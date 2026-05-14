@@ -1,4 +1,6 @@
 ---
+import { Image } from 'astro:assets';
+import headshot from '~/assets/headshot.jpg';
 ---
 <section class="mx-auto max-w-page px-6 pt-16 pb-20 md:pt-24 md:pb-28">
   <div class="grid gap-10 md:grid-cols-[1.5fr_1fr] md:gap-16 items-start">
@@ -25,14 +27,16 @@
     </div>
 
     <div class="order-first md:order-last">
-      <img
-        src="/headshot.jpg"
+      <Image
+        src={headshot}
         alt="Kazon Wilson"
-        width="560"
-        height="700"
-        class="w-full max-w-[280px] aspect-[4/5] object-cover object-[center_25%] rounded-sm"
-        fetchpriority="high"
+        width={560}
+        height={700}
+        format="avif"
+        quality={80}
         loading="eager"
+        fetchpriority="high"
+        class="w-full max-w-[280px] aspect-[4/5] object-cover object-[center_25%] rounded-sm"
       />
     </div>
   </div>
