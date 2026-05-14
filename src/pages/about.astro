@@ -1,0 +1,65 @@
+---
+import { getEntry } from 'astro:content';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Footer from '~/components/Footer.astro';
+
+const entry = await getEntry('pages', 'about');
+if (!entry) throw new Error('about content missing');
+const { Content } = await entry.render();
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Person',
+  name: 'Kazon Wilson',
+  jobTitle: 'Software Engineer',
+  url: 'https://thesuperhuman.us',
+  sameAs: [
+    'https://github.com/kwilson21',
+    'https://www.linkedin.com/in/kazonwilson/',
+  ],
+  worksFor: { '@type': 'Organization', name: 'The Superhuman Group LLC' },
+};
+---
+<BaseLayout
+  title={entry.data.title}
+  description={entry.data.description}
+  jsonLd={jsonLd}
+>
+  <article class="mx-auto max-w-content px-6 py-16 md:py-24">
+    <header class="mb-12 flex items-start gap-6">
+      <img
+        src="/headshot.jpg"
+        alt="Kazon Wilson"
+        width="120"
+        height="150"
+        class="w-24 md:w-32 aspect-[4/5] object-cover object-[center_25%] rounded-sm"
+      />
+      <div>
+        <h1 class="display mb-2">Kazon Wilson</h1>
+        <p class="text-muted text-sm md:text-base">
+          Software engineer · Fairfield, CT → Northern Virginia · Available for contract work.
+        </p>
+      </div>
+    </header>
+
+    <div class="prose-about prose-editorial">
+      <Content />
+    </div>
+  </article>
+
+  <Footer slot="footer" />
+</BaseLayout>
+
+<style is:global>
+  .prose-editorial { font-family: theme('fontFamily.serif'); color: var(--ink); }
+  .prose-editorial > * + * { margin-top: 1.5em; }
+  .prose-editorial h2 { font-size: 1.75rem; margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--rule); }
+  .prose-editorial h3 { font-size: 1.25rem; margin-top: 2rem; font-weight: 500; }
+  .prose-editorial p { font-size: 1.0625rem; line-height: 1.65; max-width: 38rem; }
+  .prose-editorial p em { font-style: italic; }
+  .prose-editorial strong { font-weight: 600; }
+  .prose-editorial hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0; max-width: 38rem; }
+  .prose-editorial ul { padding-left: 1.25rem; max-width: 38rem; }
+  .prose-editorial li { font-size: 1.0625rem; line-height: 1.65; }
+  .prose-editorial a { border-bottom: 1px solid var(--accent); }
+</style>
