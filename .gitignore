@@ -1,0 +1,24 @@
+# Claude Code & Superpowers
+.claude/
+.superpowers/
+
+# macOS
+.DS_Store
+
+# Node (Astro build, to be added in implementation)
+node_modules/
+dist/
+.astro/
+
+# Env files
+.env
+.env.local
+.dev.vars
+
+# Cloudflare local dev
+.wrangler/
+
+# Editor
+.vscode/
+.idea/
+*.swp
