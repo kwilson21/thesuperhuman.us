@@ -7,8 +7,6 @@ Software engineer based in Connecticut (soon to be Northern Virginia). Seven-plu
 
 I'm most useful when a problem cuts across layers — when a UI bug turns out to be a data pipeline issue that turns out to be a business-logic miscommunication, and someone needs to chase it through all three. I like working close to the people who use what I build, and I gravitate toward roles where the engineering decisions are also product decisions.
 
----
-
 ## About
 
 I grew up around audio. My undergraduate degree is in audio production from Middle Tennessee State, with a minor in computer science that turned out to be the part that stuck. I came into software engineering through data — my first job out of school was at a startup ingesting tobacco sales data from thousands of retail POS systems, and I learned engineering by being the person who had to make that data make sense.
@@ -16,8 +14,6 @@ I grew up around audio. My undergraduate degree is in audio production from Midd
 Since then I've worked across product engineering at Lyft, regulated insurance software at Sure, healthcare credentialing data ingestion at Axuall, and most recently as the sole data engineer at an early-stage startup. The throughline is data systems and product engineering — usually some mix of both. I tend to enjoy the operational and ownership parts of the job: knowing how a system fails, building observability so other people can debug it without paging me, and reducing the amount of manual work the team has to do.
 
 I'm currently looking for senior backend roles, with a preference for remote work or hybrid setups in the Northern Virginia area, where my family is planning to settle.
-
----
 
 ## Selected work
 
@@ -64,8 +60,6 @@ The most meaningful project from this period was an internal application I desig
 
 I also mentored a couple of interns from a 7-person cohort, two of whom chose to work closely with me. One of them transitioned into data science afterward. I keep in touch with them.
 
----
-
 ## Outside of work
 
 **Personal infrastructure.** I run a small home cluster — Docker Swarm across a few Linux mini-PCs, with Portainer managing deployments via GitHub polling and Traefik as the internal reverse proxy. I've spent meaningful time hardening it: SSH lockdown, UFW rules, Cloudflare Tunnels for external services, and a slow migration toward Tailscale SSH to get off port 22 entirely. This is the kind of side project that pays back in production engineering intuition every time I touch real infrastructure at work.
@@ -76,8 +70,6 @@ I also mentored a couple of interns from a 7-person cohort, two of whom chose to
 
 **Audio production.** Original undergraduate field. Still keep up with tooling from this world (Waves, Acustica, Sonarworks, UA Connect) as a side interest.
 
----
-
 ## Tech
 
 **Daily.** Python, Django, Flask, Ruby on Rails, PostgreSQL, MySQL, Git, AWS (EC2, S3), Docker, Linux.
@@ -85,8 +77,6 @@ I also mentored a couple of interns from a 7-person cohort, two of whom chose to
 **Used in production.** TypeScript, JavaScript, React, Dagster, MongoDB, DynamoDB, gRPC / Protobufs, GraphQL, Selenium, Grafana, Prometheus.
 
 **Adjacent personal infrastructure.** Docker Swarm, Traefik, Tailscale, Cloudflare Tunnels.
-
----
 
 ## Contact
 
