@@ -1,0 +1,23 @@
+---
+interface Props {
+  title: string;
+  audience: string;
+  description: string;
+  href: string;
+  sizeKb: number;
+}
+const { title, audience, description, href, sizeKb } = Astro.props;
+---
+<a
+  href={href}
+  download
+  class="block border border-rule bg-paper p-6 rounded-sm hover:border-accent transition-colors"
+  style="border-bottom-width: 1px;"
+>
+  <div class="eyebrow mb-3">{audience}</div>
+  <h3 class="font-serif text-xl mb-2" style="font-weight: 500;">{title}</h3>
+  <p class="text-sm text-muted leading-relaxed mb-4">{description}</p>
+  <span class="font-sans text-xs font-medium text-accent">
+    Download PDF · {sizeKb} KB →
+  </span>
+</a>
