@@ -5,11 +5,18 @@ interface Props {
   title: string;
   description: string;
   ogImage?: string;
-  jsonLd?: object;
+  jsonLd?: Record<string, unknown>;
 }
 
 const { title, description, ogImage = '/og-image.png', jsonLd } = Astro.props;
 const canonical = new URL(Astro.url.pathname, Astro.site).toString();
+
+function jsonLdString(data: object): string {
+  return JSON.stringify(data)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/\//g, '\\u002f');
+}
 ---
 <!doctype html>
 <html lang="en">
@@ -38,7 +45,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site).toString();
     />
 
     {jsonLd && (
-      <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+      <script type="application/ld+json" set:html={jsonLdString(jsonLd)} />
     )}
   </head>
   <body class="bg-paper text-ink font-serif">
