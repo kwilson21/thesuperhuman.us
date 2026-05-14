@@ -36,6 +36,6 @@
     // suppresses the warning at zero cost.
     { "binding": "SESSION", "id": "7410b0879b584637b83be68849e7c8e9" }
   ]
-  // Env vars (RESEND_API_KEY, TURNSTILE_SECRET_KEY, PUBLIC_TURNSTILE_SITE_KEY,
-  // CONTACT_TO_EMAIL, CONTACT_FROM_EMAIL) remain in the dashboard for now.
+  // Sensitive values (RESEND_API_KEY, TURNSTILE_SECRET_KEY) are dashboard-
+  // managed encrypted secrets; everything else is version-controlled above.
 }

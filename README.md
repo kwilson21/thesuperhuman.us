@@ -29,34 +29,33 @@ Local env vars live in `.dev.vars` (not committed). See `src/env.d.ts` for the f
 
 Push to `main` → Cloudflare's git integration rebuilds and runs `wrangler deploy`.
 
-### Env vars
+### Configuration: secrets vs. vars
 
-Set in **Project → Settings → Variables and Secrets**:
+| Variable | Where it lives | Why |
+| --- | --- | --- |
+| `RESEND_API_KEY` | Dashboard secret | Sensitive |
+| `TURNSTILE_SECRET_KEY` | Dashboard secret | Sensitive |
+| `CONTACT_TO_EMAIL` | `wrangler.jsonc` `vars` | Not sensitive |
+| `CONTACT_FROM_EMAIL` | `wrangler.jsonc` `vars` (currently `noreply@notifs.thesuperhuman.us`, the verified Resend sending subdomain) | Not sensitive |
+| `PUBLIC_TURNSTILE_SITE_KEY` | `wrangler.jsonc` `vars` | Browser-readable by design (Astro inlines `PUBLIC_*` into the build) |
 
-| Variable | Purpose |
-| --- | --- |
-| `RESEND_API_KEY` | Resend API key |
-| `TURNSTILE_SECRET_KEY` | Turnstile secret (server-side) |
-| `PUBLIC_TURNSTILE_SITE_KEY` | Turnstile site key (browser-side, prefixed `PUBLIC_` so Astro exposes it) |
-| `CONTACT_TO_EMAIL` | `kazon.wilson@thesuperhuman.us` |
-| `CONTACT_FROM_EMAIL` | `noreply@thesuperhuman.us` |
+Update version-controlled vars by editing `wrangler.jsonc` and pushing. Update dashboard secrets in the Cloudflare Worker settings (Variables and Secrets → Secrets).
 
 ### KV bindings
 
-Two bindings, both pointing to the same physical KV namespace (key prefixes keep data isolated):
+All three bindings point at the same physical KV namespace; key prefixes keep the data isolated.
 
 | Binding | Keys stored |
 | --- | --- |
 | `RATE_LIMIT` | `rl:<ip>` — per-IP rate-limit windows |
 | `RESUME_STORE` | `req:<uuid>` — pending resume-request approval tokens · `pdf:general` / `pdf:leadership` / `pdf:dod` — the binary resume PDFs |
+| `SESSION` | (unused — satisfies the `@astrojs/cloudflare` adapter's default expectation; Astro sessions aren't used) |
 
-Bind in **Project → Settings → Variables and Secrets → KV namespace bindings**.
+Declared in `wrangler.jsonc` `kv_namespaces` with explicit namespace IDs.
 
-### Uploading resumes to KV (one-time)
+### Uploading resumes to KV
 
 Resume PDFs are **never** committed to this repo and **never** served from `public/`. They live exclusively in KV and are emailed to requesters only after you approve each request.
-
-Upload all three from the repo root:
 
 ```bash
 npx wrangler kv key put --binding=RESUME_STORE --remote pdf:general    --path "/path/to/KWilson_Resume_G_2026.pdf"
@@ -64,9 +63,11 @@ npx wrangler kv key put --binding=RESUME_STORE --remote pdf:leadership --path "/
 npx wrangler kv key put --binding=RESUME_STORE --remote pdf:dod        --path "/path/to/KWilson_Resume_D_2026.pdf"
 ```
 
-Replace the paths with wherever you keep the source PDFs. Re-run any of these commands whenever a resume changes.
+Re-run any of these whenever a resume changes.
 
-If `wrangler` complains about the binding, declare the KV namespace in `wrangler.jsonc` with its dashboard ID, or pass `--namespace-id=<id>` directly.
+### Security headers
+
+`public/_headers` overrides Cloudflare's default `Permissions-Policy` with an explicit policy that doesn't reference Chrome-only features (which other browsers log as "Unrecognized feature" warnings). Also sets `Referrer-Policy: strict-origin-when-cross-origin`, `X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY`.
 
 ## Resume request flow
 
@@ -74,3 +75,13 @@ If `wrangler` complains about the binding, declare the KV namespace in `wrangler
 2. `POST /api/resume-request` validates, rate-limits, and stores a single-use token in KV (`req:<uuid>`, 7-day TTL). It emails the operator (`CONTACT_TO_EMAIL`) with the request details and a one-click approval link.
 3. The operator clicks the approval link. `GET /api/resume-approve?id=<uuid>` looks up the token, reads the matching PDF from KV (`pdf:<audience>`), emails it to the requester as an attachment, and deletes the token. Single-use; the link can't be replayed.
 4. The approval link's "credential" is the UUID itself (~122 bits of entropy). Because delivery is bound to the requester's email stored in KV — not the URL — a leaked or intercepted link cannot redirect delivery elsewhere.
+
+## Regenerating the OG image
+
+The `/og-image.png` social-share card is rendered from `scripts/og.html` via headless Chrome at 1200×630.
+
+```bash
+./scripts/build-og.sh
+```
+
+Editing `scripts/og.html` updates the layout; replacing `scripts/logo.png` or `src/assets/headshot.jpg` updates the imagery. The script re-inlines the source images into `scripts/og.html` as base64 data URIs on every run (so the template renders correctly when opened directly in a browser too).
