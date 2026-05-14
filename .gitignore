@@ -1,6 +1,7 @@
 # Claude Code & Superpowers
 .claude/
 .superpowers/
+.worktrees/
 
 # macOS
 .DS_Store
