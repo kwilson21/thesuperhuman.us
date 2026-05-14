@@ -51,14 +51,20 @@ async function sendOne(args: {
   };
   if (args.replyTo) payload.reply_to = args.replyTo;
 
-  const res = await fetch(ENDPOINT, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${args.apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
+  let res: Response;
+  try {
+    res = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${args.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    return false;
+  }
   return res.ok;
 }
 
