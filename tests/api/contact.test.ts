@@ -62,16 +62,16 @@ describe('POST /api/contact', () => {
   it('returns 200 ok=true on valid submission', async () => {
     const res = await POST(makeContext(validBody));
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = (await res.json()) as { ok: boolean; errors?: Record<string, string>; error?: string };
     expect(json.ok).toBe(true);
   });
 
   it('returns 400 with errors on invalid input', async () => {
     const res = await POST(makeContext({ ...validBody, email: 'bad' }));
     expect(res.status).toBe(400);
-    const json = await res.json();
+    const json = (await res.json()) as { ok: boolean; errors?: Record<string, string>; error?: string };
     expect(json.ok).toBe(false);
-    expect(json.errors.email).toBeDefined();
+    expect(json.errors?.email).toBeDefined();
   });
 
   it('returns 403 on Turnstile failure', async () => {

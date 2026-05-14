@@ -97,10 +97,10 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 
   function showHint(types: string[]) {
     if (types.includes('Contract role')) {
-      resumeHint.innerHTML = 'Looking for the full resume? <a href="/about#resumes">General</a> or <a href="/about#resumes">Leadership</a>.';
+      resumeHint.innerHTML = 'Looking for the full resume? <a href="/resumes/general.pdf">General</a> or <a href="/resumes/leadership.pdf">Leadership</a>.';
       resumeHint.classList.remove('hidden');
     } else if (types.includes('Advisory')) {
-      resumeHint.innerHTML = 'Looking for the full resume? <a href="/about#resumes">Leadership</a>.';
+      resumeHint.innerHTML = 'Looking for the full resume? <a href="/resumes/leadership.pdf">Leadership</a>.';
       resumeHint.classList.remove('hidden');
     } else {
       resumeHint.classList.add('hidden');
@@ -154,7 +154,11 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const json = await res.json();
+      const json = (await res.json()) as {
+        ok?: boolean;
+        errors?: Record<string, string>;
+        error?: string;
+      };
       if (res.ok && json.ok) {
         form.classList.add('hidden');
         success.classList.remove('hidden');
@@ -162,7 +166,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
       }
       status.textContent = '';
       if (json.errors) {
-        for (const [k, v] of Object.entries(json.errors as Record<string, string>)) {
+        for (const [k, v] of Object.entries(json.errors)) {
           showError(k, v);
         }
       } else if (json.error) {
