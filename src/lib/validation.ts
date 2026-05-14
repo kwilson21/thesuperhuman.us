@@ -55,12 +55,12 @@ export function validateContactInput(input: unknown): ValidationResult {
     errors.projectType = 'Unknown project type.';
   }
 
-  const timeline = typeof v.timeline === 'string' ? v.timeline : '';
+  const timeline = typeof v.timeline === 'string' ? v.timeline.trim() : '';
   if (!(TIMELINES as readonly string[]).includes(timeline)) {
     errors.timeline = 'Pick a timeline.';
   }
 
-  const budget = typeof v.budget === 'string' ? v.budget : '';
+  const budget = typeof v.budget === 'string' ? v.budget.trim() : '';
   if (budget && !(BUDGETS as readonly string[]).includes(budget)) {
     errors.budget = 'Unknown budget.';
   }
