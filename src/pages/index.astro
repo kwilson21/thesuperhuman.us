@@ -1,12 +1,106 @@
 ---
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import Hero from '~/components/Hero.astro';
+import WhatIDo from '~/components/WhatIDo.astro';
+import ProjectCard from '~/components/ProjectCard.astro';
+import ExperienceRow from '~/components/ExperienceRow.astro';
 import Footer from '~/components/Footer.astro';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Person',
+  name: 'Kazon Wilson',
+  jobTitle: 'Software Engineer',
+  url: 'https://thesuperhuman.us',
+  sameAs: [
+    'https://github.com/kwilson21',
+    'https://www.linkedin.com/in/kazonwilson/',
+  ],
+  worksFor: { '@type': 'Organization', name: 'The Superhuman Group LLC' },
+};
 ---
 <BaseLayout
-  title="Kazon Wilson — Software engineer"
-  description="Backend and data engineer. Available for contract work through The Superhuman Group LLC."
+  title="Kazon Wilson — Backend & data engineer, available for contract work"
+  description="Backend and data engineer with 7+ years of production systems. Contracting through The Superhuman Group LLC."
+  jsonLd={jsonLd}
 >
   <Hero />
+
+  <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
+    <p class="text-[1.0625rem] leading-relaxed max-w-measure">
+      Seven-plus years building production systems in Python, with side trips through Ruby on Rails, TypeScript, and the messy real world of healthcare credentialing, insurance documents, and POS data ingestion. I'm currently taking on contract work through The Superhuman Group LLC — backend systems, data pipelines, and the kind of cross-team product work where someone has to chase a problem through three layers of stack.
+    </p>
+  </section>
+
+  <WhatIDo />
+
+  <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
+    <h2 class="heading mb-10">Recent work</h2>
+    <div class="space-y-12">
+      <ProjectCard
+        name="Superhuman Finance"
+        url="https://finance.thesuperhuman.us"
+        description="A personal finance app with Plaid integration — automated transaction ingestion, classification, and reporting across accounts."
+        stack={['Rails 8.1', 'Hotwire', 'Tailwind', 'PostgreSQL', 'Plaid']}
+      />
+      <ProjectCard
+        name="Kaillera Next"
+        url="https://kaillera-next.thesuperhuman.us"
+        description="Play N64 games online with friends in your browser — no install. WebRTC netplay powered by EmulatorJS."
+        stack={['Next.js', 'WebRTC', 'EmulatorJS', 'TypeScript']}
+      />
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
+    <h2 class="heading mb-10">Selected experience</h2>
+    <div>
+      <ExperienceRow
+        company="Scotch"
+        role="Data Engineer"
+        dates="2025–2026 · Remote"
+        outcome="Sole data engineer at an early-stage startup. Built and maintained ETL pipelines ingesting liquor-store POS transaction data into the company's Rails platform; ran scenario interviews for senior engineering candidates; modeled AI-assisted development practices until the team adopted them."
+      />
+      <ExperienceRow
+        company="Vendorpass / Axuall"
+        role="Senior Python Developer (Contract)"
+        dates="2025 · Remote"
+        outcome="Per-state Dagster ETL pipelines for a healthcare credentialing platform, ingesting from SFTP feeds, REST APIs, and Selenium-driven web scraping. Contributed to the early stages of a connector-architecture migration."
+      />
+      <ExperienceRow
+        company="Sure"
+        role="Software Engineer"
+        dates="2023–2025 · Remote"
+        outcome="Backend on the Toggle homeowners insurance product. Owned document templating — adapting contractor HTML/CSS to carrier-required PDFs — and maintained Django-based document generation and carrier API integrations."
+      />
+      <ExperienceRow
+        company="Lyft"
+        role="Software Engineer"
+        dates="2021–2023 · Remote"
+        outcome="Associate Tools team. Led a third-party rebooking API integration end-to-end, refactored a customer-incident bonus tool from 5k-row to 100k+ row capacity with Grafana self-serve, and owned a 40k-row data migration during a third-party service deprecation."
+      />
+      <ExperienceRow
+        company="Skupos"
+        role="Associate Software Engineer / Data Operations Analyst"
+        dates="2018–2021 · San Francisco"
+        outcome="Designed and built a Python WSGI service that automated POS data quality troubleshooting — replacing ad-hoc analyst work with code that scaled retailer onboarding from 3k to 7–10k locations."
+      />
+    </div>
+
+    <p class="mt-10 eyebrow">
+      <a href="/about#resumes" style="border-bottom: 1px solid var(--accent); padding-bottom: 1px; letter-spacing: 0.12em; color: var(--ink);">
+        Looking for the resume? Pick the one that matches your role →
+      </a>
+    </p>
+  </section>
+
+  <section id="contact" class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
+    <h2 class="heading mb-3">Work with me</h2>
+    <p class="text-base text-muted mb-10 max-w-measure">
+      Tell me about your project. I usually reply within two business days.
+    </p>
+    <p class="text-sm text-muted max-w-measure">Contact form coming in Task 17.</p>
+  </section>
+
   <Footer slot="footer" />
 </BaseLayout>
