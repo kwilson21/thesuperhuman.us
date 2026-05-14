@@ -117,22 +117,24 @@
   .logo-stamp {
     display: inline-flex;
     align-items: center;
-    height: 76px;
-    padding: 0 22px 0 16px;
-    background: #F2D77E;
-    border-radius: 8px;
-    gap: 16px;
+    height: 112px;
+    padding: 0 28px 0 20px;
+    /* Matches the logo's actual yellow (#FFDE7D sampled from corner) so
+       the source image's yellow padding blends into the chip seamlessly. */
+    background: #FFDE7D;
+    border-radius: 10px;
+    gap: 20px;
   }
   .logo-stamp img {
-    height: 56px;
+    height: 92px;
     width: auto;
     display: block;
   }
   .logo-stamp .name {
     font-family: 'Inter', system-ui, sans-serif;
-    font-size: 18px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
     color: #0E0E0E;
     text-transform: uppercase;
     line-height: 1;
