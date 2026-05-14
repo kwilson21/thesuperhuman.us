@@ -10,8 +10,7 @@ const { title, audience, description, audienceKey } = Astro.props;
 <a
   href={`#resume-request-form`}
   data-audience={audienceKey}
-  class="resume-card block border border-rule bg-paper p-6 rounded-sm hover:border-accent transition-colors"
-  style="border-bottom: 1px solid var(--rule);"
+  class="resume-card block border border-rule bg-paper p-6 rounded-sm transition-colors"
 >
   <div class="eyebrow mb-3">{audience}</div>
   <h3 class="font-serif font-medium text-xl mb-2">{title}</h3>
@@ -20,3 +19,11 @@ const { title, audience, description, audienceKey } = Astro.props;
     Request this resume →
   </span>
 </a>
+
+<style is:global>
+  /* Cancel the global `a { border-bottom: 1px solid var(--accent) }` underline
+     on the resume cards so the four-side border looks consistent at rest, and
+     so :hover lights up the entire frame (not just three sides). */
+  a.resume-card { border-bottom-color: var(--rule); }
+  a.resume-card:hover { border-color: var(--accent); }
+</style>
