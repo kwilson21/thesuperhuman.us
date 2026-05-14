@@ -36,19 +36,29 @@ const jsonLd = {
   <WhatIDo />
 
   <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
+    <h2 class="heading mb-6">How I work with AI</h2>
+    <p class="text-[1.0625rem] leading-relaxed max-w-measure mb-4">
+      This site and both projects below were built with AI assistance. I want to be upfront about that.
+    </p>
+    <p class="text-[1.0625rem] leading-relaxed max-w-measure">
+      What I'm selling isn't the ability to write code by hand — it's the ability to ship AI-assisted code that's safe, secure, and not bug-riddled. The kind of work you can take to production and sleep at night.
+    </p>
+  </section>
+
+  <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
     <h2 class="heading mb-10">Recent work</h2>
     <div class="space-y-12">
       <ProjectCard
         name="Superhuman Finance"
         url="https://finance.thesuperhuman.us"
-        description="A personal finance app with Plaid integration — automated transaction ingestion, classification, and reporting across accounts."
-        stack={['Rails 8.1', 'Hotwire', 'Tailwind', 'PostgreSQL', 'Plaid']}
+        description="A personal finance app with Plaid integration — automated transaction ingestion, smart categorization, and budget tracking with mobile-first UX."
+        stack={['Django', 'HTMX', 'Alpine.js', 'Tailwind', 'PostgreSQL', 'Plaid']}
       />
       <ProjectCard
         name="Kaillera Next"
         url="https://kaillera-next.thesuperhuman.us"
-        description="Play N64 games online with friends in your browser — no install. WebRTC netplay powered by EmulatorJS."
-        stack={['Next.js', 'WebRTC', 'EmulatorJS', 'TypeScript']}
+        description="Play N64 games online with friends in your browser — no install. WebRTC netplay with a custom rollback engine, powered by EmulatorJS."
+        stack={['FastAPI', 'Socket.IO', 'WebRTC', 'EmulatorJS', 'Redis']}
       />
     </div>
   </section>
