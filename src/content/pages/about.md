@@ -80,7 +80,7 @@ I also mentored a couple of interns from a 7-person cohort, two of whom chose to
 
 ## Contact
 
-- Email: kazonwilson@gmail.com
+- Email: kazon.wilson@thesuperhuman.us
 - GitHub: [github.com/kwilson21](https://github.com/kwilson21)
 - LinkedIn: [linkedin.com/in/kazonwilson](https://www.linkedin.com/in/kazonwilson/)
 - Location: Fairfield, CT (relocating to Northern Virginia in 2026)

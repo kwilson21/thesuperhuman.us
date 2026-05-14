@@ -20,6 +20,9 @@ coverage/
 # Cloudflare local dev
 .wrangler/
 
+# BFG history-rewrite report (from one-off cleanup runs)
+..bfg-report/
+
 # Editor
 .vscode/
 .idea/
