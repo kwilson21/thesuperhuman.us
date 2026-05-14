@@ -1,0 +1,175 @@
+---
+const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
+---
+<form id="contact-form" class="space-y-6 max-w-content" novalidate>
+  <noscript>
+    <p class="text-sm" style="color: var(--accent);">
+      This form requires JavaScript. Email
+      <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>
+      directly.
+    </p>
+  </noscript>
+
+  <div class="grid gap-5 md:grid-cols-2">
+    <div>
+      <label class="eyebrow block mb-2" for="cf-name">Name</label>
+      <input id="cf-name" name="name" type="text" required maxlength="100" class="w-full border border-rule bg-paper px-3 py-2 text-base rounded-sm focus:outline-none focus:border-accent" />
+      <p class="cf-error text-sm mt-1 hidden" data-field="name" style="color: var(--accent);"></p>
+    </div>
+    <div>
+      <label class="eyebrow block mb-2" for="cf-email">Email</label>
+      <input id="cf-email" name="email" type="email" required maxlength="120" class="w-full border border-rule bg-paper px-3 py-2 text-base rounded-sm focus:outline-none focus:border-accent" />
+      <p class="cf-error text-sm mt-1 hidden" data-field="email" style="color: var(--accent);"></p>
+    </div>
+  </div>
+
+  <div>
+    <label class="eyebrow block mb-2" for="cf-company">Company <span class="text-muted normal-case tracking-normal">(optional)</span></label>
+    <input id="cf-company" name="company" type="text" maxlength="120" class="w-full border border-rule bg-paper px-3 py-2 text-base rounded-sm focus:outline-none focus:border-accent" />
+  </div>
+
+  <fieldset>
+    <legend class="eyebrow mb-3">Project type</legend>
+    <div class="flex flex-wrap gap-2">
+      {['Backend systems', 'Data pipelines', 'Contract role', 'Advisory', 'Other'].map(t => (
+        <label class="cf-chip cursor-pointer">
+          <input type="checkbox" name="projectType" value={t} class="sr-only peer" />
+          <span class="inline-block border border-rule px-3 py-1.5 text-sm rounded-full peer-checked:bg-ink peer-checked:text-paper peer-checked:border-ink">
+            {t}
+          </span>
+        </label>
+      ))}
+    </div>
+    <p class="cf-error text-sm mt-2 hidden" data-field="projectType" style="color: var(--accent);"></p>
+    <p id="cf-resume-hint" class="text-sm text-muted mt-3 hidden"></p>
+  </fieldset>
+
+  <fieldset>
+    <legend class="eyebrow mb-3">Timeline</legend>
+    <div class="flex flex-wrap gap-4 text-sm">
+      {['Now', '1–3 months', 'Just exploring'].map(t => (
+        <label class="cursor-pointer">
+          <input type="radio" name="timeline" value={t} required />
+          <span class="ml-1.5">{t}</span>
+        </label>
+      ))}
+    </div>
+    <p class="cf-error text-sm mt-2 hidden" data-field="timeline" style="color: var(--accent);"></p>
+  </fieldset>
+
+  <fieldset>
+    <legend class="eyebrow mb-3">Budget <span class="text-muted normal-case tracking-normal">(optional)</span></legend>
+    <div class="flex flex-wrap gap-4 text-sm">
+      {['Under $10k', '$10–50k', '$50k+', 'Not sure yet'].map(t => (
+        <label class="cursor-pointer">
+          <input type="radio" name="budget" value={t} />
+          <span class="ml-1.5">{t}</span>
+        </label>
+      ))}
+    </div>
+  </fieldset>
+
+  <div>
+    <label class="eyebrow block mb-2" for="cf-description">Tell me about the project</label>
+    <textarea id="cf-description" name="description" required minlength="40" maxlength="4000" rows="6" class="w-full border border-rule bg-paper px-3 py-2 text-base rounded-sm focus:outline-none focus:border-accent"></textarea>
+    <p class="cf-error text-sm mt-1 hidden" data-field="description" style="color: var(--accent);"></p>
+  </div>
+
+  <div class="cf-turnstile" data-sitekey={turnstileSiteKey}></div>
+
+  <div>
+    <button type="submit" class="btn-primary" style="border-bottom: none;">Send</button>
+    <span id="cf-status" class="ml-4 text-sm text-muted"></span>
+  </div>
+</form>
+
+<div id="contact-success" class="hidden max-w-content">
+  <p class="lede">Got it. I'll reply within two business days.</p>
+</div>
+
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>
+
+<script>
+  const form = document.getElementById('contact-form') as HTMLFormElement;
+  const success = document.getElementById('contact-success') as HTMLDivElement;
+  const status = document.getElementById('cf-status') as HTMLSpanElement;
+  const resumeHint = document.getElementById('cf-resume-hint') as HTMLParagraphElement;
+
+  function showHint(types: string[]) {
+    if (types.includes('Contract role')) {
+      resumeHint.innerHTML = 'Looking for the full resume? <a href="/about#resumes">General</a> or <a href="/about#resumes">Leadership</a>.';
+      resumeHint.classList.remove('hidden');
+    } else if (types.includes('Advisory')) {
+      resumeHint.innerHTML = 'Looking for the full resume? <a href="/about#resumes">Leadership</a>.';
+      resumeHint.classList.remove('hidden');
+    } else {
+      resumeHint.classList.add('hidden');
+    }
+  }
+
+  form.querySelectorAll('input[name="projectType"]').forEach(el => {
+    el.addEventListener('change', () => {
+      const selected = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="projectType"]:checked')).map(i => i.value);
+      showHint(selected);
+    });
+  });
+
+  function clearErrors() {
+    form.querySelectorAll('.cf-error').forEach(el => {
+      el.classList.add('hidden');
+      el.textContent = '';
+    });
+  }
+
+  function showError(field: string, msg: string) {
+    const el = form.querySelector<HTMLElement>(`.cf-error[data-field="${field}"]`);
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearErrors();
+    status.textContent = 'Sending…';
+
+    const data = new FormData(form);
+    const projectType = data.getAll('projectType').map(String);
+    const turnstileToken = (form.querySelector<HTMLInputElement>('input[name="cf-turnstile-response"]')?.value) ?? '';
+
+    const payload = {
+      name: String(data.get('name') ?? ''),
+      email: String(data.get('email') ?? ''),
+      company: String(data.get('company') ?? ''),
+      projectType,
+      timeline: String(data.get('timeline') ?? ''),
+      budget: String(data.get('budget') ?? ''),
+      description: String(data.get('description') ?? ''),
+      turnstileToken,
+    };
+
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (res.ok && json.ok) {
+        form.classList.add('hidden');
+        success.classList.remove('hidden');
+        return;
+      }
+      status.textContent = '';
+      if (json.errors) {
+        for (const [k, v] of Object.entries(json.errors as Record<string, string>)) {
+          showError(k, v);
+        }
+      } else if (json.error) {
+        status.textContent = json.error;
+      }
+    } catch {
+      status.textContent = 'Network error — please try again.';
+    }
+  });
+</script>

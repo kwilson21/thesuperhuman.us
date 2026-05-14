@@ -14,3 +14,10 @@ interface Env {
   CONTACT_FROM_EMAIL: string;
   RATE_LIMIT: KVNamespace;
 }
+
+interface ImportMetaEnv {
+  readonly PUBLIC_TURNSTILE_SITE_KEY: string;
+}
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}

@@ -5,6 +5,7 @@ import WhatIDo from '~/components/WhatIDo.astro';
 import ProjectCard from '~/components/ProjectCard.astro';
 import ExperienceRow from '~/components/ExperienceRow.astro';
 import Footer from '~/components/Footer.astro';
+import ContactForm from '~/components/ContactForm.astro';
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -99,7 +100,7 @@ const jsonLd = {
     <p class="text-base text-muted mb-10 max-w-measure">
       Tell me about your project. I usually reply within two business days.
     </p>
-    <p class="text-sm text-muted max-w-measure">Contact form coming in Task 17.</p>
+    <ContactForm />
   </section>
 
   <Footer slot="footer" />
