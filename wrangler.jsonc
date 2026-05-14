@@ -11,10 +11,12 @@
   "observability": {
     "enabled": true
   }
-  // KV namespace bindings (RATE_LIMIT, optional SESSION for Astro sessions)
-  // are bound via the Cloudflare dashboard:
+  // KV namespace bindings (RATE_LIMIT, RESUME_STORE) and env vars
+  // (RESEND_API_KEY, TURNSTILE_SECRET_KEY, PUBLIC_TURNSTILE_SITE_KEY,
+  // CONTACT_TO_EMAIL, CONTACT_FROM_EMAIL) are configured via the
+  // Cloudflare dashboard:
   //   Project → Settings → Variables and Secrets → KV namespace bindings
   //
-  // Env vars (RESEND_API_KEY, TURNSTILE_SECRET_KEY, PUBLIC_TURNSTILE_SITE_KEY,
-  // CONTACT_TO_EMAIL, CONTACT_FROM_EMAIL) are set in the same dashboard.
+  // RATE_LIMIT and RESUME_STORE can be bound to the same physical KV
+  // namespace — keys are prefixed (rl:, req:, pdf:) to keep data isolated.
 }

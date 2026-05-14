@@ -5,6 +5,7 @@ import headshot from '~/assets/headshot.jpg';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import Footer from '~/components/Footer.astro';
 import ResumeCard from '~/components/ResumeCard.astro';
+import ResumeRequestForm from '~/components/ResumeRequestForm.astro';
 
 const entry = await getEntry('pages', 'about');
 if (!entry) throw new Error('about content missing');
@@ -51,30 +52,34 @@ const jsonLd = {
       <Content />
     </div>
     <section id="resumes" class="mt-20 pt-16 border-t border-rule">
-      <h2 class="font-serif text-3xl mb-2">Resume — pick the one that matches your role</h2>
-      <p class="text-muted mb-10 max-w-measure">Three versions, tuned for different audiences.</p>
+      <h2 class="font-serif text-3xl mb-2">Resume — request the one that matches your role</h2>
+      <p class="text-muted mb-10 max-w-measure">
+        My resumes contain personal contact details, so each one is delivered by approval rather than direct download. Pick the version you want, fill in the short form below, and I'll send it within a business day.
+      </p>
       <div class="grid gap-5 md:grid-cols-3">
         <ResumeCard
           title="General"
           audience="Hiring for backend, data, or general engineering roles?"
           description="Full work history with technical depth and cross-team contributions."
-          href="/resumes/general.pdf"
-          sizeKb={21}
+          audienceKey="general"
         />
         <ResumeCard
           title="Leadership"
           audience="Hiring for staff, principal, or engineering leadership?"
           description="Emphasizes ownership, mentorship, cross-org influence, and AI-assisted development advocacy."
-          href="/resumes/leadership.pdf"
-          sizeKb={22}
+          audienceKey="leadership"
         />
         <ResumeCard
           title="DoD-focused"
           audience="Hiring for federal, defense, or cleared work?"
           description="Tailored for DoD format and contracting context."
-          href="/resumes/dod.pdf"
-          sizeKb={23}
+          audienceKey="dod"
         />
+      </div>
+
+      <div class="mt-12 pt-12 border-t border-rule">
+        <h3 class="font-serif text-2xl mb-6" style="font-weight: 500;">Request form</h3>
+        <ResumeRequestForm />
       </div>
     </section>
   </article>

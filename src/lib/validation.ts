@@ -82,3 +82,57 @@ export function validateContactInput(input: unknown): ValidationResult {
     value: { name, email, company, projectType, timeline, budget, description, turnstileToken },
   };
 }
+
+// --- Resume request validation ---
+
+import { RESUME_AUDIENCES, type ResumeAudience, type ResumeRequest } from './resume-requests';
+
+export type ResumeRequestInput = ResumeRequest & { turnstileToken: string };
+
+export type ResumeRequestValidationResult =
+  | { ok: true; value: ResumeRequestInput }
+  | { ok: false; errors: Record<string, string> };
+
+export function validateResumeRequestInput(input: unknown): ResumeRequestValidationResult {
+  const errors: Record<string, string> = {};
+
+  if (typeof input !== 'object' || input === null) {
+    return { ok: false, errors: { _form: 'Invalid request body.' } };
+  }
+  const v = input as Record<string, unknown>;
+
+  const name = typeof v.name === 'string' ? v.name.trim() : '';
+  if (!name) errors.name = 'Name is required.';
+  else if (name.length > 100) errors.name = 'Name is too long.';
+
+  const email = typeof v.email === 'string' ? v.email.trim() : '';
+  if (!email) errors.email = 'Email is required.';
+  else if (email.length > 120 || !EMAIL_RE.test(email)) errors.email = 'Invalid email.';
+
+  const company = typeof v.company === 'string' ? v.company.trim() : '';
+  if (company.length > 120) errors.company = 'Company is too long.';
+
+  const audienceRaw = typeof v.audience === 'string' ? v.audience.trim() : '';
+  const isKnownAudience = (RESUME_AUDIENCES as readonly string[]).includes(audienceRaw);
+  if (!isKnownAudience) errors.audience = 'Pick which resume you need.';
+
+  const note = typeof v.note === 'string' ? v.note.trim() : '';
+  if (note.length > 1000) errors.note = 'Note is too long.';
+
+  const turnstileToken = typeof v.turnstileToken === 'string' ? v.turnstileToken : '';
+  if (!turnstileToken) errors.turnstileToken = 'Captcha missing.';
+
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+
+  return {
+    ok: true,
+    value: {
+      name,
+      email,
+      company,
+      audience: audienceRaw as ResumeAudience,
+      note,
+      turnstileToken,
+    },
+  };
+}

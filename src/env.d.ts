@@ -13,6 +13,11 @@ interface Env {
   CONTACT_TO_EMAIL: string;
   CONTACT_FROM_EMAIL: string;
   RATE_LIMIT: KVNamespace;
+  // KV namespace holding short-lived resume-request approval tokens (req:<id>)
+  // and the binary resume PDFs (pdf:general | pdf:leadership | pdf:dod).
+  // Can point at the same physical KV namespace as RATE_LIMIT — key
+  // prefixes keep the data isolated.
+  RESUME_STORE: KVNamespace;
 }
 
 interface ImportMetaEnv {

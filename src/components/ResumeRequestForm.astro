@@ -1,0 +1,160 @@
+---
+const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
+---
+<form id="resume-request-form" class="space-y-6 max-w-content" novalidate>
+  <noscript>
+    <p class="text-sm" style="color: var(--accent);">
+      This form requires JavaScript. Email
+      <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>
+      directly with which resume you'd like.
+    </p>
+  </noscript>
+
+  <fieldset>
+    <legend class="eyebrow mb-3">Which resume?</legend>
+    <div class="flex flex-wrap gap-4 text-sm">
+      <label class="cursor-pointer">
+        <input type="radio" name="audience" value="general" required />
+        <span class="ml-1.5">General</span>
+      </label>
+      <label class="cursor-pointer">
+        <input type="radio" name="audience" value="leadership" />
+        <span class="ml-1.5">Leadership</span>
+      </label>
+      <label class="cursor-pointer">
+        <input type="radio" name="audience" value="dod" />
+        <span class="ml-1.5">DoD-focused</span>
+      </label>
+    </div>
+    <p class="rr-error text-sm mt-2 hidden" data-field="audience" style="color: var(--accent);"></p>
+  </fieldset>
+
+  <div class="grid gap-5 md:grid-cols-2">
+    <div>
+      <label class="eyebrow block mb-2" for="rr-name">Name</label>
+      <input id="rr-name" name="name" type="text" required maxlength="100" class="w-full border border-rule bg-paper px-3 py-2 text-base rounded-sm focus:outline-none focus:border-accent" />
+      <p class="rr-error text-sm mt-1 hidden" data-field="name" style="color: var(--accent);"></p>
+    </div>
+    <div>
+      <label class="eyebrow block mb-2" for="rr-email">Email</label>
+      <input id="rr-email" name="email" type="email" required maxlength="120" class="w-full border border-rule bg-paper px-3 py-2 text-base rounded-sm focus:outline-none focus:border-accent" />
+      <p class="rr-error text-sm mt-1 hidden" data-field="email" style="color: var(--accent);"></p>
+    </div>
+  </div>
+
+  <div>
+    <label class="eyebrow block mb-2" for="rr-company">Company <span class="text-muted normal-case tracking-normal">(optional)</span></label>
+    <input id="rr-company" name="company" type="text" maxlength="120" class="w-full border border-rule bg-paper px-3 py-2 text-base rounded-sm focus:outline-none focus:border-accent" />
+  </div>
+
+  <div>
+    <label class="eyebrow block mb-2" for="rr-note">A short note <span class="text-muted normal-case tracking-normal">(optional)</span></label>
+    <textarea id="rr-note" name="note" maxlength="1000" rows="3" class="w-full border border-rule bg-paper px-3 py-2 text-base rounded-sm focus:outline-none focus:border-accent" placeholder="What kind of role or project? (Helps me prioritize.)"></textarea>
+  </div>
+
+  <div class="cf-turnstile" data-sitekey={turnstileSiteKey}></div>
+
+  <div>
+    <button type="submit" class="btn-primary" style="border-bottom: none;">Request resume</button>
+    <span id="rr-status" class="ml-4 text-sm text-muted"></span>
+  </div>
+
+  <p class="text-xs text-muted">
+    Resumes contain personal contact details, so each request needs my approval before delivery — usually within a business day.
+  </p>
+</form>
+
+<div id="resume-request-success" class="hidden max-w-content">
+  <p class="lede">Request received.</p>
+  <p class="text-base text-muted mt-3 max-w-measure">
+    I'll review and approve it shortly. Once approved, the resume lands in your inbox automatically.
+  </p>
+</div>
+
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>
+
+<script>
+  const form = document.getElementById('resume-request-form') as HTMLFormElement | null;
+  const success = document.getElementById('resume-request-success') as HTMLDivElement | null;
+  const status = document.getElementById('rr-status') as HTMLSpanElement | null;
+  if (!form || !success || !status) {
+    // page didn't render the form; bail
+  } else {
+    // Prefill the audience radio from any `.resume-card[data-audience]` link clicked
+    function selectAudience(value: string) {
+      const radio = form!.querySelector<HTMLInputElement>(`input[name="audience"][value="${value}"]`);
+      if (radio) radio.checked = true;
+    }
+
+    document.querySelectorAll<HTMLAnchorElement>('a.resume-card[data-audience]').forEach(el => {
+      el.addEventListener('click', () => {
+        const aud = el.dataset.audience;
+        if (aud) selectAudience(aud);
+      });
+    });
+
+    // If page loaded with a `?audience=X` query (e.g. from another link), prefill.
+    const params = new URLSearchParams(window.location.search);
+    const fromQuery = params.get('audience');
+    if (fromQuery) selectAudience(fromQuery);
+
+    function clearErrors() {
+      form!.querySelectorAll('.rr-error').forEach(el => {
+        el.classList.add('hidden');
+        el.textContent = '';
+      });
+    }
+
+    function showError(field: string, msg: string) {
+      const el = form!.querySelector<HTMLElement>(`.rr-error[data-field="${field}"]`);
+      if (!el) return;
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearErrors();
+      status!.textContent = 'Sending…';
+
+      const data = new FormData(form!);
+      const turnstileToken = (form!.querySelector<HTMLInputElement>('input[name="cf-turnstile-response"]')?.value) ?? '';
+      const payload = {
+        name: String(data.get('name') ?? ''),
+        email: String(data.get('email') ?? ''),
+        company: String(data.get('company') ?? ''),
+        audience: String(data.get('audience') ?? ''),
+        note: String(data.get('note') ?? ''),
+        turnstileToken,
+      };
+
+      try {
+        const res = await fetch('/api/resume-request', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const json = (await res.json()) as {
+          ok?: boolean;
+          errors?: Record<string, string>;
+          error?: string;
+        };
+        if (res.ok && json.ok) {
+          form!.classList.add('hidden');
+          success!.classList.remove('hidden');
+          return;
+        }
+        status!.textContent = '';
+        if (json.errors) {
+          for (const [k, v] of Object.entries(json.errors)) {
+            showError(k, v);
+          }
+        } else if (json.error) {
+          status!.textContent = json.error;
+        }
+      } catch {
+        status!.textContent = 'Network error — please try again.';
+      }
+    });
+  }
+</script>

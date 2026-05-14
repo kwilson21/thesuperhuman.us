@@ -97,10 +97,10 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 
   function showHint(types: string[]) {
     if (types.includes('Contract role')) {
-      resumeHint.innerHTML = 'Looking for the full resume? <a href="/resumes/general.pdf">General</a> or <a href="/resumes/leadership.pdf">Leadership</a>.';
+      resumeHint.innerHTML = 'Want the full resume? Request <a href="/about?audience=general#resume-request-form">General</a> or <a href="/about?audience=leadership#resume-request-form">Leadership</a> — each delivery needs my approval.';
       resumeHint.classList.remove('hidden');
     } else if (types.includes('Advisory')) {
-      resumeHint.innerHTML = 'Looking for the full resume? <a href="/resumes/leadership.pdf">Leadership</a>.';
+      resumeHint.innerHTML = 'Want the full resume? Request <a href="/about?audience=leadership#resume-request-form">Leadership</a> — each delivery needs my approval.';
       resumeHint.classList.remove('hidden');
     } else {
       resumeHint.classList.add('hidden');
