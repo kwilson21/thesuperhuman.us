@@ -1,4 +1,7 @@
-# Kazon Wilson
+---
+title: "About — Kazon Wilson"
+description: "Software engineer based in Connecticut, soon Northern Virginia. Backend and data systems, with side trips through Ruby on Rails and TypeScript."
+---
 
 Software engineer based in Connecticut (soon to be Northern Virginia). Seven-plus years building production systems in Python, with side trips through Ruby on Rails, TypeScript, and the messy real world of healthcare credentialing, insurance documents, and POS data ingestion.
 
