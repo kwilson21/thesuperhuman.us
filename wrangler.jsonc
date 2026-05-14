@@ -10,13 +10,15 @@
   },
   "observability": {
     "enabled": true
-  }
-  // KV namespace bindings (RATE_LIMIT, RESUME_STORE) and env vars
-  // (RESEND_API_KEY, TURNSTILE_SECRET_KEY, PUBLIC_TURNSTILE_SITE_KEY,
-  // CONTACT_TO_EMAIL, CONTACT_FROM_EMAIL) are configured via the
-  // Cloudflare dashboard:
-  //   Project → Settings → Variables and Secrets → KV namespace bindings
-  //
-  // RATE_LIMIT and RESUME_STORE can be bound to the same physical KV
-  // namespace — keys are prefixed (rl:, req:, pdf:) to keep data isolated.
+  },
+  // Both bindings point at the same physical KV namespace — keys are
+  // prefixed (rl:, req:, pdf:) to keep the data isolated.
+  // - RATE_LIMIT: rl:<ip> per-IP rate-limit windows
+  // - RESUME_STORE: req:<uuid> approval tokens + pdf:<audience> binary PDFs
+  "kv_namespaces": [
+    { "binding": "RATE_LIMIT", "id": "7410b0879b584637b83be68849e7c8e9" },
+    { "binding": "RESUME_STORE", "id": "7410b0879b584637b83be68849e7c8e9" }
+  ]
+  // Env vars (RESEND_API_KEY, TURNSTILE_SECRET_KEY, PUBLIC_TURNSTILE_SITE_KEY,
+  // CONTACT_TO_EMAIL, CONTACT_FROM_EMAIL) remain in the dashboard for now.
 }
