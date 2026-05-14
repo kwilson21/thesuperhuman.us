@@ -1,0 +1,31 @@
+---
+const items = [
+  {
+    title: 'Backend systems',
+    body: 'Python, Django, Rails, Postgres. Production reliability and observability are part of the deliverable.',
+  },
+  {
+    title: 'Data pipelines & ETL',
+    body: 'Dagster, custom ingestion, messy real-world data sources with undocumented contracts.',
+  },
+  {
+    title: 'Cross-team product work',
+    body: 'Interfaces between engineering, ops, and external vendors; migrations and deprecations.',
+  },
+  {
+    title: 'AI-assisted development advocacy',
+    body: 'Modeling Claude in feature planning, PR review, and PR description authorship.',
+  },
+];
+---
+<section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
+  <h2 class="heading mb-10">What I do</h2>
+  <div class="space-y-6">
+    {items.map(item => (
+      <p class="text-[1.0625rem] leading-relaxed max-w-measure">
+        <strong class="font-serif" style="font-weight: 600;">{item.title}.</strong>
+        <span class="text-ink">{' '}{item.body}</span>
+      </p>
+    ))}
+  </div>
+</section>

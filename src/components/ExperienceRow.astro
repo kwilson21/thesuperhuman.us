@@ -1,0 +1,16 @@
+---
+interface Props {
+  company: string;
+  role: string;
+  dates: string;
+  outcome: string;
+}
+const { company, role, dates, outcome } = Astro.props;
+---
+<div class="border-t border-rule py-5 grid gap-1 md:grid-cols-[1fr_2fr] md:gap-8 items-baseline">
+  <div>
+    <h3 class="font-serif text-lg" style="font-weight: 500;">{company}</h3>
+    <p class="eyebrow mt-1">{role} · {dates}</p>
+  </div>
+  <p class="text-[1.0625rem] leading-relaxed text-ink max-w-measure">{outcome}</p>
+</div>

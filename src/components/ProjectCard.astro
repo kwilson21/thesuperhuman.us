@@ -1,0 +1,15 @@
+---
+interface Props {
+  name: string;
+  url: string;
+  description: string;
+  stack: string[];
+}
+const { name, url, description, stack } = Astro.props;
+---
+<article class="border-t border-rule pt-6 pb-2">
+  <h3 class="font-serif text-2xl mb-2">{name}</h3>
+  <p class="text-[1.0625rem] leading-relaxed text-ink mb-3 max-w-measure">{description}</p>
+  <p class="font-mono text-xs text-muted mb-3">{stack.join(' · ')}</p>
+  <a href={url} class="text-sm" target="_blank" rel="noopener">Visit live →</a>
+</article>
