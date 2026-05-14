@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "thesuperhuman-us",
+  "main": "./dist/_worker.js/index.js",
+  "compatibility_date": "2026-05-14",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./dist"
+  },
+  "observability": {
+    "enabled": true
+  }
+  // KV namespace bindings (RATE_LIMIT, optional SESSION for Astro sessions)
+  // are bound via the Cloudflare dashboard:
+  //   Project → Settings → Variables and Secrets → KV namespace bindings
+  //
+  // Env vars (RESEND_API_KEY, TURNSTILE_SECRET_KEY, PUBLIC_TURNSTILE_SITE_KEY,
+  // CONTACT_TO_EMAIL, CONTACT_FROM_EMAIL) are set in the same dashboard.
+}
