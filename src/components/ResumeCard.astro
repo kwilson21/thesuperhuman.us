@@ -12,10 +12,10 @@ const { title, audience, description, href, sizeKb } = Astro.props;
   href={href}
   download
   class="block border border-rule bg-paper p-6 rounded-sm hover:border-accent transition-colors"
-  style="border-bottom-width: 1px;"
+  style="border-bottom: 1px solid var(--rule);"
 >
   <div class="eyebrow mb-3">{audience}</div>
-  <h3 class="font-serif text-xl mb-2" style="font-weight: 500;">{title}</h3>
+  <h3 class="font-serif font-medium text-xl mb-2">{title}</h3>
   <p class="text-sm text-muted leading-relaxed mb-4">{description}</p>
   <span class="font-sans text-xs font-medium text-accent">
     Download PDF · {sizeKb} KB →
