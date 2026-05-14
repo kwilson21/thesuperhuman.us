@@ -10,11 +10,11 @@ const { title, audience, description, audienceKey } = Astro.props;
 <a
   href={`#resume-request-form`}
   data-audience={audienceKey}
-  class="resume-card block border border-rule bg-paper p-6 rounded-sm transition-colors"
+  class="resume-card block md:grid md:grid-rows-subgrid md:row-span-4 border border-rule bg-paper p-6 rounded-sm transition-colors"
 >
-  <div class="eyebrow mb-3">{audience}</div>
-  <h3 class="font-serif font-medium text-xl mb-2">{title}</h3>
-  <p class="text-sm text-muted leading-relaxed mb-4">{description}</p>
+  <div class="eyebrow mb-3 md:mb-0">{audience}</div>
+  <h3 class="font-serif font-medium text-xl mb-2 md:mb-0">{title}</h3>
+  <p class="text-sm text-muted leading-relaxed mb-4 md:mb-0">{description}</p>
   <span class="font-sans text-xs font-medium text-accent">
     Request this resume →
   </span>
