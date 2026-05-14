@@ -11,7 +11,7 @@ export async function verifyTurnstile(
     body.set('response', token);
     body.set('remoteip', remoteIp);
 
-    const res = await fetch(ENDPOINT, { method: 'POST', body });
+    const res = await fetch(ENDPOINT, { method: 'POST', body, signal: AbortSignal.timeout(5000) });
     if (!res.ok) return false;
     const data = (await res.json()) as { success?: boolean };
     return data.success === true;
