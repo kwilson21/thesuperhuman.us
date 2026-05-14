@@ -1,5 +1,7 @@
 ---
 import { getEntry } from 'astro:content';
+import { Image } from 'astro:assets';
+import headshot from '~/assets/headshot.jpg';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import Footer from '~/components/Footer.astro';
 import ResumeCard from '~/components/ResumeCard.astro';
@@ -28,11 +30,13 @@ const jsonLd = {
 >
   <article class="mx-auto max-w-content px-6 py-16 md:py-24">
     <header class="mb-12 flex items-start gap-6">
-      <img
-        src="/headshot.jpg"
+      <Image
+        src={headshot}
         alt="Kazon Wilson"
-        width="120"
-        height="150"
+        width={240}
+        height={300}
+        format="avif"
+        quality={80}
         class="w-24 md:w-32 aspect-[4/5] object-cover object-[center_25%] rounded-sm"
       />
       <div>
