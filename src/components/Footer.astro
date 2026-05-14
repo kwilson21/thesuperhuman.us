@@ -1,5 +1,34 @@
 ---
+const year = new Date().getFullYear();
 ---
-<footer class="border-t border-rule mt-24 px-6 py-10 text-sm text-muted">
-  <div class="mx-auto max-w-page">Footer placeholder — to be built in Task 12.</div>
+<footer class="border-t border-rule mt-24">
+  <div class="mx-auto max-w-page px-6 py-12">
+    <div class="grid gap-8 md:grid-cols-3 text-sm text-muted">
+      <div>
+        <div class="eyebrow mb-3">Contact</div>
+        <p>
+          <a href="mailto:kazonwilson@gmail.com" style="color: var(--ink);">kazonwilson@gmail.com</a>
+        </p>
+        <p class="mt-1">Fairfield, CT → Northern Virginia</p>
+      </div>
+
+      <div>
+        <div class="eyebrow mb-3">Elsewhere</div>
+        <ul class="space-y-1">
+          <li>
+            <a href="https://github.com/kwilson21" target="_blank" rel="noopener" style="color: var(--ink);">GitHub</a>
+          </li>
+          <li>
+            <a href="https://www.linkedin.com/in/kazonwilson/" target="_blank" rel="noopener" style="color: var(--ink);">LinkedIn</a>
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <div class="eyebrow mb-3">Identity</div>
+        <p>The Superhuman Group LLC</p>
+        <p class="mt-1">© {year}</p>
+      </div>
+    </div>
+  </div>
 </footer>
