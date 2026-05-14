@@ -16,7 +16,9 @@
   // dashboard-managed encrypted secrets.
   "vars": {
     "CONTACT_TO_EMAIL": "kazon.wilson@thesuperhuman.us",
-    "CONTACT_FROM_EMAIL": "noreply@thesuperhuman.us"
+    // Resend sends from the verified subdomain notifs.thesuperhuman.us;
+    // the apex thesuperhuman.us is NOT a Resend sending domain.
+    "CONTACT_FROM_EMAIL": "noreply@notifs.thesuperhuman.us"
   },
   // Both bindings point at the same physical KV namespace — keys are
   // prefixed (rl:, req:, pdf:) to keep the data isolated.
