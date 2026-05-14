@@ -11,6 +11,13 @@
   "observability": {
     "enabled": true
   },
+  // Non-secret config: which mailbox receives inquiries, which envelope
+  // sender Resend uses. The Resend API key + Turnstile secret stay in
+  // dashboard-managed encrypted secrets.
+  "vars": {
+    "CONTACT_TO_EMAIL": "kazon.wilson@thesuperhuman.us",
+    "CONTACT_FROM_EMAIL": "noreply@thesuperhuman.us"
+  },
   // Both bindings point at the same physical KV namespace — keys are
   // prefixed (rl:, req:, pdf:) to keep the data isolated.
   // - RATE_LIMIT: rl:<ip> per-IP rate-limit windows
