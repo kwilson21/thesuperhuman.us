@@ -47,9 +47,9 @@ All three bindings point at the same physical KV namespace; key prefixes keep th
 
 | Binding | Keys stored |
 | --- | --- |
-| `RATE_LIMIT` | `rl:<ip>` — per-IP rate-limit windows |
-| `RESUME_STORE` | `req:<uuid>` — pending resume-request approval tokens · `pdf:general` / `pdf:dod` — the binary resume PDFs |
-| `SESSION` | (unused — satisfies the `@astrojs/cloudflare` adapter's default expectation; Astro sessions aren't used) |
+| `RATE_LIMIT` | `rl:<ip>` for per-IP rate-limit windows |
+| `RESUME_STORE` | `req:<uuid>` for pending resume-request approval tokens · `pdf:general` / `pdf:dod` for the binary resume PDFs |
+| `SESSION` | unused; satisfies the `@astrojs/cloudflare` adapter's default expectation. Astro sessions aren't used. |
 
 Declared in `wrangler.jsonc` `kv_namespaces` with explicit namespace IDs.
 
@@ -73,7 +73,7 @@ Re-run any of these whenever a resume changes.
 1. A visitor requests a resume via the form on `/about` (audience + name/email/company/note + Turnstile).
 2. `POST /api/resume-request` validates, rate-limits, and stores a single-use token in KV (`req:<uuid>`, 7-day TTL). It emails the operator (`CONTACT_TO_EMAIL`) with the request details and a one-click approval link.
 3. The operator clicks the approval link. `GET /api/resume-approve?id=<uuid>` looks up the token, reads the matching PDF from KV (`pdf:<audience>`), emails it to the requester as an attachment, and deletes the token. Single-use; the link can't be replayed.
-4. The approval link's "credential" is the UUID itself (~122 bits of entropy). Because delivery is bound to the requester's email stored in KV — not the URL — a leaked or intercepted link cannot redirect delivery elsewhere.
+4. The approval link's "credential" is the UUID itself (~122 bits of entropy). Because delivery is bound to the requester's email stored in KV (not the URL), a leaked or intercepted link cannot redirect delivery elsewhere.
 
 ## Regenerating the OG image
 

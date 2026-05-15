@@ -15,7 +15,7 @@ interface Env {
   RATE_LIMIT: KVNamespace;
   // KV namespace holding short-lived resume-request approval tokens (req:<id>)
   // and the binary resume PDFs (pdf:general | pdf:dod).
-  // Can point at the same physical KV namespace as RATE_LIMIT — key
+  // Can point at the same physical KV namespace as RATE_LIMIT; key
   // prefixes keep the data isolated.
   RESUME_STORE: KVNamespace;
 }

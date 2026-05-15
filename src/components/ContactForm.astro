@@ -97,7 +97,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 
   function showHint(types: string[]) {
     if (types.includes('Contract role') || types.includes('Advisory')) {
-      resumeHint.innerHTML = 'Want the full resume? Request <a href="/about?audience=general#resume-request-form">General</a> — each delivery needs my approval.';
+      resumeHint.innerHTML = 'Want the full resume? Request <a href="/about?audience=general#resume-request-form">General</a>. Each delivery needs my approval.';
       resumeHint.classList.remove('hidden');
     } else {
       resumeHint.classList.add('hidden');
@@ -170,7 +170,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
         status.textContent = json.error;
       }
     } catch {
-      status.textContent = 'Network error — please try again.';
+      status.textContent = 'Network error. Please try again.';
     }
   });
 </script>

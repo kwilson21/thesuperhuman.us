@@ -33,11 +33,11 @@ function primaryBody(input: ContactInput): string {
 
 function autoresponderBody(): string {
   return [
-    'Thanks for reaching out — I got your message and will respond within two business days.',
+    'Thanks for reaching out. I got your message and will respond within two business days.',
     '',
     'In the meantime, if you want a deeper look at my background, the resumes on https://thesuperhuman.us/about (general and DoD-focused) cover different angles.',
     '',
-    '— Kazon',
+    'Kazon',
   ].join('\n');
 }
 
@@ -92,18 +92,18 @@ export async function sendContactEmails(args: SendArgs): Promise<{ ok: boolean }
     apiKey: args.apiKey,
     from: args.from,
     to: args.to,
-    subject: `New inquiry from ${args.input.name} — ${args.input.projectType.join(', ')}`,
+    subject: `New inquiry from ${args.input.name}: ${args.input.projectType.join(', ')}`,
     text: primaryBody(args.input),
     replyTo: args.input.email,
   });
   if (!primaryOk) return { ok: false };
 
-  // Best-effort autoresponder — do not fail the request if this errors.
+  // Best-effort autoresponder. Do not fail the request if this errors.
   await sendOne({
     apiKey: args.apiKey,
     from: args.from,
     to: args.input.email,
-    subject: 'Thanks for reaching out — Kazon Wilson',
+    subject: 'Thanks for reaching out (Kazon Wilson)',
     text: autoresponderBody(),
   }).catch(() => false);
 
@@ -144,7 +144,7 @@ export async function sendResumeApprovalRequest(
     apiKey: args.apiKey,
     from: args.from,
     to: args.to,
-    subject: `Resume request from ${args.request.name} — ${args.request.audience}`,
+    subject: `Resume request from ${args.request.name}: ${args.request.audience}`,
     text: approvalNotificationBody(args.request, args.approvalUrl),
     replyTo: args.request.email,
   });
@@ -165,10 +165,10 @@ function deliveryBody(name: string): string {
   return [
     `Hi ${name},`,
     '',
-    'My resume is attached. Let me know if anything sparks a conversation —',
-    'reply to this email or use the contact form at https://thesuperhuman.us/#contact.',
+    'My resume is attached. Let me know if anything sparks a conversation.',
+    'Reply to this email or use the contact form at https://thesuperhuman.us/#contact.',
     '',
-    '— Kazon',
+    'Kazon',
   ].join('\n');
 }
 
@@ -179,7 +179,7 @@ export async function sendResumeDelivery(
     apiKey: args.apiKey,
     from: args.from,
     to: args.to,
-    subject: 'Your requested resume — Kazon Wilson',
+    subject: 'Your requested resume (Kazon Wilson)',
     text: deliveryBody(args.name),
     attachments: [
       {

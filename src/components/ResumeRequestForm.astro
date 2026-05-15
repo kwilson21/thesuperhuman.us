@@ -56,7 +56,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
   </div>
 
   <p class="text-xs text-muted">
-    Resumes contain personal contact details, so each request needs my approval before delivery — usually within a business day.
+    Resumes contain personal contact details, so each request needs my approval before delivery. Usually within a business day.
   </p>
 </form>
 
@@ -149,7 +149,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
           status!.textContent = json.error;
         }
       } catch {
-        status!.textContent = 'Network error — please try again.';
+        status!.textContent = 'Network error. Please try again.';
       }
     });
   }
