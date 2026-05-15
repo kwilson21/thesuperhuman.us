@@ -23,6 +23,10 @@ coverage/
 # BFG history-rewrite report (from one-off cleanup runs)
 ..bfg-report/
 
+# Local Claude Code context (rates and other operator-only data)
+CLAUDE.local.md
+CLAUDE.local.*
+
 # Editor
 .vscode/
 .idea/

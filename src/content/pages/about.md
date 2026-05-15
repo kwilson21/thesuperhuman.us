@@ -5,7 +5,7 @@ description: "Software engineer based in Connecticut, soon Northern Virginia. Ba
 
 Software engineer based in Connecticut (soon to be Northern Virginia). Seven-plus years building production systems in Python, with side trips through Ruby on Rails, TypeScript, and the messy real world of healthcare credentialing, insurance documents, and POS data ingestion.
 
-I'm most useful when a problem cuts across layers — when a UI bug turns out to be a data pipeline issue that turns out to be a business-logic miscommunication, and someone needs to chase it through all three. I like working close to the people who use what I build, and I gravitate toward roles where the engineering decisions are also product decisions.
+I'm most useful when a problem cuts across layers — when a UI bug turns out to be a data pipeline issue that turns out to be a business-logic miscommunication, and someone needs to chase it through all three. I like working close to the people who use what I build, and I gravitate toward engagements where the engineering decisions are also product decisions.
 
 ## About
 
@@ -13,7 +13,7 @@ I grew up around audio. My undergraduate degree is in audio production from Midd
 
 Since then I've worked across product engineering at Lyft, regulated insurance software at Sure, healthcare credentialing data ingestion at Axuall, and most recently as the sole data engineer at an early-stage startup. The throughline is data systems and product engineering — usually some mix of both. I tend to enjoy the operational and ownership parts of the job: knowing how a system fails, building observability so other people can debug it without paging me, and reducing the amount of manual work the team has to do.
 
-I'm currently looking for senior backend roles, with a preference for remote work or hybrid setups in the Northern Virginia area, where my family is planning to settle.
+These days I'm taking on senior contract engagements through The Superhuman Group LLC — backend systems, data pipelines, and the kind of cross-layer product work where senior execution is needed but a full-time hire isn't the right shape. Fixed-price, deliverable-based, async-first, remote or hybrid out of Northern Virginia, where my family is planning to settle.
 
 ## Selected work
 
