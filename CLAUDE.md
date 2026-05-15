@@ -41,7 +41,7 @@ See `README.md` for environment variables, KV bindings, the full resume request 
 
 ### Clearance posture
 
-No active security clearance. The **DoD-focused resume** is positioned for **non-cleared support work**: data engineering for prime contractors on unclassified efforts, subcontract roles, public-facing agency systems, and prime/sub positions willing to sponsor clearance for the right engagement. Never write copy that implies current cleared status (e.g., "TS/SCI cleared engineer," "active clearance"). If a client asks about clearance in a request, route them to the contact form — that's an operator-handled conversation.
+No active security clearance, but open to pursuing one for the right engagement. The **DoD-focused resume** is positioned for **non-cleared support work**: data engineering for prime contractors on unclassified efforts, subcontract roles, public-facing agency systems, and clearance-sponsoring prime/sub positions. Never write copy that implies current cleared status (e.g., "TS/SCI cleared engineer," "active clearance"). If a client asks about clearance in a request, route them to the contact form — that's an operator-handled conversation.
 
 ## Working Principles
 
