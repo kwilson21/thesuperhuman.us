@@ -1,6 +1,6 @@
 import type { KvLike } from './rate-limit';
 
-export const RESUME_AUDIENCES = ['general', 'leadership', 'dod'] as const;
+export const RESUME_AUDIENCES = ['general', 'dod'] as const;
 export type ResumeAudience = (typeof RESUME_AUDIENCES)[number];
 
 export interface ResumeRequest {

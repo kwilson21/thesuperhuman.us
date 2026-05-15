@@ -56,23 +56,17 @@ const jsonLd = {
       <p class="text-muted mb-10 max-w-measure">
         My resumes contain personal contact details, so each one is delivered by approval rather than direct download. Pick the version you want, fill in the short form below, and I'll send it within a business day.
       </p>
-      <div class="grid gap-5 md:grid-cols-3 md:grid-rows-[auto_auto_auto_auto] md:gap-y-3">
+      <div class="grid gap-5 md:grid-cols-2 md:grid-rows-[auto_auto_auto_auto] md:gap-y-3">
         <ResumeCard
           title="General"
-          audience="Hiring for backend, data, or general engineering roles?"
-          description="Full work history with technical depth and cross-team contributions."
+          audience="Hiring senior backend or data engineering contract work?"
+          description="Full work history with technical depth and cross-team contributions. The default choice for commercial engagements."
           audienceKey="general"
         />
         <ResumeCard
-          title="Leadership"
-          audience="Hiring for staff, principal, or engineering leadership?"
-          description="Emphasizes ownership, mentorship, cross-org influence, and AI-assisted development advocacy."
-          audienceKey="leadership"
-        />
-        <ResumeCard
           title="DoD-focused"
-          audience="Hiring for federal, defense, or cleared work?"
-          description="Tailored for DoD format and contracting context."
+          audience="Hiring for federal, defense, or government-adjacent work?"
+          description="Tailored for DoD format and contracting context. U.S. citizen, eligible for and willing to obtain DoD security clearance."
           audienceKey="dod"
         />
       </div>

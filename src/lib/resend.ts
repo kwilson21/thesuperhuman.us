@@ -35,7 +35,7 @@ function autoresponderBody(): string {
   return [
     'Thanks for reaching out — I got your message and will respond within two business days.',
     '',
-    'In the meantime, if you want a deeper look at my background, the resumes on https://thesuperhuman.us/about (general, leadership, and DoD-focused) cover different angles.',
+    'In the meantime, if you want a deeper look at my background, the resumes on https://thesuperhuman.us/about (general and DoD-focused) cover different angles.',
     '',
     '— Kazon',
   ].join('\n');

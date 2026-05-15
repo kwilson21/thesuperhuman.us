@@ -25,13 +25,13 @@ const sampleRequest = {
   name: 'Jane Doe',
   email: 'jane@example.com',
   company: 'Acme Corp',
-  audience: 'leadership' as ResumeAudience,
+  audience: 'dod' as ResumeAudience,
   note: 'Reviewing your background for a staff role.',
 };
 
 describe('RESUME_AUDIENCES', () => {
   it('exposes the three audience keys', () => {
-    expect(RESUME_AUDIENCES).toEqual(['general', 'leadership', 'dod']);
+    expect(RESUME_AUDIENCES).toEqual(['general', 'dod']);
   });
 });
 

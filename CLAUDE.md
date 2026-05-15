@@ -22,7 +22,7 @@ You are working on the personal contracting website of **Kazon Wilson**, operati
 - **URL:** thesuperhuman.us
 - **Stack:** Astro 5, TypeScript, Tailwind CSS, Cloudflare Workers + Static Assets, Resend, Turnstile, Cloudflare KV
 - **Resume delivery:** Approval-gated — PDFs stored in Cloudflare KV, emailed only after operator approval
-- **Three resume variants:** `pdf:general`, `pdf:leadership`, `pdf:dod`
+- **Two resume variants:** `pdf:general` (commercial contracting), `pdf:dod` (federal/defense)
 
 See `README.md` for environment variables, KV bindings, the full resume request flow, deployment commands, and OG image regeneration. Don't duplicate that information here.
 

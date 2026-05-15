@@ -9,7 +9,7 @@ const storedRequest: StoredResumeRequest = {
   name: 'Jane Doe',
   email: 'jane@example.com',
   company: 'Acme Corp',
-  audience: 'leadership',
+  audience: 'dod',
   note: 'Reviewing your background for a staff role.',
   ts: 1700000000000,
 };
@@ -35,7 +35,7 @@ describe('sendResumeApprovalRequest', () => {
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
     expect(body.to).toEqual(['kazon.wilson@thesuperhuman.us']);
     expect(body.subject).toContain('Jane Doe');
-    expect(body.subject).toContain('leadership');
+    expect(body.subject).toContain('dod');
     expect(body.text).toContain('jane@example.com');
     expect(body.text).toContain('Acme Corp');
     expect(body.text).toContain('Reviewing your background');
@@ -89,9 +89,9 @@ describe('sendResumeDelivery', () => {
       from: 'noreply@thesuperhuman.us',
       to: 'jane@example.com',
       name: 'Jane Doe',
-      audience: 'leadership',
+      audience: 'dod',
       pdf: pdfBytes,
-      filename: 'kazon-wilson-resume-leadership.pdf',
+      filename: 'kazon-wilson-resume-dod.pdf',
     });
     expect(result.ok).toBe(true);
 
@@ -100,7 +100,7 @@ describe('sendResumeDelivery', () => {
     expect(body.subject).toContain('resume');
     expect(body.text).toContain('Jane Doe');
     expect(body.attachments).toHaveLength(1);
-    expect(body.attachments[0].filename).toBe('kazon-wilson-resume-leadership.pdf');
+    expect(body.attachments[0].filename).toBe('kazon-wilson-resume-dod.pdf');
     // "%PDF" base64-encoded = "JVBERg=="
     expect(body.attachments[0].content).toBe('JVBERg==');
   });

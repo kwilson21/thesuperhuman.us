@@ -48,7 +48,7 @@ All three bindings point at the same physical KV namespace; key prefixes keep th
 | Binding | Keys stored |
 | --- | --- |
 | `RATE_LIMIT` | `rl:<ip>` — per-IP rate-limit windows |
-| `RESUME_STORE` | `req:<uuid>` — pending resume-request approval tokens · `pdf:general` / `pdf:leadership` / `pdf:dod` — the binary resume PDFs |
+| `RESUME_STORE` | `req:<uuid>` — pending resume-request approval tokens · `pdf:general` / `pdf:dod` — the binary resume PDFs |
 | `SESSION` | (unused — satisfies the `@astrojs/cloudflare` adapter's default expectation; Astro sessions aren't used) |
 
 Declared in `wrangler.jsonc` `kv_namespaces` with explicit namespace IDs.
@@ -58,9 +58,8 @@ Declared in `wrangler.jsonc` `kv_namespaces` with explicit namespace IDs.
 Resume PDFs are **never** committed to this repo and **never** served from `public/`. They live exclusively in KV and are emailed to requesters only after you approve each request.
 
 ```bash
-npx wrangler kv key put --binding=RESUME_STORE --remote pdf:general    --path "/path/to/KWilson_Resume_G_2026.pdf"
-npx wrangler kv key put --binding=RESUME_STORE --remote pdf:leadership --path "/path/to/KWilson_Resume_L_2026.pdf"
-npx wrangler kv key put --binding=RESUME_STORE --remote pdf:dod        --path "/path/to/KWilson_Resume_D_2026.pdf"
+npx wrangler kv key put --binding=RESUME_STORE --remote pdf:general --path "/path/to/KWilson_Resume_G_2026.pdf"
+npx wrangler kv key put --binding=RESUME_STORE --remote pdf:dod     --path "/path/to/KWilson_Resume_D_2026.pdf"
 ```
 
 Re-run any of these whenever a resume changes.

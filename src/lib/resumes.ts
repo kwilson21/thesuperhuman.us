@@ -2,7 +2,6 @@ import type { ResumeAudience } from './resume-requests';
 
 export const RESUME_FILENAMES: Record<ResumeAudience, string> = {
   general: 'kazon-wilson-resume-general.pdf',
-  leadership: 'kazon-wilson-resume-leadership.pdf',
   dod: 'kazon-wilson-resume-dod.pdf',
 };
 

@@ -11,7 +11,6 @@ function makeKv(value: ArrayBuffer | null) {
 describe('RESUME_FILENAMES', () => {
   it('maps each audience to a downloadable filename', () => {
     expect(RESUME_FILENAMES.general).toBe('kazon-wilson-resume-general.pdf');
-    expect(RESUME_FILENAMES.leadership).toBe('kazon-wilson-resume-leadership.pdf');
     expect(RESUME_FILENAMES.dod).toBe('kazon-wilson-resume-dod.pdf');
   });
 });
@@ -28,8 +27,6 @@ describe('loadResume', () => {
   it('passes through the correct audience key', async () => {
     const bytes = new ArrayBuffer(4);
     const kv = makeKv(bytes);
-    await loadResume(kv as any, 'leadership' as ResumeAudience);
-    expect(kv.get).toHaveBeenCalledWith('pdf:leadership', 'arrayBuffer');
     await loadResume(kv as any, 'dod' as ResumeAudience);
     expect(kv.get).toHaveBeenCalledWith('pdf:dod', 'arrayBuffer');
   });

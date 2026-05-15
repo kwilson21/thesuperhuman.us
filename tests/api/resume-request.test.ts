@@ -5,7 +5,7 @@ const validBody = {
   name: 'Jane Doe',
   email: 'jane@example.com',
   company: 'Acme',
-  audience: 'leadership',
+  audience: 'dod',
   note: '',
   turnstileToken: 'tok',
 };
@@ -128,6 +128,6 @@ describe('POST /api/resume-request', () => {
     const body = JSON.parse((resendCall![1] as RequestInit).body as string);
     expect(body.to).toEqual(['kazon.wilson@thesuperhuman.us']);
     expect(body.text).toContain('/api/resume-approve?id=');
-    expect(body.text).toContain('leadership');
+    expect(body.text).toContain('dod');
   });
 });

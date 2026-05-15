@@ -96,11 +96,8 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
   const resumeHint = document.getElementById('cf-resume-hint') as HTMLParagraphElement;
 
   function showHint(types: string[]) {
-    if (types.includes('Contract role')) {
-      resumeHint.innerHTML = 'Want the full resume? Request <a href="/about?audience=general#resume-request-form">General</a> or <a href="/about?audience=leadership#resume-request-form">Leadership</a> — each delivery needs my approval.';
-      resumeHint.classList.remove('hidden');
-    } else if (types.includes('Advisory')) {
-      resumeHint.innerHTML = 'Want the full resume? Request <a href="/about?audience=leadership#resume-request-form">Leadership</a> — each delivery needs my approval.';
+    if (types.includes('Contract role') || types.includes('Advisory')) {
+      resumeHint.innerHTML = 'Want the full resume? Request <a href="/about?audience=general#resume-request-form">General</a> — each delivery needs my approval.';
       resumeHint.classList.remove('hidden');
     } else {
       resumeHint.classList.add('hidden');

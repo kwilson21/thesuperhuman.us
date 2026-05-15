@@ -6,7 +6,7 @@ describe('validateResumeRequestInput', () => {
     name: 'Jane',
     email: 'jane@example.com',
     company: 'Acme',
-    audience: 'leadership',
+    audience: 'dod',
     note: '',
     turnstileToken: 'tok',
   };

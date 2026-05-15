@@ -48,7 +48,7 @@ const sampleRequest = {
   name: 'Jane Doe',
   email: 'jane@example.com',
   company: 'Acme',
-  audience: 'leadership' as const,
+  audience: 'dod' as const,
   note: '',
   ts: 1700000000000,
 };
@@ -79,7 +79,7 @@ describe('GET /api/resume-approve', () => {
 
   it('on success: emails the requester with PDF, deletes the request, returns 200 HTML', async () => {
     const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]).buffer; // "%PDF-"
-    const kv = makeBinaryKv({ 'pdf:leadership': pdf }, { 'req:abc': sampleRequest });
+    const kv = makeBinaryKv({ 'pdf:dod': pdf }, { 'req:abc': sampleRequest });
     const res = await GET(makeContext('abc', kv));
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('text/html');
@@ -96,12 +96,12 @@ describe('GET /api/resume-approve', () => {
     const body = JSON.parse((resendCall![1] as RequestInit).body as string);
     expect(body.to).toEqual(['jane@example.com']);
     expect(body.attachments).toHaveLength(1);
-    expect(body.attachments[0].filename).toBe('kazon-wilson-resume-leadership.pdf');
+    expect(body.attachments[0].filename).toBe('kazon-wilson-resume-dod.pdf');
   });
 
   it('does not delete the request when send fails', async () => {
     const pdf = new ArrayBuffer(4);
-    const kv = makeBinaryKv({ 'pdf:leadership': pdf }, { 'req:abc': sampleRequest });
+    const kv = makeBinaryKv({ 'pdf:dod': pdf }, { 'req:abc': sampleRequest });
     (fetch as any).mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
     const res = await GET(makeContext('abc', kv));
     expect(res.status).toBe(500);
