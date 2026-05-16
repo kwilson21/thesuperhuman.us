@@ -20,7 +20,13 @@ export default defineConfig({
       changefreq: 'monthly',
       priority: 0.7,
       lastmod: new Date(),
-      filter: (page) => !page.includes('/api/'),
+      // Exclude API routes and the /notes index. The notes index is a
+      // list of links with no unique content of its own; the value lives
+      // in the individual posts, which are listed in the sitemap on their
+      // own. Google will still discover /notes via internal links.
+      filter: (page) =>
+        !page.includes('/api/') &&
+        !/^https:\/\/thesuperhuman\.us\/notes\/?$/.test(page),
     }),
   ],
 });

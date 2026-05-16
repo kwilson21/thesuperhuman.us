@@ -1,0 +1,75 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Footer from '~/components/Footer.astro';
+
+const notes = (await getCollection('notes', ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf(),
+);
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://thesuperhuman.us/notes#collectionpage',
+  url: 'https://thesuperhuman.us/notes',
+  name: 'Notes',
+  description:
+    'First-hand technical writing on backend systems, ETL pipelines, and the messy operational reality of regulated-industry data work.',
+  isPartOf: { '@id': 'https://thesuperhuman.us/#site' },
+  author: { '@id': 'https://thesuperhuman.us/#kazon' },
+  breadcrumb: {
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://thesuperhuman.us/' },
+      { '@type': 'ListItem', position: 2, name: 'Notes', item: 'https://thesuperhuman.us/notes' },
+    ],
+  },
+};
+
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+});
+---
+<BaseLayout
+  title="Notes by Kazon Wilson"
+  description="First-hand technical writing on backend systems, ETL pipelines, and the messy operational reality of regulated-industry data work."
+  jsonLd={jsonLd}
+  noindex={notes.length === 0}
+>
+  <article class="mx-auto max-w-content px-6 py-16 md:py-24">
+    <header class="mb-12">
+      <h1 class="display mb-3">Notes</h1>
+      <p class="lede max-w-measure text-muted">
+        Long-form writing on backend systems, ETL pipelines, and the operational side of building production software.
+      </p>
+    </header>
+
+    {notes.length === 0 ? (
+      <p class="text-muted">No notes published yet.</p>
+    ) : (
+      <ul class="space-y-10">
+        {notes.map((note) => (
+          <li class="border-t border-rule pt-6">
+            <p class="eyebrow mb-2">
+              <time datetime={note.data.date.toISOString()}>
+                {dateFormatter.format(note.data.date)}
+              </time>
+            </p>
+            <h2 class="font-serif text-2xl mb-2">
+              <a href={`/notes/${note.slug}`} style="border-bottom: none;">{note.data.title}</a>
+            </h2>
+            {note.data.description && (
+              <p class="text-[1.0625rem] leading-relaxed text-ink max-w-measure">
+                {note.data.description}
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+    )}
+  </article>
+
+  <Footer slot="footer" />
+</BaseLayout>

@@ -8,6 +8,7 @@ interface Props {
   ogImageAlt?: string;
   ogType?: 'website' | 'profile' | 'article';
   jsonLd?: Record<string, unknown>;
+  noindex?: boolean;
 }
 
 const {
@@ -17,6 +18,7 @@ const {
   ogImageAlt = 'The Superhuman Group LLC',
   ogType = 'website',
   jsonLd,
+  noindex = false,
 } = Astro.props;
 const canonical = new URL(Astro.url.pathname, Astro.site).toString();
 const ogImageUrl = new URL(ogImage, Astro.site).toString();
@@ -35,6 +37,7 @@ function jsonLdString(data: object): string {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
+    {noindex && <meta name="robots" content="noindex,follow" />}
     <link rel="canonical" href={canonical} />
 
     <meta property="og:type" content={ogType} />
