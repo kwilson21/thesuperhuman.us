@@ -11,9 +11,9 @@ export default {
         accent: 'var(--accent)',
       },
       fontFamily: {
-        serif: ['Newsreader', 'Iowan Old Style', 'Georgia', 'serif'],
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['JetBrains Mono', 'SF Mono', 'Menlo', 'monospace'],
+        serif: ['"Newsreader Variable"', 'Newsreader', 'Iowan Old Style', 'Georgia', 'serif'],
+        sans: ['"Inter Variable"', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['"JetBrains Mono Variable"', 'JetBrains Mono', 'SF Mono', 'Menlo', 'monospace'],
       },
       maxWidth: {
         measure: '38rem',
