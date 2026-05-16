@@ -1,6 +1,6 @@
 ---
-title: "About · Kazon Wilson"
-description: "Software engineer based in Connecticut, soon Northern Virginia. Backend and data systems, with side trips through Ruby on Rails and TypeScript."
+title: "About Kazon Wilson, senior backend and data engineer"
+description: "Background, selected engagements at Lyft, Sure, Axuall, and Scotch, plus side work on Kaillera-next, Kova, and self-hosted infrastructure. Senior contract engineer through The Superhuman Group LLC."
 ---
 
 Software engineer based in Connecticut (soon to be Northern Virginia). Seven-plus years building production systems in Python, with side trips through Ruby on Rails, TypeScript, and the messy real world of healthcare credentialing, insurance documents, and POS data ingestion.

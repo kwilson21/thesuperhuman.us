@@ -9,20 +9,76 @@ import ContactForm from '~/components/ContactForm.astro';
 
 const jsonLd = {
   '@context': 'https://schema.org',
-  '@type': 'Person',
-  name: 'Kazon Wilson',
-  jobTitle: 'Software Engineer',
-  url: 'https://thesuperhuman.us',
-  sameAs: [
-    'https://github.com/kwilson21',
-    'https://www.linkedin.com/in/kazonwilson/',
+  '@graph': [
+    {
+      '@type': 'Person',
+      '@id': 'https://thesuperhuman.us/#kazon',
+      name: 'Kazon Wilson',
+      givenName: 'Kazon',
+      familyName: 'Wilson',
+      jobTitle: 'Senior Backend & Data Engineer',
+      description:
+        'Backend and data engineer with 7+ years of production experience in Python, Django, Rails, PostgreSQL, and Dagster. Contracts through The Superhuman Group LLC.',
+      url: 'https://thesuperhuman.us/',
+      image: 'https://thesuperhuman.us/og-image.png',
+      sameAs: [
+        'https://github.com/kwilson21',
+        'https://www.linkedin.com/in/kazonwilson/',
+      ],
+      knowsAbout: [
+        'Python',
+        'Django',
+        'Flask',
+        'Ruby on Rails',
+        'TypeScript',
+        'PostgreSQL',
+        'Dagster',
+        'ETL pipelines',
+        'Data engineering',
+        'Backend API development',
+        'AWS',
+        'Docker',
+        'Healthcare credentialing systems',
+        'Insurance document systems',
+      ],
+      alumniOf: {
+        '@type': 'CollegeOrUniversity',
+        name: 'Middle Tennessee State University',
+      },
+      worksFor: { '@id': 'https://thesuperhuman.us/#org' },
+    },
+    {
+      '@type': 'Organization',
+      '@id': 'https://thesuperhuman.us/#org',
+      name: 'The Superhuman Group LLC',
+      url: 'https://thesuperhuman.us/',
+      logo: 'https://thesuperhuman.us/og-image.png',
+      founder: { '@id': 'https://thesuperhuman.us/#kazon' },
+      foundingLocation: { '@type': 'Place', name: 'Wyoming, USA' },
+      areaServed: 'United States',
+      knowsAbout: [
+        'Backend engineering',
+        'Data engineering',
+        'ETL pipelines',
+        'API development',
+        'Healthcare data systems',
+      ],
+    },
+    {
+      '@type': 'WebSite',
+      '@id': 'https://thesuperhuman.us/#site',
+      url: 'https://thesuperhuman.us/',
+      name: 'The Superhuman Group',
+      publisher: { '@id': 'https://thesuperhuman.us/#org' },
+      inLanguage: 'en-US',
+    },
   ],
-  worksFor: { '@type': 'Organization', name: 'The Superhuman Group LLC' },
 };
 ---
 <BaseLayout
-  title="Kazon Wilson · Backend & data engineer, available for contract work"
-  description="Backend and data engineer with 7+ years of production systems. Contracting through The Superhuman Group LLC."
+  title="Kazon Wilson, senior backend and data engineer for contract work"
+  description="Senior contractor specializing in Python backends, Dagster ETL pipelines, and data systems for regulated industries. 7+ years across Lyft, Sure (Toggle homeowners insurance), and healthcare credentialing at Axuall. Available through The Superhuman Group LLC."
+  ogImageAlt="Kazon Wilson, senior backend and data engineer"
   jsonLd={jsonLd}
 >
   <Hero />
