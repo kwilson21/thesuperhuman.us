@@ -31,7 +31,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
   <fieldset>
     <legend class="eyebrow mb-3">Project type</legend>
     <div class="flex flex-wrap gap-2">
-      {['Backend systems', 'Data pipelines', 'Contract role', 'Advisory', 'Other'].map(t => (
+      {['Backend systems', 'Data pipelines', 'Contract role', 'Full-time role', 'Advisory', 'Other'].map(t => (
         <label class="cf-chip cursor-pointer">
           <input type="checkbox" name="projectType" value={t} class="sr-only peer" />
           <span class="inline-block border border-rule px-3 py-1.5 text-sm rounded-full peer-checked:bg-ink peer-checked:text-paper peer-checked:border-ink">
@@ -96,7 +96,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
   const resumeHint = document.getElementById('cf-resume-hint') as HTMLParagraphElement;
 
   function showHint(types: string[]) {
-    if (types.includes('Contract role') || types.includes('Advisory')) {
+    if (types.includes('Contract role') || types.includes('Full-time role') || types.includes('Advisory')) {
       resumeHint.innerHTML = 'Want the full resume? Request <a href="/about?audience=general#resume-request-form">General</a>. Each delivery needs my approval.';
       resumeHint.classList.remove('hidden');
     } else {

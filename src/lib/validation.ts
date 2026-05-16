@@ -2,6 +2,7 @@ export const PROJECT_TYPES = [
   'Backend systems',
   'Data pipelines',
   'Contract role',
+  'Full-time role',
   'Advisory',
   'Other',
 ] as const;
