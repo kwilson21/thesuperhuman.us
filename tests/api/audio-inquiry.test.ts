@@ -64,7 +64,8 @@ describe('POST /api/audio-inquiry', () => {
   it('returns 200 ok=true on valid submission', async () => {
     const res = await POST(makeContext(validBody));
     expect(res.status).toBe(200);
-    expect((await res.json()).ok).toBe(true);
+    const json = (await res.json()) as { ok: boolean };
+    expect(json.ok).toBe(true);
   });
 
   it('returns 400 with errors on invalid input', async () => {
