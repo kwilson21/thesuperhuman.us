@@ -1,0 +1,162 @@
+---
+import { AUDIO_SERVICES, DELIVERY_METHODS } from '~/lib/audio-validation';
+const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
+---
+<form id="audio-form" class="space-y-6 max-w-content" novalidate>
+  <noscript>
+    <p class="text-sm" style="color: var(--accent);">
+      This form requires JavaScript. Email
+      <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>
+      directly.
+    </p>
+  </noscript>
+
+  <div class="grid gap-5 md:grid-cols-2">
+    <div>
+      <label class="eyebrow block mb-2" for="af-name">Name</label>
+      <input id="af-name" name="name" type="text" required maxlength="100" class="w-full border border-rule bg-paper px-3 py-2 text-base rounded-sm focus:outline-none focus:border-accent" />
+      <p class="af-error text-sm mt-1 hidden" data-field="name" style="color: var(--accent);"></p>
+    </div>
+    <div>
+      <label class="eyebrow block mb-2" for="af-email">Email</label>
+      <input id="af-email" name="email" type="email" required maxlength="120" class="w-full border border-rule bg-paper px-3 py-2 text-base rounded-sm focus:outline-none focus:border-accent" />
+      <p class="af-error text-sm mt-1 hidden" data-field="email" style="color: var(--accent);"></p>
+    </div>
+  </div>
+
+  <fieldset>
+    <legend class="eyebrow mb-3">Service interest</legend>
+    <div class="flex flex-wrap gap-2">
+      {AUDIO_SERVICES.map((s) => (
+        <label class="af-chip cursor-pointer">
+          <input type="checkbox" name="services" value={s} class="sr-only peer" />
+          <span class="inline-block border border-rule px-3 py-1.5 text-sm rounded-full capitalize peer-checked:bg-ink peer-checked:text-paper peer-checked:border-ink">
+            {s}
+          </span>
+        </label>
+      ))}
+    </div>
+    <p class="af-error text-sm mt-2 hidden" data-field="services" style="color: var(--accent);"></p>
+  </fieldset>
+
+  <div class="grid gap-5 md:grid-cols-2">
+    <div>
+      <label class="eyebrow block mb-2" for="af-tracks">Number of tracks <span class="text-muted normal-case tracking-normal">(optional)</span></label>
+      <input id="af-tracks" name="trackCount" type="number" min="1" max="1000" class="w-full border border-rule bg-paper px-3 py-2 text-base rounded-sm focus:outline-none focus:border-accent" />
+      <p class="af-error text-sm mt-1 hidden" data-field="trackCount" style="color: var(--accent);"></p>
+    </div>
+    <div>
+      <label class="eyebrow block mb-2" for="af-date">Target delivery date</label>
+      <input id="af-date" name="targetDate" type="date" class="w-full border border-rule bg-paper px-3 py-2 text-base rounded-sm focus:outline-none focus:border-accent" />
+      <label class="inline-flex items-center gap-2 mt-2 text-sm">
+        <input type="checkbox" name="flexible" /> Flexible
+      </label>
+      <p class="af-error text-sm mt-1 hidden" data-field="targetDate" style="color: var(--accent);"></p>
+    </div>
+  </div>
+
+  <div>
+    <label class="eyebrow block mb-2" for="af-references">Reference tracks <span class="text-muted normal-case tracking-normal">(optional)</span></label>
+    <textarea id="af-references" name="references" rows={2} maxlength="2000" class="w-full border border-rule bg-paper px-3 py-2 text-base rounded-sm focus:outline-none focus:border-accent"></textarea>
+  </div>
+
+  <div>
+    <label class="eyebrow block mb-2" for="af-delivery">File delivery method</label>
+    <select id="af-delivery" name="delivery" required class="w-full border border-rule bg-paper px-3 py-2 text-base rounded-sm focus:outline-none focus:border-accent">
+      <option value="">Pick one</option>
+      {DELIVERY_METHODS.map((d) => <option value={d}>{d}</option>)}
+    </select>
+    <p class="af-error text-sm mt-1 hidden" data-field="delivery" style="color: var(--accent);"></p>
+  </div>
+
+  <div>
+    <label class="eyebrow block mb-2" for="af-notes">Project notes</label>
+    <textarea id="af-notes" name="notes" rows={5} required minlength="40" maxlength="4000" class="w-full border border-rule bg-paper px-3 py-2 text-base rounded-sm focus:outline-none focus:border-accent"></textarea>
+    <p class="af-error text-sm mt-1 hidden" data-field="notes" style="color: var(--accent);"></p>
+  </div>
+
+  <div class="cf-turnstile" data-sitekey={turnstileSiteKey}></div>
+  <p class="af-error text-sm mt-1 hidden" data-field="turnstileToken" style="color: var(--accent);"></p>
+
+  <div>
+    <button type="submit" class="btn-primary">Send inquiry</button>
+    <p id="af-status" class="text-sm mt-3 hidden"></p>
+  </div>
+</form>
+
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+
+<script>
+  const form = document.getElementById('audio-form') as HTMLFormElement;
+  const status = document.getElementById('af-status') as HTMLParagraphElement;
+
+  function clearErrors() {
+    form.querySelectorAll('.af-error').forEach((el) => {
+      (el as HTMLElement).classList.add('hidden');
+      el.textContent = '';
+    });
+  }
+
+  function showErrors(errors: Record<string, string>) {
+    for (const [field, message] of Object.entries(errors)) {
+      const el = form.querySelector(`.af-error[data-field="${field}"]`) as HTMLElement | null;
+      if (el) {
+        el.textContent = message;
+        el.classList.remove('hidden');
+      }
+    }
+  }
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    clearErrors();
+
+    const fd = new FormData(form);
+    const services = fd.getAll('services').map(String);
+    const trackCountStr = String(fd.get('trackCount') ?? '');
+    const tokenInput = form.querySelector('input[name="cf-turnstile-response"]') as HTMLInputElement | null;
+    const turnstileToken = tokenInput?.value ?? '';
+
+    const payload = {
+      name: String(fd.get('name') ?? ''),
+      email: String(fd.get('email') ?? ''),
+      services,
+      trackCount: trackCountStr ? parseInt(trackCountStr, 10) : null,
+      targetDate: String(fd.get('targetDate') ?? ''),
+      flexible: fd.get('flexible') === 'on',
+      references: String(fd.get('references') ?? ''),
+      delivery: String(fd.get('delivery') ?? ''),
+      notes: String(fd.get('notes') ?? ''),
+      turnstileToken,
+    };
+
+    status.classList.remove('hidden');
+    status.textContent = 'Sending…';
+    status.style.color = 'var(--muted)';
+
+    try {
+      const res = await fetch('/api/audio-inquiry', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = (await res.json()) as { ok: boolean; errors?: Record<string, string>; error?: string };
+      if (data.ok) {
+        status.textContent = 'Thanks. I will respond within two business days.';
+        status.style.color = 'var(--ink)';
+        form.reset();
+        (window as any).turnstile?.reset();
+      } else if (data.errors) {
+        showErrors(data.errors);
+        status.textContent = 'Please fix the highlighted fields.';
+        status.style.color = 'var(--accent)';
+      } else {
+        status.textContent = data.error ?? 'Something went wrong.';
+        status.style.color = 'var(--accent)';
+      }
+    } catch {
+      status.textContent = 'Network error. Please try again or email kazon.wilson@thesuperhuman.us directly.';
+      status.style.color = 'var(--accent)';
+    }
+  });
+</script>
