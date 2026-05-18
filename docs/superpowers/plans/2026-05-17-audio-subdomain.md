@@ -62,34 +62,13 @@
 **Files:**
 - Modify: `wrangler.jsonc`
 
-- [ ] **Step 1: Add the AUDIO R2 binding and audio host route to wrangler.jsonc**
+The existing `wrangler.jsonc` has no `routes` field; the worker is bound to `thesuperhuman.us` and `www.thesuperhuman.us` via Cloudflare dashboard (Custom Domains or dashboard-managed Workers Routes). Adding a `routes` array now would take ownership of route management away from the dashboard and could override the existing bindings on next deploy. Therefore this task only adds the R2 binding here; binding `audio.thesuperhuman.us` to the Worker is an operator step covered in Task 24.
 
-Open `wrangler.jsonc` and add `r2_buckets` (new top-level key) and `routes` entries. The full edit is two additions:
+- [ ] **Step 1: Add the AUDIO R2 binding to wrangler.jsonc**
+
+Open `wrangler.jsonc` and add a top-level `r2_buckets` array. Preserve all existing inline comments (the file is JSON-with-comments). The minimal edit:
 
 ```jsonc
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "thesuperhuman-us",
-  "main": "./dist/_worker.js/index.js",
-  "compatibility_date": "2026-05-14",
-  "compatibility_flags": ["nodejs_compat"],
-  "assets": {
-    "binding": "ASSETS",
-    "directory": "./dist"
-  },
-  "observability": {
-    "enabled": true
-  },
-  "routes": [
-    { "pattern": "thesuperhuman.us/*", "zone_name": "thesuperhuman.us" },
-    { "pattern": "www.thesuperhuman.us/*", "zone_name": "thesuperhuman.us" },
-    { "pattern": "audio.thesuperhuman.us/*", "zone_name": "thesuperhuman.us" }
-  ],
-  "vars": {
-    "CONTACT_TO_EMAIL": "kazon.wilson@thesuperhuman.us",
-    "CONTACT_FROM_EMAIL": "noreply@notifs.thesuperhuman.us",
-    "PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAADPYWKMQT_mbi4O-"
-  },
   "kv_namespaces": [
     { "binding": "RATE_LIMIT", "id": "7410b0879b584637b83be68849e7c8e9" },
     { "binding": "RESUME_STORE", "id": "7410b0879b584637b83be68849e7c8e9" },
@@ -98,16 +77,18 @@ Open `wrangler.jsonc` and add `r2_buckets` (new top-level key) and `routes` entr
   "r2_buckets": [
     { "binding": "AUDIO", "bucket_name": "superhuman-audio" }
   ]
+  // Sensitive values (RESEND_API_KEY, TURNSTILE_SECRET_KEY) are dashboard-
+  // managed encrypted secrets; everything else is version-controlled above.
 }
 ```
 
-Note: keep any existing comments in `wrangler.jsonc` that are not shown above; the file format is JSON-with-comments. Do not delete inline comments.
+Do not add a `routes` field. Keep the existing comments around the `kv_namespaces` block intact.
 
 - [ ] **Step 2: Commit**
 
 ```bash
 git add wrangler.jsonc
-git commit -m "wrangler: bind AUDIO R2 bucket and add audio.thesuperhuman.us route"
+git commit -m "wrangler: bind AUDIO R2 bucket"
 ```
 
 ---
@@ -2221,15 +2202,17 @@ Run (operator, with Cloudflare-authenticated CLI):
 npx wrangler r2 bucket create superhuman-audio
 ```
 
-- [ ] **Step 2: Add the DNS record**
+- [ ] **Step 2: Bind audio.thesuperhuman.us to the Worker via the Cloudflare dashboard**
 
-In Cloudflare DNS for `thesuperhuman.us`, add:
+The existing site is bound to the Worker via Cloudflare dashboard configuration (Custom Domain or Workers Route), not via `wrangler.jsonc`. Add `audio.thesuperhuman.us` the same way:
 
-| Type | Name | Target | Proxy |
-|---|---|---|---|
-| CNAME | audio | thesuperhuman.us | Proxied (orange cloud) |
+- Open the Cloudflare dashboard → Workers & Pages → `thesuperhuman-us` worker → Settings → Triggers (or Domains & Routes, depending on the dashboard version).
+- Mirror whatever mechanism currently binds `thesuperhuman.us`:
+  - If it's a Custom Domain, add `audio.thesuperhuman.us` as a Custom Domain. Cloudflare provisions the DNS record automatically.
+  - If it's a Workers Route, add a route for `audio.thesuperhuman.us/*` on the `thesuperhuman.us` zone, then add a proxied CNAME `audio → thesuperhuman.us` in DNS.
+- If neither exists, prefer the Custom Domain path (simplest).
 
-(Or an A record pointing at the same Worker; CNAME-with-flattening at the apex still works for the subdomain.)
+After binding, confirm `dig audio.thesuperhuman.us` returns Cloudflare IPs and curl reaches the Worker.
 
 - [ ] **Step 3: Add audio.thesuperhuman.us to the Turnstile widget hostname allowlist**
 
@@ -2248,7 +2231,7 @@ npm run build
 npx wrangler deploy
 ```
 
-Wrangler picks up the new route entries from `wrangler.jsonc` and serves the audio host from the same Worker.
+The deploy publishes the new R2 binding. Routing for the audio host comes from the dashboard binding configured in Step 2; nothing in `wrangler.jsonc` needs to change for the route itself.
 
 - [ ] **Step 5: Verify production**
 
