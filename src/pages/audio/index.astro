@@ -1,0 +1,56 @@
+---
+export const prerender = false;
+
+import { getCollection } from 'astro:content';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import AudioHero from '~/components/audio/AudioHero.astro';
+import ServiceSection from '~/components/audio/ServiceSection.astro';
+import BookingForm from '~/components/audio/BookingForm.astro';
+import AudioFooter from '~/components/audio/AudioFooter.astro';
+import { groupTracksByService, type AudioTrack } from '~/lib/audio-tracks';
+
+const entries = await getCollection('audio-tracks');
+const tracks: AudioTrack[] = entries.map((e) => ({
+  slug: e.id,
+  ...(e.data as Omit<AudioTrack, 'slug'>),
+}));
+const groups = groupTracksByService(tracks);
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Person',
+  name: 'Kazon Wilson',
+  jobTitle: 'Audio Engineer',
+  url: 'https://audio.thesuperhuman.us',
+  worksFor: { '@type': 'Organization', name: 'The Superhuman Group LLC' },
+};
+---
+<BaseLayout
+  title="Kazon Wilson · Audio engineering through The Superhuman Group LLC"
+  description="Mixing, mastering, production, and recording. Fixed-price, async delivery."
+  jsonLd={jsonLd}
+>
+  <AudioHero />
+
+  <section class="mx-auto max-w-content px-6 py-12 border-t border-rule">
+    <p class="text-[1.0625rem] leading-relaxed max-w-measure">
+      I am a working audio engineer with an MTSU undergraduate degree in audio production. I take on mixing, mastering, production, and remote recording engagements for independent and label-affiliated artists. Engagements are fixed-price and project-scoped; communication is async-first.
+    </p>
+  </section>
+
+  {groups.map((g) => <ServiceSection service={g.service} tracks={g.tracks} />)}
+
+  <section id="book" class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
+    <h2 class="heading mb-3">Book a project</h2>
+    <p class="text-base text-muted mb-10 max-w-measure">
+      Tell me about the project. I usually reply within two business days.
+    </p>
+    <BookingForm />
+  </section>
+
+  <script>
+    import '~/scripts/audio-player-coordinator';
+  </script>
+
+  <AudioFooter slot="footer" />
+</BaseLayout>
