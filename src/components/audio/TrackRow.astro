@@ -1,0 +1,30 @@
+---
+import type { AudioRole, AudioTrack } from '~/lib/audio-tracks';
+interface Props {
+  track: AudioTrack;
+}
+const { track } = Astro.props;
+const ROLE_LABEL: Record<AudioRole, string> = {
+  mix: 'Mixed',
+  master: 'Mastered',
+  produce: 'Produced',
+  record: 'Recorded',
+};
+const roleText = track.role.map((r) => ROLE_LABEL[r]).join(', ');
+const src = `/file/${track.slug}`;
+---
+<article class="track-row py-5 border-b border-rule">
+  <div class="flex items-baseline gap-3 mb-2">
+    <h3 class="text-lg font-medium">{track.title}</h3>
+    <span class="text-sm text-muted">— {track.artist}</span>
+  </div>
+  <p class="eyebrow mb-3">{track.year} · {track.length} · {roleText}</p>
+  <audio
+    class="audio-player w-full"
+    controls
+    preload="none"
+    controlslist="nodownload"
+    src={src}
+  ></audio>
+  <p class="text-sm mt-3 max-w-measure" style="color: var(--muted);">{track.notes}</p>
+</article>
