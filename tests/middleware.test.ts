@@ -19,7 +19,7 @@ describe('middleware.onRequest', () => {
   it('passes through for the software host', async () => {
     const ctx = makeContext('https://thesuperhuman.us/', 'thesuperhuman.us');
     const next = vi.fn(async () => new Response('next', { status: 200 }));
-    const res = await onRequest(ctx, next);
+    const res = (await onRequest(ctx, next)) as Response;
     expect(next).toHaveBeenCalled();
     expect(ctx.rewrite).not.toHaveBeenCalled();
     expect(await res.text()).toBe('next');
