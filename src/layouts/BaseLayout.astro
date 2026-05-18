@@ -1,5 +1,6 @@
 ---
 import '~/styles/global.css';
+import { publicCanonicalFor } from '~/lib/canonical';
 
 interface Props {
   title: string;
@@ -9,7 +10,9 @@ interface Props {
 }
 
 const { title, description, ogImage = '/og-image.png', jsonLd } = Astro.props;
-const canonical = new URL(Astro.url.pathname, Astro.site).toString();
+const hostHeader = Astro.request.headers.get('host');
+const canonical = publicCanonicalFor(Astro.url, hostHeader);
+const ogImageUrl = new URL(ogImage, canonical).toString();
 
 function jsonLdString(data: object): string {
   return JSON.stringify(data)
@@ -31,7 +34,7 @@ function jsonLdString(data: object): string {
     <meta property="og:url" content={canonical} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta property="og:image" content={new URL(ogImage, Astro.site).toString()} />
+    <meta property="og:image" content={ogImageUrl} />
     <meta name="twitter:card" content="summary_large_image" />
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
