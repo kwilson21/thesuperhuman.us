@@ -35,6 +35,9 @@
     // sessions anywhere; binding the name to the same KV namespace
     // suppresses the warning at zero cost.
     { "binding": "SESSION", "id": "7410b0879b584637b83be68849e7c8e9" }
+  ],
+  "r2_buckets": [
+    { "binding": "AUDIO", "bucket_name": "superhuman-audio" }
   ]
   // Sensitive values (RESEND_API_KEY, TURNSTILE_SECRET_KEY) are dashboard-
   // managed encrypted secrets; everything else is version-controlled above.
