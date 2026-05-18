@@ -68,7 +68,19 @@ On the software host (`thesuperhuman.us`), no rewriting occurs; requests are pas
 
 The middleware never issues an HTTP redirect; rewrites are internal so the browser keeps the clean URL.
 
-The middleware never issues an HTTP redirect; rewrites are internal so the browser keeps the clean URL.
+### Prerender opt-out for host-routed pages
+
+Astro middleware only runs on server-rendered routes. Because the project uses `output: 'static'` (every page prerenders by default), the routes that host-aware rewriting must intercept have to opt out of prerendering with `export const prerender = false`. This applies to:
+
+- `src/pages/index.astro` (so `audio.thesuperhuman.us/` triggers middleware before static-asset resolution)
+- `src/pages/about.astro` (same, for `audio.thesuperhuman.us/about`)
+- All new `src/pages/audio/**` pages
+
+Cloudflare edge caching offsets the server-rendering cost for these handful of routes. Response cache hints (`Cache-Control: public, s-maxage=...`) are set per page as needed.
+
+### Canonical and OpenGraph URLs
+
+`src/layouts/BaseLayout.astro` currently builds canonical URLs from `Astro.site` (fixed to `https://thesuperhuman.us`). Audio-host requests rendered through `/audio/...` would otherwise advertise `https://thesuperhuman.us/audio/...` in `<link rel="canonical">` and `og:url`. To prevent that, BaseLayout reads the request host via `Astro.request.headers.get('host')` (with `Astro.url.host` as a fallback) and, for the audio host, returns `https://audio.thesuperhuman.us/<unrewritten path>` (i.e., the `/audio/` internal prefix is stripped back out for the public URL). This works because audio pages are server-rendered, so `Astro.url.host` reflects the actual request host.
 
 ## 4. Content model
 
@@ -165,6 +177,10 @@ A new `BookingForm.astro` component lives at `src/components/audio/BookingForm.a
 4. Sends a Resend email to `CONTACT_TO_EMAIL` from `CONTACT_FROM_EMAIL`. Subject: `Audio inquiry: <service interests> from <name>`. Body is the audio-inquiry template (plain text and HTML), rendering each form field on its own labeled line.
 5. Reply-to header is set to the submitter's email.
 6. Returns 200 with a small JSON success payload; the page swaps to a success state on the client.
+
+### Origin policy and Turnstile hostnames
+
+The audio inquiry endpoint's allowed-origin list adds `https://audio.thesuperhuman.us` alongside the existing software-site origins. The shared Turnstile site key (`PUBLIC_TURNSTILE_SITE_KEY` in `wrangler.jsonc`) must have `audio.thesuperhuman.us` added to its hostname allowlist in the Cloudflare Turnstile dashboard, or widget challenges will fail on the audio host. This is an operator-side configuration captured in the implementation plan's operator runbook.
 
 ### Why no approval gate
 

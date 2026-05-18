@@ -20,6 +20,7 @@
 
 - `src/middleware.ts` — Astro middleware entry, calls into the routing helper.
 - `src/lib/host-routing.ts` — pure function mapping `(host, pathname)` → rewritten pathname.
+- `src/lib/canonical.ts` — pure function returning the public canonical URL given the request URL and host header.
 - `src/lib/audio-tracks.ts` — pure helpers for grouping tracks by service.
 - `src/lib/audio-validation.ts` — input validation for the audio inquiry form.
 - `src/lib/audio-resend.ts` — Resend payload for audio inquiries.
@@ -36,6 +37,7 @@
 - `src/scripts/audio-player-coordinator.ts` — pauses other audio elements on play.
 - `scripts/upload-audio.mjs` — wrapper around `wrangler r2 object put`.
 - `tests/lib/host-routing.test.ts`
+- `tests/lib/canonical.test.ts`
 - `tests/lib/audio-tracks.test.ts`
 - `tests/lib/audio-validation.test.ts`
 - `tests/lib/audio-resend.test.ts`
@@ -50,6 +52,7 @@
 - `src/content/config.ts` — register `audio-tracks` collection.
 - `src/pages/index.astro` — add `export const prerender = false`.
 - `src/pages/about.astro` — add `export const prerender = false`.
+- `src/layouts/BaseLayout.astro` — use host-aware canonical helper for `<link rel="canonical">` and `og:url`/`og:image`.
 - `package.json` — add `audio:upload` npm script.
 
 ---
@@ -466,7 +469,131 @@ git commit -m "pages: opt index and about out of prerendering for host-aware mid
 
 ---
 
-### Task 7: audio-tracks helper
+### Task 7: Host-aware canonical URLs in BaseLayout
+
+`BaseLayout.astro` currently builds the canonical URL from `Astro.site` (`https://thesuperhuman.us`). After hostname rewriting, an audio-host request rendered through the internal `/audio/...` path would advertise `https://thesuperhuman.us/audio/...` in `<link rel="canonical">` and `og:url`. This task adds a host-aware helper that returns the public-facing URL (audio host without the `/audio/` prefix) and threads it through `BaseLayout`.
+
+**Files:**
+- Create: `src/lib/canonical.ts`
+- Test: `tests/lib/canonical.test.ts`
+- Modify: `src/layouts/BaseLayout.astro`
+
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/lib/canonical.test.ts`:
+
+```ts
+import { describe, it, expect } from 'vitest';
+import { publicCanonicalFor } from '~/lib/canonical';
+
+describe('publicCanonicalFor', () => {
+  it('returns the software host for non-audio requests', () => {
+    const url = new URL('https://thesuperhuman.us/about');
+    expect(publicCanonicalFor(url, 'thesuperhuman.us')).toBe('https://thesuperhuman.us/about');
+  });
+
+  it('treats www as the software host', () => {
+    const url = new URL('https://www.thesuperhuman.us/about');
+    expect(publicCanonicalFor(url, 'www.thesuperhuman.us')).toBe('https://thesuperhuman.us/about');
+  });
+
+  it('strips the /audio prefix on the audio host', () => {
+    const url = new URL('https://audio.thesuperhuman.us/audio/about');
+    expect(publicCanonicalFor(url, 'audio.thesuperhuman.us')).toBe('https://audio.thesuperhuman.us/about');
+  });
+
+  it('maps /audio/ to / on the audio host root', () => {
+    const url = new URL('https://audio.thesuperhuman.us/audio/');
+    expect(publicCanonicalFor(url, 'audio.thesuperhuman.us')).toBe('https://audio.thesuperhuman.us/');
+  });
+
+  it('handles a hostHeader with port', () => {
+    const url = new URL('https://audio.thesuperhuman.us/audio/about');
+    expect(publicCanonicalFor(url, 'audio.thesuperhuman.us:443')).toBe('https://audio.thesuperhuman.us/about');
+  });
+
+  it('falls back to url.host when hostHeader is null', () => {
+    const url = new URL('https://audio.thesuperhuman.us/audio/about');
+    expect(publicCanonicalFor(url, null)).toBe('https://audio.thesuperhuman.us/about');
+  });
+
+  it('preserves query strings', () => {
+    const url = new URL('https://audio.thesuperhuman.us/audio/about?x=1');
+    expect(publicCanonicalFor(url, 'audio.thesuperhuman.us')).toBe('https://audio.thesuperhuman.us/about?x=1');
+  });
+});
+```
+
+- [ ] **Step 2: Run the test, verify it fails**
+
+Run: `npm test -- tests/lib/canonical.test.ts`
+Expected: FAIL with module-not-found.
+
+- [ ] **Step 3: Implement the helper**
+
+Create `src/lib/canonical.ts`:
+
+```ts
+const AUDIO_HOST = 'audio.thesuperhuman.us';
+const SOFTWARE_HOST = 'thesuperhuman.us';
+
+export function publicCanonicalFor(url: URL, hostHeader: string | null): string {
+  const host = (hostHeader ?? url.host).split(':')[0].toLowerCase();
+  const isAudio = host === AUDIO_HOST;
+  const targetHost = isAudio ? AUDIO_HOST : SOFTWARE_HOST;
+
+  let pathname = url.pathname;
+  if (isAudio) {
+    if (pathname === '/audio' || pathname === '/audio/') {
+      pathname = '/';
+    } else if (pathname.startsWith('/audio/')) {
+      pathname = pathname.slice('/audio'.length);
+    }
+  }
+
+  return `https://${targetHost}${pathname}${url.search}`;
+}
+```
+
+- [ ] **Step 4: Run the test, verify it passes**
+
+Run: `npm test -- tests/lib/canonical.test.ts`
+Expected: all assertions pass.
+
+- [ ] **Step 5: Wire the helper into BaseLayout**
+
+Edit `src/layouts/BaseLayout.astro`. Replace the existing `canonical` computation with the helper. The frontmatter block currently has:
+
+```astro
+const canonical = new URL(Astro.url.pathname, Astro.site).toString();
+```
+
+Change it to:
+
+```astro
+import { publicCanonicalFor } from '~/lib/canonical';
+const hostHeader = Astro.request.headers.get('host');
+const canonical = publicCanonicalFor(Astro.url, hostHeader);
+const ogImageUrl = new URL(ogImage, canonical).toString();
+```
+
+Then replace the existing `og:image` `<meta>` content expression `{new URL(ogImage, Astro.site).toString()}` with `{ogImageUrl}` so it resolves against the host-aware canonical instead of `Astro.site`.
+
+- [ ] **Step 6: Type-check**
+
+Run: `npx astro check`
+Expected: zero errors.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/lib/canonical.ts tests/lib/canonical.test.ts src/layouts/BaseLayout.astro
+git commit -m "BaseLayout: host-aware canonical and og:image for audio.thesuperhuman.us"
+```
+
+---
+
+### Task 8: audio-tracks helper
 
 **Files:**
 - Create: `src/lib/audio-tracks.ts`
@@ -571,7 +698,7 @@ git commit -m "audio-tracks: helper for grouping tracks by service line"
 
 ---
 
-### Task 8: R2 file streaming endpoint
+### Task 9: R2 file streaming endpoint
 
 **Files:**
 - Create: `src/pages/audio/file/[slug].ts`
@@ -645,6 +772,23 @@ describe('GET /audio/file/[slug]', () => {
     const res = await GET(makeContext('slow-burn', 'bytes=1-3'));
     expect(res.status).toBe(206);
     expect(res.headers.get('content-range')).toBe('bytes 1-3/5');
+    expect(res.headers.get('content-length')).toBe('3');
+  });
+
+  it('returns 416 with Content-Range:*/<size> for an out-of-range request', async () => {
+    const res = await GET(makeContext('slow-burn', 'bytes=99-100'));
+    expect(res.status).toBe(416);
+    expect(res.headers.get('content-range')).toBe('bytes */5');
+  });
+
+  it('returns 416 for an inverted range (start > end)', async () => {
+    const res = await GET(makeContext('slow-burn', 'bytes=4-2'));
+    expect(res.status).toBe(416);
+  });
+
+  it('ignores a malformed Range header and serves 200', async () => {
+    const res = await GET(makeContext('slow-burn', 'malformed=foo'));
+    expect(res.status).toBe(200);
   });
 });
 ```
@@ -664,14 +808,21 @@ import { getCollection } from 'astro:content';
 
 export const prerender = false;
 
-function parseRangeHeader(header: string | null, size: number): { offset: number; length: number } | null {
-  if (!header) return null;
+type RangeParse =
+  | { kind: 'none' }
+  | { kind: 'malformed' }
+  | { kind: 'unsatisfiable' }
+  | { kind: 'ok'; offset: number; length: number };
+
+function parseRangeHeader(header: string | null, size: number): RangeParse {
+  if (!header) return { kind: 'none' };
   const match = /^bytes=(\d+)-(\d*)$/.exec(header);
-  if (!match) return null;
+  if (!match) return { kind: 'malformed' };
   const start = parseInt(match[1], 10);
   const end = match[2] ? parseInt(match[2], 10) : size - 1;
-  if (Number.isNaN(start) || Number.isNaN(end) || start > end || end >= size) return null;
-  return { offset: start, length: end - start + 1 };
+  if (Number.isNaN(start) || Number.isNaN(end)) return { kind: 'malformed' };
+  if (start > end || end >= size) return { kind: 'unsatisfiable' };
+  return { kind: 'ok', offset: start, length: end - start + 1 };
 }
 
 export const GET: APIRoute = async (context) => {
@@ -695,7 +846,17 @@ export const GET: APIRoute = async (context) => {
 
   const range = parseRangeHeader(rangeHeader, size);
 
-  if (range) {
+  if (range.kind === 'unsatisfiable') {
+    return new Response(null, {
+      status: 416,
+      headers: {
+        'content-range': `bytes */${size}`,
+        'accept-ranges': 'bytes',
+      },
+    });
+  }
+
+  if (range.kind === 'ok') {
     const partial = await env.AUDIO.get(key, { range: { offset: range.offset, length: range.length } });
     if (!partial) return new Response('not found', { status: 404 });
     return new Response(partial.body, {
@@ -711,6 +872,7 @@ export const GET: APIRoute = async (context) => {
     });
   }
 
+  // kind === 'none' or 'malformed' → serve full file with 200
   return new Response(head.body, {
     status: 200,
     headers: {
@@ -738,7 +900,7 @@ git commit -m "audio file endpoint: R2 streaming with slug validation and Range 
 
 ---
 
-### Task 9: Audio inquiry validation
+### Task 10: Audio inquiry validation
 
 **Files:**
 - Create: `src/lib/audio-validation.ts`
@@ -943,7 +1105,7 @@ git commit -m "audio-validation: validator for booking form inputs"
 
 ---
 
-### Task 10: Audio Resend payload helper
+### Task 11: Audio Resend payload helper
 
 **Files:**
 - Create: `src/lib/audio-resend.ts`
@@ -1086,7 +1248,7 @@ git commit -m "audio-resend: Resend email payload for audio inquiries"
 
 ---
 
-### Task 11: Audio inquiry API endpoint
+### Task 12: Audio inquiry API endpoint
 
 **Files:**
 - Create: `src/pages/api/audio-inquiry.ts`
@@ -1323,7 +1485,7 @@ git commit -m "audio-inquiry API: validate, rate-limit, Turnstile-verify, Resend
 
 ---
 
-### Task 12: AudioFooter component
+### Task 13: AudioFooter component
 
 **Files:**
 - Create: `src/components/audio/AudioFooter.astro`
@@ -1373,7 +1535,7 @@ git commit -m "AudioFooter: footer variant with cross-site link to software side
 
 ---
 
-### Task 13: AudioHero component
+### Task 14: AudioHero component
 
 **Files:**
 - Create: `src/components/audio/AudioHero.astro`
@@ -1419,7 +1581,7 @@ git commit -m "AudioHero: landing hero for audio.thesuperhuman.us"
 
 ---
 
-### Task 14: TrackRow component
+### Task 15: TrackRow component
 
 **Files:**
 - Create: `src/components/audio/TrackRow.astro`
@@ -1470,7 +1632,7 @@ git commit -m "TrackRow: one-track portfolio row with inline player"
 
 ---
 
-### Task 15: ServiceSection component
+### Task 16: ServiceSection component
 
 **Files:**
 - Create: `src/components/audio/ServiceSection.astro`
@@ -1540,7 +1702,7 @@ git commit -m "ServiceSection: service heading, CTA, and grouped TrackRows"
 
 ---
 
-### Task 16: Audio player coordinator script
+### Task 17: Audio player coordinator script
 
 **Files:**
 - Create: `src/scripts/audio-player-coordinator.ts`
@@ -1574,7 +1736,7 @@ git commit -m "audio-player-coordinator: pause other players on play"
 
 ---
 
-### Task 17: BookingForm component
+### Task 18: BookingForm component
 
 **Files:**
 - Create: `src/components/audio/BookingForm.astro`
@@ -1764,7 +1926,7 @@ git commit -m "BookingForm: audio-specific approval-free contact form"
 
 ---
 
-### Task 18: Audio landing page
+### Task 19: Audio landing page
 
 **Files:**
 - Create: `src/pages/audio/index.astro`
@@ -1851,7 +2013,7 @@ git commit -m "audio landing: hero, intro, service sections, booking form"
 
 ---
 
-### Task 19: Audio about page
+### Task 20: Audio about page
 
 **Files:**
 - Create: `src/pages/audio/about.astro`
@@ -1909,7 +2071,7 @@ git commit -m "audio about: longer-form about page with cross-site link"
 
 ---
 
-### Task 20: Upload helper script
+### Task 21: Upload helper script
 
 **Files:**
 - Create: `scripts/upload-audio.mjs`
@@ -1983,7 +2145,7 @@ git commit -m "upload-audio: helper script for putting MP3 files into the AUDIO 
 
 ---
 
-### Task 21: Full test + type + build verification
+### Task 22: Full test + type + build verification
 
 **Files:**
 - (no edits)
@@ -2009,7 +2171,7 @@ Do not proceed past this task until all three are clean.
 
 ---
 
-### Task 22: Manual smoke test in dev
+### Task 23: Manual smoke test in dev
 
 **Files:**
 - (no edits)
@@ -2039,7 +2201,7 @@ Fill in valid data. Submit. Confirm the success message renders. Resend won't de
 
 - [ ] **Step 5: Confirm the existing software site still works**
 
-Open `http://localhost:4321/` and `http://localhost:4321/about`. Confirm both pages render correctly (the prerender opt-out from Task 6 should be invisible to the browser).
+Open `http://localhost:4321/` and `http://localhost:4321/about`. Confirm both pages render correctly (the prerender opt-out from Task 6 should be invisible to the browser, and the host-aware canonical from Task 7 should still produce `https://thesuperhuman.us/...` on the software host).
 
 - [ ] **Step 6: Stop the dev server**
 
@@ -2047,7 +2209,7 @@ Ctrl+C.
 
 ---
 
-### Task 23: Operator runbook (manual, documented)
+### Task 24: Operator runbook (manual, documented)
 
 Some steps require operator access to Cloudflare and DNS. Document them here so the operator can run them at deploy time.
 
@@ -2069,7 +2231,17 @@ In Cloudflare DNS for `thesuperhuman.us`, add:
 
 (Or an A record pointing at the same Worker; CNAME-with-flattening at the apex still works for the subdomain.)
 
-- [ ] **Step 3: Deploy**
+- [ ] **Step 3: Add audio.thesuperhuman.us to the Turnstile widget hostname allowlist**
+
+In the Cloudflare dashboard → Turnstile → the widget that owns site key `0x4AAAAAADPYWKMQT_mbi4O-` (the value of `PUBLIC_TURNSTILE_SITE_KEY` in `wrangler.jsonc`):
+
+- Open "Hostname management".
+- Add `audio.thesuperhuman.us` to the allowed hostnames list (alongside the existing `thesuperhuman.us` and `www.thesuperhuman.us` entries).
+- Save.
+
+Without this step, the Turnstile widget on the audio host loads but every challenge fails server-side, and the booking endpoint returns 403.
+
+- [ ] **Step 4: Deploy**
 
 ```bash
 npm run build
@@ -2078,14 +2250,14 @@ npx wrangler deploy
 
 Wrangler picks up the new route entries from `wrangler.jsonc` and serves the audio host from the same Worker.
 
-- [ ] **Step 4: Verify production**
+- [ ] **Step 5: Verify production**
 
 - Visit `https://audio.thesuperhuman.us/` and confirm the audio landing page renders.
 - Visit `https://audio.thesuperhuman.us/about` and confirm the about page renders.
 - Confirm `https://thesuperhuman.us/` (software site) still renders normally.
 - Send a test booking inquiry and confirm the email arrives at `kazon.wilson@thesuperhuman.us`.
 
-- [ ] **Step 5: Confirm at least one track per service is published before announcing**
+- [ ] **Step 6: Confirm at least one track per service is published before announcing**
 
 Per the spec's launch prerequisites, do not link to or announce the audio site until each of the four service sections has at least one real track example.
 
@@ -2093,9 +2265,14 @@ Per the spec's launch prerequisites, do not link to or announce the audio site u
 
 ## Self-review checklist
 
-The plan was self-reviewed against the spec on 2026-05-17:
+The plan was self-reviewed against the spec on 2026-05-17 and re-reviewed after addressing external review findings on the same day:
 
-- **Spec coverage:** every spec section maps to one or more tasks. Routing → Tasks 1, 4, 5, 6. Content model → Task 3. Storage + player → Tasks 1, 8, 14, 16. Booking flow → Tasks 9, 10, 11, 17. Visual system → Tasks 12-18. About content → Tasks 18, 19. Launch prerequisites → Task 22, Task 23 step 5. Out-of-scope items → not addressed (correct).
+- **Spec coverage:** every spec section maps to one or more tasks. Routing → Tasks 1, 4, 5, 6. Canonical/OG host-awareness → Task 7. Content model → Task 3. Storage + player → Tasks 1, 9, 15, 17. Booking flow → Tasks 10, 11, 12, 18. Visual system → Tasks 13-19. About content → Tasks 19, 20. Launch prerequisites → Task 23, Task 24 step 6. Out-of-scope items → not addressed (correct).
 - **Placeholders:** no TBD/TODO; every step has actual code.
-- **Type consistency:** `AudioTrack`, `AudioService`, `AudioRole` defined in Task 7 and referenced consistently in Tasks 14, 15, 18.
-- **Known caveat:** Task 18 contains a script-tag correction inline. The implementer should use the `import '~/scripts/audio-player-coordinator';` form, not the standalone `src=` form.
+- **Type consistency:** `AudioTrack`, `AudioService`, `AudioRole` defined in Task 8 and referenced consistently in Tasks 15, 16, 19.
+- **External review findings addressed:**
+  - Middleware on prerendered routes: Task 6 opts `src/pages/index.astro` and `src/pages/about.astro` out of prerendering.
+  - Audio-host origin policy: Task 12 includes `https://audio.thesuperhuman.us` in `ALLOWED_ORIGINS`.
+  - Turnstile hostname allowlist: Task 24 step 3 (operator runbook).
+  - Canonical and OpenGraph URLs: Task 7 introduces `publicCanonicalFor` and rewires `BaseLayout`.
+  - File endpoint range edge cases: Task 9 returns 416 with `Content-Range: bytes */<size>` for unsatisfiable ranges and falls back to 200 for malformed Range headers.
