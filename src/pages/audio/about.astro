@@ -1,0 +1,32 @@
+---
+export const prerender = false;
+
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import AudioFooter from '~/components/audio/AudioFooter.astro';
+---
+<BaseLayout
+  title="About · Audio engineering at thesuperhuman.us"
+  description="Kazon Wilson, audio engineer. Background, gear, workflow, revision policy."
+>
+  <section class="mx-auto max-w-content px-6 py-16 md:py-24">
+    <p class="eyebrow mb-6">About</p>
+    <h1 class="display mb-8">Audio engineering, plainly described.</h1>
+
+    <div class="prose-about max-w-measure space-y-6 text-[1.0625rem] leading-relaxed">
+      <p>
+        I am Kazon Wilson, an audio engineer working through The Superhuman Group LLC, a Wyoming LLC I run for contract work. I studied audio production at MTSU and have been mixing and engineering since then. The engagements I take are project-scoped: mixing, mastering, remote-managed recording, and longer production work.
+      </p>
+      <p>
+        Communication is async. Most projects start with a written brief, references, and stems delivered through Google Drive, Dropbox, or WeTransfer. I mix on a small treated room with an RME Babyface Pro and Sennheiser HD 650s, working in UAD Luna and Pro Tools, and check on three additional reference systems before delivery.
+      </p>
+      <p>
+        I price per project, not per hour. The first round of revisions is included; subsequent rounds are scoped at the start. If a project is outside what I can do well, I will say so and recommend someone who can.
+      </p>
+      <p>
+        Looking for the software-engineering side of The Superhuman Group? That lives at <a href="https://thesuperhuman.us" style="border-bottom: 1px solid var(--accent); padding-bottom: 1px;">thesuperhuman.us</a>.
+      </p>
+    </div>
+  </section>
+
+  <AudioFooter slot="footer" />
+</BaseLayout>
