@@ -78,7 +78,7 @@ export function validateAudioInquiry(input: unknown): AudioValidationResult {
 
   const notes = typeof v.notes === 'string' ? v.notes.trim() : '';
   if (notes.length < 40) errors.notes = 'Please write at least 40 characters.';
-  else if (notes.length > 4000) errors.notes = 'Description is too long.';
+  else if (notes.length > 4000) errors.notes = 'Notes are too long.';
 
   const turnstileToken = typeof v.turnstileToken === 'string' ? v.turnstileToken : '';
   if (!turnstileToken) errors.turnstileToken = 'Captcha missing.';
