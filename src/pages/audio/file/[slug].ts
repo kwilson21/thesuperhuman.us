@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
+import type { CollectionEntry } from 'astro:content';
 
 export const prerender = false;
 
@@ -27,15 +28,15 @@ export const GET: APIRoute = async (context) => {
   }
 
   const collection = await getCollection('audio-tracks');
-  const entry = collection.find((e) => e.id === slug);
+  const entry = collection.find((e) => e.id === slug) as CollectionEntry<'audio-tracks'> | undefined;
   if (!entry) return new Response('not found', { status: 404 });
 
   const env = (context.locals as any).runtime.env as Env;
-  const key = (entry.data as any).file as string;
+  const key = entry.data.file;
 
   const rangeHeader = context.request.headers.get('range');
-  // First fetch without range to know total size.
-  const head = await env.AUDIO.get(key);
+  // Use head() to learn total size without fetching the body.
+  const head = await env.AUDIO.head(key);
   if (!head) return new Response('not found', { status: 404 });
   const size = head.size;
 
@@ -68,7 +69,9 @@ export const GET: APIRoute = async (context) => {
   }
 
   // kind === 'none' or 'malformed' -> serve full file with 200
-  return new Response(head.body, {
+  const full = await env.AUDIO.get(key);
+  if (!full) return new Response('not found', { status: 404 });
+  return new Response(full.body, {
     status: 200,
     headers: {
       'content-type': 'audio/mpeg',

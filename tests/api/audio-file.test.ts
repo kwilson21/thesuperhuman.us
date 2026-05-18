@@ -12,6 +12,7 @@ import { GET } from '~/pages/audio/file/[slug]';
 
 function makeR2(body = new Uint8Array([1, 2, 3, 4, 5]), size = 5) {
   return {
+    head: vi.fn(async (_key: string) => ({ size })),
     get: vi.fn(async (_key: string, opts?: any) => {
       const range = opts?.range;
       if (range && range.offset !== undefined && range.length !== undefined) {
