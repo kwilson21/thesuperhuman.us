@@ -1,0 +1,49 @@
+---
+import TrackRow from './TrackRow.astro';
+import type { AudioService, AudioTrack } from '~/lib/audio-tracks';
+
+interface Props {
+  service: AudioService;
+  tracks: AudioTrack[];
+}
+const { service, tracks } = Astro.props;
+
+const SERVICE_META: Record<AudioService, { label: string; cta: string; copy: string }> = {
+  mixing: {
+    label: 'Mixing',
+    cta: 'Book a mixing engagement',
+    copy: 'Multitrack stems in, polished mix out. Fixed-price per song.',
+  },
+  mastering: {
+    label: 'Mastering',
+    cta: 'Book a mastering engagement',
+    copy: 'Final loudness, EQ, and translation pass on a finished mix.',
+  },
+  production: {
+    label: 'Production',
+    cta: 'Talk about a production project',
+    copy: 'Songwriting, arrangement, instrumentation, and programming. Longer engagements.',
+  },
+  recording: {
+    label: 'Recording',
+    cta: 'Book a recording session',
+    copy: 'Remote-managed tracking. Artist records to spec, sends takes, I comp and prep.',
+  },
+};
+
+const meta = SERVICE_META[service];
+---
+<section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
+  <div class="flex flex-wrap items-baseline gap-4 mb-3">
+    <h2 class="heading">{meta.label}</h2>
+    <a href="#book" class="eyebrow" style="color: var(--accent); border-bottom: 1px solid var(--accent); padding-bottom: 1px;">{meta.cta} →</a>
+  </div>
+  <p class="text-base text-muted max-w-measure mb-8">{meta.copy}</p>
+  {tracks.length === 0 ? (
+    <p class="text-sm text-muted italic">More examples coming.</p>
+  ) : (
+    <div>
+      {tracks.map((t) => <TrackRow track={t} />)}
+    </div>
+  )}
+</section>
