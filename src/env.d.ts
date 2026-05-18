@@ -18,6 +18,7 @@ interface Env {
   // Can point at the same physical KV namespace as RATE_LIMIT; key
   // prefixes keep the data isolated.
   RESUME_STORE: KVNamespace;
+  AUDIO: R2Bucket;
 }
 
 interface ImportMetaEnv {
