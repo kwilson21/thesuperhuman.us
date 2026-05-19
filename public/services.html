@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The Superhuman Group LLC · Services</title>
+  <meta name="robots" content="noindex" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:ital,opt,wght@0,16,300;0,16,400;0,16,500;1,16,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --paper: #FBF8F2;
+      --ink: #0E0E0E;
+      --muted: #4A4A4A;
+      --rule: #E8E3DA;
+      --accent: #AE5534;
+    }
+
+    @page {
+      size: letter;
+      margin: 0;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: 'Newsreader', 'Iowan Old Style', Georgia, serif;
+      font-size: 11pt;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .page {
+      max-width: 7.5in;
+      margin: 0 auto;
+      padding: 0.55in 0.55in;
+      background: var(--paper);
+    }
+
+    @media print {
+      .page { max-width: none; }
+    }
+
+    .eyebrow {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 8.5pt;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 500;
+      color: var(--muted);
+    }
+
+    .rule {
+      border: 0;
+      border-top: 1px solid var(--rule);
+      margin: 0;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .header img {
+      height: 22px;
+      width: auto;
+      display: block;
+    }
+
+    .header .eyebrow .dot {
+      display: inline-block;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--accent);
+      margin: 0 8px 1px 0;
+      vertical-align: middle;
+    }
+
+    /* Lede */
+    .lede {
+      margin: 22px 0 6px;
+      font-size: 19pt;
+      line-height: 1.12;
+      letter-spacing: -0.012em;
+      font-weight: 400;
+      max-width: 6.3in;
+    }
+
+    .lede em {
+      font-style: italic;
+      color: var(--ink);
+    }
+
+    .sublede {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 9.5pt;
+      color: var(--muted);
+      line-height: 1.45;
+      max-width: 6.3in;
+      margin: 0 0 18px;
+    }
+
+    /* Services */
+    .services {
+      border-top: 1px solid var(--rule);
+    }
+
+    .service {
+      display: grid;
+      grid-template-columns: 0.55in 1fr;
+      gap: 16px;
+      padding: 14px 0 14px;
+      border-bottom: 1px solid var(--rule);
+      page-break-inside: avoid;
+    }
+
+    .service .num {
+      font-family: 'Newsreader', Georgia, serif;
+      font-size: 22pt;
+      font-weight: 300;
+      line-height: 1;
+      color: var(--accent);
+      letter-spacing: -0.01em;
+    }
+
+    .service h2 {
+      margin: 2px 0 4px;
+      font-family: 'Newsreader', Georgia, serif;
+      font-size: 12.5pt;
+      font-weight: 500;
+      letter-spacing: -0.005em;
+      line-height: 1.2;
+    }
+
+    .service p {
+      margin: 0 0 6px;
+      font-size: 10.5pt;
+      line-height: 1.45;
+      color: #1f1f1f;
+      max-width: 6.1in;
+    }
+
+    .service .meta {
+      margin-top: 4px;
+    }
+
+    /* About + Terms band */
+    .band {
+      display: grid;
+      grid-template-columns: 1.35fr 1fr;
+      gap: 28px;
+      padding: 18px 0;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .band h3 {
+      margin: 0 0 6px;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 8.5pt;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 500;
+      color: var(--muted);
+    }
+
+    .band p, .band ul {
+      margin: 0;
+      font-size: 10.5pt;
+      line-height: 1.45;
+    }
+
+    .band ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .band ul li {
+      padding: 2px 0;
+    }
+
+    .band ul li::before {
+      content: '·';
+      color: var(--accent);
+      display: inline-block;
+      width: 12px;
+      margin-left: -12px;
+      font-weight: 700;
+    }
+
+    /* Footer */
+    .footer {
+      padding-top: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .footer .contact {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 8.5pt;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink);
+    }
+
+    .footer .contact span.sep {
+      color: var(--rule);
+      margin: 0 6px;
+    }
+
+    .footer .mark {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 8pt;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="header">
+      <img src="superhuman-logo.svg" alt="The Superhuman Group LLC" />
+      <div class="eyebrow" style="margin-left: auto;">
+        <span class="dot"></span>Contract engineering · 2026
+      </div>
+    </header>
+
+    <h1 class="lede">
+      Senior backend &amp; data engineering for <em>growing engineering teams</em>.
+    </h1>
+    <p class="sublede">
+      Python, Django, Rails, and ETL infrastructure. Tactical work on production systems that need to move from fragile to reliable. Async-first, deliverable-focused, fixed-price.
+    </p>
+
+    <section class="services">
+      <div class="service">
+        <div class="num">01</div>
+        <div>
+          <h2>Data pipelines &amp; ETL infrastructure</h2>
+          <p>Python-based ingestion, transformation, and orchestration. Dagster, Airflow, custom ingestion against messy real-world sources: APIs, SFTP, web scrapers, document feeds.</p>
+          <div class="eyebrow meta">Typical engagement · 8–16 weeks · part-time or full-time</div>
+        </div>
+      </div>
+
+      <div class="service">
+        <div class="num">02</div>
+        <div>
+          <h2>Django / Rails backend stabilization</h2>
+          <p>Tactical engineering against technical debt, slow queries, unreliable batch jobs, or document and PDF generation pipelines that need to scale. Production-ready work, not greenfield prototypes.</p>
+          <div class="eyebrow meta">Typical engagement · 6–12 weeks</div>
+        </div>
+      </div>
+
+      <div class="service">
+        <div class="num">03</div>
+        <div>
+          <h2>AI-assisted development workflow adoption</h2>
+          <p>I work alongside your team on real backend work, modeling AI-assisted practices in code reviews and PRs until the patterns stick. Not training, not theory.</p>
+          <div class="eyebrow meta">Typical engagement · 4–6 weeks · fractional</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="band">
+      <div>
+        <h3>About</h3>
+        <p>7+ years building production systems at Lyft, Sure, Axuall, and Scotch. Sole data engineer at my most recent role. US citizen, US-based. Available remote across US time zones.</p>
+      </div>
+      <div>
+        <h3>Engagement terms</h3>
+        <ul>
+          <li>1099 via The Superhuman Group LLC (Wyoming)</li>
+          <li>Net-15 payment terms preferred</li>
+          <li>MSA + SOW for all engagements</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <div class="contact">
+        Kazon Wilson<span class="sep">·</span>kazon.wilson@thesuperhuman.us<span class="sep">·</span>571-463-5489<span class="sep">·</span>linkedin.com/in/kazonwilson
+      </div>
+      <div class="mark">thesuperhuman.us</div>
+    </footer>
+  </main>
+</body>
+</html>
