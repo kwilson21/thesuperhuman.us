@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { validateAudioInquiry } from '~/lib/audio-validation';
 import { verifyTurnstile } from '~/lib/turnstile';
 import { sendAudioInquiry } from '~/lib/audio-resend';
-import type { KvLike } from '~/lib/rate-limit';
+import { checkRateLimit } from '~/lib/rate-limit';
 
 export const prerender = false;
 
@@ -17,16 +17,6 @@ function isAllowedOrigin(origin: string | null): boolean {
   if (ALLOWED_ORIGINS.includes(origin)) return true;
   if (/^https:\/\/[a-z0-9-]+\.thesuperhuman-us\.pages\.dev$/.test(origin)) return true;
   return false;
-}
-
-const WINDOW_SECONDS = 300;
-
-async function checkAudioRateLimit(kv: KvLike, ip: string): Promise<{ allowed: boolean }> {
-  const key = `rl:audio:${ip}`;
-  const existing = await kv.get(key);
-  if (existing) return { allowed: false };
-  await kv.put(key, '1', { expirationTtl: WINDOW_SECONDS });
-  return { allowed: true };
 }
 
 export const POST: APIRoute = async (context) => {
@@ -52,7 +42,7 @@ export const POST: APIRoute = async (context) => {
   const input = validation.value;
 
   const ip = request.headers.get('cf-connecting-ip') ?? '0.0.0.0';
-  const rl = await checkAudioRateLimit(env.RATE_LIMIT, ip);
+  const rl = await checkRateLimit(env.RATE_LIMIT, ip, 'rl:audio:');
   if (!rl.allowed) {
     return Response.json(
       { ok: false, error: 'Please wait a few minutes before submitting again.' },

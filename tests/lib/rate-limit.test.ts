@@ -45,4 +45,11 @@ describe('checkRateLimit', () => {
     await checkRateLimit(kv as any, '1.2.3.4');
     expect(kv.put.mock.calls[0][2]).toEqual({ expirationTtl: 300 });
   });
+
+  it('uses a custom prefix when provided', async () => {
+    const kv = makeKvStub();
+    await checkRateLimit(kv as any, '1.2.3.4', 'rl:audio:');
+    expect(kv.put.mock.calls[0][0]).toBe('rl:audio:1.2.3.4');
+    expect(kv.get.mock.calls[0][0]).toBe('rl:audio:1.2.3.4');
+  });
 });

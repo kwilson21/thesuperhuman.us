@@ -8,8 +8,9 @@ const WINDOW_SECONDS = 300;
 export async function checkRateLimit(
   kv: KvLike,
   ip: string,
+  prefix = 'rl:',
 ): Promise<{ allowed: boolean }> {
-  const key = `rl:${ip}`;
+  const key = `${prefix}${ip}`;
   const existing = await kv.get(key);
   if (existing) return { allowed: false };
   // Note: there is a small race window between the get above returning null and
