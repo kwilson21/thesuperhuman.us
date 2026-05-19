@@ -1,5 +1,4 @@
 ---
-import { Image } from 'astro:assets';
 import headshot from '~/assets/headshot.jpg';
 ---
 <section class="mx-auto max-w-page px-6 pt-16 pb-20 md:pt-24 md:pb-28">
@@ -27,13 +26,11 @@ import headshot from '~/assets/headshot.jpg';
     </div>
 
     <div class="order-first md:order-last">
-      <Image
-        src={headshot}
+      <img
+        src={headshot.src}
         alt="Kazon Wilson"
-        width={560}
-        height={700}
-        format="avif"
-        quality={80}
+        width={headshot.width}
+        height={headshot.height}
         loading="eager"
         fetchpriority="high"
         class="w-full max-w-[280px] aspect-[4/5] object-cover object-[center_25%] rounded-sm"
