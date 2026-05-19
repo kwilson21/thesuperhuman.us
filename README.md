@@ -75,6 +75,40 @@ Re-run any of these whenever a resume changes.
 3. The operator clicks the approval link. `GET /api/resume-approve?id=<uuid>` looks up the token, reads the matching PDF from KV (`pdf:<audience>`), emails it to the requester as an attachment, and deletes the token. Single-use; the link can't be replayed.
 4. The approval link's "credential" is the UUID itself (~122 bits of entropy). Because delivery is bound to the requester's email stored in KV (not the URL), a leaked or intercepted link cannot redirect delivery elsewhere.
 
+## Audio site
+
+`audio.thesuperhuman.us` shares this repo, this build, and this Worker deployment with the software site. No separate project or deploy pipeline.
+
+### R2 audio storage
+
+Audio files are stored in the `superhuman-audio` R2 bucket, bound to the Worker as `AUDIO`. Create the bucket once:
+
+```bash
+npx wrangler r2 bucket create superhuman-audio
+```
+
+Upload a track (stores it at `tracks/<basename>` in the bucket):
+
+```bash
+npm run audio:upload path/to/track.mp3
+```
+
+### Audio tracks content collection
+
+Track metadata lives in `src/content/audio-tracks/` as one YAML file per track. The schema is defined in `src/content/config.ts`. Add a YAML file, upload the corresponding MP3 to R2 via the upload script, and the track appears on the audio site automatically.
+
+### Audio booking inquiries
+
+Booking inquiries POST to `/api/audio-inquiry`. The endpoint uses the same Turnstile verification, KV rate limiting, and Resend delivery as the software-site contact form. Rate-limit keys use the `rl:audio:` KV prefix (vs. `rl:` for the software form) so the two forms track separate windows per IP.
+
+### Operator prerequisites before serving audio.thesuperhuman.us traffic
+
+See plan Task 24 for full detail. The short list:
+
+1. Create the `superhuman-audio` R2 bucket (command above).
+2. Bind `audio.thesuperhuman.us` to the existing Worker via the Cloudflare dashboard, using a Custom Domain or Workers Route. Match how `thesuperhuman.us` is already bound.
+3. Add `audio.thesuperhuman.us` to the hostname allowlist of the existing Turnstile widget in the Cloudflare dashboard.
+
 ## Regenerating the OG image
 
 The `/og-image.png` social-share card is rendered from `scripts/og.html` via headless Chrome at 1200×630.
