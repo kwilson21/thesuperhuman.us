@@ -83,7 +83,8 @@ export const GET: APIRoute = async (context) => {
     });
   }
 
-  // range.kind === 'ok'
+  // range.kind === 'ok' (resolveRange only returns 'ok' or 'unsatisfiable' from a 'bytes' shape)
+  if (range.kind !== 'ok') return new Response('not found', { status: 404 });
   const partial = await env.AUDIO.get(key, { range: { offset: range.offset, length: range.length } });
   if (!partial) return new Response('not found', { status: 404 });
   return new Response(partial.body, {
