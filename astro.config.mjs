@@ -12,4 +12,9 @@ export default defineConfig({
     platformProxy: { enabled: true },
   }),
   integrations: [tailwind({ applyBaseStyles: false }), sitemap()],
+  vite: {
+    server: {
+      allowedHosts: ['thesuperhuman.us', 'www.thesuperhuman.us', 'audio.thesuperhuman.us'],
+    },
+  },
 });
