@@ -4,19 +4,31 @@ import type { CollectionEntry } from 'astro:content';
 
 export const prerender = false;
 
+type RangeShape =
+  | { kind: 'none' }
+  | { kind: 'malformed' }
+  | { kind: 'bytes'; start: number; endRaw: number | null };
+
 type RangeParse =
   | { kind: 'none' }
   | { kind: 'malformed' }
   | { kind: 'unsatisfiable' }
   | { kind: 'ok'; offset: number; length: number };
 
-function parseRangeHeader(header: string | null, size: number): RangeParse {
+function parseRangeShape(header: string | null): RangeShape {
   if (!header) return { kind: 'none' };
   const match = /^bytes=(\d+)-(\d*)$/.exec(header);
   if (!match) return { kind: 'malformed' };
   const start = parseInt(match[1], 10);
-  const end = match[2] ? parseInt(match[2], 10) : size - 1;
-  if (Number.isNaN(start) || Number.isNaN(end)) return { kind: 'malformed' };
+  const endRaw = match[2] ? parseInt(match[2], 10) : null;
+  if (Number.isNaN(start) || (endRaw !== null && Number.isNaN(endRaw))) return { kind: 'malformed' };
+  return { kind: 'bytes', start, endRaw };
+}
+
+function resolveRange(shape: RangeShape, size: number): RangeParse {
+  if (shape.kind !== 'bytes') return shape as RangeParse;
+  const { start, endRaw } = shape;
+  const end = endRaw !== null ? endRaw : size - 1;
   if (start > end || end >= size) return { kind: 'unsatisfiable' };
   return { kind: 'ok', offset: start, length: end - start + 1 };
 }
@@ -35,12 +47,31 @@ export const GET: APIRoute = async (context) => {
   const key = entry.data.file;
 
   const rangeHeader = context.request.headers.get('range');
-  // Use head() to learn total size without fetching the body.
+  const shape = parseRangeShape(rangeHeader);
+
+  // For no Range or malformed Range, fetch the full file in a single R2 op.
+  // The object's .size property gives us the content-length without a prior head().
+  if (shape.kind === 'none' || shape.kind === 'malformed') {
+    const full = await env.AUDIO.get(key);
+    if (!full) return new Response('not found', { status: 404 });
+    return new Response(full.body, {
+      status: 200,
+      headers: {
+        'content-type': 'audio/mpeg',
+        'accept-ranges': 'bytes',
+        'content-length': String(full.size),
+        'cache-control': 'public, max-age=31536000, immutable',
+        'content-disposition': `inline; filename="${slug}.mp3"`,
+      },
+    });
+  }
+
+  // For a syntactically valid bytes=N-M range, head() first to get size for bounds check.
   const head = await env.AUDIO.head(key);
   if (!head) return new Response('not found', { status: 404 });
   const size = head.size;
 
-  const range = parseRangeHeader(rangeHeader, size);
+  const range = resolveRange(shape, size);
 
   if (range.kind === 'unsatisfiable') {
     return new Response(null, {
@@ -52,31 +83,16 @@ export const GET: APIRoute = async (context) => {
     });
   }
 
-  if (range.kind === 'ok') {
-    const partial = await env.AUDIO.get(key, { range: { offset: range.offset, length: range.length } });
-    if (!partial) return new Response('not found', { status: 404 });
-    return new Response(partial.body, {
-      status: 206,
-      headers: {
-        'content-type': 'audio/mpeg',
-        'accept-ranges': 'bytes',
-        'content-range': `bytes ${range.offset}-${range.offset + range.length - 1}/${size}`,
-        'content-length': String(range.length),
-        'cache-control': 'public, max-age=31536000, immutable',
-        'content-disposition': `inline; filename="${slug}.mp3"`,
-      },
-    });
-  }
-
-  // kind === 'none' or 'malformed' -> serve full file with 200
-  const full = await env.AUDIO.get(key);
-  if (!full) return new Response('not found', { status: 404 });
-  return new Response(full.body, {
-    status: 200,
+  // range.kind === 'ok'
+  const partial = await env.AUDIO.get(key, { range: { offset: range.offset, length: range.length } });
+  if (!partial) return new Response('not found', { status: 404 });
+  return new Response(partial.body, {
+    status: 206,
     headers: {
       'content-type': 'audio/mpeg',
       'accept-ranges': 'bytes',
-      'content-length': String(size),
+      'content-range': `bytes ${range.offset}-${range.offset + range.length - 1}/${size}`,
+      'content-length': String(range.length),
       'cache-control': 'public, max-age=31536000, immutable',
       'content-disposition': `inline; filename="${slug}.mp3"`,
     },
