@@ -39,7 +39,7 @@ const jsonLd = {
   <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
     <h2 class="heading mb-6">How I work with AI</h2>
     <p class="text-[1.0625rem] leading-relaxed max-w-measure mb-4">
-      This site and both projects below were built with AI assistance. I want to be upfront about that.
+      This site and the work below were built with AI assistance. I want to be upfront about that.
     </p>
     <p class="text-[1.0625rem] leading-relaxed max-w-measure">
       What I'm selling isn't the ability to write code by hand. It's the ability to ship AI-assisted code that's safe, secure, and not bug-riddled. The kind of work you can take to production and sleep at night.
@@ -60,6 +60,45 @@ const jsonLd = {
         url="https://kaillera-next.thesuperhuman.us"
         description="Play N64 games online with friends in your browser. No install needed. WebRTC netplay with a custom rollback engine, powered by EmulatorJS."
         stack={['FastAPI', 'Socket.IO', 'WebRTC', 'EmulatorJS', 'Redis']}
+      />
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
+    <h2 class="heading mb-4">Personal practice</h2>
+    <p class="text-[1.0625rem] leading-relaxed max-w-measure mb-10">
+      Private systems from August 2026. Personal practice, not client work. None of these has a public URL.
+    </p>
+    <div class="space-y-12">
+      <ProjectCard
+        name="TheEngineersDaily"
+        description="A daily engineering practice. Python, served through Flask Harbor."
+        stack={['Python', 'Flask Harbor']}
+      />
+      <ProjectCard
+        name="The Algorithm Lab"
+        description="A Go CLI runner with Python algorithm exercises."
+        stack={['Go', 'Python']}
+      />
+      <ProjectCard
+        name="servant-lang"
+        description="An experimental service-oriented programming language with a Go bootstrap compiler."
+        stack={['Go']}
+      />
+      <ProjectCard
+        name="The Engineers Workshop"
+        description="A story-driven engineering practice session, about 45 minutes. Python."
+        stack={['Python']}
+      />
+      <ProjectCard
+        name="The Engineering League"
+        description="Local-first timed engineering drills in TypeScript, Python, Go, Java, Rust, and C#."
+        stack={['TypeScript', 'Python', 'Go', 'Java', 'Rust', 'C#']}
+      />
+      <ProjectCard
+        name="The Formation Daily"
+        description="A personal Christian formation CLI."
+        stack={['Node']}
       />
     </div>
   </section>
