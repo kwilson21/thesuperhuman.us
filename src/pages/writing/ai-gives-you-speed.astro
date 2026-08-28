@@ -1,0 +1,36 @@
+---
+export const prerender = false;
+import { getEntry } from 'astro:content';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Footer from '~/components/Footer.astro';
+
+const entry = await getEntry('pages', 'ai-gives-you-speed');
+if (!entry) throw new Error('AI essay content missing');
+const { Content } = await entry.render();
+---
+<BaseLayout title={entry.data.title} description={entry.data.description}>
+  <article class="mx-auto max-w-content px-6 py-16 md:py-24">
+    <header class="max-w-measure mb-14">
+      <p class="eyebrow mb-4">Technical writing · AI-assisted engineering</p>
+      <h1 class="display mb-5">{entry.data.title}</h1>
+      <p class="lede text-muted">{entry.data.description}</p>
+    </header>
+
+    <div class="prose-writing">
+      <Content />
+    </div>
+  </article>
+
+  <Footer slot="footer" />
+</BaseLayout>
+
+<style is:global>
+  .prose-writing { font-family: theme('fontFamily.serif'); color: var(--ink); }
+  .prose-writing > * + * { margin-top: 1.4em; }
+  .prose-writing h2 { font-size: 1.8rem; line-height: 1.2; margin-top: 3.5rem; padding-top: 2rem; border-top: 1px solid var(--rule); }
+  .prose-writing p { font-size: 1.0625rem; line-height: 1.72; max-width: 39rem; }
+  .prose-writing strong { font-weight: 600; }
+  .prose-writing em { font-style: italic; }
+  .prose-writing blockquote { margin: 2rem 0; padding-left: 1.25rem; border-left: 3px solid var(--accent); color: var(--muted); max-width: 39rem; }
+  .prose-writing blockquote p { font-size: 1.25rem; }
+</style>
