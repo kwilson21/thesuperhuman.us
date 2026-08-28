@@ -1,0 +1,135 @@
+---
+export const prerender = false;
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Footer from '~/components/Footer.astro';
+import ExperienceRow from '~/components/ExperienceRow.astro';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Person',
+  name: 'Kazon Wilson',
+  jobTitle: 'Backend & Data Engineer',
+  url: 'https://thesuperhuman.us/work',
+  sameAs: [
+    'https://github.com/kwilson21',
+    'https://www.linkedin.com/in/kazonwilson/',
+  ],
+};
+---
+<BaseLayout
+  title="Kazon Wilson · Backend & data engineer"
+  description="Backend and data engineer with 7+ years across production systems, data engineering, reliability, and practical AI-assisted development."
+  jsonLd={jsonLd}
+>
+  <section class="mx-auto max-w-content px-6 py-16 md:py-24">
+    <p class="eyebrow mb-4">Engineering work</p>
+    <h1 class="display max-w-[48rem] mb-6">Backend & data engineer building reliable systems across data, product, infrastructure, and AI-assisted engineering.</h1>
+    <p class="lede text-muted max-w-measure mb-8">
+      Seven-plus years of production engineering, primarily in Python and backend/data systems. My work tends to live where technical decisions meet business consequences: financial migrations, regulated systems, third-party integrations, operational tooling, and increasingly AI-assisted software development.
+    </p>
+    <div class="flex flex-wrap gap-x-6 gap-y-3 text-sm">
+      <a href="/about#resumes">Resume</a>
+      <a href="#selected-work">Selected work</a>
+      <a href="/writing/ai-gives-you-speed">Technical writing</a>
+      <a href="https://github.com/kwilson21" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </section>
+
+  <section class="border-t border-rule">
+    <div class="mx-auto max-w-content px-6 py-16 md:py-20 grid gap-10 md:grid-cols-3">
+      <div>
+        <p class="eyebrow mb-3">Production systems</p>
+        <p class="text-[1.0625rem] leading-relaxed">Python services, ETL pipelines, APIs, AWS infrastructure, monitoring, migrations, and integrations that have to keep working after launch.</p>
+      </div>
+      <div>
+        <p class="eyebrow mb-3">Engineering judgment</p>
+        <p class="text-[1.0625rem] leading-relaxed">Risk-aware planning, dry runs, safeguards, observability, vendor coordination, and cross-team execution where mistakes carry real operational or financial consequences.</p>
+      </div>
+      <div>
+        <p class="eyebrow mb-3">AI-assisted engineering</p>
+        <p class="text-[1.0625rem] leading-relaxed">I use AI to compress execution time while retaining responsibility for architecture, validation, review, and acceptance. At Scotch, I also helped normalize that workflow across the engineering team.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="selected-work" class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
+    <h2 class="heading mb-10">Selected work</h2>
+    <div class="space-y-14">
+      <article>
+        <p class="eyebrow mb-2">Lyft · Software Engineer</p>
+        <h3 class="text-2xl mb-3">Reliable systems where mistakes had financial consequences</h3>
+        <p class="text-[1.0625rem] leading-relaxed max-w-measure mb-4">Owned a 40k-row migration during a third-party rentals-service deprecation, including a dry-run plan, an 18k-record audit and backfill, and safeguards against duplicate customer fee charges.</p>
+        <p class="text-[1.0625rem] leading-relaxed max-w-measure">Also refactored an internal bonus-remediation tool from a 5k-row limit to 100k+ rows and added Grafana observability so support could self-serve runs instead of escalating them to on-call engineers.</p>
+      </article>
+
+      <article class="border-t border-rule pt-8">
+        <p class="eyebrow mb-2">Skupos · Associate Software Engineer / Data Operations Analyst</p>
+        <h3 class="text-2xl mb-3">Turning analyst work into software</h3>
+        <p class="text-[1.0625rem] leading-relaxed max-w-measure">Designed and built a Python WSGI service on AWS EC2 that automated POS data-quality troubleshooting previously handled through Google Sheets and ad-hoc scripts. The goal was simple: let operations scale through application performance instead of headcount.</p>
+      </article>
+
+      <article class="border-t border-rule pt-8">
+        <p class="eyebrow mb-2">Scotch · Data Engineer</p>
+        <h3 class="text-2xl mb-3">Data engineering plus AI adoption</h3>
+        <p class="text-[1.0625rem] leading-relaxed max-w-measure mb-4">Served as the sole data engineer, building and maintaining ETL pipelines for liquor-store POS transaction data.</p>
+        <p class="text-[1.0625rem] leading-relaxed max-w-measure">Outside the core data work, I modeled Claude-assisted feature planning, PR review, and PR-description authorship until the workflow became part of how the engineering team shipped.</p>
+      </article>
+
+      <article class="border-t border-rule pt-8">
+        <p class="eyebrow mb-2">Personal engineering · Kaillera Next</p>
+        <h3 class="text-2xl mb-3">AI-assisted systems work with production constraints</h3>
+        <p class="text-[1.0625rem] leading-relaxed max-w-measure mb-4">An open-source multiplayer netplay platform built with FastAPI, Socket.IO, WebRTC, Redis, WASM emulator integration, a custom rollback engine, self-hosted TURN infrastructure, and automated container deployment.</p>
+        <p class="text-[1.0625rem] leading-relaxed max-w-measure">Built with AI assistance. I direct architecture and review every change; Claude handles much of the implementation work.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
+    <p class="eyebrow mb-4">How I work with AI</p>
+    <h2 class="heading mb-6">AI should compress execution time, not engineering judgment.</h2>
+    <div class="max-w-measure space-y-5 text-[1.0625rem] leading-relaxed">
+      <p>I use AI to accelerate implementation, planning, review, and documentation, but I do not treat generated output as accepted work by default.</p>
+      <blockquote class="border-l-[3px] pl-5 text-xl leading-relaxed" style="border-color: var(--accent);">
+        Implementation does not mean acceptance.
+      </blockquote>
+      <p>My preferred loop is deliberately small: direction → bounded step → AI execution → validation → feedback → correction → next step. The faster implementation gets, the more valuable frequent engineering checkpoints become.</p>
+      <p><a href="/writing/ai-gives-you-speed">Read: AI Gives You Speed. Engineering Gives It Direction. →</a></p>
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
+    <p class="eyebrow mb-4">Career history</p>
+    <h2 class="heading mb-10">Seven-plus years in production engineering</h2>
+    <div>
+      <ExperienceRow company="Scotch" role="Data Engineer" dates="2025–2026 · Remote" outcome="Sole data engineer; ETL pipelines for POS transaction data; senior engineering interviews; AI-assisted development advocacy and adoption." />
+      <ExperienceRow company="Vendorpass / Axuall" role="Senior Python Developer (Contract)" dates="2025 · Remote" outcome="Dagster pipelines ingesting regulated healthcare credentialing data from SFTP, REST APIs, and web scraping." />
+      <ExperienceRow company="Sure" role="Software Engineer" dates="2023–2025 · Remote" outcome="Backend engineering on a regulated homeowners-insurance product, including document generation and carrier integrations." />
+      <ExperienceRow company="Lyft" role="Software Engineer" dates="2021–2023 · Remote" outcome="Internal tools, migrations, third-party APIs, observability, financial safeguards, and cross-team feature delivery." />
+      <ExperienceRow company="Skupos" role="Associate Software Engineer / Data Operations Analyst" dates="2018–2021 · San Francisco" outcome="Python/AWS automation for POS data quality, replacing manual analyst workflows and supporting retailer growth." />
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
+    <p class="eyebrow mb-4">Current experiments</p>
+    <h2 class="heading mb-6">Using private projects to refine an AI-assisted engineering practice</h2>
+    <div class="grid gap-10 md:grid-cols-2">
+      <div>
+        <h3 class="text-2xl mb-3">The Engineer's Daily</h3>
+        <p class="text-[1.0625rem] leading-relaxed">A daily engineering practice built through bounded capabilities: requirements, command boundaries, persistence, validation, retrieval, updates, deletion, error handling, behavioral testing, and end-to-end verification.</p>
+      </div>
+      <div>
+        <h3 class="text-2xl mb-3">Servant</h3>
+        <p class="text-[1.0625rem] leading-relaxed">An experimental programming language built with explicit roadmaps and milestone gates. Progress requires executable behavior and evidence; major phase advancement still requires human approval.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
+    <p class="eyebrow mb-4">Contact</p>
+    <h2 class="heading mb-5">Let's talk about difficult engineering problems.</h2>
+    <p class="text-[1.0625rem] leading-relaxed max-w-measure mb-5">I'm relocating to Northern Virginia in 2026 and take on senior backend and data engineering engagements where production judgment, cross-functional execution, and practical AI adoption matter.</p>
+    <p class="text-sm"><a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a> · <a href="https://www.linkedin.com/in/kazonwilson/" target="_blank" rel="noopener">LinkedIn</a></p>
+  </section>
+
+  <Footer slot="footer" />
+</BaseLayout>
