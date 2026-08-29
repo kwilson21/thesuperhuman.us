@@ -11,17 +11,19 @@ Velocity is how fast you're moving **in a specific direction**.
 
 AI gives us an incredible amount of speed. We can generate implementations, tests, documentation, and entire features faster than ever before.
 
-But I've found that the mistake is assuming that because implementation has become faster, our engineering steps should become larger.
+But I've noticed a common mistake: assuming that because implementation has become faster, our engineering steps should become larger.
 
 I think the opposite is true.
 
 ## Prompt Drift Is Often a Direction Problem
 
-The term *prompt drift* gets used in a few related ways. In production LLM systems it can refer to changes in behavior as prompts, context, models, tools, or surrounding data evolve. Here I'm using it for the engineering failure mode I encounter most in agentic development: accumulated AI decisions gradually carrying an implementation away from the outcome I intended.
+The term *prompt drift* gets used in a few related ways. In production LLM systems, it can refer to changes in behavior as prompts, context, models, tools, or surrounding data evolve. Here I'm using it for the engineering failure mode I encounter most in agentic development: accumulated AI decisions gradually carrying an implementation away from the outcome I intended.
 
 Most of that drift comes from one of two situations.
 
-Either there is **no clear direction**, and speed is being prioritized above everything else, or there is a direction but no series of **small, reliable milestones and feedback loops** for getting there.
+Either there is **no clear direction**, and speed is being prioritized above everything else.
+
+Or there is a direction, but no series of **small, reliable milestones and feedback loops** for getting there.
 
 In the first case, you're moving quickly without really knowing where you're going.
 
@@ -37,7 +39,7 @@ My approach has increasingly become:
 
 The goal isn't to give an agent a massive specification and come back later to see whether it built what I intended.
 
-I want to establish the destination, define the next meaningful step, let AI accelerate the implementation, validate what was produced, provide feedback, correct course where necessary, and then continue.
+It's to establish the destination, take one meaningful step at a time, and let AI accelerate each step while I validate the result.
 
 **Direction → Small Step → AI Execution → Validation → Feedback → Correction → Next Step**
 
@@ -65,7 +67,7 @@ The breakthrough wasn't simply that Agile made developers faster.
 
 It allowed us to **correct direction more frequently**.
 
-AI changes another constraint entirely: implementation speed.
+AI relaxes a different constraint entirely: implementation speed.
 
 What used to take days can sometimes take hours. What took hours can sometimes take minutes.
 
@@ -99,7 +101,7 @@ It isn't necessarily more velocity.
 
 The lesson I've taken from this is:
 
-**Don't make the AI iteration larger because AI is faster. Make the iteration faster while keeping it small.**
+**Don't let AI's speed make your iterations larger. Let it make them faster.**
 
 ## What This Looks Like in My Own Work
 
@@ -111,9 +113,7 @@ Rather than asking AI to produce a finished application, the project progresses 
 
 Each step has a purpose. Each step builds on something that already works.
 
-**Servant** takes the idea much further.
-
-Servant is a longer-term experiment in designing and building a programming language with AI-assisted development.
+**Servant** takes the idea much further: a longer-term experiment in designing and building a programming language with AI-assisted development.
 
 Because AI agents are involved in the development process, I've intentionally put boundaries around what counts as progress.
 
@@ -139,7 +139,7 @@ Both projects are currently private while I continue developing them, but they'v
 
 As AI becomes better at implementation, I think one part of the engineer's responsibility becomes even more important: **stewardship**.
 
-The engineer still needs to understand the system.
+Engineers still need to understand the system.
 
 We still need to decide where we're going, establish constraints, break problems into reliable steps, evaluate results, recognize when something is drifting, and know when the evidence is strong enough to move forward.
 
