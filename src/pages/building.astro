@@ -1,0 +1,13 @@
+---
+export const prerender = false;
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Footer from '~/components/Footer.astro';
+import LiveWorkFeed from '~/components/LiveWorkFeed.astro';
+import { websiteFeed } from '~/lib/publication/website';
+const feed = await websiteFeed(Astro.locals.runtime.env);
+Astro.response.headers.set('Cache-Control', 'no-store');
+---
+<BaseLayout title="What I’m building · Kazon Wilson" description="Project progress, decisions and the work behind them.">
+  <LiveWorkFeed feed={feed} history />
+  <Footer />
+</BaseLayout>
