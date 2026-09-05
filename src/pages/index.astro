@@ -7,6 +7,11 @@ import ProjectCard from '~/components/ProjectCard.astro';
 import ExperienceRow from '~/components/ExperienceRow.astro';
 import Footer from '~/components/Footer.astro';
 import ContactForm from '~/components/ContactForm.astro';
+import LiveWorkFeed from '~/components/LiveWorkFeed.astro';
+import { WORK_FEED_KEY, parseStoredWorkUpdate } from '~/lib/work-feed';
+
+const env = (Astro.locals as any).runtime.env as Env;
+const liveWorkUpdate = parseStoredWorkUpdate(await env.WORK_FEED.get(WORK_FEED_KEY));
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -35,6 +40,8 @@ const jsonLd = {
   </section>
 
   <WhatIDo />
+
+  <LiveWorkFeed initialUpdate={liveWorkUpdate} />
 
   <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
     <h2 class="heading mb-6">How I work with AI</h2>

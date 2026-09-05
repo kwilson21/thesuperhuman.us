@@ -1,0 +1,112 @@
+---
+import type { PublicWorkUpdate } from '~/lib/work-feed';
+
+interface Props {
+  initialUpdate: PublicWorkUpdate | null;
+}
+
+const { initialUpdate } = Astro.props;
+const fallback: PublicWorkUpdate = {
+  schemaVersion: 1,
+  projectId: 'threadline',
+  projectName: 'Threadline',
+  headline: 'Building real-time reconstruction of agent-assisted software work',
+  summary: 'Directing a system that turns verified development activity into living, provisional threads without requiring manual bookkeeping.',
+  status: 'active',
+  revision: 0,
+  updatedAt: '',
+  links: [],
+};
+const update = initialUpdate ?? fallback;
+---
+<section class="border-t border-rule" aria-labelledby="now-building-heading">
+  <div
+    class="mx-auto max-w-content px-6 py-16 md:py-20"
+    data-live-work-feed
+    data-revision={update.revision}
+  >
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mb-5">
+      <p class="eyebrow">Now building</p>
+      <span class="font-sans text-[11px] uppercase tracking-eyebrow text-muted" data-work-status>
+        {update.status}
+      </span>
+    </div>
+    <h2 id="now-building-heading" class="heading mb-2" data-project-name>{update.projectName}</h2>
+    <p class="text-xl leading-relaxed max-w-measure mb-4" data-work-headline>{update.headline}</p>
+    <p class="text-[1.0625rem] leading-relaxed text-muted max-w-measure mb-5" data-work-summary>
+      {update.summary}
+    </p>
+    <p class="text-sm max-w-measure mb-4">
+      Agent-assisted development directed and reviewed by Kazon Wilson. Coding agents perform implementation; Kazon owns product direction, constraints, and acceptance.
+    </p>
+    <div class="flex flex-wrap gap-x-5 gap-y-2 text-sm" data-work-links>
+      {update.links.map((link) => (
+        <a href={link.url} target="_blank" rel="noopener">{link.label} →</a>
+      ))}
+    </div>
+    <p class:list={['font-mono text-xs text-muted mt-5', !update.updatedAt && 'hidden']} data-work-updated>
+      {update.updatedAt ? `Updated ${update.updatedAt}` : ''}
+    </p>
+    <p class="sr-only" aria-live="polite" data-work-announcer></p>
+  </div>
+</section>
+
+<script>
+  interface FeedUpdate {
+    projectName: string;
+    headline: string;
+    summary: string;
+    status: string;
+    revision: number;
+    updatedAt: string;
+    links: Array<{ label: string; url: string }>;
+  }
+
+  const root = document.querySelector<HTMLElement>('[data-live-work-feed]');
+
+  function setText(selector: string, value: string) {
+    const element = root?.querySelector<HTMLElement>(selector);
+    if (element) element.textContent = value;
+  }
+
+  function render(update: FeedUpdate) {
+    if (!root || update.revision <= Number(root.dataset.revision ?? 0)) return;
+    root.dataset.revision = String(update.revision);
+    setText('[data-project-name]', update.projectName);
+    setText('[data-work-headline]', update.headline);
+    setText('[data-work-summary]', update.summary);
+    setText('[data-work-status]', update.status);
+
+    const links = root.querySelector<HTMLElement>('[data-work-links]');
+    if (links) {
+      links.replaceChildren(...update.links.map((link) => {
+        const anchor = document.createElement('a');
+        anchor.href = link.url;
+        anchor.target = '_blank';
+        anchor.rel = 'noopener';
+        anchor.textContent = `${link.label} →`;
+        return anchor;
+      }));
+    }
+
+    const updated = root.querySelector<HTMLElement>('[data-work-updated]');
+    if (updated) {
+      updated.textContent = `Updated ${new Date(update.updatedAt).toLocaleString()}`;
+      updated.classList.remove('hidden');
+    }
+    setText('[data-work-announcer]', `Now building update: ${update.headline}`);
+  }
+
+  async function refresh() {
+    try {
+      const response = await fetch('/api/work-feed', { cache: 'no-store' });
+      if (!response.ok) return;
+      const body = await response.json() as { update: FeedUpdate | null };
+      if (body.update) render(body.update);
+    } catch {
+      // The server-rendered snapshot remains usable while the next poll waits.
+    }
+  }
+
+  if (root) window.setInterval(refresh, 15_000);
+</script>
