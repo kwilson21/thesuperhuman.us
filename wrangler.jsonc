@@ -19,6 +19,8 @@
     // Resend sends from the verified subdomain notifs.thesuperhuman.us;
     // the apex thesuperhuman.us is NOT a Resend sending domain.
     "CONTACT_FROM_EMAIL": "noreply@notifs.thesuperhuman.us",
+    // Only these sanitized project projections may be published to the public work feed.
+    "WORK_FEED_ALLOWED_PROJECTS": "threadline",
     // Turnstile site key is public by design (rendered in HTML, visible
     // to the browser). Stored as a plain var, not a secret.
     "PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAADPYWKMQT_mbi4O-"
@@ -30,6 +32,7 @@
   "kv_namespaces": [
     { "binding": "RATE_LIMIT", "id": "7410b0879b584637b83be68849e7c8e9" },
     { "binding": "RESUME_STORE", "id": "7410b0879b584637b83be68849e7c8e9" },
+    { "binding": "WORK_FEED", "id": "7410b0879b584637b83be68849e7c8e9" },
     // @astrojs/cloudflare auto-enables Astro sessions and prints a
     // build warning if it can't find a SESSION binding. We don't use
     // sessions anywhere; binding the name to the same KV namespace
