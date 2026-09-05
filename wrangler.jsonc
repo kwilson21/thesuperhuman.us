@@ -21,7 +21,8 @@
     "CONTACT_FROM_EMAIL": "noreply@notifs.thesuperhuman.us",
     // Turnstile site key is public by design (rendered in HTML, visible
     // to the browser). Stored as a plain var, not a secret.
-    "PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAADPYWKMQT_mbi4O-"
+    "PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAADPYWKMQT_mbi4O-",
+    "PUBLICATION_PROJECTS": "threadline"
   },
   // Both bindings point at the same physical KV namespace — keys are
   // prefixed (rl:, req:, pdf:) to keep the data isolated.
@@ -36,9 +37,16 @@
     // suppresses the warning at zero cost.
     { "binding": "SESSION", "id": "7410b0879b584637b83be68849e7c8e9" }
   ],
+  "d1_databases": [
+    {
+      "binding": "PUBLICATION_DB",
+      "database_name": "thesuperhuman-publication",
+      "database_id": "1e9df084-b2bf-4edc-a2d2-18fdc4750f75"
+    }
+  ],
   "r2_buckets": [
     { "binding": "AUDIO", "bucket_name": "superhuman-audio" }
   ]
-  // Sensitive values (RESEND_API_KEY, TURNSTILE_SECRET_KEY) are dashboard-
+  // Sensitive values (RESEND_API_KEY, TURNSTILE_SECRET_KEY, PUBLICATION_TOKEN) are dashboard-
   // managed encrypted secrets; everything else is version-controlled above.
 }
