@@ -30,6 +30,15 @@ function fixture() {
 }
 
 describe('protocol-boundary delivery', () => {
+  it('repairs a corrupt stored receipt through idempotent journal delivery', async () => {
+    const p = fixture();
+    await p.outbox.acknowledge({ ...receipt, revision: 0 });
+    p.journal.commit.mockResolvedValue({ status: 'duplicate', receipt });
+    expect(await deliver(publication, p)).toEqual({ status: 'delivered', receipt });
+    expect(await deliver(publication, p)).toEqual({ status: 'delivered', receipt });
+    expect(p.journal.commit).toHaveBeenCalledTimes(1);
+    expect(p.outbox.acknowledge).toHaveBeenLastCalledWith(receipt);
+  });
   it('persists before transport and records acknowledgement before reporting delivery', async () => {
     const p = fixture();
     expect(await deliver(publication, p)).toEqual({ status: 'delivered', receipt });

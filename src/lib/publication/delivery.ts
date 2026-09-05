@@ -4,7 +4,7 @@ import { parsePublication, type Publication, type PublicationJournal, type Recei
 export interface Outbox {
   /** Persist before network I/O; an existing event must never be overwritten. */
   prepare(value: Publication): Promise<{ publication: Publication; receipt: Receipt | null }>;
-  /** Persist a validated server receipt. Repeating the same acknowledgement is safe. */
+  /** Persist a validated server receipt, replacing any corrupt receipt. Repeating it is safe. */
   acknowledge(receipt: Receipt): Promise<void>;
 }
 
@@ -50,10 +50,10 @@ export async function deliver(input: unknown, ports: DeliveryPorts): Promise<Del
     if (!stored || canonical(stored) !== canonical(publication)) return { status: 'conflict' };
     // A successful old receipt is not permission to bypass a newly restrictive policy.
     if (!await ports.mayPublish(parsePublication(stored)!)) return { status: 'held' };
-    if (prepared.receipt) {
-      return validReceipt(prepared.receipt, stored)
-        ? { status: 'delivered', receipt: prepared.receipt } : { status: 'pending' };
+    if (prepared.receipt && validReceipt(prepared.receipt, stored)) {
+      return { status: 'delivered', receipt: prepared.receipt };
     }
+    // Recover corrupt local receipts through the journal's idempotent commit.
     const result = await ports.journal.commit(stored);
     if (result.status === 'conflict' || result.status === 'withdrawn' || result.status === 'rejected') {
       return { status: result.status };
