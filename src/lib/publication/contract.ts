@@ -7,19 +7,22 @@ export interface Story {
   basis: 'agent-reported' | 'repository-verified' | 'human-confirmed';
 }
 
-export interface Publication {
+interface PublicationBase {
   version: 1;
   projectId: string;
   eventId: string;
   entryId: string;
   expectedRevision: number;
-  operation: 'publish' | 'correct' | 'withdraw';
   origin: 'work' | 'shutdown' | 'backfill';
   occurredOn: string;
   threadId: string | null;
   milestoneId: string | null;
-  story: Story | null;
 }
+
+export type Publication = PublicationBase & (
+  | { operation: 'publish' | 'correct'; story: Story }
+  | { operation: 'withdraw'; story: null }
+);
 
 export interface Receipt {
   projectId: string;
