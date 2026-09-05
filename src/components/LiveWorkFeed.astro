@@ -42,8 +42,8 @@ const labels = { proposed: 'Planned', implemented: 'Built', tested: 'Checked', a
       root.querySelector('[data-history-list]')?.replaceChildren();
     }
     function render(feed: ProjectFeed) {
-      if (feed.projectId !== 'threadline' || !Number.isSafeInteger(feed.revision)
-        || feed.revision < Number(root.dataset.revision)) return;
+      if (feed.projectId !== 'threadline' || !Number.isSafeInteger(feed.revision) || feed.revision < 0) return;
+      // Requests are serialized. Accept the current server snapshot even after a database reset.
       const changed = feed.revision !== Number(root.dataset.revision);
       root.dataset.revision = String(feed.revision);
       clear();
