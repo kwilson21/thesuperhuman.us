@@ -74,6 +74,16 @@ describe('durable publication delivery', () => {
     expect((await deliver(withdrawal, ports)).status).toBe('delivered');
     expect(await outbox.pending('threadline')).toEqual([]);
   });
+  it('recovers prerequisites before lexically earlier opaque event IDs', async () => {
+    const { db } = fixture(); const outbox = new D1PublicationOutbox(db);
+    await outbox.prepare({ ...base, eventId: 'z-prerequisite' });
+    for (let i = 0; i < 101; i++) await outbox.prepare({ ...base, eventId: 'a-followup-' + i,
+      entryId: 'next-' + i, expectedRevision: i + 1 });
+    const pending = await outbox.pending('threadline');
+    expect(pending).toHaveLength(100);
+    expect(pending[0].eventId).toBe('z-prerequisite');
+    expect(pending.map(p => p.expectedRevision)).toEqual(Array.from({ length: 100 }, (_, i) => i));
+  });
   it('holds queued work when current audience policy denies publication', async () => {
     const { db, journal } = fixture();
     const outbox = new D1PublicationOutbox(db);
