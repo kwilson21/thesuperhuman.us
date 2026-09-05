@@ -54,8 +54,11 @@ describe('transactional publication journal', () => {
   it('applies corrections without moving focus and prevents backfill corrections changing current', async () => {
     const { journal, db } = fixture(); await journal.commit(base);
     await journal.commit({ ...base, entryId: 'next', eventId: 'next', expectedRevision: 1 });
-    await journal.commit({ ...base, operation: 'correct', eventId: 'fix', expectedRevision: 2 });
+    await journal.commit({ ...base, operation: 'correct', eventId: 'fix', expectedRevision: 2, occurredOn: '2026-10-01' });
     expect((await readProject(db, 'threadline')).current?.entryId).toBe('next');
+    const history = (await readProject(db, 'threadline')).history;
+    expect(history.map(e => e.entryId)).toEqual(['next', 'first']);
+    expect(history.find(e => e.entryId === 'first')?.occurredOn).toBe('2026-09-05');
     await journal.commit({ ...base, entryId: 'next', operation: 'correct', eventId: 'historical-fix',
       origin: 'backfill', expectedRevision: 3, story: { ...base.story!, headline: 'Historical correction' } });
     expect((await readProject(db, 'threadline')).current?.story.headline).toBe(base.story?.headline);

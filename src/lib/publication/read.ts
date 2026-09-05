@@ -18,7 +18,7 @@ function entry(row: Record<string, unknown>): PublicEntry | null {
   if (row.payload === null) return null;
   const p = parsePublication(JSON.parse(row.payload as string));
   if (!p || !p.story) throw new Error('Invalid stored publication');
-  return { entryId: p.entryId, occurredOn: p.occurredOn,
+  return { entryId: p.entryId, occurredOn: (row.occurred_on as string | undefined) ?? p.occurredOn,
     publishedAt: row.published_at as string, backfilled: row.origin === 'backfill', story: p.story };
 }
 
@@ -31,11 +31,13 @@ export async function readProject(db: D1Database, projectId: string): Promise<Pr
         SELECT entry_id FROM publication_events WHERE project_id=?1
           AND operation='publish' AND origin!='backfill' ORDER BY revision DESC LIMIT 1)
       ORDER BY revision DESC LIMIT 1`).bind(projectId),
-    db.prepare(`SELECT e.payload,e.published_at,e.origin FROM publication_events e
+    db.prepare(`SELECT e.payload,e.published_at,o.origin,json_extract(o.payload,'$.occurredOn') AS occurred_on
+      FROM publication_events e JOIN publication_events o
+        ON o.project_id=e.project_id AND o.entry_id=e.entry_id AND o.operation='publish'
       WHERE e.project_id=?1 AND e.payload IS NOT NULL AND e.operation!='withdraw'
         AND e.revision=(SELECT MAX(revision) FROM publication_events
           WHERE project_id=e.project_id AND entry_id=e.entry_id)
-      ORDER BY json_extract(e.payload,'$.occurredOn') DESC,e.revision DESC LIMIT 100`).bind(projectId),
+      ORDER BY occurred_on DESC,o.revision DESC LIMIT 100`).bind(projectId),
   ]);
   return { projectId, revision: version.results[0].revision as number,
     current: current.results.length ? entry(current.results[0]) : null,
