@@ -1,0 +1,81 @@
+---
+import type { ProjectFeed } from '~/lib/publication/read';
+interface Props { feed: ProjectFeed | null; history?: boolean }
+const { feed, history = false } = Astro.props;
+const current = feed?.current;
+const labels = { proposed: 'Planned', implemented: 'Built', tested: 'Checked', available: 'Available to use' };
+---
+<section class="border-t border-rule" aria-label="Threadline progress">
+  <div class="mx-auto max-w-content px-6 py-16" data-publication-feed data-revision={feed?.revision ?? -1} data-history={history}>
+    <p class="eyebrow mb-4">What I’m building</p>
+    <h2 class="heading mb-4">Threadline</h2>
+    <p class="text-lg max-w-measure mb-5">Helping people return to a project and understand where they left off, without keeping a separate work log.</p>
+    <p class="text-sm text-muted mb-6">I guide the product and review the results. Coding agents implement the changes.</p>
+    <p class="text-sm text-muted mb-3" data-status>{feed ? 'Latest published progress' : 'Live updates unavailable'}</p>
+    <article data-current hidden={!current}>
+      <p class="text-xl mb-3" data-headline>{current?.story.headline}</p>
+      <p class="text-base leading-relaxed max-w-measure mb-3" data-summary>{current?.story.summary}</p>
+      <p class="text-sm text-muted" data-meta>{current ? `${labels[current.story.delivery]} · Published ${new Date(current.publishedAt).toUTCString()}` : ''}</p>
+      <details class="mt-4 text-base" data-details hidden={!current?.story.technicalDetail}>
+        <summary class="cursor-pointer">Technical details</summary>
+        <p class="mt-3 whitespace-pre-wrap max-w-measure" data-technical>{current?.story.technicalDetail}</p>
+      </details>
+    </article>
+    <p class="text-base text-muted" data-empty hidden={!!current}>No current progress update is published.</p>
+    {history ? <div class="mt-10"><h3 class="text-xl mb-5">Progress over time</h3><div data-history-list>
+      {feed?.history.map(item => <article class="border-t border-rule py-5">
+        <p class="text-sm text-muted mb-2">{item.occurredOn}{item.backfilled ? ' · Added from project history' : ''}</p>
+        <h4 class="text-lg mb-2">{item.story.headline}</h4><p class="text-base max-w-measure">{item.story.summary}</p>
+      </article>)}
+    </div></div> : <a class="inline-block mt-6 text-base underline" href="/building">See project history</a>}
+    <p class="sr-only" aria-live="polite" data-announcement></p>
+  </div>
+</section>
+<script>
+  import type { ProjectFeed } from '~/lib/publication/read';
+  const labels = { proposed: 'Planned', implemented: 'Built', tested: 'Checked', available: 'Available to use' };
+  for (const root of document.querySelectorAll<HTMLElement>('[data-publication-feed]')) {
+    const el = (name: string) => root.querySelector<HTMLElement>(`[data-${name}]`)!;
+    function clear() {
+      el('current').hidden = true; el('empty').hidden = false;
+      for (const key of ['headline', 'summary', 'meta', 'technical']) el(key).textContent = '';
+      root.querySelector('[data-history-list]')?.replaceChildren();
+    }
+    function render(feed: ProjectFeed) {
+      if (feed.projectId !== 'threadline' || !Number.isSafeInteger(feed.revision) || feed.revision < 0) return;
+      // Requests are serialized. Accept the current server snapshot even after a database reset.
+      const changed = feed.revision !== Number(root.dataset.revision);
+      root.dataset.revision = String(feed.revision);
+      clear();
+      el('status').textContent = 'Latest published progress';
+      if (feed.current) {
+        const { story, publishedAt } = feed.current;
+        el('current').hidden = false; el('empty').hidden = true;
+        el('headline').textContent = story.headline; el('summary').textContent = story.summary;
+        el('meta').textContent = `${labels[story.delivery]} · Published ${new Date(publishedAt).toUTCString()}`;
+        el('details').hidden = !story.technicalDetail; el('technical').textContent = story.technicalDetail ?? '';
+      }
+      const list = root.querySelector('[data-history-list]');
+      if (list) for (const item of feed.history) {
+        const article = document.createElement('article'); article.className = 'border-t border-rule py-5';
+        for (const [tag, content, style] of [
+          ['p', `${item.occurredOn}${item.backfilled ? ' · Added from project history' : ''}`, 'text-sm text-muted mb-2'],
+          ['h4', item.story.headline, 'text-lg mb-2'], ['p', item.story.summary, 'text-base max-w-measure'],
+        ]) { const node = document.createElement(tag); node.textContent = content; node.className = style; article.appendChild(node); }
+        list.appendChild(article);
+      }
+      if (changed) el('announcement').textContent = feed.current ? 'Project progress updated.' : 'Current progress update removed.';
+    }
+    async function refresh() {
+      try {
+        if (document.hidden) return;
+        const response = await fetch('/api/work-feed?project=threadline', { cache: 'no-store', signal: AbortSignal.timeout(10000) });
+        if (response.status === 404) { clear(); root.dataset.revision = '-1'; }
+        if (!response.ok) throw new Error('Unavailable');
+        render(await response.json() as ProjectFeed);
+      } catch { el('status').textContent = 'Live updates unavailable'; }
+      finally { window.setTimeout(refresh, 15000); }
+    }
+    void refresh();
+  }
+</script>

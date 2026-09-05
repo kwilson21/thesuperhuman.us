@@ -1,6 +1,10 @@
 ---
 export const prerender = false;
 import BaseLayout from '~/layouts/BaseLayout.astro';
+import LiveWorkFeed from '~/components/LiveWorkFeed.astro';
+import { websiteFeed } from '~/lib/publication/website';
+const feed = await websiteFeed(Astro.locals.runtime.env);
+Astro.response.headers.set('Cache-Control', 'no-store');
 import Hero from '~/components/Hero.astro';
 import WhatIDo from '~/components/WhatIDo.astro';
 import ProjectCard from '~/components/ProjectCard.astro';
@@ -27,6 +31,7 @@ const jsonLd = {
   jsonLd={jsonLd}
 >
   <Hero />
+  <LiveWorkFeed feed={feed} />
 
   <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
     <p class="text-[1.0625rem] leading-relaxed max-w-measure">
