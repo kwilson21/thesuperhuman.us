@@ -28,7 +28,7 @@ const update = initialUpdate ?? fallback;
     <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mb-5">
       <p class="eyebrow">Now building</p>
       <span class="font-sans text-[11px] uppercase tracking-eyebrow text-muted" data-work-status>
-        {update.status}
+        {initialUpdate ? update.status : 'Project overview · live status unavailable'}
       </span>
     </div>
     <h2 id="now-building-heading" class="heading mb-2" data-project-name>{update.projectName}</h2>
@@ -45,7 +45,7 @@ const update = initialUpdate ?? fallback;
       ))}
     </div>
     <p class:list={['font-mono text-xs text-muted mt-5', !update.updatedAt && 'hidden']} data-work-updated>
-      {update.updatedAt ? `Updated ${update.updatedAt}` : ''}
+      {update.updatedAt ? `Updated ${new Date(update.updatedAt).toUTCString()}` : ''}
     </p>
     <p class="sr-only" aria-live="polite" data-work-announcer></p>
   </div>
@@ -91,7 +91,7 @@ const update = initialUpdate ?? fallback;
 
     const updated = root.querySelector<HTMLElement>('[data-work-updated]');
     if (updated) {
-      updated.textContent = `Updated ${new Date(update.updatedAt).toLocaleString()}`;
+      updated.textContent = `Updated ${new Date(update.updatedAt).toUTCString()}`;
       updated.classList.remove('hidden');
     }
     setText('[data-work-announcer]', `Now building update: ${update.headline}`);
