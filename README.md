@@ -35,11 +35,23 @@ Push to `main` → Cloudflare's git integration rebuilds and runs `wrangler depl
 | --- | --- | --- |
 | `RESEND_API_KEY` | Dashboard secret | Sensitive |
 | `TURNSTILE_SECRET_KEY` | Dashboard secret | Sensitive |
+| `WORK_FEED_INGEST_TOKEN` | Dashboard secret | Authenticates the prototype work-feed publisher; missing or empty disables ingestion |
 | `CONTACT_TO_EMAIL` | `wrangler.jsonc` `vars` | Not sensitive |
 | `CONTACT_FROM_EMAIL` | `wrangler.jsonc` `vars` (currently `noreply@notifs.thesuperhuman.us`, the verified Resend sending subdomain) | Not sensitive |
 | `PUBLIC_TURNSTILE_SITE_KEY` | `wrangler.jsonc` `vars` | Browser-readable by design (Astro inlines `PUBLIC_*` into the build) |
 
 Update version-controlled vars by editing `wrangler.jsonc` and pushing. Update dashboard secrets in the Cloudflare Worker settings (Variables and Secrets → Secrets).
+
+### Work-feed prototype setup
+
+Do not enable production publication until its architecture and audience policy are approved.
+Provision a randomly generated ingest token through the Worker secret settings and the
+publisher's secret store, never in source, browser code, or chat. Rotate both together.
+`WORK_FEED_ALLOWED_PROJECTS` lists allowed project IDs; it does not sanitize text.
+`WORK_FEED` uses the existing KV namespace with the `work-feed:current` key.
+The prototype has no configured publisher. Its KV read/check/write operation is not
+atomic, and revisions currently conflict across projects. These are release blockers,
+not guarantees provided by the deployment configuration.
 
 ### KV bindings
 
