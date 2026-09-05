@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { D1PublicationJournal } from '~/lib/publication/journal';
+import { readProject } from '~/lib/publication/read';
 import type { Publication } from '~/lib/publication/contract';
 
 // Native loading avoids older Vite versions treating node:sqlite as a package.
@@ -31,11 +32,38 @@ function fixture() {
       } catch (error) { sql.exec('ROLLBACK'); throw error; }
     },
   };
-  return { journal: new D1PublicationJournal(db as unknown as D1Database), sql,
+  return { journal: new D1PublicationJournal(db as unknown as D1Database), db: db as unknown as D1Database, sql,
     interrupt: () => { fail = true; } };
 }
 
 describe('transactional publication journal', () => {
+  it('keeps old backfill out of current focus and clears withdrawn current work', async () => {
+    const { journal, db } = fixture();
+    expect(await readProject(db, 'threadline')).toEqual({ projectId: 'threadline', revision: 0, current: null, history: [] });
+    await journal.commit(base);
+    await journal.commit({ ...base, entryId: 'past', eventId: 'past', origin: 'backfill',
+      occurredOn: '2026-09-01', expectedRevision: 1 });
+    const feed = await readProject(db, 'threadline');
+    expect(feed.current?.entryId).toBe('first');
+    expect(feed.history.map(e => e.entryId)).toEqual(['first', 'past']);
+    expect(feed.history[1].backfilled).toBe(true);
+    await journal.commit({ ...base, operation: 'withdraw', story: null, eventId: 'remove', expectedRevision: 2 });
+    expect((await readProject(db, 'threadline')).current).toBeNull();
+    expect((await readProject(db, 'threadline')).history.map(e => e.entryId)).toEqual(['past']);
+  });
+  it('applies corrections without moving focus and prevents backfill corrections changing current', async () => {
+    const { journal, db } = fixture(); await journal.commit(base);
+    await journal.commit({ ...base, entryId: 'next', eventId: 'next', expectedRevision: 1 });
+    await journal.commit({ ...base, operation: 'correct', eventId: 'fix', expectedRevision: 2, occurredOn: '2026-10-01' });
+    expect((await readProject(db, 'threadline')).current?.entryId).toBe('next');
+    const history = (await readProject(db, 'threadline')).history;
+    expect(history.map(e => e.entryId)).toEqual(['next', 'first']);
+    expect(history.find(e => e.entryId === 'first')?.occurredOn).toBe('2026-09-05');
+    await journal.commit({ ...base, entryId: 'next', operation: 'correct', eventId: 'historical-fix',
+      origin: 'backfill', expectedRevision: 3, story: { ...base.story!, headline: 'Historical correction' } });
+    expect((await readProject(db, 'threadline')).current?.story.headline).toBe(base.story?.headline);
+    expect((await readProject(db, 'other')).history).toEqual([]);
+  });
   it('allows one winner for competing expected revisions and isolates projects', async () => {
     const { journal } = fixture();
     const results = await Promise.all([journal.commit(base),
