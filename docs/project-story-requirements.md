@@ -1,6 +1,8 @@
 # Project stories: shared product requirements
 
-Status: proposed canonical requirements, pending this documentation PR's review.
+Status: version 1 is accepted and supported when merged into `main`.
+Unmerged branch copies are proposals. Acceptance covers these product requirements,
+not the architecture choices explicitly left pending below.
 Owner: Kazon Wilson. Version: 1. Date: 2026-09-05.
 
 ## Purpose and ownership
