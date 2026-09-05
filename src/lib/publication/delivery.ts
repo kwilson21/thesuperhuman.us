@@ -8,6 +8,10 @@ export interface Outbox {
   acknowledge(receipt: Receipt): Promise<void>;
 }
 
+export class OutboxError extends Error {
+  constructor(readonly status: 'conflict' | 'withdrawn') { super(status); }
+}
+
 export interface DeliveryPorts {
   outbox: Outbox;
   journal: PublicationJournal;
@@ -62,7 +66,8 @@ export async function deliver(input: unknown, ports: DeliveryPorts): Promise<Del
       || !validReceipt(result.receipt, stored)) return { status: 'pending' };
     await ports.outbox.acknowledge(result.receipt);
     return { status: 'delivered', receipt: result.receipt };
-  } catch {
+  } catch (error) {
+    if (error instanceof OutboxError) return { status: error.status };
     // No exception text or source details may leak to a public error response.
     return { status: 'pending' };
   }
