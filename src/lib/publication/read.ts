@@ -24,7 +24,7 @@ function entry(row: Record<string, unknown>): PublicEntry | null {
 
 /** One snapshot; bounded history. Public callers must enforce their project allowlist. */
 export async function readProject(db: D1Database, projectId: string): Promise<ProjectFeed> {
-  const [version, current, history] = await db.batch([
+  const [version, current, history] = await db.batch<Record<string, unknown>>([
     db.prepare('SELECT COALESCE(MAX(revision),0) AS revision FROM publication_events WHERE project_id=?1').bind(projectId),
     db.prepare(`SELECT payload,published_at,origin FROM publication_events
       WHERE project_id=?1 AND origin!='backfill' AND entry_id=(
