@@ -11,9 +11,20 @@ Never put the token in source, browser code, chat output or project payloads.
 Production uses the dedicated `thesuperhuman-publication` database, bound as
 `PUBLICATION_DB` in `wrangler.jsonc`, with `threadline` as its only public project.
 The initial migration was applied through the Cloudflare API on 2026-09-05,
-before enabling the binding. It was executed directly, so it is not recorded in
-Wrangler's migration ledger; do not blindly reapply the non-idempotent migration.
+before enabling the binding. After comparing the production table constraints and
+index with the migration, its filename was recorded in Wrangler's `d1_migrations`
+ledger using Wrangler's standard ledger schema. The baseline is reconciled;
+do not rerun the SQL file directly against production.
 `PUBLICATION_TOKEN` is provisioned as an encrypted Worker secret, outside Git.
+
+For future migrations, authenticate Wrangler to the production account, inspect
+`npx wrangler d1 migrations list PUBLICATION_DB --remote`, and apply only the
+reviewed pending migrations with
+`npx wrangler d1 migrations apply PUBLICATION_DB --remote`. The initial migration
+must not appear as pending. Stop and compare `sqlite_master` with the checked-in
+migration if the ledger is unexpectedly missing; never mark an unverified schema
+as migrated. Fresh databases should use `migrations apply` from the start, which
+executes the schema and records each filename together.
 
 The working agent prepares audience-safe prose after normal durable reconciliation.
 POST the version-1 publication envelope to `/api/work-feed` with Bearer authorization.
