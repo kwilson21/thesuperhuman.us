@@ -125,7 +125,16 @@ Client-facing material defaults to private. Client access and public portfolio
 publication are separate permissions. Client delivery remains disabled until access
 control, audience isolation, assets, and withdrawal behavior are verified end to end.
 
-## Architecture decisions still requiring approval
+## Approved workflow and remaining implementation decisions
+
+[ADR 0001](architecture/0001-daily-protocol-publication.md) records the approved
+architecture: existing daily protocol → canonical project records → shared
+publication step → website story and history. Extend the existing work and
+shutdown reconciliation; do not create a parallel continuity system. Historical
+backfill is required where evidence supports it, using the same publication
+identity, privacy, correction, and withdrawal rules as live updates.
+
+The following implementation choices remain to be specified:
 
 Reuse the existing Astro/Cloudflare site and a shared publishing boundary.
 D1 with atomic updates is a candidate for journal storage, not an approved decision.

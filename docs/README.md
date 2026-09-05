@@ -4,3 +4,5 @@
 - `superpowers/specs/` and `superpowers/plans/`: historical website design and implementation documents.
 
 Other projects reference the shared requirements and supported version, not copies. Project-specific goals and private evidence remain with their owning project.
+
+- [ADR 0001: Daily-protocol publication](architecture/0001-daily-protocol-publication.md): approved workflow, ritual insertion points, transferable configuration, and evidence-backed history backfill.
