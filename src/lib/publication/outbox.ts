@@ -1,11 +1,6 @@
+import { canonicalPublication } from './canonical';
 import { parsePublication, type Publication, type Receipt } from './contract';
 import { OutboxError, type Outbox } from './delivery';
-
-function canonical(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  const object = value as Record<string, unknown>;
-  return '{' + Object.keys(object).sort().map(key => JSON.stringify(key) + ':' + canonical(object[key])).join(',') + '}';
-}
 
 /** The private queue is in the same D1 database as the public journal. */
 export class D1PublicationOutbox implements Outbox {
@@ -14,7 +9,7 @@ export class D1PublicationOutbox implements Outbox {
   async prepare(input: Publication): Promise<{ publication: Publication; receipt: Receipt | null }> {
     const publication = parsePublication(input);
     if (!publication) throw new Error('Invalid envelope');
-    const payload = canonical(publication);
+    const payload = canonicalPublication(publication);
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload));
     const hash = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
     const [, stored, withdrawn] = await this.db.batch([
