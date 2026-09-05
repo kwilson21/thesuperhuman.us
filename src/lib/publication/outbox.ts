@@ -48,7 +48,7 @@ export class D1PublicationOutbox implements Outbox {
     const [rows] = await this.db.batch([this.db.prepare(`SELECT payload FROM publication_outbox
       WHERE project_id=?1 AND payload IS NOT NULL AND receipt IS NULL ORDER BY event_id LIMIT 100`).bind(projectId)]);
     return rows.results.flatMap(row => {
-      const value = parsePublication(JSON.parse(row.payload as string));
+      const value = parsePublication(JSON.parse((row as { payload: string }).payload));
       return value ? [value] : [];
     });
   }
