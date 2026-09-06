@@ -1,6 +1,6 @@
 # ADR 0001: Publish through the existing daily continuity protocol
 
-Status: approved direction, recorded 2026-09-05; implementation pending.
+Status: approved direction, recorded 2026-09-05. Receiver and durable delivery are implemented; authenticated connection activation remains a separate gate.
 Scope: shared project publication architecture, extending requirements version 1.
 Owner: Kazon Wilson.
 
@@ -161,3 +161,9 @@ Keep slices independently reviewable. Test interruption/resume, midstream reprio
 simultaneous chats, duplicate delivery, old backfill after new live work, and withdrawal
 followed by replay. Publication success requires a confirmed receipt and verified
 website output. Until then, report prepared, pending, or blocked accurately.
+
+## Executable agent protocol
+
+Version 1 is defined in [publication-agent-protocol.md](../publication-agent-protocol.md).
+Authentication and activation are described in [publication-mcp.md](../publication-mcp.md).
+Project-local instructions pin the shared protocol commit and retain private source mappings.
