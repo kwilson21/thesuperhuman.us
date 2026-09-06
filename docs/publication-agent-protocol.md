@@ -1,102 +1,77 @@
-# Shared agent publication protocol
+# Shared publication policy and delivery contract
 
-Protocol version: 1. Owner: Kazon Wilson. Canonical home: this repository.
-Transport readiness: authenticated MCP is pending in [PR #19](https://github.com/kwilson21/thesuperhuman.us/pull/19)
-and requires production configuration. Until activated, preserve reviewed updates
-in the source handoff and report delivery as pending. Tool names below describe
-the integration contract, not an already-connected capability.
+Policy revision: 2, requested 2026-09-06. Transport envelope version: 1, unchanged.
+Owner: Kazon Wilson. Canonical home: this repository.
+Authenticated MCP is implemented; production configuration, owner sign-in, and
+first-publication verification remain separate activation gates.
 
-This implements ADR 0001. Projects reference an immutable commit of this document;
-they do not copy its rules or create another daily ritual.
+## Public content
 
-## Project setup
+Publish product goals, user-visible outcomes, meaningful milestones, honest
+limitations, and what comes next. Write a clear headline and a short explanation
+understandable without repository access. Optional technical detail is public too.
 
-Keep a small project-local mapping alongside the existing agent instructions:
+General philosophy and truthful high-level AI-assisted attribution are allowed.
+They do not authorize publishing a reproducible account of internal operations.
+Default to outcomes over implementation mechanics. Keep private operational
+instructions, prompts, detailed configurations, and source material in the source
+project. Do not publish a combination of details that reconstructs a private
+process across multiple otherwise harmless updates.
 
-- public project ID and MCP connection URL;
-- protocol version and immutable document URL;
-- canonical roadmap, execution record, and daily-summary locations;
-- audience policy and explicitly approved public links;
-- existing startup/work/shutdown insertion points;
-- private location for source-to-event identities and receipts.
+Review text, identifiers, links, images, captions, recordings, and metadata before
+transmission. An allowed field can still leak restricted material. For uncertain
+details, omit the detail and publish the supported outcome; hold the whole update
+only if its core claim cannot be made safely. Public philosophy is not confidential
+by default, and confidentiality must not become a false claim about who did the work.
 
-The MCP connection stores credentials privately. Never put credential values in
-this mapping. Private source references stay in the source project. They are not
-part of the public website envelope, even when a technical-detail field exists.
+Project-specific restrictions belong in private project configuration, not in this
+public repository. Never paste private source material into a public PR, review
+comment, issue, fixture, log, or publication request while performing the review.
+Automated field validation and keyword filters cannot guarantee confidentiality.
 
-## Startup
+## Source and audience authority
 
-Follow the project's existing orientation protocol first. Read canonical GitHub
-state and reconcile it with conversation context. Then read project progress through MCP and recover pending envelopes from the
-source project’s durable handoff. Inspect current audience permission before
-retrying anything. Resume normal work if the connection is unavailable; record
-that publication is pending without claiming an automatic background retry.
-Opening a chat is not a reason to publish.
+Project records own intent, roadmap changes, and acceptance. The website is a
+presentation, not a second tracker. Reflect a changed public goal or milestone only
+after its source record is reconciled. Do not turn exploration into a commitment.
 
-## During work
+Distinguish proposed, implemented, tested, and available. Keep evidence basis
+separate from delivery state. A merge is not human acceptance or proof of launch.
+Private evidence may support a claim without a public link. Do not imply that
+readers can inspect sources that are not available to them.
 
-1. Reconcile meaningful outcomes and decisions into canonical project records.
-   Place new ideas in Now, Next, or Parked with a trigger; preserve reasons for
-   significant plan changes. Exploration alone creates no client commitment.
-2. Compare with the existing public story. Skip routine saves, test runs, PR-review
-   chatter, repeated facts, and unchanged state.
-3. Draft a short public outcome: what is being built, what changed for its intended
-   user, and what comes next. Say agents implemented code when that matters.
-   The owner supplies direction; do not imply they personally wrote the changes.
-4. Review every field for audience safety and factual support. Remove private
-   paths, issue/PR identifiers and links, prompts, credentials, customer identity,
-   and confidential design details unless explicitly cleared for this audience.
-   `technicalDetail` is public too. Use accurate delivery and evidence labels.
-5. Preserve the reviewed envelope and its source identity in the source project's
-   private handoff before the first tool call. The server cannot recover a request that never reached it. Read the current revision, then send one envelope
-   through `publish_project_update` and retain its receipt.
-6. Verify the public feed and website after the first delivery or a surface change.
-   A receipt proves ingestion. It does not prove user acceptance, completion, or
-   that the browser displayed the intended story.
+## Delivery
 
-Use a stable event ID for each reviewed source outcome. Live work and historical
-backfill must consult the same identity mapping. Never generate a new ID merely
-because a response was lost. If content changes, reconcile and create a distinct
-correction event; do not overwrite an existing event identity.
+Use the existing project workflow; project-local instructions define its private
+insertion points. This public contract does not prescribe or describe the owner's
+internal operating sequence. Do not add a separate user reporting ritual.
 
-## Shutdown
+- Preserve the reviewed envelope and its stable source identity privately before sending.
+- Read current public state with `get_project_progress`.
+- Submit through `publish_project_update`; retain the returned receipt.
+- Retry an interrupted delivery with exactly the same envelope and event ID.
+- Reconcile conflicts against source records and public state; never advance revisions blindly.
+- Honor withdrawals and clear corresponding private pending copies. Do not restore a withdrawn entry.
+- Verify website rendering after first delivery or a surface change. Receipts prove ingestion only.
 
-Complete normal reconciliation, evidence-guided reflection, and day naming first.
-Publish a closing summary only if it adds a meaningful public outcome. Preserve
-receipts or pending envelopes with the normal durable handoff, then produce the
-usual Day Complete response. Publication never replaces reflection or blocks the
-user from ending the day.
+Pending work stays in existing durable source records. No second server queue or
+background scheduler is required. An unavailable connection must not block normal
+work or be described as active automatic publishing.
 
-## History and revisions
+## History and transfer
 
-Backfill only from verified dated source records. Preserve the original work day
-in `occurredOn`; the receiver assigns the separate publication timestamp. Use
-`origin=backfill` so historical work cannot replace current focus. Do not invent
-historical intent, time spent, acceptance, or deployment from a merged PR alone.
+Backfill a few verified, dated outcomes rather than a raw commit feed. Preserve
+the original day and label the event as backfill; the receiver records publication
+time separately. Backfill cannot replace current focus. Share identity mapping
+between historical and live updates so the same outcome is not published twice.
+Do not invent old intentions, plans, acceptance, duration, or deployment.
 
-For `pending`, retry the exact envelope at the next work boundary. For `conflict`,
-read actual public state and canonical sources before deciding whether a new
-correction is needed. Never advance revisions blindly. Withdrawn entries cannot
-be restored by retry or backfill. Corrections preserve original history dates.
+Each project supplies a public ID, the supported envelope version, an immutable
+policy reference, and private source/audience/recovery configuration. Add its ID
+to the receiver allowlist and consent to its OAuth scope. Existing grants do not
+automatically gain access to newly allowlisted projects.
 
-## Readable stories and milestones
-
-Keep the headline understandable without engineering vocabulary. The summary
-connects progress to the product goal. Put useful implementation detail behind an
-optional expansion. Avoid percentages unsupported by a defined measurement.
-Distinguish proposed, implemented, tested, and available. A milestone is complete
-only when its stated acceptance condition is evidenced.
-
-Roadmap and goal changes belong in canonical project records first. If they alter
-the public project overview, update that reviewed website projection as well;
-the version-1 event envelope does not mutate roadmap definitions. Concept visuals
-must say they are concepts. Current-product visuals require actual captured
-artifacts and must not imply a mockup is already working software.
-
-## Transfer to another project
-
-Add the small mapping to that project's agent instructions, pin this document's
-commit, allowlist the public project ID, and explicitly consent to its OAuth
-scope. Then use the same existing daily protocol and tools. Private repositories
-need no public source link and no new publication service. This protocol runs
-when a working agent reaches a boundary, not while all chats are idle.
+[Connection setup](publication-mcp.md) describes the public transport configuration.
+[Story requirements](project-story-requirements.md) describe the reader experience.
+Operational publication details previously included here are no longer part of
+the current public document. This revision does not erase older Git history.
