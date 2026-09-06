@@ -21,6 +21,7 @@
     "@astrojs/cloudflare": "^12.5.0",
     "@astrojs/sitemap": "^3.2.1",
     "@astrojs/tailwind": "^5.1.4",
+    "@cloudflare/workers-oauth-provider": "0.10.3",
     "@modelcontextprotocol/sdk": "1.30.0",
     "astro": "^5.1.0",
     "resend": "^4.0.1",

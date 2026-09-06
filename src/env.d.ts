@@ -7,6 +7,11 @@ declare namespace App {
 }
 
 interface Env {
+  PUBLICATION_OWNER_ID?: string;
+  OAUTH_KV?: KVNamespace;
+  PUBLICATION_GITHUB_CLIENT_ID?: string;
+  PUBLICATION_GITHUB_CLIENT_SECRET?: string;
+  PUBLICATION_COOKIE_KEY?: string;
   PUBLICATION_DB?: D1Database;
   PUBLICATION_PROJECTS?: string;
   PUBLICATION_TOKEN?: string;
