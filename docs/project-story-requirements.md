@@ -57,13 +57,13 @@ do not imply that they can independently inspect it. Missing links are acceptabl
 Agents perform implementation. Attribute product direction, decisions, review, and
 acceptance to a human only where supported. A bot merge is not human acceptance.
 
-Example headline: "Keeping your work summary from falling behind."
-Example explanation: "Threadline can reject an outdated AI response when the
-project changes while it is being generated. This helps prevent an old understanding
-from replacing newer information. Implemented and tested, not yet connected to the
-live experience."
-Optional technical detail can explain evidence fingerprints and revision guards.
+Example headline: "Picking up where you left off."
+Example explanation: "The project now has a clearer return-to-work summary.
+It is still being tested before wider use."
 These examples illustrate writing style, not verified current project status.
+Public philosophy and high-level AI attribution are permitted. Internal operating
+recipes and unnecessary implementation details are excluded by the
+[publication policy](publication-agent-protocol.md), including in technical detail.
 
 ## Goals, roadmaps, and acceptance
 
@@ -128,26 +128,15 @@ control, audience isolation, assets, and withdrawal behavior are verified end to
 ## Approved workflow and remaining implementation decisions
 
 [ADR 0001](architecture/0001-daily-protocol-publication.md) records the approved
-architecture: existing daily protocol → canonical project records → shared
-publication step → website story and history. Extend the existing work and
-shutdown reconciliation; do not create a parallel continuity system. Historical
-backfill is required where evidence supports it, using the same publication
+architecture: existing project records feed an audience-reviewed website projection.
+Project-local workflow remains private. The D1 journal and authenticated MCP
+implementation are merged. Production OAuth activation and first-publication
+verification remain open gates. The current homepage and /building views are a
+basic surface, not completion of the richer project-story requirements above.
+
+Reuse the current site. Polling remains the initial simplicity preference;
+SSE/WebSockets require demonstrated need. Historical backfill follows the same
 identity, privacy, correction, and withdrawal rules as live updates.
-
-The following implementation choices remain to be specified:
-
-Reuse the existing Astro/Cloudflare site and a shared publishing boundary.
-D1 with atomic updates is a candidate for journal storage, not an approved decision.
-Polling is the initial simplicity preference; its interval is not an end-to-end
-latency guarantee. SSE/WebSockets require a demonstrated need, not assumed future scale.
-Before implementation approval, document the publisher trigger, content-policy
-enforcement, event/version schema, atomic ordering, idempotency, withdrawals, retention,
-secret management, failure recovery, and measurable freshness expectations.
-
-PRs #6 and #7 are earlier latest-update prototypes, not compliance with this spec.
-Their KV read/check/write sequence does not guarantee atomic ordering; field validation
-does not guarantee sanitization; the UI fallback must not claim live activity.
-Do not treat these prototypes as approved architecture or a completed product.
 
 ## Delivery roadmap and release checks
 
