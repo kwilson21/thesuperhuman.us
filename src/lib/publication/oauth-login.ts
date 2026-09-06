@@ -68,7 +68,7 @@ export async function publicationLogin(request: Request, env: LoginEnv): Promise
           // Preserve Origin on the same-site consent POST; omit cross-site referrers.
           'Set-Cookie': cookie(await seal(state, env)), 'Referrer-Policy': 'same-origin',
           // Browsers also enforce form-action on the POST's redirect destination.
-          'Content-Security-Policy': "default-src 'none'; form-action 'self' https://github.com/login/oauth/authorize; frame-ancestors 'none'; base-uri 'none'" } });
+          'Content-Security-Policy': `default-src 'none'; form-action 'self' https://github.com/login/oauth/authorize ${new URL(auth.redirectUri).origin}; frame-ancestors 'none'; base-uri 'none'` } });
     }
     if (url.pathname === publicationBase + '/authorize' && request.method === 'POST') {
       if (request.headers.get('origin') !== publicationOrigin) return fail();

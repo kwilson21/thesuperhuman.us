@@ -23,11 +23,20 @@ async function start(env: LoginEnv) {
 }
 afterEach(() => vi.unstubAllGlobals());
 describe('publication consent and GitHub identity', () => {
+  it('permits the validated client return origin without copying callback paths or query values into CSP', async () => {
+    for (const redirectUri of ['http://127.0.0.1:54321/callback?marker=private', 'https://chatgpt.com/callback?marker=private']) {
+      const { env } = fixture({ redirectUri });
+      const page = await publicationLogin(new Request(origin + '/api/publication/authorize'), env);
+      const policy = page.headers.get('content-security-policy')!;
+      expect(policy).toContain(`form-action 'self' https://github.com/login/oauth/authorize ${new URL(redirectUri).origin};`);
+      expect(policy).not.toContain('marker');
+    }
+  });
   it('escapes client names, binds browser consent, and uses upstream PKCE without repository scopes', async () => {
     const { env } = fixture(); const { html, response, page } = await start(env);
     expect(html).not.toContain('<script>evil'); expect(html).toContain('&lt;script&gt;');
     expect(page.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
-    expect(page.headers.get('content-security-policy')).toContain("form-action 'self' https://github.com/login/oauth/authorize;");
+    expect(page.headers.get('content-security-policy')).toContain("form-action 'self' https://github.com/login/oauth/authorize https://chatgpt.com;");
     expect(page.headers.get('referrer-policy')).toBe('same-origin');
     expect(response.headers.get('referrer-policy')).toBe('no-referrer');
     const github = new URL(response.headers.get('location')!);
