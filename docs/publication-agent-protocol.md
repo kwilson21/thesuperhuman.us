@@ -22,8 +22,8 @@ part of the public website envelope, even when a technical-detail field exists.
 ## Startup
 
 Follow the project's existing orientation protocol first. Read canonical GitHub
-state and reconcile it with conversation context. Then read project progress and
-pending publications through MCP. Inspect current audience permission before
+state and reconcile it with conversation context. Then read project progress through MCP and recover pending envelopes from the
+source project’s durable handoff. Inspect current audience permission before
 retrying anything. Resume normal work if the connection is unavailable; record
 that publication is pending without claiming an automatic background retry.
 Opening a chat is not a reason to publish.
@@ -43,8 +43,7 @@ Opening a chat is not a reason to publish.
    and confidential design details unless explicitly cleared for this audience.
    `technicalDetail` is public too. Use accurate delivery and evidence labels.
 5. Preserve the reviewed envelope and its source identity in the source project's
-   private handoff before the first tool call. The server outbox cannot recover a
-   request that never reached it. Read the current revision, then send one envelope
+   private handoff before the first tool call. The server cannot recover a request that never reached it. Read the current revision, then send one envelope
    through `publish_project_update` and retain its receipt.
 6. Verify the public feed and website after the first delivery or a surface change.
    A receipt proves ingestion. It does not prove user acceptance, completion, or

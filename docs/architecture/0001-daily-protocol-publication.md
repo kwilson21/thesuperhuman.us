@@ -1,6 +1,6 @@
 # ADR 0001: Publish through the existing daily continuity protocol
 
-Status: approved direction, recorded 2026-09-05. Receiver and durable delivery are implemented; authenticated connection activation remains a separate gate.
+Status: approved direction, recorded 2026-09-05. The transactional receiver is implemented; authenticated connection activation remains a separate gate.
 Scope: shared project publication architecture, extending requirements version 1.
 Owner: Kazon Wilson.
 
