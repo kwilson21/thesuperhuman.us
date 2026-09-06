@@ -22,13 +22,17 @@
     // Turnstile site key is public by design (rendered in HTML, visible
     // to the browser). Stored as a plain var, not a secret.
     "PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAADPYWKMQT_mbi4O-",
-    "PUBLICATION_PROJECTS": "threadline"
+    "PUBLICATION_PROJECTS": "threadline",
+    "PUBLICATION_OWNER_ID": "10987837",
+    "PUBLICATION_GITHUB_CLIENT_ID": "Ov23liewYmTNLlpkrYjz"
   },
   // Both bindings point at the same physical KV namespace — keys are
   // prefixed (rl:, req:, pdf:) to keep the data isolated.
   // - RATE_LIMIT: rl:<ip> per-IP rate-limit windows
   // - RESUME_STORE: req:<uuid> approval tokens + pdf:<audience> binary PDFs
   "kv_namespaces": [
+    // Publication OAuth grants use dedicated storage.
+    { "binding": "OAUTH_KV", "id": "d489bf9435b64a45aaccc274b1a76eab" },
     { "binding": "RATE_LIMIT", "id": "7410b0879b584637b83be68849e7c8e9" },
     { "binding": "RESUME_STORE", "id": "7410b0879b584637b83be68849e7c8e9" },
     // @astrojs/cloudflare auto-enables Astro sessions and prints a
