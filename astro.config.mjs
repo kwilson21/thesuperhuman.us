@@ -7,6 +7,8 @@ import sitemap from '@astrojs/sitemap';
 export default defineConfig({
   site: 'https://thesuperhuman.us',
   output: 'static',
+  // middleware.ts retains form-origin protection, with a narrow OAuth token exception.
+  security: { checkOrigin: false },
   adapter: cloudflare({
     imageService: 'compile',
     platformProxy: { enabled: true },
