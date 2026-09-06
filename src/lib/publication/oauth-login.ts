@@ -65,7 +65,8 @@ export async function publicationLogin(request: Request, env: LoginEnv): Promise
         <p>Return address: ${escape(new URL(auth.redirectUri).origin)}</p>
         <form method="post" action="${publicationBase}/authorize"><input type="hidden" name="nonce" value="${state.nonce}"><button type="submit">Allow and sign in with GitHub</button></form><p>Close this page to cancel.</p>
         </main></body></html>`, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store',
-          'Set-Cookie': cookie(await seal(state, env)), 'Referrer-Policy': 'no-referrer',
+          // Preserve Origin on the same-site consent POST; omit cross-site referrers.
+          'Set-Cookie': cookie(await seal(state, env)), 'Referrer-Policy': 'same-origin',
           'Content-Security-Policy': "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'" } });
     }
     if (url.pathname === publicationBase + '/authorize' && request.method === 'POST') {
