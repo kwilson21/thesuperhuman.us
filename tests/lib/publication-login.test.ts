@@ -32,6 +32,7 @@ describe('publication consent and GitHub identity', () => {
     expect(response.headers.get('referrer-policy')).toBe('no-referrer');
     const github = new URL(response.headers.get('location')!);
     expect(github.origin).toBe('https://github.com');
+    expect(github.pathname).toBe('/login/oauth/authorize');
     expect(github.searchParams.get('scope')).toBe('');
     expect(github.searchParams.get('code_challenge_method')).toBe('S256');
     expect(github.searchParams.get('code_challenge')).toHaveLength(43);
