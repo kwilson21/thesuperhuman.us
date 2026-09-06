@@ -16,6 +16,25 @@ function makeContext(url: string, hostHeader?: string) {
 }
 
 describe('middleware.onRequest', () => {
+  it('allows only originless, cookieless native OAuth form exchanges through the form guard', async () => {
+    const attempt = async (path: string, headers: Record<string, string> = {}, method = 'POST', origin = 'https://thesuperhuman.us') => {
+      const ctx = makeContext(origin + path);
+      ctx.request = new Request(ctx.url, { method, headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...headers } });
+      return (await onRequest(ctx, async () => new Response('next'))) as Response;
+    };
+    expect((await attempt('/api/publication/token')).status).toBe(200);
+    const rejectedHeaders: Record<string, string>[] = [{ origin: 'https://evil.example' }, { origin: 'null' }, { cookie: 'session=x' }, { 'sec-fetch-site': 'cross-site' }];
+    for (const headers of rejectedHeaders) {
+      expect((await attempt('/api/publication/token', headers)).status).toBe(403);
+    }
+    expect((await attempt('/api/publication/token', {}, 'PUT')).status).toBe(403);
+    expect((await attempt('/api/publication/token', {}, 'POST', 'https://audio.thesuperhuman.us')).status).toBe(403);
+    for (const path of ['/api/publication/authorize', '/api/contact', '/api/publication/token/']) {
+      expect((await attempt(path)).status).toBe(403);
+      expect((await attempt(path, { origin: 'https://thesuperhuman.us' })).status).toBe(200);
+    }
+  });
+
   it('passes through for the software host', async () => {
     const ctx = makeContext('https://thesuperhuman.us/', 'thesuperhuman.us');
     const next = vi.fn(async () => new Response('next', { status: 200 }));
