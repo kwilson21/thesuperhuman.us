@@ -27,10 +27,12 @@ describe('publication consent and GitHub identity', () => {
     const { env } = fixture(); const { html, response, page } = await start(env);
     expect(html).not.toContain('<script>evil'); expect(html).toContain('&lt;script&gt;');
     expect(page.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
+    expect(page.headers.get('content-security-policy')).toContain("form-action 'self' https://github.com/login/oauth/authorize;");
     expect(page.headers.get('referrer-policy')).toBe('same-origin');
     expect(response.headers.get('referrer-policy')).toBe('no-referrer');
     const github = new URL(response.headers.get('location')!);
     expect(github.origin).toBe('https://github.com');
+    expect(github.pathname).toBe('/login/oauth/authorize');
     expect(github.searchParams.get('scope')).toBe('');
     expect(github.searchParams.get('code_challenge_method')).toBe('S256');
     expect(github.searchParams.get('code_challenge')).toHaveLength(43);

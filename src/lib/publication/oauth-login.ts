@@ -67,7 +67,8 @@ export async function publicationLogin(request: Request, env: LoginEnv): Promise
         </main></body></html>`, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store',
           // Preserve Origin on the same-site consent POST; omit cross-site referrers.
           'Set-Cookie': cookie(await seal(state, env)), 'Referrer-Policy': 'same-origin',
-          'Content-Security-Policy': "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'" } });
+          // Browsers also enforce form-action on the POST's redirect destination.
+          'Content-Security-Policy': "default-src 'none'; form-action 'self' https://github.com/login/oauth/authorize; frame-ancestors 'none'; base-uri 'none'" } });
     }
     if (url.pathname === publicationBase + '/authorize' && request.method === 'POST') {
       if (request.headers.get('origin') !== publicationOrigin) return fail();
