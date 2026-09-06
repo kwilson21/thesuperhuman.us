@@ -17,9 +17,9 @@ it('exposes tools with explicit mutating annotations and denies unauthorized pro
   });
   const response = await publicationMcp(request('tools/list'), env, identity);
   const list = await response.json() as any;
-  expect(list.result.tools).toHaveLength(3);
+  expect(list.result.tools).toHaveLength(2);
   expect(list.result.tools.find((t: any) => t.name === 'publish_project_update').annotations.destructiveHint).toBe(true);
-  for (const name of ['get_project_progress', 'get_pending_publications']) {
+  for (const name of ['get_project_progress']) {
     const reply = await publicationMcp(request('tools/call', { name, arguments: { projectId: 'private' } }), env, identity);
     expect((await reply.json() as any).result.isError).toBe(true);
   }

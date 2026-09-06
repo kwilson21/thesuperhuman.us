@@ -2,8 +2,6 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { z } from 'zod';
 import { parsePublication } from './contract';
-import { deliver } from './delivery';
-import { D1PublicationOutbox } from './outbox';
 import { D1PublicationJournal } from './journal';
 import { readProject } from './read';
 
@@ -34,7 +32,6 @@ export async function publicationMcp(request: Request, env: Env, identity: Publi
   const server = new McpServer({ name: 'superhuman-publication', version: '1.0.0' }, {
     instructions: 'Follow docs/publication-agent-protocol.md in kwilson21/thesuperhuman.us. Reconcile the project roadmap and review public wording before delivery. Never send raw private evidence or secrets. Receipts confirm ingestion, not completion or website rendering. Retry identical envelopes; reconcile conflicts without blindly increasing revisions.',
   });
-  const outbox = new D1PublicationOutbox(env.PUBLICATION_DB);
   const scopes = identity.scopes.filter(scope => scope.startsWith('publication:'));
   const security = { securitySchemes: [{ type: 'oauth2', scopes }] };
   server.registerTool('get_project_progress', {
@@ -46,15 +43,6 @@ export async function publicationMcp(request: Request, env: Env, identity: Publi
     try { return result(await readProject(env.PUBLICATION_DB!, projectId)); }
     catch { return result({ status: 'unavailable' }, true); }
   });
-  server.registerTool('get_pending_publications', {
-    description: 'Recover up to 100 private, audience-reviewed pending envelopes after an interrupted session. Review current policy before retrying each exact envelope. Does not publish.',
-    inputSchema: z.object({ projectId: id }).strict(), _meta: security,
-    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  }, async ({ projectId }) => {
-    if (!projectAccess(env, identity, projectId)) return result({ status: 'forbidden' }, true);
-    try { return result({ pending: await outbox.pending(projectId) }); }
-    catch { return result({ status: 'unavailable' }, true); }
-  });
   server.registerTool('publish_project_update', {
     description: 'Publish, correct, backfill, or permanently withdraw public website progress after canonical reconciliation and audience review. Use plain-language outcomes and accurate delivery/basis. Preserve event identity on retries. A withdrawal removes the entry and blocks restoration. A conflict requires source reconciliation, not automatic revision advancement.',
     inputSchema: z.object({ publication: envelope }).strict(), _meta: security,
@@ -63,9 +51,11 @@ export async function publicationMcp(request: Request, env: Env, identity: Publi
     if (!projectAccess(env, identity, publication.projectId)) return result({ status: 'forbidden' }, true);
     const parsed = parsePublication(publication);
     if (!parsed) return result({ status: 'invalid' }, true);
-    const outcome = await deliver(parsed, { outbox, journal: new D1PublicationJournal(env.PUBLICATION_DB!),
-      mayPublish: async p => projectAccess(env, identity, p.projectId) });
-    return result(outcome, outcome.status !== 'delivered');
+    try {
+      const outcome = await new D1PublicationJournal(env.PUBLICATION_DB!).commit(parsed);
+      return outcome.status === 'accepted' || outcome.status === 'duplicate'
+        ? result({ status: 'delivered', receipt: outcome.receipt }) : result(outcome, true);
+    } catch { return result({ status: 'pending' }, true); }
   });
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   try {

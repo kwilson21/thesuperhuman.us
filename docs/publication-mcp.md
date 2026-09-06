@@ -6,13 +6,15 @@ receiver token into an agent environment. It adds no GitHub Actions workflow,
 separate application server, or background scheduler.
 
 The same D1 journal serves both transports. OAuth grants live in a dedicated KV
-namespace. Pending audience-safe envelopes and receipts live in the private D1
-outbox, not in KV. This separation keeps publication ordering transactional.
+namespace. Pending reviewed envelopes stay in the source project’s existing durable handoff.
+The D1 journal already stores receipts and prevents duplicate retries. MCP calls
+that journal directly; there is no second queue or delivery service.
 
 ## One-time activation
 
-1. Apply `0002_publication_outbox.sql` through the repository's D1 migration
-   workflow. Preserve the existing migration ledger and all application bindings.
+1. Verify the existing `0001_publication_journal.sql` migration is applied.
+   No additional migration is required for this publisher. Preserve the ledger
+   and existing application bindings.
 2. Create a dedicated KV namespace and add its real ID to `wrangler.jsonc` as
    `OAUTH_KV`. Do not reuse the contact, resume, or session namespace.
 3. Create a dedicated GitHub OAuth App with homepage `https://thesuperhuman.us`
@@ -28,7 +30,7 @@ outbox, not in KV. This separation keeps publication ordering transactional.
    client, approve its project permissions, and sign in with the owner's GitHub
    account. Leave the existing `PUBLICATION_TOKEN` in place for the HTTP receiver;
    this connector does not need to copy or expose it.
-7. Read project progress and pending envelopes through the authenticated tools.
+7. Read project progress through MCP and recover pending envelopes from the source handoff.
    Deliver one real reviewed update, retain its receipt, and check its public
    rendering on the homepage and `/building`. A successful probe alone does not
    establish active publishing.
@@ -66,24 +68,23 @@ silently override the client's permission model.
 | Tool | Purpose |
 | --- | --- |
 | `get_project_progress` | Read published history, current focus, and revision. |
-| `get_pending_publications` | Recover up to 100 queued envelopes in expected-revision order. |
 | `publish_project_update` | Deliver a version-1 publish, correction, backfill, or withdrawal. |
 
 `delivered` includes a durable journal receipt. `pending` means retry the exact
-same envelope at the next normal work boundary. `held` means recheck publication
-policy. `conflict` requires canonical reconciliation; do not increment the
+same envelope from the source handoff at the next normal work boundary. `conflict` requires canonical reconciliation; do not increment the
 revision blindly or change content under the same event ID. `withdrawn` means
 stop attempting to restore that entry. Invalid or rejected envelopes need review.
 A lost response is recovered using the same event identity.
 
-Successful acknowledgement removes queued prose and keeps the receipt. Accepted
-withdrawal atomically clears pending prose for the entry even if it comes through
-the HTTP receiver. Replay-protection hashes remain. No automatic deletion of
-identity tombstones is configured. D1 backup retention remains a separate concern.
+Persist the returned receipt in the source handoff, then clear its pending copy.
+A lost acknowledgement is safe: the journal returns the original receipt for an
+identical retry. Withdrawal clears the journal's public prose and blocks replay.
+Source-side pending copies must also be cleared during withdrawal reconciliation.
+Replay-protection hashes remain. D1 backup retention remains separate.
 
 ## Verification limits
 
-Tests exercise SQLite queue transactions, the actual OAuth library's discovery,
+Tests exercise SQLite journal transactions, the actual OAuth library's discovery,
 registration, code/token exchange and scope narrowing, plus consent/identity
 failures. Node tests replace only the WorkerEntrypoint marker and KV transport.
 Production activation still requires the real bindings, migration, owner sign-in,

@@ -58,7 +58,7 @@ it('serves discovery, registers clients, and rejects missing/invalid bearer toke
   const narrowed = await refresh.json() as any;
   const denied = await call('/api/publication/mcp', { method: 'POST', headers: { Authorization: 'Bearer ' + narrowed.access_token,
     'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'get_pending_publications', arguments: { projectId: 'other' } } }) });
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'get_project_progress', arguments: { projectId: 'other' } } }) });
   expect(denied.status).toBe(200);
   expect((await denied.json() as any).result.content[0].text).toContain('forbidden');
 });

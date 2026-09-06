@@ -61,7 +61,7 @@ export async function publicationLogin(request: Request, env: LoginEnv): Promise
       const state: LoginState = { request: auth, nonce: random(), verifier: random(), expires: Date.now() + 600000, approved: false };
       return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Connect project publishing</title><body><main>
         <h1>Connect project publishing</h1><p><strong>${escape(client.clientName || auth.clientId)}</strong> is requesting access to ${escape(auth.scope.map(s => s.slice(12)).join(', '))}.</p>
-        <p>This connection can read pending updates and publish, correct, or permanently withdraw public progress on thesuperhuman.us.</p>
+        <p>This connection can read progress and publish, correct, or permanently withdraw public progress on thesuperhuman.us.</p>
         <p>Return address: ${escape(new URL(auth.redirectUri).origin)}</p>
         <form method="post" action="${publicationBase}/authorize"><input type="hidden" name="nonce" value="${state.nonce}"><button type="submit">Allow and sign in with GitHub</button></form><p>Close this page to cancel.</p>
         </main></body></html>`, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store',
