@@ -1,6 +1,11 @@
 # Shared agent publication protocol
 
 Protocol version: 1. Owner: Kazon Wilson. Canonical home: this repository.
+Transport readiness: authenticated MCP is pending in [PR #19](https://github.com/kwilson21/thesuperhuman.us/pull/19)
+and requires production configuration. Until activated, preserve reviewed updates
+in the source handoff and report delivery as pending. Tool names below describe
+the integration contract, not an already-connected capability.
+
 This implements ADR 0001. Projects reference an immutable commit of this document;
 they do not copy its rules or create another daily ritual.
 

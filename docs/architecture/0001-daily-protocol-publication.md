@@ -162,8 +162,11 @@ simultaneous chats, duplicate delivery, old backfill after new live work, and wi
 followed by replay. Publication success requires a confirmed receipt and verified
 website output. Until then, report prepared, pending, or blocked accurately.
 
-## Executable agent protocol
+## Shared agent protocol
 
 Version 1 is defined in [publication-agent-protocol.md](../publication-agent-protocol.md).
-Authentication and activation are described in [publication-mcp.md](../publication-mcp.md).
+Authenticated MCP implementation and activation instructions are pending in
+[PR #19](https://github.com/kwilson21/thesuperhuman.us/pull/19).
+Until it lands and is configured, retain updates in the source handoff; do not
+claim that publishing tools or automatic delivery are available.
 Project-local instructions pin the shared protocol commit and retain private source mappings.
