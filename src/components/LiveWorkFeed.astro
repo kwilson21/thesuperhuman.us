@@ -9,8 +9,8 @@ const labels = { proposed: 'Planned', implemented: 'Built', tested: 'Checked', a
   <div class="mx-auto max-w-content px-6 py-16" data-publication-feed data-revision={feed?.revision ?? -1} data-history={history}>
     <p class="eyebrow mb-4">What I’m building</p>
     <h2 class="heading mb-4">Threadline</h2>
-    <p class="text-lg max-w-measure mb-5">Helping people return to a project and understand where they left off, without keeping a separate work log.</p>
-    <p class="text-sm text-muted mb-6">I guide the product and review the results. Coding agents implement the changes.</p>
+    <p class="text-lg max-w-measure mb-5">Threadline is an experimental VS Code extension for developers returning to interrupted work. The goal is a short, readable account of what they were working on, what changed, and where to resume, without maintaining a separate work log.</p>
+    <p class="text-sm text-muted mb-6">I direct the product, evaluate prototypes against real development sessions, and guide implementation with coding agents.</p>
     <p class="text-sm text-muted mb-3" data-status>{feed ? 'Latest published progress' : 'Live updates unavailable'}</p>
     <article data-current hidden={!current}>
       <p class="text-xl mb-3" data-headline>{current?.story.headline}</p>
