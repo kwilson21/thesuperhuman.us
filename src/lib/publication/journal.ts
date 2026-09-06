@@ -1,10 +1,5 @@
+import { canonicalPublication } from './canonical';
 import { parsePublication, type Publication, type PublicationJournal, type CommitResult } from './contract';
-
-function canonical(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  const obj = value as Record<string, unknown>;
-  return '{' + Object.keys(obj).sort().map(k => JSON.stringify(k) + ':' + canonical(obj[k])).join(',') + '}';
-}
 
 /** D1 batch is a transaction. No acceptance decision relies on a prior read. */
 export class D1PublicationJournal implements PublicationJournal {
@@ -13,7 +8,7 @@ export class D1PublicationJournal implements PublicationJournal {
   async commit(input: Publication): Promise<CommitResult> {
     const p = parsePublication(input);
     if (!p || p.expectedRevision === Number.MAX_SAFE_INTEGER) return { status: 'rejected' };
-    const payload = canonical(p);
+    const payload = canonicalPublication(p);
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload));
     const hash = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
     const statements = [

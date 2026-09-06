@@ -1,3 +1,4 @@
+import { canonicalPublication } from './canonical';
 import { parsePublication, type Publication, type PublicationJournal, type Receipt } from './contract';
 
 /** Private durable storage. Both operations must be atomic and project-scoped. */
@@ -6,6 +7,10 @@ export interface Outbox {
   prepare(value: Publication): Promise<{ publication: Publication; receipt: Receipt | null }>;
   /** Persist a validated server receipt, replacing any corrupt receipt. Repeating it is safe. */
   acknowledge(receipt: Receipt): Promise<void>;
+}
+
+export class OutboxError extends Error {
+  constructor(readonly status: 'conflict' | 'withdrawn') { super(status); }
 }
 
 export interface DeliveryPorts {
@@ -18,12 +23,6 @@ export interface DeliveryPorts {
 export type DeliveryResult =
   | { status: 'delivered'; receipt: Receipt }
   | { status: 'invalid' | 'held' | 'conflict' | 'withdrawn' | 'rejected' | 'pending' };
-
-function canonical(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  const obj = value as Record<string, unknown>;
-  return '{' + Object.keys(obj).sort().map(key => JSON.stringify(key) + ':' + canonical(obj[key])).join(',') + '}';
-}
 
 function validReceipt(receipt: Receipt, publication: Publication): boolean {
   return receipt !== null && typeof receipt === 'object'
@@ -47,7 +46,7 @@ export async function deliver(input: unknown, ports: DeliveryPorts): Promise<Del
   try {
     const prepared = await ports.outbox.prepare(publication);
     const stored = parsePublication(prepared.publication);
-    if (!stored || canonical(stored) !== canonical(publication)) return { status: 'conflict' };
+    if (!stored || canonicalPublication(stored) !== canonicalPublication(publication)) return { status: 'conflict' };
     // A successful old receipt is not permission to bypass a newly restrictive policy.
     if (!await ports.mayPublish(parsePublication(stored)!)) return { status: 'held' };
     if (prepared.receipt && validReceipt(prepared.receipt, stored)) {
@@ -62,7 +61,8 @@ export async function deliver(input: unknown, ports: DeliveryPorts): Promise<Del
       || !validReceipt(result.receipt, stored)) return { status: 'pending' };
     await ports.outbox.acknowledge(result.receipt);
     return { status: 'delivered', receipt: result.receipt };
-  } catch {
+  } catch (error) {
+    if (error instanceof OutboxError) return { status: error.status };
     // No exception text or source details may leak to a public error response.
     return { status: 'pending' };
   }
