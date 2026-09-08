@@ -3,6 +3,7 @@ import type { ProjectFeed } from '~/lib/publication/read';
 interface Props { feed: ProjectFeed | null; history?: boolean }
 const { feed, history = false } = Astro.props;
 const current = feed?.current;
+const earlierUpdates = feed?.history.filter(item => item.entryId !== current?.entryId) ?? [];
 const labels = { proposed: 'Planned', implemented: 'Built', tested: 'Checked', available: 'Available to use' };
 ---
 <section class="border-t border-rule" aria-label="Threadline progress">
@@ -22,8 +23,8 @@ const labels = { proposed: 'Planned', implemented: 'Built', tested: 'Checked', a
       </details>
     </article>
     <p class="text-base text-muted" data-empty hidden={!!current}>No current progress update is published.</p>
-    {history ? <div class="mt-10"><h3 class="text-xl mb-5">Progress over time</h3><div data-history-list>
-      {feed?.history.map(item => <article class="border-t border-rule py-5">
+    {history ? <div class="mt-10" data-history-section hidden={!earlierUpdates.length}><h3 class="text-xl mb-5">Earlier updates</h3><div data-history-list>
+      {earlierUpdates.map(item => <article class="border-t border-rule py-5">
         <p class="text-sm text-muted mb-2">{item.occurredOn}{item.backfilled ? ' · Added from project history' : ''}</p>
         <h4 class="text-lg mb-2">{item.story.headline}</h4><p class="text-base max-w-measure">{item.story.summary}</p>
       </article>)}
@@ -40,6 +41,8 @@ const labels = { proposed: 'Planned', implemented: 'Built', tested: 'Checked', a
       el('current').hidden = true; el('empty').hidden = false;
       for (const key of ['headline', 'summary', 'meta', 'technical']) el(key).textContent = '';
       root.querySelector('[data-history-list]')?.replaceChildren();
+      const historySection = root.querySelector<HTMLElement>('[data-history-section]');
+      if (historySection) historySection.hidden = true;
     }
     function render(feed: ProjectFeed) {
       if (feed.projectId !== 'threadline' || !Number.isSafeInteger(feed.revision) || feed.revision < 0) return;
@@ -56,7 +59,10 @@ const labels = { proposed: 'Planned', implemented: 'Built', tested: 'Checked', a
         el('details').hidden = !story.technicalDetail; el('technical').textContent = story.technicalDetail ?? '';
       }
       const list = root.querySelector('[data-history-list]');
-      if (list) for (const item of feed.history) {
+      const earlierUpdates = feed.history.filter(item => item.entryId !== feed.current?.entryId);
+      const historySection = root.querySelector<HTMLElement>('[data-history-section]');
+      if (historySection) historySection.hidden = !earlierUpdates.length;
+      if (list) for (const item of earlierUpdates) {
         const article = document.createElement('article'); article.className = 'border-t border-rule py-5';
         for (const [tag, content, style] of [
           ['p', `${item.occurredOn}${item.backfilled ? ' · Added from project history' : ''}`, 'text-sm text-muted mb-2'],
