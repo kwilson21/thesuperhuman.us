@@ -2,6 +2,7 @@
 export const prerender = false;
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import LiveWorkFeed from '~/components/LiveWorkFeed.astro';
+import DesignStoryPreview from '~/components/DesignStoryPreview.astro';
 import { websiteFeed } from '~/lib/publication/website';
 const feed = await websiteFeed(Astro.locals.runtime.env);
 Astro.response.headers.set('Cache-Control', 'no-store');
@@ -31,6 +32,7 @@ const jsonLd = {
   jsonLd={jsonLd}
 >
   <Hero />
+  <DesignStoryPreview />
   <LiveWorkFeed feed={feed} />
 
   <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
@@ -72,12 +74,14 @@ const jsonLd = {
   <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
     <h2 class="heading mb-4">Personal practice</h2>
     <p class="text-[1.0625rem] leading-relaxed max-w-measure mb-10">
-      Private systems from August 2026. Personal practice, not client work. None of these has a public URL.
+      Personal practice projects, not client work. The applications are private; The Engineer’s Daily now has a public design journal.
     </p>
     <div class="space-y-12">
       <ProjectCard
-        name="TheEngineersDaily"
-        description="A daily engineering practice in Python and Flask. Harbor is one of the apps built in it."
+        name="The Engineer’s Daily"
+        url="/building/the-engineers-daily"
+        linkLabel="Read design journal →"
+        description="A daily practice of faith and engineering craft. Follow the design studies and local lesson prototype in its public journal."
         stack={['Python', 'Flask']}
       />
       <ProjectCard

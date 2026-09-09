@@ -1,16 +1,18 @@
 ---
 import type { ProjectFeed } from '~/lib/publication/read';
-interface Props { feed: ProjectFeed | null; history?: boolean }
-const { feed, history = false } = Astro.props;
+interface Props { feed: ProjectFeed | null; history?: boolean; projectId?: string; title?: string; description?: string; historyHref?: string }
+const { feed, history = false, projectId = 'threadline', title = 'Threadline',
+  description = 'Threadline is an experimental VS Code extension for developers returning to interrupted work. The goal is a short, readable account of what they were working on, what changed, and where to resume, without maintaining a separate work log.',
+  historyHref = '/building' } = Astro.props;
 const current = feed?.current;
 const earlierUpdates = feed?.history.filter(item => item.entryId !== current?.entryId) ?? [];
 const labels = { proposed: 'Planned', implemented: 'Built', tested: 'Checked', available: 'Available to use' };
 ---
-<section class="border-t border-rule" aria-label="Threadline progress">
-  <div class="mx-auto max-w-content px-6 py-16" data-publication-feed data-revision={feed?.revision ?? -1} data-history={history}>
+<section class="border-t border-rule" aria-label={`${title} progress`}>
+  <div class="mx-auto max-w-content px-6 py-16" data-publication-feed data-project={projectId} data-revision={feed?.revision ?? -1} data-history={history}>
     <p class="eyebrow mb-4">What I’m building</p>
-    <h2 class="heading mb-4">Threadline</h2>
-    <p class="text-lg max-w-measure mb-5">Threadline is an experimental VS Code extension for developers returning to interrupted work. The goal is a short, readable account of what they were working on, what changed, and where to resume, without maintaining a separate work log.</p>
+    <h2 class="heading mb-4">{title}</h2>
+    <p class="text-lg max-w-measure mb-5">{description}</p>
     <p class="text-sm text-muted mb-6">I direct the product, evaluate prototypes against real development sessions, and guide implementation with coding agents.</p>
     <p class="text-sm text-muted mb-3" data-status>{feed ? 'Latest published progress' : 'Live updates unavailable'}</p>
     <article data-current hidden={!current}>
@@ -28,7 +30,7 @@ const labels = { proposed: 'Planned', implemented: 'Built', tested: 'Checked', a
         <p class="text-sm text-muted mb-2">{item.occurredOn}{item.backfilled ? ' · Added from project history' : ''}</p>
         <h4 class="text-lg mb-2">{item.story.headline}</h4><p class="text-base max-w-measure">{item.story.summary}</p>
       </article>)}
-    </div></div> : <a class="inline-block mt-6 text-base underline" href="/building">See project history</a>}
+    </div></div> : <a class="inline-block mt-6 text-base underline" href={historyHref}>See project history</a>}
     <p class="sr-only" aria-live="polite" data-announcement></p>
   </div>
 </section>
@@ -45,7 +47,7 @@ const labels = { proposed: 'Planned', implemented: 'Built', tested: 'Checked', a
       if (historySection) historySection.hidden = true;
     }
     function render(feed: ProjectFeed) {
-      if (feed.projectId !== 'threadline' || !Number.isSafeInteger(feed.revision) || feed.revision < 0) return;
+      if (feed.projectId !== root.dataset.project || !Number.isSafeInteger(feed.revision) || feed.revision < 0) return;
       // Requests are serialized. Accept the current server snapshot even after a database reset.
       const changed = feed.revision !== Number(root.dataset.revision);
       root.dataset.revision = String(feed.revision);
@@ -75,7 +77,7 @@ const labels = { proposed: 'Planned', implemented: 'Built', tested: 'Checked', a
     async function refresh() {
       try {
         if (document.hidden) return;
-        const response = await fetch('/api/work-feed?project=threadline', { cache: 'no-store', signal: AbortSignal.timeout(10000) });
+        const response = await fetch(`/api/work-feed?project=${encodeURIComponent(root.dataset.project!)}`,  { cache: 'no-store', signal: AbortSignal.timeout(10000) });
         if (response.status === 404) { clear(); root.dataset.revision = '-1'; }
         if (!response.ok) throw new Error('Unavailable');
         render(await response.json() as ProjectFeed);
