@@ -2,108 +2,31 @@
 export const prerender = false;
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import Footer from '~/components/Footer.astro';
-import LiveWorkFeed from '~/components/LiveWorkFeed.astro';
+import ProjectTimeline from '~/components/ProjectTimeline.astro';
+import ProjectUpdates from '~/components/ProjectUpdates.astro';
+import StoryFlow from '~/components/StoryFlow.astro';
 import { websiteFeed } from '~/lib/publication/website';
 import story from '~/data/project-stories/the-engineers-daily.json';
+import '~/styles/project-journal.css';
 const feed = await websiteFeed(Astro.locals.runtime.env, story.projectId);
 const asset = (file: string) => `/building/${story.projectId}/${file}`;
-const cover = story.stages.flatMap(stage => stage.artifacts).find(image => image.file === story.cover)!;
+const latest = story.stages.at(-1)!.artifacts[0];
+const entries = story.stages.map(stage => ({ id:stage.id, day:stage.day, title:stage.title, summary:stage.summary, detail:stage.decision, artifacts:stage.artifacts.map(image => ({ ...image, src:asset(image.file) })) }));
 Astro.response.headers.set('Cache-Control', 'no-store');
 ---
-<BaseLayout title={`${story.title} · Design journal · Kazon Wilson`} description={story.subtitle + ' A visual history from the first studies to the selected direction and a local lesson prototype.'} ogImage={asset(story.cover)}>
-  <div class="story-shell">
-    <nav class="story-nav" aria-label="Project navigation"><a href="/">Kazon Wilson</a><a href="/building">All project updates</a></nav>
-    <header class="story-intro">
-      <div>
-        <p class="story-label">Design journal · September 2026</p>
-        <h1>{story.title}</h1>
-        <p class="story-subtitle">{story.subtitle}</p>
-        <p class="story-goal">{story.goal}</p>
-        <p class="story-audience">{story.audience}</p>
-        <a class="story-jump" href="#design-history">Follow the design history ↓</a>
-      </div>
-      <figure class="selected-preview">
-        <a href={asset(cover.file)} aria-label="Open the selected B2 concept at full size"><img src={asset(cover.file)} alt={cover.alt} width={cover.width} height={cover.height} fetchpriority="high" /></a>
-        <figcaption><strong>B2 · Coastal Practice</strong><span>Selected concept · September 9, 2026</span></figcaption>
-      </figure>
-    </header>
-    <aside class="project-state" aria-label="Project snapshot">
-      <div><p class="story-label">As of September 9, 2026</p><h2>{story.status}</h2><p>{story.current}</p></div>
-      <div><p class="story-label">What comes next</p><p>{story.next}</p></div>
-    </aside>
-    <section id="design-history" aria-labelledby="history-title">
-      <div class="history-heading"><h2 id="history-title">How it’s taking shape</h2><p>Early to recent. Open any image to see the full artifact.</p></div>
-      <p class="history-note">I direct the product and choose the direction, with AI assistance for visual exploration and implementation. Generated concepts communicate an idea; their sample copy and interfaces are not promises of working features. Dates record the supported day, not the duration of the work.</p>
-      <ol class="timeline">
-        {story.stages.map((stage, index) => <li id={stage.id} class:list={['stage', { selected: stage.id === 'b2-selected' }]}>
-          <div class="stage-marker"><span>{String(index + 1).padStart(2, '0')}</span><time datetime={stage.day}>{new Date(stage.day + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}</time></div>
-          <div class="stage-content"><h3>{stage.title}</h3><p class="stage-summary">{stage.summary}</p>
-            <p class="stage-decision">{stage.decision}</p>
-            {!!stage.artifacts.length && <div class:list={['artifacts', { single: stage.artifacts.length === 1 }]}>{stage.artifacts.map(image => <figure>
-              <a href={asset(image.file)} aria-label={`Open ${image.title} at full size`}><img src={asset(image.file)} alt={image.alt} width={image.width} height={image.height} loading="lazy" /></a>
-              <figcaption><p class="artifact-kind">{image.kind}</p><h4>{image.title}</h4><p>{image.caption}</p></figcaption>
-            </figure>)}</div>}
-          </div>
-        </li>)}
-      </ol>
-    </section>
-  </div>
-  <div id="daily-updates"><LiveWorkFeed feed={feed} projectId={story.projectId} title="Daily development notes" description="Published milestones, changes of direction and the next step for The Engineer’s Daily. The visual history above preserves the design artifacts; these notes follow the ongoing work." history /></div>
-  <Footer slot="footer" />
+<BaseLayout title={`${story.title} · Project journal · Kazon Wilson`} description={story.subtitle} ogImage={asset(story.cover)}>
+  <div class="project-shell">
+    <nav class="project-nav" aria-label="Project navigation"><a href="/">Kazon Wilson</a><a href="/building">All projects</a></nav>
+    <header class="project-intro"><p class="eyebrow">Project journal · Design & development</p><h1>{story.title}</h1><p class="lead">{story.subtitle}</p><p>A real application, built one lesson at a time. Your engineering changes shape a fantasy harbor, alongside Scripture, prayer and reflection.</p><p class="project-note">For people who already code. I’m building the daily practice I want to use myself.</p></header>
+    <figure class="project-current"><a href={asset(latest.file)} aria-label="Open the current lesson prototype screenshot"><img src={asset(latest.file)} alt={latest.alt} width={latest.width} height={latest.height} fetchpriority="high" /></a><figcaption><strong>Where it is now · September 9, 2026.</strong> {latest.caption}</figcaption></figure>
+    <StoryFlow title="A little work. A reason to return." description="The goal is a connected series: each day grows the same application and gives the work a place in the story." steps={[
+      { label:'Meet a need', visual:'◯ → ?', caption:'Arrive in the harbor. Find the problem today’s lesson asks you to solve.' },
+      { label:'Change the application', visual:'{ + }', caption:'Practice a real engineering principle through a small coding task.' },
+      { label:'Reflect, then return', visual:'✓ → ◯', caption:'Pause for reflection. Come back to grow the same application.' }
+    ]} />
+    <p class="project-next"><strong>Next:</strong> {story.next}</p>
+    <ProjectTimeline id="design-history" title="From the first sketch to a lesson" entries={entries} />
+    <p class="project-note">I direct the product and choose the direction, with AI assistance for exploration and implementation. Concepts are visual studies, not working features. Dates record the supported day, not time spent.</p>
+    <ProjectUpdates feed={feed} projectId={story.projectId} title="Development milestones" />
+  </div><Footer slot="footer" />
 </BaseLayout>
-<style>
-  .story-shell { max-width: 1200px; margin: auto; padding: 0 32px; }
-  .story-nav { display: flex; justify-content: space-between; gap: 24px; padding: 28px 0; border-bottom: 1px solid var(--rule); font-family: var(--font-sans, Inter, sans-serif); font-size: 14px; }
-  a { text-underline-offset: 5px; }
-  a:hover { text-decoration: underline; }
-  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; }
-  .story-intro { display: grid; grid-template-columns: 1.15fr 1fr; gap: 72px; align-items: center; padding: 76px 0 64px; }
-  .story-label, .artifact-kind { font: 13px/1.5 Inter, sans-serif; color: var(--muted); margin-bottom: 16px; }
-  h1 { font-size: clamp(42px, 5.5vw, 74px); line-height: .98; letter-spacing: -.04em; max-width: 8em; }
-  .story-subtitle { font-size: 26px; margin: 24px 0; line-height: 1.25; }
-  .story-goal { font-size: 19px; line-height: 1.6; }
-  .story-audience { color: var(--muted); font-size: 16px; line-height: 1.6; margin: 20px 0 28px; }
-  .story-jump { display: inline-block; font-size: 17px; text-decoration: underline; }
-  .selected-preview { margin: 0; }
-  .selected-preview a { display: block; height: 530px; overflow: hidden; border: 1px solid var(--rule); background: #e7edf0; }
-  .selected-preview img { width: 100%; height: auto; }
-  .selected-preview figcaption { padding: 14px 0 0; font: 13px/1.6 Inter, sans-serif; }
-  .selected-preview figcaption span { display: block; color: var(--muted); }
-  .project-state { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; padding: 32px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
-  .project-state h2 { font-size: 22px; margin-bottom: 8px; }
-  .project-state p:not(.story-label) { font-size: 17px; line-height: 1.6; }
-  .history-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; padding-top: 72px; }
-  .history-heading h2 { font-size: clamp(30px, 4vw, 42px); letter-spacing: -.025em; }
-  .history-heading p, .history-note { font-size: 15px; line-height: 1.7; color: var(--muted); }
-  .history-note { max-width: 72ch; margin: 20px 0 44px; }
-  .timeline { list-style: none; padding: 0; }
-  .stage { display: grid; grid-template-columns: 150px 1fr; gap: 32px; padding: 44px 0 52px; border-top: 1px solid var(--rule); }
-  .stage-marker { font: 13px/1.6 Inter, sans-serif; color: var(--muted); }
-  .stage-marker span { display: block; font-family: Newsreader, serif; font-size: 38px; line-height: 1; margin-bottom: 12px; }
-  .stage h3 { font-size: clamp(26px, 3vw, 34px); letter-spacing: -.02em; line-height: 1.2; }
-  .stage-summary { font-size: 18px; line-height: 1.65; max-width: 65ch; margin-top: 18px; }
-  .stage-decision { font-size: 16px; line-height: 1.6; max-width: 70ch; margin: 20px 0 28px; padding-left: 16px; border-left: 2px solid var(--accent); }
-  .selected .stage-marker span { color: var(--accent); }
-  .artifacts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px 24px; }
-  .artifacts.single { grid-template-columns: 1fr; }
-  .artifacts figure { margin: 0; min-width: 0; }
-  .artifacts a { display: block; border: 1px solid var(--rule); background: #e7edf0; }
-  .artifacts img { width: 100%; height: auto; }
-  .artifacts figcaption { padding-top: 16px; }
-  .artifact-kind { margin-bottom: 5px; }
-  .artifacts h4 { font-size: 22px; margin-bottom: 7px; }
-  .artifacts figcaption > p:last-child { color: var(--muted); font-size: 15px; line-height: 1.6; max-width: 60ch; }
-  @media (max-width: 760px) {
-    .story-shell { padding: 0 22px; }
-    .story-intro { grid-template-columns: 1fr; gap: 32px; padding: 40px 0; }
-    h1 { max-width: 10em; }
-    .selected-preview a { height: 400px; }
-    .project-state { grid-template-columns: 1fr; gap: 24px; }
-    .history-heading { display: block; padding-top: 48px; }
-    .history-heading p { margin-top: 10px; }
-    .stage { grid-template-columns: 1fr; gap: 16px; padding: 32px 0; }
-    .stage-marker { display: flex; align-items: center; gap: 16px; }
-    .stage-marker span { margin: 0; font-size: 26px; }
-    .artifacts { grid-template-columns: 1fr; }
-  }
-</style>

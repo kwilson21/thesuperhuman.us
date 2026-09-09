@@ -3,7 +3,7 @@ import type { ProjectFeed } from '~/lib/publication/read';
 interface Props { feed: ProjectFeed | null; history?: boolean; projectId?: string; title?: string; description?: string; historyHref?: string }
 const { feed, history = false, projectId = 'threadline', title = 'Threadline',
   description = 'Threadline is an experimental VS Code extension for developers returning to interrupted work. The goal is a short, readable account of what they were working on, what changed, and where to resume, without maintaining a separate work log.',
-  historyHref = '/building' } = Astro.props;
+  historyHref = '/building/threadline' } = Astro.props;
 const current = feed?.current;
 const earlierUpdates = feed?.history.filter(item => item.entryId !== current?.entryId) ?? [];
 const labels = { proposed: 'Planned', implemented: 'Built', tested: 'Checked', available: 'Available to use' };

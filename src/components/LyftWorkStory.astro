@@ -1,0 +1,111 @@
+<section class="lyft-story" aria-labelledby="lyft-bonus-title" data-lyft-story>
+  <p class="eyebrow">A closer look · Bulk bonus refactor</p>
+  <h4 id="lyft-bonus-title">More rows. More independence for support.</h4>
+  <p class="intro">I refactored the tool used to issue driver bonuses and added Grafana observability so support could monitor and self-serve runs.</p>
+
+  <figure class="capacity" aria-labelledby="lyft-capacity-caption">
+    <figcaption id="lyft-capacity-caption" class="eyebrow">Rows handled per batch</figcaption>
+    <div class="capacity-row">
+      <div class="capacity-label"><span>Before</span><strong>5,000 <small>row limit</small></strong></div>
+      <div class="capacity-track" aria-hidden="true"><span class="capacity-bar before-bar"></span></div>
+    </div>
+    <div class="capacity-row">
+      <div class="capacity-label"><span>After</span><strong>100,000+ <small>rows handled</small></strong></div>
+      <div class="capacity-track" aria-hidden="true"><span class="capacity-bar after-bar"></span></div>
+    </div>
+    <p class="scale-note">Same scale; the after bar shows the 100,000-row lower bound.</p>
+  </figure>
+
+  <div class="workflow-heading">
+    <p class="eyebrow" id="lyft-workflow-label">Who can run the work?</p>
+    <div class="workflow-controls" role="group" aria-labelledby="lyft-workflow-label" hidden>
+      <button type="button" data-workflow="before" aria-pressed="false" aria-controls="lyft-workflow-before">Before</button>
+      <button type="button" data-workflow="after" aria-pressed="true" aria-controls="lyft-workflow-after">After</button>
+    </div>
+  </div>
+  <div class="workflows" aria-live="polite">
+    <figure id="lyft-workflow-before" data-workflow-panel="before">
+      <figcaption>Before · Runs escalated to engineering</figcaption>
+      <ol class="workflow-path">
+        <li><span class="step-label">Support</span><span>Needs a bonus run</span></li>
+        <li><span class="step-label">Escalation</span><span>Hands off to on-call</span></li>
+        <li><span class="step-label">On-call engineer</span><span>Handles the run</span></li>
+      </ol>
+    </figure>
+    <figure id="lyft-workflow-after" data-workflow-panel="after">
+      <figcaption>After · Support can self-serve</figcaption>
+      <ol class="workflow-path">
+        <li><span class="step-label">Support</span><span>Starts a bonus run</span></li>
+        <li><span class="step-label">Grafana visibility</span><span>Support monitors the run</span></li>
+        <li><span class="step-label">Self-service</span><span>No on-call handoff needed</span></li>
+      </ol>
+    </figure>
+  </div>
+  <p class="evidence-note">Illustrations based on my <a href="/about#lyft--software-engineer">career account</a>. Capacity figures are owner-reported, not newly benchmarked. The workflow shows the change in responsibility, not elapsed time.</p>
+</section>
+
+<script>
+  function initLyftStories() {
+    document.querySelectorAll<HTMLElement>('[data-lyft-story]').forEach((story) => {
+      if (story.dataset.ready) return;
+      const controls = story.querySelector<HTMLElement>('.workflow-controls');
+      const buttons = story.querySelectorAll<HTMLButtonElement>('[data-workflow]');
+      const panels = story.querySelectorAll<HTMLElement>('[data-workflow-panel]');
+      if (!controls) return;
+      const select = (state: string) => {
+        buttons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.workflow === state)));
+        panels.forEach((panel) => { panel.hidden = panel.dataset.workflowPanel !== state; });
+      };
+      buttons.forEach((button) => button.addEventListener('click', () => select(button.dataset.workflow!)));
+      select('after');
+      controls.hidden = false;
+      story.dataset.ready = 'true';
+    });
+  }
+  initLyftStories();
+  document.addEventListener('astro:page-load', initLyftStories);
+</script>
+
+<style>
+  .lyft-story { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--rule); }
+  h4 { margin: .5rem 0; font-size: 1.75rem; font-weight: 400; line-height: 1.2; letter-spacing: -.01em; }
+  .intro { max-width: 38rem; font-size: 1.0625rem; line-height: 1.6; }
+  .capacity { margin: 1.75rem 0 2rem; }
+  .capacity-row { margin-top: 1rem; }
+  .capacity-label { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; font-family: 'Inter', system-ui, sans-serif; font-size: .75rem; }
+  .capacity-label strong { font-size: 1.5rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .capacity-label small { font-size: .6875rem; font-weight: 400; color: var(--muted); }
+  .capacity-track { height: .75rem; margin-top: .375rem; background: var(--rule); }
+  .capacity-bar { display: block; height: 100%; }
+  .before-bar { width: 5%; background: var(--ink); }
+  .after-bar { width: 100%; background: var(--accent); }
+  .scale-note, .evidence-note { color: var(--muted); font-family: 'Inter', system-ui, sans-serif; font-size: .6875rem; line-height: 1.65; }
+  .scale-note { margin-top: .75rem; }
+  .workflow-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
+  .workflow-controls { display: flex; border: 1px solid var(--rule); border-radius: 4px; padding: 3px; }
+  .workflow-controls[hidden], [data-workflow-panel][hidden] { display: none; }
+  button { padding: .5rem .875rem; min-height: 44px; font-family: 'Inter', system-ui, sans-serif; font-size: .75rem; cursor: pointer; border-radius: 2px; }
+  button[aria-pressed='true'] { background: var(--ink); color: var(--paper); }
+  button:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .workflows figure + figure { margin-top: 1.25rem; }
+  .lyft-story[data-ready] .workflows figure { margin-top: 0; }
+  .workflows figcaption { font-size: 1.125rem; margin-bottom: .75rem; }
+  .workflow-path { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; padding: 0; }
+  .workflow-path li { position: relative; padding: .75rem 1rem .75rem 0; border-top: 2px solid var(--rule); font-family: 'Inter', system-ui, sans-serif; font-size: .6875rem; line-height: 1.5; }
+  .workflow-path li + li { padding-left: .75rem; }
+  .workflow-path li + li::before { content: '→'; position: absolute; left: -.5rem; top: -1rem; background: var(--paper); color: var(--accent); font-size: 1.125rem; }
+  .step-label { display: block; font-weight: 600; margin-bottom: .25rem; font-size: .75rem; }
+  .evidence-note { border-top: 1px solid var(--rule); padding-top: 1rem; margin-top: 1rem; }
+  @media (prefers-reduced-motion: no-preference) {
+    .lyft-story[data-ready] .workflow-path li { animation: reveal-step .3s ease-out both; }
+    .lyft-story[data-ready] .workflow-path li:nth-child(2) { animation-delay: .12s; }
+    .lyft-story[data-ready] .workflow-path li:nth-child(3) { animation-delay: .24s; }
+    @keyframes reveal-step { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  }
+  @media (max-width: 420px) {
+    .capacity-label small { display: block; text-align: right; }
+    .workflow-path { grid-template-columns: 1fr; }
+    .workflow-path li, .workflow-path li + li { border-top: none; border-left: 2px solid var(--rule); padding: .5rem 0 .75rem 1rem; }
+    .workflow-path li + li::before { content: '↓'; top: -.5rem; left: -.45rem; }
+  }
+</style>

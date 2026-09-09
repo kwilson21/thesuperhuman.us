@@ -1,0 +1,13 @@
+.project-shell { max-width: 1120px; margin: auto; padding: 0 28px 70px; }
+.project-nav { display:flex; justify-content:space-between; gap:20px; padding:28px 0; border-bottom:1px solid var(--rule); font-size:14px; }
+.project-intro { padding:64px 0 34px; max-width:780px; }
+.project-intro .eyebrow { margin-bottom:20px; }
+.project-intro h1 { font-size:clamp(44px,7vw,78px); line-height:1; letter-spacing:-.04em; }
+.project-intro .lead { font-size:24px; line-height:1.4; margin:24px 0 18px; }
+.project-intro p { line-height:1.7; }
+.project-current { margin:12px 0 40px; }
+.project-current img { width:100%; height:auto; border:1px solid var(--rule); }
+.project-current figcaption { font-size:13px; color:var(--muted); line-height:1.6; margin-top:12px; }
+.project-next { border-left:2px solid var(--accent); padding-left:18px; line-height:1.7; max-width:70ch; }
+.project-note { color:var(--muted); font-size:13px; line-height:1.7; max-width:80ch; }
+@media(max-width:600px) { .project-shell { padding-inline:20px; } .project-intro { padding-top:40px; } }

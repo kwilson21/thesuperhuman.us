@@ -3,6 +3,7 @@ export const prerender = false;
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import Footer from '~/components/Footer.astro';
 import ExperienceRow from '~/components/ExperienceRow.astro';
+import LyftWorkStory from '~/components/LyftWorkStory.astro';
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -56,10 +57,10 @@ const jsonLd = {
     <h2 class="heading mb-10">Selected work</h2>
     <div class="space-y-14">
       <article>
-        <p class="eyebrow mb-2">Lyft · Software Engineer</p>
+        <p id="lyft" class="eyebrow mb-2">Lyft · Software Engineer</p>
         <h3 class="text-2xl mb-3">Reliable systems where mistakes had financial consequences</h3>
         <p class="text-[1.0625rem] leading-relaxed max-w-measure mb-4">Owned a 40k-row migration during a third-party rentals-service deprecation, including a dry-run plan, an 18k-record audit and backfill of affected records, and safeguards against duplicate customer fee charges.</p>
-        <p class="text-[1.0625rem] leading-relaxed max-w-measure">Also refactored an internal bonus-remediation tool from a 5k-row limit to 100k+ rows and added Grafana observability so support could self-serve runs instead of escalating to on-call.</p>
+        <LyftWorkStory />
       </article>
 
       <article class="border-t border-rule pt-8">

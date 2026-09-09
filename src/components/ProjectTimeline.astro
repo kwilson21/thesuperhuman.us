@@ -1,0 +1,69 @@
+---
+import type { Milestone } from '~/lib/project-story';
+interface Props { id: string; title: string; entries: Milestone[]; selectedId?: string; }
+const { id, title, entries, selectedId } = Astro.props;
+const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+---
+<section class="project-timeline" data-timeline data-selected-id={selectedId} aria-labelledby={`${id}-title`}>
+  <h2 id={`${id}-title`}>{title}</h2>
+  {entries.length ? <>
+    <div data-controls hidden>
+      <p class="timeline-hint">Earlier work to the left. Start with the latest, or choose a milestone.</p>
+      <div class="milestone-strip" aria-label="Choose a milestone">{entries.map((entry, index) => <button type="button" data-pick={index} aria-controls={entry.id} aria-pressed="false">
+        {entry.artifacts?.[0] ? <img src={entry.artifacts[0].src} alt="" width="180" height="100" loading="lazy" /> : <span class="update-mark" aria-hidden="true">{String(index + 1).padStart(2, '0')}<small>{entry.status || 'Update'}</small></span>}
+        <time datetime={entry.day}>{date(entry.day)}</time><strong>{entry.title}</strong>
+      </button>)}</div>
+      <div class="timeline-tools"><button type="button" data-prev aria-label="Previous milestone">← Previous</button><span data-position aria-live="polite"></span><button type="button" data-next aria-label="Next milestone">Next →</button><button type="button" data-all aria-pressed="false">Show all entries</button></div>
+    </div>
+    <div class="milestone-panels">{entries.map(entry => <article id={entry.id} data-panel>
+      <p class="meta"><time datetime={entry.day}>{date(entry.day)}</time>{entry.status && ` · ${entry.status}`}</p>
+      {entry.publishedAt && <p class="meta">Published <time datetime={entry.publishedAt}>{new Date(entry.publishedAt).toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })} UTC</time>{entry.backfilled && " · Added from project history"}</p>}<h3>{entry.title}</h3><p class="milestone-summary">{entry.summary}</p>
+      {(entry.detail || entry.basis) && <details><summary>Context and what comes next</summary>{entry.detail && <p class="detail">{entry.detail}</p>}{entry.basis && <p class="meta">Basis: {entry.basis.replaceAll('-', ' ')}</p>}</details>}
+      {entry.artifacts?.length && <div class="milestone-artifacts">{entry.artifacts.map(artifact => <figure><a href={artifact.src} aria-label={`Open ${artifact.title} at full size`}><img src={artifact.src} alt={artifact.alt} width={artifact.width} height={artifact.height} loading="lazy" /></a><figcaption><span class="meta">{artifact.kind}</span><h4>{artifact.title}</h4><p>{artifact.caption}</p></figcaption></figure>)}</div>}
+    </article>)}</div>
+  </> : <p>No published milestones yet.</p>}
+</section>
+<script>
+  document.querySelectorAll<HTMLElement>('[data-timeline]').forEach(root => {
+    const picks = [...root.querySelectorAll<HTMLButtonElement>('[data-pick]')];
+    const panels = [...root.querySelectorAll<HTMLElement>('[data-panel]')];
+    if (!picks.length) return;
+    const controls = root.querySelector<HTMLElement>('[data-controls]')!;
+    const previous = root.querySelector<HTMLButtonElement>('[data-prev]')!;
+    const next = root.querySelector<HTMLButtonElement>('[data-next]')!;
+    const all = root.querySelector<HTMLButtonElement>('[data-all]')!;
+    let selected = panels.findIndex(panel => '#' + panel.id === location.hash);
+    if (selected < 0 && root.dataset.selectedId) selected = panels.findIndex(panel => panel.id === root.dataset.selectedId);
+    if (selected < 0) selected = panels.length - 1;
+    let showAll = false;
+    function render(scroll = true) {
+      panels.forEach((panel, i) => panel.hidden = !showAll && i !== selected);
+      picks.forEach((pick, i) => pick.setAttribute('aria-pressed', String(i === selected)));
+      previous.disabled = selected === 0; next.disabled = selected === picks.length - 1;
+      root.querySelector('[data-position]')!.textContent = `${selected + 1} / ${picks.length}`;
+      all.setAttribute('aria-pressed', String(showAll)); all.textContent = showAll ? 'Show selected entry' : 'Show all entries';
+      if (scroll) { const strip = picks[selected].parentElement!; strip.scrollLeft = picks[selected].offsetLeft - strip.offsetLeft; }
+    }
+    function choose(index: number) { selected = index; showAll = false; render(); }
+    picks.forEach((pick, i) => { pick.addEventListener('click', () => choose(i)); pick.addEventListener('keydown', event => {
+      const target = event.key === 'Home' ? 0 : event.key === 'End' ? picks.length - 1 : event.key === 'ArrowRight' ? Math.min(i + 1, picks.length - 1) : event.key === 'ArrowLeft' ? Math.max(i - 1, 0) : -1;
+      if (target >= 0) { event.preventDefault(); choose(target); picks[target].focus(); }
+    }); });
+    previous.addEventListener('click', () => choose(Math.max(0, selected - 1)));
+    next.addEventListener('click', () => choose(Math.min(picks.length - 1, selected + 1)));
+    all.addEventListener('click', () => { showAll = !showAll; render(false); });
+    controls.hidden = false; render();
+    new ResizeObserver(() => render()).observe(root);
+  });
+</script>
+<style>
+  .project-timeline { margin: 64px 0; min-width: 0; } h2 { font-size: clamp(30px,4vw,44px); } .timeline-hint,.meta { color: var(--muted); font-size: 13px; line-height: 1.6; } .timeline-hint { margin: 10px 0 22px; }
+  .milestone-strip { display: flex; overflow-x: auto; gap: 12px; padding: 4px 4px 18px; position: relative; scrollbar-color: var(--accent) var(--rule); }
+  button { font: inherit; cursor: pointer; } button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; } .milestone-strip button { flex: 0 0 190px; text-align: left; padding: 9px; border: 1px solid var(--rule); background: transparent; border-radius: 5px; } .milestone-strip button[aria-pressed=true] { border-color: var(--accent); background: #f1e9df; }
+  .milestone-strip img { width: 100%; height: 100px; object-fit: cover; object-position: top; border-radius: 2px; } .milestone-strip time { display: block; font-size: 11px; color: var(--muted); margin: 12px 0 5px; } .milestone-strip strong { display: block; font-size: 14px; font-weight: 500; line-height: 1.4; }
+  .update-mark { display: flex; align-items: baseline; justify-content: space-between; height: 100px; padding: 16px 6px; font: 44px Newsreader,serif; border-bottom: 1px solid var(--rule); color: var(--accent); } .update-mark small { font: 11px Inter,sans-serif; color: var(--muted); }
+  .timeline-tools { display: flex; align-items: center; gap: 20px; margin: 8px 0 28px; font-size: 13px; flex-wrap: wrap; } .timeline-tools button { background: none; border: none; padding: 8px 0; } button:disabled { opacity: .35; cursor: default; } [data-all] { margin-left: auto; }
+  article { border-top: 1px solid var(--rule); padding: 28px 0; } article[hidden] { display: none; } h3 { font-size: clamp(28px,3vw,38px); margin: 12px 0; } .milestone-summary { font-size: 19px; line-height: 1.65; max-width: 66ch; } details { margin: 18px 0 24px; max-width: 75ch; font-size: 15px; line-height: 1.7; } summary { cursor: pointer; color: var(--accent); } .detail { white-space: pre-line; margin-top: 12px; }
+  .milestone-artifacts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 30px; margin-top: 28px; } figure:only-child { grid-column: 1/-1; } figure { margin: 0; } figure a { display: block; border: 1px solid var(--rule); } figure img { width: 100%; height: auto; } figcaption { margin-top: 14px; font-size: 14px; line-height: 1.6; color: var(--muted); } h4 { font-size: 21px; color: var(--ink); margin: 4px 0; }
+  @media(max-width:600px) { .milestone-artifacts { grid-template-columns: 1fr; } .timeline-tools { gap: 15px; } }
+</style>
