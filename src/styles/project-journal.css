@@ -11,3 +11,5 @@
 .project-next { border-left:2px solid var(--accent); padding-left:18px; line-height:1.7; max-width:70ch; }
 .project-note { color:var(--muted); font-size:13px; line-height:1.7; max-width:80ch; }
 @media(max-width:600px) { .project-shell { padding-inline:20px; } .project-intro { padding-top:40px; } }
+
+.intended-experience { margin-top: 22px; max-width: 66ch; font-size: 16px; line-height: 1.7; }
