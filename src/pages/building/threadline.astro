@@ -1,0 +1,22 @@
+---
+export const prerender = false;
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Footer from '~/components/Footer.astro';
+import ProjectUpdates from '~/components/ProjectUpdates.astro';
+import StoryFlow from '~/components/StoryFlow.astro';
+import { websiteFeed } from '~/lib/publication/website';
+import '~/styles/project-journal.css';
+const feed = await websiteFeed(Astro.locals.runtime.env, 'threadline');
+Astro.response.headers.set('Cache-Control', 'no-store');
+---
+<BaseLayout title="Threadline · Project journal · Kazon Wilson" description="Helping developers pick up the thread of their work. Follow Threadline from its first prototype to the latest milestone.">
+  <div class="project-shell"><nav class="project-nav" aria-label="Project navigation"><a href="/">Kazon Wilson</a><a href="/building">All projects</a></nav>
+    <header class="project-intro"><p class="eyebrow">Project journal · Development</p><h1>Threadline</h1><p class="lead">Pick up where you left off.</p><p>Switching tasks can mean reconstructing what you were doing. I’m building a way to keep related work together inside the code editor.</p><p class="project-note">An internal prototype. The milestones below distinguish plans, built pieces, checks and availability.</p></header>
+    <ProjectUpdates feed={feed} projectId="threadline" />
+    <StoryFlow title="Keep the thread when work changes." description="The intended experience: return to useful context without maintaining a separate work log." steps={[
+      { label:'Work on a task', visual:'{ A }', caption:'Your changes leave clues about what belongs together.' },
+      { label:'Keep related work together', visual:'A · A · A', caption:'Threadline proposes a grouping. You can correct it.' },
+      { label:'Find your place again', visual:'↳ A', caption:'Return to the task with the relevant code and context in view.' }
+    ]} />
+  </div><Footer slot="footer" />
+</BaseLayout>
