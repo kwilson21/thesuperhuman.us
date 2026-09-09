@@ -7,12 +7,13 @@ interface Props {
   stack: string[];
 }
 const { name, url, linkLabel = 'Visit live →', description, stack } = Astro.props;
+const external = !!url && /^https?:\/\//.test(url);
 ---
 <article class="border-t border-rule pt-6 pb-2">
   <h3 class="font-serif text-2xl mb-2">{name}</h3>
   <p class="text-[1.0625rem] leading-relaxed text-ink mb-3 max-w-measure">{description}</p>
   <p class:list={['font-mono text-xs text-muted', url && 'mb-3']}>{stack.join(' · ')}</p>
   {url && (
-    <a href={url} class="text-sm" target="_blank" rel="noopener">{linkLabel}</a>
+    <a href={url} class="text-sm" target={external ? "_blank" : undefined} rel={external ? "noopener" : undefined}>{linkLabel}</a>
   )}
 </article>
