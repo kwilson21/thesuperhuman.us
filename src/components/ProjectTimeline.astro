@@ -1,4 +1,5 @@
 ---
+import PayloadReviewIllustration from './PayloadReviewIllustration.astro';
 import type { Milestone } from '~/lib/project-story';
 interface Props { id: string; title: string; entries: Milestone[]; selectedId?: string; }
 const { id, title, entries, selectedId } = Astro.props;
@@ -18,7 +19,8 @@ const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('e
     <div class="milestone-panels">{entries.map(entry => <article id={entry.id} data-panel>
       <p class="meta"><time datetime={entry.day}>{date(entry.day)}</time>{entry.status && ` · ${entry.status}`}</p>
       {entry.publishedAt && <p class="meta">Published <time datetime={entry.publishedAt}>{new Date(entry.publishedAt).toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })} UTC</time>{entry.backfilled && " · Added from project history"}</p>}<h3>{entry.title}</h3><p class="milestone-summary">{entry.summary}</p>
-      {(entry.detail || entry.basis) && <details><summary>Context and what comes next</summary>{entry.detail && <p class="detail">{entry.detail}</p>}{entry.basis && <p class="meta">Basis: {entry.basis.replaceAll('-', ' ')}</p>}</details>}
+      {(entry.detail || entry.basis) && <details><summary>{entry.detailLabel || 'Context and what comes next'}</summary>{entry.detail && <p class="detail">{entry.detail}</p>}{entry.basis && <p class="meta">Basis: {entry.basis.replaceAll('-', ' ')}</p>}</details>}
+      {entry.illustration === 'payload-review' && <PayloadReviewIllustration />}
       {entry.artifacts?.length && <div class="milestone-artifacts">{entry.artifacts.map(artifact => <figure><a href={artifact.src} aria-label={`Open ${artifact.title} at full size`}><img src={artifact.src} alt={artifact.alt} width={artifact.width} height={artifact.height} loading="lazy" /></a><figcaption><span class="meta">{artifact.kind}</span><h4>{artifact.title}</h4><p>{artifact.caption}</p></figcaption></figure>)}</div>}
     </article>)}</div>
   </> : <p>No published milestones yet.</p>}

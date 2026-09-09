@@ -1,6 +1,8 @@
+import approvedReview from '../data/project-stories/threadline-review.json';
 import type { ProjectFeed, PublicEntry } from './publication/read';
 export interface Milestone {
   id: string; day: string; title: string; summary: string; detail?: string;
+  illustration?: 'payload-review'; detailLabel?: string;
   status?: string; basis?: string; publishedAt?: string; backfilled?: boolean;
   artifacts?: { src: string; title: string; alt: string; caption: string; kind: string; width: number; height: number }[];
 }
@@ -8,8 +10,11 @@ const entries = (feed: ProjectFeed): PublicEntry[] => [...new Map([...feed.histo
 export function publicationMilestones(feed: ProjectFeed | null): Milestone[] {
   if (!feed) return [];
   return entries(feed).reverse().map(entry => {
-    const split = entry.story.summary.match(/^.*?[.!?](?:\s|$)/)?.[0].trim();
-    return { id: entry.entryId, day: entry.occurredOn, title: entry.story.headline,
+    const split = entry.story.summary.match(/^(?:.*?[.!?](?:\s|$)){1,2}/)?.[0].trim();
+    const reviewed = feed.projectId === approvedReview.projectId && entry.entryId === approvedReview.entryId
+      && entry.occurredOn === approvedReview.occurredOn
+      && Object.entries(approvedReview.story).every(([key, value]) => entry.story[key as keyof typeof entry.story] === value);
+    return { illustration: reviewed ? 'payload-review' : undefined, detailLabel: reviewed ? 'What was checked' : undefined, id: entry.entryId, day: entry.occurredOn, title: entry.story.headline,
       summary: split || entry.story.summary,
       detail: [split ? entry.story.summary.slice(split.length).trim() : '', entry.story.technicalDetail].filter(Boolean).join('\n\n'),
       status: ({ proposed: 'Planned', implemented: 'Built', tested: 'Checked', available: 'Available to use' })[entry.story.delivery],
