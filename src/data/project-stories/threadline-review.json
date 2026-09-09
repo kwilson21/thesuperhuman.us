@@ -1,0 +1,12 @@
+{
+  "projectId": "threadline",
+  "entryId": "threadline-inspect-before-sending-20260905",
+  "occurredOn": "2026-09-05",
+  "story": {
+    "headline": "Inspect before sending",
+    "summary": "The recap confirmation dialog blocked the editor while you were deciding whether to send the displayed payload. A nonblocking notification now leaves the review document usable, while sending still requires choosing Generate Recap.",
+    "technicalDetail": "In a development check, the review document remained usable while the sending decision stayed open. Sending still required an explicit choice.\n\nThis is an illustration of that interaction, not a test recording or a released feature. No speed or productivity improvement has been measured.",
+    "delivery": "implemented",
+    "basis": "repository-verified"
+  }
+}
