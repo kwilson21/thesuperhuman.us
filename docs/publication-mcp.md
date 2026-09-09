@@ -21,7 +21,9 @@ that journal directly; there is no second queue or delivery service.
    and callback `https://thesuperhuman.us/api/publication/callback`.
    GitHub is used only to verify identity; this app requests no repository scopes.
 4. Configure `PUBLICATION_OWNER_ID=10987837` and the OAuth App's public client ID
-   as `PUBLICATION_GITHUB_CLIENT_ID`. Keep `PUBLICATION_PROJECTS=threadline`.
+   as `PUBLICATION_GITHUB_CLIENT_ID`. Keep `PUBLICATION_PROJECTS=threadline,the-engineers-daily`. Existing grants
+   need renewed owner consent for the additional project; adding it here does not
+   expand a previously issued token.
 5. Store `PUBLICATION_GITHUB_CLIENT_SECRET` and a cryptographically random
    32-byte, base64url-encoded `PUBLICATION_COOKIE_KEY` as encrypted Worker secrets.
    Transfer values directly through private credential channels. Never paste them

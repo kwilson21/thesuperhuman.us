@@ -1,0 +1,160 @@
+{
+  "version": 1,
+  "projectId": "the-engineers-daily",
+  "title": "The Engineer’s Daily",
+  "subtitle": "A daily practice of faith and craft.",
+  "goal": "A place for people who already code to practice engineering alongside Scripture, prayer and reflection. Over a series, the learner builds and grows a real application whose changes matter to an unfolding fantasy harbor world.",
+  "audience": "For experienced developers. The first person I am designing for is myself.",
+  "updatedOn": "2026-09-09",
+  "status": "Design exploration + local lesson prototype",
+  "current": "B2 Coastal Practice is selected. One Beacon lesson is built locally for review.",
+  "next": "Try the lesson as a daily ritual, refine the stopping point and return path, and connect the wider website around it.",
+  "cover": "b2-coastal-practice.png",
+  "stages": [
+    {
+      "id": "illustrated-world",
+      "day": "2026-09-08",
+      "title": "Make the work feel grounded",
+      "summary": "The early studies put Mara and Eli at an ordinary workstation in the harbor. The clear-line illustration gave the story a consistent visual language while keeping recognizable engineering work in view.",
+      "decision": "Carry forward the characters, harbor setting and believable tools.",
+      "artifacts": [
+        {
+          "file": "workstation-clear-line-v1.png",
+          "title": "The harbor workstation",
+          "kind": "Illustration",
+          "caption": "An early clear-line study, preserved September 8. The terminal is drawn, not a captured application screen.",
+          "alt": "Two illustrated engineers using an Ubuntu workstation beside a harbor window.",
+          "width": 1672,
+          "height": 941,
+          "sha256": "90aa995eab37429716da7f509202448643f60a399de901cbb16a362a348efdd2"
+        }
+      ]
+    },
+    {
+      "id": "motion-study",
+      "day": "2026-09-09",
+      "title": "Stay in one room",
+      "summary": "The motion study explored moving between the story, a monitor for coding, and reflection without leaving the same illustrated space. It made the lesson feel like a place to spend time.",
+      "decision": "Keep purposeful motion as an interaction reference. The study does not execute code.",
+      "artifacts": [
+        {
+          "file": "motion-room.png",
+          "title": "The continuous room",
+          "kind": "Illustration used in a local prototype",
+          "caption": "The panorama behind the motion study. This image shows the artwork, not the interactive controls.",
+          "alt": "A wide harbor room with Mara, a central computer monitor, Eli and an open journal.",
+          "width": 2172,
+          "height": 724,
+          "sha256": "5fb3df9812898a909e7a8a24ba0cbe476cbbc5caa5c52ae416185f49e8fca84d"
+        }
+      ]
+    },
+    {
+      "id": "first-concepts",
+      "day": "2026-09-09",
+      "title": "Find the invitation",
+      "summary": "The first full-page concept made the purpose easy to understand. Three alternatives explored a darker night watch, an open coastal layout, and a quieter field journal.",
+      "decision": "The first layout communicated the activity most clearly. B had the strongest visual appeal, but needed to make the coding more obvious.",
+      "artifacts": [
+        {
+          "file": "first-concept.png",
+          "title": "The first direction",
+          "kind": "Concept",
+          "caption": "A full-page visual study. Its structure established a clear invitation to practice.",
+          "alt": "Warm illustrated full-page website concept for The Engineer’s Daily.",
+          "width": 1024,
+          "height": 1536,
+          "sha256": "2c1f7959f68fe963c9850edb5da0a78eb3be10fb4b5c642eb6f94a7393d77078"
+        },
+        {
+          "file": "a-night-watch.png",
+          "title": "A · Night Watch",
+          "kind": "Concept",
+          "caption": "An alternative mood, retained for comparison.",
+          "alt": "Dark night-watch themed website concept.",
+          "width": 1024,
+          "height": 1536,
+          "sha256": "65296166d18559a8da323ec6366de1d9e8075df67e421dd7ebac2482b28f64f8"
+        },
+        {
+          "file": "b-open-horizon.png",
+          "title": "B · Open Horizon",
+          "kind": "Concept",
+          "caption": "The coastal direction that led to the selected B2.",
+          "alt": "Bright coastal website concept with pale surfaces and an illustrated harbor.",
+          "width": 1024,
+          "height": 1536,
+          "sha256": "192417aa405181e7b9de43d7ebfadda4915cdb708a787da64da036d51d867747"
+        },
+        {
+          "file": "c-field-journal.png",
+          "title": "C · Field Journal",
+          "kind": "Concept",
+          "caption": "A more journal-like alternative, retained for comparison.",
+          "alt": "Editorial field-journal website concept.",
+          "width": 1024,
+          "height": 1536,
+          "sha256": "e42118a9a3d213c08c20fa72b650409d36abd23b69c9c32e92e2c2647655443e"
+        }
+      ]
+    },
+    {
+      "id": "b2-selected",
+      "day": "2026-09-09",
+      "title": "B2: the direction to build from",
+      "summary": "B2 kept the open coastal aesthetic and gave the learning sequence and code preview more presence. That combination became the selected template.",
+      "decision": "Selected: Coastal Practice. This settles the visual direction, not every generated word, code sample or feature shown in the image.",
+      "artifacts": [
+        {
+          "file": "b2-coastal-practice.png",
+          "title": "B2 · Coastal Practice",
+          "kind": "Selected concept",
+          "caption": "Selected September 9. The reference for the website’s visual direction.",
+          "alt": "Selected B2 website concept with a coastal illustration, visible code and a daily practice sequence.",
+          "width": 1024,
+          "height": 1536,
+          "sha256": "8af0d5b798a3f81fd9688c8bf05a18083428bd80912a9d56627b3de3a5830949"
+        },
+        {
+          "file": "d-open-workshop.png",
+          "title": "D · Open Workshop",
+          "kind": "Concept",
+          "caption": "Another option from the same exploration, not the selected template.",
+          "alt": "Open-workshop website concept with engineering practice sections.",
+          "width": 1024,
+          "height": 1536,
+          "sha256": "a514ad869d3f7b327e4740980e59622ff96d84f5e257eebb2ed317a97d596c69"
+        },
+        {
+          "file": "e-daily-lab.png",
+          "title": "E · Daily Lab",
+          "kind": "Concept",
+          "caption": "Another option from the same exploration, not the selected template.",
+          "alt": "Daily-lab website concept with a structured lesson layout.",
+          "width": 1024,
+          "height": 1536,
+          "sha256": "dd2446a00f36cf236b6c175b48b8b19b6dda136f3e4ace9cd9ed10a35b51af0b"
+        }
+      ]
+    },
+    {
+      "id": "one-lesson",
+      "day": "2026-09-09",
+      "title": "Turn the direction into one daily lesson",
+      "summary": "A local Beacon Day 12 prototype now connects arrival, coding practice and reflection. It brings the selected visual direction into an actual page, using the motion study as its interaction reference.",
+      "decision": "Next: review the lesson as a daily practice with its first user. Persistent progress and code execution remain unbuilt; daily return is a goal to test.",
+      "artifacts": [
+        {
+          "file": "lesson-prototype.png",
+          "title": "Beacon Day 12 · Arrival",
+          "kind": "Local prototype screenshot",
+          "caption": "Captured September 9, 2026 from the actual lesson page with motion off. The page is local; code execution and persistent progress are not implemented.",
+          "alt": "Actual lesson page showing An honest default, the harbor room, Arrive, Practice and Reflect steps, and Scripture alongside the story.",
+          "width": 1440,
+          "height": 1000,
+          "sha256": "8074f4357401f534e7d7584d83ce50a3f479b3776cff8f2a7f1b0ae26002b691"
+        }
+      ]
+    }
+  ]
+}

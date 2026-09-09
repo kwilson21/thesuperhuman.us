@@ -1,0 +1,19 @@
+---
+import story from '~/data/project-stories/the-engineers-daily.json';
+const cover = story.stages.flatMap(stage => stage.artifacts).find(image => image.file === story.cover)!;
+---
+<section class="border-t border-rule" aria-labelledby="design-story-title">
+  <div class="mx-auto max-w-content px-6 py-16 grid md:grid-cols-2 gap-10 items-center">
+    <div>
+      <p class="eyebrow mb-4">Inside the design process</p>
+      <h2 class="heading mb-4" id="design-story-title">{story.title}</h2>
+      <p class="text-lg leading-relaxed mb-4">{story.subtitle} Follow the illustrated studies, layout alternatives and decisions behind a website for developers.</p>
+      <p class="text-sm text-muted mb-6">Design notes from September 9, 2026. The lesson is a local prototype.</p>
+      <a href="/building/the-engineers-daily" class="text-lg underline underline-offset-4">Explore the visual history</a>
+    </div>
+    <a href="/building/the-engineers-daily" aria-label="Explore The Engineer’s Daily visual history" class="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">
+      <img src={`/building/${story.projectId}/${story.cover}`} alt="Selected B2 Coastal Practice concept, shown as a full website layout." width={cover.width} height={cover.height} loading="lazy" class="w-full h-80 object-cover object-top border border-rule" />
+      <p class="text-sm text-muted mt-3">Selected concept · B2 Coastal Practice</p>
+    </a>
+  </div>
+</section>
