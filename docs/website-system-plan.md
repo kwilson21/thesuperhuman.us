@@ -1,25 +1,6 @@
 # Website design system and repository plan
 
-September 10, 2026. Proposed implementation model based on the selected visual
-studies and [content responsibilities](website-content-model.md). The owner has
-requested this plan and the required [generated-image QA process](generated-image-qa.md).
-Stage 1 is now implemented locally: see the [Home prototype and verification](design-concepts/2026-09-10/home-prototype/README.md).
-Stage 2 is implemented locally: Work, Building, Writing, and About. See the
-[primary-page verification](design-concepts/2026-09-10/primary-pages/README.md).
-Project/article details and Audio/contact are also implemented locally. The
-[whole-site integration review](design-concepts/2026-09-10/integration/README.md)
-is complete, including the repeated Lyft link fix and restrained About path
-motion. [Launch preparation](design-concepts/2026-09-10/launch-preparation/README.md)
-verified live configuration and public feeds, corrected runtime form configuration,
-and validated the deployment bundle. Deployment and real email/resume smoke tests
-remain; nothing has been deployed.
-
-September 10 scope update: deployment and live email tests are on hold while
-the owner's pre-launch project-journal and redesign-writing additions are
-resolved. Those additions are now implemented locally, with the [journal increment review](design-concepts/2026-09-10/website-journal/README.md) recording validation. [Story material and pre/post-launch work](redesign-story-material.md)
-records the recommendation and source evidence. Upstream PR #34's
-published Threadline illustration is integrated and checked in the redesigned timeline; enriching other Threadline
-milestones remains post-launch work. Deployment and live email tests remain on hold.
+This PR implements shared foundations and Home. The remaining page families described below are planned responsibilities for dependent PRs, not completed work in this slice. Selected production artwork has its own review records. No production launch is claimed.
 
 ## Recommendation
 
@@ -177,42 +158,6 @@ components are multiplied across pages. It is not a full-site rewrite in one pas
 - Generated text, dates, interface states, and figures in studies are not approved
   factual content. Use the original Daily screenshot for product evidence and
   clearly identify Threadline concepts until real evidence is available.
-- The pre-existing headshot deletion was retained in the Home prototype. Its
-  remaining imports were removed before the successful build; the owner accepted
-  the prototype. No replacement portrait is required by these compositions.
+- The existing headshot remains until the Audio replacement removes its final consumer. No replacement portrait is required by the selected compositions.
 - Design-study files remain historical references. Production artwork is a
   separate deliverable governed by the required image QA process.
-
-## Local stage 2 decisions
-
-Work uses native disclosures for extra context, so its selected stories add depth without requiring unfinished standalone story routes. About uses separately reviewed artwork and native SVG connecting paths; on mobile it keeps a readable sequence. Writing’s qualitative diagram is native SVG so checkpoints and arrows can be placed precisely. Building uses the real Daily screenshot and clearly labeled Threadline illustration.
-
-No publication adapter, transport, pending-request record, or PDF was changed. Only incoming resume validation changed. The public form no longer selects a version, includes an email fallback, and preserves operator approval. A stored DoD request still retrieves its original PDF through the existing approval flow.
-
-Next: apply the approved detail/article/Audio templates, simplify the general contact flow with its server validation, then review purposeful motion and the complete site. Home remains the accepted visual baseline.
-
-## Local stage 3: project and article pages
-
-Daily and Threadline now consume a shared ProjectLayout and retain their custom explanations. ProjectTimeline remains the single journal component, styled as a desktop rail/mobile selector with complete no-JS history. ProjectUpdates preserves the existing publication integration and distinguishes unavailable from empty feeds. The essay now has heading-derived contents and a native SVG illustration; its argument is retained with targeted project-description reconciliation under the publication policy. Evidence is in `docs/design-concepts/2026-09-10/detail-pages/`.
-
-Next: Audio and the general contact flow, then the integrated motion and whole-site review. The work stories currently remain native disclosures on Work. No deployment has occurred.
-
-## Local stage 3: Audio and contact
-
-Audio v3 and the simple contact flow are implemented, including shared form states and main-site navigation from the Audio host. Audio keeps its structured inquiry and native playback foundation; recordings are not invented. Contact, resume and audio delivery rules remain separate. Contact email/schema now accept a short introduction without business qualifiers; resumes still require approval. See `docs/design-concepts/2026-09-10/audio-contact/` for tests, intercepted browser evidence and real-delivery/recording limits.
-
-Next: integrated whole-site and purposeful-motion review. Work stories remain native disclosures. Nothing has been committed, deployed or sent to external recipients during this redesign QA.
-
-## September 10 pre-launch feedback
-
-Work labels now say Work highlights; Audio engineering links stay local and
-Audio is part of the personal site at /audio. The alternate subdomain still
-works, with main-site canonical URLs. Two services sheets reuse one layout,
-with mobile and print treatments and the existing software URL preserved.
-
-The Personal website project now follows eleven visual milestones: twenty
-historical studies, selected/rejected labels, direct excerpts of owner feedback,
-and six page comparisons. A reader-path diagram replaces the wordy principles
-section. The existing ProjectTimeline owns selection and keyboard behavior.
-Only an optional quote block was added to its presentation model; no feed
-contract or second timeline renderer was introduced.
