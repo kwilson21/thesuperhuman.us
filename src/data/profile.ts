@@ -66,3 +66,16 @@ export const experience = [
     context: ['Worked with retail POS data and built tools for the analysts responsible for its quality. Also mentored interns, including one who later moved into data science.'],
   },
 ] as const;
+
+export const personJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Person',
+  name: 'Kazon Wilson',
+  jobTitle: 'Software Engineer',
+  url: 'https://thesuperhuman.us',
+  sameAs: [
+    'https://github.com/kwilson21',
+    'https://www.linkedin.com/in/kazonwilson/',
+  ],
+  worksFor: { '@type': 'Organization', name: 'The Superhuman Group LLC' },
+};

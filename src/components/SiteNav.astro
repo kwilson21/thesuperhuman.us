@@ -10,7 +10,7 @@ const links = [
   { href: '/writing', label: 'Writing' },
   { href: '/about', label: 'About' },
 ];
-const current = isAudio ? '/about' : Astro.url.pathname.replace(/\/$/, '') || '/';
+const current = isAudio ? '' : Astro.url.pathname.replace(/\/$/, '') || '/';
 const active = (href: string) => href === '/' ? current === '/' : current === href || current.startsWith(`${href}/`);
 ---
 <header class="site-header site-shell">
