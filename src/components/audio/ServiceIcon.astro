@@ -1,0 +1,11 @@
+---
+import type { AudioService } from '~/lib/audio-tracks';
+interface Props { service: AudioService; }
+const { service } = Astro.props;
+---
+<svg viewBox="0 0 64 64" width="56" height="56" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  {service === 'mixing' && <><path d="M12 8v48M32 8v48M52 8v48"/><path d="M5 25h14M25 43h14M45 20h14" stroke="var(--accent)" stroke-width="3"/></>}
+  {service === 'mastering' && <><circle cx="32" cy="32" r="24"/><circle cx="32" cy="32" r="6"/><path d="M34 15a17 17 0 0 1 15 16" stroke="var(--accent)"/></>}
+  {service === 'production' && <><path d="M19 46V16l31-9v33"/><circle cx="12" cy="47" r="7" fill="var(--accent)" stroke="var(--accent)"/><circle cx="43" cy="41" r="7"/></>}
+  {service === 'recording' && <><rect x="24" y="5" width="16" height="34" rx="8"/><path d="M17 28v4a15 15 0 0 0 30 0v-4M32 47v12M22 59h20"/><path d="M30 11h4" stroke="var(--accent)"/></>}
+</svg>

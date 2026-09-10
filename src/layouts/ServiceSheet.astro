@@ -1,0 +1,57 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import ServiceIcon from '~/components/audio/ServiceIcon.astro';
+import SoftwareServiceIllustration from '~/components/SoftwareServiceIllustration.astro';
+import { mainSitePath } from '~/lib/host-routing';
+import type { ServiceSheet } from '~/data/services';
+interface Props { sheet: ServiceSheet; }
+const { sheet } = Astro.props;
+const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ?? Astro.url.host, path);
+---
+<BaseLayout title={`${sheet.title} services · Kazon Wilson`} description={sheet.introduction}>
+  <article class="service-sheet site-shell">
+    <nav class="sheet-navigation" aria-label="Services"><span>Services</span><a href={href('/services')} aria-current={sheet.kind === 'software' ? 'page' : undefined}>Software</a><a href={href('/audio/services')} aria-current={sheet.kind === 'audio' ? 'page' : undefined}>Audio</a></nav>
+    <header class="sheet-hero">
+      <div><h1>{sheet.title}.</h1><p class="sheet-introduction">{sheet.introduction}</p><p class="sheet-approach">{sheet.approach}</p><a class="site-button" href={href(sheet.contact)}>{sheet.contactLabel} <span aria-hidden="true">→</span></a></div>
+      <div class="sheet-illustration">{sheet.kind === 'software' ? <SoftwareServiceIllustration kind="idea" /> : <svg viewBox="0 0 280 140" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 70h42m172 0h42M70 63v14m13-25v36m13-49v62m13-72v82m13-63v44m26-73v104m13-81v58m13-45v32m13-24v16m13-20v24m13-16v8"/><path stroke="var(--accent)" d="M135 9v122M174 42v56"/></svg>}</div>
+    </header>
+    <section aria-label="What I can help with" class="sheet-offerings">{sheet.offerings.map(item => <div class="sheet-offering"><div class="offering-illustration">{item.service ? <ServiceIcon service={item.service} /> : item.illustration && <SoftwareServiceIllustration kind={item.illustration} />}</div><div><h2>{item.label}</h2><p>{item.description}</p>{item.evidence && <a class="offering-evidence" href={href(item.evidence)}>See this website’s redesign <span aria-hidden="true">→</span></a>}</div></div>)}</section>
+    <section class="sheet-background" aria-label="Relevant experience"><p>{sheet.background}</p><a class="site-link" href={href(sheet.evidence)}>{sheet.evidenceLabel} <span aria-hidden="true">→</span></a></section>
+    <section class="sheet-working"><h2>Working together</h2><p>{sheet.working}</p></section>
+    <section class="sheet-contact"><div><h2>{sheet.closing}</h2><p>{sheet.starting}</p></div><a class="site-button" href={href(sheet.contact)}>{sheet.contactLabel} <span aria-hidden="true">→</span></a></section>
+    <div class="sheet-address"><span>kazon.wilson@thesuperhuman.us</span><a href={href(sheet.path)}>thesuperhuman.us{sheet.path}</a></div>
+    <footer class="sheet-footnote"><span>Kazon Wilson · The Superhuman Group LLC</span><button type="button" class="site-button site-button-outline" data-print-sheet><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H3V9h18v9h-3"/><path d="M6 14h12v7H6zM17 12h1"/></svg>Print / Save PDF</button></footer>
+  </article>
+</BaseLayout>
+<script>document.querySelector('[data-print-sheet]')?.addEventListener('click', () => window.print());</script>
+<style>
+  .service-sheet { max-width: 1100px; padding-block: 2rem 3rem; }
+  .sheet-navigation { display: flex; gap: 2rem; align-items: baseline; border-bottom: 1px solid var(--rule); padding-bottom: 1rem; font-size: 1rem; }
+  .sheet-navigation > span { color: var(--muted); }.sheet-navigation a { border-color: transparent; }.sheet-navigation a[aria-current=page] { color: var(--accent); border-color: var(--accent); }
+  .sheet-hero { display: grid; grid-template-columns: 1.55fr 1fr; gap: 3rem; align-items: center; padding-block: 3rem; }
+  h1 { font-size: clamp(3rem,6vw,5rem); line-height: 1.02; max-width: 12ch; margin-bottom: 1.5rem; }
+  h2 { font-size: clamp(1.6rem,3vw,2rem); line-height: 1.15; }
+  p { font-size: 1.2rem; line-height: 1.5; color: var(--muted); }
+  .sheet-introduction { font-size: clamp(1.5rem,2.5vw,1.8rem); line-height: 1.3; color: var(--ink); max-width: 32ch; }
+  .sheet-approach { margin-top: .75rem; }.sheet-hero .site-button { margin-top: 1.5rem; }
+  .sheet-illustration :global(svg), .offering-illustration :global(svg) { width: 100%; height: auto; display: block; }
+  .site-button { gap: .75rem; text-align: center; }
+  .sheet-offerings { border-top: 1px solid var(--rule); }
+  .sheet-offering { display: grid; grid-template-columns: 30% 1fr; gap: 3rem; align-items: center; border-bottom: 1px solid var(--rule); padding-block: 1.75rem; }
+  .sheet-offering p { margin-top: .5rem; }.offering-illustration { display: grid; place-items: center; }.offering-illustration :global(svg[viewBox="0 0 64 64"]) { width: 64px; }
+  .offering-evidence { display: inline-block; font-size: .95rem; margin-top: .6rem; }
+  .sheet-background { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .75rem 2rem; padding-block: 1.5rem; border-bottom: 1px solid var(--rule); }.sheet-background p { font-size: 1rem; }
+  .sheet-working { padding: 1.5rem; margin-top: 1.5rem; background: color-mix(in srgb, var(--paper), var(--rule) 35%); }.sheet-working h2 { font-size: 1.1rem; color: var(--muted); margin-bottom: .5rem; }.sheet-working p { color: var(--ink); font-size: 1.4rem; }
+  .sheet-contact { display: flex; align-items: center; justify-content: space-between; gap: 2rem; margin-top: 2rem; }.sheet-contact > div { max-width: 35ch; }.sheet-contact p { margin-top: .75rem; }.sheet-contact .site-button { flex-shrink: 0; }
+  .sheet-address { display: grid; justify-items: start; gap: .3rem; margin-top: 1.5rem; font-size: 1rem; overflow-wrap: anywhere; }
+  .sheet-footnote { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; border-top: 1px solid var(--rule); margin-top: 2rem; padding-top: 1rem; font: .8rem/1.5 Inter,sans-serif; color: var(--muted); }.sheet-footnote button { min-height: 48px; font: 1rem/1.4 Inter,sans-serif; cursor: pointer; }.sheet-footnote button svg { flex-shrink: 0; }
+  @media screen and (max-width:700px) { .sheet-hero { grid-template-columns: 1fr; gap: 1rem; padding-block: 2rem; }.sheet-illustration { max-width: 220px; justify-self: center; }.sheet-offering { grid-template-columns: 90px 1fr; gap: 1.25rem; }.sheet-offering:has(svg[viewBox="0 0 280 140"]) { grid-template-columns: 1fr; gap: .8rem; }.offering-illustration:has(svg[viewBox="0 0 280 140"]) { width: 180px; }.sheet-contact { align-items: start; flex-direction: column; gap: 1rem; }.sheet-working { padding: 1.2rem; } }
+  @media screen and (max-width:400px) { .sheet-offering { grid-template-columns: 64px 1fr; gap: .8rem; }.sheet-offering:has(svg[viewBox="0 0 280 140"]) { grid-template-columns: 1fr; }.sheet-offering h2 { font-size: 1.45rem; }.sheet-offering p { font-size: 1.05rem; }.sheet-navigation { gap: 1.5rem; } }
+  @media print {
+    @page { size: letter; margin: .55in; }
+    :global(.site-header), :global(.compact-footer), :global(.skip-link), [data-print-sheet], .sheet-navigation, .site-button, .sheet-background .site-link { display: none !important; }
+    .service-sheet { max-width: none; padding: 0; }.sheet-hero { grid-template-columns: 1.6fr 1fr; gap: .3in; padding: 0 0 12pt; } h1 { font-size: 29pt; margin-bottom: 8pt; } h2 { font-size: 15pt; } p { font-size: 10.5pt; line-height: 1.35; }.sheet-introduction { font-size: 15pt; }.sheet-approach { margin-top: 6pt; }
+    .sheet-offering { grid-template-columns: 1.4in 1fr; gap: .25in; padding-block: 7pt; break-inside: avoid; }.offering-illustration :global(svg) { max-height: 48pt; }.offering-illustration :global(svg[viewBox="0 0 64 64"]) { width: 34pt; }.sheet-offering p { margin-top: 3pt; }.offering-evidence { font-size: 9pt; margin-top: 3pt; }
+    .sheet-background { padding-block: 9pt; }.sheet-background p { font-size: 10pt; }.sheet-working { margin-top: 10pt; padding: 10pt; print-color-adjust: exact; }.sheet-working h2 { font-size: 10pt; }.sheet-working p { font-size: 12pt; }.sheet-contact { margin-top: 12pt; }.sheet-contact > div { max-width: none; }.sheet-contact p { margin-top: 4pt; }.sheet-address { font-size: 9pt; margin-top: 8pt; gap: 1pt; }.sheet-footnote { font-size: 8pt; margin-top: 10pt; padding-top: 8pt; }
+  }
+</style>

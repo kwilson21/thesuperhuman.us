@@ -1,0 +1,33 @@
+---
+interface Props { kind: 'bonus' | 'analyst' }
+const { kind } = Astro.props;
+---
+<figure class="work-diagram">
+  {kind === 'bonus' ? <div class="responsibility">
+    <div><p><strong>Before</strong> · A handoff to engineering</p><div class="diagram-flow"><span>Support</span><span aria-hidden="true">→</span><span>On-call engineer</span></div></div>
+    <div><p><strong>After</strong> · Support can run the work</p><div class="diagram-flow"><span>Support</span><span aria-hidden="true">→</span><span class="self-serve">Self-service</span></div></div>
+  </div> : <div class="analyst">
+    <svg viewBox="0 0 460 225" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5">
+      <g transform="translate(28 35) rotate(-7 70 65)"><rect width="116" height="137" rx="3" fill="var(--paper)"/><path stroke="var(--muted)" d="M15 25h85M15 43h85M15 61h85M15 79h85M15 97h85M15 115h85M15 25v90M43 25v90M72 25v90M100 25v90"/><path d="M15 25h85v18H15z" fill="var(--rule)" stroke="none"/></g>
+      <path d="M167 94c26 0 32 30 66 30m-9-7 9 7-9 7M167 155c26 0 32-30 66-30" stroke="var(--accent)"/>
+      <rect x="263" y="56" width="170" height="133" rx="5" fill="var(--paper)"/><path d="M263 81h170M285 68h3m8 0h3m8 0h3M326 110l-17 15 17 15m48-30 17 15-17 15m-32 19 14-40"/><path d="m419 37 8-12m5 20 14-4" stroke="var(--accent)"/>
+    </svg>
+    <div class="diagram-labels"><span>Spreadsheets & scripts</span><span>One internal application</span></div>
+  </div>}
+  <figcaption>{kind === 'bonus' ? 'Illustrated change in responsibility' : 'Illustration of the workflow change'}</figcaption>
+</figure>
+<style>
+  .responsibility, .analyst { padding: 1.75rem; background: #f3eee5; border-radius: 3px; }
+  .responsibility > div + div { border-top: 1px solid #d9d0c2; margin-top: 1.5rem; padding-top: 1.5rem; }
+  .responsibility p { font-size: .9rem; color: var(--muted); }
+  .responsibility strong { font-weight: 500; color: var(--ink); }
+  .diagram-flow { display: grid; grid-template-columns: 1fr auto 1.2fr; gap: .75rem; align-items: center; margin-top: 1rem; font-size: 1.125rem; }
+  .diagram-flow > span:not([aria-hidden]) { border: 1px solid #c5b9a7; border-radius: 3px; min-height: 64px; display: grid; place-items: center; text-align: center; padding: .5rem; }
+  .diagram-flow > .self-serve { border-color: var(--accent) !important; color: var(--accent); }
+  .diagram-flow [aria-hidden] { color: var(--accent); }
+  svg { display: block; width: 100%; }
+  .diagram-labels { display: flex; justify-content: space-between; gap: 2rem; font-size: .85rem; color: var(--muted); }
+  .diagram-labels span { max-width: 45%; }
+  figcaption { font-size: .75rem; color: var(--muted); margin-top: .65rem; }
+  @media(max-width: 400px) { .responsibility, .analyst { padding: 1.1rem; }.diagram-flow { font-size: .95rem; gap: .5rem; } }
+</style>

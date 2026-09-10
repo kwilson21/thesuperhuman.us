@@ -1,41 +1,40 @@
 ---
-import headshot from '~/assets/headshot.jpg';
+import studio from '~/assets/site/studio-v1.webp';
 ---
-<section class="mx-auto max-w-page px-6 pt-16 pb-20 md:pt-24 md:pb-28">
-  <div class="grid gap-10 md:grid-cols-[1.5fr_1fr] md:gap-16 items-start">
-    <div>
-      <div class="eyebrow flex items-center gap-2 mb-9">
-        <span class="inline-block w-1.5 h-1.5 rounded-full" style="background: var(--accent);"></span>
-        Available for contract work · 2026
-      </div>
-
-      <h1 class="display mb-5">Kazon Wilson</h1>
-
-      <p class="lede max-w-measure mb-4" style="color: #2a2a2a;">
-        I'm most useful when a problem cuts <em class="italic">across layers</em>. A UI bug turns out to be a data pipeline issue that turns out to be a business-logic miscommunication.
-      </p>
-
-      <p class="text-base text-muted max-w-measure mb-8">
-        Backend &amp; data engineer · 7+ years of production systems · Contracting through The Superhuman Group LLC.
-      </p>
-
-      <div class="flex flex-wrap gap-4 items-center">
-        <a href="#contact" class="btn-primary" style="border-bottom: none;">Work with me</a>
-        <a href="/work" class="text-base">Engineering work →</a>
-        <a href="/about" class="text-base">About →</a>
-      </div>
-    </div>
-
-    <div class="order-first md:order-last">
-      <img
-        src={headshot.src}
-        alt="Kazon Wilson"
-        width={headshot.width}
-        height={headshot.height}
-        loading="eager"
-        fetchpriority="high"
-        class="w-full max-w-[280px] aspect-[4/5] object-cover object-[center_25%] rounded-sm"
-      />
+<section class="studio-hero site-shell" aria-labelledby="intro-title">
+  <div class="studio-copy">
+    <h1 id="intro-title">Kazon<br />Wilson</h1>
+    <p class="studio-tagline">Software, sound, and things worth exploring.</p>
+    <p class="studio-intro">Software engineer exploring ideas and building with AI.</p>
+    <div class="site-links">
+      <a class="site-link" href="/building">Explore what I’m building <span aria-hidden="true">→</span></a>
+      <a class="site-link" href="/about">About me <span aria-hidden="true">→</span></a>
     </div>
   </div>
+  <div class="studio-art" aria-hidden="true">
+    <img src={studio.src} width={studio.width} height={studio.height} alt="" loading="eager" fetchpriority="high" />
+  </div>
 </section>
+<style>
+  .studio-hero { position: relative; min-height: 610px; padding-block: 3rem 5rem; isolation: isolate; }
+  .studio-copy { position: relative; z-index: 1; max-width: 440px; }
+  h1 { font-size: clamp(5rem, 8.8vw, 7.5rem); line-height: .88; letter-spacing: -.065em; margin: 0 0 1.65rem; }
+  .studio-tagline { font-size: clamp(1.8rem, 2.8vw, 2.25rem); line-height: 1.14; letter-spacing: -.025em; max-width: 420px; margin: 0 0 1.1rem; }
+  .studio-intro { max-width: 340px; color: var(--muted); font-size: 1.125rem; line-height: 1.5; margin: 0 0 1.7rem; }
+  .studio-art { position: absolute; z-index: -1; width: 84%; right: -5%; top: 0; pointer-events: none; }
+  .studio-art :global(img) { width: 100%; height: auto; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 18%, #000 94%, transparent), linear-gradient(to bottom, transparent, #000 12%, #000 80%, transparent); mask-composite: intersect; }
+  @media (max-width: 1232px) and (min-width: 801px) {
+    .studio-hero { min-height: 560px; }
+    .studio-copy { max-width: 360px; }
+    .studio-art { top: 40px; width: 76%; right: 0; }
+  }
+  @media (max-width: 800px) {
+    .studio-hero { min-height: 0; padding-top: 1.5rem; padding-bottom: 0; }
+    .studio-copy { max-width: 480px; }
+    h1 { font-size: clamp(4.7rem, 16vw, 6rem); margin-bottom: 1.25rem; }
+    .studio-tagline { font-size: clamp(1.7rem, 5.8vw, 2.1rem); max-width: 410px; }
+    .studio-intro { font-size: 1.1rem; max-width: 350px; }
+    .studio-art { position: relative; top: auto; right: auto; width: calc(100% + 3rem); margin: -1rem -1.5rem -1rem; }
+    .studio-art :global(img) { mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 85%, transparent); }
+  }
+</style>

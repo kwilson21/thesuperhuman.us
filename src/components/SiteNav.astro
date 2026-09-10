@@ -1,0 +1,59 @@
+---
+import { mainSitePath } from '~/lib/host-routing';
+const host = Astro.request.headers.get('host') ?? Astro.url.host;
+const mainHref = (path: string) => mainSitePath(host, path);
+const isAudio = host.split(':')[0] === 'audio.thesuperhuman.us' || Astro.url.pathname.startsWith('/audio');
+const links = [
+  { href: '/', label: 'Home' },
+  { href: '/work', label: 'Work' },
+  { href: '/building', label: 'Building' },
+  { href: '/writing', label: 'Writing' },
+  { href: '/about', label: 'About' },
+];
+const current = isAudio ? '' : Astro.url.pathname.replace(/\/$/, '') || '/';
+const active = (href: string) => href === '/' ? current === '/' : current === href || current.startsWith(`${href}/`);
+---
+<header class="site-header site-shell">
+  <a class="site-name" href={mainHref('/')}>Kazon Wilson</a>
+  <nav class="desktop-nav" aria-label="Primary">
+    {links.map(({ href, label }) => <a href={mainHref(href)} aria-current={active(href) ? (isAudio ? 'location' : 'page') : undefined}>{label}</a>)}
+  </nav>
+  <a class="desktop-contact site-button site-button-outline" href={mainHref('/#contact')}>Get in touch</a>
+  <details class="mobile-menu">
+    <summary>Menu <span class="menu-mark" aria-hidden="true"><i></i><i></i></span></summary>
+    <nav aria-label="Primary mobile">
+      {links.map(({ href, label }) => <a href={mainHref(href)} aria-current={active(href) ? (isAudio ? 'location' : 'page') : undefined}>{label}</a>)}
+      <a href={mainHref('/#contact')}>Get in touch</a>
+    </nav>
+  </details>
+</header>
+<script>
+  document.querySelectorAll<HTMLDetailsElement>('.mobile-menu').forEach(menu => {
+    menu.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && menu.open) {
+        menu.open = false;
+        menu.querySelector('summary')?.focus();
+      }
+    });
+    menu.querySelectorAll('a').forEach(link => link.addEventListener('click', () => { menu.open = false; }));
+  });
+</script>
+<style>
+  .site-header { display: flex; align-items: center; justify-content: space-between; gap: 2rem; min-height: 112px; position: relative; z-index: 5; }
+  .site-name { font-size: 1.5rem; letter-spacing: -.04em; border: 0; white-space: nowrap; }
+  .desktop-nav { display: flex; gap: 2rem; }
+  nav a { border-bottom: 1px solid transparent; padding: .4rem 0; }
+  nav a[aria-current] { border-color: var(--accent); }
+  .mobile-menu { display: none; }
+  @media (max-width: 800px) {
+    .site-header { min-height: 90px; flex-wrap: wrap; gap: 0; padding-block: 1.25rem; }
+    .desktop-nav, .desktop-contact { display: none; }
+    .mobile-menu { display: block; }
+    summary { display: flex; align-items: center; gap: 14px; min-height: 44px; cursor: pointer; list-style: none; }
+    summary::-webkit-details-marker { display: none; }
+    .menu-mark { width: 25px; display: grid; gap: 7px; }
+    .menu-mark i { height: 1px; background: var(--accent); }
+    .mobile-menu nav { position: absolute; top: calc(100% - 10px); left: 0; right: 0; display: grid; padding: 1rem var(--site-gutter) 1.5rem; background: var(--paper); border-bottom: 1px solid var(--rule); box-shadow: 0 18px 24px -24px #0e0e0e55; }
+    .mobile-menu nav a { min-height: 44px; width: fit-content; }
+  }
+</style>

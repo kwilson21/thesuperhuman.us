@@ -1,7 +1,19 @@
 ---
+import { mainSitePath, audioPath } from '~/lib/host-routing';
+const audioHref = audioPath(Astro.request.headers.get('host') ?? Astro.url.host, '/');
+const servicesHref = mainSitePath(Astro.request.headers.get('host') ?? Astro.url.host, '/services');
+const homeHref = mainSitePath(Astro.request.headers.get('host') ?? Astro.url.host, '/');
 const year = new Date().getFullYear();
+interface Props { compact?: boolean; }
+const { compact = false } = Astro.props;
 ---
-<footer class="border-t border-rule mt-24">
+{compact ? <footer class="compact-footer site-shell">
+  <div class="compact-footer-inner">
+    <a class="footer-name" href={homeHref}>Kazon Wilson</a>
+    <nav aria-label="Elsewhere"><a href="https://github.com/kwilson21">GitHub</a><a href="https://www.linkedin.com/in/kazonwilson/">LinkedIn</a><a href={audioHref}>Audio</a><a href={servicesHref}>Services</a></nav>
+    <p>The Superhuman Group LLC · {year}</p>
+  </div>
+</footer> : <footer class="border-t border-rule mt-24">
   <div class="mx-auto max-w-page px-6 py-12">
     <div class="grid gap-8 md:grid-cols-4 text-sm text-muted">
       <div>
@@ -40,4 +52,12 @@ const year = new Date().getFullYear();
       </div>
     </div>
   </div>
-</footer>
+</footer>}
+<style>
+  .compact-footer-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1.5rem; padding-block: 2rem 3rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: .9rem; }
+  .compact-footer a { border: 0; }
+  .footer-name { font-size: 1.25rem; letter-spacing: -.03em; }
+  nav { display: flex; gap: 1.5rem; }
+  .compact-footer p { margin: 0; }
+  @media (max-width: 600px) { .compact-footer-inner { gap: 1rem; } .compact-footer p { width: 100%; } }
+</style>

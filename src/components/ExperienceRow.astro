@@ -4,13 +4,30 @@ interface Props {
   role: string;
   dates: string;
   outcome: string;
+  id: string;
+  location: string;
+  context: readonly string[];
 }
-const { company, role, dates, outcome } = Astro.props;
+const { company, role, dates, outcome, id, location, context } = Astro.props;
 ---
-<div class="border-t border-rule py-5 grid gap-1 md:grid-cols-[1fr_2fr] md:gap-8 items-baseline">
-  <div>
-    <h3 class="font-serif text-lg" style="font-weight: 500;">{company}</h3>
-    <p class="eyebrow mt-1">{role} · {dates}</p>
-  </div>
-  <p class="text-[1.0625rem] leading-relaxed text-ink max-w-measure">{outcome}</p>
-</div>
+<details id={id + '-background'} class="experience-row">
+  <summary><span class="company">{company}</span><span class="role">{role}</span><span class="dates">{dates}</span><span class="toggle" aria-hidden="true">+</span></summary>
+  <div class="experience-context"><p class="eyebrow">{location}</p><h3>{outcome}</h3><slot />{context.map(paragraph => <p>{paragraph}</p>)}</div>
+</details>
+<style>
+  details { border-top: 1px solid var(--rule); scroll-margin-top: 2rem; }
+  summary { display: grid; grid-template-columns: 1fr 1.45fr 1fr auto; gap: 1rem; align-items: baseline; padding-block: 1rem; cursor: pointer; list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  .company { font-size: 1.125rem; }
+  .role, .dates { color: var(--muted); }
+  .dates { text-align: right; font-size: .875rem; }
+  .toggle { color: var(--accent); }
+  details[open] .toggle { transform: rotate(45deg); }
+  .experience-context { max-width: 44rem; margin: .25rem 0 2rem auto; }
+  .experience-context h3 { font-size: 1.375rem; line-height: 1.35; margin-block: .5rem 1rem; }
+  .experience-context p + p { margin-top: 1rem; }
+  @media (max-width: 650px) {
+    summary { grid-template-columns: 1fr auto; gap: .15rem 1rem; }
+    .company, .role { grid-column: 1; }.dates { grid-column: 1; text-align: left; }.toggle { grid-column: 2; grid-row: 1; }
+  }
+</style>

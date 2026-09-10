@@ -1,0 +1,32 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import Footer from '~/components/Footer.astro';
+import '~/styles/project-journal.css';
+interface Props {
+  title: string;
+  subtitle: string;
+  description: string;
+  status: string;
+  journalHref: string;
+  ogImage?: string;
+}
+const { title, subtitle, description, status, journalHref, ogImage } = Astro.props;
+---
+<BaseLayout title={`${title} · Project journal · Kazon Wilson`} description={description} ogImage={ogImage}>
+  <div class="site-shell project-shell">
+    <header class="project-intro">
+      <p class="page-kicker"><a href="/building">Building</a> / {title}</p>
+      <h1 class="page-title">{title}</h1>
+      <p class="project-subtitle">{subtitle}</p>
+      <p class="project-description">{description}</p>
+      <p class="project-status">{status}</p>
+      <a class="site-link" href={journalHref}>Explore the development <span aria-hidden="true">↓</span></a>
+    </header>
+    <slot />
+    <nav class="project-close" aria-label="Continue exploring">
+      <a class="site-link" href="/building">Back to Building <span aria-hidden="true">←</span></a>
+      <a class="site-link" href="/#contact">Get in touch <span aria-hidden="true">→</span></a>
+    </nav>
+  </div>
+  <Footer compact slot="footer" />
+</BaseLayout>

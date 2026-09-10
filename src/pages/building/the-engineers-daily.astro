@@ -1,26 +1,41 @@
 ---
 export const prerender = false;
-import BaseLayout from '~/layouts/BaseLayout.astro';
-import Footer from '~/components/Footer.astro';
+import ProjectLayout from '~/layouts/ProjectLayout.astro';
+import notebook from '~/assets/site/notebook-v1.webp';
+import preview from '~/assets/projects/daily-preview.webp';
 import ProjectTimeline from '~/components/ProjectTimeline.astro';
 import ProjectUpdates from '~/components/ProjectUpdates.astro';
 import { websiteFeed } from '~/lib/publication/website';
 import story from '~/data/project-stories/the-engineers-daily.json';
-import '~/styles/project-journal.css';
 const feed = await websiteFeed(Astro.locals.runtime.env, story.projectId);
 const asset = (file: string) => `/building/${story.projectId}/${file}`;
 const latest = story.stages.at(-1)!.artifacts[0];
+// This optimized copy belongs only to this captured lesson, not future milestones.
+const latestSrc = latest.file === 'lesson-prototype.png' ? preview.src : asset(latest.file);
 const entries = story.stages.map(stage => ({ id:stage.id, day:stage.day, title:stage.title, summary:stage.summary, detail:stage.decision, artifacts:stage.artifacts.map(image => ({ ...image, src:asset(image.file) })) }));
 Astro.response.headers.set('Cache-Control', 'no-store');
 ---
-<BaseLayout title={`${story.title} · Project journal · Kazon Wilson`} description={story.subtitle} ogImage={asset(story.cover)}>
-  <div class="project-shell">
-    <nav class="project-nav" aria-label="Project navigation"><a href="/">Kazon Wilson</a><a href="/building">All projects</a></nav>
-    <header class="project-intro"><p class="eyebrow">Project journal · Design & development</p><h1>{story.title}</h1><p class="lead">{story.subtitle}</p><p>A real application, built one lesson at a time. Your engineering changes shape a fantasy harbor, alongside Scripture, prayer and reflection.</p><p class="project-note">For people who already code. I’m building the daily practice I want to use myself.</p><p class="intended-experience"><strong>The intended experience:</strong> Read a short harbor story alongside Scripture, make one small change to a real application, then pause for prayer and reflection. Return for the next lesson to keep growing that same application.</p></header>
-    <figure class="project-current"><a href={asset(latest.file)} aria-label="Open the current lesson prototype screenshot"><img src={asset(latest.file)} alt={latest.alt} width={latest.width} height={latest.height} fetchpriority="high" /></a><figcaption><strong>Where it is now · September 9, 2026.</strong> {latest.caption}</figcaption></figure>
-    <p class="project-next"><strong>Next:</strong> {story.next}</p>
-    <ProjectTimeline id="design-history" title="From the first sketch to a lesson" entries={entries} />
-    <p class="project-note">I direct the product and choose the direction, with AI assistance for exploration and implementation. Concepts are visual studies, not working features. Dates record the supported day, not time spent.</p>
-    <ProjectUpdates feed={feed} projectId={story.projectId} title="Development milestones" />
-  </div><Footer slot="footer" />
-</BaseLayout>
+<ProjectLayout title={story.title} subtitle={story.subtitle} description="Engineering practice alongside Scripture, prayer and reflection. For people who already code." status={story.status} journalHref="#design-history-title" ogImage={asset(story.cover)}>
+  <figure class="project-current">
+    <a href={asset(latest.file)} aria-label="Open the current lesson prototype screenshot at full size"><img src={latestSrc} alt={latest.alt} width={latest.width} height={latest.height} fetchpriority="high" /></a>
+    <figcaption>{latest.caption}</figcaption>
+  </figure>
+  <section class="project-section" aria-labelledby="daily-idea">
+    <div class="site-section-heading"><h2 id="daily-idea">Behind the idea</h2></div>
+    <div class="project-pair">
+      <div><h3>A practice I want to return to.</h3><p>I’m designing the daily ritual I want to use myself. One meaningful change, with space for reflection.</p><h3>Let the work shape the story.</h3><p>Over a series, your changes grow a real application and matter to the unfolding life of a fantasy harbor.</p></div>
+      <figure><img src={notebook.src} alt="An open notebook with a sketched path through a landscape." width={notebook.width} height={notebook.height} loading="lazy" /><figcaption class="project-caption">Illustration</figcaption></figure>
+    </div>
+  </section>
+  <section class="project-section" aria-labelledby="daily-state">
+    <div class="site-section-heading"><h2 id="daily-state">Where it stands</h2></div>
+    <div class="project-state">
+      <div><p class="page-kicker">Today</p><p>{story.current}</p></div>
+      <div><p class="page-kicker">Still to build</p><p>Code execution and saved progress.</p></div>
+      <div><p class="page-kicker">Next</p><p>{story.next}</p></div>
+    </div>
+  </section>
+  <ProjectTimeline id="design-history" title="From the first sketch to a lesson" entries={entries} />
+  <p class="project-note">I direct the product and choose the direction, with AI assistance for exploration and implementation. Concepts are visual studies, not working features. Dates record the supported day, not time spent.</p>
+  <ProjectUpdates feed={feed} projectId={story.projectId} title="Development milestones" />
+</ProjectLayout>

@@ -6,9 +6,6 @@ const input: ContactInput = {
   name: 'Jane',
   email: 'jane@example.com',
   company: 'Acme',
-  projectType: ['Backend systems', 'Data pipelines'],
-  timeline: 'Now',
-  budget: '$10–50k',
   description: 'Need help with our ingestion pipeline; can pay well.',
   turnstileToken: 'tok',
 };
@@ -43,7 +40,9 @@ describe('sendContactEmails', () => {
     const primaryBody = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
     expect(primaryBody.to).toContain('kazon.wilson@thesuperhuman.us');
     expect(primaryBody.reply_to).toBe('jane@example.com');
-    expect(primaryBody.subject).toContain('Jane');
+    expect(primaryBody.subject).toBe('New message from Jane');
+    expect(primaryBody.text).toContain('Message:');
+    expect(primaryBody.text).not.toMatch(/Project type:|Timeline:|Budget:|undefined/);
   });
 
   it('autoresponder goes to the visitor email', async () => {
@@ -58,6 +57,8 @@ describe('sendContactEmails', () => {
     const autoBody = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string);
     expect(autoBody.to).toContain('jane@example.com');
     expect(autoBody.subject).toMatch(/thanks/i);
+    expect(autoBody.text).toContain('https://thesuperhuman.us/about#resumes');
+    expect(autoBody.text).not.toMatch(/DoD|two business days/);
   });
 
   it('returns ok=false if primary email fails', async () => {

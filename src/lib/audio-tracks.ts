@@ -8,7 +8,7 @@ export interface AudioTrack {
   year: number;
   role: AudioRole[];
   primaryService: AudioService;
-  notes: string;
+  notes?: string;
   file: string;
   length: string;
   featured: boolean;

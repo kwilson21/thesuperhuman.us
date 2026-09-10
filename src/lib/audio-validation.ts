@@ -50,8 +50,8 @@ export function validateAudioInquiry(input: unknown): AudioValidationResult {
 
   let trackCount: number | undefined = undefined;
   if (v.trackCount !== null && v.trackCount !== undefined && v.trackCount !== '') {
-    const n = typeof v.trackCount === 'number' ? v.trackCount : parseInt(String(v.trackCount), 10);
-    if (Number.isFinite(n) && n >= 1 && n <= 1000) trackCount = n;
+    const n = typeof v.trackCount === 'number' || typeof v.trackCount === 'string' ? Number(v.trackCount) : NaN;
+    if (Number.isInteger(n) && n >= 1 && n <= 1000) trackCount = n;
     else errors.trackCount = 'Track count must be a positive integer.';
   }
 

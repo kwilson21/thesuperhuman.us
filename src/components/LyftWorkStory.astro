@@ -1,3 +1,6 @@
+---
+import { lyftBonus } from '~/data/profile';
+---
 <section class="lyft-story" aria-labelledby="lyft-bonus-title" data-lyft-story>
   <p class="eyebrow">A closer look · Bulk bonus refactor</p>
   <h4 id="lyft-bonus-title">More rows. More independence for support.</h4>
@@ -6,11 +9,11 @@
   <figure class="capacity" aria-labelledby="lyft-capacity-caption">
     <figcaption id="lyft-capacity-caption" class="eyebrow">Rows handled per batch</figcaption>
     <div class="capacity-row">
-      <div class="capacity-label"><span>Before</span><strong>5,000 <small>row limit</small></strong></div>
+      <div class="capacity-label"><span>Before</span><strong>{lyftBonus.before} <small>row limit</small></strong></div>
       <div class="capacity-track" aria-hidden="true"><span class="capacity-bar before-bar"></span></div>
     </div>
     <div class="capacity-row">
-      <div class="capacity-label"><span>After</span><strong>100,000+ <small>rows handled</small></strong></div>
+      <div class="capacity-label"><span>After</span><strong>{lyftBonus.after} <small>rows handled</small></strong></div>
       <div class="capacity-track" aria-hidden="true"><span class="capacity-bar after-bar"></span></div>
     </div>
     <p class="scale-note">Same scale; the after bar shows the 100,000-row lower bound.</p>
@@ -41,7 +44,7 @@
       </ol>
     </figure>
   </div>
-  <p class="evidence-note">Illustrations based on my <a href="/about#lyft--software-engineer">career account</a>. Capacity figures are owner-reported, not newly benchmarked. The workflow shows the change in responsibility, not elapsed time.</p>
+  <p class="evidence-note">Illustrations based on my <a href="/work#lyft-background">career account</a>. Capacity figures are owner-reported, not newly benchmarked. The workflow shows the change in responsibility, not elapsed time.</p>
 </section>
 
 <script>

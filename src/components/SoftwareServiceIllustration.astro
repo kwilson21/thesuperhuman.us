@@ -1,0 +1,15 @@
+---
+import type { SoftwareIllustration } from '~/data/services';
+interface Props { kind: SoftwareIllustration; }
+const { kind } = Astro.props;
+---
+<svg viewBox="0 0 280 140" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  {kind === 'idea' && <><path d="M45 66c-24-27-8-49 11-49s35 22 11 49l-4 12H49zM49 85h14M52 91h8M56 5v-5M26 17l-7-7M85 17l7-7"/><path d="M77 55c57-10 10 54 63 47m-7-7 7 7-9 5" stroke="var(--accent)"/></>}
+  {kind === 'prototype' && <><g transform="rotate(-8 51 70)"><rect x="16" y="27" width="70" height="87" rx="2"/><path d="M30 48h40M30 65h30M30 82h36"/></g><path d="M104 72h34m-8-6 8 6-8 6" stroke="var(--accent)"/></>}
+  {kind === 'product' && <><circle cx="49" cy="33" r="11"/><path d="M31 63c0-24 36-24 36 0"/><circle cx="24" cy="84" r="10"/><circle cx="75" cy="84" r="10"/><path d="M6 116c0-24 36-24 36 0M57 116c0-24 36-24 36 0"/><path d="M103 72h35m-8-6 8 6-8 6" stroke="var(--accent)"/></>}
+  {kind === 'integration' && <><rect x="9" y="37" width="78" height="72" rx="4"/><ellipse cx="48" cy="57" rx="17" ry="6"/><path d="M31 57v30c0 8 34 8 34 0V57M31 72c0 8 34 8 34 0"/><path d="M87 73h75" stroke="var(--accent)"/><circle cx="124" cy="73" r="6" fill="var(--paper)"/></>}
+  {kind === 'website' && <><rect x="16" y="23" width="85" height="92" rx="3"/><path d="M16 40h85M27 54h33v24H27zM68 54h20M68 64h20M27 92h60M27 102h43"/><path d="M112 73h26m-8-6 8 6-8 6" stroke="var(--accent)"/></>}
+  <rect x="162" y="34" width="103" height="80" rx="4"/>
+  <path d="M162 51h103M173 43h1m7 0h1m7 0h1"/>
+  {kind === 'integration' ? <><path d="M190 68h54M190 82h54M190 96h36"/><path d="M176 68h2m-2 14h2m-2 14h2" stroke="var(--accent)"/></> : <><rect x="175" y="62" width="26" height="20" rx="2" fill="var(--accent)" stroke="none"/><path d="M211 66h40M211 77h29M175 94h76M175 103h51"/></>}
+</svg>

@@ -1,6 +1,7 @@
 ---
 import '~/styles/global.css';
 import { publicCanonicalFor } from '~/lib/canonical';
+import SiteNav from '~/components/SiteNav.astro';
 
 interface Props {
   title: string;
@@ -61,6 +62,7 @@ function jsonLdString(data: object): string {
   </head>
   <body class="bg-paper text-ink font-serif">
     <a href="#main" class="skip-link">Skip to content</a>
+    <SiteNav />
     <main id="main" tabindex="-1">
       <slot />
     </main>

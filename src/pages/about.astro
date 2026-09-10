@@ -1,94 +1,94 @@
 ---
 export const prerender = false;
 import { getEntry } from 'astro:content';
-import headshot from '~/assets/headshot.jpg';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import Footer from '~/components/Footer.astro';
-import ResumeCard from '~/components/ResumeCard.astro';
 import ResumeRequestForm from '~/components/ResumeRequestForm.astro';
-
+import { personJsonLd, experience, workFocus, workingPreference } from '~/data/profile';
+import terrain from '~/assets/site/terrain-v1.webp';
+import headphones from '~/assets/site/headphones-v1.webp';
+import laptop from '~/assets/site/laptop-v1.webp';
+import controller from '~/assets/site/controller-v1.webp';
+import notebook from '~/assets/site/notebook-v1.webp';
 const entry = await getEntry('pages', 'about');
-if (!entry) throw new Error('about content missing');
+if (!entry) throw new Error('About content missing');
 const { Content } = await entry.render();
-
-const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'Person',
-  name: 'Kazon Wilson',
-  jobTitle: 'Software Engineer',
-  url: 'https://thesuperhuman.us',
-  sameAs: [
-    'https://github.com/kwilson21',
-    'https://www.linkedin.com/in/kazonwilson/',
-  ],
-  worksFor: { '@type': 'Organization', name: 'The Superhuman Group LLC' },
-};
+const chapters = [
+  { id: 'audio', label: 'Audio', title: 'I started with sound.', text: 'I studied audio production at Middle Tennessee State, with a minor in computer science. Audio is still part of my life.', image: headphones, href: '/audio/', link: 'Explore audio engineering' },
+  { id: 'software', label: 'Software', title: 'Finding my way into software.', text: 'I came into software through data, learning by making messy information useful. That grew into work across backend systems, data engineering, and product.', image: laptop, href: '/work', link: 'See my professional work' },
+  { id: 'play', label: 'Play', title: 'Room for play.', text: 'Retro games, emulation, and experimental tools keep giving me new things to explore.', image: controller, href: '/building', link: 'See what I’m building' },
+  { id: 'whats-next', label: 'What’s next', title: 'Making room for what comes next.', text: workFocus, image: notebook, extra: workingPreference },
+];
 ---
-<BaseLayout
-  title={entry.data.title}
-  description={entry.data.description}
-  jsonLd={jsonLd}
->
-  <article class="mx-auto max-w-content px-6 py-16 md:py-24">
-    <header class="mb-12 flex items-start gap-6">
-      <img
-        src={headshot.src}
-        alt="Kazon Wilson"
-        width={headshot.width}
-        height={headshot.height}
-        class="w-24 md:w-32 aspect-[4/5] object-cover object-[center_25%] rounded-sm"
-      />
-      <div>
-        <h1 class="display mb-2">Kazon Wilson</h1>
-        <p class="text-muted text-sm md:text-base">
-          Software engineer · Fairfield, CT → Northern Virginia · Available for contract work.
-        </p>
-      </div>
+<BaseLayout jsonLd={personJsonLd} title={entry.data.title} description={entry.data.description}>
+  <div class="about-page">
+    <header class="site-shell about-intro">
+      <div class="about-intro-copy"><p class="page-kicker">About</p><h1 class="page-title">A little more<br />about me.</h1><div class="page-lede"><Content /></div><nav class="site-links" aria-label="About chapters"><a class="site-link" href="#audio">Audio <span aria-hidden="true">→</span></a><a class="site-link" href="#software">Software <span aria-hidden="true">→</span></a><a class="site-link" href="#play">Play <span aria-hidden="true">→</span></a><a class="site-link" href="#whats-next">What’s next <span aria-hidden="true">→</span></a></nav></div>
+      <img class="terrain" src={terrain.src} width={terrain.width} height={terrain.height} alt="" fetchpriority="high" />
     </header>
-
-    <div class="prose-about prose-editorial">
-      <Content />
+    <div class="site-shell path-chapters">
+      {chapters.map((chapter, index) => <section id={chapter.id} class:list={['path-chapter', { reverse: index % 2 === 1 }]}>
+        <div class="chapter-copy"><p class="page-kicker">{chapter.label}</p><h2>{chapter.title}</h2><p>{chapter.text}</p>{chapter.extra && <p class="chapter-extra">{chapter.extra}</p>}{chapter.href && <a class="site-link" href={chapter.href}>{chapter.link} <span aria-hidden="true">→</span></a>}</div>
+        <div class="chapter-art"><img src={chapter.image.src} width={chapter.image.width} height={chapter.image.height} alt="" loading="lazy" /></div>
+        <svg class="chapter-path" viewBox="0 0 1000 500" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d={index % 2 === 0 ? 'M780 0C780 120 930 260 780 330C630 400 280 340 280 500' : 'M280 0C280 120 130 260 280 330C430 400 780 340 780 500'} fill="none" stroke="var(--accent)" stroke-width="1.4" vector-effect="non-scaling-stroke" /></svg>
+      </section>)}
+      <section id="contact" class="about-connect"><p class="page-kicker">Let’s connect</p><h2>Let’s find a connection.</h2><p>An interesting idea, a shared interest, or a promising opportunity.</p><div class="site-links"><a class="site-button" href="/#contact">Get in touch</a><a class="site-link" href="#resumes">Looking for my resume? Request a copy <span aria-hidden="true">→</span></a></div></section>
+      <details id="resumes" class="resume-section context-disclosure"><summary>Request my resume <span aria-hidden="true">+</span></summary><div><h2>My professional background.</h2><p class="resume-description">One general resume, covering my work history and technical experience.</p><ResumeRequestForm /></div></details>
+      <div class="legacy-career-links" aria-label="Previous career links">{experience.map(job => <p id={job.legacyId}>My career history now lives on Work. <a href={'/work#' + job.id + '-background'}>Read about {job.company} <span aria-hidden="true">→</span></a></p>)}<p id="selected-work">My professional background is on <a href="/work">Work</a>.</p></div>
     </div>
-    <section id="resumes" class="mt-20 pt-16 border-t border-rule">
-      <h2 class="font-serif text-3xl mb-2">Resume · request the one that matches your role</h2>
-      <p class="text-muted mb-10 max-w-measure">
-        My resumes contain personal contact details, so each one is delivered by approval rather than direct download. Pick the version you want, fill in the short form below, and I'll send it within a business day.
-      </p>
-      <div class="grid gap-5 md:grid-cols-2 md:grid-rows-[auto_auto_auto_auto] md:gap-y-3">
-        <ResumeCard
-          title="General"
-          audience="Hiring senior backend or data engineering contract work?"
-          description="Full work history with technical depth and cross-team contributions. The default choice for commercial engagements."
-          audienceKey="general"
-        />
-        <ResumeCard
-          title="DoD-focused"
-          audience="Hiring for federal, defense, or government-adjacent work?"
-          description="Tailored for DoD format and contracting context. U.S. citizen, eligible for and willing to obtain DoD security clearance."
-          audienceKey="dod"
-        />
-      </div>
-
-      <div class="mt-12 pt-12 border-t border-rule">
-        <h3 class="font-serif text-2xl mb-6" style="font-weight: 500;">Request form</h3>
-        <ResumeRequestForm />
-      </div>
-    </section>
-  </article>
-
-  <Footer slot="footer" />
+  </div><Footer compact slot="footer" />
 </BaseLayout>
+<script>
+  function openResume() {
+    const section = document.getElementById('resumes');
+    if (section instanceof HTMLDetailsElement) { section.open = true; section.scrollIntoView(); }
+  }
+  function revealResume() {
+    if (location.hash === '#resumes' || location.hash === '#resume-request-form') openResume();
+  }
+  document.querySelectorAll('a[href="#resumes"]').forEach(link => link.addEventListener('click', openResume));
+  revealResume();
+  window.addEventListener('hashchange', revealResume);
 
-<style is:global>
-  .prose-editorial { font-family: theme('fontFamily.serif'); color: var(--ink); }
-  .prose-editorial > * + * { margin-top: 1.5em; }
-  .prose-editorial h2 { font-size: 1.75rem; margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--rule); }
-  .prose-editorial h3 { font-size: 1.25rem; margin-top: 2rem; font-weight: 500; }
-  .prose-editorial p { font-size: 1.0625rem; line-height: 1.65; max-width: 38rem; }
-  .prose-editorial p em { font-style: italic; }
-  .prose-editorial strong { font-weight: 600; }
-  .prose-editorial hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0; max-width: 38rem; }
-  .prose-editorial ul { padding-left: 1.25rem; max-width: 38rem; }
-  .prose-editorial li { font-size: 1.0625rem; line-height: 1.65; }
-  .prose-editorial a { border-bottom: 1px solid var(--accent); }
+  if ('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const paths = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('trace-path');
+        paths.unobserve(entry.target);
+      });
+    }, { threshold: .25 });
+    document.querySelectorAll('.chapter-path').forEach(path => {
+      path.classList.add('trace-ready');
+      paths.observe(path);
+    });
+  }
+</script>
+<style>
+  .about-page { overflow: clip; }
+  .about-intro { position: relative; padding-top: 4rem; min-height: 640px; }
+  .about-intro-copy { position: relative; z-index: 1; max-width: 34rem; }
+  .about-intro .page-lede { max-width: 30rem; }.about-intro .site-links { margin-top: 2rem; gap: 1rem 1.5rem; }
+  .terrain { position: absolute; width: 90%; max-width: none; right: -16%; top: -1rem; z-index: 0; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 28%, #000 85%, transparent), linear-gradient(to bottom, #000 75%, transparent); mask-composite: intersect; pointer-events: none; }
+  .path-chapter { position: relative; display: grid; grid-template-columns: 1fr 1.2fr; align-items: center; gap: 2rem; min-height: 465px; padding-bottom: 100px; scroll-margin-top: 3rem; }
+  .chapter-copy { position: relative; z-index: 2; max-width: 30rem; }.chapter-copy h2 { font-size: clamp(2.2rem, 3.7vw, 3.2rem); line-height: 1.1; letter-spacing: -.035em; }.chapter-copy > p:not(.page-kicker) { font-size: 1.2rem; line-height: 1.5; color: var(--muted); margin-top: 1rem; }.chapter-copy .site-link { margin-top: 1.5rem; }.chapter-copy > p.chapter-extra { font-size: 1.05rem; }
+  .chapter-art { position: relative; z-index: 1; }.chapter-art img { width: 115%; max-width: none; height: auto; margin-left: -5%; mix-blend-mode: multiply; mask-image: radial-gradient(ellipse at center, #000 40%, transparent 72%); }
+  .reverse { grid-template-columns: 1.2fr 1fr; }.reverse .chapter-copy { grid-column: 2; grid-row: 1; }.reverse .chapter-art { grid-column: 1; grid-row: 1; }
+  .chapter-path { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: .6; pointer-events: none; }
+  @media (prefers-reduced-motion: no-preference) {
+    .trace-ready path { stroke-dasharray: 1; stroke-dashoffset: 1; }
+    .trace-path path { animation: trace-chapter 1.2s ease-out both; }
+    @keyframes trace-chapter { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+  }
+  .about-connect { position: relative; z-index: 1; padding-block: 2rem 3rem; }.about-connect h2 { font-size: clamp(2.5rem, 5vw, 4rem); line-height: 1.1; letter-spacing: -.035em; }.about-connect > p:not(.page-kicker) { color: var(--muted); font-size: 1.25rem; margin-block: 1rem 1.5rem; }
+  .resume-section { margin: 0 0 3rem; border-top: 1px solid var(--rule); padding-top: 1.5rem; }.resume-section > div { max-width: 46rem; padding-top: 1rem; }.resume-section h2 { font-size: 2rem; }.resume-description { margin-block: .5rem 2rem; color: var(--muted); }
+  .legacy-career-links > p { display: none; }.legacy-career-links > p:target { display: block; border-top: 1px solid var(--rule); padding-block: 2rem; }
+  @media(min-width: 801px) and (max-width: 1100px) { .about-intro { min-height: 590px; }.terrain { top: 6rem; }.path-chapter { min-height: 430px; }.about-intro-copy { max-width: 30rem; } }
+  @media(max-width: 800px) {
+    .about-intro { padding-top: 2rem; min-height: auto; }.about-intro-copy { max-width: 36rem; }.terrain { position: relative; width: 125%; right: auto; top: auto; margin: -1rem 0 -1rem -10%; mask-image: radial-gradient(ellipse at center, #000 40%, transparent 72%); }
+    .path-chapter, .reverse { display: flex; flex-direction: column; align-items: stretch; gap: 0; padding-bottom: 3.5rem; min-height: auto; }
+    .chapter-copy { max-width: 36rem; }.chapter-art img { width: 110%; margin-left: -5%; }.chapter-art { margin-top: -.25rem; }
+    .chapter-path { top: auto; bottom: 0; height: 75px; width: 80%; left: 10%; opacity: .5; }.path-chapter + .path-chapter { padding-top: 1rem; }
+    .about-connect { padding-top: 1.5rem; }.about-connect .site-links { align-items: flex-start; flex-direction: column; }
+  }
 </style>

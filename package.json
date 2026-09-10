@@ -10,6 +10,8 @@
     "dev": "astro dev",
     "start": "astro dev",
     "build": "astro build",
+    "prebuild": "npm run assets:check",
+    "assets:check": "node scripts/check-asset-qa.mjs",
     "preview": "astro preview",
     "check": "astro check",
     "test": "vitest run",

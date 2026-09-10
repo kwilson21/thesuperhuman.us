@@ -26,7 +26,7 @@ const audioTracks = defineCollection({
     year: z.number().int().min(1900).max(2100),
     role: z.array(z.enum(['mix', 'master', 'produce', 'record'])).min(1),
     primaryService: z.enum(['mixing', 'mastering', 'production', 'recording']),
-    notes: z.string().min(1),
+    notes: z.string().optional(),
     file: z.string().regex(/^tracks\/[a-z0-9-]+\.mp3$/),
     length: z.string().regex(/^\d{1,2}:\d{2}$/),
     featured: z.boolean().default(false),

@@ -14,3 +14,13 @@ export function rewritePathForHost(host: string, pathname: string): string | nul
   if (pathname === '/') return '/audio/';
   return `/audio${pathname}`;
 }
+
+/** Main-site links must leave the Audio host; local previews stay local. */
+export function mainSitePath(host: string, pathname: string): string {
+  return host.split(':')[0].toLowerCase() === AUDIO_HOST ? `https://thesuperhuman.us${pathname}` : pathname;
+}
+
+/** Audio routes are mounted at / on their host and /audio in the main preview. */
+export function audioPath(host: string, pathname: string): string {
+  return host.split(':')[0].toLowerCase() === AUDIO_HOST ? pathname : `/audio${pathname}`;
+}

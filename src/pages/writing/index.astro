@@ -1,0 +1,41 @@
+---
+export const prerender = false;
+import { getEntry } from 'astro:content';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Footer from '~/components/Footer.astro';
+import { websiteStory } from '~/data/project-stories/personal-website';
+const essay = await getEntry('pages', 'ai-gives-you-speed');
+if (!essay) throw new Error('AI essay content missing');
+---
+<BaseLayout title="Writing · Kazon Wilson" description="Notes on engineering, tools, and the choices behind the work.">
+  <div class="site-shell primary-page writing-page">
+    <header><h1 class="page-title">Writing</h1><p class="page-lede">Notes on engineering, tools,<br />and the choices behind the work.</p></header>
+    <article class="essay-feature">
+      <div><p class="page-kicker">AI-assisted engineering</p><h2>{essay.data.title}</h2><p>{essay.data.description}</p><a class="site-link" href="/writing/ai-gives-you-speed">Read the essay <span aria-hidden="true">→</span></a></div>
+      <figure>
+        <svg viewBox="0 0 550 410" role="img" aria-labelledby="direction-title direction-desc" fill="none">
+          <title id="direction-title">Finding direction through small corrections</title><desc id="direction-desc">A terracotta path makes its way toward an arrow, passing through four checkpoints. Dashed branches explore other directions.</desc>
+          <path d="M357 368C231 342 255 301 164 304S56 269 128 244 262 247 307 201 408 212 369 147 422 115 470 66" stroke="var(--accent)" stroke-width="3.5"/>
+          <path d="m449 72 24-10-4 25" stroke="var(--accent)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M164 304c68-33 176 14 140-33s-128-16-71-61 23-78-23-64 20-69-46-59M369 147c-58-18-48-58-7-52s28-52 55-46" stroke="#aaa18f" stroke-width="1.5" stroke-dasharray="6 8"/>
+          {[{x:164,y:304},{x:128,y:244},{x:307,y:201},{x:369,y:147}].map(point => <circle cx={point.x} cy={point.y} r="6" fill="var(--paper)" stroke="var(--accent)" stroke-width="3" />)}
+          <g stroke="#9a967e" stroke-width="1.5" stroke-linecap="round"><path d="M104 197q-12-20-11-44m11 44q8-23 20-32m-20 32q-22-12-29-25m317 148q-12-25-8-56m8 56q5-23 18-40m-18 40q-21-13-24-29"/></g>
+        </svg><figcaption>Illustration</figcaption>
+      </figure>
+    </article>
+    <section id="website-redesign" class="writing-invitation"><p class="page-kicker">Topic in progress</p><h2>{websiteStory.essayTitle}</h2><p>{websiteStory.essayDescription}</p><a class="site-link" href="/building/personal-website">Explore the design notes <span aria-hidden="true">→</span></a></section>
+    <section class="writing-invitation"><h2>Have a thought to share?</h2><p>Ideas, opportunities, or a good conversation.</p><a class="site-link" href="/#contact">Get in touch <span aria-hidden="true">→</span></a></section>
+  </div><Footer compact slot="footer" />
+</BaseLayout>
+<style>
+  .writing-page header { padding-bottom: 2.5rem; }
+  .writing-page header h1 { font-size: clamp(4.5rem, 8vw, 7rem); }
+  .essay-feature { display: grid; grid-template-columns: 1fr 1.2fr; gap: 3rem; align-items: center; padding-block: 3rem; border-top: 1px solid var(--rule); }
+  .essay-feature h2 { font-size: clamp(2rem, 3.8vw, 3.15rem); line-height: 1.14; letter-spacing: -.035em; }
+  .essay-feature p:not(.page-kicker) { font-size: 1.25rem; line-height: 1.5; color: var(--muted); margin-block: 1.25rem 2.5rem; }
+  figure svg { display: block; width: 100%; background: #f3eee5; border-radius: 3px; }
+  figcaption { text-align: right; color: var(--muted); font-size: .8rem; margin-top: .5rem; }
+  .writing-invitation { padding-block: 2.5rem; border-top: 1px solid var(--rule); }
+  .writing-invitation h2 { font-size: 2rem; line-height: 1.2; }.writing-invitation p { font-size: 1.2rem; color: var(--muted); margin-block: .5rem 1rem; }
+  @media(max-width: 800px) { .essay-feature { grid-template-columns: 1fr; gap: 2rem; }.essay-feature p:not(.page-kicker) { margin-bottom: 1.5rem; } }
+</style>

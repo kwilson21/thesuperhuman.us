@@ -1,166 +1,165 @@
 ---
 export const prerender = false;
+import { getEntry } from 'astro:content';
+import { lyftBonus } from '~/data/profile';
 import BaseLayout from '~/layouts/BaseLayout.astro';
-import LiveWorkFeed from '~/components/LiveWorkFeed.astro';
-import DesignStoryPreview from '~/components/DesignStoryPreview.astro';
-import { websiteFeed } from '~/lib/publication/website';
-const feed = await websiteFeed(Astro.locals.runtime.env);
-Astro.response.headers.set('Cache-Control', 'no-store');
 import Hero from '~/components/Hero.astro';
-import WhatIDo from '~/components/WhatIDo.astro';
-import ProjectCard from '~/components/ProjectCard.astro';
-import ExperienceRow from '~/components/ExperienceRow.astro';
 import Footer from '~/components/Footer.astro';
 import ContactForm from '~/components/ContactForm.astro';
-
+import threadline from '~/assets/site/threadline-v1.webp';
+import notebook from '~/assets/site/notebook-v1.webp';
+import interests from '~/assets/site/interests-v1.webp';
+import dailyPreview from '~/assets/projects/daily-preview.webp';
+import dailyStory from '~/data/project-stories/the-engineers-daily.json';
+const essay = await getEntry('pages', 'ai-gives-you-speed');
+if (!essay) throw new Error('AI essay content missing');
 const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'Person',
-  name: 'Kazon Wilson',
-  jobTitle: 'Software Engineer',
-  url: 'https://thesuperhuman.us',
-  sameAs: [
-    'https://github.com/kwilson21',
-    'https://www.linkedin.com/in/kazonwilson/',
-  ],
+  '@context': 'https://schema.org', '@type': 'Person', name: 'Kazon Wilson',
+  jobTitle: 'Software Engineer', url: 'https://thesuperhuman.us',
+  sameAs: ['https://github.com/kwilson21', 'https://www.linkedin.com/in/kazonwilson/'],
   worksFor: { '@type': 'Organization', name: 'The Superhuman Group LLC' },
 };
 ---
-<BaseLayout
-  title="Kazon Wilson · Backend & data engineer, available for contract work"
-  description="Backend and data engineer with 7+ years of production systems. Contracting through The Superhuman Group LLC."
-  jsonLd={jsonLd}
->
-  <Hero />
-  <DesignStoryPreview />
-  <LiveWorkFeed feed={feed} />
-
-  <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
-    <p class="text-[1.0625rem] leading-relaxed max-w-measure">
-      Seven-plus years building production systems in Python, with side trips through Ruby on Rails, TypeScript, and the messy real world of healthcare credentialing, insurance documents, and POS data ingestion. I'm currently taking on contract work through The Superhuman Group LLC: backend systems, data pipelines, and the kind of cross-team product work where someone has to chase a problem through three layers of stack.
-    </p>
-  </section>
-
-  <WhatIDo />
-
-  <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
-    <h2 class="heading mb-6">How I work with AI</h2>
-    <p class="text-[1.0625rem] leading-relaxed max-w-measure mb-4">
-      This site and the work below were built with AI assistance. I want to be upfront about that.
-    </p>
-    <p class="text-[1.0625rem] leading-relaxed max-w-measure">
-      What I'm selling isn't the ability to write code by hand. It's the ability to ship AI-assisted code that's safe, secure, and not bug-riddled. The kind of work you can take to production and sleep at night.
-    </p>
-  </section>
-
-  <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
-    <h2 class="heading mb-10">Recent work</h2>
-    <div class="space-y-12">
-      <ProjectCard
-        name="Superhuman Finance"
-        url="https://finance.thesuperhuman.us"
-        description="A personal finance app with Plaid integration. Automated transaction ingestion, smart categorization, and budget tracking with mobile-first UX."
-        stack={['Django', 'HTMX', 'Alpine.js', 'Tailwind', 'PostgreSQL', 'Plaid']}
-      />
-      <ProjectCard
-        name="Kaillera Next"
-        url="https://kaillera-next.thesuperhuman.us"
-        description="Play N64 games online with friends in your browser. No install needed. WebRTC netplay with a custom rollback engine, powered by EmulatorJS."
-        stack={['FastAPI', 'Socket.IO', 'WebRTC', 'EmulatorJS', 'Redis']}
-      />
+<BaseLayout title="Kazon Wilson · Software, sound, and things worth exploring" description="Software engineer exploring ideas and building with AI. Discover my projects, engineering work, writing, and continuing practice in sound." jsonLd={jsonLd}>
+  <div class="home-page">
+    <Hero />
+    <div class="site-shell">
+      <section class="building-section" aria-labelledby="building-title">
+        <div class="site-section-heading"><h2 id="building-title">Currently building</h2><a class="all-projects site-link" href="/building">All projects <span aria-hidden="true">→</span></a></div>
+        <div class="project-grid">
+          <article class="daily-preview">
+            <a class="project-art daily-art" href="/building/the-engineers-daily" aria-label="Explore The Engineer’s Daily journal">
+              <img src={dailyPreview.src} alt="The Engineer’s Daily local lesson prototype, with a harbor story and a code exercise." width="1440" height="1000" loading="lazy" />
+            </a>
+            <div class="project-copy">
+              <p class="art-caption">Local prototype</p>
+              <h3>{dailyStory.title}</h3>
+              <p>{dailyStory.subtitle}</p>
+              <a class="site-link" href="/building/the-engineers-daily">Explore the journal <span aria-hidden="true">→</span></a>
+            </div>
+          </article>
+          <article class="threadline-preview">
+            <a class="project-art threadline-art" href="/building/threadline" aria-label="Explore Threadline">
+              <img src={threadline.src} width={threadline.width} height={threadline.height} alt="" loading="lazy" />
+              <span class="illustration-label">Illustration</span>
+            </a>
+            <div class="project-copy">
+              <h3>Threadline</h3>
+              <p>Finding your way back to interrupted work.</p>
+              <a class="site-link" href="/building/threadline">Explore the project <span aria-hidden="true">→</span></a>
+            </div>
+          </article>
+        </div>
+      </section>
+      <section class="site-section" aria-labelledby="work-title">
+        <div class="site-section-heading"><h2 id="work-title">Work highlights</h2></div>
+        <div class="work-preview">
+          <p class="work-company">Lyft</p>
+          <div class="work-outcome"><p class="work-figure">{lyftBonus.before} <span aria-hidden="true">→</span><span class="sr-only">to</span> {lyftBonus.after} rows</p><p>More capacity. More independence for support.</p><p class="source-note">{lyftBonus.evidence}</p></div>
+          <a class="site-link" href="/work#lyft">Explore my work <span aria-hidden="true">→</span></a>
+        </div>
+      </section>
+      <section class="site-section" aria-labelledby="writing-title">
+        <div class="site-section-heading"><h2 id="writing-title">Writing</h2></div>
+        <article class="editorial-pair writing-preview">
+          <div class="editorial-art notebook-art"><img src={notebook.src} width={notebook.width} height={notebook.height} alt="" loading="lazy" /></div>
+          <div class="editorial-copy"><h3>{essay.data.title}</h3><a class="site-link" href="/writing/ai-gives-you-speed">Read the essay <span aria-hidden="true">→</span></a></div>
+        </article>
+      </section>
+      <section class="site-section" aria-labelledby="beyond-title">
+        <div class="site-section-heading"><h2 id="beyond-title">Beyond the code</h2></div>
+        <div class="editorial-pair beyond-preview">
+          <div class="editorial-art interests-art"><img src={interests.src} width={interests.width} height={interests.height} alt="" loading="lazy" /></div>
+          <div class="editorial-copy"><p class="interest-intro">Audio, retro games, and the things that keep me curious.</p><div class="site-links"><a class="site-link" href="/about">More about me <span aria-hidden="true">→</span></a><a class="site-link" href="/audio/">Audio engineering <span aria-hidden="true">→</span></a></div></div>
+        </div>
+      </section>
+      <section id="contact" class="site-section contact-section" aria-labelledby="contact-title">
+        <div class="contact-intro"><div><h2 id="contact-title">Have something in mind?<br />Let’s talk.</h2><p>Ideas, opportunities, or a good conversation.</p></div><a class="site-button" href="mailto:kazon.wilson@thesuperhuman.us">Email me</a></div>
+        <details class="contact-disclosure"><summary>Send a message</summary><div class="contact-form-content"><ContactForm /></div></details>
+      </section>
     </div>
-  </section>
-
-  <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
-    <h2 class="heading mb-4">Personal practice</h2>
-    <p class="text-[1.0625rem] leading-relaxed max-w-measure mb-10">
-      Personal practice projects, not client work. The applications are private; The Engineer’s Daily now has a public design journal.
-    </p>
-    <div class="space-y-12">
-      <ProjectCard
-        name="The Engineer’s Daily"
-        url="/building/the-engineers-daily"
-        linkLabel="Read design journal →"
-        description="A daily practice of faith and engineering craft. Follow the design studies and local lesson prototype in its public journal."
-        stack={['Python', 'Flask']}
-      />
-      <ProjectCard
-        name="The Algorithm Lab"
-        description="A Go CLI runner with Python algorithm exercises."
-        stack={['Go', 'Python']}
-      />
-      <ProjectCard
-        name="servant-lang"
-        description="An experimental service-oriented programming language with a Go bootstrap compiler."
-        stack={['Go']}
-      />
-      <ProjectCard
-        name="The Engineers Workshop"
-        description="A story-driven engineering practice session, about 45 minutes. Python."
-        stack={['Python']}
-      />
-      <ProjectCard
-        name="The Engineering League"
-        description="Local-first timed engineering drills in TypeScript, Python, Go, Java, Rust, and C#."
-        stack={['TypeScript', 'Python', 'Go', 'Java', 'Rust', 'C#']}
-      />
-      <ProjectCard
-        name="The Formation Daily"
-        description="A personal Christian formation CLI."
-        stack={['Node']}
-      />
-    </div>
-  </section>
-
-  <section class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
-    <h2 class="heading mb-10">Selected experience</h2>
-    <div>
-      <ExperienceRow
-        company="Scotch"
-        role="Data Engineer"
-        dates="October 2025 – May 2026 · Remote"
-        outcome="Sole data engineer at an early-stage startup. Built and maintained ETL pipelines ingesting liquor-store POS transaction data into the company's Rails platform; ran scenario interviews for senior engineering candidates; modeled AI-assisted development practices until the team adopted them."
-      />
-      <ExperienceRow
-        company="Vendorpass / Axuall"
-        role="Senior Python Developer (Contract)"
-        dates="July 2025 – November 2025 · Remote"
-        outcome="Per-state Dagster ETL pipelines for a healthcare credentialing platform, ingesting from SFTP feeds, REST APIs, and Selenium-driven web scraping. Contributed to the early stages of a connector-architecture migration."
-      />
-      <ExperienceRow
-        company="Sure"
-        role="Software Engineer"
-        dates="December 2023 – February 2025 · Remote"
-        outcome="Backend on the Toggle homeowners insurance product. Owned document templating (adapting contractor HTML/CSS to carrier-required PDFs) and maintained Django-based document generation and carrier API integrations."
-      />
-      <ExperienceRow
-        company="Lyft"
-        role="Software Engineer"
-        dates="January 2021 – December 2023 · Remote"
-        outcome="Associate Tools team. Led a third-party rebooking API integration end-to-end, refactored a customer-incident bonus tool from 5k-row to 100k+ row capacity with Grafana self-serve, and owned a 40k-row data migration during a third-party service deprecation."
-      />
-      <ExperienceRow
-        company="Skupos"
-        role="Associate Software Engineer / Data Operations Analyst"
-        dates="November 2018 – January 2021 · San Francisco"
-        outcome="Designed and built a Python WSGI service that automated POS data quality troubleshooting, replacing ad-hoc analyst work with code that scaled retailer onboarding from 3k to 7–10k locations."
-      />
-    </div>
-
-    <p class="mt-10 eyebrow">
-      <a href="/about#resumes" style="border-bottom: 1px solid var(--accent); padding-bottom: 1px; letter-spacing: 0.12em; color: var(--ink);">
-        Want the resume? Request the version that matches your role →
-      </a>
-    </p>
-  </section>
-
-  <section id="contact" class="mx-auto max-w-content px-6 py-16 md:py-20 border-t border-rule">
-    <h2 class="heading mb-3">Work with me</h2>
-    <p class="text-base text-muted mb-10 max-w-measure">
-      Tell me about your project. I usually reply within two business days.
-    </p>
-    <ContactForm />
-  </section>
-
-  <Footer slot="footer" />
+  </div>
+  <Footer compact slot="footer" />
 </BaseLayout>
+<script>
+  const contact = document.getElementById('contact')!;
+  const message = contact.querySelector<HTMLDetailsElement>('.contact-disclosure')!;
+  function revealContact() {
+    if (location.hash !== '#contact') return;
+    message.open = true;
+    contact.scrollIntoView({ block: 'start' });
+  }
+  revealContact();
+  window.addEventListener('hashchange', revealContact);
+  // Clicking the same fragment again does not fire hashchange.
+  document.querySelectorAll<HTMLAnchorElement>('a[href="/#contact"], a[href="#contact"]').forEach(link => {
+    link.addEventListener('click', () => { message.open = true; });
+  });
+</script>
+<style>
+  .home-page { overflow: clip; }
+  .building-section { margin-top: .5rem; }
+  .site-section-heading .all-projects { order: 1; margin-left: auto; font-size: .95rem; white-space: nowrap; }
+  .project-grid { display: grid; grid-template-columns: 1.45fr 1fr; gap: 2rem; }
+  .project-art { display: block; position: relative; border: 0; padding: 0; height: 340px; }
+  .project-art :global(img) { width: 100%; height: 100%; object-fit: cover; }
+  .daily-art { border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; background: #f2f5f5; }
+  .daily-art img { object-position: top left; }
+  .threadline-art :global(img) { mix-blend-mode: multiply; object-fit: cover; }
+  .illustration-label { position: absolute; bottom: .4rem; right: .65rem; font-size: .8rem; font-style: italic; color: var(--muted); }
+  .project-copy { margin-top: 1.2rem; }
+  .project-copy h3 { font-size: clamp(1.9rem, 3vw, 2.6rem); letter-spacing: -.035em; line-height: 1.1; margin: 0 0 .4rem; }
+  .project-copy p:not(.art-caption) { font-size: 1.125rem; color: var(--muted); line-height: 1.45; margin: 0 0 1rem; }
+  .art-caption { color: var(--accent); font-family: theme('fontFamily.sans'); font-size: .75rem; margin: 0 0 .65rem; }
+  .threadline-preview .project-copy { padding-top: 1.75rem; }
+  .work-preview { display: flex; align-items: center; gap: 2rem; padding: 2rem 2.25rem; background: #f1ede5; border-radius: 3px; }
+  .work-company { font-size: 3rem; letter-spacing: -.04em; margin: 0; padding-right: 2.5rem; border-right: 1px solid #d9d2c7; }
+  .work-outcome { flex: 1; }
+  .work-outcome p { margin: 0; }
+  .work-outcome .work-figure { font-size: clamp(1.5rem, 2.6vw, 2.2rem); letter-spacing: -.04em; line-height: 1.2; margin-bottom: .35rem; }
+  .work-outcome .source-note { color: var(--muted); font-size: .85rem; margin-top: .4rem; }
+  .editorial-pair { display: grid; grid-template-columns: 1.4fr 1fr; gap: 3rem; align-items: center; }
+  .editorial-art { overflow: hidden; }
+  .editorial-art :global(img) { display: block; width: 100%; height: auto; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent); mask-composite: intersect; }
+  .editorial-copy h3 { font-size: clamp(2rem, 3.4vw, 2.9rem); line-height: 1.08; letter-spacing: -.04em; margin: 0 0 2rem; }
+  .interest-intro { font-size: clamp(1.6rem, 2.7vw, 2.1rem); line-height: 1.2; letter-spacing: -.025em; margin: 0 0 2rem; }
+  .interests-art { aspect-ratio: 1.65; position: relative; }
+  .interests-art :global(img) { width: 100%; height: 100%; object-fit: cover; }
+  .contact-section { border-top: 1px solid var(--rule); padding-block: 3rem; scroll-margin-top: 2rem; }
+  .contact-intro { display: flex; justify-content: space-between; gap: 2rem; align-items: center; }
+  .contact-intro h2 { font-size: clamp(2rem, 3.5vw, 2.7rem); line-height: 1.07; letter-spacing: -.035em; margin: 0 0 .7rem; }
+  .contact-intro p { font-size: 1.1rem; color: var(--muted); margin: 0; }
+  .contact-disclosure { margin-top: 1.25rem; color: var(--muted); }
+  .contact-disclosure summary { width: fit-content; cursor: pointer; font-size: .95rem; padding: .4rem 0; }
+  .contact-form-content { padding-block: 2rem; color: var(--ink); }
+  @media (max-width: 800px) {
+    .project-grid { grid-template-columns: 1fr; gap: 2.25rem; }
+    .project-art { height: auto; aspect-ratio: 1.5; }
+    .site-section-heading { gap: 1rem; }
+    .site-section-heading .all-projects { font-size: .85rem; }
+    .work-preview { display: block; padding: 0; background: none; }
+    .work-company { border: 0; font-size: 3rem; padding: 0; margin: 0 0 .65rem; }
+    .work-outcome { margin-bottom: 1.2rem; }
+    .work-outcome .work-figure { font-size: clamp(1.65rem, 6vw, 2.1rem); }
+    .editorial-pair { grid-template-columns: 1fr; gap: .75rem; }
+    .writing-preview .editorial-copy { order: -1; }
+    .editorial-copy h3 { font-size: clamp(2rem, 7.4vw, 2.6rem); margin-bottom: 1.2rem; }
+    .notebook-art { margin-inline: -1.5rem; }
+    .beyond-preview .editorial-copy { display: contents; }
+    .beyond-preview .interest-intro { grid-row: 1; }
+    .beyond-preview .interests-art { grid-row: 2; margin-inline: -1.5rem; }
+    .beyond-preview .site-links { grid-row: 3; }
+    .interest-intro { margin-bottom: 1.2rem; }
+    .contact-intro { align-items: flex-start; flex-direction: column; gap: 1.2rem; }
+    .contact-section { padding-block: 2rem; }
+  }
+  @media (max-width: 420px) {
+    .site-section-heading .all-projects { display: none; }
+    .threadline-preview { display: grid; grid-template-columns: 1.2fr 1fr; align-items: center; gap: .75rem; padding-top: 1.75rem; border-top: 1px solid var(--rule); }
+    .threadline-preview .project-copy { grid-column: 1; grid-row: 1; padding: 0; margin: 0; }
+    .threadline-art { grid-column: 2; grid-row: 1; aspect-ratio: 1; margin-right: -.75rem; }
+    .threadline-art :global(img) { object-fit: contain; mask-image: radial-gradient(ellipse at center, #000 55%, transparent 76%); }
+    .project-copy h3 { font-size: 1.9rem; }
+    .project-copy p:not(.art-caption) { font-size: 1.05rem; }
+  }
+</style>

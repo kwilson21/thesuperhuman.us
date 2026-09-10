@@ -16,7 +16,7 @@ interface Env {
   PUBLICATION_PROJECTS?: string;
   PUBLICATION_TOKEN?: string;
   RESEND_API_KEY: string;
-  TURNSTILE_SITE_KEY: string;
+  PUBLIC_TURNSTILE_SITE_KEY?: string;
   TURNSTILE_SECRET_KEY: string;
   CONTACT_TO_EMAIL: string;
   CONTACT_FROM_EMAIL: string;

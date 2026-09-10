@@ -5,10 +5,7 @@ const validBody = {
   name: 'Jane',
   email: 'jane@example.com',
   company: '',
-  projectType: ['Backend systems'],
-  timeline: 'Now',
-  budget: '',
-  description: 'A long enough description that explains the project clearly.',
+  description: 'Hello!',
   turnstileToken: 'tok',
 };
 
