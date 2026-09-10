@@ -18,11 +18,11 @@ import { personJsonLd, experience, lyftBonus, lyftTeams, workFocus, workingPrefe
       <article id="lyft" class="selected-story">
         <div><p class="page-kicker">Lyft · Associate Tools</p><h3>More independence for support.</h3><p class="story-summary">Refactored a bonus tool and added visibility so support could run and monitor the work.</p><p class="capacity-figure">{lyftBonus.before} <span aria-hidden="true">→</span><span class="sr-only">to</span> {lyftBonus.after} rows</p><p class="text-muted text-sm">{lyftBonus.evidence}</p>
           <details class="context-disclosure"><summary>Read the context <span aria-hidden="true">+</span></summary><div><p>The customer incident response team used this tool to issue driver bonuses. I rewrote its batch handling and added Grafana observability, making runs visible to the people responsible for them.</p><p>The figures describe rows handled per batch. They are from my career account; they do not measure runtime or a new benchmark.</p></div></details>
-          <a class="site-link lyft-scope-link" href="#lyft-background">Explore my work across three Lyft teams <span aria-hidden="true">→</span></a>
+          <a class="site-link story-context-link" href="#lyft-background">Explore my work across three Lyft teams <span aria-hidden="true">→</span></a>
         </div><WorkDiagram kind="bonus" />
       </article>
       <article id="skupos" class="selected-story">
-        <div><p class="page-kicker">Skupos</p><h3>Turning analyst work into software.</h3><p class="story-summary">Built an internal service to automate POS data-quality troubleshooting.</p><details class="context-disclosure"><summary>Read the context <span aria-hidden="true">+</span></summary><div><p>Analysts were using Google Sheets and ad-hoc Python scripts. I designed and built a Python WSGI application on AWS EC2 to bring that troubleshooting into one tool.</p><p>The aim was to scale operations through application performance instead of continually adding analysts. It was an early lesson in connecting engineering decisions to the work people actually do.</p></div></details></div><WorkDiagram kind="analyst" />
+        <div><p class="page-kicker">Skupos</p><h3>Turning analyst work into software.</h3><p class="story-summary">What began as contributions to coworkers’ Python scripts grew into an application used by operations and account managers.</p><details class="context-disclosure"><summary>Read the context <span aria-hidden="true">+</span></summary><div><p>I knew the troubleshooting work firsthand. As I took on more of the automation, I brought the tools together and built an interface that more people could use.</p><p>The work taught me to follow a useful idea beyond the first script: improve it, make it maintainable and help others build on it.</p></div></details><a class="site-link story-context-link" href="#skupos-background">From intern to associate engineer <span aria-hidden="true">→</span></a></div><WorkDiagram kind="analyst" />
       </article>
     </section>
     <section id="experience" class="site-section"><div class="site-section-heading"><h2>Experience</h2></div>{experience.map(job => <ExperienceRow {...job}>
@@ -31,7 +31,7 @@ import { personJsonLd, experience, lyftBonus, lyftTeams, workFocus, workingPrefe
         <ul>{team.projects.map(project => <li><strong>{project.title}.</strong> {project.description}</li>)}</ul>
       </section>)}</div>}
     </ExperienceRow>)}</section>
-    <section class="site-section"><div class="site-section-heading"><h2>How I work</h2></div><div class="working-values"><div><h3>Ownership</h3><p>I take responsibility and see things through.</p></div><div><h3>Async collaboration</h3><p>Clear communication keeps work moving.</p></div><div><h3>AI-assisted development</h3><p>I use AI to move faster, with engineering judgment and validation.</p></div></div><div class="site-links"><a class="site-link" href="/writing/ai-gives-you-speed">Read my perspective <span aria-hidden="true">→</span></a><a class="site-link" href="/building">Explore personal projects <span aria-hidden="true">→</span></a></div></section>
+    <section class="site-section"><div class="site-section-heading"><h2>How I work</h2></div><div class="working-values"><div><h3>Ownership</h3><p>I take responsibility and see things through.</p></div><div><h3>Async collaboration</h3><p>Clear communication keeps work moving.</p></div><div><h3>AI-assisted development</h3><p>I use AI to move faster, with engineering judgment and validation.</p></div></div><div class="site-links"><a class="site-link" href="/writing/ai-gives-you-speed">Read my perspective <span aria-hidden="true">→</span></a><a class="site-link" href="/building/the-engineers-daily">Explore The Engineer’s Daily prototype <span aria-hidden="true">→</span></a></div></section>
     <section class="page-connect"><div><p class="page-kicker">Let’s talk</p><h2>An interesting problem or possibility?</h2><p>I’d love to hear about it.</p></div><a class="site-button" href="/#contact">Get in touch</a></section>
   </div><Footer compact slot="footer" />
 </BaseLayout>
@@ -60,7 +60,7 @@ import { personJsonLd, experience, lyftBonus, lyftTeams, workFocus, workingPrefe
   .selected-story + .selected-story { border-top: 1px solid var(--rule); padding-top: 2.5rem; }
   h3 { font-size: clamp(1.65rem, 2.7vw, 2.2rem); line-height: 1.15; letter-spacing: -.025em; }
   .story-summary { font-size: 1.2rem; line-height: 1.45; color: var(--muted); margin-block: .8rem 1.5rem; max-width: 30rem; }
-  .lyft-scope-link { margin-top: 1rem; font-size: .95rem; }
+  .story-context-link { margin-top: 1rem; font-size: .95rem; }
   .lyft-teams { margin-block: 1.5rem; }
   .lyft-teams section { border-left: 2px solid var(--rule); padding-left: 1.25rem; }
   .lyft-teams section + section { margin-top: 1.75rem; }
