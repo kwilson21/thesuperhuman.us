@@ -1,7 +1,6 @@
 ---
 export const prerender = false;
 import ProjectLayout from '~/layouts/ProjectLayout.astro';
-import ProjectTimeline from '~/components/ProjectTimeline.astro';
 import ProjectUpdates from '~/components/ProjectUpdates.astro';
 import { websiteFeed } from '~/lib/publication/website';
 import { websiteStory, websiteMilestones } from '~/data/project-stories/personal-website';
@@ -18,17 +17,17 @@ Astro.response.headers.set('Cache-Control', 'no-store');
       <figure><a href={before.src} aria-label="Open the original homepage capture"><img src={before.src} width={before.width} height={before.height} alt="Original homepage: a contract availability line, engineering introduction and portrait." /></a><figcaption><strong>Before</strong><p>The original homepage, captured during the September 9 audit.</p></figcaption></figure>
       <figure><a href={after.src} aria-label="Open the redesigned homepage capture"><img src={after.src} width={after.width} height={after.height} alt="Redesigned homepage: shared navigation, a short personal introduction and a quiet studio illustration." /></a><figcaption><strong>Taking shape</strong><p>The local redesign, September 10. Studio artwork is illustrative.</p></figcaption></figure>
     </div>
-    <nav class="site-links journey-links" aria-label="Explore the redesign"><a class="site-link" href="#website-design-history-title">Follow the design journey <span aria-hidden="true">↓</span></a><a class="site-link" href="#website-page-comparisons">Compare the pages <span aria-hidden="true">↓</span></a><a class="site-link" href="#personal-website-updates-title">Development updates <span aria-hidden="true">↓</span></a></nav>
+    <nav class="site-links journey-links" aria-label="Explore the redesign"><a class="site-link" href="#personal-website-updates-title">Development journal <span aria-hidden="true">↓</span></a><a class="site-link" href="#website-page-comparisons">Compare the pages <span aria-hidden="true">↓</span></a></nav>
   </section>
   <p class="history-note">The intention behind each step, alongside the studies and revisions that followed. These are historical design options: generated wording, equipment and interfaces are part of the studies, not finished copy or product evidence. Open any image to inspect the full page.</p>
-  <ProjectTimeline id="website-design-history" title="How the design took shape" entries={websiteMilestones} selectedId="website-start-with-the-reader" />
+  <span id="website-design-history-title" aria-hidden="true"></span>
+  <ProjectUpdates feed={feed} projectId="personal-website" title="Development journal" milestones={websiteMilestones} selectedId="website-start-with-the-reader" />
   <section class="project-section page-comparisons" id="website-page-comparisons" aria-labelledby="page-comparisons-title">
     <div class="site-section-heading"><h2 id="page-comparisons-title">What changed, page by page.</h2></div>
     <p class="comparison-intro">Actual pages: the public site before launch and the local redesign, captured September 10. Choose a page, then open either capture to see it in full.</p>
     {websitePages.map(page => <details class="page-comparison" name="website-pages"><summary><span>{page.name}</span><span class="comparison-change">{page.change}</span><span aria-hidden="true">+</span></summary><div class="page-comparison-body"><p>{page.description}</p><div class="website-comparison">{[{label:'Before',image:page.before},{label:'Local redesign',image:page.after}].map(({label,image}) => <figure><a href={image.src}><img src={image.src} width={image.width} height={image.height} alt={`${page.name}, ${label.toLowerCase()}. Full-page capture.`} loading="lazy" /><span class="capture-open">Open full {label === 'Before' ? 'before' : 'redesign'} capture <span aria-hidden="true">↗</span></span></a><figcaption><strong>{label}</strong></figcaption></figure>)}</div>{page.extra && <p class="new-page-link">A new destination: <a class="site-link" href={page.extra.src}>See the Writing index <span aria-hidden="true">↗</span></a></p>}</div></details>)}
   </section>
-  <section class="project-section"><div class="site-section-heading"><h2>Live, and still evolving.</h2></div><p>The redesign launched on September 10, 2026. The studies above preserve how it took shape; the journal below follows what changes next.</p><a class="site-link website-writing-link" href="/writing#website-redesign">Explore the essay topic <span aria-hidden="true">→</span></a></section>
-  <ProjectUpdates feed={feed} projectId="personal-website" title="The development journal" />
+  <section class="project-section"><div class="site-section-heading"><h2>Live, and still evolving.</h2></div><p>The redesign launched on September 10, 2026. The development journal brings together the design decisions, visual studies, and updates as the site evolves.</p><a class="site-link website-writing-link" href="/writing#website-redesign">Explore the essay topic <span aria-hidden="true">→</span></a></section>
 </ProjectLayout>
 <style>
   .website-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2rem; margin-top: 2rem; }

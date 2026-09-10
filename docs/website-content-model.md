@@ -105,6 +105,28 @@ show its interaction. Reconcile the other projects currently scattered across
 Home and About before selecting what to feature. Appearance on the existing site
 does not establish current priority or active development.
 
+### One Development journal per project
+
+Use **Development journal** as the consistent public destination name. Design
+studies, implementation, testing, and launch are kinds of milestones in one
+chronological journal, not separate destinations named Design history or Design
+notes. The project overview introduces the purpose and current state; it links
+to that journal. Essays remain separate reflections that link to relevant work.
+
+Preserve existing visuals, captions, supported dates, milestone IDs, and old
+section bookmarks when reorganizing. The Engineer's Daily keeps all five visual
+stages and their artifacts; the website keeps its eleven visual milestones.
+The shared timeline combines curated entries and published updates by work date.
+Curated entries remain repository-owned and must not also be published as new
+feed records. Existing publication corrections and withdrawals clear affected
+feed content while leaving curated work readable. Repeated polls must not reset
+the reader's context or focus in that fallback.
+
+Private project records, evidence, and backups remain separate from this public
+presentation. Saving a private checkpoint does not publish it. This naming and
+composition decision uses existing storage and publication mechanisms; no new
+ADR or content-storage system is needed.
+
 ## Writing: follow an idea
 
 **Visitor outcome:** understand a point of view, argument, or lesson and follow
@@ -244,8 +266,13 @@ The eleven visual milestones are a dated retrospective, not feed publication rec
 
 Private checkpoints in `.private/development/journal/` own continuity and
 source snapshots. Public notes are selected disclosures and are never a mirror
-of those files. The project page also reads the `personal-website` publication
-feed through the shared `websiteFeed` and `ProjectUpdates` components. It disables
+of those files. One Development journal combines these curated visual milestones with the
+`personal-website` publication feed through `websiteFeed` and `ProjectUpdates`.
+Entries are ordered by work date, preserving order within each day. Curated
+`website-*` entries remain repository-owned and must not be republished through
+the feed: new publications use distinct identities. Corrections to curated entries
+belong in reviewed source changes; feed corrections retain the existing immediate
+clearing behavior. It disables
 response caching and retains the visual retrospective if live data is unavailable.
 Deployment and renewed OAuth consent are required before the publisher can use
 this additional project. Private journal writes never depend on the website being

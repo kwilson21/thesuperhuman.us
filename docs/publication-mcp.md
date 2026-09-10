@@ -95,7 +95,9 @@ a real publication receipt, and website rendering verification.
 ## Personal website activation
 
 The website project uses `publication:personal-website` and the same journal as
-other projects. Its curated design history remains separate from the live feed.
+other projects. Its curated visual milestones and published updates appear in one Development
+journal. Curated entries remain repository-owned; publish new outcomes rather
+than duplicating those entries in the feed.
 After deploying the allowlist and page integration, reconnect the publisher and
 consent to the additional project scope. An old grant remains insufficient even
 after deployment. Verify `get_project_progress` for `personal-website`, publish a
