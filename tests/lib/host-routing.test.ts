@@ -40,3 +40,12 @@ describe('rewritePathForHost', () => {
     expect(rewritePathForHost('localhost:4321', '/')).toBeNull();
   });
 });
+
+it('resolves shared navigation and local Audio paths without crossing site identities', async () => {
+  const { mainSitePath, audioPath } = await import('~/lib/host-routing');
+  expect(mainSitePath('audio.thesuperhuman.us', '/about')).toBe('https://thesuperhuman.us/about');
+  expect(mainSitePath('127.0.0.1:4362', '/about')).toBe('/about');
+  expect(audioPath('audio.thesuperhuman.us', '/about')).toBe('/about');
+  expect(audioPath('127.0.0.1:4362', '/about')).toBe('/audio/about');
+  expect(audioPath('audio.thesuperhuman.us', '/file/example')).toBe('/file/example');
+});

@@ -124,3 +124,66 @@
     color: var(--ink);
   }
 }
+
+/* Shared foundations for the September 2026 page compositions. */
+:root {
+  --site-gutter: clamp(1.5rem, 5vw, 3.5rem);
+  --site-section-space: clamp(3rem, 6vw, 5.5rem);
+}
+@layer components {
+  .site-shell { width: 100%; max-width: 1232px; margin-inline: auto; padding-inline: var(--site-gutter); }
+  .site-section { margin-top: var(--site-section-space); }
+  .site-section-heading { display: flex; align-items: center; gap: 1.5rem; margin-bottom: 1.5rem; }
+  .site-section-heading h2 { flex-shrink: 1; min-width: 0; font-size: clamp(1.75rem, 3vw, 2.25rem); line-height: 1.2; letter-spacing: -.035em; margin: 0; }
+  .site-section-heading::after { content: ''; height: 1px; flex: 1; background: var(--rule); }
+  .site-links { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.75rem; }
+  .site-link { display: inline-flex; align-items: baseline; gap: .65rem; padding-bottom: .2rem; border-bottom: 1px solid var(--accent); line-height: 1.45; }
+  .site-link span { color: var(--accent); transition: transform 160ms ease; }
+  .site-link:is(:hover, :focus-visible) span { transform: translateX(3px); }
+  .site-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .55rem 1.35rem; background: var(--accent); color: var(--paper); border: 1px solid var(--accent); border-radius: 3px; line-height: 1.4; }
+  .site-button:hover { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+  .site-button-outline { background: transparent; color: var(--ink); }
+  @media (prefers-reduced-motion: reduce) {
+    .site-link span { transition: none; }
+    .site-link:is(:hover, :focus-visible) span { transform: none; }
+  }
+}
+
+@layer components {
+  .primary-page { padding-top: clamp(2rem, 5vw, 4rem); padding-bottom: 1rem; }
+  .page-kicker { font-family: theme('fontFamily.mono'); color: var(--accent); font-size: .6875rem; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 1rem; }
+  .page-title { font-size: clamp(3.25rem, 6.5vw, 5.4rem); line-height: 1.02; letter-spacing: -.045em; }
+  .page-lede { font-size: clamp(1.3rem, 2.5vw, 1.8rem); line-height: 1.35; margin-top: 1.25rem; max-width: 40rem; }
+  .page-connect { border-top: 1px solid var(--rule); padding-block: 2.5rem; margin-top: var(--site-section-space); display: flex; justify-content: space-between; align-items: center; gap: 2rem; }
+  .page-connect h2 { font-size: clamp(1.75rem, 3vw, 2.25rem); line-height: 1.15; letter-spacing: -.025em; }
+  .page-connect p:not(.page-kicker) { color: var(--muted); font-size: 1.125rem; margin-top: .6rem; }
+  .page-connect > .site-button { flex-shrink: 0; }
+  .context-disclosure { margin-top: 1.75rem; }
+  .context-disclosure > summary { display: inline-flex; align-items: baseline; gap: .8rem; border-bottom: 1px solid var(--accent); cursor: pointer; list-style: none; min-height: 32px; }
+  .context-disclosure > summary::-webkit-details-marker { display: none; }
+  .context-disclosure > summary span { color: var(--accent); }
+  .context-disclosure[open] > summary span { transform: rotate(45deg); }
+  .context-disclosure > div { padding-top: 1rem; }
+  .context-disclosure > div > p + p { margin-top: 1rem; }
+  .context-disclosure > div > .site-link { margin-top: 1rem; }
+  @media(max-width: 800px) { .page-connect { flex-direction: column; align-items: flex-start; } }
+}
+
+/* Shared form presentation for contact, resume and structured audio inquiries. */
+.site-form { max-width: 48rem; }
+.site-form > * + * { margin-top: 1.5rem; }
+.site-form .form-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
+.site-form label:not(:has(input)), .site-form legend { display: block; margin-bottom: .5rem; font-size: 1rem; }
+.site-form label > span, .site-form .form-hint { color: var(--muted); }
+.site-form input:not([type=checkbox]):not([type=radio]):not([type=hidden]), .site-form textarea, .site-form select { display: block; width: 100%; min-width: 0; border: 1px solid var(--rule); background: var(--paper); padding: .65rem .8rem; border-radius: 3px; font: 1rem/1.5 Inter, sans-serif; }
+.site-form textarea { resize: vertical; }
+.site-form :is(input, textarea, select):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.site-form [aria-invalid=true] { border-color: var(--accent); }
+.site-form [data-form-error] { color: var(--accent); font-size: .875rem; margin-top: .5rem; }
+.site-form [data-form-status] { font-size: .9rem; margin-top: .75rem; }
+.site-form .form-hint { font-size: .875rem; line-height: 1.6; overflow-wrap: anywhere; }
+.site-form button:disabled { opacity: .5; cursor: not-allowed; }
+.site-form[hidden], .form-success[hidden], .site-form [hidden] { display: none; }
+.form-success h3 { font-size: 2rem; margin-bottom: .75rem; }
+.form-success { padding-block: 1rem; }
+@media(max-width: 600px) { .site-form .form-pair { grid-template-columns: 1fr; } }
