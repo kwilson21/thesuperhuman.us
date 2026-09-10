@@ -1,7 +1,7 @@
 ---
 import { mainSitePath, audioPath } from '~/lib/host-routing';
 const audioHref = audioPath(Astro.request.headers.get('host') ?? Astro.url.host, '/');
-const servicesHref = mainSitePath(Astro.request.headers.get('host') ?? Astro.url.host, '/services.html');
+const servicesHref = mainSitePath(Astro.request.headers.get('host') ?? Astro.url.host, '/services');
 const homeHref = mainSitePath(Astro.request.headers.get('host') ?? Astro.url.host, '/');
 const year = new Date().getFullYear();
 interface Props { compact?: boolean; }

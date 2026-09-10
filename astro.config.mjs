@@ -6,6 +6,7 @@ import sitemap from '@astrojs/sitemap';
 
 export default defineConfig({
   site: 'https://thesuperhuman.us',
+  devToolbar: { enabled: false },
   output: 'static',
   // middleware.ts retains form-origin protection, with a narrow OAuth token exception.
   security: { checkOrigin: false },

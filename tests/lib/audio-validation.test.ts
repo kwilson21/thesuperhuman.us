@@ -61,3 +61,9 @@ describe('validateAudioInquiry', () => {
     expect(r.ok).toBe(true);
   });
 });
+
+it.each([1.5, '1.5', '2 tracks', true, 0, 1001])('rejects an invalid track count: %s', trackCount => {
+  const result = validateAudioInquiry({ ...valid, trackCount });
+  expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.errors.trackCount).toBeDefined();
+});
