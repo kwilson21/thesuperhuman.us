@@ -235,7 +235,8 @@ Work exposes a direct link from the featured Associate Tools story to the full t
 ## Website project and writing topic
 
 `src/data/project-stories/personal-website.ts` owns the project description,
-curated design milestones and potential essay metadata.
+curated design milestones and essay-topic metadata. The essay is tracked through
+author review and publication in GitHub issue #45.
 `src/pages/building/personal-website.astro` owns the comparison and project
 composition, using the shared layout/timeline. Building links to it; Writing
 uses the same topic metadata at `#website-redesign` and links to the actual notes.
@@ -243,9 +244,12 @@ The eleven visual milestones are a dated retrospective, not feed publication rec
 
 Private checkpoints in `.private/development/journal/` own continuity and
 source snapshots. Public notes are selected disclosures and are never a mirror
-of those files. This increment does not onboard a new public feed or turn the
-website into its own runtime dependency. A finished essay will develop the
-argument rather than duplicate the journal.
+of those files. The project page also reads the `personal-website` publication
+feed through the shared `websiteFeed` and `ProjectUpdates` components. It disables
+response caching and retains the visual retrospective if live data is unavailable.
+Deployment and renewed OAuth consent are required before the publisher can use
+this additional project. Private journal writes never depend on the website being
+online. A finished essay will develop the argument rather than duplicate the journal.
 
 ## Shareable services overviews
 
