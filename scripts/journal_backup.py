@@ -21,11 +21,25 @@ def verify(data):
         with zipfile.ZipFile(io.BytesIO(archive)) as zipped:
             if zipped.testzip() is not None or len(zipped.infolist()) != data['fileCount']:
                 raise ValueError('Backup archive is incomplete.')
-            for name in zipped.namelist():
+            names = zipped.namelist()
+            if len(set(names)) != len(names):
+                raise ValueError('Duplicate archive paths.')
+            for name in names:
                 if Path(name).is_absolute() or '..' in Path(name).parts:
                     raise ValueError('Unsafe archive path.')
+            for name in names:
+                if '/' not in name and name.endswith('.json'):
+                    day = json.loads(zipped.read(name))
+                    for checkpoint in day.get('checkpoints', []):
+                        for artifact in checkpoint.get('artifactSnapshots', []):
+                            stored = artifact['storedPath']
+                            if not isinstance(stored, str) or stored not in names:
+                                raise ValueError('A recorded journal artifact is missing.')
+                            content = zipped.read(stored)
+                            if len(content) != artifact['bytes'] or hashlib.sha256(content).hexdigest() != artifact['sha256']:
+                                raise ValueError('A recorded journal artifact has changed.')
         return data['fileCount']
-    except (KeyError, zipfile.BadZipFile, OSError, TypeError) as error:
+    except (KeyError, zipfile.BadZipFile, OSError, TypeError, AttributeError) as error:
         raise ValueError('Invalid backup.') from error
 
 
@@ -47,12 +61,12 @@ def pack(root):
             for path in files:
                 zipped.write(path, str(path.relative_to(journal)))
         archive = buffer.getvalue()
-    digest = hashlib.sha256(archive).hexdigest()
-    encoded = base64.b64encode(archive).decode('ascii')
-    data = {'id': digest, 'createdAt': datetime.now(timezone.utc).isoformat(),
-            'sha256': digest, 'bytes': len(archive), 'fileCount': len(files),
-            'chunks': [encoded[i:i + 32768] for i in range(0, len(encoded), 32768)]}
-    verify(data)
+        digest = hashlib.sha256(archive).hexdigest()
+        encoded = base64.b64encode(archive).decode('ascii')
+        data = {'id': digest, 'createdAt': datetime.now(timezone.utc).isoformat(),
+                'sha256': digest, 'bytes': len(archive), 'fileCount': len(files),
+                'chunks': [encoded[i:i + 32768] for i in range(0, len(encoded), 32768)]}
+        verify(data)
     output = root / '.private/backups' / digest
     if not output.resolve().is_relative_to(root):
         raise ValueError('Backup directory must stay inside project.')
