@@ -6,8 +6,8 @@ the public project feed and has no binding in the website Worker. The website ca
 be offline while checkpoints and recovery archives are created.
 
 `scripts/journal_backup.py` uses Python's standard library. It locks the journal
-using the logger's existing lock, archives checkpoints, index and nominated
-artifact snapshots, and checks the archive before preparing an upload. It does
+using the logger's existing lock, archives valid version-1 checkpoints, index and nominated
+artifact snapshots, and checks the archive before preparing an upload. Orphaned artifacts from interrupted writes are excluded; their local files are preserved. It does
 not scan the rest of the repository, upload credentials, publish, or schedule work.
 
 ## Create a snapshot
@@ -51,7 +51,7 @@ CREATE TABLE journal_backup_chunks (
    ordinals are contiguous and count matches the manifest. Reconstruct the same
    JSON shape privately as `roundtrip.json`.
 4. Run `python3 scripts/journal_backup.py verify --file <roundtrip.json>`. It
-   validates byte length, SHA-256, ZIP integrity, file count and safe paths. Compare
+   validates byte length, SHA-256, ZIP integrity, file count, safe paths, authoritative record shape and referenced artifact hashes. Compare
    the remote hash with the original local manifest as well.
 5. Only after success, set `verified_at` and save a local receipt with backup ID,
    verification time and counts. Do not print private chunks or checkpoint text.

@@ -10,12 +10,12 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 JOURNAL = ROOT / '.private' / 'development' / 'journal'
-ZONE = ZoneInfo('America/New_York')
+ZONE = 'America/New_York'
 FIELDS = {'id', 'title', 'summary', 'decisions', 'current', 'next', 'evidence', 'verification'}
 
 
@@ -23,7 +23,10 @@ def clock(now=None):
     now = now or datetime.now(timezone.utc)
     if now.tzinfo is None:
         raise ValueError('An aware clock is required.')
-    local = now.astimezone(ZONE)
+    try:
+        local = now.astimezone(ZoneInfo(ZONE))
+    except ZoneInfoNotFoundError as error:
+        raise ValueError('IANA timezone data is required. Install system tzdata or the Python tzdata package.') from error
     return {'day': local.date().isoformat(), 'local': local.isoformat(timespec='seconds'),
             'utc': now.astimezone(timezone.utc).isoformat(timespec='seconds'), 'timezone': str(ZONE)}
 

@@ -30,7 +30,9 @@ def verify(data):
             for name in names:
                 if '/' not in name and name.endswith('.json'):
                     day = json.loads(zipped.read(name))
-                    for checkpoint in day.get('checkpoints', []):
+                    if not isinstance(day, dict) or day.get('version') != 1 or not isinstance(day.get('checkpoints'), list):
+                        raise ValueError('Invalid authoritative journal record.')
+                    for checkpoint in day['checkpoints']:
                         for artifact in checkpoint.get('artifactSnapshots', []):
                             stored = artifact['storedPath']
                             if not isinstance(stored, str) or stored not in names:
@@ -53,7 +55,22 @@ def pack(root):
         files = sorted(p for p in journal.rglob('*') if p.name != '.lock')
         if any(p.is_symlink() for p in files):
             raise ValueError('Journal backup refuses symlinks.')
-        files = [p for p in files if p.is_file()]
+        days = sorted(journal.glob('*.json'))
+        included = set(days)
+        for path in days:
+            day = json.loads(path.read_text())
+            if not isinstance(day, dict) or day.get('version') != 1 or not isinstance(day.get('checkpoints'), list):
+                raise ValueError('Invalid authoritative journal record.')
+            included.add(path.with_suffix('.md'))
+            for checkpoint in day['checkpoints']:
+                for artifact in checkpoint.get('artifactSnapshots', []):
+                    stored = Path(artifact['storedPath'])
+                    if stored.is_absolute() or '..' in stored.parts:
+                        raise ValueError('Unsafe artifact path.')
+                    included.add(journal / stored)
+        included.update(journal / 'index' / name for name in ('index.json', 'index.md'))
+        # Only authoritative records, derived views and explicitly referenced evidence.
+        files = [p for p in files if p.is_file() and p in included]
         if not files or not list(journal.glob('*.json')):
             raise ValueError('No checkpoints to back up.')
         buffer = io.BytesIO()

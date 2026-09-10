@@ -1,7 +1,7 @@
 # Portable project journal
 
 A small Python checkpoint logger and agent protocol, independent of a product's
-own persistence. Python 3.9+ on macOS/Linux; standard library only. Keep it separate
+own persistence. Python 3.9+ on macOS/Linux with IANA timezone data installed. macOS normally provides it; minimal Linux images may need the system tzdata package or `python3 -m pip install tzdata`. The logger reports this prerequisite if the named zone is unavailable. Keep it separate
 from learner data, application checkpoints and personal reflections.
 
 The agent runs `python3 scripts/development_journal.py status` at startup and after
