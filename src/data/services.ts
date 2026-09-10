@@ -18,7 +18,7 @@ export const softwareSheet: ServiceSheet = {
   offerings: [
     { label: 'Prototypes', description: 'An idea made tangible enough to try.', illustration: 'prototype' },
     { label: 'Products & internal tools', description: 'Useful software, refined with the people using it.', illustration: 'product' },
-    { label: 'Website design', description: 'Clear structure, visual storytelling and responsive pages.', illustration: 'website' },
+    { label: 'Website design', description: 'Clear structure, visual storytelling and responsive pages.', illustration: 'website', evidence: '/building/personal-website' },
     { label: 'Integrations', description: 'Connect systems and simplify a workflow.', illustration: 'integration' },
   ],
   background: '7+ years in software engineering · Lyft · Sure · Axuall',

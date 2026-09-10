@@ -1,6 +1,6 @@
 # thesuperhuman.us
 
-Personal site for Kazon Wilson · backend & data engineer · contracting through The Superhuman Group LLC.
+Personal site for Kazon Wilson · software engineer building with AI · independent work through The Superhuman Group LLC.
 
 ## Stack
 
@@ -37,9 +37,14 @@ Push to `main` → Cloudflare's git integration rebuilds and runs `wrangler depl
 | `TURNSTILE_SECRET_KEY` | Dashboard secret | Sensitive |
 | `CONTACT_TO_EMAIL` | `wrangler.jsonc` `vars` | Not sensitive |
 | `CONTACT_FROM_EMAIL` | `wrangler.jsonc` `vars` (currently `noreply@notifs.thesuperhuman.us`, the verified Resend sending subdomain) | Not sensitive |
-| `PUBLIC_TURNSTILE_SITE_KEY` | `wrangler.jsonc` `vars` | Browser-readable by design (Astro inlines `PUBLIC_*` into the build) |
+| `PUBLIC_TURNSTILE_SITE_KEY` | `wrangler.jsonc` `vars` | Public widget key, read by the server-rendered forms from the Worker runtime |
 
 Update version-controlled vars by editing `wrangler.jsonc` and pushing. Update dashboard secrets in the Cloudflare Worker settings (Variables and Secrets → Secrets).
+
+The forms read `Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY` first, with
+`import.meta.env.PUBLIC_TURNSTILE_SITE_KEY` as a build-time fallback. Wrangler
+runtime vars are not automatically Astro build-time variables. An empty runtime
+key explicitly disables the forms and keeps their email alternatives visible.
 
 ### KV bindings
 
@@ -66,13 +71,16 @@ Re-run any of these whenever a resume changes.
 
 ### Rebuilding the services one-pager PDF
 
-The source HTML lives at `public/services.html` (also served at `/services.html`). To regenerate the PDF and refresh `doc:services-overview` in KV:
+The services overviews share `src/layouts/ServiceSheet.astro` and `src/data/services.ts`. Software lives at `/services` (the existing `/services.html` redirects there); Audio lives at `/audio/services`. Both are readable on phones and have a Print / Save PDF action. Existing PDFs in KV are not updated by editing the pages.
+
+For scripted export, start a local preview and specify its URL:
 
 ```bash
-./scripts/build-services-pdf.sh --upload
+BASE_URL=http://127.0.0.1:4321 ./scripts/build-services-pdf.sh
+BASE_URL=http://127.0.0.1:4321 ./scripts/build-services-pdf.sh --audio
 ```
 
-Without `--upload`, the script only renders to `/tmp/services-overview.pdf` for inspection. The PDF artifact is never committed.
+These render to `/tmp/services-overview.pdf` and `/tmp/audio-services-overview.pdf`. `OUT` overrides the destination. Inspect the output before sharing; generated PDFs are not committed. The existing `--upload` option refreshes the software `doc:services-overview` key only when explicitly requested. Audio export is render-only and cannot overwrite that key.
 
 ### Security headers
 
@@ -80,14 +88,14 @@ Without `--upload`, the script only renders to `/tmp/services-overview.pdf` for 
 
 ## Resume request flow
 
-1. A visitor requests a resume via the form on `/about` (audience + name/email/company/note + Turnstile).
+1. A visitor requests the general resume via the form on `/about` (name/email/company/note + Turnstile). New requests always use the general audience; stored legacy approvals retain their original audience.
 2. `POST /api/resume-request` validates, rate-limits, and stores a single-use token in KV (`req:<uuid>`, 7-day TTL). It emails the operator (`CONTACT_TO_EMAIL`) with the request details and a one-click approval link.
 3. The operator clicks the approval link. `GET /api/resume-approve?id=<uuid>` looks up the token, reads the matching PDF from KV (`pdf:<audience>`), emails it to the requester as an attachment, and deletes the token. Single-use; the link can't be replayed.
 4. The approval link's "credential" is the UUID itself (~122 bits of entropy). Because delivery is bound to the requester's email stored in KV (not the URL), a leaked or intercepted link cannot redirect delivery elsewhere.
 
 ## Audio site
 
-`audio.thesuperhuman.us` shares this repo, this build, and this Worker deployment with the software site. No separate project or deploy pipeline.
+Audio is part of the personal site at `/audio/`. `audio.thesuperhuman.us` remains an alternate entry using the same repository, build and Worker. Its pages point to main-site `/audio` canonical URLs. Main-site and local-preview links stay within the site; legacy audio-host pages, inquiry APIs and file links retain their existing routing. No separate studio brand or deployment pipeline.
 
 ### R2 audio storage
 
@@ -106,6 +114,8 @@ npm run audio:upload path/to/track.mp3
 ### Audio tracks content collection
 
 Track metadata lives in `src/content/audio-tracks/` as one YAML file per track. The schema is defined in `src/content/config.ts`. Add a YAML file, upload the corresponding MP3 to R2 via the upload script, and the track appears on the audio site automatically.
+
+Notes are optional. The Selected audio section appears only when recordings exist; the page does not render empty players. Native audio controls and explicit user-initiated playback remain the baseline.
 
 ### Audio booking inquiries
 
@@ -127,4 +137,10 @@ The `/og-image.png` social-share card is rendered from `scripts/og.html` via hea
 ./scripts/build-og.sh
 ```
 
-Editing `scripts/og.html` updates the layout; replacing `scripts/logo.png` or `src/assets/headshot.jpg` updates the imagery. The script re-inlines the source images into `scripts/og.html` as base64 data URIs on every run (so the template renders correctly when opened directly in a browser too).
+Editing `scripts/og.html` updates the layout and copy. The card reuses the reviewed studio artwork at `src/assets/site/studio-v1.webp`; the renderer reads that local asset directly. Inspect the regenerated card before sharing.
+
+## General contact
+
+The local redesign keeps general contact at `/#contact`: required name, email and message (nonempty after trimming, at most 4000 characters), with optional company. `/api/contact` uses this same schema and preserves origin checks, Turnstile, rate limiting and Resend delivery. Project type, timeline and budget are no longer part of the general form. The structured Audio inquiry remains separate.
+
+The three forms share pending, error, focus and receipt behavior in `src/scripts/form-submission.ts`. Without JavaScript or a configured public Turnstile key, submit remains disabled and a direct email alternative stays available. Resume receipt still means a request awaits approval, not that a PDF was sent.

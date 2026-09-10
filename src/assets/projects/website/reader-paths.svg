@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="510" viewBox="0 0 900 510" fill="none">
+  <rect width="900" height="510" fill="#FBF8F2"/>
+  <g font-family="Inter,Arial,sans-serif" fill="#0E0E0E">
+    <text x="40" y="55" font-size="20" fill="#4A4A4A">A QUESTION</text><text x="510" y="55" font-size="20" fill="#4A4A4A">A PLACE TO EXPLORE</text>
+    <text x="40" y="142" font-size="28">Who is this?</text><text x="510" y="135" font-size="30">Home · About</text><text x="510" y="172" font-size="20" fill="#4A4A4A">Meet the person and their interests.</text>
+    <text x="40" y="282" font-size="28">Could we work together?</text><text x="510" y="275" font-size="30">Work · Services</text><text x="510" y="312" font-size="20" fill="#4A4A4A">Assess the experience and the fit.</text>
+    <text x="40" y="422" font-size="28">What are you exploring?</text><text x="510" y="415" font-size="30">Building · Writing</text><text x="510" y="452" font-size="20" fill="#4A4A4A">Follow projects and ideas.</text>
+  </g>
+  <g stroke="#AE5534" stroke-width="2"><path d="M402 138h70m-10-8 10 8-10 8M402 278h70m-10-8 10 8-10 8M402 418h70m-10-8 10 8-10 8"/></g>
+  <g stroke="#E8E3DA"><path d="M40 212h820M40 352h820"/></g>
+</svg>

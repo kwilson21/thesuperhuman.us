@@ -2,14 +2,24 @@
 
 ## Who You Are Working With
 
-You are working on the personal contracting website of **Kazon Wilson**, operating as **The Superhuman Group LLC**, a Wyoming LLC providing senior backend and data engineering services.
+You are working on the personal website of **Kazon Wilson**, who also operates **The Superhuman Group LLC**, a Wyoming LLC through which he can undertake independent work. His current direction is software engineering focused on building with AI.
+
+The September 2026 redesign direction in [docs/website-direction.md](docs/website-direction.md)
+and [docs/website-content-model.md](docs/website-content-model.md) supersedes the
+original contractor-only positioning. The site introduces the person, interests,
+and evidence of work. Contracts are preferred; interesting full-time opportunities
+are welcome. The [system plan](docs/website-system-plan.md) describes the implementation
+in the redesign PR stack; deployment is a separate decision. All generated website imagery must
+pass [image QA](docs/generated-image-qa.md).
 
 ## About Kazon
 
 - **7+ years** professional software engineering experience
 - **Background:** Lyft, Sure (Toggle homeowners insurance), Axuall/Vendorpass (contract), Scotch Inc.
-- **Core specialty:** Python, ETL pipelines, data engineering, backend API development
+- **Current direction:** AI-assisted building, with room to shape solutions, prototype, iterate, and stay close to how people use the result. He welcomes ideas from collaborators; choosing the original idea is not a requirement.
+- **Professional background:** Python, ETL pipelines, data engineering, backend API development. This establishes credibility; do not advertise data engineering as his desired next specialization.
 - **Regulated industry experience:** Healthcare credentialing, insurance document systems
+- **Website design:** Page structure, visual storytelling and responsive implementation. The personal website redesign is the current portfolio example; do not imply a history of client design projects.
 - **Also works in:** Ruby on Rails, TypeScript, Django, Flask, Dagster, PostgreSQL, AWS
 - **Infrastructure depth:** Docker Swarm, Traefik, Tailscale, Cloudflare, OPNsense, self-hosted everything
 - **Side projects:** Kaillera-next (retro gaming netplay platform), Kova (custom ETL programming language), Frigate NVR, personal home cluster
@@ -22,39 +32,41 @@ You are working on the personal contracting website of **Kazon Wilson**, operati
 - **URL:** thesuperhuman.us
 - **Stack:** Astro 5, TypeScript, Tailwind CSS, Cloudflare Workers + Static Assets, Resend, Turnstile, Cloudflare KV
 - **Resume delivery:** Approval-gated. PDFs stored in Cloudflare KV, emailed only after operator approval
-- **Two resume variants:** `pdf:general` (commercial contracting), `pdf:dod` (federal/defense)
+- **New resume requests use the general variant only.** The public version picker and incoming DoD requests are retired in the local redesign. Approval and delivery still support stored legacy requests through `pdf:general` and `pdf:dod`; neither stored requests nor PDFs were migrated or deleted.
 
 See `README.md` for environment variables, KV bindings, the full resume request flow, deployment commands, and OG image regeneration. Don't duplicate that information here.
 
 ## Positioning & Brand Voice
 
-- **Contractor, not a job seeker.** Kazon offers specialized services through his LLC. All public-facing copy should reflect that. Never write "looking for roles," "open to opportunities," "seeking a position," etc. Frame everything as taking on engagements / accepting contracts / available for project work.
+- **Person and interests first.** Show what Kazon cares about, makes, and contributes. Make professional evidence easy to assess. Express a preference for compatible contract work without excluding interesting full-time opportunities or turning every page into a services pitch.
 - **Tone:** Direct, confident, technically specific. No fluff, no buzzwords
-- **Audience:** CTOs, engineering leads, startup founders, government prime contractors
+- **Audience:** curious visitors, potential collaborators, recruiters, and hiring managers
 - **Key differentiators:**
   - Lyft pedigree
   - Regulated industry experience (healthcare, insurance)
-  - ETL/pipeline specialist, not a generalist
+  - AI-assisted building grounded in production engineering experience
   - Async-first, results-focused working style
   - AI-assisted development advocate
-  - Moving to NoVA, positioned for government contracting
+  - Interest in shaping solutions and seeing ideas become useful software
 
 ### Clearance posture
 
-No active security clearance, but open to pursuing one for the right engagement. The **DoD-focused resume** is positioned for **non-cleared support work**: data engineering for prime contractors on unclassified efforts, subcontract roles, public-facing agency systems, and clearance-sponsoring prime/sub positions. Never write copy that implies current cleared status (e.g., "TS/SCI cleared engineer," "active clearance"). If a client asks about clearance in a request, route them to the contact form. That's an operator-handled conversation.
+No active security clearance, but open to pursuing one for the right engagement. The redesign retires the DoD-focused resume option. Never write copy that implies current cleared status (e.g., "TS/SCI cleared engineer," "active clearance"). If a client asks about clearance in a request, route them to the contact form. That's an operator-handled conversation.
 
 ## Working Principles
 
 - **Privacy.** Kazon's personal home address never appears in public-facing content. The business address is The Superhuman Group LLC's Wyoming registered agent address.
 - **Engagement model.** All contracts are **fixed-price, deliverable-based**, never hourly. Never add hourly rate copy anywhere.
-- **AI tool usage** is non-negotiable and is a feature, not a disclaimer. Reflect it positively. The site already includes a section-level disclosure on `/about` under "Outside of work". Match that tone if you ever need to write similar copy.
+- **AI tool usage** is non-negotiable and is a feature, not a disclaimer. Reflect it positively. The Work page and project journals describe AI collaboration at a high level. Keep attribution truthful without publishing private operational recipes.
 - **Async communication is preferred.** Reflect this in contact/engagement copy.
 
 ## Rate Context
 
 Lives in `CLAUDE.local.md` (gitignored). Don't write public rate numbers anywhere.
 
-## Services Offered
+## Historical capabilities
+
+These describe prior capabilities, not a service menu to promote. Lead with the current building direction and preserve specific experience as supporting evidence.
 
 1. **ETL Pipeline Architecture & Development**: Dagster, Python, multi-source ingestion
 2. **Backend API Development**: Django, Flask, Python, REST, gRPC
@@ -75,7 +87,7 @@ Lives in `CLAUDE.local.md` (gitignored). Don't write public rate numbers anywher
 
 - Never display Kazon's personal home address anywhere on the site
 - Never display rates or pricing publicly
-- Never position Kazon as a job seeker; he is a contractor offering services
+- Never imply contract exclusivity or a blanket rejection of full-time opportunities; follow the agreed personal-site direction
 - Never use buzzwords: *passionate*, *innovative*, *guru*, *ninja*, *rockstar*
 - Never use em-dashes (` — `) in user-facing prose, email bodies, subjects, or any new copy. They read as AI-generated. Use periods, colons, commas, semicolons, or parentheses instead. The middle-dot (` · `) is fine as a separator in metadata lines. This rule applies to `src/`, `public/`, README.md, and CLAUDE.md. Historical design specs in `docs/superpowers/specs/` are frozen and exempt.
 - Never add hourly rates; all engagements are fixed price

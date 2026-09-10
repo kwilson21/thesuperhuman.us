@@ -43,3 +43,5 @@ implausible visible connection. No private information or new product evidence.
 Outcome: ready for the local preview. The automated source-asset gate still
 checks studio-v1; this derived public card has the separate manual review and
 hash above. Regeneration requires inspecting the output again.
+
+Archive note: source PNGs, prompts and raw browser-evidence paths above refer to the private recovery archive. The committed production file and hash record are authoritative for the asset gate; see [the evidence index](../design-concepts/README.md).

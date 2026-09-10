@@ -65,7 +65,7 @@ new preferred role or imply willingness to take every engagement.
 Evidence: [Hero](../../../src/components/Hero.astro),
 [Contact form](../../../src/components/ContactForm.astro),
 [About content](../../../src/content/pages/about.md),
-[services sheet](../../../public/services.html), [CLAUDE.md](../../../CLAUDE.md).
+[services sheet](https://github.com/kwilson21/thesuperhuman.us/blob/67769c6/public/services.html), [CLAUDE.md](../../../CLAUDE.md).
 
 ### A2. Visitors do not have a consistent map
 

@@ -2,12 +2,12 @@
 
 Status: Refined through September 10, 2026. The five primary areas and the
 distinction between Work as capability evidence and Building as project exploration
-are agreed. The [visual-study index](design-concepts/2026-09-09/README.md) records
+are agreed. The [visual-study index](design-concepts/README.md) records
 selected page compositions and deeper templates. Audio remains a secondary
 destination associated with About. Final copy, production assets, and interaction
 behavior still require validation. The proposed [system plan](website-system-plan.md)
 turns these responsibilities into repository conventions. Home and the four primary
-page compositions, project/article details, Audio and the contact flow are implemented locally. Integrated whole-site verification passes. The website project and redesign topic are also implemented locally; see the [journal increment review](design-concepts/2026-09-10/website-journal/README.md). Nothing has been deployed.
+page compositions, project/article details, Audio and the contact flow are implemented locally. Integrated whole-site verification passes. The website project and redesign topic are also implemented locally; see the [journal increment review](redesign-story-material.md). Nothing has been deployed.
 
 Based on the [agreed direction](website-direction.md) and
 [website audit](audits/2026-09-09/website-audit.md).
@@ -74,7 +74,7 @@ the page with a hiring manager even before a resume is delivered.
 
 September 10 decision: offer only the general resume for now. Retire the
 DoD-focused option and version selection as part of implementation, preserving
-approval before delivery. See the [approved request flow](design-concepts/2026-09-09/contact-flow-study.md).
+approval before delivery. See the [approved request flow](design-concepts/README.md#resume-and-contact).
 
 This area can include personal projects, audio work, and future open-source
 contributions when they demonstrate a relevant capability. It is not restricted
@@ -143,7 +143,7 @@ extended writing rather than repeating them.
 Keep the existing resume request destination reachable while making its entry
 point obvious from Work. A curious visitor should be able to contact Kazon
 without presenting a fully scoped project. The approved
-[contact study](design-concepts/2026-09-09/contact-flow-study.md) simplifies the
+[contact study](design-concepts/README.md#resume-and-contact) simplifies the
 general inquiry; implementation must preserve delivery and privacy safeguards.
 
 ## Audio: a connected practice with its own destination

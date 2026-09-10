@@ -153,3 +153,7 @@ main explanation with a nontechnical reader and technical depth with an engineer
 and record evidence before claiming acceptance. Use small reviewable PRs.
 Videos as progress evidence are supported; generated episodic shorts, 3D exploration,
 and a new orchestration platform are not required for the initial release.
+
+## September 10 primary-page presentation amendment
+
+The owner-approved Building directory supersedes the earlier requirement for a cross-project feed on `/building`. The index now presents a small selection of projects and links to their journals. It does not copy live status into curated labels. `/building/threadline` and `/building/the-engineers-daily` retain their source-driven updates, timelines, corrections, and withdrawals. This changes presentation only; source authority, the version 1 transport, and publication acceptance rules are unchanged.

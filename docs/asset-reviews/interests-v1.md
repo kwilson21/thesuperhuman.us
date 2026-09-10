@@ -30,3 +30,5 @@ Exact delivered-file record:
   ]
 }
 ```
+
+Archive note: source PNGs, prompts and raw browser-evidence paths above refer to the private recovery archive. The committed production file and hash record are authoritative for the asset gate; see [the evidence index](../design-concepts/README.md).
