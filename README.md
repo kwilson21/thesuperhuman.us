@@ -66,13 +66,16 @@ Re-run any of these whenever a resume changes.
 
 ### Rebuilding the services one-pager PDF
 
-The source HTML lives at `public/services.html` (also served at `/services.html`). To regenerate the PDF and refresh `doc:services-overview` in KV:
+The services overviews share `src/layouts/ServiceSheet.astro` and `src/data/services.ts`. Software lives at `/services` (the existing `/services.html` redirects there); Audio lives at `/audio/services`. Both are readable on phones and have a Print / Save PDF action. Existing PDFs in KV are not updated by editing the pages.
+
+For scripted export, start a local preview and specify its URL:
 
 ```bash
-./scripts/build-services-pdf.sh --upload
+BASE_URL=http://127.0.0.1:4321 ./scripts/build-services-pdf.sh
+BASE_URL=http://127.0.0.1:4321 ./scripts/build-services-pdf.sh --audio
 ```
 
-Without `--upload`, the script only renders to `/tmp/services-overview.pdf` for inspection. The PDF artifact is never committed.
+These render to `/tmp/services-overview.pdf` and `/tmp/audio-services-overview.pdf`. `OUT` overrides the destination. Inspect the output before sharing; generated PDFs are not committed. The existing `--upload` option refreshes the software `doc:services-overview` key only when explicitly requested. Audio export is render-only and cannot overwrite that key.
 
 ### Security headers
 
