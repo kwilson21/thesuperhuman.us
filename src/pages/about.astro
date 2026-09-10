@@ -4,7 +4,7 @@ import { getEntry } from 'astro:content';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import Footer from '~/components/Footer.astro';
 import ResumeRequestForm from '~/components/ResumeRequestForm.astro';
-import { experience, workFocus, workingPreference } from '~/data/profile';
+import { personJsonLd, experience, workFocus, workingPreference } from '~/data/profile';
 import terrain from '~/assets/site/terrain-v1.webp';
 import headphones from '~/assets/site/headphones-v1.webp';
 import laptop from '~/assets/site/laptop-v1.webp';
@@ -20,7 +20,7 @@ const chapters = [
   { id: 'whats-next', label: 'What’s next', title: 'Making room for what comes next.', text: workFocus, image: notebook, extra: workingPreference },
 ];
 ---
-<BaseLayout title={entry.data.title} description={entry.data.description}>
+<BaseLayout jsonLd={personJsonLd} title={entry.data.title} description={entry.data.description}>
   <div class="about-page">
     <header class="site-shell about-intro">
       <div class="about-intro-copy"><p class="page-kicker">About</p><h1 class="page-title">A little more<br />about me.</h1><div class="page-lede"><Content /></div><nav class="site-links" aria-label="About chapters"><a class="site-link" href="#audio">Audio <span aria-hidden="true">→</span></a><a class="site-link" href="#software">Software <span aria-hidden="true">→</span></a><a class="site-link" href="#play">Play <span aria-hidden="true">→</span></a><a class="site-link" href="#whats-next">What’s next <span aria-hidden="true">→</span></a></nav></div>

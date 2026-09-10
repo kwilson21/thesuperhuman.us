@@ -4,9 +4,9 @@ import BaseLayout from '~/layouts/BaseLayout.astro';
 import Footer from '~/components/Footer.astro';
 import ExperienceRow from '~/components/ExperienceRow.astro';
 import WorkDiagram from '~/components/WorkDiagram.astro';
-import { experience, lyftBonus, lyftTeams, workFocus, workingPreference } from '~/data/profile';
+import { personJsonLd, experience, lyftBonus, lyftTeams, workFocus, workingPreference } from '~/data/profile';
 ---
-<BaseLayout title="Work · Kazon Wilson" description="Software engineer building with AI. Work highlights, professional experience, and an approach grounded in exploration, iteration, and engineering judgment.">
+<BaseLayout jsonLd={personJsonLd} title="Work · Kazon Wilson" description="Software engineer building with AI. Work highlights, professional experience, and an approach grounded in exploration, iteration, and engineering judgment.">
   <div class="site-shell primary-page work-page">
     <header class="work-intro">
       <div><p class="page-kicker">Work</p><h1 class="page-title">Software engineer.<br />Building with AI.</h1><p class="page-lede">I turn ideas into working software through exploration, iteration, and engineering judgment.</p><div class="site-links"><a class="site-link" href="#selected-work">Work highlights <span aria-hidden="true">→</span></a><a class="site-link" href="#experience">Experience <span aria-hidden="true">→</span></a><a class="site-link" href="/services">Software services <span aria-hidden="true">→</span></a><a class="site-link" href="/about#resumes">Request resume <span aria-hidden="true">→</span></a></div></div>
