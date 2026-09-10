@@ -1,17 +1,49 @@
 ---
 export const prerender = false;
-import BaseLayout from '~/layouts/BaseLayout.astro';
-import Footer from '~/components/Footer.astro';
+import ProjectLayout from '~/layouts/ProjectLayout.astro';
+import threadline from '~/assets/site/threadline-v1.webp';
 import ProjectUpdates from '~/components/ProjectUpdates.astro';
 import { websiteFeed } from '~/lib/publication/website';
-import '~/styles/project-journal.css';
 const feed = await websiteFeed(Astro.locals.runtime.env, 'threadline');
 Astro.response.headers.set('Cache-Control', 'no-store');
 ---
-<BaseLayout title="Threadline · Project journal · Kazon Wilson" description="Helping developers pick up the thread of their work. Follow Threadline from its first prototype to the latest milestone.">
-  <div class="project-shell"><nav class="project-nav" aria-label="Project navigation"><a href="/">Kazon Wilson</a><a href="/building">All projects</a></nav>
-    <header class="project-intro"><p class="eyebrow">Project journal · Development</p><h1>Threadline</h1><p class="lead">Pick up where you left off.</p><p>Switching tasks can mean reconstructing what you were doing. I’m building a way to keep related work together inside the code editor.</p><p class="project-note">An internal prototype. The milestones below distinguish plans, built pieces, checks and availability.</p><p class="intended-experience"><strong>The intended experience:</strong> Work on a task, handle an interruption, then return to its related code and context. Threadline should help keep that work together, with you able to correct its suggestions.</p></header>
-    <p class="project-next"><strong>Current state:</strong> Threadline is an internal prototype. Its live editor experience is still in development.</p>
-    <ProjectUpdates feed={feed} projectId="threadline" />
-  </div><Footer slot="footer" />
-</BaseLayout>
+<ProjectLayout title="Threadline" subtitle="Pick up where you left off." description="Keep related work together, so an interruption doesn’t mean starting over." status="Internal prototype" journalHref="#threadline-updates-title">
+  <figure class="thread-experience">
+    <img src={threadline.src} alt="Notes connected by a terracotta thread, gathered beside a spool." width={threadline.width} height={threadline.height} fetchpriority="high" />
+    <ol class="thread-steps">
+      <li><span aria-hidden="true">01</span><div><h2>Work</h2><p>A task, its code, and the context that belongs to it.</p></div></li>
+      <li><span aria-hidden="true">02</span><div><h2>Switch</h2><p>Something else needs your attention.</p></div></li>
+      <li><span aria-hidden="true">03</span><div><h2>Return</h2><p>Pick up the related work inside your editor.</p></div></li>
+    </ol>
+    <figcaption class="project-caption">Illustration of the intended experience.</figcaption>
+  </figure>
+  <section class="project-section" aria-labelledby="threadline-idea">
+    <div class="site-section-heading"><h2 id="threadline-idea">Behind the idea</h2></div>
+    <div class="project-pair thread-principles">
+      <div><h3>Less reconstructing.</h3><p>Returning to a task should feel familiar. I’m exploring how to keep its context close to the code.</p></div>
+      <div><h3>You keep the final say.</h3><p>Suggestions should be inspectable and correctable. The developer decides what belongs together.</p></div>
+    </div>
+  </section>
+  <section class="project-section" aria-labelledby="threadline-state">
+    <div class="site-section-heading"><h2 id="threadline-state">Where it stands</h2></div>
+    <p class="thread-state">This is an internal prototype. The journal below distinguishes plans, built pieces, checks and availability as the work develops.</p>
+  </section>
+  <ProjectUpdates feed={feed} projectId="threadline" title="The development journal" />
+</ProjectLayout>
+<style>
+  .thread-experience { position: relative; margin-top: .5rem; }
+  .thread-experience > img { display: block; width: 100%; height: auto;  border-radius: 3px; }
+  .thread-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; gap: 2rem; padding: 2rem 0 1rem; }
+  .thread-steps li { display: flex; gap: 1rem; align-items: baseline; }
+  .thread-steps li > span { font: .8rem 'JetBrains Mono', monospace; color: var(--accent); }
+  .thread-steps h2 { font-size: 1.6rem; line-height: 1.25; }
+  .thread-steps p { font-size: 1rem; color: var(--muted); margin-top: .5rem; line-height: 1.6; }
+  .thread-principles { align-items: start; grid-template-columns: 1fr 1fr; }
+  .thread-state { margin-top: 1.5rem; font-size: 1.15rem; line-height: 1.6; max-width: 65ch; }
+  @media(max-width: 700px) {
+    .thread-experience > img { max-height: none; }
+    .thread-steps, .thread-principles { grid-template-columns: 1fr; }
+    .thread-steps { gap: 1.5rem; }
+    .thread-steps li { border-left: 1px solid var(--rule); padding-left: 1rem; }
+  }
+</style>

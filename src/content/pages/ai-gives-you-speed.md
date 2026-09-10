@@ -47,6 +47,29 @@ AI shouldn't eliminate the engineering process.
 
 **It should compress the execution time between engineering checkpoints.**
 
+<figure class="direction-comparison" aria-label="Two conceptual paths toward an intended outcome">
+  <div class="direction-path">
+    <h3>Without checkpoints</h3>
+    <svg viewBox="0 0 600 100" role="img" aria-label="A dashed path drifts away from its intended outcome" fill="none">
+      <path d="M10 80C100 85 130 15 190 45S240 110 300 70 350 90 420 20" stroke="var(--muted)" stroke-width="2" stroke-dasharray="6 7" />
+      <path d="m408 23 13-5-3 14" stroke="var(--muted)" stroke-width="2" />
+      <circle cx="10" cy="80" r="6" fill="var(--ink)" /><circle cx="590" cy="40" r="7" stroke="var(--ink)" stroke-width="2" />
+    </svg>
+    <div class="direction-labels"><span>Start</span><span>Intended outcome</span></div>
+  </div>
+  <div class="direction-path">
+    <h3>With checkpoints</h3>
+    <svg viewBox="0 0 600 100" role="img" aria-label="A solid path changes course at checkpoints and approaches its intended outcome" fill="none">
+      <path d="M10 80C70 80 90 60 130 55S195 35 240 65 330 75 380 50 460 65 560 40" stroke="var(--accent)" stroke-width="2.5" />
+      <path d="m547 34 15 5-11 10" stroke="var(--accent)" stroke-width="2.5" />
+      <circle cx="10" cy="80" r="6" fill="var(--ink)" />
+      <g fill="var(--paper)" stroke="var(--accent)" stroke-width="2.5"><circle cx="130" cy="55" r="6" /><circle cx="240" cy="65" r="6" /><circle cx="380" cy="50" r="6" /><circle cx="590" cy="40" r="7" /></g>
+    </svg>
+    <div class="direction-labels"><span>Start</span><span>Intended outcome</span></div>
+  </div>
+  <figcaption>Illustration of course correction. These paths do not represent measured performance.</figcaption>
+</figure>
+
 ## We Have Seen This Problem Before
 
 There's an interesting progression here when you look at how software engineering has evolved.
@@ -107,17 +130,13 @@ The lesson I've taken from this is:
 
 I don't want this to be a philosophy I only write about. I've been applying it in two projects that have helped refine how I work with AI.
 
-**The Engineer's Daily** is an experiment in building engineering capability incrementally.
+**[The Engineer’s Daily](/building/the-engineers-daily)** explores a daily practice of engineering alongside Scripture, prayer and reflection. The intended experience grows a real application through small changes that matter to a fantasy harbor.
 
-Rather than asking AI to produce a finished application, the project progresses through bounded capabilities that build on one another: requirements, command boundaries, persistence, validation, retrieval, updates, deletion, error handling, behavioral testing, and end-to-end verification.
-
-Each step has a purpose. Each step builds on something that already works.
+One lesson is built locally for review. Code execution and saved progress are still to come.
 
 **Servant** takes the idea much further: a longer-term experiment in designing and building a programming language with AI-assisted development.
 
-Because AI agents are involved in the development process, I've intentionally put boundaries around what counts as progress.
-
-Agents work against an explicit roadmap and milestone gates. Milestones aren't complete simply because tasks were checked off. Advancement requires executable behavior and recorded evidence. Design decisions can remain provisional while they're tested through actual usage, and major phase advancement still requires human approval.
+Working on a language keeps bringing me back to the difference between an idea being implemented and an idea being ready to rely on.
 
 One principle from Servant has become increasingly important to how I think about AI-assisted development:
 
@@ -133,7 +152,7 @@ It doesn't mean we've learned enough to commit to the decision.
 
 And it doesn't mean we're moving in the right direction.
 
-Both projects are currently private while I continue developing them, but they've become practical environments for refining how I use AI as an engineer rather than simply as a code generator.
+These projects have become practical environments for refining how I use AI as an engineer rather than simply as a code generator.
 
 ## The Engineer Becomes a Steward
 

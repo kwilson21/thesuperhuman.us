@@ -1,15 +1,15 @@
 ---
 import PayloadReviewIllustration from './PayloadReviewIllustration.astro';
 import type { Milestone } from '~/lib/project-story';
-interface Props { id: string; title: string; entries: Milestone[]; selectedId?: string; }
-const { id, title, entries, selectedId } = Astro.props;
+interface Props { id: string; title: string; entries: Milestone[]; selectedId?: string; unavailable?: boolean; }
+const { id, title, entries, selectedId, unavailable = false } = Astro.props;
 const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 ---
 <section class="project-timeline" data-timeline data-selected-id={selectedId} aria-labelledby={`${id}-title`}>
-  <h2 id={`${id}-title`}>{title}</h2>
+  <div class="site-section-heading"><h2 id={`${id}-title`}>{title}</h2></div>
   {entries.length ? <>
     <div data-controls hidden>
-      <p class="timeline-hint">Earlier work to the left. Start with the latest, or choose a milestone.</p>
+      <p class="timeline-hint">Choose a milestone to explore the work.</p>
       <div class="milestone-strip" aria-label="Choose a milestone">{entries.map((entry, index) => <button type="button" data-pick={index} aria-controls={entry.id} aria-pressed="false">
         {entry.artifacts?.[0] ? <img src={entry.artifacts[0].src} alt="" width="180" height="100" loading="lazy" /> : <span class="update-mark" aria-hidden="true">{String(index + 1).padStart(2, '0')}<small>{entry.status || 'Update'}</small></span>}
         <time datetime={entry.day}>{date(entry.day)}</time><strong>{entry.title}</strong>
@@ -23,7 +23,7 @@ const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('e
       {entry.illustration === 'payload-review' && <PayloadReviewIllustration />}
       {entry.artifacts?.length && <div class="milestone-artifacts">{entry.artifacts.map(artifact => <figure><a href={artifact.src} aria-label={`Open ${artifact.title} at full size`}><img src={artifact.src} alt={artifact.alt} width={artifact.width} height={artifact.height} loading="lazy" /></a><figcaption><span class="meta">{artifact.kind}</span><h4>{artifact.title}</h4><p>{artifact.caption}</p></figcaption></figure>)}</div>}
     </article>)}</div>
-  </> : <p>No published milestones yet.</p>}
+  </> : <p>{unavailable ? 'Published updates are temporarily unavailable.' : 'No published milestones yet.'}</p>}
 </section>
 <script>
   document.querySelectorAll<HTMLElement>('[data-timeline]').forEach(root => {
@@ -48,13 +48,21 @@ const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('e
     }
     function choose(index: number) { selected = index; showAll = false; render(); }
     picks.forEach((pick, i) => { pick.addEventListener('click', () => choose(i)); pick.addEventListener('keydown', event => {
-      const target = event.key === 'Home' ? 0 : event.key === 'End' ? picks.length - 1 : event.key === 'ArrowRight' ? Math.min(i + 1, picks.length - 1) : event.key === 'ArrowLeft' ? Math.max(i - 1, 0) : -1;
+      const target = event.key === 'Home' ? 0 : event.key === 'End' ? picks.length - 1 : (event.key === 'ArrowRight' || event.key === 'ArrowDown') ? Math.min(i + 1, picks.length - 1) : (event.key === 'ArrowLeft' || event.key === 'ArrowUp') ? Math.max(i - 1, 0) : -1;
       if (target >= 0) { event.preventDefault(); choose(target); picks[target].focus(); }
     }); });
     previous.addEventListener('click', () => choose(Math.max(0, selected - 1)));
     next.addEventListener('click', () => choose(Math.min(picks.length - 1, selected + 1)));
     all.addEventListener('click', () => { showAll = !showAll; render(false); });
+    function followHash() {
+      const index = panels.findIndex(panel => '#' + panel.id === location.hash);
+      if (index < 0) return;
+      choose(index);
+      panels[index].scrollIntoView({ block: 'start' });
+    }
+    window.addEventListener('hashchange', followHash);
     controls.hidden = false; render();
+    if (panels.some(panel => '#' + panel.id === location.hash)) followHash();
     new ResizeObserver(() => render()).observe(root);
   });
 </script>
@@ -67,5 +75,24 @@ const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('e
   .timeline-tools { display: flex; align-items: center; gap: 20px; margin: 8px 0 28px; font-size: 13px; flex-wrap: wrap; } .timeline-tools button { background: none; border: none; padding: 8px 0; } button:disabled { opacity: .35; cursor: default; } [data-all] { margin-left: auto; }
   article { border-top: 1px solid var(--rule); padding: 28px 0; } article[hidden] { display: none; } h3 { font-size: clamp(28px,3vw,38px); margin: 12px 0; } .milestone-summary { font-size: 19px; line-height: 1.65; max-width: 66ch; } details { margin: 18px 0 24px; max-width: 75ch; font-size: 15px; line-height: 1.7; } summary { cursor: pointer; color: var(--accent); } .detail { white-space: pre-line; margin-top: 12px; }
   .milestone-artifacts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 30px; margin-top: 28px; } figure:only-child { grid-column: 1/-1; } figure { margin: 0; } figure a { display: block; border: 1px solid var(--rule); } figure img { width: 100%; height: auto; } figcaption { margin-top: 14px; font-size: 14px; line-height: 1.6; color: var(--muted); } h4 { font-size: 21px; color: var(--ink); margin: 4px 0; }
+  .project-timeline > .site-section-heading { margin-bottom: 1.5rem; }
+  article { scroll-margin-top: 2rem; }
+  @media(min-width: 801px) {
+    .project-timeline:has(> [data-controls]:not([hidden])) { display: grid; grid-template-columns: 230px minmax(0, 1fr); column-gap: 2.5rem; }
+    .project-timeline > .site-section-heading { grid-column: 1 / -1; }
+    .milestone-strip { flex-direction: column; overflow: visible; gap: 0; padding: 0 0 1rem; }
+    .milestone-strip button { position: relative; flex: none; padding: .9rem 1rem .9rem 1.3rem; border: 0; border-left: 1px solid var(--rule); border-radius: 0; }
+    .milestone-strip button::before { content: ''; position: absolute; width: 9px; height: 9px; border: 1px solid var(--muted); background: var(--paper); border-radius: 50%; left: -5px; top: 1.25rem; }
+    .milestone-strip button[aria-pressed=true] { background: transparent; border-color: var(--rule); }
+    .milestone-strip button[aria-pressed=true]::before { background: var(--accent); border-color: var(--accent); outline: 1px solid var(--accent); outline-offset: 3px; }
+    .milestone-strip img, .update-mark { display: none; }
+    .milestone-strip time { margin: 0 0 .4rem; }
+    .milestone-strip strong { font-size: .9rem; }
+    .timeline-tools { gap: .75rem; font-size: .75rem; }
+    [data-all] { margin-left: 0; flex-basis: 100%; text-align: left; }
+    .milestone-panels { border-left: 1px solid var(--rule); padding-left: 2.5rem; }
+    .milestone-panels article:first-child, .milestone-panels article[hidden] + article { border-top: 0; padding-top: 0; }
+    .timeline-hint { margin-top: 0; }
+  }
   @media(max-width:600px) { .milestone-artifacts { grid-template-columns: 1fr; } .timeline-tools { gap: 15px; } }
 </style>

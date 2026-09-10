@@ -2,14 +2,48 @@
 export const prerender = false;
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import Footer from '~/components/Footer.astro';
-import LiveWorkFeed from '~/components/LiveWorkFeed.astro';
-import DesignStoryPreview from '~/components/DesignStoryPreview.astro';
-import { websiteFeed } from '~/lib/publication/website';
-const feed = await websiteFeed(Astro.locals.runtime.env);
-Astro.response.headers.set('Cache-Control', 'no-store');
+import dailyStory from '~/data/project-stories/the-engineers-daily.json';
+import dailyPreview from '~/assets/projects/daily-preview.webp';
+import threadline from '~/assets/site/threadline-v1.webp';
+import controller from '~/assets/site/controller-v1.webp';
 ---
-<BaseLayout title="What I’m building · Kazon Wilson" description="Project progress, decisions and the work behind them.">
-  <DesignStoryPreview />
-  <LiveWorkFeed feed={feed} historyHref="/building/threadline" />
-  <Footer />
+<BaseLayout title="Building · Kazon Wilson" description="Projects, experiments, and ideas I want to explore.">
+  <div class="site-shell primary-page">
+    <header class="building-intro"><p class="page-kicker">Building</p><h1 class="page-title">Things I’m making.</h1><p class="page-lede">Projects, experiments, and ideas I want to explore.</p><div class="site-links"><a class="site-link" href="#featured">Featured projects <span aria-hidden="true">→</span></a><a class="site-link" href="#more-projects">More projects <span aria-hidden="true">→</span></a></div></header>
+    <section id="featured" class="site-section">
+      <div class="site-section-heading"><h2>Featured projects</h2></div>
+      <article class="daily-feature">
+        <a class="daily-image" href="/building/the-engineers-daily" aria-label="Explore The Engineer’s Daily journal"><img src={dailyPreview.src} width={dailyPreview.width} height={dailyPreview.height} alt="The Engineer’s Daily local lesson prototype, with a harbor story and a code exercise." fetchpriority="high" /></a>
+        <div><p class="page-kicker">Local prototype · September 2026</p><h3>{dailyStory.title}</h3><p class="project-subtitle">{dailyStory.subtitle}</p><p class="project-description">A lesson prototype with story, practice, and reflection.</p><div class="project-links"><a class="site-link" href="/building/the-engineers-daily">Explore the journal <span aria-hidden="true">→</span></a><a class="site-link secondary-link" href="/building/the-engineers-daily#design-history-title">Design history <span aria-hidden="true">→</span></a></div></div>
+      </article>
+      <article class="threadline-feature">
+        <div><p class="page-kicker">Threadline</p><h3>Finding your way back.</h3><p class="project-subtitle">Pick up interrupted development work with its context intact.</p><p class="project-description">Explore the idea, the work behind it, and what comes next.</p><a class="site-link" href="/building/threadline">Explore the journal <span aria-hidden="true">→</span></a></div>
+        <a class="threadline-image" href="/building/threadline" aria-label="Explore Threadline"><img src={threadline.src} width={threadline.width} height={threadline.height} alt="" loading="lazy" /><span class="art-note">Illustration</span></a>
+      </article>
+    </section>
+    <section id="more-projects" class="site-section">
+      <div class="site-section-heading"><h2>More projects</h2></div>
+      <article class="project-row"><img src={controller.src} width={controller.width} height={controller.height} alt="" loading="lazy" /><div><h3>Kaillera Next</h3><p>Retro gaming and online netplay.</p></div><a class="site-link" href="https://kaillera-next.thesuperhuman.us">Explore <span aria-hidden="true">↗</span><span class="sr-only">Kaillera Next</span></a></article>
+    </section>
+    <section class="page-connect"><div><h2>Curious about how I work?</h2><p>Explore my work or read what I’m thinking about.</p></div><div class="site-links"><a class="site-link" href="/work">Explore my work <span aria-hidden="true">→</span></a><a class="site-link" href="/writing">Read my writing <span aria-hidden="true">→</span></a></div></section>
+  </div><Footer compact slot="footer" />
 </BaseLayout>
+<style>
+  .building-intro .site-links { margin-top: 2rem; }
+  .daily-feature { display: grid; grid-template-columns: 1.65fr 1fr; gap: 2.5rem; align-items: center; }
+  .daily-image { display: block; border: 1px solid var(--rule); border-radius: 3px; padding: 0; overflow: hidden; }
+  img { width: 100%; height: auto; }
+  h3 { font-size: clamp(2rem, 3.2vw, 2.8rem); line-height: 1.15; letter-spacing: -.025em; }
+  .project-subtitle { font-size: 1.4rem; line-height: 1.4; margin-top: 1rem; }
+  .project-description { color: var(--muted); font-size: 1.125rem; margin-block: 1rem 1.5rem; max-width: 27rem; }
+  .project-links { display: flex; flex-direction: column; align-items: flex-start; gap: 1.2rem; }.secondary-link { font-size: .95rem; }
+  .threadline-feature { display: grid; grid-template-columns: 1fr 1.4fr; gap: 3rem; align-items: center; margin-top: 3rem; padding-top: 2.5rem; border-top: 1px solid var(--rule); }
+  .threadline-image { position: relative; display: block; border: 0; }.threadline-image img { border-radius: 3px; }
+  .art-note { display: block; text-align: right; font-size: .75rem; color: var(--muted); margin-top: .5rem; }
+  .project-row { display: grid; grid-template-columns: 120px 1fr auto; gap: 2rem; align-items: center; padding-block: 1.5rem; border-top: 1px solid var(--rule); }
+  .project-row h3 { font-size: 1.7rem; }.project-row p { color: var(--muted); max-width: 36rem; }.project-row img { mix-blend-mode: multiply; mask-image: radial-gradient(ellipse at center, #000 45%, transparent 73%); }.row-icon { width: 80px; justify-self: center; }
+  @media(max-width: 800px) {
+    .daily-feature, .threadline-feature { grid-template-columns: 1fr; gap: 1.5rem; }.daily-feature > div { grid-row: 1; }
+    .project-row { grid-template-columns: 65px 1fr; gap: 1rem; }.project-row > a { grid-column: 2; justify-self: start; }.row-icon { width: 55px; }.project-row h3 { font-size: 1.5rem; }
+  }
+</style>
