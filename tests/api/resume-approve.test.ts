@@ -77,7 +77,7 @@ describe('GET /api/resume-approve', () => {
     expect(kv.delete).not.toHaveBeenCalled();
   });
 
-  it('on success: emails the requester with PDF, deletes the request, returns 200 HTML', async () => {
+  it('still fulfills a stored legacy DoD request and consumes it only after delivery', async () => {
     const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]).buffer; // "%PDF-"
     const kv = makeBinaryKv({ 'pdf:dod': pdf }, { 'req:abc': sampleRequest });
     const res = await GET(makeContext('abc', kv));

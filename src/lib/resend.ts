@@ -20,11 +20,8 @@ function primaryBody(input: ContactInput): string {
     `Name: ${input.name}`,
     `Email: ${input.email}`,
     input.company ? `Company: ${input.company}` : null,
-    `Project type: ${input.projectType.join(', ')}`,
-    `Timeline: ${input.timeline}`,
-    input.budget ? `Budget: ${input.budget}` : null,
     '',
-    'Description:',
+    'Message:',
     input.description,
   ]
     .filter(Boolean)
@@ -33,9 +30,9 @@ function primaryBody(input: ContactInput): string {
 
 function autoresponderBody(): string {
   return [
-    'Thanks for reaching out. I got your message and will respond within two business days.',
+    'Thanks for reaching out. Your message has been received.',
     '',
-    'In the meantime, if you want a deeper look at my background, the resumes on https://thesuperhuman.us/about (general and DoD-focused) cover different angles.',
+    'For a deeper look at my background, you can request my resume at https://thesuperhuman.us/about#resumes. Each request is reviewed before a copy is emailed.',
     '',
     'Kazon',
   ].join('\n');
@@ -92,7 +89,7 @@ export async function sendContactEmails(args: SendArgs): Promise<{ ok: boolean }
     apiKey: args.apiKey,
     from: args.from,
     to: args.to,
-    subject: `New inquiry from ${args.input.name}: ${args.input.projectType.join(', ')}`,
+    subject: `New message from ${args.input.name}`,
     text: primaryBody(args.input),
     replyTo: args.input.email,
   });

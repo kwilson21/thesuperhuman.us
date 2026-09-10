@@ -6,10 +6,7 @@ describe('validateContactInput', () => {
     name: 'Jane',
     email: 'jane@example.com',
     company: '',
-    projectType: ['Backend systems'],
-    timeline: 'Now',
-    budget: '',
-    description: 'A long enough description that explains the project clearly.',
+    description: 'Hello!',
     turnstileToken: 'tok',
   };
 
@@ -30,8 +27,8 @@ describe('validateContactInput', () => {
     if (!result.ok) expect(result.errors.email).toBeDefined();
   });
 
-  it('rejects description shorter than 40 chars', () => {
-    const result = validateContactInput({ ...validInput, description: 'too short' });
+  it('rejects a whitespace-only message', () => {
+    const result = validateContactInput({ ...validInput, description: '   ' });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errors.description).toBeDefined();
   });
@@ -41,20 +38,8 @@ describe('validateContactInput', () => {
     expect(result.ok).toBe(false);
   });
 
-  it('rejects empty projectType array', () => {
-    const result = validateContactInput({ ...validInput, projectType: [] });
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.errors.projectType).toBeDefined();
-  });
-
-  it('rejects unknown projectType value', () => {
-    const result = validateContactInput({ ...validInput, projectType: ['Cryptocurrency'] });
-    expect(result.ok).toBe(false);
-  });
-
-  it('rejects unknown timeline value', () => {
-    const result = validateContactInput({ ...validInput, timeline: 'Soon' });
-    expect(result.ok).toBe(false);
+  it('accepts a short introduction without business qualifiers', () => {
+    expect(validateContactInput({ name: ' Jane ', email: ' jane@example.com ', description: ' Hi ', turnstileToken: 'tok' })).toEqual({ ok: true, value: { name: 'Jane', email: 'jane@example.com', company: '', description: 'Hi', turnstileToken: 'tok' } });
   });
 
   it('rejects missing turnstile token', () => {
@@ -63,7 +48,7 @@ describe('validateContactInput', () => {
   });
 
   it('accepts optional fields when empty', () => {
-    const result = validateContactInput({ ...validInput, company: '', budget: '' });
+    const result = validateContactInput({ ...validInput, company: '' });
     expect(result.ok).toBe(true);
   });
 });

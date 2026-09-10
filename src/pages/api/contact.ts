@@ -69,7 +69,7 @@ export const POST: APIRoute = async (context) => {
   });
   if (!send.ok) {
     return Response.json(
-      { ok: false, error: 'Email delivery failed. Please email kazon.wilson@thesuperhuman.us directly.' },
+      { ok: false, error: 'We could not confirm email delivery. Please email kazon.wilson@thesuperhuman.us directly.' },
       { status: 500 },
     );
   }

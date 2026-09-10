@@ -5,7 +5,7 @@ const validBody = {
   name: 'Jane Doe',
   email: 'jane@example.com',
   company: 'Acme',
-  audience: 'dod',
+  audience: 'general',
   note: '',
   turnstileToken: 'tok',
 };
@@ -74,6 +74,14 @@ describe('POST /api/resume-request', () => {
     expect(json.errors?.audience).toBeDefined();
   });
 
+  it('rejects new DoD requests before storage or external requests', async () => {
+    const kv = makeKv();
+    const res = await POST(makeContext({ ...validBody, audience: 'dod' }, '1.2.3.4', 'https://thesuperhuman.us', kv));
+    expect(res.status).toBe(400);
+    expect(kv.put).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('returns 403 on origin mismatch', async () => {
     const res = await POST(makeContext(validBody, '1.2.3.4', 'https://evil.example.com'));
     expect(res.status).toBe(403);
@@ -128,6 +136,6 @@ describe('POST /api/resume-request', () => {
     const body = JSON.parse((resendCall![1] as RequestInit).body as string);
     expect(body.to).toEqual(['kazon.wilson@thesuperhuman.us']);
     expect(body.text).toContain('/api/resume-approve?id=');
-    expect(body.text).toContain('dod');
+    expect(body.text).toContain('general');
   });
 });

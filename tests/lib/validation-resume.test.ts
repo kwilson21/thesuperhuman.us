@@ -6,7 +6,7 @@ describe('validateResumeRequestInput', () => {
     name: 'Jane',
     email: 'jane@example.com',
     company: 'Acme',
-    audience: 'dod',
+    audience: 'general',
     note: '',
     turnstileToken: 'tok',
   };
@@ -30,6 +30,12 @@ describe('validateResumeRequestInput', () => {
 
   it('rejects unknown audience', () => {
     const result = validateResumeRequestInput({ ...valid, audience: 'sales' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.audience).toBeDefined();
+  });
+
+  it('rejects the retired DoD variant for new requests', () => {
+    const result = validateResumeRequestInput({ ...valid, audience: 'dod' });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errors.audience).toBeDefined();
   });

@@ -1,23 +1,7 @@
-export const PROJECT_TYPES = [
-  'Backend systems',
-  'Data pipelines',
-  'Contract role',
-  'Full-time role',
-  'Advisory',
-  'Other',
-] as const;
-
-export const TIMELINES = ['Now', '1–3 months', 'Just exploring'] as const;
-
-export const BUDGETS = ['Under $10k', '$10–50k', '$50k+', 'Not sure yet'] as const;
-
 export type ContactInput = {
   name: string;
   email: string;
   company: string;
-  projectType: string[];
-  timeline: string;
-  budget: string;
   description: string;
   turnstileToken: string;
 };
@@ -47,30 +31,11 @@ export function validateContactInput(input: unknown): ValidationResult {
   const company = typeof v.company === 'string' ? v.company.trim() : '';
   if (company.length > 120) errors.company = 'Company is too long.';
 
-  const projectType = Array.isArray(v.projectType)
-    ? v.projectType.filter((t): t is string => typeof t === 'string')
-    : [];
-  if (projectType.length === 0) {
-    errors.projectType = 'Pick at least one project type.';
-  } else if (!projectType.every(t => (PROJECT_TYPES as readonly string[]).includes(t))) {
-    errors.projectType = 'Unknown project type.';
-  }
-
-  const timeline = typeof v.timeline === 'string' ? v.timeline.trim() : '';
-  if (!(TIMELINES as readonly string[]).includes(timeline)) {
-    errors.timeline = 'Pick a timeline.';
-  }
-
-  const budget = typeof v.budget === 'string' ? v.budget.trim() : '';
-  if (budget && !(BUDGETS as readonly string[]).includes(budget)) {
-    errors.budget = 'Unknown budget.';
-  }
-
   const description = typeof v.description === 'string' ? v.description.trim() : '';
-  if (description.length < 40) {
-    errors.description = 'Please write at least 40 characters.';
+  if (!description) {
+    errors.description = 'Please enter a message.';
   } else if (description.length > 4000) {
-    errors.description = 'Description is too long.';
+    errors.description = 'Message is too long.';
   }
 
   const turnstileToken = typeof v.turnstileToken === 'string' ? v.turnstileToken : '';
@@ -80,13 +45,13 @@ export function validateContactInput(input: unknown): ValidationResult {
 
   return {
     ok: true,
-    value: { name, email, company, projectType, timeline, budget, description, turnstileToken },
+    value: { name, email, company, description, turnstileToken },
   };
 }
 
 // --- Resume request validation ---
 
-import { RESUME_AUDIENCES, type ResumeAudience, type ResumeRequest } from './resume-requests';
+import type { ResumeRequest } from './resume-requests';
 
 export type ResumeRequestInput = ResumeRequest & { turnstileToken: string };
 
@@ -114,8 +79,8 @@ export function validateResumeRequestInput(input: unknown): ResumeRequestValidat
   if (company.length > 120) errors.company = 'Company is too long.';
 
   const audienceRaw = typeof v.audience === 'string' ? v.audience.trim() : '';
-  const isKnownAudience = (RESUME_AUDIENCES as readonly string[]).includes(audienceRaw);
-  if (!isKnownAudience) errors.audience = 'Pick which resume you need.';
+  // New requests use the general resume; stored legacy requests remain fulfillable.
+  if (audienceRaw !== 'general') errors.audience = 'Only the general resume is available.';
 
   const note = typeof v.note === 'string' ? v.note.trim() : '';
   if (note.length > 1000) errors.note = 'Note is too long.';
@@ -131,7 +96,7 @@ export function validateResumeRequestInput(input: unknown): ResumeRequestValidat
       name,
       email,
       company,
-      audience: audienceRaw as ResumeAudience,
+      audience: 'general',
       note,
       turnstileToken,
     },
