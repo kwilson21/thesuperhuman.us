@@ -3,14 +3,50 @@ import BaseLayout from '~/layouts/BaseLayout.astro';
 import Footer from '~/components/Footer.astro';
 ---
 <BaseLayout title="Page not found · Kazon Wilson" description="This page could not be found. Explore Kazon Wilson’s projects or return to the homepage." noindex>
-  <section class="site-shell py-16 md:py-24">
-    <p class="eyebrow mb-4">404 · Page not found</p>
-    <h1 class="display mb-6">This page isn’t here.</h1>
-    <p class="lede max-w-measure mb-8">The link may have changed. You can head home or explore what I’m building.</p>
-    <div class="site-links">
-      <a class="site-link" href="https://thesuperhuman.us/">Back to home <span aria-hidden="true">→</span></a>
-      <a class="site-link" href="https://thesuperhuman.us/building">Explore my projects <span aria-hidden="true">→</span></a>
+  <section class="missing-page site-shell" aria-labelledby="missing-title">
+    <div class="missing-copy">
+      <p class="missing-status"><span aria-hidden="true"></span>404 / Page not found</p>
+      <h1 id="missing-title">A little<br />off course.</h1>
+      <p class="missing-description">This link doesn’t lead to a page. There’s still plenty worth exploring.</p>
+      <div class="missing-actions">
+        <a class="site-button" href="https://thesuperhuman.us/">Back to home <span aria-hidden="true">↗</span></a>
+        <a class="site-link" href="https://thesuperhuman.us/building">Explore my projects <span aria-hidden="true">→</span></a>
+      </div>
+    </div>
+    <div class="missing-art" aria-hidden="true">
+      <svg viewBox="0 0 640 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="326" cy="249" r="204" stroke="var(--rule)" />
+        <path d="M326 30V468M106 249H548" stroke="var(--rule)" stroke-dasharray="2 8" />
+        <text x="18" y="337" fill="var(--ink)" font-family="Georgia, serif" font-size="256" letter-spacing="-20">404</text>
+        <path d="M35 410C103 410 138 367 166 296C190 234 211 144 290 126C350 112 423 145 422 207C421 262 357 264 334 230C311 196 334 158 365 152" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" />
+        <path d="M458 331C465 378 500 402 554 402" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" />
+        <circle cx="35" cy="410" r="6" fill="var(--accent)" />
+        <circle cx="365" cy="152" r="6" fill="var(--paper)" stroke="var(--accent)" stroke-width="2" />
+        <path d="M543 393L555 402L543 411" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M436 281L446 291M446 281L436 291" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" />
+      </svg>
     </div>
   </section>
   <Footer compact slot="footer" />
 </BaseLayout>
+<style>
+  .missing-page { display: grid; grid-template-columns: 1fr 1.1fr; align-items: center; gap: 2rem; min-height: min(690px, calc(100svh - 260px)); padding-block: 3rem 5rem; }
+  .missing-copy { position: relative; z-index: 1; }
+  .missing-status { display: flex; align-items: center; gap: .65rem; color: var(--muted); font-size: .95rem; margin: 0 0 2rem; }
+  .missing-status > span { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+  h1 { font-size: clamp(3.75rem, 6.9vw, 6.5rem); line-height: .98; letter-spacing: -.055em; margin: 0 0 1.5rem; }
+  .missing-description { max-width: 30ch; font-size: 1.2rem; line-height: 1.5; color: var(--muted); margin: 0 0 2rem; }
+  .missing-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 1.25rem 1.75rem; }
+  .missing-actions .site-button { gap: 1.25rem; }
+  .missing-art { margin-inline: -1.5rem 0; }
+  .missing-art svg { display: block; width: 100%; height: auto; overflow: visible; }
+  @media (max-width: 800px) {
+    .missing-page { grid-template-columns: 1fr; gap: 0; padding-block: 0 3rem; min-height: 0; }
+    .missing-art { grid-row: 1; width: min(100%, 440px); margin: -1rem auto -.25rem; }
+    .missing-copy { max-width: 480px; }
+    .missing-status { margin-bottom: 1rem; }
+    h1 { font-size: clamp(3.5rem, 12vw, 5.5rem); }
+    .missing-description { font-size: 1.125rem; margin-bottom: 1.5rem; }
+    .missing-actions { gap: 1.25rem; }
+  }
+</style>
