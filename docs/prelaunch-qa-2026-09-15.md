@@ -28,3 +28,7 @@ Final branch validation: **204 unit tests pass**, Astro check reports zero error
 ![Branded 404](audits/2026-09-15/prelaunch/404-desktop.png)
 
 ![Privacy notice](audits/2026-09-15/prelaunch/privacy-desktop.png)
+
+## 404 visual direction
+
+The final revision follows the owner-approved goal of a peaceful, reassuring experience: familiar typography, generous space, a plain explanation and one primary way home. Removed the decorative route illustration and oversized error-code artwork. Desktop (1280px) and mobile (390px) screenshots above reflect this revision. HTTP 404, Astro checks and the production build were reverified.
