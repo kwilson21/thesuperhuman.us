@@ -32,3 +32,7 @@ Final branch validation: **204 unit tests pass**, Astro check reports zero error
 ## 404 visual direction
 
 The final revision follows the owner-approved goal of a peaceful, reassuring experience: familiar typography, generous space, a plain explanation and one primary way home. Removed the decorative route illustration and oversized error-code artwork. Desktop (1280px) and mobile (390px) screenshots above reflect this revision. HTTP 404, Astro checks and the production build were reverified.
+
+### Peaceful imagery
+
+Added an original generated coastal landscape in response to the request for beautiful, peaceful imagery. It is decorative and does not claim a real location. Text stays separate, and desktop/mobile crops have been visually reviewed. See `docs/asset-reviews/quiet-coast-v1.md` for delivered-asset QA. Screenshots above show this revision.

@@ -1,9 +1,13 @@
 ---
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import Footer from '~/components/Footer.astro';
+import coast from '~/assets/site/quiet-coast-v1.webp';
 ---
 <BaseLayout title="Page not found · Kazon Wilson" description="This page could not be found. Explore Kazon Wilson’s projects or return to the homepage." noindex>
   <section class="missing-page site-shell" aria-labelledby="missing-title">
+    <div class="missing-landscape" aria-hidden="true">
+      <img src={coast.src} width={coast.width} height={coast.height} alt="" loading="eager" fetchpriority="high" />
+    </div>
     <div class="missing-copy">
       <p class="missing-status">404</p>
       <h1 id="missing-title">This page isn’t here.</h1>
@@ -17,9 +21,11 @@ import Footer from '~/components/Footer.astro';
   <Footer compact slot="footer" />
 </BaseLayout>
 <style>
-  .missing-page { display: grid; place-items: center; min-height: clamp(32rem, calc(100svh - 260px), 44rem); padding-block: 5rem 6rem; }
+  .missing-page { display: grid; justify-items: center; gap: 2.5rem; padding-block: 1.5rem 4rem; }
+  .missing-landscape { width: 100%; max-width: 920px; aspect-ratio: 2.65; overflow: hidden; border-radius: 3px; }
+  .missing-landscape img { width: 100%; height: 100%; object-fit: cover; object-position: center 48%; }
   .missing-copy { width: 100%; max-width: 680px; text-align: center; }
-  .missing-status { color: var(--muted); font-size: .95rem; margin: 0 0 1.5rem; }
+  .missing-status { color: var(--muted); font-size: .95rem; margin: 0 0 1rem; }
   h1 { font-size: clamp(2.5rem, 4.7vw, 3.75rem); line-height: 1.12; letter-spacing: -.035em; margin: 0 0 1.5rem; }
   .missing-description { max-width: 36ch; margin: 0 auto 2rem; font-size: 1.125rem; line-height: 1.65; color: var(--muted); }
   .missing-actions { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
@@ -27,7 +33,8 @@ import Footer from '~/components/Footer.astro';
   .missing-secondary { color: var(--muted); font-size: 1rem; }
   .missing-secondary:hover { color: var(--accent); }
   @media (max-width: 600px) {
-    .missing-page { min-height: 30rem; padding-block: 3.5rem 4.5rem; }
+    .missing-page { padding-block: .5rem 3rem; gap: 2rem; }
+    .missing-landscape { aspect-ratio: 1.7; }
     .missing-description { max-width: 30ch; }
   }
 </style>
