@@ -1,7 +1,7 @@
 ---
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import Footer from '~/components/Footer.astro';
-import coast from '~/assets/site/quiet-coast-v1.webp';
+import coast from '~/assets/site/quiet-coast-v2.webp';
 ---
 <BaseLayout title="Page not found · Kazon Wilson" description="This page could not be found. Explore Kazon Wilson’s projects or return to the homepage." noindex>
   <section class="missing-page site-shell" aria-labelledby="missing-title">
@@ -22,8 +22,8 @@ import coast from '~/assets/site/quiet-coast-v1.webp';
 </BaseLayout>
 <style>
   .missing-page { display: grid; justify-items: center; gap: 2.5rem; padding-block: 1.5rem 4rem; }
-  .missing-landscape { width: 100%; max-width: 920px; aspect-ratio: 2.65; overflow: hidden; border-radius: 3px; }
-  .missing-landscape img { width: 100%; height: 100%; object-fit: cover; object-position: center 48%; }
+  .missing-landscape { width: 100%; max-width: 700px; margin-block: -2rem; }
+  .missing-landscape img { display: block; width: 100%; height: auto; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 12%, #000 85%, transparent); mask-composite: intersect; }
   .missing-copy { width: 100%; max-width: 680px; text-align: center; }
   .missing-status { color: var(--muted); font-size: .95rem; margin: 0 0 1rem; }
   h1 { font-size: clamp(2.5rem, 4.7vw, 3.75rem); line-height: 1.12; letter-spacing: -.035em; margin: 0 0 1.5rem; }
@@ -34,7 +34,7 @@ import coast from '~/assets/site/quiet-coast-v1.webp';
   .missing-secondary:hover { color: var(--accent); }
   @media (max-width: 600px) {
     .missing-page { padding-block: .5rem 3rem; gap: 2rem; }
-    .missing-landscape { aspect-ratio: 1.7; }
+    .missing-landscape { margin-block: -.5rem; }
     .missing-description { max-width: 30ch; }
   }
 </style>

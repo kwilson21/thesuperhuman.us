@@ -35,4 +35,6 @@ The final revision follows the owner-approved goal of a peaceful, reassuring exp
 
 ### Peaceful imagery
 
-Added an original generated coastal landscape in response to the request for beautiful, peaceful imagery. It is decorative and does not claim a real location. Text stays separate, and desktop/mobile crops have been visually reviewed. See `docs/asset-reviews/quiet-coast-v1.md` for delivered-asset QA. Screenshots above show this revision.
+Added an original generated coastal landscape in response to the request for beautiful, peaceful imagery. It is decorative and does not claim a real location. Text stays separate, and desktop/mobile crops have been visually reviewed. See `docs/asset-reviews/quiet-coast-v2.md` for delivered-asset QA. Screenshots above show this revision.
+
+The final coastal illustration uses the existing terrain and studio artwork as style references: warm ivory materials, restrained sage/blue tones, soft modeled forms and feathered page blending. Replaced the earlier photographic version. Desktop/mobile screenshots above reflect the final local revision.
