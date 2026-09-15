@@ -12,7 +12,7 @@
     "build": "astro build",
     "prebuild": "npm run assets:check",
     "assets:check": "node scripts/check-asset-qa.mjs",
-    "preview": "astro preview",
+    "preview": "wrangler dev --local",
     "check": "astro check",
     "test": "vitest run",
     "test:watch": "vitest",

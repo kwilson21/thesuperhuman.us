@@ -1,0 +1,31 @@
+---
+export const prerender = false;
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Footer from '~/components/Footer.astro';
+---
+<BaseLayout title="Privacy · Kazon Wilson" description="How this website handles contact messages, audio inquiries, resume requests, and information used to keep the site working.">
+  <article class="site-shell py-16">
+    <div class="max-w-measure">
+      <p class="eyebrow mb-4">Updated September 15, 2026</p>
+      <h1 class="display mb-6">Privacy</h1>
+      <p>This is Kazon Wilson’s website, operated through The Superhuman Group LLC. This notice covers thesuperhuman.us and its audio pages.</p>
+      <h2>Information you send</h2>
+      <p>Contact messages, audio inquiries, and resume requests include the details you enter, such as your name, email address, company, and message or project information. These details are used to respond to you, discuss potential work, or review your resume request. Resume delivery requires my approval.</p>
+      <h2>Services that process information</h2>
+      <p>Cloudflare hosts and protects the site. Its Turnstile service processes browser and network signals to prevent automated form abuse. Resend delivers form notifications and requested emails. Your browser also contacts Google Fonts to load the site’s typefaces.</p>
+      <p>Read the providers’ privacy information: <a href="https://www.cloudflare.com/policies/privacy/">Cloudflare</a>, <a href="https://www.cloudflare.com/turnstile-privacy-policy/">Turnstile</a>, <a href="https://resend.com/legal/privacy-policy">Resend</a>, and <a href="https://policies.google.com/privacy">Google</a>.</p>
+      <h2>Storage and retention</h2>
+      <p>Pending resume requests expire from the website’s request store after seven days and are removed when processed. Temporary IP-based form rate-limit records expire after five minutes. These limits do not delete email copies. Messages and provider logs have separate retention settings; contact me about a specific message or deletion request.</p>
+      <h2>Cookies and site operation</h2>
+      <p>The site uses hosting and security services to serve pages and investigate failures. The private publishing sign-in uses a short-lived security cookie. The website’s page code does not include advertising trackers or visitor analytics scripts.</p>
+      <h2>Questions or requests</h2>
+      <p>To ask about information you have submitted, request access or correction, or request deletion, email <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>. Include enough context to identify your message without sending sensitive documents.</p>
+    </div>
+  </article>
+  <Footer compact slot="footer" />
+</BaseLayout>
+<style>
+  h2 { font-size: 1.5rem; line-height: 1.2; margin-block: 2rem .75rem; }
+  p { margin-bottom: 1rem; }
+  a { overflow-wrap: anywhere; }
+</style>
