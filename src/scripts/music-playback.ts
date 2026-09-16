@@ -90,9 +90,10 @@ export function setupMusicPlayback() {
     let lastMedium: 'audio' | 'video' = 'audio';
     let youtubeStart = 0;
     let youtubePlayer: YoutubePlayer | undefined;
+    let youtubeIsReady = false;
     if (linkedAudio) {
       const restoreAudio = () => {
-        if (lastMedium === 'video') linkedAudio.currentTime = native?.currentTime ?? youtubePlayer?.getCurrentTime() ?? linkedAudio.currentTime;
+        if (lastMedium === 'video') linkedAudio.currentTime = native?.currentTime ?? (youtubeIsReady ? youtubePlayer?.getCurrentTime() : undefined) ?? linkedAudio.currentTime;
         lastMedium = 'audio';
       };
       linkedAudio.addEventListener('music-request-play', restoreAudio);
@@ -111,7 +112,7 @@ export function setupMusicPlayback() {
       });
     };
     document.querySelectorAll('audio').forEach(audio => ['play', 'music-request-play'].forEach(event => audio.addEventListener(event, () => {
-      wantsVideo = false; if (native) native.pause(); youtubePlayer?.pauseVideo(); showPoster(); videoState(false); status.textContent = '';
+      wantsVideo = false; if (native) native.pause(); if (youtubeIsReady) youtubePlayer?.pauseVideo(); showPoster(); videoState(false); status.textContent = '';
     })));
     if (native) {
       native.addEventListener('play', () => { if (linkedAudio && lastMedium === 'audio') native.currentTime = linkedAudio.currentTime; lastMedium = 'video'; videoState(true); });
@@ -124,31 +125,32 @@ export function setupMusicPlayback() {
     triggers.forEach(button => {
       button.disabled = false;
       button.addEventListener('click', async () => {
-        if ((native && !native.paused) || youtubePlayer?.getPlayerState() === 1) {
-          native?.pause(); youtubePlayer?.pauseVideo(); videoState(false); return;
+        if ((native && !native.paused) || (youtubeIsReady && youtubePlayer?.getPlayerState() === 1)) {
+          native?.pause(); if (youtubeIsReady) youtubePlayer?.pauseVideo(); videoState(false); return;
         }
         if (loading) return;
-        youtubeStart = lastMedium === 'audio' ? linkedAudio?.currentTime ?? 0 : native?.currentTime ?? youtubePlayer?.getCurrentTime() ?? 0;
+        youtubeStart = lastMedium === 'audio' ? linkedAudio?.currentTime ?? 0 : native?.currentTime ?? (youtubeIsReady ? youtubePlayer?.getCurrentTime() : undefined) ?? 0;
         wantsVideo = true; loading = true; status.textContent = 'Loading the lyric video…';
         pauseOthers(native ?? youtubePlayer ?? stage);
         showVideo();
         try {
           if (native) { if (native.error) native.load(); await native.play(); status.textContent = ''; }
           else if (youtube) {
-            if (youtubePlayer) { youtubePlayer.seekTo(youtubeStart, true); youtubePlayer.playVideo(); lastMedium = 'video'; }
+            if (youtubePlayer && youtubeIsReady) { youtubePlayer.seekTo(youtubeStart, true); youtubePlayer.playVideo(); lastMedium = 'video'; }
             else {
+              if (youtubePlayer) return;
               const api = await youtubeAPI();
               const meter = engagement(youtube, 'video');
               youtubePlayer = new api.Player(youtube.querySelector<HTMLElement>('[data-youtube-mount]')!, {
                 videoId: youtube.dataset.youtubeId, host: 'https://www.youtube-nocookie.com', playerVars: { playsinline: 1, origin: location.origin },
                 events: {
-                  onReady: () => { youtubePlayer!.getIframe().title = 'Lyric video'; status.textContent = ''; if (wantsVideo) { youtubePlayer!.seekTo(youtubeStart, true); youtubePlayer!.playVideo(); lastMedium = 'video'; } },
+                  onReady: () => { youtubeIsReady = true; loading = false; youtubePlayer!.getIframe().title = 'Lyric video'; status.textContent = ''; if (wantsVideo) { youtubePlayer!.seekTo(youtubeStart, true); youtubePlayer!.playVideo(); lastMedium = 'video'; } },
                   onStateChange: (event: { data: number }) => { if (event.data === 1) { pauseOthers(youtubePlayer!); status.textContent = ''; } videoState(event.data === 1); meter.reset(youtubePlayer!.getCurrentTime()); },
-                  onError: () => { status.textContent = 'The video is unavailable here. Try the YouTube link or listen to the song.'; },
+                  onError: () => { loading = false; status.textContent = 'The video is unavailable here. Try the YouTube link or listen to the song.'; },
                 },
               });
               const player = youtubePlayer;
-              players.set(player, { pause: () => player.pauseVideo() });
+              players.set(player, { pause: () => { if (youtubeIsReady) player.pauseVideo(); } });
               const timer = window.setInterval(() => { if (player.getPlayerState) meter.sample(player.getCurrentTime(), player.getPlayerState() === 1 && !player.isMuted() && player.getVolume() > 0, player.getPlaybackRate()); }, 500);
               window.addEventListener('pagehide', () => clearInterval(timer), { once: true });
             }
@@ -157,7 +159,7 @@ export function setupMusicPlayback() {
           if (wantsVideo && stage.getBoundingClientRect().bottom > innerHeight) stage.scrollIntoView({ block: 'nearest', behavior: 'instant' });
         } catch {
           if (wantsVideo) { status.textContent = 'The video couldn’t start. Please try again, or listen to the song.'; showPoster(); }
-        } finally { loading = false; }
+        } finally { if (!youtube || youtubeIsReady || !youtubePlayer) loading = false; }
       });
     });
   });

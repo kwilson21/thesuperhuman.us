@@ -28,7 +28,7 @@ export function setupVideoControls() {
     });
     seek.addEventListener('input',()=>{video.currentTime=Number(seek.value);});
     mute.addEventListener('click',()=>{video.muted=!video.muted;});
-    full.addEventListener('click',async()=>{try {await video.requestFullscreen();} catch {status.textContent='Fullscreen isn’t available in this browser.';}});
+    full.addEventListener('click',async()=>{try {await stage.requestFullscreen();} catch {status.textContent='Fullscreen isn’t available in this browser.';}});
     ['play','pause','timeupdate','loadedmetadata','volumechange','ended'].forEach(event=>video.addEventListener(event,render));
     new MutationObserver(render).observe(video,{attributes:true,attributeFilter:['hidden']});
     video.controls=false; render();
