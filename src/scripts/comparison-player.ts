@@ -41,6 +41,7 @@ export function setupComparisonPlayers() {
     const claimPlayback = registerMusicPlayer(root, { pause });
     async function start() {
       const request = ++operation;
+      media.forEach(audio => { audio.pause(); audio.controls = false; audio.hidden = true; });
       pending = true; claimPlayback(); status.textContent = 'Preparing synchronized audio…'; render();
       try {
         context ??= new AudioContext();
@@ -57,7 +58,10 @@ export function setupComparisonPlayers() {
         if (request !== operation) return;
         transport!.seek(position); applyVolume(); transport!.play(); status.textContent = '';
       } catch {
-        if (request === operation) status.textContent = 'The comparison couldn’t load. Please try again.';
+        if (request === operation) {
+          media.forEach(audio => { audio.controls = true; audio.hidden = false; });
+          status.textContent = 'The comparison couldn’t load. Retry Play, or listen with the individual players.';
+        }
       } finally { if (request === operation) { pending = false; render(); } }
     }
     play.addEventListener('click', () => {
