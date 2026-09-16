@@ -23,8 +23,11 @@ Career and prelaunch changes, the Releases/Portfolio page framework, the revised
 - PASS — mix, master and lyric video staged in the private audio bucket; sizes and object checksums match local files. Public bucket domain disabled; no custom bucket domains.
 - PASS — dedicated music database created, schema initialized and read back; both tables are empty. Binding is version-controlled in #50.
 - PASS — desktop/mobile visual review, shared-clock A/B and loudness, click/tap seeking, native video/audio time transfer, seek and fullscreen checks.
-- PASS — 237 tests, Astro check (0 errors/warnings; 3 existing hints), asset QA and production build. Clean locked-dependency installation and Worker deployment dry-run pass.
+- PASS — 259 tests, Astro check (0 errors/warnings; 3 existing hints), asset QA and production build. Clean locked-dependency installation and Worker deployment dry-run pass.
+- PASS — 90-day retention review produces private HTML and a matching manifest; approved cleanup archives daily totals atomically before removing raw events. No automatic deletion. Failure/race/retry tests and nonempty local D1 verification pass.
+- PASS — production-built local candidate serves public release/portfolio/sitemap, media byte ranges, playback events and test fan-interest submissions; a real 30-second listening check excludes seeking time. GitHub catalog remains draft.
 - PASS — prelaunch privacy review addressed by adding music disclosure with #50, where processing begins. Sharp dependency is explicit.
+- UNVERIFIED — standalone production reporting via Wrangler needs refreshed D1 authentication on this computer. Authenticated Cloudflare connector access and production schema readback are verified; local reporting and retention workflows pass.
 - UNVERIFIED — live email delivery and operator payment/booking operations. These are service-intake launch checks; the song remains a streaming preview with interest requests, not a checkout.
 - UNVERIFIED — public release playback, range responses, first-party event delivery and fan-interest submission on the final production host; verify after authorized publication.
 - N/A — live YouTube playback; the supplied hosted lyric video is used. A future YouTube ID requires a real integration check.
