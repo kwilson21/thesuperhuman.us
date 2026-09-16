@@ -1,0 +1,69 @@
+---
+export const prerender = false;
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import MusicNav from '~/components/audio/MusicNav.astro';
+import AudioFooter from '~/components/audio/AudioFooter.astro';
+import ReleaseInterest from '~/components/audio/ReleaseInterest.astro';
+import LyricVideo from '~/components/audio/LyricVideo.astro';
+import AudioPlayer from '~/components/audio/AudioPlayer.astro';
+import PlayIcon from '~/components/audio/PlayIcon.astro';
+import { loadMusicCatalog } from '~/lib/music-content';
+import { musicFile, releaseVersion } from '~/lib/music-catalog';
+import { audioPath } from '~/lib/host-routing';
+import type { ImageMetadata } from 'astro';
+import '~/styles/music.css';
+import '~/styles/music-premiere.css';
+const catalog = await loadMusicCatalog();
+const release = catalog.releases.find(r => r.slug === Astro.params.slug);
+if (!release) return new Response('Release not found', { status: 404 });
+const tracks = release.tracks.map(id => catalog.recordings.find(r => r.id === id)!);
+const first = tracks[0];
+const mainTitle = release.displayTitle ?? release.title;
+const heroImages = import.meta.glob<{ default: ImageMetadata }>('../../assets/site/*.webp', { eager: true });
+const hero = release.hero ? heroImages[`../../assets/site/${release.hero}.webp`]?.default : undefined;
+const poster = hero?.src ?? release.artwork;
+const host = Astro.request.headers.get('host') ?? Astro.url.host;
+const hasVideo = Boolean(first.youtubeId || first.versions.video);
+const playerId = `listen-${first.id}`;
+const videoId = `video-${first.id}`;
+---
+<BaseLayout title={`${release.title} · ${release.artist}`} description={`Listen to ${release.title} by ${release.artist}. ${release.status === 'preview' ? 'Streaming preview.' : 'Music release.'}`} ogImage={release.artwork}>
+  <div class="site-shell music-page premiere-page">
+    <MusicNav />
+    <header class="premiere-masthead">
+      <div class="masthead-artist"><span aria-label={release.artist}>{release.artist.split(/(z\u0304)/i).map(part => /^z\u0304$/i.test(part) ? <span class="artist-macron">{part[0]}</span> : part)}</span></div>
+      <h1 class:list={['masthead-title', { 'masthead-title-long': mainTitle.length > 12 }]}>{mainTitle}</h1>
+      <p class="masthead-credit">{release.producer && <span>Prod. {release.producer}</span>}<span>{release.status === 'preview' ? 'Streaming preview' : release.type === 'ep' ? 'EP' : release.type}</span></p>
+      <div class="premiere-actions">
+        <button type="button" class="premiere-action" data-audio-toggle={playerId} data-play-label="Play song" data-pause-label="Pause song" aria-label="Play song" disabled><span class="round-play"><PlayIcon /></span><span data-action-label>Play song</span></button>
+        {hasVideo && <button type="button" class="premiere-action video-action" data-video-trigger={videoId} aria-label="Watch lyric video" disabled><span class="round-play outlined"><PlayIcon /></span><span data-action-label>Watch lyric video</span></button>}
+      </div>
+      <noscript><p class="music-note">Use the listening and video controls below.</p></noscript>
+    </header>
+    <LyricVideo recording={first} releaseId={release.id} poster={poster} quote={release.heroQuote}>
+      <div class="hero-transport"><AudioPlayer id={playerId} src={musicFile(first.id, releaseVersion(first))} title={mainTitle} duration={first.duration} artwork={release.artwork} releaseId={release.id} recordingId={first.id} /></div>
+    </LyricVideo>
+    {tracks.length > 1 && <section class="music-section album-tracks" aria-label="Track list">{tracks.slice(1).map((track, index) => <div><h2>{index + 2}. {track.title}</h2><AudioPlayer id={`listen-${track.id}`} src={musicFile(track.id, releaseVersion(track))} title={track.title} duration={track.duration} releaseId={release.id} recordingId={track.id} /></div>)}</section>}
+    <section class="lyric-spread" aria-label="Lyrics and contributors">
+      <div>{release.lyricQuote && <blockquote>“{release.lyricQuote}”</blockquote>}<a class="site-link" href="#lyrics">Read the lyrics <span aria-hidden="true">→</span></a></div>
+      <div class="featured-credits">{first.credits.filter(c => !/lyrics/i.test(c.role)).sort((a,b) => Number(b.name === first.artist) - Number(a.name === first.artist)).map(credit => <p><strong>{credit.name}</strong><span>{credit.role}</span></p>)}<a class="credit-link" href="#credits">Full credits</a></div>
+    </section>
+    <ReleaseInterest releaseId={release.id} artwork={release.artwork} merchandiseConcept={release.hero === 'old-news-premiere'} />
+    <section class="music-details music-section" aria-label="Lyrics and credits">
+      {tracks.map((track, index) => <div>
+        {tracks.length > 1 && <h2>{track.title}</h2>}
+        {track.lyrics && <details id={index === 0 ? 'lyrics' : `lyrics-${track.id}`}><summary>Lyrics <span aria-hidden="true">+</span></summary><div class="song-lyrics">{track.lyrics}</div></details>}
+        <details id={index === 0 ? 'credits' : `credits-${track.id}`}><summary>Credits <span aria-hidden="true">+</span></summary><dl>{track.credits.map(credit => <div><dt>{credit.role}</dt><dd>{credit.name}</dd></div>)}</dl></details>
+      </div>)}
+      <p class="music-note">Free streaming preview. Downloads and purchases aren’t available yet. Playback starts and 30 seconds of listening help me understand interest in the release.</p>
+    </section>
+    <section class="premiere-outro"><div><h2>Hear the mix.<br />Hear the master.</h2><p>Two versions. Hear the difference.</p></div><a class="site-link" href={audioPath(host, '/portfolio')}>Explore the audio portfolio <span aria-hidden="true">→</span></a></section>
+  </div>
+  <AudioFooter slot="footer" />
+  <script>
+    import { setupMusicPlayback } from '~/scripts/music-playback'; setupMusicPlayback();
+    function openLinkedDetail() { const target = document.getElementById(location.hash.slice(1)); if (target instanceof HTMLDetailsElement) target.open = true; }
+    openLinkedDetail(); window.addEventListener('hashchange', openLinkedDetail);
+    document.querySelectorAll('a[href="#lyrics"],a[href="#credits"]').forEach(link => link.addEventListener('click', () => { const target = document.getElementById(link.getAttribute('href')!.slice(1)); if (target instanceof HTMLDetailsElement) target.open = true; }));
+  </script>
+</BaseLayout>
