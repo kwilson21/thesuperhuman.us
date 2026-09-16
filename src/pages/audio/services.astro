@@ -3,4 +3,4 @@ export const prerender = false;
 import ServiceSheet from '~/layouts/ServiceSheet.astro';
 import { audioSheet } from '~/data/services';
 ---
-<ServiceSheet sheet={audioSheet} />
+<ServiceSheet sheet={{ ...audioSheet, contact: "/audio/start", contactLabel: "Start your song" }} />

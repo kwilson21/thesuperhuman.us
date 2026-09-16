@@ -1,0 +1,48 @@
+---
+export const prerender = false;
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import MusicNav from '~/components/audio/MusicNav.astro';
+import AudioFooter from '~/components/audio/AudioFooter.astro';
+import { audioOffers, directionFields, type IntakeService } from '~/lib/audio-intake';
+import '~/styles/audio-intake.css';
+const env = Astro.locals.runtime?.env;
+const siteKey = env?.PUBLIC_TURNSTILE_SITE_KEY ?? '';
+const available = Boolean(siteKey && env?.RESEND_API_KEY && env?.CONTACT_FROM_EMAIL && env?.CONTACT_TO_EMAIL && env?.TURNSTILE_SECRET_KEY && env?.RATE_LIMIT);
+---
+<BaseLayout title="Start your song · Kaz̄on" description="Choose your service, share your recording and send it to Kaz̄on for review. No payment before file approval.">
+<article class="site-shell intake-page"><MusicNav />
+<header class="intake-header"><p class="intake-eyebrow">WORK WITH KAZ̄ON</p><h1>Your song starts here.</h1><p>A few details. A careful listen. A clear next step.</p></header>
+<ol class="intake-progress" aria-label="Your progress"><li aria-current="step">1 <span>Choose a service</span></li><li>2 <span>Shape your sound</span></li><li>3 <span>Review & send</span></li></ol>
+<form id="song-intake" data-available={available} novalidate>
+<noscript><p>Please enable JavaScript to use this form, or email <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>.</p></noscript>
+<section data-step="0" aria-labelledby="step-one"><h2 id="step-one" tabindex="-1">What does your song need?</h2><p class="intake-muted">Starting prices in USD. I confirm the scope and fixed price after listening.</p>
+<fieldset class="offer-list"><legend class="sr-only">Choose a service</legend>{Object.entries(audioOffers).map(([id, offer]) => <label class="intake-offer"><input type="radio" name="service" value={id} checked={id === 'vocal-mix'} /><span><strong>{offer.name}</strong><span>{offer.description}</span></span><b>{offer.price ? `From $${offer.price}` : 'By review'}</b></label>)}</fieldset>
+<div class="intake-note"><strong>Every song gets my full attention.</strong><p>Clarity, balance and careful listening are part of the work. Your preferences guide the artistic choices.</p></div>
+<details><summary>What’s included?</summary><p data-offer-scope>{audioOffers['vocal-mix'].scope}</p><p>Extra tracks, longer songs and extensive editing are quoted separately. A revision round is one consolidated set of notes within the agreed direction.</p></details>
+</section>
+<section data-step="1" aria-labelledby="step-two" hidden><h2 id="step-two" tabindex="-1">Shape your sound.</h2><p class="intake-muted">Bring your vision, or leave the choices with me.</p>
+<label class="intake-field" for="song-title">Song or project title<input id="song-title" name="title" maxlength="120" required /></label><p data-form-error="title" hidden></p>
+<div class="intake-files"><h3>Your files</h3><p data-files-needed>{audioOffers['vocal-mix'].files}</p><label class="intake-field" for="song-link">Drive, Dropbox or WeTransfer link<input id="song-link" name="fileLink" type="url" maxlength="2048" placeholder="https://" aria-describedby="file-help" /></label><p id="file-help" class="intake-muted">Enable viewing and downloading for anyone with the link. Check it in a private browser window. Send a folder or transfer link, not your password.</p><p data-form-error="fileLink" hidden></p><details><summary>How to prepare your files</summary><p data-preparation>{audioOffers['vocal-mix'].preparation}</p></details></div>
+<fieldset class="direction-list"><legend>How much direction would you like to give?</legend><label><input type="radio" name="direction" value="judgment" checked /><span><strong>Use your judgment</strong><small>I’ll listen closely and make choices that serve your song.</small></span></label><label><input type="radio" name="direction" value="preferences" /><span><strong>I have a few preferences</strong><small>Choose what matters to you. Leave the rest with me.</small></span></label><label><input type="radio" name="direction" value="specific" /><span><strong>I have a specific direction</strong><small>Share notes, references or moments to listen for.</small></span></label></fieldset>
+<div data-preferences hidden>{Object.keys(audioOffers).map(service => <div data-service-preferences={service} hidden>{directionFields(service as IntakeService).map(field => <label class="intake-field" for={`pref-${service}-${field.id}`}>{field.label}<select aria-label={field.label} id={`pref-${service}-${field.id}`} name={`pref-${service}-${field.id}`} data-preference={field.id}><option value="decide">You decide</option>{field.options.map(option => <option value={option.value}>{option.label}</option>)}</select></label>)}{service === 'custom' && <p>Describe the creative direction in your project notes below.</p>}</div>)}</div><p data-form-error="preferences" hidden></p>
+<div data-reference-fields hidden><label class="intake-field">Reference link <span>(optional)</span><input name="referenceUrl" type="url" maxlength="2048" placeholder="https://" /></label><p data-form-error="referenceUrl" hidden></p></div>
+<label class="intake-field"><span data-note-label>Notes about your direction (optional)</span><textarea name="referenceNote" maxlength="2000" rows="3" placeholder="A feeling, a reference, a timestamp, or something you’re unsure about."></textarea></label><p data-form-error="referenceNote" hidden></p>
+<label class="intake-field">Anything to preserve or avoid changing? <span>(optional)</span><textarea name="preserve" maxlength="1200" rows="2" placeholder="A raw vocal moment, a particular effect, a deliberate rough edge…"></textarea></label><p data-form-error="preserve" hidden></p>
+<p class="intake-muted">Preferences are a starting point. If the recording or scope limits what’s possible, I’ll explain before you book.</p>
+</section>
+<section data-step="2" aria-labelledby="step-three" hidden><h2 id="step-three" tabindex="-1">Ready for a careful listen.</h2><p class="intake-muted">Check the details, then send your song for review.</p>
+<div class="intake-review"><dl data-review></dl><div class="intake-edit"><button type="button" data-edit="0">Edit service</button><button type="button" data-edit="1">Edit song & direction</button></div></div>
+<div class="intake-pair"><label class="intake-field">Your name<input name="name" autocomplete="name" required maxlength="100" /></label><label class="intake-field">Email<input name="email" autocomplete="email" type="email" required maxlength="120" /></label></div><p data-form-error="name" hidden></p><p data-form-error="email" hidden></p>
+<div class="intake-note"><h3>What happens next?</h3><p>I’ll listen and email you the agreed scope, price and availability. No call required. You choose whether to move forward.</p><p>Once approved: 50% to book, balance before final files. Your first listening version arrives in 3–5 business days after booking and usable files. Custom work follows its agreed timeline.</p></div>
+<label class="intake-consent"><input type="checkbox" name="permission" required /><span>I have permission to share these files and allow Kaz̄on to access them for this project review.</span></label><p data-form-error="permission" hidden></p>
+{available ? <div class="cf-turnstile" data-sitekey={siteKey}></div> : <p class="intake-unavailable">This preview isn’t connected to email delivery yet. You can try every step; sending is unavailable.</p>}<p data-form-error="turnstileToken" hidden></p>
+</section>
+<p data-form-status role="status" tabindex="-1"></p>
+<div class="intake-actions"><button type="button" data-back hidden>← Back</button><button type="button" class="site-button" data-next>Continue <span aria-hidden="true">→</span></button><button type="submit" class="site-button" hidden disabled>Send for review <span aria-hidden="true">→</span></button></div><p class="intake-reassurance">No payment now. No commitment until you approve the offer.</p>
+</form>
+<section id="intake-success" hidden tabindex="-1" role="status"><h2>Your song is in good hands.</h2><p>Your request has been sent. I’ll review the files and reply by email with the next step. You haven’t booked or paid yet.</p></section>
+<p class="intake-contact">Need a hand? <a href="mailto:kazon.wilson@thesuperhuman.us">Email me</a>.</p>
+</article><AudioFooter slot="footer" />
+{available && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>}
+<script>import '~/scripts/audio-intake';</script>
+</BaseLayout>
