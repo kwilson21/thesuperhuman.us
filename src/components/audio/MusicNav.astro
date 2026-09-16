@@ -1,7 +1,7 @@
 ---
-import { audioPath } from '~/lib/host-routing';
+import { audioPath, rewritePathForHost } from '~/lib/host-routing';
 const host = Astro.request.headers.get('host') ?? Astro.url.host;
-const current = Astro.url.pathname;
+const current = rewritePathForHost(host, Astro.url.pathname) ?? Astro.url.pathname;
 const links = [['/', 'Audio'], ['/releases', 'Releases'], ['/portfolio', 'Portfolio'], ['/services', 'Services']];
 ---
 <nav class="music-nav" aria-label="Audio and music">
