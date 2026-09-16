@@ -68,7 +68,19 @@ export function setupComparisonPlayers() {
       selected = media.findIndex(audio => audio.dataset.version === button.dataset.selectVersion);
       applyVolume(); render();
     }));
-    seek.addEventListener('input', () => { position = Number(seek.value); transport?.seek(position); render(); });
+    function seekTo(seconds: number) {
+      const duration = transport?.duration ?? Number(root.dataset.duration);
+      position = Math.max(0, Math.min(seconds, duration));
+      transport?.seek(position); render();
+    }
+    seek.addEventListener('input', () => seekTo(Number(seek.value)));
+    root.querySelectorAll<SVGSVGElement>('.comparison-waveform').forEach(waveform => {
+      waveform.addEventListener('click', event => {
+        const bounds = waveform.getBoundingClientRect();
+        if (!bounds.width) return;
+        seekTo((event.clientX - bounds.left) / bounds.width * (transport?.duration ?? Number(root.dataset.duration)));
+      });
+    });
     volume.addEventListener('input', applyVolume);
     match?.addEventListener('change', applyVolume);
     root.addEventListener('music-pause', pause);
