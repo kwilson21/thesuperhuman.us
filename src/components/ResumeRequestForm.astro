@@ -46,6 +46,7 @@ const turnstileSiteKey = Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY ?? i
     My resume includes personal contact details. Each request needs my approval before delivery.
     {turnstileSiteKey && <span> You can also <a href="mailto:kazon.wilson@thesuperhuman.us?subject=Resume%20request">request it by email</a>.</span>}
   </p>
+<p class="form-hint">Read how your information is handled in the <a href="https://thesuperhuman.us/privacy">privacy notice</a>.</p>
 </form>
 
 <div id="resume-request-success" class="form-success" tabindex="-1" role="status" hidden>
