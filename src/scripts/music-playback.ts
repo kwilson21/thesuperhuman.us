@@ -8,6 +8,10 @@ const players = new Map<object, Playable>();
 let initialized = false;
 let youtubeReady: Promise<YoutubeAPI> | undefined;
 function pauseOthers(active: object) { players.forEach((player, key) => { if (key !== active) player.pause(); }); }
+export function registerMusicPlayer(key: object, player: Playable) {
+  players.set(key, player);
+  return () => pauseOthers(key);
+}
 function sessionId() {
   try {
     let id = sessionStorage.getItem('music-session');

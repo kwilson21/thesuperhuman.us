@@ -1,6 +1,11 @@
-/** One audible native element; both versions share a logical song position. */
+import { ComparisonTransport } from './comparison-transport';
+import { registerMusicPlayer } from './music-playback';
+
+/** Load the comparison pair on demand; A/B and loudness never restart playback. */
 export function setupComparisonPlayers() {
   document.querySelectorAll<HTMLElement>('[data-comparison]').forEach(root => {
+    if (root.dataset.initialized || !window.AudioContext) return;
+    root.dataset.initialized = 'true';
     const media = [...root.querySelectorAll<HTMLAudioElement>('audio')];
     const play = root.querySelector<HTMLButtonElement>('[data-comparison-play]')!;
     const seek = root.querySelector<HTMLInputElement>('[data-comparison-seek]')!;
@@ -9,60 +14,66 @@ export function setupComparisonPlayers() {
     const match = root.querySelector<HTMLInputElement>('[data-match-level]');
     const time = root.querySelector<HTMLElement>('[data-comparison-time]')!;
     const switches = [...root.querySelectorAll<HTMLButtonElement>('[data-select-version]')];
-    if (root.dataset.initialized) return; root.dataset.initialized = 'true';
-    let active = media[0], pending = false, operation = 0;
-    const offset = (audio: HTMLAudioElement) => Number(audio.dataset.offset ?? 0);
-    const duration = Number(root.dataset.duration);
-    const position = () => Math.max(0, active.currentTime - offset(active));
+    let context: AudioContext | undefined, transport: ComparisonTransport | undefined;
+    let loading: Promise<void> | undefined, selected = 0, operation = 0, pending = false, frame = 0;
+    let position = 0;
     const format = (n: number) => `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, '0')}`;
     function applyVolume() {
       const quietest = Math.min(...media.map(audio => Number(audio.dataset.loudness ?? 0)));
-      media.forEach(audio => { const gain = match?.checked ? Math.pow(10, (quietest - Number(audio.dataset.loudness ?? 0)) / 20) : 1; audio.volume = Number(volume.value) * gain; });
+      transport?.setLevels(media.map((audio, index) => index !== selected ? 0 : Number(volume.value) * (match?.checked ? Math.pow(10, (quietest - Number(audio.dataset.loudness ?? 0)) / 20) : 1)));
     }
-    match?.addEventListener('change', applyVolume);
     function render() {
-      const current = Math.min(position(), duration);
-      seek.value = String(current); seek.setAttribute('aria-valuetext', format(current));
+      cancelAnimationFrame(frame);
+      const duration = transport?.duration ?? Number(root.dataset.duration);
+      const current = transport?.position ?? position;
+      seek.max = String(duration); seek.value = String(current); seek.setAttribute('aria-valuetext', format(current));
       time.textContent = `${format(current)} / ${format(duration)}`; root.style.setProperty('--position', `${current / duration * 100}%`);
-      play.dataset.playing = String(!active.paused);
-      play.setAttribute('aria-label', `${active.paused ? 'Play' : 'Pause'} comparison`);
-      switches.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.selectVersion === active.dataset.version)));
-      root.querySelectorAll<HTMLElement>('[data-lane]').forEach(lane => lane.dataset.selected = String(lane.dataset.lane === active.dataset.version));
+      play.dataset.playing = String(Boolean(transport?.playing));
+      play.setAttribute('aria-label', `${transport?.playing || pending ? 'Pause' : 'Play'} comparison`);
+      play.setAttribute('aria-busy', String(pending));
+      switches.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.selectVersion === media[selected].dataset.version)));
+      root.querySelectorAll<HTMLElement>('[data-lane]').forEach(lane => lane.dataset.selected = String(lane.dataset.lane === media[selected].dataset.version));
+      if (transport?.playing) frame = requestAnimationFrame(render);
     }
+    function pause() {
+      operation++; pending = false; transport?.pause(); status.textContent = ''; render();
+    }
+    const claimPlayback = registerMusicPlayer(root, { pause });
     async function start() {
-      const request = ++operation, target = active;
-      pending = true; status.textContent = 'Loading…';
-      target.dispatchEvent(new Event('music-request-play'));
+      const request = ++operation;
+      pending = true; claimPlayback(); status.textContent = 'Preparing synchronized audio…'; render();
       try {
-        if (target.error) target.load();
-        await target.play();
-        if (request !== operation || target !== active) { target.pause(); return; }
-        status.textContent = '';
-      } catch (error) {
-        if (request === operation && !(error instanceof DOMException && error.name === 'AbortError')) status.textContent = 'This version couldn’t play. Please try again.';
-      } finally { if (request === operation) pending = false; render(); }
+        context ??= new AudioContext();
+        // Resume during the click gesture, before network work (mobile autoplay rules).
+        const resumed = context.resume();
+        loading ??= Promise.all(media.map(async audio => {
+          const response = await fetch(audio.currentSrc || audio.src);
+          if (!response.ok) throw new Error('Audio unavailable');
+          return context!.decodeAudioData(await response.arrayBuffer());
+        })).then(buffers => {
+          transport = new ComparisonTransport(context!, buffers, media.map(audio => Number(audio.dataset.offset ?? 0)), Number(root.dataset.duration), render);
+        }).catch(error => { loading = undefined; throw error; });
+        await Promise.all([resumed, loading]);
+        if (request !== operation) return;
+        transport!.seek(position); applyVolume(); transport!.play(); status.textContent = '';
+      } catch {
+        if (request === operation) status.textContent = 'The comparison couldn’t load. Please try again.';
+      } finally { if (request === operation) { pending = false; render(); } }
     }
     play.addEventListener('click', () => {
-      if (!active.paused || pending) { operation++; pending = false; active.pause(); status.textContent = ''; render(); }
-      else void start();
+      if (transport?.playing || pending) { position = transport?.position ?? position; pause(); }
+      else { position = transport?.position ?? position; void start(); }
     });
     switches.forEach(button => button.addEventListener('click', () => {
-      const next = media.find(audio => audio.dataset.version === button.dataset.selectVersion)!;
-      if (next === active) return;
-      const current = position(), resume = !active.paused || pending;
-      operation++; pending = false; active.pause(); active = next;
-      active.currentTime = current + offset(active); applyVolume();
-      status.textContent = ''; render(); if (resume) void start();
+      selected = media.findIndex(audio => audio.dataset.version === button.dataset.selectVersion);
+      applyVolume(); render();
     }));
-    seek.addEventListener('input', () => { active.currentTime = Number(seek.value) + offset(active); render(); });
+    seek.addEventListener('input', () => { position = Number(seek.value); transport?.seek(position); render(); });
     volume.addEventListener('input', applyVolume);
-    media.forEach(audio => {
-      ['play','pause','timeupdate','ended','loadedmetadata'].forEach(event => audio.addEventListener(event, render));
-      audio.addEventListener('waiting', () => { if (audio === active && !audio.paused) status.textContent = 'Buffering…'; });
-      audio.addEventListener('playing', () => { if (audio === active) status.textContent = ''; });
-      audio.addEventListener('error', () => { if (audio === active) status.textContent = 'This version is unavailable. Try the other version or retry Play.'; });
-      audio.controls = false; audio.hidden = true;
-    });
+    match?.addEventListener('change', applyVolume);
+    root.addEventListener('music-pause', pause);
+    window.addEventListener('pagehide', pause);
+    media.forEach(audio => { audio.pause(); audio.controls = false; audio.hidden = true; });
     root.querySelector<HTMLElement>('.comparison-controls')!.hidden = false;
     root.querySelector<HTMLElement>('.comparison-playhead')!.hidden = false;
     render();
