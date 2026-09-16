@@ -56,14 +56,18 @@ export const experience = [
   {
     id: 'lyft', company: 'Lyft', role: 'Software Engineer',
     dates: 'January 2021 – December 2023', location: 'Remote', legacyId: 'lyft--software-engineer',
-    outcome: 'Product and platform engineering across Rentals, Associate Tools and Comms Platform.',
-    context: [],
+    outcome: 'From junior to mid-level engineer, with growing ownership across three teams.',
+    context: ['Started on Rentals, moved to Associate Tools and was promoted to mid-level engineer, then finished on Comms Platform. The work combined technical design, cross-team delivery and responsibility for the result after rollout.'],
   },
   {
     id: 'skupos', company: 'Skupos', role: 'Associate Software Engineer / Data Operations Analyst',
     dates: 'November 2018 – January 2021', location: 'San Francisco', legacyId: 'skupos--associate-software-engineer--data-operations-analyst',
-    outcome: 'My first role in software, progressing from intern to associate engineer.',
-    context: ['Worked with retail POS data and built tools for the analysts responsible for its quality. Also mentored interns, including one who later moved into data science.'],
+    outcome: 'From contributing scripts to owning an internal application.',
+    context: [
+      'I joined as an intern with a computer science minor and an online JavaScript and React course behind me. I started adding to coworkers’ Python scripts, then led the automation work for data operations and account managers.',
+      'I brought the scripts into a shared GitHub repository with pull-request and review standards. They grew into a Flask application with asynchronous processing, a MySQL database on RDS, EC2 hosting and a React interface in the company’s internal website.',
+      'Along the way, I mentored two interns. After promotion to Associate Software Engineer, I continued maintaining the application and contributing to the core Ruby on Rails product.',
+    ],
   },
 ] as const;
 
