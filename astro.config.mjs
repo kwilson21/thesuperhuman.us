@@ -12,7 +12,7 @@ export default defineConfig({
   security: { checkOrigin: false },
   adapter: cloudflare({
     imageService: 'compile',
-    platformProxy: { enabled: true },
+    platformProxy: { enabled: true, ...(process.env.MUSIC_PREVIEW_CONFIG ? { configPath: process.env.MUSIC_PREVIEW_CONFIG } : {}) },
   }),
   integrations: [tailwind({ applyBaseStyles: false }), sitemap()],
   vite: {

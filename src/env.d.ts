@@ -7,6 +7,7 @@ declare namespace App {
 }
 
 interface Env {
+  MUSIC_DB?: D1Database;
   PUBLICATION_OWNER_ID?: string;
   OAUTH_KV?: KVNamespace;
   PUBLICATION_GITHUB_CLIENT_ID?: string;

@@ -16,7 +16,10 @@
     "check": "astro check",
     "test": "vitest run",
     "test:watch": "vitest",
-    "audio:upload": "node scripts/upload-audio.mjs"
+    "audio:upload": "node scripts/upload-audio.mjs",
+    "music:prepare": "node scripts/prepare-music.mjs",
+    "music:preview:setup": "node scripts/music-preview.mjs",
+    "music:upload": "node scripts/upload-music.mjs"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.4",
