@@ -14,7 +14,7 @@ const current = isAudio ? '' : Astro.url.pathname.replace(/\/$/, '') || '/';
 const active = (href: string) => href === '/' ? current === '/' : current === href || current.startsWith(`${href}/`);
 ---
 <header class="site-header site-shell">
-  <a class="site-name" href={mainHref('/')}>Kazon Wilson</a>
+  <a class="site-name" href={mainHref('/')}>Kaz̄on Wilson</a>
   <nav class="desktop-nav" aria-label="Primary">
     {links.map(({ href, label }) => <a href={mainHref(href)} aria-current={active(href) ? (isAudio ? 'location' : 'page') : undefined}>{label}</a>)}
   </nav>

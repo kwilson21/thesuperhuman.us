@@ -1,0 +1,17 @@
+---
+import PlayIcon from './PlayIcon.astro';
+interface Props { id: string; src: string; title: string; duration?: number; artwork?: string; releaseId?: string; recordingId?: string; }
+const { id, src, title, duration = 0, artwork, releaseId, recordingId } = Astro.props;
+const time = `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}`;
+---
+<div class="listening-player" data-player={id}>
+  <audio id={id} controls controlslist="nodownload" preload="none" class="audio-player" src={src} aria-label={title} data-release-id={releaseId} data-recording-id={recordingId}></audio>
+  <div class="player-controls" hidden>
+    {artwork && <img src={artwork} width="64" height="64" alt="" loading="lazy" />}
+    <span class="player-title">{title}</span>
+    <button type="button" class="round-play" data-audio-toggle={id} data-play-label={`Play ${title}`} data-pause-label={`Pause ${title}`} aria-label={`Play ${title}`}><PlayIcon /></button>
+    <div class="player-progress"><label class="sr-only" for={`${id}-seek`}>Playback position for {title}</label><input type="range" id={`${id}-seek`} min="0" max={duration || 1} step="0.1" value="0" data-seek disabled /><span class="player-time"><span data-current-time>0:00</span> / {time}</span></div>
+    <button type="button" class="volume-button" data-mute aria-label={`Mute ${title}`} aria-pressed="false"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9h4l5-4v14l-5-4H3zM16 8q4 4 0 8M19 5q7 7 0 14"/></svg></button>
+  </div>
+  <p class="media-status" data-media-status role="status"></p>
+</div>

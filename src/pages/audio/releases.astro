@@ -1,0 +1,20 @@
+---
+export const prerender = false;
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import AudioFooter from '~/components/audio/AudioFooter.astro';
+import MusicNav from '~/components/audio/MusicNav.astro';
+import { loadMusicCatalog } from '~/lib/music-content';
+import { mainSitePath } from '~/lib/host-routing';
+import '~/styles/music.css';
+const { releases } = await loadMusicCatalog();
+const host = Astro.request.headers.get('host') ?? Astro.url.host;
+---
+<BaseLayout title="Releases · Kaz̄on" description="Singles, EPs and albums by Kaz̄on.">
+  <div class="site-shell music-page"><MusicNav />
+    <header class="music-heading"><h1>Releases</h1><p>Music by Kaz̄on.</p></header>
+    <div class="release-grid">
+      {releases.map(release => <article><a href={mainSitePath(host, `/music/${release.slug}`)} class="release-card"><img src={release.artwork} alt={`${release.title} cover artwork`} width="1254" height="1254" /><div><p class="release-meta">{release.type === 'ep' ? 'EP' : release.type} · {release.status === 'preview' ? 'Streaming preview' : 'Released'}</p><h2>{release.title}</h2><span class="site-link">Listen to the release</span></div></a></article>)}
+    </div>
+    {!releases.length && <p>New music is on its way.</p>}
+  </div><AudioFooter slot="footer" />
+</BaseLayout>

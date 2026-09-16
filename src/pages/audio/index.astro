@@ -4,6 +4,7 @@ export const prerender = false;
 import { getCollection } from 'astro:content';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import AudioHero from '~/components/audio/AudioHero.astro';
+import MusicNav from '~/components/audio/MusicNav.astro';
 import ServiceSection from '~/components/audio/ServiceSection.astro';
 import BookingForm from '~/components/audio/BookingForm.astro';
 import AudioFooter from '~/components/audio/AudioFooter.astro';
@@ -37,7 +38,9 @@ const jsonLd = {
   jsonLd={jsonLd}
 >
   <div class="site-shell primary-page audio-page">
+    <MusicNav />
     <AudioHero />
+    <section class="audio-section"><div class="site-section-heading"><h2>Music and recordings</h2></div><div class="site-links"><a class="site-link" href={audioPath(host, "/releases")}>Listen to my releases</a><a class="site-link" href={audioPath(host, "/portfolio")}>Hear my engineering work</a></div></section>
     {tracks.length > 0 && <section class="audio-section" aria-labelledby="selected-audio-title"><div class="site-section-heading"><h2 id="selected-audio-title">Selected audio</h2></div>{groups.filter(group => group.tracks.length > 0).map(group => <ServiceSection service={group.service} tracks={group.tracks} />)}</section>}
     <section class="audio-section" aria-labelledby="audio-services-title">
       <div class="site-section-heading"><h2 id="audio-services-title">What I work on</h2><a class="site-link" href={audioPath(host, '/services')}>See audio services <span aria-hidden="true">→</span></a></div>

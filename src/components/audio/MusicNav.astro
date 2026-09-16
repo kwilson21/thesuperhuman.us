@@ -1,0 +1,10 @@
+---
+import { audioPath } from '~/lib/host-routing';
+const host = Astro.request.headers.get('host') ?? Astro.url.host;
+const current = Astro.url.pathname;
+const links = [['/', 'Audio'], ['/releases', 'Releases'], ['/portfolio', 'Portfolio'], ['/services', 'Services']];
+---
+<nav class="music-nav" aria-label="Audio and music">
+  {links.map(([path, label]) => <a href={audioPath(host, path)} aria-current={current.replace(/\/$/, '') === `/audio${path === '/' ? '' : path}` ? 'page' : undefined}>{label}</a>)}
+</nav>
+<style>.music-nav{display:flex;gap:1.5rem;flex-wrap:wrap;padding-block:1rem 2.5rem;font-family:Inter, sans-serif;font-size:.9rem}.music-nav a{padding:.3rem 0;border-bottom:1px solid transparent}.music-nav a[aria-current]{border-color:var(--accent)}</style>

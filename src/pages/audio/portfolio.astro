@@ -1,0 +1,32 @@
+---
+export const prerender = false;
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import AudioFooter from '~/components/audio/AudioFooter.astro';
+import MusicNav from '~/components/audio/MusicNav.astro';
+import { loadMusicCatalog } from '~/lib/music-content';
+import { musicFile } from '~/lib/music-catalog';
+import { mainSitePath, audioPath } from '~/lib/host-routing';
+import '~/styles/music.css';
+const catalog = await loadMusicCatalog();
+const host = Astro.request.headers.get('host') ?? Astro.url.host;
+---
+<BaseLayout title="Audio portfolio · Kaz̄on Wilson" description="Hear Kaz̄on’s vocal mixing and mastering work through before and after recordings.">
+  <div class="site-shell music-page"><MusicNav />
+    <header class="music-heading"><h1>Hear the difference.</h1><p>Vocal mixing over two-track beats. Mastering for the finished song.</p></header>
+    {catalog.examples.map(example => {
+      const track = catalog.recordings.find(r => r.id === example.recordingId)!;
+      const release = catalog.releases.find(r => r.tracks.includes(track.id));
+      return <article class="portfolio-example music-section">
+        <div class="portfolio-intro">{release && <img src={release.artwork} alt={`${release.title} cover artwork`} width="1254" height="1254" />}<div><p class="release-meta">{example.service}</p><h2>{track.title}</h2><p>{example.summary}</p>{release && <a class="site-link" href={mainSitePath(host, `/music/${release.slug}`)}>Visit the release</a>}</div></div>
+        <div class="comparison-players">
+          <section><h3>{example.service === 'mastering' ? 'Before mastering' : 'Before mixing'}</h3><audio class="audio-player" controls controlslist="nodownload" preload="none" aria-label={`${track.title}: before ${example.service}`} src={musicFile(track.id, example.before)}></audio></section>
+          <section><h3>{example.service === 'mastering' ? 'Final master' : 'Mixed version'}</h3><audio class="audio-player" controls controlslist="nodownload" preload="none" aria-label={`${track.title}: after ${example.service}`} src={musicFile(track.id, example.after)}></audio></section>
+        </div>
+        {example.comparisonNote && <p class="music-note">{example.comparisonNote}</p>}
+      </article>;
+    })}
+    {!catalog.examples.length && <p>Selected recordings will appear here as they become available.</p>}
+    <section class="music-section music-outro"><h2>Working on a song?</h2><p>Tell me about your recording and what you want to achieve.</p><a class="site-button" href={audioPath(host, '/#book')}>Discuss an audio project</a></section>
+  </div><AudioFooter slot="footer" />
+  <script>import { setupMusicPlayback } from '~/scripts/music-playback'; setupMusicPlayback();</script>
+</BaseLayout>

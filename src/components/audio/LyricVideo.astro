@@ -1,0 +1,21 @@
+---
+import type { Recording } from '~/lib/music-catalog';
+import { musicFile } from '~/lib/music-catalog';
+import PlayIcon from './PlayIcon.astro';
+interface Props { recording: Recording; releaseId: string; poster: string; quote?: string }
+const { recording, releaseId, poster, quote } = Astro.props;
+const id = `video-${recording.id}`;
+---
+<div class="premiere-stage" data-video-stage id={id}>
+  <div class="premiere-poster" data-poster>
+    <img src={poster} alt="" width="1672" height="941" fetchpriority="high" />
+    {quote && <p class="hero-lyric">{quote}</p>}
+    {(recording.youtubeId || recording.versions.video) && <button class="video-poster-button" data-video-trigger={id} aria-label="Watch lyric video" disabled><span class="round-play"><PlayIcon /></span><span>Watch the lyric video</span></button>}
+  </div>
+  {recording.youtubeId ? <div class="youtube-shell" data-youtube-id={recording.youtubeId} data-release-id={releaseId} data-recording-id={recording.id} hidden>
+    <div data-youtube-mount></div><p class="music-note"><a href={`https://www.youtube.com/watch?v=${recording.youtubeId}`}>Watch on YouTube</a></p>
+  </div> : recording.versions.video && <video class="music-video" hidden controls controlslist="nodownload" playsinline preload="none" poster={poster} src={musicFile(recording.id, 'video')} data-release-id={releaseId} data-recording-id={recording.id} aria-label={`Lyric video for ${recording.title}`}></video>}
+  <noscript><style>.premiere-poster{display:none!important}.music-video[hidden],.youtube-shell[hidden]{display:block!important}</style></noscript>
+  <p class="media-status" data-video-status role="status"></p>
+  <slot />
+</div>
