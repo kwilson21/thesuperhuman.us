@@ -1,7 +1,7 @@
 ---
 import { mainSitePath } from '~/lib/host-routing';
-const host = Astro.request.headers.get('host') ?? Astro.url.host;
-const mainHref = (path: string) => mainSitePath(host, path);
+const host = (Astro.isPrerendered ? null : Astro.request.headers.get('host')) ?? Astro.url.host;
+const mainHref = (path: string) => Astro.isPrerendered ? new URL(path, Astro.site).href : mainSitePath(host, path);
 const isAudio = host.split(':')[0] === 'audio.thesuperhuman.us' || Astro.url.pathname.startsWith('/audio');
 const links = [
   { href: '/', label: 'Home' },
