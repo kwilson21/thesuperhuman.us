@@ -1,5 +1,8 @@
 # Website documentation
 
+- [Pre-launch checklist / Definition of Done](prelaunch-checklist.md): reusable website deployment gate.
+- [September 15 readiness QA](prelaunch-qa-2026-09-15.md): scope, evidence, and remaining release checks.
+
 - [Direction](website-direction.md): audiences, purpose and editorial principles.
 - [Original audit](audits/2026-09-09/website-audit.md): before-state observations and evidence.
 - [Content responsibilities](website-content-model.md): the job of each page.
