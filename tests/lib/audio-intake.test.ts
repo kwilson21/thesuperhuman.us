@@ -5,6 +5,12 @@ describe('audio intake', () => {
   it('accepts delegated judgment without requiring references or preservation notes', () => {
     const result = validateIntake(base); expect(result.ok).toBe(true);
   });
+  it('requires a direction note when specific direction is selected', () => {
+    for (const referenceNote of ['', '   ']) {
+      expect(validateIntake({ ...base, direction: 'specific', referenceNote })).toEqual({ ok: false, errors: { referenceNote: 'Describe the specific direction you have in mind.' } });
+    }
+    expect(validateIntake({ ...base, direction: 'specific', referenceNote: 'Keep the vocal close and dry.' }).ok).toBe(true);
+  });
   it('supports partial artistic preferences and separates mastering from vocal edits', () => {
     expect(validateIntake({ ...base, direction: 'preferences', preferences: { space: 'dry' } }).ok).toBe(true);
     expect(validateIntake({ ...base, service: 'mastering', direction: 'preferences', preferences: { space: 'dry' } }).ok).toBe(false);

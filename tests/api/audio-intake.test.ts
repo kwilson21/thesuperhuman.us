@@ -11,5 +11,28 @@ describe('intake endpoint',()=>{
  it('requires files and permission before sending',async()=>{expect((await POST(context({...base,fileLink:'',permission:false}))).status).toBe(400);expect(fetch).not.toHaveBeenCalled();});
  it('does not accept obsolete upload session instead of files',async()=>{expect((await POST(context({...base,fileLink:'',uploadSession:'00000000-0000-0000-0000-000000000001'}))).status).toBe(400);});
  it('does not claim success when delivery is unavailable or fails',async()=>{const ctx=context();ctx.locals.runtime.env.RESEND_API_KEY='';expect((await POST(ctx)).status).toBe(503);(fetch as any).mockImplementation(async(url:string)=>url.includes('siteverify')?{ok:true,json:async()=>({success:true})}:{ok:false});expect((await POST(context())).status).toBe(502);});
+ it('rejects empty specific direction before external calls', async () => {
+   const response = await POST(context({ ...base, direction: 'specific', referenceNote: '  ' }));
+   expect(response.status).toBe(400);
+   expect(await response.json()).toEqual({ ok: false, errors: { referenceNote: 'Describe the specific direction you have in mind.' } });
+   expect(fetch).not.toHaveBeenCalled();
+ });
+ it('allows a corrected captcha immediately while limiting successful submissions', async () => {
+   const stored = new Map<string, string>();
+   const kv = { get: vi.fn(async (key: string) => stored.get(key) ?? null), put: vi.fn(async (key: string, value: string) => { stored.set(key, value); }) };
+   const submit = () => { const ctx = context(); ctx.locals.runtime.env.RATE_LIMIT = kv; return POST(ctx); };
+   vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ success: false }) } as Response);
+   expect((await submit()).status).toBe(403);
+   expect(stored.has('rl:audio:0.0.0.0')).toBe(false);
+   expect((await submit()).status).toBe(200);
+   expect((await submit()).status).toBe(429);
+   expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(1);
+ });
+ it('bounds repeated failed captcha attempts before external verification', async () => {
+   const ctx = context();
+   ctx.locals.runtime.env.RATE_LIMIT.get.mockImplementation(async (key: string) => key.startsWith('rl:audio-attempt:') ? '10' : null);
+   expect((await POST(ctx)).status).toBe(429);
+   expect(fetch).not.toHaveBeenCalled();
+ });
  it('blocks failed captcha and rate limit',async()=>{const ctx=context();ctx.locals.runtime.env.RATE_LIMIT.get.mockResolvedValue('1');expect((await POST(ctx)).status).toBe(429);(fetch as any).mockResolvedValue({ok:true,json:async()=>({success:false})});expect((await POST(context())).status).toBe(403);});
 });

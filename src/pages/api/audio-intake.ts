@@ -18,9 +18,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const input = result.value;
   const ip = request.headers.get('cf-connecting-ip') ?? '0.0.0.0';
   try {
+    // Bound verification attempts separately so a failed challenge can be retried.
+    const attempts = await checkRateLimit(env.RATE_LIMIT, ip, 'rl:audio-attempt:', 10);
+    if (!attempts.allowed) return Response.json({ ok: false, error: 'Please wait a few minutes before sending again.' }, { status: 429 });
+    if (!await verifyTurnstile(input.turnstileToken, env.TURNSTILE_SECRET_KEY, ip)) return Response.json({ ok: false, errors: { turnstileToken: 'Please complete the security check again.' } }, { status: 403 });
     const limit = await checkRateLimit(env.RATE_LIMIT, ip, 'rl:audio:');
     if (!limit.allowed) return Response.json({ ok: false, error: 'Please wait a few minutes before sending again.' }, { status: 429 });
-    if (!await verifyTurnstile(input.turnstileToken, env.TURNSTILE_SECRET_KEY, ip)) return Response.json({ ok: false, errors: { turnstileToken: 'Please complete the security check again.' } }, { status: 403 });
     const offer = audioOffers[input.service];
     const text = [
       'Audio project submitted for FILE REVIEW ONLY. No booking or payment.',

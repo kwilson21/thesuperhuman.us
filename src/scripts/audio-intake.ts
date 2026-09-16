@@ -19,20 +19,20 @@ if (form) {
     const data = new FormData(form!);
     const service = String(data.get('service')) as IntakeService;
     const offer = audioOffers[service];
+    const direction = data.get('direction');
     form!.querySelector('[data-offer-name]')!.textContent = offer.name;
     form!.querySelector('[data-offer-description]')!.textContent = offer.description;
     form!.querySelector('[data-offer-scope]')!.textContent = offer.scope;
     form!.querySelector('[data-files-heading]')!.textContent = service === 'mastering' ? 'Finished stereo mix' : service === 'custom' ? 'Your files (optional)' : 'Beat + vocal tracks';
     form!.querySelector('[data-title-label]')!.textContent = service === 'custom' ? 'Song or project title' : 'Song title (working title)';
     form!.querySelector<HTMLInputElement>('[name=fileLink]')!.required = service !== 'custom';
-    form!.querySelector<HTMLTextAreaElement>('[name=referenceNote]')!.required = service === 'custom';
+    form!.querySelector<HTMLTextAreaElement>('[name=referenceNote]')!.required = service === 'custom' || direction === 'specific';
     form!.querySelector('[data-files-needed]')!.textContent = offer.files;
     form!.querySelector('[data-preparation]')!.textContent = offer.preparation;
-    form!.querySelector('[data-note-label]')!.textContent = service === 'custom' ? 'Tell me about your project' : 'Notes about your direction (optional)';
+    form!.querySelector('[data-note-label]')!.textContent = service === 'custom' ? 'Tell me about your project' : direction === 'specific' ? 'Describe your direction' : 'Notes about your direction (optional)';
     form!.querySelectorAll<HTMLElement>('[data-service-preferences]').forEach(group => group.hidden = group.dataset.servicePreferences !== service);
-    const direction = data.get('direction');
     form!.querySelector<HTMLElement>('[data-preferences]')!.hidden = direction !== 'preferences';
-    form!.querySelector('[data-reference-summary]')!.textContent = service === 'custom' ? 'Tell me about your project' : 'Add a reference or note (optional)';
+    form!.querySelector('[data-reference-summary]')!.textContent = service === 'custom' ? 'Tell me about your project' : direction === 'specific' ? 'Describe your direction' : 'Add a reference or note (optional)';
     if (service === 'custom' || direction === 'specific') form!.querySelector<HTMLDetailsElement>('[data-reference-fields]')!.open = true;
   }
   function renderReview() {
