@@ -1,28 +1,20 @@
 #!/usr/bin/env node
 import { mkdir, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { getPlatformProxy } from 'wrangler';
+import { openMusicDatabase, lifetimePlayback, dailyPlayback } from './music-analytics.mjs';
 const remote = process.argv.includes('--remote');
 const contacts = process.argv.includes('--contacts');
 const queries = {
-  playback: 'SELECT release_id,recording_id,medium,event,count(*) AS count FROM music_events GROUP BY release_id,recording_id,medium,event',
+  playback: lifetimePlayback,
+  playbackByDay: dailyPlayback + ' ORDER BY day DESC,release_id,recording_id,medium,event',
   interest: 'SELECT release_id,interest,count(*) AS count FROM music_interest GROUP BY release_id,interest',
   merchandise: 'SELECT release_id,j.value AS item,count(*) AS count FROM music_interest,json_each(merchandise) AS j GROUP BY release_id,j.value',
 };
 if (contacts) queries.contacts = 'SELECT release_id,email,interest,merchandise,suggestion,consent_version,updated_at FROM music_interest ORDER BY updated_at DESC';
-let proxy;
+const database = await openMusicDatabase(remote);
 const report = { environment: remote ? 'Production' : 'Local test data', generatedAt: new Date().toISOString() };
 try {
-  if (!remote) proxy = await getPlatformProxy({ configPath: resolve('.private/wrangler-music-preview.json'), persist: { path: '.wrangler/state/v3' } });
-  for (const [key, sql] of Object.entries(queries)) {
-    if (remote) {
-      const result = spawnSync(process.execPath, ['node_modules/wrangler/bin/wrangler.js','d1','execute','MUSIC_DB','--remote','--json','--command',sql], { encoding: 'utf8', env: { ...process.env, WRANGLER_LOG_PATH: resolve('.private/wrangler.log') } });
-      if (result.status !== 0) throw new Error('Report query failed. Verify the dedicated MUSIC_DB binding and your Cloudflare authentication.');
-      report[key] = JSON.parse(result.stdout)[0].results;
-    } else report[key] = (await proxy.env.MUSIC_DB.prepare(sql).all()).results;
-  }
-} finally { await proxy?.dispose(); }
+  for (const [key, sql] of Object.entries(queries)) report[key] = await database.query(sql);
+} finally { await database.close(); }
 await mkdir('.private', { recursive: true });
 await writeFile('.private/music-demand-report.json', JSON.stringify(report,null,2));
 const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));

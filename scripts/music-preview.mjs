@@ -15,7 +15,8 @@ await writeFile(configPath, JSON.stringify({
 const proxy = await getPlatformProxy({ configPath, persist: { path: '.wrangler/state/v3' } });
 try {
   const sql = await readFile('db/music.sql', 'utf8');
-  for (const statement of sql.replace(/^--.*$/gm, '').split(';').filter(s => s.trim())) await proxy.env.MUSIC_DB.prepare(statement).run();
+  // This schema contains CREATE statements; preserve semicolons inside trigger bodies.
+  for (const statement of sql.replace(/^--.*$/gm, '').split(/;\s*(?=CREATE\b|$)/i).filter(s => s.trim())) await proxy.env.MUSIC_DB.prepare(statement).run();
   const files = (await readdir('.private/music-assets')).filter(f => f.endsWith('-upload.json'));
   for (const file of files) {
     const media = JSON.parse(await readFile(`.private/music-assets/${file}`, 'utf8'));
