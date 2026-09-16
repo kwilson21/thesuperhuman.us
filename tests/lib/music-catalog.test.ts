@@ -19,3 +19,17 @@ describe('music catalog', () => {
     expect(() => validateCatalog({ recordings: [{ ...recording, versions: { master: { key: '../private.json', type: 'audio/mpeg' } } }], releases: [single], examples: [] })).toThrow();
   });
 });
+
+it('supports mix-only portfolio work with explicit methodology and credited roles', () => {
+  const mixOnly = { ...recording, services: ['full-mix'], versions: { mix: recording.versions.master, unmixed: recording.versions.master } };
+  const example = { id: 'full-mix-demo', recordingId: mixOnly.id, visibility:'draft', service:'mixing', methodology:'full-mix', summary:'Full mix', before:'unmixed', after:'mix' };
+  expect(validateCatalog({recordings:[mixOnly],releases:[],examples:[example]}).examples[0].alignment).toEqual({before:0,after:0});
+  expect(() => validateCatalog({recordings:[mixOnly],releases:[],examples:[{...example,methodology:'mastering'}]})).toThrow();
+  expect(() => validateCatalog({recordings:[mixOnly],releases:[],examples:[{...example,methodology:'two-track-vocals'}]})).toThrow();
+});
+it('rejects invalid comparison pairs and waveform amplitudes', () => {
+  const track = {...recording,versions:{master:recording.versions.master,mix:recording.versions.master}};
+  const example = {id:'mastering-demo', recordingId:track.id, visibility:'draft',service:'mastering',summary:'Mastering',before:'mix',after:'master'};
+  expect(() => validateCatalog({recordings:[track],releases:[],examples:[{...example,after:'mix'}]})).toThrow();
+  expect(() => validateCatalog({recordings:[track],releases:[],examples:[{...example,waveforms:{before:[2],after:[1]}}]})).toThrow();
+});
