@@ -21,6 +21,10 @@ export function publicationMilestones(feed: ProjectFeed | null): Milestone[] {
       publishedAt: entry.publishedAt, backfilled: entry.backfilled, basis: entry.story.basis };
   });
 }
+/** Curated history remains repository-owned; publish new milestones under separate IDs. */
+export function journalMilestones(feed: ProjectFeed | null, curated: Milestone[] = []): Milestone[] {
+  return [...curated, ...publicationMilestones(feed)].sort((a, b) => a.day.localeCompare(b.day));
+}
 export function feedChange(previous: ProjectFeed, next: ProjectFeed): 'ignore' | 'unchanged' | 'new' | 'replace' {
   if (next.projectId !== previous.projectId || !Number.isSafeInteger(next.revision)) return 'ignore';
   const current = new Map(entries(next).map(entry => [entry.entryId, entry]));

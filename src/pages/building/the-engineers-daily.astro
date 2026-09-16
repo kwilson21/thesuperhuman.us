@@ -3,7 +3,6 @@ export const prerender = false;
 import ProjectLayout from '~/layouts/ProjectLayout.astro';
 import notebook from '~/assets/site/notebook-v1.webp';
 import preview from '~/assets/projects/daily-preview.webp';
-import ProjectTimeline from '~/components/ProjectTimeline.astro';
 import ProjectUpdates from '~/components/ProjectUpdates.astro';
 import { websiteFeed } from '~/lib/publication/website';
 import story from '~/data/project-stories/the-engineers-daily.json';
@@ -15,7 +14,7 @@ const latestSrc = latest.file === 'lesson-prototype.png' ? preview.src : asset(l
 const entries = story.stages.map(stage => ({ id:stage.id, day:stage.day, title:stage.title, summary:stage.summary, detail:stage.decision, artifacts:stage.artifacts.map(image => ({ ...image, src:asset(image.file) })) }));
 Astro.response.headers.set('Cache-Control', 'no-store');
 ---
-<ProjectLayout title={story.title} subtitle={story.subtitle} description="Engineering practice alongside Scripture, prayer and reflection. For people who already code." status={story.status} journalHref="#design-history-title" ogImage={asset(story.cover)}>
+<ProjectLayout title={story.title} subtitle={story.subtitle} description="Engineering practice alongside Scripture, prayer and reflection. For people who already code." status={story.status} journalHref="#the-engineers-daily-updates-title" ogImage={asset(story.cover)}>
   <figure class="project-current">
     <a href={asset(latest.file)} aria-label="Open the current lesson prototype screenshot at full size"><img src={latestSrc} alt={latest.alt} width={latest.width} height={latest.height} fetchpriority="high" /></a>
     <figcaption>{latest.caption}</figcaption>
@@ -35,7 +34,7 @@ Astro.response.headers.set('Cache-Control', 'no-store');
       <div><p class="page-kicker">Next</p><p>{story.next}</p></div>
     </div>
   </section>
-  <ProjectTimeline id="design-history" title="From the first sketch to a lesson" entries={entries} />
+  <span id="design-history-title" aria-hidden="true"></span>
   <p class="project-note">I direct the product and choose the direction, with AI assistance for exploration and implementation. Concepts are visual studies, not working features. Dates record the supported day, not time spent.</p>
-  <ProjectUpdates feed={feed} projectId={story.projectId} title="Development milestones" />
+  <ProjectUpdates feed={feed} projectId={story.projectId} milestones={entries} />
 </ProjectLayout>

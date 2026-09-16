@@ -18,7 +18,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
       return new Response(`Cross-site ${request.method} form submissions are forbidden`, { status: 403 });
     }
   }
-  const host = context.request.headers.get('host') ?? context.url.host;
+  const host = context.isPrerendered ? context.url.host : context.request.headers.get('host') ?? context.url.host;
   const rewritten = rewritePathForHost(host, context.url.pathname);
   if (rewritten) {
     return context.rewrite(rewritten);

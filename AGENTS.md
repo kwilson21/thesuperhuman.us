@@ -7,6 +7,10 @@ For generated or AI-edited website images, follow [docs/generated-image-qa.md](d
 General philosophy is permitted; private operational recipes remain excluded.
 Existing checks, permissions, and review requirements still apply.
 
+## Website deployment gate
+
+Before deploying a website, follow [the reusable pre-launch Definition of Done](docs/prelaunch-checklist.md). Record PASS, FAIL, UNVERIFIED, or justified N/A for every applicable check. Code completion is separate from deployment and live verification. For future website projects, copy this checklist and add this instruction to their existing agent guidance.
+
 ## Project journal continuity
 
 Read `docs/project-journal.md`. At task start and after compaction, run

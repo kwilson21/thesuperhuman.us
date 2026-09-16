@@ -1,7 +1,7 @@
 import approved from '../../src/data/project-stories/threadline-review.json';
 import type { Story } from '../../src/lib/publication/contract';
 import {describe, expect, it} from 'vitest';
-import {feedChange, publicationMilestones} from '../../src/lib/project-story';
+import {feedChange, publicationMilestones, journalMilestones} from '../../src/lib/project-story';
 import type {ProjectFeed, PublicEntry} from '../../src/lib/publication/read';
 const entry = (id: string, day = '2026-09-09'): PublicEntry => ({entryId:id,occurredOn:day,publishedAt:day+'T12:00:00Z',backfilled:false,story:{basis:'repository-verified',delivery:'implemented',headline:id,summary:'A visible result. The prototype is not released.',technicalDetail:null}});
 const feed = (items: PublicEntry[], revision = 1): ProjectFeed => ({projectId:'threadline',revision,current:items[0]??null,history:items});
@@ -53,4 +53,18 @@ describe('reviewed milestone illustration',()=>{
  it('keeps the illustration when unrelated work advances the project revision',()=>{
   const e=reviewedEntry();expect(publicationMilestones(feed([entry('later'),e],99)).find(m=>m.id===e.entryId)?.illustration).toBe('payload-review');
  });
+});
+
+describe('one journal for curated and published milestones', () => {
+ const design = { id: 'website-design', day: '2026-09-09', title: 'Design', summary: 'A reviewed study.', artifacts: [] };
+ it('retains curated visuals when the feed is empty or unavailable', () => {
+  expect(journalMilestones(null, [design])).toEqual([design]);
+  expect(journalMilestones(feed([]), [design])).toEqual([design]);
+ });
+ it('interleaves work by date and preserves same-day sequence', () => {
+  const result = journalMilestones(feed([entry('launch', '2026-09-10'), entry('earlier', '2026-09-08')]), [design]);
+  expect(result.map(m => m.id)).toEqual(['earlier', 'website-design', 'launch']);
+  expect(result[1]).toBe(design);
+ });
+
 });
