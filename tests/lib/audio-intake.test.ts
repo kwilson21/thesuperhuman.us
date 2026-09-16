@@ -13,6 +13,7 @@ describe('audio intake', () => {
   it('does not require finished audio for a custom recording inquiry', () => {
     expect(validateIntake({ ...base, service: 'custom', fileLink: '', referenceNote: 'Help me record vocals at home.' }).ok).toBe(true);
     expect(validateIntake({ ...base, fileLink: '' }).ok).toBe(false);
+    expect(validateIntake({ ...base, service: 'custom', fileLink: '', preserve: 'Keep vocals natural.', referenceNote: '' }).ok).toBe(false);
   });
   it('rejects unsafe links, invalid consent and oversized notes', () => {
     for (const changes of [{fileLink:'javascript:alert(1)'},{referenceUrl:'file:///secret'},{permission:false},{preserve:'x'.repeat(1201)},{email:'bad'}]) expect(validateIntake({...base,...changes}).ok).toBe(false);

@@ -51,6 +51,6 @@ export function validateIntake(input: unknown): { ok: true; value: IntakeInput }
   }
   if (value.direction === 'judgment' && Object.values(value.preferences).some(v => v !== 'decide')) errors.preferences = 'Choose a preference path to include specific settings.';
   if (value.service !== 'custom' && !value.fileLink) errors.fileLink = 'Provide your files before submitting for review.';
-  if (value.service === 'custom' && !value.referenceNote && !value.preserve) errors.referenceNote = 'Briefly describe your project and what you need.';
+  if (value.service === 'custom' && !value.referenceNote) errors.referenceNote = 'Briefly describe your project and what you need.';
   return Object.keys(errors).length ? { ok: false, errors } : { ok: true, value };
 }
