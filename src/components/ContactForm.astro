@@ -15,6 +15,7 @@ const turnstileSiteKey = Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY ?? i
   <div><button type="submit" disabled class="site-button">Send message</button><p id="cf-status" data-form-status role="status" tabindex="-1"></p></div>
   <p class="form-hint">Prefer email? <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a></p>
   <p class="form-hint">Looking for my resume? <a href="/about#resumes">Request a copy.</a></p>
+<p class="form-hint">Read how your information is handled in the <a href="https://thesuperhuman.us/privacy">privacy notice</a>.</p>
 </form>
 <div id="contact-success" class="form-success" role="status" tabindex="-1" hidden><h3>Message received.</h3><p>Thanks for getting in touch.</p></div>
 {turnstileSiteKey && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>}

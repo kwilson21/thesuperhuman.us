@@ -7,11 +7,12 @@ interface Props {
   title: string;
   description: string;
   ogImage?: string;
+  noindex?: boolean;
   jsonLd?: Record<string, unknown>;
 }
 
-const { title, description, ogImage = '/og-image.png', jsonLd } = Astro.props;
-const hostHeader = Astro.request.headers.get('host');
+const { title, description, ogImage = '/og-image.png', noindex = false, jsonLd } = Astro.props;
+const hostHeader = (Astro.isPrerendered ? null : Astro.request.headers.get('host'));
 const canonical = publicCanonicalFor(Astro.url, hostHeader);
 const ogImageUrl = new URL(ogImage, canonical).toString();
 
@@ -30,6 +31,7 @@ function jsonLdString(data: object): string {
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
+    {noindex && <meta name="robots" content="noindex, follow" />}
 
     <meta property="og:type" content="website" />
     <meta property="og:url" content={canonical} />
@@ -38,7 +40,9 @@ function jsonLdString(data: object): string {
     <meta property="og:image" content={ogImageUrl} />
     <meta name="twitter:card" content="summary_large_image" />
 
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="sitemap" href="/sitemap-index.xml" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
