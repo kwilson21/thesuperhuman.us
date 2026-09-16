@@ -33,3 +33,12 @@ it('rejects invalid comparison pairs and waveform amplitudes', () => {
   expect(() => validateCatalog({recordings:[track],releases:[],examples:[{...example,after:'mix'}]})).toThrow();
   expect(() => validateCatalog({recordings:[track],releases:[],examples:[{...example,waveforms:{before:[2],after:[1]}}]})).toThrow();
 });
+
+it.each([
+  ['master', 'mp4', 'video/mp4'], ['mix', 'mp4', 'audio/mpeg'],
+  ['unmixed', 'mp3', 'video/mp4'], ['video', 'mp3', 'audio/mpeg'],
+  ['video', 'mp4', 'audio/mpeg'], ['master', 'mp3', 'video/mp4'],
+])('rejects a %s slot with .%s and %s', (slot, suffix, type) => {
+  const track = { ...recording, versions: { ...recording.versions, [slot]: { key: `music/song/export.${suffix}`, type } } };
+  expect(() => validateCatalog({ recordings: [track], releases: [], examples: [] })).toThrow();
+});
