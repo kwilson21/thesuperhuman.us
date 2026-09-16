@@ -52,7 +52,7 @@ test('concurrent change after verification blocks the atomic delete', async () =
     if (sql.startsWith('DELETE')) database.db.exec("UPDATE music_events SET session_id='raced' WHERE session_id='old-a'");
     return database.query(sql);
   }};
-  await assert.rejects(apply(guarded, review, 'Local test data', now), /did not empty/);
+  await assert.rejects(apply(guarded, review, 'Local test data', now), /source changed/);
   assert.equal((await database.query('SELECT count(*) n FROM music_events'))[0].n, 6);
   assert.equal((await database.query('SELECT count(*) n FROM music_event_daily'))[0].n, 0);
 });
@@ -69,4 +69,25 @@ test('missing or altered archive trigger prevents cleanup', async () => {
   const review = await preview(database, 'Local test data', now);
   database.db.exec('DROP TRIGGER music_events_archive_before_delete');
   await assert.rejects(apply(database, review, 'Local test data', now), /trigger/);
+});
+
+test('large reviews use bounded chunks; failure leaves the rest for a fresh review', async () => {
+  const database = setup();
+  const insert = database.db.prepare('INSERT INTO music_events VALUES (?,?,?,?,?,?)');
+  for (let i=0; i<220; i++) insert.run('batch','song',`session-${i}`,'audio','start','2026-01-01T00:00:00.000Z');
+  const before = await database.query(lifetimePlayback);
+  const review = await preview(database, 'Local test data', now);
+  let deletes = 0;
+  const interrupted = { query: async (sql: string) => {
+    if (sql.startsWith('DELETE') && ++deletes === 2) throw new Error('simulated interruption');
+    return database.query(sql);
+  }};
+  await assert.rejects(apply(interrupted, review, 'Local test data', now), /earlier chunks may be archived/);
+  assert.equal((await database.query('SELECT sum(count) n FROM music_event_daily'))[0].n, 100);
+  assert.deepEqual(await database.query(lifetimePlayback), before);
+  await assert.rejects(apply(database, review, 'Local test data', now), /changed/);
+  const remaining = await preview(database, 'Local test data', now);
+  assert.equal(remaining.rows, 124);
+  assert.equal(await apply(database, remaining, 'Local test data', now), 124);
+  assert.deepEqual(await database.query(lifetimePlayback), before);
 });

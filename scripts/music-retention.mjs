@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { renderMusicReport } from './music-report-view.mjs';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -8,8 +9,8 @@ import { openMusicDatabase, lifetimePlayback } from './music-analytics.mjs';
 const quote = value => `'${value.replaceAll("'", "''")}'`;
 const hash = value => createHash('sha256').update(value).digest('hex');
 export const cutoffFor = now => new Date(now.getTime() - 90 * 86400000).toISOString().slice(0, 10) + 'T00:00:00.000Z';
-export const snapshotQuery = cutoff => `SELECT json_group_array(json_array(release_id,recording_id,session_id,medium,event,occurred_at)) AS snapshot
-FROM (SELECT * FROM music_events WHERE occurred_at < ${quote(cutoff)}
+export const snapshotQuery = (cutoff, selection = '1') => `SELECT json_group_array(json_array(release_id,recording_id,session_id,medium,event,occurred_at)) AS snapshot
+FROM (SELECT * FROM music_events WHERE occurred_at < ${quote(cutoff)} AND (${selection})
 ORDER BY release_id,recording_id,session_id,medium,event)`;
 export const summaryQuery = cutoff => `SELECT substr(occurred_at,1,10) AS day,release_id,recording_id,medium,event,count(*) AS count
 FROM music_events WHERE occurred_at < ${quote(cutoff)} GROUP BY day,release_id,recording_id,medium,event
@@ -48,12 +49,24 @@ export async function apply(database, review, environment, now = new Date()) {
   const triggers = await database.query("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='music_events_archive_before_delete'");
   const normalize = sql => sql.replace('IF NOT EXISTS ', '').replace(/;$/, '').replace(/\s+/g, ' ').trim();
   if (triggers.length !== 1 || normalize(triggers[0].sql) !== normalize(expected)) throw new Error('Archive trigger is missing or different. Apply the reviewed db/music.sql schema first.');
-  // The exact snapshot predicate closes the race between review verification and
-  // deletion, including changes with the same count. This is ONE atomic statement.
-  await database.query(`DELETE FROM music_events WHERE occurred_at < ${quote(review.cutoff)}
-AND (${snapshotQuery(review.cutoff)}) = ${quote(snapshot)}`);
-  const [remaining] = await database.query(snapshotQuery(review.cutoff));
-  if (remaining.snapshot !== '[]') throw new Error('Cleanup did not empty the reviewed range (concurrent change possible). Generate a fresh preview before retrying.');
+  // Bound each atomic statement below D1's SQL-size limit. The single explicit
+  // approval covers this exact reviewed snapshot; no new rows join the cleanup.
+  const rows = JSON.parse(snapshot);
+  for (let start = 0; start < rows.length; start += 100) {
+    const chunk = rows.slice(start, start + 100);
+    const selection = `(release_id,recording_id,session_id,medium,event) IN (VALUES ${chunk.map(row => `(${row.slice(0, 5).map(quote).join(',')})`).join(',')})`;
+    const query = snapshotQuery(review.cutoff, selection);
+    const sql = `DELETE FROM music_events WHERE occurred_at < ${quote(review.cutoff)} AND (${selection})
+AND (${query}) = ${quote(JSON.stringify(chunk))}`;
+    if (Buffer.byteLength(sql) > 90000) throw new Error('Reviewed chunk exceeds the safe query limit; remaining rows were retained. Generate a fresh preview before retrying.');
+    try {
+      await database.query(sql);
+      const [remaining] = await database.query(query);
+      if (remaining.snapshot !== '[]') throw new Error('Reviewed source changed during cleanup.');
+    } catch (error) {
+      throw new Error(`Cleanup stopped; earlier chunks may be archived. Remaining rows were retained. Generate a fresh preview before retrying. ${error.message}`);
+    }
+  }
   return review.rows;
 }
 
@@ -75,7 +88,8 @@ async function main() {
     } else {
       const review = await preview(database, environment);
       await writeFile(reviewPath, JSON.stringify(review, null, 2), { mode: 0o600 });
-      console.log(`Preview only: ${review.rows} events before ${review.cutoff}. Review ${reviewPath}, preserve any additional insights privately, then explicitly run --apply ${reviewPath}${remote ? ' --remote' : ''}. Nothing was removed.`);
+      await writeFile('.private/music-retention-review.html', renderMusicReport('Playback retention review', `${environment} · ${review.generatedAt}`, `${review.rows} individual records before ${review.cutoff} are eligible. Nothing has been removed. ${review.notes} Save important observations privately, then explicitly apply the matching JSON review.`, { 'Daily playback eligible for cleanup': review.dailySummary, 'Lifetime playback totals': review.lifetimeTotals }), { mode: 0o600 });
+      console.log(`Preview only: ${review.rows} events before ${review.cutoff}. Open .private/music-retention-review.html (matching manifest: ${reviewPath}), preserve any additional insights privately, then explicitly run --apply ${reviewPath}${remote ? ' --remote' : ''}. Nothing was removed.`);
     }
   } finally { await database.close(); }
 }
