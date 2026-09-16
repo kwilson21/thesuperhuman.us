@@ -12,7 +12,11 @@ const waveforms = {};
 const loudness = {};
 for (const side of ['before', 'after']) {
   const file = resolve('.private/music-assets', track.versions[example[side]].key);
-  const result = spawnSync('ffmpeg', ['-v', 'error', '-ss', String(example.alignment?.[side] ?? 0), '-i', file, '-t', String(track.duration), '-ac', '1', '-ar', '8000', '-f', 'f32le', 'pipe:1'], { maxBuffer: 64 * 1024 * 1024 });
+  const window = ['-ss', String(example.alignment?.[side] ?? 0), '-i', file, '-t', String(track.duration)];
+  // Trim before analysis filters: an output -t alone can let loudnorm analyze
+  // buffered samples beyond the playback endpoint.
+  const trim = `atrim=duration=${track.duration}`;
+  const result = spawnSync('ffmpeg', ['-v', 'error', ...window, '-af', trim, '-ac', '1', '-ar', '8000', '-f', 'f32le', 'pipe:1'], { maxBuffer: 64 * 1024 * 1024 });
   if (result.status !== 0) throw new Error(result.stderr?.toString() || 'ffmpeg could not decode the export');
   const count = result.stdout.length / 4;
   const bins = Array.from({ length: 320 }, (_, index) => {
@@ -20,7 +24,7 @@ for (const side of ['before', 'after']) {
     for (let i = Math.floor(index * count / 320); i < Math.floor((index + 1) * count / 320); i++) { const sample = result.stdout.readFloatLE(i * 4); energy += sample * sample; samples++; }
     return samples ? Math.sqrt(energy / samples) : 0;
   });
-  const measured = spawnSync('ffmpeg', ['-hide_banner', '-i', file, '-af', 'loudnorm=print_format=json', '-f', 'null', '-'], { maxBuffer: 4 * 1024 * 1024 });
+  const measured = spawnSync('ffmpeg', ['-hide_banner', ...window, '-af', `${trim},loudnorm=print_format=json`, '-f', 'null', '-'], { maxBuffer: 4 * 1024 * 1024 });
   const match = measured.stderr?.toString().match(/\{[\s\S]*?"input_i"[\s\S]*?\}/);
   if (measured.status !== 0 || !match) throw new Error('Could not measure integrated loudness');
   loudness[side] = Number(JSON.parse(match[0]).input_i);

@@ -4,7 +4,7 @@ import { mkdir, writeFile, readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { getPlatformProxy } from 'wrangler';
 const configPath = resolve('.private/wrangler-music-preview.json');
-await mkdir('.private', { recursive: true });
+await mkdir('.private/music-assets', { recursive: true });
 await writeFile(configPath, JSON.stringify({
   name: 'music-local-preview', compatibility_date: '2026-05-14', compatibility_flags: ['nodejs_compat'],
   vars: { PUBLIC_TURNSTILE_SITE_KEY: '1x00000000000000000000AA', TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA' },

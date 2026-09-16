@@ -8,15 +8,19 @@ export const methodologies = {
   mastering: { label: 'Mastering', description: 'A finished mix prepared for release.', service: 'mastering' },
 } as const;
 const visibility = z.enum(['draft', 'public']);
-const asset = z.object({
-  key: z.string().regex(/^music\/[a-z0-9-]+\/[a-z0-9-]+\.(mp3|mp4)$/),
-  type: z.enum(['audio/mpeg', 'video/mp4']),
+const audioAsset = z.object({
+  key: z.string().regex(/^music\/[a-z0-9-]+\/[a-z0-9-]+\.mp3$/),
+  type: z.literal('audio/mpeg'),
+});
+const videoAsset = z.object({
+  key: z.string().regex(/^music\/[a-z0-9-]+\/[a-z0-9-]+\.mp4$/),
+  type: z.literal('video/mp4'),
 });
 export const recordingSchema = z.object({
   id: musicId, title: z.string().min(1), artist: z.string().min(1), duration: z.number().positive(), visibility,
   credits: z.array(z.object({ role: z.string(), name: z.string() })), lyrics: z.string().optional(),
   services: z.array(methodologySchema).default([]),
-  versions: z.object({ master: asset.optional(), mix: asset.optional(), unmixed: asset.optional(), video: asset.optional() }).refine(v => v.master || v.mix || v.unmixed, { message: 'At least one audio export is required' }),
+  versions: z.object({ master: audioAsset.optional(), mix: audioAsset.optional(), unmixed: audioAsset.optional(), video: videoAsset.optional() }).refine(v => v.master || v.mix || v.unmixed, { message: 'At least one audio export is required' }),
   youtubeId: z.string().regex(/^[a-zA-Z0-9_-]{11}$/).optional(),
 });
 export const releaseSchema = z.object({
