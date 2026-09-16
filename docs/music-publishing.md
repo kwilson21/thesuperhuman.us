@@ -47,7 +47,7 @@ from approved lyrics. Release metadata lives in the three content collections.
 A recording may specify a YouTube `youtubeId` instead of hosting an MP4. When both
 exist, YouTube is preferred. The iframe loads only when requested. Old News is
 currently tested with its actual hosted lyric-video file; no published YouTube ID
-has been supplied. Native video and audio pause each other.
+has been supplied. Audio and video transfer the current position when switching and pause each other. Hosted video uses custom controls with a native fallback; YouTube loads on request. Real hosted video and simulated delayed YouTube readiness were checked; live YouTube playback still needs a supplied video ID.
 
 ## Preview and publish
 
@@ -98,3 +98,9 @@ unchecked. Repeated submissions update the same release/email record. No email,
 newsletter subscription, order or payment is created. Honor withdrawal requests
 through the displayed contact address, using the private database. Keep reports
 and contact exports out of public assets and version control.
+
+## Portfolio methodologies and comparison audio
+
+Use `two-track-vocals`, `full-mix`, or `mastering` to identify the work demonstrated. Recording service credits are separate from the comparison methodology: a track may credit both vocal mixing and mastering while only supplying a genuine mastering before/after pair. Never fabricate a missing unmixed source. Mix-only recordings are supported.
+
+Run `node scripts/music-waveforms.mjs` against the private local exports after preparing the catalog. This derives waveform samples and integrated loudness measurements; review timing offsets against the actual files. The stacked A/B player preserves position, supports source offsets, and optionally attenuates the louder version for comparison. It does not rewrite the audio.
