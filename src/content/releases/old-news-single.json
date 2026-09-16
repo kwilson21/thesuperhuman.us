@@ -4,8 +4,9 @@
   "title": "Old News (Prod. Lexi Banks)",
   "artist": "Kaz̄on",
   "type": "single",
-  "status": "preview",
-  "visibility": "draft",
+  "status": "released",
+  "visibility": "public",
+  "date": "2026-09-16",
   "artwork": "/music/old-news-single-0db5fc05dca4ee79.webp",
   "tracks": [
     "old-news-recording"
