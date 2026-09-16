@@ -31,5 +31,9 @@
       "key": "music/old-news-recording/video-44555c710ec8f444.mp4",
       "type": "video/mp4"
     }
-  }
+  },
+  "services": [
+    "two-track-vocals",
+    "mastering"
+  ]
 }

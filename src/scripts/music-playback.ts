@@ -1,7 +1,8 @@
 /** One active player, with engagement separate from playback controls. */
 import { setupAudioControls } from "./music-controls";
+import { setupVideoControls } from "./video-controls";
 interface Playable { pause: () => void }
-interface YoutubePlayer { playVideo(): void; pauseVideo(): void; getCurrentTime(): number; getPlayerState(): number; isMuted(): boolean; getVolume(): number; getPlaybackRate(): number; getIframe(): HTMLIFrameElement }
+interface YoutubePlayer { seekTo(seconds: number, allowSeekAhead: boolean): void; playVideo(): void; pauseVideo(): void; getCurrentTime(): number; getPlayerState(): number; isMuted(): boolean; getVolume(): number; getPlaybackRate(): number; getIframe(): HTMLIFrameElement }
 interface YoutubeAPI { Player: new (element: HTMLElement, options: Record<string, unknown>) => YoutubePlayer }
 const players = new Map<object, Playable>();
 let initialized = false;
@@ -78,13 +79,26 @@ export function setupMusicPlayback() {
     media.addEventListener('timeupdate', () => meter.sample(media.currentTime, !media.paused && !media.seeking && !media.muted && media.volume > 0, media.playbackRate));
   });
   setupAudioControls();
+  setupVideoControls();
   document.querySelectorAll<HTMLElement>('[data-video-stage]').forEach(stage => {
     const poster = stage.querySelector<HTMLElement>('[data-poster]')!;
     const native = stage.querySelector<HTMLVideoElement>('video');
     const youtube = stage.querySelector<HTMLElement>('[data-youtube-id]');
     const status = stage.querySelector<HTMLElement>('[data-video-status]')!;
     const triggers = [...document.querySelectorAll<HTMLButtonElement>('[data-video-trigger]')].filter(b => b.dataset.videoTrigger === stage.id);
+    const linkedAudio = stage.querySelector<HTMLAudioElement>('audio');
+    let lastMedium: 'audio' | 'video' = 'audio';
+    let youtubeStart = 0;
     let youtubePlayer: YoutubePlayer | undefined;
+    if (linkedAudio) {
+      const restoreAudio = () => {
+        if (lastMedium === 'video') linkedAudio.currentTime = native?.currentTime ?? youtubePlayer?.getCurrentTime() ?? linkedAudio.currentTime;
+        lastMedium = 'audio';
+      };
+      linkedAudio.addEventListener('music-request-play', restoreAudio);
+      linkedAudio.addEventListener('play', restoreAudio);
+      linkedAudio.addEventListener('seeking', () => { lastMedium = 'audio'; });
+    }
     let wantsVideo = false;
     let loading = false;
     function showVideo() { poster.hidden = true; if (native) native.hidden = false; if (youtube) youtube.hidden = false; }
@@ -100,7 +114,8 @@ export function setupMusicPlayback() {
       wantsVideo = false; if (native) native.pause(); youtubePlayer?.pauseVideo(); showPoster(); videoState(false); status.textContent = '';
     })));
     if (native) {
-      native.addEventListener('play', () => videoState(true));
+      native.addEventListener('play', () => { if (linkedAudio && lastMedium === 'audio') native.currentTime = linkedAudio.currentTime; lastMedium = 'video'; videoState(true); });
+      native.addEventListener('seeking', () => { lastMedium = 'video'; });
       native.addEventListener('pause', () => videoState(false));
       native.addEventListener('ended', () => { showPoster(); videoState(false); });
       native.addEventListener('playing', () => { status.textContent = ''; });
@@ -113,20 +128,21 @@ export function setupMusicPlayback() {
           native?.pause(); youtubePlayer?.pauseVideo(); videoState(false); return;
         }
         if (loading) return;
+        youtubeStart = lastMedium === 'audio' ? linkedAudio?.currentTime ?? 0 : native?.currentTime ?? youtubePlayer?.getCurrentTime() ?? 0;
         wantsVideo = true; loading = true; status.textContent = 'Loading the lyric video…';
         pauseOthers(native ?? youtubePlayer ?? stage);
         showVideo();
         try {
           if (native) { if (native.error) native.load(); await native.play(); status.textContent = ''; }
           else if (youtube) {
-            if (youtubePlayer) youtubePlayer.playVideo();
+            if (youtubePlayer) { youtubePlayer.seekTo(youtubeStart, true); youtubePlayer.playVideo(); lastMedium = 'video'; }
             else {
               const api = await youtubeAPI();
               const meter = engagement(youtube, 'video');
               youtubePlayer = new api.Player(youtube.querySelector<HTMLElement>('[data-youtube-mount]')!, {
                 videoId: youtube.dataset.youtubeId, host: 'https://www.youtube-nocookie.com', playerVars: { playsinline: 1, origin: location.origin },
                 events: {
-                  onReady: () => { youtubePlayer!.getIframe().title = 'Lyric video'; status.textContent = ''; if (wantsVideo) youtubePlayer!.playVideo(); },
+                  onReady: () => { youtubePlayer!.getIframe().title = 'Lyric video'; status.textContent = ''; if (wantsVideo) { youtubePlayer!.seekTo(youtubeStart, true); youtubePlayer!.playVideo(); lastMedium = 'video'; } },
                   onStateChange: (event: { data: number }) => { if (event.data === 1) { pauseOthers(youtubePlayer!); status.textContent = ''; } videoState(event.data === 1); meter.reset(youtubePlayer!.getCurrentTime()); },
                   onError: () => { status.textContent = 'The video is unavailable here. Try the YouTube link or listen to the song.'; },
                 },

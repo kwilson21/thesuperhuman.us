@@ -1,13 +1,14 @@
 ---
 export const prerender = false;
 import BaseLayout from '~/layouts/BaseLayout.astro';
+import MusicNav from '~/components/audio/MusicNav.astro';
 import AudioFooter from '~/components/audio/AudioFooter.astro';
 import ReleaseInterest from '~/components/audio/ReleaseInterest.astro';
 import LyricVideo from '~/components/audio/LyricVideo.astro';
 import AudioPlayer from '~/components/audio/AudioPlayer.astro';
 import PlayIcon from '~/components/audio/PlayIcon.astro';
 import { loadMusicCatalog } from '~/lib/music-content';
-import { musicFile } from '~/lib/music-catalog';
+import { musicFile, releaseVersion } from '~/lib/music-catalog';
 import { audioPath } from '~/lib/host-routing';
 import type { ImageMetadata } from 'astro';
 import '~/styles/music.css';
@@ -28,7 +29,7 @@ const videoId = `video-${first.id}`;
 ---
 <BaseLayout title={`${release.title} · ${release.artist}`} description={`Listen to ${release.title} by ${release.artist}. ${release.status === 'preview' ? 'Streaming preview.' : 'Music release.'}`} ogImage={release.artwork}>
   <div class="site-shell music-page premiere-page">
-    <nav class="premiere-nav" aria-label="Audio and music"><a href={audioPath(host, '/releases')}>Releases</a><span aria-hidden="true">/</span><a href={audioPath(host, '/portfolio')}>Portfolio</a></nav>
+    <MusicNav />
     <header class="premiere-masthead">
       <div class="masthead-artist"><span aria-label={release.artist}>{release.artist.split(/(z\u0304)/i).map(part => /^z\u0304$/i.test(part) ? <span class="artist-macron">{part[0]}</span> : part)}</span></div>
       <h1 class:list={['masthead-title', { 'masthead-title-long': mainTitle.length > 12 }]}>{mainTitle}</h1>
@@ -40,9 +41,9 @@ const videoId = `video-${first.id}`;
       <noscript><p class="music-note">Use the listening and video controls below.</p></noscript>
     </header>
     <LyricVideo recording={first} releaseId={release.id} poster={poster} quote={release.heroQuote}>
-      <div class="hero-transport"><AudioPlayer id={playerId} src={musicFile(first.id, 'master')} title={mainTitle} duration={first.duration} artwork={release.artwork} releaseId={release.id} recordingId={first.id} /></div>
+      <div class="hero-transport"><AudioPlayer id={playerId} src={musicFile(first.id, releaseVersion(first))} title={mainTitle} duration={first.duration} artwork={release.artwork} releaseId={release.id} recordingId={first.id} /></div>
     </LyricVideo>
-    {tracks.length > 1 && <section class="music-section album-tracks" aria-label="Track list">{tracks.slice(1).map((track, index) => <div><h2>{index + 2}. {track.title}</h2><AudioPlayer id={`listen-${track.id}`} src={musicFile(track.id, 'master')} title={track.title} duration={track.duration} releaseId={release.id} recordingId={track.id} /></div>)}</section>}
+    {tracks.length > 1 && <section class="music-section album-tracks" aria-label="Track list">{tracks.slice(1).map((track, index) => <div><h2>{index + 2}. {track.title}</h2><AudioPlayer id={`listen-${track.id}`} src={musicFile(track.id, releaseVersion(track))} title={track.title} duration={track.duration} releaseId={release.id} recordingId={track.id} /></div>)}</section>}
     <section class="lyric-spread" aria-label="Lyrics and contributors">
       <div>{release.lyricQuote && <blockquote>“{release.lyricQuote}”</blockquote>}<a class="site-link" href="#lyrics">Read the lyrics <span aria-hidden="true">→</span></a></div>
       <div class="featured-credits">{first.credits.filter(c => !/lyrics/i.test(c.role)).sort((a,b) => Number(b.name === first.artist) - Number(a.name === first.artist)).map(credit => <p><strong>{credit.name}</strong><span>{credit.role}</span></p>)}<a class="credit-link" href="#credits">Full credits</a></div>

@@ -1,0 +1,32 @@
+---
+import { musicFile, type MusicCatalog, type Recording } from '~/lib/music-catalog';
+import PlayIcon from './PlayIcon.astro';
+interface Props { example: MusicCatalog['examples'][number]; recording: Recording }
+const { example, recording } = Astro.props;
+const labels = example.service === 'mastering' ? ['Before mastering', 'Final master'] : ['Before mixing', 'Mixed version'];
+---
+<div class="comparison-player" data-comparison data-duration={recording.duration}>
+  <div class="comparison-lanes">
+    {(['before', 'after'] as const).map((side, index) => <section class="comparison-lane" data-lane={side}>
+      <div class="lane-heading"><span class="lane-letter">{index === 0 ? 'A' : 'B'}</span><h3>{labels[index]}</h3><span class="lane-selected" aria-hidden="true">Listening</span></div>
+      {example.waveforms && <svg class="comparison-waveform" viewBox={`0 0 ${example.waveforms[side].length * 4} 64`} preserveAspectRatio="none" aria-hidden="true">{example.waveforms[side].map((height, i) => <line x1={i * 4 + 2} x2={i * 4 + 2} y1={32 - Math.max(1, height * 75)} y2={32 + Math.max(1, height * 75)} stroke="currentColor" stroke-width="2" />)}</svg>}
+      <audio controls controlslist="nodownload" preload="none" data-version={side} data-offset={example.alignment[side]} data-loudness={example.loudness?.[side]} aria-label={`${recording.title}: ${labels[index]}`} src={musicFile(recording.id, example[side])}></audio>
+    </section>)}
+    <span class="comparison-playhead" aria-hidden="true" hidden></span>
+  </div>
+  <div class="comparison-controls" hidden>
+    <button class="round-play" data-comparison-play aria-label={`Play comparison: ${recording.title}`}><PlayIcon /></button>
+    <span class="comparison-time" data-comparison-time>0:00</span>
+    <div class="comparison-switch" role="group" aria-label="Choose version">
+      <button data-select-version="before" aria-pressed="true">A <span>{example.service === 'mastering' ? 'Mix' : 'Unmixed'}</span></button><button data-select-version="after" aria-pressed="false">B <span>{example.service === 'mastering' ? 'Master' : 'Mix'}</span></button>
+    </div>
+    <label class="comparison-volume">Volume <input data-comparison-volume type="range" min="0" max="1" step="0.05" value="1" /></label>
+    {example.loudness && <label class="comparison-match"><input type="checkbox" data-match-level /> Match loudness</label>}
+    <label class="comparison-seek">Playback position <input data-comparison-seek type="range" min="0" max={recording.duration} step="0.1" value="0" /></label>
+  </div>
+  <p class="music-note comparison-instruction">Switch versions. Keep your place.</p><details class="comparison-about"><summary>About this comparison</summary><p>{example.comparisonNote}</p>{example.loudness && <p>Match loudness lowers the louder export using measured whole-song loudness. Original export levels play when unchecked.</p>}</details>
+  <p class="media-status" data-comparison-status role="status"></p>
+</div>
+<style>
+.comparison-player{border:1px solid var(--rule);border-radius:4px;padding:1rem}.comparison-about{font-size:.8rem;color:var(--muted);margin-top:.5rem}.comparison-about summary{cursor:pointer}.comparison-match{display:flex;align-items:center;gap:.4rem;font-size:.8rem}.comparison-match input{accent-color:var(--accent)}.comparison-lanes{position:relative}.comparison-lane{padding:.6rem 0;border-bottom:1px solid var(--rule);color:var(--muted)}.comparison-lane[data-lane=after]{color:var(--accent)}.lane-heading{display:flex;align-items:center;gap:.7rem;font-family:Inter,sans-serif}.lane-heading h3{font-size:.9rem}.lane-letter{font-size:.8rem;border:1px solid currentColor;display:grid;place-items:center;width:1.7rem;height:1.7rem;border-radius:50%}.lane-selected{margin-left:auto;font-size:.7rem;opacity:0}.comparison-lane[data-selected=true] .lane-selected{opacity:1}.comparison-waveform{display:block;width:100%;height:52px;margin-top:.4rem}.comparison-playhead{position:absolute;left:var(--position,0%);top:0;bottom:0;border-left:1px solid var(--accent);pointer-events:none}.comparison-controls{display:flex;align-items:center;flex-wrap:wrap;gap:1rem;margin-top:1.25rem}.round-play{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--paper);flex-shrink:0}.round-play :global(svg){width:17px;height:17px}.round-play[data-playing=true] :global(.play-symbol){display:none}.round-play:not([data-playing=true]) :global(.pause-symbol){display:none}.comparison-time{font: .8rem Inter,sans-serif;font-variant-numeric:tabular-nums;min-width:5.5rem}.comparison-switch{display:flex;border:1px solid var(--rule);border-radius:3px;overflow:hidden}.comparison-switch button{min-height:44px;padding:.5rem .85rem;font:.8rem Inter,sans-serif}.comparison-switch button[aria-pressed=true]{background:var(--ink);color:var(--paper)}.comparison-switch button[data-select-version=after][aria-pressed=true]{background:var(--accent)}.comparison-switch span{margin-left:.3rem}.comparison-volume{margin-left:auto;display:flex;align-items:center;gap:.5rem;font:.7rem Inter,sans-serif}.comparison-volume input{width:70px;accent-color:var(--accent)}.comparison-seek{width:100%;font: .75rem Inter,sans-serif;color:var(--muted)}.comparison-seek input{display:block;width:100%;margin-top:.5rem;accent-color:var(--accent)}.comparison-instruction{margin-top:.8rem}.comparison-controls button{cursor:pointer}.comparison-player [hidden]{display:none!important}@media(max-width:420px){.comparison-controls{gap:.65rem}.comparison-volume{margin-left:0}.comparison-switch button{padding:.5rem .6rem}.comparison-time{min-width:2.2rem}}
+</style>
