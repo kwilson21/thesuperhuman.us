@@ -61,7 +61,7 @@ Publication uses the existing site deployment and review process. Before publish
 Production setup requires a dedicated D1 `MUSIC_DB` binding initialized with
 `db/music.sql`, the existing `AUDIO` R2 bucket, `RATE_LIMIT` KV and real Turnstile
 keys. Never deploy the local preview configuration or test keys. Its bindings
-and data are entirely local. The production configuration has not been changed.
+and data are entirely local. The dedicated `thesuperhuman-music` database has been initialized and its `MUSIC_DB` binding is included in the PR stack. Binding activation still depends on deployment.
 
 ```sh
 node scripts/upload-music.mjs .private/music-assets/old-news-single-upload.json
