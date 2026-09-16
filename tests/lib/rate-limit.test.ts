@@ -53,3 +53,11 @@ describe('checkRateLimit', () => {
     expect(kv.get.mock.calls[0][0]).toBe('rl:audio:1.2.3.4');
   });
 });
+
+it('supports a bounded burst for metrics without blocking a second listener', async () => {
+  const values = new Map<string, string>();
+  const kv = { get: async (key: string) => values.get(key) ?? null, put: async (key: string, value: string) => { values.set(key, value); } };
+  expect((await checkRateLimit(kv, 'shared-network', 'metrics:', 2)).allowed).toBe(true);
+  expect((await checkRateLimit(kv, 'shared-network', 'metrics:', 2)).allowed).toBe(true);
+  expect((await checkRateLimit(kv, 'shared-network', 'metrics:', 2)).allowed).toBe(false);
+});
