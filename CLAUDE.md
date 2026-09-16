@@ -62,7 +62,7 @@ No active security clearance, but open to pursuing one for the right engagement.
 
 ## Rate Context
 
-Lives in `CLAUDE.local.md` (gitignored). Don't write public rate numbers anywhere.
+Software rate context lives in `CLAUDE.local.md` (gitignored). Keep software rates private. The owner approved public audio starting prices: $150 two-track vocal mixing, $75 mastering and $200 vocal mix plus master. Custom audio work is quoted after review.
 
 ## Historical capabilities
 
@@ -86,7 +86,7 @@ These describe prior capabilities, not a service menu to promote. Lead with the 
 ## Things to Never Do
 
 - Never display Kazon's personal home address anywhere on the site
-- Never display rates or pricing publicly
+- Never display software rates publicly; audio starting prices above are approved
 - Never imply contract exclusivity or a blanket rejection of full-time opportunities; follow the agreed personal-site direction
 - Never use buzzwords: *passionate*, *innovative*, *guru*, *ninja*, *rockstar*
 - Never use em-dashes (` — `) in user-facing prose, email bodies, subjects, or any new copy. They read as AI-generated. Use periods, colons, commas, semicolons, or parentheses instead. The middle-dot (` · `) is fine as a separator in metadata lines. This rule applies to `src/`, `public/`, README.md, and CLAUDE.md. Historical design specs in `docs/superpowers/specs/` are frozen and exempt.
