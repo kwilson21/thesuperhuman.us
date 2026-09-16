@@ -19,7 +19,8 @@
     "audio:upload": "node scripts/upload-audio.mjs",
     "music:prepare": "node scripts/prepare-music.mjs",
     "music:preview:setup": "node scripts/music-preview.mjs",
-    "music:upload": "node scripts/upload-music.mjs"
+    "music:upload": "node scripts/upload-music.mjs",
+    "music:report": "node scripts/music-report.mjs"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.4",
