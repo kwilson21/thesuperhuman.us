@@ -28,7 +28,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const tag = await resolveCampaignTag(env.MUSIC_DB, input);
     const cf = (request as Request & { cf?: { country?: string; region?: string; city?: string; botManagement?: { verifiedBot?: boolean } } }).cf;
     const automated = cf?.botManagement?.verifiedBot === true || /bot|crawler|spider|slurp|preview/i.test(request.headers.get('user-agent') ?? '');
-    await saveEvent(env.MUSIC_DB, input, {
+    await saveEvent(env.MUSIC_DB, { ...input, mediaDurationSeconds: Math.round(recording.duration) }, {
       trafficClass: automated ? 'automated' : 'human',
       ...(tag ?? {}),
       country: locationPart(cf?.country), region: locationPart(cf?.region), city: locationPart(cf?.city),

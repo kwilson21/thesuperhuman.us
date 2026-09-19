@@ -47,6 +47,10 @@ export async function saveInterest(db: D1Database, input: InterestInput) {
       ? JSON.stringify({ merchandise: [...new Set(input.merchandise)], suggestion: input.suggestion })
       : '{}';
     statements.push(
+      db.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
+        SELECT id,'reopened','system','Repeat submission',? FROM owner_requests
+        WHERE id=? AND status IN ('reviewed','resolved','withdrawn')`)
+        .bind(now, requestIds[index]),
       db.prepare(`INSERT INTO owner_requests
         (id,kind,release_id,name,email,city_region,summary,details_json,status,private_note,created_at,updated_at)
         VALUES (?,?,?,'',?,?,?,?, 'new','',?,?) ON CONFLICT(id) DO UPDATE SET
@@ -81,16 +85,16 @@ type PlaybackMetadata = {
   city?: string;
 };
 
-export async function saveEvent(db: D1Database, input: z.infer<typeof eventSchema>, metadata: PlaybackMetadata) {
+export async function saveEvent(db: D1Database, input: z.infer<typeof eventSchema>, metadata: PlaybackMetadata, now = new Date()) {
   const duplicate = await db.prepare(`SELECT session_id,playthrough_id,sequence FROM music_playback_events WHERE id=?`)
     .bind(input.eventId).first<{ session_id: string; playthrough_id: string; sequence: number }>();
   if (duplicate) {
     if (duplicate.session_id === input.sessionId && duplicate.playthrough_id === input.playthroughId && duplicate.sequence === input.sequence) return { status: 'duplicate' as const };
     throw new PlaybackSequenceError('Playback event identity was reused.');
   }
-  const last = await db.prepare(`SELECT sequence,accumulated_seconds,event FROM music_playback_events
+  const last = await db.prepare(`SELECT sequence,accumulated_seconds,event,occurred_at FROM music_playback_events
     WHERE session_id=? AND playthrough_id=? ORDER BY sequence DESC LIMIT 1`)
-    .bind(input.sessionId, input.playthroughId).first<{ sequence: number; accumulated_seconds: number; event: string }>();
+    .bind(input.sessionId, input.playthroughId).first<{ sequence: number; accumulated_seconds: number; event: string; occurred_at: string }>();
   const first = input.event === 'start' || input.event === 'replay';
   if (first ? Boolean(last) || input.sequence !== 1 || input.accumulatedSeconds !== 0
     : !last || input.sequence !== last.sequence + 1 || input.accumulatedSeconds < last.accumulated_seconds) {
@@ -100,7 +104,12 @@ export async function saveEvent(db: D1Database, input: z.infer<typeof eventSchem
   if (input.event === 'complete' && (input.mediaDurationSeconds <= 0 || input.accumulatedSeconds * 10 < input.mediaDurationSeconds * 9)) {
     throw new PlaybackSequenceError('Reported completion is not earned.');
   }
-  const now = new Date().toISOString();
+  if (last) {
+    const elapsed = Math.max(0, (now.getTime() - new Date(last.occurred_at).getTime()) / 1000);
+    const claimed = input.accumulatedSeconds - last.accumulated_seconds;
+    if (!Number.isFinite(elapsed) || claimed > elapsed + 2) throw new PlaybackSequenceError('Reported playback advanced faster than server time.');
+  }
+  const occurredAt = now.toISOString();
   await db.prepare(`INSERT INTO music_playback_events
     (id,release_id,recording_id,session_id,playthrough_id,sequence,medium,event,accumulated_seconds,
       media_duration_seconds,campaign_id,channel,creative,traffic_class,country,region,city,occurred_at)
@@ -108,6 +117,6 @@ export async function saveEvent(db: D1Database, input: z.infer<typeof eventSchem
     .bind(input.eventId, input.releaseId, input.recordingId, input.sessionId, input.playthroughId,
       input.sequence, input.medium, input.event, input.accumulatedSeconds, input.mediaDurationSeconds,
       metadata.campaignId ?? null, metadata.channel ?? null, metadata.creative ?? null, metadata.trafficClass,
-      metadata.country ?? '', metadata.region ?? '', metadata.city ?? '', now).run();
+      metadata.country ?? '', metadata.region ?? '', metadata.city ?? '', occurredAt).run();
   return { status: 'stored' as const };
 }

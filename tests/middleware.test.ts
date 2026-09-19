@@ -20,6 +20,11 @@ function makeContext(url: string, hostHeader?: string) {
 }
 
 describe('middleware.onRequest', () => {
+  it('fails the build when an owner route is accidentally prerendered', async () => {
+    const ctx = makeContext('https://thesuperhuman.us/owner');
+    ctx.isPrerendered = true;
+    await expect(onRequest(ctx, vi.fn())).rejects.toThrow('Owner routes must be server-rendered');
+  });
   it('rejects unauthenticated owner routes without exposing a cacheable response', async () => {
     vi.mocked(verifyOwnerAccess).mockResolvedValueOnce(null);
     const ctx = makeContext('https://thesuperhuman.us/owner/requests');

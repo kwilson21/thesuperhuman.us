@@ -15,6 +15,7 @@ function withOwnerHeaders(response: Response) {
 export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url } = context;
   const ownerPath = url.pathname === '/owner' || url.pathname.startsWith('/owner/');
+  if (context.isPrerendered && ownerPath) throw new Error('Owner routes must be server-rendered.');
   if (!context.isPrerendered && ownerPath) {
     const owner = await verifyOwnerAccess(request, context.locals.runtime.env);
     if (!owner) return new Response('Owner access required.', { status: 403, headers: ownerPrivateHeaders });
