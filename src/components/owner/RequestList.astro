@@ -1,0 +1,13 @@
+---
+import type { OwnerRequest } from '~/lib/owner-model';
+interface Props { requests: OwnerRequest[]; empty?: string }
+const { requests, empty = 'No requests need attention.' } = Astro.props;
+const labels = { purchase: 'Purchase', merchandise: 'Merchandise', service: 'Audio service', 'release-update': 'Release updates' };
+---
+{requests.length ? <ol class="request-list">
+  {requests.map(request => <li><a href={`/owner/requests/${request.id}`}>
+    <span class:list={['request-state', { new: request.status === 'new' }]} aria-label={request.status === 'new' ? 'New request' : undefined}></span>
+    <span class="request-copy"><strong>{request.summary}</strong><small>{labels[request.kind]} · {request.name || request.email}</small></span>
+    <time datetime={request.createdAt}>{new Date(request.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</time>
+  </a></li>)}
+</ol> : <p class="owner-empty">{empty}</p>}
