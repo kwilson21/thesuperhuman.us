@@ -23,6 +23,7 @@ export type StudioLedger = {
   recentRequests: OwnerRequest[];
   observations: string[];
 };
+export type AudiencePermission = { email: string; status: 'subscribed' | 'unsubscribed'; grantedAt: string; withdrawnAt: string | null; sourceRequestId: string | null };
 
 type CampaignRow = {
   id: string; subject_type: 'release' | 'service'; subject_id: string; name: string; primary_goal: string;
@@ -108,4 +109,16 @@ export async function loadStudioLedger(db: D1Database, now: Date): Promise<Studi
     geography: await geography(db), activeCampaign: campaign ? campaignSummary(campaign) : null,
     recentRequests: await requests(db), observations,
   };
+}
+
+export async function listCampaigns(db: D1Database): Promise<CampaignSummary[]> {
+  const rows = (await db.prepare(`SELECT id,subject_type,subject_id,name,primary_goal,secondary_signals,starts_at,ends_at,
+    approved_plan,retrospective,next_lesson,status FROM owner_campaigns ORDER BY starts_at DESC`).all<CampaignRow>()).results;
+  return rows.map(campaignSummary);
+}
+
+export async function listAudience(db: D1Database): Promise<AudiencePermission[]> {
+  const rows = (await db.prepare(`SELECT email,status,granted_at,withdrawn_at,source_request_id FROM owner_audience_permissions ORDER BY granted_at DESC`)
+    .all<{ email: string; status: 'subscribed' | 'unsubscribed'; granted_at: string; withdrawn_at: string | null; source_request_id: string | null }>()).results;
+  return rows.map(row => ({ email: row.email, status: row.status, grantedAt: row.granted_at, withdrawnAt: row.withdrawn_at, sourceRequestId: row.source_request_id }));
 }

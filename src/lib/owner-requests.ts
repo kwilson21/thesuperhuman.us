@@ -24,6 +24,8 @@ export type RequestCommand =
   | { id: string; action: 'review' | 'resolve' | 'reopen' | 'withdraw'; actor: string }
   | { id: string; action: 'note'; actor: string; note: string };
 
+export type OwnerRequestAudit = { id: number; action: string; actor: string; note: string; occurredAt: string };
+
 const requestColumns = `id,kind,release_id,service_id,campaign_id,name,email,city_region,
   summary,details_json,status,private_note,created_at,updated_at,resolved_at,contact_delete_after`;
 
@@ -55,6 +57,12 @@ export async function saveOwnerRequest(db: D1Database, input: NewOwnerRequest, a
 export async function getOwnerRequest(db: D1Database, id: string): Promise<OwnerRequest | null> {
   const row = await db.prepare(`SELECT ${requestColumns} FROM owner_requests WHERE id=?`).bind(id).first<OwnerRequestRow>();
   return row ? ownerRequestFromRow(row) : null;
+}
+
+export async function listOwnerRequestAudit(db: D1Database, id: string): Promise<OwnerRequestAudit[]> {
+  const result = await db.prepare(`SELECT id,action,actor,note,occurred_at FROM owner_request_audit WHERE request_id=? ORDER BY id DESC`)
+    .bind(id).all<{ id: number; action: string; actor: string; note: string; occurred_at: string }>();
+  return result.results.map(row => ({ id: row.id, action: row.action, actor: row.actor, note: row.note, occurredAt: row.occurred_at }));
 }
 
 export async function listOwnerRequests(db: D1Database, filter: { kind?: OwnerRequestKind; status?: OwnerRequestStatus } = {}) {

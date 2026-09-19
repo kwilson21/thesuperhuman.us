@@ -20,3 +20,11 @@ it('keeps the owner interface editorial and responsive', () => {
   expect(css).toContain('prefers-reduced-motion');
   expect(css).not.toMatch(/gradient|box-shadow|backdrop-filter/);
 });
+
+it('provides connected request, campaign and audience views', () => {
+  for (const path of ['src/pages/owner/requests/index.astro', 'src/pages/owner/requests/[id].astro', 'src/pages/owner/campaigns/index.astro', 'src/pages/owner/campaigns/[id].astro', 'src/pages/owner/audience.astro']) {
+    expect(read(path)).toContain('OwnerLayout');
+  }
+  expect(read('src/pages/owner/campaigns/[id].astro')).toContain('Return to Today');
+  expect(read('src/pages/owner/requests/[id].astro')).toContain('Supplied by requester');
+});

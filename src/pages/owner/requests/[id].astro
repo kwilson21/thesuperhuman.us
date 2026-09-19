@@ -1,0 +1,25 @@
+---
+export const prerender = false;
+import OwnerLayout from '~/layouts/OwnerLayout.astro';
+import { getOwnerRequest, listOwnerRequestAudit, listOwnerRequests } from '~/lib/owner-requests';
+const db = Astro.locals.runtime.env.MUSIC_DB;
+if (!db) return new Response('Owner reporting is unavailable.', { status: 503 });
+const request = Astro.params.id ? await getOwnerRequest(db, Astro.params.id) : null;
+if (!request) return new Response('Request not found.', { status: 404 });
+const [audit, newRequests] = await Promise.all([listOwnerRequestAudit(db, request.id), listOwnerRequests(db, { status: 'new' })]);
+const allowed = request.status === 'new' ? ['review', 'resolve', 'withdraw'] : request.status === 'reviewed' ? ['resolve', 'reopen', 'withdraw'] : request.status === 'resolved' ? ['reopen', 'withdraw'] : [];
+---
+<OwnerLayout title={request.summary} current="requests" newRequestCount={newRequests.length} ownerEmail={Astro.locals.owner?.email ?? ''}>
+  <p class="owner-breadcrumb"><a href="/owner/requests">Requests</a> <span aria-hidden="true">/</span> {request.summary}</p>
+  <header class="owner-page-heading compact"><div><p class="owner-kicker">{request.kind} · {request.status}</p><h1>{request.summary}</h1><p>Received {new Date(request.createdAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</p></div></header>
+  <div class="request-detail-grid" data-request-id={request.id}>
+    <section class="owner-section request-contact" aria-labelledby="contact-heading"><p class="owner-kicker">Person</p><h2 id="contact-heading">Contact</h2><dl><dt>Name</dt><dd>{request.name || 'Not supplied'}</dd><dt>Email</dt><dd><a href={`mailto:${request.email}`}>{request.email}</a></dd><dt>City or region <small>Supplied by requester</small></dt><dd>{request.cityRegion || 'Not supplied'}</dd></dl>
+      {(request.releaseId || request.serviceId || request.campaignId) && <div class="request-source"><p class="owner-kicker">Related</p>{request.releaseId && <a href={`/music/${request.releaseId.replace(/-single$/, '')}`}>Open release →</a>}{request.serviceId && <a href="/audio/services">Open service →</a>}{request.campaignId && <a href={`/owner/campaigns/${request.campaignId}`}>Open campaign →</a>}</div>}
+    </section>
+    <section class="owner-section request-work" aria-labelledby="work-heading"><p class="owner-kicker">Your working note</p><h2 id="work-heading">Keep the next step clear</h2><form data-request-note><textarea name="note" maxlength="1000" rows="5">{request.privateNote}</textarea><button type="submit">Save private note</button><p data-action-status aria-live="polite"></p></form>
+      {allowed.length > 0 && <div class="request-actions" data-request-actions>{allowed.map(action => <button type="button" data-action={action} class:list={{ danger: action === 'withdraw' }}>{action === 'review' ? 'Mark reviewed' : action === 'resolve' ? 'Mark resolved' : action === 'reopen' ? 'Reopen request' : 'Honor withdrawal'}</button>)}</div>}
+    </section>
+  </div>
+  <section class="owner-section audit-trail"><p class="owner-kicker">Audit trail</p><h2>What changed</h2><ol>{audit.map(item => <li><strong>{item.action.replace('-', ' ')}</strong><span>{item.actor}</span><time datetime={item.occurredAt}>{new Date(item.occurredAt).toLocaleString()}</time>{item.note && <p>{item.note}</p>}</li>)}</ol></section>
+  <script>import { setupOwnerRequestActions } from '~/scripts/owner-request-actions'; setupOwnerRequestActions();</script>
+</OwnerLayout>

@@ -1,0 +1,21 @@
+---
+export const prerender = false;
+import OwnerLayout from '~/layouts/OwnerLayout.astro';
+import { listAudience } from '~/lib/owner-reporting';
+import { listOwnerRequests } from '~/lib/owner-requests';
+const db = Astro.locals.runtime.env.MUSIC_DB;
+if (!db) return new Response('Owner reporting is unavailable.', { status: 503 });
+const [audience, newRequests] = await Promise.all([listAudience(db), listOwnerRequests(db, { status: 'new' })]);
+---
+<OwnerLayout title="Audience" current="audience" newRequestCount={newRequests.length} ownerEmail={Astro.locals.owner?.email ?? ''}>
+  <header class="owner-page-heading compact"><div><p class="owner-kicker">Release-update permission</p><h1>Audience</h1><p>People who separately chose to hear about future Kaz̄on releases.</p></div></header>
+  <section class="owner-section audience-list">{audience.length ? <ol>{audience.map(person => <li><div><strong>{person.email}</strong><small>{person.status} · Granted {new Date(person.grantedAt).toLocaleDateString()}</small></div>{person.status === 'subscribed' && <button type="button" data-withdraw={person.email}>Withdraw permission</button>}</li>)}</ol> : <p class="owner-empty">No one has chosen future release updates yet.</p>}<p data-audience-status aria-live="polite"></p></section>
+  <script>
+    const status = document.querySelector<HTMLElement>('[data-audience-status]');
+    document.querySelectorAll<HTMLButtonElement>('[data-withdraw]').forEach(button => button.addEventListener('click', async () => {
+      if (!confirm('Withdraw future release updates for this person? Their other requests will stay intact.')) return;
+      const response = await fetch('/api/owner/audience', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'withdraw', email: button.dataset.withdraw }) });
+      if (response.ok) location.reload(); else if (status) status.textContent = 'Permission was not changed. Refresh and try again.';
+    }));
+  </script>
+</OwnerLayout>
