@@ -7,7 +7,12 @@ const input = { releaseId: 'old-news-single', email: ' Fan@Example.com ', intere
 function fixture() {
   const sql = new DatabaseSync(':memory:');
   sql.exec(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8'));
-  const db = { prepare: (query: string) => ({ bind: (...args: never[]) => ({ run: async () => sql.prepare(query).run(...args) }) }) };
+  const statement = (query: string, args: unknown[] = []) => ({ query, args, bind: (...values: unknown[]) => statement(query, values), run: async () => sql.prepare(query).run(...args) });
+  const db = { prepare: (query: string) => statement(query), batch: async (statements: ReturnType<typeof statement>[]) => {
+    sql.exec('BEGIN');
+    try { const results = statements.map(item => ({ results: [], meta: sql.prepare(item.query).run(...item.args) })); sql.exec('COMMIT'); return results; }
+    catch (error) { sql.exec('ROLLBACK'); throw error; }
+  } };
   return { sql, db: db as unknown as D1Database };
 }
 describe('private music demand', () => {
@@ -26,6 +31,10 @@ describe('private music demand', () => {
     await saveInterest(db, interestSchema.parse({ ...input, merchandise: ['hoodies'] }));
     const rows = sql.prepare('SELECT email, merchandise FROM music_interest').all();
     expect(rows).toHaveLength(1); expect(rows[0].merchandise).toBe('["hoodies"]');
+    expect(sql.prepare('SELECT kind,status FROM owner_requests ORDER BY kind').all())
+      .toEqual([{ kind: 'merchandise', status: 'new' }, { kind: 'purchase', status: 'new' }, { kind: 'release-update', status: 'new' }]);
+    expect(sql.prepare('SELECT email,status,consent_version FROM owner_audience_permissions').all())
+      .toEqual([{ email: 'fan@example.com', status: 'subscribed', consent_version: 'release-updates-v1' }]);
   });
   it('deduplicates event retries and separates audio, video and milestones', async () => {
     const { sql, db } = fixture();

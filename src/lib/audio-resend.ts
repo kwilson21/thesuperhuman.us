@@ -36,7 +36,7 @@ export async function sendAudioInquiry(args: SendArgs): Promise<{ ok: boolean }>
   return sendAudioMessage({ payload, apiKey: args.apiKey });
 }
 
-export async function sendAudioMessage({ payload, apiKey }: { payload: { from: string; to: string[]; subject: string; text: string; reply_to: string }; apiKey: string }): Promise<{ ok: boolean }> {
+export async function sendAudioMessage({ payload, apiKey }: { payload: { from: string; to: string[]; subject: string; text: string; reply_to?: string }; apiKey: string }): Promise<{ ok: boolean }> {
   try {
     const res = await fetch(ENDPOINT, {
       method: 'POST',

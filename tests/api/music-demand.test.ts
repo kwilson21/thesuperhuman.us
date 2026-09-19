@@ -1,12 +1,16 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { POST as interest } from '~/pages/api/music-interest';
 import { POST as event } from '~/pages/api/music-event';
+import { sendUrgentOwnerAlert } from '~/lib/owner-alerts';
 vi.mock('~/lib/music-content', () => ({ loadMusicCatalog: async () => ({ releases: [{ id: 'release', tracks: ['recording'] }], recordings: [{ id: 'recording', versions: { video: {} } }] }) }));
+vi.mock('~/lib/owner-alerts', () => ({ sendUrgentOwnerAlert: vi.fn(async () => true) }));
 const body = { releaseId: 'release', email: 'fan@example.com', interest: 'song', consent: true, merchandise: [], suggestion: '', turnstileToken: 'test' };
 function context(data: unknown, options: { origin?: string; fail?: boolean; db?: boolean } = {}) {
+  const database = { prepare: () => ({ bind: () => ({ run: async () => { if (options.fail) throw new Error('unavailable'); } }) }),
+    batch: async (statements: { run: () => Promise<unknown> }[]) => { for (const statement of statements) await statement.run(); return []; } };
   return { request: new Request('https://thesuperhuman.us/api/music-interest', { method: 'POST', headers: { origin: options.origin ?? 'https://thesuperhuman.us', 'content-type': 'application/json' }, body: JSON.stringify(data) }), locals: { runtime: { env: {
-    MUSIC_DB: options.db === false ? undefined : { prepare: () => ({ bind: () => ({ run: async () => { if (options.fail) throw new Error('unavailable'); } }) }) },
-    RATE_LIMIT: { get: async () => null, put: async () => {} }, TURNSTILE_SECRET_KEY: 'test',
+    MUSIC_DB: options.db === false ? undefined : database,
+    RATE_LIMIT: { get: async () => null, put: async () => {}, delete: async () => {} }, TURNSTILE_SECRET_KEY: 'test',
   } } } } as any;
 }
 beforeEach(() => vi.stubGlobal('fetch', vi.fn(async () => Response.json({ success: true }))));
@@ -17,6 +21,7 @@ it('rejects cross-origin requests and unknown releases', async () => {
 it('only confirms interest after persistence and captcha succeed', async () => {
   expect((await interest(context(body))).status).toBe(200);
   expect((await interest(context(body, { fail: true }))).status).toBe(503);
+  expect(sendUrgentOwnerAlert).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ category: 'request-storage', route: '/api/music-interest' }));
   expect((await interest(context(body, { db: false }))).status).toBe(503);
   vi.stubGlobal('fetch', vi.fn(async () => Response.json({ success: false })));
   expect((await interest(context(body))).status).toBe(403);

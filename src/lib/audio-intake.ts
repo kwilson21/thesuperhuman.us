@@ -41,6 +41,9 @@ const schema = z.object({
   fileLink: optionalLink.default(''),
 });
 export type IntakeInput = z.infer<typeof schema>;
+export function isAudioIntakeAvailable(env: Env | undefined) {
+  return Boolean(env?.MUSIC_DB && env.TURNSTILE_SECRET_KEY && env.RATE_LIMIT);
+}
 export function ownerRequestForIntake(input: IntakeInput): NewOwnerRequest {
   const offer = audioOffers[input.service];
   return {

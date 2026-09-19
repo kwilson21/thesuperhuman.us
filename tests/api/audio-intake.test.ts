@@ -1,16 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from '~/pages/api/audio-intake';
+import { saveOwnerRequest } from '~/lib/owner-requests';
+import { sendUrgentOwnerAlert } from '~/lib/owner-alerts';
+
+vi.mock('~/lib/owner-requests', () => ({ saveOwnerRequest: vi.fn(async (_db, input) => ({ id: 'request-123', ...input })) }));
+vi.mock('~/lib/owner-alerts', () => ({ sendUrgentOwnerAlert: vi.fn(async () => true) }));
 const base = { service:'vocal-mix', title:'My song', direction:'judgment', preferences:{}, name:'Artist', email:'artist@example.com', permission:true, turnstileToken:'test', fileLink:'https://drive.google.com/example' };
 function context(body: unknown = base, origin = 'https://thesuperhuman.us') {
-  return { request: new Request('https://thesuperhuman.us/api/audio-intake', { method:'POST', headers:{origin,'content-type':'application/json'}, body:JSON.stringify(body) }), locals:{runtime:{env:{RESEND_API_KEY:'test',CONTACT_FROM_EMAIL:'test@example.com',CONTACT_TO_EMAIL:'owner@example.com',TURNSTILE_SECRET_KEY:'test',RATE_LIMIT:{get:vi.fn(async()=>null),put:vi.fn(async()=>{})}}}} } as any;
+  return { request: new Request('https://thesuperhuman.us/api/audio-intake', { method:'POST', headers:{origin,'content-type':'application/json'}, body:JSON.stringify(body) }), locals:{runtime:{env:{MUSIC_DB:{},RESEND_API_KEY:'test',CONTACT_FROM_EMAIL:'test@example.com',CONTACT_TO_EMAIL:'owner@example.com',TURNSTILE_SECRET_KEY:'test',RATE_LIMIT:{get:vi.fn(async()=>null),put:vi.fn(async()=>{}),delete:vi.fn(async()=>{})}}}} } as any;
 }
-beforeEach(()=>vi.stubGlobal('fetch',vi.fn(async (url:string)=> url.includes('siteverify') ? {ok:true,json:async()=>({success:true})} : {ok:true})));
+beforeEach(()=>{ vi.clearAllMocks(); vi.stubGlobal('fetch',vi.fn(async (url:string)=> url.includes('siteverify') ? {ok:true,json:async()=>({success:true})} : {ok:true})); });
 describe('intake endpoint',()=>{
- it('sends reviewed details only to the owner without fetching file links',async()=>{const res=await POST(context());expect(res.status).toBe(200);expect(fetch).toHaveBeenCalledTimes(2);const payload=JSON.parse((fetch as any).mock.calls[1][1].body);expect(payload.to).toEqual(['owner@example.com']);expect(payload.text).toContain('FILE REVIEW ONLY');expect(payload.text).toContain(base.fileLink);});
+ it('stores reviewed details without fetching the shared file or sending routine email',async()=>{const res=await POST(context());expect(res.status).toBe(200);expect(fetch).toHaveBeenCalledTimes(1);expect(saveOwnerRequest).toHaveBeenCalledWith(expect.anything(),expect.objectContaining({kind:'service',serviceId:'vocal-mix',email:'artist@example.com'}));});
  it('rejects cross-origin and oversized requests before external calls',async()=>{expect((await POST(context(base,'https://evil.example'))).status).toBe(403);expect((await POST(context({padding:'x'.repeat(33000)}))).status).toBe(413);expect(fetch).not.toHaveBeenCalled();});
  it('requires files and permission before sending',async()=>{expect((await POST(context({...base,fileLink:'',permission:false}))).status).toBe(400);expect(fetch).not.toHaveBeenCalled();});
  it('does not accept obsolete upload session instead of files',async()=>{expect((await POST(context({...base,fileLink:'',uploadSession:'00000000-0000-0000-0000-000000000001'}))).status).toBe(400);});
- it('does not claim success when delivery is unavailable or fails',async()=>{const ctx=context();ctx.locals.runtime.env.RESEND_API_KEY='';expect((await POST(ctx)).status).toBe(503);(fetch as any).mockImplementation(async(url:string)=>url.includes('siteverify')?{ok:true,json:async()=>({success:true})}:{ok:false});expect((await POST(context())).status).toBe(502);});
+ it('does not claim success when storage is unavailable or fails',async()=>{const ctx=context();ctx.locals.runtime.env.MUSIC_DB=undefined;expect((await POST(ctx)).status).toBe(503);vi.mocked(saveOwnerRequest).mockRejectedValueOnce(new Error('database unavailable'));expect((await POST(context())).status).toBe(503);expect(sendUrgentOwnerAlert).toHaveBeenCalledWith(expect.anything(),expect.objectContaining({category:'request-storage',route:'/api/audio-intake'}));});
  it('rejects empty specific direction before external calls', async () => {
    const response = await POST(context({ ...base, direction: 'specific', referenceNote: '  ' }));
    expect(response.status).toBe(400);
@@ -26,7 +31,7 @@ describe('intake endpoint',()=>{
    expect(stored.has('rl:audio:0.0.0.0')).toBe(false);
    expect((await submit()).status).toBe(200);
    expect((await submit()).status).toBe(429);
-   expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(1);
+   expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(0);
  });
  it('bounds repeated failed captcha attempts before external verification', async () => {
    const ctx = context();
