@@ -1,4 +1,5 @@
 import { z } from 'astro/zod';
+import type { NewOwnerRequest } from './owner-requests';
 
 export const audioOffers = {
   'vocal-mix': { name: 'Two-track vocal mixing', price: 150, description: 'Your vocals over a finished stereo beat.', scope: 'One song up to five minutes, one stereo beat and up to eight prepared vocal tracks. Cleanup, light tuning and timing. Two revision rounds. Stereo WAV mix and MP3; mastering separate.', files: 'Your stereo beat and separate, prepared vocal tracks.', preparation: 'Choose your takes first. Name your files and export each from the same starting point. WAV is preferred. Include a rough mix if you have one, and note any effects already applied.' },
@@ -40,6 +41,25 @@ const schema = z.object({
   fileLink: optionalLink.default(''),
 });
 export type IntakeInput = z.infer<typeof schema>;
+export function ownerRequestForIntake(input: IntakeInput): NewOwnerRequest {
+  const offer = audioOffers[input.service];
+  return {
+    kind: 'service',
+    serviceId: input.service,
+    name: input.name,
+    email: input.email,
+    summary: `${input.title} · ${offer.name}`,
+    details: {
+      title: input.title,
+      fileLink: input.fileLink,
+      direction: input.direction,
+      preferences: input.preferences,
+      preserve: input.preserve,
+      referenceUrl: input.referenceUrl,
+      referenceNote: input.referenceNote,
+    },
+  };
+}
 export function validateIntake(input: unknown): { ok: true; value: IntakeInput } | { ok: false; errors: Record<string, string> } {
   const result = schema.safeParse(input);
   if (!result.success) return { ok: false, errors: Object.fromEntries(result.error.issues.map(i => [String(i.path[0] ?? '_form'), i.message])) };

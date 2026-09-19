@@ -5,7 +5,10 @@ export const interestSchema = z.object({
   releaseId: musicId, email: z.string().trim().toLowerCase().email().max(120),
   interest: z.enum(['song', 'merchandise', 'both']),
   merchandise: z.array(z.enum(['shirts', 'hoodies', 'stickers', 'digital-art'])).max(4).default([]),
-  suggestion: z.string().trim().max(500).default(''), consent: z.literal(true),
+  suggestion: z.string().trim().max(500).default(''),
+  cityRegion: z.string().trim().max(120).default(''),
+  releaseUpdates: z.boolean().default(false),
+  consent: z.literal(true),
   turnstileToken: z.string().min(1).max(2048),
 }).refine(v => v.interest !== 'song' || (!v.merchandise.length && !v.suggestion), { path: ['merchandise'], message: 'Choose merchandise interest to include merchandise suggestions.' });
 export const eventSchema = z.object({
