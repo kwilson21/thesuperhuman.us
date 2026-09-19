@@ -12,8 +12,12 @@ export const interestSchema = z.object({
   turnstileToken: z.string().min(1).max(2048),
 }).refine(v => v.interest !== 'song' || (!v.merchandise.length && !v.suggestion), { path: ['merchandise'], message: 'Choose merchandise interest to include merchandise suggestions.' });
 export const eventSchema = z.object({
-  releaseId: musicId, recordingId: musicId, sessionId: z.string().uuid(),
-  medium: z.enum(['audio', 'video']), event: z.enum(['start', 'listen30']),
+  releaseId: musicId, recordingId: musicId, sessionId: z.string().uuid(), playthroughId: z.string().uuid(),
+  eventId: z.string().uuid(), sequence: z.number().int().min(1).max(10_000),
+  medium: z.enum(['audio', 'video']), event: z.enum(['start', 'progress', 'listen30', 'complete', 'replay']),
+  accumulatedSeconds: z.number().int().min(0).max(86_400),
+  mediaDurationSeconds: z.number().int().min(0).max(86_400),
+  campaignId: musicId.optional(), channel: musicId.optional(), creative: musicId.optional(),
 });
 type InterestInput = z.infer<typeof interestSchema>;
 
@@ -65,7 +69,45 @@ export async function saveInterest(db: D1Database, input: InterestInput) {
   }
   await db.batch(statements);
 }
-export async function saveEvent(db: D1Database, input: z.infer<typeof eventSchema>) {
-  await db.prepare('INSERT OR IGNORE INTO music_events (release_id,recording_id,session_id,medium,event,occurred_at) VALUES (?,?,?,?,?,?)')
-    .bind(input.releaseId, input.recordingId, input.sessionId, input.medium, input.event, new Date().toISOString()).run();
+export class PlaybackSequenceError extends Error {}
+
+type PlaybackMetadata = {
+  trafficClass: 'human' | 'automated';
+  campaignId?: string;
+  channel?: string;
+  creative?: string;
+  country?: string;
+  region?: string;
+  city?: string;
+};
+
+export async function saveEvent(db: D1Database, input: z.infer<typeof eventSchema>, metadata: PlaybackMetadata) {
+  const duplicate = await db.prepare(`SELECT session_id,playthrough_id,sequence FROM music_playback_events WHERE id=?`)
+    .bind(input.eventId).first<{ session_id: string; playthrough_id: string; sequence: number }>();
+  if (duplicate) {
+    if (duplicate.session_id === input.sessionId && duplicate.playthrough_id === input.playthroughId && duplicate.sequence === input.sequence) return { status: 'duplicate' as const };
+    throw new PlaybackSequenceError('Playback event identity was reused.');
+  }
+  const last = await db.prepare(`SELECT sequence,accumulated_seconds,event FROM music_playback_events
+    WHERE session_id=? AND playthrough_id=? ORDER BY sequence DESC LIMIT 1`)
+    .bind(input.sessionId, input.playthroughId).first<{ sequence: number; accumulated_seconds: number; event: string }>();
+  const first = input.event === 'start' || input.event === 'replay';
+  if (first ? Boolean(last) || input.sequence !== 1 || input.accumulatedSeconds !== 0
+    : !last || input.sequence !== last.sequence + 1 || input.accumulatedSeconds < last.accumulated_seconds) {
+    throw new PlaybackSequenceError('Playback event sequence is invalid.');
+  }
+  if (input.event === 'listen30' && input.accumulatedSeconds < 30) throw new PlaybackSequenceError('Reported listen is not earned.');
+  if (input.event === 'complete' && (input.mediaDurationSeconds <= 0 || input.accumulatedSeconds * 10 < input.mediaDurationSeconds * 9)) {
+    throw new PlaybackSequenceError('Reported completion is not earned.');
+  }
+  const now = new Date().toISOString();
+  await db.prepare(`INSERT INTO music_playback_events
+    (id,release_id,recording_id,session_id,playthrough_id,sequence,medium,event,accumulated_seconds,
+      media_duration_seconds,campaign_id,channel,creative,traffic_class,country,region,city,occurred_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(input.eventId, input.releaseId, input.recordingId, input.sessionId, input.playthroughId,
+      input.sequence, input.medium, input.event, input.accumulatedSeconds, input.mediaDurationSeconds,
+      metadata.campaignId ?? null, metadata.channel ?? null, metadata.creative ?? null, metadata.trafficClass,
+      metadata.country ?? '', metadata.region ?? '', metadata.city ?? '', now).run();
+  return { status: 'stored' as const };
 }

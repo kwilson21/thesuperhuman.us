@@ -1,13 +1,17 @@
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
-import { interestSchema, eventSchema, saveInterest, saveEvent } from '~/lib/music-demand';
+import { interestSchema, eventSchema, PlaybackSequenceError, saveInterest, saveEvent } from '~/lib/music-demand';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 const input = { releaseId: 'old-news-single', email: ' Fan@Example.com ', interest: 'both', merchandise: ['shirts', 'digital-art'], suggestion: 'Blue design', cityRegion: ' Nashville, Tennessee ', releaseUpdates: true, consent: true, turnstileToken: 'token' };
 function fixture() {
   const sql = new DatabaseSync(':memory:');
   sql.exec(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8'));
-  const statement = (query: string, args: unknown[] = []) => ({ query, args, bind: (...values: unknown[]) => statement(query, values), run: async () => sql.prepare(query).run(...args) });
+  const statement = (query: string, args: unknown[] = []) => ({ query, args, bind: (...values: unknown[]) => statement(query, values),
+    run: async () => sql.prepare(query).run(...args),
+    all: async () => ({ results: sql.prepare(query).all(...args) }),
+    first: async () => sql.prepare(query).get(...args) ?? null,
+  });
   const db = { prepare: (query: string) => statement(query), batch: async (statements: ReturnType<typeof statement>[]) => {
     sql.exec('BEGIN');
     try { const results = statements.map(item => ({ results: [], meta: sql.prepare(item.query).run(...item.args) })); sql.exec('COMMIT'); return results; }
@@ -36,12 +40,21 @@ describe('private music demand', () => {
     expect(sql.prepare('SELECT email,status,consent_version FROM owner_audience_permissions').all())
       .toEqual([{ email: 'fan@example.com', status: 'subscribed', consent_version: 'release-updates-v1' }]);
   });
-  it('deduplicates event retries and separates audio, video and milestones', async () => {
+  it('deduplicates retries and accepts ordered progress across audio and video', async () => {
     const { sql, db } = fixture();
-    const event = eventSchema.parse({ releaseId: 'old-news-single', recordingId: 'old-news-recording', sessionId: 'a8246321-955d-4a28-b81e-2b74b52cd450', medium: 'audio', event: 'start' });
-    await saveEvent(db, event); await saveEvent(db, event);
-    await saveEvent(db, { ...event, medium: 'video' });
-    await saveEvent(db, { ...event, event: 'listen30' });
-    expect(sql.prepare('SELECT count(*) AS n FROM music_events').get().n).toBe(3);
+    const baseEvent = { releaseId: 'old-news-single', recordingId: 'old-news-recording', sessionId: 'a8246321-955d-4a28-b81e-2b74b52cd450', playthroughId: '0bc1f442-f455-49d6-b3a7-99f4fbd92ab4', mediaDurationSeconds: 200 };
+    const start = eventSchema.parse({ ...baseEvent, eventId: '538b2261-f59b-4489-96bd-1945e307d312', sequence: 1, medium: 'audio', event: 'start', accumulatedSeconds: 0 });
+    await saveEvent(db, start, { trafficClass: 'human' });
+    await saveEvent(db, start, { trafficClass: 'human' });
+    await saveEvent(db, eventSchema.parse({ ...baseEvent, eventId: 'f072c4b5-c77a-41ca-ac07-40e850586067', sequence: 2, medium: 'video', event: 'progress', accumulatedSeconds: 12 }), { trafficClass: 'human' });
+    await saveEvent(db, eventSchema.parse({ ...baseEvent, eventId: '6fcda671-3155-4ee1-9b6d-401a3ae52d31', sequence: 3, medium: 'video', event: 'listen30', accumulatedSeconds: 30 }), { trafficClass: 'human' });
+    expect(sql.prepare('SELECT count(*) AS n FROM music_playback_events').get().n).toBe(3);
+    expect(sql.prepare('SELECT medium,event FROM music_playback_events ORDER BY sequence').all())
+      .toEqual([{ medium: 'audio', event: 'start' }, { medium: 'video', event: 'progress' }, { medium: 'video', event: 'listen30' }]);
+  });
+  it('rejects out-of-order and unearned listening milestones', async () => {
+    const { db } = fixture();
+    const event = eventSchema.parse({ releaseId: 'old-news-single', recordingId: 'old-news-recording', sessionId: 'a8246321-955d-4a28-b81e-2b74b52cd450', playthroughId: '0bc1f442-f455-49d6-b3a7-99f4fbd92ab4', eventId: '6fcda671-3155-4ee1-9b6d-401a3ae52d31', sequence: 2, medium: 'audio', event: 'listen30', accumulatedSeconds: 10, mediaDurationSeconds: 200 });
+    await expect(saveEvent(db, event, { trafficClass: 'human' })).rejects.toBeInstanceOf(PlaybackSequenceError);
   });
 });
