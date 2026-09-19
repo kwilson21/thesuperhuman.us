@@ -38,17 +38,21 @@ async function listening(db: D1Database, campaignId?: string): Promise<Listening
   const campaign = campaignId ? ' AND campaign_id=?' : '';
   const query = `SELECT event,COUNT(*) AS total FROM music_playback_events
     WHERE traffic_class='human'${campaign} AND event IN ('start','listen30','complete','replay') GROUP BY event`;
-  const rows = (await db.prepare(query).bind(...(campaignId ? [campaignId] : [])).all<{ event: string; total: number }>()).results;
-  const count = (event: string) => Number(rows.find(row => row.event === event)?.total ?? 0);
+  const rows = (await db.prepare(`${query} UNION ALL SELECT event,SUM(count) AS total FROM music_playback_daily
+    WHERE 1=1${campaign} AND event IN ('start','listen30','complete','replay') GROUP BY event`).bind(...(campaignId ? [campaignId, campaignId] : [])).all<{ event: string; total: number }>()).results;
+  const count = (event: string) => rows.filter(row => row.event === event).reduce((sum, row) => sum + Number(row.total), 0);
   return { reportedStarts: count('start') + count('replay'), reported30SecondListens: count('listen30'), reportedCompletions: count('complete'), replays: count('replay') };
 }
 
 async function geography(db: D1Database, campaignId?: string): Promise<GeographySummary> {
   const campaign = campaignId ? ' AND campaign_id=?' : '';
-  const rows = (await db.prepare(`SELECT city,region,COUNT(DISTINCT session_id || ':' || playthrough_id) AS total
-    FROM music_playback_events WHERE traffic_class='human' AND event IN ('listen30','complete')
-      AND city<>''${campaign} GROUP BY city,region ORDER BY total DESC,city ASC`)
-    .bind(...(campaignId ? [campaignId] : [])).all<{ city: string; region: string; total: number }>()).results;
+  const rows = (await db.prepare(`SELECT city,region,SUM(total) AS total FROM (
+      SELECT city,region,COUNT(*) AS total FROM music_playback_events
+        WHERE traffic_class='human' AND event='listen30' AND city<>''${campaign} GROUP BY city,region
+      UNION ALL SELECT city,region,SUM(count) AS total FROM music_playback_daily
+        WHERE event='listen30' AND city<>''${campaign} GROUP BY city,region
+    ) GROUP BY city,region ORDER BY total DESC,city ASC`)
+    .bind(...(campaignId ? [campaignId, campaignId] : [])).all<{ city: string; region: string; total: number }>()).results;
   const visible = rows.filter(row => Number(row.total) >= 5).map(row => ({ label: row.region ? `${row.city}, ${row.region}` : row.city, reportedListens: Number(row.total) }));
   const suppressed = rows.filter(row => Number(row.total) < 5).reduce((sum, row) => sum + Number(row.total), 0);
   if (suppressed) visible.push({ label: 'Other locations', reportedListens: suppressed });

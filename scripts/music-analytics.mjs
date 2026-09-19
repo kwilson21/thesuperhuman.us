@@ -9,6 +9,12 @@ export const dailyPlayback = `SELECT day,release_id,recording_id,medium,event,su
 ) GROUP BY day,release_id,recording_id,medium,event`;
 export const lifetimePlayback = `SELECT release_id,recording_id,medium,event,sum(count) AS count
 FROM (${dailyPlayback}) GROUP BY release_id,recording_id,medium,event`;
+export const lifetimeOwnerPlayback = `SELECT release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,city,SUM(count) AS count FROM (
+  SELECT release_id,recording_id,medium,event,COALESCE(campaign_id,'') AS campaign_id,COALESCE(channel,'') AS channel,
+    COALESCE(creative,'') AS creative,country,region,city,COUNT(*) AS count FROM music_playback_events WHERE traffic_class='human'
+    GROUP BY release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,city
+  UNION ALL SELECT release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,city,count FROM music_playback_daily
+) GROUP BY release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,city`;
 
 // Keep operator access on the same dedicated MUSIC_DB binding as existing reports.
 export async function openMusicDatabase(remote) {

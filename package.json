@@ -20,7 +20,9 @@
     "music:prepare": "node scripts/prepare-music.mjs",
     "music:preview:setup": "node scripts/music-preview.mjs",
     "music:upload": "node scripts/upload-music.mjs",
-    "music:report": "node scripts/music-report.mjs"
+    "music:report": "node scripts/music-report.mjs",
+    "owner:retention:preview": "node scripts/owner-retention.mjs",
+    "owner:retention:apply": "node scripts/owner-retention.mjs --apply .private/owner-retention-review.json"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.4",
