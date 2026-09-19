@@ -92,9 +92,13 @@ export async function saveEvent(db: D1Database, input: z.infer<typeof eventSchem
     if (duplicate.session_id === input.sessionId && duplicate.playthrough_id === input.playthroughId && duplicate.sequence === input.sequence) return { status: 'duplicate' as const };
     throw new PlaybackSequenceError('Playback event identity was reused.');
   }
-  const last = await db.prepare(`SELECT sequence,accumulated_seconds,event,occurred_at FROM music_playback_events
+  const last = await db.prepare(`SELECT sequence,accumulated_seconds,event,occurred_at,
+      (SELECT occurred_at FROM music_playback_events first_event
+        WHERE first_event.session_id=? AND first_event.playthrough_id=? AND first_event.sequence=1) AS started_at
+    FROM music_playback_events
     WHERE session_id=? AND playthrough_id=? ORDER BY sequence DESC LIMIT 1`)
-    .bind(input.sessionId, input.playthroughId).first<{ sequence: number; accumulated_seconds: number; event: string; occurred_at: string }>();
+    .bind(input.sessionId, input.playthroughId, input.sessionId, input.playthroughId)
+    .first<{ sequence: number; accumulated_seconds: number; event: string; occurred_at: string; started_at: string }>();
   const first = input.event === 'start' || input.event === 'replay';
   if (first ? Boolean(last) || input.sequence !== 1 || input.accumulatedSeconds !== 0
     : !last || input.sequence !== last.sequence + 1 || input.accumulatedSeconds < last.accumulated_seconds) {
@@ -105,9 +109,8 @@ export async function saveEvent(db: D1Database, input: z.infer<typeof eventSchem
     throw new PlaybackSequenceError('Reported completion is not earned.');
   }
   if (last) {
-    const elapsed = Math.max(0, (now.getTime() - new Date(last.occurred_at).getTime()) / 1000);
-    const claimed = input.accumulatedSeconds - last.accumulated_seconds;
-    if (!Number.isFinite(elapsed) || claimed > elapsed + 2) throw new PlaybackSequenceError('Reported playback advanced faster than server time.');
+    const elapsed = Math.max(0, (now.getTime() - new Date(last.started_at).getTime()) / 1000);
+    if (!Number.isFinite(elapsed) || input.accumulatedSeconds > elapsed + 2) throw new PlaybackSequenceError('Reported playback advanced faster than server time.');
   }
   const occurredAt = now.toISOString();
   await db.prepare(`INSERT INTO music_playback_events

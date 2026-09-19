@@ -73,4 +73,12 @@ describe('private music demand', () => {
     await expect(saveEvent(db, eventSchema.parse({ ...baseEvent, eventId: '6fcda671-3155-4ee1-9b6d-401a3ae52d31', sequence: 2, medium: 'audio', event: 'listen30', accumulatedSeconds: 30 }), { trafficClass: 'human' }, new Date('2026-09-19T12:00:01Z')))
       .rejects.toBeInstanceOf(PlaybackSequenceError);
   });
+  it('accepts ordered events that catch up after a delivery delay', async () => {
+    const { db } = fixture();
+    const baseEvent = { releaseId: 'old-news-single', recordingId: 'old-news-recording', sessionId: 'a8246321-955d-4a28-b81e-2b74b52cd450', playthroughId: '0bc1f442-f455-49d6-b3a7-99f4fbd92ab4', mediaDurationSeconds: 200 };
+    await saveEvent(db, eventSchema.parse({ ...baseEvent, eventId: '538b2261-f59b-4489-96bd-1945e307d312', sequence: 1, medium: 'audio', event: 'start', accumulatedSeconds: 0 }), { trafficClass: 'human' }, new Date('2026-09-19T12:00:00Z'));
+    await saveEvent(db, eventSchema.parse({ ...baseEvent, eventId: 'f072c4b5-c77a-41ca-ac07-40e850586067', sequence: 2, medium: 'audio', event: 'progress', accumulatedSeconds: 12 }), { trafficClass: 'human' }, new Date('2026-09-19T12:00:30Z'));
+    await expect(saveEvent(db, eventSchema.parse({ ...baseEvent, eventId: '6fcda671-3155-4ee1-9b6d-401a3ae52d31', sequence: 3, medium: 'audio', event: 'listen30', accumulatedSeconds: 30 }), { trafficClass: 'human' }, new Date('2026-09-19T12:00:30Z')))
+      .resolves.toEqual({ status: 'stored' });
+  });
 });
