@@ -3,11 +3,16 @@
 type Runtime = import('@astrojs/cloudflare').Runtime<Env>;
 
 declare namespace App {
-  interface Locals extends Runtime {}
+  interface Locals extends Runtime {
+    owner?: { email: string };
+  }
 }
 
 interface Env {
   MUSIC_DB?: D1Database;
+  OWNER_ACCESS_TEAM_DOMAIN?: string;
+  OWNER_ACCESS_AUD?: string;
+  OWNER_EMAIL?: string;
   PUBLICATION_OWNER_ID?: string;
   OAUTH_KV?: KVNamespace;
   PUBLICATION_GITHUB_CLIENT_ID?: string;

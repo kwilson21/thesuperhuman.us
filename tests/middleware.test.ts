@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { onRequest } from '~/middleware';
+import { verifyOwnerAccess } from '~/lib/owner-access';
+
+vi.mock('~/lib/owner-access', () => ({ verifyOwnerAccess: vi.fn(async () => null) }));
 
 function makeContext(url: string, hostHeader?: string) {
   const u = new URL(url);
@@ -8,6 +11,7 @@ function makeContext(url: string, hostHeader?: string) {
   return {
     url: u,
     request: new Request(url, { headers }),
+    locals: { runtime: { env: {} } },
     rewrite: vi.fn(async (target: string | URL) => {
       const rewritten = typeof target === 'string' ? new URL(target, u) : target;
       return new Response('rewritten:' + rewritten.pathname, { status: 200 });
@@ -16,6 +20,28 @@ function makeContext(url: string, hostHeader?: string) {
 }
 
 describe('middleware.onRequest', () => {
+  it('rejects unauthenticated owner routes without exposing a cacheable response', async () => {
+    vi.mocked(verifyOwnerAccess).mockResolvedValueOnce(null);
+    const ctx = makeContext('https://thesuperhuman.us/owner/requests');
+    const next = vi.fn(async () => new Response('private content'));
+    const response = (await onRequest(ctx, next)) as Response;
+    expect(response.status).toBe(403);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('passes verified owner identity to routes and marks their responses private', async () => {
+    vi.mocked(verifyOwnerAccess).mockResolvedValueOnce({ email: 'owner@example.com' });
+    const ctx = makeContext('https://thesuperhuman.us/owner');
+    const next = vi.fn(async () => new Response('private content'));
+    const response = (await onRequest(ctx, next)) as Response;
+    expect(ctx.locals.owner).toEqual({ email: 'owner@example.com' });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+  });
+
   it('allows only originless, cookieless native OAuth form exchanges through the form guard', async () => {
     const attempt = async (path: string, headers: Record<string, string> = {}, method = 'POST', origin = 'https://thesuperhuman.us') => {
       const ctx = makeContext(origin + path);
