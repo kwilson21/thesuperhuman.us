@@ -17,7 +17,7 @@ const base: Publication = { version: 1, projectId: 'threadline', eventId: 'one',
 // Execute the production SQL against SQLite, with the transaction guarantee D1 provides.
 function fixture() {
   const sql = new DatabaseSync(':memory:');
-  sql.exec(readFileSync(new URL('../../migrations/0001_publication_journal.sql', import.meta.url), 'utf8'));
+  sql.exec(readFileSync(new URL('../../migrations/publication/0001_publication_journal.sql', import.meta.url), 'utf8'));
   let fail = false;
   const db = {
     prepare: (query: string) => ({ bind: (...args: unknown[]) => ({ query, args }) }),

@@ -32,7 +32,8 @@
 
 ### PR 1: Owner data and trust boundary
 
-- `migrations/0003_owner_insights.sql`: additive campaign, request, consent, playback-sequence and audit schema.
+- `migrations/music/0001_music_schema.sql`: idempotent MUSIC_DB baseline plus campaign, request, consent, playback-sequence and audit schema.
+- `migrations/publication/*.sql`: existing publication migrations moved without renaming into their database-specific directory.
 - `src/lib/owner-access.ts`: validates Cloudflare Access JWT issuer, audience, signature and owner email.
 - `src/lib/owner-model.ts`: shared owner types and database row conversion.
 - `src/lib/owner-requests.ts`: request persistence, inbox queries and audited status changes.
@@ -71,8 +72,11 @@
 ### Task 1: Reconcile D1 and add the owner schema
 
 **Files:**
-- Create: `migrations/0003_owner_insights.sql`
+- Create: `migrations/music/0001_music_schema.sql`
+- Move: `migrations/0001_publication_journal.sql` to `migrations/publication/0001_publication_journal.sql`
+- Move: `migrations/0002_publication_outbox.sql` to `migrations/publication/0002_publication_outbox.sql`
 - Modify: `db/music.sql`
+- Modify: `wrangler.jsonc`
 - Create: `tests/lib/owner-schema.test.ts`
 - Modify: `tests/__mocks__/cloudflare-workers.ts`
 
@@ -89,7 +93,7 @@ npx wrangler d1 migrations list MUSIC_DB --remote
 npx wrangler d1 execute MUSIC_DB --remote --command "SELECT name,type FROM sqlite_master WHERE type IN ('table','index','trigger') ORDER BY type,name"
 ```
 
-Expected: a reviewed list that establishes whether `db/music.sql` was applied manually and whether migration `0003` is safe to introduce. If the live ledger and schema disagree, stop and write the reconciliation steps into the PR before applying anything.
+Expected: MUSIC_DB has the manually initialized music tables and an empty migration ledger; PUBLICATION_DB retains its applied publication migration filename. Configure a separate migration directory per binding, preserve publication filenames, and introduce an idempotent MUSIC_DB baseline so the first managed music migration records the existing schema safely.
 
 - [ ] **Step 2: Write the failing schema test**
 
@@ -222,7 +226,7 @@ Expected: PASS, including the existing lifetime playback preservation tests.
 - [ ] **Step 6: Commit the reviewed schema**
 
 ```bash
-git add migrations/0003_owner_insights.sql db/music.sql tests/lib/owner-schema.test.ts tests/__mocks__/cloudflare-workers.ts
+git add migrations/music/0001_music_schema.sql migrations/publication db/music.sql wrangler.jsonc tests/lib/owner-schema.test.ts tests/__mocks__/cloudflare-workers.ts tests/lib/publication-journal.test.ts tests/lib/publication-contention.test.ts docs/publication-deployment.md
 git commit -m "Add owner insights data model"
 ```
 

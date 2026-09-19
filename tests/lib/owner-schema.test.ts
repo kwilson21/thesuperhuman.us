@@ -1,0 +1,44 @@
+import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
+
+function apply(path: string) {
+  const db = new DatabaseSync(':memory:');
+  db.exec(readFileSync(new URL(path, import.meta.url), 'utf8'));
+  return db;
+}
+
+function tableNames(db: InstanceType<typeof DatabaseSync>) {
+  return db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+    .all().map((row: { name: string }) => row.name);
+}
+
+describe('owner insights schema', () => {
+  it('keeps publication and music migrations in database-specific directories', () => {
+    const config = readFileSync(new URL('../../wrangler.jsonc', import.meta.url), 'utf8');
+    expect(config).toMatch(/"binding": "MUSIC_DB"[\s\S]*?"migrations_dir": "migrations\/music"/);
+    expect(config).toMatch(/"binding": "PUBLICATION_DB"[\s\S]*?"migrations_dir": "migrations\/publication"/);
+    expect(readFileSync(new URL('../../migrations/publication/0001_publication_journal.sql', import.meta.url), 'utf8')).toContain('publication_events');
+  });
+
+  it('provides an idempotent music baseline plus separate owner domains', () => {
+    const migration = readFileSync(new URL('../../migrations/music/0001_music_schema.sql', import.meta.url), 'utf8');
+    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(migration);
+    const db = apply('../../migrations/music/0001_music_schema.sql');
+    const expected = [
+      'music_event_daily', 'music_events', 'music_interest', 'music_playback_daily',
+      'music_playback_events', 'owner_audience_permissions', 'owner_campaign_tags',
+      'owner_campaigns', 'owner_request_audit', 'owner_requests',
+    ];
+    expect(tableNames(db)).toEqual(expect.arrayContaining(expected));
+    expect(() => db.exec(migration)).not.toThrow();
+    expect(() => db.prepare(`INSERT INTO owner_requests
+      (id,kind,email,summary,status,created_at,updated_at)
+      VALUES ('1','unknown','fan@example.com','Bad kind','new','now','now')`).run()).toThrow();
+    expect(() => db.prepare(`INSERT INTO owner_audience_permissions
+      (email,status,consent_version,granted_at,updated_at)
+      VALUES ('fan@example.com','subscribed','release-updates-v1','now','now')`).run()).not.toThrow();
+  });
+});
