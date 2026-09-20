@@ -3,6 +3,7 @@ import BaseLayout from './BaseLayout.astro';
 import MusicNav from '~/components/audio/MusicNav.astro';
 import ServiceIcon from '~/components/audio/ServiceIcon.astro';
 import SoftwareServiceIllustration from '~/components/SoftwareServiceIllustration.astro';
+import PersonalName from '~/components/PersonalName.astro';
 import { mainSitePath } from '~/lib/host-routing';
 import type { ServiceSheet } from '~/data/services';
 interface Props { sheet: ServiceSheet; }
@@ -22,7 +23,7 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
     <section class="sheet-working"><h2>Working together</h2><p>{sheet.working}</p></section>
     <section class="sheet-contact"><div><h2>{sheet.closing}</h2><p>{sheet.starting}</p></div><a class="site-button" href={href(sheet.contact)}>{sheet.contactLabel} <span aria-hidden="true">→</span></a></section>
     <div class="sheet-address"><span>kazon.wilson@thesuperhuman.us</span><a href={href(sheet.path)}>thesuperhuman.us{sheet.path}</a></div>
-    <footer class="sheet-footnote"><span>Kazon Wilson · The Superhuman Group LLC · <a href={href('/privacy')}>Privacy</a></span><button type="button" class="site-button site-button-outline" data-print-sheet><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H3V9h18v9h-3"/><path d="M6 14h12v7H6zM17 12h1"/></svg>Print / Save PDF</button></footer>
+    <footer class="sheet-footnote"><span><PersonalName variant="full" /> · The Superhuman Group LLC · <a href={href('/privacy')}>Privacy</a></span><button type="button" class="site-button site-button-outline" data-print-sheet><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H3V9h18v9h-3"/><path d="M6 14h12v7H6zM17 12h1"/></svg>Print / Save PDF</button></footer>
   </article>
 </BaseLayout>
 <script>document.querySelector('[data-print-sheet]')?.addEventListener('click', () => window.print());</script>

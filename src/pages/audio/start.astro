@@ -2,6 +2,7 @@
 export const prerender = false;
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import AudioFooter from '~/components/audio/AudioFooter.astro';
+import PersonalName from '~/components/PersonalName.astro';
 import { audioOffers, directionFields, isAudioIntakeAvailable, type IntakeService } from '~/lib/audio-intake';
 import '~/styles/audio-intake.css';
 const requestedService = Astro.url.searchParams.get('service') ?? 'vocal-mix';
@@ -31,7 +32,7 @@ const available = Boolean(siteKey && isAudioIntakeAvailable(env));
 <section data-step="2" aria-labelledby="step-three" hidden><h1 id="step-three" tabindex="-1">Does this sound right?</h1><p class="intake-intro">Check the details, then send your song for review.</p><div class="intake-columns intake-review-columns">
 <div class="intake-review"><dl data-review></dl><div class="intake-edit"><button type="button" data-edit="0">Edit service</button><button type="button" data-edit="1">Edit song & direction</button></div></div>
 <div class="intake-contact-fields"><div class="intake-pair"><label class="intake-field">Your name<input name="name" autocomplete="name" required maxlength="100" /></label><label class="intake-field">Email<input name="email" autocomplete="email" type="email" required maxlength="120" /></label></div><p data-form-error="name" hidden></p><p data-form-error="email" hidden></p>
-<label class="intake-consent"><input type="checkbox" name="permission" required /><span>I have permission to share these files and allow Kazon to access them for this project review.</span></label><p data-form-error="permission" hidden></p>
+<label class="intake-consent"><input type="checkbox" name="permission" required /><span>I have permission to share these files and allow <PersonalName /> to access them for this project review.</span></label><p data-form-error="permission" hidden></p>
 {available ? <div class="cf-turnstile" data-sitekey={siteKey}></div> : <p class="intake-unavailable">This preview isn’t connected to email delivery yet. You can try every step; sending is unavailable.</p>}<p data-form-error="turnstileToken" hidden></p></div></div>
 </section>
 <p data-form-status role="status" tabindex="-1"></p>

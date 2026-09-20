@@ -1,0 +1,23 @@
+---
+import { personalName, type PersonalNameVariant } from '~/lib/personal-name';
+
+interface Props {
+  variant?: PersonalNameVariant;
+  style?: 'text' | 'display';
+  breakAfterFirst?: boolean;
+  class?: string;
+}
+
+const {
+  variant = 'first',
+  style = 'text',
+  breakAfterFirst = false,
+  class: className,
+} = Astro.props;
+const value = personalName(variant);
+---
+<span
+  class:list={['personal-name', { 'personal-name--display': style === 'display' }, className]}
+  data-personal-name={variant}
+  data-name-style={style}
+>{variant === 'full' && breakAfterFirst ? <>Kazon<br />{' '}Wilson</> : value}</span>

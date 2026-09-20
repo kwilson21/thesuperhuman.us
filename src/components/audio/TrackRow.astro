@@ -1,5 +1,6 @@
 ---
 import { audioPath } from '~/lib/host-routing';
+import PersonalNameText from '~/components/PersonalNameText.astro';
 import type { AudioRole, AudioTrack } from '~/lib/audio-tracks';
 interface Props {
   track: AudioTrack;
@@ -17,7 +18,7 @@ const src = audioPath(Astro.request.headers.get('host') ?? Astro.url.host, `/fil
 <article class="track-row py-5 border-b border-rule">
   <div class="flex items-baseline gap-3 mb-2">
     <h4 class="text-lg font-medium">{track.title}</h4>
-    <span class="text-sm text-muted">· {track.artist}</span>
+    <span class="text-sm text-muted">· <PersonalNameText text={track.artist} /></span>
   </div>
   <p class="eyebrow mb-3">{track.year} · {track.length} · {roleText}</p>
   <audio

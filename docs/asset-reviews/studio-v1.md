@@ -44,4 +44,15 @@ Outcome: ready for the local preview. The automated source-asset gate still
 checks studio-v1; this derived public card has the separate manual review and
 hash above. Regeneration requires inspecting the output again.
 
+## Derived social card, September 20 typography update
+
+Regenerated `public/og-image.png` from `scripts/og.html` after switching the
+name to the scoped Kazon Name Display font (1200 × 630, 324,671 bytes; SHA-256
+`fc54d403540955337ececac09b370a8fdcb72a5a3885ed4bef95945d41d40a4c`). The
+horizontal mark is visibly centered over the lowercase `z`, the name remains
+legible at social-card scale, and the line breaks, studio artwork, masks,
+proportions, and edge crops remain intact. No new generated objects, private
+information, or product claims were introduced. Outcome: ready for production
+asset use; deployment remains separate.
+
 Archive note: source PNGs, prompts and raw browser-evidence paths above refer to the private recovery archive. The committed production file and hash record are authoritative for the asset gate; see [the evidence index](../design-concepts/README.md).
