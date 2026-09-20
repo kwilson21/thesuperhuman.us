@@ -14,6 +14,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const body = await musicRequest(request); if (body instanceof Response) return body;
   const parsed = eventSchema.safeParse(body);
   if (!parsed.success) return Response.json({ ok: false }, { status: 400 });
+  if (locals.runtime.env.MUSIC_EVENTS_ENABLED === 'false') return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
   const input = parsed.data;
   const catalog = await loadMusicCatalog();
   const release = catalog.releases.find(r => r.id === input.releaseId);

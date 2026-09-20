@@ -4,6 +4,16 @@ export const ownerRequestStatuses = ['new', 'reviewed', 'resolved', 'withdrawn']
 export type OwnerRequestKind = typeof ownerRequestKinds[number];
 export type OwnerRequestStatus = typeof ownerRequestStatuses[number];
 
+export function safeExternalUrl(value: unknown) {
+  if (typeof value !== 'string') return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
 export type OwnerRequest = {
   id: string;
   kind: OwnerRequestKind;

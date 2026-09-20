@@ -14,9 +14,11 @@ function withOwnerHeaders(response: Response) {
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url } = context;
-  const ownerPath = url.pathname === '/owner' || url.pathname.startsWith('/owner/');
-  if (context.isPrerendered && ownerPath) throw new Error('Owner routes must be server-rendered.');
-  if (!context.isPrerendered && ownerPath) {
+  const ownerPage = url.pathname === '/owner' || url.pathname.startsWith('/owner/');
+  const ownerApi = url.pathname === '/api/owner' || url.pathname.startsWith('/api/owner/');
+  const ownerBoundary = ownerPage || ownerApi;
+  if (context.isPrerendered && ownerPage) throw new Error('Owner routes must be server-rendered.');
+  if (!context.isPrerendered && ownerBoundary) {
     const owner = await verifyOwnerAccess(request, context.locals.runtime.env);
     if (!owner) return new Response('Owner access required.', { status: 403, headers: ownerPrivateHeaders });
     context.locals.owner = owner;
@@ -40,8 +42,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const rewritten = rewritePathForHost(host, context.url.pathname);
   if (rewritten) {
     const response = await context.rewrite(rewritten);
-    return ownerPath ? withOwnerHeaders(response) : response;
+    return ownerBoundary ? withOwnerHeaders(response) : response;
   }
   const response = await next();
-  return ownerPath ? withOwnerHeaders(response) : response;
+  return ownerBoundary ? withOwnerHeaders(response) : response;
 });

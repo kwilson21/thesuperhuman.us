@@ -47,6 +47,24 @@ describe('middleware.onRequest', () => {
     expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
   });
 
+  it('protects owner mutation APIs with the same verified identity', async () => {
+    vi.mocked(verifyOwnerAccess).mockResolvedValueOnce({ email: 'owner@example.com' });
+    const ctx = makeContext('https://thesuperhuman.us/api/owner/audience');
+    ctx.request = new Request(ctx.url, { method: 'POST', headers: { origin: 'https://thesuperhuman.us', 'content-type': 'application/json' }, body: '{}' });
+    const next = vi.fn(async () => new Response(ctx.locals.owner?.email ?? 'missing'));
+    const response = (await onRequest(ctx, next)) as Response;
+    expect(await response.text()).toBe('owner@example.com');
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('protects future owner APIs by namespace', async () => {
+    vi.mocked(verifyOwnerAccess).mockResolvedValueOnce(null);
+    const ctx = makeContext('https://thesuperhuman.us/api/owner/campaigns');
+    const next = vi.fn(async () => new Response('private content'));
+    expect(((await onRequest(ctx, next)) as Response).status).toBe(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it('allows only originless, cookieless native OAuth form exchanges through the form guard', async () => {
     const attempt = async (path: string, headers: Record<string, string> = {}, method = 'POST', origin = 'https://thesuperhuman.us') => {
       const ctx = makeContext(origin + path);
