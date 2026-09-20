@@ -47,7 +47,7 @@ const jsonLd = {
       <div class="audio-services">{groups.map(({service}) => <article><ServiceIcon service={service} /><div><h3>{audioServices[service].label}</h3><p>{audioServices[service].description}</p></div></article>)}</div>
     </section>
     <section class="audio-section audio-working" aria-labelledby="audio-working-title">
-      <div><h2 id="audio-working-title">Working together</h2><p>Projects are scoped individually, with written communication and clear deliverables.</p><a class="site-link" href="#book">Discuss an audio project <span aria-hidden="true">→</span></a><a class="audio-detail-link" href={audioPath(host, '/about')}>Approach and project details</a></div>
+      <div><h2 id="audio-working-title">Working together</h2><p>Projects are scoped individually, with written communication and clear deliverables.</p><a class="audio-detail-link" href={audioPath(host, '/about')}>Approach and project details</a></div>
       <img class="audio-art" src={notebook.src} alt="" width={notebook.width} height={notebook.height} loading="lazy" />
     </section>
     <details id="book" class="audio-booking context-disclosure"><summary>Discuss an audio project <span aria-hidden="true">+</span></summary><div class="audio-booking-content"><h2>Tell me about the project.</h2><p>Share the scope, timing, and how you’d like to send your files.</p><BookingForm /></div></details>
@@ -80,7 +80,6 @@ const jsonLd = {
   .audio-services p, .audio-working p, .audio-beyond p { color: var(--muted); font-size: 1.2rem; line-height: 1.6; margin-top: .75rem; max-width: 35ch; }
   .audio-working { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center; }
   .audio-working img { display: block; width: 100%; height: auto; mix-blend-mode: multiply; }
-  .audio-working .site-link { margin-top: 1.75rem; }
   .audio-detail-link { display: block; width: fit-content; font-size: .9rem; margin-top: 1rem; }
   .audio-booking { border-top: 1px solid var(--rule); padding-top: 1.25rem; margin-bottom: 2rem; scroll-margin-top: 2rem; }
   .audio-booking-content { margin-top: 2rem; max-width: 48rem; }
