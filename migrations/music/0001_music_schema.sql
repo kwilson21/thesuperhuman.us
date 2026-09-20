@@ -87,6 +87,13 @@ CREATE TABLE IF NOT EXISTS owner_audience_permissions (
   withdrawn_at TEXT,
   updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS owner_audience_audit (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT NOT NULL,
+  action TEXT NOT NULL CHECK(action IN ('subscribed','withdrawn')),
+  actor TEXT NOT NULL,
+  occurred_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS music_playback_events (
   id TEXT PRIMARY KEY,
   release_id TEXT NOT NULL,

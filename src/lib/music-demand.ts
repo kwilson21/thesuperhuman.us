@@ -69,7 +69,9 @@ export async function saveInterest(db: D1Database, input: InterestInput) {
       (email,status,consent_version,source_request_id,granted_at,withdrawn_at,updated_at)
       VALUES (?,'subscribed','release-updates-v1',?,?,NULL,?) ON CONFLICT(email) DO UPDATE SET
       status='subscribed',consent_version=excluded.consent_version,source_request_id=excluded.source_request_id,
-      withdrawn_at=NULL,updated_at=excluded.updated_at`).bind(input.email, sourceId, now, now));
+      withdrawn_at=NULL,updated_at=excluded.updated_at`).bind(input.email, sourceId, now, now),
+      db.prepare(`INSERT INTO owner_audience_audit(email,action,actor,occurred_at) VALUES (?,'subscribed','requester',?)`)
+        .bind(input.email, now));
   }
   await db.batch(statements);
 }

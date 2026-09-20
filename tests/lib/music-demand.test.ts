@@ -39,6 +39,8 @@ describe('private music demand', () => {
       .toEqual([{ kind: 'merchandise', status: 'new' }, { kind: 'purchase', status: 'new' }, { kind: 'release-update', status: 'new' }]);
     expect(sql.prepare('SELECT email,status,consent_version FROM owner_audience_permissions').all())
       .toEqual([{ email: 'fan@example.com', status: 'subscribed', consent_version: 'release-updates-v1' }]);
+    expect(sql.prepare('SELECT action,actor FROM owner_audience_audit ORDER BY id').all())
+      .toEqual([{ action: 'subscribed', actor: 'requester' }, { action: 'subscribed', actor: 'requester' }]);
   });
   it('records when a repeat submission reopens a completed request', async () => {
     const { sql, db } = fixture();
