@@ -2,7 +2,7 @@
 import type { OwnerRequest } from '~/lib/owner-model';
 interface Props { requests: OwnerRequest[]; empty?: string }
 const { requests, empty = 'No requests need attention.' } = Astro.props;
-const labels = { purchase: 'Purchase', merchandise: 'Merchandise', service: 'Audio service', 'release-update': 'Release updates' };
+const labels = { purchase: 'Purchase', merchandise: 'Merchandise', service: 'Audio service' };
 ---
 {requests.length ? <ol class="request-list">
   {requests.map(request => <li><a href={`/owner/requests/${request.id}`}>

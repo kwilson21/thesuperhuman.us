@@ -2,14 +2,14 @@ import { expect, it } from 'vitest';
 import { ownerHealth } from '../../scripts/owner-health.mjs';
 
 const requiredSchema = [
-  'owner_campaigns', 'owner_requests', 'owner_request_audit', 'owner_audience_permissions',
+  'owner_campaigns', 'owner_requests', 'owner_request_audit',
   'music_playback_events', 'music_playback_daily', 'music_playback_geography_daily', 'owner_retention_runs',
 ];
 
 function healthyFixture() {
   return {
     now: new Date('2026-09-19T12:00:00Z'),
-    configuredNames: new Set(['MUSIC_DB', 'AUDIO', 'OWNER_ACCESS_TEAM_DOMAIN', 'OWNER_ACCESS_AUD', 'OWNER_EMAIL', 'OWNER_DATA_HMAC_KEY']),
+    configuredNames: new Set(['MUSIC_DB', 'AUDIO', 'OWNER_ACCESS_TEAM_DOMAIN', 'OWNER_ACCESS_AUD', 'OWNER_EMAIL']),
     query: async (sql: string) => {
       if (sql.includes('sqlite_master')) return requiredSchema.map(name => ({ name }));
       if (sql.includes('owner_retention_runs')) return [{ completed_at: '2026-09-18T12:00:00Z' }];

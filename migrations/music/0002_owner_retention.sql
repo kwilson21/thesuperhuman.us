@@ -4,7 +4,6 @@ CREATE TABLE IF NOT EXISTS owner_retention_runs (
   playback_cutoff TEXT NOT NULL,
   playback_rows INTEGER NOT NULL CHECK(playback_rows >= 0),
   request_contacts INTEGER NOT NULL CHECK(request_contacts >= 0),
-  audience_contacts INTEGER NOT NULL CHECK(audience_contacts >= 0),
   completed_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS music_playback_geography_daily (

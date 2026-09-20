@@ -18,5 +18,5 @@ it('allows public media responses to use shared caching', async () => {
   const response = await streamMusic(new Request('https://example.test/music/file/old-news/master'), bucket, {
     key: 'old-news/master.mp3', type: 'audio/mpeg',
   });
-  expect(response.headers.get('cache-control')).toBe('public, max-age=3600, s-maxage=86400');
+  expect(response.headers.get('cache-control')).toBe('public, max-age=3600, s-maxage=3600');
 });

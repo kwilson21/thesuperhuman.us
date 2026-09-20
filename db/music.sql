@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS owner_campaign_tags (
 );
 CREATE TABLE IF NOT EXISTS owner_requests (
   id TEXT PRIMARY KEY,
-  kind TEXT NOT NULL CHECK(kind IN ('purchase','merchandise','service','release-update')),
+  kind TEXT NOT NULL CHECK(kind IN ('purchase','merchandise','service')),
   release_id TEXT,
   service_id TEXT,
   campaign_id TEXT REFERENCES owner_campaigns(id),
@@ -76,22 +76,6 @@ CREATE TABLE IF NOT EXISTS owner_request_audit (
   action TEXT NOT NULL CHECK(action IN ('created','reviewed','resolved','reopened','withdrawn','note-updated','personal-data-deleted')),
   actor TEXT NOT NULL,
   note TEXT NOT NULL DEFAULT '',
-  occurred_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS owner_audience_permissions (
-  email TEXT PRIMARY KEY,
-  status TEXT NOT NULL CHECK(status IN ('subscribed','unsubscribed')),
-  consent_version TEXT NOT NULL,
-  source_request_id TEXT REFERENCES owner_requests(id),
-  granted_at TEXT NOT NULL,
-  withdrawn_at TEXT,
-  updated_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS owner_audience_audit (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  permission_key TEXT NOT NULL,
-  action TEXT NOT NULL CHECK(action IN ('subscribed','withdrawn')),
-  actor TEXT NOT NULL,
   occurred_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS music_playback_events (
@@ -138,7 +122,6 @@ CREATE TABLE IF NOT EXISTS owner_retention_runs (
   playback_cutoff TEXT NOT NULL,
   playback_rows INTEGER NOT NULL CHECK(playback_rows >= 0),
   request_contacts INTEGER NOT NULL CHECK(request_contacts >= 0),
-  audience_contacts INTEGER NOT NULL CHECK(audience_contacts >= 0),
   completed_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS music_playback_geography_daily (

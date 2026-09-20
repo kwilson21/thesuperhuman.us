@@ -30,11 +30,11 @@ Open a request from **Today**, **Campaigns**, or **Requests**. Each path reaches
 
 Routine purchase, merchandise, and service requests do not send email. They appear in the owner center. A redacted urgent email is sent only when a valid request cannot be stored. Treat repeated storage alerts, owner authentication failures, media failures, or retention failures as urgent.
 
-Public release-update subscription is disabled until a confirmed opt-in and self-service unsubscribe flow exists. Existing permission records remain visible for withdrawal and cleanup, but the public interest form cannot create or restore one.
+Release-update subscriptions are deferred until a confirmed opt-in and self-service unsubscribe flow exists. The owner center does not display a subscription metric until that complete flow is built.
 
 ## Retention
 
-Raw playback is kept for 90 days. Daily human totals remain after cleanup, with sparse cities stored only as **Other locations**. City thresholds count distinct tab sessions, so replays in one tab do not increase the city toward visibility. Resolved purchase and merchandise contact data is removed after 90 days, resolved service contact data after one year, and withdrawn request contact data immediately. Audience permission remains separate until withdrawal; its email is removed 90 days later while a keyed, contact-free permission audit remains.
+Raw playback is kept for 90 days. Daily human totals remain after cleanup, with sparse cities stored only as **Other locations**. City thresholds count distinct tab sessions, so replays in one tab do not increase the city toward visibility. Resolved purchase and merchandise contact data is removed after 90 days, resolved service contact data after one year, and withdrawn request contact data immediately.
 
 1. Run `npm run owner:retention:preview -- --remote`.
 2. Open `.private/owner-retention-review.html`. Save any useful conclusions in the private development journal. The review must not contain names, email addresses, notes, IP addresses, or secrets.
@@ -54,7 +54,7 @@ There is no scheduled deletion at launch. To pause retention, do not run the app
 
 ### Hide Old News
 
-Set `visibility` to `draft` in the Old News release, recording, and portfolio example content records. Build and inspect the releases, detail, portfolio, and services pages before an approved deployment. This hides discovery and streaming routes without deleting source assets or demand records.
+Set `visibility` to `draft` in the Old News release, recording, and portfolio example content records. Build and inspect the releases, detail, portfolio, and services pages before an approved deployment. After deployment, purge Cloudflare cache entries for `/music/file/*`, then confirm a previously cached media URL returns `404`. This hides discovery and streaming routes without deleting source assets or demand records.
 
 ### Disable playback events
 

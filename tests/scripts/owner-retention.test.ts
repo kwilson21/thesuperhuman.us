@@ -11,11 +11,7 @@ function fixture() {
   db.exec(`INSERT INTO owner_requests(id,kind,name,email,city_region,summary,details_json,status,private_note,created_at,updated_at,resolved_at) VALUES
     ('old-request','purchase','Fan','fan@example.com','Nashville','Purchase','{"format":"digital"}','resolved','reply sent','2026-01-01T00:00:00Z','2026-01-02T00:00:00Z','2026-01-02T00:00:00Z'),
     ('recent-request','service','Artist','artist@example.com','','Mastering','{}','resolved','','2026-09-01T00:00:00Z','2026-09-02T00:00:00Z','2026-09-02T00:00:00Z');
-    INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at) VALUES ('old-request','created','system','','2026-01-01T00:00:00Z');
-    INSERT INTO owner_audience_permissions(email,status,consent_version,granted_at,withdrawn_at,updated_at) VALUES
-      ('old-listener@example.com','unsubscribed','release-updates-v1','2025-01-01T00:00:00Z','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z'),
-      ('current-listener@example.com','subscribed','release-updates-v1','2026-09-01T00:00:00Z',NULL,'2026-09-01T00:00:00Z');
-    INSERT INTO owner_audience_audit(permission_key,action,actor,occurred_at) VALUES ('hash-only','withdrawn','owner@example.com','2026-01-01T00:00:00Z');`);
+    INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at) VALUES ('old-request','created','system','','2026-01-01T00:00:00Z');`);
   const event = db.prepare(`INSERT INTO music_playback_events(id,release_id,recording_id,session_id,playthrough_id,sequence,medium,event,accumulated_seconds,media_duration_seconds,campaign_id,channel,creative,traffic_class,country,region,city,occurred_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
   for (let index=0; index<3; index++) event.run(`event-${index}`,'old-news-single','old-news-recording',`session-${index}`,`play-${index}`,1,'audio',index ? 'listen30' : 'start',index ? 30 : 0,180,'campaign','instagram','story','human','US','Tennessee','Nashville','2026-01-01T00:00:00Z');
   event.run('automated','old-news-single','old-news-recording','bot-session','bot-play',1,'audio','listen30',30,180,'campaign','crawler','preview','automated','US','Virginia','Ashburn','2026-01-01T00:00:00Z');
@@ -31,7 +27,7 @@ it('preview is read-only and apply preserves aggregates while deleting eligible 
   const totals = `SELECT event,SUM(count) AS count FROM (${lifetimeOwnerPlayback}) GROUP BY event ORDER BY event`;
   const before = await database.query(totals);
   const review = await previewOwnerRetention(database, 'Local test data', now);
-  expect(review.requestContacts).toBe(1); expect(review.audienceContacts).toBe(1); expect(review.rawPlayback).toBe(5); expect(review.remainingPlayback).toBe(0);
+  expect(review.requestContacts).toBe(1); expect(review.rawPlayback).toBe(5); expect(review.remainingPlayback).toBe(0);
   expect(JSON.stringify(review)).not.toContain('fan@example.com');
   expect((await database.query('SELECT count(*) AS total FROM music_playback_events'))[0].total).toBe(6);
   await applyOwnerRetention(database, review, 'Local test data', now);
@@ -39,21 +35,19 @@ it('preview is read-only and apply preserves aggregates while deleting eligible 
   expect((await database.query('SELECT sum(count) AS total FROM music_playback_daily'))[0].total).toBe(4);
   expect(await database.query('SELECT city,count FROM music_playback_geography_daily')).toEqual([{ city: '', count: 2 }]);
   expect(await database.query('SELECT DISTINCT city FROM music_playback_daily')).toEqual([{ city: '' }]);
-  expect(await database.query('SELECT email,status FROM owner_audience_permissions')).toEqual([{ email: 'current-listener@example.com', status: 'subscribed' }]);
-  expect(JSON.stringify(await database.query('SELECT * FROM owner_audience_audit'))).not.toContain('old-listener@example.com');
   expect((await database.query("SELECT name,email,city_region,details_json,private_note,status FROM owner_requests WHERE id='old-request'"))[0])
     .toEqual({ name: '', email: '', city_region: '', details_json: '{}', private_note: '', status: 'resolved' });
   expect((await database.query("SELECT action,actor FROM owner_request_audit WHERE request_id='old-request' ORDER BY id DESC LIMIT 1"))[0])
     .toEqual({ action: 'personal-data-deleted', actor: 'retention' });
-  expect((await database.query('SELECT environment,playback_rows,request_contacts,audience_contacts FROM owner_retention_runs'))[0])
-    .toEqual({ environment: 'Local test data', playback_rows: 5, request_contacts: 1, audience_contacts: 1 });
+  expect((await database.query('SELECT environment,playback_rows,request_contacts FROM owner_retention_runs'))[0])
+    .toEqual({ environment: 'Local test data', playback_rows: 5, request_contacts: 1 });
 });
 
 it('rolls back every retention mutation when an atomic batch statement fails', async () => {
   const database = fixture(); const review = await previewOwnerRetention(database, 'Local test data', now);
   const interrupted = { ...database, batch: async (statements: string[]) => {
     database.db.exec('BEGIN');
-    try { database.db.prepare(statements[0]).all(); database.db.prepare(statements[2]).all(); throw new Error('simulated failure'); }
+    try { database.db.prepare(statements[0]).all(); database.db.prepare(statements[1]).all(); throw new Error('simulated failure'); }
     catch (error) { database.db.exec('ROLLBACK'); throw error; }
   } };
   await expect(applyOwnerRetention(interrupted, review, 'Local test data', now)).rejects.toThrow('simulated failure');

@@ -30,17 +30,13 @@ describe('owner insights schema', () => {
     const db = apply('../../db/music.sql');
     const expected = [
       'music_event_daily', 'music_events', 'music_interest', 'music_playback_daily',
-      'music_playback_events', 'music_playback_geography_daily', 'owner_audience_audit', 'owner_audience_permissions', 'owner_campaign_tags',
-      'owner_retention_runs',
-      'owner_campaigns', 'owner_request_audit', 'owner_requests',
+      'music_playback_events', 'music_playback_geography_daily', 'owner_campaign_tags',
+      'owner_retention_runs', 'owner_campaigns', 'owner_request_audit', 'owner_requests',
     ];
     expect(tableNames(db)).toEqual(expect.arrayContaining(expected));
     expect(() => db.exec(`${baseline}\n${retention}`)).not.toThrow();
     expect(() => db.prepare(`INSERT INTO owner_requests
       (id,kind,email,summary,status,created_at,updated_at)
       VALUES ('1','unknown','fan@example.com','Bad kind','new','now','now')`).run()).toThrow();
-    expect(() => db.prepare(`INSERT INTO owner_audience_permissions
-      (email,status,consent_version,granted_at,updated_at)
-      VALUES ('fan@example.com','subscribed','release-updates-v1','now','now')`).run()).not.toThrow();
   });
 });
