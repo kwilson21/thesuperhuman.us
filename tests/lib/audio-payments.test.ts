@@ -158,6 +158,8 @@ describe('audio payments', () => {
     const reset = await replaceTerminalInvoice(db, { requestId: 'request-1', installment: 'booking', actor: approval.actor });
     expect(reset).toMatchObject({ bookingInvoiceId: null, bookingInvoiceUrl: null, bookingStatus: 'not_created', bookingAttemptCount: 1 });
     expect(sql.prepare('SELECT replaced_at FROM stripe_invoice_attempts WHERE invoice_id=?').get('in_void')?.replaced_at).toBeTruthy();
+    expect(sql.prepare(`SELECT COUNT(*) AS total FROM owner_request_audit
+      WHERE request_id=? AND action='booking-invoice-replaced'`).get('request-1')).toEqual({ total: 1 });
     await expect(replaceTerminalInvoice(db, { requestId: 'request-1', installment: 'booking', actor: approval.actor }))
       .rejects.toThrow('void or uncollectible');
   });
