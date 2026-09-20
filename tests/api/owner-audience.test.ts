@@ -22,5 +22,6 @@ it('withdraws permission and preserves a timestamped actor audit', async () => {
   } as any);
   expect(response.status).toBe(200);
   expect(sql.prepare('SELECT status,withdrawn_at FROM owner_audience_permissions').get()).toMatchObject({ status: 'unsubscribed' });
-  expect(sql.prepare('SELECT action,actor FROM owner_audience_audit').get()).toEqual({ action: 'withdrawn', actor: 'owner@example.com' });
+  expect(sql.prepare('SELECT permission_key,action,actor FROM owner_audience_audit').get()).toEqual({ permission_key: expect.stringMatching(/^[a-f0-9]{64}$/), action: 'withdrawn', actor: 'owner@example.com' });
+  expect(JSON.stringify(sql.prepare('SELECT * FROM owner_audience_audit').all())).not.toContain('fan@example.com');
 });
