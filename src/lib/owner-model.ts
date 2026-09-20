@@ -1,8 +1,11 @@
 export const ownerRequestKinds = ['purchase', 'merchandise', 'service', 'release-update'] as const;
 export const ownerRequestStatuses = ['new', 'reviewed', 'resolved', 'withdrawn'] as const;
 
-export async function audiencePermissionKey(email: string) {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(email.trim().toLowerCase()));
+export async function audiencePermissionKey(email: string, secret: string) {
+  if (secret.length < 32) throw new Error('Audience audit key is unavailable.');
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const digest = await crypto.subtle.sign('HMAC', key, encoder.encode(email.trim().toLowerCase()));
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
