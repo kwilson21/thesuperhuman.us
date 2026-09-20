@@ -49,7 +49,9 @@ describe('owner Access verification', () => {
   it('rejects invalid signatures and incomplete configuration', async () => {
     const request = await signedRequest();
     const token = request.headers.get('cf-access-jwt-assertion')!;
-    const invalid = new Request(request.url, { headers: { 'cf-access-jwt-assertion': `${token.slice(0, -1)}${token.endsWith('a') ? 'b' : 'a'}` } });
+    const parts = token.split('.');
+    parts[2] = `${parts[2][0] === 'a' ? 'b' : 'a'}${parts[2].slice(1)}`;
+    const invalid = new Request(request.url, { headers: { 'cf-access-jwt-assertion': parts.join('.') } });
     await expect(verifyOwnerAccess(invalid, env)).resolves.toBeNull();
     await expect(verifyOwnerAccess(request, { ...env, OWNER_ACCESS_AUD: '' })).resolves.toBeNull();
   });
