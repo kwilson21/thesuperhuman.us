@@ -34,7 +34,7 @@
 
 When the remaining preview gates pass and deployment is approved, apply the two migrations in order:
 
-1. `0001_music_schema.sql` records the already-present baseline through idempotent `CREATE ... IF NOT EXISTS` statements.
-2. `0002_owner_retention.sql` adds the owner campaigns, request inbox and audit, detailed playback and daily reporting, geography rollups, retention-run record, supporting indexes, and personal-data deletion audit trigger.
+1. `0001_music_schema.sql` records the already-present baseline and adds the owner campaigns, campaign tags, request inbox and audit, detailed playback, daily reporting, and supporting indexes through idempotent `CREATE ... IF NOT EXISTS` statements.
+2. `0002_owner_retention.sql` adds the retention-run record, privacy-thresholded geography rollups, and personal-data deletion audit trigger.
 
 The pre-migration recovery point is the private Time Travel bookmark captured during the September 20 reconciliation. Re-read it immediately before applying migrations because later production writes advance the bookmark.
