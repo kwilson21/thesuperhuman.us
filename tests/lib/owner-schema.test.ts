@@ -40,7 +40,7 @@ describe('owner insights schema', () => {
       'music_event_daily', 'music_events', 'music_interest', 'music_playback_daily',
       'music_playback_events', 'music_playback_geography_daily', 'owner_campaign_tags',
       'owner_retention_runs', 'owner_campaigns', 'owner_request_audit', 'owner_requests',
-      'audio_payments', 'stripe_webhook_events',
+      'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts',
     ];
     expect(tableNames(db)).toEqual(expect.arrayContaining(expected));
     expect(() => db.exec(`${baseline}\n${retention}\n${payments}`)).not.toThrow();

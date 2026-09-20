@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { applyStripeInvoiceEvent, getAudioPayment, type InvoiceStatus } from '~/lib/audio-payments';
+import { applyStripeInvoiceEvent, getAudioPayment, isKnownInvoiceAttempt, type InvoiceStatus } from '~/lib/audio-payments';
 import { verifyStripeWebhook } from '~/lib/stripe-invoicing';
 
 export const prerender = false;
@@ -37,7 +37,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
   const payment = await getAudioPayment(db, requestId);
   const expectedInvoiceId = installment === 'booking' ? payment?.bookingInvoiceId : payment?.balanceInvoiceId;
-  if (!payment || expectedInvoiceId !== invoice.id) return Response.json({ received: true });
+  if (!payment || expectedInvoiceId !== invoice.id) {
+    if (await isKnownInvoiceAttempt(db, invoice.id)) return Response.json({ received: true });
+    return Response.json({ received: false }, { status: 503, headers: { 'retry-after': '60' } });
+  }
   try {
     await applyStripeInvoiceEvent(db, {
       eventId: event.id,

@@ -82,10 +82,18 @@ it('applies a replayed event only once', async () => {
   expect(sql.prepare('SELECT COUNT(*) AS total FROM stripe_webhook_events').get()).toEqual({ total: 1 });
 });
 
-it('ignores an invoice without matching request metadata', async () => {
+it('retries an audio invoice whose request metadata does not match a stored payment', async () => {
   const value = event('invoice.paid');
   value.data.object.metadata.audio_request_id = 'another-request';
   verify.mockResolvedValueOnce(value);
-  expect((await POST(context())).status).toBe(200);
+  expect((await POST(context())).status).toBe(503);
   expect(sql.prepare('SELECT booking_status FROM audio_payments').get()).toEqual({ booking_status: 'open' });
+});
+
+it('asks Stripe to retry a recognized audio invoice that is not recorded yet', async () => {
+  sql.prepare(`UPDATE audio_payments SET booking_invoice_id=NULL,booking_invoice_url=NULL,booking_status='not_created'
+    WHERE request_id='request-1'`).run();
+  verify.mockResolvedValueOnce(event('invoice.paid'));
+  expect((await POST(context())).status).toBe(503);
+  expect(sql.prepare('SELECT COUNT(*) AS total FROM stripe_webhook_events').get()).toEqual({ total: 0 });
 });

@@ -9,6 +9,8 @@ const invoiceMocks = vi.hoisted(() => ({
 vi.mock('~/lib/stripe-invoicing', () => ({
   createBookingInvoice: invoiceMocks.booking,
   createBalanceInvoice: invoiceMocks.balance,
+  stripeAvailable: (env: Record<string, unknown>) => env.STRIPE_PAYMENTS_ENABLED === 'true'
+    && Boolean(env.STRIPE_SECRET_KEY) && Boolean(env.STRIPE_WEBHOOK_SECRET),
 }));
 
 import { POST } from '~/pages/api/owner/requests/[id]/payment';
@@ -108,4 +110,20 @@ it('does not record invoice success when Stripe fails', async () => {
   expect(response.status).toBe(502);
   expect(sql.prepare('SELECT booking_invoice_id,booking_status FROM audio_payments').get())
     .toEqual({ booking_invoice_id: null, booking_status: 'not_created' });
+});
+
+it('creates a replacement after a voided booking invoice', async () => {
+  await POST(context({ action: 'approve', approvedService: 'Mastering', totalAmountCents: 7_500, offerAccepted: true }));
+  await POST(context({ action: 'create-booking-invoice' }, true, { STRIPE_PAYMENTS_ENABLED: 'true' }));
+  sql.prepare("UPDATE audio_payments SET booking_status='void' WHERE request_id='request-1'").run();
+  invoiceMocks.booking.mockResolvedValueOnce({
+    stripeCustomerId: 'cus_1', invoiceId: 'in_replacement',
+    hostedInvoiceUrl: 'https://invoice.stripe.com/replacement', status: 'open',
+  });
+  const response = await POST(context({ action: 'replace-booking-invoice' }, true, {
+    STRIPE_PAYMENTS_ENABLED: 'true', STRIPE_SECRET_KEY: 'sk_test_1', STRIPE_WEBHOOK_SECRET: 'whsec_1',
+  }));
+  expect(response.status).toBe(200);
+  expect(sql.prepare('SELECT booking_invoice_id,booking_status FROM audio_payments').get())
+    .toEqual({ booking_invoice_id: 'in_replacement', booking_status: 'open' });
 });

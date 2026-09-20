@@ -75,6 +75,7 @@ export async function applyOwnerRetention(database, review, environment, now = n
   const statements = [
     guard(requestSnapshot(now), requests),
     guard(playbackSnapshot(review.playbackCutoff), playback),
+    `UPDATE audio_payments SET stripe_customer_id=NULL,booking_invoice_url=NULL,balance_invoice_url=NULL,updated_at=${quote(now.toISOString())} WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`,
     `UPDATE owner_requests SET name='',email='',city_region='',details_json='{}',private_note='',updated_at=${quote(now.toISOString())} WHERE ${requestSelection}`,
     `INSERT INTO music_playback_daily(day,release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,city,count)
       SELECT day,release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,'' AS city,SUM(count) FROM

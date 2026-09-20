@@ -42,12 +42,14 @@ export async function createInvoiceWithClient(
   payment: AudioPayment,
   installment: Installment,
 ): Promise<CreatedStripeInvoice> {
-  const rootKey = `audio-request:${payment.requestId}`;
+  const customerKey = `audio-request:${payment.requestId}`;
+  const attempt = installment === 'booking' ? payment.bookingAttemptCount : payment.balanceAttemptCount;
+  const rootKey = `${customerKey}:${installment}:attempt-${attempt}`;
   const customerId = payment.stripeCustomerId ?? (await stripe.customers.create({
     email: request.email,
     name: request.name || undefined,
     metadata: { audio_request_id: payment.requestId },
-  }, { idempotencyKey: `${rootKey}:customer` })).id;
+  }, { idempotencyKey: `${customerKey}:customer` })).id;
   const invoice = await stripe.invoices.create({
     customer: customerId,
     collection_method: 'send_invoice',
@@ -55,7 +57,7 @@ export async function createInvoiceWithClient(
     auto_advance: false,
     description: `${request.summary} · Audio services by Kazon`,
     metadata: { audio_request_id: payment.requestId, installment },
-  }, { idempotencyKey: `${rootKey}:${installment}:invoice` });
+  }, { idempotencyKey: `${rootKey}:invoice` });
   const booking = installment === 'booking';
   await stripe.invoiceItems.create({
     customer: customerId,
@@ -64,9 +66,9 @@ export async function createInvoiceWithClient(
     currency: payment.currency,
     description: `Audio services by Kazon · ${payment.approvedService} · ${booking ? '50% booking payment' : 'remaining balance'}`,
     metadata: { audio_request_id: payment.requestId, installment },
-  }, { idempotencyKey: `${rootKey}:${installment}:item` });
-  await stripe.invoices.finalizeInvoice(invoice.id, {}, { idempotencyKey: `${rootKey}:${installment}:finalize` });
-  const sent = await stripe.invoices.sendInvoice(invoice.id, {}, { idempotencyKey: `${rootKey}:${installment}:send` });
+  }, { idempotencyKey: `${rootKey}:item` });
+  await stripe.invoices.finalizeInvoice(invoice.id, {}, { idempotencyKey: `${rootKey}:finalize` });
+  const sent = await stripe.invoices.sendInvoice(invoice.id, {}, { idempotencyKey: `${rootKey}:send` });
   if (sent.status !== 'open' || !sent.hosted_invoice_url?.startsWith('https://')) {
     throw new Error('Stripe did not return a hosted payment URL.');
   }

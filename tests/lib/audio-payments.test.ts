@@ -6,6 +6,7 @@ import {
   approveAudioPayment,
   getAudioPayment,
   recordInvoice,
+  replaceTerminalInvoice,
 } from '~/lib/audio-payments';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
@@ -145,5 +146,19 @@ describe('audio payments', () => {
     })).applied).toBe(false);
     expect((await getAudioPayment(db, 'request-1'))?.bookingStatus).toBe('paid');
     expect(sql.prepare('SELECT COUNT(*) AS total FROM stripe_webhook_events').get()).toEqual({ total: 2 });
+  });
+
+  it('replaces only terminal invoices while retaining the old attempt', async () => {
+    const { db, sql } = fixture();
+    await approveAudioPayment(db, approval);
+    await recordInvoice(db, {
+      requestId: 'request-1', installment: 'booking', stripeCustomerId: 'cus_1', invoiceId: 'in_void',
+      hostedInvoiceUrl: 'https://invoice.stripe.com/void', status: 'void', actor: approval.actor,
+    });
+    const reset = await replaceTerminalInvoice(db, { requestId: 'request-1', installment: 'booking', actor: approval.actor });
+    expect(reset).toMatchObject({ bookingInvoiceId: null, bookingInvoiceUrl: null, bookingStatus: 'not_created', bookingAttemptCount: 1 });
+    expect(sql.prepare('SELECT replaced_at FROM stripe_invoice_attempts WHERE invoice_id=?').get('in_void')?.replaced_at).toBeTruthy();
+    await expect(replaceTerminalInvoice(db, { requestId: 'request-1', installment: 'booking', actor: approval.actor }))
+      .rejects.toThrow('void or uncollectible');
   });
 });

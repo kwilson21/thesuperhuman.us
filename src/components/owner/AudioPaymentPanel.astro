@@ -5,6 +5,7 @@ const { requestId, payment, stripeEnabled } = Astro.props;
 const money = (cents: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
 const statusLabel = (status: string) => ({ not_created:'Not created',draft:'Draft',open:'Awaiting payment',paid:'Paid',payment_failed:'Payment failed',void:'Voided',uncollectible:'Uncollectible' }[status] ?? status);
 const nextAction = !payment ? 'approve' : payment.bookingStatus === 'not_created' ? 'booking' : payment.bookingStatus === 'paid' && payment.balanceStatus === 'not_created' ? 'balance' : null;
+const replaceAction = payment && ['void','uncollectible'].includes(payment.bookingStatus) ? 'booking' : payment?.bookingStatus === 'paid' && ['void','uncollectible'].includes(payment.balanceStatus) ? 'balance' : null;
 ---
 <section class="owner-section payment-panel" aria-labelledby="payment-heading" data-payment-panel data-request-id={requestId}>
   <div class="payment-heading"><div><p class="owner-kicker">Payment</p><h2 id="payment-heading">Book the work</h2></div>{payment && <p class="payment-total"><span>Fixed project price</span><strong>{money(payment.totalAmountCents)}</strong></p>}</div>
@@ -21,8 +22,9 @@ const nextAction = !payment ? 'approve' : payment.bookingStatus === 'not_created
   </div>}
   {nextAction === 'booking' && <button class="owner-primary-action" type="button" data-payment-action="create-booking-invoice" disabled={!stripeEnabled}>Create booking invoice <span aria-hidden="true">→</span></button>}
   {nextAction === 'balance' && <button class="owner-primary-action" type="button" data-payment-action="create-balance-invoice" disabled={!stripeEnabled}>Create balance invoice <span aria-hidden="true">→</span></button>}
+  {replaceAction && <button class="owner-primary-action" type="button" data-payment-action={`replace-${replaceAction}-invoice`} disabled={!stripeEnabled}>Create replacement {replaceAction} invoice <span aria-hidden="true">→</span></button>}
   {payment && payment.bookingStatus !== 'paid' && payment.bookingStatus !== 'not_created' && <p class="payment-next">Work is booked when Stripe confirms the booking payment.</p>}
   {payment?.bookingStatus === 'paid' && payment.balanceStatus !== 'paid' && payment.balanceStatus !== 'not_created' && <p class="payment-next">Keep final downloadable files private until Stripe confirms the remaining balance.</p>}
-  {!stripeEnabled && nextAction !== 'approve' && nextAction && <p class="payment-unavailable">Invoice creation is disabled until Stripe setup and launch checks are complete.</p>}
+  {!stripeEnabled && nextAction !== 'approve' && (nextAction || replaceAction) && <p class="payment-unavailable">Invoice creation is disabled until Stripe setup and launch checks are complete.</p>}
   <p data-payment-status class="payment-action-status" role="status" aria-live="polite"></p>
 </section>

@@ -7,8 +7,10 @@ const payment = {
   offerAcceptedAt: '2026-09-20T13:00:00.000Z', stripeCustomerId: null,
   bookingInvoiceId: null, bookingInvoiceUrl: null, bookingStatus: 'not_created' as const,
   bookingStatusUpdatedAt: null,
+  bookingAttemptCount: 0,
   balanceInvoiceId: null, balanceInvoiceUrl: null, balanceStatus: 'not_created' as const,
   balanceStatusUpdatedAt: null,
+  balanceAttemptCount: 0,
   createdAt: '2026-09-20T13:00:00.000Z', updatedAt: '2026-09-20T13:00:00.000Z',
 };
 const request = { name: 'Artist Name', email: 'artist@example.com', summary: 'Old News mix' };
@@ -42,11 +44,11 @@ describe('Stripe invoicing', () => {
     expect(stripe.invoices.create).toHaveBeenCalledWith(expect.objectContaining({
       customer: 'cus_1', collection_method: 'send_invoice', days_until_due: 7,
       metadata: { audio_request_id: 'request-1', installment: 'booking' },
-    }), { idempotencyKey: 'audio-request:request-1:booking:invoice' });
+    }), { idempotencyKey: 'audio-request:request-1:booking:attempt-0:invoice' });
     expect(stripe.invoiceItems.create).toHaveBeenCalledWith(expect.objectContaining({
       customer: 'cus_1', invoice: 'in_1', amount: 10_001, currency: 'usd',
       description: 'Audio services by Kazon · Two-track vocal mix + master · 50% booking payment',
-    }), { idempotencyKey: 'audio-request:request-1:booking:item' });
+    }), { idempotencyKey: 'audio-request:request-1:booking:attempt-0:item' });
     expect(result).toEqual({
       stripeCustomerId: 'cus_1', invoiceId: 'in_1',
       hostedInvoiceUrl: 'https://invoice.stripe.com/i/in_1', status: 'open',

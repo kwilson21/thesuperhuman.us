@@ -15,10 +15,12 @@ export type AudioPayment = {
   bookingInvoiceUrl: string | null;
   bookingStatus: InvoiceStatus;
   bookingStatusUpdatedAt: string | null;
+  bookingAttemptCount: number;
   balanceInvoiceId: string | null;
   balanceInvoiceUrl: string | null;
   balanceStatus: InvoiceStatus;
   balanceStatusUpdatedAt: string | null;
+  balanceAttemptCount: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -28,14 +30,15 @@ type PaymentRow = {
   booking_amount_cents: number; balance_amount_cents: number; offer_accepted_at: string;
   stripe_customer_id: string | null; booking_invoice_id: string | null; booking_invoice_url: string | null;
   booking_status: InvoiceStatus; balance_invoice_id: string | null; balance_invoice_url: string | null;
-  booking_status_updated_at: string | null; balance_status: InvoiceStatus; balance_status_updated_at: string | null;
+  booking_status_updated_at: string | null; booking_attempt_count: number; balance_status: InvoiceStatus;
+  balance_status_updated_at: string | null; balance_attempt_count: number;
   created_at: string; updated_at: string;
 };
 
 const columns = `request_id,approved_service,total_amount_cents,currency,booking_amount_cents,
   balance_amount_cents,offer_accepted_at,stripe_customer_id,booking_invoice_id,booking_invoice_url,
-  booking_status,booking_status_updated_at,balance_invoice_id,balance_invoice_url,balance_status,
-  balance_status_updated_at,created_at,updated_at`;
+  booking_status,booking_status_updated_at,booking_attempt_count,balance_invoice_id,balance_invoice_url,balance_status,
+  balance_status_updated_at,balance_attempt_count,created_at,updated_at`;
 
 function fromRow(row: PaymentRow): AudioPayment {
   return {
@@ -46,8 +49,10 @@ function fromRow(row: PaymentRow): AudioPayment {
     bookingInvoiceId: row.booking_invoice_id, bookingInvoiceUrl: row.booking_invoice_url,
     bookingStatus: row.booking_status, balanceInvoiceId: row.balance_invoice_id,
     bookingStatusUpdatedAt: row.booking_status_updated_at,
+    bookingAttemptCount: Number(row.booking_attempt_count),
     balanceInvoiceUrl: row.balance_invoice_url, balanceStatus: row.balance_status,
     balanceStatusUpdatedAt: row.balance_status_updated_at,
+    balanceAttemptCount: Number(row.balance_attempt_count),
     createdAt: row.created_at, updatedAt: row.updated_at,
   };
 }
@@ -126,10 +131,39 @@ export async function recordInvoice(db: D1Database, input: {
       ${prefix}_invoice_url=?,${prefix}_status=?,updated_at=?
       WHERE request_id=? AND ${prefix}_invoice_id IS NULL`)
       .bind(input.stripeCustomerId, input.invoiceId, input.hostedInvoiceUrl, input.status, now, input.requestId),
+    db.prepare(`INSERT OR IGNORE INTO stripe_invoice_attempts(invoice_id,request_id,installment,created_at)
+      VALUES (?,?,?,?)`).bind(input.invoiceId, input.requestId, input.installment, now),
   ]);
   const updated = await getAudioPayment(db, input.requestId);
   if (!updated || updated[`${prefix}InvoiceId`] !== input.invoiceId) throw new Error('Invoice already exists.');
   return updated;
+}
+
+export async function replaceTerminalInvoice(db: D1Database, input: {
+  requestId: string; installment: Installment; actor: string;
+}): Promise<AudioPayment> {
+  const payment = await getAudioPayment(db, input.requestId);
+  if (!payment) throw new Error('Payment terms are not approved.');
+  if (!input.actor.trim()) throw new Error('Invalid request actor.');
+  const prefix = input.installment;
+  const status = payment[`${prefix}Status`];
+  const invoiceId = payment[`${prefix}InvoiceId`];
+  if (!invoiceId || !['void', 'uncollectible'].includes(status)) throw new Error('Only a void or uncollectible invoice can be replaced.');
+  const now = new Date().toISOString();
+  await db.batch([
+    db.prepare(`UPDATE stripe_invoice_attempts SET replaced_at=? WHERE invoice_id=?`).bind(now, invoiceId),
+    db.prepare(`UPDATE audio_payments SET ${prefix}_invoice_id=NULL,${prefix}_invoice_url=NULL,
+      ${prefix}_status='not_created',${prefix}_status_updated_at=NULL,${prefix}_attempt_count=${prefix}_attempt_count+1,updated_at=?
+      WHERE request_id=? AND ${prefix}_invoice_id=?`)
+      .bind(now, input.requestId, invoiceId),
+    db.prepare(`INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at)
+      VALUES (?,?,?,?,?)`).bind(input.requestId, `${prefix}-invoice-replaced`, input.actor.trim().toLowerCase(), invoiceId, now),
+  ]);
+  return (await getAudioPayment(db, input.requestId))!;
+}
+
+export async function isKnownInvoiceAttempt(db: D1Database, invoiceId: string): Promise<boolean> {
+  return Boolean(await db.prepare('SELECT invoice_id FROM stripe_invoice_attempts WHERE invoice_id=?').bind(invoiceId).first());
 }
 
 export async function applyStripeInvoiceEvent(db: D1Database, input: {

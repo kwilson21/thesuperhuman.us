@@ -6,7 +6,7 @@ const { ownerHealth } = ownerHealthModule;
 const requiredSchema = [
   'owner_campaigns', 'owner_requests', 'owner_request_audit',
   'music_playback_events', 'music_playback_daily', 'music_playback_geography_daily', 'owner_retention_runs',
-  'audio_payments', 'stripe_webhook_events',
+  'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts',
 ];
 
 function healthyFixture() {

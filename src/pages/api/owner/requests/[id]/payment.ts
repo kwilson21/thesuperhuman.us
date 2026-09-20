@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
-import { approveAudioPayment, getAudioPayment, recordInvoice, type AudioPayment } from '~/lib/audio-payments';
+import { approveAudioPayment, getAudioPayment, recordInvoice, replaceTerminalInvoice, type AudioPayment } from '~/lib/audio-payments';
 import { getOwnerRequest } from '~/lib/owner-requests';
-import { createBalanceInvoice, createBookingInvoice } from '~/lib/stripe-invoicing';
+import { createBalanceInvoice, createBookingInvoice, stripeAvailable } from '~/lib/stripe-invoicing';
 
 export const prerender = false;
 
@@ -15,6 +15,8 @@ const commandSchema = z.discriminatedUnion('action', [
   }),
   z.object({ action: z.literal('create-booking-invoice') }),
   z.object({ action: z.literal('create-balance-invoice') }),
+  z.object({ action: z.literal('replace-booking-invoice') }),
+  z.object({ action: z.literal('replace-balance-invoice') }),
 ]);
 
 function ownerView(payment: AudioPayment) {
@@ -52,9 +54,14 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       return Response.json({ ok: true, payment: ownerView(payment) }, { headers });
     }
 
-    const payment = await getAudioPayment(db, requestRecord.id);
+    let payment = await getAudioPayment(db, requestRecord.id);
     if (!payment) return Response.json({ ok: false }, { status: 409, headers });
-    const installment = parsed.data.action === 'create-booking-invoice' ? 'booking' : 'balance';
+    if (parsed.data.action.startsWith('replace-')) {
+      if (!stripeAvailable(locals.runtime.env)) return Response.json({ ok: false }, { status: 503, headers });
+      const installment = parsed.data.action === 'replace-booking-invoice' ? 'booking' : 'balance';
+      payment = await replaceTerminalInvoice(db, { requestId: requestRecord.id, installment, actor: locals.owner.email });
+    }
+    const installment = ['create-booking-invoice', 'replace-booking-invoice'].includes(parsed.data.action) ? 'booking' : 'balance';
     const existingId = installment === 'booking' ? payment.bookingInvoiceId : payment.balanceInvoiceId;
     if (existingId) return Response.json({ ok: true, payment: ownerView(payment) }, { headers });
     if (installment === 'balance' && payment.bookingStatus !== 'paid') {
