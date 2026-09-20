@@ -16,38 +16,41 @@ const requestEligibility = now => `(status='withdrawn' OR (contact_delete_after 
 const requestSnapshot = (now, selection = '1') => `SELECT json_group_array(json_array(id,updated_at)) AS snapshot FROM
   (SELECT id,updated_at FROM owner_requests WHERE ${requestEligibility(now)} AND (${selection}) ORDER BY id)`;
 const playbackSnapshot = (cutoff, selection = '1') => `SELECT json_group_array(json_array(id,occurred_at)) AS snapshot FROM
-  (SELECT id,occurred_at FROM music_playback_events WHERE occurred_at<${quote(cutoff)} AND (${selection}) ORDER BY id)`;
-const playbackSummary = cutoff => `SELECT substr(occurred_at,1,10) AS day,release_id,recording_id,medium,event,
+  (SELECT id,occurred_at FROM music_playback_events WHERE occurred_at<${quote(cutoff)} AND (${selection}) ORDER BY id LIMIT 1000)`;
+const playbackSummary = (cutoff, selection = '1') => `SELECT substr(occurred_at,1,10) AS day,release_id,recording_id,medium,event,
   COALESCE(campaign_id,'') AS campaign_id,COALESCE(channel,'') AS channel,COALESCE(creative,'') AS creative,
-  country,region,city,COUNT(*) AS count FROM music_playback_events WHERE occurred_at<${quote(cutoff)} AND traffic_class='human'
+  country,region,city,COUNT(*) AS count FROM music_playback_events WHERE occurred_at<${quote(cutoff)} AND traffic_class='human' AND (${selection})
   GROUP BY day,release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,city ORDER BY day,release_id,event`;
+const idsSelection = rows => rows.length ? `id IN (${rows.map(row => quote(row[0])).join(',')})` : '0';
 
 export async function previewOwnerRetention(database, environment, now = new Date()) {
   const cutoff = dayCutoff(now, 90);
   const [{ snapshot: requests }] = await database.query(requestSnapshot(now));
   const [{ snapshot: playback }] = await database.query(playbackSnapshot(cutoff));
-  const dailySummary = await database.query(playbackSummary(cutoff));
+  const playbackRows = JSON.parse(playback); const selection = idsSelection(playbackRows);
+  const dailySummary = await database.query(playbackSummary(cutoff, selection));
+  const [{ total: allPlayback }] = await database.query(`SELECT COUNT(*) AS total FROM music_playback_events WHERE occurred_at<${quote(cutoff)}`);
   const [requestCheck] = await database.query(requestSnapshot(now));
   const [playbackCheck] = await database.query(playbackSnapshot(cutoff));
   if (requestCheck.snapshot !== requests || playbackCheck.snapshot !== playback) throw new Error('Eligible owner data changed during preview. Generate a fresh review.');
   return {
     version: 1, environment, generatedAt: now.toISOString(), playbackCutoff: cutoff,
     requestSourceHash: hash(requests), playbackSourceHash: hash(playback),
-    requestContacts: JSON.parse(requests).length, rawPlayback: JSON.parse(playback).length,
+    requestContacts: JSON.parse(requests).length, rawPlayback: playbackRows.length, remainingPlayback: Math.max(0, Number(allPlayback) - playbackRows.length),
     dailySummary, lifetimeTotals: await database.query(lifetimeOwnerPlayback),
-    notes: 'Review campaign, channel, creative, medium, event, and approximate geography before applying. The manifest contains aggregate evidence and hashes, never request contact values. Applying blanks eligible request contact fields and removes raw playback only after daily totals are preserved.',
+    notes: 'Review campaign, channel, creative, medium, event, and approximate geography before applying. The manifest contains aggregate evidence and hashes, never request contact values. Applying uses one transaction, coarsens retained geography, blanks eligible request contact fields, and removes at most 1,000 reviewed raw playback rows. Run another preview when remainingPlayback is above zero.',
   };
 }
 
 function validateReview(review, environment, now) {
   if (review.version !== 1 || review.environment !== environment || typeof review.playbackCutoff !== 'string' ||
     !Number.isFinite(Date.parse(review.playbackCutoff)) || review.playbackCutoff > dayCutoff(now, 90) ||
-    !Number.isInteger(review.requestContacts) || !Number.isInteger(review.rawPlayback)) throw new Error('Invalid review, wrong environment, or cutoff less than 90 days old.');
+    !Number.isInteger(review.requestContacts) || !Number.isInteger(review.rawPlayback) || !Number.isInteger(review.remainingPlayback)) throw new Error('Invalid review, wrong environment, or cutoff less than 90 days old.');
 }
 
 async function verifyTriggers(database) {
   const schema = await readFile(new URL('../db/music.sql', import.meta.url), 'utf8');
-  for (const name of ['music_playback_events_archive_before_delete', 'owner_requests_audit_personal_delete']) {
+  for (const name of ['owner_requests_audit_personal_delete']) {
     const expected = schema.match(new RegExp(`CREATE TRIGGER IF NOT EXISTS ${name}[\\s\\S]*?END;`))?.[0];
     const rows = await database.query(`SELECT sql FROM sqlite_master WHERE type='trigger' AND name=${quote(name)}`);
     const normalize = sql => sql.replace('IF NOT EXISTS ', '').replace(/;$/, '').replace(/\s+/g, ' ').trim();
@@ -60,32 +63,37 @@ export async function applyOwnerRetention(database, review, environment, now = n
   const [{ snapshot: requests }] = await database.query(requestSnapshot(now));
   const [{ snapshot: playback }] = await database.query(playbackSnapshot(review.playbackCutoff));
   if (hash(requests) !== review.requestSourceHash || hash(playback) !== review.playbackSourceHash) throw new Error('Eligible owner data changed or this review was already applied. Generate and review a fresh preview.');
-  const summary = await database.query(playbackSummary(review.playbackCutoff));
+  const playbackRows = JSON.parse(playback); const playbackSelection = idsSelection(playbackRows);
+  const summary = await database.query(playbackSummary(review.playbackCutoff, playbackSelection));
   if (JSON.stringify(summary) !== JSON.stringify(review.dailySummary) || JSON.parse(requests).length !== review.requestContacts || JSON.parse(playback).length !== review.rawPlayback) throw new Error('Review summary does not match eligible owner data.');
   await verifyTriggers(database);
   const requestRows = JSON.parse(requests);
-  for (let start=0; start<requestRows.length; start+=100) {
-    const chunk = requestRows.slice(start,start+100); const ids = chunk.map(row => row[0]);
-    const selection = `id IN (${ids.map(quote).join(',')})`;
-    const guard = requestSnapshot(now, selection);
-    await database.query(`UPDATE owner_requests SET name='',email='',city_region='',details_json='{}',private_note='',updated_at=${quote(now.toISOString())}
-      WHERE ${selection} AND (${guard})=${quote(JSON.stringify(chunk))}`);
-    const [remaining] = await database.query(requestSnapshot(now, selection));
-    if (remaining.snapshot !== '[]') throw new Error('Reviewed request data changed during cleanup. Stop and generate a fresh preview.');
-  }
-  const playbackRows = JSON.parse(playback);
-  for (let start=0; start<playbackRows.length; start+=100) {
-    const chunk = playbackRows.slice(start,start+100); const ids = chunk.map(row => row[0]);
-    const selection = `id IN (${ids.map(quote).join(',')})`;
-    const guard = playbackSnapshot(review.playbackCutoff, selection);
-    await database.query(`DELETE FROM music_playback_events WHERE occurred_at<${quote(review.playbackCutoff)} AND ${selection}
-      AND (${guard})=${quote(JSON.stringify(chunk))}`);
-    const [remaining] = await database.query(playbackSnapshot(review.playbackCutoff, selection));
-    if (remaining.snapshot !== '[]') throw new Error('Reviewed playback data changed during cleanup. Stop and generate a fresh preview.');
-  }
+  const requestSelection = idsSelection(requestRows);
+  const guard = (query, expected) => `SELECT CASE WHEN (${query})=${quote(expected)} THEN 1 ELSE json_extract('retention source changed','$') END`;
   const runId = hash(`${review.generatedAt}:${review.requestSourceHash}:${review.playbackSourceHash}`);
-  await database.query(`INSERT INTO owner_retention_runs(id,environment,playback_cutoff,playback_rows,request_contacts,completed_at)
-    VALUES(${quote(runId)},${quote(environment)},${quote(review.playbackCutoff)},${review.rawPlayback},${review.requestContacts},${quote(now.toISOString())})`);
+  await database.batch([
+    guard(requestSnapshot(now), requests),
+    guard(playbackSnapshot(review.playbackCutoff), playback),
+    `UPDATE owner_requests SET name='',email='',city_region='',details_json='{}',private_note='',updated_at=${quote(now.toISOString())} WHERE ${requestSelection}`,
+    `INSERT INTO music_playback_daily(day,release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,city,count)
+      SELECT day,release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,'' AS city,SUM(count) FROM
+        (${playbackSummary(review.playbackCutoff, playbackSelection).replace(/ ORDER BY day,release_id,event$/,'')})
+      GROUP BY day,release_id,recording_id,medium,event,campaign_id,channel,creative,country,region
+      ON CONFLICT(day,release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,city) DO UPDATE SET count=count+excluded.count`,
+    `INSERT INTO music_playback_geography_daily(day,release_id,recording_id,campaign_id,channel,creative,country,region,city,count)
+      WITH qualified AS (SELECT substr(occurred_at,1,10) AS day,release_id,recording_id,COALESCE(campaign_id,'') AS campaign_id,
+        COALESCE(channel,'') AS channel,COALESCE(creative,'') AS creative,country,region,city,session_id,playthrough_id
+        FROM music_playback_events WHERE traffic_class='human' AND event IN ('listen30','complete') AND (${playbackSelection})
+        GROUP BY day,release_id,recording_id,campaign_id,channel,creative,country,region,city,session_id,playthrough_id),
+      city_counts AS (SELECT day,release_id,recording_id,campaign_id,channel,creative,country,region,city,COUNT(*) AS count
+        FROM qualified GROUP BY day,release_id,recording_id,campaign_id,channel,creative,country,region,city)
+      SELECT day,release_id,recording_id,campaign_id,channel,creative,country,region,CASE WHEN count>=5 THEN city ELSE '' END,SUM(count)
+        FROM city_counts GROUP BY day,release_id,recording_id,campaign_id,channel,creative,country,region,CASE WHEN count>=5 THEN city ELSE '' END
+      ON CONFLICT(day,release_id,recording_id,campaign_id,channel,creative,country,region,city) DO UPDATE SET count=count+excluded.count`,
+    `DELETE FROM music_playback_events WHERE occurred_at<${quote(review.playbackCutoff)} AND ${playbackSelection}`,
+    `INSERT INTO owner_retention_runs(id,environment,playback_cutoff,playback_rows,request_contacts,completed_at)
+      VALUES(${quote(runId)},${quote(environment)},${quote(review.playbackCutoff)},${review.rawPlayback},${review.requestContacts},${quote(now.toISOString())})`,
+  ]);
   return { requestContacts: review.requestContacts, rawPlayback: review.rawPlayback };
 }
 

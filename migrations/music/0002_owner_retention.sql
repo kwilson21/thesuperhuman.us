@@ -6,16 +6,19 @@ CREATE TABLE IF NOT EXISTS owner_retention_runs (
   request_contacts INTEGER NOT NULL CHECK(request_contacts >= 0),
   completed_at TEXT NOT NULL
 );
-
-CREATE TRIGGER IF NOT EXISTS music_playback_events_archive_before_delete
-BEFORE DELETE ON music_playback_events
-WHEN OLD.traffic_class='human'
-BEGIN
-  INSERT INTO music_playback_daily(day,release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,city,count)
-  VALUES(substr(OLD.occurred_at,1,10),OLD.release_id,OLD.recording_id,OLD.medium,OLD.event,COALESCE(OLD.campaign_id,''),COALESCE(OLD.channel,''),COALESCE(OLD.creative,''),OLD.country,OLD.region,OLD.city,1)
-  ON CONFLICT(day,release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,city)
-  DO UPDATE SET count=count+1;
-END;
+CREATE TABLE IF NOT EXISTS music_playback_geography_daily (
+  day TEXT NOT NULL,
+  release_id TEXT NOT NULL,
+  recording_id TEXT NOT NULL,
+  campaign_id TEXT NOT NULL DEFAULT '',
+  channel TEXT NOT NULL DEFAULT '',
+  creative TEXT NOT NULL DEFAULT '',
+  country TEXT NOT NULL DEFAULT '',
+  region TEXT NOT NULL DEFAULT '',
+  city TEXT NOT NULL DEFAULT '',
+  count INTEGER NOT NULL CHECK(count > 0),
+  PRIMARY KEY(day,release_id,recording_id,campaign_id,channel,creative,country,region,city)
+);
 CREATE TRIGGER IF NOT EXISTS owner_requests_audit_personal_delete
 AFTER UPDATE OF name,email,city_region,details_json,private_note ON owner_requests
 WHEN NEW.name='' AND NEW.email='' AND NEW.city_region='' AND NEW.details_json='{}' AND NEW.private_note=''

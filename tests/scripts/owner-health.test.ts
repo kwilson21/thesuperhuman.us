@@ -3,7 +3,7 @@ import { ownerHealth } from '../../scripts/owner-health.mjs';
 
 const requiredSchema = [
   'owner_campaigns', 'owner_requests', 'owner_request_audit', 'owner_audience_permissions',
-  'music_playback_events', 'music_playback_daily', 'owner_retention_runs',
+  'music_playback_events', 'music_playback_daily', 'music_playback_geography_daily', 'owner_retention_runs',
 ];
 
 function healthyFixture() {
