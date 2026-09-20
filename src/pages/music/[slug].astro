@@ -15,7 +15,7 @@ import '~/styles/music.css';
 import '~/styles/music-premiere.css';
 const catalog = await loadMusicCatalog();
 const release = catalog.releases.find(r => r.slug === Astro.params.slug);
-if (!release) return new Response('Release not found', { status: 404 });
+if (!release) return Astro.rewrite('/404');
 const tracks = release.tracks.map(id => catalog.recordings.find(r => r.id === id)!);
 const first = tracks[0];
 const mainTitle = release.displayTitle ?? release.title;
@@ -31,7 +31,7 @@ const videoId = `video-${first.id}`;
   <div class="site-shell music-page premiere-page">
     <MusicNav />
     <header class="premiere-masthead">
-      <div class="masthead-artist"><span aria-label={release.artist}>{release.artist.split(/(z\u0304)/i).map(part => /^z\u0304$/i.test(part) ? <span class="artist-macron">{part[0]}</span> : part)}</span></div>
+      <div class="masthead-artist"><span aria-label={release.artist}>{release.artist.split(/(z\u0304)/i).map(part => /^z\u0304$/i.test(part) ? <span class="artist-macron">{part}</span> : part)}</span></div>
       <h1 class:list={['masthead-title', { 'masthead-title-long': mainTitle.length > 12 }]}>{mainTitle}</h1>
       <p class="masthead-credit">{release.producer && <span>Prod. {release.producer}</span>}<span>{release.status === 'preview' ? 'Streaming preview' : release.type === 'ep' ? 'EP' : release.type}</span></p>
       <div class="premiere-actions">
