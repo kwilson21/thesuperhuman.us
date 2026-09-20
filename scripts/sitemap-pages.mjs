@@ -21,6 +21,8 @@ export function shouldIncludeSitemapPage(page) {
   const pathname = new URL(page).pathname.replace(/\/$/, '') || '/';
   if (pathname === '/services.html') return false;
   return !pathname.startsWith('/api/')
+    && pathname !== '/owner'
+    && !pathname.startsWith('/owner/')
     && !pathname.startsWith('/audio/file/')
     && !pathname.startsWith('/music/file/');
 }
