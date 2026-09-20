@@ -1,7 +1,7 @@
 # Audio payment design
 
 **Date:** September 20, 2026  
-**Status:** Approved design pending implementation plan  
+**Status:** Approved website integration design pending implementation
 **Owner:** The Superhuman Group LLC  
 **Customer-facing service:** Audio services by Kazon
 
@@ -37,7 +37,7 @@ Payout capability must return to active status before the payment flow is consid
 
 Invoices use USD, card and other ordinary Stripe-hosted methods enabled for the account, and Stripe's standard hosted invoice page. Each invoice identifies the song or project, agreed service, installment, and due timing. Invoice descriptions do not claim ownership of client material.
 
-## Website changes
+## Website integration
 
 The public service and intake pages explain the same sequence in plain language:
 
@@ -49,22 +49,41 @@ The public service and intake pages explain the same sequence in plain language:
 
 The successful intake state tells the client to expect file review and an emailed offer. It does not display a generic payment link because price and scope have not been approved yet.
 
-The first version adds no embedded Stripe checkout and no payment controls to the owner page. Kazon opens Stripe from the owner request and creates the two invoices manually. The existing private note can hold a non-sensitive operational reminder such as `Deposit invoice sent`; it must not contain card, bank, or identity data.
+The first version adds a Payment section to each audio-service request in the private owner center. Kazon records the approved service, fixed total price, and confirmation that the client accepted the written offer. The website then creates and sends a Stripe-hosted invoice for the 50% booking payment.
+
+Stripe emails and hosts the secure payment page. A signed webhook updates the private owner page when an invoice is sent, paid, payment fails, or is voided. After the booking invoice is paid, the owner page can create the remaining-balance invoice. Final downloadable files remain withheld until the balance is paid.
+
+The written offer remains manual in this version. The website does not add automated quoting, contracts, a client portal, or project-file delivery. The owner explicitly confirms acceptance before the first invoice can be created.
+
+The Payment section shows:
+
+- approved service and total fixed price;
+- offer-acceptance confirmation;
+- booking and balance amounts;
+- booking and balance invoice status;
+- a link to the relevant Stripe invoice;
+- one action to create each invoice when its prerequisites are satisfied.
 
 ## Boundaries and security
 
 - Stripe collects and stores payment credentials. The website never receives card or bank details.
-- No Stripe secret key, webhook, customer ID, invoice ID, or payment status is stored in the website for this version.
+- Stripe API and webhook secrets remain encrypted Cloudflare Worker secrets and never appear in source, D1, logs, or owner-page HTML.
+- D1 stores only Stripe customer and invoice identifiers, installment amounts, statuses, and event timestamps needed for the owner workflow.
 - No client-facing payment link exists until Kazon approves that specific project.
-- The website remains the source for service scope and intake; Stripe remains the source for invoices, payments, refunds, and receipts.
+- The website remains the source for service scope, intake, and the owner's operational view. Stripe remains authoritative for invoices, payments, refunds, disputes, and receipts.
 - Only public business URLs and the approved service description are submitted in Stripe's business review. Private credentials and personal addresses are never copied into repository files or chat.
+- Webhook signatures are verified against the raw request body before any state is changed.
+- Stripe event IDs are recorded so repeated delivery is safe.
+- Invoice-creation requests use stable idempotency keys so retries cannot create duplicate invoices.
+- Production invoice creation stays disabled until Stripe payments and payouts are active and the test-mode workflow passes.
 
 ## Failure handling
 
-- If Stripe review is incomplete or payouts remain paused, do not invoice clients. Reply that booking will open after payment processing is ready.
+- If Stripe review is incomplete, payouts remain paused, or the website payment gate is disabled, invoice creation is unavailable.
 - If an invoice is unpaid, the project is not booked and work does not begin.
 - If the final invoice is unpaid, preserve the project files but do not release final downloadable files.
-- Refunds, disputes, failed payments, and invoice corrections are handled in Stripe and documented in the private request note without copying sensitive payment data.
+- Refunds, disputes, and invoice corrections are handled in Stripe. The owner page links to Stripe without copying sensitive payment data.
+- A Stripe API or webhook failure leaves the request intact, shows an actionable failure to the owner, and creates no optimistic paid state.
 
 ## Verification
 
@@ -73,10 +92,12 @@ Before launch:
 1. Stripe reports payouts and payments active with no overdue verification task.
 2. Stripe business identity, branding, customer emails, and invoice defaults are reviewed.
 3. A Stripe test-mode invoice proves the deposit and balance workflow without a real charge.
-4. Website copy and intake success state render correctly on desktop and mobile.
-5. Repository checks pass for every changed file.
-6. Production deployment remains separately gated by the repository prelaunch checklist.
+4. Repeated invoice actions and repeated webhook events prove idempotent behavior.
+5. Invalid webhook signatures prove that D1 remains unchanged.
+6. Website copy, intake success state, and the private Payment section render correctly on desktop and mobile.
+7. Repository checks pass for every changed file.
+8. Production deployment remains separately gated by the repository prelaunch checklist.
 
 ## Deferred work
 
-Automated invoice creation, webhooks, owner-page payment state, automatic reminders, contracts, tax automation, subscriptions, and website checkout are deferred until real booking volume shows that manual invoicing is a burden.
+Automated quoting, offer email composition, automatic reminders, contracts, tax automation, subscriptions, embedded checkout, project-file delivery, and a client portal are deferred until real booking volume justifies them.
