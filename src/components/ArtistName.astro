@@ -1,0 +1,20 @@
+---
+interface Props { suffix?: string }
+const { suffix = '' } = Astro.props;
+---
+<span class="artist-name" aria-label={`Kaz̄on${suffix}`}><span aria-hidden="true">Ka<span class="artist-z">z</span>on{suffix}</span></span>
+
+<style>
+  .artist-name { white-space: nowrap; }
+  .artist-z { display: inline-block; position: relative; }
+  .artist-z::after {
+    background: currentColor;
+    content: '';
+    height: max(1px, .055em);
+    left: 50%;
+    position: absolute;
+    top: .04em;
+    transform: translateX(-50%);
+    width: .58em;
+  }
+</style>
