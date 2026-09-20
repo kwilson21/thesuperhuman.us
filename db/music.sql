@@ -132,6 +132,15 @@ CREATE TABLE IF NOT EXISTS music_playback_daily (
   count INTEGER NOT NULL CHECK(count > 0),
   PRIMARY KEY(day,release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,city)
 );
+CREATE TABLE IF NOT EXISTS owner_retention_runs (
+  id TEXT PRIMARY KEY,
+  environment TEXT NOT NULL,
+  playback_cutoff TEXT NOT NULL,
+  playback_rows INTEGER NOT NULL CHECK(playback_rows >= 0),
+  request_contacts INTEGER NOT NULL CHECK(request_contacts >= 0),
+  completed_at TEXT NOT NULL
+);
+
 CREATE TRIGGER IF NOT EXISTS music_playback_events_archive_before_delete
 BEFORE DELETE ON music_playback_events
 WHEN OLD.traffic_class='human'

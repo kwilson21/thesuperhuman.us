@@ -22,7 +22,8 @@
     "music:upload": "node scripts/upload-music.mjs",
     "music:report": "node scripts/music-report.mjs",
     "owner:retention:preview": "node scripts/owner-retention.mjs",
-    "owner:retention:apply": "node scripts/owner-retention.mjs --apply .private/owner-retention-review.json"
+    "owner:retention:apply": "node scripts/owner-retention.mjs --apply .private/owner-retention-review.json",
+    "owner:health": "node scripts/owner-health.mjs"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.4",

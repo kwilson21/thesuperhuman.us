@@ -83,6 +83,9 @@ export async function applyOwnerRetention(database, review, environment, now = n
     const [remaining] = await database.query(playbackSnapshot(review.playbackCutoff, selection));
     if (remaining.snapshot !== '[]') throw new Error('Reviewed playback data changed during cleanup. Stop and generate a fresh preview.');
   }
+  const runId = hash(`${review.generatedAt}:${review.requestSourceHash}:${review.playbackSourceHash}`);
+  await database.query(`INSERT INTO owner_retention_runs(id,environment,playback_cutoff,playback_rows,request_contacts,completed_at)
+    VALUES(${quote(runId)},${quote(environment)},${quote(review.playbackCutoff)},${review.rawPlayback},${review.requestContacts},${quote(now.toISOString())})`);
   return { requestContacts: review.requestContacts, rawPlayback: review.rawPlayback };
 }
 

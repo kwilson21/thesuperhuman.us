@@ -34,6 +34,8 @@ it('preview is read-only and apply preserves aggregates while deleting eligible 
     .toEqual({ name: '', email: '', city_region: '', details_json: '{}', private_note: '', status: 'resolved' });
   expect((await database.query("SELECT action,actor FROM owner_request_audit WHERE request_id='old-request' ORDER BY id DESC LIMIT 1"))[0])
     .toEqual({ action: 'personal-data-deleted', actor: 'retention' });
+  expect((await database.query('SELECT environment,playback_rows,request_contacts FROM owner_retention_runs'))[0])
+    .toEqual({ environment: 'Local test data', playback_rows: 4, request_contacts: 1 });
 });
 
 it('rejects changed sources, wrong environments and a second application', async () => {
