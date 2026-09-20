@@ -16,6 +16,9 @@ interface Env {
   OWNER_EMAIL?: string;
   CLOUDFLARE_ANALYTICS_TOKEN?: string;
   CLOUDFLARE_ZONE_ID?: string;
+  STRIPE_PAYMENTS_ENABLED?: string;
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
   PUBLICATION_OWNER_ID?: string;
   OAUTH_KV?: KVNamespace;
   PUBLICATION_GITHUB_CLIENT_ID?: string;
