@@ -17,6 +17,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (!env.MUSIC_DB) return musicUnavailable();
   const ip = request.headers.get('cf-connecting-ip') ?? '0.0.0.0';
   try {
+    if (!(await checkRateLimit(env.RATE_LIMIT, ip, 'rl:music-event-all:', 240)).allowed) return Response.json({ ok: false }, { status: 429 });
     const prefix = `rl:music-event:${input.releaseId}:${input.recordingId}:${input.medium}:${input.event}:`;
     if (!(await checkRateLimit(env.RATE_LIMIT, ip, prefix, 60)).allowed) return Response.json({ ok: false }, { status: 429 });
     await saveEvent(env.MUSIC_DB, input);

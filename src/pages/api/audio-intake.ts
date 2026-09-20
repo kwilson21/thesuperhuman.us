@@ -36,7 +36,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
       `Preserve / avoid: ${input.preserve || 'None specified'}`, 'Permission to access files for review: confirmed.',
     ].join('\n');
     const sent = await sendAudioMessage({ apiKey: env.RESEND_API_KEY, payload: { from: env.CONTACT_FROM_EMAIL, to: [env.CONTACT_TO_EMAIL], reply_to: input.email, subject: `Song review: ${input.title}`, text } });
-    if (!sent.ok) return Response.json({ ok: false, error: 'We couldn’t confirm delivery. Your details are still here. Try again later or email kazon.wilson@thesuperhuman.us.' }, { status: 502 });
+    if (!sent.ok) {
+      await env.RATE_LIMIT.delete(`rl:audio:${ip}`);
+      return Response.json({ ok: false, error: 'We couldn’t confirm delivery. Your details are still here. Try again later or email kazon.wilson@thesuperhuman.us.' }, { status: 502 });
+    }
     return Response.json({ ok: true });
   } catch {
     return Response.json({ ok: false, error: 'Sending is temporarily unavailable. Your details are still here. Please try again later.' }, { status: 503 });
