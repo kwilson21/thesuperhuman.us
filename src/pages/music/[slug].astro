@@ -15,7 +15,10 @@ import '~/styles/music.css';
 import '~/styles/music-premiere.css';
 const catalog = await loadMusicCatalog();
 const release = catalog.releases.find(r => r.slug === Astro.params.slug);
-if (!release) return Astro.rewrite('/404');
+if (!release) {
+  Astro.response.status = 404;
+  return Astro.rewrite('/404');
+}
 const tracks = release.tracks.map(id => catalog.recordings.find(r => r.id === id)!);
 const first = tracks[0];
 const mainTitle = release.displayTitle ?? release.title;
