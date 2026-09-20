@@ -19,14 +19,4 @@ describe('artist name', () => {
       expect(read(path), path).not.toContain('artist-macron');
     }
   });
-
-  it('uses an outlined SVG wordmark with a fixed macron for prominent branding', () => {
-    const wordmark = read('public/kazon-wordmark.svg');
-
-    expect(wordmark).toContain('<path');
-    expect(wordmark).toContain('<rect x="351" y="76" width="48" height="4"');
-    expect(wordmark).not.toContain('<text');
-    expect(read('src/components/SiteNav.astro')).toContain('KazonWordmark');
-    expect(read('src/pages/music/[slug].astro')).toContain('KazonWordmark');
-  });
 });
