@@ -28,11 +28,13 @@ Open a request from **Today**, **Campaigns**, or **Requests**. Each path reaches
 - **Withdraw** stops the request and makes its contact detail eligible for immediate removal.
 - **Delete personal data** is performed by reviewed retention. It preserves the request category, status, dates, and audit trail while blanking contact fields and private notes.
 
-Routine purchase, merchandise, service, and release-update requests do not send email. A redacted urgent email is sent only when a valid request cannot be stored. Treat repeated storage alerts, owner authentication failures, media failures, or retention failures as urgent.
+Routine purchase, merchandise, and service requests do not send email. They appear in the owner center. A redacted urgent email is sent only when a valid request cannot be stored. Treat repeated storage alerts, owner authentication failures, media failures, or retention failures as urgent.
+
+Public release-update subscription is disabled until a confirmed opt-in and self-service unsubscribe flow exists. Existing permission records remain visible for withdrawal and cleanup, but the public interest form cannot create or restore one.
 
 ## Retention
 
-Raw playback is kept for 90 days. Daily human totals remain after cleanup, with sparse cities stored only as **Other locations**. Resolved purchase and merchandise contact data is removed after 90 days, resolved service contact data after one year, and withdrawn request contact data immediately. Audience permission remains separate until withdrawal; its email is removed 90 days later while a contact-free permission audit remains.
+Raw playback is kept for 90 days. Daily human totals remain after cleanup, with sparse cities stored only as **Other locations**. City thresholds count distinct tab sessions, so replays in one tab do not increase the city toward visibility. Resolved purchase and merchandise contact data is removed after 90 days, resolved service contact data after one year, and withdrawn request contact data immediately. Audience permission remains separate until withdrawal; its email is removed 90 days later while a keyed, contact-free permission audit remains.
 
 1. Run `npm run owner:retention:preview -- --remote`.
 2. Open `.private/owner-retention-review.html`. Save any useful conclusions in the private development journal. The review must not contain names, email addresses, notes, IP addresses, or secrets.

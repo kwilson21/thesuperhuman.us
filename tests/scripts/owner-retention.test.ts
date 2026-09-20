@@ -19,7 +19,7 @@ function fixture() {
   const event = db.prepare(`INSERT INTO music_playback_events(id,release_id,recording_id,session_id,playthrough_id,sequence,medium,event,accumulated_seconds,media_duration_seconds,campaign_id,channel,creative,traffic_class,country,region,city,occurred_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
   for (let index=0; index<3; index++) event.run(`event-${index}`,'old-news-single','old-news-recording',`session-${index}`,`play-${index}`,1,'audio',index ? 'listen30' : 'start',index ? 30 : 0,180,'campaign','instagram','story','human','US','Tennessee','Nashville','2026-01-01T00:00:00Z');
   event.run('automated','old-news-single','old-news-recording','bot-session','bot-play',1,'audio','listen30',30,180,'campaign','crawler','preview','automated','US','Virginia','Ashburn','2026-01-01T00:00:00Z');
-  event.run('complete-only','old-news-single','old-news-recording','complete-session','complete-play',1,'audio','complete',180,180,'campaign','instagram','story','human','US','Tennessee','Nashville','2026-01-01T00:00:00Z');
+  event.run('complete-only','old-news-single','old-news-recording','session-1','complete-play',1,'audio','complete',180,180,'campaign','instagram','story','human','US','Tennessee','Nashville','2026-01-01T00:00:00Z');
   event.run('recent','old-news-single','old-news-recording','recent-session','recent-play',1,'audio','start',0,180,null,null,null,'human','US','','','2026-09-18T00:00:00Z');
   const database = { db, query: async (sql: string) => db.prepare(sql).all().map((row: Record<string, unknown>) => ({ ...row })),
     batch: async (statements: string[]) => { db.exec('BEGIN'); try { const results = statements.map(sql => db.prepare(sql).all()); db.exec('COMMIT'); return results; } catch (error) { db.exec('ROLLBACK'); throw error; } } };
@@ -37,7 +37,7 @@ it('preview is read-only and apply preserves aggregates while deleting eligible 
   await applyOwnerRetention(database, review, 'Local test data', now);
   expect(await database.query(totals)).toEqual(before);
   expect((await database.query('SELECT sum(count) AS total FROM music_playback_daily'))[0].total).toBe(4);
-  expect(await database.query('SELECT city,count FROM music_playback_geography_daily')).toEqual([{ city: '', count: 3 }]);
+  expect(await database.query('SELECT city,count FROM music_playback_geography_daily')).toEqual([{ city: '', count: 2 }]);
   expect(await database.query('SELECT DISTINCT city FROM music_playback_daily')).toEqual([{ city: '' }]);
   expect(await database.query('SELECT email,status FROM owner_audience_permissions')).toEqual([{ email: 'current-listener@example.com', status: 'subscribed' }]);
   expect(JSON.stringify(await database.query('SELECT * FROM owner_audience_audit'))).not.toContain('old-listener@example.com');

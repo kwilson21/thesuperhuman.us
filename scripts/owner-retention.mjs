@@ -79,7 +79,7 @@ export async function applyOwnerRetention(database, review, environment, now = n
   const audienceSelection = audienceRows.length ? `email IN (${audienceRows.map(row => quote(row[0])).join(',')})` : '0';
   const guard = (query, expected) => `SELECT CASE WHEN (${query})=${quote(expected)} THEN 1 ELSE json_extract('retention source changed','$') END`;
   const runId = hash(`${review.generatedAt}:${review.requestSourceHash}:${review.audienceSourceHash}:${review.playbackSourceHash}`);
-  await database.batch([
+  const statements = [
     guard(requestSnapshot(now), requests),
     guard(audienceSnapshot(now), audience),
     guard(playbackSnapshot(review.playbackCutoff), playback),
@@ -92,9 +92,9 @@ export async function applyOwnerRetention(database, review, environment, now = n
       ON CONFLICT(day,release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,city) DO UPDATE SET count=count+excluded.count`,
     `INSERT INTO music_playback_geography_daily(day,release_id,recording_id,campaign_id,channel,creative,country,region,city,count)
       WITH qualified AS (SELECT substr(occurred_at,1,10) AS day,release_id,recording_id,COALESCE(campaign_id,'') AS campaign_id,
-        COALESCE(channel,'') AS channel,COALESCE(creative,'') AS creative,country,region,city,session_id,playthrough_id
+        COALESCE(channel,'') AS channel,COALESCE(creative,'') AS creative,country,region,city,session_id
         FROM music_playback_events WHERE traffic_class='human' AND event IN ('listen30','complete') AND (${playbackSelection})
-        GROUP BY day,release_id,recording_id,campaign_id,channel,creative,country,region,city,session_id,playthrough_id),
+        GROUP BY day,release_id,recording_id,campaign_id,channel,creative,country,region,city,session_id),
       city_counts AS (SELECT day,release_id,recording_id,campaign_id,channel,creative,country,region,city,COUNT(*) AS count
         FROM qualified GROUP BY day,release_id,recording_id,campaign_id,channel,creative,country,region,city)
       SELECT day,release_id,recording_id,campaign_id,channel,creative,country,region,CASE WHEN count>=5 THEN city ELSE '' END,SUM(count)
@@ -103,7 +103,11 @@ export async function applyOwnerRetention(database, review, environment, now = n
     `DELETE FROM music_playback_events WHERE occurred_at<${quote(review.playbackCutoff)} AND ${playbackSelection}`,
     `INSERT INTO owner_retention_runs(id,environment,playback_cutoff,playback_rows,request_contacts,audience_contacts,completed_at)
       VALUES(${quote(runId)},${quote(environment)},${quote(review.playbackCutoff)},${review.rawPlayback},${review.requestContacts},${review.audienceContacts},${quote(now.toISOString())})`,
-  ]);
+  ];
+  if (statements.some(statement => Buffer.byteLength(statement) > 90_000)) {
+    throw new Error('Reviewed retention batch exceeds the safe D1 statement limit. Reduce the reviewed row limit and generate a fresh preview.');
+  }
+  await database.batch(statements);
   return { requestContacts: review.requestContacts, audienceContacts: review.audienceContacts, rawPlayback: review.rawPlayback };
 }
 

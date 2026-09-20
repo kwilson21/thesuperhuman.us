@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | Repository tests | PASS | 301 tests pass on Node 22.19 in a disposable combined checkout containing the PR #44 SQLite compatibility fix and the PR #57 stack head. |
 | Astro check and build | PASS | `astro check` reports zero errors; the Cloudflare build completes. Existing content-loader and inline-script hints remain. |
-| Owner access policy | UNVERIFIED | JWT verification and fail-closed middleware pass locally. The production Cloudflare Access application, one-owner allow policy, secrets, and signed live response have not been verified. |
+| Owner access policy | UNVERIFIED | JWT verification, cached JWKS, fail-closed middleware, and keyed audience audits pass locally. The production Cloudflare Access application, one-owner allow policy, `OWNER_DATA_HMAC_KEY`, other secrets, and signed live response have not been verified. |
 | Private response headers | PASS locally | Middleware tests cover no-store and noindex behavior. Live headers remain part of post-deploy verification. |
 | MUSIC_DB schema and ledger | UNVERIFIED | The additive migrations and idempotent combined schema pass locally. Reconcile the production schema, migration ledger, and recovery point before applying either owner migration. |
 | Request storage failure | PASS locally | Tests confirm success follows storage and urgent alerts are redacted. Live D1 and authorized email delivery remain unverified. |
