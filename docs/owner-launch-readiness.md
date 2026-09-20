@@ -7,7 +7,7 @@
 
 | Gate | Result | Evidence or next action |
 | --- | --- | --- |
-| Repository tests | PASS | 301 tests pass on Node 22.19 in a disposable combined checkout containing the PR #44 SQLite compatibility fix and the PR #57 stack head. |
+| Repository tests | PASS | 305 tests pass across 58 files on Node 22.19 at the PR #57 stack head. Pull requests now run tests, Astro checks, and the production build in GitHub Actions. |
 | Astro check and build | PASS | `astro check` reports zero errors; the Cloudflare build completes. Existing content-loader and inline-script hints remain. |
 | Owner access policy | UNVERIFIED | JWT verification, cached JWKS, fail-closed middleware, and keyed audience audits pass locally. The production Cloudflare Access application, one-owner allow policy, `OWNER_DATA_HMAC_KEY`, other secrets, and signed live response have not been verified. |
 | Private response headers | PASS locally | Middleware tests cover no-store and noindex behavior. Live headers remain part of post-deploy verification. |
