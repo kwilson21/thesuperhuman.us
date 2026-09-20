@@ -22,12 +22,17 @@ export type CreatedStripeInvoice = {
 
 export function stripeAvailable(env: Env): boolean {
   return env.STRIPE_PAYMENTS_ENABLED === 'true'
-    && Boolean(env.STRIPE_SECRET_KEY)
-    && Boolean(env.STRIPE_WEBHOOK_SECRET);
+    && stripeWebhookAvailable(env);
 }
 
-function stripeClient(env: Env): Stripe {
-  if (!stripeAvailable(env)) throw new Error('Stripe invoice creation is unavailable.');
+export function stripeWebhookAvailable(env: Env): boolean {
+  return Boolean(env.STRIPE_SECRET_KEY) && Boolean(env.STRIPE_WEBHOOK_SECRET);
+}
+
+function stripeClient(env: Env, invoiceCreation = true): Stripe {
+  if (invoiceCreation ? !stripeAvailable(env) : !stripeWebhookAvailable(env)) {
+    throw new Error(invoiceCreation ? 'Stripe invoice creation is unavailable.' : 'Stripe webhooks are unavailable.');
+  }
   return new Stripe(env.STRIPE_SECRET_KEY!, { httpClient: Stripe.createFetchHttpClient() });
 }
 
@@ -77,8 +82,7 @@ export async function createBalanceInvoice(env: Env, request: InvoiceRequest, pa
 }
 
 export async function verifyStripeWebhook(env: Env, rawBody: string, signature: string): Promise<Stripe.Event> {
-  if (!stripeAvailable(env)) throw new Error('Stripe webhooks are unavailable.');
-  return stripeClient(env).webhooks.constructEventAsync(
+  return stripeClient(env, false).webhooks.constructEventAsync(
     rawBody,
     signature,
     env.STRIPE_WEBHOOK_SECRET!,

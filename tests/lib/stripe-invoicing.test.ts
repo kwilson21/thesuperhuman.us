@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createInvoiceWithClient, stripeAvailable } from '~/lib/stripe-invoicing';
+import { createInvoiceWithClient, stripeAvailable, stripeWebhookAvailable } from '~/lib/stripe-invoicing';
 
 const payment = {
   requestId: 'request-1', approvedService: 'Two-track vocal mix + master', totalAmountCents: 20_001,
@@ -28,6 +28,7 @@ describe('Stripe invoicing', () => {
     expect(stripeAvailable({ STRIPE_PAYMENTS_ENABLED: 'false', STRIPE_SECRET_KEY: 'sk_test_1', STRIPE_WEBHOOK_SECRET: 'whsec_1' } as Env)).toBe(false);
     expect(stripeAvailable({ STRIPE_PAYMENTS_ENABLED: 'true', STRIPE_SECRET_KEY: 'sk_test_1' } as Env)).toBe(false);
     expect(stripeAvailable({ STRIPE_PAYMENTS_ENABLED: 'true', STRIPE_SECRET_KEY: 'sk_test_1', STRIPE_WEBHOOK_SECRET: 'whsec_1' } as Env)).toBe(true);
+    expect(stripeWebhookAvailable({ STRIPE_PAYMENTS_ENABLED: 'false', STRIPE_SECRET_KEY: 'sk_test_1', STRIPE_WEBHOOK_SECRET: 'whsec_1' } as Env)).toBe(true);
   });
 
   it('creates, finalizes, and sends the booking invoice with bounded metadata and idempotency', async () => {

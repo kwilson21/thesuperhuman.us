@@ -145,8 +145,6 @@ BEGIN
   INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at)
   VALUES(NEW.id,'personal-data-deleted','retention','',NEW.updated_at);
 END;
-
-
 CREATE TABLE IF NOT EXISTS audio_payments (
   request_id TEXT PRIMARY KEY REFERENCES owner_requests(id),
   approved_service TEXT NOT NULL,

@@ -32,6 +32,20 @@ Routine purchase, merchandise, and service requests do not send email. They appe
 
 Release-update subscriptions are deferred until a confirmed opt-in and self-service unsubscribe flow exists. The owner center does not display a subscription metric until that complete flow is built.
 
+## Audio-service payments
+
+1. Open the audio-service request and review its files, requested service, scope, and availability.
+2. Send the client a written fixed-price offer outside the website.
+3. After the client accepts that exact offer, enter the approved service and total price in **Payment** and check the acceptance confirmation.
+4. Select **Create booking invoice**. Stripe emails the hosted invoice for 50% of the total.
+5. Do not begin the 3–5 business-day delivery window until the owner page shows the booking invoice as **Paid**.
+6. After the agreed work and revisions, select **Create balance invoice**.
+7. Keep final downloadable files private until the balance shows **Paid**.
+
+If invoice creation fails, refresh the request before retrying. Stable Stripe idempotency keys prevent a retry from creating a second invoice, but the refreshed owner page is the clearest source for the next action. Handle refunds, disputes, voiding, and invoice corrections in Stripe. The website stores operational status only.
+
+To stop new invoices, set `STRIPE_PAYMENTS_ENABLED=false` and deploy the reviewed configuration change. This does not erase payment history or disable signed status updates for invoices already sent.
+
 ## Retention
 
 Raw playback is kept for 90 days. Daily human totals remain after cleanup, with sparse cities stored only as **Other locations**. City thresholds count distinct tab sessions, so replays in one tab do not increase the city toward visibility. Resolved purchase and merchandise contact data is removed after 90 days, resolved service contact data after one year, and withdrawn request contact data immediately.
