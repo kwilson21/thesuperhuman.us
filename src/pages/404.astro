@@ -1,0 +1,41 @@
+---
+export const prerender = false;
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Footer from '~/components/Footer.astro';
+import coast from '~/assets/site/quiet-coast-v2.webp';
+---
+<BaseLayout title="Page not found · Kazon Wilson" description="This page could not be found. Explore Kazon Wilson’s projects or return to the homepage." noindex>
+  <section class="missing-page site-shell" aria-labelledby="missing-title">
+    <div class="missing-landscape" aria-hidden="true">
+      <img src={coast.src} width={coast.width} height={coast.height} alt="" loading="eager" fetchpriority="high" />
+    </div>
+    <div class="missing-copy">
+      <p class="missing-status">404</p>
+      <h1 id="missing-title">This page isn’t here.</h1>
+      <p class="missing-description">The link may have changed. You can return home and find your way from there.</p>
+      <div class="missing-actions">
+        <a class="site-button" href="https://thesuperhuman.us/">Back to home</a>
+        <a class="missing-secondary" href="https://thesuperhuman.us/building">Explore my projects</a>
+      </div>
+    </div>
+  </section>
+  <Footer compact slot="footer" />
+</BaseLayout>
+<style>
+  .missing-page { display: grid; justify-items: center; gap: 2.5rem; padding-block: 1.5rem 4rem; }
+  .missing-landscape { width: 100%; max-width: 700px; margin-block: -2rem; }
+  .missing-landscape img { display: block; width: 100%; height: auto; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 12%, #000 85%, transparent); mask-composite: intersect; }
+  .missing-copy { width: 100%; max-width: 680px; text-align: center; }
+  .missing-status { color: var(--muted); font-size: .95rem; margin: 0 0 1rem; }
+  h1 { font-size: clamp(2.5rem, 4.7vw, 3.75rem); line-height: 1.12; letter-spacing: -.035em; margin: 0 0 1.5rem; }
+  .missing-description { max-width: 36ch; margin: 0 auto 2rem; font-size: 1.125rem; line-height: 1.65; color: var(--muted); }
+  .missing-actions { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
+  .missing-actions .site-button { min-height: 48px; padding-inline: 1.75rem; }
+  .missing-secondary { color: var(--muted); font-size: 1rem; }
+  .missing-secondary:hover { color: var(--accent); }
+  @media (max-width: 600px) {
+    .missing-page { padding-block: .5rem 3rem; gap: 2rem; }
+    .missing-landscape { margin-block: -.5rem; }
+    .missing-description { max-width: 30ch; }
+  }
+</style>

@@ -4,7 +4,7 @@ import { getEntry } from 'astro:content';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import Footer from '~/components/Footer.astro';
 import ResumeRequestForm from '~/components/ResumeRequestForm.astro';
-import { personJsonLd, experience, workFocus, workingPreference } from '~/data/profile';
+import { personJsonLd, experience, workingPreference } from '~/data/profile';
 import terrain from '~/assets/site/terrain-v1.webp';
 import headphones from '~/assets/site/headphones-v1.webp';
 import laptop from '~/assets/site/laptop-v1.webp';
@@ -15,9 +15,9 @@ if (!entry) throw new Error('About content missing');
 const { Content } = await entry.render();
 const chapters = [
   { id: 'audio', label: 'Audio', title: 'I started with sound.', text: 'I studied audio production at Middle Tennessee State, with a minor in computer science. Audio is still part of my life.', image: headphones, href: '/audio/', link: 'Explore audio engineering' },
-  { id: 'software', label: 'Software', title: 'Finding my way into software.', text: 'I came into software through data, learning by making messy information useful. That grew into work across backend systems, data engineering, and product.', image: laptop, href: '/work', link: 'See my professional work' },
+  { id: 'software', label: 'Software', title: 'Finding my way into software.', text: 'I joined Skupos as an intern hoping to become a software engineer. Adding to coworkers’ Python scripts grew into leading the automation work, building an internal application and mentoring other interns.', extra: 'At Lyft, I grew from junior to mid-level engineer, taking on features across Rentals, Associate Tools and Comms Platform.', image: laptop, href: '/work', link: 'See my professional work' },
   { id: 'play', label: 'Play', title: 'Room for play.', text: 'Retro games, emulation, and experimental tools keep giving me new things to explore.', image: controller, href: '/building', link: 'See what I’m building' },
-  { id: 'whats-next', label: 'What’s next', title: 'Making room for what comes next.', text: workFocus, image: notebook, extra: workingPreference },
+  { id: 'whats-next', label: 'What’s next', title: 'Making room for what comes next.', text: 'Product engineering at Sure and data engineering at Axuall and Scotch helped me understand what I enjoy most: shaping an idea, building it and seeing how people use it. I’m pursuing that through my own projects and research in AI-assisted development.', image: notebook, extra: workingPreference, href: '/building/the-engineers-daily', link: 'Explore The Engineer’s Daily prototype' },
 ];
 ---
 <BaseLayout jsonLd={personJsonLd} title={entry.data.title} description={entry.data.description}>
@@ -32,7 +32,7 @@ const chapters = [
         <div class="chapter-art"><img src={chapter.image.src} width={chapter.image.width} height={chapter.image.height} alt="" loading="lazy" /></div>
         <svg class="chapter-path" viewBox="0 0 1000 500" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d={index % 2 === 0 ? 'M780 0C780 120 930 260 780 330C630 400 280 340 280 500' : 'M280 0C280 120 130 260 280 330C430 400 780 340 780 500'} fill="none" stroke="var(--accent)" stroke-width="1.4" vector-effect="non-scaling-stroke" /></svg>
       </section>)}
-      <section id="contact" class="about-connect"><p class="page-kicker">Let’s connect</p><h2>Let’s find a connection.</h2><p>An interesting idea, a shared interest, or a promising opportunity.</p><div class="site-links"><a class="site-button" href="/#contact">Get in touch</a><a class="site-link" href="#resumes">Looking for my resume? Request a copy <span aria-hidden="true">→</span></a></div></section>
+      <section id="contact" class="about-connect"><p class="page-kicker">Let’s connect</p><h2>Let’s find a connection.</h2><p>An interesting idea, a shared interest, or a promising opportunity.</p><div class="site-links"><a class="site-button" href="/#contact">Get in touch</a></div></section>
       <details id="resumes" class="resume-section context-disclosure"><summary>Request my resume <span aria-hidden="true">+</span></summary><div><h2>My professional background.</h2><p class="resume-description">One general resume, covering my work history and technical experience.</p><ResumeRequestForm /></div></details>
       <div class="legacy-career-links" aria-label="Previous career links">{experience.map(job => <p id={job.legacyId}>My career history now lives on Work. <a href={'/work#' + job.id + '-background'}>Read about {job.company} <span aria-hidden="true">→</span></a></p>)}<p id="selected-work">My professional background is on <a href="/work">Work</a>.</p></div>
     </div>

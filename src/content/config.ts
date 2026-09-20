@@ -1,4 +1,5 @@
 import { defineCollection, z } from 'astro:content';
+import { recordingSchema, releaseSchema, exampleSchema } from '../lib/music-catalog';
 
 const pages = defineCollection({
   type: 'content',
@@ -34,4 +35,8 @@ const audioTracks = defineCollection({
   }),
 });
 
-export const collections = { pages, notes, 'audio-tracks': audioTracks };
+export const collections = { pages, notes, 'audio-tracks': audioTracks,
+  recordings: defineCollection({ type: 'data', schema: recordingSchema }),
+  releases: defineCollection({ type: 'data', schema: releaseSchema }),
+  'audio-examples': defineCollection({ type: 'data', schema: exampleSchema }),
+};

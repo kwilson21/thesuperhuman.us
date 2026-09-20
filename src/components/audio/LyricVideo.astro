@@ -1,0 +1,24 @@
+---
+import type { Recording } from '~/lib/music-catalog';
+import { musicFile } from '~/lib/music-catalog';
+import PlayIcon from './PlayIcon.astro';
+interface Props { recording: Recording; releaseId: string; poster: string; quote?: string }
+const { recording, releaseId, poster, quote } = Astro.props;
+const id = `video-${recording.id}`;
+---
+<div class="premiere-stage" data-video-stage id={id}>
+  <div class="premiere-poster" data-poster>
+    <img src={poster} alt="" width="1672" height="941" fetchpriority="high" />
+    {quote && <p class="hero-lyric">{quote}</p>}
+    {(recording.youtubeId || recording.versions.video) && <button class="video-poster-button" data-video-trigger={id} aria-label="Watch lyric video" disabled><span class="round-play"><PlayIcon /></span><span>Watch the lyric video</span></button>}
+  </div>
+  {recording.youtubeId ? <div class="youtube-shell" data-youtube-id={recording.youtubeId} data-release-id={releaseId} data-recording-id={recording.id} hidden>
+    <div data-youtube-mount></div><p class="music-note"><a href={`https://www.youtube.com/watch?v=${recording.youtubeId}`}>Watch on YouTube</a></p>
+  </div> : recording.versions.video && <video class="music-video" hidden controls controlslist="nodownload" playsinline preload="none" poster={poster} src={musicFile(recording.id, 'video')} data-release-id={releaseId} data-recording-id={recording.id} aria-label={`Lyric video for ${recording.title}`}></video>}
+  {recording.versions.video && !recording.youtubeId && <div class="native-video-controls" data-native-video-controls hidden><button type="button" data-video-play>Play</button><span data-video-time>0:00</span><label class="sr-only" for={`${id}-seek`}>Video position</label><input id={`${id}-seek`} data-video-seek type="range" min="0" max={recording.duration} step="0.1" value="0" /><button type="button" data-video-mute aria-pressed="false">Mute</button><button type="button" data-video-full>Fullscreen</button></div>}
+  <noscript><style>.premiere-poster{display:none!important}.music-video[hidden],.youtube-shell[hidden]{display:block!important}</style></noscript>
+  <p class="media-status" data-video-status role="status"></p>
+  <slot />
+</div>
+
+<style>.premiere-stage:fullscreen{background:var(--paper);display:flex;flex-direction:column;justify-content:center}.premiere-stage:fullscreen video{max-height:calc(100vh - 90px);object-fit:contain}.premiere-stage:fullscreen :global(.hero-transport){display:none}.native-video-controls{display:flex;align-items:center;gap:1rem;padding:.65rem 1rem;background:var(--paper);font:.85rem Inter,sans-serif}.native-video-controls input{flex:1;min-width:40px;accent-color:var(--accent)}.native-video-controls button{min-height:44px;cursor:pointer}.native-video-controls[hidden]{display:none}@media(max-width:480px){.native-video-controls{gap:.6rem;flex-wrap:wrap}.native-video-controls input{flex-basis:35%}}</style>

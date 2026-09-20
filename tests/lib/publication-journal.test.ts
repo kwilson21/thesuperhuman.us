@@ -7,6 +7,7 @@ import type { Publication } from '~/lib/publication/contract';
 
 // Native loading avoids older Vite versions treating node:sqlite as a package.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
+const numbered = (args: unknown[]) => Object.fromEntries(args.map((value, index) => [String(index + 1), value]));
 
 const base: Publication = { version: 1, projectId: 'threadline', eventId: 'one', entryId: 'first',
   expectedRevision: 0, operation: 'publish', origin: 'work', occurredOn: '2026-09-05',
@@ -17,7 +18,7 @@ const base: Publication = { version: 1, projectId: 'threadline', eventId: 'one',
 // Execute the production SQL against SQLite, with the transaction guarantee D1 provides.
 function fixture() {
   const sql = new DatabaseSync(':memory:');
-  sql.exec(readFileSync(new URL('../../migrations/0001_publication_journal.sql', import.meta.url), 'utf8'));
+  sql.exec(readFileSync(new URL('../../migrations/publication/0001_publication_journal.sql', import.meta.url), 'utf8'));
   let fail = false;
   const db = {
     prepare: (query: string) => ({ bind: (...args: unknown[]) => ({ query, args }) }),
@@ -26,7 +27,7 @@ function fixture() {
       try {
         const results = statements.map((s, i) => {
           if (fail && i === 1) throw new Error('interrupted');
-          return { results: sql.prepare(s.query).all(...s.args) };
+          return { results: sql.prepare(s.query).all(numbered(s.args)) };
         });
         sql.exec('COMMIT'); return results;
       } catch (error) { sql.exec('ROLLBACK'); throw error; }

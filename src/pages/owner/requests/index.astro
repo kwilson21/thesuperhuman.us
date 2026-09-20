@@ -1,0 +1,23 @@
+---
+export const prerender = false;
+import OwnerLayout from '~/layouts/OwnerLayout.astro';
+import RequestList from '~/components/owner/RequestList.astro';
+import { listOwnerRequests } from '~/lib/owner-requests';
+import { ownerRequestKinds, ownerRequestStatuses, type OwnerRequestKind, type OwnerRequestStatus } from '~/lib/owner-model';
+const db = Astro.locals.runtime.env.MUSIC_DB;
+if (!db) return new Response('Owner reporting is unavailable.', { status: 503 });
+const kind = ownerRequestKinds.includes(Astro.url.searchParams.get('kind') as OwnerRequestKind) ? Astro.url.searchParams.get('kind') as OwnerRequestKind : undefined;
+const status = ownerRequestStatuses.includes(Astro.url.searchParams.get('status') as OwnerRequestStatus) ? Astro.url.searchParams.get('status') as OwnerRequestStatus : undefined;
+const requests = await listOwnerRequests(db, { kind, status });
+const newRequestCount = (await listOwnerRequests(db, { status: 'new' })).length;
+const kinds = [{ value: '', label: 'All kinds' }, { value: 'purchase', label: 'Purchase' }, { value: 'merchandise', label: 'Merchandise' }, { value: 'service', label: 'Audio service' }];
+---
+<OwnerLayout title="Requests" current="requests" {newRequestCount} ownerEmail={Astro.locals.owner?.email ?? ''}>
+  <header class="owner-page-heading compact"><div><p class="owner-kicker">Private inbox</p><h1>Requests</h1><p>Every person waiting for a clear next step.</p></div></header>
+  <form class="owner-filters" method="get">
+    <label>Status<select name="status"><option value="">All statuses</option>{ownerRequestStatuses.map(value => <option value={value} selected={status === value}>{value}</option>)}</select></label>
+    <label>Kind<select name="kind">{kinds.map(option => <option value={option.value} selected={kind === option.value}>{option.label}</option>)}</select></label>
+    <button type="submit">Apply filters</button>
+  </form>
+  <section class="owner-section"><RequestList {requests} empty="No requests match these filters." /></section>
+</OwnerLayout>

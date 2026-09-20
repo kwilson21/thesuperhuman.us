@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "private": true,
   "engines": {
-    "node": ">=22.13.0"
+    "node": ">=22.18.0"
   },
   "scripts": {
     "dev": "astro dev",
@@ -12,11 +12,18 @@
     "build": "astro build",
     "prebuild": "npm run assets:check",
     "assets:check": "node scripts/check-asset-qa.mjs",
-    "preview": "astro preview",
+    "preview": "wrangler dev --local",
     "check": "astro check",
     "test": "vitest run",
     "test:watch": "vitest",
-    "audio:upload": "node scripts/upload-audio.mjs"
+    "audio:upload": "node scripts/upload-audio.mjs",
+    "music:prepare": "node scripts/prepare-music.mjs",
+    "music:preview:setup": "node scripts/music-preview.mjs",
+    "music:upload": "node scripts/upload-music.mjs",
+    "music:report": "node scripts/music-report.mjs",
+    "owner:retention:preview": "node scripts/owner-retention.mjs",
+    "owner:retention:apply": "node scripts/owner-retention.mjs --apply .private/owner-retention-review.json",
+    "owner:health": "node scripts/owner-health.mjs"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.4",
@@ -26,6 +33,7 @@
     "@cloudflare/workers-oauth-provider": "0.10.3",
     "@modelcontextprotocol/sdk": "1.30.0",
     "astro": "^5.1.0",
+    "jose": "^6.1.0",
     "resend": "^4.0.1",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2",
@@ -33,6 +41,8 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241218.0",
-    "vitest": "^2.1.8"
+    "sharp": "^0.34.5",
+    "vitest": "^2.1.8",
+    "wrangler": "4.90.0"
   }
 }

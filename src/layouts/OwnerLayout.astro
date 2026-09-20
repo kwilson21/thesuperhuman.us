@@ -1,0 +1,26 @@
+---
+import '~/styles/global.css';
+import '~/styles/owner.css';
+interface Props { title: string; current: 'today' | 'requests' | 'campaigns'; newRequestCount: number; ownerEmail: string }
+const { title, current, newRequestCount, ownerEmail } = Astro.props;
+const links = [
+  { id: 'today', href: '/owner', label: 'Today' },
+  { id: 'requests', href: '/owner/requests', label: 'Requests' },
+  { id: 'campaigns', href: '/owner/campaigns', label: 'Campaigns' },
+] as const;
+---
+<!doctype html>
+<html lang="en"><head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" /><title>{title} · Owner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300..700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" />
+</head><body class="owner-body">
+  <a class="skip-link" href="#owner-main">Skip to content</a>
+  <header class="owner-header"><div class="owner-shell owner-header-row">
+    <a class="owner-wordmark" href="/owner" aria-label="Owner center home">Kazon <span>owner center</span></a>
+    <nav aria-label="Owner center">{links.map(link => <a href={link.href} aria-current={current === link.id ? 'page' : undefined}>{link.label}{link.id === 'requests' && newRequestCount > 0 && <span class="request-count" aria-label={`${newRequestCount} new requests`}>{newRequestCount}</span>}</a>)}</nav>
+    <span class="owner-identity">{ownerEmail}</span>
+  </div></header>
+  <main id="owner-main" class="owner-shell owner-main" tabindex="-1"><slot /></main>
+</body></html>

@@ -1,0 +1,38 @@
+---
+export const prerender = false;
+import OwnerLayout from '~/layouts/OwnerLayout.astro';
+import AttentionIndex from '~/components/owner/AttentionIndex.astro';
+import ListeningPath from '~/components/owner/ListeningPath.astro';
+import RequestList from '~/components/owner/RequestList.astro';
+import MetricDefinition from '~/components/owner/MetricDefinition.astro';
+import { loadStudioLedger } from '~/lib/owner-reporting';
+const db = Astro.locals.runtime.env.MUSIC_DB;
+if (!db) return new Response('Owner reporting is unavailable.', { status: 503 });
+const ledger = await loadStudioLedger(db, new Date());
+---
+<OwnerLayout title="Today" current="today" newRequestCount={ledger.attention.newRequests} ownerEmail={Astro.locals.owner?.email ?? ''}>
+  <header class="owner-page-heading">
+    <div><p class="owner-kicker">Today · Owner center</p><h1>What deserves your attention.</h1></div>
+    <p class="owner-health"><span aria-hidden="true"></span> Collection is ready</p>
+  </header>
+  <section class="owner-section attention-section" aria-labelledby="waiting-heading">
+    <AttentionIndex number="01" label="First area to inspect" />
+    <div class="section-heading-line"><div><p class="owner-kicker">People</p><h2 id="waiting-heading">{ledger.attention.newRequests ? `${ledger.attention.newRequests} waiting for review` : 'No one is waiting'}</h2></div><a href="/owner/requests">Open requests →</a></div>
+    <RequestList requests={ledger.attentionRequests} />
+  </section>
+  <section class="owner-section campaign-preview" aria-labelledby="campaign-heading">
+    <div class="campaign-copy"><p class="owner-kicker">Active promotion</p><h2 id="campaign-heading">{ledger.activeCampaign?.name ?? 'No active campaign'}</h2>
+      <p>{ledger.activeCampaign?.primaryGoal ?? 'Start a campaign when you are ready to promote a release or service.'}</p>
+      {ledger.activeCampaign && <a class="owner-primary-action" href={`/owner/campaigns/${ledger.activeCampaign.id}`}>Open Campaign Desk <span aria-hidden="true">→</span></a>}
+    </div>{ledger.activeCampaign ? <ListeningPath listening={ledger.activeCampaignListening} /> : null}
+  </section>
+  <section class="owner-section observation-section" aria-labelledby="observation-heading">
+    <AttentionIndex number="02" label="Next useful area" />
+    <div class="section-heading-line"><div><p class="owner-kicker">What the evidence says</p><h2 id="observation-heading">A short reading of the moment.</h2></div></div>
+    {ledger.observations.length ? <ul class="observations">{ledger.observations.map(item => <li>{item}</li>)}</ul> : <p class="owner-empty">There is not enough activity for a useful observation yet.</p>}
+  </section>
+  <section class="owner-section supporting-evidence" aria-labelledby="geography-heading">
+    <div><p class="owner-kicker">Approximate geography</p><h2 id="geography-heading">Where listening gathers</h2><MetricDefinition label="approximate geography">Cloudflare supplies an approximate network location. It is not a listener’s supplied address.</MetricDefinition></div>
+    {ledger.geography.cities.length ? <ol>{ledger.geography.cities.map(city => <li><span>{city.label}</span><strong>{city.reportedListens}</strong></li>)}</ol> : <p class="owner-empty">City patterns appear after at least five qualifying reported sessions share a city.</p>}
+  </section>
+</OwnerLayout>

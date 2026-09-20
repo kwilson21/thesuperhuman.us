@@ -1,0 +1,45 @@
+---
+export const prerender = false;
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import AudioFooter from '~/components/audio/AudioFooter.astro';
+import MusicNav from '~/components/audio/MusicNav.astro';
+import ComparisonPlayer from '~/components/audio/ComparisonPlayer.astro';
+import ServiceIcon from '~/components/audio/ServiceIcon.astro';
+import notebook from '~/assets/site/notebook-v1.webp';
+import { loadMusicCatalog } from '~/lib/music-content';
+import { methodologies } from '~/lib/music-catalog';
+import { audioPath } from '~/lib/host-routing';
+import '~/styles/music.css';
+import '~/styles/music-hubs.css';
+const catalog = await loadMusicCatalog();
+const host = Astro.request.headers.get('host') ?? Astro.url.host;
+---
+<BaseLayout title="Audio portfolio · Kazon" description="Two-track vocal mixing, full mixing and mastering. Hear what changed.">
+<div class="site-shell music-page portfolio-page"><MusicNav />
+<header class="portfolio-heading"><h1>Hear the difference.</h1><p>Different approaches. Hear what changed.</p></header>
+<div class="methodology-tabs" role="group" aria-label="Comparison methodology"><button data-method="all" aria-pressed="true">All work</button>{Object.entries(methodologies).map(([key,method]) => <button data-method={key} aria-pressed="false">{method.label}</button>)}</div>
+{catalog.examples.map(example => {
+ const track = catalog.recordings.find(recording => recording.id === example.recordingId)!;
+ const release = catalog.releases.find(release => release.tracks.includes(track.id));
+ const method = example.methodology ?? 'mastering';
+ return <article class="portfolio-case" data-example-method={method}>
+ <div class="portfolio-case-main">{release && <img class="portfolio-cover" src={release.artwork} alt={`${release.title} cover artwork`} width="1254" height="1254" />}<div class="case-title"><h2>{release?.displayTitle ?? track.title}</h2><p>{track.artist}{release?.producer && ` · Prod. ${release.producer}`}</p></div><div class="case-player"><ComparisonPlayer example={example} recording={track} /></div></div>
+ <div class="case-credits"><h3>My work on this song</h3><div>{track.services.map(service => <a href={audioPath(host, `/services#${service}`)}>{methodologies[service].label} →</a>)}</div><p>A/B demonstrates {methodologies[method].label.toLowerCase()}.<br />{track.credits.filter(credit => credit.name !== track.artist && !/lyrics/i.test(credit.role)).map(credit => <span>{credit.role}: {credit.name}. </span>)}</p></div>
+ <section class="case-process"><h3>The process</h3><div class="process-steps">{track.services.includes('two-track-vocals') && <><div><ServiceIcon service="production" /><section><h4>Two-track instrumental</h4><p>Start with the supplied beat and vocal takes.</p></section></div><span aria-hidden="true">→</span><div><ServiceIcon service="recording" /><section><h4>Vocal mix</h4><p>Clean, balance and shape the vocals.</p></section></div></>}{track.services.includes('full-mix') && <div><ServiceIcon service="mixing" /><section><h4>Full mix</h4><p>Shape individual instrumental and vocal tracks.</p></section></div>}{track.services.includes('mastering') && <><span aria-hidden="true">→</span><div><ServiceIcon service="mixing" /><section><h4>Master</h4><p>Bring the finished mix together for release.</p></section></div></>}</div></section>
+ </article>;
+})}
+<p class="methodology-empty" data-no-examples hidden>A listening example for this approach is still to come. <a href={audioPath(host, '/services')}>Explore the services</a>.</p>
+{!catalog.examples.length && <p class="collection-empty">Selected recordings will appear here as they become available.</p>}
+<nav class="explore-services" aria-label="Explore audio services"><h3>Explore the services</h3>{Object.entries(methodologies).map(([key,method]) => <a href={audioPath(host, `/services#${key}`)}>{method.label}<span>About the service →</span></a>)}</nav>
+<section class="hub-outro"><div><h2>Let’s work on your song.</h2><p>Careful listening. Purposeful choices.</p><a class="site-button" href={audioPath(host, '/start')}>Start your song</a></div><img src={notebook.src} alt="" width={notebook.width} height={notebook.height} /></section>
+</div><AudioFooter slot="footer" />
+<script>
+import { setupMusicPlayback } from '~/scripts/music-playback'; import { setupComparisonPlayers } from '~/scripts/comparison-player'; setupMusicPlayback(); setupComparisonPlayers();
+const examples = [...document.querySelectorAll<HTMLElement>('[data-example-method]')];
+document.querySelectorAll<HTMLButtonElement>('[data-method]').forEach(button => button.addEventListener('click', () => {
+ document.querySelectorAll('[data-method]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+ examples.forEach(example => {example.hidden = button.dataset.method !== 'all' && example.dataset.exampleMethod !== button.dataset.method; if(example.hidden) { example.querySelectorAll('audio').forEach(audio => audio.pause()); example.querySelector('[data-comparison]')?.dispatchEvent(new Event('music-pause')); }});
+ document.querySelector<HTMLElement>('[data-no-examples]')!.hidden = button.dataset.method === 'all' || examples.some(example => !example.hidden);
+}));
+</script>
+</BaseLayout>

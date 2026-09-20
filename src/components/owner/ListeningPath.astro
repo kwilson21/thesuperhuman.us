@@ -1,0 +1,20 @@
+---
+import MetricDefinition from './MetricDefinition.astro';
+import type { ListeningSummary } from '~/lib/owner-reporting';
+interface Props { listening: ListeningSummary }
+const { listening } = Astro.props;
+const steps = [
+  { label: 'Started', value: listening.reportedStarts, explanation: 'Audio or lyric video began playing.' },
+  { label: 'Reached 30 seconds', value: listening.reported30SecondListens, explanation: 'The browser reported 30 accumulated seconds in a valid sequence.' },
+  { label: 'Completed', value: listening.reportedCompletions, explanation: 'The browser reported playback reaching at least 90 percent of the recording.' },
+];
+---
+<ol class="listening-path" aria-label="Reported listening path">
+  {steps.map((step, index) => <li class:list={{ reached: step.value > 0 }}>
+    <span class="path-marker" aria-hidden="true"></span>
+    <div class="path-copy"><div><span class="path-value">{step.value}</span><span class="path-label">{step.label}</span></div>
+      <MetricDefinition label={step.label}>{step.explanation} These are reported listens, not certified streams.</MetricDefinition>
+    </div>
+    {index < steps.length - 1 && <span class="path-line" aria-hidden="true"></span>}
+  </li>)}
+</ol>

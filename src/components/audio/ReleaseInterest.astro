@@ -1,0 +1,74 @@
+---
+import { MERCHANDISE } from '~/lib/music-demand';
+import merchConcepts from '~/assets/site/old-news-merch-concepts.webp';
+interface Props { releaseId: string; artwork?: string; merchandiseConcept?: boolean }
+const { releaseId, merchandiseConcept = false } = Astro.props;
+const env = Astro.locals.runtime.env;
+const key = env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
+const available = Boolean(key && env.MUSIC_DB && env.TURNSTILE_SECRET_KEY);
+---
+<section class="music-interest music-section" id="interest" aria-labelledby="interest-title">
+  <div>
+    <h2 id="interest-title">Help shape what comes next.</h2>
+    <p>Would you want the song, merchandise, or both? Your interest helps me decide what to make available.</p>
+    <p class="music-note">This is an expression of interest, not an order. No payment is collected.</p>
+  </div>
+  <div>
+    {merchandiseConcept && <div class="merch-concepts"><p>Merchandise <span class="music-note">(concept examples)</span></p><img src={merchConcepts.src} width={merchConcepts.width} height={merchConcepts.height} alt="Illustrative Old News shirt, hoodie, stickers, and digital artwork. These are ideas, not available products." loading="lazy" /><div class="merch-concept-labels"><span>Shirts</span><span>Hoodies</span><span>Stickers</span><span>Digital art</span></div></div>}
+    <form id="release-interest" class="site-form" data-available={available} data-release-id={releaseId} novalidate>
+      <fieldset>
+        <legend>I’m interested in</legend>
+        <div class="music-choices">
+          <label><input type="radio" name="interest" value="song" checked /> The song</label>
+          <label><input type="radio" name="interest" value="merchandise" /> Merchandise</label>
+          <label><input type="radio" name="interest" value="both" /> Both</label>
+        </div>
+        <p hidden data-form-error="interest"></p>
+      </fieldset>
+      <fieldset data-merch-fields hidden disabled>
+        <legend>What would you like? <span class="music-note">Optional</span></legend>
+        <div class="music-choices">
+          {Object.entries(MERCHANDISE).map(([value, label]) => <label><input type="checkbox" name="merchandise" value={value} />{label}</label>)}
+        </div>
+        <p hidden data-form-error="merchandise"></p>
+        <label for="merch-suggestion">Any design ideas? <span class="music-note">Optional</span></label>
+        <textarea id="merch-suggestion" name="suggestion" maxlength="500" rows="3" aria-describedby="suggestion-hint"></textarea>
+        <p id="suggestion-hint" class="music-note">Up to 500 characters. Suggestions don’t guarantee availability.</p>
+        <p hidden data-form-error="suggestion"></p>
+      </fieldset>
+      <div>
+        <label for="interest-email">Email</label>
+        <input id="interest-email" type="email" name="email" autocomplete="email" required maxlength="120" />
+        <p hidden data-form-error="email"></p>
+      </div>
+      <label class="music-consent"><input type="checkbox" name="consent" required /><span>Kazon may email me about availability of the song or merchandise I selected.</span></label>
+      <p hidden data-form-error="consent"></p>
+      <p class="music-note">Your email and request are kept private. This does not subscribe you to a newsletter. To withdraw a request, <a href="mailto:kazon.wilson@thesuperhuman.us?subject=Music%20interest%20request">email Kazon</a>.</p>
+      {available && <div class="cf-turnstile" data-sitekey={key} data-size="compact"></div>}
+      {!available && <p>Requests are temporarily unavailable. Please try again later.</p>}
+      <p hidden data-form-error="turnstileToken"></p>
+      <button type="submit" class="site-button" disabled>Register interest</button>
+      <p data-form-status role="status" tabindex="-1"></p>
+      <noscript><p>To share your interest, email <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>.</p></noscript>
+    </form>
+    <div id="interest-success" class="form-success" role="status" tabindex="-1" hidden><h3>Thanks for letting me know.</h3><p>Your interest is recorded. If your selection becomes available, I can get in touch.</p></div>
+  </div>
+</section>
+{available && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>}
+<script>
+  import { setupFormSubmission } from '~/scripts/form-submission';
+  const form = document.querySelector<HTMLFormElement>('#release-interest');
+  if (form) {
+    const merchandise = form.querySelector<HTMLFieldSetElement>('[data-merch-fields]')!;
+    const update = () => {
+      const enabled = new FormData(form).get('interest') !== 'song';
+      merchandise.hidden = !enabled; merchandise.disabled = !enabled;
+    };
+    form.querySelectorAll('[name="interest"]').forEach(input => input.addEventListener('change', update));
+    update();
+    setupFormSubmission({ form, endpoint: '/api/music-interest', success: document.getElementById('interest-success')!, payload: data => ({
+      releaseId: form.dataset.releaseId, email: String(data.get('email') ?? ''), interest: data.get('interest'),
+      merchandise: data.getAll('merchandise').map(String), suggestion: String(data.get('suggestion') ?? ''), consent: data.get('consent') === 'on',
+    }) });
+  }
+</script>

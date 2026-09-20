@@ -12,7 +12,7 @@ it('serializes simultaneous connections competing for the same project revision'
   const directory = mkdtempSync(join(tmpdir(), 'publication-'));
   const filename = join(directory, 'journal.sqlite');
   const sql = new DatabaseSync(filename);
-  sql.exec(readFileSync(new URL('../../migrations/0001_publication_journal.sql', import.meta.url), 'utf8'));
+  sql.exec(readFileSync(new URL('../../migrations/publication/0001_publication_journal.sql', import.meta.url), 'utf8'));
   sql.close();
   const barrier = new SharedArrayBuffer(4);
   const workers: Worker[] = [];
@@ -29,7 +29,7 @@ it('serializes simultaneous connections competing for the same project revision'
         while (Atomics.load(gate,0)<2) Atomics.wait(gate,0,1,5000);
         try {
           db.exec('BEGIN IMMEDIATE');
-          const results = d.statements.map(s => ({ results: db.prepare(s.query).all(...s.args) }));
+          const results = d.statements.map(s => ({ results: db.prepare(s.query).all(Object.fromEntries(s.args.map((value,index) => [String(index+1),value]))) }));
           db.exec('COMMIT'); parentPort.postMessage(results);
         } finally { db.close(); }
       `, { eval: true, workerData: { filename, barrier, statements } });

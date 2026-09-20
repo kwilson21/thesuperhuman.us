@@ -1,8 +1,11 @@
 ---
 import { mainSitePath, audioPath } from '~/lib/host-routing';
-const audioHref = audioPath(Astro.request.headers.get('host') ?? Astro.url.host, '/');
-const servicesHref = mainSitePath(Astro.request.headers.get('host') ?? Astro.url.host, '/services');
-const homeHref = mainSitePath(Astro.request.headers.get('host') ?? Astro.url.host, '/');
+const host = Astro.isPrerendered ? Astro.url.host : Astro.request.headers.get('host') ?? Astro.url.host;
+const mainHref = (path: string) => Astro.isPrerendered ? new URL(path, Astro.site).href : mainSitePath(host, path);
+const audioHref = Astro.isPrerendered ? new URL('/audio/', Astro.site).href : audioPath(host, '/');
+const servicesHref = mainHref('/services');
+const privacyHref = mainHref('/privacy');
+const homeHref = mainHref('/');
 const year = new Date().getFullYear();
 interface Props { compact?: boolean; }
 const { compact = false } = Astro.props;
@@ -10,7 +13,8 @@ const { compact = false } = Astro.props;
 {compact ? <footer class="compact-footer site-shell">
   <div class="compact-footer-inner">
     <a class="footer-name" href={homeHref}>Kazon Wilson</a>
-    <nav aria-label="Elsewhere"><a href="https://github.com/kwilson21">GitHub</a><a href="https://www.linkedin.com/in/kazonwilson/">LinkedIn</a><a href={audioHref}>Audio</a><a href={servicesHref}>Services</a></nav>
+    <nav aria-label="Elsewhere"><a href="https://github.com/kwilson21">GitHub</a><a href="https://www.linkedin.com/in/kazonwilson/">LinkedIn</a><a href={audioHref}>Audio</a><a href={servicesHref}>Services</a><a href={privacyHref}>Privacy</a></nav>
+
     <p>The Superhuman Group LLC · {year}</p>
   </div>
 </footer> : <footer class="border-t border-rule mt-24">
@@ -48,7 +52,7 @@ const { compact = false } = Astro.props;
       <div>
         <div class="eyebrow mb-3">Identity</div>
         <p>The Superhuman Group LLC</p>
-        <p class="mt-1">© {year}</p>
+        <p class="mt-1">© {year}</p><p class="mt-1"><a href={privacyHref}>Privacy</a></p>
       </div>
     </div>
   </div>
@@ -57,7 +61,7 @@ const { compact = false } = Astro.props;
   .compact-footer-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1.5rem; padding-block: 2rem 3rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: .9rem; }
   .compact-footer a { border: 0; }
   .footer-name { font-size: 1.25rem; letter-spacing: -.03em; }
-  nav { display: flex; gap: 1.5rem; }
+  nav { display: flex; flex-wrap: wrap; gap: .75rem 1.5rem; }
   .compact-footer p { margin: 0; }
   @media (max-width: 600px) { .compact-footer-inner { gap: 1rem; } .compact-footer p { width: 100%; } }
 </style>

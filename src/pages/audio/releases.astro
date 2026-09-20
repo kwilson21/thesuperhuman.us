@@ -1,0 +1,37 @@
+---
+export const prerender = false;
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import AudioFooter from '~/components/audio/AudioFooter.astro';
+import MusicNav from '~/components/audio/MusicNav.astro';
+import AudioPlayer from '~/components/audio/AudioPlayer.astro';
+import skyline from '~/assets/site/music-skyline.webp';
+import { loadMusicCatalog } from '~/lib/music-content';
+import { musicFile, releaseVersion } from '~/lib/music-catalog';
+import { mainSitePath, audioPath } from '~/lib/host-routing';
+import '~/styles/music.css';
+import '~/styles/music-hubs.css';
+const { releases, recordings } = await loadMusicCatalog();
+const host = Astro.request.headers.get('host') ?? Astro.url.host;
+const types = [...new Set(releases.map(release => release.type))];
+---
+<BaseLayout title="Releases · Kazon" description="Singles, EPs and albums by Kazon.">
+<div class="site-shell music-page collection-page"><MusicNav />
+<header class="collection-hero"><img src={skyline.src} width={skyline.width} height={skyline.height} alt="" /><div><h1>Music by Kazon.</h1><p>Songs, stories, and everything that comes next.</p></div></header>
+<div class="collection-bar"><div role="group" aria-label="Release format">{types.length > 1 ? <><button data-filter="all" aria-pressed="true">All releases</button>{types.map(type => <button data-filter={type} aria-pressed="false">{type === 'ep' ? 'EPs' : type === 'album' ? 'Albums' : 'Singles'}</button>)}</> : <span>All releases</span>}</div><span data-release-count>{releases.length} {releases.length === 1 ? 'release' : 'releases'}</span></div>
+<div class="music-collection">{releases.map(release => {
+ const track = recordings.find(recording => recording.id === release.tracks[0])!;
+ return <article data-release-type={release.type}><a class="collection-cover" href={mainSitePath(host, `/music/${release.slug}`)}><img src={release.artwork} alt={`${release.title} cover artwork`} width="1254" height="1254" /></a><p class="release-meta">{release.type === 'ep' ? 'EP' : release.type} · {release.status === 'preview' ? 'Streaming preview' : 'Released'}</p><h2>{release.displayTitle ?? release.title}</h2>{release.producer && <p class="collection-credit">Prod. {release.producer}</p>}<AudioPlayer id={`collection-${release.id}`} src={musicFile(track.id, releaseVersion(track))} title={release.displayTitle ?? release.title} duration={track.duration} releaseId={release.id} recordingId={track.id} /><a class="site-link" href={mainSitePath(host, `/music/${release.slug}`)}>Explore release →</a></article>;
+})}</div>
+{!releases.length && <p class="collection-empty">New music is on its way.</p>}
+<section class="collection-footer"><div><h2>The work behind the sound.</h2><a class="site-link" href={audioPath(host, '/portfolio')}>Audio portfolio →</a></div>{releases.length === 1 && <p>One song. A beginning.</p>}</section>
+</div><AudioFooter slot="footer" />
+<script>
+import { setupMusicPlayback } from '~/scripts/music-playback'; setupMusicPlayback();
+const cards = [...document.querySelectorAll<HTMLElement>('[data-release-type]')];
+document.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach(button => button.addEventListener('click', () => {
+ document.querySelectorAll('[data-filter]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+ cards.forEach(card => {card.hidden = button.dataset.filter !== 'all' && card.dataset.releaseType !== button.dataset.filter; if(card.hidden) card.querySelector('audio')?.pause();});
+ const count = cards.filter(card => !card.hidden).length; document.querySelector('[data-release-count]')!.textContent = `${count} ${count === 1 ? 'release' : 'releases'}`;
+}));
+</script>
+</BaseLayout>
