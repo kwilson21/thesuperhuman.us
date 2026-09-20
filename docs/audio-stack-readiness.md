@@ -22,12 +22,14 @@ Career and prelaunch changes, the Releases/Portfolio page framework, the revised
 - PASS — prelaunch privacy review addressed by adding music disclosure with #50, where processing begins. Sharp dependency is explicit.
 - UNVERIFIED — standalone production reporting via Wrangler needs refreshed D1 authentication on this computer. Authenticated Cloudflare connector access and production schema readback are verified; local reporting and retention workflows pass.
 - UNVERIFIED — live email delivery and operator payment/booking operations. These are service-intake launch checks; the song remains a streaming preview with interest requests, not a checkout.
+- PASS in protected preview — master and hosted video exposed complete 160-second seekable ranges; the A/B player decoded mix and master and switched without losing its playhead; controlled first-party playback events reached the isolated preview database.
+- PASS in protected preview — event collection could be disabled without stopping playback, all three Old News surfaces could be hidden, the reviewed visitor experience recovered, and D1 Time Travel removed a disposable probe while preserving pre-bookmark test rows.
 - UNVERIFIED — public release playback, range responses, first-party event delivery and fan-interest submission on the final production host; verify after authorized publication.
 - N/A — live YouTube playback; the supplied hosted lyric video is used. A future YouTube ID requires a real integration check.
 
 ## Publication step still requires approval
 
-Complete the remaining protected-preview gates, review the exact migrations and production deployment, and obtain explicit approval before merging PR #44. After an authorized deployment, verify the actual production routes, media, event recording and interest submissions. Do not treat a successful build or merge as a live launch receipt. No automatic sales threshold or commerce flow is enabled.
+Review the exact migrations and two-stage production deployment, and obtain explicit approval before merging PR #44. Deploy and verify the infrastructure with Old News still draft, then merge the separately reviewed publication switch and verify the actual production routes, media, event recording and interest submissions. Do not treat a successful build or merge as a live launch receipt. No automatic sales threshold or commerce flow is enabled.
 
 ## Recovery
 

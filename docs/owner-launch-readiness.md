@@ -3,7 +3,7 @@
 **Review date:** September 20, 2026
 **Target:** thesuperhuman.us production  
 **Scope:** stacked owner data, interface, retention, health, and Old News measurement changes  
-**Deployment decision:** blocked. Nothing in this review authorizes a migration or deployment.
+**Deployment decision:** awaiting explicit approval. Nothing in this review authorizes a production migration, merge, or deployment.
 
 | Gate | Result | Evidence or next action |
 | --- | --- | --- |
@@ -18,17 +18,21 @@
 | Retention preview | PASS locally | The empty local preview generated matching private HTML and JSON. A scan found no email, request detail, private note, session ID, playthrough ID, JWT, IP address, or secret. No apply was performed. |
 | Retention freshness | UNVERIFIED | Health correctly reports that no successful retention apply is recorded. Apply an exact reviewed manifest only after schema reconciliation. |
 | Old News private media | PASS for stored objects | The master, mix, and lyric video were downloaded from private R2 on September 20. Their complete SHA-256 hashes match the content-addressed object keys, with expected nonzero sizes. |
-| Old News preview routes | UNVERIFIED | The current live site does not contain the stacked media routes. Keep the release hidden until protected-preview range responses and permissions are verified with the candidate Worker. |
-| Event-disable control | PASS locally | The API returns `204` and stores nothing when `MUSIC_EVENTS_ENABLED=false`; playback remains independent. Non-production deployment exercise remains unverified. |
-| Rollback and recovery | UNVERIFIED | Wrangler confirms the previous-version deployment command exists. No non-production Worker target was available to exercise rollback, release hiding, or D1 recovery. |
+| Old News preview routes | PASS in protected preview | The master and hosted lyric video each loaded as a 160-second seekable stream. The A/B player decoded and played both mix and master while preserving its playhead across the switch. Controlled playback wrote ordered rows to the isolated preview database. |
+| Event-disable control | PASS in protected preview | With `MUSIC_EVENTS_ENABLED=false`, the song continued playing while a clean session left the isolated database unchanged at 19 rows. Restoring the reviewed candidate re-enabled collection and the next controlled play produced row 20. |
+| Rollback and recovery | PASS in protected preview | Returning all three Old News records to draft removed the release route, then restoring the reviewed candidate returned the page and stream. A disposable D1 table was created after a preview bookmark; Time Travel removed it while preserving all 20 pre-bookmark playback rows. Earlier Worker versions remain available. Production rollback remains approval-gated. |
 | Owner interface | PASS locally | The stacked UI was previously checked across six owner routes at desktop and mobile widths, including unsigned rejection. Production access remains unverified. |
 
-## Required before a deployment decision
+## Production change set requiring approval
 
-1. Configure the three missing owner settings during the approved release step, then verify the Access login, signed identity response, and one-owner denial behavior.
-2. Confirm all three Old News streaming routes in a protected preview environment; stored R2 objects are already verified.
-3. Exercise event disable, release hiding, previous-version rollback, and visitor recovery in that preview environment.
-4. Re-run the complete checklist and present the exact migration and deployment change set for explicit approval.
+1. Re-read the production schema, pending migration list, and Time Travel bookmark immediately before the change.
+2. Apply `0001_music_schema.sql`, then `0002_owner_retention.sql`, to `thesuperhuman-music`; read back the migration ledger and new objects.
+3. Configure `OWNER_ACCESS_TEAM_DOMAIN`, `OWNER_ACCESS_AUD`, and `OWNER_EMAIL` on the production Worker without publishing their values.
+4. Merge PR #44 and allow its connected Cloudflare build to deploy the reviewed infrastructure while Old News remains draft.
+5. Verify production owner authentication, private response headers, health reporting, request failure behavior, public navigation, and hidden Old News routes.
+6. Merge the separately reviewed Old News publication PR, then verify the release page, mix/master/video streams, event recording, interest submission, sitemap, and owner reporting on the production hostname.
+
+If any verification fails, hide Old News if necessary and deploy the recorded last-known-good Worker version. D1 recovery uses the pre-change bookmark only after schema and ledger readback identify a database rollback as necessary.
 
 ## Exact pending database change
 
