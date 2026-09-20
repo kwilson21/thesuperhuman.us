@@ -25,6 +25,13 @@ export function reconciliationStatements(args, now = new Date()) {
   throw new Error('Use --resolve-event EVENT_ID NOTE or --clear-reservation REQUEST_ID booking|balance NOTE.');
 }
 
+export function changedRows(value) {
+  if (Array.isArray(value)) return value.reduce((total, item) => total + changedRows(item), 0);
+  if (!value || typeof value !== 'object') return 0;
+  const changes = Number(value.meta?.changes);
+  return (Number.isFinite(changes) ? changes : 0) + changedRows(value.results);
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const database = await openMusicDatabase(process.argv.includes('--remote'));
   try {
@@ -33,7 +40,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       console.log(JSON.stringify(await database.query(`SELECT event_id,event_type,invoice_id,request_id,installment,status,reason,received_at
         FROM stripe_unmatched_events WHERE resolved_at IS NULL ORDER BY received_at`), null, 2));
     } else {
-      await database.batch(reconciliationStatements(args));
+      const results = await database.batch(reconciliationStatements(args));
+      if (changedRows(results) < 1) throw new Error('No matching unresolved event or pending reservation was changed.');
       console.log('Stripe reconciliation recorded. Run owner:health to verify the result.');
     }
   } finally { await database.close(); }
