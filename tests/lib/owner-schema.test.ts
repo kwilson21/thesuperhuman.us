@@ -47,5 +47,11 @@ describe('owner insights schema', () => {
     expect(() => db.prepare(`INSERT INTO owner_requests
       (id,kind,email,summary,status,created_at,updated_at)
       VALUES ('1','unknown','fan@example.com','Bad kind','new','now','now')`).run()).toThrow();
+    db.prepare(`INSERT INTO owner_requests
+      (id,kind,email,summary,status,created_at,updated_at)
+      VALUES ('payment-request','service','artist@example.com','Mix','reviewed','now','now')`).run();
+    expect(() => db.prepare(`INSERT INTO owner_request_audit
+      (request_id,action,actor,note,occurred_at)
+      VALUES ('payment-request','payment-approved','owner@example.com','USD 200.00','now')`).run()).not.toThrow();
   });
 });

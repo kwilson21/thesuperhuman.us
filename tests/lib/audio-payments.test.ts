@@ -60,7 +60,7 @@ const approval = {
 
 describe('audio payments', () => {
   it('approves fixed USD pricing for service requests and preserves exact installment cents', async () => {
-    const { db } = fixture();
+    const { db, sql } = fixture();
     const payment = await approveAudioPayment(db, approval);
     expect(payment).toMatchObject({
       requestId: 'request-1', totalAmountCents: 20_001,
@@ -68,6 +68,8 @@ describe('audio payments', () => {
       bookingStatus: 'not_created', balanceStatus: 'not_created',
     });
     expect(await getAudioPayment(db, 'request-1')).toEqual(payment);
+    expect(sql.prepare('SELECT action,actor FROM owner_request_audit WHERE request_id=? ORDER BY id DESC LIMIT 1').get('request-1'))
+      .toEqual({ action: 'payment-approved', actor: 'owner@example.com' });
   });
 
   it('rejects non-service requests and invalid prices', async () => {
@@ -77,7 +79,7 @@ describe('audio payments', () => {
   });
 
   it('records each invoice once and requires a paid booking invoice before the balance', async () => {
-    const { db } = fixture();
+    const { db, sql } = fixture();
     await approveAudioPayment(db, approval);
     await expect(recordInvoice(db, {
       requestId: 'request-1', installment: 'balance', stripeCustomerId: 'cus_1',
@@ -88,6 +90,8 @@ describe('audio payments', () => {
       invoiceId: 'in_booking', hostedInvoiceUrl: 'https://invoice.stripe.com/booking', status: 'open', actor: approval.actor,
     });
     expect(booking).toMatchObject({ bookingInvoiceId: 'in_booking', bookingStatus: 'open' });
+    expect(sql.prepare('SELECT action FROM owner_request_audit WHERE request_id=? ORDER BY id DESC LIMIT 1').get('request-1'))
+      .toEqual({ action: 'booking-invoice-created' });
     await expect(recordInvoice(db, {
       requestId: 'request-1', installment: 'booking', stripeCustomerId: 'cus_1',
       invoiceId: 'in_other', hostedInvoiceUrl: 'https://invoice.stripe.com/other', status: 'open', actor: approval.actor,
@@ -109,10 +113,31 @@ describe('audio payments', () => {
     expect((await applyStripeInvoiceEvent(db, event)).applied).toBe(false);
     expect((await getAudioPayment(db, 'request-1'))?.bookingStatus).toBe('paid');
     expect(sql.prepare('SELECT COUNT(*) AS total FROM stripe_webhook_events').get()).toEqual({ total: 1 });
+    expect(sql.prepare('SELECT action,actor FROM owner_request_audit WHERE request_id=? ORDER BY id DESC LIMIT 1').get('request-1'))
+      .toEqual({ action: 'booking-payment-updated', actor: 'stripe' });
     const balance = await recordInvoice(db, {
       requestId: 'request-1', installment: 'balance', stripeCustomerId: 'cus_1',
       invoiceId: 'in_balance', hostedInvoiceUrl: 'https://invoice.stripe.com/balance', status: 'open', actor: approval.actor,
     });
     expect(balance.balanceInvoiceId).toBe('in_balance');
+  });
+
+  it('records but does not apply an older event after payment is confirmed', async () => {
+    const { db, sql } = fixture();
+    await approveAudioPayment(db, approval);
+    await recordInvoice(db, {
+      requestId: 'request-1', installment: 'booking', stripeCustomerId: 'cus_1',
+      invoiceId: 'in_booking', hostedInvoiceUrl: 'https://invoice.stripe.com/booking', status: 'open', actor: approval.actor,
+    });
+    expect((await applyStripeInvoiceEvent(db, {
+      eventId: 'evt_paid', eventType: 'invoice.paid', invoiceId: 'in_booking', status: 'paid',
+      occurredAt: '2026-09-20T15:00:00.000Z',
+    })).applied).toBe(true);
+    expect((await applyStripeInvoiceEvent(db, {
+      eventId: 'evt_old', eventType: 'invoice.sent', invoiceId: 'in_booking', status: 'open',
+      occurredAt: '2026-09-20T14:00:00.000Z',
+    })).applied).toBe(false);
+    expect((await getAudioPayment(db, 'request-1'))?.bookingStatus).toBe('paid');
+    expect(sql.prepare('SELECT COUNT(*) AS total FROM stripe_webhook_events').get()).toEqual({ total: 2 });
   });
 });

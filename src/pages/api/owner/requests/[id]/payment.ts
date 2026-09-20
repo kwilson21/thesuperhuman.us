@@ -38,6 +38,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   try {
     if (parsed.data.action === 'approve') {
       const existing = await getAudioPayment(db, requestRecord.id);
+      if (existing && (existing.approvedService !== parsed.data.approvedService
+        || existing.totalAmountCents !== parsed.data.totalAmountCents)) {
+        return Response.json({ ok: false }, { status: 409, headers });
+      }
       const payment = existing ?? await approveAudioPayment(db, {
         requestId: requestRecord.id,
         approvedService: parsed.data.approvedService,

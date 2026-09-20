@@ -73,6 +73,16 @@ it('persists approved terms before any Stripe call', async () => {
     .toEqual({ total_amount_cents: 20_000, booking_status: 'not_created' });
 });
 
+it('rejects changed terms after approval instead of reporting stale terms as saved', async () => {
+  await POST(context({ action: 'approve', approvedService: 'Mastering', totalAmountCents: 7_500, offerAccepted: true }));
+  const response = await POST(context({
+    action: 'approve', approvedService: 'Two-track vocal mix + master', totalAmountCents: 20_000, offerAccepted: true,
+  }));
+  expect(response.status).toBe(409);
+  expect(sql.prepare('SELECT approved_service,total_amount_cents FROM audio_payments').get())
+    .toEqual({ approved_service: 'Mastering', total_amount_cents: 7_500 });
+});
+
 it('creates and records one booking invoice after approval', async () => {
   await POST(context({ action: 'approve', approvedService: 'Two-track vocal mix + master', totalAmountCents: 20_000, offerAccepted: true }));
   const response = await POST(context({ action: 'create-booking-invoice' }, true, { STRIPE_PAYMENTS_ENABLED: 'true' }));

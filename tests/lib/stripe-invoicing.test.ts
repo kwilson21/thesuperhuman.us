@@ -6,7 +6,9 @@ const payment = {
   currency: 'usd' as const, bookingAmountCents: 10_001, balanceAmountCents: 10_000,
   offerAcceptedAt: '2026-09-20T13:00:00.000Z', stripeCustomerId: null,
   bookingInvoiceId: null, bookingInvoiceUrl: null, bookingStatus: 'not_created' as const,
+  bookingStatusUpdatedAt: null,
   balanceInvoiceId: null, balanceInvoiceUrl: null, balanceStatus: 'not_created' as const,
+  balanceStatusUpdatedAt: null,
   createdAt: '2026-09-20T13:00:00.000Z', updatedAt: '2026-09-20T13:00:00.000Z',
 };
 const request = { name: 'Artist Name', email: 'artist@example.com', summary: 'Old News mix' };

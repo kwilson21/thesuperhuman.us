@@ -14,9 +14,11 @@ export type AudioPayment = {
   bookingInvoiceId: string | null;
   bookingInvoiceUrl: string | null;
   bookingStatus: InvoiceStatus;
+  bookingStatusUpdatedAt: string | null;
   balanceInvoiceId: string | null;
   balanceInvoiceUrl: string | null;
   balanceStatus: InvoiceStatus;
+  balanceStatusUpdatedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -26,12 +28,14 @@ type PaymentRow = {
   booking_amount_cents: number; balance_amount_cents: number; offer_accepted_at: string;
   stripe_customer_id: string | null; booking_invoice_id: string | null; booking_invoice_url: string | null;
   booking_status: InvoiceStatus; balance_invoice_id: string | null; balance_invoice_url: string | null;
-  balance_status: InvoiceStatus; created_at: string; updated_at: string;
+  booking_status_updated_at: string | null; balance_status: InvoiceStatus; balance_status_updated_at: string | null;
+  created_at: string; updated_at: string;
 };
 
 const columns = `request_id,approved_service,total_amount_cents,currency,booking_amount_cents,
   balance_amount_cents,offer_accepted_at,stripe_customer_id,booking_invoice_id,booking_invoice_url,
-  booking_status,balance_invoice_id,balance_invoice_url,balance_status,created_at,updated_at`;
+  booking_status,booking_status_updated_at,balance_invoice_id,balance_invoice_url,balance_status,
+  balance_status_updated_at,created_at,updated_at`;
 
 function fromRow(row: PaymentRow): AudioPayment {
   return {
@@ -41,7 +45,9 @@ function fromRow(row: PaymentRow): AudioPayment {
     offerAcceptedAt: row.offer_accepted_at, stripeCustomerId: row.stripe_customer_id,
     bookingInvoiceId: row.booking_invoice_id, bookingInvoiceUrl: row.booking_invoice_url,
     bookingStatus: row.booking_status, balanceInvoiceId: row.balance_invoice_id,
+    bookingStatusUpdatedAt: row.booking_status_updated_at,
     balanceInvoiceUrl: row.balance_invoice_url, balanceStatus: row.balance_status,
+    balanceStatusUpdatedAt: row.balance_status_updated_at,
     createdAt: row.created_at, updatedAt: row.updated_at,
   };
 }
@@ -79,11 +85,16 @@ export async function approveAudioPayment(db: D1Database, input: {
   const booking = Math.ceil(input.totalAmountCents / 2);
   const balance = input.totalAmountCents - booking;
   const now = new Date().toISOString();
-  await db.prepare(`INSERT INTO audio_payments
-    (request_id,approved_service,total_amount_cents,currency,booking_amount_cents,balance_amount_cents,
-      offer_accepted_at,booking_status,balance_status,created_at,updated_at)
-    VALUES (?,?,?,'usd',?,?,?,'not_created','not_created',?,?)`)
-    .bind(input.requestId, approvedService, input.totalAmountCents, booking, balance, input.offerAcceptedAt, now, now).run();
+  await db.batch([
+    db.prepare(`INSERT INTO audio_payments
+      (request_id,approved_service,total_amount_cents,currency,booking_amount_cents,balance_amount_cents,
+        offer_accepted_at,booking_status,balance_status,created_at,updated_at)
+      VALUES (?,?,?,'usd',?,?,?,'not_created','not_created',?,?)`)
+      .bind(input.requestId, approvedService, input.totalAmountCents, booking, balance, input.offerAcceptedAt, now, now),
+    db.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
+      VALUES (?,'payment-approved',?,?,?)`)
+      .bind(input.requestId, input.actor.trim().toLowerCase(), `${approvedService}; USD ${(input.totalAmountCents / 100).toFixed(2)}`, now),
+  ]);
   return (await getAudioPayment(db, input.requestId))!;
 }
 
@@ -106,9 +117,14 @@ export async function recordInvoice(db: D1Database, input: {
   if (!invoiceStatuses.includes(input.status)) throw new Error('Invalid invoice status.');
   const prefix = input.installment === 'booking' ? 'booking' : 'balance';
   const now = new Date().toISOString();
-  await db.prepare(`UPDATE audio_payments SET stripe_customer_id=?,${prefix}_invoice_id=?,
-    ${prefix}_invoice_url=?,${prefix}_status=?,updated_at=? WHERE request_id=? AND ${prefix}_invoice_id IS NULL`)
-    .bind(input.stripeCustomerId, input.invoiceId, input.hostedInvoiceUrl, input.status, now, input.requestId).run();
+  await db.batch([
+    db.prepare(`UPDATE audio_payments SET stripe_customer_id=?,${prefix}_invoice_id=?,
+      ${prefix}_invoice_url=?,${prefix}_status=?,updated_at=?
+      WHERE request_id=? AND ${prefix}_invoice_id IS NULL`)
+      .bind(input.stripeCustomerId, input.invoiceId, input.hostedInvoiceUrl, input.status, now, input.requestId),
+    db.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
+      VALUES (?,?,?,?,?)`).bind(input.requestId, `${prefix}-invoice-created`, input.actor.trim().toLowerCase(), input.invoiceId, now),
+  ]);
   const updated = await getAudioPayment(db, input.requestId);
   if (!updated || updated[`${prefix}InvoiceId`] !== input.invoiceId) throw new Error('Invoice already exists.');
   return updated;
@@ -131,12 +147,20 @@ export async function applyStripeInvoiceEvent(db: D1Database, input: {
   if (!row) return { applied: false, payment: null };
   const installment = row.booking_invoice_id === input.invoiceId ? 'booking' : 'balance';
   const processedAt = new Date().toISOString();
-  await db.batch([
-    db.prepare(`UPDATE audio_payments SET ${installment}_status=?,updated_at=?
-      WHERE request_id=? AND ${installment}_invoice_id=?`)
-      .bind(input.status, processedAt, row.request_id, input.invoiceId),
+  const currentStatus = row[`${installment}_status`];
+  const currentEventAt = row[`${installment}_status_updated_at`];
+  const shouldApply = currentStatus !== 'paid' && (!currentEventAt || input.occurredAt >= currentEventAt);
+  const statements = [
     db.prepare(`INSERT INTO stripe_webhook_events (id,event_type,invoice_id,occurred_at,processed_at)
       VALUES (?,?,?,?,?)`).bind(input.eventId, input.eventType, input.invoiceId, input.occurredAt, processedAt),
-  ]);
-  return { applied: true, payment: await getAudioPayment(db, row.request_id) };
+  ];
+  if (shouldApply) statements.unshift(
+    db.prepare(`UPDATE audio_payments SET ${installment}_status=?,${installment}_status_updated_at=?,updated_at=?
+      WHERE request_id=? AND ${installment}_invoice_id=?`)
+      .bind(input.status, input.occurredAt, processedAt, row.request_id, input.invoiceId),
+    db.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
+      VALUES (?,?,?,?,?)`).bind(row.request_id, `${installment}-payment-updated`, 'stripe', `${input.eventType}: ${input.status}`, processedAt),
+  );
+  await db.batch(statements);
+  return { applied: shouldApply, payment: await getAudioPayment(db, row.request_id) };
 }
