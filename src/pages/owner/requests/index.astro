@@ -10,7 +10,7 @@ const kind = ownerRequestKinds.includes(Astro.url.searchParams.get('kind') as Ow
 const status = ownerRequestStatuses.includes(Astro.url.searchParams.get('status') as OwnerRequestStatus) ? Astro.url.searchParams.get('status') as OwnerRequestStatus : undefined;
 const requests = await listOwnerRequests(db, { kind, status });
 const newRequestCount = (await listOwnerRequests(db, { status: 'new' })).length;
-const kinds = [{ value: '', label: 'All kinds' }, { value: 'purchase', label: 'Purchase' }, { value: 'merchandise', label: 'Merchandise' }, { value: 'service', label: 'Audio service' }, { value: 'release-update', label: 'Release updates' }];
+const kinds = [{ value: '', label: 'All kinds' }, { value: 'purchase', label: 'Purchase' }, { value: 'merchandise', label: 'Merchandise' }, { value: 'service', label: 'Audio service' }];
 ---
 <OwnerLayout title="Requests" current="requests" {newRequestCount} ownerEmail={Astro.locals.owner?.email ?? ''}>
   <header class="owner-page-heading compact"><div><p class="owner-kicker">Private inbox</p><h1>Requests</h1><p>Every person waiting for a clear next step.</p></div></header>

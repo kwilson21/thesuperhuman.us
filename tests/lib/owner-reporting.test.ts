@@ -21,8 +21,7 @@ function fixture() {
     ('r1','purchase','old-news-single','one@example.com','Wants the song','new','2026-09-18T10:00:00Z','2026-09-18T10:00:00Z'),
     ('r2','merchandise','old-news-single','two@example.com','Wants a shirt','new','2026-09-18T11:00:00Z','2026-09-18T11:00:00Z'),
     ('r3','service',NULL,'three@example.com','Mastering request','reviewed','2026-09-18T12:00:00Z','2026-09-18T12:00:00Z');
-    INSERT INTO owner_audience_permissions VALUES
-    ('listener@example.com','subscribed','release-updates-v1','r1','2026-09-18T10:00:00Z',NULL,'2026-09-18T10:00:00Z');`);
+    `);
   const request = sql.prepare(`INSERT INTO owner_requests(id,kind,release_id,campaign_id,email,summary,status,created_at,updated_at)
     VALUES (?,?,?,?,?,?,?,?,?)`);
   for (let index = 0; index < 12; index++) request.run(`d${index}`, index % 2 ? 'merchandise' : 'purchase', 'old-news-single', 'old-news-launch', `d${index}@example.com`, 'Demand', 'resolved', `2026-09-18T${String(13 + Math.floor(index / 2)).padStart(2, '0')}:00:00Z`, `2026-09-18T${String(13 + Math.floor(index / 2)).padStart(2, '0')}:00:00Z`);
@@ -52,7 +51,7 @@ it('orders attention first, suppresses sparse cities and excludes automated traf
 it('uses the same campaign evidence for the campaign desk', async () => {
   const desk = await loadCampaignDesk(fixture(), 'old-news-launch', new Date('2026-09-19T12:00:00Z'));
   expect(desk).toMatchObject({ id: 'old-news-launch', listening: { reportedStarts: 6, reported30SecondListens: 6 } });
-  expect(desk?.demand).toEqual({ purchase: 7, merchandise: 7, subscribers: 1 });
+  expect(desk?.demand).toEqual({ purchase: 7, merchandise: 7 });
   expect(desk?.requests).toHaveLength(10);
   expect(await loadCampaignDesk(fixture(), 'missing', new Date())).toBeNull();
 });

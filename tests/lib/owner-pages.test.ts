@@ -6,7 +6,7 @@ const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta
 it('renders shared navigation, one primary action and accessible guidance', () => {
   const layout = read('src/layouts/OwnerLayout.astro');
   const today = read('src/pages/owner/index.astro');
-  for (const label of ['Today', 'Requests', 'Campaigns', 'Audience']) expect(layout).toContain(label);
+  for (const label of ['Today', 'Requests', 'Campaigns']) expect(layout).toContain(label);
   expect(today).toContain('Open Campaign Desk');
   expect(today.match(/owner-primary-action/g)).toHaveLength(1);
   expect(today).toContain('First area to inspect');
@@ -21,8 +21,8 @@ it('keeps the owner interface editorial and responsive', () => {
   expect(css).not.toMatch(/gradient|box-shadow|backdrop-filter/);
 });
 
-it('provides connected request, campaign and audience views', () => {
-  for (const path of ['src/pages/owner/requests/index.astro', 'src/pages/owner/requests/[id].astro', 'src/pages/owner/campaigns/index.astro', 'src/pages/owner/campaigns/[id].astro', 'src/pages/owner/audience.astro']) {
+it('provides connected request and campaign views', () => {
+  for (const path of ['src/pages/owner/requests/index.astro', 'src/pages/owner/requests/[id].astro', 'src/pages/owner/campaigns/index.astro', 'src/pages/owner/campaigns/[id].astro']) {
     expect(read(path)).toContain('OwnerLayout');
   }
   expect(read('src/pages/owner/campaigns/[id].astro')).toContain('Return to Today');
@@ -30,5 +30,4 @@ it('provides connected request, campaign and audience views', () => {
   expect(read('src/pages/owner/requests/[id].astro')).toContain('Submitted with this request');
   expect(read('src/pages/owner/requests/[id].astro')).toContain('for="owner-private-note"');
   expect(read('src/scripts/owner-request-actions.ts')).toContain('Connection lost');
-  expect(read('src/pages/owner/audience.astro')).toContain('Connection lost');
 });

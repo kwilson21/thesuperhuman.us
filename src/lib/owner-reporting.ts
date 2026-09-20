@@ -12,7 +12,7 @@ export type CampaignDesk = CampaignSummary & {
   subjectType: 'release' | 'service'; subjectId: string; status: 'draft' | 'active' | 'complete';
   secondarySignals: string[]; approvedPlan: string; retrospective: string; nextLesson: string;
   listening: ListeningSummary; geography: GeographySummary;
-  demand: { purchase: number; merchandise: number; subscribers: number };
+  demand: { purchase: number; merchandise: number };
   requests: OwnerRequest[]; channels: { channel: string; creative: string }[];
 };
 export type StudioLedger = {
@@ -24,8 +24,6 @@ export type StudioLedger = {
   activeCampaignListening: ListeningSummary;
   observations: string[];
 };
-export type AudiencePermission = { email: string; status: 'subscribed' | 'unsubscribed'; grantedAt: string; withdrawnAt: string | null; sourceRequestId: string | null };
-
 type CampaignRow = {
   id: string; subject_type: 'release' | 'service'; subject_id: string; name: string; primary_goal: string;
   secondary_signals: string; starts_at: string; ends_at: string | null; approved_plan: string;
@@ -79,15 +77,7 @@ export async function loadCampaignDesk(db: D1Database, campaignId: string, now: 
   const demand = {
     purchase: Number(demandRows.find(item => item.kind === 'purchase')?.total ?? 0),
     merchandise: Number(demandRows.find(item => item.kind === 'merchandise')?.total ?? 0),
-    subscribers: 0,
   };
-  if (row.subject_type === 'release') {
-    const subscriber = await db.prepare(`SELECT COUNT(*) AS total FROM owner_audience_permissions permission
-      JOIN owner_requests request ON request.id=permission.source_request_id
-      WHERE permission.status='subscribed' AND request.release_id=? AND permission.granted_at>=? AND permission.granted_at<=?`)
-      .bind(row.subject_id, row.starts_at, end).first<{ total: number }>();
-    demand.subscribers = Number(subscriber?.total ?? 0);
-  }
   const channels = (await db.prepare(`SELECT channel,creative FROM owner_campaign_tags WHERE campaign_id=? ORDER BY channel,creative`)
     .bind(row.id).all<{ channel: string; creative: string }>()).results;
   return {
@@ -122,10 +112,4 @@ export async function listCampaigns(db: D1Database): Promise<CampaignSummary[]> 
   const rows = (await db.prepare(`SELECT id,subject_type,subject_id,name,primary_goal,secondary_signals,starts_at,ends_at,
     approved_plan,retrospective,next_lesson,status FROM owner_campaigns ORDER BY starts_at DESC`).all<CampaignRow>()).results;
   return rows.map(campaignSummary);
-}
-
-export async function listAudience(db: D1Database): Promise<AudiencePermission[]> {
-  const rows = (await db.prepare(`SELECT email,status,granted_at,withdrawn_at,source_request_id FROM owner_audience_permissions ORDER BY granted_at DESC`)
-    .all<{ email: string; status: 'subscribed' | 'unsubscribed'; granted_at: string; withdrawn_at: string | null; source_request_id: string | null }>()).results;
-  return rows.map(row => ({ email: row.email, status: row.status, grantedAt: row.granted_at, withdrawnAt: row.withdrawn_at, sourceRequestId: row.source_request_id }));
 }
