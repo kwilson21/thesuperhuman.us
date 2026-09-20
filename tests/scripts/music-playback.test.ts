@@ -18,7 +18,8 @@ it('counts actual playback across media while seeking adds no listening time', a
   clock = 13_000; tracker.sample(81, true, 1, 100, 'video');
   clock = 30_000; tracker.sample(98, true, 1, 100, 'video');
   await tracker.flush();
-  expect(events.map(event => event.event)).toEqual(['start', 'progress', 'progress', 'listen30']);
+  expect(events.map(event => event.event)).toEqual(['start', 'progress', 'progress', 'progress', 'listen30']);
+  expect(events.filter(event => event.event === 'progress').map(event => event.accumulatedSeconds)).toEqual([10, 20, 30]);
   expect(events.at(-1)).toMatchObject({ accumulatedSeconds: 30, medium: 'video' });
   expect(events.every((event, index) => event.sequence === index + 1)).toBe(true);
 });
