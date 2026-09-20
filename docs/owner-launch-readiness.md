@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | Repository tests | PASS | 304 tests pass across 58 files on Node 22.19 at the consolidated PR #44 stack head. Pull requests run tests, Astro checks, and the production build in GitHub Actions. |
 | Astro check and build | PASS | `astro check` reports zero errors; the Cloudflare build completes. Existing content-loader and inline-script hints remain. |
-| Owner access policy | BLOCKED on configuration | JWT verification, cached JWKS, and fail-closed middleware pass locally. The deployed Worker has the existing contact, Turnstile, and publication secrets, but `OWNER_ACCESS_TEAM_DOMAIN`, `OWNER_ACCESS_AUD`, and `OWNER_EMAIL` are not configured. The production Cloudflare Access application, one-owner allow policy, and signed response still require an authenticated dashboard session. |
+| Owner access policy | PASS for Access boundary; BLOCKED on Worker settings | The production `Owner Center` Access application protects `thesuperhuman.us/owner` with a reusable one-owner email allow policy and a 24-hour application session. No external identity provider is configured, so Cloudflare's default one-time PIN login applies. The application AUD was retrieved. JWT verification, cached JWKS, and fail-closed middleware pass locally. `OWNER_ACCESS_TEAM_DOMAIN`, `OWNER_ACCESS_AUD`, and `OWNER_EMAIL` remain intentionally unconfigured on the deployed Worker until the approved release step; the signed production response remains unverified. |
 | Private response headers | PASS locally | Middleware tests cover no-store and noindex behavior. Live headers remain part of post-deploy verification. |
 | MUSIC_DB schema and ledger | PASS for read-only reconciliation | Production contains the three baseline music tables, their index and archive trigger. All three tables contain zero rows. The migration ledger is empty, so `0001_music_schema.sql` and `0002_owner_retention.sql` are pending. The current Time Travel bookmark was recorded privately. No migration was applied. |
 | Request storage failure | PASS locally | Tests confirm success follows storage and urgent alerts are redacted. Live D1 and authorized email delivery remain unverified. |
@@ -25,7 +25,7 @@
 
 ## Required before a deployment decision
 
-1. Configure and verify the single-owner Cloudflare Access policy and the three missing owner settings.
+1. Configure the three missing owner settings during the approved release step, then verify the Access login, signed identity response, and one-owner denial behavior.
 2. Confirm all three Old News streaming routes in a protected preview environment; stored R2 objects are already verified.
 3. Exercise event disable, release hiding, previous-version rollback, and visitor recovery in that preview environment.
 4. Re-run the complete checklist and present the exact migration and deployment change set for explicit approval.
