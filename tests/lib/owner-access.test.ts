@@ -5,9 +5,10 @@ import { verifyOwnerAccess } from '~/lib/owner-access';
 const issuer = 'https://owner-test.cloudflareaccess.com';
 const audience = 'owner-application-audience';
 const ownerEmail = 'owner@example.com';
+const keyPair = generateKeyPair('RS256');
 
 async function signedRequest(claims: { email?: string; audience?: string } = {}) {
-  const { privateKey, publicKey } = await generateKeyPair('RS256');
+  const { privateKey, publicKey } = await keyPair;
   const key = { ...await exportJWK(publicKey), kid: 'owner-test-key', alg: 'RS256', use: 'sig' };
   vi.stubGlobal('fetch', vi.fn(async () => Response.json({ keys: [key] })));
   const token = await new SignJWT({ email: claims.email ?? ownerEmail, type: 'app' })
@@ -32,7 +33,11 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('owner Access verification', () => {
   it('accepts a signed application token for the configured owner', async () => {
-    await expect(verifyOwnerAccess(await signedRequest(), env)).resolves.toEqual({ email: ownerEmail });
+    const first = await signedRequest();
+    const second = await signedRequest();
+    await expect(verifyOwnerAccess(first, env)).resolves.toEqual({ email: ownerEmail });
+    await expect(verifyOwnerAccess(second, env)).resolves.toEqual({ email: ownerEmail });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it('rejects missing, wrong-audience and wrong-owner tokens', async () => {
@@ -43,8 +48,9 @@ describe('owner Access verification', () => {
 
   it('rejects invalid signatures and incomplete configuration', async () => {
     const request = await signedRequest();
-    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ keys: [] })));
-    await expect(verifyOwnerAccess(request, env)).resolves.toBeNull();
+    const token = request.headers.get('cf-access-jwt-assertion')!;
+    const invalid = new Request(request.url, { headers: { 'cf-access-jwt-assertion': `${token.slice(0, -1)}${token.endsWith('a') ? 'b' : 'a'}` } });
+    await expect(verifyOwnerAccess(invalid, env)).resolves.toBeNull();
     await expect(verifyOwnerAccess(request, { ...env, OWNER_ACCESS_AUD: '' })).resolves.toBeNull();
   });
 });

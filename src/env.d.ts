@@ -14,6 +14,7 @@ interface Env {
   OWNER_ACCESS_TEAM_DOMAIN?: string;
   OWNER_ACCESS_AUD?: string;
   OWNER_EMAIL?: string;
+  OWNER_DATA_HMAC_KEY?: string;
   CLOUDFLARE_ANALYTICS_TOKEN?: string;
   CLOUDFLARE_ZONE_ID?: string;
   PUBLICATION_OWNER_ID?: string;

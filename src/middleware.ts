@@ -15,7 +15,7 @@ function withOwnerHeaders(response: Response) {
 export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url } = context;
   const ownerPage = url.pathname === '/owner' || url.pathname.startsWith('/owner/');
-  const ownerApi = url.pathname === '/api/owner/audience' || url.pathname.startsWith('/api/owner/requests/');
+  const ownerApi = url.pathname === '/api/owner' || url.pathname.startsWith('/api/owner/');
   const ownerBoundary = ownerPage || ownerApi;
   if (context.isPrerendered && ownerPage) throw new Error('Owner routes must be server-rendered.');
   if (!context.isPrerendered && ownerBoundary) {

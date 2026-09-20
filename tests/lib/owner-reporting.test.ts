@@ -31,8 +31,9 @@ function fixture() {
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
   for (let index = 0; index < 7; index++) {
     const automated = index === 6;
-    insert.run(`e${index}`,'old-news-single','old-news-recording',`s${index}`,`p${index}`,1,'audio','start',0,100,'old-news-launch','instagram','story',automated ? 'automated' : 'human','US','Tennessee',index < 5 ? 'Nashville' : 'Memphis','2026-09-18T12:00:00Z');
-    if (!automated) insert.run(`l${index}`,'old-news-single','old-news-recording',`s${index}`,`p${index}`,2,'audio','listen30',30,100,'old-news-launch','instagram','story','human','US','Tennessee',index < 5 ? 'Nashville' : 'Memphis','2026-09-18T12:01:00Z');
+    const session = index < 5 ? 'replaying-session' : `s${index}`;
+    insert.run(`e${index}`,'old-news-single','old-news-recording',session,`p${index}`,1,'audio','start',0,100,'old-news-launch','instagram','story',automated ? 'automated' : 'human','US','Tennessee',index < 5 ? 'Nashville' : 'Memphis','2026-09-18T12:00:00Z');
+    if (!automated) insert.run(`l${index}`,'old-news-single','old-news-recording',session,`p${index}`,2,'audio','listen30',30,100,'old-news-launch','instagram','story','human','US','Tennessee',index < 5 ? 'Nashville' : 'Memphis','2026-09-18T12:01:00Z');
   }
   insert.run('unrelated','other-release','other-recording','other-session','other-play',1,'audio','start',0,100,null,null,null,'human','US','','','2026-09-18T12:00:00Z');
   return db;
@@ -41,10 +42,7 @@ function fixture() {
 it('orders attention first, suppresses sparse cities and excludes automated traffic', async () => {
   const ledger = await loadStudioLedger(fixture(), new Date('2026-09-19T12:00:00Z'));
   expect(ledger.attention.newRequests).toBe(2);
-  expect(ledger.geography.cities).toEqual([
-    { label: 'Nashville, Tennessee', reportedListens: 5 },
-    { label: 'Other locations', reportedListens: 1 },
-  ]);
+  expect(ledger.geography.cities).toEqual([{ label: 'Other locations', reportedListens: 2 }]);
   expect(ledger.listening.reportedStarts).toBe(7);
   expect(ledger.activeCampaignListening.reportedStarts).toBe(6);
   expect(ledger.attentionRequests.map(request => request.id)).toEqual(['r2', 'r1']);

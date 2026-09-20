@@ -57,6 +57,14 @@ describe('middleware.onRequest', () => {
     expect(response.headers.get('cache-control')).toBe('private, no-store');
   });
 
+  it('protects future owner APIs by namespace', async () => {
+    vi.mocked(verifyOwnerAccess).mockResolvedValueOnce(null);
+    const ctx = makeContext('https://thesuperhuman.us/api/owner/campaigns');
+    const next = vi.fn(async () => new Response('private content'));
+    expect(((await onRequest(ctx, next)) as Response).status).toBe(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it('allows only originless, cookieless native OAuth form exchanges through the form guard', async () => {
     const attempt = async (path: string, headers: Record<string, string> = {}, method = 'POST', origin = 'https://thesuperhuman.us') => {
       const ctx = makeContext(origin + path);

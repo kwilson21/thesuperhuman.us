@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { interestSchema, eventSchema, PlaybackSequenceError, saveInterest, saveEvent } from '~/lib/music-demand';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
-const input = { releaseId: 'old-news-single', email: ' Fan@Example.com ', interest: 'both', merchandise: ['shirts', 'digital-art'], suggestion: 'Blue design', cityRegion: ' Nashville, Tennessee ', releaseUpdates: true, consent: true, turnstileToken: 'token' };
+const input = { releaseId: 'old-news-single', email: ' Fan@Example.com ', interest: 'both', merchandise: ['shirts', 'digital-art'], suggestion: 'Blue design', cityRegion: ' Nashville, Tennessee ', consent: true, turnstileToken: 'token' };
 function fixture() {
   const sql = new DatabaseSync(':memory:');
   sql.exec(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8'));
@@ -21,39 +21,27 @@ function fixture() {
 }
 describe('private music demand', () => {
   it('normalizes email and requires valid choices and consent', () => {
-    expect(interestSchema.parse(input)).toMatchObject({ email: 'fan@example.com', cityRegion: 'Nashville, Tennessee', releaseUpdates: true });
+    expect(interestSchema.parse({ ...input, releaseUpdates: true })).toMatchObject({ email: 'fan@example.com', cityRegion: 'Nashville, Tennessee' });
+    expect(interestSchema.parse({ ...input, releaseUpdates: true })).not.toHaveProperty('releaseUpdates');
     expect(interestSchema.safeParse({ ...input, consent: false }).success).toBe(false);
     expect(interestSchema.safeParse({ ...input, merchandise: ['vinyl'] }).success).toBe(false);
     expect(interestSchema.safeParse({ ...input, suggestion: 'x'.repeat(501) }).success).toBe(false);
     expect(interestSchema.safeParse({ ...input, interest: 'song' }).success).toBe(false);
     expect(interestSchema.safeParse({ ...input, cityRegion: 'x'.repeat(121) }).success).toBe(false);
-    expect(interestSchema.parse({ ...input, releaseUpdates: undefined }).releaseUpdates).toBe(false);
   });
-  it('updates a fans interest instead of counting repeat submissions twice', async () => {
+  it('updates aggregate interest while keeping each request independent', async () => {
     const { sql, db } = fixture();
     await saveInterest(db, interestSchema.parse(input));
     await saveInterest(db, interestSchema.parse({ ...input, merchandise: ['hoodies'] }));
     const rows = sql.prepare('SELECT email, merchandise FROM music_interest').all();
     expect(rows).toHaveLength(1); expect(rows[0].merchandise).toBe('["hoodies"]');
     expect(sql.prepare('SELECT kind,status FROM owner_requests ORDER BY kind').all())
-      .toEqual([{ kind: 'merchandise', status: 'new' }, { kind: 'purchase', status: 'new' }, { kind: 'release-update', status: 'new' }]);
-    expect(sql.prepare('SELECT email,status,consent_version FROM owner_audience_permissions').all())
-      .toEqual([{ email: 'fan@example.com', status: 'subscribed', consent_version: 'release-updates-v1' }]);
-    expect(sql.prepare('SELECT permission_key,action,actor FROM owner_audience_audit ORDER BY id').all())
       .toEqual([
-        { permission_key: expect.stringMatching(/^[a-f0-9]{64}$/), action: 'subscribed', actor: 'requester' },
-        { permission_key: expect.stringMatching(/^[a-f0-9]{64}$/), action: 'subscribed', actor: 'requester' },
+        { kind: 'merchandise', status: 'new' }, { kind: 'merchandise', status: 'new' },
+        { kind: 'purchase', status: 'new' }, { kind: 'purchase', status: 'new' },
       ]);
-    expect(JSON.stringify(sql.prepare('SELECT * FROM owner_audience_audit').all())).not.toContain('fan@example.com');
-  });
-  it('records when a repeat submission reopens a completed request', async () => {
-    const { sql, db } = fixture();
-    await saveInterest(db, interestSchema.parse(input));
-    sql.prepare("UPDATE owner_requests SET status='resolved' WHERE kind='purchase'").run();
-    await saveInterest(db, interestSchema.parse(input));
-    expect(sql.prepare("SELECT status FROM owner_requests WHERE kind='purchase'").get()).toEqual({ status: 'new' });
-    expect(sql.prepare("SELECT action FROM owner_request_audit audit JOIN owner_requests request ON request.id=audit.request_id WHERE request.kind='purchase' ORDER BY audit.id").all())
-      .toEqual([{ action: 'created' }, { action: 'reopened' }]);
+    expect(sql.prepare('SELECT * FROM owner_audience_permissions').all()).toEqual([]);
+    expect(sql.prepare('SELECT count(*) AS total FROM owner_request_audit').get()).toEqual({ total: 4 });
   });
   it('deduplicates retries and accepts ordered progress across audio and video', async () => {
     const { sql, db } = fixture();

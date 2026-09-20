@@ -1,5 +1,4 @@
 import { z } from 'astro/zod';
-import { audiencePermissionKey } from './owner-model';
 import { musicId } from './music-catalog';
 export const MERCHANDISE = { shirts: 'Shirts', hoodies: 'Hoodies', stickers: 'Stickers', 'digital-art': 'Digital art' } as const;
 export const interestSchema = z.object({
@@ -8,7 +7,6 @@ export const interestSchema = z.object({
   merchandise: z.array(z.enum(['shirts', 'hoodies', 'stickers', 'digital-art'])).max(4).default([]),
   suggestion: z.string().trim().max(500).default(''),
   cityRegion: z.string().trim().max(120).default(''),
-  releaseUpdates: z.boolean().default(false),
   consent: z.literal(true),
   turnstileToken: z.string().min(1).max(2048),
 }).refine(v => v.interest !== 'song' || (!v.merchandise.length && !v.suggestion), { path: ['merchandise'], message: 'Choose merchandise interest to include merchandise suggestions.' });
@@ -22,19 +20,12 @@ export const eventSchema = z.object({
 });
 type InterestInput = z.infer<typeof interestSchema>;
 
-async function demandRequestId(input: InterestInput, kind: 'purchase' | 'merchandise' | 'release-update') {
-  const source = `${input.releaseId}\0${input.email}\0${kind}`;
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
-  return `music-${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 32)}`;
-}
-
 export async function saveInterest(db: D1Database, input: InterestInput) {
   const now = new Date().toISOString();
-  const kinds: ('purchase' | 'merchandise' | 'release-update')[] = [];
+  const kinds: ('purchase' | 'merchandise')[] = [];
   if (input.interest === 'song' || input.interest === 'both') kinds.push('purchase');
   if (input.interest === 'merchandise' || input.interest === 'both') kinds.push('merchandise');
-  if (input.releaseUpdates) kinds.push('release-update');
-  const requestIds = await Promise.all(kinds.map(kind => demandRequestId(input, kind)));
+  const requestIds = kinds.map(() => `music-${crypto.randomUUID()}`);
   const statements = [db.prepare(`INSERT INTO music_interest (release_id,email,interest,merchandise,suggestion,consent_version,updated_at)
     VALUES (?,?,?,?,?,'availability-v1',?) ON CONFLICT(release_id,email) DO UPDATE SET
     interest=excluded.interest,merchandise=excluded.merchandise,suggestion=excluded.suggestion,
@@ -48,33 +39,15 @@ export async function saveInterest(db: D1Database, input: InterestInput) {
       ? JSON.stringify({ merchandise: [...new Set(input.merchandise)], suggestion: input.suggestion })
       : '{}';
     statements.push(
-      db.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
-        SELECT id,'reopened','system','Repeat submission',? FROM owner_requests
-        WHERE id=? AND status IN ('reviewed','resolved','withdrawn')`)
-        .bind(now, requestIds[index]),
       db.prepare(`INSERT INTO owner_requests
         (id,kind,release_id,name,email,city_region,summary,details_json,status,private_note,created_at,updated_at)
-        VALUES (?,?,?,'',?,?,?,?, 'new','',?,?) ON CONFLICT(id) DO UPDATE SET
-        city_region=excluded.city_region,summary=excluded.summary,details_json=excluded.details_json,
-        status='new',resolved_at=NULL,contact_delete_after=NULL,updated_at=excluded.updated_at`)
+        VALUES (?,?,?,'',?,?,?,?, 'new','',?,?)`)
         .bind(requestIds[index], kind, input.releaseId, input.email, input.cityRegion, summary, details, now, now),
       db.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
-        SELECT ?,'created','system','',? WHERE NOT EXISTS
-          (SELECT 1 FROM owner_request_audit WHERE request_id=?)`)
-        .bind(requestIds[index], now, requestIds[index]),
+        VALUES (?,'created','system','',?)`)
+        .bind(requestIds[index], now),
     );
   });
-  if (input.releaseUpdates) {
-    const sourceId = requestIds[kinds.indexOf('release-update')];
-    const permissionKey = await audiencePermissionKey(input.email);
-    statements.push(db.prepare(`INSERT INTO owner_audience_permissions
-      (email,status,consent_version,source_request_id,granted_at,withdrawn_at,updated_at)
-      VALUES (?,'subscribed','release-updates-v1',?,?,NULL,?) ON CONFLICT(email) DO UPDATE SET
-      status='subscribed',consent_version=excluded.consent_version,source_request_id=excluded.source_request_id,
-      withdrawn_at=NULL,updated_at=excluded.updated_at`).bind(input.email, sourceId, now, now),
-      db.prepare(`INSERT INTO owner_audience_audit(permission_key,action,actor,occurred_at) VALUES (?,'subscribed','requester',?)`)
-        .bind(permissionKey, now));
-  }
   await db.batch(statements);
 }
 export class PlaybackSequenceError extends Error {}

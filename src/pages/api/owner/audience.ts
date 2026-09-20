@@ -5,12 +5,12 @@ export const prerender = false;
 const schema = z.object({ action: z.literal('withdraw'), email: z.string().trim().toLowerCase().email().max(120) });
 export const POST: APIRoute = async ({ request, locals }) => {
   if (!locals.owner) return Response.json({ ok: false }, { status: 403 });
-  const db = locals.runtime.env.MUSIC_DB;
-  if (!db) return Response.json({ ok: false }, { status: 503 });
+  const { MUSIC_DB: db, OWNER_DATA_HMAC_KEY: auditKey } = locals.runtime.env;
+  if (!db || !auditKey) return Response.json({ ok: false }, { status: 503 });
   let body: unknown; try { body = await request.json(); } catch { return Response.json({ ok: false }, { status: 400 }); }
   const parsed = schema.safeParse(body); if (!parsed.success) return Response.json({ ok: false }, { status: 400 });
   const now = new Date().toISOString();
-  const permissionKey = await audiencePermissionKey(parsed.data.email);
+  const permissionKey = await audiencePermissionKey(parsed.data.email, auditKey);
   const [, result] = await db.batch([
     db.prepare(`INSERT INTO owner_audience_audit(permission_key,action,actor,occurred_at)
       SELECT ?,'withdrawn',?,? FROM owner_audience_permissions WHERE email=? AND status='subscribed'`)
