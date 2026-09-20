@@ -12,7 +12,7 @@ const ledger = await loadStudioLedger(db, new Date());
 ---
 <OwnerLayout title="Today" current="today" newRequestCount={ledger.attention.newRequests} ownerEmail={Astro.locals.owner?.email ?? ''}>
   <header class="owner-page-heading">
-    <div><p class="owner-kicker">Today · Studio Ledger</p><h1>What deserves your attention.</h1></div>
+    <div><p class="owner-kicker">Today · Owner center</p><h1>What deserves your attention.</h1></div>
     <p class="owner-health"><span aria-hidden="true"></span> Collection is ready</p>
   </header>
   <section class="owner-section attention-section" aria-labelledby="waiting-heading">
@@ -24,7 +24,7 @@ const ledger = await loadStudioLedger(db, new Date());
     <div class="campaign-copy"><p class="owner-kicker">Active promotion</p><h2 id="campaign-heading">{ledger.activeCampaign?.name ?? 'No active campaign'}</h2>
       <p>{ledger.activeCampaign?.primaryGoal ?? 'Start a campaign when you are ready to promote a release or service.'}</p>
       {ledger.activeCampaign && <a class="owner-primary-action" href={`/owner/campaigns/${ledger.activeCampaign.id}`}>Open Campaign Desk <span aria-hidden="true">→</span></a>}
-    </div><ListeningPath listening={ledger.activeCampaignListening} />
+    </div>{ledger.activeCampaign ? <ListeningPath listening={ledger.activeCampaignListening} /> : <p class="campaign-empty-path">Listening begins when a campaign is active.</p>}
   </section>
   <section class="owner-section observation-section" aria-labelledby="observation-heading">
     <AttentionIndex number="02" label="Next useful area" />

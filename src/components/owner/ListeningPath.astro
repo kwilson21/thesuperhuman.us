@@ -12,8 +12,9 @@ const steps = [
 <ol class="listening-path" aria-label="Reported listening path">
   {steps.map((step, index) => <li class:list={{ reached: step.value > 0 }}>
     <span class="path-marker" aria-hidden="true"></span>
-    <div><span class="path-value">{step.value}</span><span class="path-label">{step.label}</span></div>
-    <MetricDefinition label={step.label}>{step.explanation} These are reported listens, not certified streams.</MetricDefinition>
+    <div class="path-copy"><div><span class="path-value">{step.value}</span><span class="path-label">{step.label}</span></div>
+      <MetricDefinition label={step.label}>{step.explanation} These are reported listens, not certified streams.</MetricDefinition>
+    </div>
     {index < steps.length - 1 && <span class="path-line" aria-hidden="true"></span>}
   </li>)}
 </ol>

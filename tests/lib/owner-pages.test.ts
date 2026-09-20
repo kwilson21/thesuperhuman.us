@@ -13,6 +13,25 @@ it('renders shared navigation, one primary action and accessible guidance', () =
   expect(today).toContain('Next useful area');
 });
 
+it('keeps the empty campaign state compact and names the owner center plainly', () => {
+  const layout = read('src/layouts/OwnerLayout.astro');
+  const today = read('src/pages/owner/index.astro');
+  expect(layout.toLowerCase()).not.toContain('studio ledger');
+  expect(today.toLowerCase()).not.toContain('studio ledger');
+  expect(layout).toContain('owner center');
+  expect(today).toContain('ledger.activeCampaign ? <ListeningPath');
+  expect(today).toContain('Listening begins when a campaign is active.');
+});
+
+it('keeps listening explanations beside their metric copy', () => {
+  const component = read('src/components/owner/ListeningPath.astro');
+  const css = read('src/styles/owner.css');
+  expect(component).toContain('class="path-copy"');
+  expect(component).toMatch(/path-copy[\s\S]*MetricDefinition/);
+  expect(css).toContain('.path-copy{');
+  expect(css).toContain('.campaign-empty-path{');
+});
+
 it('keeps the owner interface editorial and responsive', () => {
   const css = read('src/styles/owner.css');
   expect(css).toContain('var(--paper)');
