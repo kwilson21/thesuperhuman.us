@@ -1,5 +1,7 @@
 import { expect, it } from 'vitest';
-import { ownerHealth } from '../../scripts/owner-health.mjs';
+import * as ownerHealthModule from '../../scripts/owner-health.mjs';
+
+const { ownerHealth } = ownerHealthModule;
 
 const requiredSchema = [
   'owner_campaigns', 'owner_requests', 'owner_request_audit',
@@ -22,6 +24,12 @@ function healthyFixture() {
     head: async (url: string) => ({ ok: true, status: 206, contentType: url.endsWith('/video') ? 'video/mp4' : 'audio/mpeg' }),
   };
 }
+
+it('uses the supported Wrangler JSON format option when listing secrets', () => {
+  expect(ownerHealthModule.wranglerSecretListArguments()).toEqual([
+    'node_modules/wrangler/bin/wrangler.js', 'secret', 'list', '--format', 'json',
+  ]);
+});
 
 it('passes only when configuration, schema, media, reporting and retention are healthy', async () => {
   const report = await ownerHealth(healthyFixture());
