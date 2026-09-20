@@ -1,0 +1,39 @@
+{
+  "id": "old-news-recording",
+  "title": "Old News (Prod. Lexi Banks)",
+  "artist": "Kaz̄on",
+  "duration": 160,
+  "visibility": "draft",
+  "credits": [
+    {
+      "role": "Beat production and instrumental mixing",
+      "name": "Lexi Banks"
+    },
+    {
+      "role": "Vocals, recording, vocal mixing and mastering",
+      "name": "Kaz̄on"
+    },
+    {
+      "role": "Lyrics",
+      "name": "Kaz̄on, co-written with ChatGPT"
+    }
+  ],
+  "versions": {
+    "master": {
+      "key": "music/old-news-recording/master-cda232160a069f03.mp3",
+      "type": "audio/mpeg"
+    },
+    "mix": {
+      "key": "music/old-news-recording/mix-e0df4fabd704edc5.mp3",
+      "type": "audio/mpeg"
+    },
+    "video": {
+      "key": "music/old-news-recording/video-44555c710ec8f444.mp4",
+      "type": "video/mp4"
+    }
+  },
+  "services": [
+    "two-track-vocals",
+    "mastering"
+  ]
+}

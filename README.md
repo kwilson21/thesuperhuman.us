@@ -20,7 +20,7 @@ npm run dev       # local Astro dev server on http://localhost:4321
 npm test          # run Vitest unit tests
 npm run check     # Astro type-check
 npm run build     # production build into dist/
-npm run preview   # serve the built site locally
+npm run preview   # serve the built Worker locally after npm run build
 ```
 
 Local env vars live in `.dev.vars` (not committed). See `src/env.d.ts` for the full list.
@@ -144,3 +144,9 @@ Editing `scripts/og.html` updates the layout and copy. The card reuses the revie
 The local redesign keeps general contact at `/#contact`: required name, email and message (nonempty after trimming, at most 4000 characters), with optional company. `/api/contact` uses this same schema and preserves origin checks, Turnstile, rate limiting and Resend delivery. Project type, timeline and budget are no longer part of the general form. The structured Audio inquiry remains separate.
 
 The three forms share pending, error, focus and receipt behavior in `src/scripts/form-submission.ts`. Without JavaScript or a configured public Turnstile key, submit remains disabled and a direct email alternative stays available. Resume receipt still means a request awaits approval, not that a PDF was sent.
+
+## Pre-launch Definition of Done
+
+Use [the pre-launch checklist](docs/prelaunch-checklist.md) before each website deployment. See [the readiness QA record](docs/prelaunch-qa-2026-09-15.md) for verified checks and remaining release work.
+
+Regenerate browser icons from the existing brand SVG with `node scripts/build-icons.mjs`.

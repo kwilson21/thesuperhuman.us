@@ -1,0 +1,32 @@
+{
+  "release": {
+    "id": "song-single",
+    "slug": "song",
+    "title": "Song title",
+    "artist": "Kaz̄on",
+    "type": "single",
+    "status": "preview",
+    "visibility": "draft",
+    "tracks": ["song-recording"]
+  },
+  "artworkFile": "Artwork/cover.png",
+  "recordings": [{
+    "id": "song-recording",
+    "title": "Song title",
+    "artist": "Kaz̄on",
+    "duration": 160,
+    "visibility": "draft",
+    "credits": [{"role": "Vocals", "name": "Kaz̄on"}],
+    "lyricsFile": "Lyrics/lyrics.txt",
+    "sources": {"master": "Audio/master.mp3", "mix": "Audio/mix.mp3", "video": "Video/lyric-video.mp4"}
+  }],
+  "examples": [{
+    "id": "song-mastering",
+    "recordingId": "song-recording",
+    "visibility": "draft",
+    "service": "mastering",
+    "summary": "Replace with accurate scope and credits.",
+    "before": "mix",
+    "after": "master"
+  }]
+}
