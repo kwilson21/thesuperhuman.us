@@ -7,7 +7,7 @@ import { recoverMusicFiles, commitMusicFiles } from './music-transaction.mjs';
 import { validateCatalog, recordingSchema, releaseSchema, exampleSchema } from '../src/lib/music-catalog.ts';
 
 const [input, ...flags] = process.argv.slice(2);
-if (!input) throw new Error('Usage: node scripts/prepare-music.mjs <package.json> [--replace] (Node 24+)');
+if (!input) throw new Error('Usage: node scripts/prepare-music.mjs <package.json> [--replace] (Node 22.18+)');
 await recoverMusicFiles();
 const config = JSON.parse(await readFile(input, 'utf8'));
 const base = dirname(resolve(input));

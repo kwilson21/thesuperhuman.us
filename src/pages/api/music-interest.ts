@@ -17,8 +17,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (!env.MUSIC_DB || !env.TURNSTILE_SECRET_KEY) return musicUnavailable();
   const ip = request.headers.get('cf-connecting-ip') ?? '0.0.0.0';
   try {
-    if (!(await verifyTurnstile(input.turnstileToken, env.TURNSTILE_SECRET_KEY, ip))) return Response.json({ ok: false, error: 'Verification expired. Please try again.' }, { status: 403 });
     if (!(await checkRateLimit(env.RATE_LIMIT, ip, 'rl:music-interest:')).allowed) return Response.json({ ok: false, error: 'Please wait a few minutes before sending another request.' }, { status: 429 });
+    if (!(await verifyTurnstile(input.turnstileToken, env.TURNSTILE_SECRET_KEY, ip))) return Response.json({ ok: false, error: 'Verification expired. Please try again.' }, { status: 403 });
     try { await saveInterest(env.MUSIC_DB, input); }
     catch (error) {
       await env.RATE_LIMIT.delete(`rl:music-interest:${ip}`);
