@@ -21,7 +21,7 @@ that journal directly; there is no second queue or delivery service.
    and callback `https://thesuperhuman.us/api/publication/callback`.
    GitHub is used only to verify identity; this app requests no repository scopes.
 4. Configure `PUBLICATION_OWNER_ID=10987837` and the OAuth App's public client ID
-   as `PUBLICATION_GITHUB_CLIENT_ID`. Keep `PUBLICATION_PROJECTS=threadline,the-engineers-daily`. Existing grants
+   as `PUBLICATION_GITHUB_CLIENT_ID`. Set `PUBLICATION_PROJECTS=threadline,the-engineers-daily,personal-website`. Existing grants
    need renewed owner consent for the additional project; adding it here does not
    expand a previously issued token.
 5. Store `PUBLICATION_GITHUB_CLIENT_SECRET` and a cryptographically random
@@ -91,3 +91,17 @@ registration, code/token exchange and scope narrowing, plus consent/identity
 failures. Node tests replace only the WorkerEntrypoint marker and KV transport.
 Production activation still requires the real bindings, migration, owner sign-in,
 a real publication receipt, and website rendering verification.
+
+## Personal website activation
+
+The website project uses `publication:personal-website` and the same journal as
+other projects. Its curated visual milestones and published updates appear in one Development
+journal. Curated entries remain repository-owned; publish new outcomes rather
+than duplicating those entries in the feed.
+After deploying the allowlist and page integration, reconnect the publisher and
+consent to the additional project scope. An old grant remains insufficient even
+after deployment. Verify `get_project_progress` for `personal-website`, publish a
+reviewed launch update, and check the project page and `/api/work-feed?project=personal-website`.
+Do not declare publishing active before receipt and rendering verification.
+Private checkpoints and backups remain separate; this does not schedule automatic
+publication or authorize mirroring private records.

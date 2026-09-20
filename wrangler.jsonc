@@ -22,7 +22,7 @@
     // Turnstile site key is public by design (rendered in HTML, visible
     // to the browser). Stored as a plain var, not a secret.
     "PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAADPYWKMQT_mbi4O-",
-    "PUBLICATION_PROJECTS": "threadline,the-engineers-daily",
+    "PUBLICATION_PROJECTS": "threadline,the-engineers-daily,personal-website",
     "PUBLICATION_OWNER_ID": "10987837",
     "PUBLICATION_GITHUB_CLIENT_ID": "Ov23liewYmTNLlpkrYjz"
   },
