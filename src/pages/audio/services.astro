@@ -16,7 +16,7 @@ const recording = example && catalog.recordings.find(track => track.id === examp
 const start = audioPath(host, '/start');
 const anchors = {'vocal-mix':'two-track-vocals',mastering:'mastering',bundle:'mix-master',custom:'full-mix'};
 ---
-<BaseLayout title="Audio services · Kaz̄on" description="Two-track vocal mixing and mastering. Careful listening, purposeful choices and clear scope before booking.">
+<BaseLayout title="Audio services · Kazon" description="Two-track vocal mixing and mastering. Careful listening, purposeful choices and clear scope before booking.">
 <div class="site-shell music-page services-page"><MusicNav />
 <section class="services-hero"><header><h1>Your song.<br />My full attention.</h1><p>Careful listening. Purposeful choices.<br />Your vision at the center.</p><a class="site-button" href={start}>Start your song</a></header>
 <div class="service-listening"><div class="service-listening-heading"><h2>Hear the difference.</h2><p>{recording ? `${recording.title} · Mastering example` : 'Selected audio work'}</p></div>{example && recording ? <ComparisonPlayer example={example} recording={recording} /> : <p class="service-no-example">Listening examples will appear here when they’re ready to share.</p>}<a class="more-audio" href={audioPath(host, '/portfolio')}>More audio work →</a>{recording && <details class="service-credits"><summary>Credits</summary><p>This comparison demonstrates mastering.</p>{recording.credits.map(credit => <p>{credit.role}: {credit.name}.</p>)}</details>}</div>

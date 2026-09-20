@@ -7,7 +7,6 @@ import ReleaseInterest from '~/components/audio/ReleaseInterest.astro';
 import LyricVideo from '~/components/audio/LyricVideo.astro';
 import AudioPlayer from '~/components/audio/AudioPlayer.astro';
 import PlayIcon from '~/components/audio/PlayIcon.astro';
-import ArtistName from '~/components/ArtistName.astro';
 import { loadMusicCatalog } from '~/lib/music-content';
 import { musicFile, releaseVersion } from '~/lib/music-catalog';
 import { audioPath } from '~/lib/host-routing';
@@ -35,7 +34,7 @@ const videoId = `video-${first.id}`;
   <div class="site-shell music-page premiere-page">
     <MusicNav />
     <header class="premiere-masthead">
-      <div class="masthead-artist">{release.artist === 'Kaz̄on' ? <ArtistName /> : <span>{release.artist}</span>}</div>
+      <div class="masthead-artist"><span>{release.artist}</span></div>
       <h1 class:list={['masthead-title', { 'masthead-title-long': mainTitle.length > 12 }]}>{mainTitle}</h1>
       <p class="masthead-credit">{release.producer && <span>Prod. {release.producer}</span>}<span>{release.status === 'preview' ? 'Streaming preview' : release.type === 'ep' ? 'EP' : release.type}</span></p>
       <div class="premiere-actions">
@@ -50,14 +49,14 @@ const videoId = `video-${first.id}`;
     {tracks.length > 1 && <section class="music-section album-tracks" aria-label="Track list">{tracks.slice(1).map((track, index) => <div><h2>{index + 2}. {track.title}</h2><AudioPlayer id={`listen-${track.id}`} src={musicFile(track.id, releaseVersion(track))} title={track.title} duration={track.duration} releaseId={release.id} recordingId={track.id} /></div>)}</section>}
     <section class="lyric-spread" aria-label="Lyrics and contributors">
       <div>{release.lyricQuote && <blockquote>“{release.lyricQuote}”</blockquote>}<a class="site-link" href="#lyrics">Read the lyrics <span aria-hidden="true">→</span></a></div>
-      <div class="featured-credits">{first.credits.filter(c => !/lyrics/i.test(c.role)).sort((a,b) => Number(b.name === first.artist) - Number(a.name === first.artist)).map(credit => <p><strong>{credit.name === 'Kaz̄on' ? <ArtistName /> : credit.name}</strong><span>{credit.role}</span></p>)}<a class="credit-link" href="#credits">Full credits</a></div>
+      <div class="featured-credits">{first.credits.filter(c => !/lyrics/i.test(c.role)).sort((a,b) => Number(b.name === first.artist) - Number(a.name === first.artist)).map(credit => <p><strong>{credit.name}</strong><span>{credit.role}</span></p>)}<a class="credit-link" href="#credits">Full credits</a></div>
     </section>
     <ReleaseInterest releaseId={release.id} artwork={release.artwork} merchandiseConcept={release.hero === 'old-news-premiere'} />
     <section class="music-details music-section" aria-label="Lyrics and credits">
       {tracks.map((track, index) => <div>
         {tracks.length > 1 && <h2>{track.title}</h2>}
         {track.lyrics && <details id={index === 0 ? 'lyrics' : `lyrics-${track.id}`}><summary>Lyrics <span aria-hidden="true">+</span></summary><div class="song-lyrics">{track.lyrics}</div></details>}
-        <details id={index === 0 ? 'credits' : `credits-${track.id}`}><summary>Credits <span aria-hidden="true">+</span></summary><dl>{track.credits.map(credit => <div><dt>{credit.role}</dt><dd>{credit.name === 'Kaz̄on' ? <ArtistName /> : credit.name}</dd></div>)}</dl></details>
+        <details id={index === 0 ? 'credits' : `credits-${track.id}`}><summary>Credits <span aria-hidden="true">+</span></summary><dl>{track.credits.map(credit => <div><dt>{credit.role}</dt><dd>{credit.name}</dd></div>)}</dl></details>
       </div>)}
       <p class="music-note">Free streaming preview. Downloads and purchases aren’t available yet. Playback starts and 30 seconds of listening help me understand interest in the release.</p>
     </section>

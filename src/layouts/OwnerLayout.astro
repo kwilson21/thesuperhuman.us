@@ -1,7 +1,6 @@
 ---
 import '~/styles/global.css';
 import '~/styles/owner.css';
-import ArtistName from '~/components/ArtistName.astro';
 interface Props { title: string; current: 'today' | 'requests' | 'campaigns'; newRequestCount: number; ownerEmail: string }
 const { title, current, newRequestCount, ownerEmail } = Astro.props;
 const links = [
@@ -19,7 +18,7 @@ const links = [
 </head><body class="owner-body">
   <a class="skip-link" href="#owner-main">Skip to content</a>
   <header class="owner-header"><div class="owner-shell owner-header-row">
-    <a class="owner-wordmark" href="/owner" aria-label="Owner center home"><ArtistName /> <span>owner center</span></a>
+    <a class="owner-wordmark" href="/owner" aria-label="Owner center home">Kazon <span>owner center</span></a>
     <nav aria-label="Owner center">{links.map(link => <a href={link.href} aria-current={current === link.id ? 'page' : undefined}>{link.label}{link.id === 'requests' && newRequestCount > 0 && <span class="request-count" aria-label={`${newRequestCount} new requests`}>{newRequestCount}</span>}</a>)}</nav>
     <span class="owner-identity">{ownerEmail}</span>
   </div></header>

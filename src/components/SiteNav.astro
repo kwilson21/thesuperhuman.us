@@ -1,6 +1,5 @@
 ---
 import { mainSitePath } from '~/lib/host-routing';
-import ArtistName from '~/components/ArtistName.astro';
 const host = (Astro.isPrerendered ? null : Astro.request.headers.get('host')) ?? Astro.url.host;
 const mainHref = (path: string) => Astro.isPrerendered ? new URL(path, Astro.site).href : mainSitePath(host, path);
 const isAudio = host.split(':')[0] === 'audio.thesuperhuman.us' || Astro.url.pathname.startsWith('/audio');
@@ -15,7 +14,7 @@ const current = isAudio ? '' : Astro.url.pathname.replace(/\/$/, '') || '/';
 const active = (href: string) => href === '/' ? current === '/' : current === href || current.startsWith(`${href}/`);
 ---
 <header class="site-header site-shell">
-  <a class="site-name" href={mainHref('/')}><ArtistName suffix=" Wilson" /></a>
+  <a class="site-name" href={mainHref('/')}>Kazon Wilson</a>
   <nav class="desktop-nav" aria-label="Primary">
     {links.map(({ href, label }) => <a href={mainHref(href)} aria-current={active(href) ? (isAudio ? 'location' : 'page') : undefined}>{label}</a>)}
   </nav>

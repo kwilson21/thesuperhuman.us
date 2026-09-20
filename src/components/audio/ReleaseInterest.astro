@@ -1,7 +1,6 @@
 ---
 import { MERCHANDISE } from '~/lib/music-demand';
 import merchConcepts from '~/assets/site/old-news-merch-concepts.webp';
-import ArtistName from '~/components/ArtistName.astro';
 interface Props { releaseId: string; artwork?: string; merchandiseConcept?: boolean }
 const { releaseId, merchandiseConcept = false } = Astro.props;
 const env = Astro.locals.runtime.env;
@@ -42,9 +41,9 @@ const available = Boolean(key && env.MUSIC_DB && env.TURNSTILE_SECRET_KEY);
         <input id="interest-email" type="email" name="email" autocomplete="email" required maxlength="120" />
         <p hidden data-form-error="email"></p>
       </div>
-      <label class="music-consent"><input type="checkbox" name="consent" required /><span><ArtistName /> may email me about availability of the song or merchandise I selected.</span></label>
+      <label class="music-consent"><input type="checkbox" name="consent" required /><span>Kazon may email me about availability of the song or merchandise I selected.</span></label>
       <p hidden data-form-error="consent"></p>
-      <p class="music-note">Your email and request are kept private. This does not subscribe you to a newsletter. To withdraw a request, <a href="mailto:kazon.wilson@thesuperhuman.us?subject=Music%20interest%20request">email <ArtistName /></a>.</p>
+      <p class="music-note">Your email and request are kept private. This does not subscribe you to a newsletter. To withdraw a request, <a href="mailto:kazon.wilson@thesuperhuman.us?subject=Music%20interest%20request">email Kazon</a>.</p>
       {available && <div class="cf-turnstile" data-sitekey={key} data-size="compact"></div>}
       {!available && <p>Requests are temporarily unavailable. Please try again later.</p>}
       <p hidden data-form-error="turnstileToken"></p>

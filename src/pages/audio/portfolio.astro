@@ -14,7 +14,7 @@ import '~/styles/music-hubs.css';
 const catalog = await loadMusicCatalog();
 const host = Astro.request.headers.get('host') ?? Astro.url.host;
 ---
-<BaseLayout title="Audio portfolio · Kaz̄on" description="Two-track vocal mixing, full mixing and mastering. Hear what changed.">
+<BaseLayout title="Audio portfolio · Kazon" description="Two-track vocal mixing, full mixing and mastering. Hear what changed.">
 <div class="site-shell music-page portfolio-page"><MusicNav />
 <header class="portfolio-heading"><h1>Hear the difference.</h1><p>Different approaches. Hear what changed.</p></header>
 <div class="methodology-tabs" role="group" aria-label="Comparison methodology"><button data-method="all" aria-pressed="true">All work</button>{Object.entries(methodologies).map(([key,method]) => <button data-method={key} aria-pressed="false">{method.label}</button>)}</div>
