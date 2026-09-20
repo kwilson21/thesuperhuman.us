@@ -39,8 +39,12 @@ describe('private music demand', () => {
       .toEqual([{ kind: 'merchandise', status: 'new' }, { kind: 'purchase', status: 'new' }, { kind: 'release-update', status: 'new' }]);
     expect(sql.prepare('SELECT email,status,consent_version FROM owner_audience_permissions').all())
       .toEqual([{ email: 'fan@example.com', status: 'subscribed', consent_version: 'release-updates-v1' }]);
-    expect(sql.prepare('SELECT action,actor FROM owner_audience_audit ORDER BY id').all())
-      .toEqual([{ action: 'subscribed', actor: 'requester' }, { action: 'subscribed', actor: 'requester' }]);
+    expect(sql.prepare('SELECT permission_key,action,actor FROM owner_audience_audit ORDER BY id').all())
+      .toEqual([
+        { permission_key: expect.stringMatching(/^[a-f0-9]{64}$/), action: 'subscribed', actor: 'requester' },
+        { permission_key: expect.stringMatching(/^[a-f0-9]{64}$/), action: 'subscribed', actor: 'requester' },
+      ]);
+    expect(JSON.stringify(sql.prepare('SELECT * FROM owner_audience_audit').all())).not.toContain('fan@example.com');
   });
   it('records when a repeat submission reopens a completed request', async () => {
     const { sql, db } = fixture();

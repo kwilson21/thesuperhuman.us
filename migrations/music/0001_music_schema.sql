@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS owner_audience_permissions (
 );
 CREATE TABLE IF NOT EXISTS owner_audience_audit (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  email TEXT NOT NULL,
+  permission_key TEXT NOT NULL,
   action TEXT NOT NULL CHECK(action IN ('subscribed','withdrawn')),
   actor TEXT NOT NULL,
   occurred_at TEXT NOT NULL

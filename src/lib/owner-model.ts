@@ -1,6 +1,11 @@
 export const ownerRequestKinds = ['purchase', 'merchandise', 'service', 'release-update'] as const;
 export const ownerRequestStatuses = ['new', 'reviewed', 'resolved', 'withdrawn'] as const;
 
+export async function audiencePermissionKey(email: string) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(email.trim().toLowerCase()));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
 export type OwnerRequestKind = typeof ownerRequestKinds[number];
 export type OwnerRequestStatus = typeof ownerRequestStatuses[number];
 

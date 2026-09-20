@@ -1,4 +1,5 @@
 import { z } from 'astro/zod';
+import { audiencePermissionKey } from './owner-model';
 import { musicId } from './music-catalog';
 export const MERCHANDISE = { shirts: 'Shirts', hoodies: 'Hoodies', stickers: 'Stickers', 'digital-art': 'Digital art' } as const;
 export const interestSchema = z.object({
@@ -65,13 +66,14 @@ export async function saveInterest(db: D1Database, input: InterestInput) {
   });
   if (input.releaseUpdates) {
     const sourceId = requestIds[kinds.indexOf('release-update')];
+    const permissionKey = await audiencePermissionKey(input.email);
     statements.push(db.prepare(`INSERT INTO owner_audience_permissions
       (email,status,consent_version,source_request_id,granted_at,withdrawn_at,updated_at)
       VALUES (?,'subscribed','release-updates-v1',?,?,NULL,?) ON CONFLICT(email) DO UPDATE SET
       status='subscribed',consent_version=excluded.consent_version,source_request_id=excluded.source_request_id,
       withdrawn_at=NULL,updated_at=excluded.updated_at`).bind(input.email, sourceId, now, now),
-      db.prepare(`INSERT INTO owner_audience_audit(email,action,actor,occurred_at) VALUES (?,'subscribed','requester',?)`)
-        .bind(input.email, now));
+      db.prepare(`INSERT INTO owner_audience_audit(permission_key,action,actor,occurred_at) VALUES (?,'subscribed','requester',?)`)
+        .bind(permissionKey, now));
   }
   await db.batch(statements);
 }
