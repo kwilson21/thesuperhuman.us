@@ -16,6 +16,13 @@ function tableNames(db: InstanceType<typeof DatabaseSync>) {
 }
 
 describe('owner insights schema', () => {
+  it('pins the Wrangler release that preserves numbered D1 migration order', () => {
+    const packageJson = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
+      devDependencies?: Record<string, string>;
+    };
+    expect(packageJson.devDependencies?.wrangler).toBe('4.90.0');
+  });
+
   it('keeps publication and music migrations in database-specific directories', () => {
     const config = readFileSync(new URL('../../wrangler.jsonc', import.meta.url), 'utf8');
     expect(config).toMatch(/"binding": "MUSIC_DB"[\s\S]*?"migrations_dir": "migrations\/music"/);
