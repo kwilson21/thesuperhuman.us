@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | Repository tests | PASS | 304 tests pass across 58 files on Node 22.19 at the consolidated PR #44 stack head. Pull requests run tests, Astro checks, and the production build in GitHub Actions. |
 | Astro check and build | PASS | `astro check` reports zero errors; the Cloudflare build completes. Existing content-loader and inline-script hints remain. |
-| Owner access policy | UNVERIFIED | JWT verification, cached JWKS, and fail-closed middleware pass locally. The production Cloudflare Access application, one-owner allow policy, other secrets, and signed live response have not been verified. |
+| Owner access policy | BLOCKED on configuration | JWT verification, cached JWKS, and fail-closed middleware pass locally. The deployed Worker has the existing contact, Turnstile, and publication secrets, but `OWNER_ACCESS_TEAM_DOMAIN`, `OWNER_ACCESS_AUD`, and `OWNER_EMAIL` are not configured. The production Cloudflare Access application, one-owner allow policy, and signed response still require an authenticated dashboard session. |
 | Private response headers | PASS locally | Middleware tests cover no-store and noindex behavior. Live headers remain part of post-deploy verification. |
 | MUSIC_DB schema and ledger | PASS for read-only reconciliation | Production contains the three baseline music tables, their index and archive trigger. All three tables contain zero rows. The migration ledger is empty, so `0001_music_schema.sql` and `0002_owner_retention.sql` are pending. The current Time Travel bookmark was recorded privately. No migration was applied. |
 | Request storage failure | PASS locally | Tests confirm success follows storage and urgent alerts are redacted. Live D1 and authorized email delivery remain unverified. |
@@ -17,15 +17,16 @@
 | Playback integrity and sparse geography | PASS locally | Sequence, sparse-timer delivery, automated-traffic exclusion, retained totals, completion-only geography, and storage-level five-listen city coarsening tests pass. |
 | Retention preview | PASS locally | The empty local preview generated matching private HTML and JSON. A scan found no email, request detail, private note, session ID, playthrough ID, JWT, IP address, or secret. No apply was performed. |
 | Retention freshness | UNVERIFIED | Health correctly reports that no successful retention apply is recorded. Apply an exact reviewed manifest only after schema reconciliation. |
-| Old News public media | FAIL for current live site | One-byte checks for master, mix, and video all failed. Keep the release hidden until the stacked code, R2 objects, routes, and permissions are verified together. |
+| Old News private media | PASS for stored objects | The master, mix, and lyric video were downloaded from private R2 on September 20. Their complete SHA-256 hashes match the content-addressed object keys, with expected nonzero sizes. |
+| Old News preview routes | UNVERIFIED | The current live site does not contain the stacked media routes. Keep the release hidden until protected-preview range responses and permissions are verified with the candidate Worker. |
 | Event-disable control | PASS locally | The API returns `204` and stores nothing when `MUSIC_EVENTS_ENABLED=false`; playback remains independent. Non-production deployment exercise remains unverified. |
 | Rollback and recovery | UNVERIFIED | Wrangler confirms the previous-version deployment command exists. No non-production Worker target was available to exercise rollback, release hiding, or D1 recovery. |
 | Owner interface | PASS locally | The stacked UI was previously checked across six owner routes at desktop and mobile widths, including unsigned rejection. Production access remains unverified. |
 
 ## Required before a deployment decision
 
-1. Configure and verify the single-owner Cloudflare Access policy and required secrets.
-2. Confirm all three Old News objects and streaming routes in a protected preview environment.
+1. Configure and verify the single-owner Cloudflare Access policy and the three missing owner settings.
+2. Confirm all three Old News streaming routes in a protected preview environment; stored R2 objects are already verified.
 3. Exercise event disable, release hiding, previous-version rollback, and visitor recovery in that preview environment.
 4. Re-run the complete checklist and present the exact migration and deployment change set for explicit approval.
 

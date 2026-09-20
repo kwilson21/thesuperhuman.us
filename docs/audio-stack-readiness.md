@@ -13,7 +13,7 @@ Career and prelaunch changes, the Releases/Portfolio page framework, the revised
 ## Old News readiness
 
 - PASS — owner confirmed direct streaming and portfolio permissions on September 16.
-- PASS — mix, master and lyric video staged in the private audio bucket; sizes and object checksums match local files. Public bucket domain disabled; no custom bucket domains.
+- PASS — mix, master and lyric video staged in the private audio bucket. A fresh September 20 download verified all three complete hashes against their content-addressed keys and confirmed expected nonzero sizes. Public bucket domain disabled; no custom bucket domains.
 - PASS — dedicated music database created and read back. The three baseline music tables are empty; their schema, index, archive trigger, empty migration ledger, pending migrations, and Time Travel recovery point were reconciled on September 20. No migration was applied.
 - PASS — desktop/mobile visual review, shared-clock A/B and loudness, click/tap seeking, native video/audio time transfer, seek and fullscreen checks.
 - PASS — 259 tests, Astro check (0 errors/warnings; 3 existing hints), asset QA and production build. Clean locked-dependency installation and Worker deployment dry-run pass.
