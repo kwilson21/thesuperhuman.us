@@ -200,11 +200,24 @@ export async function recoverInvoiceFromWebhook(db: D1Database, input: {
       .bind(input.stripeCustomerId, input.invoiceId, input.hostedInvoiceUrl, input.status, input.occurredAt,
         receivedAt, input.requestId),
     db.prepare(`INSERT OR IGNORE INTO stripe_invoice_attempts(invoice_id,request_id,installment,created_at)
-      VALUES (?,?,?,?)`).bind(input.invoiceId, input.requestId, input.installment, receivedAt),
+      SELECT ?,?,?,? WHERE EXISTS (
+        SELECT 1 FROM audio_payments WHERE request_id=? AND ${prefix}_invoice_id=?
+      )`).bind(input.invoiceId, input.requestId, input.installment, receivedAt, input.requestId, input.invoiceId),
     db.prepare(`INSERT OR IGNORE INTO stripe_webhook_events(id,event_type,invoice_id,occurred_at,processed_at)
-      VALUES (?,?,?,?,?)`).bind(input.eventId, input.eventType, input.invoiceId, input.occurredAt, receivedAt),
+      SELECT ?,?,?,?,? WHERE EXISTS (
+        SELECT 1 FROM audio_payments WHERE request_id=? AND ${prefix}_invoice_id=?
+      )`).bind(input.eventId, input.eventType, input.invoiceId, input.occurredAt, receivedAt,
+        input.requestId, input.invoiceId),
+    db.prepare(`INSERT OR IGNORE INTO stripe_unmatched_events
+      (event_id,event_type,invoice_id,request_id,installment,status,occurred_at,received_at,reason)
+      SELECT ?,?,?,?,?,?,?,?,'invoice-conflict' WHERE EXISTS (
+        SELECT 1 FROM audio_payments WHERE request_id=? AND ${prefix}_invoice_id IS NOT NULL AND ${prefix}_invoice_id<>?
+      )`).bind(input.eventId, input.eventType, input.invoiceId, input.requestId, input.installment,
+        input.status, input.occurredAt, receivedAt, input.requestId, input.invoiceId),
   ]);
-  return 'recovered';
+  const unmatched = await db.prepare('SELECT event_id FROM stripe_unmatched_events WHERE event_id=?')
+    .bind(input.eventId).first();
+  return unmatched ? 'unmatched' : 'recovered';
 }
 
 export async function applyStripeInvoiceEvent(db: D1Database, input: {

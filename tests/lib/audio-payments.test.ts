@@ -6,6 +6,7 @@ import {
   approveAudioPayment,
   getAudioPayment,
   recordInvoice,
+  recoverInvoiceFromWebhook,
   replaceTerminalInvoice,
 } from '~/lib/audio-payments';
 
@@ -162,5 +163,21 @@ describe('audio payments', () => {
       WHERE request_id=? AND action='booking-invoice-replaced'`).get('request-1')).toEqual({ total: 1 });
     await expect(replaceTerminalInvoice(db, { requestId: 'request-1', installment: 'booking', actor: approval.actor }))
       .rejects.toThrow('void or uncollectible');
+  });
+
+  it('dead-letters the invoice that loses a concurrent recovery race', async () => {
+    const { db, sql } = fixture();
+    await approveAudioPayment(db, approval);
+    const recover = (eventId: string, invoiceId: string) => recoverInvoiceFromWebhook(db, {
+      eventId, eventType: 'invoice.paid', requestId: 'request-1', installment: 'booking', invoiceId,
+      stripeCustomerId: 'cus_1', hostedInvoiceUrl: `https://invoice.stripe.com/${invoiceId}`,
+      status: 'paid', occurredAt: '2026-09-20T15:00:00.000Z',
+    });
+    const results = await Promise.all([recover('evt_first', 'in_first'), recover('evt_second', 'in_second')]);
+    expect(results.sort()).toEqual(['recovered', 'unmatched']);
+    expect(sql.prepare('SELECT COUNT(*) AS total FROM stripe_webhook_events').get()).toEqual({ total: 1 });
+    expect(sql.prepare('SELECT COUNT(*) AS total FROM stripe_invoice_attempts').get()).toEqual({ total: 1 });
+    expect(sql.prepare('SELECT invoice_id,reason FROM stripe_unmatched_events').get())
+      .toEqual({ invoice_id: 'in_second', reason: 'invoice-conflict' });
   });
 });
