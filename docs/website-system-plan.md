@@ -122,6 +122,13 @@ Audio notes become optional so empty prose is not required to publish a recordin
 - **Change an illustration:** reuse or create the asset, complete its QA record,
   inspect actual placements, then replace the production reference.
 
+## Deferred maintenance
+
+- Create matching personal-name font derivatives for every remaining site
+  typeface that needs the horizontal mark over the `z`, including Inter and
+  JetBrains Mono. Until a matching derivative exists, render the plain name in
+  the surrounding typeface instead of inserting a differently styled glyph.
+
 ## Implementation sequence
 
 1. **Foundations and Home prototype.** Reuse the current palette and type; build

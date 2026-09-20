@@ -7,8 +7,8 @@ export const interestSchema = z.object({
   merchandise: z.array(z.enum(['shirts', 'hoodies', 'stickers', 'digital-art'])).max(4).default([]),
   suggestion: z.string().trim().max(500).default(''),
   cityRegion: z.string().trim().max(120).default(''),
-  consent: z.literal(true),
-  turnstileToken: z.string().min(1).max(2048),
+  consent: z.literal(true, { errorMap: () => ({ message: 'Check the box to confirm I may email you about your selection.' }) }),
+  turnstileToken: z.string().min(1, 'Complete the verification and try again.').max(2048),
 }).refine(v => v.interest !== 'song' || (!v.merchandise.length && !v.suggestion), { path: ['merchandise'], message: 'Choose merchandise interest to include merchandise suggestions.' });
 export const eventSchema = z.object({
   releaseId: musicId, recordingId: musicId, sessionId: z.string().uuid(), playthroughId: z.string().uuid(),
