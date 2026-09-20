@@ -11,7 +11,7 @@ const env = Astro.locals.runtime?.env;
 const siteKey = env?.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 const available = Boolean(siteKey && isAudioIntakeAvailable(env));
 ---
-<BaseLayout title="Start your song · Kazon" description="Choose your service, share your recording and send it to Kazon for review. No payment before file approval.">
+<BaseLayout title="Start your song · Kazon" description="Choose your service, share your recording and send it to Kazon for review. Payment comes only after you approve the offer.">
 <article class="site-shell intake-page">
 <ol class="intake-progress" aria-label="Your progress"><li aria-current="step"><span class="step-number">1</span> Service</li><li><span class="step-number">2</span> Song &amp; direction</li><li><span class="step-number">3</span> Review</li></ol>
 <form id="song-intake" data-available={available} novalidate>
@@ -36,9 +36,9 @@ const available = Boolean(siteKey && isAudioIntakeAvailable(env));
 {available ? <div class="cf-turnstile" data-sitekey={siteKey}></div> : <p class="intake-unavailable">This preview isn’t connected to email delivery yet. You can try every step; sending is unavailable.</p>}<p data-form-error="turnstileToken" hidden></p></div></div>
 </section>
 <p data-form-status role="status" tabindex="-1"></p>
-<div class="intake-actions"><button type="button" data-back hidden>Back</button><button type="button" class="site-button" data-next>Continue</button><button type="submit" class="site-button" hidden disabled>Send for review</button></div><p class="intake-reassurance">No payment now. No commitment until you approve the offer.</p>
+<div class="intake-actions"><button type="button" data-back hidden>Back</button><button type="button" class="site-button" data-next>Continue</button><button type="submit" class="site-button" hidden disabled>Send for review</button></div><p class="intake-reassurance">No payment now. After file review, you’ll receive a written offer. If you approve it, a secure Stripe invoice books the project.</p>
 </form>
-<section id="intake-success" hidden tabindex="-1" role="status"><h1>Your song is in for review.</h1><p class="intake-intro">You’ll hear from me by email.</p><ol class="intake-next-steps"><li>I’ll listen and check the files.</li><li>You’ll receive an offer or a request for clarification.</li><li>You approve the offer before paying a deposit.</li></ol><p>No payment taken. Nothing booked yet.</p></section>
+<section id="intake-success" hidden tabindex="-1" role="status"><h1>Your song is in for review.</h1><p class="intake-intro">You’ll hear from me by email.</p><ol class="intake-next-steps"><li>I’ll listen and check the files.</li><li>You’ll receive an offer or a request for clarification.</li><li>You approve the scope and fixed project price.</li><li>A secure Stripe invoice for 50% books the project.</li></ol><p>No payment has been taken. Nothing is booked until the deposit invoice is paid.</p></section>
 <p class="intake-contact">Need a hand? <a href="mailto:kazon.wilson@thesuperhuman.us">Email me</a>.</p>
 </article><AudioFooter slot="footer" />
 {available && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>}
