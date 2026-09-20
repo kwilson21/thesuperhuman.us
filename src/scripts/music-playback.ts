@@ -31,7 +31,7 @@ export function createPlaybackTracker(options: PlaybackTrackerOptions) {
       accumulatedSeconds: Math.floor(reportedSeconds), mediaDurationSeconds: Math.round(Number.isFinite(duration) ? duration : 0),
       ...options.attribution,
     };
-    queue = queue.then(() => options.submit(payload));
+    queue = queue.then(() => options.submit(payload)).catch(() => {});
   }
   return {
     get completed() { return completed; },

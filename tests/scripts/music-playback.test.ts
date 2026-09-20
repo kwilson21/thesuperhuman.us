@@ -44,6 +44,28 @@ it('reports completion after genuine playback and starts a replay as a new playt
   expect(events.at(-1)?.playthroughId).not.toBe(firstPlaythrough);
 });
 
+it('continues submitting later events after one submission throws', async () => {
+  let clock = 0;
+  const events: Record<string, unknown>[] = [];
+  let attempts = 0;
+  const tracker = createPlaybackTracker({
+    releaseId: 'old-news-single', recordingId: 'old-news-recording',
+    sessionId: 'a8246321-955d-4a28-b81e-2b74b52cd450',
+    now: () => clock,
+    submit: async event => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('temporary submit failure');
+      events.push(event);
+    },
+  });
+  tracker.reset(0);
+  clock = 12_000; tracker.sample(12, true, 1, 100, 'audio');
+  await tracker.flush();
+  expect(attempts).toBe(2);
+  expect(events).toHaveLength(1);
+  expect(events[0]).toMatchObject({ event: 'progress', sequence: 2 });
+});
+
 it('retries loading the YouTube API after a temporary script failure', async () => {
   // Exercise the real loader without loading a third-party script in the test runner.
   const source = readFileSync('src/scripts/music-playback.ts', 'utf8');
