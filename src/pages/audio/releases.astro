@@ -8,6 +8,7 @@ import skyline from '~/assets/site/music-skyline.webp';
 import { loadMusicCatalog } from '~/lib/music-content';
 import { musicFile, releaseVersion } from '~/lib/music-catalog';
 import { mainSitePath, audioPath } from '~/lib/host-routing';
+import ArtistName from '~/components/ArtistName.astro';
 import '~/styles/music.css';
 import '~/styles/music-hubs.css';
 const { releases, recordings } = await loadMusicCatalog();
@@ -16,7 +17,7 @@ const types = [...new Set(releases.map(release => release.type))];
 ---
 <BaseLayout title="Releases · Kaz̄on" description="Singles, EPs and albums by Kaz̄on.">
 <div class="site-shell music-page collection-page"><MusicNav />
-<header class="collection-hero"><img src={skyline.src} width={skyline.width} height={skyline.height} alt="" /><div><h1>Music by Kaz̄on.</h1><p>Songs, stories, and everything that comes next.</p></div></header>
+<header class="collection-hero"><img src={skyline.src} width={skyline.width} height={skyline.height} alt="" /><div><h1>Music by <ArtistName />.</h1><p>Songs, stories, and everything that comes next.</p></div></header>
 <div class="collection-bar"><div role="group" aria-label="Release format">{types.length > 1 ? <><button data-filter="all" aria-pressed="true">All releases</button>{types.map(type => <button data-filter={type} aria-pressed="false">{type === 'ep' ? 'EPs' : type === 'album' ? 'Albums' : 'Singles'}</button>)}</> : <span>All releases</span>}</div><span data-release-count>{releases.length} {releases.length === 1 ? 'release' : 'releases'}</span></div>
 <div class="music-collection">{releases.map(release => {
  const track = recordings.find(recording => recording.id === release.tracks[0])!;

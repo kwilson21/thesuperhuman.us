@@ -1,5 +1,6 @@
 ---
 import { mainSitePath, audioPath } from '~/lib/host-routing';
+import ArtistName from '~/components/ArtistName.astro';
 const host = Astro.isPrerendered ? Astro.url.host : Astro.request.headers.get('host') ?? Astro.url.host;
 const mainHref = (path: string) => Astro.isPrerendered ? new URL(path, Astro.site).href : mainSitePath(host, path);
 const audioHref = Astro.isPrerendered ? new URL('/audio/', Astro.site).href : audioPath(host, '/');
@@ -12,7 +13,7 @@ const { compact = false } = Astro.props;
 ---
 {compact ? <footer class="compact-footer site-shell">
   <div class="compact-footer-inner">
-    <a class="footer-name" href={homeHref}>Kaz̄on Wilson</a>
+    <a class="footer-name" href={homeHref}><ArtistName suffix=" Wilson" /></a>
     <nav aria-label="Elsewhere"><a href="https://github.com/kwilson21">GitHub</a><a href="https://www.linkedin.com/in/kazonwilson/">LinkedIn</a><a href={audioHref}>Audio</a><a href={servicesHref}>Services</a><a href={privacyHref}>Privacy</a></nav>
 
     <p>The Superhuman Group LLC · {year}</p>
