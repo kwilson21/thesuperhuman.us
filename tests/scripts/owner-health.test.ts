@@ -6,6 +6,7 @@ const { ownerHealth } = ownerHealthModule;
 const requiredSchema = [
   'owner_campaigns', 'owner_requests', 'owner_request_audit',
   'music_playback_events', 'music_playback_daily', 'music_playback_geography_daily', 'owner_retention_runs',
+  'audio_payments', 'stripe_webhook_events',
 ];
 
 function healthyFixture() {
@@ -51,4 +52,15 @@ it('reports actionable safe failures without private data', async () => {
   expect(report.checks).toContainEqual(expect.objectContaining({ id: 'request-storage', status: 'attention', next: expect.any(String) }));
   expect(JSON.stringify(report)).not.toContain('fan@example.com');
   expect(JSON.stringify(report)).not.toContain('OWNER_EMAIL=');
+});
+
+it('requires the payment projection and Stripe event ledger', async () => {
+  const fixture = healthyFixture();
+  fixture.query = async (sql: string) => {
+    if (sql.includes('sqlite_master')) return requiredSchema.filter(name => name !== 'audio_payments').map(name => ({ name }));
+    if (sql.includes('owner_retention_runs')) return [{ completed_at: '2026-09-18T12:00:00Z' }];
+    return [{ total: 0 }];
+  };
+  const report = await ownerHealth(fixture);
+  expect(report.checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
 });

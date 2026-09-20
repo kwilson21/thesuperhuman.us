@@ -27,8 +27,10 @@
 
 **Files:**
 - Create: `migrations/music/0003_audio_payments.sql`
+- Modify: `db/music.sql`
 - Create: `src/lib/audio-payments.ts`
 - Create: `tests/lib/audio-payments.test.ts`
+- Modify: `scripts/owner-health.mjs`
 - Modify: `tests/scripts/owner-health.test.ts`
 
 **Interfaces:**
