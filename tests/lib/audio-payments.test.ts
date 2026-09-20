@@ -179,5 +179,10 @@ describe('audio payments', () => {
     expect(sql.prepare('SELECT COUNT(*) AS total FROM stripe_invoice_attempts').get()).toEqual({ total: 1 });
     expect(sql.prepare('SELECT invoice_id,reason FROM stripe_unmatched_events').get())
       .toEqual({ invoice_id: 'in_second', reason: 'invoice-conflict' });
+
+    sql.prepare(`UPDATE audio_payments SET booking_invoice_id=NULL,booking_invoice_url=NULL,booking_status='not_created'
+      WHERE request_id='request-1'`).run();
+    expect(await recover('evt_second', 'in_second')).toBe('recovered');
+    expect(sql.prepare('SELECT COUNT(*) AS total FROM stripe_unmatched_events').get()).toEqual({ total: 0 });
   });
 });

@@ -214,6 +214,9 @@ export async function recoverInvoiceFromWebhook(db: D1Database, input: {
         SELECT 1 FROM audio_payments WHERE request_id=? AND ${prefix}_invoice_id IS NOT NULL AND ${prefix}_invoice_id<>?
       )`).bind(input.eventId, input.eventType, input.invoiceId, input.requestId, input.installment,
         input.status, input.occurredAt, receivedAt, input.requestId, input.invoiceId),
+    db.prepare(`DELETE FROM stripe_unmatched_events WHERE event_id=? AND EXISTS (
+      SELECT 1 FROM audio_payments WHERE request_id=? AND ${prefix}_invoice_id=?
+    )`).bind(input.eventId, input.requestId, input.invoiceId),
   ]);
   const unmatched = await db.prepare('SELECT event_id FROM stripe_unmatched_events WHERE event_id=?')
     .bind(input.eventId).first();
