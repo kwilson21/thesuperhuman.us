@@ -10,6 +10,7 @@ declare namespace App {
 
 interface Env {
   MUSIC_DB?: D1Database;
+  MUSIC_EVENTS_ENABLED?: string;
   OWNER_ACCESS_TEAM_DOMAIN?: string;
   OWNER_ACCESS_AUD?: string;
   OWNER_EMAIL?: string;
