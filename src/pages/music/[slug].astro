@@ -34,7 +34,7 @@ const videoId = `video-${first.id}`;
   <div class="site-shell music-page premiere-page">
     <MusicNav />
     <header class="premiere-masthead">
-      <div class="masthead-artist"><span aria-label={release.artist}>{release.artist.split(/(z\u0304)/i).map(part => /^z\u0304$/i.test(part) ? <span class="artist-macron">{part}</span> : part)}</span></div>
+      <div class="masthead-artist"><span>{release.artist}</span></div>
       <h1 class:list={['masthead-title', { 'masthead-title-long': mainTitle.length > 12 }]}>{mainTitle}</h1>
       <p class="masthead-credit">{release.producer && <span>Prod. {release.producer}</span>}<span>{release.status === 'preview' ? 'Streaming preview' : release.type === 'ep' ? 'EP' : release.type}</span></p>
       <div class="premiere-actions">
