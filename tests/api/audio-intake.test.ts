@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from '~/pages/api/audio-intake';
 const base = { service:'vocal-mix', title:'My song', direction:'judgment', preferences:{}, name:'Artist', email:'artist@example.com', permission:true, turnstileToken:'test', fileLink:'https://drive.google.com/example' };
 function context(body: unknown = base, origin = 'https://thesuperhuman.us') {
-  return { request: new Request('https://thesuperhuman.us/api/audio-intake', { method:'POST', headers:{origin,'content-type':'application/json'}, body:JSON.stringify(body) }), locals:{runtime:{env:{RESEND_API_KEY:'test',CONTACT_FROM_EMAIL:'test@example.com',CONTACT_TO_EMAIL:'owner@example.com',TURNSTILE_SECRET_KEY:'test',RATE_LIMIT:{get:vi.fn(async()=>null),put:vi.fn(async()=>{})}}}} } as any;
+  return { request: new Request('https://thesuperhuman.us/api/audio-intake', { method:'POST', headers:{origin,'content-type':'application/json'}, body:JSON.stringify(body) }), locals:{runtime:{env:{RESEND_API_KEY:'test',CONTACT_FROM_EMAIL:'test@example.com',CONTACT_TO_EMAIL:'owner@example.com',TURNSTILE_SECRET_KEY:'test',RATE_LIMIT:{get:vi.fn(async()=>null),put:vi.fn(async()=>{}),delete:vi.fn(async()=>{})}}}} } as any;
 }
 beforeEach(()=>vi.stubGlobal('fetch',vi.fn(async (url:string)=> url.includes('siteverify') ? {ok:true,json:async()=>({success:true})} : {ok:true})));
 describe('intake endpoint',()=>{
@@ -11,6 +11,12 @@ describe('intake endpoint',()=>{
  it('requires files and permission before sending',async()=>{expect((await POST(context({...base,fileLink:'',permission:false}))).status).toBe(400);expect(fetch).not.toHaveBeenCalled();});
  it('does not accept obsolete upload session instead of files',async()=>{expect((await POST(context({...base,fileLink:'',uploadSession:'00000000-0000-0000-0000-000000000001'}))).status).toBe(400);});
  it('does not claim success when delivery is unavailable or fails',async()=>{const ctx=context();ctx.locals.runtime.env.RESEND_API_KEY='';expect((await POST(ctx)).status).toBe(503);(fetch as any).mockImplementation(async(url:string)=>url.includes('siteverify')?{ok:true,json:async()=>({success:true})}:{ok:false});expect((await POST(context())).status).toBe(502);});
+ it('releases the submission limit when delivery fails', async () => {
+   vi.mocked(fetch).mockImplementation(async url => String(url).includes('siteverify') ? { ok: true, json: async () => ({ success: true }) } as Response : { ok: false } as Response);
+   const ctx = context();
+   expect((await POST(ctx)).status).toBe(502);
+   expect(ctx.locals.runtime.env.RATE_LIMIT.delete).toHaveBeenCalledWith('rl:audio:0.0.0.0');
+ });
  it('rejects empty specific direction before external calls', async () => {
    const response = await POST(context({ ...base, direction: 'specific', referenceNote: '  ' }));
    expect(response.status).toBe(400);

@@ -17,6 +17,6 @@ try {
   for (const [key, sql] of Object.entries(queries)) report[key] = await database.query(sql);
 } finally { await database.close(); }
 await mkdir('.private', { recursive: true });
-await writeFile('.private/music-demand-report.json', JSON.stringify(report,null,2));
-await writeFile('.private/music-demand-report.html', renderMusicReport('Music demand', `${report.environment} · ${report.generatedAt}`, 'Starts and 30-second listens are browser-reported, deduplicated per tab session and recording. They are not audited unique listeners. Interest totals represent unverified email addresses, not guaranteed buyers.', report));
+await writeFile('.private/music-demand-report.json', JSON.stringify(report,null,2), { mode: 0o600 });
+await writeFile('.private/music-demand-report.html', renderMusicReport('Music demand', `${report.environment} · ${report.generatedAt}`, 'Starts and 30-second listens are browser-reported, deduplicated per tab session and recording. They are not audited unique listeners. Interest totals represent unverified email addresses, not guaranteed buyers.', report), { mode: 0o600 });
 console.log('Saved .private/music-demand-report.html and .private/music-demand-report.json');

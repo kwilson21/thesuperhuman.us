@@ -21,6 +21,13 @@ it('only confirms interest after persistence and captcha succeed', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => Response.json({ success: false })));
   expect((await interest(context(body))).status).toBe(403);
 });
+it('rate limits interest before making an outbound captcha request', async () => {
+  const ctx = context(body);
+  ctx.locals.runtime.env.RATE_LIMIT = { get: async () => '1', put: async () => {} };
+  const response = await interest(ctx);
+  expect(response.status).toBe(429);
+  expect(fetch).not.toHaveBeenCalled();
+});
 it('rejects oversized requests and events for unrelated recordings', async () => {
   expect((await interest(context({ ...body, padding: 'x'.repeat(9000) }))).status).toBe(413);
   const data = { releaseId: 'release', recordingId: 'other', sessionId: 'a8246321-955d-4a28-b81e-2b74b52cd450', medium: 'audio', event: 'start' };
@@ -35,4 +42,15 @@ it('allows the same event to retry after a temporary database failure', async ()
   const retry = context(data);
   retry.locals.runtime.env.RATE_LIMIT = ctx.locals.runtime.env.RATE_LIMIT;
   expect((await event(retry)).status).toBe(200);
+});
+it('applies a catalog-wide event cap before the per-event cap', async () => {
+  const data = { releaseId: 'release', recordingId: 'recording', sessionId: 'a8246321-955d-4a28-b81e-2b74b52cd450', medium: 'audio', event: 'start' };
+  const keys: string[] = [];
+  const ctx = context(data);
+  ctx.locals.runtime.env.RATE_LIMIT = {
+    get: async (key: string) => { keys.push(key); return key.startsWith('rl:music-event-all:') ? '240' : null; },
+    put: async () => {},
+  };
+  expect((await event(ctx)).status).toBe(429);
+  expect(keys).toEqual(['rl:music-event-all:0.0.0.0']);
 });
