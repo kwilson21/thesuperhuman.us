@@ -27,4 +27,8 @@ it('provides connected request, campaign and audience views', () => {
   }
   expect(read('src/pages/owner/campaigns/[id].astro')).toContain('Return to Today');
   expect(read('src/pages/owner/requests/[id].astro')).toContain('Supplied by requester');
+  expect(read('src/pages/owner/requests/[id].astro')).toContain('Submitted with this request');
+  expect(read('src/pages/owner/requests/[id].astro')).toContain('for="owner-private-note"');
+  expect(read('src/scripts/owner-request-actions.ts')).toContain('Connection lost');
+  expect(read('src/pages/owner/audience.astro')).toContain('Connection lost');
 });

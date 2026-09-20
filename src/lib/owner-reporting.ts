@@ -7,7 +7,7 @@ export type ListeningSummary = {
   replays: number;
 };
 export type GeographySummary = { cities: { label: string; reportedListens: number }[] };
-export type CampaignSummary = { id: string; name: string; primaryGoal: string; startsAt: string; endsAt: string | null };
+export type CampaignSummary = { id: string; name: string; primaryGoal: string; startsAt: string; endsAt: string | null; status: 'draft' | 'active' | 'complete' };
 export type CampaignDesk = CampaignSummary & {
   subjectType: 'release' | 'service'; subjectId: string; status: 'draft' | 'active' | 'complete';
   secondarySignals: string[]; approvedPlan: string; retrospective: string; nextLesson: string;
@@ -20,7 +20,8 @@ export type StudioLedger = {
   listening: ListeningSummary;
   geography: GeographySummary;
   activeCampaign: CampaignSummary | null;
-  recentRequests: OwnerRequest[];
+  attentionRequests: OwnerRequest[];
+  activeCampaignListening: ListeningSummary;
   observations: string[];
 };
 export type AudiencePermission = { email: string; status: 'subscribed' | 'unsubscribed'; grantedAt: string; withdrawnAt: string | null; sourceRequestId: string | null };
@@ -61,7 +62,7 @@ async function requests(db: D1Database, where = '', values: unknown[] = [], limi
 }
 
 function campaignSummary(row: CampaignRow): CampaignSummary {
-  return { id: row.id, name: row.name, primaryGoal: row.primary_goal, startsAt: row.starts_at, endsAt: row.ends_at };
+  return { id: row.id, name: row.name, primaryGoal: row.primary_goal, startsAt: row.starts_at, endsAt: row.ends_at, status: row.status };
 }
 
 export async function loadCampaignDesk(db: D1Database, campaignId: string, now: Date): Promise<CampaignDesk | null> {
@@ -71,9 +72,13 @@ export async function loadCampaignDesk(db: D1Database, campaignId: string, now: 
   const end = row.ends_at ?? now.toISOString();
   const subjectColumn = row.subject_type === 'release' ? 'release_id' : 'service_id';
   const relatedRequests = await requests(db, `WHERE (campaign_id=? OR (campaign_id IS NULL AND ${subjectColumn}=? AND created_at>=? AND created_at<=?))`, [row.id, row.subject_id, row.starts_at, end], 10);
+  const demandRows = (await db.prepare(`SELECT kind,COUNT(*) AS total FROM owner_requests
+    WHERE (campaign_id=? OR (campaign_id IS NULL AND ${subjectColumn}=? AND created_at>=? AND created_at<=?))
+      AND kind IN ('purchase','merchandise') GROUP BY kind`)
+    .bind(row.id, row.subject_id, row.starts_at, end).all<{ kind: 'purchase' | 'merchandise'; total: number }>()).results;
   const demand = {
-    purchase: relatedRequests.filter(request => request.kind === 'purchase').length,
-    merchandise: relatedRequests.filter(request => request.kind === 'merchandise').length,
+    purchase: Number(demandRows.find(item => item.kind === 'purchase')?.total ?? 0),
+    merchandise: Number(demandRows.find(item => item.kind === 'merchandise')?.total ?? 0),
     subscribers: 0,
   };
   if (row.subject_type === 'release') {
@@ -107,7 +112,9 @@ export async function loadStudioLedger(db: D1Database, now: Date): Promise<Studi
   return {
     attention: { newRequests: Number(newRow?.total ?? 0) }, listening: listeningSummary,
     geography: await geography(db), activeCampaign: campaign ? campaignSummary(campaign) : null,
-    recentRequests: await requests(db), observations,
+    attentionRequests: await requests(db, `WHERE status='new'`, [], 4),
+    activeCampaignListening: campaign ? await listening(db, campaign.id) : { reportedStarts: 0, reported30SecondListens: 0, reportedCompletions: 0, replays: 0 },
+    observations,
   };
 }
 

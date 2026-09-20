@@ -18,13 +18,13 @@ const ledger = await loadStudioLedger(db, new Date());
   <section class="owner-section attention-section" aria-labelledby="waiting-heading">
     <AttentionIndex number="01" label="First area to inspect" />
     <div class="section-heading-line"><div><p class="owner-kicker">People</p><h2 id="waiting-heading">{ledger.attention.newRequests ? `${ledger.attention.newRequests} waiting for review` : 'No one is waiting'}</h2></div><a href="/owner/requests">Open requests →</a></div>
-    <RequestList requests={ledger.recentRequests.filter(request => request.status === 'new').slice(0, 4)} />
+    <RequestList requests={ledger.attentionRequests} />
   </section>
   <section class="owner-section campaign-preview" aria-labelledby="campaign-heading">
     <div class="campaign-copy"><p class="owner-kicker">Active promotion</p><h2 id="campaign-heading">{ledger.activeCampaign?.name ?? 'No active campaign'}</h2>
       <p>{ledger.activeCampaign?.primaryGoal ?? 'Start a campaign when you are ready to promote a release or service.'}</p>
       {ledger.activeCampaign && <a class="owner-primary-action" href={`/owner/campaigns/${ledger.activeCampaign.id}`}>Open Campaign Desk <span aria-hidden="true">→</span></a>}
-    </div><ListeningPath listening={ledger.listening} />
+    </div><ListeningPath listening={ledger.activeCampaignListening} />
   </section>
   <section class="owner-section observation-section" aria-labelledby="observation-heading">
     <AttentionIndex number="02" label="Next useful area" />

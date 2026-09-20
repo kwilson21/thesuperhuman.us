@@ -8,6 +8,9 @@ const request = Astro.params.id ? await getOwnerRequest(db, Astro.params.id) : n
 if (!request) return new Response('Request not found.', { status: 404 });
 const [audit, newRequests] = await Promise.all([listOwnerRequestAudit(db, request.id), listOwnerRequests(db, { status: 'new' })]);
 const allowed = request.status === 'new' ? ['review', 'resolve', 'withdraw'] : request.status === 'reviewed' ? ['resolve', 'reopen', 'withdraw'] : request.status === 'resolved' ? ['reopen', 'withdraw'] : [];
+const label = (key: string) => key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, character => character.toUpperCase());
+const detailRows = Object.entries(request.details).filter(([, value]) => value !== '' && value !== null && value !== false && (!Array.isArray(value) || value.length));
+const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') : typeof value === 'object' && value ? Object.entries(value).map(([key, item]) => `${label(key)}: ${String(item)}`).join(' · ') : String(value);
 ---
 <OwnerLayout title={request.summary} current="requests" newRequestCount={newRequests.length} ownerEmail={Astro.locals.owner?.email ?? ''}>
   <p class="owner-breadcrumb"><a href="/owner/requests">Requests</a> <span aria-hidden="true">/</span> {request.summary}</p>
@@ -16,7 +19,8 @@ const allowed = request.status === 'new' ? ['review', 'resolve', 'withdraw'] : r
     <section class="owner-section request-contact" aria-labelledby="contact-heading"><p class="owner-kicker">Person</p><h2 id="contact-heading">Contact</h2><dl><dt>Name</dt><dd>{request.name || 'Not supplied'}</dd><dt>Email</dt><dd><a href={`mailto:${request.email}`}>{request.email}</a></dd><dt>City or region <small>Supplied by requester</small></dt><dd>{request.cityRegion || 'Not supplied'}</dd></dl>
       {(request.releaseId || request.serviceId || request.campaignId) && <div class="request-source"><p class="owner-kicker">Related</p>{request.releaseId && <a href={`/music/${request.releaseId.replace(/-single$/, '')}`}>Open release →</a>}{request.serviceId && <a href="/audio/services">Open service →</a>}{request.campaignId && <a href={`/owner/campaigns/${request.campaignId}`}>Open campaign →</a>}</div>}
     </section>
-    <section class="owner-section request-work" aria-labelledby="work-heading"><p class="owner-kicker">Your working note</p><h2 id="work-heading">Keep the next step clear</h2><form data-request-note><textarea name="note" maxlength="1000" rows="5">{request.privateNote}</textarea><button type="submit">Save private note</button><p data-action-status aria-live="polite"></p></form>
+    {detailRows.length > 0 && <section class="owner-section request-submission" aria-labelledby="submission-heading"><p class="owner-kicker">Submitted with this request</p><h2 id="submission-heading">Project details</h2><dl>{detailRows.map(([key, value]) => <><dt>{label(key)}</dt><dd>{/url|link/i.test(key) && typeof value === 'string' ? <a href={value} rel="noreferrer">Open supplied link →</a> : detailValue(value)}</dd></>)}</dl></section>}
+    <section class="owner-section request-work" aria-labelledby="work-heading"><p class="owner-kicker">Your working note</p><h2 id="work-heading">Keep the next step clear</h2><form data-request-note><label for="owner-private-note">Private note</label><textarea id="owner-private-note" name="note" maxlength="1000" rows="5">{request.privateNote}</textarea><button type="submit">Save private note</button><p data-action-status aria-live="polite"></p></form>
       {allowed.length > 0 && <div class="request-actions" data-request-actions>{allowed.map(action => <button type="button" data-action={action} class:list={{ danger: action === 'withdraw' }}>{action === 'review' ? 'Mark reviewed' : action === 'resolve' ? 'Mark resolved' : action === 'reopen' ? 'Reopen request' : 'Honor withdrawal'}</button>)}</div>}
     </section>
   </div>

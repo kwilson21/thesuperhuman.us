@@ -14,8 +14,10 @@ const [audience, newRequests] = await Promise.all([listAudience(db), listOwnerRe
     const status = document.querySelector<HTMLElement>('[data-audience-status]');
     document.querySelectorAll<HTMLButtonElement>('[data-withdraw]').forEach(button => button.addEventListener('click', async () => {
       if (!confirm('Withdraw future release updates for this person? Their other requests will stay intact.')) return;
-      const response = await fetch('/api/owner/audience', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'withdraw', email: button.dataset.withdraw }) });
-      if (response.ok) location.reload(); else if (status) status.textContent = 'Permission was not changed. Refresh and try again.';
+      try {
+        const response = await fetch('/api/owner/audience', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'withdraw', email: button.dataset.withdraw }) });
+        if (response.ok) location.reload(); else if (status) status.textContent = 'Permission was not changed. Refresh and try again.';
+      } catch { if (status) status.textContent = 'Connection lost. Permission may not have changed. Refresh before trying again.'; }
     }));
   </script>
 </OwnerLayout>
