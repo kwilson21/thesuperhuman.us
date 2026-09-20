@@ -57,11 +57,12 @@ describe('private music demand', () => {
     const start = eventSchema.parse({ ...baseEvent, eventId: '538b2261-f59b-4489-96bd-1945e307d312', sequence: 1, medium: 'audio', event: 'start', accumulatedSeconds: 0 });
     await saveEvent(db, start, { trafficClass: 'human' }, new Date('2026-09-19T12:00:00Z'));
     await saveEvent(db, start, { trafficClass: 'human' }, new Date('2026-09-19T12:00:00Z'));
-    await saveEvent(db, eventSchema.parse({ ...baseEvent, eventId: 'f072c4b5-c77a-41ca-ac07-40e850586067', sequence: 2, medium: 'video', event: 'progress', accumulatedSeconds: 12 }), { trafficClass: 'human' }, new Date('2026-09-19T12:00:12Z'));
-    await saveEvent(db, eventSchema.parse({ ...baseEvent, eventId: '6fcda671-3155-4ee1-9b6d-401a3ae52d31', sequence: 3, medium: 'video', event: 'listen30', accumulatedSeconds: 30 }), { trafficClass: 'human' }, new Date('2026-09-19T12:00:30Z'));
-    expect(sql.prepare('SELECT count(*) AS n FROM music_playback_events').get().n).toBe(3);
+    await saveEvent(db, eventSchema.parse({ ...baseEvent, eventId: 'f072c4b5-c77a-41ca-ac07-40e850586067', sequence: 2, medium: 'video', event: 'progress', accumulatedSeconds: 10 }), { trafficClass: 'human' }, new Date('2026-09-19T12:00:10Z'));
+    await saveEvent(db, eventSchema.parse({ ...baseEvent, eventId: '2b0888f7-bf7f-41db-99af-6dc11b3b2b46', sequence: 3, medium: 'video', event: 'progress', accumulatedSeconds: 20 }), { trafficClass: 'human' }, new Date('2026-09-19T12:00:20Z'));
+    await saveEvent(db, eventSchema.parse({ ...baseEvent, eventId: '6fcda671-3155-4ee1-9b6d-401a3ae52d31', sequence: 4, medium: 'video', event: 'listen30', accumulatedSeconds: 30 }), { trafficClass: 'human' }, new Date('2026-09-19T12:00:30Z'));
+    expect(sql.prepare('SELECT count(*) AS n FROM music_playback_events').get().n).toBe(4);
     expect(sql.prepare('SELECT medium,event FROM music_playback_events ORDER BY sequence').all())
-      .toEqual([{ medium: 'audio', event: 'start' }, { medium: 'video', event: 'progress' }, { medium: 'video', event: 'listen30' }]);
+      .toEqual([{ medium: 'audio', event: 'start' }, { medium: 'video', event: 'progress' }, { medium: 'video', event: 'progress' }, { medium: 'video', event: 'listen30' }]);
   });
   it('rejects out-of-order and unearned listening milestones', async () => {
     const { db } = fixture();
@@ -79,8 +80,16 @@ describe('private music demand', () => {
     const { db } = fixture();
     const baseEvent = { releaseId: 'old-news-single', recordingId: 'old-news-recording', sessionId: 'a8246321-955d-4a28-b81e-2b74b52cd450', playthroughId: '0bc1f442-f455-49d6-b3a7-99f4fbd92ab4', mediaDurationSeconds: 200 };
     await saveEvent(db, eventSchema.parse({ ...baseEvent, eventId: '538b2261-f59b-4489-96bd-1945e307d312', sequence: 1, medium: 'audio', event: 'start', accumulatedSeconds: 0 }), { trafficClass: 'human' }, new Date('2026-09-19T12:00:00Z'));
-    await saveEvent(db, eventSchema.parse({ ...baseEvent, eventId: 'f072c4b5-c77a-41ca-ac07-40e850586067', sequence: 2, medium: 'audio', event: 'progress', accumulatedSeconds: 12 }), { trafficClass: 'human' }, new Date('2026-09-19T12:00:30Z'));
-    await expect(saveEvent(db, eventSchema.parse({ ...baseEvent, eventId: '6fcda671-3155-4ee1-9b6d-401a3ae52d31', sequence: 3, medium: 'audio', event: 'listen30', accumulatedSeconds: 30 }), { trafficClass: 'human' }, new Date('2026-09-19T12:00:30Z')))
+    await saveEvent(db, eventSchema.parse({ ...baseEvent, eventId: 'f072c4b5-c77a-41ca-ac07-40e850586067', sequence: 2, medium: 'audio', event: 'progress', accumulatedSeconds: 10 }), { trafficClass: 'human' }, new Date('2026-09-19T12:00:30Z'));
+    await saveEvent(db, eventSchema.parse({ ...baseEvent, eventId: '2b0888f7-bf7f-41db-99af-6dc11b3b2b46', sequence: 3, medium: 'audio', event: 'progress', accumulatedSeconds: 20 }), { trafficClass: 'human' }, new Date('2026-09-19T12:00:30Z'));
+    await expect(saveEvent(db, eventSchema.parse({ ...baseEvent, eventId: '6fcda671-3155-4ee1-9b6d-401a3ae52d31', sequence: 4, medium: 'audio', event: 'listen30', accumulatedSeconds: 30 }), { trafficClass: 'human' }, new Date('2026-09-19T12:00:30Z')))
       .resolves.toEqual({ status: 'stored' });
+  });
+  it('does not turn an idle gap into earned listening', async () => {
+    const { db } = fixture();
+    const baseEvent = { releaseId: 'old-news-single', recordingId: 'old-news-recording', sessionId: 'a8246321-955d-4a28-b81e-2b74b52cd450', playthroughId: '0bc1f442-f455-49d6-b3a7-99f4fbd92ab4', mediaDurationSeconds: 200 };
+    await saveEvent(db, eventSchema.parse({ ...baseEvent, eventId: '538b2261-f59b-4489-96bd-1945e307d312', sequence: 1, medium: 'audio', event: 'start', accumulatedSeconds: 0 }), { trafficClass: 'human' }, new Date('2026-09-19T12:00:00Z'));
+    await expect(saveEvent(db, eventSchema.parse({ ...baseEvent, eventId: '6fcda671-3155-4ee1-9b6d-401a3ae52d31', sequence: 2, medium: 'audio', event: 'listen30', accumulatedSeconds: 30 }), { trafficClass: 'human' }, new Date('2026-09-19T12:01:00Z')))
+      .rejects.toBeInstanceOf(PlaybackSequenceError);
   });
 });

@@ -24,11 +24,11 @@ export function createPlaybackTracker(options: PlaybackTrackerOptions) {
   let lastPosition: number | undefined, lastWall = now(), nextProgress = 10;
   let started = false, listened30 = false, completed = false, replay = false;
   let queue = Promise.resolve();
-  function emit(event: PlaybackEvent, medium: PlaybackMedium, duration: number) {
+  function emit(event: PlaybackEvent, medium: PlaybackMedium, duration: number, reportedSeconds = accumulated) {
     const payload: PlaybackPayload = {
       releaseId: options.releaseId, recordingId: options.recordingId, sessionId: options.sessionId,
       playthroughId, eventId: crypto.randomUUID(), sequence: ++sequence, medium, event,
-      accumulatedSeconds: Math.floor(accumulated), mediaDurationSeconds: Math.round(Number.isFinite(duration) ? duration : 0),
+      accumulatedSeconds: Math.floor(reportedSeconds), mediaDurationSeconds: Math.round(Number.isFinite(duration) ? duration : 0),
       ...options.attribution,
     };
     queue = queue.then(() => options.submit(payload));
@@ -50,7 +50,7 @@ export function createPlaybackTracker(options: PlaybackTrackerOptions) {
         accumulated += Math.min(mediaDelta / rate, wallSeconds);
         while (accumulated >= nextProgress) {
           const threshold = nextProgress; nextProgress += 10;
-          if (threshold !== 30) emit('progress', medium, duration);
+          if (threshold !== 30) emit('progress', medium, duration, threshold);
         }
         if (!listened30 && accumulated >= 30) { emit('listen30', medium, duration); listened30 = true; }
         if (!completed && duration > 0 && accumulated * 10 >= duration * 9) { emit('complete', medium, duration); completed = true; }

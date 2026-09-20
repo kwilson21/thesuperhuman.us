@@ -111,6 +111,8 @@ export async function saveEvent(db: D1Database, input: z.infer<typeof eventSchem
     throw new PlaybackSequenceError('Reported completion is not earned.');
   }
   if (last) {
+    const advance = input.accumulatedSeconds - last.accumulated_seconds;
+    if (advance > 12) throw new PlaybackSequenceError('Reported playback skipped required progress evidence.');
     const elapsed = Math.max(0, (now.getTime() - new Date(last.started_at).getTime()) / 1000);
     if (!Number.isFinite(elapsed) || input.accumulatedSeconds > elapsed + 2) throw new PlaybackSequenceError('Reported playback advanced faster than server time.');
   }
