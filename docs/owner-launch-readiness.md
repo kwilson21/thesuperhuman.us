@@ -14,7 +14,7 @@
 | MUSIC_DB schema and ledger | UNVERIFIED | The additive migrations and idempotent combined schema pass locally. Reconcile the production schema, migration ledger, and recovery point before applying either owner migration. |
 | Request storage failure | PASS locally | Tests confirm success follows storage and urgent alerts are redacted. Live D1 and authorized email delivery remain unverified. |
 | Traffic analytics fallback | PASS locally | Typed query and unavailable-state tests pass. Production token or dashboard fallback remains an operator configuration choice. |
-| Playback integrity and sparse geography | PASS locally | Sequence, automated-traffic exclusion, retained totals, and five-listen city suppression tests pass. |
+| Playback integrity and sparse geography | PASS locally | Sequence, sparse-timer delivery, automated-traffic exclusion, retained totals, completion-only geography, and storage-level five-listen city coarsening tests pass. |
 | Retention preview | PASS locally | The empty local preview generated matching private HTML and JSON. A scan found no email, request detail, private note, session ID, playthrough ID, JWT, IP address, or secret. No apply was performed. |
 | Retention freshness | UNVERIFIED | Health correctly reports that no successful retention apply is recorded. Apply an exact reviewed manifest only after schema reconciliation. |
 | Old News public media | FAIL for current live site | One-byte checks for master, mix, and video all failed. Keep the release hidden until the stacked code, R2 objects, routes, and permissions are verified together. |
