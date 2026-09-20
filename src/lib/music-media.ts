@@ -13,7 +13,7 @@ export async function streamMusic(request: Request, bucket: R2Bucket, asset: { k
   if (!head) return new Response('Media unavailable', { status: 404 });
   const range = request.method === 'HEAD' ? null : mediaRange(request.headers.get('range'), head.size);
   if (range === 'invalid') return new Response(null, { status: 416, headers: { 'content-range': `bytes */${head.size}` } });
-  const headers = new Headers({ 'content-type': asset.type, 'accept-ranges': 'bytes', 'content-length': String(range?.length ?? head.size), 'cache-control': 'private, max-age=0, must-revalidate', 'x-content-type-options': 'nosniff', 'content-disposition': 'inline' });
+  const headers = new Headers({ 'content-type': asset.type, 'accept-ranges': 'bytes', 'content-length': String(range?.length ?? head.size), 'cache-control': 'public, max-age=3600, s-maxage=86400', 'x-content-type-options': 'nosniff', 'content-disposition': 'inline' });
   if (range) headers.set('content-range', `bytes ${range.offset}-${range.offset + range.length - 1}/${head.size}`);
   if (request.method === 'HEAD') return new Response(null, { headers });
   const object = await bucket.get(asset.key, range ? { range } : undefined);
