@@ -48,16 +48,22 @@ export function setupFormSubmission({ form, endpoint, payload, success }: {
         return;
       }
       let firstInvalid: HTMLElement | undefined;
+      let hasDisplayedErrors = false;
       const generalErrors: string[] = [];
       for (const [field, message] of Object.entries(result.errors ?? {})) {
         const error = errors.find(element => element.dataset.formError === field);
-        if (error) { error.textContent = message; error.hidden = false; }
         const controls = controlsFor(field);
+        if (error) {
+          error.textContent = message;
+          error.hidden = false;
+          hasDisplayedErrors = true;
+          if (!controls.length) error.tabIndex = -1;
+        }
         controls.forEach(control => control.setAttribute('aria-invalid', 'true'));
-        firstInvalid ??= controls[0];
-        if (!controls.length) generalErrors.push(message);
+        firstInvalid ??= controls[0] ?? error;
+        if (!error && !controls.length) generalErrors.push(message);
       }
-      status.textContent = generalErrors.join(' ') || result.error || (firstInvalid ? 'Please check the highlighted fields.' : 'We couldn’t confirm your message was sent. Try again or use email.');
+      status.textContent = generalErrors.join(' ') || result.error || (hasDisplayedErrors ? 'Please check the highlighted fields.' : 'We couldn’t confirm your message was sent. Try again or use email.');
       (firstInvalid ?? status).focus();
     } catch {
       status.textContent = 'We couldn’t confirm your message was sent. Your text is still here. Try again or use email.';

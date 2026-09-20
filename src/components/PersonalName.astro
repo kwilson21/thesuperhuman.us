@@ -3,7 +3,7 @@ import { personalName, type PersonalNameVariant } from '~/lib/personal-name';
 
 interface Props {
   variant?: PersonalNameVariant;
-  style?: 'text' | 'display';
+  style?: 'text' | 'display' | 'inherit';
   breakAfterFirst?: boolean;
   class?: string;
 }
@@ -17,7 +17,10 @@ const {
 const value = personalName(variant);
 ---
 <span
-  class:list={['personal-name', { 'personal-name--display': style === 'display' }, className]}
+  class:list={['personal-name', {
+    'personal-name--display': style === 'display',
+    'personal-name--inherit': style === 'inherit',
+  }, className]}
   data-personal-name={variant}
   data-name-style={style}
 >{variant === 'full' && breakAfterFirst ? <>Kazon<br />{' '}Wilson</> : value}</span>

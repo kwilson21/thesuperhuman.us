@@ -41,14 +41,20 @@ const routes = [...new Set([...staticRoutes, '/music/old-news'])].sort();
       const invalidStyles = await page.locator('[data-personal-name]').evaluateAll(elements =>
         elements.flatMap(element => {
           const style = getComputedStyle(element);
-          const expectedFamily = element.getAttribute('data-name-style') === 'display'
+          const nameStyle = element.getAttribute('data-name-style');
+          const expectedFamily = nameStyle === 'display'
             ? 'Kazon Name Display'
-            : 'Kazon Name Text';
+            : nameStyle === 'inherit'
+              ? getComputedStyle(element.parentElement).fontFamily
+              : 'Kazon Name Text';
           const value = element.textContent || '';
           const expectedValue = element.getAttribute('data-personal-name') === 'full'
             ? 'Kazon Wilson'
             : 'Kazon';
-          return style.fontFamily.includes(expectedFamily)
+          const familyMatches = nameStyle === 'inherit'
+            ? style.fontFamily === expectedFamily
+            : style.fontFamily.includes(expectedFamily);
+          return familyMatches
             && style.textTransform === 'none'
             && value === expectedValue
             ? []
@@ -93,6 +99,15 @@ const routes = [...new Set([...staticRoutes, '/music/old-news'])].sort();
     await displayName.screenshot({ path: path.join(artifactDir, 'personal-name-display.png') });
     await page.locator('.site-name [data-personal-name]').screenshot({ path: path.join(artifactDir, 'personal-name-text.png') });
     await page.screenshot({ path: path.join(artifactDir, 'personal-name-desktop.png'), fullPage: true });
+
+    await page.goto(new URL('/music/old-news', targetUrl).href, { waitUntil: 'domcontentloaded' });
+    const inheritedName = page.locator('.music-consent [data-name-style="inherit"]');
+    await inheritedName.waitFor();
+    assert.equal(
+      await inheritedName.evaluate(element => getComputedStyle(element).fontFamily),
+      await inheritedName.evaluate(element => getComputedStyle(element.parentElement).fontFamily),
+      'inline personal name should inherit the surrounding form typeface',
+    );
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });

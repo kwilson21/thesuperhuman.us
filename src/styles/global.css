@@ -78,6 +78,12 @@
     font-family: 'Kazon Name Display', 'Newsreader', Georgia, serif;
   }
 
+  .personal-name--inherit {
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+  }
+
   .eyebrow {
     font-family: theme('fontFamily.sans');
     font-size: 11px;

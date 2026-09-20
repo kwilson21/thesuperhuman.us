@@ -29,6 +29,15 @@ describe('private music demand', () => {
     expect(interestSchema.safeParse({ ...input, interest: 'song' }).success).toBe(false);
     expect(interestSchema.safeParse({ ...input, cityRegion: 'x'.repeat(121) }).success).toBe(false);
   });
+  it('explains how to resolve missing consent and verification', () => {
+    const result = interestSchema.safeParse({ ...input, consent: false, turnstileToken: '' });
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(Object.fromEntries(result.error.issues.map(issue => [issue.path[0], issue.message]))).toMatchObject({
+      consent: 'Check the box to confirm I may email you about your selection.',
+      turnstileToken: 'Complete the verification and try again.',
+    });
+  });
   it('updates aggregate interest while keeping each request independent', async () => {
     const { sql, db } = fixture();
     await saveInterest(db, interestSchema.parse(input));
