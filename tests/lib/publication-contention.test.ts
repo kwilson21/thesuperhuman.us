@@ -29,7 +29,7 @@ it('serializes simultaneous connections competing for the same project revision'
         while (Atomics.load(gate,0)<2) Atomics.wait(gate,0,1,5000);
         try {
           db.exec('BEGIN IMMEDIATE');
-          const results = d.statements.map(s => ({ results: db.prepare(s.query).all(...s.args) }));
+          const results = d.statements.map(s => ({ results: db.prepare(s.query).all(Object.fromEntries(s.args.map((value,index) => [String(index+1),value]))) }));
           db.exec('COMMIT'); parentPort.postMessage(results);
         } finally { db.close(); }
       `, { eval: true, workerData: { filename, barrier, statements } });
