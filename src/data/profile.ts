@@ -3,7 +3,8 @@ export const workFocus = 'I’m interested in work where I can help shape the so
 export const workingPreference = 'Independent work is my preference. I’m also open to the right full-time opportunity.';
 export const lyftBonus = { before: '5,000', after: '100,000+', evidence: 'Owner-reported batch capacity' };
 // Team scope clarified by the owner on September 10, 2026. Rentals projects come
-// from the existing career account; quiet hours comes from the owner's recollection.
+// from the existing career account. Quiet hours was completed after the July 2026
+// candidate summary and is recorded separately from that historical account.
 export const lyftTeams = [
   {
     name: 'Rentals',
@@ -32,9 +33,10 @@ export const experience = [
   {
     id: 'scotch', company: 'Scotch', role: 'Data Engineer',
     dates: 'October 2025 – May 2026', location: 'Remote', legacyId: 'scotch--data-engineer',
-    outcome: 'Sole data engineer for a platform built around retail transaction data.',
+    outcome: 'Sole data engineer maintaining retail transaction data pipelines.',
     context: [
-      'Built and maintained ETL pipelines bringing liquor-store POS transactions into a Ruby on Rails platform.',
+      'Maintained and operated inherited ETL pipelines in a Ruby on Rails platform, using GoodJob, EC2, and S3 to transform legacy store transaction data and bulk-load results.',
+      'Handled recurring alarms and prototyped internal, unshipped tools for store onboarding and PII debugging.',
       'Conducted scenario-based senior engineering interviews and contributed to hiring decisions. Advocated for AI-assisted development and helped the engineering team adopt it.',
     ],
   },
@@ -42,14 +44,15 @@ export const experience = [
     id: 'axuall', company: 'Vendorpass / Axuall', role: 'Senior Python Developer (Contract)',
     dates: 'July 2025 – November 2025', location: 'Remote', legacyId: 'vendorpass--axuall-contract--senior-python-developer',
     outcome: 'Data ingestion for a healthcare credentialing platform.',
-    context: ['Built per-state Dagster ETL pipelines ingesting medical-board data from SFTP feeds, REST APIs, and web interfaces. Contributed to the early transition from legacy Python connectors to per-state pipelines.'],
+    context: ['Built per-state Dagster pipelines ingesting medical-board data from SFTP feeds, REST APIs, and Selenium-driven web sources. Applied credentialing logic for multiple states, including North Carolina, and contributed to the early transition from legacy Python connectors to per-state pipelines.'],
   },
   {
     id: 'sure', company: 'Sure', role: 'Software Engineer',
     dates: 'December 2023 – February 2025', location: 'Remote', legacyId: 'sure--software-engineer',
     outcome: 'Backend engineering for Toggle homeowners insurance.',
     context: [
-      'Owned the document templating pipeline, adapting HTML and CSS to carrier reference PDFs. Maintained document generation in Django and third-party carrier integrations.',
+      'Added document types to the insurance pipeline, adapting HTML and CSS to carrier reference PDFs and generating application documents with Jinja.',
+      'Stored documents in S3 with versioned metadata in MongoDB, and maintained document generation in Django and third-party carrier integrations.',
       'The role ended in a company-wide layoff in early 2025.',
     ],
   },
@@ -62,11 +65,12 @@ export const experience = [
   {
     id: 'skupos', company: 'Skupos', role: 'Associate Software Engineer / Data Operations Analyst',
     dates: 'November 2018 – January 2021', location: 'San Francisco', legacyId: 'skupos--associate-software-engineer--data-operations-analyst',
-    outcome: 'From contributing scripts to owning an internal application.',
+    outcome: 'Progressed from intern to associate engineer while building data tools for retail POS operations.',
     context: [
-      'I joined as an intern with a computer science minor and an online JavaScript and React course behind me. I started adding to coworkers’ Python scripts, then led the automation work for data operations and account managers.',
-      'I brought the scripts into a shared GitHub repository with pull-request and review standards. They grew into a Flask application with asynchronous processing, a MySQL database on RDS, EC2 hosting and a React interface in the company’s internal website.',
-      'Along the way, I mentored two interns. After promotion to Associate Software Engineer, I continued maintaining the application and contributing to the core Ruby on Rails product.',
+      'Built a Flask and React application backed by MySQL on AWS, replacing Google Sheets and ad-hoc scripts used by operations and account-management teams across 3,000+ retailer locations.',
+      'Automated tobacco-scan troubleshooting as transaction volume grew 3–5× without additional operations headcount.',
+      'Rewrote manufacturer reporting in Rails, with Python configuration logic that sampled data to avoid an expensive query and refreshed results weekly.',
+      'Built asynchronous data workflows with SQL, GraphQL, and Google Sheets, and mentored two teammates while establishing code-review standards.',
     ],
   },
 ] as const;
