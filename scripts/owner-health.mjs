@@ -11,6 +11,10 @@ const requiredSchema = ['owner_campaigns', 'owner_requests', 'owner_request_audi
 const attention = (id, summary, next) => ({ id, status: 'attention', summary, next });
 const pass = (id, summary) => ({ id, status: 'pass', summary, next: '' });
 
+export function wranglerSecretListArguments() {
+  return ['node_modules/wrangler/bin/wrangler.js', 'secret', 'list', '--format', 'json'];
+}
+
 export async function ownerHealth({ now = new Date(), configuredNames, query, media, head }) {
   const checks = [];
   const missingConfiguration = requiredConfiguration.filter(name => !configuredNames.has(name));
@@ -72,7 +76,7 @@ async function main() {
   const baseUrl = process.env.OWNER_HEALTH_BASE_URL || 'https://thesuperhuman.us';
   const configuredNames = new Set(['MUSIC_DB', 'AUDIO', ...requiredConfiguration.filter(name => process.env[name])]);
   if (remote) {
-    const secretList = spawnSync(process.execPath, ['node_modules/wrangler/bin/wrangler.js', 'secret', 'list', '--json'], {
+    const secretList = spawnSync(process.execPath, wranglerSecretListArguments(), {
       encoding: 'utf8',
       env: { ...process.env, WRANGLER_LOG_PATH: resolve('.private/wrangler-owner-health.log') },
     });
