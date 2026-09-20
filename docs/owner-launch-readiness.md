@@ -7,7 +7,7 @@
 
 | Gate | Result | Evidence or next action |
 | --- | --- | --- |
-| Repository tests | FAIL | 287 tests pass on Node 22.19. The nine publication-journal tests also fail on the unchanged PR 2 head with Node SQLite `column index out of range`; fix or rerun with the CI runtime before merge. Owner-focused tests pass. |
+| Repository tests | FAIL | 288 tests pass on Node 22.19. Nine publication-journal tests also fail on the owner interface base with Node SQLite `column index out of range`; fix or rerun with the CI runtime before merge. All 47 focused owner, retention, playback, and API tests pass. |
 | Astro check and build | PASS | `astro check` reports zero errors; the Cloudflare build completes. Existing content-loader and inline-script hints remain. |
 | Owner access policy | UNVERIFIED | JWT verification and fail-closed middleware pass locally. The production Cloudflare Access application, one-owner allow policy, secrets, and signed live response have not been verified. |
 | Private response headers | PASS locally | Middleware tests cover no-store and noindex behavior. Live headers remain part of post-deploy verification. |
