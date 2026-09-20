@@ -42,7 +42,6 @@ CREATE TABLE IF NOT EXISTS audio_payments (
     CHECK(balance_status IN ('not_created','draft','open','paid','payment_failed','void','uncollectible')),
   balance_status_updated_at TEXT,
   balance_attempt_count INTEGER NOT NULL DEFAULT 0 CHECK(balance_attempt_count >= 0),
-  external_refs_deleted_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   CHECK(booking_amount_cents + balance_amount_cents = total_amount_cents)
@@ -60,15 +59,4 @@ CREATE TABLE IF NOT EXISTS stripe_invoice_attempts (
   installment TEXT NOT NULL CHECK(installment IN ('booking','balance')),
   created_at TEXT NOT NULL,
   replaced_at TEXT
-);
-CREATE TABLE IF NOT EXISTS stripe_unmatched_events (
-  event_id TEXT PRIMARY KEY,
-  event_type TEXT NOT NULL,
-  invoice_id TEXT NOT NULL,
-  request_id TEXT NOT NULL,
-  installment TEXT NOT NULL CHECK(installment IN ('booking','balance')),
-  status TEXT NOT NULL,
-  occurred_at TEXT NOT NULL,
-  received_at TEXT NOT NULL,
-  reason TEXT NOT NULL CHECK(reason IN ('request-not-found','invoice-conflict'))
 );

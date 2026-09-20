@@ -12,6 +12,8 @@ const payment = {
   balanceStatusUpdatedAt: null,
   balanceAttemptCount: 0,
   externalRefsDeletedAt: null,
+  bookingRecoveryEventId: null, balanceRecoveryEventId: null,
+  bookingCreationStartedAt: null, balanceCreationStartedAt: null,
   createdAt: '2026-09-20T13:00:00.000Z', updatedAt: '2026-09-20T13:00:00.000Z',
 };
 const request = { name: 'Artist Name', email: 'artist@example.com', summary: 'Old News mix' };

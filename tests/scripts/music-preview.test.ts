@@ -8,7 +8,7 @@ const { dispose, spawnSync } = vi.hoisted(() => ({
 }));
 vi.mock('node:child_process', () => ({ spawnSync }));
 vi.mock('wrangler', () => ({ getPlatformProxy: async () => ({
-  env: { AUDIO: {} }, dispose,
+  env: { MUSIC_DB: { prepare: () => ({ first: async () => ({ name: 'owner_requests' }) }) }, AUDIO: {} }, dispose,
 }) }));
 it('sets up an empty checkout without any imported music assets', async () => {
   const root = await mkdtemp(join(tmpdir(), 'music-preview-'));
@@ -21,9 +21,8 @@ it('sets up an empty checkout without any imported music assets', async () => {
     expect((await stat(join(root, '.private/music-assets'))).isDirectory()).toBe(true);
     expect(spawnSync).toHaveBeenCalledOnce();
     const args = spawnSync.mock.calls[0]?.[1] as string[];
-    expect(args.slice(1, 6)).toEqual(['d1', 'execute', 'MUSIC_DB', '--local', '--file']);
-    expect(args[6]).toMatch(/\/db\/music\.sql$/);
-    expect(args).toContain('--yes');
+    expect(args.slice(1, 6)).toEqual(['d1', 'migrations', 'apply', 'MUSIC_DB', '--local']);
+    expect(args[args.indexOf('--persist-to') + 1]).toMatch(/\/\.wrangler\/state$/);
     expect(dispose).toHaveBeenCalledOnce();
   } finally { process.chdir(cwd); await rm(root, { recursive: true, force: true }); }
 });

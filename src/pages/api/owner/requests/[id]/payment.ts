@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
-import { approveAudioPayment, getAudioPayment, recordInvoice, replaceTerminalInvoice, type AudioPayment } from '~/lib/audio-payments';
+import { approveAudioPayment, getAudioPayment, recordInvoice, replaceTerminalInvoice, reserveInvoiceCreation, type AudioPayment } from '~/lib/audio-payments';
 import { getOwnerRequest } from '~/lib/owner-requests';
 import { createBalanceInvoice, createBookingInvoice, stripeAvailable } from '~/lib/stripe-invoicing';
 
@@ -68,15 +68,16 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     if (installment === 'balance' && payment.bookingStatus !== 'paid') {
       return Response.json({ ok: false }, { status: 409, headers });
     }
+    payment = await reserveInvoiceCreation(db, { requestId: requestRecord.id, installment });
     const invoice = installment === 'booking'
       ? await createBookingInvoice(locals.runtime.env, requestRecord, payment)
       : await createBalanceInvoice(locals.runtime.env, requestRecord, payment);
-    const updated = await recordInvoice(db, {
-      requestId: requestRecord.id,
-      installment,
-      ...invoice,
-      actor: locals.owner.email,
-    });
+    let updated: AudioPayment;
+    try {
+      updated = await recordInvoice(db, { requestId: requestRecord.id, installment, ...invoice, actor: locals.owner.email });
+    } catch {
+      return Response.json({ ok: false, recoveryPending: true }, { status: 503, headers });
+    }
     return Response.json({ ok: true, payment: ownerView(updated) }, { headers });
   } catch (error) {
     const message = error instanceof Error ? error.message : '';

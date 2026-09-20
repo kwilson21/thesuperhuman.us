@@ -45,7 +45,7 @@ function context(signature = 'valid') {
 function event(type: string, id = 'evt_1') {
   return {
     id, type, created: 1_790_000_000,
-    data: { object: { id: 'in_booking', customer: 'cus_1', hosted_invoice_url: 'https://invoice.stripe.com/booking',
+    data: { object: { id: 'in_booking', customer: 'cus_1', hosted_invoice_url: 'https://invoice.stripe.com/booking', total: 10000, currency: 'usd',
       metadata: { audio_request_id: 'request-1', installment: 'booking' } } },
   };
 }

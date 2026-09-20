@@ -7,6 +7,7 @@ import {
   getAudioPayment,
   recordInvoice,
   recoverInvoiceFromWebhook,
+  reserveInvoiceCreation,
   replaceTerminalInvoice,
 } from '~/lib/audio-payments';
 
@@ -106,6 +107,13 @@ describe('audio payments', () => {
     })).rejects.toThrow('already exists');
   });
 
+  it('reserves invoice creation before calling Stripe and refuses a second attempt', async () => {
+    const { db } = fixture();
+    await approveAudioPayment(db, approval);
+    expect((await reserveInvoiceCreation(db, { requestId: 'request-1', installment: 'booking' })).bookingCreationStartedAt).toBeTruthy();
+    await expect(reserveInvoiceCreation(db, { requestId: 'request-1', installment: 'booking' })).rejects.toThrow('pending or complete');
+  });
+
   it('applies a Stripe event once and unlocks the balance only after confirmed payment', async () => {
     const { db, sql } = fixture();
     await approveAudioPayment(db, approval);
@@ -171,7 +179,7 @@ describe('audio payments', () => {
     const recover = (eventId: string, invoiceId: string) => recoverInvoiceFromWebhook(db, {
       eventId, eventType: 'invoice.paid', requestId: 'request-1', installment: 'booking', invoiceId,
       stripeCustomerId: 'cus_1', hostedInvoiceUrl: `https://invoice.stripe.com/${invoiceId}`,
-      status: 'paid', occurredAt: '2026-09-20T15:00:00.000Z',
+      status: 'paid', occurredAt: '2026-09-20T15:00:00.000Z', totalAmountCents: 10_001, currency: 'usd',
     });
     const results = await Promise.all([recover('evt_first', 'in_first'), recover('evt_second', 'in_second')]);
     expect(results.sort()).toEqual(['recovered', 'unmatched']);
@@ -184,5 +192,34 @@ describe('audio payments', () => {
       WHERE request_id='request-1'`).run();
     expect(await recover('evt_second', 'in_second')).toBe('recovered');
     expect(sql.prepare('SELECT COUNT(*) AS total FROM stripe_unmatched_events').get()).toEqual({ total: 0 });
+  });
+
+  it('applies a later concurrent event for the same recovered invoice', async () => {
+    const { db, sql } = fixture();
+    await approveAudioPayment(db, approval);
+    const recover = (eventId: string, status: 'open' | 'paid', occurredAt: string) => recoverInvoiceFromWebhook(db, {
+      eventId, eventType: status === 'paid' ? 'invoice.paid' : 'invoice.sent', requestId: 'request-1',
+      installment: 'booking', invoiceId: 'in_same', stripeCustomerId: 'cus_1', hostedInvoiceUrl: 'https://invoice.stripe.com/in_same',
+      status, occurredAt, totalAmountCents: 10_001, currency: 'usd',
+    });
+    await Promise.all([
+      recover('evt_sent', 'open', '2026-09-20T14:00:00.000Z'),
+      recover('evt_paid', 'paid', '2026-09-20T15:00:00.000Z'),
+    ]);
+    expect((await getAudioPayment(db, 'request-1'))?.bookingStatus).toBe('paid');
+    expect(sql.prepare('SELECT COUNT(*) AS total FROM stripe_webhook_events').get()).toEqual({ total: 2 });
+  });
+
+  it('rejects recovery with the wrong amount or a premature balance invoice', async () => {
+    const { db, sql } = fixture();
+    await approveAudioPayment(db, approval);
+    const base = {
+      eventId: 'evt_wrong', eventType: 'invoice.paid', requestId: 'request-1', invoiceId: 'in_wrong',
+      stripeCustomerId: 'cus_1', hostedInvoiceUrl: 'https://invoice.stripe.com/in_wrong', status: 'paid' as const,
+      occurredAt: '2026-09-20T15:00:00.000Z', currency: 'usd',
+    };
+    expect(await recoverInvoiceFromWebhook(db, { ...base, installment: 'booking', totalAmountCents: 1 })).toBe('unmatched');
+    expect(await recoverInvoiceFromWebhook(db, { ...base, eventId: 'evt_balance', invoiceId: 'in_balance', installment: 'balance', totalAmountCents: 10_000 })).toBe('unmatched');
+    expect(sql.prepare('SELECT COUNT(*) AS total FROM stripe_unmatched_events').get()).toEqual({ total: 2 });
   });
 });

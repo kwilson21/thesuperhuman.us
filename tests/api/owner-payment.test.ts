@@ -119,6 +119,17 @@ it('does not record invoice success when Stripe fails', async () => {
   expect(response.status).toBe(502);
   expect(sql.prepare('SELECT booking_invoice_id,booking_status FROM audio_payments').get())
     .toEqual({ booking_invoice_id: null, booking_status: 'not_created' });
+  expect(sql.prepare('SELECT booking_creation_started_at FROM audio_payments').get()?.booking_creation_started_at).toBeTruthy();
+});
+
+it('reports pending recovery when D1 fails after Stripe sends the invoice', async () => {
+  await POST(context({ action: 'approve', approvedService: 'Mastering', totalAmountCents: 7_500, offerAccepted: true }));
+  const working = db;
+  db = { ...working, batch: async () => { throw new Error('D1 unavailable'); } } as unknown as D1Database;
+  const response = await POST(context({ action: 'create-booking-invoice' }, true, stripeEnv));
+  expect(response.status).toBe(503);
+  expect(await response.json()).toMatchObject({ ok: false, recoveryPending: true });
+  expect(invoiceMocks.booking).toHaveBeenCalledOnce();
 });
 
 it('creates a replacement after a voided booking invoice', async () => {

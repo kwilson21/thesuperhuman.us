@@ -7,7 +7,13 @@ export function setupOwnerPaymentActions() {
     button.disabled = true; status!.textContent = '';
     try {
       const response = await fetch(`/api/owner/requests/${requestId}/payment`, { method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload) });
-      if (!response.ok) { status!.textContent = payload.action === 'approve' ? 'Those terms were not saved. Check the price and acceptance, then try again.' : response.status === 503 ? 'Stripe invoicing is unavailable. Refresh the payment status before trying again.' : 'That invoice was not created. Refresh the payment status before trying again.'; button.disabled=false; return; }
+      if (!response.ok) {
+        const result = await response.clone().json().catch(() => ({})) as { recoveryPending?: boolean };
+        status!.textContent = payload.action === 'approve' ? 'Those terms were not saved. Check the price and acceptance, then try again.'
+          : result.recoveryPending ? 'Stripe may have sent the invoice. Check Stripe and wait for webhook recovery before taking another action.'
+            : response.status === 503 ? 'Stripe invoicing is unavailable. Refresh the payment status before trying again.' : 'That invoice was not created. Refresh the payment status before trying again.';
+        button.disabled=false; return;
+      }
       location.reload();
     } catch { status!.textContent='Connection lost. Refresh before trying again so an invoice is not duplicated.'; button.disabled=false; }
   }

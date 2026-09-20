@@ -55,7 +55,7 @@ export async function ownerHealth({ now = new Date(), configuredNames, query, me
   }
 
   try {
-    const rows = await query('SELECT COUNT(*) AS total FROM stripe_unmatched_events');
+    const rows = await query('SELECT COUNT(*) AS total FROM stripe_unmatched_events WHERE resolved_at IS NULL');
     const total = Number(rows[0]?.total);
     if (!Number.isFinite(total)) throw new Error('invalid summary');
     checks.push(total > 0

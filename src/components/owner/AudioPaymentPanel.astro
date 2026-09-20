@@ -4,7 +4,9 @@ interface Props { requestId: string; payment: AudioPayment | null; stripeEnabled
 const { requestId, payment, stripeEnabled } = Astro.props;
 const money = (cents: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
 const statusLabel = (status: string) => ({ not_created:'Not created',draft:'Draft',open:'Awaiting payment',paid:'Paid',payment_failed:'Payment failed',void:'Voided',uncollectible:'Uncollectible' }[status] ?? status);
-const nextAction = !payment ? 'approve' : payment.bookingStatus === 'not_created' ? 'booking' : payment.bookingStatus === 'paid' && payment.balanceStatus === 'not_created' ? 'balance' : null;
+const nextAction = !payment ? 'approve'
+  : payment.bookingStatus === 'not_created' && !payment.bookingCreationStartedAt ? 'booking'
+    : payment.bookingStatus === 'paid' && payment.balanceStatus === 'not_created' && !payment.balanceCreationStartedAt ? 'balance' : null;
 const replaceAction = payment && ['void','uncollectible'].includes(payment.bookingStatus) ? 'booking' : payment?.bookingStatus === 'paid' && ['void','uncollectible'].includes(payment.balanceStatus) ? 'balance' : null;
 ---
 <section class="owner-section payment-panel" aria-labelledby="payment-heading" data-payment-panel data-request-id={requestId}>
@@ -26,6 +28,7 @@ const replaceAction = payment && ['void','uncollectible'].includes(payment.booki
   {payment && payment.bookingStatus !== 'paid' && payment.bookingStatus !== 'not_created' && <p class="payment-next">Work is booked when Stripe confirms the booking payment.</p>}
   {payment?.bookingStatus === 'paid' && payment.balanceStatus !== 'paid' && payment.balanceStatus !== 'not_created' && <p class="payment-next">Keep final downloadable files private until Stripe confirms the remaining balance.</p>}
   {(payment?.bookingStatus === 'payment_failed' || payment?.balanceStatus === 'payment_failed') && <p class="payment-next">Open the invoice in Stripe to retry payment, void it, or contact the client before taking another action.</p>}
+  {(payment?.bookingCreationStartedAt || payment?.balanceCreationStartedAt) && <p class="payment-next">Invoice creation is awaiting Stripe reconciliation. Check Stripe before clearing or retrying this request.</p>}
   {!stripeEnabled && nextAction !== 'approve' && (nextAction || replaceAction) && <p class="payment-unavailable">Invoice creation is disabled until Stripe setup and launch checks are complete.</p>}
   <p data-payment-status class="payment-action-status" role="status" aria-live="polite"></p>
 </section>

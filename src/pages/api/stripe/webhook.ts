@@ -30,6 +30,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
     id?: string;
     customer?: string | { id?: string } | null;
     hosted_invoice_url?: string | null;
+    total?: number | null;
+    currency?: string | null;
     metadata?: { audio_request_id?: string; installment?: string };
   };
   const requestId = invoice.metadata?.audio_request_id;
@@ -45,7 +47,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
     await recoverInvoiceFromWebhook(db, {
       eventId: event.id, eventType: event.type, requestId, installment: installment as 'booking' | 'balance',
       invoiceId: invoice.id, stripeCustomerId: customerId, hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
-      status, occurredAt: new Date(event.created * 1000).toISOString(),
+      status, occurredAt: new Date(event.created * 1000).toISOString(), totalAmountCents: invoice.total ?? -1,
+      currency: invoice.currency ?? '',
     });
     return Response.json({ received: true });
   }

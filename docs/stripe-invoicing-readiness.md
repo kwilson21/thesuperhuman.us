@@ -21,13 +21,15 @@ This record separates completed implementation checks from Stripe account state,
 
 ## Known recovery boundary
 
-Stripe idempotency keys are a short retry safeguard, not permanent invoice identity. If Stripe sends an invoice but the website fails before recording it, a signed webhook can restore the missing local projection. An invoice that cannot be adopted safely is stored in `stripe_unmatched_events`, and owner health reports that queue for reconciliation. Do not retry invoice creation after 24 hours while an unmatched event is unresolved; a later retry can create a second payable invoice. Live enablement remains blocked until test mode proves the recovery and reconciliation paths.
+Stripe idempotency keys are a short retry safeguard, not permanent invoice identity. The site reserves an installment before contacting Stripe and does not offer another creation attempt until the invoice is recorded or the reservation is manually reconciled. If Stripe sends an invoice but the website fails before recording it, a signed webhook can restore the missing local projection. An invoice that cannot be adopted safely is stored in `stripe_unmatched_events`, and owner health reports that queue for reconciliation. Live enablement remains blocked until test mode proves the recovery and reconciliation paths.
+
+Run `npm run owner:stripe:reconcile` to list unresolved events. After comparing the request and invoice in Stripe, record the outcome with `npm run owner:stripe:reconcile -- --resolve-event EVENT_ID "resolution"`. If Stripe confirms that no invoice exists for a reserved creation, clear only that reservation with `npm run owner:stripe:reconcile -- --clear-reservation REQUEST_ID booking|balance "Stripe check and reason"`. The reservation prevents a later click from creating a second payable invoice when a prior request had an ambiguous result.
 
 ## Required before deployment
 
 - UNVERIFIED: Review and approve the complete branch and migration.
 - UNVERIFIED: Back up production MUSIC_DB and reconcile the migration ledger.
-- UNVERIFIED: Apply `0003_audio_payments.sql` to the intended non-production database first.
+- UNVERIFIED: Apply `0003_audio_payments.sql` and `0004_stripe_reconciliation.sql` to the intended non-production database first.
 - UNVERIFIED: Configure a Stripe test secret and test webhook signing secret in the intended preview Worker.
 - UNVERIFIED: Register the preview webhook for the five supported invoice events.
 - UNVERIFIED: Render and review the owner Payment section on desktop and mobile.

@@ -73,3 +73,10 @@ it('rejects changed sources, wrong environments and a second application', async
   const fresh = await previewOwnerRetention(database, 'Local test data', now); await applyOwnerRetention(database, fresh, 'Local test data', now);
   await expect(applyOwnerRetention(database, fresh, 'Local test data', now)).rejects.toThrow(/changed|applied/);
 });
+
+it('refuses payment cleanup when the reconciliation migration is incomplete', async () => {
+  const database = fixture();
+  const review = await previewOwnerRetention(database, 'Local test data', now);
+  database.db.exec('DROP TABLE stripe_unmatched_events');
+  await expect(applyOwnerRetention(database, review, 'Local test data', now)).rejects.toThrow('migration 0004');
+});
