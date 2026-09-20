@@ -45,7 +45,7 @@ async function listening(db: D1Database, campaignId?: string): Promise<Listening
 
 async function geography(db: D1Database, campaignId?: string): Promise<GeographySummary> {
   const campaign = campaignId ? ' AND campaign_id=?' : '';
-  const rows = (await db.prepare(`SELECT city,region,COUNT(DISTINCT session_id || ':' || playthrough_id) AS total
+  const rows = (await db.prepare(`SELECT city,region,COUNT(DISTINCT session_id) AS total
     FROM music_playback_events WHERE traffic_class='human' AND event IN ('listen30','complete')
       AND city<>''${campaign} GROUP BY city,region ORDER BY total DESC,city ASC`)
     .bind(...(campaignId ? [campaignId] : [])).all<{ city: string; region: string; total: number }>()).results;

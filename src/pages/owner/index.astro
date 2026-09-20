@@ -33,6 +33,6 @@ const ledger = await loadStudioLedger(db, new Date());
   </section>
   <section class="owner-section supporting-evidence" aria-labelledby="geography-heading">
     <div><p class="owner-kicker">Approximate geography</p><h2 id="geography-heading">Where listening gathers</h2><MetricDefinition label="approximate geography">Cloudflare supplies an approximate network location. It is not a listener’s supplied address.</MetricDefinition></div>
-    {ledger.geography.cities.length ? <ol>{ledger.geography.cities.map(city => <li><span>{city.label}</span><strong>{city.reportedListens}</strong></li>)}</ol> : <p class="owner-empty">City patterns appear after enough reported listening protects individual privacy.</p>}
+    {ledger.geography.cities.length ? <ol>{ledger.geography.cities.map(city => <li><span>{city.label}</span><strong>{city.reportedListens}</strong></li>)}</ol> : <p class="owner-empty">City patterns appear after at least five qualifying reported sessions share a city.</p>}
   </section>
 </OwnerLayout>

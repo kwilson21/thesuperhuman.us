@@ -18,7 +18,7 @@ it('withdraws permission and preserves a timestamped actor audit', async () => {
   } } as unknown as D1Database;
   const response = await POST({
     request: new Request('https://thesuperhuman.us/api/owner/audience', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'withdraw', email: 'fan@example.com' }) }),
-    locals: { owner: { email: 'owner@example.com' }, runtime: { env: { MUSIC_DB: db } } },
+    locals: { owner: { email: 'owner@example.com' }, runtime: { env: { MUSIC_DB: db, OWNER_DATA_HMAC_KEY: 'private-audit-key-that-is-at-least-32-bytes' } } },
   } as any);
   expect(response.status).toBe(200);
   expect(sql.prepare('SELECT status,withdrawn_at FROM owner_audience_permissions').get()).toMatchObject({ status: 'unsubscribed' });
