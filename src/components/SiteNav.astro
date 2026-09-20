@@ -1,5 +1,6 @@
 ---
 import { mainSitePath } from '~/lib/host-routing';
+import KazonWordmark from '~/components/KazonWordmark.astro';
 const host = (Astro.isPrerendered ? null : Astro.request.headers.get('host')) ?? Astro.url.host;
 const mainHref = (path: string) => Astro.isPrerendered ? new URL(path, Astro.site).href : mainSitePath(host, path);
 const isAudio = host.split(':')[0] === 'audio.thesuperhuman.us' || Astro.url.pathname.startsWith('/audio');
@@ -14,7 +15,7 @@ const current = isAudio ? '' : Astro.url.pathname.replace(/\/$/, '') || '/';
 const active = (href: string) => href === '/' ? current === '/' : current === href || current.startsWith(`${href}/`);
 ---
 <header class="site-header site-shell">
-  <a class="site-name" href={mainHref('/')}>Kazon Wilson</a>
+  <a class="site-name" href={mainHref('/')}><KazonWordmark /><span>Wilson</span></a>
   <nav class="desktop-nav" aria-label="Primary">
     {links.map(({ href, label }) => <a href={mainHref(href)} aria-current={active(href) ? (isAudio ? 'location' : 'page') : undefined}>{label}</a>)}
   </nav>
@@ -40,7 +41,8 @@ const active = (href: string) => href === '/' ? current === '/' : current === hr
 </script>
 <style>
   .site-header { display: flex; align-items: center; justify-content: space-between; gap: 2rem; min-height: 112px; position: relative; z-index: 5; }
-  .site-name { font-size: 1.5rem; letter-spacing: -.04em; border: 0; white-space: nowrap; }
+  .site-name { display: inline-flex; align-items: baseline; gap: .2em; font-size: 1.5rem; letter-spacing: -.04em; border: 0; white-space: nowrap; }
+  .site-name :global(.kazon-wordmark) { --wordmark-height: .92em; }
   .desktop-nav { display: flex; gap: 2rem; }
   nav a { border-bottom: 1px solid transparent; padding: .4rem 0; }
   nav a[aria-current] { border-color: var(--accent); }
