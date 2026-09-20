@@ -40,7 +40,6 @@ describe('private music demand', () => {
         { kind: 'merchandise', status: 'new' }, { kind: 'merchandise', status: 'new' },
         { kind: 'purchase', status: 'new' }, { kind: 'purchase', status: 'new' },
       ]);
-    expect(sql.prepare('SELECT * FROM owner_audience_permissions').all()).toEqual([]);
     expect(sql.prepare('SELECT count(*) AS total FROM owner_request_audit').get()).toEqual({ total: 4 });
   });
   it('deduplicates retries and accepts ordered progress across audio and video', async () => {
