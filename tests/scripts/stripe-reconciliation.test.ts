@@ -8,6 +8,7 @@ it('builds bounded reconciliation statements for exact event and reservation ide
   const clear = reconciliationStatements(['--clear-reservation', 'request-1', 'booking', 'No', 'invoice', 'exists'], now);
   expect(clear).toHaveLength(2);
   expect(clear[1]).toContain('booking_creation_started_at=NULL');
+  expect(clear[1]).toContain('booking_creation_started_at IS NOT NULL');
   expect(() => reconciliationStatements(['--clear-reservation', 'request-1', 'other', 'No'], now)).toThrow();
 });
 

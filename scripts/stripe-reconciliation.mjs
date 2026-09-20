@@ -19,7 +19,7 @@ export function reconciliationStatements(args, now = new Date()) {
         SELECT ${quote(first)},${quote(`${second}-payment-updated`)},'stripe-reconciliation',${quote(note)},${quote(at)}
         WHERE EXISTS (SELECT 1 FROM audio_payments WHERE request_id=${quote(first)} AND ${second}_invoice_id IS NULL AND ${second}_creation_started_at IS NOT NULL)`,
       `UPDATE audio_payments SET ${second}_creation_started_at=NULL,updated_at=${quote(at)}
-        WHERE request_id=${quote(first)} AND ${second}_invoice_id IS NULL`,
+        WHERE request_id=${quote(first)} AND ${second}_invoice_id IS NULL AND ${second}_creation_started_at IS NOT NULL`,
     ];
   }
   throw new Error('Use --resolve-event EVENT_ID NOTE or --clear-reservation REQUEST_ID booking|balance NOTE.');
