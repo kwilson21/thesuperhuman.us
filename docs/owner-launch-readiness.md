@@ -7,7 +7,7 @@
 
 | Gate | Result | Evidence or next action |
 | --- | --- | --- |
-| Repository tests | FAIL | 288 tests pass on Node 22.19. Nine publication-journal tests also fail on the owner interface base with Node SQLite `column index out of range`; fix or rerun with the CI runtime before merge. All 47 focused owner, retention, playback, and API tests pass. |
+| Repository tests | PASS | 301 tests pass on Node 22.19 in a disposable combined checkout containing the PR #44 SQLite compatibility fix and the PR #57 stack head. |
 | Astro check and build | PASS | `astro check` reports zero errors; the Cloudflare build completes. Existing content-loader and inline-script hints remain. |
 | Owner access policy | UNVERIFIED | JWT verification and fail-closed middleware pass locally. The production Cloudflare Access application, one-owner allow policy, secrets, and signed live response have not been verified. |
 | Private response headers | PASS locally | Middleware tests cover no-store and noindex behavior. Live headers remain part of post-deploy verification. |
@@ -24,9 +24,8 @@
 
 ## Required before a deployment decision
 
-1. Resolve the publication-journal runtime failure or verify the exact supported CI Node runtime passes the complete suite.
-2. Reconcile production D1 schema, migration ledger, and recovery point without applying changes.
-3. Configure and verify the single-owner Cloudflare Access policy and required secrets.
-4. Confirm all three Old News objects and streaming routes in a protected preview environment.
-5. Exercise event disable, release hiding, previous-version rollback, and visitor recovery in that preview environment.
-6. Re-run the complete checklist and present the exact migration and deployment change set for explicit approval.
+1. Reconcile production D1 schema, migration ledger, and recovery point without applying changes.
+2. Configure and verify the single-owner Cloudflare Access policy and required secrets.
+3. Confirm all three Old News objects and streaming routes in a protected preview environment.
+4. Exercise event disable, release hiding, previous-version rollback, and visitor recovery in that preview environment.
+5. Re-run the complete checklist and present the exact migration and deployment change set for explicit approval.
