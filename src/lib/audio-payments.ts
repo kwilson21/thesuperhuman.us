@@ -118,12 +118,14 @@ export async function recordInvoice(db: D1Database, input: {
   const prefix = input.installment === 'booking' ? 'booking' : 'balance';
   const now = new Date().toISOString();
   await db.batch([
+    db.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
+      SELECT ?,?,?,?,? WHERE EXISTS (
+        SELECT 1 FROM audio_payments WHERE request_id=? AND ${prefix}_invoice_id IS NULL
+      )`).bind(input.requestId, `${prefix}-invoice-created`, input.actor.trim().toLowerCase(), input.invoiceId, now, input.requestId),
     db.prepare(`UPDATE audio_payments SET stripe_customer_id=?,${prefix}_invoice_id=?,
       ${prefix}_invoice_url=?,${prefix}_status=?,updated_at=?
       WHERE request_id=? AND ${prefix}_invoice_id IS NULL`)
       .bind(input.stripeCustomerId, input.invoiceId, input.hostedInvoiceUrl, input.status, now, input.requestId),
-    db.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
-      VALUES (?,?,?,?,?)`).bind(input.requestId, `${prefix}-invoice-created`, input.actor.trim().toLowerCase(), input.invoiceId, now),
   ]);
   const updated = await getAudioPayment(db, input.requestId);
   if (!updated || updated[`${prefix}InvoiceId`] !== input.invoiceId) throw new Error('Invoice already exists.');

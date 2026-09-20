@@ -92,6 +92,12 @@ describe('audio payments', () => {
     expect(booking).toMatchObject({ bookingInvoiceId: 'in_booking', bookingStatus: 'open' });
     expect(sql.prepare('SELECT action FROM owner_request_audit WHERE request_id=? ORDER BY id DESC LIMIT 1').get('request-1'))
       .toEqual({ action: 'booking-invoice-created' });
+    expect((await recordInvoice(db, {
+      requestId: 'request-1', installment: 'booking', stripeCustomerId: 'cus_1',
+      invoiceId: 'in_booking', hostedInvoiceUrl: 'https://invoice.stripe.com/booking', status: 'open', actor: approval.actor,
+    })).bookingInvoiceId).toBe('in_booking');
+    expect(sql.prepare(`SELECT COUNT(*) AS total FROM owner_request_audit
+      WHERE request_id=? AND action='booking-invoice-created'`).get('request-1')).toEqual({ total: 1 });
     await expect(recordInvoice(db, {
       requestId: 'request-1', installment: 'booking', stripeCustomerId: 'cus_1',
       invoiceId: 'in_other', hostedInvoiceUrl: 'https://invoice.stripe.com/other', status: 'open', actor: approval.actor,
