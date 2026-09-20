@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'Kazon Name Text';
+  src: url('/fonts/kazon-name-text.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Kazon Name Display';
+  src: url('/fonts/kazon-name-display.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
 :root {
   --paper: #FBF8F2;
   --ink: #0E0E0E;
@@ -51,6 +67,17 @@
 }
 
 @layer components {
+  .personal-name {
+    font-family: 'Kazon Name Text', 'Newsreader', Georgia, serif;
+    font-style: normal;
+    font-synthesis: none;
+    font-weight: 400;
+  }
+
+  .personal-name--display {
+    font-family: 'Kazon Name Display', 'Newsreader', Georgia, serif;
+  }
+
   .eyebrow {
     font-family: theme('fontFamily.sans');
     font-size: 11px;

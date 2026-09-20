@@ -5,6 +5,7 @@ import AudioFooter from '~/components/audio/AudioFooter.astro';
 import MusicNav from '~/components/audio/MusicNav.astro';
 import ComparisonPlayer from '~/components/audio/ComparisonPlayer.astro';
 import ServiceIcon from '~/components/audio/ServiceIcon.astro';
+import PersonalNameText from '~/components/PersonalNameText.astro';
 import notebook from '~/assets/site/notebook-v1.webp';
 import { loadMusicCatalog } from '~/lib/music-content';
 import { methodologies } from '~/lib/music-catalog';
@@ -23,8 +24,8 @@ const host = Astro.request.headers.get('host') ?? Astro.url.host;
  const release = catalog.releases.find(release => release.tracks.includes(track.id));
  const method = example.methodology ?? 'mastering';
  return <article class="portfolio-case" data-example-method={method}>
- <div class="portfolio-case-main">{release && <img class="portfolio-cover" src={release.artwork} alt={`${release.title} cover artwork`} width="1254" height="1254" />}<div class="case-title"><h2>{release?.displayTitle ?? track.title}</h2><p>{track.artist}{release?.producer && ` · Prod. ${release.producer}`}</p></div><div class="case-player"><ComparisonPlayer example={example} recording={track} /></div></div>
- <div class="case-credits"><h3>My work on this song</h3><div>{track.services.map(service => <a href={audioPath(host, `/services#${service}`)}>{methodologies[service].label} →</a>)}</div><p>A/B demonstrates {methodologies[method].label.toLowerCase()}.<br />{track.credits.filter(credit => credit.name !== track.artist && !/lyrics/i.test(credit.role)).map(credit => <span>{credit.role}: {credit.name}. </span>)}</p></div>
+ <div class="portfolio-case-main">{release && <img class="portfolio-cover" src={release.artwork} alt={`${release.title} cover artwork`} width="1254" height="1254" />}<div class="case-title"><h2>{release?.displayTitle ?? track.title}</h2><p><PersonalNameText text={track.artist} />{release?.producer && ` · Prod. ${release.producer}`}</p></div><div class="case-player"><ComparisonPlayer example={example} recording={track} /></div></div>
+ <div class="case-credits"><h3>My work on this song</h3><div>{track.services.map(service => <a href={audioPath(host, `/services#${service}`)}>{methodologies[service].label} →</a>)}</div><p>A/B demonstrates {methodologies[method].label.toLowerCase()}.<br />{track.credits.filter(credit => credit.name !== track.artist && !/lyrics/i.test(credit.role)).map(credit => <span>{credit.role}: <PersonalNameText text={credit.name} />. </span>)}</p></div>
  <section class="case-process"><h3>The process</h3><div class="process-steps">{track.services.includes('two-track-vocals') && <><div><ServiceIcon service="production" /><section><h4>Two-track instrumental</h4><p>Start with the supplied beat and vocal takes.</p></section></div><span aria-hidden="true">→</span><div><ServiceIcon service="recording" /><section><h4>Vocal mix</h4><p>Clean, balance and shape the vocals.</p></section></div></>}{track.services.includes('full-mix') && <div><ServiceIcon service="mixing" /><section><h4>Full mix</h4><p>Shape individual instrumental and vocal tracks.</p></section></div>}{track.services.includes('mastering') && <><span aria-hidden="true">→</span><div><ServiceIcon service="mixing" /><section><h4>Master</h4><p>Bring the finished mix together for release.</p></section></div></>}</div></section>
  </article>;
 })}

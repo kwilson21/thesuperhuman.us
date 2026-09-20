@@ -4,13 +4,14 @@
 <meta charset="utf-8" />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400&family=Inter:wght@400;500&display=swap" />
 <style>
+  @font-face { font-family: 'Kazon Name Display'; src: url('../public/fonts/kazon-name-display.woff2') format('woff2'); font-style: normal; font-weight: 400; font-display: block; }
   :root { --paper: #FBF8F2; --ink: #0E0E0E; --muted: #4A4A4A; --accent: #AE5534; }
   * { box-sizing: border-box; }
   html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
   body { background: var(--paper); color: var(--ink); font-family: 'Newsreader', Georgia, serif; }
   .card { position: relative; height: 100%; padding: 60px 64px; isolation: isolate; }
   .eyebrow { font-family: 'Inter', sans-serif; color: var(--accent); font-size: 16px; letter-spacing: .08em; }
-  h1 { font-size: 100px; line-height: .95; letter-spacing: -.045em; font-weight: 400; margin: 42px 0 24px; }
+  h1 { font-family: 'Kazon Name Display', 'Newsreader', Georgia, serif; font-size: 100px; line-height: .95; letter-spacing: -.045em; font-weight: 400; margin: 42px 0 24px; }
   .lede { font-size: 34px; line-height: 1.25; max-width: 450px; margin: 0; }
   .url { position: absolute; bottom: 48px; font: 18px 'Inter', sans-serif; color: var(--muted); }
   img { position: absolute; z-index: -1; width: 790px; height: auto; right: -80px; top: 85px; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 25%, #000 85%, transparent), linear-gradient(to bottom, transparent, #000 10%, #000 85%, transparent); mask-composite: intersect; }
@@ -18,7 +19,7 @@
 </head>
 <body><main class="card">
   <p class="eyebrow">Software, sound, and things worth exploring.</p>
-  <h1>Kazon<br />Wilson</h1>
+  <h1>Kazon<br /> Wilson</h1>
   <p class="lede">Software engineer.<br />Building with AI.</p>
   <img src="../src/assets/site/studio-v1.webp" alt="" width="1536" height="1024" />
   <p class="url">thesuperhuman.us</p>
