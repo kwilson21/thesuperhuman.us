@@ -9,6 +9,7 @@ export function rewritePathForHost(host: string, pathname: string): string | nul
   if (hostNoPort !== AUDIO_HOST) return null;
 
   if (pathname.startsWith('/api/')) return null;
+  if (pathname === '/music' || pathname.startsWith('/music/')) return null;
   if (pathname === '/audio' || pathname.startsWith('/audio/')) return null;
 
   if (pathname === '/') return '/audio/';

@@ -9,10 +9,11 @@ export async function checkRateLimit(
   kv: KvLike,
   ip: string,
   prefix = 'rl:',
+  maxRequests = 1,
 ): Promise<{ allowed: boolean }> {
   const key = `${prefix}${ip}`;
-  const existing = await kv.get(key);
-  if (existing) return { allowed: false };
+  const existing = Number(await kv.get(key) ?? 0);
+  if (!Number.isFinite(existing) || existing >= maxRequests) return { allowed: false };
   // Note: there is a small race window between the get above returning null and
   // the put below being visible to other edge nodes. Cloudflare KV does not
   // support atomic check-and-set, so two concurrent requests from the same IP
@@ -20,6 +21,6 @@ export async function checkRateLimit(
   // the risk is acceptable. KV's eventual-consistency also means a put from one
   // edge may take ~60 s to propagate to another, so this rate limit is
   // best-effort across the network; the 5-min window provides natural slack.
-  await kv.put(key, '1', { expirationTtl: WINDOW_SECONDS });
+  await kv.put(key, String(existing + 1), { expirationTtl: WINDOW_SECONDS });
   return { allowed: true };
 }

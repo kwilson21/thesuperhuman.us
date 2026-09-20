@@ -33,11 +33,15 @@ export async function sendAudioInquiry(args: SendArgs): Promise<{ ok: boolean }>
     text: body(args.input),
     reply_to: args.input.email,
   };
+  return sendAudioMessage({ payload, apiKey: args.apiKey });
+}
+
+export async function sendAudioMessage({ payload, apiKey }: { payload: { from: string; to: string[]; subject: string; text: string; reply_to?: string }; apiKey: string }): Promise<{ ok: boolean }> {
   try {
     const res = await fetch(ENDPOINT, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${args.apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),

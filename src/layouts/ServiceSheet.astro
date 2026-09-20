@@ -1,5 +1,6 @@
 ---
 import BaseLayout from './BaseLayout.astro';
+import MusicNav from '~/components/audio/MusicNav.astro';
 import ServiceIcon from '~/components/audio/ServiceIcon.astro';
 import SoftwareServiceIllustration from '~/components/SoftwareServiceIllustration.astro';
 import { mainSitePath } from '~/lib/host-routing';
@@ -10,6 +11,7 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
 ---
 <BaseLayout title={`${sheet.title} services · Kazon Wilson`} description={sheet.introduction}>
   <article class="service-sheet site-shell">
+    {sheet.kind === 'audio' && <MusicNav />}
     <nav class="sheet-navigation" aria-label="Services"><span>Services</span><a href={href('/services')} aria-current={sheet.kind === 'software' ? 'page' : undefined}>Software</a><a href={href('/audio/services')} aria-current={sheet.kind === 'audio' ? 'page' : undefined}>Audio</a></nav>
     <header class="sheet-hero">
       <div><h1>{sheet.title}.</h1><p class="sheet-introduction">{sheet.introduction}</p><p class="sheet-approach">{sheet.approach}</p><a class="site-button" href={href(sheet.contact)}>{sheet.contactLabel} <span aria-hidden="true">→</span></a></div>
