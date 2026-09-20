@@ -2,13 +2,13 @@
 export const prerender = false;
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import AudioFooter from '~/components/audio/AudioFooter.astro';
-import { audioOffers, directionFields, type IntakeService } from '~/lib/audio-intake';
+import { audioOffers, directionFields, isAudioIntakeAvailable, type IntakeService } from '~/lib/audio-intake';
 import '~/styles/audio-intake.css';
 const requestedService = Astro.url.searchParams.get('service') ?? 'vocal-mix';
 const selectedService = Object.hasOwn(audioOffers, requestedService) ? requestedService : 'vocal-mix';
 const env = Astro.locals.runtime?.env;
 const siteKey = env?.PUBLIC_TURNSTILE_SITE_KEY ?? '';
-const available = Boolean(siteKey && env?.RESEND_API_KEY && env?.CONTACT_FROM_EMAIL && env?.CONTACT_TO_EMAIL && env?.TURNSTILE_SECRET_KEY && env?.RATE_LIMIT);
+const available = Boolean(siteKey && isAudioIntakeAvailable(env));
 ---
 <BaseLayout title="Start your song · Kaz̄on" description="Choose your service, share your recording and send it to Kaz̄on for review. No payment before file approval.">
 <article class="site-shell intake-page">

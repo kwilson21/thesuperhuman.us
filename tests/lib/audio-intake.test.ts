@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateIntake, directionFields } from '~/lib/audio-intake';
+import { validateIntake, directionFields, isAudioIntakeAvailable, ownerRequestForIntake } from '~/lib/audio-intake';
 const base = { service: 'vocal-mix', title: 'My song', direction: 'judgment', preferences: {}, preserve: '', referenceUrl: '', referenceNote: '', name: 'Artist', email: 'artist@example.com', permission: true, turnstileToken: 'test', fileLink: 'https://drive.google.com/example' };
 describe('audio intake', () => {
   it('accepts delegated judgment without requiring references or preservation notes', () => {
@@ -27,5 +27,19 @@ describe('audio intake', () => {
   it('does not turn old engineering priorities or arbitrary service names into an offer', () => {
     expect(validateIntake({ ...base, service: 'free-master' }).ok).toBe(false);
     expect(validateIntake({ ...base, direction: 'preferences', preferences: { clarity: 'off' } }).ok).toBe(false);
+  });
+  it('maps validated intake to a bounded owner request without retaining the challenge token', () => {
+    const result = validateIntake(base);
+    if (!result.ok) throw new Error('fixture should be valid');
+    const request = ownerRequestForIntake(result.value);
+    expect(request).toMatchObject({ kind: 'service', serviceId: 'vocal-mix', name: 'Artist', email: 'artist@example.com' });
+    expect(request.summary).toBe('My song · Two-track vocal mixing');
+    expect(JSON.stringify(request)).not.toContain('turnstileToken');
+  });
+  it('depends on private storage and abuse controls rather than routine email delivery', () => {
+    const env = { MUSIC_DB: {}, TURNSTILE_SECRET_KEY: 'secret', RATE_LIMIT: {} } as Env;
+    expect(isAudioIntakeAvailable(env)).toBe(true);
+    expect(isAudioIntakeAvailable({ ...env, MUSIC_DB: undefined })).toBe(false);
+    expect(isAudioIntakeAvailable({ ...env, TURNSTILE_SECRET_KEY: '' })).toBe(false);
   });
 });

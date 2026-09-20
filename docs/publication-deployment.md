@@ -3,7 +3,7 @@
 This receiver supersedes PR #6's KV prototype. It requires the migration and read
 model from PRs #12 and #13. It does not accept the prototype's old update shape.
 
-Provision a dedicated D1 database, apply `migrations/0001_publication_journal.sql`,
+Provision a dedicated D1 database, apply `migrations/publication/0001_publication_journal.sql`,
 and configure its `PUBLICATION_DB` binding in Wrangler. Set `PUBLICATION_PROJECTS`
 to the comma-separated IDs approved for public display. Set `PUBLICATION_TOKEN`
 as a Cloudflare encrypted secret and in the publisher's private credential store.
