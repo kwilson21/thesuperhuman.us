@@ -20,7 +20,7 @@ it('keeps the empty campaign state compact and names the owner center plainly', 
   expect(today.toLowerCase()).not.toContain('studio ledger');
   expect(layout).toContain('owner center');
   expect(today).toContain('ledger.activeCampaign ? <ListeningPath');
-  expect(today).toContain('Listening begins when a campaign is active.');
+  expect(today).not.toContain('campaign-empty-path');
 });
 
 it('keeps listening explanations beside their metric copy', () => {
@@ -29,7 +29,7 @@ it('keeps listening explanations beside their metric copy', () => {
   expect(component).toContain('class="path-copy"');
   expect(component).toMatch(/path-copy[\s\S]*MetricDefinition/);
   expect(css).toContain('.path-copy{');
-  expect(css).toContain('.campaign-empty-path{');
+  expect(css).not.toContain('.campaign-empty-path{');
 });
 
 it('keeps the owner interface editorial and responsive', () => {

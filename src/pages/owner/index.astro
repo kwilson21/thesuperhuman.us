@@ -24,7 +24,7 @@ const ledger = await loadStudioLedger(db, new Date());
     <div class="campaign-copy"><p class="owner-kicker">Active promotion</p><h2 id="campaign-heading">{ledger.activeCampaign?.name ?? 'No active campaign'}</h2>
       <p>{ledger.activeCampaign?.primaryGoal ?? 'Start a campaign when you are ready to promote a release or service.'}</p>
       {ledger.activeCampaign && <a class="owner-primary-action" href={`/owner/campaigns/${ledger.activeCampaign.id}`}>Open Campaign Desk <span aria-hidden="true">→</span></a>}
-    </div>{ledger.activeCampaign ? <ListeningPath listening={ledger.activeCampaignListening} /> : <p class="campaign-empty-path">Listening begins when a campaign is active.</p>}
+    </div>{ledger.activeCampaign ? <ListeningPath listening={ledger.activeCampaignListening} /> : null}
   </section>
   <section class="owner-section observation-section" aria-labelledby="observation-heading">
     <AttentionIndex number="02" label="Next useful area" />
