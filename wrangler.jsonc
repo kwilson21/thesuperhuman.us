@@ -22,6 +22,7 @@
     // Turnstile site key is public by design (rendered in HTML, visible
     // to the browser). Stored as a plain var, not a secret.
     "PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAADPYWKMQT_mbi4O-",
+    "MUSIC_EVENTS_ENABLED": "true",
     "PUBLICATION_PROJECTS": "threadline,the-engineers-daily,personal-website",
     "PUBLICATION_OWNER_ID": "10987837",
     "PUBLICATION_GITHUB_CLIENT_ID": "Ov23liewYmTNLlpkrYjz"
@@ -45,12 +46,14 @@
     {
       "binding": "MUSIC_DB",
       "database_name": "thesuperhuman-music",
-      "database_id": "f143ccc6-d6da-40ac-aa3a-007170f6dd1b"
+      "database_id": "f143ccc6-d6da-40ac-aa3a-007170f6dd1b",
+      "migrations_dir": "migrations/music"
     },
     {
       "binding": "PUBLICATION_DB",
       "database_name": "thesuperhuman-publication",
-      "database_id": "1e9df084-b2bf-4edc-a2d2-18fdc4750f75"
+      "database_id": "1e9df084-b2bf-4edc-a2d2-18fdc4750f75",
+      "migrations_dir": "migrations/publication"
     }
   ],
   "r2_buckets": [

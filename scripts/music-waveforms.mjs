@@ -19,10 +19,10 @@ for (const side of ['before', 'after']) {
   const result = spawnSync('ffmpeg', ['-v', 'error', ...window, '-af', trim, '-ac', '1', '-ar', '8000', '-f', 'f32le', 'pipe:1'], { maxBuffer: 64 * 1024 * 1024 });
   if (result.status !== 0) throw new Error(result.stderr?.toString() || 'ffmpeg could not decode the export');
   const count = result.stdout.length / 4;
-  const bins = Array.from({ length: 160 }, (_, index) => {
-    let peak = 0;
-    for (let i = Math.floor(index * count / 160); i < Math.floor((index + 1) * count / 160); i++) peak = Math.max(peak, Math.abs(result.stdout.readFloatLE(i * 4)));
-    return peak;
+  const bins = Array.from({ length: 320 }, (_, index) => {
+    let energy = 0; let samples = 0;
+    for (let i = Math.floor(index * count / 320); i < Math.floor((index + 1) * count / 320); i++) { const sample = result.stdout.readFloatLE(i * 4); energy += sample * sample; samples++; }
+    return samples ? Math.sqrt(energy / samples) : 0;
   });
   const measured = spawnSync('ffmpeg', ['-hide_banner', ...window, '-af', `${trim},loudnorm=print_format=json`, '-f', 'null', '-'], { maxBuffer: 4 * 1024 * 1024 });
   const match = measured.stderr?.toString().match(/\{[\s\S]*?"input_i"[\s\S]*?\}/);
