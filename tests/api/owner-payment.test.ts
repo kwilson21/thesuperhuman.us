@@ -49,6 +49,8 @@ beforeEach(() => {
   });
 });
 
+const stripeEnv = { STRIPE_PAYMENTS_ENABLED: 'true', STRIPE_SECRET_KEY: 'sk_test_1', STRIPE_WEBHOOK_SECRET: 'whsec_1' };
+
 function context(body: unknown, owner = true, env: Record<string, unknown> = {}) {
   return {
     params: { id: 'request-1' },
@@ -87,26 +89,33 @@ it('rejects changed terms after approval instead of reporting stale terms as sav
 
 it('creates and records one booking invoice after approval', async () => {
   await POST(context({ action: 'approve', approvedService: 'Two-track vocal mix + master', totalAmountCents: 20_000, offerAccepted: true }));
-  const response = await POST(context({ action: 'create-booking-invoice' }, true, { STRIPE_PAYMENTS_ENABLED: 'true' }));
+  const response = await POST(context({ action: 'create-booking-invoice' }, true, stripeEnv));
   expect(response.status).toBe(200);
   expect(invoiceMocks.booking).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ email: 'artist@example.com' }), expect.objectContaining({ bookingAmountCents: 10_000 }));
   expect(sql.prepare('SELECT booking_invoice_id,booking_status FROM audio_payments').get())
     .toEqual({ booking_invoice_id: 'in_booking', booking_status: 'open' });
-  await POST(context({ action: 'create-booking-invoice' }, true, { STRIPE_PAYMENTS_ENABLED: 'true' }));
+  await POST(context({ action: 'create-booking-invoice' }, true, stripeEnv));
   expect(invoiceMocks.booking).toHaveBeenCalledTimes(1);
 });
 
 it('does not create a balance invoice before Stripe confirms the booking payment', async () => {
   await POST(context({ action: 'approve', approvedService: 'Two-track vocal mix + master', totalAmountCents: 20_000, offerAccepted: true }));
-  const response = await POST(context({ action: 'create-balance-invoice' }, true, { STRIPE_PAYMENTS_ENABLED: 'true' }));
+  const response = await POST(context({ action: 'create-balance-invoice' }, true, stripeEnv));
   expect(response.status).toBe(409);
   expect(invoiceMocks.balance).not.toHaveBeenCalled();
+});
+
+it('returns service unavailable without calling Stripe when invoice creation is disabled', async () => {
+  await POST(context({ action: 'approve', approvedService: 'Mastering', totalAmountCents: 7_500, offerAccepted: true }));
+  const response = await POST(context({ action: 'create-booking-invoice' }, true, { STRIPE_PAYMENTS_ENABLED: 'false' }));
+  expect(response.status).toBe(503);
+  expect(invoiceMocks.booking).not.toHaveBeenCalled();
 });
 
 it('does not record invoice success when Stripe fails', async () => {
   await POST(context({ action: 'approve', approvedService: 'Mastering', totalAmountCents: 7_500, offerAccepted: true }));
   invoiceMocks.booking.mockRejectedValueOnce(new Error('Stripe unavailable'));
-  const response = await POST(context({ action: 'create-booking-invoice' }, true, { STRIPE_PAYMENTS_ENABLED: 'true' }));
+  const response = await POST(context({ action: 'create-booking-invoice' }, true, stripeEnv));
   expect(response.status).toBe(502);
   expect(sql.prepare('SELECT booking_invoice_id,booking_status FROM audio_payments').get())
     .toEqual({ booking_invoice_id: null, booking_status: 'not_created' });
@@ -114,15 +123,13 @@ it('does not record invoice success when Stripe fails', async () => {
 
 it('creates a replacement after a voided booking invoice', async () => {
   await POST(context({ action: 'approve', approvedService: 'Mastering', totalAmountCents: 7_500, offerAccepted: true }));
-  await POST(context({ action: 'create-booking-invoice' }, true, { STRIPE_PAYMENTS_ENABLED: 'true' }));
+  await POST(context({ action: 'create-booking-invoice' }, true, stripeEnv));
   sql.prepare("UPDATE audio_payments SET booking_status='void' WHERE request_id='request-1'").run();
   invoiceMocks.booking.mockResolvedValueOnce({
     stripeCustomerId: 'cus_1', invoiceId: 'in_replacement',
     hostedInvoiceUrl: 'https://invoice.stripe.com/replacement', status: 'open',
   });
-  const response = await POST(context({ action: 'replace-booking-invoice' }, true, {
-    STRIPE_PAYMENTS_ENABLED: 'true', STRIPE_SECRET_KEY: 'sk_test_1', STRIPE_WEBHOOK_SECRET: 'whsec_1',
-  }));
+  const response = await POST(context({ action: 'replace-booking-invoice' }, true, stripeEnv));
   expect(response.status).toBe(200);
   expect(sql.prepare('SELECT booking_invoice_id,booking_status FROM audio_payments').get())
     .toEqual({ booking_invoice_id: 'in_replacement', booking_status: 'open' });

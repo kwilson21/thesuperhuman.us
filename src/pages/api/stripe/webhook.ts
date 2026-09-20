@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { applyStripeInvoiceEvent, getAudioPayment, isKnownInvoiceAttempt, type InvoiceStatus } from '~/lib/audio-payments';
+import { applyStripeInvoiceEvent, getAudioPayment, isKnownInvoiceAttempt, recoverInvoiceFromWebhook, type InvoiceStatus } from '~/lib/audio-payments';
 import { verifyStripeWebhook } from '~/lib/stripe-invoicing';
 
 export const prerender = false;
@@ -28,6 +28,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (!status) return Response.json({ received: true });
   const invoice = event.data.object as unknown as {
     id?: string;
+    customer?: string | { id?: string } | null;
+    hosted_invoice_url?: string | null;
     metadata?: { audio_request_id?: string; installment?: string };
   };
   const requestId = invoice.metadata?.audio_request_id;
@@ -39,7 +41,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const expectedInvoiceId = installment === 'booking' ? payment?.bookingInvoiceId : payment?.balanceInvoiceId;
   if (!payment || expectedInvoiceId !== invoice.id) {
     if (await isKnownInvoiceAttempt(db, invoice.id)) return Response.json({ received: true });
-    return Response.json({ received: false }, { status: 503, headers: { 'retry-after': '60' } });
+    const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id ?? null;
+    await recoverInvoiceFromWebhook(db, {
+      eventId: event.id, eventType: event.type, requestId, installment: installment as 'booking' | 'balance',
+      invoiceId: invoice.id, stripeCustomerId: customerId, hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
+      status, occurredAt: new Date(event.created * 1000).toISOString(),
+    });
+    return Response.json({ received: true });
   }
   try {
     await applyStripeInvoiceEvent(db, {

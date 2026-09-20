@@ -13,7 +13,7 @@ This record separates completed implementation checks from Stripe account state,
 - PASS: Webhooks require a valid Stripe signature over the raw request body.
 - PASS: Replayed Stripe event IDs apply once.
 - PASS: Out-of-order events cannot move a paid installment backward.
-- PASS: Recognized audio invoice events without a matching recorded invoice return a retryable response instead of being discarded.
+- PASS: A signed audio invoice event can restore a missing invoice projection when its request slot is empty; conflicts and invalid request references are retained for owner reconciliation.
 - PASS: Voided and uncollectible invoices can be replaced while prior attempts remain identifiable.
 - PASS: Owner retention removes Stripe customer IDs and hosted invoice URLs with eligible request contact data.
 - PASS: Stripe API failure leaves invoice state uncreated.
@@ -21,7 +21,7 @@ This record separates completed implementation checks from Stripe account state,
 
 ## Known recovery boundary
 
-Stripe idempotency keys are a short retry safeguard, not permanent invoice identity. If Stripe sends an invoice but the website fails before recording it, the signed webhook remains retryable so the event is not silently lost. Do not retry invoice creation after 24 hours until the request is reconciled against the Stripe dashboard; a later retry can create a second payable invoice. Live enablement remains blocked until test mode proves this failure path and its owner recovery steps.
+Stripe idempotency keys are a short retry safeguard, not permanent invoice identity. If Stripe sends an invoice but the website fails before recording it, a signed webhook can restore the missing local projection. An invoice that cannot be adopted safely is stored in `stripe_unmatched_events`, and owner health reports that queue for reconciliation. Do not retry invoice creation after 24 hours while an unmatched event is unresolved; a later retry can create a second payable invoice. Live enablement remains blocked until test mode proves the recovery and reconciliation paths.
 
 ## Required before deployment
 
@@ -43,7 +43,8 @@ Stripe idempotency keys are a short retry safeguard, not permanent invoice ident
 - UNVERIFIED: Pay the balance and confirm both installments show **Paid**.
 - UNVERIFIED: Send an invalid signature and confirm no payment record changes.
 - UNVERIFIED: Replay a valid event and confirm one event-ledger row.
-- UNVERIFIED: Simulate a sent invoice whose D1 recording fails, confirm its webhook retries, and reconcile it before any retry outside the 24-hour idempotency window.
+- UNVERIFIED: Simulate a sent invoice whose D1 recording fails and confirm its signed webhook restores the missing invoice projection.
+- UNVERIFIED: Deliver an invoice event whose request is missing or whose installment slot is occupied; confirm it appears in owner health and reconcile it before retrying invoice creation.
 - UNVERIFIED: Void a test invoice and confirm the owner can create exactly one replacement.
 - UNVERIFIED: Run retention against an eligible service request and confirm customer IDs and hosted invoice URLs are cleared.
 - UNVERIFIED: Disable invoice creation and confirm status readback remains available.

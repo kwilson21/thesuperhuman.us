@@ -21,6 +21,7 @@ export type AudioPayment = {
   balanceStatus: InvoiceStatus;
   balanceStatusUpdatedAt: string | null;
   balanceAttemptCount: number;
+  externalRefsDeletedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -32,13 +33,13 @@ type PaymentRow = {
   booking_status: InvoiceStatus; balance_invoice_id: string | null; balance_invoice_url: string | null;
   booking_status_updated_at: string | null; booking_attempt_count: number; balance_status: InvoiceStatus;
   balance_status_updated_at: string | null; balance_attempt_count: number;
-  created_at: string; updated_at: string;
+  external_refs_deleted_at: string | null; created_at: string; updated_at: string;
 };
 
 const columns = `request_id,approved_service,total_amount_cents,currency,booking_amount_cents,
   balance_amount_cents,offer_accepted_at,stripe_customer_id,booking_invoice_id,booking_invoice_url,
   booking_status,booking_status_updated_at,booking_attempt_count,balance_invoice_id,balance_invoice_url,balance_status,
-  balance_status_updated_at,balance_attempt_count,created_at,updated_at`;
+  balance_status_updated_at,balance_attempt_count,external_refs_deleted_at,created_at,updated_at`;
 
 function fromRow(row: PaymentRow): AudioPayment {
   return {
@@ -53,6 +54,7 @@ function fromRow(row: PaymentRow): AudioPayment {
     balanceInvoiceUrl: row.balance_invoice_url, balanceStatus: row.balance_status,
     balanceStatusUpdatedAt: row.balance_status_updated_at,
     balanceAttemptCount: Number(row.balance_attempt_count),
+    externalRefsDeletedAt: row.external_refs_deleted_at,
     createdAt: row.created_at, updatedAt: row.updated_at,
   };
 }
@@ -167,6 +169,42 @@ export async function replaceTerminalInvoice(db: D1Database, input: {
 
 export async function isKnownInvoiceAttempt(db: D1Database, invoiceId: string): Promise<boolean> {
   return Boolean(await db.prepare('SELECT invoice_id FROM stripe_invoice_attempts WHERE invoice_id=?').bind(invoiceId).first());
+}
+
+export async function recoverInvoiceFromWebhook(db: D1Database, input: {
+  eventId: string; eventType: string; requestId: string; installment: Installment; invoiceId: string;
+  stripeCustomerId: string | null; hostedInvoiceUrl: string | null;
+  status: Exclude<InvoiceStatus, 'not_created'>; occurredAt: string;
+}): Promise<'recovered' | 'discarded' | 'unmatched'> {
+  const payment = await getAudioPayment(db, input.requestId);
+  if (payment?.externalRefsDeletedAt) return 'discarded';
+  const prefix = input.installment;
+  const currentId = payment?.[`${prefix}InvoiceId`];
+  const receivedAt = new Date().toISOString();
+  if (!payment || currentId) {
+    await db.prepare(`INSERT OR IGNORE INTO stripe_unmatched_events
+      (event_id,event_type,invoice_id,request_id,installment,status,occurred_at,received_at,reason)
+      VALUES (?,?,?,?,?,?,?,?,?)`).bind(input.eventId, input.eventType, input.invoiceId, input.requestId,
+      input.installment, input.status, input.occurredAt, receivedAt, payment ? 'invoice-conflict' : 'request-not-found').run();
+    return 'unmatched';
+  }
+  await db.batch([
+    db.prepare(`INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at)
+      SELECT ?,?,?,?,? WHERE EXISTS (
+        SELECT 1 FROM audio_payments WHERE request_id=? AND ${prefix}_invoice_id IS NULL
+      )`).bind(input.requestId, `${prefix}-payment-updated`, 'stripe-recovery',
+        `${input.eventType}: ${input.status}; recovered ${input.invoiceId}`, receivedAt, input.requestId),
+    db.prepare(`UPDATE audio_payments SET stripe_customer_id=COALESCE(?,stripe_customer_id),
+      ${prefix}_invoice_id=?,${prefix}_invoice_url=?,${prefix}_status=?,${prefix}_status_updated_at=?,updated_at=?
+      WHERE request_id=? AND ${prefix}_invoice_id IS NULL`)
+      .bind(input.stripeCustomerId, input.invoiceId, input.hostedInvoiceUrl, input.status, input.occurredAt,
+        receivedAt, input.requestId),
+    db.prepare(`INSERT OR IGNORE INTO stripe_invoice_attempts(invoice_id,request_id,installment,created_at)
+      VALUES (?,?,?,?)`).bind(input.invoiceId, input.requestId, input.installment, receivedAt),
+    db.prepare(`INSERT OR IGNORE INTO stripe_webhook_events(id,event_type,invoice_id,occurred_at,processed_at)
+      VALUES (?,?,?,?,?)`).bind(input.eventId, input.eventType, input.invoiceId, input.occurredAt, receivedAt),
+  ]);
+  return 'recovered';
 }
 
 export async function applyStripeInvoiceEvent(db: D1Database, input: {

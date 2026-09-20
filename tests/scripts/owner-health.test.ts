@@ -6,7 +6,7 @@ const { ownerHealth } = ownerHealthModule;
 const requiredSchema = [
   'owner_campaigns', 'owner_requests', 'owner_request_audit',
   'music_playback_events', 'music_playback_daily', 'music_playback_geography_daily', 'owner_retention_runs',
-  'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts',
+  'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts', 'stripe_unmatched_events',
 ];
 
 function healthyFixture() {
@@ -16,6 +16,7 @@ function healthyFixture() {
     query: async (sql: string) => {
       if (sql.includes('sqlite_master')) return requiredSchema.map(name => ({ name }));
       if (sql.includes('owner_retention_runs')) return [{ completed_at: '2026-09-18T12:00:00Z' }];
+      if (sql.includes('stripe_unmatched_events')) return [{ total: 0 }];
       return [{ total: 2 }];
     },
     media: [
@@ -63,4 +64,12 @@ it('requires the payment projection and Stripe event ledger', async () => {
   };
   const report = await ownerHealth(fixture);
   expect(report.checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
+});
+
+it('requires attention when a Stripe invoice event needs reconciliation', async () => {
+  const fixture = healthyFixture();
+  const baseQuery = fixture.query;
+  fixture.query = async (sql: string) => sql.includes('stripe_unmatched_events') ? [{ total: 1 }] : baseQuery(sql);
+  const report = await ownerHealth(fixture);
+  expect(report.checks).toContainEqual(expect.objectContaining({ id: 'stripe-unmatched', status: 'attention' }));
 });

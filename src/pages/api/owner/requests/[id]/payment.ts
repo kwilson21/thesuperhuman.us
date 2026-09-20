@@ -64,6 +64,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     const installment = ['create-booking-invoice', 'replace-booking-invoice'].includes(parsed.data.action) ? 'booking' : 'balance';
     const existingId = installment === 'booking' ? payment.bookingInvoiceId : payment.balanceInvoiceId;
     if (existingId) return Response.json({ ok: true, payment: ownerView(payment) }, { headers });
+    if (!stripeAvailable(locals.runtime.env)) return Response.json({ ok: false }, { status: 503, headers });
     if (installment === 'balance' && payment.bookingStatus !== 'paid') {
       return Response.json({ ok: false }, { status: 409, headers });
     }

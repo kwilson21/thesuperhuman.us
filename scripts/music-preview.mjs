@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // Isolated local bindings. No production resource identifiers or credentials.
+import { spawnSync } from 'node:child_process';
 import { mkdir, writeFile, readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { getPlatformProxy } from 'wrangler';
 const configPath = resolve('.private/wrangler-music-preview.json');
+const persistPath = resolve('.wrangler/state/v3');
 await mkdir('.private/music-assets', { recursive: true });
 await writeFile(configPath, JSON.stringify({
   name: 'music-local-preview', compatibility_date: '2026-05-14', compatibility_flags: ['nodejs_compat'],
@@ -12,11 +14,17 @@ await writeFile(configPath, JSON.stringify({
   kv_namespaces: [{ binding: 'RATE_LIMIT', id: 'local-rate-limit' }, { binding: 'SESSION', id: 'local-session' }],
   r2_buckets: [{ binding: 'AUDIO', bucket_name: 'superhuman-audio' }],
 }, null, 2));
-const proxy = await getPlatformProxy({ configPath, persist: { path: '.wrangler/state/v3' } });
+const schemaResult = spawnSync(process.execPath, [
+  resolve('node_modules/wrangler/bin/wrangler.js'),
+  'd1', 'execute', 'MUSIC_DB',
+  '--local', '--file', resolve('db/music.sql'),
+  '--config', configPath, '--persist-to', persistPath, '--yes',
+], { encoding: 'utf8' });
+if (schemaResult.status !== 0) {
+  throw new Error(`Could not initialize the local music database:\n${schemaResult.stderr || schemaResult.stdout}`);
+}
+const proxy = await getPlatformProxy({ configPath, persist: { path: persistPath } });
 try {
-  const sql = await readFile('db/music.sql', 'utf8');
-  // This schema contains CREATE statements; preserve semicolons inside trigger bodies.
-  for (const statement of sql.replace(/^--.*$/gm, '').split(/;\s*(?=CREATE\b|$)/i).filter(s => s.trim())) await proxy.env.MUSIC_DB.prepare(statement).run();
   const files = (await readdir('.private/music-assets')).filter(f => f.endsWith('-upload.json'));
   for (const file of files) {
     const media = JSON.parse(await readFile(`.private/music-assets/${file}`, 'utf8'));

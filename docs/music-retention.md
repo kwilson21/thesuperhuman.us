@@ -3,8 +3,11 @@
 Playback records become eligible for review after 90 days (the cutoff uses UTC
 midnight, so every eligible record is at least 90 days old). There is no scheduled
 delete. Contact requests are outside this cleanup and retain their existing
-withdrawal process. Apply the additive `db/music.sql` schema to the dedicated
-MUSIC_DB before using either reporting or cleanup.
+withdrawal process. Apply the versioned MUSIC_DB migrations with
+`wrangler d1 migrations apply`; Wrangler rolls back a migration file when one of
+its statements fails. `0003_audio_payments.sql` rebuilds the request audit table
+to extend its action constraint, so `db/music.sql` is a fresh-database baseline,
+not an additive production upgrade.
 
 ```sh
 node scripts/music-retention.mjs

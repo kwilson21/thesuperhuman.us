@@ -70,12 +70,21 @@ export async function applyOwnerRetention(database, review, environment, now = n
   await verifyTriggers(database);
   const requestRows = JSON.parse(requests);
   const requestSelection = idsSelection(requestRows);
+  const paymentSchema = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='audio_payments'");
+  const paymentCleanup = paymentSchema.length ? [
+    `DELETE FROM stripe_webhook_events WHERE invoice_id IN (SELECT invoice_id FROM stripe_invoice_attempts WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection}))`,
+    `DELETE FROM stripe_unmatched_events WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`,
+    `DELETE FROM stripe_invoice_attempts WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`,
+    `UPDATE audio_payments SET stripe_customer_id=NULL,booking_invoice_id=NULL,booking_invoice_url=NULL,
+      balance_invoice_id=NULL,balance_invoice_url=NULL,external_refs_deleted_at=${quote(now.toISOString())},updated_at=${quote(now.toISOString())}
+      WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`,
+  ] : [];
   const guard = (query, expected) => `SELECT CASE WHEN (${query})=${quote(expected)} THEN 1 ELSE json_extract('retention source changed','$') END`;
   const runId = hash(`${review.generatedAt}:${review.requestSourceHash}:${review.playbackSourceHash}`);
   const statements = [
     guard(requestSnapshot(now), requests),
     guard(playbackSnapshot(review.playbackCutoff), playback),
-    `UPDATE audio_payments SET stripe_customer_id=NULL,booking_invoice_url=NULL,balance_invoice_url=NULL,updated_at=${quote(now.toISOString())} WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`,
+    ...paymentCleanup,
     `UPDATE owner_requests SET name='',email='',city_region='',details_json='{}',private_note='',updated_at=${quote(now.toISOString())} WHERE ${requestSelection}`,
     `INSERT INTO music_playback_daily(day,release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,city,count)
       SELECT day,release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,'' AS city,SUM(count) FROM
