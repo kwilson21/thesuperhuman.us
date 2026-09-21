@@ -111,7 +111,7 @@ export function setupComparisonPlayers() {
     window.addEventListener('pagehide', pause);
     media.forEach(audio => { audio.pause(); audio.controls = false; audio.hidden = true; });
     root.querySelector<HTMLElement>('.comparison-controls')!.hidden = false;
-    root.querySelector<HTMLElement>('.comparison-playhead')!.hidden = false;
+    root.querySelectorAll<HTMLElement>('.comparison-playhead').forEach(playhead => playhead.hidden = false);
     render();
   });
 }
