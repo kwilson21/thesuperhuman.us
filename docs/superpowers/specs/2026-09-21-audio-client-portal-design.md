@@ -11,6 +11,8 @@ Build a private studio companion for audio-service clients. It gives each client
 
 The portal should establish the trust of a thoughtful in-person process while remaining useful to clients who are busy, shy, or uncertain how to give notes. It should explain what is happening, why it matters, and what the client needs to do next.
 
+This design supersedes the client-portal and project-file-delivery exclusions in [`2026-09-20-audio-payments-design.md`](2026-09-20-audio-payments-design.md). The payment design remains authoritative for offers, invoices, and Stripe payment state.
+
 ## Goals
 
 - Keep requests, messages, project progress, payment state, review files, and final delivery in one private place.
@@ -33,7 +35,7 @@ Deferred work must remain recorded in the project roadmap or issue tracker befor
 
 A service request creates one **provisional** private project as soon as it is received. This lets the client correct a shared-file link or add essential context before Kazon approves the files. The same project is promoted to `Accepted` when Kazon approves the files and scope; messages and timeline history never need to be moved between records. The existing `owner_requests` record remains the source for intake and contact information. The existing `audio_payments` record remains the source for payment status. The new project record owns communication, visible progress, delivery dates, and published project files.
 
-One project has one client email address in the first version. Only Kazon can change a project stage, publish files, set or change the delivery date, or close the project.
+One project has one client email address in the first version. The client email is normalized by trimming whitespace and lowercasing it; the system does not strip plus-addressing. Only Kazon can manually change a project stage, publish files, set or change the delivery date, or close the project. A Stripe-confirmed booking payment is the sole automated stage transition.
 
 ### Project stages
 
@@ -54,9 +56,9 @@ The first version does not allow a client action to change stages. Client messag
 
 ### Access
 
-The client receives an email containing a private sign-in link whenever a project begins or a meaningful update is posted. The email does not include message text, file names, project notes, payment details, or other private content.
+The client receives an email containing a private sign-in-page link whenever a project begins or a meaningful update is posted. This link is not itself authorization. The email does not include message text, file names, project notes, payment details, or other private content.
 
-Following the link opens an email-code sign-in flow. A valid, short-lived code establishes a private browser session that can access only projects associated with that email. There are no passwords to create or recover.
+Following the link opens `/studio/sign-in`. The client enters the normalized project email, completes Turnstile, and receives a separate one-time email code. The request endpoint returns the same generic response whether or not the email has a project; it must not reveal project existence. A valid, short-lived code establishes a private browser session that can access only projects associated with that email. There are no passwords to create or recover.
 
 ### Project page
 
@@ -124,9 +126,9 @@ The owner dashboard adds a “Projects needing attention” section. It prioriti
 
 Kazon uploads files from the owner project view. The application stores file metadata separately from the private audio object. Metadata includes project id, version type, display name, media type, uploaded time, published time, availability state, and expiry time.
 
-Review audio can stream in the project page. Download availability is an owner choice per file. Final files can stream and download only after the balance invoice has reached Stripe-confirmed `paid` state.
+Review audio can stream in the project page. Download availability is an owner choice per file. Publishing final files makes prior review versions unavailable to the client, preserving one clear current delivery. Final files can stream and download only after the balance invoice has reached Stripe-confirmed `paid` state.
 
-Private file objects must never use a public URL. After an authorized client session is verified, the application produces short-lived streaming or download access. File delivery is recorded with a timestamp and client session identifier sufficient for operations, without storing unnecessary personal data.
+The existing `AUDIO` R2 bucket stores client objects under a dedicated private project prefix. Private file objects must never use a public URL, and the existing public audio route must reject this prefix. After an authorized client session is verified, the application produces short-lived streaming or download access. File delivery is recorded with a timestamp and client session identifier sufficient for operations, without storing unnecessary personal data.
 
 Final-file access expires one year after its delivery date. Kazon can revoke a file or client project access earlier when necessary. Expired files remain unavailable even if an old browser link is retained.
 
@@ -146,9 +148,11 @@ Emails stay minimal. They say that an update is waiting and link to the private 
 ## Security and privacy
 
 - Require an email code before client project access. Codes must be random, short-lived, single use, and rate-limited by email and client IP.
+- Require the existing Turnstile verification on every email-code request.
 - Bind a completed session to one normalized client email. Verify project membership on every client route and file request.
 - Use `Cache-Control: private, no-store` for client pages, API responses, and authorized file routes.
 - Validate message content, limit message length, accept only HTTPS shared-file links, and rate-limit message creation.
+- Render shared links as plain links only. The application does not fetch, inspect, or generate previews for client-provided URLs.
 - Store separate owner and client message actors. Client messages must never be treated as owner actions.
 - Keep direct attachments and collaborator invitations out of the first version.
 - Store files in private object storage. Generate authorization only after server-side session and project checks.
