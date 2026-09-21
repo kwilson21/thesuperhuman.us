@@ -2,9 +2,17 @@ import { ComparisonTransport } from './comparison-transport';
 import { registerMusicPlayer } from './music-playback';
 
 /** Load the comparison pair on demand; A/B and loudness never restart playback. */
+type AudioContextConstructor = new () => AudioContext;
+
+export function getAudioContextConstructor(scope: { AudioContext?: AudioContextConstructor; webkitAudioContext?: AudioContextConstructor }) {
+  return scope.AudioContext ?? scope.webkitAudioContext;
+}
+
 export function setupComparisonPlayers() {
+  const AudioContextConstructor = getAudioContextConstructor(window);
+  if (!AudioContextConstructor) return;
   document.querySelectorAll<HTMLElement>('[data-comparison]').forEach(root => {
-    if (root.dataset.initialized || !window.AudioContext) return;
+    if (root.dataset.initialized) return;
     root.dataset.initialized = 'true';
     const media = [...root.querySelectorAll<HTMLAudioElement>('audio')];
     const play = root.querySelector<HTMLButtonElement>('[data-comparison-play]')!;
@@ -44,7 +52,7 @@ export function setupComparisonPlayers() {
       media.forEach(audio => { audio.pause(); audio.controls = false; audio.hidden = true; });
       pending = true; claimPlayback(); status.textContent = 'Preparing synchronized audio…'; render();
       try {
-        context ??= new AudioContext();
+        context ??= new AudioContextConstructor!();
         // Resume during the click gesture, before network work (mobile autoplay rules).
         const resumed = context.resume();
         loading ??= Promise.all(media.map(async audio => {
