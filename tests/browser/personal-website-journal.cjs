@@ -20,7 +20,7 @@ const targetUrl = process.env.TARGET_URL || 'http://127.0.0.1:4321';
     ]) {
       await page.getByRole('button', { name }).click();
       await page.getByRole('heading', { name }).waitFor();
-      const activeProof = page.locator('details[open] .timeline-visual-proof');
+      const activeProof = page.locator('article[data-panel]:not([hidden]) .timeline-visual-proof');
       await activeProof.waitFor();
       const widths = await activeProof.locator('figure').evaluateAll(elements => elements.map(element => Math.round(element.getBoundingClientRect().width)));
       assert.deepEqual(widths, [342, 342], `Opened visual proof does not fit a phone viewport: ${JSON.stringify({ name: String(name), widths })}`);
