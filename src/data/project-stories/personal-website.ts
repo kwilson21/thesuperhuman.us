@@ -27,6 +27,12 @@ import currentWork from '~/assets/projects/website/work-after.png';
 import oldNewsPremiere from '~/assets/site/old-news-premiere.webp';
 import oldNewsMerchConcepts from '~/assets/site/old-news-merch-concepts.webp';
 import musicSkyline from '~/assets/site/music-skyline.webp';
+import playbackBefore from '~/assets/projects/website/bugfixes/playback-before.png';
+import playbackAfter from '~/assets/projects/website/bugfixes/playback-after.png';
+import comparisonLayoutBefore from '~/assets/projects/website/bugfixes/comparison-layout-before.png';
+import comparisonLayoutAfter from '~/assets/projects/website/bugfixes/comparison-layout-after.png';
+import ownerTooltipBefore from '~/assets/projects/website/bugfixes/owner-tooltip-before.png';
+import ownerTooltipAfter from '~/assets/projects/website/bugfixes/owner-tooltip-after.png';
 
 export const websiteStory = {
   title: 'Personal website',
@@ -51,6 +57,11 @@ export const websiteMilestones: Milestone[] = [
     summary: 'The A/B player now initializes more reliably on phones and requests iOS playback audio when the device ringer is silent.',
     detailLabel: 'What changed',
     detail: 'The player keeps a browser-compatible Web Audio initialization path, then uses the optional playback audio-session category when iOS exposes it. The change preserves fallback behavior for browsers without that API.',
+    visualProof: {
+      label: 'A/B player mobile playback context',
+      before: artifact(playbackBefore, 'Before · mobile A/B player', 'The player’s visible controls did not reveal the iPhone silent-mode failure. The problem was the browser audio category, not the layout.', 'Browser capture'),
+      after: artifact(playbackAfter, 'After · mobile A/B player', 'The same player after the repair. Still images cannot prove silent-mode audio, so the behavior is also covered by the player regression checks.', 'Browser capture'),
+    },
   },
   {
     id: 'website-mobile-comparison-layout', day: '2026-09-21',
@@ -58,6 +69,11 @@ export const websiteMilestones: Milestone[] = [
     summary: 'The compact A/B selector no longer stretches to match the loudness controls, and each playback line now follows only its own waveform.',
     detailLabel: 'What changed',
     detail: 'The selector is sized to its content rather than a shared grid column. Each playhead lives inside its own waveform stage, so it stops at the waveform it represents.',
+    visualProof: {
+      label: 'A/B player layout before and after',
+      before: artifact(comparisonLayoutBefore, 'Before · shared playback line', 'At phone width, one playhead crossed both waveforms and the selector was governed by the wider control grid.', 'Browser capture'),
+      after: artifact(comparisonLayoutAfter, 'After · waveform-bounded playback line', 'Each line now ends with its own waveform, and the A/B selector keeps only the width its controls need.', 'Browser capture'),
+    },
   },
   {
     id: 'website-owner-mobile-tooltips', day: '2026-09-21',
@@ -65,6 +81,11 @@ export const websiteMilestones: Milestone[] = [
     summary: 'The owner dashboard’s metric explanations now open inward on a phone instead of being clipped off-screen.',
     detailLabel: 'What changed',
     detail: 'Left-anchored metric explanations open to the right. Right-anchored supporting-evidence explanations open to the left. The private owner dashboard is not shown in this public timeline.',
+    visualProof: {
+      label: 'Owner-tooltip placement before and after',
+      before: artifact(ownerTooltipBefore, 'Before · clipped explanation', 'A data-free browser fixture showing the original placement: each explanation could run outside a phone viewport. No owner metrics are shown.', 'Browser capture'),
+      after: artifact(ownerTooltipAfter, 'After · inward explanation', 'The same data-free fixture after the repair: left and right explanations each open toward readable space.', 'Browser capture'),
+    },
   },
   {
     id: 'website-old-news-release-experience', day: '2026-09-15',
