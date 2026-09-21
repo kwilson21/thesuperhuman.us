@@ -26,15 +26,29 @@ Open a request from **Today**, **Campaigns**, or **Requests**. Each path reaches
 - **Resolved** means the next step is complete or the request will not proceed.
 - **Reopen** returns a resolved request to active review.
 - **Withdraw** stops the request and makes its contact detail eligible for immediate removal.
-- **Delete personal data** is performed by reviewed retention. It preserves the request category, status, dates, and audit trail while blanking contact fields and private notes.
+- **Delete personal data** is performed by reviewed retention. It preserves the request category, status, dates, and audit trail while blanking contact fields and private notes. A service request stays out of retention while either payment installment is unfinished, so invoice recovery and file delivery remain possible.
 
 Routine purchase, merchandise, and service requests do not send email. They appear in the owner center. A redacted urgent email is sent only when a valid request cannot be stored. Treat repeated storage alerts, owner authentication failures, media failures, or retention failures as urgent.
 
 Release-update subscriptions are deferred until a confirmed opt-in and self-service unsubscribe flow exists. The owner center does not display a subscription metric until that complete flow is built.
 
+## Audio-service payments
+
+1. Open the audio-service request and review its files, requested service, scope, and availability.
+2. Send the client a written fixed-price offer outside the website.
+3. After the client accepts that exact offer, enter the approved service and total price in **Payment** and check the acceptance confirmation.
+4. Select **Create booking invoice**. Stripe emails the hosted invoice for 50% of the total.
+5. Do not begin the 3–5 business-day delivery window until the owner page shows the booking invoice as **Paid**.
+6. After the agreed work and revisions, select **Create balance invoice**.
+7. Keep final downloadable files private until the balance shows **Paid**.
+
+If invoice creation fails, refresh the request before retrying. Stable Stripe idempotency keys prevent a retry from creating a second invoice, but the refreshed owner page is the clearest source for the next action. Handle refunds, disputes, voiding, and invoice corrections in Stripe. An uncollectible invoice remains associated because Stripe can later mark it paid; void it in Stripe before creating a replacement. The website stores operational status only.
+
+To stop new invoices, set `STRIPE_PAYMENTS_ENABLED=false` and deploy the reviewed configuration change. This does not erase payment history or disable signed status updates for invoices already sent.
+
 ## Retention
 
-Raw playback is kept for 90 days. Daily human totals remain after cleanup, with sparse cities stored only as **Other locations**. City thresholds count distinct tab sessions, so replays in one tab do not increase the city toward visibility. Resolved purchase and merchandise contact data is removed after 90 days, resolved service contact data after one year, and withdrawn request contact data immediately.
+Raw playback is kept for 90 days. Daily human totals remain after cleanup, with sparse cities stored only as **Other locations**. City thresholds count distinct tab sessions, so replays in one tab do not increase the city toward visibility. Resolved purchase and merchandise contact data is removed after 90 days, resolved service contact data after one year, and withdrawn request contact data immediately unless an invoice exists, invoice creation is still reserved, or a paid booking still has a balance due.
 
 1. Run `npm run owner:retention:preview -- --remote`.
 2. Open `.private/owner-retention-review.html`. Save any useful conclusions in the private development journal. The review must not contain names, email addresses, notes, IP addresses, or secrets.

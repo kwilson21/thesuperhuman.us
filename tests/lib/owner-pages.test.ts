@@ -50,3 +50,19 @@ it('provides connected request and campaign views', () => {
   expect(read('src/pages/owner/requests/[id].astro')).toContain('for="owner-private-note"');
   expect(read('src/scripts/owner-request-actions.ts')).toContain('Connection lost');
 });
+
+it('keeps audio payment work inside the service request with one clear next action', () => {
+  const page = read('src/pages/owner/requests/[id].astro');
+  const panel = read('src/components/owner/AudioPaymentPanel.astro');
+  const script = read('src/scripts/owner-payment-actions.ts');
+  expect(page).toContain("request.kind === 'service'");
+  expect(page).toContain('AudioPaymentPanel');
+  expect(panel).toContain('Payment');
+  expect(panel).toContain('Client accepted the written offer');
+  expect(panel).toContain('Create booking invoice');
+  expect(panel).toContain('Create balance invoice');
+  expect(panel).toContain("payment.bookingStatus === 'paid'");
+  expect(panel).not.toContain('stripeCustomerId');
+  expect(script).toContain('/payment');
+  expect(script).toContain('That invoice was not created');
+});

@@ -33,17 +33,26 @@ describe('owner insights schema', () => {
   it('provides an idempotent music baseline plus separate owner domains', () => {
     const baseline = readFileSync(new URL('../../migrations/music/0001_music_schema.sql', import.meta.url), 'utf8');
     const retention = readFileSync(new URL('../../migrations/music/0002_owner_retention.sql', import.meta.url), 'utf8');
-    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(`${baseline.trim()}\n${retention.trim()}\n`);
+    const payments = readFileSync(new URL('../../migrations/music/0003_audio_payments.sql', import.meta.url), 'utf8');
+    const reconciliation = readFileSync(new URL('../../migrations/music/0004_stripe_reconciliation.sql', import.meta.url), 'utf8');
+    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(`${baseline.trim()}\n${retention.trim()}\n${payments.trim()}\n${reconciliation.trim()}\n`);
     const db = apply('../../db/music.sql');
     const expected = [
       'music_event_daily', 'music_events', 'music_interest', 'music_playback_daily',
       'music_playback_events', 'music_playback_geography_daily', 'owner_campaign_tags',
       'owner_retention_runs', 'owner_campaigns', 'owner_request_audit', 'owner_requests',
+      'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts', 'stripe_unmatched_events',
     ];
     expect(tableNames(db)).toEqual(expect.arrayContaining(expected));
-    expect(() => db.exec(`${baseline}\n${retention}`)).not.toThrow();
+    expect(() => db.exec(`${baseline}\n${retention}\n${payments}`)).not.toThrow();
     expect(() => db.prepare(`INSERT INTO owner_requests
       (id,kind,email,summary,status,created_at,updated_at)
       VALUES ('1','unknown','fan@example.com','Bad kind','new','now','now')`).run()).toThrow();
+    db.prepare(`INSERT INTO owner_requests
+      (id,kind,email,summary,status,created_at,updated_at)
+      VALUES ('payment-request','service','artist@example.com','Mix','reviewed','now','now')`).run();
+    expect(() => db.prepare(`INSERT INTO owner_request_audit
+      (request_id,action,actor,note,occurred_at)
+      VALUES ('payment-request','payment-approved','owner@example.com','USD 200.00','now')`).run()).not.toThrow();
   });
 });

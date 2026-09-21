@@ -7,7 +7,7 @@ import { openMusicDatabase } from './music-analytics.mjs';
 import { renderMusicReport } from './music-report-view.mjs';
 
 const requiredConfiguration = ['MUSIC_DB', 'AUDIO', 'OWNER_ACCESS_TEAM_DOMAIN', 'OWNER_ACCESS_AUD', 'OWNER_EMAIL'];
-const requiredSchema = ['owner_campaigns', 'owner_requests', 'owner_request_audit', 'music_playback_events', 'music_playback_daily', 'music_playback_geography_daily', 'owner_retention_runs'];
+const requiredSchema = ['owner_campaigns', 'owner_requests', 'owner_request_audit', 'music_playback_events', 'music_playback_daily', 'music_playback_geography_daily', 'owner_retention_runs', 'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts', 'stripe_unmatched_events'];
 const attention = (id, summary, next) => ({ id, status: 'attention', summary, next });
 const pass = (id, summary) => ({ id, status: 'pass', summary, next: '' });
 
@@ -52,6 +52,17 @@ export async function ownerHealth({ now = new Date(), configuredNames, query, me
     checks.push(pass('request-storage', 'The bounded owner request summary query passed.'));
   } catch {
     checks.push(attention('request-storage', 'The owner request summary could not be read.', 'Check MUSIC_DB availability and the owner_requests schema.'));
+  }
+
+  try {
+    const rows = await query('SELECT COUNT(*) AS total FROM stripe_unmatched_events WHERE resolved_at IS NULL');
+    const total = Number(rows[0]?.total);
+    if (!Number.isFinite(total)) throw new Error('invalid summary');
+    checks.push(total > 0
+      ? attention('stripe-unmatched', `${total} Stripe invoice event${total === 1 ? '' : 's'} need reconciliation.`, 'Compare the request and invoice in Stripe before creating or releasing files.')
+      : pass('stripe-unmatched', 'No unmatched Stripe invoice events are waiting.'));
+  } catch {
+    checks.push(attention('stripe-unmatched', 'Unmatched Stripe invoice events could not be read.', 'Confirm the payment migration and database availability.'));
   }
 
   try {

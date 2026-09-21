@@ -11,7 +11,12 @@ function fixture() {
   db.exec(`INSERT INTO owner_requests(id,kind,name,email,city_region,summary,details_json,status,private_note,created_at,updated_at,resolved_at) VALUES
     ('old-request','purchase','Fan','fan@example.com','Nashville','Purchase','{"format":"digital"}','resolved','reply sent','2026-01-01T00:00:00Z','2026-01-02T00:00:00Z','2026-01-02T00:00:00Z'),
     ('recent-request','service','Artist','artist@example.com','','Mastering','{}','resolved','','2026-09-01T00:00:00Z','2026-09-02T00:00:00Z','2026-09-02T00:00:00Z');
-    INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at) VALUES ('old-request','created','system','','2026-01-01T00:00:00Z');`);
+    INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at) VALUES ('old-request','created','system','','2026-01-01T00:00:00Z');
+    INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
+      offer_accepted_at,stripe_customer_id,booking_invoice_id,booking_invoice_url,booking_status,balance_invoice_id,balance_invoice_url,balance_status,created_at,updated_at)
+    VALUES ('old-request','Mastering',7500,3750,3750,'2026-01-01T00:00:00Z','cus_private','in_old','https://invoice.stripe.com/private','paid','in_balance','https://invoice.stripe.com/balance','paid','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z');
+    INSERT INTO stripe_invoice_attempts(invoice_id,request_id,installment,created_at)
+    VALUES ('in_old','old-request','booking','2026-01-01T00:00:00Z');`);
   const event = db.prepare(`INSERT INTO music_playback_events(id,release_id,recording_id,session_id,playthrough_id,sequence,medium,event,accumulated_seconds,media_duration_seconds,campaign_id,channel,creative,traffic_class,country,region,city,occurred_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
   for (let index=0; index<3; index++) event.run(`event-${index}`,'old-news-single','old-news-recording',`session-${index}`,`play-${index}`,1,'audio',index ? 'listen30' : 'start',index ? 30 : 0,180,'campaign','instagram','story','human','US','Tennessee','Nashville','2026-01-01T00:00:00Z');
   event.run('automated','old-news-single','old-news-recording','bot-session','bot-play',1,'audio','listen30',30,180,'campaign','crawler','preview','automated','US','Virginia','Ashburn','2026-01-01T00:00:00Z');
@@ -39,6 +44,10 @@ it('preview is read-only and apply preserves aggregates while deleting eligible 
     .toEqual({ name: '', email: '', city_region: '', details_json: '{}', private_note: '', status: 'resolved' });
   expect((await database.query("SELECT action,actor FROM owner_request_audit WHERE request_id='old-request' ORDER BY id DESC LIMIT 1"))[0])
     .toEqual({ action: 'personal-data-deleted', actor: 'retention' });
+  expect((await database.query("SELECT stripe_customer_id,booking_invoice_id,booking_invoice_url,external_refs_deleted_at FROM audio_payments WHERE request_id='old-request'"))[0])
+    .toEqual({ stripe_customer_id: null, booking_invoice_id: null, booking_invoice_url: null, external_refs_deleted_at: now.toISOString() });
+  expect((await database.query("SELECT COUNT(*) AS total FROM stripe_invoice_attempts WHERE request_id='old-request'"))[0])
+    .toEqual({ total: 0 });
   expect((await database.query('SELECT environment,playback_rows,request_contacts FROM owner_retention_runs'))[0])
     .toEqual({ environment: 'Local test data', playback_rows: 5, request_contacts: 1 });
 });
@@ -63,4 +72,89 @@ it('rejects changed sources, wrong environments and a second application', async
   await expect(applyOwnerRetention(database, review, 'Local test data', now)).rejects.toThrow('changed');
   const fresh = await previewOwnerRetention(database, 'Local test data', now); await applyOwnerRetention(database, fresh, 'Local test data', now);
   await expect(applyOwnerRetention(database, fresh, 'Local test data', now)).rejects.toThrow(/changed|applied/);
+});
+
+it('refuses payment cleanup when the reconciliation migration is incomplete', async () => {
+  const database = fixture();
+  const review = await previewOwnerRetention(database, 'Local test data', now);
+  database.db.exec('DROP TABLE stripe_unmatched_events');
+  await expect(applyOwnerRetention(database, review, 'Local test data', now)).rejects.toThrow('migration 0004');
+});
+
+it('keeps an unfinished service request intact until both invoices are terminal', async () => {
+  const database = fixture();
+  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at)
+    VALUES ('active-service','service','Active Artist','active@example.com','Mix','resolved','2025-01-01T00:00:00Z','2025-01-02T00:00:00Z','2025-01-02T00:00:00Z');
+    INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
+      offer_accepted_at,stripe_customer_id,booking_invoice_id,booking_invoice_url,booking_status,created_at,updated_at)
+    VALUES ('active-service','Mix',10000,5000,5000,'2026-01-01T00:00:00Z','cus_active','in_active','https://invoice.stripe.com/active','open','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z');`);
+  const review = await previewOwnerRetention(database, 'Local test data', now);
+  expect(review.requestContacts).toBe(1);
+  await applyOwnerRetention(database, review, 'Local test data', now);
+  expect((await database.query("SELECT name,email FROM owner_requests WHERE id='active-service'"))[0])
+    .toEqual({ name: 'Active Artist', email: 'active@example.com' });
+  expect((await database.query("SELECT stripe_customer_id,booking_invoice_id FROM audio_payments WHERE request_id='active-service'"))[0])
+    .toEqual({ stripe_customer_id: 'cus_active', booking_invoice_id: 'in_active' });
+});
+
+it('keeps an uncollectible service invoice available for Stripe reconciliation', async () => {
+  const database = fixture();
+  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at)
+    VALUES ('uncollectible-service','service','Artist','artist@example.com','Mix','resolved','2025-01-01T00:00:00Z','2025-01-02T00:00:00Z','2025-01-02T00:00:00Z');
+    INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
+      offer_accepted_at,stripe_customer_id,booking_status,balance_invoice_id,balance_invoice_url,balance_status,created_at,updated_at)
+    VALUES ('uncollectible-service','Mix',10000,5000,5000,'2025-01-01T00:00:00Z','cus_uncollectible','paid','in_uncollectible','https://invoice.stripe.com/uncollectible','uncollectible','2025-01-01T00:00:00Z','2025-01-01T00:00:00Z');`);
+  const review = await previewOwnerRetention(database, 'Local test data', now);
+  expect(review.requestContacts).toBe(1);
+  await applyOwnerRetention(database, review, 'Local test data', now);
+  expect((await database.query("SELECT name,email FROM owner_requests WHERE id='uncollectible-service'"))[0])
+    .toEqual({ name: 'Artist', email: 'artist@example.com' });
+  expect((await database.query("SELECT stripe_customer_id,balance_invoice_id,balance_invoice_url FROM audio_payments WHERE request_id='uncollectible-service'"))[0])
+    .toEqual({ stripe_customer_id: 'cus_uncollectible', balance_invoice_id: 'in_uncollectible', balance_invoice_url: 'https://invoice.stripe.com/uncollectible' });
+});
+
+it('removes a withdrawn service request after terms are accepted but before any invoice is started', async () => {
+  const database = fixture();
+  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at)
+    VALUES ('withdrawn-service','service','Artist','artist@example.com','Mix','withdrawn','2026-09-01T00:00:00Z','2026-09-02T00:00:00Z');
+    INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
+      offer_accepted_at,created_at,updated_at)
+    VALUES ('withdrawn-service','Mix',10000,5000,5000,'2026-09-01T00:00:00Z','2026-09-01T00:00:00Z','2026-09-01T00:00:00Z');`);
+  const review = await previewOwnerRetention(database, 'Local test data', now);
+  expect(review.requestContacts).toBe(2);
+  await applyOwnerRetention(database, review, 'Local test data', now);
+  expect((await database.query("SELECT name,email FROM owner_requests WHERE id='withdrawn-service'"))[0])
+    .toEqual({ name: '', email: '' });
+  expect((await database.query("SELECT external_refs_deleted_at FROM audio_payments WHERE request_id='withdrawn-service'"))[0])
+    .toEqual({ external_refs_deleted_at: now.toISOString() });
+});
+
+it('keeps a withdrawn service request while an invoice creation is reserved', async () => {
+  const database = fixture();
+  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at)
+    VALUES ('reserved-service','service','Artist','artist@example.com','Mix','withdrawn','2026-09-01T00:00:00Z','2026-09-02T00:00:00Z');
+    INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
+      offer_accepted_at,booking_creation_started_at,created_at,updated_at)
+    VALUES ('reserved-service','Mix',10000,5000,5000,'2026-09-01T00:00:00Z','2026-09-02T00:00:00Z','2026-09-01T00:00:00Z','2026-09-02T00:00:00Z');`);
+  const review = await previewOwnerRetention(database, 'Local test data', now);
+  expect(review.requestContacts).toBe(1);
+  await applyOwnerRetention(database, review, 'Local test data', now);
+  expect((await database.query("SELECT name,email FROM owner_requests WHERE id='reserved-service'"))[0])
+    .toEqual({ name: 'Artist', email: 'artist@example.com' });
+});
+
+it('keeps a withdrawn service request while its paid booking still permits a balance invoice', async () => {
+  const database = fixture();
+  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at)
+    VALUES ('balance-due-service','service','Artist','artist@example.com','Mix','withdrawn','2026-09-01T00:00:00Z','2026-09-02T00:00:00Z');
+    INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
+      offer_accepted_at,stripe_customer_id,booking_invoice_id,booking_invoice_url,booking_status,created_at,updated_at)
+    VALUES ('balance-due-service','Mix',10000,5000,5000,'2026-09-01T00:00:00Z','cus_balance_due','in_booking','https://invoice.stripe.com/booking','paid','2026-09-01T00:00:00Z','2026-09-01T00:00:00Z');`);
+  const review = await previewOwnerRetention(database, 'Local test data', now);
+  expect(review.requestContacts).toBe(1);
+  await applyOwnerRetention(database, review, 'Local test data', now);
+  expect((await database.query("SELECT name,email FROM owner_requests WHERE id='balance-due-service'"))[0])
+    .toEqual({ name: 'Artist', email: 'artist@example.com' });
+  expect((await database.query("SELECT stripe_customer_id,booking_invoice_id FROM audio_payments WHERE request_id='balance-due-service'"))[0])
+    .toEqual({ stripe_customer_id: 'cus_balance_due', booking_invoice_id: 'in_booking' });
 });

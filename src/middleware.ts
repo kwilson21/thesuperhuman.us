@@ -23,6 +23,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
     if (!owner) return new Response('Owner access required.', { status: 403, headers: ownerPrivateHeaders });
     context.locals.owner = owner;
   }
+  if (!context.isPrerendered && ownerApi && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
+    && request.headers.get('origin') !== url.origin) {
+    return new Response(`Cross-site ${request.method} owner actions are forbidden`, { status: 403, headers: ownerPrivateHeaders });
+  }
   // OAuth clients exchange codes/PKCE or refresh tokens without browser Origin.
   // The token endpoint does not authenticate using cookies.
   const tokenExchange = url.origin === 'https://thesuperhuman.us'

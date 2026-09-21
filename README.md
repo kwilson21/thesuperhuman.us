@@ -35,11 +35,22 @@ Push to `main` → Cloudflare's git integration rebuilds and runs `wrangler depl
 | --- | --- | --- |
 | `RESEND_API_KEY` | Dashboard secret | Sensitive |
 | `TURNSTILE_SECRET_KEY` | Dashboard secret | Sensitive |
+| `STRIPE_SECRET_KEY` | Dashboard secret | Stripe server credential |
+| `STRIPE_WEBHOOK_SECRET` | Dashboard secret | Verifies `/api/stripe/webhook` payloads |
+| `STRIPE_PAYMENTS_ENABLED` | `wrangler.jsonc` `vars` | Explicit invoice-creation gate; keep `false` until payment readiness passes |
 | `CONTACT_TO_EMAIL` | `wrangler.jsonc` `vars` | Not sensitive |
 | `CONTACT_FROM_EMAIL` | `wrangler.jsonc` `vars` (currently `noreply@notifs.thesuperhuman.us`, the verified Resend sending subdomain) | Not sensitive |
 | `PUBLIC_TURNSTILE_SITE_KEY` | `wrangler.jsonc` `vars` | Public widget key, read by the server-rendered forms from the Worker runtime |
 
 Update version-controlled vars by editing `wrangler.jsonc` and pushing. Update dashboard secrets in the Cloudflare Worker settings (Variables and Secrets → Secrets).
+
+### Stripe invoice integration
+
+Audio-service payments begin from a reviewed service request in `/owner/requests/<id>`. The owner records the accepted fixed-price offer, then creates a 50% booking invoice. Stripe emails and hosts the secure payment page. After Stripe confirms that payment through the signed webhook, the owner can create the remaining-balance invoice.
+
+Apply `migrations/music/0003_audio_payments.sql` and `migrations/music/0004_stripe_reconciliation.sql` before deploying code that reads payment records. Register the production webhook URL as `https://thesuperhuman.us/api/stripe/webhook` and subscribe only to `invoice.sent`, `invoice.paid`, `invoice.payment_failed`, `invoice.voided`, and `invoice.marked_uncollectible`. Store the endpoint signing secret as `STRIPE_WEBHOOK_SECRET`.
+
+Keep `STRIPE_PAYMENTS_ENABLED=false` until [Stripe invoicing readiness](docs/stripe-invoicing-readiness.md) passes. Disabling this variable stops new invoice creation while preserving owner status readback and signed webhook processing after the Worker is redeployed with the change.
 
 The forms read `Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY` first, with
 `import.meta.env.PUBLIC_TURNSTILE_SITE_KEY` as a build-time fallback. Wrangler
