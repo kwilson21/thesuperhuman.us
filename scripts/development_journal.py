@@ -6,6 +6,7 @@ import fcntl
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
@@ -29,6 +30,36 @@ def clock(now=None):
         raise ValueError('IANA timezone data is required. Install system tzdata or the Python tzdata package.') from error
     return {'day': local.date().isoformat(), 'local': local.isoformat(timespec='seconds'),
             'utc': now.astimezone(timezone.utc).isoformat(timespec='seconds'), 'timezone': str(ZONE)}
+
+
+def git_worktrees(root):
+    """Return the linked worktrees and their branches, without mutating Git state."""
+    try:
+        result = subprocess.run(
+            ['git', '-C', str(root), 'worktree', 'list', '--porcelain'],
+            check=True, capture_output=True, text=True)
+    except (OSError, subprocess.CalledProcessError):
+        return []
+    worktrees = []
+    current = {}
+    for line in result.stdout.splitlines() + ['']:
+        if not line:
+            if current.get('worktree'):
+                worktrees.append((Path(current['worktree']).resolve(), current.get('branch')))
+            current = {}
+        elif line.startswith('worktree '):
+            current['worktree'] = line.removeprefix('worktree ')
+        elif line.startswith('branch '):
+            current['branch'] = line.removeprefix('branch ')
+    return worktrees
+
+
+def journal_root(invoking_root):
+    """Keep one private journal in the primary checkout for linked worktrees."""
+    for path, branch in git_worktrees(invoking_root):
+        if branch == 'refs/heads/main':
+            return path
+    return invoking_root
 
 
 def records(directory):
@@ -318,13 +349,14 @@ def main():
     parser.add_argument('command', choices=['status', 'clock', 'checkpoint', 'read', 'index'])
     parser.add_argument('--root', type=Path, default=ROOT, help='Project root; private storage stays inside this project.')
     args = parser.parse_args()
-    directory = args.root.resolve() / '.private/development/journal'
+    invoking_root = args.root.resolve()
+    directory = journal_root(invoking_root) / '.private/development/journal'
     try:
         if args.command == 'read':
             print(readable(directory))
             return 0
         if args.command == 'checkpoint':
-            result = checkpoint(directory, json.load(sys.stdin), project_root=args.root.resolve(), capture_runtime=True)
+            result = checkpoint(directory, json.load(sys.stdin), project_root=invoking_root, capture_runtime=True)
         elif args.command == 'index':
             result = project_index(directory)
         else:
