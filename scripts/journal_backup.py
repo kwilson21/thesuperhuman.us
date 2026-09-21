@@ -9,6 +9,10 @@ import fcntl
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+try:
+    from journal_paths import journal_root
+except ModuleNotFoundError:  # Supports importing this standalone script in tests.
+    from scripts.journal_paths import journal_root
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -46,7 +50,8 @@ def verify(data):
 
 
 def pack(root):
-    root = root.resolve()
+    invoking_root = root.resolve()
+    root = journal_root(invoking_root).resolve()
     journal = root / '.private/development/journal'
     if not journal.is_dir() or not journal.resolve().is_relative_to(root):
         raise ValueError('No local private journal.')

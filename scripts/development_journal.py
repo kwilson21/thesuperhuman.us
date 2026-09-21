@@ -6,13 +6,16 @@ import fcntl
 import json
 import os
 import re
-import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from urllib.parse import urlparse
+try:
+    from journal_paths import git_worktrees, journal_root
+except ModuleNotFoundError:  # Supports importing this standalone script in tests.
+    from scripts.journal_paths import git_worktrees, journal_root
 
 ROOT = Path(__file__).resolve().parents[1]
 JOURNAL = ROOT / '.private' / 'development' / 'journal'
@@ -30,36 +33,6 @@ def clock(now=None):
         raise ValueError('IANA timezone data is required. Install system tzdata or the Python tzdata package.') from error
     return {'day': local.date().isoformat(), 'local': local.isoformat(timespec='seconds'),
             'utc': now.astimezone(timezone.utc).isoformat(timespec='seconds'), 'timezone': str(ZONE)}
-
-
-def git_worktrees(root):
-    """Return the linked worktrees and their branches, without mutating Git state."""
-    try:
-        result = subprocess.run(
-            ['git', '-C', str(root), 'worktree', 'list', '--porcelain'],
-            check=True, capture_output=True, text=True)
-    except (OSError, subprocess.CalledProcessError):
-        return []
-    worktrees = []
-    current = {}
-    for line in result.stdout.splitlines() + ['']:
-        if not line:
-            if current.get('worktree'):
-                worktrees.append((Path(current['worktree']).resolve(), current.get('branch')))
-            current = {}
-        elif line.startswith('worktree '):
-            current['worktree'] = line.removeprefix('worktree ')
-        elif line.startswith('branch '):
-            current['branch'] = line.removeprefix('branch ')
-    return worktrees
-
-
-def journal_root(invoking_root):
-    """Keep one private journal in the primary checkout for linked worktrees."""
-    for path, branch in git_worktrees(invoking_root):
-        if branch == 'refs/heads/main':
-            return path
-    return invoking_root
 
 
 def records(directory):

@@ -18,10 +18,12 @@ const targetUrl = process.env.TARGET_URL || 'http://127.0.0.1:4321';
       clientWidth: document.documentElement.clientWidth,
       proofCount: document.querySelectorAll('.timeline-visual-proof').length,
       figureWidths: [...document.querySelectorAll('.timeline-visual-proof figure')].map(element => Math.round(element.getBoundingClientRect().width)),
+      proofLinkCount: document.querySelectorAll('.timeline-visual-proof a').length,
     }));
     assert.equal(metrics.scrollWidth, metrics.clientWidth, `Journal overflows a phone viewport: ${JSON.stringify(metrics)}`);
     assert.equal(metrics.proofCount, 1, `Expected one reviewed visual proof: ${JSON.stringify(metrics)}`);
     assert.ok(metrics.figureWidths.every(width => width > 0 && width <= 390), `Visual proof does not fit a phone viewport: ${JSON.stringify(metrics)}`);
+    assert.equal(metrics.proofLinkCount, 2, `Each proof image needs a full-size link: ${JSON.stringify(metrics)}`);
   } finally {
     await browser.close();
   }
