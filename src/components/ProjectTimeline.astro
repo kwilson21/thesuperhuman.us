@@ -11,7 +11,7 @@ const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('e
     <div data-controls hidden>
       <p class="timeline-hint">Choose a milestone to explore the work.</p>
       <div class="milestone-strip" aria-label="Choose a milestone">{entries.map((entry, index) => <button type="button" data-pick={index} aria-controls={entry.id} aria-pressed="false">
-        {entry.artifacts?.[0] ? <img src={entry.artifacts[0].src} alt="" width="180" height="100" loading="lazy" /> : <span class="update-mark" aria-hidden="true">{String(index + 1).padStart(2, '0')}<small>{entry.status || 'Update'}</small></span>}
+        {entry.artifacts?.[0] || entry.visualProof?.after ? <img src={(entry.artifacts?.[0] || entry.visualProof!.after).src} alt="" width="180" height="100" loading="lazy" /> : <span class="update-mark" aria-hidden="true">{String(index + 1).padStart(2, '0')}<small>{entry.status || 'Update'}</small></span>}
         <time datetime={entry.day}>{date(entry.day)}</time><strong>{entry.title}</strong>
       </button>)}</div>
       <div class="timeline-tools"><button type="button" data-prev aria-label="Previous milestone">← Previous</button><span data-position aria-live="polite"></span><button type="button" data-next aria-label="Next milestone">Next →</button><button type="button" data-all aria-pressed="false">Show all entries</button></div>
@@ -21,6 +21,10 @@ const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('e
       {entry.publishedAt && <p class="meta">Published <time datetime={entry.publishedAt}>{new Date(entry.publishedAt).toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })} UTC</time>{entry.backfilled && " · Added from project history"}</p>}<h3>{entry.title}</h3><p class="milestone-summary">{entry.summary}</p>
       {(entry.detail || entry.basis) && <details><summary>{entry.detailLabel || 'Context and what comes next'}</summary>{entry.detail && <p class="detail">{entry.detail}</p>}{entry.basis && <p class="meta">Basis: {entry.basis.replaceAll('-', ' ')}</p>}</details>}
       {entry.illustration === 'payload-review' && <PayloadReviewIllustration />}
+      {entry.visualProof && <section class="timeline-visual-proof" aria-label={entry.visualProof.label}>
+        <figure><a href={entry.visualProof.before.src} aria-label={`Open ${entry.visualProof.before.title} at full size`}><img src={entry.visualProof.before.src} alt={entry.visualProof.before.alt} width={entry.visualProof.before.width} height={entry.visualProof.before.height} loading="lazy" /></a><figcaption><span class="meta">Before · {entry.visualProof.before.kind}</span><h4>{entry.visualProof.before.title}</h4><p>{entry.visualProof.before.caption}</p></figcaption></figure>
+        <figure><a href={entry.visualProof.after.src} aria-label={`Open ${entry.visualProof.after.title} at full size`}><img src={entry.visualProof.after.src} alt={entry.visualProof.after.alt} width={entry.visualProof.after.width} height={entry.visualProof.after.height} loading="lazy" /></a><figcaption><span class="meta">After · {entry.visualProof.after.kind}</span><h4>{entry.visualProof.after.title}</h4><p>{entry.visualProof.after.caption}</p></figcaption></figure>
+      </section>}
       {entry.artifacts?.length && <div class="milestone-artifacts">{entry.artifacts.map(artifact => <figure><a href={artifact.src} aria-label={`Open ${artifact.title} at full size`}><img src={artifact.src} alt={artifact.alt} width={artifact.width} height={artifact.height} loading="lazy" /></a><figcaption><span class="meta">{artifact.kind}</span><h4>{artifact.title}</h4><p>{artifact.caption}</p></figcaption></figure>)}</div>}
     </article>)}</div>
   </> : <p>{unavailable ? 'Published updates are temporarily unavailable.' : 'No published milestones yet.'}</p>}
@@ -75,6 +79,7 @@ const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('e
   .timeline-tools { display: flex; align-items: center; gap: 20px; margin: 8px 0 28px; font-size: 13px; flex-wrap: wrap; } .timeline-tools button { background: none; border: none; padding: 8px 0; } button:disabled { opacity: .35; cursor: default; } [data-all] { margin-left: auto; }
   article { border-top: 1px solid var(--rule); padding: 28px 0; } article[hidden] { display: none; } h3 { font-size: clamp(28px,3vw,38px); margin: 12px 0; } .milestone-summary { font-size: 19px; line-height: 1.65; max-width: 66ch; } details { margin: 18px 0 24px; max-width: 75ch; font-size: 15px; line-height: 1.7; } summary { cursor: pointer; color: var(--accent); } .detail { white-space: pre-line; margin-top: 12px; }
   .milestone-artifacts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 30px; margin-top: 28px; } figure:only-child { grid-column: 1/-1; } figure { margin: 0; } figure a { display: block; border: 1px solid var(--rule); } figure img { width: 100%; height: auto; } figcaption { margin-top: 14px; font-size: 14px; line-height: 1.6; color: var(--muted); } h4 { font-size: 21px; color: var(--ink); margin: 4px 0; }
+  .timeline-visual-proof { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 30px; margin-top: 28px; } .timeline-visual-proof img { width: 100%; height: auto; border: 1px solid var(--rule); }
   .project-timeline > .site-section-heading { margin-bottom: 1.5rem; }
   article { scroll-margin-top: 2rem; }
   @media(min-width: 801px) {
@@ -94,5 +99,5 @@ const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('e
     .milestone-panels article:first-child, .milestone-panels article[hidden] + article { border-top: 0; padding-top: 0; }
     .timeline-hint { margin-top: 0; }
   }
-  @media(max-width:600px) { .milestone-artifacts { grid-template-columns: 1fr; } .timeline-tools { gap: 15px; } }
+  @media(max-width:600px) { .milestone-artifacts,.timeline-visual-proof { grid-template-columns: 1fr; } .timeline-tools { gap: 15px; } }
 </style>

@@ -12,6 +12,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from urllib.parse import urlparse
+try:
+    from journal_paths import git_worktrees, journal_root
+except ModuleNotFoundError:  # Supports importing this standalone script in tests.
+    from scripts.journal_paths import git_worktrees, journal_root
 
 ROOT = Path(__file__).resolve().parents[1]
 JOURNAL = ROOT / '.private' / 'development' / 'journal'
@@ -318,13 +322,14 @@ def main():
     parser.add_argument('command', choices=['status', 'clock', 'checkpoint', 'read', 'index'])
     parser.add_argument('--root', type=Path, default=ROOT, help='Project root; private storage stays inside this project.')
     args = parser.parse_args()
-    directory = args.root.resolve() / '.private/development/journal'
+    invoking_root = args.root.resolve()
+    directory = journal_root(invoking_root) / '.private/development/journal'
     try:
         if args.command == 'read':
             print(readable(directory))
             return 0
         if args.command == 'checkpoint':
-            result = checkpoint(directory, json.load(sys.stdin), project_root=args.root.resolve(), capture_runtime=True)
+            result = checkpoint(directory, json.load(sys.stdin), project_root=invoking_root, capture_runtime=True)
         elif args.command == 'index':
             result = project_index(directory)
         else:

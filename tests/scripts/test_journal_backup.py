@@ -12,6 +12,7 @@ import unittest
 import fcntl
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from pathlib import Path
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('backup', Path(__file__).resolve().parents[2] / 'scripts/journal_backup.py')
 backup = importlib.util.module_from_spec(spec)
@@ -19,6 +20,18 @@ spec.loader.exec_module(backup)
 
 
 class BackupTests(unittest.TestCase):
+    def test_backs_up_the_canonical_journal_from_a_linked_worktree(self):
+        with tempfile.TemporaryDirectory() as temp:
+            primary = Path(temp) / 'primary'
+            worktree = Path(temp) / 'worktree'
+            journal = primary / '.private/development/journal'
+            journal.mkdir(parents=True)
+            (journal / 'day.json').write_text('{"version": 1, "checkpoints": []}')
+            with patch.object(backup, 'journal_root', return_value=primary):
+                output = backup.pack(worktree)
+            self.assertEqual(output.parent.parent, (primary / '.private').resolve())
+            self.assertEqual(backup.verify(json.loads((output / 'upload.json').read_text())), 1)
+
     def test_waits_for_an_in_progress_checkpoint(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
