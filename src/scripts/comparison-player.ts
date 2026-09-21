@@ -8,6 +8,17 @@ export function getAudioContextConstructor(scope: { AudioContext?: AudioContextC
   return scope.AudioContext ?? scope.webkitAudioContext;
 }
 
+export function setPlaybackAudioSession(scope: object) {
+  const audioSession = (scope as { audioSession?: { type: string } }).audioSession;
+  if (!audioSession) return false;
+  try {
+    audioSession.type = 'playback';
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function setupComparisonPlayers() {
   const AudioContextConstructor = getAudioContextConstructor(window);
   if (!AudioContextConstructor) return;
@@ -52,6 +63,7 @@ export function setupComparisonPlayers() {
       media.forEach(audio => { audio.pause(); audio.controls = false; audio.hidden = true; });
       pending = true; claimPlayback(); status.textContent = 'Preparing synchronized audio…'; render();
       try {
+        setPlaybackAudioSession(navigator);
         context ??= new AudioContextConstructor!();
         // Resume during the click gesture, before network work (mobile autoplay rules).
         const resumed = context.resume();
