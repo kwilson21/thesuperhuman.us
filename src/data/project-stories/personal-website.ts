@@ -46,6 +46,27 @@ const artifact = (image: ImageMetadata, title: string, caption: string, kind = '
 // intent behind each step without reproducing conversation excerpts.
 export const websiteMilestones: Milestone[] = [
   {
+    id: 'website-mobile-ab-playback', day: '2026-09-21',
+    title: 'Let the A/B player keep playing on iPhone.', status: 'Mobile reliability',
+    summary: 'The A/B player now initializes more reliably on phones and requests iOS playback audio when the device ringer is silent.',
+    detailLabel: 'What changed',
+    detail: 'The player keeps a browser-compatible Web Audio initialization path, then uses the optional playback audio-session category when iOS exposes it. The change preserves fallback behavior for browsers without that API.',
+  },
+  {
+    id: 'website-mobile-comparison-layout', day: '2026-09-21',
+    title: 'Make the A/B controls fit the song.', status: 'Mobile layout repair',
+    summary: 'The compact A/B selector no longer stretches to match the loudness controls, and each playback line now follows only its own waveform.',
+    detailLabel: 'What changed',
+    detail: 'The selector is sized to its content rather than a shared grid column. Each playhead lives inside its own waveform stage, so it stops at the waveform it represents.',
+  },
+  {
+    id: 'website-owner-mobile-tooltips', day: '2026-09-21',
+    title: 'Keep owner-page explanations inside the screen.', status: 'Mobile layout repair',
+    summary: 'The owner dashboard’s metric explanations now open inward on a phone instead of being clipped off-screen.',
+    detailLabel: 'What changed',
+    detail: 'Left-anchored metric explanations open to the right. Right-anchored supporting-evidence explanations open to the left. The private owner dashboard is not shown in this public timeline.',
+  },
+  {
     id: 'website-old-news-release-experience', day: '2026-09-15',
     title: 'Give Old News a place to be heard.', status: 'Release experience',
     summary: 'I turned Old News from a catalog entry into a release page built for listening: a player, lyric-video viewing, credits, lyrics, and a way to ask for more all live together.',
