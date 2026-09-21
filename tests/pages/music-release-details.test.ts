@@ -12,4 +12,6 @@ it('renders supplied YouTube and SoundCloud actions for a release', () => {
   expect(page).toContain('Watch on YouTube');
   expect(page).toContain('first.soundcloudUrl');
   expect(page).toContain('Listen on SoundCloud');
+  expect(page).toContain('track.youtubeUrl');
+  expect(page).toContain('track.soundcloudUrl');
 });
