@@ -13,23 +13,27 @@ const targetUrl = process.env.TARGET_URL || 'http://127.0.0.1:4321';
     await page.getByRole('button', { name: /Mobile needed the same sense of flow/i }).click();
     const proof = page.locator('.timeline-visual-proof');
     await proof.first().waitFor();
+    for (const name of [
+      /Let the A\/B player keep playing on iPhone/i,
+      /Make the A\/B controls fit the song/i,
+      /Keep owner-page explanations inside the screen/i,
+    ]) {
+      await page.getByRole('button', { name }).click();
+      await page.getByRole('heading', { name }).waitFor();
+      const activeProof = page.locator('details[open] .timeline-visual-proof');
+      await activeProof.waitFor();
+      const widths = await activeProof.locator('figure').evaluateAll(elements => elements.map(element => Math.round(element.getBoundingClientRect().width)));
+      assert.deepEqual(widths, [342, 342], `Opened visual proof does not fit a phone viewport: ${JSON.stringify({ name: String(name), widths })}`);
+    }
     const metrics = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,
       proofCount: document.querySelectorAll('.timeline-visual-proof').length,
-      figureWidths: [...document.querySelectorAll('.timeline-visual-proof figure')].map(element => Math.round(element.getBoundingClientRect().width)),
       proofLinkCount: document.querySelectorAll('.timeline-visual-proof a').length,
     }));
     assert.equal(metrics.scrollWidth, metrics.clientWidth, `Journal overflows a phone viewport: ${JSON.stringify(metrics)}`);
-    assert.equal(metrics.proofCount, 1, `Expected one reviewed visual proof: ${JSON.stringify(metrics)}`);
-    assert.ok(metrics.figureWidths.every(width => width > 0 && width <= 390), `Visual proof does not fit a phone viewport: ${JSON.stringify(metrics)}`);
-    assert.equal(metrics.proofLinkCount, 2, `Each proof image needs a full-size link: ${JSON.stringify(metrics)}`);
-    await page.getByRole('button', { name: /Let the A\/B player keep playing on iPhone/i }).click();
-    await page.getByRole('heading', { name: /Let the A\/B player keep playing on iPhone/i }).waitFor();
-    await page.getByRole('button', { name: /Make the A\/B controls fit the song/i }).click();
-    await page.getByRole('heading', { name: /Make the A\/B controls fit the song/i }).waitFor();
-    await page.getByRole('button', { name: /Keep owner-page explanations inside the screen/i }).click();
-    await page.getByRole('heading', { name: /Keep owner-page explanations inside the screen/i }).waitFor();
+    assert.equal(metrics.proofCount, 4, `Expected the existing study and all three mobile repairs to have visual proof: ${JSON.stringify(metrics)}`);
+    assert.equal(metrics.proofLinkCount, 8, `Each proof image needs a full-size link: ${JSON.stringify(metrics)}`);
   } finally {
     await browser.close();
   }
