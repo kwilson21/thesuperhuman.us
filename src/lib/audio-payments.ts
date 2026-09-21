@@ -158,19 +158,21 @@ export async function replaceTerminalInvoice(db: D1Database, input: {
   const prefix = input.installment;
   const status = payment[`${prefix}Status`];
   const invoiceId = payment[`${prefix}InvoiceId`];
-  if (!invoiceId || !['void', 'uncollectible'].includes(status)) throw new Error('Only a void or uncollectible invoice can be replaced.');
+  if (!invoiceId || status !== 'void') throw new Error('Only a void invoice can be replaced.');
   const now = new Date().toISOString();
   await db.batch([
     db.prepare(`INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at)
       SELECT ?,?,?,?,? WHERE EXISTS (
-        SELECT 1 FROM audio_payments WHERE request_id=? AND ${prefix}_invoice_id=?
+        SELECT 1 FROM audio_payments WHERE request_id=? AND ${prefix}_invoice_id=? AND ${prefix}_status='void'
       )`).bind(input.requestId, `${prefix}-invoice-replaced`, input.actor.trim().toLowerCase(), invoiceId, now,
         input.requestId, invoiceId),
-    db.prepare(`UPDATE stripe_invoice_attempts SET replaced_at=? WHERE invoice_id=? AND replaced_at IS NULL`).bind(now, invoiceId),
+    db.prepare(`UPDATE stripe_invoice_attempts SET replaced_at=? WHERE invoice_id=? AND replaced_at IS NULL
+      AND EXISTS (SELECT 1 FROM audio_payments WHERE request_id=? AND ${prefix}_invoice_id=? AND ${prefix}_status='void')`)
+      .bind(now, invoiceId, input.requestId, invoiceId),
     db.prepare(`UPDATE audio_payments SET ${prefix}_invoice_id=NULL,${prefix}_invoice_url=NULL,
       ${prefix}_status='not_created',${prefix}_status_updated_at=NULL,${prefix}_recovery_event_id=NULL,
       ${prefix}_creation_started_at=NULL,${prefix}_attempt_count=${prefix}_attempt_count+1,updated_at=?
-      WHERE request_id=? AND ${prefix}_invoice_id=?`)
+      WHERE request_id=? AND ${prefix}_invoice_id=? AND ${prefix}_status='void'`)
       .bind(now, input.requestId, invoiceId),
   ]);
   return (await getAudioPayment(db, input.requestId))!;

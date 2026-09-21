@@ -9,7 +9,7 @@ import { renderMusicReport } from './music-report-view.mjs';
 const quote = value => `'${String(value).replaceAll("'", "''")}'`;
 const hash = value => createHash('sha256').update(value).digest('hex');
 const dayCutoff = (now, days) => new Date(now.getTime() - days * 86400000).toISOString();
-const terminalPaymentStatuses = "'paid','void','uncollectible'";
+const terminalPaymentStatuses = "'paid','void'";
 const requestEligibility = (now, paymentGuard = '1') => `(status='withdrawn' OR (contact_delete_after IS NOT NULL AND contact_delete_after<=${quote(now.toISOString())})
   OR (status='resolved' AND kind<>'service' AND resolved_at<${quote(dayCutoff(now, 90))})
   OR (status='resolved' AND kind='service' AND resolved_at<${quote(dayCutoff(now, 365))}))

@@ -14,8 +14,8 @@ This record separates completed implementation checks from Stripe account state,
 - PASS: Replayed Stripe event IDs apply once.
 - PASS: Out-of-order events cannot move a paid installment backward.
 - PASS: A signed audio invoice event can restore a missing invoice projection when its request slot is empty; conflicts and invalid request references are retained for owner reconciliation.
-- PASS: Voided and uncollectible invoices can be replaced while prior attempts remain identifiable.
-- PASS: Owner retention removes Stripe customer IDs and hosted invoice URLs with eligible request contact data after both invoice installments reach a terminal state.
+- PASS: A voided invoice can be replaced while prior attempts remain identifiable. An uncollectible invoice stays associated until it is voided in Stripe.
+- PASS: Owner retention removes Stripe customer IDs and hosted invoice URLs with eligible request contact data after both invoice installments are paid or voided.
 - PASS: Stripe API failure leaves invoice state uncreated.
 - PASS: Production configuration keeps `STRIPE_PAYMENTS_ENABLED=false`.
 
@@ -48,6 +48,7 @@ Run `npm run owner:stripe:reconcile` to list unresolved events. After comparing 
 - UNVERIFIED: Simulate a sent invoice whose D1 recording fails and confirm its signed webhook restores the missing invoice projection.
 - UNVERIFIED: Deliver an invoice event whose request is missing or whose installment slot is occupied; confirm it appears in owner health and reconcile it before retrying invoice creation.
 - UNVERIFIED: Void a test invoice and confirm the owner can create exactly one replacement.
+- UNVERIFIED: Mark a test invoice uncollectible and confirm the owner page requires it to be voided in Stripe before a replacement is offered.
 - UNVERIFIED: Run retention against an eligible service request and confirm customer IDs and hosted invoice URLs are cleared.
 - UNVERIFIED: Disable invoice creation and confirm status readback remains available.
 

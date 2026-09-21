@@ -186,7 +186,7 @@ describe('audio payments', () => {
     expect(sql.prepare('SELECT COUNT(*) AS total FROM stripe_webhook_events').get()).toEqual({ total: 2 });
   });
 
-  it('replaces only terminal invoices while retaining the old attempt', async () => {
+  it('replaces only voided invoices while retaining the old attempt', async () => {
     const { db, sql } = fixture();
     await approveAudioPayment(db, approval);
     await recordInvoice(db, {
@@ -199,7 +199,37 @@ describe('audio payments', () => {
     expect(sql.prepare(`SELECT COUNT(*) AS total FROM owner_request_audit
       WHERE request_id=? AND action='booking-invoice-replaced'`).get('request-1')).toEqual({ total: 1 });
     await expect(replaceTerminalInvoice(db, { requestId: 'request-1', installment: 'booking', actor: approval.actor }))
-      .rejects.toThrow('void or uncollectible');
+      .rejects.toThrow('void');
+  });
+
+  it('keeps an uncollectible invoice associated until it is voided in Stripe', async () => {
+    const { db, sql } = fixture();
+    await approveAudioPayment(db, approval);
+    await recordInvoice(db, {
+      requestId: 'request-1', installment: 'booking', stripeCustomerId: 'cus_1', invoiceId: 'in_uncollectible',
+      hostedInvoiceUrl: 'https://invoice.stripe.com/uncollectible', status: 'uncollectible', actor: approval.actor,
+    });
+    await expect(replaceTerminalInvoice(db, { requestId: 'request-1', installment: 'booking', actor: approval.actor }))
+      .rejects.toThrow('void');
+    expect(await getAudioPayment(db, 'request-1')).toMatchObject({ bookingInvoiceId: 'in_uncollectible', bookingStatus: 'uncollectible' });
+    expect(sql.prepare('SELECT replaced_at FROM stripe_invoice_attempts WHERE invoice_id=?').get('in_uncollectible')?.replaced_at).toBeNull();
+  });
+
+  it('does not replace an invoice when payment is confirmed after its terminal-state read', async () => {
+    const { db, sql } = fixture();
+    await approveAudioPayment(db, approval);
+    await recordInvoice(db, {
+      requestId: 'request-1', installment: 'booking', stripeCustomerId: 'cus_1', invoiceId: 'in_void',
+      hostedInvoiceUrl: 'https://invoice.stripe.com/void', status: 'void', actor: approval.actor,
+    });
+    const originalBatch = db.batch.bind(db);
+    (db as any).batch = async (statements: unknown[]) => {
+      sql.prepare(`UPDATE audio_payments SET booking_status='paid' WHERE request_id='request-1'`).run();
+      return originalBatch(statements as any);
+    };
+    const payment = await replaceTerminalInvoice(db, { requestId: 'request-1', installment: 'booking', actor: approval.actor });
+    expect(payment).toMatchObject({ bookingInvoiceId: 'in_void', bookingStatus: 'paid', bookingAttemptCount: 0 });
+    expect(sql.prepare('SELECT replaced_at FROM stripe_invoice_attempts WHERE invoice_id=?').get('in_void')?.replaced_at).toBeNull();
   });
 
   it('dead-letters the invoice that loses a concurrent recovery race', async () => {

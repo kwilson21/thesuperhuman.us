@@ -42,7 +42,7 @@ Release-update subscriptions are deferred until a confirmed opt-in and self-serv
 6. After the agreed work and revisions, select **Create balance invoice**.
 7. Keep final downloadable files private until the balance shows **Paid**.
 
-If invoice creation fails, refresh the request before retrying. Stable Stripe idempotency keys prevent a retry from creating a second invoice, but the refreshed owner page is the clearest source for the next action. Handle refunds, disputes, voiding, and invoice corrections in Stripe. The website stores operational status only.
+If invoice creation fails, refresh the request before retrying. Stable Stripe idempotency keys prevent a retry from creating a second invoice, but the refreshed owner page is the clearest source for the next action. Handle refunds, disputes, voiding, and invoice corrections in Stripe. An uncollectible invoice remains associated because Stripe can later mark it paid; void it in Stripe before creating a replacement. The website stores operational status only.
 
 To stop new invoices, set `STRIPE_PAYMENTS_ENABLED=false` and deploy the reviewed configuration change. This does not erase payment history or disable signed status updates for invoices already sent.
 

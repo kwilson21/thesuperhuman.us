@@ -96,3 +96,19 @@ it('keeps an unfinished service request intact until both invoices are terminal'
   expect((await database.query("SELECT stripe_customer_id,booking_invoice_id FROM audio_payments WHERE request_id='active-service'"))[0])
     .toEqual({ stripe_customer_id: 'cus_active', booking_invoice_id: 'in_active' });
 });
+
+it('keeps an uncollectible service invoice available for Stripe reconciliation', async () => {
+  const database = fixture();
+  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at)
+    VALUES ('uncollectible-service','service','Artist','artist@example.com','Mix','resolved','2025-01-01T00:00:00Z','2025-01-02T00:00:00Z','2025-01-02T00:00:00Z');
+    INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
+      offer_accepted_at,stripe_customer_id,booking_status,balance_invoice_id,balance_invoice_url,balance_status,created_at,updated_at)
+    VALUES ('uncollectible-service','Mix',10000,5000,5000,'2025-01-01T00:00:00Z','cus_uncollectible','paid','in_uncollectible','https://invoice.stripe.com/uncollectible','uncollectible','2025-01-01T00:00:00Z','2025-01-01T00:00:00Z');`);
+  const review = await previewOwnerRetention(database, 'Local test data', now);
+  expect(review.requestContacts).toBe(1);
+  await applyOwnerRetention(database, review, 'Local test data', now);
+  expect((await database.query("SELECT name,email FROM owner_requests WHERE id='uncollectible-service'"))[0])
+    .toEqual({ name: 'Artist', email: 'artist@example.com' });
+  expect((await database.query("SELECT stripe_customer_id,balance_invoice_id,balance_invoice_url FROM audio_payments WHERE request_id='uncollectible-service'"))[0])
+    .toEqual({ stripe_customer_id: 'cus_uncollectible', balance_invoice_id: 'in_uncollectible', balance_invoice_url: 'https://invoice.stripe.com/uncollectible' });
+});
