@@ -31,7 +31,7 @@ Deferred work must remain recorded in the project roadmap or issue tracker befor
 
 ## Product model
 
-An accepted audio service request receives one private project. The existing `owner_requests` record remains the source for intake and contact information. The existing `audio_payments` record remains the source for payment status. The new project record owns communication, visible progress, delivery dates, and published project files.
+A service request creates one **provisional** private project as soon as it is received. This lets the client correct a shared-file link or add essential context before Kazon approves the files. The same project is promoted to `Accepted` when Kazon approves the files and scope; messages and timeline history never need to be moved between records. The existing `owner_requests` record remains the source for intake and contact information. The existing `audio_payments` record remains the source for payment status. The new project record owns communication, visible progress, delivery dates, and published project files.
 
 One project has one client email address in the first version. Only Kazon can change a project stage, publish files, set or change the delivery date, or close the project.
 
@@ -39,7 +39,7 @@ One project has one client email address in the first version. Only Kazon can ch
 
 | Stage | Client experience | Owner action that advances it |
 | --- | --- | --- |
-| Files under review | The request arrived and the client can clarify shared-file links or context. | Accept the files and project scope. |
+| Files under review | The request arrived and the client can clarify shared-file links or context. The provisional project has no approved scope or payment state. | Accept the files and project scope, which promotes this same project to Accepted. |
 | Accepted | The agreed service and cautious delivery date are visible. | Confirm the booking terms. |
 | Booking paid | The project is booked. | Stripe confirms the booking invoice. |
 | In progress | A brief update says what Kazon is focusing on. | Start the work. |
@@ -107,7 +107,7 @@ The client receives a sign-in-link email and sees both the original and revised 
 
 ## Owner experience
 
-The existing owner request page becomes the entry point for a service project. When a service request is accepted, the owner can create the project, set its “by” date, and post its first update.
+The existing owner request page becomes the entry point for a provisional service project. It is created with the request. When Kazon accepts the files and scope, the owner sets its “by” date and posts its first update on that same project.
 
 The owner project view provides:
 
@@ -153,7 +153,13 @@ Emails stay minimal. They say that an update is waiting and link to the private 
 - Keep direct attachments and collaborator invitations out of the first version.
 - Store files in private object storage. Generate authorization only after server-side session and project checks.
 - Keep audit records for access-code issuance, completed sign-ins, message creation, milestone updates, date changes, file publication, revocation, and file delivery.
-- Apply the existing retention process to client data and add project, message, session, and file-metadata rules before production launch. Retention must not delete identifiers needed to prevent a live-payment or active-delivery error.
+- Apply this retention schedule before production launch. It deliberately keeps active work intact while limiting inactive client data:
+  - Access codes are stored only as hashes; delete them 30 days after use or expiry.
+  - Revoke client sessions immediately when access is revoked. Delete expired, revoked, or inactive sessions after 30 days.
+  - Keep project messages, updates, shared-link URLs, review files, and client contact data while a project is active. For a withdrawn or declined request with no active payment, delete them within 30 days of closure. For a delivered project, delete them 30 days after the one-year final-file access period ends.
+  - Make final files unavailable at the one-year delivery expiry. Remove the portal's client-delivery objects within the following 30 days; any long-term production archive must live outside the client portal and follow its own documented policy.
+  - Keep non-content operational and security audit metadata for two years. Payment and invoice records continue to follow the existing Stripe and owner-retention rules; portal cleanup must never remove identifiers for a live or reconciling payment.
+- Retention must not delete identifiers needed to prevent a live-payment or active-delivery error.
 - Do not place client message content, file URLs, access codes, or personal contact data in alerts or logs.
 
 ## Proposed data boundaries
