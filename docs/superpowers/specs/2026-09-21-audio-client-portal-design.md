@@ -70,6 +70,19 @@ The project page is calm and direct. Its first view shows:
 
 A timeline presents a durable record of changes, updates, deliveries, date revisions, and important payment milestones. It should read like studio progress, not a support ticket ledger.
 
+### Visual direction
+
+The client page and owner controls share the existing site’s warm ivory ground, charcoal type, thin rules, restrained oxidized-orange actions, and calm paper texture. The portal should feel like a quiet studio companion, not a generic software dashboard.
+
+- Use a spacious two-column desktop composition: the client project on the left and owner attention controls on the right. Collapse each view to a focused single column on smaller screens.
+- Lead the client page with stage, next action, cautious delivery date, latest meaningful update, and any available audio player. Keep these visible before the message thread or timeline.
+- Use waveform playback and a vertical progress line as visual anchors. They communicate movement without requiring the client to parse a dense table.
+- Use real project data only. Never add decorative quotes, invented project names, fake client messages, placeholder dates, or studio-themed filler language.
+- Use small status dots and thin dividers instead of heavy cards, badges, gradients, shadows, or dense control groups.
+- Do not show direct-attachment controls in version one. Shared-file links belong in the text thread; review and final audio are published by the owner.
+
+The approved visual study is a reference for proportion, hierarchy, and material feel. It does not prescribe placeholder content or require image assets in the product UI.
+
 ### Messages and revision feedback
 
 A single shared text thread opens as soon as the request exists, allowing a client to correct a Drive, Dropbox, or WeTransfer link or provide relevant context before file approval. Messages accept plain text and HTTPS shared-file links only.
