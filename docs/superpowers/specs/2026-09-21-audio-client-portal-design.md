@@ -35,7 +35,7 @@ Deferred work must remain recorded in the project roadmap or issue tracker befor
 
 A service request creates one **provisional** private project as soon as it is received. This lets the client correct a shared-file link or add essential context before Kazon approves the files. The same project is promoted to `Accepted` when Kazon approves the files and scope; messages and timeline history never need to be moved between records. The existing `owner_requests` record remains the source for intake and contact information. The existing `audio_payments` record remains the source for payment status. The new project record owns communication, visible progress, delivery dates, and published project files.
 
-One project has one client email address in the first version. The client email is normalized by trimming whitespace and lowercasing it; the system does not strip plus-addressing. Only Kazon can manually change a project stage, publish files, set or change the delivery date, or close the project. A Stripe-confirmed booking payment is the sole automated stage transition.
+One project has one client email address in the first version. The client email is normalized by trimming whitespace and lowercasing it; the system does not strip plus-addressing. Only Kazon can manually change a project stage, publish files, set or change the delivery date, or close the project. `Booking paid` is a client-visible stage derived from the Stripe payment projection while the project's manual stage remains `Accepted`; it is not a second webhook-owned project write.
 
 ### Project stages
 
@@ -43,7 +43,7 @@ One project has one client email address in the first version. The client email 
 | --- | --- | --- |
 | Files under review | The request arrived and the client can clarify shared-file links or context. The provisional project has no approved scope or payment state. | Accept the files and project scope, which promotes this same project to Accepted. |
 | Accepted | The agreed service and cautious delivery date are visible. | Confirm the booking terms. |
-| Booking paid | The project is booked. | Stripe confirms the booking invoice. |
+| Booking paid | The project is booked. | No project-stage write: the client view derives this stage from Stripe's confirmed booking-payment projection while the manual stage remains Accepted. |
 | In progress | A brief update says what Kazon is focusing on. | Start the work. |
 | Review ready | The client can stream the review version, download it if allowed, and reply with notes. | Publish a review file. |
 | Revision in progress | The client sees that their notes were understood and are being addressed. | Begin an agreed revision round. |
