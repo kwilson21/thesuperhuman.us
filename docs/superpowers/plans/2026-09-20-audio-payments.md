@@ -1,10 +1,13 @@
 # Audio Payments Implementation Plan
 
+> **Superseded:** This is the initial dashboard-only payment plan. The current implementation
+> plan is [`2026-09-20-stripe-owner-invoicing.md`](./2026-09-20-stripe-owner-invoicing.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make approved audio-service projects bookable through secure Stripe invoices while preserving file approval before payment.
 
-**Architecture:** Stripe Invoicing owns customers, invoices, hosted payment pages, receipts, and payment records. The Astro site continues to own service scope and intake, and only explains the invoice sequence. Version one has no Stripe API integration, keys, webhooks, embedded checkout, or local payment state.
+**Architecture:** Historical dashboard-only proposal. The Astro site now uses the successor plan above.
 
 **Tech Stack:** Stripe Dashboard and Invoicing, Astro 5, TypeScript, Vitest, Cloudflare Workers
 
@@ -39,7 +42,7 @@
 - Record evidence privately with `python3 scripts/development_journal.py checkpoint`.
 
 **Interfaces:**
-- Consumes: Stripe account `acct_1Q7Q7nRriKlm7r9B`, the public website, and verified public social profiles.
+- Consumes: the Stripe account, the public website, and verified public social profiles.
 - Produces: a submitted Stripe business-information review and an observed account status.
 
 - [ ] **Step 1: Reopen the overdue Stripe task**

@@ -57,6 +57,21 @@ describe('middleware.onRequest', () => {
     expect(response.headers.get('cache-control')).toBe('private, no-store');
   });
 
+  it('rejects cross-site JSON owner mutations while leaving Stripe webhook paths public', async () => {
+    vi.mocked(verifyOwnerAccess).mockResolvedValueOnce({ email: 'owner@example.com' });
+    const owner = makeContext('https://thesuperhuman.us/api/owner/requests/request-1/payment');
+    owner.request = new Request(owner.url, {
+      method: 'POST', headers: { origin: 'https://evil.example', 'content-type': 'application/json' }, body: '{}',
+    });
+    expect(((await onRequest(owner, async () => new Response('next'))) as Response).status).toBe(403);
+
+    const webhook = makeContext('https://thesuperhuman.us/api/stripe/webhook');
+    webhook.request = new Request(webhook.url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    const next = vi.fn(async () => new Response('webhook'));
+    expect(await (await onRequest(webhook, next) as Response).text()).toBe('webhook');
+    expect(next).toHaveBeenCalled();
+  });
+
   it('protects future owner APIs by namespace', async () => {
     vi.mocked(verifyOwnerAccess).mockResolvedValueOnce(null);
     const ctx = makeContext('https://thesuperhuman.us/api/owner/campaigns');

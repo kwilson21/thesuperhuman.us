@@ -287,11 +287,18 @@ export async function applyStripeInvoiceEvent(db: D1Database, input: {
       VALUES (?,?,?,?,?)`).bind(input.eventId, input.eventType, input.invoiceId, input.occurredAt, processedAt),
   ];
   if (shouldApply) statements.unshift(
-    db.prepare(`UPDATE audio_payments SET ${installment}_status=?,${installment}_status_updated_at=?,updated_at=?
-      WHERE request_id=? AND ${installment}_invoice_id=?`)
-      .bind(input.status, input.occurredAt, processedAt, row.request_id, input.invoiceId),
     db.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
-      VALUES (?,?,?,?,?)`).bind(row.request_id, `${installment}-payment-updated`, 'stripe', `${input.eventType}: ${input.status}`, processedAt),
+      SELECT ?,?,?,?,? WHERE EXISTS (
+        SELECT 1 FROM audio_payments WHERE request_id=? AND ${installment}_invoice_id=?
+          AND ${installment}_status<>'paid'
+          AND (${installment}_status_updated_at IS NULL OR ${installment}_status_updated_at<=?)
+      )`).bind(row.request_id, `${installment}-payment-updated`, 'stripe', `${input.eventType}: ${input.status}`, processedAt,
+        row.request_id, input.invoiceId, input.occurredAt),
+    db.prepare(`UPDATE audio_payments SET ${installment}_status=?,${installment}_status_updated_at=?,updated_at=?
+      WHERE request_id=? AND ${installment}_invoice_id=?
+        AND ${installment}_status<>'paid'
+        AND (${installment}_status_updated_at IS NULL OR ${installment}_status_updated_at<=?)`)
+      .bind(input.status, input.occurredAt, processedAt, row.request_id, input.invoiceId, input.occurredAt),
   );
   await db.batch(statements);
   return { applied: shouldApply, payment: await getAudioPayment(db, row.request_id) };

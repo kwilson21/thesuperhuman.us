@@ -157,6 +157,35 @@ describe('audio payments', () => {
     expect(sql.prepare('SELECT COUNT(*) AS total FROM stripe_webhook_events').get()).toEqual({ total: 2 });
   });
 
+  it('keeps a paid invoice paid when an older event follows a stale read', async () => {
+    const { db, sql } = fixture();
+    await approveAudioPayment(db, approval);
+    await recordInvoice(db, {
+      requestId: 'request-1', installment: 'booking', stripeCustomerId: 'cus_1',
+      invoiceId: 'in_booking', hostedInvoiceUrl: 'https://invoice.stripe.com/booking', status: 'open', actor: approval.actor,
+    });
+    await applyStripeInvoiceEvent(db, {
+      eventId: 'evt_paid', eventType: 'invoice.paid', invoiceId: 'in_booking', status: 'paid',
+      occurredAt: '2026-09-20T15:00:00.000Z',
+    });
+    // The old handler selected "open" before payment committed, then reaches its guarded update.
+    sql.prepare(`UPDATE audio_payments SET booking_status='open',booking_status_updated_at='2026-09-20T14:00:00.000Z'
+      WHERE request_id='request-1'`).run();
+    const originalBatch = db.batch.bind(db);
+    (db as any).batch = async (statements: unknown[]) => {
+      // A competing paid event commits after this handler's SELECT, before its UPDATE.
+      sql.prepare(`UPDATE audio_payments SET booking_status='paid',booking_status_updated_at='2026-09-20T15:00:00.000Z'
+        WHERE request_id='request-1'`).run();
+      return originalBatch(statements as any);
+    };
+    await applyStripeInvoiceEvent(db, {
+      eventId: 'evt_old_sent', eventType: 'invoice.sent', invoiceId: 'in_booking', status: 'open',
+      occurredAt: '2026-09-20T14:00:00.000Z',
+    });
+    expect((await getAudioPayment(db, 'request-1'))?.bookingStatus).toBe('paid');
+    expect(sql.prepare('SELECT COUNT(*) AS total FROM stripe_webhook_events').get()).toEqual({ total: 2 });
+  });
+
   it('replaces only terminal invoices while retaining the old attempt', async () => {
     const { db, sql } = fixture();
     await approveAudioPayment(db, approval);
