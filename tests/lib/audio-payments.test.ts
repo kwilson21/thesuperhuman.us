@@ -78,6 +78,7 @@ describe('audio payments', () => {
   it('rejects non-service requests and invalid prices', async () => {
     await expect(approveAudioPayment(fixture('purchase').db, approval)).rejects.toThrow('service request');
     await expect(approveAudioPayment(fixture().db, { ...approval, totalAmountCents: 0 })).rejects.toThrow('price');
+    await expect(approveAudioPayment(fixture().db, { ...approval, totalAmountCents: 1 })).rejects.toThrow('price');
     await expect(approveAudioPayment(fixture().db, { ...approval, totalAmountCents: 150.5 })).rejects.toThrow('price');
   });
 

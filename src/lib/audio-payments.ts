@@ -81,7 +81,7 @@ export async function approveAudioPayment(db: D1Database, input: {
   requestId: string; approvedService: string; totalAmountCents: number;
   offerAcceptedAt: string; actor: string;
 }): Promise<AudioPayment> {
-  if (!Number.isSafeInteger(input.totalAmountCents) || input.totalAmountCents < 1 || input.totalAmountCents > 100_000_000) {
+  if (!Number.isSafeInteger(input.totalAmountCents) || input.totalAmountCents < 2 || input.totalAmountCents > 100_000_000) {
     throw new Error('Invalid fixed project price.');
   }
   const approvedService = input.approvedService.trim();
@@ -184,7 +184,8 @@ export async function reserveInvoiceCreation(db: D1Database, input: {
   const prefix = input.installment;
   const now = new Date().toISOString();
   const reservation = await db.prepare(`UPDATE audio_payments SET ${prefix}_creation_started_at=?,updated_at=?
-    WHERE request_id=? AND ${prefix}_invoice_id IS NULL AND ${prefix}_creation_started_at IS NULL`)
+    WHERE request_id=? AND ${prefix}_invoice_id IS NULL AND ${prefix}_creation_started_at IS NULL
+      AND external_refs_deleted_at IS NULL`)
     .bind(now, now, input.requestId).run();
   if (reservation.meta.changes !== 1) throw new Error('Invoice creation is already pending or complete.');
   const payment = await getAudioPayment(db, input.requestId);

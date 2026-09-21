@@ -14,6 +14,7 @@ vi.mock('~/lib/stripe-invoicing', () => ({
 }));
 
 import { POST } from '~/pages/api/owner/requests/[id]/payment';
+import { applyOwnerRetention, previewOwnerRetention } from '../../scripts/owner-retention.mjs';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database;
@@ -65,6 +66,7 @@ it('requires owner access and valid explicit offer acceptance', async () => {
   expect((await POST(context({ action: 'approve', approvedService: 'Mix', totalAmountCents: 20_000, offerAccepted: true }, false))).status).toBe(403);
   expect((await POST(context({ action: 'approve', approvedService: 'Mix', totalAmountCents: 20_000, offerAccepted: false }))).status).toBe(400);
   expect((await POST(context({ action: 'approve', approvedService: 'Mix', totalAmountCents: 150.5, offerAccepted: true }))).status).toBe(400);
+  expect((await POST(context({ action: 'approve', approvedService: 'Mix', totalAmountCents: 1, offerAccepted: true }))).status).toBe(400);
 });
 
 it('persists approved terms before any Stripe call', async () => {
@@ -96,6 +98,38 @@ it('creates and records one booking invoice after approval', async () => {
     .toEqual({ booking_invoice_id: 'in_booking', booking_status: 'open' });
   await POST(context({ action: 'create-booking-invoice' }, true, stripeEnv));
   expect(invoiceMocks.booking).toHaveBeenCalledTimes(1);
+});
+
+it('does not create an invoice after retention deletes a withdrawn request', async () => {
+  await POST(context({ action: 'approve', approvedService: 'Mix', totalAmountCents: 20_000, offerAccepted: true }));
+  sql.exec("UPDATE owner_requests SET status='withdrawn' WHERE id='request-1'");
+  const retentionDb = {
+    query: async (query: string) => sql.prepare(query).all(),
+    batch: async (queries: string[]) => {
+      sql.exec('BEGIN');
+      try { const result = queries.map(query => sql.prepare(query).all()); sql.exec('COMMIT'); return result; }
+      catch (error) { sql.exec('ROLLBACK'); throw error; }
+    },
+  };
+  const retentionNow = new Date();
+  const review = await previewOwnerRetention(retentionDb, 'Local test data', retentionNow);
+  const originalPrepare = db.prepare.bind(db);
+  db.prepare = ((query: string) => {
+    const prepared = originalPrepare(query);
+    if (!query.startsWith('UPDATE audio_payments SET booking_creation_started_at=')) return prepared;
+    return { bind: (...args: unknown[]) => {
+      const bound = prepared.bind(...args);
+      return { run: async () => {
+        await applyOwnerRetention(retentionDb, review, 'Local test data', retentionNow);
+        return bound.run();
+      }};
+    }};
+  }) as typeof db.prepare;
+  const response = await POST(context({ action: 'create-booking-invoice' }, true, stripeEnv));
+  expect(response.status).toBe(409);
+  expect(invoiceMocks.booking).not.toHaveBeenCalled();
+  expect(sql.prepare('SELECT name,email FROM owner_requests WHERE id=?').get('request-1'))
+    .toEqual({ name: '', email: '' });
 });
 
 it('does not create a balance invoice before Stripe confirms the booking payment', async () => {

@@ -10,7 +10,7 @@ const commandSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('approve'),
     approvedService: z.string().trim().min(1).max(160),
-    totalAmountCents: z.number().int().min(1).max(100_000_000),
+    totalAmountCents: z.number().int().min(2).max(100_000_000),
     offerAccepted: z.literal(true),
   }),
   z.object({ action: z.literal('create-booking-invoice') }),
