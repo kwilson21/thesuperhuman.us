@@ -24,6 +24,9 @@ import readerPaths from '~/assets/projects/website/reader-paths.svg';
 import softwareSheet from '~/assets/projects/website/software-sheet.webp';
 import audioSheet from '~/assets/projects/website/audio-sheet.webp';
 import currentWork from '~/assets/projects/website/work-after.png';
+import oldNewsPremiere from '~/assets/site/old-news-premiere.webp';
+import oldNewsMerchConcepts from '~/assets/site/old-news-merch-concepts.webp';
+import musicSkyline from '~/assets/site/music-skyline.webp';
 
 export const websiteStory = {
   title: 'Personal website',
@@ -42,6 +45,30 @@ const artifact = (image: ImageMetadata, title: string, caption: string, kind = '
 // the work described, not publication-feed receipts. Summaries express the
 // intent behind each step without reproducing conversation excerpts.
 export const websiteMilestones: Milestone[] = [
+  {
+    id: 'website-old-news-release-experience', day: '2026-09-15',
+    title: 'Give Old News a place to be heard.', status: 'Release experience',
+    summary: 'I turned Old News from a catalog entry into a release page built for listening: a player, lyric-video viewing, credits, lyrics, and a way to ask for more all live together.',
+    detailLabel: 'What the release page needed to hold',
+    detail: 'The page needed to support the song without overstating the work. Its credits describe two-track vocal mixing and mastering, while the producer credit remains with Lexi Banks. The release design followed the existing music collections and streaming conventions instead of creating a separate system.',
+    artifacts: [artifact(oldNewsPremiere, 'Old News · Release-page visual', 'Reviewed premiere artwork used to give the release its own place on the site.', 'Reviewed release artwork')],
+  },
+  {
+    id: 'website-old-news-listening-comparison', day: '2026-09-15',
+    title: 'Let the mastering change be heard.', status: 'Listening design',
+    summary: 'The release experience added an A/B comparison so people can switch between the earlier version and the final master without losing their place.',
+    detailLabel: 'How the comparison fits the release',
+    detail: 'The comparison uses source-derived waveforms and coordinated playback rather than a static explanation. It sits beside the release details so the listening decision stays connected to the song and its credits.',
+    artifacts: [artifact(musicSkyline, 'Audio · Releases collection', 'The reviewed releases-hub skyline carries the listening work into the wider Audio section.', 'Reviewed collection artwork')],
+  },
+  {
+    id: 'website-old-news-interest-and-merch', day: '2026-09-15',
+    title: 'Make room for the next signal of interest.', status: 'Release follow-through',
+    summary: 'The release page also makes space for people who want more—whether that means future music, a purchase, or merchandise—without pretending those ideas are already for sale.',
+    detailLabel: 'What remains deliberately provisional',
+    detail: 'The merchandise image is a reviewed concept, not a product listing. The page uses an interest flow so future release decisions can be informed by explicit, consented requests.',
+    artifacts: [artifact(oldNewsMerchConcepts, 'Old News · Merchandise concepts', 'A reviewed concept sheet shown as a direction for interest, not as a storefront.', 'Reviewed concept artwork')],
+  },
   {
     id: 'website-start-with-the-reader', day: '2026-09-09',
     title: 'Start with the person visiting.', status: 'The brief',
