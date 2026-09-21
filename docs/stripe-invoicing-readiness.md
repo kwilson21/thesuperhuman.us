@@ -15,7 +15,7 @@ This record separates completed implementation checks from Stripe account state,
 - PASS: Out-of-order events cannot move a paid installment backward.
 - PASS: A signed audio invoice event can restore a missing invoice projection when its request slot is empty; conflicts and invalid request references are retained for owner reconciliation.
 - PASS: A voided invoice can be replaced while prior attempts remain identifiable. An uncollectible invoice stays associated until it is voided in Stripe.
-- PASS: Owner retention removes Stripe customer IDs and hosted invoice URLs with eligible request contact data after each invoice installment is paid, voided, or never started without an active creation reservation.
+- PASS: Owner retention removes Stripe customer IDs and hosted invoice URLs with eligible request contact data after both installments are paid or voided, or when no invoice remains due and neither installment has an active creation reservation.
 - PASS: Stripe API failure leaves invoice state uncreated.
 - PASS: Production configuration keeps `STRIPE_PAYMENTS_ENABLED=false`.
 
