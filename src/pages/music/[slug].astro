@@ -49,7 +49,7 @@ const videoId = `video-${first.id}`;
     </LyricVideo>
     {tracks.length > 1 && <section class="music-section album-tracks" aria-label="Track list">{tracks.slice(1).map((track, index) => <div><h2>{index + 2}. {track.title}</h2><AudioPlayer id={`listen-${track.id}`} src={musicFile(track.id, releaseVersion(track))} title={track.title} duration={track.duration} releaseId={release.id} recordingId={track.id} /></div>)}</section>}
     <section class="lyric-spread" aria-label="Lyrics and contributors">
-      <div>{release.lyricQuote && <blockquote>“{release.lyricQuote}”</blockquote>}<a class="site-link" href="#lyrics">Read the lyrics <span aria-hidden="true">→</span></a></div>
+      <div>{release.lyricQuote && <blockquote>“{release.lyricQuote}”</blockquote>}{first.lyrics && <a class="site-link" href="#lyrics">Read the lyrics <span aria-hidden="true">→</span></a>}</div>
       <div class="featured-credits">{first.credits.filter(c => !/lyrics/i.test(c.role)).sort((a,b) => Number(b.name === first.artist) - Number(a.name === first.artist)).map(credit => <p><strong><PersonalNameText text={credit.name} /></strong><span class="credit-role">{credit.role}</span></p>)}<a class="credit-link" href="#credits">Full credits</a></div>
     </section>
     <ReleaseInterest releaseId={release.id} artwork={release.artwork} merchandiseConcept={release.hero === 'old-news-premiere'} />
