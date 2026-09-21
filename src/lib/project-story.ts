@@ -1,10 +1,14 @@
 import approvedReview from '../data/project-stories/threadline-review.json';
 import type { ProjectFeed, PublicEntry } from './publication/read';
+export interface ProjectArtifact {
+  src: string; title: string; alt: string; caption: string; kind: string; width: number; height: number;
+}
 export interface Milestone {
   id: string; day: string; title: string; summary: string; detail?: string;
   illustration?: 'payload-review'; detailLabel?: string;
   status?: string; basis?: string; publishedAt?: string; backfilled?: boolean;
-  artifacts?: { src: string; title: string; alt: string; caption: string; kind: string; width: number; height: number }[];
+  artifacts?: ProjectArtifact[];
+  visualProof?: { label: string; before: ProjectArtifact; after: ProjectArtifact };
 }
 const entries = (feed: ProjectFeed): PublicEntry[] => [...new Map([...feed.history, ...(feed.current ? [feed.current] : [])].map(entry => [entry.entryId, entry])).values()];
 export function publicationMilestones(feed: ProjectFeed | null): Milestone[] {

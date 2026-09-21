@@ -2,6 +2,7 @@ import approved from '../../src/data/project-stories/threadline-review.json';
 import type { Story } from '../../src/lib/publication/contract';
 import {describe, expect, it} from 'vitest';
 import {feedChange, publicationMilestones, journalMilestones} from '../../src/lib/project-story';
+import type {Milestone} from '../../src/lib/project-story';
 import type {ProjectFeed, PublicEntry} from '../../src/lib/publication/read';
 const entry = (id: string, day = '2026-09-09'): PublicEntry => ({entryId:id,occurredOn:day,publishedAt:day+'T12:00:00Z',backfilled:false,story:{basis:'repository-verified',delivery:'implemented',headline:id,summary:'A visible result. The prototype is not released.',technicalDetail:null}});
 const feed = (items: PublicEntry[], revision = 1): ProjectFeed => ({projectId:'threadline',revision,current:items[0]??null,history:items});
@@ -65,6 +66,12 @@ describe('one journal for curated and published milestones', () => {
   const result = journalMilestones(feed([entry('launch', '2026-09-10'), entry('earlier', '2026-09-08')]), [design]);
   expect(result.map(m => m.id)).toEqual(['earlier', 'website-design', 'launch']);
   expect(result[1]).toBe(design);
+ });
+ it('keeps accessible before-and-after proof with its curated milestone', () => {
+  const before = {src:'/before.webp',width:390,height:844,title:'Before',caption:'The controls overflowed on a phone.',kind:'Browser capture',alt:'A phone layout before the repair.'};
+  const after = {src:'/after.webp',width:390,height:844,title:'After',caption:'The controls fit their content on a phone.',kind:'Browser capture',alt:'A phone layout after the repair.'};
+  const repaired = {id:'mobile-repair',day:'2026-09-21',title:'Mobile repair',summary:'A narrow layout was corrected.',visualProof:{label:'Mobile layout before and after',before,after}} satisfies Milestone;
+  expect(journalMilestones(null,[repaired])[0].visualProof).toEqual({label:'Mobile layout before and after',before,after});
  });
 
 });

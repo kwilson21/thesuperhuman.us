@@ -71,7 +71,11 @@ export const websiteMilestones: Milestone[] = [
     id: 'website-mobile-continuity', day: '2026-09-09',
     title: 'Mobile needed the same sense of flow.', status: 'Revision',
     summary: 'I wanted mobile to feel as smooth as desktop. The revision replaced disjointed image blocks with a continuous paper surface.',
-    artifacts: [artifact(mobile1, 'Mobile v1 · Not selected', 'The separate image blocks felt disjointed. Each sheet shows the page in two successive slices, not two mobile columns.'), artifact(mobile2, 'Mobile v2 · Selected', 'A more continuous composition. The left slice begins the page; the right continues it.')],
+    visualProof: {
+      label: 'Mobile continuity before and after',
+      before: artifact(mobile1, 'Mobile v1 · Not selected', 'The separate image blocks felt disjointed. Each sheet shows the page in two successive slices, not two mobile columns.'),
+      after: artifact(mobile2, 'Mobile v2 · Selected', 'A more continuous composition. The left slice begins the page; the right continues it.'),
+    },
   },
   {
     id: 'website-page-responsibilities', day: '2026-09-09',
