@@ -16,12 +16,16 @@ const videoAsset = z.object({
   key: z.string().regex(/^music\/[a-z0-9-]+\/[a-z0-9-]+\.mp4$/),
   type: z.literal('video/mp4'),
 });
+const youtubeUrl = z.string().regex(/^https:\/\/(?:www\.)?(?:youtube\.com|youtu\.be)\//);
+const soundcloudUrl = z.string().regex(/^https:\/\/(?:on\.)?soundcloud\.com\//);
 export const recordingSchema = z.object({
   id: musicId, title: z.string().min(1), artist: z.string().min(1), duration: z.number().positive(), visibility,
   credits: z.array(z.object({ role: z.string(), name: z.string() })), lyrics: z.string().optional(),
   services: z.array(methodologySchema).default([]),
   versions: z.object({ master: audioAsset.optional(), mix: audioAsset.optional(), unmixed: audioAsset.optional(), video: videoAsset.optional() }).refine(v => v.master || v.mix || v.unmixed, { message: 'At least one audio export is required' }),
   youtubeId: z.string().regex(/^[a-zA-Z0-9_-]{11}$/).optional(),
+  youtubeUrl: youtubeUrl.optional(),
+  soundcloudUrl: soundcloudUrl.optional(),
 });
 export const releaseSchema = z.object({
   id: musicId, slug: musicId, title: z.string().min(1), artist: z.string().min(1),

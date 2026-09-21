@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 
-const read = (path: string) => JSON.parse(readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8')) as { visibility?: string; lyrics?: string };
+const read = (path: string) => JSON.parse(readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8')) as { visibility?: string; lyrics?: string; youtubeUrl?: string; soundcloudUrl?: string };
 
 it('publishes every Old News surface together after launch verification passes', () => {
   const paths = [
@@ -17,4 +17,11 @@ it('includes the supplied Old News lyrics for the release details panel', () => 
 
   expect(recording.lyrics).toContain('VERSE 1');
   expect(recording.lyrics).toContain('Case already closed, you can’t condemn me');
+});
+
+it('links the released song to its official YouTube and SoundCloud destinations', () => {
+  const recording = read('src/content/recordings/old-news-recording.json');
+
+  expect(recording.youtubeUrl).toBe('https://youtu.be/YkJeUDIiFmU');
+  expect(recording.soundcloudUrl).toBe('https://on.soundcloud.com/dQcpIkx3S7gRzdW1KV');
 });
