@@ -24,6 +24,8 @@ const targetUrl = process.env.TARGET_URL || 'http://127.0.0.1:4321';
     assert.equal(metrics.proofCount, 1, `Expected one reviewed visual proof: ${JSON.stringify(metrics)}`);
     assert.ok(metrics.figureWidths.every(width => width > 0 && width <= 390), `Visual proof does not fit a phone viewport: ${JSON.stringify(metrics)}`);
     assert.equal(metrics.proofLinkCount, 2, `Each proof image needs a full-size link: ${JSON.stringify(metrics)}`);
+    await page.getByRole('button', { name: /Let the A\/B player keep playing on iPhone/i }).click();
+    await page.getByRole('heading', { name: /Let the A\/B player keep playing on iPhone/i }).waitFor();
     await page.getByRole('button', { name: /Make the A\/B controls fit the song/i }).click();
     await page.getByRole('heading', { name: /Make the A\/B controls fit the song/i }).waitFor();
     await page.getByRole('button', { name: /Keep owner-page explanations inside the screen/i }).click();
