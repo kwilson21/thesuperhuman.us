@@ -84,7 +84,7 @@ it('refuses payment cleanup when the reconciliation migration is incomplete', as
 it('keeps an unfinished service request intact until both invoices are terminal', async () => {
   const database = fixture();
   database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at)
-    VALUES ('active-service','service','Active Artist','active@example.com','Mix','resolved','2026-01-01T00:00:00Z','2026-01-02T00:00:00Z','2026-01-02T00:00:00Z');
+    VALUES ('active-service','service','Active Artist','active@example.com','Mix','resolved','2025-01-01T00:00:00Z','2025-01-02T00:00:00Z','2025-01-02T00:00:00Z');
     INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
       offer_accepted_at,stripe_customer_id,booking_invoice_id,booking_invoice_url,booking_status,created_at,updated_at)
     VALUES ('active-service','Mix',10000,5000,5000,'2026-01-01T00:00:00Z','cus_active','in_active','https://invoice.stripe.com/active','open','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z');`);

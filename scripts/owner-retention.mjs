@@ -102,7 +102,7 @@ export async function applyOwnerRetention(database, review, environment, now = n
   const guard = (query, expected) => `SELECT CASE WHEN (${query})=${quote(expected)} THEN 1 ELSE json_extract('retention source changed','$') END`;
   const runId = hash(`${review.generatedAt}:${review.requestSourceHash}:${review.playbackSourceHash}`);
   const statements = [
-    guard(requestSnapshot(now), requests),
+    guard(requestSnapshot(now, '1', paymentGuard), requests),
     guard(playbackSnapshot(review.playbackCutoff), playback),
     ...paymentCleanup,
     `UPDATE owner_requests SET name='',email='',city_region='',details_json='{}',private_note='',updated_at=${quote(now.toISOString())} WHERE ${requestSelection}`,
