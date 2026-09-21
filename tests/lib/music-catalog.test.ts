@@ -17,6 +17,8 @@ describe('music catalog', () => {
     expect(visibleCatalog(c, false).releases).toHaveLength(0);
     expect(visibleCatalog(c, true).releases).toHaveLength(1);
     expect(() => validateCatalog({ recordings: [{ ...recording, versions: { master: { key: '../private.json', type: 'audio/mpeg' } } }], releases: [single], examples: [] })).toThrow();
+    expect(() => validateCatalog({ recordings: [{ ...recording, youtubeUrl: 'https://youtu.be/not-an-id' }], releases: [single], examples: [] })).toThrow();
+    expect(() => validateCatalog({ recordings: [{ ...recording, soundcloudUrl: 'https://soundcloud.com/' }], releases: [single], examples: [] })).toThrow();
   });
 });
 
