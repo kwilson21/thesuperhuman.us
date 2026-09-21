@@ -196,6 +196,16 @@ export async function isKnownInvoiceAttempt(db: D1Database, invoiceId: string): 
   return Boolean(await db.prepare('SELECT invoice_id FROM stripe_invoice_attempts WHERE invoice_id=?').bind(invoiceId).first());
 }
 
+export async function recordUnmatchedStripeEvent(db: D1Database, input: {
+  eventId: string; eventType: string; invoiceId: string; requestId: string; installment: Installment;
+  status: Exclude<InvoiceStatus, 'not_created'>; occurredAt: string; reason: 'request-not-found' | 'invoice-conflict';
+}): Promise<void> {
+  await db.prepare(`INSERT OR IGNORE INTO stripe_unmatched_events
+    (event_id,event_type,invoice_id,request_id,installment,status,occurred_at,received_at,reason)
+    VALUES (?,?,?,?,?,?,?,?,?)`).bind(input.eventId, input.eventType, input.invoiceId, input.requestId,
+    input.installment, input.status, input.occurredAt, new Date().toISOString(), input.reason).run();
+}
+
 export async function recoverInvoiceFromWebhook(db: D1Database, input: {
   eventId: string; eventType: string; requestId: string; installment: Installment; invoiceId: string;
   stripeCustomerId: string | null; hostedInvoiceUrl: string | null;
@@ -210,10 +220,11 @@ export async function recoverInvoiceFromWebhook(db: D1Database, input: {
   const invalidInvoice = payment && (input.totalAmountCents !== expectedAmount || input.currency !== payment.currency
     || (input.installment === 'balance' && payment.bookingStatus !== 'paid'));
   if (!payment || currentId || invalidInvoice) {
-    await db.prepare(`INSERT OR IGNORE INTO stripe_unmatched_events
-      (event_id,event_type,invoice_id,request_id,installment,status,occurred_at,received_at,reason)
-      VALUES (?,?,?,?,?,?,?,?,?)`).bind(input.eventId, input.eventType, input.invoiceId, input.requestId,
-      input.installment, input.status, input.occurredAt, receivedAt, payment ? 'invoice-conflict' : 'request-not-found').run();
+    await recordUnmatchedStripeEvent(db, {
+      eventId: input.eventId, eventType: input.eventType, invoiceId: input.invoiceId, requestId: input.requestId,
+      installment: input.installment, status: input.status, occurredAt: input.occurredAt,
+      reason: payment ? 'invoice-conflict' : 'request-not-found',
+    });
     return 'unmatched';
   }
   await db.batch([
@@ -230,12 +241,12 @@ export async function recoverInvoiceFromWebhook(db: D1Database, input: {
         `${input.eventType}: ${input.status}; recovered ${input.invoiceId}`, receivedAt, input.requestId, input.eventId),
     db.prepare(`INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at)
       SELECT ?,?,?,?,? WHERE EXISTS (
-        SELECT 1 FROM audio_payments WHERE request_id=? AND ${prefix}_invoice_id=? AND ${prefix}_recovery_event_id<>?
+        SELECT 1 FROM audio_payments WHERE request_id=? AND ${prefix}_invoice_id=? AND ${prefix}_recovery_event_id IS NOT ?
           AND ${prefix}_status<>'paid' AND (${prefix}_status_updated_at IS NULL OR ${prefix}_status_updated_at<=?)
       )`).bind(input.requestId, `${prefix}-payment-updated`, 'stripe', `${input.eventType}: ${input.status}`,
         receivedAt, input.requestId, input.invoiceId, input.eventId, input.occurredAt),
     db.prepare(`UPDATE audio_payments SET ${prefix}_status=?,${prefix}_status_updated_at=?,updated_at=?
-      WHERE request_id=? AND ${prefix}_invoice_id=? AND ${prefix}_recovery_event_id<>?
+      WHERE request_id=? AND ${prefix}_invoice_id=? AND ${prefix}_recovery_event_id IS NOT ?
         AND ${prefix}_status<>'paid' AND (${prefix}_status_updated_at IS NULL OR ${prefix}_status_updated_at<=?)`)
       .bind(input.status, input.occurredAt, receivedAt, input.requestId, input.invoiceId, input.eventId, input.occurredAt),
     db.prepare(`INSERT OR IGNORE INTO stripe_invoice_attempts(invoice_id,request_id,installment,created_at)

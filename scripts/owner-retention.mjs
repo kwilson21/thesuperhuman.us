@@ -9,12 +9,13 @@ import { renderMusicReport } from './music-report-view.mjs';
 const quote = value => `'${String(value).replaceAll("'", "''")}'`;
 const hash = value => createHash('sha256').update(value).digest('hex');
 const dayCutoff = (now, days) => new Date(now.getTime() - days * 86400000).toISOString();
-const requestEligibility = now => `(status='withdrawn' OR (contact_delete_after IS NOT NULL AND contact_delete_after<=${quote(now.toISOString())})
+const terminalPaymentStatuses = "'paid','void','uncollectible'";
+const requestEligibility = (now, paymentGuard = '1') => `(status='withdrawn' OR (contact_delete_after IS NOT NULL AND contact_delete_after<=${quote(now.toISOString())})
   OR (status='resolved' AND kind<>'service' AND resolved_at<${quote(dayCutoff(now, 90))})
   OR (status='resolved' AND kind='service' AND resolved_at<${quote(dayCutoff(now, 365))}))
-  AND (name<>'' OR email<>'' OR city_region<>'' OR details_json<>'{}' OR private_note<>'')`;
-const requestSnapshot = (now, selection = '1') => `SELECT json_group_array(json_array(id,updated_at)) AS snapshot FROM
-  (SELECT id,updated_at FROM owner_requests WHERE ${requestEligibility(now)} AND (${selection}) ORDER BY id)`;
+  AND (name<>'' OR email<>'' OR city_region<>'' OR details_json<>'{}' OR private_note<>'') AND (${paymentGuard})`;
+const requestSnapshot = (now, selection = '1', paymentGuard = '1') => `SELECT json_group_array(json_array(id,updated_at)) AS snapshot FROM
+  (SELECT id,updated_at FROM owner_requests WHERE ${requestEligibility(now, paymentGuard)} AND (${selection}) ORDER BY id)`;
 const playbackSnapshot = (cutoff, selection = '1') => `SELECT json_group_array(json_array(id,occurred_at)) AS snapshot FROM
   (SELECT id,occurred_at FROM music_playback_events WHERE occurred_at<${quote(cutoff)} AND (${selection}) ORDER BY id LIMIT 1000)`;
 const playbackSummary = (cutoff, selection = '1') => `SELECT substr(occurred_at,1,10) AS day,release_id,recording_id,medium,event,
@@ -23,14 +24,22 @@ const playbackSummary = (cutoff, selection = '1') => `SELECT substr(occurred_at,
   GROUP BY day,release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,city ORDER BY day,release_id,event`;
 const idsSelection = rows => rows.length ? `id IN (${rows.map(row => quote(row[0])).join(',')})` : '0';
 
+async function paymentRetentionGuard(database) {
+  const tables = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='audio_payments'");
+  if (!tables.length) return '1';
+  return `NOT EXISTS (SELECT 1 FROM audio_payments AS payment WHERE payment.request_id=owner_requests.id
+    AND (payment.booking_status NOT IN (${terminalPaymentStatuses}) OR payment.balance_status NOT IN (${terminalPaymentStatuses})))`;
+}
+
 export async function previewOwnerRetention(database, environment, now = new Date()) {
   const cutoff = dayCutoff(now, 90);
-  const [{ snapshot: requests }] = await database.query(requestSnapshot(now));
+  const paymentGuard = await paymentRetentionGuard(database);
+  const [{ snapshot: requests }] = await database.query(requestSnapshot(now, '1', paymentGuard));
   const [{ snapshot: playback }] = await database.query(playbackSnapshot(cutoff));
   const playbackRows = JSON.parse(playback); const selection = idsSelection(playbackRows);
   const dailySummary = await database.query(playbackSummary(cutoff, selection));
   const [{ total: allPlayback }] = await database.query(`SELECT COUNT(*) AS total FROM music_playback_events WHERE occurred_at<${quote(cutoff)}`);
-  const [requestCheck] = await database.query(requestSnapshot(now));
+  const [requestCheck] = await database.query(requestSnapshot(now, '1', paymentGuard));
   const [playbackCheck] = await database.query(playbackSnapshot(cutoff));
   if (requestCheck.snapshot !== requests || playbackCheck.snapshot !== playback) throw new Error('Eligible owner data changed during preview. Generate a fresh review.');
   return {
@@ -61,7 +70,8 @@ async function verifyTriggers(database) {
 
 export async function applyOwnerRetention(database, review, environment, now = new Date()) {
   validateReview(review, environment, now);
-  const [{ snapshot: requests }] = await database.query(requestSnapshot(now));
+  const paymentGuard = await paymentRetentionGuard(database);
+  const [{ snapshot: requests }] = await database.query(requestSnapshot(now, '1', paymentGuard));
   const [{ snapshot: playback }] = await database.query(playbackSnapshot(review.playbackCutoff));
   if (hash(requests) !== review.requestSourceHash || hash(playback) !== review.playbackSourceHash) throw new Error('Eligible owner data changed or this review was already applied. Generate and review a fresh preview.');
   const playbackRows = JSON.parse(playback); const playbackSelection = idsSelection(playbackRows);
@@ -86,7 +96,8 @@ export async function applyOwnerRetention(database, review, environment, now = n
       balance_invoice_id=NULL,balance_invoice_url=NULL,booking_recovery_event_id=NULL,balance_recovery_event_id=NULL,
       booking_creation_started_at=NULL,balance_creation_started_at=NULL,
       external_refs_deleted_at=${quote(now.toISOString())},updated_at=${quote(now.toISOString())}
-      WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`,
+      WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})
+        AND booking_status IN (${terminalPaymentStatuses}) AND balance_status IN (${terminalPaymentStatuses})`,
   ] : [];
   const guard = (query, expected) => `SELECT CASE WHEN (${query})=${quote(expected)} THEN 1 ELSE json_extract('retention source changed','$') END`;
   const runId = hash(`${review.generatedAt}:${review.requestSourceHash}:${review.playbackSourceHash}`);

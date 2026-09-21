@@ -26,7 +26,7 @@ Open a request from **Today**, **Campaigns**, or **Requests**. Each path reaches
 - **Resolved** means the next step is complete or the request will not proceed.
 - **Reopen** returns a resolved request to active review.
 - **Withdraw** stops the request and makes its contact detail eligible for immediate removal.
-- **Delete personal data** is performed by reviewed retention. It preserves the request category, status, dates, and audit trail while blanking contact fields and private notes.
+- **Delete personal data** is performed by reviewed retention. It preserves the request category, status, dates, and audit trail while blanking contact fields and private notes. A service request stays out of retention while either payment installment is unfinished, so invoice recovery and file delivery remain possible.
 
 Routine purchase, merchandise, and service requests do not send email. They appear in the owner center. A redacted urgent email is sent only when a valid request cannot be stored. Treat repeated storage alerts, owner authentication failures, media failures, or retention failures as urgent.
 

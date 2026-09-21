@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { applyStripeInvoiceEvent, getAudioPayment, isKnownInvoiceAttempt, recoverInvoiceFromWebhook, type InvoiceStatus } from '~/lib/audio-payments';
+import { applyStripeInvoiceEvent, getAudioPayment, isKnownInvoiceAttempt, recordUnmatchedStripeEvent, recoverInvoiceFromWebhook, type InvoiceStatus } from '~/lib/audio-payments';
 import { verifyStripeWebhook } from '~/lib/stripe-invoicing';
 
 export const prerender = false;
@@ -42,7 +42,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const payment = await getAudioPayment(db, requestId);
   const expectedInvoiceId = installment === 'booking' ? payment?.bookingInvoiceId : payment?.balanceInvoiceId;
   if (!payment || expectedInvoiceId !== invoice.id) {
-    if (await isKnownInvoiceAttempt(db, invoice.id)) return Response.json({ received: true });
+    if (await isKnownInvoiceAttempt(db, invoice.id)) {
+      await recordUnmatchedStripeEvent(db, {
+        eventId: event.id, eventType: event.type, invoiceId: invoice.id, requestId,
+        installment: installment as 'booking' | 'balance', status,
+        occurredAt: new Date(event.created * 1000).toISOString(), reason: 'invoice-conflict',
+      });
+      return Response.json({ received: true });
+    }
     const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id ?? null;
     await recoverInvoiceFromWebhook(db, {
       eventId: event.id, eventType: event.type, requestId, installment: installment as 'booking' | 'balance',

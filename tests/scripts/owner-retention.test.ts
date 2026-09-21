@@ -13,8 +13,8 @@ function fixture() {
     ('recent-request','service','Artist','artist@example.com','','Mastering','{}','resolved','','2026-09-01T00:00:00Z','2026-09-02T00:00:00Z','2026-09-02T00:00:00Z');
     INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at) VALUES ('old-request','created','system','','2026-01-01T00:00:00Z');
     INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
-      offer_accepted_at,stripe_customer_id,booking_invoice_id,booking_invoice_url,booking_status,created_at,updated_at)
-    VALUES ('old-request','Mastering',7500,3750,3750,'2026-01-01T00:00:00Z','cus_private','in_old','https://invoice.stripe.com/private','paid','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z');
+      offer_accepted_at,stripe_customer_id,booking_invoice_id,booking_invoice_url,booking_status,balance_invoice_id,balance_invoice_url,balance_status,created_at,updated_at)
+    VALUES ('old-request','Mastering',7500,3750,3750,'2026-01-01T00:00:00Z','cus_private','in_old','https://invoice.stripe.com/private','paid','in_balance','https://invoice.stripe.com/balance','paid','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z');
     INSERT INTO stripe_invoice_attempts(invoice_id,request_id,installment,created_at)
     VALUES ('in_old','old-request','booking','2026-01-01T00:00:00Z');`);
   const event = db.prepare(`INSERT INTO music_playback_events(id,release_id,recording_id,session_id,playthrough_id,sequence,medium,event,accumulated_seconds,media_duration_seconds,campaign_id,channel,creative,traffic_class,country,region,city,occurred_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
@@ -79,4 +79,20 @@ it('refuses payment cleanup when the reconciliation migration is incomplete', as
   const review = await previewOwnerRetention(database, 'Local test data', now);
   database.db.exec('DROP TABLE stripe_unmatched_events');
   await expect(applyOwnerRetention(database, review, 'Local test data', now)).rejects.toThrow('migration 0004');
+});
+
+it('keeps an unfinished service request intact until both invoices are terminal', async () => {
+  const database = fixture();
+  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at)
+    VALUES ('active-service','service','Active Artist','active@example.com','Mix','resolved','2026-01-01T00:00:00Z','2026-01-02T00:00:00Z','2026-01-02T00:00:00Z');
+    INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
+      offer_accepted_at,stripe_customer_id,booking_invoice_id,booking_invoice_url,booking_status,created_at,updated_at)
+    VALUES ('active-service','Mix',10000,5000,5000,'2026-01-01T00:00:00Z','cus_active','in_active','https://invoice.stripe.com/active','open','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z');`);
+  const review = await previewOwnerRetention(database, 'Local test data', now);
+  expect(review.requestContacts).toBe(1);
+  await applyOwnerRetention(database, review, 'Local test data', now);
+  expect((await database.query("SELECT name,email FROM owner_requests WHERE id='active-service'"))[0])
+    .toEqual({ name: 'Active Artist', email: 'active@example.com' });
+  expect((await database.query("SELECT stripe_customer_id,booking_invoice_id FROM audio_payments WHERE request_id='active-service'"))[0])
+    .toEqual({ stripe_customer_id: 'cus_active', booking_invoice_id: 'in_active' });
 });

@@ -5,6 +5,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 const verify = vi.hoisted(() => vi.fn());
 vi.mock('~/lib/stripe-invoicing', () => ({ verifyStripeWebhook: verify }));
 import { POST } from '~/pages/api/stripe/webhook';
+import { replaceTerminalInvoice } from '~/lib/audio-payments';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database;
@@ -100,4 +101,17 @@ it('recovers a recognized audio invoice that is not recorded yet', async () => {
   expect(sql.prepare('SELECT booking_invoice_id,booking_status FROM audio_payments').get())
     .toEqual({ booking_invoice_id: 'in_booking', booking_status: 'paid' });
   expect(sql.prepare('SELECT COUNT(*) AS total FROM stripe_webhook_events').get()).toEqual({ total: 1 });
+});
+
+it('dead-letters a late event for a replaced invoice without reviving it', async () => {
+  sql.prepare(`INSERT INTO stripe_invoice_attempts(invoice_id,request_id,installment,created_at)
+    VALUES ('in_booking','request-1','booking','2026-09-20T12:00:00Z')`).run();
+  sql.prepare("UPDATE audio_payments SET booking_status='void' WHERE request_id='request-1'").run();
+  await replaceTerminalInvoice(db, { requestId: 'request-1', installment: 'booking', actor: 'owner@example.com' });
+  verify.mockResolvedValueOnce(event('invoice.paid', 'evt_replaced_paid'));
+  expect((await POST(context())).status).toBe(200);
+  expect(sql.prepare('SELECT booking_invoice_id,booking_status FROM audio_payments').get())
+    .toEqual({ booking_invoice_id: null, booking_status: 'not_created' });
+  expect(sql.prepare('SELECT invoice_id,reason FROM stripe_unmatched_events').get())
+    .toEqual({ invoice_id: 'in_booking', reason: 'invoice-conflict' });
 });
