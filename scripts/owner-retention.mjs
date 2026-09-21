@@ -139,11 +139,12 @@ export async function applyOwnerRetention(database, review, environment, now = n
 }
 
 async function main() {
-  const args = process.argv.slice(2), remote = args.includes('--remote'), applyIndex = args.indexOf('--apply');
+  const args = process.argv.slice(2), remote = args.includes('--remote'), applyIndex = args.indexOf('--apply'), configIndex = args.indexOf('--config');
   const reviewPath = applyIndex < 0 ? '.private/owner-retention-review.json' : args[applyIndex + 1];
-  const allowed = new Set(['--remote','--apply',...(applyIndex < 0 ? [] : [reviewPath])]);
-  if (!reviewPath || args.some(arg => !allowed.has(arg))) throw new Error('Usage: node scripts/owner-retention.mjs [--remote] [--apply .private/owner-retention-review.json]');
-  await mkdir('.private',{recursive:true}); const environment = remote ? 'Production' : 'Local test data'; const database = await openMusicDatabase(remote);
+  const configPath = configIndex < 0 ? undefined : args[configIndex + 1];
+  const allowed = new Set(['--remote','--apply','--config',...(applyIndex < 0 ? [] : [reviewPath]),...(configPath ? [configPath] : [])]);
+  if (!reviewPath || (configIndex >= 0 && (!remote || !configPath)) || args.some(arg => !allowed.has(arg))) throw new Error('Usage: node scripts/owner-retention.mjs [--remote --config path] [--apply .private/owner-retention-review.json]');
+  await mkdir('.private',{recursive:true}); const environment = remote ? (configPath ? `Remote ${configPath}` : 'Production') : 'Local test data'; const database = await openMusicDatabase(remote, configPath);
   try {
     if (applyIndex >= 0) {
       const review = JSON.parse(await readFile(resolve(reviewPath),'utf8')); const result = await applyOwnerRetention(database,review,environment);

@@ -33,9 +33,13 @@ export function changedRows(value) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const database = await openMusicDatabase(process.argv.includes('--remote'));
+  const remote = process.argv.includes('--remote'), configIndex = process.argv.indexOf('--config');
+  const configPath = configIndex < 0 ? undefined : process.argv[configIndex + 1];
+  if (configIndex >= 0 && (!remote || !configPath)) throw new Error('Use --config path only with --remote.');
+  const database = await openMusicDatabase(remote, configPath);
   try {
-    const args = process.argv.slice(2).filter(value => value !== '--remote');
+    const rawArgs = process.argv.slice(2), rawConfigIndex = rawArgs.indexOf('--config');
+    const args = rawArgs.filter((value, index) => value !== '--remote' && value !== '--config' && index !== rawConfigIndex + 1);
     if (!args.length) {
       console.log(JSON.stringify(await database.query(`SELECT event_id,event_type,invoice_id,request_id,installment,status,reason,received_at
         FROM stripe_unmatched_events WHERE resolved_at IS NULL ORDER BY received_at`), null, 2));
