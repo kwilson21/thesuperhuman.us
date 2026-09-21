@@ -48,7 +48,7 @@ To stop new invoices, set `STRIPE_PAYMENTS_ENABLED=false` and deploy the reviewe
 
 ## Retention
 
-Raw playback is kept for 90 days. Daily human totals remain after cleanup, with sparse cities stored only as **Other locations**. City thresholds count distinct tab sessions, so replays in one tab do not increase the city toward visibility. Resolved purchase and merchandise contact data is removed after 90 days, resolved service contact data after one year, and withdrawn request contact data immediately.
+Raw playback is kept for 90 days. Daily human totals remain after cleanup, with sparse cities stored only as **Other locations**. City thresholds count distinct tab sessions, so replays in one tab do not increase the city toward visibility. Resolved purchase and merchandise contact data is removed after 90 days, resolved service contact data after one year, and withdrawn request contact data immediately unless an invoice exists or invoice creation is still reserved.
 
 1. Run `npm run owner:retention:preview -- --remote`.
 2. Open `.private/owner-retention-review.html`. Save any useful conclusions in the private development journal. The review must not contain names, email addresses, notes, IP addresses, or secrets.

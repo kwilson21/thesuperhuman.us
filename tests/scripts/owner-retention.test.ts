@@ -112,3 +112,33 @@ it('keeps an uncollectible service invoice available for Stripe reconciliation',
   expect((await database.query("SELECT stripe_customer_id,balance_invoice_id,balance_invoice_url FROM audio_payments WHERE request_id='uncollectible-service'"))[0])
     .toEqual({ stripe_customer_id: 'cus_uncollectible', balance_invoice_id: 'in_uncollectible', balance_invoice_url: 'https://invoice.stripe.com/uncollectible' });
 });
+
+it('removes a withdrawn service request after terms are accepted but before any invoice is started', async () => {
+  const database = fixture();
+  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at)
+    VALUES ('withdrawn-service','service','Artist','artist@example.com','Mix','withdrawn','2026-09-01T00:00:00Z','2026-09-02T00:00:00Z');
+    INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
+      offer_accepted_at,created_at,updated_at)
+    VALUES ('withdrawn-service','Mix',10000,5000,5000,'2026-09-01T00:00:00Z','2026-09-01T00:00:00Z','2026-09-01T00:00:00Z');`);
+  const review = await previewOwnerRetention(database, 'Local test data', now);
+  expect(review.requestContacts).toBe(2);
+  await applyOwnerRetention(database, review, 'Local test data', now);
+  expect((await database.query("SELECT name,email FROM owner_requests WHERE id='withdrawn-service'"))[0])
+    .toEqual({ name: '', email: '' });
+  expect((await database.query("SELECT external_refs_deleted_at FROM audio_payments WHERE request_id='withdrawn-service'"))[0])
+    .toEqual({ external_refs_deleted_at: now.toISOString() });
+});
+
+it('keeps a withdrawn service request while an invoice creation is reserved', async () => {
+  const database = fixture();
+  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at)
+    VALUES ('reserved-service','service','Artist','artist@example.com','Mix','withdrawn','2026-09-01T00:00:00Z','2026-09-02T00:00:00Z');
+    INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
+      offer_accepted_at,booking_creation_started_at,created_at,updated_at)
+    VALUES ('reserved-service','Mix',10000,5000,5000,'2026-09-01T00:00:00Z','2026-09-02T00:00:00Z','2026-09-01T00:00:00Z','2026-09-02T00:00:00Z');`);
+  const review = await previewOwnerRetention(database, 'Local test data', now);
+  expect(review.requestContacts).toBe(1);
+  await applyOwnerRetention(database, review, 'Local test data', now);
+  expect((await database.query("SELECT name,email FROM owner_requests WHERE id='reserved-service'"))[0])
+    .toEqual({ name: 'Artist', email: 'artist@example.com' });
+});

@@ -10,6 +10,9 @@ const quote = value => `'${String(value).replaceAll("'", "''")}'`;
 const hash = value => createHash('sha256').update(value).digest('hex');
 const dayCutoff = (now, days) => new Date(now.getTime() - days * 86400000).toISOString();
 const terminalPaymentStatuses = "'paid','void'";
+const finishedPaymentInstallment = installment => `(${installment}_status IN (${terminalPaymentStatuses})
+  OR (${installment}_status='not_created' AND ${installment}_invoice_id IS NULL AND ${installment}_creation_started_at IS NULL))`;
+const finishedPaymentTerms = `${finishedPaymentInstallment('booking')} AND ${finishedPaymentInstallment('balance')}`;
 const requestEligibility = (now, paymentGuard = '1') => `(status='withdrawn' OR (contact_delete_after IS NOT NULL AND contact_delete_after<=${quote(now.toISOString())})
   OR (status='resolved' AND kind<>'service' AND resolved_at<${quote(dayCutoff(now, 90))})
   OR (status='resolved' AND kind='service' AND resolved_at<${quote(dayCutoff(now, 365))}))
@@ -28,7 +31,7 @@ async function paymentRetentionGuard(database) {
   const tables = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='audio_payments'");
   if (!tables.length) return '1';
   return `NOT EXISTS (SELECT 1 FROM audio_payments AS payment WHERE payment.request_id=owner_requests.id
-    AND (payment.booking_status NOT IN (${terminalPaymentStatuses}) OR payment.balance_status NOT IN (${terminalPaymentStatuses})))`;
+    AND NOT (${finishedPaymentTerms}))`;
 }
 
 export async function previewOwnerRetention(database, environment, now = new Date()) {
@@ -97,7 +100,7 @@ export async function applyOwnerRetention(database, review, environment, now = n
       booking_creation_started_at=NULL,balance_creation_started_at=NULL,
       external_refs_deleted_at=${quote(now.toISOString())},updated_at=${quote(now.toISOString())}
       WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})
-        AND booking_status IN (${terminalPaymentStatuses}) AND balance_status IN (${terminalPaymentStatuses})`,
+        AND ${finishedPaymentTerms}`,
   ] : [];
   const guard = (query, expected) => `SELECT CASE WHEN (${query})=${quote(expected)} THEN 1 ELSE json_extract('retention source changed','$') END`;
   const runId = hash(`${review.generatedAt}:${review.requestSourceHash}:${review.playbackSourceHash}`);
