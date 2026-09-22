@@ -1,7 +1,8 @@
 # Audio client portal design
 
 **Date:** September 21, 2026  
-**Status:** Proposed for final owner review  
+**Status:** Approved for implementation September 22, 2026
+
 **Owner:** The Superhuman Group LLC  
 **Customer-facing service:** Audio services by Kazon
 
@@ -29,7 +30,7 @@ This design supersedes the client-portal and project-file-delivery exclusions in
 - Automated quotes, contracts, payment reminders, refunds, or disputes.
 - A generic customer-support system.
 
-Deferred work must remain recorded in the project roadmap or issue tracker before implementation begins. The direct-file-attachment and collaborator-access features need separate security, retention, and permission design.
+Deferred work is tracked in [issue #79](https://github.com/kwilson21/thesuperhuman.us/issues/79). The direct-file-attachment and collaborator-access features need separate security, retention, and permission design.
 
 ## Product model
 
