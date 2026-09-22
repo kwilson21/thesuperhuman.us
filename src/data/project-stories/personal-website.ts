@@ -177,13 +177,13 @@ export const websiteMilestones: Milestone[] = [
     title: 'Make the words fit the work I want to do.', status: 'Positioning',
     summary: 'I wanted the site to reflect the work I enjoy now: shaping and building useful software with AI. My production engineering history provides evidence of what I bring to that work.',
     detailLabel: 'What clarified in the conversation',
-    detail: 'The exciting part is shaping and building the solution; I do not need to originate the idea. Independent work is my preference, with room for an interesting full-time opportunity. Work keeps the engineering history as evidence. The introduction describes where I want to go.',
+    detail: 'I enjoy shaping and building the solution; I do not need to originate the idea. Independent work is my preference, with room for the right full-time opportunity. Work keeps the engineering history as evidence. The introduction describes where I want to go.',
     artifacts: [artifact(work, 'Earlier positioning', 'The initial Work study led with backend and data engineering.'), artifact(currentWork, 'The current direction', 'The introduction now leads with building with AI. Work retains the career evidence.', 'Local implementation capture')],
   },
   {
     id: 'website-general-resume', day: '2026-09-10',
     title: 'One resume, an easier next step.', status: 'Contact and resume',
-    summary: 'One general resume gives people a clear professional profile and an easier next step, with room for both contract work and interesting full-time opportunities.',
+    summary: 'One general resume gives people a clear professional profile and an easier next step, with room for both contract work and the right full-time opportunities.',
     artifacts: [artifact(resume1, 'Resume v1 · Earlier choice', 'The first study offered general and DoD-focused variants. This is a historical design, not the current form.'), artifact(resume2, 'Resume v2 · Selected', 'A single request form. The lower part of the sheet explores submission and error states.')],
   },
   {
