@@ -1,6 +1,7 @@
 // Curated from the owner's career account. Update professional facts here.
 export const workFocus = 'I’m interested in work where I can help shape the solution, build with AI, and stay close to how people use the result.';
-export const workingPreference = 'Independent work is my preference. I’m also open to the right full-time opportunity.';
+export const workingPreference = 'I work independently, through contracts and projects, and I’m selective about full-time roles.';
+export const workingPreferenceDetail = 'I work independently, through contracts and projects. I’ll consider full-time roles where I’d own meaningful work end to end, work remotely, and build with AI as a normal part of the job. If that isn’t your role, a contract is probably the better fit, and I’m glad to talk about that too.';
 export const lyftBonus = { before: '5,000', after: '100,000+', evidence: 'Owner-reported batch capacity' };
 // Team scope clarified by the owner on September 10, 2026. Rentals projects come
 // from the existing career account. Quiet hours was completed after the July 2026
@@ -32,7 +33,7 @@ export const lyftTeams = [
 export const experience = [
   {
     id: 'scotch', company: 'Scotch', role: 'Data Engineer',
-    dates: 'October 2025 – May 2026', location: 'Remote', legacyId: 'scotch--data-engineer',
+    dates: 'October 2025 – May 2026', location: 'Remote',
     outcome: 'Sole data engineer maintaining retail transaction data pipelines.',
     context: [
       'Maintained and operated inherited ETL pipelines in a Ruby on Rails platform, using GoodJob, EC2, and S3 to transform legacy store transaction data and bulk-load results.',
@@ -42,13 +43,13 @@ export const experience = [
   },
   {
     id: 'axuall', company: 'Vendorpass / Axuall', role: 'Senior Python Developer (Contract)',
-    dates: 'July 2025 – November 2025', location: 'Remote', legacyId: 'vendorpass--axuall-contract--senior-python-developer',
+    dates: 'July 2025 – November 2025', location: 'Remote',
     outcome: 'Data ingestion for a healthcare credentialing platform.',
     context: ['Built per-state Dagster pipelines ingesting medical-board data from SFTP feeds, REST APIs, and Selenium-driven web sources. Applied credentialing logic for multiple states, including North Carolina, and contributed to the early transition from legacy Python connectors to per-state pipelines.'],
   },
   {
     id: 'sure', company: 'Sure', role: 'Software Engineer',
-    dates: 'December 2023 – February 2025', location: 'Remote', legacyId: 'sure--software-engineer',
+    dates: 'December 2023 – February 2025', location: 'Remote',
     outcome: 'Backend engineering for Toggle homeowners insurance.',
     context: [
       'Added document types to the insurance pipeline, adapting HTML and CSS to carrier reference PDFs and generating application documents with Jinja.',
@@ -58,13 +59,13 @@ export const experience = [
   },
   {
     id: 'lyft', company: 'Lyft', role: 'Software Engineer',
-    dates: 'January 2021 – December 2023', location: 'Remote', legacyId: 'lyft--software-engineer',
+    dates: 'January 2021 – December 2023', location: 'Remote',
     outcome: 'From junior to mid-level engineer, with growing ownership across three teams.',
     context: ['Started on Rentals, moved to Associate Tools and was promoted to mid-level engineer, then finished on Comms Platform. The work combined technical design, cross-team delivery and responsibility for the result after rollout.'],
   },
   {
     id: 'skupos', company: 'Skupos', role: 'Associate Software Engineer / Data Operations Analyst',
-    dates: 'November 2018 – January 2021', location: 'San Francisco', legacyId: 'skupos--associate-software-engineer--data-operations-analyst',
+    dates: 'November 2018 – January 2021', location: 'San Francisco',
     outcome: 'Progressed from intern to associate engineer while building data tools for retail POS operations.',
     context: [
       'Built a Flask and React application backed by MySQL on AWS, replacing Google Sheets and ad-hoc scripts used by operations and account-management teams across 3,000+ retailer locations.',
