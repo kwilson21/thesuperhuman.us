@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   clientProjectForSession, clientProjectsForSession, completeClientCode,
-  discardUndeliveredCode, issueClientCode, normalizeClientEmail, revokeClientSession,
+  discardUndeliveredCode, issueClientCode, listStudioSignInFailures, normalizeClientEmail, revokeClientSession,
 } from '~/lib/audio-client-access';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
@@ -107,6 +107,18 @@ describe('audio client access', () => {
     expect(await completeClientCode(db, 'artist@example.com', undelivered, secret, now)).toBeNull();
     expect(sql.prepare('SELECT action FROM audio_client_access_audit ORDER BY id DESC LIMIT 1').get())
       .toEqual({ action: 'code-delivery-failed' });
+    sql.close();
+  });
+
+  it('surfaces failed delivery until the client signs in', async () => {
+    const { sql, db, addRequest } = fixture();
+    addRequest('song-1');
+    const undelivered = (await issueClientCode(db, 'artist@example.com', secret, now))!;
+    await discardUndeliveredCode(db, 'artist@example.com', undelivered, secret, now);
+    expect(await listStudioSignInFailures(db)).toEqual([{ requestId: 'song-1', clientName: '' }]);
+    sql.prepare(`INSERT INTO audio_client_access_audit(request_id,action,occurred_at)
+      VALUES ('song-1','signed-in',?)`).run(now.toISOString());
+    expect(await listStudioSignInFailures(db)).toEqual([]);
     sql.close();
   });
 });

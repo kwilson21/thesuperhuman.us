@@ -69,6 +69,18 @@ export async function discardUndeliveredCode(db: D1Database, email: string, code
   ]);
 }
 
+export async function listStudioSignInFailures(db: D1Database): Promise<{ requestId: string; clientName: string | null }[]> {
+  const rows = await db.prepare(`SELECT a.request_id AS requestId,r.name AS clientName,MAX(a.id) AS last_failure
+    FROM audio_client_access_audit a
+    JOIN audio_projects p ON p.request_id=a.request_id
+    JOIN owner_requests r ON r.id=a.request_id
+    WHERE a.action='code-delivery-failed' AND p.revoked_at IS NULL AND r.status<>'withdrawn'
+      AND NOT EXISTS(SELECT 1 FROM audio_client_access_audit later
+        WHERE later.request_id=a.request_id AND later.id>a.id AND later.action='signed-in')
+    GROUP BY a.request_id ORDER BY last_failure DESC LIMIT 5`).all<{ requestId: string; clientName: string | null; last_failure: number }>();
+  return rows.results.map(row => ({ requestId: row.requestId, clientName: row.clientName }));
+}
+
 export async function completeClientCode(db: D1Database, email: string, code: string, secret: string, now = new Date()): Promise<string | null> {
   if (!/^\d{8}$/.test(code)) return null;
   const digest = await codeHash(email, code, secret);
