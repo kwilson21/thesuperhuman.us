@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
@@ -16,6 +16,18 @@ function tableNames(db: InstanceType<typeof DatabaseSync>) {
 }
 
 describe('owner insights schema', () => {
+  it('adds declined-studio closure to a database that already applied 0013 and 0014', () => {
+    const db = new DatabaseSync(':memory:');
+    const migrations = readdirSync(new URL('../../migrations/music/', import.meta.url)).filter(name => name.endsWith('.sql')).sort();
+    for (const name of migrations.filter(name => name < '0015'))
+      db.exec(readFileSync(new URL(`../../migrations/music/${name}`, import.meta.url), 'utf8'));
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name='audio_project_close_declined_request'").get()).toBeUndefined();
+    db.exec(readFileSync(new URL('../../migrations/music/0015_audio_project_close_declined.sql', import.meta.url), 'utf8'));
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name='audio_project_close_declined_request'").get())
+      .toEqual({ name: 'audio_project_close_declined_request' });
+    db.close();
+  });
+
   it('pins the Wrangler release that preserves numbered D1 migration order', () => {
     const packageJson = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
       devDependencies?: Record<string, string>;
