@@ -13,7 +13,7 @@ const inputSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('start_work'), body: note }),
   z.object({ action: z.literal('revise_date'), dueDate: date,
     reason: z.enum(['protect_song', 'client_clarification', 'schedule_conflict']), body: note }),
-  z.object({ action: z.literal('retry_email'), updateId: z.number().int().positive() }),
+  z.object({ action: z.literal('retry_email'), updateId: z.number().int().positive(), confirmedNotSent: z.boolean().optional() }),
 ]);
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
@@ -29,7 +29,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   if (!parsed.success) return Response.json({ ok: false, error: 'Check the update and try again.' }, { status: 400 });
   try {
     if (parsed.data.action === 'retry_email') {
-      const requeued = await queueProjectNoticeForDelivery(env.MUSIC_DB, params.id, parsed.data.updateId);
+      const requeued = await queueProjectNoticeForDelivery(env.MUSIC_DB, params.id, parsed.data.updateId, parsed.data.confirmedNotSent);
       if (!requeued) return Response.json({ ok: false, error: 'This email cannot be retried here.' }, { status: 409 });
       locals.runtime.ctx.waitUntil(deliverProjectUpdateNotice(env.MUSIC_DB, parsed.data.updateId, env)
         .catch(() => console.error('Studio update email state is uncertain.')));

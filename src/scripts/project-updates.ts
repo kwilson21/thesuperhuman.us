@@ -25,7 +25,7 @@ export function setupProjectUpdates() {
         if (!Number.isInteger(updateId)) return;
         button.disabled = true;
         try {
-          const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'retry_email', updateId }) });
+          const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'retry_email', updateId, confirmedNotSent: button.dataset.confirmedNotSent === 'true' }) });
           if (response.ok) { location.reload(); return; }
         } catch { /* Restore the button so the owner can try again. */ }
         button.disabled = false;

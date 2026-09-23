@@ -143,15 +143,19 @@ export async function deliverProjectUpdateNotice(db: D1Database, updateId: numbe
       from: env.CONTACT_FROM_EMAIL, to: [recipient.email], subject: 'Your studio project has an update',
       text: 'There is an update to your audio project. Sign in to see it: https://thesuperhuman.us/studio/sign-in',
     } }) : { ok: false };
+  if (sent.uncertain) return;
   await db.prepare(`UPDATE audio_project_updates SET notification_status=?,notification_sent_at=?
     WHERE id=? AND notification_status='sending'`).bind(sent.ok ? 'sent' : 'failed', sent.ok ? new Date().toISOString() : null, updateId).run();
 }
 
-export async function queueProjectNoticeForDelivery(db: D1Database, requestId: string, updateId: number): Promise<boolean> {
+export async function queueProjectNoticeForDelivery(db: D1Database, requestId: string, updateId: number,
+  confirmedNotSent = false, now = new Date()): Promise<boolean> {
+  const staleBefore = new Date(now.getTime() - 60_000).toISOString();
   const result = await db.prepare(`UPDATE audio_project_updates SET notification_status='pending',notification_attempted_at=NULL
-    WHERE id=? AND request_id=? AND notification_status IN ('failed','pending')
+    WHERE id=? AND request_id=? AND (notification_status IN ('failed','pending') OR
+      (notification_status='sending' AND ?=1 AND notification_attempted_at<=?))
       AND EXISTS(SELECT 1 FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
         WHERE p.request_id=? AND p.revoked_at IS NULL AND r.status<>'withdrawn' AND r.email<>'')
-    RETURNING id`).bind(updateId, requestId, requestId).first<{ id: number }>();
+    RETURNING id`).bind(updateId, requestId, confirmedNotSent ? 1 : 0, staleBefore, requestId).first<{ id: number }>();
   return Boolean(result);
 }

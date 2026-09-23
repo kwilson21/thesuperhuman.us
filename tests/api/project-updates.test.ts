@@ -47,10 +47,11 @@ it('rejects invalid and cross-site updates without saving anything', async () =>
   expect(saveProjectUpdate).not.toHaveBeenCalled();
 });
 
-it('only retries a notification confirmed as failed', async () => {
+it('passes owner confirmation through when retrying an unconfirmed notification', async () => {
   expect((await POST(context({ action: 'retry_email', updateId: 7 }))).status).toBe(409);
   vi.mocked(queueProjectNoticeForDelivery).mockResolvedValueOnce(true);
-  const ctx = context({ action: 'retry_email', updateId: 7 });
+  const ctx = context({ action: 'retry_email', updateId: 7, confirmedNotSent: true });
   expect((await POST(ctx)).status).toBe(200);
+  expect(queueProjectNoticeForDelivery).toHaveBeenLastCalledWith({}, 'song-1', 7, true);
   expect(deliverProjectUpdateNotice).toHaveBeenCalledWith({}, 7, ctx.locals.runtime.env);
 });
