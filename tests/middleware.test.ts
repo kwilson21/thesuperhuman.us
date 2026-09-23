@@ -80,6 +80,19 @@ describe('middleware.onRequest', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it('keeps studio pages private and rejects cross-site studio mutations', async () => {
+    const page = makeContext('https://thesuperhuman.us/studio/projects/request-1');
+    const pageResponse = (await onRequest(page, async () => new Response('private project'))) as Response;
+    expect(pageResponse.headers.get('cache-control')).toBe('private, no-store');
+    expect(pageResponse.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+
+    const api = makeContext('https://thesuperhuman.us/api/studio/session');
+    api.request = new Request(api.url, { method: 'POST', headers: { origin: 'https://evil.example', 'content-type': 'application/json' }, body: '{}' });
+    const next = vi.fn(async () => new Response('accepted'));
+    expect(((await onRequest(api, next)) as Response).status).toBe(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it('allows only originless, cookieless native OAuth form exchanges through the form guard', async () => {
     const attempt = async (path: string, headers: Record<string, string> = {}, method = 'POST', origin = 'https://thesuperhuman.us') => {
       const ctx = makeContext(origin + path);
