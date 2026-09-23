@@ -56,7 +56,10 @@ const siteKey = env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
         status.textContent = result.message ?? result.error ?? 'Please try again.';
         if (response.ok) { verifyForm.hidden = false; verifyForm.querySelector('input')?.focus(); }
       } catch { status.textContent = 'Could not reach the studio. Please try again.'; }
-      finally { if (button) button.disabled = false; }
+      finally {
+        if (button) button.disabled = false;
+        (window as Window & { turnstile?: { reset: () => void } }).turnstile?.reset();
+      }
     });
     verifyForm?.addEventListener('submit', async event => {
       event.preventDefault();

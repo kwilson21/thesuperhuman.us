@@ -14,6 +14,8 @@ if (!projects) return Astro.redirect('/studio/sign-in');
     <p class="studio-kicker">Your private studio</p>
     <h1>Your songs</h1>
     {projects.length ? <ul>{projects.map(project => <li><a href={`/studio/projects/${project.request_id}`}><span>{project.summary}</span><span aria-hidden="true">→</span></a></li>)}</ul> : <p>No active projects are available for this email.</p>}
+    <button id="studio-sign-out" type="button">Sign out</button>
+    <p id="studio-sign-out-status" role="status"></p>
   </article>
   <style>
     .studio-home { max-width: 70rem; margin: 0 auto; padding: clamp(4rem, 10vw, 8rem) 1.5rem 8rem; }
@@ -24,5 +26,16 @@ if (!projects) return Astro.redirect('/studio/sign-in');
     li:last-child { border-bottom: 1px solid #d8d2c9; }
     a { display: flex; justify-content: space-between; gap: 2rem; padding: 1.5rem 0; font: 400 clamp(1.5rem, 4vw, 2.3rem)/1.2 Newsreader, Georgia, serif; text-decoration: none; }
     a:hover { color: #a4512f; }
+    button { margin-top: 3rem; padding: .5rem 0; border: 0; border-bottom: 1px solid currentColor; background: none; cursor: pointer; font: 500 .9rem/1.4 Inter, sans-serif; }
   </style>
+  <script>
+    document.querySelector('#studio-sign-out')?.addEventListener('click', async () => {
+      const status = document.querySelector<HTMLElement>('#studio-sign-out-status');
+      try {
+        const response = await fetch('/api/studio/sign-out', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+        if (response.ok) { location.assign('/studio/sign-in'); return; }
+      } catch { /* Display the same retry message below. */ }
+      if (status) status.textContent = 'Could not sign out. Please try again.';
+    });
+  </script>
 </BaseLayout>

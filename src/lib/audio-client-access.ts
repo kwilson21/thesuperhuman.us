@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const emailSchema = z.string().trim().toLowerCase().email().max(320);
+const emailSchema = z.string().trim().toLowerCase().pipe(z.email().max(320));
 const codeLifetimeMs = 10 * 60 * 1000;
 const sessionLifetimeMs = 14 * 24 * 60 * 60 * 1000;
 
@@ -130,6 +130,17 @@ export async function clientProjectsForSession(db: D1Database, token: string, no
 
 export function studioSessionCookie(token: string, secure: boolean): string {
   return `studio_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${sessionLifetimeMs / 1000}${secure ? '; Secure' : ''}`;
+}
+
+export async function revokeClientSession(db: D1Database, token: string, now = new Date()): Promise<void> {
+  if (!/^[0-9a-f-]{72}$/i.test(token)) return;
+  const tokenHash = await hashValue(token);
+  await db.prepare('UPDATE audio_client_sessions SET revoked_at=? WHERE token_hash=? AND revoked_at IS NULL')
+    .bind(now.toISOString(), tokenHash).run();
+}
+
+export function clearStudioSessionCookie(secure: boolean): string {
+  return `studio_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure ? '; Secure' : ''}`;
 }
 
 export function studioSessionFromRequest(request: Request): string | null {

@@ -38,6 +38,8 @@ Push to `main` → Cloudflare's git integration rebuilds and runs `wrangler depl
 | `STRIPE_SECRET_KEY` | Dashboard secret | Stripe server credential |
 | `STRIPE_WEBHOOK_SECRET` | Dashboard secret | Verifies `/api/stripe/webhook` payloads |
 | `STRIPE_PAYMENTS_ENABLED` | `wrangler.jsonc` `vars` | Explicit invoice-creation gate; keep `false` until payment readiness passes |
+| `AUDIO_CLIENT_PORTAL_ENABLED` | `wrangler.jsonc` `vars` | Keep `false` until the complete client portal and its privacy checks are ready |
+| `AUDIO_CLIENT_CODE_KEY` | Dashboard secret | Random 32-byte or longer key used to protect short email sign-in codes |
 | `CONTACT_TO_EMAIL` | `wrangler.jsonc` `vars` | Not sensitive |
 | `CONTACT_FROM_EMAIL` | `wrangler.jsonc` `vars` (currently `noreply@notifs.thesuperhuman.us`, the verified Resend sending subdomain) | Not sensitive |
 | `PUBLIC_TURNSTILE_SITE_KEY` | `wrangler.jsonc` `vars` | Public widget key, read by the server-rendered forms from the Worker runtime |
@@ -55,6 +57,8 @@ Keep `STRIPE_PAYMENTS_ENABLED=false` until [Stripe invoicing readiness](docs/str
 ### Audio client portal foundation
 
 Apply `migrations/music/0005_audio_projects.sql` before deploying portal code. It creates one provisional project and audit entry with each new audio-service request, and backfills open service requests. The project references the existing request email instead of storing another copy. This migration alone adds no client access or file-delivery route. The [portal design](docs/superpowers/specs/2026-09-21-audio-client-portal-design.md) defines the later communication, authentication, and delivery gates.
+
+The email-code access slice also requires `migrations/music/0006_audio_client_access.sql` and the `AUDIO_CLIENT_CODE_KEY` secret. The portal flag remains `false` until messaging, private file delivery, retention, and the full [prelaunch checklist](docs/prelaunch-checklist.md) are complete. Codes expire after 10 minutes and are single-use; client sessions expire after 14 days. The access routes never expose whether an email has a project.
 
 The forms read `Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY` first, with
 `import.meta.env.PUBLIC_TURNSTILE_SITE_KEY` as a build-time fallback. Wrangler

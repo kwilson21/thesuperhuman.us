@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   clientProjectForSession, clientProjectsForSession, completeClientCode,
-  discardUndeliveredCode, issueClientCode, normalizeClientEmail,
+  discardUndeliveredCode, issueClientCode, normalizeClientEmail, revokeClientSession,
 } from '~/lib/audio-client-access';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
@@ -85,6 +85,9 @@ describe('audio client access', () => {
     expect(await clientProjectForSession(db, token!, 'song-1', new Date('2026-10-10T12:00:00Z'))).toBeNull();
     sql.prepare("UPDATE owner_requests SET status='withdrawn' WHERE id='song-1'").run();
     expect(await clientProjectForSession(db, token!, 'song-1', now)).toBeNull();
+    expect(await clientProjectForSession(db, token!, 'song-2', now)).not.toBeNull();
+    await revokeClientSession(db, token!, now);
+    expect(await clientProjectForSession(db, token!, 'song-2', now)).toBeNull();
     sql.close();
   });
 

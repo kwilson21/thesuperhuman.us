@@ -1,13 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { POST as requestCode } from '~/pages/api/studio/code';
 import { POST as completeCode } from '~/pages/api/studio/session';
-import { issueClientCode, completeClientCode } from '~/lib/audio-client-access';
+import { POST as signOut } from '~/pages/api/studio/sign-out';
+import { issueClientCode, completeClientCode, discardUndeliveredCode, revokeClientSession } from '~/lib/audio-client-access';
 import { sendAudioMessage } from '~/lib/audio-resend';
 
 vi.mock('~/lib/audio-client-access', async importOriginal => ({
   ...(await importOriginal<typeof import('~/lib/audio-client-access')>()),
   issueClientCode: vi.fn(),
   completeClientCode: vi.fn(),
+  discardUndeliveredCode: vi.fn(),
+  revokeClientSession: vi.fn(),
 }));
 vi.mock('~/lib/audio-resend', () => ({ sendAudioMessage: vi.fn(async () => ({ ok: true })) }));
 
@@ -53,5 +56,20 @@ describe('studio access routes', () => {
     expect(cookie).toContain('SameSite=Strict');
     expect(cookie).toContain('Secure');
     expect(cookie).toContain('Max-Age=1209600');
+  });
+
+  it('invalidates an undelivered code and revokes the current session on sign-out', async () => {
+    vi.mocked(issueClientCode).mockResolvedValueOnce('12345678');
+    vi.mocked(sendAudioMessage).mockResolvedValueOnce({ ok: false });
+    const codeResponse = await requestCode(context('/api/studio/code', { email, turnstileToken: 'challenge' }));
+    expect(codeResponse.status).toBe(200);
+    expect(discardUndeliveredCode).toHaveBeenCalled();
+
+    const ctx = context('/api/studio/sign-out', {});
+    ctx.request.headers.set('cookie', `studio_session=${'0'.repeat(72)}`);
+    const response = await signOut(ctx);
+    expect(response.status).toBe(200);
+    expect(revokeClientSession).toHaveBeenCalled();
+    expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
   });
 });

@@ -18,8 +18,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const body = await musicRequest(request, 4096);
   if (body instanceof Response) return body;
   const parsed = inputSchema.safeParse(body);
-  const email = parsed.success ? normalizeClientEmail(parsed.data.email) : null;
-  if (!parsed.success || !email) return Response.json({ ok: false, error: 'Enter a valid email address.' }, { status: 400 });
+  if (!parsed.success) return Response.json({ ok: false, error: 'Enter your email and complete the security check.' }, { status: 400 });
+  const email = normalizeClientEmail(parsed.data.email);
+  if (!email) return Response.json({ ok: false, error: 'Enter a valid email address.' }, { status: 400 });
   const ip = request.headers.get('cf-connecting-ip') ?? '0.0.0.0';
   try {
     const ipLimit = await checkRateLimit(env.RATE_LIMIT, ip, 'rl:studio-code-ip:', 10);
