@@ -76,7 +76,8 @@ from PR #41) and [Kaillera-next C-level rollback](samples/entry-kaillera-next-ro
 For customer-facing systems the owner ships, the owner should be able to explain at
 a whiteboard how the system works at a high level, defend its key decisions, discuss
 how it could be misused, and identify where it can fail. Line-level recall of the
-code is not the standard. Proofs of concept, demos and experiments can put speed
+code is not the standard. Nor is instant recall: rereading notes before a
+conversation is how the standard is met, not a way around it. Proofs of concept, demos and experiments can put speed
 first and are not held to that shipping standard, but they are never presented as
 if they were. The standard is the owner's to meet: the publicist prepares material
 for it, it cannot certify that the owner meets it, and nothing public claims so on
@@ -111,50 +112,62 @@ secrets, no real household data) and stay private; a public entry chooses its ow
 reviewed media.
 
 The publicist drafts the answers from repository evidence, cites each source, and
-marks every answer `unverified`. The owner reviews the answers, marks each one
-`verified` or `corrected`, then decides `publish`, `hold` or `no`. For shipped work
-the owner also records whiteboard-defense readiness: `ready` or `not yet`. For
-exploration work it is `not applicable`. The publicist never fills in that part.
+marks every answer `unverified`, then condenses them into the note's Refresher
+(below). **The owner reviews the Refresher, not each answer** (owner decision,
+2026-09-23): the owner corrects it where needed, marks it `verified` or `corrected`,
+then decides `publish`, `hold` or `no`. The detailed answers stay as evidence and
+study material; the owner may correct them but does not have to mark them. For
+shipped work the owner also records readiness under the "Whiteboard defense"
+label: `ready` or `not yet`. For exploration work it is `not applicable`. The
+publicist never fills in that part.
 
-**Readiness blocks shipped work.** A `shipped`-tier entry clears the gate only
-when readiness is `ready`. `not yet` holds the entry, even with every answer
-verified and `publish: yes`, until the owner changes it. If the work was really a
+**Readiness blocks shipped work.** Readiness is the owner's own call: "I'm
+comfortable talking about this". No test sits behind it. A `shipped`-tier entry
+clears the gate only when readiness is `ready`. `not yet` holds the entry, even with
+a verified Refresher and `publish: yes`, until the owner changes it. If the work was really a
 proof of concept, the owner can re-tier the note to `exploration` (readiness
 `not applicable`); its public copy then cannot present it as shipped. An
 `exploration` entry needs readiness `not applicable`. Any other combination is
 invalid and holds the entry. Owner decision (2026-09-23): hold.
 
-**Grill sessions and the defense record.** When a shipped entry is held at
-`not yet`, or whenever the owner asks, the publicist runs a grill session: a live
-drill in which it asks the questions a skeptical interviewer or reviewer would ask
-about that work, one at a time, and the owner answers in their own words. Questions
-cover how it works end to end, why this approach and not the alternatives, what
-happens when a part fails, how someone could misuse it, and what the owner would
-change. After each answer the publicist points out what the repository evidence
-confirms, what it contradicts and what was missed, with links to the evidence. The
-session is saved as `defense-<date>.md` in the note's folder: each question, the
-owner's answer as given, the evidence-based feedback, and the gaps to revisit. The
-record is the owner's memory aid for later reviews and interviews. The owner, not
-the publicist, then decides whether readiness becomes `ready`.
+**Walkthroughs, not exams.** Owner decision (2026-09-23): reinforcement should
+never feel like a technical interview. When a shipped entry is held at `not yet`,
+or whenever the owner asks, the publicist offers a walkthrough: it leads, like a
+colleague showing someone around, starting from the diagram and following one
+request or frame through the parts, then telling the note's stories (below). The
+owner interrupts and asks anything; nothing is asked of the owner and nothing is
+scored. At the end the owner may, if they like, say in a sentence or two how they
+would describe the work to a friend; the publicist tidies that into the Refresher's
+"In my words" line without judging it. The session is saved as
+`walkthrough-<date>.md` in the note's folder. The owner alone then decides whether
+readiness becomes `ready`. A question-and-answer grill session is available only
+when the owner explicitly asks for one (for example before a big interview); its
+record is saved as `defense-<date>.md`.
 
-**Refreshers.** Every note opens with a Refresher: five to eight bullets the owner
-can read in two minutes before a call or interview, covering what it is, how the
-parts connect, why this approach, the weak points and what is still open. It is
-condensed from the note's answers and any grill records, carries their status and
-adds no claim they do not support. After a grill session, the publicist folds the
-evidence-backed corrections into the Refresher. A script in the private repository
+**Refreshers and stories.** Every note opens with a Refresher: five to eight
+bullets the owner can read in two minutes before a call or interview, covering what
+it is, how the parts connect, why this approach, the weak points and what is still
+open, followed by one to three stories. A story is a short "what went wrong, what we
+found, what we did" arc (for example, a player drifting out of sync, the compiler
+flag behind it, and the fix); stories are easier to remember than lists and are what
+the owner would tell someone on a call. The Refresher is condensed from the note's
+answers and any walkthrough records and adds no claim they do not support. It is
+also what the owner verifies, so **public copy may state only what the verified
+Refresher states**. After a walkthrough, the publicist folds any corrections and the
+owner's "In my words" line into it. A script in the private repository
 (`scripts/build-refreshers.mjs`) collects every refresher into one page per project,
 `refreshers/<project>.md`, linked from that repository's README, so the owner has a
 single place to read before a conversation. Refreshers are private like the rest of
 the note.
 
-**The gate.** An entry clears the gate when its note has the required answers
+**The gate.** An entry clears the gate when its note has a Refresher marked
 `verified` or `corrected`, the decision `publish: yes`, and a readiness value that
-fits its tier (above). Within an entry, a public claim may state only what rests on
-`verified` or `corrected` answers. A claim that depends on an `unverified` answer is held: it is
-left out rather than reworded into something vaguer that implies the same thing, and
-if the entry's core claim depends on it, the whole entry waits. An entry whose
-claims all rest on verified answers may carry the story contract's
+fits its tier (above). Within an entry, a public claim may state only what the
+verified Refresher states. A claim that appears only in the detailed answers, or in
+a Refresher line the owner struck or marked as open, is held: it is left out rather
+than reworded into something vaguer that implies the same thing, and if the entry's
+core claim depends on it, the whole entry waits. An entry whose claims all rest on
+the verified Refresher may carry the story contract's
 `human-confirmed` basis. That confirms the facts; it says nothing about the
 owner's understanding.
 
@@ -166,7 +179,8 @@ publicist-private/
   review-notes/<project>/<entry-id>/
     note.md                              the review note, opening with its Refresher
     images/                              screenshots, studies and diagrams for the owner
-    defense-<date>.md                    grill session records, if any
+    walkthrough-<date>.md                walkthrough records, if any
+    defense-<date>.md                    grill records, only when the owner asked for one
   refreshers/<project>.md                every refresher for a project on one page (generated)
   scripts/build-refreshers.mjs           builds those pages; --check reports stale ones
   state.json                             last merged work drafted into notes
@@ -187,8 +201,9 @@ encryption, so notes never contain secrets, and misuse answers stay at the level
 1. **Notes stage.** The publicist drafts notes for new candidates and opens (or adds
    to) one private PR, "Review notes: <date range>". Backfill runs batch about five
    notes per PR, grouped by milestone.
-2. **Owner review.** In that PR the owner corrects answers, marks them, fills in
-   "Owner review", and merges. Merging with some answers still unverified is fine;
+2. **Owner review.** In that PR the owner reads each Refresher (the per-project
+   refresher page shows them all), corrects it where needed, fills in "Owner
+   review", and merges. Merging with some Refreshers still unverified is fine;
    those entries stay held.
 3. **Publish stage.** A run reads notes only from the private repository's `main`,
    so an unmerged note can never unlock anything. For each note that clears the
@@ -258,7 +273,7 @@ in the current apps) and commits only the conversation JSON. The publicist reads
 during backfill runs, keeps only threads about these two projects, and uses them
 only as sources inside the private review notes, paraphrased and cited as
 "conversation export (private)". Nothing from them reaches a public entry unless the
-note answer it supports is verified. It never quotes, links or commits the exports
+note's Refresher that states it is verified. It never quotes, links or commits the exports
 anywhere public, and it drops anything personal. If the full export is more than the
 owner wants to share, copying the relevant threads into Markdown files in the same
 folder works just as well. The owner can delete `exports/` after the backfill; the
@@ -321,7 +336,7 @@ Each run:
 6. Picks media: the CI screenshot at the PR's final head for Tally; a recording
    when a flow changed (section 7). Converts to WebP.
 7. Writes entries into `src/data/project-stories/<project>.ts` from verified
-   answers, drafts posts into `publicist/queue/`, records the published entry IDs in
+   Refreshers, drafts posts into `publicist/queue/`, records the published entry IDs in
    `publicist/state.json`,
    runs `npm run check`, `npm test` and `npm run build`, and opens one public PR
    titled "Publicist: <date range>", listing entries by ID and the number held.
@@ -372,7 +387,7 @@ checklist, not by a GUI-driving agent.
    "Thread", no rhetorical questions.
 3. **Concrete.** Names the real thing: the screen, the number, the bug, the rule.
    Every factual claim traces to the journal entry, and a post never says more
-   than its entry, which rests only on verified review-note answers.
+   than its entry, which rests only on a verified review-note Refresher.
 4. **Says why.** Includes the reason or the decision, not only what shipped.
 5. **Honest status.** "Built, not live yet" when that is true. No implied launches,
    users or results that are not recorded.
@@ -470,7 +485,7 @@ enforced in four layers, plus the owner's review of the final public PR:
    production deploy. It checks Tally and Kaillera-next journal data, their assets
    and `publicist/queue/`, and fails the build when:
    - an entry or queued post has no note on the private repository's `main`, or
-     the note's required answers are not all `verified` or `corrected`, or its
+     the note has no Refresher or it is not `verified` or `corrected`, or its
      decision is not `publish: yes`, or its readiness does not fit its tier
      (`shipped` needs `ready`, `exploration` needs `not applicable`);
    - a post points to an entry that is neither in the PR nor already published;
@@ -500,7 +515,7 @@ to get it right the first time. Layer 4 reliably stops the mechanical failures i
 checks: a missing or unapproved note, a shipped entry not marked `ready`, a post
 without its entry, an em dash, a secret-shaped string, an unlabeled capture. It
 cannot tell whether each sentence of the public copy actually follows from the
-verified answers; no script can judge that. **Source fidelity is checked by the
+verified Refresher; no script can judge that. **Source fidelity is checked by the
 owner reviewing the final public PR** against the notes, claim by claim, before
 merging. That review is the claim-level check, and the gate does not replace it.
 
@@ -523,7 +538,7 @@ loads that canonical file first. In short:
   `publicist/config.json`. `kwilson21/publicist-private` holds review notes and
   exports and is never a publication source in its own right.
 - Every publicized change, including every backfill entry, has a private review
-  note; public claims rest only on answers the owner verified (section 3). Notes
+  note; public claims rest only on the Refresher the owner verified (section 3). Notes
   never appear in public places, and the publicist never certifies the owner's
   understanding.
 - Nothing is published without approval: entries by merge, posts by merge plus
@@ -544,17 +559,21 @@ loads that canonical file first. In short:
 4. **Enforcement:** add the `publicist-gate` build step and make `validate` a
    required check. The owner creates the read-only token for the private
    repository and stores it as an Actions secret and a Cloudflare build secret.
-5. **Readiness:** `not yet` holds a shipped entry, and triggers a grill session
-   whose record is saved with the note (section 3).
+5. **Readiness:** `not yet` holds a shipped entry. Readiness is the owner's own
+   call, and `not yet` leads to an offered walkthrough, not a grill session
+   (section 3, revised 2026-09-23).
+5a. **Review level:** the owner verifies each note's Refresher rather than every
+   answer, and public copy may state only what the verified Refresher states
+   (2026-09-23).
 
 **Still open (not blocking):**
 
 6. **Platforms:** LinkedIn plus Bluesky or X. The comparison is in
    [channels/](channels/README.md#feed-platforms) and the Bluesky setup in
    [bluesky/](bluesky/README.md); the queue works with either.
-7. **Kaillera-next attribution:** commits credit Claude almost throughout, with
-   Codex on six. Where did ChatGPT or Codex shape the work? Until answered, the
-   affected review-note answers stay `unverified` and those claims are held.
+7. **Kaillera-next attribution:** resolved 2026-09-23 from commit trailers, as the
+   owner asked: Claude co-authors almost every commit; Codex appears only on six
+   spec-review commits on 2026-04-27.
 8. **Cadence:** start at 2 posts a day and move to 3 once the queue proves it has
    enough good material?
 9. **Checkpoint rule:** add the intent-note rule (section 5) to both project
@@ -568,7 +587,7 @@ After approval, in order:
    `AGENTS.md` sync check and the `publicist-gate` build step (section 9), before
    any content is drafted.
 2. Draft the backfill review notes for your review.
-3. Build the two project pages and backfill PRs from the notes you verified.
+3. Build the two project pages and backfill PRs from the Refreshers you verified.
 4. Create the Routine, paused until you confirm its first dry run.
 
 ## Appendix: draft Routine prompt

@@ -38,7 +38,6 @@ export function frontMatter(text) {
     .filter(Boolean).map(([, k, v]) => [k, v.trim()]));
 }
 
-const REQUIRED = ['1', '2', '3', '4', '5'];
 
 /**
  * Decide whether a private review note clears the gate.
@@ -48,12 +47,11 @@ export function noteProblems(note) {
   const problems = [];
   const fm = frontMatter(note);
   const tier = fm.tier;
-  for (const n of REQUIRED) {
-    const section = note.match(new RegExp(`^## ${n}\\. [^\\n]*\\n([\\s\\S]*?)(?=^## |(?![\\s\\S]))`, 'm'));
-    const status = section?.[1].match(/status:\s*(verified|corrected|unverified)[ \t]*$/m)?.[1];
-    if (status !== 'verified' && status !== 'corrected') problems.push(`answer ${n} not verified`);
-  }
+  const refresher = note.match(/^## Refresher\n([\s\S]*?)(?=^## |(?![\s\S]))/m)?.[1] ?? '';
+  if (!/^- \*\*/m.test(refresher)) problems.push('refresher missing');
   const review = note.slice(note.search(/^## Owner review/m) >= 0 ? note.search(/^## Owner review/m) : note.length);
+  const verified = review.match(/Refresher:\s*(verified|corrected)[ \t]*$/m)?.[1];
+  if (!verified) problems.push('refresher not verified');
   const publish = review.match(/Publish:\s*(yes|hold|no)[ \t]*$/m)?.[1];
   if (publish !== 'yes') problems.push('publish is not yes');
   const readiness = review.match(/Whiteboard defense:\s*(ready|not yet|not applicable)[ \t]*$/m)?.[1];
