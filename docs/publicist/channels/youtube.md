@@ -4,6 +4,45 @@ Status: later phase, proposal for owner review. Nothing is created or uploaded.
 The core publicist (journal, review gate, feed posts) runs first; YouTube starts
 after a few approved batches.
 
+## The channel
+
+The channel already exists: https://www.youtube.com/@KazonTheOne. Keep it; do not
+open a separate thesuperhuman.us channel. The owner is the face of the brand, the
+website is where the work lives, and The Superhuman Group LLC is the legal entity
+behind it, not a separate audience. A second channel would split a starting
+audience in two and double the upkeep. The site is tied in through the banner and
+the channel links instead.
+
+- **Handle:** keep `@KazonTheOne`. Changing it breaks existing links, and the old
+  handle is released to anyone once dropped.
+- **Display name:** "Kazon Wilson" to match the site, LinkedIn and Bluesky, or
+  "Kazon" to match the artist credit on releases. An owner decision; the handle
+  stays either way.
+
+## Redesign checklist (owner applies in YouTube Studio)
+
+YouTube is blocked from this environment, so the channel's current state has not
+been seen. The owner lists the existing videos and what each is; the publicist then
+proposes keep, move to a playlist, or unlist for each.
+
+1. **Banner:** [youtube/banner-draft.png](youtube/banner-draft.png), rendered from
+   [banner-draft.html](youtube/banner-draft.html) at 2560×1440. It shows the
+   channel's signature: one ink line that ends in code on the Build side and in a
+   waveform on the Sound side. All text and the motif sit inside the central
+   1546×423 area that every device shows; the rest is plain paper, so TV, desktop
+   and phone crops all read cleanly.
+2. **Avatar:** the same portrait as the site and Bluesky, face centered.
+3. **Description** (proposal):
+   > I build useful software with AI and make music. Build videos show what I made,
+   > why, and how it works. Sound videos are releases and notes on how a mix or
+   > master came together. Everything lives at thesuperhuman.us.
+4. **Links:** thesuperhuman.us first, then Bluesky (or X), LinkedIn and GitHub.
+   Ko-fi joins once its plan exists ([ko-fi.md](ko-fi.md)).
+5. **Home page sections:** Build playlist, Sound playlist, latest release. A channel
+   trailer can come later from the first good Build and Sound videos.
+6. **Playlists:** Build: Tally · Build: kaillera-next · Build: the website ·
+   Sound: releases · Sound: mix and master notes.
+
 ## One channel, two strands
 
 One channel under the owner's name, because the owner is the common thread: someone
@@ -95,4 +134,6 @@ not been watched):
 2. Old News is credited "Prod. Lexi Banks". Does the beat license allow a YouTube
    upload, and is the song already distributed so that Content ID may claim it?
 3. Your voice, or captions and music only?
-4. Channel name and handle: your name (matching the site), or something else?
+4. Display name: "Kazon Wilson" or "Kazon"?
+5. What is on the channel today, so each existing video can be kept, moved to a
+   playlist or unlisted?

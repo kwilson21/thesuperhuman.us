@@ -10,7 +10,7 @@ agent inside the same run, still under the same gate and the same approval PR.
 | Website journal | Home | The full story of each change; every post links here | Per merged milestone | Merge of the public PR deploys it |
 | LinkedIn | Feed | Professional story posts for recruiters and hiring managers | At most 1 a weekday | API for posts once approved; profile edits by hand |
 | Bluesky (or X) | Feed | One idea per post, conversation with developers | 1 to 2 a day | API once approved; X is paid per post |
-| YouTube | Video | Software and music on one channel ([playbook](youtube.md)) | At most 1 video a week, plus releases | Uploaded by hand in YouTube Studio at first |
+| YouTube | Video | Software and music on one channel, @KazonTheOne ([playbook](youtube.md)) | At most 1 video a week, plus releases | Uploaded by hand in YouTube Studio at first |
 | GitHub | Profile | Profile README (`kwilson21/kwilson21`), project READMEs, pinned repos | When a milestone lands | PRs for README changes; pinning by hand |
 | Ko-fi | Profile | Support for all of the owner's work | On hold ([plan needed](ko-fi.md)) | By hand; no posting API is known |
 
