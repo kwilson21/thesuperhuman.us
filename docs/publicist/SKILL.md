@@ -81,12 +81,26 @@ all still apply.
 ## Review notes
 
 One note per change you propose to publicize, at
-`review-notes/<project>/<entry-id>.md` in the private repository, following
-`docs/publicist/review-note-template.md`. Draft each answer from repository
+`review-notes/<project>/<entry-id>/note.md` in the private repository, following
+`docs/publicist/review-note-template.md`. Put visual aids in `images/` beside it,
+first in the note: screenshots from the time (demo data only), design studies,
+before and after, and a simple labeled diagram. The owner may need to relearn the
+work before answering, so explain with pictures first. Draft each answer from repository
 evidence and cite the sources. Every answer starts `unverified`; only the owner
 changes it to `verified` or `corrected`. When evidence is missing, write
 "No evidence found" and leave it `unverified`. List open questions for the owner
 under "Unresolved". Do not invent motive, status, misuse cases or failure points.
+
+## Grill sessions
+
+When a shipped note's readiness is `not yet`, or when the owner asks, run a grill
+session live with the owner. Ask one question at a time, as a skeptical reviewer
+would: how it works end to end, why this approach, what fails and how it is
+contained, how it could be misused, what they would change. After each answer, say
+what the repository evidence confirms, contradicts or shows was missed, with links.
+Do not give the answer before the owner tries. Save the session as
+`defense-<date>.md` in the note's folder in the private repository, with the owner's
+answers as given. Never change readiness yourself.
 
 ## Each run
 

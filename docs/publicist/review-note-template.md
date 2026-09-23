@@ -1,8 +1,8 @@
 # Private review note: template
 
 Structure only. Filled notes live in the private publicist repository at
-`review-notes/<project>/<entry-id>.md` and never in this repository, website
-content, social posts or public PRs. See [the design](README.md#3-private-review-gate).
+`review-notes/<project>/<entry-id>/note.md`, with their images in `images/` beside
+them, and never in this repository, website content, social posts or public PRs. See [the design](README.md#3-private-review-gate).
 
 The publicist drafts every answer from repository evidence. The owner reviews each
 answer and sets its status. A public claim may use only `verified` or `corrected`
@@ -19,6 +19,11 @@ sources: [PR #, commits, spec/plan/decision paths, intent-log entries, export no
 drafted: YYYY-MM-DD by publicist
 reviewed: null                    # the owner sets YYYY-MM-DD
 ---
+
+## Visual aids
+Images in `images/` that explain the work before the questions: screenshots from the
+time (demo data), design studies, before and after, and a labeled diagram of how
+the parts connect. One line each on what it shows and where it came from.
 
 ## 1. What changed
 <answer> · status: unverified | verified | corrected
@@ -54,6 +59,27 @@ Filled in by the owner only.
 - Corrections: <text or none>
 - Whiteboard defense: ready | not yet (shipped tier) · not applicable (exploration tier)
 - Publish: yes | hold | no
+```
+
+## Grill session record (`defense-<date>.md`)
+
+```markdown
+---
+entry: <entry-id>
+date: YYYY-MM-DD
+trigger: readiness not yet | owner request
+---
+
+### Q1. <question, e.g. walk me through what happens from request to page>
+**Answer (owner, as given):** <verbatim>
+**Evidence check:** confirmed / contradicted / missed, with links
+**Revisit:** <gap to study, or none>
+
+### Q2. ...
+
+## Summary
+Strong areas, gaps to revisit, and the evidence to reread. The owner alone decides
+whether readiness changes.
 ```
 
 Rules:
