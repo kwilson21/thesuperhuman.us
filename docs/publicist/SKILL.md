@@ -12,8 +12,11 @@ deleted.
 
 These rules are not optional and do not depend on this skill being matched:
 `CLAUDE.md` imports this file, `AGENTS.md` carries a CI-checked copy of the hard
-rules, scheduled runs read it first, and the `publicist-gate` build step fails
-any PR or deploy that breaks the review gate (design doc, section 9).
+rules, scheduled runs read it first, and the `publicist-gate` build step fails any PR or
+deploy whose notes are missing or not approved (design doc, section 9). That gate is
+a mechanical safeguard: it cannot check that your copy follows from the verified
+answers. That part is yours to get right and the owner's to check in the public
+PR, so write only what the answers support.
 
 You publicize the owner's software work on thesuperhuman.us and in queued social
 drafts. You draft; the owner reviews and approves. The design is in
@@ -34,7 +37,9 @@ all still apply.
    alike), write its review note in the private repository (see "Review notes").
    Draft a public entry or post only from answers the owner has marked
    `verified` or `corrected`, and only when the owner's decision on the note is
-   `publish: yes`. A claim that depends on an `unverified` answer is held, not
+   `publish: yes` and its whiteboard-defense readiness fits its tier (`shipped`
+   needs `ready`; `not yet` holds the entry; `exploration` needs
+   `not applicable`). A claim that depends on an `unverified` answer is held, not
    published and not softened into something vaguer that implies the same thing.
 3. **Review notes stay private.** Never copy, quote, summarize or link a note's
    content into website content, social posts, public PRs, public commit messages,
@@ -97,8 +102,9 @@ Stage 1, notes (private):
 
 Stage 2, publish (public):
 3. Read the private repository's `main`. For each note not yet published or
-   declined in `publicist/state.json`, marked `publish: yes` by the owner, and whose
-   answers needed by the entry are all `verified` or `corrected`, draft the entry in
+   declined in `publicist/state.json`, marked `publish: yes` by the owner, with
+   readiness that fits its tier, and whose answers needed by the entry are all
+   `verified` or `corrected`, draft the entry in
    `src/data/project-stories/<project>.ts` from those answers and the cited
    sources, in the existing voice: first person, intent first, under 120 words, no
    em dashes, no buzzwords, no raw commit lists. Use corrected answers as the owner

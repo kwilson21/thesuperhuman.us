@@ -103,10 +103,23 @@ private note following [review-note-template.md](review-note-template.md):
 The publicist drafts the answers from repository evidence, cites each source, and
 marks every answer `unverified`. The owner reviews the answers, marks each one
 `verified` or `corrected`, then decides `publish`, `hold` or `no`. For shipped work
-the owner also records whether they are ready to defend it. The publicist never fills in that part.
+the owner also records whiteboard-defense readiness: `ready` or `not yet`. For
+exploration work it is `not applicable`. The publicist never fills in that part.
 
-**The gate.** A public entry or post may state only what rests on `verified` or
-`corrected` answers. A claim that depends on an `unverified` answer is held: it is
+**Readiness blocks shipped work.** A `shipped`-tier entry clears the gate only
+when readiness is `ready`. `not yet` holds the entry, even with every answer
+verified and `publish: yes`, until the owner changes it. If the work was really a
+proof of concept, the owner can re-tier the note to `exploration` (readiness
+`not applicable`); its public copy then cannot present it as shipped. An
+`exploration` entry needs readiness `not applicable`. Any other combination is
+invalid and holds the entry. This is a conservative default: it keeps public
+claims about customer-facing work behind the owner's own shipping standard. The
+owner can relax it.
+
+**The gate.** An entry clears the gate when its note has the required answers
+`verified` or `corrected`, the decision `publish: yes`, and a readiness value that
+fits its tier (above). Within an entry, a public claim may state only what rests on
+`verified` or `corrected` answers. A claim that depends on an `unverified` answer is held: it is
 left out rather than reworded into something vaguer that implies the same thing, and
 if the entry's core claim depends on it, the whole entry waits. An entry whose
 claims all rest on verified answers may carry the story contract's
@@ -142,8 +155,10 @@ encryption, so notes never contain secrets, and misuse answers stay at the level
 3. **Publish stage.** A run reads notes only from the private repository's `main`,
    so an unmerged note can never unlock anything. For each note that clears the
    gate, it drafts the public entry and posts and opens the public PR here.
-4. **Approval.** Merging the public PR approves the entries and post batch, and the
-   site deploys, exactly as before.
+4. **Approval.** The owner reads the public PR against the notes, claim by claim,
+   then merges it. That merge approves the entries and post batch, and the site
+   deploys, exactly as before. This review is the source-fidelity check; the build
+   gate (section 9) only confirms the approvals exist.
 
 The public PR refers to notes only by entry ID and says how many entries are held.
 No note text, summary or link to a private PR appears in this repository, the
@@ -408,7 +423,7 @@ so a skill can be skipped. The existing Codex journal works differently: its
 protocol is in `AGENTS.md`, which Codex loads into every session. Even that
 guarantees the agent *sees* the rules, not that it follows them; `AGENTS.md` itself
 says a prompt cannot guarantee durable writes. So the publicist's rules are
-enforced in four layers, and only the last one is a real guarantee:
+enforced in four layers, plus the owner's review of the final public PR:
 
 1. **Always loaded, for both tools.** The rules live in one canonical file (below).
    `CLAUDE.md` pulls it in with Claude Code's `@` import, so every Claude session in
@@ -426,7 +441,7 @@ enforced in four layers, and only the last one is a real guarantee:
    [project-journal.md](../project-journal.md)); a matching hook is proposed only
    after checking Codex's current hook docs, and like the existing hook pilot it
    needs the owner's trust to activate.
-4. **Enforcement that does not depend on the model.** A gate script,
+4. **A mechanical safeguard that does not depend on the model.** A gate script,
    `publicist-gate`, runs as a `prebuild` step, the same way `assets:check` already
    does. Every `npm run build` therefore runs it: the existing `validate` workflow on
    each PR, and Cloudflare's own Workers Build on each PR preview and each
@@ -434,11 +449,13 @@ enforced in four layers, and only the last one is a real guarantee:
    and `publicist/queue/`, and fails the build when:
    - an entry or queued post has no note on the private repository's `main`, or
      the note's required answers are not all `verified` or `corrected`, or its
-     decision is not `publish: yes`;
+     decision is not `publish: yes`, or its readiness does not fit its tier
+     (`shipped` needs `ready`, `exploration` needs `not applicable`);
    - a post points to an entry that is neither in the PR nor already published;
    - text contains em dashes or matches a secret pattern, or a Tally capture lacks
      its demo-data label.
 
+   It confirms that the approvals exist; it does not check what the copy says.
    It reads the private repository with a fine-grained, read-only token for that
    one repository, stored as an Actions secret and as a Cloudflare build secret
    (GitHub does not expose secrets to pull requests from forks). Its log prints only
@@ -455,8 +472,14 @@ enforced in four layers, and only the last one is a real guarantee:
    gate runs inside Cloudflare's build, an ungated entry cannot deploy even if
    GitHub Actions is down or disabled.
 
-Layers 1 to 3 make the agent get it right the first time. Layer 4 plus the owner's
-merge are what actually stop a skipped rule from reaching the site.
+**What each layer can and cannot establish.** Layers 1 to 3 make the agent likely
+to get it right the first time. Layer 4 reliably stops the mechanical failures it
+checks: a missing or unapproved note, a shipped entry not marked `ready`, a post
+without its entry, an em dash, a secret-shaped string, an unlabeled capture. It
+cannot tell whether each sentence of the public copy actually follows from the
+verified answers; no script can judge that. **Source fidelity is checked by the
+owner reviewing the final public PR** against the notes, claim by claim, before
+merging. That review is the claim-level check, and the gate does not replace it.
 
 **Where the file lives.** When the Routine is built the draft moves to one
 canonical file that both agents read, so Claude and Codex behave the same:
@@ -509,6 +532,9 @@ prompt (appendix) loads that canonical file first. In short:
    required check (section 9)? It needs one fine-grained, read-only token for the
    private repository, which you create and store as an Actions secret and a
    Cloudflare build secret.
+
+9. **Readiness:** should a `shipped` entry marked `not yet` for the whiteboard
+   defense stay held until you mark it `ready` (the proposed default, section 3)?
 
 After approval, in order:
 1. Move the skill to its canonical file and add the always-loaded layers, the

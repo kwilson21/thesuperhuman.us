@@ -52,7 +52,7 @@ Questions only the owner can answer, and which public claims wait on each.
 ## Owner review
 Filled in by the owner only.
 - Corrections: <text or none>
-- Whiteboard defense (shipped tier): ready | not yet | not applicable
+- Whiteboard defense: ready | not yet (shipped tier) · not applicable (exploration tier)
 - Publish: yes | hold | no
 ```
 
@@ -61,3 +61,5 @@ Rules:
 - "No evidence found" is a valid answer. It stays `unverified` until the owner
   answers it.
 - A note can be verified with a `hold` decision; the entry then stays unpublished.
+- A `shipped` note clears the gate only with readiness `ready`; `not yet` holds it.
+  An `exploration` note needs `not applicable`. Any other combination holds it.
