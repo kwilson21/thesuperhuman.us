@@ -72,6 +72,8 @@ Owner file upload requires `migrations/music/0011_audio_project_uploads.sql` aft
 
 Owner publication requires `migrations/music/0012_audio_project_publication.sql` after 0011. A review can be published after the booking payment is confirmed; a final file requires confirmed balance payment. Publishing a new review or a final file hides earlier review versions. Publication advances the project stage, records an owner-authored timeline note, and queues the existing minimal sign-in-link email. The portal gate remains `false` until revocation, retention, and operations checks are complete.
 
+File and project revocation require `migrations/music/0013_audio_project_revocation.sql` after 0012. Revoking a published file immediately blocks playback and sends a minimal sign-in-link notice attached to the owner's explanation in the timeline. Closing project access immediately hides the project, invalidates that client's current sessions and pending code, and records an audit event; it does not change Stripe invoices. The portal gate remains `false` until retention and operations checks are complete.
+
 The forms read `Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY` first, with
 `import.meta.env.PUBLIC_TURNSTILE_SITE_KEY` as a build-time fallback. Wrangler
 runtime vars are not automatically Astro build-time variables. An empty runtime

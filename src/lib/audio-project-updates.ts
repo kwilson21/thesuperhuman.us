@@ -134,7 +134,8 @@ export async function deliverProjectUpdateNotice(db: D1Database, updateId: numbe
   if (!claimed) return;
   let recipient: { email: string } | null;
   try {
-    recipient = await db.prepare(`SELECT email FROM owner_requests WHERE id=? AND status<>'withdrawn' AND email<>''`)
+    recipient = await db.prepare(`SELECT r.email FROM owner_requests r JOIN audio_projects p ON p.request_id=r.id
+      WHERE r.id=? AND r.status<>'withdrawn' AND r.email<>'' AND p.revoked_at IS NULL`)
       .bind(claimed.request_id).first<{ email: string }>();
   } catch {
     await db.prepare(`UPDATE audio_project_updates SET notification_status='failed'

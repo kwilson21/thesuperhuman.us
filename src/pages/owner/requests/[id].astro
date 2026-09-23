@@ -63,8 +63,18 @@ const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') 
       || (portalProject.stage === 'final_files_ready' && payment?.balanceStatus === 'paid'))
       && payment?.bookingStatus === 'paid' && !portalProject.revoked_at && request.status !== 'withdrawn'}
     finalOnly={portalProject.stage === 'final_files_ready'}
+    canRevoke={!portalProject.revoked_at && request.status !== 'withdrawn'}
     bookingPaid={payment?.bookingStatus === 'paid'} balancePaid={payment?.balanceStatus === 'paid'} />}
+  {portalProject && !portalProject.revoked_at && <section class="owner-section" data-project-access data-endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/access`}>
+    <p class="owner-kicker">Client access</p><details><summary>Close this private project</summary><p>This signs the client out and hides the project and its files immediately. It does not change invoices.</p><button type="button" data-revoke-project>Close client access</button><p data-access-status role="status" aria-live="polite"></p></details>
+  </section>}
   {portalProject && <ProjectMessages messages={projectMessages} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/messages`} reader="owner" closed={portalProject.stage === 'complete' || Boolean(portalProject.revoked_at) || request.status === 'withdrawn'} />}
   <section class="owner-section audit-trail"><p class="owner-kicker">Audit trail</p><h2>What changed</h2><ol>{audit.map(item => <li><strong>{item.action.replace('-', ' ')}</strong><span>{item.actor}</span><time datetime={item.occurredAt}>{new Date(item.occurredAt).toLocaleString()}</time>{item.note && <p>{item.note}</p>}</li>)}</ol></section>
   <script>import { setupOwnerRequestActions } from '~/scripts/owner-request-actions'; import { setupOwnerPaymentActions } from '~/scripts/owner-payment-actions'; import { setupProjectMessages } from '~/scripts/project-messages'; import { setupProjectUpdates } from '~/scripts/project-updates'; import { setupProjectInvitation } from '~/scripts/project-invitation'; import { setupOwnerProjectFiles } from '~/scripts/owner-project-files'; setupOwnerRequestActions(); setupOwnerPaymentActions(); setupProjectMessages(); setupProjectUpdates(); setupProjectInvitation(); setupOwnerProjectFiles();</script>
+  <style>
+    [data-project-access] summary { width: fit-content; cursor: pointer; font: 400 1.6rem/1.2 Newsreader,Georgia,serif; }
+    [data-project-access] details p { max-width: 38rem; margin: .8rem 0; color: #514d47; font: .9rem/1.5 Inter,sans-serif; }
+    [data-project-access] button { border: 0; border-bottom: 1px solid currentColor; background: none; padding: .4rem 0; color: #a4512f; cursor: pointer; font: 500 .9rem/1.4 Inter,sans-serif; }
+    [data-project-access] button:disabled { opacity: .5; cursor: wait; }
+  </style>
 </OwnerLayout>

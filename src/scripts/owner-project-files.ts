@@ -6,6 +6,25 @@ export function setupOwnerProjectFiles() {
     const endpoint = root.dataset.endpoint;
     if (!endpoint) return;
     const publishEndpoint = root.dataset.publishEndpoint;
+    if (publishEndpoint) root.querySelectorAll<HTMLFormElement>('[data-project-revoke-form]').forEach(revokeForm => {
+      revokeForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        const button = revokeForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+        const status = revokeForm.querySelector<HTMLElement>('[data-revoke-status]');
+        const note = revokeForm.querySelector<HTMLTextAreaElement>('textarea[name="note"]')?.value ?? '';
+        const fileId = revokeForm.dataset.fileId;
+        if (!button || !status || !fileId || !confirm('Remove access to this file?')) return;
+        button.disabled = true;
+        try {
+          const response = await fetch(`${publishEndpoint}/${encodeURIComponent(fileId)}`, { method: 'POST',
+            headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'revoke', note }) });
+          const result = await response.json() as { error?: string };
+          if (!response.ok) throw new Error(result.error ?? 'Could not revoke this file.');
+          location.reload();
+        } catch (error) { status.textContent = error instanceof Error ? error.message : 'Could not revoke this file.'; }
+        finally { button.disabled = false; }
+      });
+    });
     if (publishEndpoint) root.querySelectorAll<HTMLFormElement>('[data-project-publish-form]').forEach(publishForm => {
       publishForm.addEventListener('submit', async event => {
         event.preventDefault();
@@ -92,6 +111,23 @@ export function setupOwnerProjectFiles() {
         status.textContent = error instanceof Error ? error.message : 'Upload failed. Please try again.';
         if (uploadId && !completed) status.textContent += ' The file was not published. Reload to recover or discard the unfinished upload.';
       } finally { button.disabled = false; }
+    });
+  });
+  document.querySelectorAll<HTMLElement>('[data-project-access]').forEach(root => {
+    const button = root.querySelector<HTMLButtonElement>('[data-revoke-project]');
+    const status = root.querySelector<HTMLElement>('[data-access-status]');
+    const endpoint = root.dataset.endpoint;
+    if (!button || !status || !endpoint) return;
+    button.addEventListener('click', async () => {
+      if (!confirm('Close client access to this project? The client will be signed out immediately.')) return;
+      button.disabled = true;
+      try {
+        const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'revoke' }) });
+        const result = await response.json() as { error?: string };
+        if (!response.ok) throw new Error(result.error ?? 'Could not close client access.');
+        location.reload();
+      } catch (error) { status.textContent = error instanceof Error ? error.message : 'Could not close client access.'; }
+      finally { button.disabled = false; }
     });
   });
 }

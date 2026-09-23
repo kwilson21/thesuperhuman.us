@@ -116,4 +116,18 @@ describe('project updates', () => {
       .toEqual({ notification_status: 'sent' });
     sql.close();
   });
+
+  it('does not email a queued update after project access is revoked', async () => {
+    const { sql, db } = fixture();
+    sql.prepare("UPDATE owner_requests SET status='reviewed' WHERE id='song-1'").run();
+    const update = (await saveProjectUpdate(db, 'song-1', 'owner@example.com', {
+      action: 'accept', dueDate: '2026-10-01', body: 'We are set.',
+    }, now))!;
+    sql.prepare("UPDATE audio_projects SET revoked_at=? WHERE request_id='song-1'").run(now.toISOString());
+    await deliverProjectUpdateNotice(db, update.id,
+      { RESEND_API_KEY: 'test', CONTACT_FROM_EMAIL: 'noreply@example.com' } as Env);
+    expect(sendStudioSignInNotice).not.toHaveBeenCalled();
+    expect(await queueProjectNoticeForDelivery(db, 'song-1', update.id)).toBe(false);
+    sql.close();
+  });
 });
