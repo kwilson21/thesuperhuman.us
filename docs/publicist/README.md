@@ -345,8 +345,10 @@ each project repo that calls it on `pull_request: closed` with `merged == true`.
 
 **Platforms.** LinkedIn plus one short-form network (Bluesky or X). The queue and
 the rules below work with any `platform` value, so development updates do not wait
-on that choice. The platform comparison and the Bluesky, YouTube, GitHub and Ko-fi
-channel plans are in a follow-up PR.
+on that choice. The platform comparison and the channel plans (Bluesky, YouTube,
+GitHub, Ko-fi) are in [channels/](channels/README.md): one publicist with a playbook
+per channel. Channels without an API are handled by the owner from a prepared
+checklist, not by a GUI-driving agent.
 
 **Quality standards.** A post goes in the queue only if it passes every check:
 
@@ -534,8 +536,9 @@ loads that canonical file first. In short:
 
 **Still open (not blocking):**
 
-6. **Platforms:** LinkedIn plus Bluesky or X. The comparison and setup are in the
-   follow-up PR; the queue works with either.
+6. **Platforms:** LinkedIn plus Bluesky or X. The comparison is in
+   [channels/](channels/README.md#feed-platforms) and the Bluesky setup in
+   [bluesky/](bluesky/README.md); the queue works with either.
 7. **Kaillera-next attribution:** commits credit Claude almost throughout, with
    Codex on six. Where did ChatGPT or Codex shape the work? Until answered, the
    affected review-note answers stay `unverified` and those claims are held.
@@ -543,6 +546,9 @@ loads that canonical file first. In short:
    enough good material?
 9. **Checkpoint rule:** add the intent-note rule (section 5) to both project
    repositories?
+10. **YouTube and Ko-fi:** the open questions are in
+    [channels/youtube.md](channels/youtube.md) (style, Old News rights, voice,
+    display name, existing videos) and [channels/ko-fi.md](channels/ko-fi.md).
 
 After approval, in order:
 1. Move the skill to its canonical file and add the always-loaded layers, the
