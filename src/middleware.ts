@@ -23,6 +23,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const studioApi = url.pathname === '/api/studio' || url.pathname.startsWith('/api/studio/');
   const studioBoundary = studioPage || studioApi;
   if (context.isPrerendered && ownerPage) throw new Error('Owner routes must be server-rendered.');
+  if (context.isPrerendered && studioPage) throw new Error('Studio routes must be server-rendered.');
   if (!context.isPrerendered && ownerBoundary) {
     const owner = await verifyOwnerAccess(request, context.locals.runtime.env);
     if (!owner) return new Response('Owner access required.', { status: 403, headers: ownerPrivateHeaders });

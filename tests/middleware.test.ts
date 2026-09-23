@@ -25,6 +25,11 @@ describe('middleware.onRequest', () => {
     ctx.isPrerendered = true;
     await expect(onRequest(ctx, vi.fn())).rejects.toThrow('Owner routes must be server-rendered');
   });
+  it('fails the build when a studio route is accidentally prerendered', async () => {
+    const ctx = makeContext('https://thesuperhuman.us/studio/projects/request-1');
+    ctx.isPrerendered = true;
+    await expect(onRequest(ctx, vi.fn())).rejects.toThrow('Studio routes must be server-rendered');
+  });
   it('rejects unauthenticated owner routes without exposing a cacheable response', async () => {
     vi.mocked(verifyOwnerAccess).mockResolvedValueOnce(null);
     const ctx = makeContext('https://thesuperhuman.us/owner/requests');
