@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { completeClientCode, issueClientCode, revokeClientSession } from '~/lib/audio-client-access';
 import {
-  listProjectMessages, markProjectMessagesRead, postClientProjectMessage,
+  clientMessageRateLimited, listProjectMessages, markProjectMessagesRead, postClientProjectMessage,
   postOwnerProjectMessage, validateProjectMessage,
 } from '~/lib/audio-project-messages';
 
@@ -116,6 +116,10 @@ describe('audio project messages', () => {
       postClientProjectMessage(db, 'song-1', token, `Note ${index}`, now)));
     expect(sends.filter(Boolean)).toHaveLength(12);
     expect(sql.prepare("SELECT count(*) AS n FROM audio_project_messages WHERE request_id='song-1'").get()).toEqual({ n: 12 });
+    const secondCode = (await issueClientCode(db, 'artist@example.com', secret, new Date(now.getTime() + 31_000)))!;
+    const secondToken = (await completeClientCode(db, 'artist@example.com', secondCode, secret, new Date(now.getTime() + 31_000)))!;
+    expect(await clientMessageRateLimited(db, 'song-1', new Date(now.getTime() + 31_000))).toBe(true);
+    expect(await postClientProjectMessage(db, 'song-1', secondToken, 'New session', new Date(now.getTime() + 31_000))).toBeNull();
     expect(await postClientProjectMessage(db, 'song-1', token, 'Later note', new Date(now.getTime() + 300_001))).not.toBeNull();
     sql.close();
   });

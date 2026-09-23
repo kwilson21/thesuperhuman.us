@@ -53,17 +53,16 @@ export async function postClientProjectMessage(db: D1Database, requestId: string
     WHERE p.request_id=? AND p.stage<>'complete' AND p.revoked_at IS NULL AND r.status<>'withdrawn'
       AND s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at>?
       AND (SELECT count(*) FROM audio_project_messages m
-        WHERE m.actor='client' AND m.actor_id=? AND m.created_at>?)<?
+        WHERE m.request_id=? AND m.actor='client' AND m.created_at>?)<?
     RETURNING ${messageColumns}`)
     .bind(tokenHash, body, now.toISOString(), requestId, tokenHash, now.toISOString(),
-      tokenHash, windowStart, CLIENT_MESSAGE_LIMIT).first<ProjectMessage>();
+      requestId, windowStart, CLIENT_MESSAGE_LIMIT).first<ProjectMessage>();
 }
 
-export async function clientMessageRateLimited(db: D1Database, token: string, now = new Date()): Promise<boolean> {
-  const tokenHash = await hashValue(token);
+export async function clientMessageRateLimited(db: D1Database, requestId: string, now = new Date()): Promise<boolean> {
   const windowStart = new Date(now.getTime() - CLIENT_MESSAGE_WINDOW_MS).toISOString();
   const row = await db.prepare(`SELECT count(*) AS total FROM audio_project_messages
-    WHERE actor='client' AND actor_id=? AND created_at>?`).bind(tokenHash, windowStart).first<{ total: number }>();
+    WHERE request_id=? AND actor='client' AND created_at>?`).bind(requestId, windowStart).first<{ total: number }>();
   return (row?.total ?? 0) >= CLIENT_MESSAGE_LIMIT;
 }
 

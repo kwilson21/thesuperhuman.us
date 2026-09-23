@@ -31,7 +31,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     if (!message) return Response.json({ ok: false, error: 'Write up to 4,000 characters. Shared links must start with https://.' }, { status: 400 });
     const saved = await postClientProjectMessage(env.MUSIC_DB, params.id, token, message);
     if (!saved) {
-      if (await clientMessageRateLimited(env.MUSIC_DB, token)) {
+      if (await clientMessageRateLimited(env.MUSIC_DB, params.id)) {
         return Response.json({ ok: false, error: 'Please wait a few minutes before sending another message.' }, { status: 429 });
       }
       return Response.json({ ok: false }, { status: 409 });
