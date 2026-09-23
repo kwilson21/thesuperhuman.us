@@ -65,3 +65,22 @@ it('closes project access, invalidates sessions and codes, and writes one audit 
   expect(sql.prepare("SELECT COUNT(*) AS count FROM audio_project_audit WHERE action='revoked'").get()).toEqual({ count: 1 });
   sql.close();
 });
+
+it('closes a declined provisional project when its request is resolved', () => {
+  const { sql } = fixture();
+  sql.prepare("UPDATE audio_projects SET stage='files_under_review' WHERE request_id='song-1'").run();
+  sql.prepare("UPDATE owner_requests SET status='resolved',updated_at=? WHERE id='song-1'").run(now.toISOString());
+  expect(sql.prepare("SELECT revoked_at FROM audio_projects WHERE request_id='song-1'").get())
+    .toEqual({ revoked_at: now.toISOString() });
+  expect(sql.prepare("SELECT action,actor FROM audio_project_audit WHERE request_id='song-1' ORDER BY id").all())
+    .toEqual([{ action: 'created', actor: 'system' }, { action: 'revoked', actor: 'request-resolution' }]);
+  sql.close();
+});
+
+it('leaves delivered work available when its request is resolved', () => {
+  const { sql } = fixture();
+  sql.prepare("UPDATE owner_requests SET status='resolved',updated_at=? WHERE id='song-1'").run(now.toISOString());
+  expect(sql.prepare("SELECT revoked_at FROM audio_projects WHERE request_id='song-1'").get())
+    .toEqual({ revoked_at: null });
+  sql.close();
+});
