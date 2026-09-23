@@ -56,6 +56,35 @@ Filled in by the owner only.
 - Publish: yes | hold | no
 ```
 
+## Release note (music)
+
+Sound videos and music releases use this shorter note instead. Tiers and
+whiteboard-defense readiness do not apply to it.
+
+```markdown
+---
+entry: <entry-id>
+kind: release
+work_dates: YYYY-MM-DD
+sources: [release page, distribution links, license or agreement reference]
+drafted: YYYY-MM-DD by publicist
+reviewed: null
+---
+
+## 1. What it is
+Title, format, and what the video or post will show.  · status: unverified
+## 2. Credits
+Every contributor and role, as publicly credited.  · status: unverified
+## 3. Rights to publish
+Beat or sample licenses, collaborator consent, and whether this upload is allowed.  · status: unverified
+## 4. Distribution and Content ID
+Where it is already released, and whether automatic copyright matching may claim it.  · status: unverified
+## 5. Unresolved
+## Owner review
+- Corrections: <text or none>
+- Publish: yes | hold | no
+```
+
 Rules:
 - The publicist never fills in "Owner review" and never marks an answer verified.
 - "No evidence found" is a valid answer. It stays `unverified` until the owner
@@ -63,3 +92,5 @@ Rules:
 - A note can be verified with a `hold` decision; the entry then stays unpublished.
 - A `shipped` note clears the gate only with readiness `ready`; `not yet` holds it.
   An `exploration` note needs `not applicable`. Any other combination holds it.
+- A release note clears the gate only when credits and rights to publish are
+  `verified` or `corrected` and the decision is `publish: yes`.

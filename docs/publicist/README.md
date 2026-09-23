@@ -350,11 +350,20 @@ are rechecked against those official pages before any automated posting is propo
 [Bluesky rate limits](https://docs.bsky.app/docs/advanced-guides/rate-limits),
 [TechCrunch on Bluesky active users (2026-08-11)](https://techcrunch.com/2026/08/11/blueskys-active-user-base-is-shrinking-as-its-focus-expands-beyond-the-app/).
 
-**Support (Ko-fi).** The owner's Ko-fi page, https://ko-fi.com/kazonwilson,
-supports all of their work: software projects and audio. It gets a permanent place
-rather than a spot in every post:
+**Channels.** One publicist writes for every channel, each with its own playbook:
+[channels/](channels/README.md). YouTube joins as a later phase, as one channel
+with a Build strand for software and a Sound strand for music
+([playbook](channels/youtube.md)). Channels without an API (profile setup, Ko-fi,
+YouTube uploads, pinned repos) are handled by the owner from a prepared checklist,
+not by a GUI-driving agent.
+
+**Support (Ko-fi), on hold.** No Ko-fi link goes on the website or in posts until
+the page has a plan: [channels/ko-fi.md](channels/ko-fi.md) lists the questions.
+The placement below applies once it does. The owner's Ko-fi page,
+https://ko-fi.com/kazonwilson, supports all of their work: software projects and
+audio. It gets a permanent place rather than a spot in every post:
 - **Website:** a "Support my work" link in the footer of every page and in the
-  structured-data profile links, proposed as a separate website PR. Because every
+  structured-data profile links (drafted in PR #91, closed until the plan exists). Because every
   post links to a journal page on the site, readers who want to help can always
   find it. A later option, if wanted: a short support line on the Building project
   pages and the Old News release page.
@@ -535,6 +544,9 @@ prompt (appendix) loads that canonical file first. In short:
 
 9. **Readiness:** should a `shipped` entry marked `not yet` for the whiteboard
    defense stay held until you mark it `ready` (the proposed default, section 3)?
+10. **YouTube and Ko-fi:** the open questions are in
+    [channels/youtube.md](channels/youtube.md) (style, Old News rights, voice,
+    channel name) and [channels/ko-fi.md](channels/ko-fi.md).
 
 After approval, in order:
 1. Move the skill to its canonical file and add the always-loaded layers, the
