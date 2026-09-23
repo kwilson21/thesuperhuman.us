@@ -24,7 +24,7 @@ Open a request from **Today**, **Campaigns**, or **Requests**. Each path reaches
 
 - **Reviewed** means you have assessed it.
 - **Resolved** means the next step is complete or the request will not proceed.
-- **Reopen** returns a resolved request to active review.
+- **Reopen** returns a resolved request to active review. If the request was declined before file approval, its provisional studio access was closed and does not reopen; ask the client to submit a new service request if the project resumes.
 - **Withdraw** stops the request. Non-studio contact detail becomes eligible for immediate removal; a private studio project's content is reviewed after 30 days before its contact detail is removed.
 - **Delete personal data** is performed by reviewed retention. It preserves the request category, status, dates, and audit trail while blanking contact fields and private notes. A service request stays out of retention while either payment installment is unfinished, so invoice recovery and file delivery remain possible.
 
@@ -59,6 +59,8 @@ Raw playback is kept for 90 days. Daily human totals remain after cleanup, with 
 Studio data has a separate first step. Codes and expired, revoked, or inactive sessions become eligible 30 days after they stop being useful. Access and project audit rows become eligible after two years. For a withdrawn or declined project without an active payment, private content is eligible 30 days after closure, even if work had already started. Delivered project content becomes eligible 30 days after the last final file's one-year access period, at least 30 days after the last project activity, and at least 30 days after any newer unpublished file upload. A revoked final follows the same expiry and activity rules. Pending multipart uploads block project cleanup until the owner discards them. This is manual cleanup; the published privacy notice must say so. Run it at least monthly while the portal is in use:
 
 Revoking a project also signs out all studio sessions for that client's email. If the client has another active project, they can request a fresh sign-in code to reopen it.
+
+A sign-in code locks after five incorrect entries. Someone who knows a client's email could exhaust those attempts or the three-codes-per-five-minutes issuance limit. The client can request a fresh code when the limit clears; check the access audit and email delivery if they report repeated lockouts.
 
 1. Run `npm run studio:retention:preview -- --remote` and review `.private/studio-retention-review.html`. It contains counts and hashes, not client messages, email addresses, or R2 keys.
 2. Apply the exact manifest with `npm run studio:retention:apply -- --remote` within 24 hours. The command closes eligible project access before deleting private R2 objects. It then atomically clears project messages, updates, file metadata and old access records, and marks content removed.

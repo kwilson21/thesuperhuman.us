@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
@@ -16,6 +16,18 @@ function tableNames(db: InstanceType<typeof DatabaseSync>) {
 }
 
 describe('owner insights schema', () => {
+  it('adds declined-studio closure to a database that already applied 0013 and 0014', () => {
+    const db = new DatabaseSync(':memory:');
+    const migrations = readdirSync(new URL('../../migrations/music/', import.meta.url)).filter(name => name.endsWith('.sql')).sort();
+    for (const name of migrations.filter(name => name < '0015'))
+      db.exec(readFileSync(new URL(`../../migrations/music/${name}`, import.meta.url), 'utf8'));
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name='audio_project_close_declined_request'").get()).toBeUndefined();
+    db.exec(readFileSync(new URL('../../migrations/music/0015_audio_project_close_declined.sql', import.meta.url), 'utf8'));
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name='audio_project_close_declined_request'").get())
+      .toEqual({ name: 'audio_project_close_declined_request' });
+    db.close();
+  });
+
   it('pins the Wrangler release that preserves numbered D1 migration order', () => {
     const packageJson = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
       devDependencies?: Record<string, string>;
@@ -45,8 +57,9 @@ describe('owner insights schema', () => {
     const publication = readFileSync(new URL('../../migrations/music/0012_audio_project_publication.sql', import.meta.url), 'utf8');
     const revocation = readFileSync(new URL('../../migrations/music/0013_audio_project_revocation.sql', import.meta.url), 'utf8');
     const studioRetention = readFileSync(new URL('../../migrations/music/0014_audio_project_retention.sql', import.meta.url), 'utf8');
-    const peaks = readFileSync(new URL('../../migrations/music/0015_audio_project_file_peaks.sql', import.meta.url), 'utf8');
-    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(`${baseline.trim()}\n${retention.trim()}\n${payments.trim()}\n${reconciliation.trim()}\n${projects.trim()}\n${clientAccess.trim()}\n${messages.trim()}\n${updates.trim()}\n${invitations.trim()}\n${files.trim()}\n${uploads.trim()}\n${publication.trim()}\n${revocation.trim()}\n${studioRetention.trim()}\n${peaks.trim()}\n`);
+    const declined = readFileSync(new URL('../../migrations/music/0015_audio_project_close_declined.sql', import.meta.url), 'utf8');
+    const peaks = readFileSync(new URL('../../migrations/music/0016_audio_project_file_peaks.sql', import.meta.url), 'utf8');
+    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(`${baseline.trim()}\n${retention.trim()}\n${payments.trim()}\n${reconciliation.trim()}\n${projects.trim()}\n${clientAccess.trim()}\n${messages.trim()}\n${updates.trim()}\n${invitations.trim()}\n${files.trim()}\n${uploads.trim()}\n${publication.trim()}\n${revocation.trim()}\n${studioRetention.trim()}\n${declined.trim()}\n${peaks.trim()}\n`);
     const db = apply('../../db/music.sql');
     const expected = [
       'music_event_daily', 'music_events', 'music_interest', 'music_playback_daily',
