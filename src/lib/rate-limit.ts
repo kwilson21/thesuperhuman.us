@@ -10,12 +10,10 @@ export async function checkRateLimit(
   ip: string,
   prefix = 'rl:',
   maxRequests = 1,
-  options: { consume?: boolean } = {},
 ): Promise<{ allowed: boolean }> {
   const key = `${prefix}${ip}`;
   const existing = Number(await kv.get(key) ?? 0);
   if (!Number.isFinite(existing) || existing >= maxRequests) return { allowed: false };
-  if (options.consume === false) return { allowed: true };
   // Note: there is a small race window between the get above returning null and
   // the put below being visible to other edge nodes. Cloudflare KV does not
   // support atomic check-and-set, so two concurrent requests from the same IP

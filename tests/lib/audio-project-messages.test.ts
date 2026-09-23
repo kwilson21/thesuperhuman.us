@@ -106,4 +106,17 @@ describe('audio project messages', () => {
       .toEqual([now.toISOString(), now.toISOString()]);
     sql.close();
   });
+
+  it('counts saved client messages within the rolling five-minute window', async () => {
+    const { sql, db, addRequest } = fixture();
+    addRequest('song-1');
+    const code = (await issueClientCode(db, 'artist@example.com', secret, now))!;
+    const token = (await completeClientCode(db, 'artist@example.com', code, secret, now))!;
+    const sends = await Promise.all(Array.from({ length: 13 }, (_, index) =>
+      postClientProjectMessage(db, 'song-1', token, `Note ${index}`, now)));
+    expect(sends.filter(Boolean)).toHaveLength(12);
+    expect(sql.prepare("SELECT count(*) AS n FROM audio_project_messages WHERE request_id='song-1'").get()).toEqual({ n: 12 });
+    expect(await postClientProjectMessage(db, 'song-1', token, 'Later note', new Date(now.getTime() + 300_001))).not.toBeNull();
+    sql.close();
+  });
 });

@@ -9,6 +9,8 @@ export type ProjectMessage = {
 };
 
 const messageColumns = 'id,actor,body,created_at,read_at';
+const CLIENT_MESSAGE_WINDOW_MS = 300_000;
+const CLIENT_MESSAGE_LIMIT = 12;
 
 export function validateProjectMessage(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -41,14 +43,28 @@ export async function postOwnerProjectMessage(db: D1Database, requestId: string,
 
 export async function postClientProjectMessage(db: D1Database, requestId: string, token: string, body: string, now = new Date()): Promise<ProjectMessage | null> {
   const tokenHash = await hashValue(token);
+  const windowStart = new Date(now.getTime() - CLIENT_MESSAGE_WINDOW_MS).toISOString();
+  // The count and write belong to one SQL statement so concurrent sends cannot
+  // all pass a separate KV read before any of them saves a message.
   return db.prepare(`INSERT INTO audio_project_messages(request_id,actor,actor_id,body,created_at)
-    SELECT p.request_id,'client','client',?,? FROM audio_projects p
+    SELECT p.request_id,'client',?,?,? FROM audio_projects p
     JOIN owner_requests r ON r.id=p.request_id
     JOIN audio_client_sessions s ON s.email=r.email
     WHERE p.request_id=? AND p.stage<>'complete' AND p.revoked_at IS NULL AND r.status<>'withdrawn'
       AND s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at>?
+      AND (SELECT count(*) FROM audio_project_messages m
+        WHERE m.actor='client' AND m.actor_id=? AND m.created_at>?)<?
     RETURNING ${messageColumns}`)
-    .bind(body, now.toISOString(), requestId, tokenHash, now.toISOString()).first<ProjectMessage>();
+    .bind(tokenHash, body, now.toISOString(), requestId, tokenHash, now.toISOString(),
+      tokenHash, windowStart, CLIENT_MESSAGE_LIMIT).first<ProjectMessage>();
+}
+
+export async function clientMessageRateLimited(db: D1Database, token: string, now = new Date()): Promise<boolean> {
+  const tokenHash = await hashValue(token);
+  const windowStart = new Date(now.getTime() - CLIENT_MESSAGE_WINDOW_MS).toISOString();
+  const row = await db.prepare(`SELECT count(*) AS total FROM audio_project_messages
+    WHERE actor='client' AND actor_id=? AND created_at>?`).bind(tokenHash, windowStart).first<{ total: number }>();
+  return (row?.total ?? 0) >= CLIENT_MESSAGE_LIMIT;
 }
 
 export async function markProjectMessagesRead(db: D1Database, requestId: string, reader: 'owner' | 'client', messageId: number, token: string | null = null, now = new Date()): Promise<void> {

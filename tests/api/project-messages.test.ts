@@ -9,7 +9,6 @@ const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 const baseline = readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8');
 const secret = 'studio-code-key-for-tests-32-characters';
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database, token: string;
-let counts: Map<string, number>;
 
 beforeEach(async () => {
   sql = new DatabaseSync(':memory:');
@@ -34,7 +33,6 @@ beforeEach(async () => {
   } } as unknown as D1Database;
   const code = (await issueClientCode(db, 'artist@example.com', secret))!;
   token = (await completeClientCode(db, 'artist@example.com', code, secret))!;
-  counts = new Map();
 });
 
 function context(actor: 'owner' | 'client', body: unknown, options: { enabled?: boolean; owner?: boolean; origin?: string; id?: string; cookie?: boolean } = {}) {
@@ -51,10 +49,6 @@ function context(actor: 'owner' | 'client', body: unknown, options: { enabled?: 
     }),
     locals: { owner: owner ? { email: 'owner@example.com' } : undefined, runtime: { env: {
       AUDIO_CLIENT_PORTAL_ENABLED: options.enabled === false ? 'false' : 'true', MUSIC_DB: db,
-      RATE_LIMIT: {
-        get: async (key: string) => String(counts.get(key) ?? 0),
-        put: async (key: string, value: string) => { counts.set(key, Number(value)); },
-      },
     } } },
   } as any;
 }
@@ -79,10 +73,10 @@ it('stores both sides of the thread, validates links, and rejects cross-site pos
 });
 
 it('rate-limits client messages without deleting earlier messages', async () => {
-  for (let index = 0; index < 12; index++) {
-    expect((await clientPost(context('client', { action: 'send', body: `Note ${index}` }))).status).toBe(200);
-  }
-  expect((await clientPost(context('client', { action: 'send', body: 'One too many' }))).status).toBe(429);
+  const responses = await Promise.all(Array.from({ length: 20 }, (_, index) =>
+    clientPost(context('client', { action: 'send', body: `Note ${index}` }))));
+  expect(responses.filter(response => response.status === 200)).toHaveLength(12);
+  expect(responses.filter(response => response.status === 429)).toHaveLength(8);
   expect(sql.prepare('SELECT count(*) AS n FROM audio_project_messages').get()).toEqual({ n: 12 });
   sql.close();
 });
@@ -90,6 +84,6 @@ it('rate-limits client messages without deleting earlier messages', async () => 
 it('does not consume a message allowance when the project rejects the write', async () => {
   sql.prepare("UPDATE audio_projects SET stage='complete' WHERE request_id='song-1'").run();
   expect((await clientPost(context('client', { action: 'send', body: 'Too late' }))).status).toBe(409);
-  expect([...counts.values()]).toEqual([]);
+  expect(sql.prepare('SELECT count(*) AS n FROM audio_project_messages').get()).toEqual({ n: 0 });
   sql.close();
 });

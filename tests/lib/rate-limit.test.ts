@@ -53,13 +53,6 @@ describe('checkRateLimit', () => {
     expect(kv.get.mock.calls[0][0]).toBe('rl:audio:1.2.3.4');
   });
 
-  it('can check the allowance without consuming it before a database write', async () => {
-    const kv = makeKvStub();
-    expect((await checkRateLimit(kv, 'client', 'messages:', 1, { consume: false })).allowed).toBe(true);
-    expect(kv.put).not.toHaveBeenCalled();
-    expect((await checkRateLimit(kv, 'client', 'messages:', 1)).allowed).toBe(true);
-    expect((await checkRateLimit(kv, 'client', 'messages:', 1, { consume: false })).allowed).toBe(false);
-  });
 });
 
 it('supports a bounded burst for metrics without blocking a second listener', async () => {
