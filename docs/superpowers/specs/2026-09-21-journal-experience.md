@@ -35,6 +35,7 @@ The journal combines repository-owned milestones with the live public publicatio
 - “View project story” and “Browse archive” state what each path contains.
   “Show all entries” is not a primary action.
 - Direct links to an update remain stable.
+- When an entry moves to Story or Archive, its former main-page fragment still reaches a link to the entry at its new location. Withdrawn publication entries are removed rather than linked.
 - The newest available entry is the default selection; an old, fixed milestone does not take precedence over newer work.
 - Without JavaScript, the document presents the latest five updates in reverse
   chronological order followed by the Archive link. It does not emit every

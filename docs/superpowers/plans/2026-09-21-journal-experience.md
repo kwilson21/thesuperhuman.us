@@ -59,9 +59,9 @@
 - Modify: `src/pages/building/personal-website.astro`
 - Test: `tests/browser/personal-website-journal.cjs`
 
-**Interfaces:** Story consumes `storyMilestones`; archive consumes `archiveMilestones` from curated and published sources; both retain stable direct links. Load the current publication feed on each server-rendered route and use the same correction/withdrawal handling as the main page.
+**Interfaces:** Story consumes `storyMilestones`; archive consumes `archiveMilestones` from curated and published sources; both retain stable direct links. Load the current publication feed on each server-rendered route and use the same correction/withdrawal handling as the main page. For an entry moved off the main page, leave a small anchor with its original ID and a link to `/building/personal-website/archive#<entry-id>` (or the story route for an authored chapter). This preserves old main-page fragment links even without JavaScript; the destination carries the same entry ID. Do not leave an anchor for withdrawn publication content.
 
-- [ ] Write a failing route check for `/building/personal-website/story` and `/building/personal-website/archive`, plus a reverse-chronological archive assertion.
+- [ ] Write a failing route check for `/building/personal-website/story` and `/building/personal-website/archive`, a reverse-chronological archive assertion, and an old main-page fragment that still leads to its moved entry without JavaScript.
 - [ ] Run the browser check and confirm both routes are absent.
 - [ ] Implement labeled routes. Keep story to authored chapters and choose pagination or year/topic grouping for the archive during implementation review.
 - [ ] Verify no-JavaScript output presents latest five plus Archive link, never the full archive inline. Verify a corrected or withdrawn published entry is removed on the next page load and from the live-refresh view. Commit `Separate journal story and archive`.
