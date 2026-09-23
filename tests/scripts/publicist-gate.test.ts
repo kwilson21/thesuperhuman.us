@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { agentsBlock, captureProblems, entryIds, frontMatter, hardRules, noteProblems, syncAgents, textProblems } from '../../scripts/publicist/lib.mjs';
 
-const note = ({ tier = 'shipped', refresher = 'verified', publish = 'yes', readiness = 'ready', bullets = true } = {}) => `---
+const note = ({ tier = 'shipped', draft = 'verified', publish = 'yes', readiness = 'ready', bullets = true, draftText = true } = {}) => `---
 entry: tally-home-screen
 tier: ${tier}
 ---
@@ -14,6 +14,10 @@ tier: ${tier}
 A two-minute read.
 
 ${bullets ? '- **One line:** Home leads with safe to spend.' : ''}
+
+## Draft entry
+**The Home screen** · 2026-09-23
+${draftText ? '> Home leads with safe to spend.' : ''}
 
 ## Visual aids
 Screenshot.
@@ -38,7 +42,7 @@ Built. · status: verified
 
 ## Owner review
 - Corrections: none
-- Refresher: ${refresher}
+- Draft entry: ${draft}
 - Whiteboard defense: ${readiness}
 - Publish: ${publish}
 `;
@@ -47,11 +51,18 @@ describe('noteProblems', () => {
   it('clears a fully verified shipped note marked ready', () => {
     expect(noteProblems(note())).toEqual([]);
   });
-  it('clears on a verified refresher even with unverified detail answers', () => {
-    expect(noteProblems(note({ refresher: 'corrected' }))).toEqual([]);
+  it('clears on an approved draft even with unverified detail answers', () => {
+    expect(noteProblems(note({ draft: 'corrected' }))).toEqual([]);
   });
-  it('holds a refresher the owner has not verified', () => {
-    expect(noteProblems(note({ refresher: 'unverified' }))).toContain('refresher not verified');
+  it('accepts decisions recorded from conversation with their source', () => {
+    const src = ' (owner, in conversation, 2026-09-23)';
+    expect(noteProblems(note({ draft: `verified${src}`, publish: `yes${src}`, readiness: `ready${src}` }))).toEqual([]);
+  });
+  it('holds a draft the owner has not approved', () => {
+    expect(noteProblems(note({ draft: 'unverified' }))).toContain('draft entry not approved');
+  });
+  it('holds a note without draft text', () => {
+    expect(noteProblems(note({ draftText: false }))).toContain('draft entry missing');
   });
   it('holds a note without refresher bullets', () => {
     expect(noteProblems(note({ bullets: false }))).toContain('refresher missing');
@@ -72,7 +83,7 @@ describe('noteProblems', () => {
     const problems = noteProblems(block);
     expect(problems).toContain('publish is not yes');
     expect(problems).toContain('tier missing or invalid');
-    expect(problems).toContain('refresher not verified');
+    expect(problems).toContain('draft entry not approved');
   });
 });
 

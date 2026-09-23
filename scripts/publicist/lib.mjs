@@ -50,11 +50,13 @@ export function noteProblems(note) {
   const refresher = note.match(/^## Refresher\n([\s\S]*?)(?=^## |(?![\s\S]))/m)?.[1] ?? '';
   if (!/^- \*\*/m.test(refresher)) problems.push('refresher missing');
   const review = note.slice(note.search(/^## Owner review/m) >= 0 ? note.search(/^## Owner review/m) : note.length);
-  const verified = review.match(/Refresher:\s*(verified|corrected)[ \t]*$/m)?.[1];
-  if (!verified) problems.push('refresher not verified');
-  const publish = review.match(/Publish:\s*(yes|hold|no)[ \t]*$/m)?.[1];
+  const draft = note.match(/^## Draft entry\n([\s\S]*?)(?=^## |(?![\s\S]))/m)?.[1] ?? '';
+  if (!/^> \S/m.test(draft)) problems.push('draft entry missing');
+  const approved = review.match(/Draft entry:\s*(verified|corrected)(?:[ \t]+\([^)\n]*\))?[ \t]*$/m)?.[1];
+  if (!approved) problems.push('draft entry not approved');
+  const publish = review.match(/Publish:\s*(yes|hold|no)(?:[ \t]+\([^)\n]*\))?[ \t]*$/m)?.[1];
   if (publish !== 'yes') problems.push('publish is not yes');
-  const readiness = review.match(/Whiteboard defense:\s*(ready|not yet|not applicable)[ \t]*$/m)?.[1];
+  const readiness = review.match(/Whiteboard defense:\s*(ready|not yet|not applicable)(?:[ \t]+\([^)\n]*\))?[ \t]*$/m)?.[1];
   if (tier === 'shipped' && readiness !== 'ready') problems.push('shipped entry not marked ready');
   else if (tier === 'exploration' && readiness !== 'not applicable') problems.push('exploration entry needs not applicable');
   else if (tier !== 'shipped' && tier !== 'exploration') problems.push('tier missing or invalid');
