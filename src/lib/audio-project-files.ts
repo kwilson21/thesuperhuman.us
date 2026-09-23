@@ -12,9 +12,10 @@ export type ProjectFile = {
   downloadable: number;
   published_at: string;
   expires_at: string | null;
+  peaks: string | null;
 };
 
-const fileColumns = 'f.id,f.request_id,f.version,f.object_key,f.display_name,f.media_type,f.byte_size,f.downloadable,f.published_at,f.expires_at';
+const fileColumns = 'f.id,f.request_id,f.version,f.object_key,f.display_name,f.media_type,f.byte_size,f.downloadable,f.published_at,f.expires_at,f.peaks';
 const clientFileScope = `FROM audio_project_files f
   JOIN audio_projects p ON p.request_id=f.request_id
   JOIN owner_requests r ON r.id=p.request_id

@@ -1,0 +1,18 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+---
+<BaseLayout title="Project unavailable · Studio" description="This studio project isn’t available." noindex>
+  <article class="site-shell studio-unavailable">
+    <svg viewBox="0 0 24 32" aria-hidden="true"><path d="M9 26a4 4 0 1 1-2-3.46V4l11 3v5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" /></svg>
+    <h1>This project isn’t available</h1>
+    <p>The link may be old, or access to this project has closed.</p>
+    <a href="/studio">Back to your songs</a>
+  </article>
+  <style>
+    .studio-unavailable { display: grid; justify-items: center; gap: 1.2rem; max-width: 36rem; margin: 0 auto; padding: clamp(6rem, 18vw, 12rem) 1.5rem; text-align: center; }
+    svg { width: 1.8rem; height: 2.4rem; color: var(--accent); }
+    h1 { margin: 0; font: 400 clamp(2.4rem, 6vw, 3.6rem)/1.05 Newsreader, Georgia, serif; text-wrap: balance; }
+    p { margin: 0; color: #514d47; font: 1rem/1.6 Inter, sans-serif; }
+    a { color: var(--accent); font: 500 .95rem/1.4 Inter, sans-serif; }
+  </style>
+</BaseLayout>

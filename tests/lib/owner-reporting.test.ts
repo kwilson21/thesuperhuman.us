@@ -63,7 +63,9 @@ it('shows unread client messages, failed notices, and approaching delivery dates
     VALUES ('due','service','due@example.com','Due song','reviewed','2026-09-01','2026-09-01'),
       ('quiet','service','quiet@example.com','Quiet song','reviewed','2026-09-01','2026-09-01'),
       ('review','service','review@example.com','Review song','reviewed','2026-09-01','2026-09-01'),
-      ('closed','service','closed@example.com','Closed song','withdrawn','2026-09-01','2026-09-01');
+      ('closed','service','closed@example.com','Closed song','withdrawn','2026-09-01','2026-09-01'),
+      ('late','service','late@example.com','Late song','reviewed','2026-09-01','2026-09-01');
+    UPDATE audio_projects SET stage='revision_in_progress',current_due_at='2026-09-21' WHERE request_id='late';
     UPDATE audio_projects SET stage='in_progress',current_due_at='2026-09-24' WHERE request_id='due';
     UPDATE audio_projects SET stage='in_progress',current_due_at='2026-10-01' WHERE request_id='quiet';
     UPDATE audio_projects SET stage='review_ready',current_due_at='2026-09-24' WHERE request_id='review';
@@ -78,7 +80,8 @@ it('shows unread client messages, failed notices, and approaching delivery dates
   });
   const db = { prepare: (query: string) => statement(query) } as unknown as D1Database;
   expect(await listStudioProjectAttention(db, new Date('2026-09-23T12:00:00Z'))).toEqual([
-    { requestId: 'due', summary: 'Due song', unreadMessages: 1, failedNotices: 1, dueSoon: true },
+    { requestId: 'due', summary: 'Due song', unreadMessages: 1, failedNotices: 1, dueSoon: true, stage: 'in_progress', bookingPaid: false, dueInDays: 1 },
+    { requestId: 'late', summary: 'Late song', unreadMessages: 0, failedNotices: 0, dueSoon: true, stage: 'revision_in_progress', bookingPaid: false, dueInDays: -2 },
   ]);
   sql.close();
 });

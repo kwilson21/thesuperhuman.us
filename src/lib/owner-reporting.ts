@@ -31,6 +31,10 @@ export type StudioProjectAttention = {
   unreadMessages: number;
   failedNotices: number;
   dueSoon: boolean;
+  stage: string;
+  bookingPaid: boolean;
+  /** Days from today (America/New_York) to the due date when dueSoon; negative when past due. */
+  dueInDays: number | null;
 };
 type CampaignRow = {
   id: string; subject_type: 'release' | 'service'; subject_id: string; name: string; primary_goal: string;
@@ -45,7 +49,8 @@ export async function listStudioProjectAttention(db: D1Database, now: Date): Pro
   const dueLimit = new Date(`${today}T12:00:00Z`);
   dueLimit.setUTCDate(dueLimit.getUTCDate() + 2);
   const rows = await db.prepare(`WITH project_attention AS (
-    SELECT p.request_id AS requestId,r.summary,
+    SELECT p.request_id AS requestId,r.summary,p.stage,p.current_due_at AS dueAt,
+      COALESCE((SELECT booking_status='paid' FROM audio_payments pay WHERE pay.request_id=p.request_id),0) AS bookingPaid,
       (SELECT COUNT(*) FROM audio_project_messages m
         WHERE m.request_id=p.request_id AND m.actor='client' AND m.read_at IS NULL) AS unreadMessages,
       (SELECT COUNT(*) FROM audio_project_updates u
@@ -58,9 +63,12 @@ export async function listStudioProjectAttention(db: D1Database, now: Date): Pro
     WHERE unreadMessages>0 OR failedNotices>0 OR dueSoon=1
     ORDER BY dueSoon DESC,unreadMessages DESC,requestId`)
     .bind(dueLimit.toISOString().slice(0, 10)).all<{
-      requestId: string; summary: string; unreadMessages: number; failedNotices: number; dueSoon: number;
+      requestId: string; summary: string; stage: string; dueAt: string | null; bookingPaid: number;
+      unreadMessages: number; failedNotices: number; dueSoon: number;
     }>();
-  return rows.results.map(row => ({ ...row, dueSoon: Boolean(row.dueSoon) }));
+  const day = (value: string) => Date.parse(`${value}T12:00:00Z`) / 86_400_000;
+  return rows.results.map(({ dueAt, ...row }) => ({ ...row, dueSoon: Boolean(row.dueSoon), bookingPaid: Boolean(row.bookingPaid),
+    dueInDays: row.dueSoon && dueAt ? Math.round(day(dueAt) - day(today)) : null }));
 }
 
 async function listening(db: D1Database, campaignId?: string): Promise<ListeningSummary> {

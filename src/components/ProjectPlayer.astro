@@ -1,0 +1,54 @@
+---
+import '~/styles/studio.css';
+import { parsePeaks, waveformRects } from '~/lib/audio-peaks';
+
+type Props = { src: string; name: string; label: string; peaks: string | null; downloadHref?: string };
+const { src, name, label, peaks, downloadHref } = Astro.props;
+const bars = parsePeaks(peaks);
+const wave = bars ? waveformRects(bars) : '';
+---
+<div class="player" data-project-player>
+  <audio preload="metadata" src={src}></audio>
+  <button type="button" class="player-toggle" data-player-toggle aria-label={`Play ${name}`}>
+    <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" /></svg>
+    <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" /></svg>
+  </button>
+  <div class="player-body">
+    <div class="player-heading"><strong>{name}</strong><span>{label}</span></div>
+    <div class:list={['player-wave', { flat: !bars }]} style="--progress: 0%">
+      {bars ? <>
+        <svg class="wave-base" viewBox="0 0 320 40" preserveAspectRatio="none" aria-hidden="true" set:html={wave} />
+        <svg class="wave-played" viewBox="0 0 320 40" preserveAspectRatio="none" aria-hidden="true" set:html={wave} />
+      </> : <span class="wave-line" aria-hidden="true"><span></span></span>}
+      <input type="range" class="player-seek" data-player-seek min="0" max="1000" value="0" step="1" aria-label={`Position in ${name}`} />
+    </div>
+    <div class="player-foot"><span class="player-time" data-player-time>0:00</span>{downloadHref && <a href={downloadHref} class="player-download">Download</a>}</div>
+  </div>
+</div>
+<style>
+  .player { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 1.1rem 1.4rem; padding: 1.2rem 0; }
+  .player-toggle { display: grid; place-items: center; width: 3.6rem; height: 3.6rem; border: 0; border-radius: 50%; background: var(--accent); color: var(--paper); cursor: pointer; transition: background 140ms ease; }
+  .player-toggle:hover { background: var(--ink); }
+  .player-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .player-toggle svg { width: 1.4rem; height: 1.4rem; fill: currentColor; }
+  .player-toggle .icon-pause, .player.playing .icon-play { display: none; }
+  .player.playing .icon-pause { display: block; }
+  .player-body { display: grid; gap: .45rem; min-width: 0; }
+  .player-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem .9rem; }
+  .player-heading strong { font: 400 1.35rem/1.2 Newsreader, Georgia, serif; }
+  .player-heading span, .player-time { color: var(--studio-muted); font: .78rem/1.4 Inter, sans-serif; font-variant-numeric: tabular-nums; }
+  .player-wave { position: relative; height: 3.2rem; }
+  .player-wave svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .wave-base { fill: var(--studio-line); }
+  .wave-played { fill: var(--accent); clip-path: inset(0 calc(100% - var(--progress)) 0 0); }
+  .wave-line { position: absolute; inset: 50% 0 auto; height: 3px; border-radius: 2px; background: var(--studio-line); transform: translateY(-50%); }
+  .wave-line span { display: block; width: var(--progress); height: 100%; border-radius: inherit; background: var(--accent); }
+  /* The native range stays on top for pointer and keyboard seeking, drawn invisibly over the waveform. */
+  .player-seek { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+  .player-wave:has(.player-seek:focus-visible) { outline: 2px solid var(--accent); outline-offset: 4px; }
+  .player-foot { display: flex; justify-content: space-between; gap: 1rem; }
+  .player-download { color: var(--ink); font: 500 .8rem/1.4 Inter, sans-serif; }
+  .player-download:hover { color: var(--accent); }
+  @media (max-width: 30rem) { .player { gap: .8rem 1rem; } .player-toggle { width: 3rem; height: 3rem; } }
+  @media (prefers-reduced-motion: reduce) { .player-toggle { transition: none; } }
+</style>

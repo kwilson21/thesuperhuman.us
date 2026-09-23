@@ -7,11 +7,14 @@ import RequestList from '~/components/owner/RequestList.astro';
 import MetricDefinition from '~/components/owner/MetricDefinition.astro';
 import { clientPortalEnabled, listStudioSignInFailures } from '~/lib/audio-client-access';
 import { listStudioProjectAttention, loadStudioLedger } from '~/lib/owner-reporting';
+import StageTrack from '~/components/StageTrack.astro';
 const db = Astro.locals.runtime.env.MUSIC_DB;
 if (!db) return new Response('Owner reporting is unavailable.', { status: 503 });
 const ledger = await loadStudioLedger(db, new Date());
 const signInFailures = clientPortalEnabled(Astro.locals.runtime.env) ? await listStudioSignInFailures(db) : [];
 const studioAttention = clientPortalEnabled(Astro.locals.runtime.env) ? await listStudioProjectAttention(db, new Date()) : [];
+const stageName = (stage: string, bookingPaid: boolean) => stage === 'accepted' && bookingPaid ? 'Booking paid' : stage.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase());
+const dueLabel = (days: number) => days > 1 ? `Due in ${days} days` : days === 1 ? 'Due tomorrow' : days === 0 ? 'Due today' : `Past due by ${-days} ${days === -1 ? 'day' : 'days'}`;
 ---
 <OwnerLayout title="Today" current="today" newRequestCount={ledger.attention.newRequests} ownerEmail={Astro.locals.owner?.email ?? ''}>
   <header class="owner-page-heading">
@@ -20,7 +23,7 @@ const studioAttention = clientPortalEnabled(Astro.locals.runtime.env) ? await li
   </header>
   <section class="owner-section attention-section" aria-labelledby="waiting-heading">
     <AttentionIndex number="01" label="First area to inspect" />
-    <div class="section-heading-line"><div><p class="owner-kicker">People</p><h2 id="waiting-heading">{ledger.attention.newRequests ? `${ledger.attention.newRequests} waiting for review` : 'No one is waiting'}</h2></div><a href="/owner/requests">Open requests →</a></div>
+    <div class="section-heading-line"><div><p class="owner-kicker">People</p><h2 id="waiting-heading">{ledger.attention.newRequests ? `${ledger.attention.newRequests} waiting for review` : studioAttention.length ? 'No new requests' : 'No one is waiting'}</h2></div><a href="/owner/requests">Open requests →</a></div>
     <RequestList requests={ledger.attentionRequests} />
   </section>
   {signInFailures.length > 0 && <section class="owner-section" aria-labelledby="studio-sign-in-heading">
@@ -30,14 +33,16 @@ const studioAttention = clientPortalEnabled(Astro.locals.runtime.env) ? await li
   </section>}
   {studioAttention.length > 0 && <section class="owner-section" aria-labelledby="studio-attention-heading">
     <p class="owner-kicker">Studio projects</p><h2 id="studio-attention-heading">Songs needing a next step</h2>
-    <ul class="studio-attention-list">{studioAttention.map(item => <li>
-      <a href={`/owner/requests/${encodeURIComponent(item.requestId)}`}>{item.summary || 'Studio project'} <span aria-hidden="true">→</span></a>
-      <span>{[
-        item.unreadMessages ? `${item.unreadMessages} unread client ${item.unreadMessages === 1 ? 'message' : 'messages'}` : '',
-        item.failedNotices ? `${item.failedNotices} ${item.failedNotices === 1 ? 'update email' : 'update emails'} to retry` : '',
-        item.dueSoon ? 'Delivery date is within two days or past due' : '',
-      ].filter(Boolean).join(' · ')}</span>
-    </li>)}</ul>
+    <ul class="studio-attention-list">{studioAttention.map(item => <li><a href={`/owner/requests/${encodeURIComponent(item.requestId)}`}>
+      <span class="attention-song"><strong>{item.summary || 'Studio project'}</strong>
+        <span class="attention-stage"><StageTrack stage={item.stage} bookingPaid={item.bookingPaid} size="mini" /><span>{stageName(item.stage, item.bookingPaid)}</span></span></span>
+      <span class="attention-chips">
+        {item.unreadMessages > 0 && <span class="studio-pill signal">{item.unreadMessages} unread {item.unreadMessages === 1 ? 'message' : 'messages'}</span>}
+        {item.failedNotices > 0 && <span class="studio-pill signal">{item.failedNotices} {item.failedNotices === 1 ? 'email' : 'emails'} to retry</span>}
+        {item.dueInDays !== null && <span class:list={['studio-pill', item.dueInDays < 0 ? 'late' : 'signal']}>{dueLabel(item.dueInDays)}</span>}
+      </span>
+      <span class="attention-arrow" aria-hidden="true">→</span>
+    </a></li>)}</ul>
   </section>}
   <section class="owner-section campaign-preview" aria-labelledby="campaign-heading">
     <div class="campaign-copy"><p class="owner-kicker">Active promotion</p><h2 id="campaign-heading">{ledger.activeCampaign?.name ?? 'No active campaign'}</h2>
@@ -56,8 +61,19 @@ const studioAttention = clientPortalEnabled(Astro.locals.runtime.env) ? await li
   </section>
 </OwnerLayout>
 <style>
-  .studio-attention-list { list-style: none; margin: 1rem 0 0; padding: 0; }
-  .studio-attention-list li { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .4rem 1.5rem; padding: .85rem 0; border-top: 1px solid #e2ddd6; }
-  .studio-attention-list a { text-decoration: underline; text-underline-offset: .2em; }
-  .studio-attention-list span { font: .875rem/1.5 Inter, sans-serif; color: #55514c; }
+  #studio-attention-heading { margin-top: .2rem; font-size: clamp(2rem, 4vw, 3.2rem); line-height: 1.02; letter-spacing: -.04em; }
+  .studio-attention-list { list-style: none; margin: 1.2rem 0 0; padding: 0; border-top: 1px solid var(--rule); }
+  .studio-attention-list li { border-bottom: 1px solid var(--rule); }
+  .studio-attention-list a { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: .8rem 2rem; padding: 1.3rem .2rem; border: 0; color: var(--ink); }
+  .studio-attention-list a:hover strong { color: var(--accent); }
+  .studio-attention-list a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .attention-song { display: grid; gap: .55rem; min-width: 0; }
+  .attention-song strong { font: 400 clamp(1.3rem, 2.4vw, 1.7rem)/1.2 Newsreader, Georgia, serif; }
+  .attention-stage { display: flex; align-items: center; gap: 1rem; color: var(--studio-muted); font: .82rem/1.4 Inter, sans-serif; }
+  .attention-chips { display: flex; flex-wrap: wrap; justify-content: end; gap: .5rem; }
+  .attention-chips .studio-pill { border: 1px solid var(--studio-line); background: none; }
+  .attention-chips .studio-pill::before { content: ''; width: .45rem; height: .45rem; border-radius: 50%; background: var(--accent); }
+  .attention-chips .studio-pill.late::before { background: var(--studio-danger); }
+  .attention-arrow { font: 1.2rem/1 Inter, sans-serif; }
+  @media (max-width: 45rem) { .studio-attention-list a { grid-template-columns: minmax(0, 1fr) auto; } .attention-chips { grid-column: 1; justify-content: start; } .attention-arrow { grid-row: 1; grid-column: 2; } }
 </style>
