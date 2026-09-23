@@ -6,7 +6,7 @@ const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 const migration = readFileSync(new URL('../../migrations/music/0017_audio_project_update_milestones.sql', import.meta.url), 'utf8');
 const schema = readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8');
 
-it('backfills revision and completion notes from their same-instant audit rows', () => {
+it('backfills revision and completion notes only when the same-instant pairing is unambiguous', () => {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys=ON');
   db.exec(schema.replace(migration.trim(), ''));
@@ -19,12 +19,16 @@ it('backfills revision and completion notes from their same-instant audit rows',
   note.run('progress', 'Chorus notes heard.', at(2)); audit.run('stage-changed', at(2));
   note.run('progress', 'A plain update.', at(3));
   note.run('progress', 'All done.', at(4)); audit.run('completed', at(4));
+  // Two plain notes at one instant: which one the audit row belongs to is unknowable.
+  note.run('progress', 'Ambiguous A.', at(5)); note.run('progress', 'Ambiguous B.', at(5)); audit.run('stage-changed', at(5));
   db.exec(migration);
   expect(db.prepare('SELECT body,milestone FROM audio_project_updates ORDER BY id').all()).toEqual([
     { body: 'Starting.', milestone: null },
     { body: 'Chorus notes heard.', milestone: 'revision_started' },
     { body: 'A plain update.', milestone: null },
     { body: 'All done.', milestone: 'completed' },
+    { body: 'Ambiguous A.', milestone: null },
+    { body: 'Ambiguous B.', milestone: null },
   ]);
   db.close();
 });
