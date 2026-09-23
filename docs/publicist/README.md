@@ -409,10 +409,12 @@ enforced in four layers, and only the last one is a real guarantee:
    [project-journal.md](../project-journal.md)); a matching hook is proposed only
    after checking Codex's current hook docs, and like the existing hook pilot it
    needs the owner's trust to activate.
-4. **Enforcement that does not depend on the model.** A new required CI check,
-   `publicist-gate`, runs on every PR in this repository that touches Tally or
-   Kaillera-next journal data, their assets, or `publicist/queue/`. It fails the PR
-   when:
+4. **Enforcement that does not depend on the model.** A gate script,
+   `publicist-gate`, runs as a `prebuild` step, the same way `assets:check` already
+   does. Every `npm run build` therefore runs it: the existing `validate` workflow on
+   each PR, and Cloudflare's own Workers Build on each PR preview and each
+   production deploy. It checks Tally and Kaillera-next journal data, their assets
+   and `publicist/queue/`, and fails the build when:
    - an entry or queued post has no note on the private repository's `main`, or
      the note's required answers are not all `verified` or `corrected`, or its
      decision is not `publish: yes`;
@@ -421,11 +423,20 @@ enforced in four layers, and only the last one is a real guarantee:
      its demo-data label.
 
    It reads the private repository with a fine-grained, read-only token for that
-   one repository, stored as an Actions secret (GitHub does not expose secrets to
-   pull requests from forks), and its log prints only entry IDs and pass or fail,
-   never note content. Branch protection makes the check required, and only the
-   owner merges. It covers only the projects in `publicist/config.json`, so the
-   existing personal-website journal flow is unchanged.
+   one repository, stored as an Actions secret and as a Cloudflare build secret
+   (GitHub does not expose secrets to pull requests from forks). Its log prints only
+   entry IDs and pass or fail, never note content. Local builds without the token
+   skip the private lookup and say so; CI and deploy builds without it fail. Branch
+   protection makes `validate` required, and only the owner merges. It covers only
+   the projects in `publicist/config.json`, so the existing personal-website
+   journal flow is unchanged.
+
+   **Cost and availability.** This repository is public, and GitHub-hosted
+   runners are free for public repositories, including after GitHub's 2026 pricing
+   changes, so the gate does not use the included minutes that private repositories
+   consume. The private repository runs no workflows at all. And because the same
+   gate runs inside Cloudflare's build, an ungated entry cannot deploy even if
+   GitHub Actions is down or disabled.
 
 Layers 1 to 3 make the agent get it right the first time. Layer 4 plus the owner's
 merge are what actually stop a skipped rule from reaching the site.
@@ -477,14 +488,15 @@ prompt (appendix) loads that canonical file first. In short:
 7. **Tiers:** Kaillera-next and Tally both `shipped` by default, with individual
    explorations marked on their notes?
 
-8. **Enforcement:** add the required `publicist-gate` check and branch protection
-   (section 9)? It needs one fine-grained, read-only token for the private
-   repository, which you create and store as an Actions secret.
+8. **Enforcement:** add the `publicist-gate` build step and make `validate` a
+   required check (section 9)? It needs one fine-grained, read-only token for the
+   private repository, which you create and store as an Actions secret and a
+   Cloudflare build secret.
 
 After approval, in order:
 1. Move the skill to its canonical file and add the always-loaded layers, the
-   `AGENTS.md` sync check and the `publicist-gate` check (section 9), before any
-   content is drafted.
+   `AGENTS.md` sync check and the `publicist-gate` build step (section 9), before
+   any content is drafted.
 2. Draft the backfill review notes for your review.
 3. Build the two project pages and backfill PRs from the notes you verified.
 4. Create the Routine, paused until you confirm its first dry run.

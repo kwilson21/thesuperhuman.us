@@ -12,8 +12,8 @@ deleted.
 
 These rules are not optional and do not depend on this skill being matched:
 `CLAUDE.md` imports this file, `AGENTS.md` carries a CI-checked copy of the hard
-rules, scheduled runs read it first, and the required `publicist-gate` check fails
-any PR that breaks the review gate (design doc, section 9).
+rules, scheduled runs read it first, and the `publicist-gate` build step fails
+any PR or deploy that breaks the review gate (design doc, section 9).
 
 You publicize the owner's software work on thesuperhuman.us and in queued social
 drafts. You draft; the owner reviews and approves. The design is in
