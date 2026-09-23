@@ -21,22 +21,28 @@ describe('audio project migration', () => {
       summary TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     )`);
     request(db, 'existing-service', 'service');
+    request(db, 'retained-request', 'service', 'reviewed', '');
     request(db, 'withdrawn-service', 'service', 'withdrawn');
     request(db, 'purchase', 'purchase');
 
     db.exec(migration);
     expect(db.prepare('SELECT request_id,stage FROM audio_projects').all()).toEqual([
       { request_id: 'existing-service', stage: 'files_under_review' },
+      { request_id: 'retained-request', stage: 'files_under_review' },
     ]);
     expect(db.prepare('SELECT action,actor FROM audio_project_audit').all()).toEqual([
+      { action: 'created', actor: 'migration' },
       { action: 'created', actor: 'migration' },
     ]);
 
     request(db, 'new-service', 'service');
+    request(db, 'new-retained', 'service', 'new', '');
     request(db, 'new-purchase', 'purchase');
     expect(db.prepare('SELECT request_id,stage FROM audio_projects ORDER BY request_id').all()).toEqual([
       { request_id: 'existing-service', stage: 'files_under_review' },
+      { request_id: 'new-retained', stage: 'files_under_review' },
       { request_id: 'new-service', stage: 'files_under_review' },
+      { request_id: 'retained-request', stage: 'files_under_review' },
     ]);
     expect(db.prepare("SELECT action,actor FROM audio_project_audit WHERE request_id='new-service'").get())
       .toEqual({ action: 'created', actor: 'system' });
