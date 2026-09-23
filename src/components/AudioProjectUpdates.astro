@@ -27,8 +27,10 @@ const nextDay = currentDueAt ? new Date(Date.parse(`${currentDueAt}T12:00:00Z`) 
 const laterDate = nextDay > today ? nextDay : today;
 // Each kind of event gets its own node shape, so the line reads at a glance.
 const node = (update: ProjectUpdate) => update.file_version === 'final' ? 'final' : update.file_version === 'review' ? 'review'
-  : update.kind === 'date_changed' ? 'date' : update.kind === 'accepted' || update.kind === 'work_started' ? 'milestone' : 'note';
+  : update.kind === 'date_changed' ? 'date' : update.milestone === 'completed' ? 'complete'
+  : update.kind === 'accepted' || update.kind === 'work_started' || update.milestone ? 'milestone' : 'note';
 const title = (update: ProjectUpdate) => update.file_version === 'review' ? 'Review ready' : update.file_version === 'final' ? 'Final files ready'
+  : update.milestone === 'revision_started' ? 'Revision started' : update.milestone === 'completed' ? 'Project complete'
   : update.kind === 'accepted' ? 'Project accepted' : update.kind === 'work_started' ? 'Work started' : update.kind === 'date_changed' ? 'Date moved' : 'Studio update';
 // After the final delivery, the date that matters is the file's availability, not the due date.
 const upcoming = active && currentDueAt && stage !== 'final_files_ready' ? currentDueAt : null;
@@ -105,6 +107,8 @@ const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month
   .timeline-node.review { background: var(--paper); border: 2px solid var(--accent); }
   .timeline-node.review::after { content: ''; position: absolute; inset: .18rem; border-radius: 50%; background: var(--accent); }
   .timeline-node.final { background: var(--accent); border-color: var(--accent); }
+  .timeline-node.complete { background: var(--studio-done); border-color: var(--studio-done); }
+  .timeline-node.complete::after { content: ''; position: absolute; left: .28rem; top: .12rem; width: .28rem; height: .5rem; border: solid var(--paper); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
   .timeline-node.date { border-radius: 2px; transform: rotate(45deg) scale(.8); background: var(--paper); border: 2px solid var(--studio-done); }
   .timeline-node.next { background: var(--paper); border: 1.5px dashed var(--studio-line); }
   .timeline-entry { display: grid; gap: .45rem; min-width: 0; }

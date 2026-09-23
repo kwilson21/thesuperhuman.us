@@ -78,6 +78,8 @@ Studio retention requires `migrations/music/0014_audio_project_retention.sql` af
 
 Waveform display requires `migrations/music/0016_audio_project_file_peaks.sql` after 0015. The owner's browser measures 160 loudness bars while uploading and sends them with the finished upload; the server only checks that they are whole numbers from 0 to 100. Files without them, including anything uploaded before 0016, show a plain progress bar instead of a waveform.
 
+Timeline milestones require `migrations/music/0017_audio_project_update_milestones.sql` after 0016. It adds a nullable `milestone` to owner updates so starting a revision and completing a project show by name instead of as a general studio update, and backfills existing notes from the audit row written in the same batch.
+
 The forms read `Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY` first, with
 `import.meta.env.PUBLIC_TURNSTILE_SITE_KEY` as a build-time fallback. Wrangler
 runtime vars are not automatically Astro build-time variables. An empty runtime

@@ -59,7 +59,8 @@ describe('owner insights schema', () => {
     const studioRetention = readFileSync(new URL('../../migrations/music/0014_audio_project_retention.sql', import.meta.url), 'utf8');
     const declined = readFileSync(new URL('../../migrations/music/0015_audio_project_close_declined.sql', import.meta.url), 'utf8');
     const peaks = readFileSync(new URL('../../migrations/music/0016_audio_project_file_peaks.sql', import.meta.url), 'utf8');
-    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(`${baseline.trim()}\n${retention.trim()}\n${payments.trim()}\n${reconciliation.trim()}\n${projects.trim()}\n${clientAccess.trim()}\n${messages.trim()}\n${updates.trim()}\n${invitations.trim()}\n${files.trim()}\n${uploads.trim()}\n${publication.trim()}\n${revocation.trim()}\n${studioRetention.trim()}\n${declined.trim()}\n${peaks.trim()}\n`);
+    const milestones = readFileSync(new URL('../../migrations/music/0017_audio_project_update_milestones.sql', import.meta.url), 'utf8');
+    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(`${baseline.trim()}\n${retention.trim()}\n${payments.trim()}\n${reconciliation.trim()}\n${projects.trim()}\n${clientAccess.trim()}\n${messages.trim()}\n${updates.trim()}\n${invitations.trim()}\n${files.trim()}\n${uploads.trim()}\n${publication.trim()}\n${revocation.trim()}\n${studioRetention.trim()}\n${declined.trim()}\n${peaks.trim()}\n${milestones.trim()}\n`);
     const db = apply('../../db/music.sql');
     const expected = [
       'music_event_daily', 'music_events', 'music_interest', 'music_playback_daily',

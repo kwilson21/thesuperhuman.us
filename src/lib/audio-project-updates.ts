@@ -13,6 +13,7 @@ export type ProjectUpdate = {
   notification_status: 'pending' | 'sending' | 'sent' | 'failed';
   notification_attempted_at: string | null;
   file_id: string | null;
+  milestone: 'revision_started' | 'completed' | null;
   file_version?: 'review' | 'final' | null;
 };
 
@@ -24,7 +25,7 @@ export type ProjectUpdateCommand =
   | { action: 'complete'; body: string }
   | { action: 'revise_date'; dueDate: string; reason: 'protect_song' | 'client_clarification' | 'schedule_conflict'; body: string };
 
-const columns = `id,request_id,kind,body,reason,previous_due_at,new_due_at,actor,created_at,notification_status,notification_attempted_at,file_id`;
+const columns = `id,request_id,kind,body,reason,previous_due_at,new_due_at,actor,created_at,notification_status,notification_attempted_at,file_id,milestone`;
 
 export function validProjectDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -120,8 +121,8 @@ export async function saveProjectUpdate(db: D1Database, requestId: string, actor
           AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND status='reviewed')
           AND EXISTS(SELECT 1 FROM audio_project_files WHERE request_id=? AND version='review' AND status='published')
         RETURNING request_id`).bind(at, requestId, state.updated_at, requestId, requestId),
-      db.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at)
-        SELECT request_id,'progress',?,?,? FROM audio_projects
+      db.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at,milestone)
+        SELECT request_id,'progress',?,?,?,'revision_started' FROM audio_projects
         WHERE request_id=? AND stage='revision_in_progress' AND updated_at=? AND changes()=1 RETURNING ${columns}`)
         .bind(body, actor, at, requestId, at),
       db.prepare(`INSERT INTO audio_project_audit(request_id,action,actor,occurred_at)
@@ -141,8 +142,8 @@ export async function saveProjectUpdate(db: D1Database, requestId: string, actor
           AND EXISTS(SELECT 1 FROM audio_payments WHERE request_id=? AND booking_status='paid' AND balance_status='paid')
           AND EXISTS(SELECT 1 FROM audio_project_files WHERE request_id=? AND version='final' AND status='published')
         RETURNING request_id`).bind(at, at, requestId, state.updated_at, requestId, requestId, requestId),
-      db.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at)
-        SELECT request_id,'progress',?,?,? FROM audio_projects
+      db.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at,milestone)
+        SELECT request_id,'progress',?,?,?,'completed' FROM audio_projects
         WHERE request_id=? AND stage='complete' AND updated_at=? AND changes()=1 RETURNING ${columns}`)
         .bind(body, actor, at, requestId, at),
       db.prepare(`INSERT INTO audio_project_audit(request_id,action,actor,occurred_at)
