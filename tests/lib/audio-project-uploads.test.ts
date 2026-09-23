@@ -1,8 +1,12 @@
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { expect, it, vi } from 'vitest';
+import { getPlatformProxy } from 'wrangler';
 import { abortProjectUpload, beginProjectUpload, expectedPartLength, finishProjectUpload,
-  getProjectUpload, ownerProjectCanUpload, uploadPartSize } from '~/lib/audio-project-uploads';
+  getProjectUpload, maxPartEtagLength, maxProjectFileSize, ownerProjectCanUpload, uploadPartSize } from '~/lib/audio-project-uploads';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 const schema = readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8');
@@ -65,6 +69,41 @@ it('keeps an owner upload private until publication and supports a large multipa
     .toEqual({ status: 'uploaded', published_at: null });
   expect(await getProjectUpload(db, 'song-1', upload.id)).toBeNull();
   sql.close();
+});
+
+it('finishes an upload using the opaque part tag returned by local R2', async () => {
+  const { sql, db } = fixture();
+  const directory = await mkdtemp(join(tmpdir(), 'studio-r2-upload-'));
+  await writeFile(join(directory, 'wrangler.jsonc'), JSON.stringify({
+    name: 'studio-r2-upload-test', compatibility_date: '2026-09-22',
+    r2_buckets: [{ binding: 'AUDIO', bucket_name: 'studio-upload-test' }],
+  }));
+  const proxy = await getPlatformProxy({ configPath: join(directory, 'wrangler.jsonc'), persist: { path: join(directory, 'state') } });
+  try {
+    sql.prepare("UPDATE audio_payments SET booking_status='paid' WHERE request_id='song-1'").run();
+    const bucket = proxy.env.AUDIO as R2Bucket;
+    const upload = (await beginProjectUpload(db, bucket, 'song-1', {
+      version: 'review', displayName: 'Review.wav', mediaType: 'audio/wav', byteSize: 5,
+    }, now))!;
+    const part = await bucket.resumeMultipartUpload(upload.object_key, upload.upload_id)
+      .uploadPart(1, new Uint8Array([1, 2, 3, 4, 5]));
+    expect(part.etag.length).toBeGreaterThan(128);
+    expect(part.etag.length).toBeLessThanOrEqual(maxPartEtagLength);
+    expect(await finishProjectUpload(db, bucket, upload, [part], now)).toBe('saved');
+    expect(sql.prepare('SELECT status FROM audio_project_files WHERE id=?').get(upload.id))
+      .toEqual({ status: 'uploaded' });
+  } finally {
+    await proxy.dispose();
+    await rm(directory, { recursive: true, force: true });
+    sql.close();
+  }
+}, 15_000);
+
+it('fits the maximum number of opaque part tags into the completion request limit', () => {
+  const count = Math.ceil(maxProjectFileSize / uploadPartSize);
+  const parts = Array.from({ length: count }, (_, index) => ({ partNumber: index + 1, etag: 'x'.repeat(maxPartEtagLength) }));
+  expect(new TextEncoder().encode(JSON.stringify({ action: 'complete', uploadId: crypto.randomUUID(), parts })).byteLength)
+    .toBeLessThan(32_000);
 });
 
 it('recovers a completed R2 object after a metadata write failure and can discard it safely', async () => {
