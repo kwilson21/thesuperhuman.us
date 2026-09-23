@@ -1,0 +1,95 @@
+name: Publish screenshots
+
+# Trusted half of the screenshot flow. workflow_run always runs this file and the scripts it
+# checks out from the default branch, never the pull request's code. The artifact is untrusted
+# input: the PR comes from run metadata, and only validated PNGs and escaped text are published.
+on:
+  workflow_run:
+    workflows: [Screenshots]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: screenshots-publish-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Find the pull request from run metadata
+        id: pr
+        env:
+          PULLS: ${{ toJSON(github.event.workflow_run.pull_requests) }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          number=$(jq -r --arg sha "$SHA" '[.[] | select(.head.sha == $sha) | .number][0] // empty' <<< "$PULLS")
+          [[ "$number" =~ ^[0-9]+$ && "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "No same-repository pull request for this run; nothing to publish."; exit 0; }
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+      - if: steps.pr.outputs.number
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - if: steps.pr.outputs.number
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: screenshots
+          path: incoming
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Validate the images
+        if: steps.pr.outputs.number
+        run: |
+          mkdir -p verified
+          for file in incoming/*; do
+            name=$(basename "$file")
+            if [[ "$name" == manifest.json ]]; then cp "$file" verified/; continue; fi
+            [[ "$name" =~ ^[a-z0-9-]{1,100}\.png$ && -f "$file" && ! -L "$file" ]] || { echo "Skipping unexpected file $name"; continue; }
+            [[ $(stat -c %s "$file") -le 15000000 ]] || { echo "Skipping oversized $name"; continue; }
+            [[ "$(head -c 8 "$file" | od -An -tx1 | tr -d ' \n')" == 89504e470d0a1a0a ]] || { echo "Skipping non-PNG $name"; continue; }
+            cp "$file" verified/
+          done
+          [[ -f verified/manifest.json ]] || { echo "Missing manifest"; exit 1; }
+      - name: Publish images to the screenshots branch
+        if: steps.pr.outputs.number
+        id: publish
+        env:
+          PR: ${{ steps.pr.outputs.number }}
+          SHA: ${{ steps.pr.outputs.sha }}
+        run: |
+          dir="pr-${PR}/${SHA::7}"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch --depth=1 origin screenshots; then
+            git worktree add --detach shots FETCH_HEAD
+          else
+            git worktree add --detach shots
+            git -C shots switch --orphan screenshots
+          fi
+          mkdir -p "shots/$dir"
+          find verified -maxdepth 1 -name '*.png' -exec cp {} "shots/$dir/" \;
+          git -C shots add .
+          # A rerun of the same commit can produce identical images; nothing to commit is fine.
+          git -C shots diff --cached --quiet || git -C shots commit -m "chore: screenshots for #${PR} at ${SHA::7}"
+          # Each run writes its own folder, so a rebase after a race never conflicts.
+          for i in 1 2 3; do
+            if git -C shots push origin HEAD:screenshots; then pushed=1; break; fi
+            git -C shots fetch origin screenshots && git -C shots rebase FETCH_HEAD
+          done
+          [ -n "${pushed:-}" ] || { echo "Could not push screenshots"; exit 1; }
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+      - name: Update the PR description
+        if: steps.pr.outputs.number
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          DIR: ${{ steps.publish.outputs.dir }}
+          SHA: ${{ steps.pr.outputs.sha }}
+          MANIFEST: verified/manifest.json
+          IMAGES: verified
+        run: node scripts/screenshots/update-pr-body.mjs

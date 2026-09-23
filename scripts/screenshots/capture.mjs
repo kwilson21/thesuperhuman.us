@@ -12,6 +12,7 @@ import { chromium } from 'playwright';
 import { ACCESS_AUDIENCE, ACCESS_ISSUER, OUT, OWNER_EMAIL, PAGES, VIEWPORTS } from './config.mjs';
 
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:4321';
+const statusText = { 404: 'Not Found' };
 
 // A throwaway Access issuer so owner pages render with the real JWT check.
 const { publicKey, privateKey } = await generateKeyPair('RS256');
@@ -40,8 +41,10 @@ async function capture({ file, path, viewport = 'desktop', owner = false, cookie
   const page = await context.newPage();
   const where = `${path} (${viewport})`;
   page.on('console', message => {
-    // The browser also logs an intentional non-200 document, such as the 404 page, as an error.
-    const ownStatus = message.location().url === BASE + path && status !== 200;
+    // The browser logs an intentional non-200 document, such as the 404 page, as a failed resource.
+    // Ignore exactly that message for the page itself; any other error on the page still fails.
+    const ownStatus = status !== 200 && message.location().url === BASE + path
+      && message.text() === `Failed to load resource: the server responded with a status of ${status} (${statusText[status] ?? ''})`;
     if (message.type() === 'error' && !ownStatus) errors.push(`${where}: ${message.text()}`);
   });
   page.on('pageerror', error => errors.push(`${where}: ${error.message}`));

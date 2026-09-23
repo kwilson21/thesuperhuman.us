@@ -31,8 +31,12 @@ export const NOT_PAGES = {
   'src/pages/404.astro': 'Captured through not-found.',
   'src/pages/services.html.astro': 'Redirects to /services.',
   'src/pages/music/[slug].astro': 'Captured through music-old-news.',
-  'src/pages/owner/requests/[id].astro': 'Needs a seeded request; scenarios capture it.',
-  'src/pages/owner/campaigns/[id].astro': 'Needs a seeded campaign; scenarios capture it.',
+};
+
+/** Pages that need seeded data. The coverage test checks the named scenario captures the route. */
+export const SCENARIO_PAGES = {
+  'src/pages/owner/requests/[id].astro': { scenario: 'owner-details', route: '/owner/requests/' },
+  'src/pages/owner/campaigns/[id].astro': { scenario: 'owner-details', route: '/owner/campaigns/' },
 };
 
 export const VIEWPORTS = [
@@ -57,7 +61,31 @@ export function withScreenshots(body, section) {
   return text ? `${text}\n\n${section}` : section;
 }
 
-/** Builds the PR description section from the capture manifest. */
+const escape = value => String(value).replace(/[&<>"'`|\\*_[\]#]/g, character => `&#${character.charCodeAt(0)};`).slice(0, 200);
+const imageName = /^[a-z0-9-]{1,100}\.png$/;
+
+/**
+ * The manifest arrives from untrusted pull request code. Keep only entries whose images passed
+ * validation, escape every piece of text, and cap the lengths.
+ */
+export function sanitizeManifest(manifest, images) {
+  const available = new Set(images.filter(name => imageName.test(name)));
+  const has = file => typeof file === 'string' && available.has(file);
+  const pages = (Array.isArray(manifest?.pages) ? manifest.pages : []).slice(0, 100)
+    .filter(page => typeof page?.name === 'string' && has(`${page.name}-desktop.png`) && has(`${page.name}-phone.png`))
+    .map(page => ({ name: page.name, path: escape(page.path ?? '') }));
+  const scenarios = (Array.isArray(manifest?.scenarios) ? manifest.scenarios : []).slice(0, 20).map(scenario => ({
+    title: escape(scenario?.title ?? 'Scenario'),
+    steps: (Array.isArray(scenario?.steps) ? scenario.steps : []).slice(0, 40).map(step => ({
+      title: escape(step?.title ?? ''),
+      images: (Array.isArray(step?.images) ? step.images : []).slice(0, 8).filter(image => has(image?.file))
+        .map(image => ({ file: image.file, caption: escape(image.caption ?? '') })),
+    })).filter(step => step.images.length),
+  })).filter(scenario => scenario.steps.length);
+  return { pages, scenarios };
+}
+
+/** Builds the PR description section from a sanitized capture manifest. */
 export function screenshotSection(manifest, rawBase, sha) {
   const [desktop, phone] = VIEWPORTS;
   const img = (file, alt, width) => `<img src="${rawBase}/${file}" width="${width}" alt="${alt.replaceAll('"', '&quot;')}">`;

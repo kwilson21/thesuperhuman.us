@@ -1,6 +1,11 @@
 # Screenshots
 
-CI runs these on pull requests that touch the UI. It publishes the images to the `screenshots` branch and writes them into the PR description.
+CI runs these on pull requests that touch the UI, in two workflows:
+
+- `screenshots.yml` runs the pull request's code with a read-only token. It captures the pages and scenarios and uploads the PNGs and `manifest.json` as an artifact.
+- `screenshots-publish.yml` runs after it via `workflow_run`, always from the default branch. It finds the pull request from run metadata, accepts only PNG files with plain names, sanitizes the manifest, pushes the images to the `screenshots` branch and writes the table into the PR description.
+
+Because `workflow_run` workflows only run from the default branch, a change to the publish step takes effect after it merges.
 
 Run locally:
 
@@ -17,6 +22,8 @@ The preview uses local D1, KV and R2, Turnstile's test keys, and a throwaway Acc
 `config.mjs` lists every page. `tests/scripts/screenshots.test.ts` fails when a new page file is neither listed in `PAGES` nor explained in `NOT_PAGES`.
 
 ## Scenarios
+
+Pages that need seeded data are listed in `SCENARIO_PAGES` in `config.mjs` with the scenario that captures them; the coverage test checks that scenario captures the route.
 
 A scenario captures a stateful flow step by step. Add `scripts/screenshots/scenarios/<name>.mjs`:
 

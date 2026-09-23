@@ -1,5 +1,7 @@
 name: Screenshots
 
+# Runs the pull request's own code, so it gets a read-only token. It only captures images and
+# uploads them as an artifact; screenshots-publish.yml (always main's copy) publishes them.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
@@ -15,23 +17,22 @@ on:
       - '.github/workflows/screenshots.yml'
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 concurrency:
   group: screenshots-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  screenshots:
-    # Forks get a read-only token and can't push images or edit the description.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+  capture:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       WRANGLER_SEND_METRICS: 'false'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.19.0
@@ -44,39 +45,13 @@ jobs:
           MUSIC_PREVIEW_CONFIG=.screenshots/wrangler.json npx astro dev --port 4321 --host 127.0.0.1 > astro.log 2>&1 &
           for i in $(seq 1 90); do curl -fsS -o /dev/null http://127.0.0.1:4321/ && break; sleep 2; done
       - run: npm run screenshots
-      - name: Publish images to the screenshots branch
-        id: publish
-        env:
-          PR: ${{ github.event.pull_request.number }}
-          SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          dir="pr-${PR}/${SHA::7}"
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git fetch --depth=1 origin screenshots; then
-            git worktree add --detach shots FETCH_HEAD
-          else
-            git worktree add --detach shots
-            git -C shots switch --orphan screenshots
-          fi
-          mkdir -p "shots/$dir"
-          cp screenshots/*.png "shots/$dir/"
-          git -C shots add .
-          # A rerun of the same commit can produce identical images; nothing to commit is fine.
-          git -C shots diff --cached --quiet || git -C shots commit -m "chore: screenshots for #${PR} at ${SHA::7}"
-          # Each run writes its own folder, so a rebase after a race never conflicts.
-          for i in 1 2 3; do
-            if git -C shots push origin HEAD:screenshots; then pushed=1; break; fi
-            git -C shots fetch origin screenshots && git -C shots rebase FETCH_HEAD
-          done
-          [ -n "${pushed:-}" ] || { echo "Could not push screenshots"; exit 1; }
-          echo "dir=$dir" >> "$GITHUB_OUTPUT"
-      - name: Update the PR description
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          DIR: ${{ steps.publish.outputs.dir }}
-          SHA: ${{ github.event.pull_request.head.sha }}
-        run: node scripts/screenshots/update-pr-body.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: screenshots
+          path: |
+            screenshots/*.png
+            screenshots/manifest.json
+          retention-days: 7
+          if-no-files-found: error
       - if: failure()
         run: tail -80 astro.log || true
