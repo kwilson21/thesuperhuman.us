@@ -16,17 +16,23 @@ try { raw = JSON.parse(await readFile(MANIFEST, 'utf8')); } catch { /* An unread
 const manifest = sanitizeManifest(raw, await readdir(IMAGES));
 const section = screenshotSection(manifest, `https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/screenshots/${DIR}`, SHA);
 
-const readBody = async () => {
+const readPull = async () => {
   const response = await fetch(url, { headers });
   if (!response.ok) throw new Error(`Reading the PR failed: ${response.status}`);
-  return (await response.json()).body;
+  return response.json();
 };
 // GitHub has no conditional update for PR bodies. Re-read just before writing and start over if
 // someone edited the description meanwhile, which keeps the overwrite window to one request.
 for (let attempt = 1; ; attempt++) {
-  const body = await readBody();
+  const { body } = await readPull();
   const next = withScreenshots(body, section);
-  if (await readBody() !== body) {
+  const latest = await readPull();
+  // A newer push has its own run coming; these screenshots would replace that run's.
+  if (latest.head?.sha !== SHA) {
+    console.log(`The PR has moved on to ${latest.head?.sha}; leaving the description alone.`);
+    process.exit(0);
+  }
+  if (latest.body !== body) {
     if (attempt === 3) throw new Error('The description kept changing; not overwriting it.');
     continue;
   }

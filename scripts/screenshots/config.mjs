@@ -29,8 +29,12 @@ export const PAGES = [
 /** Page files that are covered another way. */
 export const NOT_PAGES = {
   'src/pages/404.astro': 'Captured through not-found.',
-  'src/pages/services.html.astro': 'Redirects to /services.',
   'src/pages/music/[slug].astro': 'Captured through music-old-news.',
+};
+
+/** Page files that only redirect. Capture checks each one answers with this status and location. */
+export const REDIRECTS = {
+  'src/pages/services.html.astro': { from: '/services.html', to: '/services', status: 301 },
 };
 
 /** Pages that need seeded data. The coverage test checks the named scenario captures the route. */
@@ -38,6 +42,16 @@ export const SCENARIO_PAGES = {
   'src/pages/owner/requests/[id].astro': { scenario: 'owner-details', route: '/owner/requests/' },
   'src/pages/owner/campaigns/[id].astro': { scenario: 'owner-details', route: '/owner/campaigns/' },
 };
+
+/**
+ * Page files in SCENARIO_PAGES whose scenario never rendered a page under the route.
+ * `captured` lists `{ scenario, path }` for every capture that returned its expected status.
+ */
+export function missingScenarioRoutes(scenarioPages, captured) {
+  return Object.entries(scenarioPages).filter(([, { scenario, route }]) =>
+    !captured.some(item => item.scenario === scenario && item.path.startsWith(route) && item.path.length > route.length))
+    .map(([file]) => file);
+}
 
 export const VIEWPORTS = [
   { name: 'desktop', width: 1280, height: 800 },
@@ -48,6 +62,63 @@ export const OUT = 'screenshots';
 export const OWNER_EMAIL = 'owner@example.com';
 export const ACCESS_ISSUER = 'http://127.0.0.1:9911';
 export const ACCESS_AUDIENCE = 'screenshots';
+
+/**
+ * Settings the preview deliberately changes from wrangler.jsonc. Every other var is mirrored,
+ * so a feature flag flipped there shows up in the screenshots.
+ */
+export const PREVIEW_OVERRIDES = {
+  // Turnstile's always-pass test keys: the production site key rejects localhost.
+  PUBLIC_TURNSTILE_SITE_KEY: '1x00000000000000000000AA',
+  TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA',
+  // A throwaway Access issuer run by capture.mjs, so owner pages go through the real JWT check.
+  OWNER_ACCESS_TEAM_DOMAIN: ACCESS_ISSUER,
+  OWNER_ACCESS_AUD: ACCESS_AUDIENCE,
+  OWNER_EMAIL,
+  // Production keeps this secret; the preview needs some key to issue studio codes.
+  AUDIO_CLIENT_CODE_KEY: 'screenshots-only-code-key-0123456789abcdef',
+  // Gated pages stay reviewable in PRs before launch.
+  AUDIO_CLIENT_PORTAL_ENABLED: 'true',
+};
+
+/** Parses JSON with comments and trailing commas, the format of wrangler.jsonc. */
+export function parseJsonc(text) {
+  let out = '';
+  for (let i = 0; i < text.length; i++) {
+    const character = text[i];
+    if (character === '"') {
+      const start = i;
+      for (i++; i < text.length && text[i] !== '"'; i++) if (text[i] === '\\') i++;
+      out += text.slice(start, i + 1);
+    } else if (character === '/' && text[i + 1] === '/') {
+      while (i < text.length && text[i] !== '\n') i++;
+      out += '\n';
+    } else if (character === '/' && text[i + 1] === '*') {
+      const end = text.indexOf('*/', i + 2);
+      i = end === -1 ? text.length : end + 1;
+    } else if (character !== ',' || !/^\s*[}\]]/.test(text.slice(i + 1))) out += character;
+  }
+  return JSON.parse(out);
+}
+
+/**
+ * The local preview config: wrangler.jsonc's compatibility settings, vars and binding names,
+ * with local storage in place of every production resource and PREVIEW_OVERRIDES applied.
+ */
+export function previewWrangler(config) {
+  return {
+    name: 'screenshots-preview',
+    compatibility_date: config.compatibility_date,
+    compatibility_flags: config.compatibility_flags ?? [],
+    vars: { ...config.vars, ...PREVIEW_OVERRIDES },
+    d1_databases: (config.d1_databases ?? []).map((database, index) => ({ binding: database.binding,
+      database_name: `screenshots-${database.binding.toLowerCase()}`,
+      database_id: `00000000-0000-0000-0000-${String(index + 1).padStart(12, '0')}`,
+      ...(database.migrations_dir ? { migrations_dir: database.migrations_dir } : {}) })),
+    kv_namespaces: (config.kv_namespaces ?? []).map(({ binding }) => ({ binding, id: `screenshots-${binding.toLowerCase()}` })),
+    r2_buckets: (config.r2_buckets ?? []).map(({ binding }) => ({ binding, bucket_name: `screenshots-${binding.toLowerCase()}` })),
+  };
+}
 
 const START = '<!-- screenshots:start -->';
 const END = '<!-- screenshots:end -->';

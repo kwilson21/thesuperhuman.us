@@ -13,8 +13,10 @@ permissions:
   contents: write
   pull-requests: write
 
+# One publish per branch at a time. Each run also checks the PR's current head, so an older run
+# that finishes late publishes nothing instead of replacing newer screenshots.
 concurrency:
-  group: screenshots-publish-${{ github.event.workflow_run.head_sha }}
+  group: screenshots-publish-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: false
 
 jobs:
@@ -28,9 +30,12 @@ jobs:
         env:
           PULLS: ${{ toJSON(github.event.workflow_run.pull_requests) }}
           SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           number=$(jq -r --arg sha "$SHA" '[.[] | select(.head.sha == $sha) | .number][0] // empty' <<< "$PULLS")
           [[ "$number" =~ ^[0-9]+$ && "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "No same-repository pull request for this run; nothing to publish."; exit 0; }
+          head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$number" --jq '.head.sha')
+          [[ "$head" == "$SHA" ]] || { echo "#$number has moved on to $head; skipping screenshots for $SHA."; exit 0; }
           echo "number=$number" >> "$GITHUB_OUTPUT"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
       - if: steps.pr.outputs.number
@@ -51,7 +56,7 @@ jobs:
             if [[ "$name" == manifest.json ]]; then cp "$file" verified/; continue; fi
             [[ "$name" =~ ^[a-z0-9-]{1,100}\.png$ && -f "$file" && ! -L "$file" ]] || { echo "Skipping unexpected file $name"; continue; }
             [[ $(stat -c %s "$file") -le 15000000 ]] || { echo "Skipping oversized $name"; continue; }
-            [[ "$(head -c 8 "$file" | od -An -tx1 | tr -d ' \n')" == 89504e470d0a1a0a ]] || { echo "Skipping non-PNG $name"; continue; }
+            problem=$(node scripts/screenshots/verify-png.mjs "$file" 2>&1) || { echo "Skipping $name: $problem"; continue; }
             cp "$file" verified/
           done
           [[ -f verified/manifest.json ]] || { echo "Missing manifest"; exit 1; }

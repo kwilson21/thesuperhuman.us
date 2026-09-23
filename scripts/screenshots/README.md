@@ -3,7 +3,7 @@
 CI runs these on pull requests that touch the UI, in two workflows:
 
 - `screenshots.yml` runs the pull request's code with a read-only token. It captures the pages and scenarios and uploads the PNGs and `manifest.json` as an artifact.
-- `screenshots-publish.yml` runs after it via `workflow_run`, always from the default branch. It finds the pull request from run metadata, accepts only PNG files with plain names, sanitizes the manifest, pushes the images to the `screenshots` branch and writes the table into the PR description.
+- `screenshots-publish.yml` runs after it via `workflow_run`, always from the default branch. It finds the pull request from run metadata and skips the run if the PR has moved on to a newer commit. It accepts only PNG files with plain names that `verify-png.mjs` fully decodes, sanitizes the manifest, pushes the images to the `screenshots` branch and writes the table into the PR description, checking the PR head once more just before it writes.
 
 Because `workflow_run` workflows only run from the default branch, a change to the publish step takes effect after it merges.
 
@@ -15,15 +15,15 @@ MUSIC_PREVIEW_CONFIG=.screenshots/wrangler.json npx astro dev --port 4321 --host
 npm run screenshots   # in a second terminal; images land in screenshots/
 ```
 
-The preview uses local D1, KV and R2, Turnstile's test keys, and a throwaway Access issuer on `127.0.0.1:9911`, so owner pages render through the real JWT check. Nothing reaches production.
+The preview config is built from `wrangler.jsonc`: the same compatibility settings, vars and binding names, with local D1, KV and R2 in place of every production resource. `PREVIEW_OVERRIDES` in `config.mjs` lists the only vars it changes, and why: Turnstile's test keys, a throwaway Access issuer on `127.0.0.1:9911` so owner pages render through the real JWT check, a local studio code key, and the client portal flag turned on so gated pages can be reviewed before launch. Nothing reaches production. A change to `wrangler.jsonc` triggers the workflow.
 
 ## Pages
 
-`config.mjs` lists every page. `tests/scripts/screenshots.test.ts` fails when a new page file is neither listed in `PAGES` nor explained in `NOT_PAGES`.
+`config.mjs` lists every page. `tests/scripts/screenshots.test.ts` fails when a new page file is not in `PAGES`, `REDIRECTS`, `SCENARIO_PAGES` or `NOT_PAGES`. Capture requests each redirect without following it and fails unless the status and location match.
 
 ## Scenarios
 
-Pages that need seeded data are listed in `SCENARIO_PAGES` in `config.mjs` with the scenario that captures them; the coverage test checks that scenario captures the route.
+Pages that need seeded data are listed in `SCENARIO_PAGES` in `config.mjs` with the scenario that captures them. The coverage test runs each scenario with a recording `capture`, and capture itself fails when the scenario rendered no page under the route with the expected status.
 
 A scenario captures a stateful flow step by step. Add `scripts/screenshots/scenarios/<name>.mjs`:
 

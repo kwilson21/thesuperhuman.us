@@ -12,6 +12,7 @@ on:
       - 'scripts/screenshots/**'
       - 'astro.config.mjs'
       - 'tailwind.config.mjs'
+      - 'wrangler.jsonc'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/screenshots.yml'

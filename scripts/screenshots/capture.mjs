@@ -9,7 +9,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { chromium } from 'playwright';
-import { ACCESS_AUDIENCE, ACCESS_ISSUER, OUT, OWNER_EMAIL, PAGES, VIEWPORTS } from './config.mjs';
+import { ACCESS_AUDIENCE, ACCESS_ISSUER, missingScenarioRoutes, OUT, OWNER_EMAIL, PAGES, REDIRECTS, SCENARIO_PAGES, VIEWPORTS } from './config.mjs';
 
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:4321';
 const statusText = { 404: 'Not Found' };
@@ -29,6 +29,8 @@ await rm(OUT, { recursive: true, force: true });
 await mkdir(OUT, { recursive: true });
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const errors = [];
+// Every path that rendered with the expected status, so seeded pages can be checked afterwards.
+const captured = [];
 
 /** Saves one PNG. Pass `owner` for owner pages, `cookie` for a studio session, `selector` for one section. */
 async function capture({ file, path, viewport = 'desktop', owner = false, cookie, selector, status = 200 }) {
@@ -50,6 +52,7 @@ async function capture({ file, path, viewport = 'desktop', owner = false, cookie
   page.on('pageerror', error => errors.push(`${where}: ${error.message}`));
   const response = await page.goto(BASE + path, { waitUntil: 'load', timeout: 90_000 });
   if (response?.status() !== status) errors.push(`${where}: HTTP ${response?.status()}, expected ${status}`);
+  else captured.push({ scenario: currentScenario, path });
   // Turnstile keeps requesting in the background, so network idle is a best effort, not a requirement.
   await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
   await page.evaluate(() => document.fonts.ready);
@@ -71,7 +74,15 @@ async function ownerFetch(path, body, method = 'POST', headers = {}) {
   return json;
 }
 
+let currentScenario;
 try {
+  for (const { from, to, status } of Object.values(REDIRECTS)) {
+    const response = await fetch(BASE + from, { redirect: 'manual' });
+    const location = response.headers.get('location');
+    if (response.status !== status || (location && new URL(location, BASE).pathname) !== to) {
+      errors.push(`${from}: HTTP ${response.status} to ${location}, expected ${status} to ${to}`);
+    }
+  }
   const pages = [];
   for (const page of PAGES) {
     for (const viewport of VIEWPORTS) await capture({ file: `${page.name}-${viewport.name}.png`, path: page.path, viewport: viewport.name, owner: page.owner, status: page.status });
@@ -81,8 +92,10 @@ try {
   const directory = resolve('scripts/screenshots/scenarios');
   for (const name of (await readdir(directory)).filter(file => file.endsWith('.mjs')).sort()) {
     const scenario = (await import(pathToFileURL(`${directory}/${name}`).href)).default;
+    currentScenario = name.replace(/\.mjs$/, '');
     scenarios.push({ title: scenario.title, steps: await scenario.run({ base: BASE, capture, sql, ownerFetch }) });
   }
+  errors.push(...missingScenarioRoutes(SCENARIO_PAGES, captured).map(file => `${file}: its scenario captured no page under its route`));
   await writeFile(`${OUT}/manifest.json`, JSON.stringify({ pages, scenarios }, null, 2));
 } finally {
   await browser.close();
