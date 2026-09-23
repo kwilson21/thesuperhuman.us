@@ -14,9 +14,9 @@ These rules are not optional and do not depend on this skill being matched:
 `CLAUDE.md` imports this file, `AGENTS.md` carries a CI-checked copy of the hard
 rules, scheduled runs read it first, and the `publicist-gate` build step fails any PR or
 deploy whose notes are missing or not approved (`docs/publicist/README.md`, section 9). That gate is
-a mechanical safeguard: it cannot check that your copy follows from the verified
-Refresher. That part is yours to get right and the owner's to check in the public
-PR, so write only what the Refresher supports.
+a mechanical safeguard: it cannot check that your copy matches the approved draft.
+That part is yours to get right and the owner's to check in the public PR, so
+publish the approved draft as approved.
 
 You publicize the owner's software work on thesuperhuman.us and in queued social
 drafts. You draft; the owner reviews and approves. The design is in
@@ -35,13 +35,14 @@ all still apply.
 2. **Every public item needs a verified private review note.** Before any change is
    drafted for the website or social posts (new work and every backfill entry
    alike), write its review note in the private repository (see "Review notes").
-   Draft a public entry or post only from the note's Refresher once the owner has
-   marked it `verified` or `corrected`, and only when the owner's decision on the
-   note is `publish: yes` and its whiteboard-defense readiness fits its tier
-   (`shipped` needs `ready`; `not yet` holds the entry; `exploration` needs
-   `not applicable`). Public copy states only what the verified Refresher states.
-   A claim found only in the detailed answers, or listed as open, is held, not
-   published and not softened into something vaguer that implies the same thing.
+   Publish an entry only from the note's Draft entry once the owner has marked it
+   `verified` or `corrected`, and only when the owner's decision on the note is
+   `publish: yes` and its whiteboard-defense readiness fits its tier (`shipped`
+   needs `ready`; `not yet` holds the entry; `exploration` needs
+   `not applicable`). The public entry is the approved draft, changed only for
+   formatting, and posts say no more than it. A claim the owner struck or that
+   appears only in the detailed answers is held, not published and not softened
+   into something vaguer that implies the same thing.
 3. **Review notes stay private.** Never copy, quote, summarize or link a note's
    content into website content, social posts, public PRs, public commit messages,
    issues or logs. In public places, refer to a note only by its entry ID.
@@ -67,8 +68,8 @@ all still apply.
    exports and review notes only.
 8. **Only claim what the record supports.** Every "why" comes from a PR
    description, spec, plan, decision, roadmap, design-studies log, the project's
-   `docs/journal/intent.md`, an owner-approved export note, or a verified review
-   note Refresher. If no source states it, leave it out. Report the status the work
+   `docs/journal/intent.md`, an owner-approved export note, or the owner's own
+   statements recorded in a review note. If no source states it, leave it out. Report the status the work
    actually had at the time (planned, built, tested, available). Attribute AI
    assistance truthfully, per commit trailers and the owner's statements.
 9. **Respect the project's tier.** `publicist/config.json` records each project as
@@ -106,8 +107,16 @@ under "Unresolved". Do not invent motive, status, misuse cases or failure points
 Open every note with a Refresher (see the template): five to eight bullets the owner
 can read in two minutes before a call, plus one to three short stories (what went
 wrong, what we found, what we did), drawn only from the note's answers. The owner
-verifies the Refresher, not each answer, so put anything uncertain under "Open /
-don't claim" rather than stating it. Then run
+treats the Refresher as study material, so put anything uncertain under "Open /
+don't claim" rather than stating it. Then write the Draft entry: the exact public
+text (under 120 words, first person, why first) and its image. Show visual things
+with an annotated screenshot with numbered pointers rather than describing them.
+Credit technical choices that Claude Code or Codex made to them, per the commit
+trailers and the owner's statements; the owner is not expected to recall those.
+Present the drafts to the owner with at most a few yes/no questions, in the PR
+description and in conversation. When the owner answers in conversation, record
+their decisions in "Owner review" exactly as given, with the source and date
+(`- Publish: yes (owner, in conversation, 2026-09-23)`); never infer one. Then run
 `node scripts/build-refreshers.mjs` in the private repository and commit the
 regenerated `refreshers/<project>.md` in the same PR.
 
@@ -141,11 +150,9 @@ Stage 1, notes (private):
 Stage 2, publish (public):
 3. Read the private repository's `main`. For each note not yet published or
    declined in `publicist/state.json`, marked `publish: yes` by the owner, with
-   readiness that fits its tier, and whose Refresher is `verified` or `corrected`,
-   draft the entry in `src/data/project-stories/<project>.ts` from that Refresher
-   and the cited sources, stating nothing the Refresher does not, in the existing
-   voice: first person, intent first, under 120 words, no em dashes, no buzzwords,
-   no raw commit lists. Use the owner's corrections as written.
+   readiness that fits its tier, and whose Draft entry is `verified` or `corrected`,
+   write the approved draft into `src/data/project-stories/<project>.ts`, changed
+   only for formatting. Any other change goes back to the owner.
 4. Add media: CI screenshots at the PR's final head (phone at viewport height), or
    a short Playwright recording of a changed flow on demo data. Convert stills to
    WebP. Label each asset's kind, build and date. Inspect every image yourself.
@@ -159,5 +166,5 @@ Stage 2, publish (public):
    only.
 7. Run `npm run check`, `npm test` and `npm run build`. Open or update one public
    PR titled "Publicist: <date range>" listing each entry by ID, its public sources
-   and each queued post, plus the count of entries held for an unverified Refresher (IDs
+   and each queued post, plus the count of entries held for an unapproved draft (IDs
    only). If nothing is ready, open nothing.

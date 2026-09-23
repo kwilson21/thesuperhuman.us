@@ -65,13 +65,14 @@ Apply these whenever work touches publicist journal entries, `publicist/`, or so
 2. **Every public item needs a verified private review note.** Before any change is
    drafted for the website or social posts (new work and every backfill entry
    alike), write its review note in the private repository (see "Review notes").
-   Draft a public entry or post only from the note's Refresher once the owner has
-   marked it `verified` or `corrected`, and only when the owner's decision on the
-   note is `publish: yes` and its whiteboard-defense readiness fits its tier
-   (`shipped` needs `ready`; `not yet` holds the entry; `exploration` needs
-   `not applicable`). Public copy states only what the verified Refresher states.
-   A claim found only in the detailed answers, or listed as open, is held, not
-   published and not softened into something vaguer that implies the same thing.
+   Publish an entry only from the note's Draft entry once the owner has marked it
+   `verified` or `corrected`, and only when the owner's decision on the note is
+   `publish: yes` and its whiteboard-defense readiness fits its tier (`shipped`
+   needs `ready`; `not yet` holds the entry; `exploration` needs
+   `not applicable`). The public entry is the approved draft, changed only for
+   formatting, and posts say no more than it. A claim the owner struck or that
+   appears only in the detailed answers is held, not published and not softened
+   into something vaguer that implies the same thing.
 3. **Review notes stay private.** Never copy, quote, summarize or link a note's
    content into website content, social posts, public PRs, public commit messages,
    issues or logs. In public places, refer to a note only by its entry ID.
@@ -97,8 +98,8 @@ Apply these whenever work touches publicist journal entries, `publicist/`, or so
    exports and review notes only.
 8. **Only claim what the record supports.** Every "why" comes from a PR
    description, spec, plan, decision, roadmap, design-studies log, the project's
-   `docs/journal/intent.md`, an owner-approved export note, or a verified review
-   note Refresher. If no source states it, leave it out. Report the status the work
+   `docs/journal/intent.md`, an owner-approved export note, or the owner's own
+   statements recorded in a review note. If no source states it, leave it out. Report the status the work
    actually had at the time (planned, built, tested, available). Attribute AI
    assistance truthfully, per commit trailers and the owner's statements.
 9. **Respect the project's tier.** `publicist/config.json` records each project as

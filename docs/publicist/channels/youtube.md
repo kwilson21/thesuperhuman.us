@@ -99,7 +99,7 @@ not been watched):
 ## Review gate and approval
 
 - **Build videos** use the normal review note for the change they cover. A video may
-  show and say only what its verified Refresher supports, like any post.
+  show and say only what its approved draft supports, like any post.
 - **Sound videos and releases** use a release note instead (see
   [the template](../review-note-template.md)): credits, the right to publish the
   recording and any samples or beats on YouTube, where it is already distributed,
