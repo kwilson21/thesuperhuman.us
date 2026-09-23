@@ -1,0 +1,8 @@
+{
+  "privateRepo": "kwilson21/publicist-private",
+  "projects": {
+    "tally": { "repo": "kwilson21/tally", "tier": "shipped", "data": "src/data/project-stories/tally.ts" },
+    "kaillera-next": { "repo": "kwilson21/kaillera-next", "tier": "shipped", "data": "src/data/project-stories/kaillera-next.ts" }
+  },
+  "autopost": { "linkedin": false, "bluesky": false, "x": false }
+}

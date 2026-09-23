@@ -1,10 +1,11 @@
 # Publicist agent: design proposal
 
-Status: proposal for owner review, 2026-09-23. Nothing here is scheduled, deployed
-or posted. The backfill and the Routine are built only after the owner approves
-this design. Samples live in [samples/](samples/). The proposed agent instructions
-live in [SKILL.md](SKILL.md), and every publicized change passes a private owner
-review first ([section 3](#3-private-review-gate)).
+Status: approved by the owner, 2026-09-23. The rules are active: the agent
+instructions live in
+[.agents/skills/publicist/SKILL.md](../../.agents/skills/publicist/SKILL.md), and
+every publicized change passes a private owner review first
+([section 3](#3-private-review-gate)). Samples live in [samples/](samples/). The
+daily Routine is created paused and turned on after the owner reviews a dry run.
 
 The publicist covers `kwilson21/tally` and `kwilson21/kaillera-next` on
 thesuperhuman.us and on social media. It extends the existing development journal;
@@ -465,7 +466,8 @@ enforced in four layers, plus the owner's review of the final public PR:
 
    It confirms that the approvals exist; it does not check what the copy says.
    It reads the private repository with a fine-grained, read-only token for that
-   one repository, stored as an Actions secret and as a Cloudflare build secret
+   one repository (Contents: read), named `PUBLICIST_PRIVATE_TOKEN` and stored as an
+   Actions secret and as a Cloudflare build secret
    (GitHub does not expose secrets to pull requests from forks). Its log prints only
    entry IDs and pass or fail, never note content. Local builds without the token
    skip the private lookup and say so; CI and deploy builds without it fail. Branch
@@ -489,16 +491,16 @@ verified answers; no script can judge that. **Source fidelity is checked by the
 owner reviewing the final public PR** against the notes, claim by claim, before
 merging. That review is the claim-level check, and the gate does not replace it.
 
-**Where the file lives.** When the Routine is built the draft moves to one
-canonical file that both agents read, so Claude and Codex behave the same:
+**Where the file lives.** One canonical file that both agents read, so Claude and
+Codex behave the same:
 `.agents/skills/publicist/SKILL.md` (where Codex looks for repository skills) holds
 the full instructions; `.claude/skills/publicist/SKILL.md` (where Claude Code looks)
 is a stub with the same name and description whose only instruction is to follow the
 canonical file. `.gitignore` changes from `.claude/` to `.claude/*` plus
-`!.claude/skills/` so the stub can be committed, and `AGENTS.md` and `CLAUDE.md`
-each gain one line naming the canonical file. The draft in `docs/publicist/` is
-deleted in the same change, so only one maintained copy exists, and the Routine
-prompt (appendix) loads that canonical file first. In short:
+`!.claude/skills/` so the stub can be committed. `CLAUDE.md` imports the canonical
+file, and `AGENTS.md` carries its hard rules in a marked block that
+`npm run publicist:sync` writes and the build checks. The Routine prompt (appendix)
+loads that canonical file first. In short:
 - Tally content comes only from demo data (seeded fictional household, CI
   screenshots, the public demo). Never production bindings, the family's data, or
   Plaid anything.
