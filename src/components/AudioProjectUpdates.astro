@@ -36,7 +36,7 @@ const title = (update: ProjectUpdate) => update.file_version === 'review' ? 'Rev
 const upcoming = active && currentDueAt && stage !== 'final_files_ready' ? currentDueAt : null;
 const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' });
 ---
-<section class="project-updates" data-audio-project-updates data-endpoint={endpoint} aria-labelledby="project-updates-heading">
+<section class:list={['project-updates', { owner }]} data-audio-project-updates data-endpoint={endpoint} aria-labelledby="project-updates-heading">
   <div class="project-updates-heading"><p class="project-updates-kicker">Progress</p><h2 id="project-updates-heading">{owner ? 'Timeline' : 'Your song’s timeline'}</h2></div>
   {updates.length || upcoming ? <ol class="timeline">
     {upcoming && <li class="timeline-next"><span class="timeline-node next" aria-hidden="true"></span><div class="timeline-entry">
@@ -93,6 +93,9 @@ const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month
 </section>
 <style>
   .project-updates { border-top: 1px solid var(--rule); padding: 2.5rem 0; }
+  /* The owner acts first, then reads the history. */
+  .project-updates.owner { display: flex; flex-direction: column; border-top: 0; padding-top: 0; }
+  .owner .project-update-actions { order: -1; margin: 0 0 2.75rem; }
   .project-updates-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1.5rem; margin-bottom: 2rem; }
   .project-updates-kicker { margin: 0; color: var(--accent); font: 500 .78rem/1.4 Inter, sans-serif; letter-spacing: .18em; text-transform: uppercase; }
   h2 { margin: 0; font: 400 clamp(2rem, 4vw, 3rem)/1.1 Newsreader, Georgia, serif; }

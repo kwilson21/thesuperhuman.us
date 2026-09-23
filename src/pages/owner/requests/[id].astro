@@ -40,52 +40,126 @@ const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') 
 <OwnerLayout title={request.summary} current="requests" newRequestCount={newRequests.length} ownerEmail={Astro.locals.owner?.email ?? ''}>
   <p class="owner-breadcrumb"><a href="/owner/requests">Requests</a> <span aria-hidden="true">/</span> {request.summary}</p>
   <header class="owner-page-heading compact"><div><p class="owner-kicker">{request.kind} · {request.status}</p><h1>{request.summary}</h1><p>Received {new Date(request.createdAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</p></div></header>
-  <div class="request-detail-grid" data-request-id={request.id}>
-    <section class="owner-section request-contact" aria-labelledby="contact-heading"><p class="owner-kicker">Person</p><h2 id="contact-heading">Contact</h2><dl><dt>Name</dt><dd>{request.name || 'Not supplied'}</dd><dt>Email</dt><dd><a href={`mailto:${request.email}`}>{request.email}</a></dd><dt>City or region <small>Supplied by requester</small></dt><dd>{request.cityRegion || 'Not supplied'}</dd></dl>
-      {(request.releaseId || request.serviceId || request.campaignId) && <div class="request-source"><p class="owner-kicker">Related</p>{request.releaseId && <a href={`/music/${request.releaseId.replace(/-single$/, '')}`}>Open release →</a>}{request.serviceId && <a href="/audio/services">Open service →</a>}{request.campaignId && <a href={`/owner/campaigns/${request.campaignId}`}>Open campaign →</a>}</div>}
-    </section>
-    {detailRows.length > 0 && <section class="owner-section request-submission" aria-labelledby="submission-heading"><p class="owner-kicker">Submitted with this request</p><h2 id="submission-heading">Project details</h2><dl>{detailRows.map(([key, value]) => { const href = /url|link/i.test(key) ? safeExternalUrl(value) : null; return <><dt>{label(key)}</dt><dd>{href ? <a href={href} rel="noreferrer">Open supplied link →</a> : detailValue(value)}</dd></>; })}</dl></section>}
-    <section class="owner-section request-work" aria-labelledby="work-heading"><p class="owner-kicker">Your working note</p><h2 id="work-heading">Keep the next step clear</h2><form data-request-note><label for="owner-private-note">Private note</label><textarea id="owner-private-note" name="note" maxlength="1000" rows="5">{request.privateNote}</textarea><button type="submit">Save private note</button><p data-action-status aria-live="polite"></p></form>
-      {allowed.length > 0 && <div class="request-actions" data-request-actions>{allowed.map(action => <button type="button" data-action={action} class:list={{ danger: action === 'withdraw' }}>{action === 'review' ? 'Mark reviewed' : action === 'resolve' ? 'Mark resolved' : action === 'reopen' ? 'Reopen request' : 'Honor withdrawal'}</button>)}</div>}
-    </section>
+  {portalProject && <nav class="request-jump" aria-label="Sections on this page"><a href="#request-work">Work</a><a href="#project-files-heading">Files</a><a href="#project-messages-heading">Conversation</a><a href="#request-client">Client</a></nav>}
+  <div class:list={['request-layout', { portal: portalProject }]} data-request-id={request.id}>
+    <div class="request-main" id="request-work">
+      {portalProject && <section class="portal-stage" aria-label="Studio project stage"><StageTrack stage={portalProject.stage} bookingPaid={payment?.bookingStatus === 'paid'} /></section>}
+      {portalProject && <AudioProjectUpdates updates={projectUpdates} currentDueAt={portalProject.current_due_at} stage={portalProject.stage} requestStatus={request.status} bookingPaid={payment?.bookingStatus === 'paid'} revoked={Boolean(portalProject.revoked_at)} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/updates`} />}
+      {portalProject && <OwnerProjectFiles files={projectFiles} pending={pendingUploads} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/uploads`}
+        publishEndpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/files`}
+        canUpload={(['in_progress','review_ready','revision_in_progress'].includes(portalProject.stage)
+          || (portalProject.stage === 'final_files_ready' && payment?.balanceStatus === 'paid'))
+          && payment?.bookingStatus === 'paid' && !portalProject.revoked_at && request.status !== 'withdrawn'}
+        finalOnly={portalProject.stage === 'final_files_ready'}
+        canRevoke={!portalProject.revoked_at && request.status !== 'withdrawn'}
+        bookingPaid={payment?.bookingStatus === 'paid'} balancePaid={payment?.balanceStatus === 'paid'} />}
+      {portalProject && <ProjectMessages messages={projectMessages} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/messages`} reader="owner" closed={portalProject.stage === 'complete' || Boolean(portalProject.revoked_at) || request.status === 'withdrawn'} />}
+      {!portalProject && detailRows.length > 0 && <section class="rail-section wide" aria-labelledby="submission-heading"><h2 id="submission-heading">Submitted details</h2><p class="rail-muted rail-caption">Submitted with this request, as the client wrote it.</p><dl class="rail-list">{detailRows.map(([key, value]) => { const href = /url|link/i.test(key) ? safeExternalUrl(value) : null; return <><dt>{label(key)}</dt><dd>{href ? <a href={href} rel="noreferrer">Open link ↗</a> : detailValue(value)}</dd></>; })}</dl></section>}
+      {!portalProject && request.kind === 'service' && <AudioPaymentPanel requestId={request.id} payment={payment} stripeEnabled={stripeAvailable(Astro.locals.runtime.env)} />}
+    </div>
+    <aside class="request-rail" id="request-client" aria-label="Request details">
+      <section class="rail-section" aria-labelledby="contact-heading"><h2 id="contact-heading">Client</h2>
+        <p class="rail-name">{request.name || 'Name not supplied'}</p>
+        <p><a href={`mailto:${request.email}`}>{request.email}</a></p>
+        <p class="rail-muted">{request.cityRegion || 'City not supplied'} <small>· Supplied by requester</small></p>
+        {(request.releaseId || request.serviceId || request.campaignId) && <p class="rail-links">{request.releaseId && <a href={`/music/${request.releaseId.replace(/-single$/, '')}`}>Release →</a>}{request.serviceId && <a href="/audio/services">Service →</a>}{request.campaignId && <a href={`/owner/campaigns/${request.campaignId}`}>Campaign →</a>}</p>}
+      </section>
+      {portalProject && detailRows.length > 0 && <section class="rail-section" aria-labelledby="submission-heading"><h2 id="submission-heading">Submitted details</h2><p class="rail-muted rail-caption">Submitted with this request, as the client wrote it.</p><dl class="rail-list">{detailRows.map(([key, value]) => { const href = /url|link/i.test(key) ? safeExternalUrl(value) : null; return <><dt>{label(key)}</dt><dd>{href ? <a href={href} rel="noreferrer">Open link ↗</a> : detailValue(value)}</dd></>; })}</dl></section>}
+      {portalProject && <AudioPaymentPanel requestId={request.id} payment={payment} stripeEnabled={stripeAvailable(Astro.locals.runtime.env)} />}
+      {portalProject && <section class="rail-section request-access" aria-labelledby="access-heading"><h2 id="access-heading">Client access</h2>
+        <div data-project-invitation data-endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/invitation`}>
+          <p class="rail-state"><span class:list={['state-dot', portalProject.revoked_at ? 'closed' : portalProject.invitation_status]} aria-hidden="true"></span>{portalProject.revoked_at ? 'Access closed. Sign-in and private files are unavailable.' : portalProject.invitation_status === 'sent' ? 'Sign-in link sent' : portalProject.invitation_status === 'failed' ? 'Sign-in email failed. The project is saved.' : portalProject.invitation_status === 'sending' ? 'Sign-in email unconfirmed. Check Resend before retrying.' : 'Sign-in email not sent yet'}</p>
+          {['pending', 'failed'].includes(portalProject.invitation_status) && request.status !== 'withdrawn' && !portalProject.revoked_at && <button type="button" class="studio-button" data-send-project-invitation>{portalProject.invitation_status === 'failed' ? 'Retry invitation' : 'Send invitation'}</button>}
+          {portalProject.invitation_status === 'sending' && portalProject.invitation_attempted_at && Date.now() - Date.parse(portalProject.invitation_attempted_at) > 60_000 && request.status !== 'withdrawn' && !portalProject.revoked_at && <button type="button" class="studio-quiet" data-send-project-invitation data-confirmed-not-sent="true">I checked Resend; retry</button>}
+          <p class="studio-status" data-invitation-status role="status" aria-live="polite"></p>
+        </div>
+        {!portalProject.revoked_at && <details class="rail-close" data-project-access data-endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/access`}>
+          <summary>Close access</summary>
+          <p>Signs the client out and hides the project and its files immediately. Invoices are unchanged.</p>
+          <button type="button" class="studio-quiet danger" data-revoke-project>Close client access</button>
+          <p class="studio-status" data-access-status role="status" aria-live="polite"></p>
+        </details>}
+      </section>}
+      <section class="rail-section" aria-labelledby="note-heading"><h2 id="note-heading">Private note</h2>
+        <form class="rail-note" data-request-note><label class="visually-hidden" for="owner-private-note">Private note</label><textarea class="studio-textarea" id="owner-private-note" name="note" maxlength="1000" rows="3" placeholder="A note for yourself…">{request.privateNote}</textarea><button type="submit" class="studio-quiet">Save note</button></form>
+      </section>
+      {allowed.length > 0 && <section class="rail-section" aria-labelledby="request-heading"><h2 id="request-heading">Request</h2>
+        <div class="rail-actions" data-request-actions>{allowed.map(action => <button type="button" data-action={action} class:list={{ danger: action === 'withdraw' }}>{action === 'review' ? 'Mark reviewed' : action === 'resolve' ? 'Mark resolved' : action === 'reopen' ? 'Reopen' : 'Honor withdrawal'}</button>)}</div>
+      </section>}
+      <p class="studio-status" data-action-status aria-live="polite"></p>
+      <details class="rail-section rail-activity"><summary><span>Activity</span><span>{audit.length} {audit.length === 1 ? 'entry' : 'entries'}</span></summary>
+        <ol>{audit.map(item => <li><strong>{item.action.replaceAll('-', ' ')}</strong><span>{item.actor}</span><time datetime={item.occurredAt}>{new Date(item.occurredAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' })}</time>{item.note && <p>{item.note}</p>}</li>)}</ol>
+      </details>
+    </aside>
   </div>
-  {request.kind === 'service' && <AudioPaymentPanel requestId={request.id} payment={payment} stripeEnabled={stripeAvailable(Astro.locals.runtime.env)} />}
-  {portalProject && <section class="owner-section request-invitation" data-project-invitation data-endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/invitation`}>
-    <p class="owner-kicker">Client access</p><h2>Private project invitation</h2><span class:list={['invitation-state', portalProject.revoked_at ? 'closed' : portalProject.invitation_status]} aria-hidden="true"></span>
-    <p>{portalProject.revoked_at ? 'Client access is closed. Sign-in and private files are unavailable.' : portalProject.invitation_status === 'sent' ? `Sign-in link sent to ${request.email}.` : portalProject.invitation_status === 'failed' ? 'The sign-in email failed. The project and request are saved.' : portalProject.invitation_status === 'sending' ? 'Sign-in email unconfirmed. Check Resend before another attempt.' : 'The sign-in email has not been sent yet.'}</p>
-    {['pending', 'failed'].includes(portalProject.invitation_status) && request.status !== 'withdrawn' && !portalProject.revoked_at && <button type="button" class="studio-button" data-send-project-invitation>{portalProject.invitation_status === 'failed' ? 'Retry invitation' : 'Send invitation'}</button>}
-    {portalProject.invitation_status === 'sending' && portalProject.invitation_attempted_at && Date.now() - Date.parse(portalProject.invitation_attempted_at) > 60_000 && request.status !== 'withdrawn' && !portalProject.revoked_at && <button type="button" class="studio-quiet" data-send-project-invitation data-confirmed-not-sent="true">I checked Resend; retry</button>}
-    <p class="studio-status" data-invitation-status role="status" aria-live="polite"></p>
-  </section>}
-  {portalProject && <section class="owner-section portal-stage" aria-label="Studio project stage"><p class="owner-kicker">Studio project</p><StageTrack stage={portalProject.stage} bookingPaid={payment?.bookingStatus === 'paid'} /></section>}
-  {portalProject && <AudioProjectUpdates updates={projectUpdates} currentDueAt={portalProject.current_due_at} stage={portalProject.stage} requestStatus={request.status} bookingPaid={payment?.bookingStatus === 'paid'} revoked={Boolean(portalProject.revoked_at)} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/updates`} />}
-  {portalProject && <OwnerProjectFiles files={projectFiles} pending={pendingUploads} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/uploads`}
-    publishEndpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/files`}
-    canUpload={(['in_progress','review_ready','revision_in_progress'].includes(portalProject.stage)
-      || (portalProject.stage === 'final_files_ready' && payment?.balanceStatus === 'paid'))
-      && payment?.bookingStatus === 'paid' && !portalProject.revoked_at && request.status !== 'withdrawn'}
-    finalOnly={portalProject.stage === 'final_files_ready'}
-    canRevoke={!portalProject.revoked_at && request.status !== 'withdrawn'}
-    bookingPaid={payment?.bookingStatus === 'paid'} balancePaid={payment?.balanceStatus === 'paid'} />}
-  {portalProject && !portalProject.revoked_at && <section class="owner-section" data-project-access data-endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/access`}>
-    <p class="owner-kicker">Client access</p><details><summary>Close this private project</summary><p>This signs the client out and hides the project and its files immediately. It does not change invoices.</p><button type="button" class="studio-quiet danger" data-revoke-project>Close client access</button><p data-access-status role="status" aria-live="polite"></p></details>
-  </section>}
-  {portalProject && <ProjectMessages messages={projectMessages} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/messages`} reader="owner" closed={portalProject.stage === 'complete' || Boolean(portalProject.revoked_at) || request.status === 'withdrawn'} />}
-  <section class="owner-section audit-trail"><p class="owner-kicker">Audit trail</p><h2>What changed</h2><ol>{audit.map(item => <li><strong>{item.action.replace('-', ' ')}</strong><span>{item.actor}</span><time datetime={item.occurredAt}>{new Date(item.occurredAt).toLocaleString()}</time>{item.note && <p>{item.note}</p>}</li>)}</ol></section>
   <script>import { setupOwnerRequestActions } from '~/scripts/owner-request-actions'; import { setupOwnerPaymentActions } from '~/scripts/owner-payment-actions'; import { setupProjectMessages } from '~/scripts/project-messages'; import { setupProjectUpdates } from '~/scripts/project-updates'; import { setupProjectInvitation } from '~/scripts/project-invitation'; import { setupOwnerProjectFiles } from '~/scripts/owner-project-files'; setupOwnerRequestActions(); setupOwnerPaymentActions(); setupProjectMessages(); setupProjectUpdates(); setupProjectInvitation(); setupOwnerProjectFiles();</script>
   <style>
-    .portal-stage { padding-block: 2rem 2.5rem; }
-    .request-invitation { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: .8rem; row-gap: .6rem; }
-    .request-invitation > .owner-kicker, .request-invitation > p, .request-invitation > button { grid-column: 1 / -1; }
-    .request-invitation h2 { grid-column: 1; font-size: 2rem; line-height: 1.1; }
-    .request-invitation > p:not(.owner-kicker):not(.studio-status) { max-width: 46ch; color: #514d47; font: .95rem/1.5 Inter, sans-serif; }
-    .invitation-state { width: .6rem; height: .6rem; border-radius: 50%; background: var(--studio-line); }
-    .invitation-state.sent { background: var(--studio-done); }
-    .invitation-state.failed, .invitation-state.sending { background: var(--accent); }
-    .invitation-state.closed { background: var(--muted); }
-    [data-project-access] summary { width: fit-content; cursor: pointer; font: 400 1.6rem/1.2 Newsreader,Georgia,serif; }
-    [data-project-access] details p { max-width: 38rem; margin: .8rem 0; color: #514d47; font: .9rem/1.5 Inter,sans-serif; }
-    [data-project-access] button { border: 0; border-bottom: 1px solid currentColor; background: none; padding: .4rem 0; color: #a4512f; cursor: pointer; font: 500 .9rem/1.4 Inter,sans-serif; }
-    [data-project-access] button:disabled { opacity: .5; cursor: wait; }
+    .request-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem); gap: clamp(2.5rem, 5vw, 4.5rem); align-items: start; }
+    .request-layout:not(.portal) { grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem); }
+    .request-main { min-width: 0; }
+    .portal-stage { padding: .5rem 0 2.5rem; }
+    .request-rail { display: grid; border-left: 1px solid var(--rule); padding-left: clamp(1.5rem, 3vw, 2.5rem); }
+    .rail-section { display: grid; gap: .45rem; padding: 1.4rem 0; border-bottom: 1px solid var(--rule); }
+    .rail-section:first-child { padding-top: 0; }
+    .rail-section h2, .rail-section > summary span:first-child { font: 400 1.45rem/1.15 Newsreader, Georgia, serif; }
+    .rail-section.wide { max-width: 46rem; }
+    .rail-section p { margin: 0; font: .9rem/1.5 Inter, sans-serif; }
+    .rail-name { font: 400 1.2rem/1.3 Newsreader, Georgia, serif !important; }
+    .rail-muted { color: var(--studio-muted); }
+    .rail-muted small, .rail-caption { font-size: .78rem !important; }
+    .rail-links { display: flex; flex-wrap: wrap; gap: .4rem 1rem; }
+    .rail-list { display: grid; grid-template-columns: minmax(5.5rem, auto) minmax(0, 1fr); gap: .35rem 1rem; margin: .2rem 0 0; font: .86rem/1.45 Inter, sans-serif; }
+    .rail-list dt { color: var(--studio-muted); }
+    .rail-list dd { margin: 0; overflow-wrap: anywhere; }
+    .rail-state { display: flex; align-items: baseline; gap: .55rem; }
+    .state-dot { flex: none; width: .55rem; height: .55rem; border-radius: 50%; background: var(--studio-line); transform: translateY(-.05rem); }
+    .state-dot.sent { background: var(--studio-done); }
+    .state-dot.failed, .state-dot.sending { background: var(--accent); }
+    .state-dot.closed { background: var(--muted); }
+    .request-access [data-project-invitation] { display: grid; gap: .6rem; }
+    .rail-close summary { width: fit-content; cursor: pointer; color: var(--studio-danger); font: 500 .82rem/1.4 Inter, sans-serif; }
+    .rail-close[open] { display: grid; gap: .5rem; }
+    .rail-close p:not(.studio-status) { color: var(--studio-muted); font-size: .82rem; }
+    .rail-note { display: grid; gap: .5rem; }
+    .rail-note .studio-textarea { min-height: 5rem; font-size: .9rem; }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .rail-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+    .rail-actions button { min-height: 2.4rem; padding: .45rem .85rem; border: 1px solid var(--ink); border-radius: 2px; background: none; color: var(--ink); font: 500 .8rem/1.2 Inter, sans-serif; cursor: pointer; }
+    .rail-actions button:hover { background: var(--ink); color: var(--paper); }
+    .rail-actions button.danger { border-color: var(--studio-danger); color: var(--studio-danger); }
+    .rail-actions button.danger:hover { background: var(--studio-danger); color: var(--paper); }
+    .rail-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .request-rail > .studio-status { padding-top: .5rem; }
+    .rail-activity summary { display: flex; justify-content: space-between; align-items: baseline; cursor: pointer; list-style: none; }
+    .rail-activity summary::-webkit-details-marker { display: none; }
+    .rail-activity summary span:last-child { color: var(--studio-muted); font: .8rem/1.4 Inter, sans-serif; }
+    .rail-activity summary span:last-child::after { content: ' ▾'; }
+    .rail-activity[open] summary span:last-child::after { content: ' ▴'; }
+    .rail-activity ol { list-style: none; margin: .8rem 0 0; padding: 0; display: grid; gap: .7rem; }
+    .rail-activity li { display: grid; grid-template-columns: 1fr auto; gap: .1rem .8rem; font: .78rem/1.4 Inter, sans-serif; }
+    .rail-activity li strong { font-weight: 500; text-transform: capitalize; }
+    .rail-activity li span { grid-column: 1; color: var(--studio-muted); overflow-wrap: anywhere; }
+    .rail-activity li time { grid-row: 1; grid-column: 2; color: var(--studio-muted); white-space: nowrap; }
+    .rail-activity li p { grid-column: 1 / -1; }
+    /* The payment panel keeps its own markup and script hooks; the rail only tightens it. */
+    .request-rail :global(.payment-panel) { padding-block: 1.4rem; border-top: 0; border-bottom: 1px solid var(--rule); gap: 1rem; }
+    .request-rail :global(.payment-heading) { display: grid; gap: .3rem; }
+    .request-rail :global(.payment-heading .owner-kicker) { display: none; }
+    .request-rail :global(.payment-heading h2) { font: 400 1.45rem/1.15 Newsreader, Georgia, serif; }
+    .request-rail :global(.payment-total) { text-align: left; }
+    .request-rail :global(.payment-total strong) { font-size: 1.25rem; }
+    .request-rail :global(.payment-fields) { grid-template-columns: 1fr; }
+    .request-rail :global(.payment-ledger li) { flex-wrap: wrap; gap: .4rem 1rem; }
+    .request-rail :global(.payment-step) { display: inline-grid; place-items: center; width: 1.9rem; height: 1.9rem; border: 1px solid var(--studio-line); border-radius: 50%; }
+    .request-rail :global(.payment-panel .owner-primary-action) { justify-self: stretch; }
+    .request-jump { display: none; }
+    @media (max-width: 60rem) {
+      .request-layout, .request-layout:not(.portal) { grid-template-columns: 1fr; }
+      .request-rail { border-left: 0; padding-left: 0; border-top: 1px solid var(--rule); padding-top: 1.5rem; }
+      .request-jump { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; display: flex; gap: 1.4rem; overflow-x: auto; margin: 0 0 1.5rem; padding: .8rem 0; border-bottom: 1px solid var(--rule); background: var(--paper); }
+      .request-jump a { flex: none; border: 0; color: var(--ink); font: 500 .85rem/1.4 Inter, sans-serif; }
+      .request-jump a:hover, .request-jump a:focus-visible { color: var(--accent); }
+      :global(#request-work), :global(#project-files-heading), :global(#project-messages-heading), :global(#request-client) { scroll-margin-top: 4rem; }
+    }
   </style>
 </OwnerLayout>
