@@ -85,6 +85,7 @@ export const personJsonLd = {
   sameAs: [
     'https://github.com/kwilson21',
     'https://www.linkedin.com/in/kazonwilson/',
+    'https://ko-fi.com/kazonwilson',
   ],
   worksFor: { '@type': 'Organization', name: 'The Superhuman Group LLC' },
 };
