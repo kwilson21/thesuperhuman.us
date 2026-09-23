@@ -1,6 +1,6 @@
 # Screenshots
 
-CI runs these on pull requests that touch the UI, in two workflows:
+CI runs these only on pull requests that change the UI (see the `paths` list in `screenshots.yml`; server-only code, migrations and config don't trigger it), in two workflows:
 
 - `screenshots.yml` runs the pull request's code with a read-only token. It captures the pages and scenarios and uploads the PNGs and `manifest.json` as an artifact.
 - `screenshots-publish.yml` runs after it via `workflow_run`, always from the default branch. It finds the pull request from run metadata and skips the run if the PR has moved on to a newer commit. It accepts only PNG files with plain names that `verify-png.mjs` fully decodes, sanitizes the manifest, pushes the images to the `screenshots` branch and writes the table into the PR description, checking the PR head once more just before it writes.
@@ -15,7 +15,7 @@ MUSIC_PREVIEW_CONFIG=.screenshots/wrangler.json npx astro dev --port 4321 --host
 npm run screenshots   # in a second terminal; images land in screenshots/
 ```
 
-The preview config is built from `wrangler.jsonc`: the same compatibility settings, vars and binding names, with local D1, KV and R2 in place of every production resource. `PREVIEW_OVERRIDES` in `config.mjs` lists the only vars it changes, and why: Turnstile's test keys, a throwaway Access issuer on `127.0.0.1:9911` so owner pages render through the real JWT check, a local studio code key, and the client portal flag turned on so gated pages can be reviewed before launch. Nothing reaches production. A change to `wrangler.jsonc` triggers the workflow.
+The preview config is built from `wrangler.jsonc`: the same compatibility settings, vars and binding names, with local D1, KV and R2 in place of every production resource. `PREVIEW_OVERRIDES` in `config.mjs` lists the only vars it changes, and why: Turnstile's test keys, a throwaway Access issuer on `127.0.0.1:9911` so owner pages render through the real JWT check, a local studio code key, and the client portal flag turned on so gated pages can be reviewed before launch. Nothing reaches production.
 
 ## Pages
 

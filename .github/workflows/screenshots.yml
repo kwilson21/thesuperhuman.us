@@ -2,19 +2,26 @@ name: Screenshots
 
 # Runs the pull request's own code, so it gets a read-only token. It only captures images and
 # uploads them as an artifact; screenshots-publish.yml (always main's copy) publishes them.
+# Only UI changes: pages, components, layouts, styles, browser scripts, page content and
+# static assets. Server-only code (API routes, src/lib, middleware), migrations and
+# dependency or Worker config changes don't trigger it.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
-      - 'src/**'
+      - 'src/pages/**'
+      - '!src/pages/api/**'
+      - 'src/components/**'
+      - 'src/layouts/**'
+      - 'src/styles/**'
+      - 'src/scripts/**'
+      - 'src/assets/**'
+      - 'src/content/**'
+      - 'src/data/**'
       - 'public/**'
-      - 'migrations/**'
-      - 'scripts/screenshots/**'
       - 'astro.config.mjs'
       - 'tailwind.config.mjs'
-      - 'wrangler.jsonc'
-      - 'package.json'
-      - 'package-lock.json'
+      - 'scripts/screenshots/**'
       - '.github/workflows/screenshots.yml'
 
 permissions:
