@@ -6,6 +6,7 @@ For public output, apply [docs/publication-agent-protocol.md](docs/publication-a
 For generated or AI-edited website images, follow [docs/generated-image-qa.md](docs/generated-image-qa.md). Layout approval does not replace production asset QA.
 General philosophy is permitted; private operational recipes remain excluded.
 Existing checks, permissions, and review requirements still apply.
+UI pull requests follow the screenshot rule in [CLAUDE.md](CLAUDE.md): review the CI screenshots, and add a scenario in `scripts/screenshots/scenarios/` for any new stateful flow.
 
 ## Website deployment gate
 

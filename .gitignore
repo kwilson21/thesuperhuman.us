@@ -40,3 +40,7 @@ CLAUDE.local.*
 # Python journal utilities
 __pycache__/
 *.py[cod]
+
+# Local screenshot runs (CI publishes them to the screenshots branch)
+/screenshots/
+.screenshots/

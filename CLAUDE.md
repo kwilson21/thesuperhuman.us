@@ -112,3 +112,4 @@ Publicizing Tally and Kaillera-next work follows the design in
 - Keep Tailwind classes clean and consistent with existing design system
 - Run `npm run check` before committing any Astro changes
 - Run `npm test` before committing any TypeScript logic changes
+- UI PRs need screenshots. The Screenshots workflow captures every page at 1280×800 and 390×844 and writes them into the PR description; look at them before asking for review. A PR that adds a stateful flow (sign-in, a multi-step owner action, a client journey) adds a scenario in `scripts/screenshots/scenarios/` so CI captures each step. Stacked PRs only get the workflow once their branch contains it, so merge main into the bottom of the stack
