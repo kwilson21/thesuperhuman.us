@@ -6,7 +6,18 @@
     "tally-design-system",
     "tally-data-and-money",
     "tally-ci-screenshots",
-    "tally-home-screen"
+    "tally-home-screen",
+    "kaillera-next-first-playable",
+    "kaillera-next-streaming-mode",
+    "kaillera-next-staying-in-sync",
+    "kaillera-next-easier-start",
+    "kaillera-next-alpha-launch",
+    "kaillera-next-seeing-problems",
+    "kaillera-next-phone-controls",
+    "kaillera-next-rom-library",
+    "kaillera-next-bit-exact",
+    "kaillera-next-four-players",
+    "kaillera-next-rollback"
   ],
   "declined": []
 }
