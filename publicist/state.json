@@ -17,7 +17,12 @@
     "kaillera-next-rom-library",
     "kaillera-next-bit-exact",
     "kaillera-next-four-players",
-    "kaillera-next-rollback"
+    "kaillera-next-rollback",
+    "kaillera-next-launch-readiness",
+    "kaillera-next-n64recomp",
+    "kaillera-next-late-join",
+    "kaillera-next-hardening",
+    "kaillera-next-ai-team"
   ],
   "declined": []
 }
