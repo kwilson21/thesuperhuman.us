@@ -63,7 +63,10 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
     if (length === null || (request.headers.has('content-length') && Number(request.headers.get('content-length')) !== length)) {
       return fail('This file part has the wrong size.', 400);
     }
-    const part = await putProjectUploadPart(env.AUDIO, upload, partNumber, request.body);
+    // A part is at most 10 MiB. Buffering gives R2 a known length in workerd and in local dev.
+    const body = await request.arrayBuffer();
+    if (body.byteLength !== length) return fail('This file part has the wrong size.', 400);
+    const part = await putProjectUploadPart(env.AUDIO, upload, partNumber, body);
     return Response.json({ ok: true, part });
   } catch {
     return fail('This part could not be uploaded. Please try again.', 503);

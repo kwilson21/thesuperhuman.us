@@ -61,7 +61,7 @@ export function expectedPartLength(byteSize: number, partNumber: number): number
 }
 
 export async function putProjectUploadPart(bucket: R2Bucket, upload: ProjectUpload, partNumber: number,
-  body: ReadableStream): Promise<R2UploadedPart> {
+  body: ArrayBuffer): Promise<R2UploadedPart> {
   if (upload.state !== 'pending') throw new Error('This upload is being discarded.');
   return bucket.resumeMultipartUpload(upload.object_key, upload.upload_id).uploadPart(partNumber, body);
 }
