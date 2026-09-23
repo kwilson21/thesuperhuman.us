@@ -1,5 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { parsePeaks, peaksFromChannels, waveformRects } from '../../src/lib/audio-peaks';
+import { parsePeaks, peaksFromChannels, peaksFromWav, waveformRects } from '../../src/lib/audio-peaks';
+
+// A stereo WAV with a quiet first half and a loud second half, plus a LIST chunk before fmt.
+function wav({ bits = 16, float = false, frames = 44_100 } = {}) {
+  const bytes = bits / 8, block = bytes * 2, list = 12;
+  const buffer = Buffer.alloc(12 + (8 + list) + 24 + 8 + frames * block);
+  buffer.write('RIFF', 0); buffer.writeUInt32LE(buffer.length - 8, 4); buffer.write('WAVE', 8);
+  buffer.write('LIST', 12); buffer.writeUInt32LE(list, 16);
+  let at = 20 + list;
+  buffer.write('fmt ', at); buffer.writeUInt32LE(16, at + 4); buffer.writeUInt16LE(float ? 3 : 1, at + 8); buffer.writeUInt16LE(2, at + 10);
+  buffer.writeUInt32LE(44_100, at + 12); buffer.writeUInt32LE(44_100 * block, at + 16); buffer.writeUInt16LE(block, at + 20); buffer.writeUInt16LE(bits, at + 22);
+  at += 24; buffer.write('data', at); buffer.writeUInt32LE(frames * block, at + 4); at += 8;
+  for (let frame = 0; frame < frames; frame++) {
+    const level = (frame < frames / 2 ? .2 : .8) * Math.sin(frame / 7);
+    for (let channel = 0; channel < 2; channel++, at += bytes) {
+      if (float) buffer.writeFloatLE(level, at);
+      else if (bits === 16) buffer.writeInt16LE(Math.round(level * 32767), at);
+      else buffer.writeIntLE(Math.round(level * 8388607), at, 3);
+    }
+  }
+  return buffer;
+}
+const reader = (buffer: Buffer, log: number[] = []) => async (start: number, end: number) => {
+  log.push(end - start);
+  return buffer.buffer.slice(buffer.byteOffset + start, buffer.byteOffset + end) as ArrayBuffer;
+};
 
 describe('audio peaks', () => {
   it('takes the loudest sample per bar across channels and scales to 0-100', () => {
@@ -26,5 +51,24 @@ describe('audio peaks', () => {
     expect(rects.match(/<rect /g)).toHaveLength(2);
     expect(rects).toContain('y="19.00" width="96.00" height="2.00"');
     expect(rects).toContain('y="0.00" width="96.00" height="40.00"');
+  });
+
+  it('reads WAV peaks in small slices without decoding the whole file', async () => {
+    for (const options of [{ bits: 16 }, { bits: 24 }, { bits: 32, float: true }]) {
+      const file = wav(options);
+      const reads: number[] = [];
+      const peaks = (await peaksFromWav(reader(file, reads), file.length, 16))!;
+      expect(peaks).toHaveLength(16);
+      expect(Math.max(...peaks.slice(0, 7))).toBeLessThanOrEqual(30);
+      expect(Math.min(...peaks.slice(9))).toBeGreaterThanOrEqual(90);
+      expect(Math.max(...reads)).toBeLessThanOrEqual(4096);
+    }
+  });
+
+  it('skips WAV files it cannot read as PCM', async () => {
+    const file = wav();
+    file.writeUInt16LE(2, 32 + 8);
+    expect(await peaksFromWav(reader(file), file.length)).toBeNull();
+    expect(await peaksFromWav(reader(Buffer.from('not a wav file at all')), 21)).toBeNull();
   });
 });

@@ -1,16 +1,17 @@
-import { peaksFromChannels } from '~/lib/audio-peaks';
+import { peaksFromChannels, peaksFromWav } from '~/lib/audio-peaks';
 
 type UploadPart = { partNumber: number; etag: string };
 
-// Measures loudness bars in the owner's browser. A file it cannot decode still uploads, without a waveform.
-async function measurePeaks(file: File): Promise<number[] | null> {
-  // Decoding holds the whole file and its samples in memory; very large files skip the waveform.
-  if (file.size > 300 * 1024 * 1024) return null;
+// Measures loudness bars in the owner's browser. WAV is read in small slices at any size; MP3 must be
+// decoded whole, so only small ones get a waveform. Anything else still uploads, without a waveform.
+const maxDecodedMp3Bytes = 20 * 1024 * 1024;
+async function measurePeaks(file: File, mediaType: string): Promise<number[] | null> {
   try {
+    if (mediaType === 'audio/wav') return await peaksFromWav((start, end) => file.slice(start, end).arrayBuffer(), file.size);
+    if (file.size > maxDecodedMp3Bytes) return null;
     const context = new OfflineAudioContext(1, 1, 44_100);
     const audio = await context.decodeAudioData(await file.arrayBuffer());
-    const channels = Array.from({ length: audio.numberOfChannels }, (_, index) => audio.getChannelData(index));
-    const peaks = peaksFromChannels(channels);
+    const peaks = peaksFromChannels(Array.from({ length: audio.numberOfChannels }, (_, index) => audio.getChannelData(index)));
     return peaks.length ? peaks : null;
   } catch { return null; }
 }
@@ -108,7 +109,7 @@ export function setupOwnerProjectFiles() {
       if (progress) progress.hidden = false;
       try {
         status.textContent = 'Measuring the waveform…';
-        const peaks = await measurePeaks(file);
+        const peaks = await measurePeaks(file, mediaType);
         const begin = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ action: 'start', version, displayName: file.name, mediaType, byteSize: file.size }) });
         const start = await begin.json() as { uploadId?: string; partSize?: number; error?: string };
