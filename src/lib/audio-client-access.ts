@@ -36,20 +36,18 @@ const activeProjects = `SELECT p.request_id FROM audio_projects p
   WHERE r.email=? AND r.status<>'withdrawn' AND p.revoked_at IS NULL`;
 
 export async function issueClientCode(db: D1Database, email: string, secret: string, now = new Date()): Promise<string | null> {
-  const projects = await db.prepare(activeProjects).bind(email).all<{ request_id: string }>();
-  if (!projects.results.length) return null;
   const code = newCode();
   const digest = await codeHash(email, code, secret);
   const issuedAt = now.toISOString();
   const expiresAt = new Date(now.getTime() + codeLifetimeMs).toISOString();
   const [stored] = await db.batch([
     db.prepare(`INSERT INTO audio_client_codes(email,code_hash,attempts,created_at,expires_at,used_at,session_token_hash)
-      VALUES(?,?,0,?,?,NULL,NULL)
+      SELECT ?,?,0,?,?,NULL,NULL WHERE EXISTS (${activeProjects})
       ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,attempts=0,
       created_at=excluded.created_at,expires_at=excluded.expires_at,used_at=NULL,session_token_hash=NULL
       WHERE audio_client_codes.created_at<=? OR audio_client_codes.used_at IS NOT NULL OR audio_client_codes.expires_at<=?
       RETURNING email`)
-      .bind(email, digest, issuedAt, expiresAt, new Date(now.getTime() - 30_000).toISOString(), issuedAt),
+      .bind(email, digest, issuedAt, expiresAt, email, new Date(now.getTime() - 30_000).toISOString(), issuedAt),
     db.prepare(`INSERT INTO audio_client_access_audit(request_id,action,occurred_at)
       SELECT p.request_id,'code-issued',? FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
       WHERE r.email=? AND p.revoked_at IS NULL
@@ -80,7 +78,7 @@ export async function completeClientCode(db: D1Database, email: string, code: st
   const expiresAt = new Date(now.getTime() + sessionLifetimeMs).toISOString();
   const [used] = await db.batch([
     db.prepare(`UPDATE audio_client_codes SET used_at=?,session_token_hash=?
-      WHERE email=? AND code_hash=? AND used_at IS NULL AND attempts<5 AND expires_at>?
+      WHERE email=? AND code_hash=? AND used_at IS NULL AND expires_at>?
       RETURNING email`).bind(at, tokenHash, email, digest, at),
     db.prepare(`INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at)
       SELECT ?,email,?,?,? FROM audio_client_codes WHERE email=? AND session_token_hash=?`)

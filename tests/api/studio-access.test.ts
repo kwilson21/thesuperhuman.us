@@ -16,15 +16,17 @@ vi.mock('~/lib/audio-resend', () => ({ sendAudioMessage: vi.fn(async () => ({ ok
 
 const email = 'Artist@Example.com';
 function context(path: string, body: unknown, enabled = true) {
+  const pending: Promise<unknown>[] = [];
   return {
     request: new Request(`https://thesuperhuman.us${path}`, {
       method: 'POST', headers: { origin: 'https://thesuperhuman.us', 'content-type': 'application/json' }, body: JSON.stringify(body),
     }),
-    locals: { runtime: { env: {
+    locals: { runtime: { ctx: { waitUntil: vi.fn((work: Promise<unknown>) => { pending.push(work); }) }, env: {
       AUDIO_CLIENT_PORTAL_ENABLED: enabled ? 'true' : 'false', AUDIO_CLIENT_CODE_KEY: 'a'.repeat(32),
       MUSIC_DB: {}, RATE_LIMIT: { get: vi.fn(async () => null), put: vi.fn(async () => {}) },
       TURNSTILE_SECRET_KEY: 'test', RESEND_API_KEY: 'test', CONTACT_FROM_EMAIL: 'noreply@example.com',
     } } },
+    pending,
   } as any;
 }
 
@@ -39,10 +41,27 @@ describe('studio access routes', () => {
     const unknown = await requestCode(context('/api/studio/code', { email, turnstileToken: 'challenge' }));
     expect(unknown.status).toBe(200);
     expect(sendAudioMessage).not.toHaveBeenCalled();
-    const known = await requestCode(context('/api/studio/code', { email, turnstileToken: 'challenge' }));
+    const knownContext = context('/api/studio/code', { email, turnstileToken: 'challenge' });
+    const known = await requestCode(knownContext);
     expect(known.status).toBe(200);
     expect(await known.json()).toEqual(await unknown.json());
     expect(sendAudioMessage).toHaveBeenCalledWith(expect.objectContaining({ payload: expect.objectContaining({ to: ['artist@example.com'] }) }));
+    await Promise.all(knownContext.pending);
+  });
+
+  it('responds without waiting for email delivery', async () => {
+    vi.mocked(issueClientCode).mockResolvedValueOnce('12345678');
+    let finishDelivery!: (result: { ok: boolean }) => void;
+    vi.mocked(sendAudioMessage).mockReturnValueOnce(new Promise(resolve => { finishDelivery = resolve; }));
+    const ctx = context('/api/studio/code', { email, turnstileToken: 'challenge' });
+    const response = await Promise.race([
+      requestCode(ctx),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Code response waited for email delivery')), 1000)),
+    ]);
+    expect(response.status).toBe(200);
+    expect(ctx.locals.runtime.ctx.waitUntil).toHaveBeenCalledOnce();
+    finishDelivery({ ok: true });
+    await Promise.all(ctx.pending);
   });
 
   it('keeps access closed by default and sets a protected cookie after a valid code', async () => {
@@ -61,8 +80,10 @@ describe('studio access routes', () => {
   it('invalidates an undelivered code and revokes the current session on sign-out', async () => {
     vi.mocked(issueClientCode).mockResolvedValueOnce('12345678');
     vi.mocked(sendAudioMessage).mockResolvedValueOnce({ ok: false });
-    const codeResponse = await requestCode(context('/api/studio/code', { email, turnstileToken: 'challenge' }));
+    const codeContext = context('/api/studio/code', { email, turnstileToken: 'challenge' });
+    const codeResponse = await requestCode(codeContext);
     expect(codeResponse.status).toBe(200);
+    await Promise.all(codeContext.pending);
     expect(discardUndeliveredCode).toHaveBeenCalled();
 
     const ctx = context('/api/studio/sign-out', {});
@@ -70,6 +91,16 @@ describe('studio access routes', () => {
     const response = await signOut(ctx);
     expect(response.status).toBe(200);
     expect(revokeClientSession).toHaveBeenCalled();
+    expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
+  });
+
+  it('clears the browser cookie when session revocation fails', async () => {
+    vi.mocked(revokeClientSession).mockRejectedValueOnce(new Error('Database unavailable'));
+    const ctx = context('/api/studio/sign-out', {});
+    ctx.request.headers.set('cookie', `studio_session=${'0'.repeat(72)}`);
+    const response = await signOut(ctx);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ ok: false, localSignedOut: true });
     expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
   });
 });

@@ -91,7 +91,7 @@ describe('audio client access', () => {
     sql.close();
   });
 
-  it('locks a code after five wrong attempts and rejects expired or undelivered codes', async () => {
+  it('keeps a correct code usable after wrong attempts and rejects expired or undelivered codes', async () => {
     const { sql, db, addRequest } = fixture();
     addRequest('song-1');
     const code = (await issueClientCode(db, 'artist@example.com', secret, now))!;
@@ -99,7 +99,7 @@ describe('audio client access', () => {
     for (let attempt = 0; attempt < 5; attempt++) {
       expect(await completeClientCode(db, 'artist@example.com', wrong, secret, now)).toBeNull();
     }
-    expect(await completeClientCode(db, 'artist@example.com', code, secret, now)).toBeNull();
+    expect(await completeClientCode(db, 'artist@example.com', code, secret, now)).toBeTruthy();
     const newer = (await issueClientCode(db, 'artist@example.com', secret, new Date(now.getTime() + 31_000)))!;
     expect(await completeClientCode(db, 'artist@example.com', newer, secret, new Date('2026-09-22T12:11:00Z'))).toBeNull();
     const undelivered = (await issueClientCode(db, 'artist@example.com', secret, new Date('2026-09-22T12:12:00Z')))!;

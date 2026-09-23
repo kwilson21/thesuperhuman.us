@@ -32,13 +32,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const emailLimit = await checkRateLimit(env.RATE_LIMIT, emailKey, 'rl:studio-code-email:', 3);
     if (!emailLimit.allowed) return Response.json({ ok: false, error: 'Please wait a few minutes before asking for another code.' }, { status: 429 });
     const code = await issueClientCode(env.MUSIC_DB, email, env.AUDIO_CLIENT_CODE_KEY);
-    if (code) {
+    if (code) locals.runtime.ctx.waitUntil((async () => {
       const sent = await sendAudioMessage({ apiKey: env.RESEND_API_KEY, payload: {
         from: env.CONTACT_FROM_EMAIL, to: [email], subject: 'Your studio sign-in code',
         text: `Your sign-in code is ${code}. It expires in 10 minutes.\n\nOpen https://thesuperhuman.us/studio/sign-in to use it.`,
       } });
-      if (!sent.ok) await discardUndeliveredCode(env.MUSIC_DB, email, code, env.AUDIO_CLIENT_CODE_KEY);
-    }
+      if (!sent.ok) await discardUndeliveredCode(env.MUSIC_DB!, email, code, env.AUDIO_CLIENT_CODE_KEY!);
+    })().catch(() => {
+      // Keep private details out of logs. The next request can issue a fresh code.
+      console.error('Studio code delivery or cleanup failed.');
+    }));
     return Response.json(generic);
   } catch {
     return Response.json({ ok: false, error: 'Studio sign-in is temporarily unavailable.' }, { status: 503 });

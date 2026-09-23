@@ -5,11 +5,13 @@ import { clientPortalEnabled } from '~/lib/audio-client-access';
 const env = Astro.locals.runtime?.env;
 if (!clientPortalEnabled(env)) return new Response('Not found', { status: 404 });
 const siteKey = env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
+const partialSignOut = Astro.url.searchParams.get('signout') === 'partial';
 ---
 <BaseLayout title="Studio sign-in · Kazon" description="Sign in to your private audio project." noindex>
   <article class="studio-sign-in site-shell">
     <p class="studio-kicker">Your private studio</p>
     <h1>Return to your song.</h1>
+    {partialSignOut && <p role="status">You’re signed out on this device. If you’re concerned someone else has access, <a href="mailto:kazon.wilson@thesuperhuman.us">contact Kazon</a>.</p>}
     <p class="studio-intro">Use the email you shared when you sent your project. We’ll send a short code to confirm it’s you.</p>
     {siteKey ? <>
       <form id="studio-code-request">
