@@ -2,19 +2,18 @@
 export const prerender = false;
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import StageTrack from '~/components/StageTrack.astro';
-import { clientPortalEnabled, clientProjectsForSession, studioSessionFromRequest } from '~/lib/audio-client-access';
+import { clientPortalEnabled, clientProjectsForSession, groupStudioProjects, studioSessionFromRequest } from '~/lib/audio-client-access';
 const env = Astro.locals.runtime?.env;
 if (!clientPortalEnabled(env)) return new Response('Not found', { status: 404 });
 if (!env.MUSIC_DB) return new Response('Studio is temporarily unavailable.', { status: 503 });
 const token = studioSessionFromRequest(Astro.request);
 const projects = token ? await clientProjectsForSession(env.MUSIC_DB, token) : null;
 if (!projects) return Astro.redirect('/studio/sign-in');
-const delivered = (stage: string) => stage === 'final_files_ready' || stage === 'complete';
-const active = projects.filter(project => !delivered(project.stage));
-const done = projects.filter(project => delivered(project.stage));
+const { active, delivered: done } = groupStudioProjects(projects);
 const stageName = (stage: string, bookingStatus: string | null) => stage === 'accepted' && bookingStatus === 'paid' ? 'Booking paid'
   : stage.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase());
-const through = (value: string | null) => value ? `Available through ${new Date(value).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}` : 'Final files ready';
+const longDate = (value: string) => new Date(value).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+const through = (project: { final_expires_at: string | null; available: boolean }) => project.available ? `Available through ${longDate(project.final_expires_at!)}` : `Final files expired ${longDate(project.final_expires_at!)}`;
 ---
 <BaseLayout title="Your studio · Kazon" description="Your private audio projects." noindex>
   <article class="site-shell studio-home">
@@ -30,7 +29,7 @@ const through = (value: string | null) => value ? `Available through ${new Date(
       <h2 id="delivered-heading"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.5" /><path d="M6 10.3l2.6 2.6L14.2 7.3" /></svg>Delivered</h2>
       <ul class="song-list">{done.map(project => <li><a href={`/studio/projects/${project.request_id}`}>
         <span class="song-title">{project.summary}</span>
-        <span class="song-stage">{through(project.final_expires_at)}</span>
+        <span class="song-stage">{through(project)}</span>
         <StageTrack stage={project.stage} size="mini" />
       </a></li>)}</ul>
     </section>}

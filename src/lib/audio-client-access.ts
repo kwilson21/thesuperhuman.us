@@ -162,3 +162,16 @@ export function studioSessionFromRequest(request: Request): string | null {
   const match = request.headers.get('cookie')?.match(/(?:^|;\s*)studio_session=([0-9a-f-]{72})(?:;|$)/i);
   return match?.[1] ?? null;
 }
+
+type ListedProject = { stage: string; final_expires_at: string | null };
+/**
+ * Splits a client's songs into active and delivered. Delivered needs a published final file, not just
+ * a stage, so a revoked final keeps the song active. `available` is false once the final has expired.
+ */
+export function groupStudioProjects<T extends ListedProject>(projects: T[], now = new Date()) {
+  const delivered = (project: T) => (project.stage === 'final_files_ready' || project.stage === 'complete') && Boolean(project.final_expires_at);
+  return {
+    active: projects.filter(project => !delivered(project)),
+    delivered: projects.filter(delivered).map(project => ({ ...project, available: Date.parse(project.final_expires_at!) > now.getTime() })),
+  };
+}

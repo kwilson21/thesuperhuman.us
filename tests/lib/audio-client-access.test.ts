@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   clientProjectForSession, clientProjectsForSession, completeClientCode,
-  discardUndeliveredCode, issueClientCode, listStudioSignInFailures, normalizeClientEmail, revokeClientSession,
+  discardUndeliveredCode, groupStudioProjects, issueClientCode, listStudioSignInFailures, normalizeClientEmail, revokeClientSession,
 } from '~/lib/audio-client-access';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
@@ -121,5 +121,21 @@ describe('audio client access', () => {
       VALUES ('song-1','signed-in',?)`).run(now.toISOString());
     expect(await listStudioSignInFailures(db)).toEqual([]);
     sql.close();
+  });
+});
+
+describe('studio song groups', () => {
+  it('delivers only songs with a published final and marks expired ones', () => {
+    const now = new Date('2026-09-23T12:00:00Z');
+    const { active, delivered } = groupStudioProjects([
+      { id: 'working', stage: 'in_progress', final_expires_at: null },
+      { id: 'revoked-final', stage: 'final_files_ready', final_expires_at: null },
+      { id: 'current', stage: 'final_files_ready', final_expires_at: '2027-09-23T12:00:00Z' },
+      { id: 'expired', stage: 'complete', final_expires_at: '2026-09-01T12:00:00Z' },
+    ], now);
+    expect(active.map(project => project.id)).toEqual(['working', 'revoked-final']);
+    expect(delivered.map(({ id, available }) => ({ id, available }))).toEqual([
+      { id: 'current', available: true }, { id: 'expired', available: false },
+    ]);
   });
 });
