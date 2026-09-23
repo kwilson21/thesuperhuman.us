@@ -12,6 +12,7 @@ export type ProjectUpload = {
   display_name: string;
   media_type: ProjectFile['media_type'];
   byte_size: number;
+  state: 'pending' | 'discarding';
   created_at: string;
 };
 
@@ -34,7 +35,7 @@ export async function beginProjectUpload(db: D1Database, bucket: R2Bucket, reque
   try {
     const row = await db.prepare(`INSERT INTO audio_project_uploads(id,request_id,upload_id,object_key,version,display_name,media_type,byte_size,created_at)
       SELECT ?,?,?,?,?,?,?,?,? WHERE ${activeProject}
-      RETURNING id,request_id,upload_id,object_key,version,display_name,media_type,byte_size,created_at`)
+      RETURNING id,request_id,upload_id,object_key,version,display_name,media_type,byte_size,state,created_at`)
       .bind(id, requestId, upload.uploadId, key, input.version, input.displayName, input.mediaType, input.byteSize, now.toISOString(), requestId)
       .first<ProjectUpload>();
     if (row) return row;
@@ -47,7 +48,7 @@ export async function beginProjectUpload(db: D1Database, bucket: R2Bucket, reque
 }
 
 export async function getProjectUpload(db: D1Database, requestId: string, id: string): Promise<ProjectUpload | null> {
-  return db.prepare(`SELECT id,request_id,upload_id,object_key,version,display_name,media_type,byte_size,created_at
+  return db.prepare(`SELECT id,request_id,upload_id,object_key,version,display_name,media_type,byte_size,state,created_at
     FROM audio_project_uploads WHERE request_id=? AND id=?`).bind(requestId, id).first<ProjectUpload>();
 }
 
@@ -59,11 +60,13 @@ export function expectedPartLength(byteSize: number, partNumber: number): number
 
 export async function putProjectUploadPart(bucket: R2Bucket, upload: ProjectUpload, partNumber: number,
   body: ReadableStream): Promise<R2UploadedPart> {
+  if (upload.state !== 'pending') throw new Error('This upload is being discarded.');
   return bucket.resumeMultipartUpload(upload.object_key, upload.upload_id).uploadPart(partNumber, body);
 }
 
 export async function finishProjectUpload(db: D1Database, bucket: R2Bucket, upload: ProjectUpload,
   parts: R2UploadedPart[] | null, now = new Date()): Promise<'saved' | 'blocked' | 'size-mismatch'> {
+  if (upload.state !== 'pending') return 'blocked';
   if (!await ownerProjectCanUpload(db, upload.request_id)) return 'blocked';
   const count = Math.ceil(upload.byte_size / uploadPartSize);
   let object = await bucket.head(upload.object_key);
@@ -74,7 +77,7 @@ export async function finishProjectUpload(db: D1Database, bucket: R2Bucket, uplo
   if (object.size !== upload.byte_size) return 'size-mismatch';
   const saved = await db.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,uploaded_at)
     SELECT id,request_id,version,object_key,display_name,media_type,byte_size,?
-    FROM audio_project_uploads WHERE id=? AND request_id=? AND ${activeProject}
+    FROM audio_project_uploads WHERE id=? AND request_id=? AND state='pending' AND ${activeProject}
     ON CONFLICT(id) DO NOTHING RETURNING id`)
     .bind(now.toISOString(), upload.id, upload.request_id, upload.request_id).first<{ id: string }>();
   const existing = saved || await db.prepare('SELECT id FROM audio_project_files WHERE id=? AND request_id=?')
@@ -86,15 +89,24 @@ export async function finishProjectUpload(db: D1Database, bucket: R2Bucket, uplo
 }
 
 export async function abortProjectUpload(db: D1Database, bucket: R2Bucket, upload: ProjectUpload): Promise<void> {
-  const removed = await db.prepare(`DELETE FROM audio_project_uploads WHERE id=? AND request_id=?
-    AND NOT EXISTS(SELECT 1 FROM audio_project_files WHERE id=?) RETURNING id`)
+  const discarding = await db.prepare(`UPDATE audio_project_uploads SET state='discarding'
+    WHERE id=? AND request_id=? AND NOT EXISTS(SELECT 1 FROM audio_project_files WHERE id=?) RETURNING id`)
     .bind(upload.id, upload.request_id, upload.id).first<{ id: string }>();
-  if (!removed) {
+  if (!discarding) {
     await db.prepare('DELETE FROM audio_project_uploads WHERE id=? AND request_id=? AND EXISTS(SELECT 1 FROM audio_project_files WHERE id=?)')
       .bind(upload.id, upload.request_id, upload.id).run();
     return;
   }
   const object = await bucket.head(upload.object_key);
   if (object) await bucket.delete(upload.object_key);
-  else await bucket.resumeMultipartUpload(upload.object_key, upload.upload_id).abort().catch(() => {});
+  else {
+    try { await bucket.resumeMultipartUpload(upload.object_key, upload.upload_id).abort(); }
+    catch (error) {
+      if (!await bucket.head(upload.object_key)) throw error;
+      await bucket.delete(upload.object_key);
+    }
+  }
+  await db.prepare(`DELETE FROM audio_project_uploads WHERE id=? AND request_id=? AND state='discarding'
+    AND NOT EXISTS(SELECT 1 FROM audio_project_files WHERE id=?)`)
+    .bind(upload.id, upload.request_id, upload.id).run();
 }

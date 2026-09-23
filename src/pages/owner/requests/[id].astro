@@ -28,9 +28,9 @@ const projectFiles = portalProject ? (await db.prepare(`SELECT id,version,displa
   FROM audio_project_files WHERE request_id=? ORDER BY uploaded_at DESC`).bind(request.id).all<
   { id: string; version: 'review' | 'final'; display_name: string; byte_size: number;
     status: 'uploaded' | 'published' | 'revoked'; uploaded_at: string; published_at: string | null }>()).results : [];
-const pendingUploads = portalProject ? (await db.prepare(`SELECT id,display_name,created_at FROM audio_project_uploads
+const pendingUploads = portalProject ? (await db.prepare(`SELECT id,display_name,state,created_at FROM audio_project_uploads
   WHERE request_id=? ORDER BY created_at DESC`).bind(request.id).all<
-  { id: string; display_name: string; created_at: string }>()).results : [];
+  { id: string; display_name: string; state: 'pending' | 'discarding'; created_at: string }>()).results : [];
 const allowed = request.status === 'new' ? ['review', 'resolve', 'withdraw'] : request.status === 'reviewed' ? ['resolve', 'reopen', 'withdraw'] : request.status === 'resolved' ? ['reopen', 'withdraw'] : [];
 const label = (key: string) => key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, character => character.toUpperCase());
 const detailRows = Object.entries(request.details).filter(([, value]) => value !== '' && value !== null && value !== false && (!Array.isArray(value) || value.length));

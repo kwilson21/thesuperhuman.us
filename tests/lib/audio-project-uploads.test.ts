@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { abortProjectUpload, beginProjectUpload, expectedPartLength, finishProjectUpload,
   getProjectUpload, ownerProjectCanUpload, uploadPartSize } from '~/lib/audio-project-uploads';
 
@@ -86,5 +86,46 @@ it('recovers a completed R2 object after a metadata write failure and can discar
   await abortProjectUpload(db, bucket, second);
   expect(deleted).toContain(second.object_key);
   expect(await getProjectUpload(db, 'song-1', second.id)).toBeNull();
+  sql.close();
+});
+
+it('keeps a failed discard recoverable and retries R2 cleanup', async () => {
+  const { sql, db, bucket, objects } = fixture();
+  sql.prepare("UPDATE audio_payments SET booking_status='paid' WHERE request_id='song-1'").run();
+  const upload = (await beginProjectUpload(db, bucket, 'song-1', {
+    version: 'review', displayName: 'Draft.mp3', mediaType: 'audio/mpeg', byteSize: 5,
+  }, now))!;
+  objects.set(upload.object_key, { size: 5 });
+  vi.spyOn(bucket, 'delete').mockRejectedValueOnce(new Error('R2 unavailable'));
+  await expect(abortProjectUpload(db, bucket, upload)).rejects.toThrow('R2 unavailable');
+  expect((await getProjectUpload(db, 'song-1', upload.id))?.state).toBe('discarding');
+  expect(objects.has(upload.object_key)).toBe(true);
+  expect(await finishProjectUpload(db, bucket, upload, null, now)).toBe('blocked');
+  await abortProjectUpload(db, bucket, upload);
+  expect(await getProjectUpload(db, 'song-1', upload.id)).toBeNull();
+  expect(objects.has(upload.object_key)).toBe(false);
+  sql.close();
+});
+
+it('cleans an object completed while a discard is starting', async () => {
+  const { sql, db, bucket, objects } = fixture();
+  sql.prepare("UPDATE audio_payments SET booking_status='paid' WHERE request_id='song-1'").run();
+  const upload = (await beginProjectUpload(db, bucket, 'song-1', {
+    version: 'review', displayName: 'Draft.wav', mediaType: 'audio/wav', byteSize: uploadPartSize + 3,
+  }, now))!;
+  const parts = [1, 2].map(partNumber => ({ partNumber, etag: 'a'.repeat(32) }));
+  const originalHead = bucket.head.bind(bucket);
+  let interleave = true;
+  vi.spyOn(bucket, 'head').mockImplementation(async key => {
+    if (interleave) {
+      interleave = false;
+      expect(await finishProjectUpload(db, bucket, upload, parts, now)).toBe('blocked');
+    }
+    return originalHead(key);
+  });
+  await abortProjectUpload(db, bucket, upload);
+  expect(await getProjectUpload(db, 'song-1', upload.id)).toBeNull();
+  expect(sql.prepare('SELECT id FROM audio_project_files WHERE id=?').get(upload.id)).toBeUndefined();
+  expect(objects.has(upload.object_key)).toBe(false);
   sql.close();
 });
