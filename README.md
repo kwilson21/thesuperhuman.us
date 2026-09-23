@@ -62,6 +62,8 @@ The email-code access slice also requires `migrations/music/0006_audio_client_ac
 
 The private message-thread slice requires `migrations/music/0007_audio_project_messages.sql` after 0006. It stores one immutable owner/client conversation per project, including who sent each message and when the other side read it. Clients can clarify files before approval and both sides can reply until the project is complete. Messages accept plain text and HTTPS links; the site never fetches or previews those links. Routine client messages appear in the owner request view without sending email. The portal flag stays `false` while update notifications, delivery, retention, and operations are unfinished.
 
+Owner progress updates require `migrations/music/0008_audio_project_updates.sql` after 0007. Accepting a reviewed request sets an initial delivery date; later date moves require a reason and preserve the prior date in the timeline. Updates are saved before a minimal sign-in-link email is attempted. The owner view shows whether that email was sent, failed, or remains unconfirmed, with an explicit retry only after a confirmed failure. The portal gate stays `false` until initial project invitations, private delivery, retention, and full operations checks are ready.
+
 The forms read `Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY` first, with
 `import.meta.env.PUBLIC_TURNSTILE_SITE_KEY` as a build-time fallback. Wrangler
 runtime vars are not automatically Astro build-time variables. An empty runtime

@@ -38,7 +38,8 @@ describe('owner insights schema', () => {
     const projects = readFileSync(new URL('../../migrations/music/0005_audio_projects.sql', import.meta.url), 'utf8');
     const clientAccess = readFileSync(new URL('../../migrations/music/0006_audio_client_access.sql', import.meta.url), 'utf8');
     const messages = readFileSync(new URL('../../migrations/music/0007_audio_project_messages.sql', import.meta.url), 'utf8');
-    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(`${baseline.trim()}\n${retention.trim()}\n${payments.trim()}\n${reconciliation.trim()}\n${projects.trim()}\n${clientAccess.trim()}\n${messages.trim()}\n`);
+    const updates = readFileSync(new URL('../../migrations/music/0008_audio_project_updates.sql', import.meta.url), 'utf8');
+    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(`${baseline.trim()}\n${retention.trim()}\n${payments.trim()}\n${reconciliation.trim()}\n${projects.trim()}\n${clientAccess.trim()}\n${messages.trim()}\n${updates.trim()}\n`);
     const db = apply('../../db/music.sql');
     const expected = [
       'music_event_daily', 'music_events', 'music_interest', 'music_playback_daily',
@@ -46,7 +47,7 @@ describe('owner insights schema', () => {
       'owner_retention_runs', 'owner_campaigns', 'owner_request_audit', 'owner_requests',
       'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts', 'stripe_unmatched_events',
       'audio_projects', 'audio_project_audit',
-      'audio_client_codes', 'audio_client_sessions', 'audio_client_access_audit', 'audio_project_messages',
+      'audio_client_codes', 'audio_client_sessions', 'audio_client_access_audit', 'audio_project_messages', 'audio_project_updates',
     ];
     expect(tableNames(db)).toEqual(expect.arrayContaining(expected));
     expect(() => db.exec(`${baseline}\n${retention}\n${payments}`)).not.toThrow();
