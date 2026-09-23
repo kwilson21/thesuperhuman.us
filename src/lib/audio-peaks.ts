@@ -23,3 +23,12 @@ export function parsePeaks(value: unknown): number[] | null {
   if (!Array.isArray(peaks) || peaks.length < 16 || peaks.length > 400) return null;
   return peaks.every(peak => Number.isInteger(peak) && peak >= 0 && peak <= 100) ? peaks as number[] : null;
 }
+
+/** SVG bars for a 320×40 viewBox, centered on the midline. */
+export function waveformRects(peaks: number[]): string {
+  const width = 320 / peaks.length;
+  return peaks.map((peak, index) => {
+    const height = Math.max(2, peak / 100 * 40);
+    return `<rect x="${(index * width + width * .2).toFixed(2)}" y="${(20 - height / 2).toFixed(2)}" width="${(width * .6).toFixed(2)}" height="${height.toFixed(2)}" rx="${(width * .3).toFixed(2)}"/>`;
+  }).join('');
+}

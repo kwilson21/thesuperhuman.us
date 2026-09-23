@@ -5,6 +5,7 @@ import AudioPaymentPanel from '~/components/owner/AudioPaymentPanel.astro';
 import ProjectMessages from '~/components/ProjectMessages.astro';
 import AudioProjectUpdates from '~/components/AudioProjectUpdates.astro';
 import OwnerProjectFiles from '~/components/owner/OwnerProjectFiles.astro';
+import StageTrack from '~/components/StageTrack.astro';
 import { getAudioPayment } from '~/lib/audio-payments';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
 import type { ProjectInvitation } from '~/lib/audio-project-invitations';
@@ -50,12 +51,13 @@ const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') 
   </div>
   {request.kind === 'service' && <AudioPaymentPanel requestId={request.id} payment={payment} stripeEnabled={stripeAvailable(Astro.locals.runtime.env)} />}
   {portalProject && <section class="owner-section request-invitation" data-project-invitation data-endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/invitation`}>
-    <p class="owner-kicker">Client access</p><h2>Private project invitation</h2>
+    <p class="owner-kicker">Client access</p><h2>Private project invitation</h2><span class:list={['invitation-state', portalProject.revoked_at ? 'closed' : portalProject.invitation_status]} aria-hidden="true"></span>
     <p>{portalProject.revoked_at ? 'Client access is closed. Sign-in and private files are unavailable.' : portalProject.invitation_status === 'sent' ? `Sign-in link sent to ${request.email}.` : portalProject.invitation_status === 'failed' ? 'The sign-in email failed. The project and request are saved.' : portalProject.invitation_status === 'sending' ? 'Sign-in email unconfirmed. Check Resend before another attempt.' : 'The sign-in email has not been sent yet.'}</p>
-    {['pending', 'failed'].includes(portalProject.invitation_status) && request.status !== 'withdrawn' && !portalProject.revoked_at && <button type="button" data-send-project-invitation>{portalProject.invitation_status === 'failed' ? 'Retry invitation' : 'Send invitation'}</button>}
-    {portalProject.invitation_status === 'sending' && portalProject.invitation_attempted_at && Date.now() - Date.parse(portalProject.invitation_attempted_at) > 60_000 && request.status !== 'withdrawn' && !portalProject.revoked_at && <button type="button" data-send-project-invitation data-confirmed-not-sent="true">I checked Resend; retry</button>}
-    <p data-invitation-status role="status" aria-live="polite"></p>
+    {['pending', 'failed'].includes(portalProject.invitation_status) && request.status !== 'withdrawn' && !portalProject.revoked_at && <button type="button" class="studio-button" data-send-project-invitation>{portalProject.invitation_status === 'failed' ? 'Retry invitation' : 'Send invitation'}</button>}
+    {portalProject.invitation_status === 'sending' && portalProject.invitation_attempted_at && Date.now() - Date.parse(portalProject.invitation_attempted_at) > 60_000 && request.status !== 'withdrawn' && !portalProject.revoked_at && <button type="button" class="studio-quiet" data-send-project-invitation data-confirmed-not-sent="true">I checked Resend; retry</button>}
+    <p class="studio-status" data-invitation-status role="status" aria-live="polite"></p>
   </section>}
+  {portalProject && <section class="owner-section portal-stage" aria-label="Studio project stage"><p class="owner-kicker">Studio project</p><StageTrack stage={portalProject.stage} bookingPaid={payment?.bookingStatus === 'paid'} /></section>}
   {portalProject && <AudioProjectUpdates updates={projectUpdates} currentDueAt={portalProject.current_due_at} stage={portalProject.stage} requestStatus={request.status} bookingPaid={payment?.bookingStatus === 'paid'} revoked={Boolean(portalProject.revoked_at)} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/updates`} />}
   {portalProject && <OwnerProjectFiles files={projectFiles} pending={pendingUploads} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/uploads`}
     publishEndpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/files`}
@@ -66,12 +68,21 @@ const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') 
     canRevoke={!portalProject.revoked_at && request.status !== 'withdrawn'}
     bookingPaid={payment?.bookingStatus === 'paid'} balancePaid={payment?.balanceStatus === 'paid'} />}
   {portalProject && !portalProject.revoked_at && <section class="owner-section" data-project-access data-endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/access`}>
-    <p class="owner-kicker">Client access</p><details><summary>Close this private project</summary><p>This signs the client out and hides the project and its files immediately. It does not change invoices.</p><button type="button" data-revoke-project>Close client access</button><p data-access-status role="status" aria-live="polite"></p></details>
+    <p class="owner-kicker">Client access</p><details><summary>Close this private project</summary><p>This signs the client out and hides the project and its files immediately. It does not change invoices.</p><button type="button" class="studio-quiet danger" data-revoke-project>Close client access</button><p data-access-status role="status" aria-live="polite"></p></details>
   </section>}
   {portalProject && <ProjectMessages messages={projectMessages} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/messages`} reader="owner" closed={portalProject.stage === 'complete' || Boolean(portalProject.revoked_at) || request.status === 'withdrawn'} />}
   <section class="owner-section audit-trail"><p class="owner-kicker">Audit trail</p><h2>What changed</h2><ol>{audit.map(item => <li><strong>{item.action.replace('-', ' ')}</strong><span>{item.actor}</span><time datetime={item.occurredAt}>{new Date(item.occurredAt).toLocaleString()}</time>{item.note && <p>{item.note}</p>}</li>)}</ol></section>
   <script>import { setupOwnerRequestActions } from '~/scripts/owner-request-actions'; import { setupOwnerPaymentActions } from '~/scripts/owner-payment-actions'; import { setupProjectMessages } from '~/scripts/project-messages'; import { setupProjectUpdates } from '~/scripts/project-updates'; import { setupProjectInvitation } from '~/scripts/project-invitation'; import { setupOwnerProjectFiles } from '~/scripts/owner-project-files'; setupOwnerRequestActions(); setupOwnerPaymentActions(); setupProjectMessages(); setupProjectUpdates(); setupProjectInvitation(); setupOwnerProjectFiles();</script>
   <style>
+    .portal-stage { padding-block: 2rem 2.5rem; }
+    .request-invitation { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: .8rem; row-gap: .6rem; }
+    .request-invitation > .owner-kicker, .request-invitation > p, .request-invitation > button { grid-column: 1 / -1; }
+    .request-invitation h2 { grid-column: 1; font-size: 2rem; line-height: 1.1; }
+    .request-invitation > p:not(.owner-kicker):not(.studio-status) { max-width: 46ch; color: #514d47; font: .95rem/1.5 Inter, sans-serif; }
+    .invitation-state { width: .6rem; height: .6rem; border-radius: 50%; background: var(--studio-line); }
+    .invitation-state.sent { background: var(--studio-done); }
+    .invitation-state.failed, .invitation-state.sending { background: var(--accent); }
+    .invitation-state.closed { background: var(--muted); }
     [data-project-access] summary { width: fit-content; cursor: pointer; font: 400 1.6rem/1.2 Newsreader,Georgia,serif; }
     [data-project-access] details p { max-width: 38rem; margin: .8rem 0; color: #514d47; font: .9rem/1.5 Inter,sans-serif; }
     [data-project-access] button { border: 0; border-bottom: 1px solid currentColor; background: none; padding: .4rem 0; color: #a4512f; cursor: pointer; font: 500 .9rem/1.4 Inter,sans-serif; }

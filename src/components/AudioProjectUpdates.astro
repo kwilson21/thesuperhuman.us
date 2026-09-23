@@ -1,6 +1,7 @@
 ---
 import type { ProjectUpdate } from '~/lib/audio-project-updates';
 import { projectToday } from '~/lib/audio-project-updates';
+import '~/styles/studio.css';
 
 type Props = {
   updates: ProjectUpdate[];
@@ -19,80 +20,109 @@ const reasonLabels = {
   client_clarification: 'Waiting on client clarification',
   schedule_conflict: 'Scheduling conflict',
 };
+const shortDate = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 const dateLabel = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 const today = projectToday();
 const nextDay = currentDueAt ? new Date(Date.parse(`${currentDueAt}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10) : today;
 const laterDate = nextDay > today ? nextDay : today;
+// Each kind of event gets its own node shape, so the line reads at a glance.
+const node = (update: ProjectUpdate) => update.file_version === 'final' ? 'final' : update.file_version === 'review' ? 'review'
+  : update.kind === 'date_changed' ? 'date' : update.kind === 'accepted' || update.kind === 'work_started' ? 'milestone' : 'note';
+const title = (update: ProjectUpdate) => update.file_version === 'review' ? 'Review ready' : update.file_version === 'final' ? 'Final files ready'
+  : update.kind === 'accepted' ? 'Project accepted' : update.kind === 'work_started' ? 'Work started' : update.kind === 'date_changed' ? 'Date moved' : 'Studio update';
+// After the final delivery, the date that matters is the file's availability, not the due date.
+const upcoming = active && currentDueAt && stage !== 'final_files_ready' ? currentDueAt : null;
+const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' });
 ---
 <section class="project-updates" data-audio-project-updates data-endpoint={endpoint} aria-labelledby="project-updates-heading">
-  <div class="project-updates-heading"><p class="project-updates-kicker">Progress</p><h2 id="project-updates-heading">Your song’s timeline</h2></div>
-  {updates.length ? <ol>{[...updates].reverse().map(update =>
-    <li>
-      <div class="project-update-meta"><time datetime={update.created_at}>{new Date(update.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' })}</time><span>{update.file_version === 'review' ? 'Review ready' : update.file_version === 'final' ? 'Final files ready' : update.kind === 'accepted' ? 'Project accepted' : update.kind === 'work_started' ? 'Work started' : update.kind === 'date_changed' ? 'Date updated' : 'Studio update'}</span></div>
-      <p>{update.body}</p>
-      {update.kind === 'date_changed' && update.previous_due_at && update.new_due_at && <p class="project-update-date">{reasonLabels[update.reason ?? 'protect_song']}: {dateLabel(update.previous_due_at)} → {dateLabel(update.new_due_at)}</p>}
-      {owner && <div class="project-update-notice">
-        {update.notification_status === 'sent' ? <span>Client email sent</span> : update.notification_status === 'failed' ? <><span>Client email failed</span><button type="button" data-retry-update={update.id}>Retry email</button></> : update.notification_status === 'sending' ? update.notification_attempted_at && Date.now() - Date.parse(update.notification_attempted_at) > 60_000 ? <><span>Delivery unconfirmed. Check Resend. If it did not accept the email, retry here.</span><button type="button" data-retry-update={update.id} data-confirmed-not-sent="true">I checked Resend; retry</button></> : <span>Client email sending</span> : <><span>Client email pending</span><button type="button" data-retry-update={update.id}>Try sending</button></>}
-      </div>}
-    </li>
-  )}</ol> : <p class="project-updates-empty">No progress updates yet.</p>}
+  <div class="project-updates-heading"><p class="project-updates-kicker">Progress</p><h2 id="project-updates-heading">{owner ? 'Timeline' : 'Your song’s timeline'}</h2></div>
+  {updates.length || upcoming ? <ol class="timeline">
+    {upcoming && <li class="timeline-next"><span class="timeline-node next" aria-hidden="true"></span><div class="timeline-entry">
+      <p class="timeline-meta"><strong>Next</strong><span>Expected by {dateLabel(upcoming)}</span></p>
+    </div></li>}
+    {[...updates].reverse().map(update => <li>
+      <span class:list={['timeline-node', node(update)]} aria-hidden="true"></span>
+      <div class="timeline-entry">
+        <p class="timeline-meta"><strong>{title(update)}</strong><time datetime={update.created_at}>{stamp(update.created_at)}</time></p>
+        {update.kind === 'date_changed' && update.previous_due_at && update.new_due_at && <p class="timeline-date"><span>{reasonLabels[update.reason ?? 'protect_song']}</span><del>{shortDate(update.previous_due_at)}</del><span aria-hidden="true">→</span><ins>{shortDate(update.new_due_at)}</ins></p>}
+        <p class="timeline-body">{update.body}</p>
+        {owner && <div class="timeline-notice">
+          {update.notification_status === 'sent' ? <span class="sent">Client emailed</span> : update.notification_status === 'failed' ? <><span class="failed">Email failed</span><button type="button" class="studio-quiet" data-retry-update={update.id}>Retry email</button></> : update.notification_status === 'sending' ? update.notification_attempted_at && Date.now() - Date.parse(update.notification_attempted_at) > 60_000 ? <><span class="failed">Delivery unconfirmed. Check Resend. If it did not accept the email, retry here.</span><button type="button" class="studio-quiet" data-retry-update={update.id} data-confirmed-not-sent="true">I checked Resend; retry</button></> : <span>Sending email</span> : <><span>Email pending</span><button type="button" class="studio-quiet" data-retry-update={update.id}>Try sending</button></>}
+        </div>}
+      </div>
+    </li>)}
+  </ol> : <p class="project-updates-empty">No progress updates yet.</p>}
 
   {owner && active && <div class="project-update-actions">
-    {stage === 'files_under_review' && requestStatus === 'reviewed' && <form data-project-update-form data-action="accept">
+    {stage === 'files_under_review' && requestStatus === 'reviewed' && <form class="panel" data-project-update-form data-action="accept">
       <h3>Accept the project</h3><p>Set a cautious delivery date and tell the client what happens next.</p>
-      <label>Expected by <input type="date" name="dueDate" min={today} required /></label>
-      <label>First update <textarea name="body" rows="3" maxlength="1000" required></textarea></label>
-      <button type="submit">Accept and update client</button><p role="status" data-update-status></p>
+      <label class="studio-field">Expected by <input class="studio-input" type="date" name="dueDate" min={today} required /></label>
+      <label class="studio-field">First update <textarea class="studio-textarea" name="body" rows="3" maxlength="1000" required></textarea></label>
+      <button type="submit" class="studio-button">Accept and update client</button><p class="studio-status" role="status" data-update-status></p>
     </form>}
-    {stage === 'accepted' && bookingPaid && <form data-project-update-form data-action="start_work">
-      <h3>Start the work</h3><label>What you’re focusing on <textarea name="body" rows="3" maxlength="1000" required></textarea></label>
-      <button type="submit">Mark in progress</button><p role="status" data-update-status></p>
+    {stage === 'accepted' && bookingPaid && <form class="panel" data-project-update-form data-action="start_work">
+      <h3>Start the work</h3><p>Tell the client what you are focusing on first.</p>
+      <label class="studio-field">Focus <textarea class="studio-textarea" name="body" rows="3" maxlength="1000" required></textarea></label>
+      <button type="submit" class="studio-button">Mark in progress</button><p class="studio-status" role="status" data-update-status></p>
     </form>}
-    {stage === 'review_ready' && <form data-project-update-form data-action="begin_revision">
-      <h3>Begin a revision</h3><label>What you’ll address <textarea name="body" rows="3" maxlength="1000" required></textarea></label>
-      <button type="submit">Update the client</button><p role="status" data-update-status></p>
+    {stage === 'review_ready' && <form class="panel" data-project-update-form data-action="begin_revision">
+      <h3>Begin a revision</h3><p>Show the client their notes were understood.</p>
+      <label class="studio-field">What you will address <textarea class="studio-textarea" name="body" rows="3" maxlength="1000" required></textarea></label>
+      <button type="submit" class="studio-button">Begin revision</button><p class="studio-status" role="status" data-update-status></p>
     </form>}
-    {stage === 'final_files_ready' && <form data-project-update-form data-action="complete">
+    {stage === 'final_files_ready' && <form class="panel" data-project-update-form data-action="complete">
       <h3>Close the project</h3><p>The final file stays available until its expiry date. Messages become read-only.</p>
-      <label>Closing note <textarea name="body" rows="3" maxlength="1000" required></textarea></label>
-      <button type="submit">Mark complete</button><p role="status" data-update-status></p>
+      <label class="studio-field">Closing note <textarea class="studio-textarea" name="body" rows="3" maxlength="1000" required></textarea></label>
+      <button type="submit" class="studio-button">Mark complete</button><p class="studio-status" role="status" data-update-status></p>
     </form>}
-    {stage !== 'files_under_review' && <form data-project-update-form data-action="progress">
-      <h3>Share progress</h3><label>Meaningful update <textarea name="body" rows="3" maxlength="1000" required></textarea></label>
-      <button type="submit">Post update</button><p role="status" data-update-status></p>
+    {currentDueAt && <form class="panel" data-project-update-form data-action="revise_date">
+      <h3>Change the delivery date</h3><p>Now {dateLabel(currentDueAt)}. A later date needs a clear reason.</p>
+      <label class="studio-field">New date <input class="studio-input" type="date" name="dueDate" min={laterDate} required /></label>
+      <label class="studio-field">Reason <select class="studio-select" name="reason" required><option value="">Choose a reason</option><option value="protect_song">More time to protect the song</option><option value="client_clarification">Waiting on client clarification</option><option value="schedule_conflict">Scheduling conflict</option></select></label>
+      <label class="studio-field">Note to the client <textarea class="studio-textarea" name="body" rows="2" maxlength="1000" required></textarea></label>
+      <button type="submit" class="studio-button">Update date</button><p class="studio-status" role="status" data-update-status></p>
     </form>}
-    {currentDueAt && <form data-project-update-form data-action="revise_date">
-      <h3>Change the delivery date</h3><p>Current date: {dateLabel(currentDueAt)}. A later date needs a clear reason.</p>
-      <label>New date <input type="date" name="dueDate" min={laterDate} required /></label>
-      <label>Reason <select name="reason" required><option value="">Choose a reason</option><option value="protect_song">More time to protect the song</option><option value="client_clarification">Waiting on client clarification</option><option value="schedule_conflict">Scheduling conflict</option></select></label>
-      <label>Note to the client <textarea name="body" rows="3" maxlength="1000" required></textarea></label>
-      <button type="submit">Update date and client</button><p role="status" data-update-status></p>
+    {stage !== 'files_under_review' && <form class="panel" data-project-update-form data-action="progress">
+      <h3>Share progress</h3><p>A meaningful update, emailed as a sign-in link.</p>
+      <label class="studio-field">Update <textarea class="studio-textarea" name="body" rows="3" maxlength="1000" required></textarea></label>
+      <button type="submit" class="studio-button">Post update</button><p class="studio-status" role="status" data-update-status></p>
     </form>}
   </div>}
 </section>
 <style>
-  .project-updates { border-top: 1px solid #d8d2c9; padding: 2.5rem 0; }
-  .project-updates-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1.5rem; margin-bottom: 1.5rem; }
-  .project-updates-kicker { margin: 0; color: #a4512f; font: 500 .78rem/1.4 Inter, sans-serif; letter-spacing: .18em; text-transform: uppercase; }
+  .project-updates { border-top: 1px solid var(--rule); padding: 2.5rem 0; }
+  .project-updates-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1.5rem; margin-bottom: 2rem; }
+  .project-updates-kicker { margin: 0; color: var(--accent); font: 500 .78rem/1.4 Inter, sans-serif; letter-spacing: .18em; text-transform: uppercase; }
   h2 { margin: 0; font: 400 clamp(2rem, 4vw, 3rem)/1.1 Newsreader, Georgia, serif; }
-  ol { list-style: none; margin: 0; padding: 0; border-bottom: 1px solid #d8d2c9; }
-  li { border-top: 1px solid #d8d2c9; padding: 1.3rem 0; max-width: 50rem; }
-  .project-update-meta { display: flex; flex-wrap: wrap; gap: 1rem; color: #66615a; font: .8rem/1.4 Inter, sans-serif; }
-  .project-update-meta span { color: #a4512f; }
-  li > p { margin: .7rem 0 0; font: 1rem/1.6 Inter, sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; }
-  .project-update-date { color: #514d47; }
-  .project-update-notice { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1rem; margin-top: .8rem; color: #66615a; font: .8rem/1.4 Inter, sans-serif; }
-  .project-update-notice button { margin: 0; }
-  .project-updates-empty { font: 1rem/1.6 Inter, sans-serif; color: #514d47; }
-  .project-update-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 2rem; margin-top: 2rem; }
-  form { display: grid; align-content: start; gap: .8rem; border-top: 1px solid #d8d2c9; padding-top: 1rem; }
-  h3 { margin: 0; font: 400 1.6rem/1.15 Newsreader, Georgia, serif; }
-  form p { margin: 0; color: #514d47; font: .9rem/1.5 Inter, sans-serif; }
-  label { display: grid; gap: .4rem; font: 500 .85rem/1.4 Inter, sans-serif; }
-  input,textarea,select { width: 100%; padding: .7rem .8rem; border: 1px solid #9d968c; border-radius: 0; background: #fffdf9; font: 1rem/1.4 Inter, sans-serif; }
-  textarea { resize: vertical; }
-  button { justify-self: start; border: 0; border-bottom: 1px solid currentColor; background: none; padding: .4rem 0; cursor: pointer; font: 500 .9rem/1.4 Inter, sans-serif; }
-  button:hover { color: #a4512f; }
-  button:disabled { opacity: .5; cursor: wait; }
-  [data-update-status] { min-height: 1.4rem; }
+  .timeline { position: relative; list-style: none; margin: 0; padding: 0; max-width: 46rem; }
+  /* The spine: one continuous line through every node. */
+  .timeline::before { content: ''; position: absolute; top: .55rem; bottom: .9rem; left: .5rem; width: 1.5px; background: var(--studio-done); }
+  .timeline li { position: relative; display: grid; grid-template-columns: 1rem minmax(0, 1fr); gap: 1.25rem; padding-bottom: 1.9rem; }
+  .timeline li:last-child { padding-bottom: 0; }
+  .timeline-next::after { content: ''; position: absolute; top: .55rem; bottom: 0; left: .5rem; width: 1.5px; background: var(--paper); background-image: linear-gradient(var(--studio-line) 50%, transparent 0); background-size: 1.5px 6px; }
+  .timeline-node { position: relative; z-index: 1; margin-top: .3rem; width: 1rem; height: 1rem; border-radius: 50%; background: var(--studio-done); border: 1.5px solid var(--studio-done); box-shadow: 0 0 0 4px var(--paper); }
+  .timeline-node.note { width: .6rem; height: .6rem; margin: .5rem 0 0 .2rem; }
+  .timeline-node.review { background: var(--paper); border: 2px solid var(--accent); }
+  .timeline-node.review::after { content: ''; position: absolute; inset: .18rem; border-radius: 50%; background: var(--accent); }
+  .timeline-node.final { background: var(--accent); border-color: var(--accent); }
+  .timeline-node.date { border-radius: 2px; transform: rotate(45deg) scale(.8); background: var(--paper); border: 2px solid var(--studio-done); }
+  .timeline-node.next { background: var(--paper); border: 1.5px dashed var(--studio-line); }
+  .timeline-entry { display: grid; gap: .45rem; min-width: 0; }
+  .timeline-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem .9rem; margin: 0; font: .8rem/1.4 Inter, sans-serif; color: var(--studio-muted); }
+  .timeline-meta strong { color: var(--ink); font: 400 1.2rem/1.25 Newsreader, Georgia, serif; }
+  .timeline-next .timeline-meta strong { color: var(--studio-muted); }
+  .timeline-body { margin: 0; font: 1rem/1.6 Inter, sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .timeline-date { display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem .6rem; margin: 0; font: .88rem/1.5 Inter, sans-serif; color: var(--studio-muted); }
+  .timeline-date span:first-child { margin-right: .3rem; }
+  .timeline-date del { color: var(--studio-muted); }
+  .timeline-date ins { text-decoration: none; color: var(--ink); font-weight: 500; }
+  .timeline-notice { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem 1rem; font: .78rem/1.4 Inter, sans-serif; color: var(--studio-muted); }
+  .timeline-notice span::before { content: ''; display: inline-block; width: .45rem; height: .45rem; margin-right: .4rem; border-radius: 50%; background: var(--studio-line); vertical-align: .05rem; }
+  .timeline-notice .sent::before { background: var(--studio-done); }
+  .timeline-notice .failed::before { background: var(--accent); }
+  .project-updates-empty { font: 1rem/1.6 Inter, sans-serif; color: var(--studio-muted); }
+  .project-update-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 1.25rem; margin-top: 2.5rem; }
+  .panel { display: grid; align-content: start; gap: .9rem; padding: 1.4rem; border: 1px solid var(--rule); border-radius: 2px; background: color-mix(in srgb, var(--studio-field) 60%, var(--paper)); }
+  h3 { margin: 0; font: 400 1.5rem/1.15 Newsreader, Georgia, serif; }
+  .panel > p:not(.studio-status) { margin: -.4rem 0 0; color: var(--studio-muted); font: .85rem/1.5 Inter, sans-serif; }
 </style>

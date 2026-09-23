@@ -1,55 +1,105 @@
 ---
+import '~/styles/studio.css';
+import { parsePeaks, waveformRects } from '~/lib/audio-peaks';
+
 type FileRow = { id: string; version: 'review' | 'final'; display_name: string; byte_size: number;
-  status: 'uploaded' | 'published' | 'revoked'; uploaded_at: string; published_at: string | null };
+  status: 'uploaded' | 'published' | 'revoked'; uploaded_at: string; published_at: string | null; peaks: string | null };
 type PendingUpload = { id: string; display_name: string; state: 'pending' | 'discarding'; created_at: string };
 type Props = { files: FileRow[]; pending: PendingUpload[]; endpoint: string; publishEndpoint: string;
   canUpload: boolean; canRevoke: boolean; finalOnly: boolean; bookingPaid: boolean; balancePaid: boolean };
 const { files, pending, endpoint, publishEndpoint, canUpload, canRevoke, finalOnly, bookingPaid, balancePaid } = Astro.props;
+const stateLabel = { uploaded: 'Draft', published: 'Published', revoked: 'Revoked' } as const;
+const when = (value: string) => new Date(value).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' });
+const size = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 ---
 <section class="owner-section project-files" data-owner-project-files data-endpoint={endpoint} data-publish-endpoint={publishEndpoint} aria-labelledby="project-files-heading">
   <p class="owner-kicker">Private files</p><h2 id="project-files-heading">Review and delivery</h2>
-  {files.length ? <ul>{files.map(file => <li><div><strong>{file.display_name}</strong><span>{file.version === 'review' ? 'Review' : 'Final'} · {file.status} · {(file.byte_size / 1024 / 1024).toFixed(1)} MB</span>
-    {file.status === 'uploaded' && canUpload && bookingPaid && ((file.version === 'review' && !finalOnly) || (file.version === 'final' && balancePaid)) && <form data-project-publish-form data-file-id={file.id}>
-      <label>Note to the client <textarea name="note" rows="3" maxlength="1000" required></textarea></label>
-      {file.version === 'review' && <label class="download-choice"><input type="checkbox" name="downloadable" /> Allow download of this review</label>}
-      <button type="submit">Publish {file.version === 'review' ? 'review' : 'final file'}</button><p data-publish-status role="status" aria-live="polite"></p>
+  {files.length ? <ol class="file-list">{files.map(file => { const peaks = parsePeaks(file.peaks); return <li class:list={['file-row', file.status]}>
+    <div class="file-name"><strong>{file.display_name}</strong><span>{file.version === 'review' ? 'Review' : 'Final'} · {when(file.published_at ?? file.uploaded_at)}</span></div>
+    <div class="file-wave">{peaks ? <svg viewBox="0 0 320 40" preserveAspectRatio="none" aria-hidden="true" set:html={waveformRects(peaks)} /> : <span class="file-wave-empty">No waveform</span>}</div>
+    <span class:list={['studio-pill', file.status]}>{stateLabel[file.status]}</span>
+    <span class="file-size">{size(file.byte_size)}</span>
+    {file.status === 'uploaded' && canUpload && bookingPaid && ((file.version === 'review' && !finalOnly) || (file.version === 'final' && balancePaid)) && <form class="file-publish" data-project-publish-form data-file-id={file.id}>
+      <label class="studio-field">Note to the client <textarea class="studio-textarea" name="note" rows="2" maxlength="1000" required></textarea></label>
+      <div class="file-publish-row">
+        {file.version === 'review' && <label class="studio-toggle"><input type="checkbox" name="downloadable" /> Allow download</label>}
+        <button type="submit" class="studio-button">Publish {file.version === 'review' ? 'review' : 'final file'}</button>
+      </div>
+      <p class="studio-status" data-publish-status role="status" aria-live="polite"></p>
     </form>}
-    {file.status === 'uploaded' && file.version === 'final' && !balancePaid && <span>Waiting for confirmed balance payment before sharing.</span>}
-    {file.status !== 'revoked' && canRevoke && <form data-project-revoke-form data-file-id={file.id} data-was-published={file.status === 'published'}>
-      {file.status === 'published' && <label>Why this file is no longer available <textarea name="note" rows="2" maxlength="1000" required></textarea></label>}
-      <button type="submit">{file.status === 'published' ? 'Revoke file access' : 'Discard draft'}</button><p data-revoke-status role="status" aria-live="polite"></p>
-    </form>}
-    </div><time datetime={file.uploaded_at}>{new Date(file.uploaded_at).toLocaleDateString('en-US', { dateStyle: 'medium' })}</time></li>)}</ul> : <p>No files uploaded yet.</p>}
-  {pending.length > 0 && <div class="unfinished"><h3>Unfinished uploads</h3><p>If an upload finished but did not appear above, try recovery. Otherwise discard it and start again.</p><ul>{pending.map(upload => <li><div><strong>{upload.display_name}</strong><span>{upload.state === 'discarding' ? 'Cleanup needs another try' : 'Started'} {new Date(upload.created_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</span></div><div class="upload-actions">{upload.state === 'pending' && <button type="button" data-upload-action="recover" data-upload-id={upload.id}>Recover</button>}<button type="button" data-upload-action="abort" data-upload-id={upload.id}>{upload.state === 'discarding' ? 'Retry cleanup' : 'Discard'}</button></div></li>)}</ul><p data-pending-status role="status" aria-live="polite"></p></div>}
-  {canUpload && <form data-project-upload-form>
-    <h3>Upload a private file</h3>
-    <p>Uploading does not share a file with the client. You will choose when to publish it.</p>
-    <label>Version <select name="version">{!finalOnly && <option value="review">Review version</option>}<option value="final">Final version</option></select></label>
-    <label>Audio file <input name="file" type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" required /></label>
-    <button type="submit">Upload file</button>
-    <p data-upload-status role="status" aria-live="polite"></p>
+    {file.status === 'uploaded' && file.version === 'final' && !balancePaid && <p class="file-note">Waiting for confirmed balance payment before sharing.</p>}
+    {file.status !== 'revoked' && canRevoke && <details class="file-more">
+      <summary>{file.status === 'published' ? 'Revoke access' : 'Discard draft'}</summary>
+      <form data-project-revoke-form data-file-id={file.id} data-was-published={file.status === 'published'}>
+        {file.status === 'published' && <label class="studio-field">Why this file is no longer available <textarea class="studio-textarea" name="note" rows="2" maxlength="1000" required></textarea></label>}
+        <button type="submit" class="studio-quiet danger">{file.status === 'published' ? 'Revoke file access' : 'Discard this draft'}</button>
+        <p class="studio-status" data-revoke-status role="status" aria-live="polite"></p>
+      </form>
+    </details>}
+  </li>; })}</ol> : <p class="file-empty">No files uploaded yet.</p>}
+  {pending.length > 0 && <div class="unfinished"><h3>Unfinished uploads</h3><p>If an upload finished but did not appear above, try recovery. Otherwise discard it and start again.</p><ul>{pending.map(upload => <li><div><strong>{upload.display_name}</strong><span>{upload.state === 'discarding' ? 'Cleanup needs another try' : 'Started'} {when(upload.created_at)}</span></div><div class="upload-actions">{upload.state === 'pending' && <button type="button" class="studio-quiet" data-upload-action="recover" data-upload-id={upload.id}>Recover</button>}<button type="button" class="studio-quiet danger" data-upload-action="abort" data-upload-id={upload.id}>{upload.state === 'discarding' ? 'Retry cleanup' : 'Discard'}</button></div></li>)}</ul><p class="studio-status" data-pending-status role="status" aria-live="polite"></p></div>}
+  {canUpload && <form class="upload" data-project-upload-form>
+    <div class="upload-heading"><h3>Upload a private file</h3><p>Uploading does not share it. You choose when to publish.</p></div>
+    <label class="drop" data-upload-drop>
+      <input name="file" type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" required />
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4.5h14V14" fill="none" stroke="currentColor" stroke-width="1.5" /></svg>
+      <span class="drop-copy"><strong data-upload-name>Drop a WAV or MP3</strong><span>or choose a file · up to 1 GB</span></span>
+    </label>
+    <div class="upload-row">
+      <label class="studio-field">Version <select class="studio-select" name="version">{!finalOnly && <option value="review">Review version</option>}<option value="final">Final version</option></select></label>
+      <button type="submit" class="studio-button">Upload file</button>
+    </div>
+    <div class="upload-progress" data-upload-progress hidden><div class="upload-segments" data-upload-segments></div><p class="studio-status" data-upload-status role="status" aria-live="polite"></p></div>
   </form>}
 </section>
 <style>
-  .project-files h2 { font-size: clamp(2rem,4vw,3rem); line-height: 1.1; margin-bottom: 1.2rem; }
-  .project-files > p:not(.owner-kicker),form p { color: #514d47; font: .9rem/1.5 Inter,sans-serif; }
-  ul { list-style: none; padding: 0; margin: 0 0 2rem; border-top: 1px solid #d8d2c9; }
-  li { display: flex; justify-content: space-between; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid #d8d2c9; }
-  li div { display: grid; gap: .2rem; min-width: 0; }
-  li strong { overflow-wrap: anywhere; font: 500 1rem/1.4 Inter,sans-serif; }
-  li span,li time { color: #66615a; font: .78rem/1.4 Inter,sans-serif; }
-  form { display: grid; gap: .85rem; max-width: 32rem; border-top: 1px solid #d8d2c9; padding-top: 1.5rem; }
-  h3 { font: 400 1.6rem/1.15 Newsreader,Georgia,serif; }
-  label { display: grid; gap: .35rem; font: 500 .85rem/1.4 Inter,sans-serif; }
-  select,input { padding: .65rem; border: 1px solid #9d968c; background: #fffdf9; font: 1rem/1.4 Inter,sans-serif; max-width: 100%; }
-  textarea { width: 100%; padding: .65rem; border: 1px solid #9d968c; background: #fffdf9; font: 1rem/1.4 Inter,sans-serif; resize: vertical; }
-  .download-choice { display: flex; align-items: center; gap: .6rem; }
-  .download-choice input { width: auto; }
-  [data-project-revoke-form] { margin-top: .6rem; }
-  [data-project-revoke-form] button { color: #a4512f; }
-  button { justify-self: start; border: 0; border-bottom: 1px solid currentColor; background: none; padding: .4rem 0; font: 500 .9rem/1.4 Inter,sans-serif; cursor: pointer; }
-  button:hover { color: #a4512f; } button:disabled { opacity: .5; cursor: wait; }
-  .unfinished { margin-top: 1.5rem; } .unfinished h3 { margin-bottom: .5rem; } .unfinished p { color: #514d47; font: .9rem/1.5 Inter,sans-serif; }
-  .upload-actions { display: flex; gap: 1rem; align-items: center; } .upload-actions button { font-size: .8rem; }
-  [data-upload-status] { min-height: 1.4rem; }
+  .project-files h2 { font-size: clamp(2rem,4vw,3rem); line-height: 1.1; margin-bottom: 1.5rem; }
+  .file-list { list-style: none; margin: 0 0 2.5rem; padding: 0; border-top: 1px solid var(--rule); }
+  .file-row { display: grid; grid-template-columns: minmax(10rem, 1.1fr) minmax(8rem, 2fr) auto 5rem; align-items: center; gap: .8rem 1.5rem; padding: 1.1rem 0; border-bottom: 1px solid var(--rule); }
+  .file-name { display: grid; gap: .15rem; min-width: 0; }
+  .file-name strong { overflow-wrap: anywhere; font: 500 1rem/1.35 Inter, sans-serif; }
+  .file-name span, .file-size, .file-note { color: var(--studio-muted); font: .76rem/1.4 Inter, sans-serif; font-variant-numeric: tabular-nums; }
+  .file-size { text-align: right; }
+  .file-wave { height: 2.2rem; }
+  .file-wave svg { width: 100%; height: 100%; fill: #a79e91; }
+  .file-row.published .file-wave svg { fill: var(--accent); }
+  .file-row.revoked { opacity: .65; }
+  .file-wave-empty { display: flex; align-items: center; height: 100%; color: var(--studio-muted); font: .72rem/1 Inter, sans-serif; border-top: 1px dashed var(--studio-line); }
+  .file-publish, .file-note, .file-more { grid-column: 1 / -1; }
+  .file-publish { display: grid; gap: .75rem; padding: 1rem; background: var(--studio-soft); border-radius: 2px; }
+  .file-publish-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
+  .file-more summary { width: fit-content; cursor: pointer; color: var(--studio-muted); font: 500 .76rem/1.4 Inter, sans-serif; }
+  .file-more form { display: grid; gap: .6rem; max-width: 34rem; margin-top: .7rem; }
+  .file-empty { color: var(--studio-muted); font: .95rem/1.5 Inter, sans-serif; }
+  h3 { font: 400 1.5rem/1.15 Newsreader,Georgia,serif; }
+  .upload { display: grid; gap: 1rem; max-width: 46rem; }
+  .upload-heading p, .unfinished p { margin: .3rem 0 0; color: var(--studio-muted); font: .85rem/1.5 Inter, sans-serif; }
+  .drop { position: relative; display: flex; align-items: center; justify-content: center; gap: 1rem; min-height: 7rem; padding: 1.5rem; border: 1.5px dashed var(--studio-line); border-radius: 2px; background: var(--studio-field); cursor: pointer; transition: border-color 140ms ease, background 140ms ease; }
+  .drop:hover, .drop.dragging { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 5%, var(--studio-field)); }
+  .drop:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .drop svg { width: 2rem; height: 2rem; color: var(--ink); }
+  .drop-copy { display: grid; gap: .1rem; }
+  .drop-copy strong { font: 500 1rem/1.35 Inter, sans-serif; overflow-wrap: anywhere; }
+  .drop-copy span { color: var(--studio-muted); font: .78rem/1.4 Inter, sans-serif; }
+  .upload-row { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; }
+  .upload-row .studio-field { flex: 1 1 14rem; }
+  .upload-progress { display: grid; gap: .5rem; }
+  .upload-segments { display: flex; gap: 3px; height: .35rem; }
+  /* Segments are created by script, outside Astro's scoped styles. */
+  .upload-segments :global(span) { flex: 1; border-radius: 1px; background: var(--studio-line); transition: background 200ms ease; }
+  .upload-segments :global(span.done) { background: var(--accent); }
+  .unfinished { margin: 0 0 2.5rem; }
+  .unfinished ul { list-style: none; margin: .8rem 0 0; padding: 0; border-top: 1px solid var(--rule); }
+  .unfinished li { display: flex; justify-content: space-between; gap: 1rem; padding: .9rem 0; border-bottom: 1px solid var(--rule); }
+  .unfinished li div:first-child { display: grid; gap: .1rem; }
+  .unfinished li span { color: var(--studio-muted); font: .76rem/1.4 Inter, sans-serif; }
+  .upload-actions { display: flex; gap: 1.2rem; align-items: center; }
+  @media (max-width: 45rem) {
+    .file-row { grid-template-columns: minmax(0, 1fr) auto; }
+    .file-wave { grid-column: 1 / -1; grid-row: 2; }
+    .file-size { grid-column: 2; grid-row: 1; align-self: start; }
+    .studio-pill { grid-column: 1; grid-row: 3; justify-self: start; }
+  }
+  @media (prefers-reduced-motion: reduce) { .drop, .upload-segments :global(span) { transition: none; } }
 </style>

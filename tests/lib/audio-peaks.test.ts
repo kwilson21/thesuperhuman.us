@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parsePeaks, peaksFromChannels } from '../../src/lib/audio-peaks';
+import { parsePeaks, peaksFromChannels, waveformRects } from '../../src/lib/audio-peaks';
 
 describe('audio peaks', () => {
   it('takes the loudest sample per bar across channels and scales to 0-100', () => {
@@ -19,5 +19,12 @@ describe('audio peaks', () => {
     expect(parsePeaks(valid.slice(1))).toBeNull();
     expect(parsePeaks('not json')).toBeNull();
     expect(parsePeaks(null)).toBeNull();
+  });
+
+  it('draws centered bars with a visible minimum height', () => {
+    const rects = waveformRects([0, 100]);
+    expect(rects.match(/<rect /g)).toHaveLength(2);
+    expect(rects).toContain('y="19.00" width="96.00" height="2.00"');
+    expect(rects).toContain('y="0.00" width="96.00" height="40.00"');
   });
 });

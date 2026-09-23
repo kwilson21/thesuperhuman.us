@@ -20,7 +20,7 @@ const studioAttention = clientPortalEnabled(Astro.locals.runtime.env) ? await li
   </header>
   <section class="owner-section attention-section" aria-labelledby="waiting-heading">
     <AttentionIndex number="01" label="First area to inspect" />
-    <div class="section-heading-line"><div><p class="owner-kicker">People</p><h2 id="waiting-heading">{ledger.attention.newRequests ? `${ledger.attention.newRequests} waiting for review` : 'No one is waiting'}</h2></div><a href="/owner/requests">Open requests →</a></div>
+    <div class="section-heading-line"><div><p class="owner-kicker">People</p><h2 id="waiting-heading">{ledger.attention.newRequests ? `${ledger.attention.newRequests} waiting for review` : studioAttention.length ? 'No new requests' : 'No one is waiting'}</h2></div><a href="/owner/requests">Open requests →</a></div>
     <RequestList requests={ledger.attentionRequests} />
   </section>
   {signInFailures.length > 0 && <section class="owner-section" aria-labelledby="studio-sign-in-heading">
