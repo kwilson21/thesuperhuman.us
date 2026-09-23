@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
 import { abortProjectUpload, beginProjectUpload, expectedPartLength, finishProjectUpload,
-  getProjectUpload, maxPartEtagLength, maxProjectFileSize, ownerProjectCanUpload, putProjectUploadPart, uploadPartSize } from '~/lib/audio-project-uploads';
+  getProjectUpload, maxPartEtagLength, readBodyWithin, maxProjectFileSize, ownerProjectCanUpload, putProjectUploadPart, uploadPartSize } from '~/lib/audio-project-uploads';
 import { musicRequest } from '~/lib/music-request';
 
 export const prerender = false;
@@ -66,9 +66,10 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
     if (length === null || (request.headers.has('content-length') && Number(request.headers.get('content-length')) !== length)) {
       return fail('This file part has the wrong size.', 400);
     }
-    // A part is at most 10 MiB. Buffering gives R2 a known length in workerd and in local dev.
-    const body = await request.arrayBuffer();
-    if (body.byteLength !== length) return fail('This file part has the wrong size.', 400);
+    // A part is at most 10 MiB. Buffering gives R2 a known length in workerd and in local dev,
+    // and reading stops as soon as the body passes the expected size.
+    const body = await readBodyWithin(request.body, length);
+    if (!body || body.byteLength !== length) return fail('This file part has the wrong size.', 400);
     const part = await putProjectUploadPart(env.AUDIO, upload, partNumber, body);
     return Response.json({ ok: true, part });
   } catch {

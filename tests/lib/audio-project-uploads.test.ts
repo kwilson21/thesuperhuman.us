@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { expect, it, vi } from 'vitest';
 import { getPlatformProxy } from 'wrangler';
 import { abortProjectUpload, beginProjectUpload, expectedPartLength, finishProjectUpload,
-  getProjectUpload, maxPartEtagLength, maxProjectFileSize, ownerProjectCanUpload, uploadPartSize } from '~/lib/audio-project-uploads';
+  getProjectUpload, readBodyWithin, maxPartEtagLength, maxProjectFileSize, ownerProjectCanUpload, uploadPartSize } from '~/lib/audio-project-uploads';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 const schema = readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8');
@@ -172,4 +172,13 @@ it('cleans an object completed while a discard is starting', async () => {
   expect(sql.prepare('SELECT id FROM audio_project_files WHERE id=?').get(upload.id)).toBeUndefined();
   expect(objects.has(upload.object_key)).toBe(false);
   sql.close();
+});
+
+it('stops reading an upload body as soon as it passes the expected size', async () => {
+  let pulled = 0;
+  const endless = new ReadableStream<Uint8Array>({ pull(controller) { pulled++; controller.enqueue(new Uint8Array(4)); } });
+  expect(await readBodyWithin(endless, 10)).toBeNull();
+  expect(pulled).toBeLessThanOrEqual(4);
+  const exact = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array([1, 2])); controller.enqueue(new Uint8Array([3])); controller.close(); } });
+  expect([...new Uint8Array((await readBodyWithin(exact, 3))!)]).toEqual([1, 2, 3]);
 });
