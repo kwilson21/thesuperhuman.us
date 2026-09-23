@@ -44,11 +44,12 @@ small number of good conversations, with LinkedIn carrying the professional reac
    > I build useful software with AI, grounded in 7+ years of production engineering (Lyft, insurance, healthcare).
    > Now: Tally (family budgeting) and kaillera-next (browser netplay for retro games).
    > Also mixing and mastering audio. thesuperhuman.us
-   The Ko-fi page (ko-fi.com/kazonwilson) does not fit in the bio. Better homes:
-   a line on the website where support links belong, which is a separate site
-   change for you to approve, or a mention in the pinned post. Posts themselves
-   keep one link, to the site (quality standard 8).
-5. **Pinned post:** the Tally Home screen post from the first approved batch.
+   The Ko-fi page (ko-fi.com/kazonwilson) does not fit in the bio. It goes in the
+   pinned post and in the website footer instead (see "Support (Ko-fi)" in the
+   design doc). Routine posts keep one link, to the site (quality standard 8).
+5. **Pinned post:** an introduction with two links: the website and Ko-fi.
+   > I build useful software with AI, and I mix and master audio. I'm posting what I make and why: Tally, kaillera-next and more. Everything lives at thesuperhuman.us. If the work is useful to you, you can support it on Ko-fi: ko-fi.com/kazonwilson
+   Replace it with a strong project post later if you prefer; keep Ko-fi in it.
 6. **Settings worth changing:** turn on two-factor sign-in by email; leave
    "adult content" off; set who can reply to "everyone" at first.
 7. **Later, only for automated posting:** create an **app password** (Settings,

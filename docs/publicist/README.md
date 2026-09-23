@@ -335,6 +335,23 @@ are rechecked against those official pages before any automated posting is propo
 [Bluesky rate limits](https://docs.bsky.app/docs/advanced-guides/rate-limits),
 [TechCrunch on Bluesky active users (2026-08-11)](https://techcrunch.com/2026/08/11/blueskys-active-user-base-is-shrinking-as-its-focus-expands-beyond-the-app/).
 
+**Support (Ko-fi).** The owner's Ko-fi page, https://ko-fi.com/kazonwilson,
+supports all of their work: software projects and audio. It gets a permanent place
+rather than a spot in every post:
+- **Website:** a "Support my work" link in the footer of every page and in the
+  structured-data profile links, proposed as a separate website PR. Because every
+  post links to a journal page on the site, readers who want to help can always
+  find it. A later option, if wanted: a short support line on the Building project
+  pages and the Old News release page.
+- **Profiles:** in the pinned Bluesky post, in LinkedIn's contact info (it allows
+  several website links) and in the X bio before it goes quiet.
+- **Posts:** routine posts keep their one link, to the site. At most one explicit
+  support post a month, drafted only when there is a concrete milestone to point to,
+  and queued like any other post for the owner's approval.
+- **Tone:** plain and specific ("If this work is useful to you, you can support it
+  on Ko-fi"). Public copy does not mention employment status; that is the owner's
+  to share.
+
 **Quality standards.** Every queued post passes the checklist in
 [bluesky/README.md](bluesky/README.md#post-quality-standards-all-platforms)
 (one idea, point first, concrete, says why, honest status, plain voice, one real
