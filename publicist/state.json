@@ -1,5 +1,12 @@
 {
   "version": 1,
-  "published": [],
+  "published": [
+    "tally-phase-0",
+    "tally-design-direction",
+    "tally-design-system",
+    "tally-data-and-money",
+    "tally-ci-screenshots",
+    "tally-home-screen"
+  ],
   "declined": []
 }
