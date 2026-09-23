@@ -86,6 +86,8 @@ The client page and owner controls share the existing site’s warm ivory ground
 
 The approved visual study is a reference for proportion, hierarchy, and material feel. It does not prescribe placeholder content or require image assets in the product UI.
 
+The first portal implementation uses the browser's native audio player and a text timeline. The waveform, vertical progress line, and payment milestones in the timeline remain visual follow-up work. Payment status and gating are still visible in the project flow and enforced by the server; these follow-ups should use the existing project and payment records rather than create a second source of truth.
+
 ### Messages and revision feedback
 
 A single shared text thread opens as soon as the request exists, allowing a client to correct a Drive, Dropbox, or WeTransfer link or provide relevant context before file approval. Messages accept plain text and HTTPS shared-file links only.

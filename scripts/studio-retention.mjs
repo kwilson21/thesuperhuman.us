@@ -15,10 +15,9 @@ const ids = rows => rows.length ? rows.map(row => quote(row[0])).join(',') : "''
 const snapshot = sql => `SELECT json_group_array(json_array(${sql.columns.split(',').map(column => column.trim().split('.').pop()).join(',')})) AS snapshot FROM
   (SELECT ${sql.columns} FROM ${sql.from} WHERE ${sql.where} ORDER BY ${sql.order} LIMIT ${sql.limit})`;
 
-function sources(now) {
+export function studioRetentionProjectPredicate(now) {
   const old = quote(cutoff(now, 30));
-  const auditOld = quote(cutoff(now, 730));
-  const projectWhere = `p.content_deleted_at IS NULL
+  return `p.content_deleted_at IS NULL
     AND NOT EXISTS(SELECT 1 FROM audio_project_uploads upload WHERE upload.request_id=p.request_id)
     AND ((r.status IN ('withdrawn','resolved')
       AND COALESCE(r.resolved_at,r.updated_at)<=${old}
@@ -26,7 +25,12 @@ function sources(now) {
         AND f.version='final' AND f.published_at IS NOT NULL)
       AND NOT EXISTS(SELECT 1 FROM audio_payments pay WHERE pay.request_id=p.request_id
         AND NOT (${finishedPaymentTerms})))
-      OR (p.stage IN ('final_files_ready','complete')
+      OR ((p.stage IN ('final_files_ready','complete') OR (p.stage='in_progress'
+          AND EXISTS(SELECT 1 FROM audio_project_files f WHERE f.request_id=p.request_id
+            AND f.version='final' AND f.status='revoked')
+          AND NOT EXISTS(SELECT 1 FROM audio_project_files f WHERE f.request_id=p.request_id
+            AND f.version='final' AND f.status='published')))
+        AND p.updated_at<=${old}
         AND EXISTS(SELECT 1 FROM audio_payments pay WHERE pay.request_id=p.request_id
           AND pay.booking_status='paid' AND pay.balance_status='paid')
         AND NOT EXISTS(SELECT 1 FROM audio_project_files f WHERE f.request_id=p.request_id
@@ -36,6 +40,12 @@ function sources(now) {
         AND NOT EXISTS(SELECT 1 FROM audio_project_files f WHERE f.request_id=p.request_id
           AND f.version='final' AND f.published_at IS NOT NULL AND (f.expires_at IS NULL OR f.expires_at>${old}))
       ))`;
+}
+
+function sources(now) {
+  const old = quote(cutoff(now, 30));
+  const auditOld = quote(cutoff(now, 730));
+  const projectWhere = studioRetentionProjectPredicate(now);
   const projects = snapshot({ columns: 'p.request_id,p.updated_at', from: 'audio_projects p JOIN owner_requests r ON r.id=p.request_id', where: projectWhere, order: 'p.request_id', limit: 25 });
   const codes = snapshot({ columns: 'email,created_at', from: 'audio_client_codes', where: `COALESCE(used_at,expires_at)<${old}`, order: 'email', limit: 1000 });
   const sessions = snapshot({ columns: 'token_hash,last_seen_at', from: 'audio_client_sessions',

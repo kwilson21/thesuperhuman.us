@@ -51,7 +51,7 @@ export async function listStudioProjectAttention(db: D1Database, now: Date): Pro
       (SELECT COUNT(*) FROM audio_project_updates u
         WHERE u.request_id=p.request_id AND u.notification_status='failed') AS failedNotices,
       CASE WHEN p.current_due_at IS NOT NULL AND p.current_due_at<=?
-        AND p.stage NOT IN ('final_files_ready','complete') THEN 1 ELSE 0 END AS dueSoon
+        AND p.stage IN ('accepted','in_progress','revision_in_progress') THEN 1 ELSE 0 END AS dueSoon
     FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
     WHERE p.revoked_at IS NULL AND r.status<>'withdrawn'
   ) SELECT * FROM project_attention

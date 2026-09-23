@@ -62,9 +62,11 @@ it('shows unread client messages, failed notices, and approaching delivery dates
   sql.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
     VALUES ('due','service','due@example.com','Due song','reviewed','2026-09-01','2026-09-01'),
       ('quiet','service','quiet@example.com','Quiet song','reviewed','2026-09-01','2026-09-01'),
+      ('review','service','review@example.com','Review song','reviewed','2026-09-01','2026-09-01'),
       ('closed','service','closed@example.com','Closed song','withdrawn','2026-09-01','2026-09-01');
     UPDATE audio_projects SET stage='in_progress',current_due_at='2026-09-24' WHERE request_id='due';
     UPDATE audio_projects SET stage='in_progress',current_due_at='2026-10-01' WHERE request_id='quiet';
+    UPDATE audio_projects SET stage='review_ready',current_due_at='2026-09-24' WHERE request_id='review';
     UPDATE audio_projects SET stage='in_progress',current_due_at='2026-09-24' WHERE request_id='closed';
     INSERT INTO audio_project_messages(request_id,actor,actor_id,body,created_at)
       VALUES ('due','client','session','Please check my files','2026-09-23');

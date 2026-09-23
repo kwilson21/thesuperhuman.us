@@ -90,7 +90,7 @@ export async function completeClientCode(db: D1Database, email: string, code: st
   const expiresAt = new Date(now.getTime() + sessionLifetimeMs).toISOString();
   const [used] = await db.batch([
     db.prepare(`UPDATE audio_client_codes SET used_at=?,session_token_hash=?
-      WHERE email=? AND code_hash=? AND used_at IS NULL AND expires_at>?
+      WHERE email=? AND code_hash=? AND used_at IS NULL AND attempts<5 AND expires_at>?
       RETURNING email`).bind(at, tokenHash, email, digest, at),
     db.prepare(`INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at)
       SELECT ?,email,?,?,? FROM audio_client_codes WHERE email=? AND session_token_hash=?`)

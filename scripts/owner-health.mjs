@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { openMusicDatabase } from './music-analytics.mjs';
 import { renderMusicReport } from './music-report-view.mjs';
+import { studioRetentionProjectPredicate } from './studio-retention.mjs';
 
 const requiredConfiguration = ['MUSIC_DB', 'AUDIO', 'OWNER_ACCESS_TEAM_DOMAIN', 'OWNER_ACCESS_AUD', 'OWNER_EMAIL'];
 const requiredSchema = ['owner_campaigns', 'owner_requests', 'owner_request_audit', 'music_playback_events', 'music_playback_daily', 'music_playback_geography_daily', 'owner_retention_runs', 'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts', 'stripe_unmatched_events',
@@ -82,9 +83,8 @@ export async function ownerHealth({ now = new Date(), configuredNames, query, me
     const rows = await query(`SELECT
       (SELECT COUNT(*) FROM audio_client_codes WHERE COALESCE(used_at,expires_at)< '${old}')
       +(SELECT COUNT(*) FROM audio_client_sessions WHERE expires_at<'${old}' OR revoked_at<'${old}' OR last_seen_at<'${old}')
-      +(SELECT COUNT(*) FROM audio_projects p WHERE p.content_deleted_at IS NULL AND
-        (p.revoked_at<'${old}' OR EXISTS(SELECT 1 FROM audio_project_files f
-          WHERE f.request_id=p.request_id AND f.version='final' AND f.expires_at<'${old}'))) AS total`);
+      +(SELECT COUNT(*) FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
+        WHERE ${studioRetentionProjectPredicate(now)}) AS total`);
     const total = Number(rows[0]?.total);
     if (!Number.isFinite(total)) throw new Error('invalid summary');
     checks.push(total > 0

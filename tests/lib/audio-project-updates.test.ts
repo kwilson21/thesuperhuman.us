@@ -125,6 +125,7 @@ describe('project updates', () => {
     sql.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,status,uploaded_at,published_at,expires_at)
       VALUES ('final-1','song-1','final','studio/projects/song-1/final-1.mp3','Final','audio/mpeg',5,'published',?,?,?)`)
       .run(now.toISOString(), now.toISOString(), '2027-09-22T12:00:00Z');
+    sql.prepare("UPDATE owner_requests SET status='resolved' WHERE id='song-1'").run();
     expect(await saveProjectUpdate(db, 'song-1', 'owner@example.com', close, new Date(now.getTime() + 1000)))
       .toMatchObject({ kind: 'progress' });
     expect(await saveProjectUpdate(db, 'song-1', 'owner@example.com', close, new Date(now.getTime() + 1000))).toBeNull();

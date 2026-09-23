@@ -119,6 +119,16 @@ it('waits 30 days after a new unpublished draft before cleaning delivered conten
   sql.close();
 });
 
+it('cleans a revoked final after its access expiry and 30 days without project activity', async () => {
+  const { sql, database } = fixture();
+  sql.prepare("UPDATE audio_project_files SET status='revoked',revoked_at='2028-01-10' WHERE id='file-delivered'").run();
+  sql.prepare("UPDATE audio_projects SET stage='in_progress',updated_at='2028-01-10' WHERE request_id='delivered'").run();
+  expect((await previewStudioRetention(database, 'Local test data', now)).counts.projects).toBe(1);
+  sql.prepare("UPDATE audio_projects SET updated_at='2027-12-01' WHERE request_id='delivered'").run();
+  expect((await previewStudioRetention(database, 'Local test data', now)).counts.projects).toBe(2);
+  sql.close();
+});
+
 it('refuses changed data, wrong environment, and already applied reviews before object deletion', async () => {
   const { sql, database } = fixture();
   const review = await previewStudioRetention(database, 'Local test data', now);

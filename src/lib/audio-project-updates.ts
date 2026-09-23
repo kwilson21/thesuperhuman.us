@@ -133,11 +133,11 @@ export async function saveProjectUpdate(db: D1Database, requestId: string, actor
   }
 
   if (command.action === 'complete') {
-    if (state.stage !== 'final_files_ready' || state.booking_status !== 'paid' || state.balance_status !== 'paid' || state.request_status !== 'reviewed') return null;
+    if (state.stage !== 'final_files_ready' || state.booking_status !== 'paid' || state.balance_status !== 'paid' || !['reviewed', 'resolved'].includes(state.request_status)) return null;
     const [changed, update] = await db.batch([
       db.prepare(`UPDATE audio_projects SET stage='complete',completed_at=?,updated_at=?
         WHERE request_id=? AND stage='final_files_ready' AND updated_at=? AND revoked_at IS NULL
-          AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND status='reviewed')
+          AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND status IN ('reviewed','resolved'))
           AND EXISTS(SELECT 1 FROM audio_payments WHERE request_id=? AND booking_status='paid' AND balance_status='paid')
           AND EXISTS(SELECT 1 FROM audio_project_files WHERE request_id=? AND version='final' AND status='published')
         RETURNING request_id`).bind(at, at, requestId, state.updated_at, requestId, requestId, requestId),
