@@ -53,7 +53,21 @@ describe('audio peaks', () => {
     expect(rects).toContain('y="0.00" width="96.00" height="40.00"');
   });
 
-  it('reads WAV peaks in small slices without decoding the whole file', async () => {
+  it('measures every sample, so a single short transient still shows', async () => {
+    const frames = 44_100 * 60, file = wav({ frames: 0 });
+    const silent = Buffer.concat([file, Buffer.alloc(frames * 4)]);
+    silent.writeUInt32LE(silent.length - 8, 4);
+    silent.writeUInt32LE(frames * 4, file.length - 4);
+    const loudFrame = Math.floor(frames / 3) + 1001;
+    silent.writeInt16LE(20_000, file.length + loudFrame * 4);
+    const reads: number[] = [];
+    const peaks = (await peaksFromWav(reader(silent, reads), silent.length))!;
+    expect(peaks[Math.floor(loudFrame * 160 / frames)]).toBe(100);
+    expect(peaks.filter(peak => peak > 0)).toHaveLength(1);
+    expect(Math.max(...reads)).toBeLessThanOrEqual(1024 * 1024);
+  });
+
+  it('reads WAV peaks in bounded slices without decoding the whole file', async () => {
     for (const options of [{ bits: 16 }, { bits: 24 }, { bits: 32, float: true }]) {
       const file = wav(options);
       const reads: number[] = [];
@@ -61,7 +75,7 @@ describe('audio peaks', () => {
       expect(peaks).toHaveLength(16);
       expect(Math.max(...peaks.slice(0, 7))).toBeLessThanOrEqual(30);
       expect(Math.min(...peaks.slice(9))).toBeGreaterThanOrEqual(90);
-      expect(Math.max(...reads)).toBeLessThanOrEqual(4096);
+      expect(Math.max(...reads)).toBeLessThanOrEqual(1024 * 1024);
     }
   });
 

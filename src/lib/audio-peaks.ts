@@ -34,13 +34,12 @@ export function waveformRects(peaks: number[]): string {
 }
 
 type ReadRange = (start: number, end: number) => Promise<ArrayBuffer>;
-const windowsPerBar = 4;
-const windowBytes = 4096;
+const chunkBytes = 1024 * 1024;
 
 /**
- * Peaks for a WAV file read in small slices, never decoding the whole file. Each bar samples a few
- * short windows spread through its span, so memory stays bounded at any file size. Returns null for
- * anything other than 16/24/32-bit integer or 32-bit float PCM.
+ * Peaks for a WAV file, measured from every sample but read in 1 MiB chunks, so memory stays
+ * bounded at any file size and a short transient is never skipped. Returns null for anything
+ * other than 16/24/32-bit integer or 32-bit float PCM.
  */
 export async function peaksFromWav(read: ReadRange, size: number, count = peakCount): Promise<number[] | null> {
   const header = new DataView(await read(0, Math.min(size, 12)));
@@ -62,26 +61,26 @@ export async function peaksFromWav(read: ReadRange, size: number, count = peakCo
   if (dataStart < 0 || !channels || !block || block !== channels * bits / 8 || (!integer && !float)) return null;
   const frames = Math.floor(dataSize / block);
   if (frames < count) return null;
+  const width = bits / 8;
   const sample = (view: DataView, at: number) => float ? Math.abs(view.getFloat32(at, true))
     : bits === 16 ? Math.abs(view.getInt16(at, true)) / 32768
     : bits === 24 ? Math.abs((view.getUint8(at) | view.getUint8(at + 1) << 8 | view.getInt8(at + 2) << 16)) / 8388608
     : Math.abs(view.getInt32(at, true)) / 2147483648;
-  const framesPerWindow = Math.max(1, Math.floor(windowBytes / block));
-  const bars: number[] = [];
-  for (let bar = 0; bar < count; bar++) {
-    const first = Math.floor(bar * frames / count), span = Math.max(1, Math.floor((bar + 1) * frames / count) - first);
-    let peak = 0;
-    for (let window = 0; window < windowsPerBar; window++) {
-      const start = first + Math.floor(window * span / windowsPerBar);
-      const length = Math.min(framesPerWindow, first + span - start);
-      if (length <= 0) continue;
-      const view = new DataView(await read(dataStart + start * block, dataStart + (start + length) * block));
-      for (let at = 0; at + bits / 8 <= view.byteLength; at += bits / 8) peak = Math.max(peak, sample(view, at));
+  const bars = new Array<number>(count).fill(0);
+  const framesPerChunk = Math.max(1, Math.floor(chunkBytes / block));
+  for (let first = 0; first < frames; first += framesPerChunk) {
+    const length = Math.min(framesPerChunk, frames - first);
+    const view = new DataView(await read(dataStart + first * block, dataStart + (first + length) * block));
+    for (let frame = 0; frame < length; frame++) {
+      const bar = Math.min(count - 1, Math.floor((first + frame) * count / frames));
+      for (let channel = 0, at = frame * block; channel < channels; channel++, at += width) {
+        const value = sample(view, at);
+        if (value > bars[bar]) bars[bar] = value;
+      }
     }
-    bars.push(Math.min(1, peak));
   }
-  const loudest = Math.max(...bars);
-  return bars.map(value => loudest ? Math.round(value / loudest * 100) : 0);
+  const loudest = Math.max(...bars.map(value => Math.min(1, value)));
+  return bars.map(value => loudest ? Math.round(Math.min(1, value) / loudest * 100) : 0);
 }
 
 function text(view: DataView, at: number): string {
