@@ -6,6 +6,8 @@ export const PAGES = [
   { name: 'work', path: '/work' },
   { name: 'building', path: '/building' },
   { name: 'building-personal-website', path: '/building/personal-website' },
+  { name: 'building-kaillera-next', path: '/building/kaillera-next' },
+  { name: 'building-tally', path: '/building/tally' },
   { name: 'building-threadline', path: '/building/threadline' },
   { name: 'building-the-engineers-daily', path: '/building/the-engineers-daily' },
   { name: 'writing', path: '/writing' },
