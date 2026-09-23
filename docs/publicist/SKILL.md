@@ -77,6 +77,18 @@ all still apply.
     locations, and other people's names unless they are already public credits.
 11. **No commercial game assets.** Never fetch, store or show ROMs. Kaillera-next
     gameplay media comes only from the owner.
+12. **Music needs verified rights.** Sound videos and releases use the release note
+    in the template. Nothing about a recording is published until its credits and
+    rights to publish are verified. Use only music the owner has the right to
+    publish, including for background beds.
+13. **Unreleased videos stay private.** A video's script, captions, metadata,
+    thumbnail and preview go only to the private repository and a private bucket
+    with expiring links. Nothing about it enters a public PR until the owner has
+    released the video.
+14. **One publicist, per-channel playbooks.** Follow `docs/publicist/channels/`
+    for each channel's format and cadence. Never operate a platform's website or
+    app on the owner's behalf; where there is no API, prepare a checklist for the
+    owner.
 
 ## Review notes
 
