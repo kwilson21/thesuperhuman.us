@@ -86,3 +86,10 @@ it('rate-limits client messages without deleting earlier messages', async () => 
   expect(sql.prepare('SELECT count(*) AS n FROM audio_project_messages').get()).toEqual({ n: 12 });
   sql.close();
 });
+
+it('does not consume a message allowance when the project rejects the write', async () => {
+  sql.prepare("UPDATE audio_projects SET stage='complete' WHERE request_id='song-1'").run();
+  expect((await clientPost(context('client', { action: 'send', body: 'Too late' }))).status).toBe(409);
+  expect([...counts.values()]).toEqual([]);
+  sql.close();
+});

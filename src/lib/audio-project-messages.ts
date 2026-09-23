@@ -51,20 +51,21 @@ export async function postClientProjectMessage(db: D1Database, requestId: string
     .bind(body, now.toISOString(), requestId, tokenHash, now.toISOString()).first<ProjectMessage>();
 }
 
-export async function markProjectMessagesRead(db: D1Database, requestId: string, reader: 'owner' | 'client', token: string | null = null, now = new Date()): Promise<void> {
+export async function markProjectMessagesRead(db: D1Database, requestId: string, reader: 'owner' | 'client', messageId: number, token: string | null = null, now = new Date()): Promise<void> {
+  if (!Number.isInteger(messageId) || messageId < 1) return;
   const sender = reader === 'owner' ? 'client' : 'owner';
   if (reader === 'owner') {
-    await db.prepare(`UPDATE audio_project_messages SET read_at=? WHERE request_id=? AND actor=? AND read_at IS NULL`)
-      .bind(now.toISOString(), requestId, sender).run();
+    await db.prepare(`UPDATE audio_project_messages SET read_at=? WHERE id=? AND request_id=? AND actor=? AND read_at IS NULL`)
+      .bind(now.toISOString(), messageId, requestId, sender).run();
     return;
   }
   if (!token) return;
   const tokenHash = await hashValue(token);
   await db.prepare(`UPDATE audio_project_messages SET read_at=?
-    WHERE request_id=? AND actor=? AND read_at IS NULL AND EXISTS(
+    WHERE id=? AND request_id=? AND actor=? AND read_at IS NULL AND EXISTS(
       SELECT 1 FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
       JOIN audio_client_sessions s ON s.email=r.email
       WHERE p.request_id=audio_project_messages.request_id AND p.revoked_at IS NULL
         AND r.status<>'withdrawn' AND s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at>?)`)
-    .bind(now.toISOString(), requestId, sender, tokenHash, now.toISOString()).run();
+    .bind(now.toISOString(), messageId, requestId, sender, tokenHash, now.toISOString()).run();
 }

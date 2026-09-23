@@ -71,9 +71,9 @@ describe('audio project messages', () => {
     const reply = await postOwnerProjectMessage(db, 'song-1', 'owner@example.com', 'Thanks, I have it.', now);
     expect(reply).toMatchObject({ actor: 'owner', body: 'Thanks, I have it.' });
     expect((await listProjectMessages(db, 'song-1')).map(message => message.body)).toEqual(['I updated the Drive link.', 'Thanks, I have it.']);
-    await markProjectMessagesRead(db, 'song-1', 'owner', null, now);
+    await markProjectMessagesRead(db, 'song-1', 'owner', first!.id, null, now);
     expect((await listProjectMessages(db, 'song-1'))[0].read_at).toBe(now.toISOString());
-    await markProjectMessagesRead(db, 'song-1', 'client', token, now);
+    await markProjectMessagesRead(db, 'song-1', 'client', reply!.id, token, now);
     expect((await listProjectMessages(db, 'song-1'))[1].read_at).toBe(now.toISOString());
     await revokeClientSession(db, token, now);
     expect(await postClientProjectMessage(db, 'song-1', token, 'After revocation.', now)).toBeNull();
@@ -88,6 +88,22 @@ describe('audio project messages', () => {
     sql.prepare("UPDATE audio_projects SET stage='files_under_review' WHERE request_id='song-1'").run();
     sql.prepare("UPDATE owner_requests SET status='withdrawn' WHERE id='song-1'").run();
     expect(await postOwnerProjectMessage(db, 'song-1', 'owner@example.com', 'Withdrawn.', now)).toBeNull();
+    sql.close();
+  });
+
+  it('marks only the message the reader actually reached', async () => {
+    const { sql, db, addRequest } = fixture();
+    addRequest('song-1');
+    const code = (await issueClientCode(db, 'artist@example.com', secret, now))!;
+    const token = (await completeClientCode(db, 'artist@example.com', code, secret, now))!;
+    const first = (await postClientProjectMessage(db, 'song-1', token, 'First note.', now))!;
+    const second = (await postClientProjectMessage(db, 'song-1', token, 'Second note.', now))!;
+    await markProjectMessagesRead(db, 'song-1', 'owner', first.id, null, now);
+    expect((await listProjectMessages(db, 'song-1')).map(message => message.read_at))
+      .toEqual([now.toISOString(), null]);
+    await markProjectMessagesRead(db, 'song-1', 'owner', second.id, null, now);
+    expect((await listProjectMessages(db, 'song-1')).map(message => message.read_at))
+      .toEqual([now.toISOString(), now.toISOString()]);
     sql.close();
   });
 });

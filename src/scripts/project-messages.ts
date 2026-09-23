@@ -20,10 +20,14 @@ export function setupProjectMessages() {
     });
     if (root.dataset.unread !== 'true') return;
     const observer = new IntersectionObserver(entries => {
-      if (!entries.some(entry => entry.isIntersecting)) return;
-      observer.disconnect();
-      void fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'read' }) }).catch(() => {});
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        observer.unobserve(entry.target);
+        const messageId = Number((entry.target as HTMLElement).dataset.unreadMessage);
+        if (!Number.isInteger(messageId)) continue;
+        void fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'read', messageId }) }).catch(() => {});
+      }
     });
-    observer.observe(root);
+    root.querySelectorAll<HTMLElement>('[data-unread-message]').forEach(message => observer.observe(message));
   });
 }

@@ -7,7 +7,7 @@ import { musicRequest } from '~/lib/music-request';
 export const prerender = false;
 const inputSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('send'), body: z.unknown() }),
-  z.object({ action: z.literal('read') }),
+  z.object({ action: z.literal('read'), messageId: z.number().int().positive() }),
 ]);
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
@@ -24,7 +24,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     const project = await env.MUSIC_DB.prepare('SELECT request_id FROM audio_projects WHERE request_id=?').bind(params.id).first();
     if (!project) return Response.json({ ok: false }, { status: 404 });
     if (parsed.data.action === 'read') {
-      await markProjectMessagesRead(env.MUSIC_DB, params.id, 'owner');
+      await markProjectMessagesRead(env.MUSIC_DB, params.id, 'owner', parsed.data.messageId);
       return Response.json({ ok: true });
     }
     const message = validateProjectMessage(parsed.data.body);

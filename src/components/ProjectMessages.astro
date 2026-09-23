@@ -29,7 +29,7 @@ function parts(body: string) {
 <section class="project-messages" data-project-messages data-endpoint={endpoint} data-unread={unread ? 'true' : 'false'} aria-labelledby="project-messages-heading">
   <div class="project-messages-heading"><p class="project-messages-kicker">Conversation</p><h2 id="project-messages-heading">Stay in the loop</h2></div>
   {messages.length ? <ol class="project-message-list">{messages.map(message =>
-    <li class:list={{ mine: message.actor === reader }}>
+    <li class:list={{ mine: message.actor === reader }} data-unread-message={message.actor !== reader && !message.read_at ? message.id : undefined}>
       <div class="project-message-meta"><strong>{message.actor === reader ? 'You' : message.actor === 'owner' ? 'Kazon' : 'Client'}</strong><time datetime={message.created_at}>{new Date(message.created_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</time></div>
       <p>{parts(message.body).map(part => part.href ? <a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a> : part.text)}</p>
     </li>

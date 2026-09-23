@@ -8,7 +8,7 @@ import { checkRateLimit } from '~/lib/rate-limit';
 export const prerender = false;
 const inputSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('send'), body: z.unknown() }),
-  z.object({ action: z.literal('read') }),
+  z.object({ action: z.literal('read'), messageId: z.number().int().positive() }),
 ]);
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
@@ -25,7 +25,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     const project = await clientProjectForSession(env.MUSIC_DB, token, params.id);
     if (!project) return Response.json({ ok: false }, { status: 404 });
     if (parsed.data.action === 'read') {
-      await markProjectMessagesRead(env.MUSIC_DB, params.id, 'client', token);
+      await markProjectMessagesRead(env.MUSIC_DB, params.id, 'client', parsed.data.messageId, token);
       return Response.json({ ok: true });
     }
     const message = validateProjectMessage(parsed.data.body);
@@ -33,12 +33,17 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     const key = await hashValue(token);
     const ip = request.headers.get('cf-connecting-ip') ?? '0.0.0.0';
     const [sessionLimit, ipLimit] = await Promise.all([
-      checkRateLimit(env.RATE_LIMIT, key, 'rl:studio-message-session:', 12),
-      checkRateLimit(env.RATE_LIMIT, ip, 'rl:studio-message-ip:', 30),
+      checkRateLimit(env.RATE_LIMIT, key, 'rl:studio-message-session:', 12, { consume: false }),
+      checkRateLimit(env.RATE_LIMIT, ip, 'rl:studio-message-ip:', 30, { consume: false }),
     ]);
     if (!sessionLimit.allowed || !ipLimit.allowed) return Response.json({ ok: false, error: 'Please wait a few minutes before sending another message.' }, { status: 429 });
     const saved = await postClientProjectMessage(env.MUSIC_DB, params.id, token, message);
     if (!saved) return Response.json({ ok: false }, { status: 409 });
+    const counted = await Promise.allSettled([
+      checkRateLimit(env.RATE_LIMIT, key, 'rl:studio-message-session:', 12),
+      checkRateLimit(env.RATE_LIMIT, ip, 'rl:studio-message-ip:', 30),
+    ]);
+    if (counted.some(result => result.status === 'rejected')) console.error('Studio message rate-limit update failed.');
     return Response.json({ ok: true, message: saved });
   } catch {
     return Response.json({ ok: false, error: 'Your message could not be saved. Please try again.' }, { status: 503 });
