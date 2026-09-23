@@ -32,8 +32,10 @@ const errors = [];
 /** Saves one PNG. Pass `owner` for owner pages, `cookie` for a studio session, `selector` for one section. */
 async function capture({ file, path, viewport = 'desktop', owner = false, cookie, selector, status = 200 }) {
   const size = VIEWPORTS.find(item => item.name === viewport);
-  const context = await browser.newContext({ viewport: { width: size.width, height: size.height }, reducedMotion: 'reduce',
-    ...(owner ? { extraHTTPHeaders: ownerHeaders } : {}) });
+  const context = await browser.newContext({ viewport: { width: size.width, height: size.height }, reducedMotion: 'reduce' });
+  // Access adds this header at the edge, so only our own origin sees it. Fonts and other hosts reject it.
+  if (owner) await context.route(url => url.origin === new URL(BASE).origin,
+    route => route.continue({ headers: { ...route.request().headers(), ...ownerHeaders } }));
   if (cookie) await context.addCookies([{ ...cookie, url: BASE }]);
   const page = await context.newPage();
   const where = `${path} (${viewport})`;
