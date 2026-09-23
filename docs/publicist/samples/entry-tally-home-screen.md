@@ -6,6 +6,22 @@ Phase 1c-1 plan, decisions 20 and 24.
 Media: CI capture from `screenshots:pr-41/acde0f5/home-desktop.png` (the PR's
 last screenshot run), seeded demo data.
 
+## Review gate
+
+Private review note: `tally-home-screen` (tier `shipped`). The draft below shows the
+entry as it would read **after** the owner verifies the note; the note itself stays
+in the private repository. The public copy depends on these answers:
+
+| Public claim | Note answer | If unverified |
+| --- | --- | --- |
+| Home leads with safe to spend, the status sentence and the category band | 1. What changed | Hold the entry (core claim) |
+| Code does the math and writes the sentence; AI only suggests categories | 2. How it works | Drop that sentence |
+| "The question my family actually asks"; studies felt sterile | 3. Why this approach | Drop the motive; keep the outcome |
+| "Built, not yet live" | 5. Status at the time | Hold the entry (status is core) |
+
+Answer 4 (misuse and failure cases) informs the owner's review only. No public
+claim uses it, and this public sample does not preview it.
+
 ## As it would appear on /building/tally
 
 ![Tally Home screen at desktop width, showing $283 safe to spend, a status sentence, a band saying 12 transactions need a category, and green and red budget bars for five categories.](media/tally-home-desktop-pr41-acde0f5.png)
@@ -50,10 +66,10 @@ It goes public when the demo launches at the end of Phase 1.
 }
 ```
 
-## Review notes for the owner
+## Drafting notes for the owner
 
-- "The question my family actually asks" is inferred from spec §1 and §8. If
-  that is not how you would put it, this is the line to change.
+- "The question my family actually asks" is inferred from spec §1 and §8, so the
+  private note leaves answer 3 `unverified` until the owner confirms or corrects it.
 - The phone capture from the same run is full-page, so the fixed tab bar covers
   the Budget list mid-page. The build would recapture it at viewport height
   rather than publish that version.

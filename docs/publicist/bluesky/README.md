@@ -40,10 +40,14 @@ small number of good conversations, with LinkedIn carrying the professional reac
    Back in Bluesky, choose Verify. Propagation usually takes minutes.
    The record is public by design and contains no secret. This changes DNS for the
    site's domain, so it is your action to take; it touches no existing record.
-4. **Bio** (proposal, 3 lines):
+4. **Bio** (proposal, 3 lines, 243 of Bluesky's 256 characters):
    > I build useful software with AI, grounded in 7+ years of production engineering (Lyft, insurance, healthcare).
-   > Now: Tally, a family budgeting app, and kaillera-next, browser netplay for retro games.
-   > Also mixing and mastering audio. Notes and work: thesuperhuman.us
+   > Now: Tally (family budgeting) and kaillera-next (browser netplay for retro games).
+   > Also mixing and mastering audio. thesuperhuman.us
+   The Ko-fi page (ko-fi.com/kazonwilson) does not fit in the bio. Better homes:
+   a line on the website where support links belong, which is a separate site
+   change for you to approve, or a mention in the pinned post. Posts themselves
+   keep one link, to the site (quality standard 8).
 5. **Pinned post:** the Tally Home screen post from the first approved batch.
 6. **Settings worth changing:** turn on two-factor sign-in by email; leave
    "adult content" off; set who can reply to "everyone" at first.
@@ -79,7 +83,8 @@ A post goes in the queue only if it passes every check:
    the outcome, the problem, or a concrete detail. No "Excited to share", no
    "Thread", no rhetorical questions.
 3. **Concrete.** Names the real thing: the screen, the number, the bug, the rule.
-   Every factual claim traces to the journal entry and its sources.
+   Every factual claim traces to the journal entry, and a post never says more
+   than its entry, which rests only on verified review-note answers.
 4. **Says why.** Includes the reason or the decision, not only what shipped.
 5. **Honest status.** "Built, not live yet" when that is true. No implied launches,
    users or results that are not recorded.

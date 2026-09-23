@@ -1,7 +1,10 @@
 # Sample queue: September 24 to 26
 
 Drafts only. In the real flow these files live in `publicist/queue/` inside the
-review PR, and merging the PR approves them. Links point to journal pages that the
+public review PR, and merging the PR approves them. Posts are drafted only for
+entries whose private review note cleared the gate, and they may say only what the
+entry says. This sample assumes the notes behind all four source entries were
+verified. Links point to journal pages that the
 backfill PR would create; they do not exist yet. Media paths are the planned asset
 names.
 

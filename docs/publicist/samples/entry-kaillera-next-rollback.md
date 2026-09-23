@@ -5,6 +5,23 @@ Source: `docs/superpowers/specs/2026-04-06-c-level-rollback-design.md`,
 (2026-04-06), and the current README's description of the rollback engine.
 Dated to the work (April 6, 2026), labeled as backfill.
 
+## Review gate
+
+Private review note: `kaillera-next-c-level-rollback` (tier `shipped`). Backfill
+entries go through the same gate as new work. The draft below shows the entry as it
+would read **after** the owner verifies the note. The public copy depends on:
+
+| Public claim | Note answer | If unverified |
+| --- | --- | --- |
+| The rewind moved into the emulator's C code | 1. What changed | Hold the entry (core claim) |
+| Ring of saved states, replay in one tight loop, lockstep fallback | 2. How it works | Drop the mechanism detail |
+| Lockstep ran 30+ minutes clean, so the browser was the cause | 3. Why this approach | Drop the reasoning; keep the outcome |
+| "Built" on April 6 (v0.34.0 the same day) | 5. Status at the time | Hold the entry (status is core) |
+| "I moved it" (first-person credit) | 7. Unresolved: attribution | Reword to "the project moved it" until answered |
+
+Answer 4 (misuse and failure cases) informs the owner's review only. No public
+claim uses it, and this public sample does not preview it.
+
 ## As it would appear on /building/kaillera-next
 
 *[Illustration to be drawn: one tick of the game loop. The browser hands inputs to
@@ -51,7 +68,7 @@ state-integrity audits.
 }
 ```
 
-## Review notes for the owner
+## Drafting notes for the owner
 
 - Every claim comes from the spec's Problem and Solution sections and the README.
   "Built" is supported by the v0.34.0 release the same day; the build would also

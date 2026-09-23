@@ -3,7 +3,8 @@
 Status: proposal for owner review, 2026-09-23. Nothing here is scheduled, deployed
 or posted. The backfill and the Routine are built only after the owner approves
 this design. Samples live in [samples/](samples/). The proposed agent instructions
-live in [SKILL.md](SKILL.md).
+live in [SKILL.md](SKILL.md), and every publicized change passes a private owner
+review first ([section 3](#3-private-review-gate)).
 
 The publicist covers `kwilson21/tally` and `kwilson21/kaillera-next` on
 thesuperhuman.us and on social media. It extends the existing development journal;
@@ -68,7 +69,89 @@ Samples: [Tally Home screen](samples/entry-tally-home-screen.md) (live-style ent
 from PR #41) and [Kaillera-next C-level rollback](samples/entry-kaillera-next-rollback.md)
 (backfill entry).
 
-## 3. Backfill plan
+## 3. Private review gate
+
+**Principle: the whiteboard defense** (the owner's standard for responsible AI use).
+For customer-facing systems the owner ships, the owner should be able to explain at
+a whiteboard how the system works at a high level, defend its key decisions, discuss
+how it could be misused, and identify where it can fail. Line-level recall of the
+code is not the standard. Proofs of concept, demos and experiments can put speed
+first and are not held to that shipping standard, but they are never presented as
+if they were. The standard is the owner's to meet: the publicist prepares material
+for it, it cannot certify that the owner meets it, and nothing public claims so on
+the publicist's word.
+
+**Tiers.** `publicist/config.json` gives each project a default tier that the owner sets:
+`shipped` (customer-facing) or `exploration` (PoC, demo, experiment). Each review
+note can override it for one change. Proposed defaults: Kaillera-next `shipped`
+(a public site people play on); Tally `shipped` (the family relies on it and the
+demo is public). Explorations inside a shipped project, such as Kaillera-next's
+N64Recomp work, are marked `exploration` on their note. **Owner question 7.**
+
+**A review note for every publicized change.** Every change the publicist proposes
+to publicize, new work and every backfill entry alike, whatever its tier, gets a
+private note following [review-note-template.md](review-note-template.md):
+
+1. What changed.
+2. How it works, at a high level.
+3. Why this approach, including what was rejected.
+4. Misuse and failure cases (for exploration work, the shortcuts taken for speed).
+5. The work's actual status at the time: planned, built, tested or available.
+6. Supporting sources.
+7. Unresolved uncertainty, and which public claims wait on it.
+
+The publicist drafts the answers from repository evidence, cites each source, and
+marks every answer `unverified`. The owner reviews the answers, marks each one
+`verified` or `corrected`, then decides `publish`, `hold` or `no`. For shipped work
+the owner also records whether they are ready to defend it. The publicist never fills in that part.
+
+**The gate.** A public entry or post may state only what rests on `verified` or
+`corrected` answers. A claim that depends on an `unverified` answer is held: it is
+left out rather than reworded into something vaguer that implies the same thing, and
+if the entry's core claim depends on it, the whole entry waits. An entry whose
+claims all rest on verified answers may carry the story contract's
+`human-confirmed` basis. That confirms the facts; it says nothing about the
+owner's understanding.
+
+**Private storage.** One private GitHub repository, `kwilson21/publicist-private`,
+holds the notes and the backfill raw material:
+
+```text
+publicist-private/
+  review-notes/<project>/<entry-id>.md   one note per publicized change
+  state.json                             last merged work drafted into notes
+  exports/claude/  exports/chatgpt/      conversation exports, backfill only
+```
+
+This is the practical option that works everywhere: the daily Routine and backfill
+sessions both run in fresh cloud containers, which can clone a private repository
+and open PRs on it once it is attached to the environment, but cannot reach the
+existing `.private/` journal on the owner's machine. It needs no new service, and each review
+is a normal PR with history. A private repository is access control, not
+encryption, so notes never contain secrets, and misuse answers stay at the level of
+"what could go wrong and what limits it", never working attack steps.
+
+**Handoff (the same for backfill and the daily Routine).**
+
+1. **Notes stage.** The publicist drafts notes for new candidates and opens (or adds
+   to) one private PR, "Review notes: <date range>". Backfill runs batch about five
+   notes per PR, grouped by milestone.
+2. **Owner review.** In that PR the owner corrects answers, marks them, fills in
+   "Owner review", and merges. Merging with some answers still unverified is fine;
+   those entries stay held.
+3. **Publish stage.** A run reads notes only from the private repository's `main`,
+   so an unmerged note can never unlock anything. For each note that clears the
+   gate, it drafts the public entry and posts and opens the public PR here.
+4. **Approval.** Merging the public PR approves the entries and post batch, and the
+   site deploys, exactly as before.
+
+The public PR refers to notes only by entry ID and says how many entries are held.
+No note text, summary or link to a private PR appears in this repository, the
+website, posts, commit messages or public PR discussion. New work therefore reaches
+a public PR one Routine cycle after its notes are merged; the owner can fire the
+Routine by hand to skip the wait.
+
+## 4. Backfill plan
 
 Grouped into milestones, dated to when the work happened, marked `backfilled`.
 Roughly 5 Tally entries and 12 to 14 Kaillera-next entries. Each claim is checked
@@ -108,23 +191,27 @@ built. Kaillera-next gameplay footage involves a commercial game, so media is
 limited to the lobby and interface, owner-supplied captures, and labeled diagrams.
 No ROM files are ever fetched or shown.
 
-**Delivery.** One backfill PR per project, reviewed like any other. Its social posts
-enter the queue at no more than two backfill posts a day, mixed with new work.
+**Delivery.** Every backfill entry goes through the review gate first: private
+notes in batches of about five, then one public backfill PR per project containing
+only entries that cleared it. Its social posts enter the queue at no more than two
+backfill posts a day, mixed with new work.
 
-**Conversation exports (backfill only).** Simplest path: a **private** repository,
-for example `kwilson21/publicist-sources`, with `claude/` and `chatgpt/` folders.
+**Conversation exports (backfill only).** They go in the `exports/` folder of the
+same private repository, `kwilson21/publicist-private`, under `claude/` and
+`chatgpt/`.
 The owner downloads each app's official data export (Claude: Settings, Privacy,
 Export data; ChatGPT: Settings, Data controls, Export data; confirm the menu names
 in the current apps) and commits only the conversation JSON. The publicist reads it
-with read-only access during backfill runs, keeps only threads about these two
-projects, and writes paraphrased intent notes into the review PR with the source
-recorded as "conversation export (private)". It never quotes, links or commits the
-exports anywhere public, and it drops anything personal. If the full export is more
-than the owner wants to share, copying the relevant threads into Markdown files in
-the same repo works just as well. The owner can delete the repository after the
-backfill.
+during backfill runs, keeps only threads about these two projects, and uses them
+only as sources inside the private review notes, paraphrased and cited as
+"conversation export (private)". Nothing from them reaches a public entry unless the
+note answer it supports is verified. It never quotes, links or commits the exports
+anywhere public, and it drops anything personal. If the full export is more than the
+owner wants to share, copying the relevant threads into Markdown files in the same
+folder works just as well. The owner can delete `exports/` after the backfill; the
+review notes stay.
 
-## 4. Checkpoint rule for the project repositories
+## 5. Checkpoint rule for the project repositories
 
 Proposed text for `tally/CLAUDE.md`, `kaillera-next/CLAUDE.md` and a new
 `kaillera-next/AGENTS.md` (so Codex reads it too). Not committed to those repos;
@@ -150,36 +237,45 @@ Routine session can read it from a plain clone. PR descriptions, specs, plans,
 decisions and the roadmap stay the first sources; the note fills the gap when a PR
 has none.
 
-## 5. Automation
+## 6. Automation
 
-**Approval flow (to confirm).** The Routine opens a PR in this repository. The owner
-reviews the entries, media and queued posts in that PR, edits or deletes anything,
-and merges. Merging is approval; Cloudflare's Git integration then deploys the
-entries. This matches how the curated personal-website milestones are approved
-today. The MCP publication feed stays as it is for owner-driven sessions.
-**Owner question 1.**
+**Approval flow (to confirm).** Two merges, both by the owner. First the private
+review-note PR (section 3), then the public PR in this repository with the entries,
+media and queued posts that cleared the gate. The owner edits or deletes anything in
+either and merges. Merging the public PR is publication approval; Cloudflare's Git
+integration then deploys the entries. This matches how the curated
+personal-website milestones are approved today. The MCP publication feed stays as
+it is for owner-driven sessions. **Owner question 1.**
 
 **Routine.** A Claude Code Routine that creates a fresh session on each firing,
 in this environment, once a day at 06:30 America/New_York (`30 10 * * *` UTC while
 daylight time is in effect; it drifts to 05:30 in winter, which is harmless).
 Each run:
 
-1. Reads `publicist/state.json` on `main`: the last processed PR and merge time per
-   project, plus any declined source IDs.
+1. Reads two state files: `state.json` in the private repository (the last merged
+   work drafted into notes, per project) and `publicist/state.json` here (entry IDs
+   published or declined, nothing else).
 2. Clones both project repos read-only and lists PRs merged since then (merge
    commits on `main`, plus the GitHub API when the repo is attached).
 3. For each merged PR, gathers intent from the PR description, linked spec, plan
    and decision entries, and `docs/journal/intent.md`. Skips PRs with no user-visible
-   outcome (dependency bumps, formatting) and groups related PRs into one entry.
-4. Picks media: the CI screenshot at the PR's final head for Tally; a recording
-   when a flow changed (section 6). Converts to WebP.
-5. Writes entries into `src/data/project-stories/<project>.ts`, drafts posts into
-   `publicist/queue/`, advances `publicist/state.json`, runs `npm run check`,
-   `npm test` and `npm run build`, and opens one PR titled
-   "Publicist: <date range>".
-6. If a publicist PR is already open, it adds to that branch instead of opening a
-   second one. If the last publicist PR was closed without merging, its source IDs
-   are recorded as declined so they are not redrafted.
+   outcome (dependency bumps, formatting) and groups related PRs into one candidate.
+4. **Notes stage:** drafts a review note per new candidate and opens or updates the
+   private "Review notes" PR in `kwilson21/publicist-private`, advancing the private
+   state file in the same PR.
+5. **Publish stage:** reads notes from the private repository's `main` and, for
+   each one that clears the gate, continues below. Everything else waits.
+6. Picks media: the CI screenshot at the PR's final head for Tally; a recording
+   when a flow changed (section 7). Converts to WebP.
+7. Writes entries into `src/data/project-stories/<project>.ts` from verified
+   answers, drafts posts into `publicist/queue/`, records the published entry IDs in
+   `publicist/state.json`,
+   runs `npm run check`, `npm test` and `npm run build`, and opens one public PR
+   titled "Publicist: <date range>", listing entries by ID and the number held.
+8. If a publicist PR (private or public) is already open, it adds to that branch
+   instead of opening a second one. If the last public publicist PR was closed
+   without merging, its entry IDs are recorded as declined so they are not
+   redrafted.
 
 State only advances when the owner merges, so nothing is lost or published twice.
 Days with nothing new produce no PR.
@@ -189,7 +285,7 @@ queue, so publishing within minutes of a merge gains little. If wanted later, us
 the Routine's own GitHub or API trigger (checked at setup), or a small Action in
 each project repo that calls it on `pull_request: closed` with `merged == true`.
 
-## 6. Media
+## 7. Media
 
 - **Tally screenshots:** reuse CI output from `screenshots:pr-<N>/<sha7>/` at the
   PR's last head (1280×800 desktop; 390×844 phone at viewport height). Always demo data.
@@ -205,7 +301,7 @@ each project repo that calls it on `pull_request: closed` with `merged == true`.
 - Every capture is checked visually before it goes in a PR: no real data, no
   secrets or tokens in the address bar or console, no clipped fixed elements.
 
-## 7. Social posts
+## 8. Social posts
 
 **Platforms (recommendation).** Keep two, not three.
 
@@ -287,7 +383,7 @@ per-platform approval.
 
 A sample 3-day queue is in [samples/queue/](samples/queue/).
 
-## 8. Safety rules
+## 9. Safety rules
 
 Drafted as [SKILL.md](SKILL.md). When the Routine is built it moves to one
 canonical file that both agents read, so Claude and Codex behave the same:
@@ -296,21 +392,27 @@ the full instructions; `.claude/skills/publicist/SKILL.md` (where Claude Code lo
 is a stub with the same name and description whose only instruction is to follow the
 canonical file. `.gitignore` changes from `.claude/` to `.claude/*` plus
 `!.claude/skills/` so the stub can be committed, and `AGENTS.md` and `CLAUDE.md`
-each gain one line naming the canonical file. The Routine prompt loads it first.
-In short:
+each gain one line naming the canonical file. The draft in `docs/publicist/` is
+deleted in the same change, so only one maintained copy exists, and the Routine
+prompt (appendix) loads that canonical file first. In short:
 - Tally content comes only from demo data (seeded fictional household, CI
   screenshots, the public demo). Never production bindings, the family's data, or
   Plaid anything.
 - No secrets, tokens, credentials, `.dev.vars`, private URLs or private paths in any
   entry, image, video frame, caption or post.
 - Private repositories are excluded unless the owner opts one in by name in
-  `publicist/config.json`. The conversation-export repo is read for intent only.
+  `publicist/config.json`. `kwilson21/publicist-private` holds review notes and
+  exports and is never a publication source in its own right.
+- Every publicized change, including every backfill entry, has a private review
+  note; public claims rest only on answers the owner verified (section 3). Notes
+  never appear in public places, and the publicist never certifies the owner's
+  understanding.
 - Nothing is published without approval: entries by merge, posts by merge plus
   manual posting (or a separately approved autopost switch).
 - Plus the existing publication policy, story requirements, image QA and
   CLAUDE.md rules (no rates, no clearance claims, no exclusivity, no em dashes).
 
-## 9. Questions for the owner
+## 10. Questions for the owner
 
 1. **Approval:** is "merge the publicist PR" the right approval for both journal
    entries and post batches? Or should posts get their own PR?
@@ -322,21 +424,32 @@ In short:
    accurately?
 4. **Cadence:** start at 2 posts a day and move to 3 once the queue proves it has
    enough good material?
-5. **Checkpoint rule:** add the intent-note rule (section 4) to both project
+5. **Checkpoint rule:** add the intent-note rule (section 5) to both project
    repositories?
-6. **Exports:** willing to create the private sources repository, or prefer to
-   paste the relevant threads?
+6. **Private repository:** create `kwilson21/publicist-private` for review notes
+   and exports, and attach it to the Routine's environment? Or prefer another
+   private location that a fresh cloud session can read and write?
+7. **Tiers:** Kaillera-next and Tally both `shipped` by default, with individual
+   explorations marked on their notes?
 
-After approval: build the two project pages and backfill PRs, then create the
-Routine (paused until you confirm its first dry run).
+After approval: draft the backfill review notes, then (after your review) the two
+project pages and backfill PRs, then create the Routine (paused until you confirm
+its first dry run).
 
 ## Appendix: draft Routine prompt
+
+Written for the built state, after the skill has moved to its canonical location
+(section 9). It names only the canonical file, so there is one maintained source of
+instructions.
 
 ```text
 You are the publicist for Kazon Wilson's software projects. Work in the
 kwilson21/thesuperhuman.us repository. Load and follow the skill at
-docs/publicist/SKILL.md and the design in docs/publicist/README.md.
-Draft journal entries, media and queued posts for work merged since
-publicist/state.json, then open or update one review PR. Never merge, deploy or
-post anything. If nothing new qualifies, stop without opening a PR.
+.agents/skills/publicist/SKILL.md, which points to the design in
+docs/publicist/README.md. First draft private review notes for work merged since
+the private repository's state.json and open or update the review-notes PR in
+kwilson21/publicist-private. Then, only for notes on that repository's main that
+clear the review gate, draft journal entries, media and queued posts and open or
+update one public review PR. Never merge, deploy or post anything, and never copy
+review-note content into public places. If nothing qualifies, open no PR.
 ```
