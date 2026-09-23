@@ -76,6 +76,8 @@ File and project revocation require `migrations/music/0013_audio_project_revocat
 
 Studio retention requires `migrations/music/0014_audio_project_retention.sql` after 0013. The [owner operations guide](docs/owner-operations.md) describes its review-first cleanup, private R2 deletion, failure recovery, and the order for running owner-request retention afterward. The owner Today page shows unread studio messages, failed update notices, and delivery dates needing attention when the portal is enabled. Keep `AUDIO_CLIENT_PORTAL_ENABLED=false` until migration reconciliation and the portal's accessibility, mobile, storage-failure, and email checks pass in the target environment.
 
+Waveform display requires `migrations/music/0015_audio_project_file_peaks.sql` after 0014. The owner's browser measures 160 loudness bars while uploading and sends them with the finished upload; the server only checks that they are whole numbers from 0 to 100. Files without them, including anything uploaded before 0015, show a plain progress bar instead of a waveform.
+
 The forms read `Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY` first, with
 `import.meta.env.PUBLIC_TURNSTILE_SITE_KEY` as a build-time fallback. Wrangler
 runtime vars are not automatically Astro build-time variables. An empty runtime

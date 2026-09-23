@@ -64,9 +64,10 @@ it('keeps an owner upload private until publication and supports a large multipa
   expect(expectedPartLength(input.byteSize, 3)).toBeNull();
   const parts = [1, 2].map(partNumber => ({ partNumber, etag: 'a'.repeat(32) }));
   expect(await finishProjectUpload(db, bucket, upload, parts.slice(0, 1), now)).toBe('blocked');
-  expect(await finishProjectUpload(db, bucket, upload, parts, now)).toBe('saved');
-  expect(sql.prepare('SELECT status,published_at FROM audio_project_files WHERE id=?').get(upload.id))
-    .toEqual({ status: 'uploaded', published_at: null });
+  const peaks = Array.from({ length: 16 }, (_, index) => index * 6);
+  expect(await finishProjectUpload(db, bucket, upload, parts, now, peaks)).toBe('saved');
+  expect(sql.prepare('SELECT status,published_at,peaks FROM audio_project_files WHERE id=?').get(upload.id))
+    .toEqual({ status: 'uploaded', published_at: null, peaks: JSON.stringify(peaks) });
   expect(await getProjectUpload(db, 'song-1', upload.id)).toBeNull();
   sql.prepare("UPDATE audio_projects SET stage='final_files_ready' WHERE request_id='song-1'").run();
   expect(await ownerProjectCanUpload(db, 'song-1', 'review')).toBe(false);
@@ -102,11 +103,12 @@ it('finishes an upload using the opaque part tag returned by local R2', async ()
   }
 }, 15_000);
 
-it('fits the maximum number of opaque part tags into the completion request limit', () => {
+it('fits the maximum part tags and waveform peaks into the completion request limit', () => {
   const count = Math.ceil(maxProjectFileSize / uploadPartSize);
   const parts = Array.from({ length: count }, (_, index) => ({ partNumber: index + 1, etag: 'x'.repeat(maxPartEtagLength) }));
-  expect(new TextEncoder().encode(JSON.stringify({ action: 'complete', uploadId: crypto.randomUUID(), parts })).byteLength)
-    .toBeLessThan(32_000);
+  const peaks = Array.from({ length: 400 }, () => 100);
+  expect(new TextEncoder().encode(JSON.stringify({ action: 'complete', uploadId: crypto.randomUUID(), parts, peaks })).byteLength)
+    .toBeLessThan(34_000);
 });
 
 it('recovers a completed R2 object after a metadata write failure and can discard it safely', async () => {

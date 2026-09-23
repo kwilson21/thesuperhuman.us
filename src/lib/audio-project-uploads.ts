@@ -67,7 +67,7 @@ export async function putProjectUploadPart(bucket: R2Bucket, upload: ProjectUplo
 }
 
 export async function finishProjectUpload(db: D1Database, bucket: R2Bucket, upload: ProjectUpload,
-  parts: R2UploadedPart[] | null, now = new Date()): Promise<'saved' | 'blocked' | 'size-mismatch'> {
+  parts: R2UploadedPart[] | null, now = new Date(), peaks: number[] | null = null): Promise<'saved' | 'blocked' | 'size-mismatch'> {
   if (upload.state !== 'pending') return 'blocked';
   if (!await ownerProjectCanUpload(db, upload.request_id, upload.version)) return 'blocked';
   const count = Math.ceil(upload.byte_size / uploadPartSize);
@@ -78,11 +78,11 @@ export async function finishProjectUpload(db: D1Database, bucket: R2Bucket, uplo
     object = await bucket.resumeMultipartUpload(upload.object_key, upload.upload_id).complete(parts);
   }
   if (object.size !== upload.byte_size) return 'size-mismatch';
-  const saved = await db.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,uploaded_at)
-    SELECT id,request_id,version,object_key,display_name,media_type,byte_size,?
+  const saved = await db.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,uploaded_at,peaks)
+    SELECT id,request_id,version,object_key,display_name,media_type,byte_size,?,?
     FROM audio_project_uploads WHERE id=? AND request_id=? AND state='pending' AND ${activeProject(upload.version)}
     ON CONFLICT(id) DO NOTHING RETURNING id`)
-    .bind(now.toISOString(), upload.id, upload.request_id, upload.request_id).first<{ id: string }>();
+    .bind(now.toISOString(), peaks ? JSON.stringify(peaks) : null, upload.id, upload.request_id, upload.request_id).first<{ id: string }>();
   const existing = saved || await db.prepare('SELECT id FROM audio_project_files WHERE id=? AND request_id=?')
     .bind(upload.id, upload.request_id).first<{ id: string }>();
   if (!existing) return 'blocked';

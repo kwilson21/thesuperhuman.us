@@ -24,10 +24,10 @@ const portalProject = request.kind === 'service' && clientPortalEnabled(Astro.lo
     { stage: string; current_due_at: string | null; revoked_at: string | null } & ProjectInvitation>() : null;
 const projectMessages = portalProject ? await listProjectMessages(db, request.id) : [];
 const projectUpdates = portalProject ? await listProjectUpdates(db, request.id) : [];
-const projectFiles = portalProject ? (await db.prepare(`SELECT id,version,display_name,byte_size,status,uploaded_at,published_at
+const projectFiles = portalProject ? (await db.prepare(`SELECT id,version,display_name,byte_size,status,uploaded_at,published_at,peaks
   FROM audio_project_files WHERE request_id=? ORDER BY uploaded_at DESC`).bind(request.id).all<
   { id: string; version: 'review' | 'final'; display_name: string; byte_size: number;
-    status: 'uploaded' | 'published' | 'revoked'; uploaded_at: string; published_at: string | null }>()).results : [];
+    status: 'uploaded' | 'published' | 'revoked'; uploaded_at: string; published_at: string | null; peaks: string | null }>()).results : [];
 const pendingUploads = portalProject ? (await db.prepare(`SELECT id,display_name,state,created_at FROM audio_project_uploads
   WHERE request_id=? ORDER BY created_at DESC`).bind(request.id).all<
   { id: string; display_name: string; state: 'pending' | 'discarding'; created_at: string }>()).results : [];
