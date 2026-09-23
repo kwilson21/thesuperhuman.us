@@ -43,8 +43,10 @@ async function capture({ file, path, viewport = 'desktop', owner = false, cookie
     if (message.type() === 'error' && !ownStatus) errors.push(`${where}: ${message.text()}`);
   });
   page.on('pageerror', error => errors.push(`${where}: ${error.message}`));
-  const response = await page.goto(BASE + path, { waitUntil: 'networkidle' });
+  const response = await page.goto(BASE + path, { waitUntil: 'load', timeout: 90_000 });
   if (response?.status() !== status) errors.push(`${where}: HTTP ${response?.status()}, expected ${status}`);
+  // Turnstile keeps requesting in the background, so network idle is a best effort, not a requirement.
+  await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
   await page.evaluate(() => document.fonts.ready);
   const target = selector ? page.locator(selector).first() : page;
   await target.screenshot({ path: `${OUT}/${file}`, ...(selector ? {} : { fullPage: true }), animations: 'disabled' });
