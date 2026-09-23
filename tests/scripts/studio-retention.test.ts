@@ -96,6 +96,29 @@ it('retains a withdrawn delivered project until its final expires, then cleans i
   sql.close();
 });
 
+it.each(['accepted', 'in_progress'])('cleans a withdrawn project after work reached %s', async stage => {
+  const { sql, database } = fixture();
+  sql.prepare("UPDATE audio_projects SET stage=? WHERE request_id='withdrawn'").run(stage);
+  const review = await previewStudioRetention(database, 'Local test data', now);
+  expect(review.counts.projects).toBe(2);
+  await applyStudioRetention(database, review, 'Local test data', async () => {}, now);
+  expect(sql.prepare("SELECT content_deleted_at IS NOT NULL AS removed FROM audio_projects WHERE request_id='withdrawn'").get())
+    .toEqual({ removed: 1 });
+  sql.close();
+});
+
+it('waits 30 days after a new unpublished draft before cleaning delivered content', async () => {
+  const { sql, database } = fixture();
+  sql.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,uploaded_at)
+    VALUES ('recent-draft','delivered','final','studio/projects/delivered/recent-draft.mp3','New final draft','audio/mpeg',100,'2028-01-10')`).run();
+  const early = await previewStudioRetention(database, 'Local test data', now);
+  expect(early.counts.projects).toBe(1);
+  sql.prepare("UPDATE audio_project_files SET uploaded_at='2027-12-01' WHERE id='recent-draft'").run();
+  const later = await previewStudioRetention(database, 'Local test data', now);
+  expect(later.counts.projects).toBe(2);
+  sql.close();
+});
+
 it('refuses changed data, wrong environment, and already applied reviews before object deletion', async () => {
   const { sql, database } = fixture();
   const review = await previewStudioRetention(database, 'Local test data', now);

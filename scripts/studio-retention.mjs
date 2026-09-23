@@ -20,7 +20,7 @@ function sources(now) {
   const auditOld = quote(cutoff(now, 730));
   const projectWhere = `p.content_deleted_at IS NULL
     AND NOT EXISTS(SELECT 1 FROM audio_project_uploads upload WHERE upload.request_id=p.request_id)
-    AND ((r.status IN ('withdrawn','resolved') AND p.stage='files_under_review'
+    AND ((r.status IN ('withdrawn','resolved')
       AND COALESCE(r.resolved_at,r.updated_at)<=${old}
       AND NOT EXISTS(SELECT 1 FROM audio_project_files f WHERE f.request_id=p.request_id
         AND f.version='final' AND f.published_at IS NOT NULL)
@@ -29,6 +29,8 @@ function sources(now) {
       OR (p.stage IN ('final_files_ready','complete')
         AND EXISTS(SELECT 1 FROM audio_payments pay WHERE pay.request_id=p.request_id
           AND pay.booking_status='paid' AND pay.balance_status='paid')
+        AND NOT EXISTS(SELECT 1 FROM audio_project_files f WHERE f.request_id=p.request_id
+          AND f.published_at IS NULL AND f.uploaded_at>${old})
         AND EXISTS(SELECT 1 FROM audio_project_files f WHERE f.request_id=p.request_id
           AND f.version='final' AND f.published_at IS NOT NULL AND f.expires_at<=${old})
         AND NOT EXISTS(SELECT 1 FROM audio_project_files f WHERE f.request_id=p.request_id
