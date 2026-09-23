@@ -20,6 +20,16 @@ drafted: YYYY-MM-DD by publicist
 reviewed: null                    # the owner sets YYYY-MM-DD
 ---
 
+## Refresher
+A two-minute read before a call. Condensed from the answers below and any grill records beside this note. It carries their status (unverified until you verify the answers) and adds nothing they don't support.
+
+- **One line:** what it is and why it exists.
+- **The parts / how:** the pieces and how data or control moves between them.
+- **Why this way:** the decision, with the alternative that lost.
+- **Weak points:** misuse, failure and trade-offs, and what limits them.
+- **Open / don't claim:** unresolved questions and claims to avoid.
+- **Status then:** planned, built, tested or available.
+
 ## Visual aids
 Images in `images/` that explain the work before the questions: screenshots from the
 time (demo data), design studies, before and after, and a labeled diagram of how
@@ -113,6 +123,10 @@ Where it is already released, and whether automatic copyright matching may claim
 
 Rules:
 - The publicist never fills in "Owner review" and never marks an answer verified.
+- The Refresher is five to eight bullets, drawn only from the note's answers and grill
+  records. After a grill session, fold the evidence-backed corrections into it. Then
+  run `node scripts/build-refreshers.mjs` in the private repository so
+  `refreshers/<project>.md` matches, in the same PR.
 - "No evidence found" is a valid answer. It stays `unverified` until the owner
   answers it.
 - A note can be verified with a `hold` decision; the entry then stays unpublished.

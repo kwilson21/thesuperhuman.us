@@ -137,6 +137,17 @@ owner's answer as given, the evidence-based feedback, and the gaps to revisit. T
 record is the owner's memory aid for later reviews and interviews. The owner, not
 the publicist, then decides whether readiness becomes `ready`.
 
+**Refreshers.** Every note opens with a Refresher: five to eight bullets the owner
+can read in two minutes before a call or interview, covering what it is, how the
+parts connect, why this approach, the weak points and what is still open. It is
+condensed from the note's answers and any grill records, carries their status and
+adds no claim they do not support. After a grill session, the publicist folds the
+evidence-backed corrections into the Refresher. A script in the private repository
+(`scripts/build-refreshers.mjs`) collects every refresher into one page per project,
+`refreshers/<project>.md`, linked from that repository's README, so the owner has a
+single place to read before a conversation. Refreshers are private like the rest of
+the note.
+
 **The gate.** An entry clears the gate when its note has the required answers
 `verified` or `corrected`, the decision `publish: yes`, and a readiness value that
 fits its tier (above). Within an entry, a public claim may state only what rests on
@@ -153,9 +164,11 @@ holds the notes and the backfill raw material:
 ```text
 publicist-private/
   review-notes/<project>/<entry-id>/
-    note.md                              the review note
+    note.md                              the review note, opening with its Refresher
     images/                              screenshots, studies and diagrams for the owner
     defense-<date>.md                    grill session records, if any
+  refreshers/<project>.md                every refresher for a project on one page (generated)
+  scripts/build-refreshers.mjs           builds those pages; --check reports stale ones
   state.json                             last merged work drafted into notes
   videos/<entry-id>/                     unreleased video scripts, captions, metadata
   exports/claude/  exports/chatgpt/      conversation exports, backfill only

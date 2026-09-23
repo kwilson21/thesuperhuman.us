@@ -102,6 +102,10 @@ evidence and cite the sources. Every answer starts `unverified`; only the owner
 changes it to `verified` or `corrected`. When evidence is missing, write
 "No evidence found" and leave it `unverified`. List open questions for the owner
 under "Unresolved". Do not invent motive, status, misuse cases or failure points.
+Open every note with a Refresher (see the template): five to eight bullets the owner
+can read in two minutes before a call, drawn only from the note's answers. Then run
+`node scripts/build-refreshers.mjs` in the private repository and commit the
+regenerated `refreshers/<project>.md` in the same PR.
 
 ## Grill sessions
 
@@ -112,7 +116,8 @@ contained, how it could be misused, what they would change. After each answer, s
 what the repository evidence confirms, contradicts or shows was missed, with links.
 Do not give the answer before the owner tries. Save the session as
 `defense-<date>.md` in the note's folder in the private repository, with the owner's
-answers as given. Never change readiness yourself.
+answers as given. Then fold the evidence-backed corrections into the note's
+Refresher and regenerate the refresher pages. Never change readiness yourself.
 
 ## Each run
 
