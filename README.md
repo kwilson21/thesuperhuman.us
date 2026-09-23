@@ -70,6 +70,8 @@ Private project audio requires `migrations/music/0010_audio_project_files.sql` a
 
 Owner file upload requires `migrations/music/0011_audio_project_uploads.sql` after 0010. The owner request view uploads MP3 or WAV files to private R2 storage in 10 MiB parts, so a full-resolution file does not have to fit in one Worker request. Completed uploads remain private drafts until a separate owner publication action; an unfinished upload can be recovered if R2 completed it or discarded. The portal gate remains `false` until publication, revocation, retention, and operations checks are complete.
 
+Owner publication requires `migrations/music/0012_audio_project_publication.sql` after 0011. A review can be published after the booking payment is confirmed; a final file requires confirmed balance payment. Publishing a new review or a final file hides earlier review versions. Publication advances the project stage, records an owner-authored timeline note, and queues the existing minimal sign-in-link email. The portal gate remains `false` until revocation, retention, and operations checks are complete.
+
 The forms read `Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY` first, with
 `import.meta.env.PUBLIC_TURNSTILE_SITE_KEY` as a build-time fallback. Wrangler
 runtime vars are not automatically Astro build-time variables. An empty runtime

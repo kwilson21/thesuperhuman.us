@@ -42,7 +42,8 @@ describe('owner insights schema', () => {
     const invitations = readFileSync(new URL('../../migrations/music/0009_audio_project_invitations.sql', import.meta.url), 'utf8');
     const files = readFileSync(new URL('../../migrations/music/0010_audio_project_files.sql', import.meta.url), 'utf8');
     const uploads = readFileSync(new URL('../../migrations/music/0011_audio_project_uploads.sql', import.meta.url), 'utf8');
-    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(`${baseline.trim()}\n${retention.trim()}\n${payments.trim()}\n${reconciliation.trim()}\n${projects.trim()}\n${clientAccess.trim()}\n${messages.trim()}\n${updates.trim()}\n${invitations.trim()}\n${files.trim()}\n${uploads.trim()}\n`);
+    const publication = readFileSync(new URL('../../migrations/music/0012_audio_project_publication.sql', import.meta.url), 'utf8');
+    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(`${baseline.trim()}\n${retention.trim()}\n${payments.trim()}\n${reconciliation.trim()}\n${projects.trim()}\n${clientAccess.trim()}\n${messages.trim()}\n${updates.trim()}\n${invitations.trim()}\n${files.trim()}\n${uploads.trim()}\n${publication.trim()}\n`);
     const db = apply('../../db/music.sql');
     const expected = [
       'music_event_daily', 'music_events', 'music_interest', 'music_playback_daily',

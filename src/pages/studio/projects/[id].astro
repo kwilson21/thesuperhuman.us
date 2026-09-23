@@ -17,11 +17,15 @@ if (!project) return new Response('Project not found.', { status: 404 });
 const messages = await listProjectMessages(env.MUSIC_DB, project.request_id);
 const updates = await listProjectUpdates(env.MUSIC_DB, project.request_id);
 const files = await clientProjectFiles(env.MUSIC_DB, project.request_id, token);
+const finalExpiry = files.find(file => file.version === 'final')?.expires_at;
 const stage = project.stage === 'accepted' && project.booking_status === 'paid' ? 'Booking paid' :
   project.stage.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase());
 const next = project.stage === 'files_under_review' ? 'I’m checking the files and direction you sent.' :
   project.stage === 'accepted' && project.booking_status !== 'paid' ? 'Your booking details are being confirmed.' :
   project.stage === 'accepted' ? 'Your song is booked. I’ll post an update when work begins.' :
+  project.stage === 'review_ready' && files.some(file => file.version === 'review') ? 'Your review is ready below. Listen when you can, then send one set of notes.' :
+  project.stage === 'final_files_ready' && finalExpiry ? 'Your final audio is ready to listen to or download below.' :
+  project.stage === 'complete' && finalExpiry ? 'Your completed audio remains here through its availability date.' :
   'I’ll keep this page updated as your song moves forward.';
 ---
 <BaseLayout title={`${project.summary} · Studio`} description="Your private audio project." noindex>
@@ -30,7 +34,8 @@ const next = project.stage === 'files_under_review' ? 'I’m checking the files 
     <h1>{project.summary}</h1>
     <div class="studio-rule"></div>
     <section aria-labelledby="studio-stage"><p class="studio-label">Where we are</p><h2 id="studio-stage">{stage}</h2><p>{next}</p></section>
-    {project.current_due_at && <section aria-labelledby="studio-date"><p class="studio-label">Expected by</p><h2 id="studio-date">{new Date(`${project.current_due_at}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</h2></section>}
+    {finalExpiry ? <section aria-labelledby="studio-date"><p class="studio-label">Available through</p><h2 id="studio-date">{new Date(finalExpiry).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}</h2></section>
+      : project.current_due_at && <section aria-labelledby="studio-date"><p class="studio-label">Expected by</p><h2 id="studio-date">{new Date(`${project.current_due_at}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</h2></section>}
     {files.length > 0 && <section class="studio-files" aria-labelledby="studio-files-heading"><p class="studio-label">Listen</p><h2 id="studio-files-heading">Your audio</h2><ol>{files.map(file => {
       const href = `/api/studio/projects/${encodeURIComponent(project.request_id)}/files/${encodeURIComponent(file.id)}`;
       return <li><strong>{file.display_name}</strong><span>{file.version === 'final' ? 'Final audio' : 'Review audio'}</span><audio controls preload="none" src={href} aria-label={`Play ${file.display_name}`}></audio>{Boolean(file.downloadable) && <a href={`${href}?download=1`}>Download {file.display_name}</a>}</li>;

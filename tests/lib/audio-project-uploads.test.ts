@@ -50,7 +50,7 @@ function fixture() {
 it('keeps an owner upload private until publication and supports a large multipart file', async () => {
   const { sql, db, bucket } = fixture();
   const input = { version: 'review' as const, displayName: 'Review.wav', mediaType: 'audio/wav' as const, byteSize: uploadPartSize + 3 };
-  expect(await ownerProjectCanUpload(db, 'song-1')).toBe(false);
+  expect(await ownerProjectCanUpload(db, 'song-1', 'review')).toBe(false);
   expect(await beginProjectUpload(db, bucket, 'song-1', input, now)).toBeNull();
   sql.prepare("UPDATE audio_payments SET booking_status='paid' WHERE request_id='song-1'").run();
   const upload = (await beginProjectUpload(db, bucket, 'song-1', input, now))!;
@@ -64,6 +64,9 @@ it('keeps an owner upload private until publication and supports a large multipa
   expect(sql.prepare('SELECT status,published_at FROM audio_project_files WHERE id=?').get(upload.id))
     .toEqual({ status: 'uploaded', published_at: null });
   expect(await getProjectUpload(db, 'song-1', upload.id)).toBeNull();
+  sql.prepare("UPDATE audio_projects SET stage='final_files_ready' WHERE request_id='song-1'").run();
+  expect(await ownerProjectCanUpload(db, 'song-1', 'review')).toBe(false);
+  expect(await ownerProjectCanUpload(db, 'song-1', 'final')).toBe(true);
   sql.close();
 });
 

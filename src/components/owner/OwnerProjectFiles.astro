@@ -2,17 +2,25 @@
 type FileRow = { id: string; version: 'review' | 'final'; display_name: string; byte_size: number;
   status: 'uploaded' | 'published' | 'revoked'; uploaded_at: string; published_at: string | null };
 type PendingUpload = { id: string; display_name: string; state: 'pending' | 'discarding'; created_at: string };
-type Props = { files: FileRow[]; pending: PendingUpload[]; endpoint: string; canUpload: boolean };
-const { files, pending, endpoint, canUpload } = Astro.props;
+type Props = { files: FileRow[]; pending: PendingUpload[]; endpoint: string; publishEndpoint: string;
+  canUpload: boolean; finalOnly: boolean; bookingPaid: boolean; balancePaid: boolean };
+const { files, pending, endpoint, publishEndpoint, canUpload, finalOnly, bookingPaid, balancePaid } = Astro.props;
 ---
-<section class="owner-section project-files" data-owner-project-files data-endpoint={endpoint} aria-labelledby="project-files-heading">
+<section class="owner-section project-files" data-owner-project-files data-endpoint={endpoint} data-publish-endpoint={publishEndpoint} aria-labelledby="project-files-heading">
   <p class="owner-kicker">Private files</p><h2 id="project-files-heading">Review and delivery</h2>
-  {files.length ? <ul>{files.map(file => <li><div><strong>{file.display_name}</strong><span>{file.version === 'review' ? 'Review' : 'Final'} · {file.status} · {(file.byte_size / 1024 / 1024).toFixed(1)} MB</span></div><time datetime={file.uploaded_at}>{new Date(file.uploaded_at).toLocaleDateString('en-US', { dateStyle: 'medium' })}</time></li>)}</ul> : <p>No files uploaded yet.</p>}
+  {files.length ? <ul>{files.map(file => <li><div><strong>{file.display_name}</strong><span>{file.version === 'review' ? 'Review' : 'Final'} · {file.status} · {(file.byte_size / 1024 / 1024).toFixed(1)} MB</span>
+    {file.status === 'uploaded' && canUpload && bookingPaid && ((file.version === 'review' && !finalOnly) || (file.version === 'final' && balancePaid)) && <form data-project-publish-form data-file-id={file.id}>
+      <label>Note to the client <textarea name="note" rows="3" maxlength="1000" required></textarea></label>
+      {file.version === 'review' && <label class="download-choice"><input type="checkbox" name="downloadable" /> Allow download of this review</label>}
+      <button type="submit">Publish {file.version === 'review' ? 'review' : 'final file'}</button><p data-publish-status role="status" aria-live="polite"></p>
+    </form>}
+    {file.status === 'uploaded' && file.version === 'final' && !balancePaid && <span>Waiting for confirmed balance payment before sharing.</span>}
+    </div><time datetime={file.uploaded_at}>{new Date(file.uploaded_at).toLocaleDateString('en-US', { dateStyle: 'medium' })}</time></li>)}</ul> : <p>No files uploaded yet.</p>}
   {pending.length > 0 && <div class="unfinished"><h3>Unfinished uploads</h3><p>If an upload finished but did not appear above, try recovery. Otherwise discard it and start again.</p><ul>{pending.map(upload => <li><div><strong>{upload.display_name}</strong><span>{upload.state === 'discarding' ? 'Cleanup needs another try' : 'Started'} {new Date(upload.created_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</span></div><div class="upload-actions">{upload.state === 'pending' && <button type="button" data-upload-action="recover" data-upload-id={upload.id}>Recover</button>}<button type="button" data-upload-action="abort" data-upload-id={upload.id}>{upload.state === 'discarding' ? 'Retry cleanup' : 'Discard'}</button></div></li>)}</ul><p data-pending-status role="status" aria-live="polite"></p></div>}
   {canUpload && <form data-project-upload-form>
     <h3>Upload a private file</h3>
     <p>Uploading does not share a file with the client. You will choose when to publish it.</p>
-    <label>Version <select name="version"><option value="review">Review version</option><option value="final">Final version</option></select></label>
+    <label>Version <select name="version">{!finalOnly && <option value="review">Review version</option>}<option value="final">Final version</option></select></label>
     <label>Audio file <input name="file" type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" required /></label>
     <button type="submit">Upload file</button>
     <p data-upload-status role="status" aria-live="polite"></p>
@@ -30,6 +38,9 @@ const { files, pending, endpoint, canUpload } = Astro.props;
   h3 { font: 400 1.6rem/1.15 Newsreader,Georgia,serif; }
   label { display: grid; gap: .35rem; font: 500 .85rem/1.4 Inter,sans-serif; }
   select,input { padding: .65rem; border: 1px solid #9d968c; background: #fffdf9; font: 1rem/1.4 Inter,sans-serif; max-width: 100%; }
+  textarea { width: 100%; padding: .65rem; border: 1px solid #9d968c; background: #fffdf9; font: 1rem/1.4 Inter,sans-serif; resize: vertical; }
+  .download-choice { display: flex; align-items: center; gap: .6rem; }
+  .download-choice input { width: auto; }
   button { justify-self: start; border: 0; border-bottom: 1px solid currentColor; background: none; padding: .4rem 0; font: 500 .9rem/1.4 Inter,sans-serif; cursor: pointer; }
   button:hover { color: #a4512f; } button:disabled { opacity: .5; cursor: wait; }
   .unfinished { margin-top: 1.5rem; } .unfinished h3 { margin-bottom: .5rem; } .unfinished p { color: #514d47; font: .9rem/1.5 Inter,sans-serif; }

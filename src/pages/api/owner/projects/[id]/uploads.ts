@@ -58,7 +58,7 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
   try {
     const upload = await getProjectUpload(env.MUSIC_DB, params.id, uploadId.data);
     if (!upload) return fail('This upload is no longer available.', 404);
-    if (!await ownerProjectCanUpload(env.MUSIC_DB, params.id)) return fail('This project is not ready for file upload.', 409);
+    if (!await ownerProjectCanUpload(env.MUSIC_DB, params.id, upload.version)) return fail('This project is not ready for file upload.', 409);
     const length = expectedPartLength(upload.byte_size, partNumber);
     if (length === null || (request.headers.has('content-length') && Number(request.headers.get('content-length')) !== length)) {
       return fail('This file part has the wrong size.', 400);

@@ -12,6 +12,8 @@ export type ProjectUpdate = {
   created_at: string;
   notification_status: 'pending' | 'sending' | 'sent' | 'failed';
   notification_attempted_at: string | null;
+  file_id: string | null;
+  file_version?: 'review' | 'final' | null;
 };
 
 export type ProjectUpdateCommand =
@@ -20,7 +22,7 @@ export type ProjectUpdateCommand =
   | { action: 'start_work'; body: string }
   | { action: 'revise_date'; dueDate: string; reason: 'protect_song' | 'client_clarification' | 'schedule_conflict'; body: string };
 
-const columns = `id,request_id,kind,body,reason,previous_due_at,new_due_at,actor,created_at,notification_status,notification_attempted_at`;
+const columns = `id,request_id,kind,body,reason,previous_due_at,new_due_at,actor,created_at,notification_status,notification_attempted_at,file_id`;
 
 export function validProjectDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -36,7 +38,8 @@ export function projectToday(now = new Date()): string {
 }
 
 export async function listProjectUpdates(db: D1Database, requestId: string): Promise<ProjectUpdate[]> {
-  const result = await db.prepare(`SELECT ${columns} FROM audio_project_updates WHERE request_id=? ORDER BY id`)
+  const result = await db.prepare(`SELECT ${columns},(SELECT version FROM audio_project_files WHERE id=file_id) AS file_version
+    FROM audio_project_updates WHERE request_id=? ORDER BY id`)
     .bind(requestId).all<ProjectUpdate>();
   return result.results;
 }
