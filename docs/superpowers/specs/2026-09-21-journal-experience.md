@@ -26,6 +26,8 @@ The journal has three separate surfaces:
 The Personal Website page leads with Latest work. Older redesign material belongs
 in the authored Project story or Archive, not in the default reading path.
 
+The journal combines repository-owned milestones with the live public publication feed. Both sources use the same Latest work and Archive rules. A published entry is never silently promoted into the authored Project story. Corrections and withdrawals continue to clear superseded public content through the existing feed behavior.
+
 ## Interaction contract
 
 - The first visible panel names the current state and shows the newest update.
@@ -33,11 +35,13 @@ in the authored Project story or Archive, not in the default reading path.
 - “View project story” and “Browse archive” state what each path contains.
   “Show all entries” is not a primary action.
 - Direct links to an update remain stable.
+- The newest available entry is the default selection; an old, fixed milestone does not take precedence over newer work.
 - Without JavaScript, the document presents the latest five updates in reverse
   chronological order followed by the Archive link. It does not emit every
   archived panel.
 - Visual proof stays attached to its update and retains captions and full-size
   links.
+- The bounded view is specific to Personal Website. Threadline and Engineers' Daily continue using the shared journal components without a reading-model change in this increment.
 
 ## Guardrails
 
