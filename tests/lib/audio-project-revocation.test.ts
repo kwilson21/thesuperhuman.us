@@ -68,6 +68,9 @@ it('closes project access, invalidates sessions and codes, and writes one audit 
 
 it('closes a declined provisional project when its request is resolved', () => {
   const { sql } = fixture();
+  // Simulate a database that applied 0013 before the close-on-decline trigger existed.
+  sql.exec('DROP TRIGGER audio_project_close_declined_request');
+  sql.exec(readFileSync(new URL('../../migrations/music/0015_audio_project_close_declined.sql', import.meta.url), 'utf8'));
   sql.prepare("UPDATE audio_projects SET stage='files_under_review' WHERE request_id='song-1'").run();
   sql.prepare("UPDATE owner_requests SET status='resolved',updated_at=? WHERE id='song-1'").run(now.toISOString());
   expect(sql.prepare("SELECT revoked_at FROM audio_projects WHERE request_id='song-1'").get())
