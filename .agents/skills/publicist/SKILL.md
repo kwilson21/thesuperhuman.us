@@ -5,15 +5,15 @@ description: "Draft private review notes, then development-journal entries and q
 
 # Publicist
 
-**Status: proposed draft.** Not active until the owner approves
-`docs/publicist/README.md`. When the Routine is built, this file moves to
-`.agents/skills/publicist/SKILL.md` as the single maintained copy, and this draft is
-deleted.
+This is the single maintained copy of the publicist's instructions. Claude Code
+reaches it through the `.claude/skills/publicist/` pointer and a `CLAUDE.md` import;
+Codex reads it here and through the hard-rules block in `AGENTS.md`, which
+`npm run publicist:sync` keeps identical to the section below.
 
 These rules are not optional and do not depend on this skill being matched:
 `CLAUDE.md` imports this file, `AGENTS.md` carries a CI-checked copy of the hard
 rules, scheduled runs read it first, and the `publicist-gate` build step fails any PR or
-deploy whose notes are missing or not approved (design doc, section 9). That gate is
+deploy whose notes are missing or not approved (`docs/publicist/README.md`, section 9). That gate is
 a mechanical safeguard: it cannot check that your copy follows from the verified
 answers. That part is yours to get right and the owner's to check in the public
 PR, so write only what the answers support.
