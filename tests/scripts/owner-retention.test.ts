@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { applyOwnerRetention, previewOwnerRetention } from '../../scripts/owner-retention.mjs';
+import { applyStudioRetention, previewStudioRetention } from '../../scripts/studio-retention.mjs';
 import { lifetimeOwnerPlayback } from '../../scripts/music-analytics.mjs';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 const now = new Date('2026-09-19T12:00:00Z');
@@ -113,7 +114,7 @@ it('keeps an uncollectible service invoice available for Stripe reconciliation',
     .toEqual({ stripe_customer_id: 'cus_uncollectible', balance_invoice_id: 'in_uncollectible', balance_invoice_url: 'https://invoice.stripe.com/uncollectible' });
 });
 
-it('removes a withdrawn service request after terms are accepted but before any invoice is started', async () => {
+it('keeps withdrawn service contact until studio content has completed its 30-day cleanup', async () => {
   const database = fixture();
   database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at)
     VALUES ('withdrawn-service','service','Artist','artist@example.com','Mix','withdrawn','2026-09-01T00:00:00Z','2026-09-02T00:00:00Z');
@@ -121,12 +122,28 @@ it('removes a withdrawn service request after terms are accepted but before any 
       offer_accepted_at,created_at,updated_at)
     VALUES ('withdrawn-service','Mix',10000,5000,5000,'2026-09-01T00:00:00Z','2026-09-01T00:00:00Z','2026-09-01T00:00:00Z');`);
   const review = await previewOwnerRetention(database, 'Local test data', now);
-  expect(review.requestContacts).toBe(2);
+  expect(review.requestContacts).toBe(1);
   await applyOwnerRetention(database, review, 'Local test data', now);
   expect((await database.query("SELECT name,email FROM owner_requests WHERE id='withdrawn-service'"))[0])
-    .toEqual({ name: '', email: '' });
+    .toEqual({ name: 'Artist', email: 'artist@example.com' });
   expect((await database.query("SELECT external_refs_deleted_at FROM audio_payments WHERE request_id='withdrawn-service'"))[0])
-    .toEqual({ external_refs_deleted_at: now.toISOString() });
+    .toEqual({ external_refs_deleted_at: null });
+});
+
+it('clears request contact and summary after studio cleanup has removed withdrawn project content', async () => {
+  const database = fixture();
+  const later = new Date('2026-10-10T12:00:00Z');
+  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at)
+    VALUES ('studio-withdrawn','service','Artist','artist@example.com','Private song details','withdrawn','2026-09-01','2026-09-02');
+    INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
+      offer_accepted_at,created_at,updated_at)
+    VALUES ('studio-withdrawn','Mix',10000,5000,5000,'2026-09-01','2026-09-01','2026-09-01');`);
+  const studioReview = await previewStudioRetention(database, 'Local test data', later);
+  await applyStudioRetention(database, studioReview, 'Local test data', async () => {}, later);
+  const ownerReview = await previewOwnerRetention(database, 'Local test data', later);
+  await applyOwnerRetention(database, ownerReview, 'Local test data', later);
+  expect((await database.query("SELECT name,email,summary FROM owner_requests WHERE id='studio-withdrawn'"))[0])
+    .toEqual({ name: '', email: '', summary: '' });
 });
 
 it('keeps a withdrawn service request while an invoice creation is reserved', async () => {

@@ -6,11 +6,12 @@ import ListeningPath from '~/components/owner/ListeningPath.astro';
 import RequestList from '~/components/owner/RequestList.astro';
 import MetricDefinition from '~/components/owner/MetricDefinition.astro';
 import { clientPortalEnabled, listStudioSignInFailures } from '~/lib/audio-client-access';
-import { loadStudioLedger } from '~/lib/owner-reporting';
+import { listStudioProjectAttention, loadStudioLedger } from '~/lib/owner-reporting';
 const db = Astro.locals.runtime.env.MUSIC_DB;
 if (!db) return new Response('Owner reporting is unavailable.', { status: 503 });
 const ledger = await loadStudioLedger(db, new Date());
 const signInFailures = clientPortalEnabled(Astro.locals.runtime.env) ? await listStudioSignInFailures(db) : [];
+const studioAttention = clientPortalEnabled(Astro.locals.runtime.env) ? await listStudioProjectAttention(db, new Date()) : [];
 ---
 <OwnerLayout title="Today" current="today" newRequestCount={ledger.attention.newRequests} ownerEmail={Astro.locals.owner?.email ?? ''}>
   <header class="owner-page-heading">
@@ -26,6 +27,17 @@ const signInFailures = clientPortalEnabled(Astro.locals.runtime.env) ? await lis
     <p class="owner-kicker">Studio access</p><h2 id="studio-sign-in-heading">Sign-in needs attention</h2>
     <p>A code could not be delivered. Check the request's email address and ask the client to try again.</p>
     <ul>{signInFailures.map(item => <li><a href={`/owner/requests/${encodeURIComponent(item.requestId)}`}>{item.clientName || 'Studio client'}: open request →</a></li>)}</ul>
+  </section>}
+  {studioAttention.length > 0 && <section class="owner-section" aria-labelledby="studio-attention-heading">
+    <p class="owner-kicker">Studio projects</p><h2 id="studio-attention-heading">Songs needing a next step</h2>
+    <ul class="studio-attention-list">{studioAttention.map(item => <li>
+      <a href={`/owner/requests/${encodeURIComponent(item.requestId)}`}>{item.summary || 'Studio project'} <span aria-hidden="true">→</span></a>
+      <span>{[
+        item.unreadMessages ? `${item.unreadMessages} unread client ${item.unreadMessages === 1 ? 'message' : 'messages'}` : '',
+        item.failedNotices ? `${item.failedNotices} ${item.failedNotices === 1 ? 'update email' : 'update emails'} to retry` : '',
+        item.dueSoon ? 'Delivery date is within two days or past due' : '',
+      ].filter(Boolean).join(' · ')}</span>
+    </li>)}</ul>
   </section>}
   <section class="owner-section campaign-preview" aria-labelledby="campaign-heading">
     <div class="campaign-copy"><p class="owner-kicker">Active promotion</p><h2 id="campaign-heading">{ledger.activeCampaign?.name ?? 'No active campaign'}</h2>
@@ -43,3 +55,9 @@ const signInFailures = clientPortalEnabled(Astro.locals.runtime.env) ? await lis
     {ledger.geography.cities.length ? <ol>{ledger.geography.cities.map(city => <li><span>{city.label}</span><strong>{city.reportedListens}</strong></li>)}</ol> : <p class="owner-empty">City patterns appear after at least five qualifying reported sessions share a city.</p>}
   </section>
 </OwnerLayout>
+<style>
+  .studio-attention-list { list-style: none; margin: 1rem 0 0; padding: 0; }
+  .studio-attention-list li { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .4rem 1.5rem; padding: .85rem 0; border-top: 1px solid #e2ddd6; }
+  .studio-attention-list a { text-decoration: underline; text-underline-offset: .2em; }
+  .studio-attention-list span { font: .875rem/1.5 Inter, sans-serif; color: #55514c; }
+</style>

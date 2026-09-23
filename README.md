@@ -74,6 +74,8 @@ Owner publication requires `migrations/music/0012_audio_project_publication.sql`
 
 File and project revocation require `migrations/music/0013_audio_project_revocation.sql` after 0012. Revoking a published file immediately blocks playback and sends a minimal sign-in-link notice attached to the owner's explanation in the timeline. Closing project access immediately hides the project, invalidates that client's current sessions and pending code, and records an audit event; it does not change Stripe invoices. The portal gate remains `false` until retention and operations checks are complete.
 
+Studio retention requires `migrations/music/0014_audio_project_retention.sql` after 0013. The [owner operations guide](docs/owner-operations.md) describes its review-first cleanup, private R2 deletion, failure recovery, and the order for running owner-request retention afterward. The owner Today page shows unread studio messages, failed update notices, and delivery dates needing attention when the portal is enabled. Keep `AUDIO_CLIENT_PORTAL_ENABLED=false` until migration reconciliation and the portal's accessibility, mobile, storage-failure, and email checks pass in the target environment.
+
 The forms read `Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY` first, with
 `import.meta.env.PUBLIC_TURNSTILE_SITE_KEY` as a build-time fallback. Wrangler
 runtime vars are not automatically Astro build-time variables. An empty runtime

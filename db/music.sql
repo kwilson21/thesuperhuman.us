@@ -384,3 +384,6 @@ ALTER TABLE audio_project_files ADD COLUMN revoked_by TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS audio_project_files_revocation ON audio_project_files(revocation_id);
 ALTER TABLE audio_projects ADD COLUMN access_revocation_id TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS audio_projects_access_revocation ON audio_projects(access_revocation_id);
+-- Keep the project shell after its client content is removed, so payment and
+-- operational history can still be reconciled without retaining private files.
+ALTER TABLE audio_projects ADD COLUMN content_deleted_at TEXT;

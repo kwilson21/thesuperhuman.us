@@ -1,4 +1,5 @@
 import { ownerRequestFromRow, type OwnerRequest, type OwnerRequestRow } from './owner-model';
+import { projectToday } from './audio-project-updates';
 
 export type ListeningSummary = {
   reportedStarts: number;
@@ -24,6 +25,13 @@ export type StudioLedger = {
   activeCampaignListening: ListeningSummary;
   observations: string[];
 };
+export type StudioProjectAttention = {
+  requestId: string;
+  summary: string;
+  unreadMessages: number;
+  failedNotices: number;
+  dueSoon: boolean;
+};
 type CampaignRow = {
   id: string; subject_type: 'release' | 'service'; subject_id: string; name: string; primary_goal: string;
   secondary_signals: string; starts_at: string; ends_at: string | null; approved_plan: string;
@@ -31,6 +39,29 @@ type CampaignRow = {
 };
 const requestColumns = `id,kind,release_id,service_id,campaign_id,name,email,city_region,
   summary,details_json,status,private_note,created_at,updated_at,resolved_at,contact_delete_after`;
+
+export async function listStudioProjectAttention(db: D1Database, now: Date): Promise<StudioProjectAttention[]> {
+  const today = projectToday(now);
+  const dueLimit = new Date(`${today}T12:00:00Z`);
+  dueLimit.setUTCDate(dueLimit.getUTCDate() + 2);
+  const rows = await db.prepare(`WITH project_attention AS (
+    SELECT p.request_id AS requestId,r.summary,
+      (SELECT COUNT(*) FROM audio_project_messages m
+        WHERE m.request_id=p.request_id AND m.actor='client' AND m.read_at IS NULL) AS unreadMessages,
+      (SELECT COUNT(*) FROM audio_project_updates u
+        WHERE u.request_id=p.request_id AND u.notification_status='failed') AS failedNotices,
+      CASE WHEN p.current_due_at IS NOT NULL AND p.current_due_at<=?
+        AND p.stage NOT IN ('final_files_ready','complete') THEN 1 ELSE 0 END AS dueSoon
+    FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
+    WHERE p.revoked_at IS NULL AND r.status<>'withdrawn'
+  ) SELECT * FROM project_attention
+    WHERE unreadMessages>0 OR failedNotices>0 OR dueSoon=1
+    ORDER BY dueSoon DESC,unreadMessages DESC,requestId`)
+    .bind(dueLimit.toISOString().slice(0, 10)).all<{
+      requestId: string; summary: string; unreadMessages: number; failedNotices: number; dueSoon: number;
+    }>();
+  return rows.results.map(row => ({ ...row, dueSoon: Boolean(row.dueSoon) }));
+}
 
 async function listening(db: D1Database, campaignId?: string): Promise<ListeningSummary> {
   const campaign = campaignId ? ' AND campaign_id=?' : '';
