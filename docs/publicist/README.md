@@ -289,8 +289,15 @@ A sample 3-day queue is in [samples/queue/](samples/queue/).
 
 ## 8. Safety rules
 
-Drafted as [SKILL.md](SKILL.md) (the repo gitignores `.claude/`, so it moves to `.claude/skills/publicist/` with a narrow ignore exception when the Routine is built),
-which the Routine prompt loads first. In short:
+Drafted as [SKILL.md](SKILL.md). When the Routine is built it moves to one
+canonical file that both agents read, so Claude and Codex behave the same:
+`.agents/skills/publicist/SKILL.md` (where Codex looks for repository skills) holds
+the full instructions; `.claude/skills/publicist/SKILL.md` (where Claude Code looks)
+is a stub with the same name and description whose only instruction is to follow the
+canonical file. `.gitignore` changes from `.claude/` to `.claude/*` plus
+`!.claude/skills/` so the stub can be committed, and `AGENTS.md` and `CLAUDE.md`
+each gain one line naming the canonical file. The Routine prompt loads it first.
+In short:
 - Tally content comes only from demo data (seeded fictional household, CI
   screenshots, the public demo). Never production bindings, the family's data, or
   Plaid anything.
