@@ -44,12 +44,15 @@ small number of good conversations, with LinkedIn carrying the professional reac
    > I build useful software with AI, grounded in 7+ years of production engineering (Lyft, insurance, healthcare).
    > Now: Tally (family budgeting) and kaillera-next (browser netplay for retro games).
    > Also mixing and mastering audio. thesuperhuman.us
-   The Ko-fi page (ko-fi.com/kazonwilson) does not fit in the bio. It goes in the
-   pinned post and in the website footer instead (see "Support (Ko-fi)" in the
-   design doc). Routine posts keep one link, to the site (quality standard 8).
-5. **Pinned post:** an introduction with two links: the website and Ko-fi.
-   > I build useful software with AI, and I mix and master audio. I'm posting what I make and why: Tally, kaillera-next and more. Everything lives at thesuperhuman.us. If the work is useful to you, you can support it on Ko-fi: ko-fi.com/kazonwilson
-   Replace it with a strong project post later if you prefer; keep Ko-fi in it.
+   Routine posts keep one link, to the site (quality standard 8).
+5. **Pinned post:** a short introduction with one link, the website.
+   > I build useful software with AI, and I mix and master audio. I'm posting what I make and why: Tally, kaillera-next and more. Everything lives at thesuperhuman.us.
+
+   Replace it with a strong project post later if you prefer. **Ko-fi is on hold**
+   ([channels/ko-fi.md](../channels/ko-fi.md)): no Ko-fi link goes in the pinned post,
+   the bio or any post until the owner answers that plan's questions. Once they do,
+   this line can be appended to the pinned post:
+   > If the work is useful to you, you can support it on Ko-fi: ko-fi.com/kazonwilson
 6. **Settings worth changing:** turn on two-factor sign-in by email; leave
    "adult content" off; set who can reply to "everyone" at first.
 7. **Later, only for automated posting:** create an **app password** (Settings,

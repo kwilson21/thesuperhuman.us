@@ -105,12 +105,25 @@ not been watched):
   recording and any samples or beats on YouTube, where it is already distributed,
   and whether YouTube's automatic copyright matching (Content ID) is expected to
   claim it. A release video is held until rights are verified.
-- The public review PR carries each video's script, captions (`.srt`), title,
-  description with chapters, tags, thumbnail and playlist. Rendered video files are
-  stored outside this repository (for example in R2, like the site's audio), with a
-  preview link in the PR.
-- Merging approves the batch. The owner then uploads in YouTube Studio from the
-  prepared checklist.
+- **Private until the video is public.** Nothing about an unreleased video enters
+  this public repository or a public PR: not its script, captions, title,
+  description, thumbnail or a preview link. The flow:
+  1. **Private review.** The publicist opens a PR in the private repository
+     (`kwilson21/publicist-private`, under `videos/<entry-id>/`) with the script,
+     captions (`.srt`), title, description with chapters, tags, thumbnail and
+     playlist. The rendered video goes to a private storage bucket with no public
+     access (for example a private R2 bucket). The private PR links it only through
+     a signed URL that expires within 7 days, and a fresh one is issued on request.
+  2. **Owner approval.** The owner watches the preview, edits the materials in the
+     private PR and merges it. That merge is the explicit approval to publish the
+     video.
+  3. **Upload.** The owner uploads in YouTube Studio from the approved checklist,
+     publishing immediately or scheduling a premiere.
+  4. **Public follow-up.** Only after the video is public does the publicist open
+     the usual public PR: the website entry that embeds or links it and the feed
+     posts announcing it, all through the normal gate.
+- Build videos about already-published journal entries follow the same order. The
+  entry may be public already, but the video is not until the owner releases it.
 
 ## Publishing mechanics
 
@@ -122,8 +135,10 @@ not been watched):
   [quota and compliance audits](https://developers.google.com/youtube/v3/guides/quota_and_compliance_audits).
 - **Pipeline (proposal):** videos built from code with Remotion (videos written as
   React components), using the Playwright recordings the design already produces,
-  finished with ffmpeg. Each video's source lives in this repository, so a style
-  change is one reviewed diff.
+  finished with ffmpeg. The shared style (templates, the opening line, typography)
+  lives in this repository, so a style change is one reviewed diff. Each video's
+  own content (script, captions, footage) stays in the private repository until
+  the video is public.
 - **Cadence:** at most one video a week, plus releases when they happen. The feed
   post announcing a video counts toward the daily feed limit.
 

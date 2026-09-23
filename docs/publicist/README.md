@@ -133,6 +133,7 @@ holds the notes and the backfill raw material:
 publicist-private/
   review-notes/<project>/<entry-id>.md   one note per publicized change
   state.json                             last merged work drafted into notes
+  videos/<entry-id>/                     unreleased video scripts, captions, metadata
   exports/claude/  exports/chatgpt/      conversation exports, backfill only
 ```
 
