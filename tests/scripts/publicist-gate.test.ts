@@ -5,16 +5,21 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { agentsBlock, captureProblems, entryIds, frontMatter, hardRules, noteProblems, syncAgents, textProblems } from '../../scripts/publicist/lib.mjs';
 
-const note = ({ tier = 'shipped', status = 'verified', publish = 'yes', readiness = 'ready' } = {}) => `---
+const note = ({ tier = 'shipped', refresher = 'verified', publish = 'yes', readiness = 'ready', bullets = true } = {}) => `---
 entry: tally-home-screen
 tier: ${tier}
 ---
+
+## Refresher
+A two-minute read.
+
+${bullets ? '- **One line:** Home leads with safe to spend.' : ''}
 
 ## Visual aids
 Screenshot.
 
 ## 1. What changed
-Home leads with safe to spend. · status: ${status}
+Home leads with safe to spend. · status: unverified
 
 ## 2. How it works, at a high level
 Answer. · status: verified
@@ -33,6 +38,7 @@ Built. · status: verified
 
 ## Owner review
 - Corrections: none
+- Refresher: ${refresher}
 - Whiteboard defense: ${readiness}
 - Publish: ${publish}
 `;
@@ -41,8 +47,14 @@ describe('noteProblems', () => {
   it('clears a fully verified shipped note marked ready', () => {
     expect(noteProblems(note())).toEqual([]);
   });
-  it('holds an unverified answer', () => {
-    expect(noteProblems(note({ status: 'unverified' }))).toContain('answer 1 not verified');
+  it('clears on a verified refresher even with unverified detail answers', () => {
+    expect(noteProblems(note({ refresher: 'corrected' }))).toEqual([]);
+  });
+  it('holds a refresher the owner has not verified', () => {
+    expect(noteProblems(note({ refresher: 'unverified' }))).toContain('refresher not verified');
+  });
+  it('holds a note without refresher bullets', () => {
+    expect(noteProblems(note({ bullets: false }))).toContain('refresher missing');
   });
   it('holds a shipped note marked not yet', () => {
     expect(noteProblems(note({ readiness: 'not yet' }))).toContain('shipped entry not marked ready');
@@ -60,7 +72,7 @@ describe('noteProblems', () => {
     const problems = noteProblems(block);
     expect(problems).toContain('publish is not yes');
     expect(problems).toContain('tier missing or invalid');
-    expect(problems).toContain('answer 1 not verified');
+    expect(problems).toContain('refresher not verified');
   });
 });
 
