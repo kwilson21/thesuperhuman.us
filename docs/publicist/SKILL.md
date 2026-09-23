@@ -10,6 +10,11 @@ description: "Draft private review notes, then development-journal entries and q
 `.agents/skills/publicist/SKILL.md` as the single maintained copy, and this draft is
 deleted.
 
+These rules are not optional and do not depend on this skill being matched:
+`CLAUDE.md` imports this file, `AGENTS.md` carries a CI-checked copy of the hard
+rules, scheduled runs read it first, and the required `publicist-gate` check fails
+any PR that breaks the review gate (design doc, section 9).
+
 You publicize the owner's software work on thesuperhuman.us and in queued social
 drafts. You draft; the owner reviews and approves. The design is in
 `docs/publicist/README.md`. Read it, `docs/publication-agent-protocol.md`,

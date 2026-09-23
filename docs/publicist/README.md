@@ -385,7 +385,52 @@ A sample 3-day queue is in [samples/queue/](samples/queue/).
 
 ## 9. Safety rules
 
-Drafted as [SKILL.md](SKILL.md). When the Routine is built it moves to one
+**Making the rules non-optional.** A skill alone is not enough. Claude Code and
+Codex both load a skill only when the model decides a task matches its description,
+so a skill can be skipped. The existing Codex journal works differently: its
+protocol is in `AGENTS.md`, which Codex loads into every session. Even that
+guarantees the agent *sees* the rules, not that it follows them; `AGENTS.md` itself
+says a prompt cannot guarantee durable writes. So the publicist's rules are
+enforced in four layers, and only the last one is a real guarantee:
+
+1. **Always loaded, for both tools.** The rules live in one canonical file (below).
+   `CLAUDE.md` pulls it in with Claude Code's `@` import, so every Claude session in
+   this repository has it in context from the start, not just when a skill
+   matches. `AGENTS.md` has no import mechanism, so a small script copies the
+   hard-rules section into a marked block in `AGENTS.md`, and CI fails if the two
+   copies differ. That is the same always-loaded mechanism the Codex journal
+   protocol uses today.
+2. **Explicit entry point.** The Routine prompt (appendix) tells every scheduled
+   run to read the canonical file before anything else, so scheduled runs never
+   depend on skill matching.
+3. **Harness hooks.** A committed Claude Code `SessionStart` hook re-injects the
+   hard rules at session start and after context compaction, so a long session
+   cannot lose them. Codex supports hooks too (linked from
+   [project-journal.md](../project-journal.md)); a matching hook is proposed only
+   after checking Codex's current hook docs, and like the existing hook pilot it
+   needs the owner's trust to activate.
+4. **Enforcement that does not depend on the model.** A new required CI check,
+   `publicist-gate`, runs on every PR in this repository that touches Tally or
+   Kaillera-next journal data, their assets, or `publicist/queue/`. It fails the PR
+   when:
+   - an entry or queued post has no note on the private repository's `main`, or
+     the note's required answers are not all `verified` or `corrected`, or its
+     decision is not `publish: yes`;
+   - a post points to an entry that is neither in the PR nor already published;
+   - text contains em dashes or matches a secret pattern, or a Tally capture lacks
+     its demo-data label.
+
+   It reads the private repository with a fine-grained, read-only token for that
+   one repository, stored as an Actions secret (GitHub does not expose secrets to
+   pull requests from forks), and its log prints only entry IDs and pass or fail,
+   never note content. Branch protection makes the check required, and only the
+   owner merges. It covers only the projects in `publicist/config.json`, so the
+   existing personal-website journal flow is unchanged.
+
+Layers 1 to 3 make the agent get it right the first time. Layer 4 plus the owner's
+merge are what actually stop a skipped rule from reaching the site.
+
+**Where the file lives.** When the Routine is built the draft moves to one
 canonical file that both agents read, so Claude and Codex behave the same:
 `.agents/skills/publicist/SKILL.md` (where Codex looks for repository skills) holds
 the full instructions; `.claude/skills/publicist/SKILL.md` (where Claude Code looks)
@@ -432,9 +477,17 @@ prompt (appendix) loads that canonical file first. In short:
 7. **Tiers:** Kaillera-next and Tally both `shipped` by default, with individual
    explorations marked on their notes?
 
-After approval: draft the backfill review notes, then (after your review) the two
-project pages and backfill PRs, then create the Routine (paused until you confirm
-its first dry run).
+8. **Enforcement:** add the required `publicist-gate` check and branch protection
+   (section 9)? It needs one fine-grained, read-only token for the private
+   repository, which you create and store as an Actions secret.
+
+After approval, in order:
+1. Move the skill to its canonical file and add the always-loaded layers, the
+   `AGENTS.md` sync check and the `publicist-gate` check (section 9), before any
+   content is drafted.
+2. Draft the backfill review notes for your review.
+3. Build the two project pages and backfill PRs from the notes you verified.
+4. Create the Routine, paused until you confirm its first dry run.
 
 ## Appendix: draft Routine prompt
 
