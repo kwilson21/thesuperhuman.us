@@ -60,6 +60,8 @@ Apply `migrations/music/0005_audio_projects.sql` before deploying portal code. I
 
 The email-code access slice also requires `migrations/music/0006_audio_client_access.sql` and the `AUDIO_CLIENT_CODE_KEY` secret. The portal flag remains `false` until messaging, private file delivery, retention, and the full [prelaunch checklist](docs/prelaunch-checklist.md) are complete. Codes expire after 10 minutes and are single-use; client sessions expire after 14 days. The access routes never expose whether an email has a project.
 
+The private message-thread slice requires `migrations/music/0007_audio_project_messages.sql` after 0006. It stores one immutable owner/client conversation per project, including who sent each message and when the other side read it. Clients can clarify files before approval and both sides can reply until the project is complete. Messages accept plain text and HTTPS links; the site never fetches or previews those links. Routine client messages appear in the owner request view without sending email. The portal flag stays `false` while update notifications, delivery, retention, and operations are unfinished.
+
 The forms read `Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY` first, with
 `import.meta.env.PUBLIC_TURNSTILE_SITE_KEY` as a build-time fallback. Wrangler
 runtime vars are not automatically Astro build-time variables. An empty runtime
