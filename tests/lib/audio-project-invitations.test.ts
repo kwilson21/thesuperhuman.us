@@ -51,6 +51,20 @@ describe('project invitations', () => {
     sql.close();
   });
 
+  it('requires checking Resend before retrying an uncertain invitation', async () => {
+    const { sql, db } = fixture();
+    const env = { RESEND_API_KEY: 'test', CONTACT_FROM_EMAIL: 'studio@example.com' } as Env;
+    vi.mocked(sendStudioSignInNotice).mockResolvedValueOnce({ ok: false, uncertain: true });
+    await deliverProjectInvitation(db, 'song-1', env);
+    expect(sql.prepare("SELECT invitation_status FROM audio_projects WHERE request_id='song-1'").get())
+      .toEqual({ invitation_status: 'sending' });
+    expect(await queueProjectInvitation(db, 'song-1', false, new Date(Date.now() + 61_000))).toBe(false);
+    expect(await queueProjectInvitation(db, 'song-1', true, new Date(Date.now() + 61_000))).toBe(true);
+    await deliverProjectInvitation(db, 'song-1', env);
+    expect(sendStudioSignInNotice).toHaveBeenCalledTimes(2);
+    sql.close();
+  });
+
   it('does not invite a withdrawn or revoked project', async () => {
     const { sql, db } = fixture();
     const env = { RESEND_API_KEY: 'test', CONTACT_FROM_EMAIL: 'studio@example.com' } as Env;

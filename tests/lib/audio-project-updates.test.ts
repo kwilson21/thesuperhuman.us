@@ -104,14 +104,14 @@ describe('project updates', () => {
     sql.prepare("UPDATE owner_requests SET status='reviewed' WHERE id='song-1'").run();
     const update = (await saveProjectUpdate(db, 'song-1', 'owner@example.com', { action: 'accept', dueDate: '2026-10-01', body: 'We are set.' }, now))!;
     const env = { RESEND_API_KEY: 'test', CONTACT_FROM_EMAIL: 'noreply@example.com' } as Env;
-    vi.mocked(sendAudioMessage).mockResolvedValueOnce({ ok: false, uncertain: true });
+    vi.mocked(sendStudioSignInNotice).mockResolvedValueOnce({ ok: false, uncertain: true });
     await deliverProjectUpdateNotice(db, update.id, env);
     expect(sql.prepare('SELECT notification_status FROM audio_project_updates WHERE id=?').get(update.id))
       .toEqual({ notification_status: 'sending' });
     expect(await queueProjectNoticeForDelivery(db, 'song-1', update.id, false, new Date(Date.now() + 61_000))).toBe(false);
     expect(await queueProjectNoticeForDelivery(db, 'song-1', update.id, true, new Date(Date.now() + 61_000))).toBe(true);
     await deliverProjectUpdateNotice(db, update.id, env);
-    expect(sendAudioMessage).toHaveBeenCalledTimes(2);
+    expect(sendStudioSignInNotice).toHaveBeenCalledTimes(2);
     expect(sql.prepare('SELECT notification_status FROM audio_project_updates WHERE id=?').get(update.id))
       .toEqual({ notification_status: 'sent' });
     sql.close();

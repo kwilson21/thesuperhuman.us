@@ -7,12 +7,12 @@ vi.mock('~/lib/audio-project-invitations', () => ({
   queueProjectInvitation: vi.fn(async () => true),
 }));
 
-function context(options: { owner?: boolean; enabled?: boolean; action?: string } = {}) {
+function context(options: { owner?: boolean; enabled?: boolean; action?: string; confirmedNotSent?: boolean } = {}) {
   const waitUntil = vi.fn();
   const env = { AUDIO_CLIENT_PORTAL_ENABLED: options.enabled === false ? 'false' : 'true', MUSIC_DB: {} };
   return { params: { id: 'song-1' }, request: new Request('https://thesuperhuman.us/api/owner/projects/song-1/invitation', {
     method: 'POST', headers: { origin: 'https://thesuperhuman.us', 'content-type': 'application/json' },
-    body: JSON.stringify({ action: options.action ?? 'send' }),
+    body: JSON.stringify({ action: options.action ?? 'send', confirmedNotSent: options.confirmedNotSent ?? false }),
   }), locals: { owner: options.owner === false ? null : { email: 'owner@example.com' }, runtime: { env, ctx: { waitUntil } } }, waitUntil } as any;
 }
 
@@ -28,9 +28,12 @@ it('keeps invitation sending behind the owner and portal gates', async () => {
 it('queues one owner-triggered invitation and schedules delivery', async () => {
   const ctx = context();
   expect((await POST(ctx)).status).toBe(200);
-  expect(queueProjectInvitation).toHaveBeenCalledWith(ctx.locals.runtime.env.MUSIC_DB, 'song-1');
+  expect(queueProjectInvitation).toHaveBeenCalledWith(ctx.locals.runtime.env.MUSIC_DB, 'song-1', false);
   expect(deliverProjectInvitation).toHaveBeenCalledWith(ctx.locals.runtime.env.MUSIC_DB, 'song-1', ctx.locals.runtime.env);
   expect(ctx.waitUntil).toHaveBeenCalledTimes(1);
   vi.mocked(queueProjectInvitation).mockResolvedValueOnce(false);
   expect((await POST(context())).status).toBe(409);
+  vi.mocked(queueProjectInvitation).mockResolvedValueOnce(true);
+  expect((await POST(context({ confirmedNotSent: true }))).status).toBe(200);
+  expect(queueProjectInvitation).toHaveBeenLastCalledWith({}, 'song-1', true);
 });

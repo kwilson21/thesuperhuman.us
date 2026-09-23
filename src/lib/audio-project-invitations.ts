@@ -24,15 +24,19 @@ export async function deliverProjectInvitation(db: D1Database, requestId: string
   }
   const sent = recipient && env.RESEND_API_KEY && env.CONTACT_FROM_EMAIL
     ? await sendStudioSignInNotice(env.RESEND_API_KEY, env.CONTACT_FROM_EMAIL, recipient.email, 'Your private studio project') : { ok: false };
+  if (sent.uncertain) return;
   await db.prepare(`UPDATE audio_projects SET invitation_status=?,invitation_sent_at=?
     WHERE request_id=? AND invitation_status='sending'`)
     .bind(sent.ok ? 'sent' : 'failed', sent.ok ? new Date().toISOString() : null, requestId).run();
 }
 
-export async function queueProjectInvitation(db: D1Database, requestId: string): Promise<boolean> {
+export async function queueProjectInvitation(db: D1Database, requestId: string,
+  confirmedNotSent = false, now = new Date()): Promise<boolean> {
+  const staleBefore = new Date(now.getTime() - 60_000).toISOString();
   const row = await db.prepare(`UPDATE audio_projects SET invitation_status='pending',invitation_attempted_at=NULL
-    WHERE request_id=? AND invitation_status IN ('pending','failed') AND revoked_at IS NULL
+    WHERE request_id=? AND (invitation_status IN ('pending','failed') OR
+      (invitation_status='sending' AND ?=1 AND invitation_attempted_at<=?)) AND revoked_at IS NULL
       AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND kind='service' AND status<>'withdrawn' AND email<>'')
-    RETURNING request_id`).bind(requestId, requestId).first<{ request_id: string }>();
+    RETURNING request_id`).bind(requestId, confirmedNotSent ? 1 : 0, staleBefore, requestId).first<{ request_id: string }>();
   return Boolean(row);
 }
