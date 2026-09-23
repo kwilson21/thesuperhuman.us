@@ -4,6 +4,7 @@ import BaseLayout from '~/layouts/BaseLayout.astro';
 import { clientPortalEnabled, clientProjectForSession, studioSessionFromRequest } from '~/lib/audio-client-access';
 import { listProjectMessages } from '~/lib/audio-project-messages';
 import { listProjectUpdates } from '~/lib/audio-project-updates';
+import { clientProjectFiles } from '~/lib/audio-project-files';
 import ProjectMessages from '~/components/ProjectMessages.astro';
 import AudioProjectUpdates from '~/components/AudioProjectUpdates.astro';
 const env = Astro.locals.runtime?.env;
@@ -15,6 +16,7 @@ const project = Astro.params.id ? await clientProjectForSession(env.MUSIC_DB, to
 if (!project) return new Response('Project not found.', { status: 404 });
 const messages = await listProjectMessages(env.MUSIC_DB, project.request_id);
 const updates = await listProjectUpdates(env.MUSIC_DB, project.request_id);
+const files = await clientProjectFiles(env.MUSIC_DB, project.request_id, token);
 const stage = project.stage === 'accepted' && project.booking_status === 'paid' ? 'Booking paid' :
   project.stage.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase());
 const next = project.stage === 'files_under_review' ? 'I’m checking the files and direction you sent.' :
@@ -29,6 +31,10 @@ const next = project.stage === 'files_under_review' ? 'I’m checking the files 
     <div class="studio-rule"></div>
     <section aria-labelledby="studio-stage"><p class="studio-label">Where we are</p><h2 id="studio-stage">{stage}</h2><p>{next}</p></section>
     {project.current_due_at && <section aria-labelledby="studio-date"><p class="studio-label">Expected by</p><h2 id="studio-date">{new Date(`${project.current_due_at}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</h2></section>}
+    {files.length > 0 && <section class="studio-files" aria-labelledby="studio-files-heading"><p class="studio-label">Listen</p><h2 id="studio-files-heading">Your audio</h2><ol>{files.map(file => {
+      const href = `/api/studio/projects/${encodeURIComponent(project.request_id)}/files/${encodeURIComponent(file.id)}`;
+      return <li><strong>{file.display_name}</strong><span>{file.version === 'final' ? 'Final audio' : 'Review audio'}</span><audio controls preload="none" src={href} aria-label={`Play ${file.display_name}`}></audio>{Boolean(file.downloadable) && <a href={`${href}?download=1`}>Download {file.display_name}</a>}</li>;
+    })}</ol></section>}
     <AudioProjectUpdates updates={updates} currentDueAt={project.current_due_at} stage={project.stage} />
     <ProjectMessages messages={messages} endpoint={`/api/studio/projects/${encodeURIComponent(project.request_id)}/messages`} reader="client" closed={project.stage === 'complete'} />
   </article>
@@ -42,7 +48,13 @@ const next = project.stage === 'files_under_review' ? 'I’m checking the files 
     .studio-label { grid-row: span 2; margin: .6rem 0 0; }
     h2 { font: 400 clamp(2rem, 5vw, 3.6rem)/1.1 Newsreader, Georgia, serif; margin: 0; }
     section p:last-child { font: 1rem/1.6 Inter, sans-serif; color: #4d4b47; }
-    @media(max-width: 45rem) { section { grid-template-columns: 1fr; } .studio-label { grid-row: auto; } }
+    .studio-files ol { grid-column: 2; list-style: none; display: grid; gap: 1.5rem; padding: 0; margin: 0; }
+    .studio-files li { display: grid; gap: .7rem; padding: 1rem 0; border-top: 1px solid #d8d2c9; font: .9rem/1.5 Inter, sans-serif; }
+    .studio-files li strong { font: 400 1.5rem/1.2 Newsreader, Georgia, serif; }
+    .studio-files li span { color: #66615a; }
+    .studio-files audio { width: min(100%, 38rem); }
+    .studio-files a { justify-self: start; text-decoration: underline; text-underline-offset: .2em; }
+    @media(max-width: 45rem) { section { grid-template-columns: 1fr; } .studio-label { grid-row: auto; } .studio-files ol { grid-column: 1; } }
   </style>
   <script>import { setupProjectMessages } from '~/scripts/project-messages'; setupProjectMessages();</script>
 </BaseLayout>
