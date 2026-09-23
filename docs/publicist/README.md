@@ -29,7 +29,7 @@ Rules the publicist inherits unchanged:
 Other findings that shape the design:
 - **Tally** is two days old (24 commits, PRs #37, #38, #40, #41, 2026-09-22 to 09-23) with strong intent sources: the spec, 24 numbered decisions, four phase plans, the roadmap and a design-studies log. Its visual direction deliberately shares this site's foundations (decision 20), which is a good cross-link. CI screenshots are on `screenshots` under `pr-<N>/<sha7>/`, taken from the seeded "Rivera family" demo with a "Demo data. Nothing here is real." banner.
 - **Kaillera-next** has 1,036 commits from 2026-03-18 to 2026-04-30 (v0.1.0 to v0.49.1), 55 dated design specs and 46 plans. It has a `CLAUDE.md` but no `AGENTS.md`.
-- **Attribution check needed.** Kaillera-next's commit trailers credit Claude on about 980 commits and Codex GPT-5.5 on 6 (April 27 spec reviews under `docs/team/`). The brief says it was built "partly with ChatGPT/Codex". Entries should say only what the record supports: if ChatGPT shaped direction in conversation, the exports will show it. **Owner question 3 below.**
+- **Attribution check needed.** Kaillera-next's commit trailers credit Claude on about 980 commits and Codex GPT-5.5 on 6 (April 27 spec reviews under `docs/team/`). The brief says it was built "partly with ChatGPT/Codex". Entries should say only what the record supports: if ChatGPT shaped direction in conversation, the exports will show it. **Owner question 7 below.**
 - The phone-size CI screenshot is a full-page capture, so the fixed bottom tab bar covers part of the Budget list mid-page. The publicist should use viewport-height captures for phones (or crop above the tab bar) rather than publish that artifact as-is.
 
 ## 2. Journal entries
@@ -86,7 +86,7 @@ the publicist's word.
 note can override it for one change. Proposed defaults: Kaillera-next `shipped`
 (a public site people play on); Tally `shipped` (the family relies on it and the
 demo is public). Explorations inside a shipped project, such as Kaillera-next's
-N64Recomp work, are marked `exploration` on their note. **Owner question 7.**
+N64Recomp work, are marked `exploration` on their note. **Owner question 3.**
 
 **A review note for every publicized change.** Every change the publicist proposes
 to publicize, new work and every backfill entry alike, whatever its tier, gets a
@@ -319,68 +319,41 @@ each project repo that calls it on `pull_request: closed` with `merged == true`.
 
 ## 8. Social posts
 
-**Platforms (recommendation).** Keep two, not three.
+**Platforms.** LinkedIn plus one short-form network (Bluesky or X). The queue and
+the rules below work with any `platform` value, so development updates do not wait
+on that choice. The platform comparison and the Bluesky, YouTube, GitHub and Ko-fi
+channel plans are in a follow-up PR.
 
-- **LinkedIn** is where recruiters and hiring managers already are, the site's main
-  professional audience. Posting to your own profile needs only the self-serve
-  "Share on LinkedIn" product (`w_member_social`); tokens expire after about 60 days,
-  so automated posting needs a re-sign-in roughly every two months.
-- **X** already has the account. Since February 2026 its API is pay-per-use:
-  about $0.015 per post and $0.20 per post containing a URL, so about 60 linked
-  posts a month cost roughly $12.
-- **Bluesky** is free to post to through its open API (an app password is enough;
-  limits are far above what a person needs), chronological by default, and its
-  users skew toward developers and writers who reply. But it is small and
-  shrinking: about 10 million monthly app users in mid-2026, roughly half its
-  late-2024 peak, and posts reach far fewer people than on X.
+**Quality standards.** A post goes in the queue only if it passes every check:
 
-Recommendation: **two networks, not three. LinkedIn plus Bluesky as a reset,
-with X going quiet.** A third platform works against the goal of doing less. Since
-you are open to a reset and not fond of X, Bluesky is the better second network:
-your domain becomes your handle (@thesuperhuman.us), it costs nothing to automate,
-and its audience is developers who reply. The trade is reach, which LinkedIn
-covers. The setup walkthrough, banner draft and profile copy are in
-[bluesky/](bluesky/README.md). If you would rather keep X, the design works
-unchanged with `platform: x`.
-
-Sources checked 2026-09-23 through search results, because this environment blocks
-docs.x.com, docs.bsky.app and learn.microsoft.com. Prices, limits and token rules
-are rechecked against those official pages before any automated posting is proposed:
-[X API pricing](https://docs.x.com/x-api/getting-started/pricing),
-[Share on LinkedIn](https://learn.microsoft.com/en-us/linkedin/consumer/integrations/self-serve/share-on-linkedin),
-[Bluesky rate limits](https://docs.bsky.app/docs/advanced-guides/rate-limits),
-[TechCrunch on Bluesky active users (2026-08-11)](https://techcrunch.com/2026/08/11/blueskys-active-user-base-is-shrinking-as-its-focus-expands-beyond-the-app/).
-
-**Channels.** One publicist writes for every channel, each with its own playbook:
-[channels/](channels/README.md). YouTube joins as a later phase, as one channel
-with a Build strand for software and a Sound strand for music
-([playbook](channels/youtube.md)). Channels without an API (profile setup, Ko-fi,
-YouTube uploads, pinned repos) are handled by the owner from a prepared checklist,
-not by a GUI-driving agent.
-
-**Support (Ko-fi), on hold.** No Ko-fi link goes on the website or in posts until
-the page has a plan: [channels/ko-fi.md](channels/ko-fi.md) lists the questions.
-The placement below applies once it does. The owner's Ko-fi page,
-https://ko-fi.com/kazonwilson, supports all of their work: software projects and
-audio. It gets a permanent place rather than a spot in every post:
-- **Website:** a "Support my work" link in the footer of every page and in the
-  structured-data profile links (drafted in PR #91, closed until the plan exists). Because every
-  post links to a journal page on the site, readers who want to help can always
-  find it. A later option, if wanted: a short support line on the Building project
-  pages and the Old News release page.
-- **Profiles:** in the pinned Bluesky post, in LinkedIn's contact info (it allows
-  several website links) and in the X bio before it goes quiet.
-- **Posts:** routine posts keep their one link, to the site. At most one explicit
-  support post a month, drafted only when there is a concrete milestone to point to,
-  and queued like any other post for the owner's approval.
-- **Tone:** plain and specific ("If this work is useful to you, you can support it
-  on Ko-fi"). Public copy does not mention employment status; that is the owner's
-  to share.
-
-**Quality standards.** Every queued post passes the checklist in
-[bluesky/README.md](bluesky/README.md#post-quality-standards-all-platforms)
-(one idea, point first, concrete, says why, honest status, plain voice, one real
-visual, one link to the site, written for its platform).
+1. **One idea.** One outcome, decision or lesson per post. If it needs "and also",
+   it is two posts or a journal entry.
+2. **Leads with the point.** The first line makes sense on its own in a feed:
+   the outcome, the problem, or a concrete detail. No "Excited to share", no
+   "Thread", no rhetorical questions.
+3. **Concrete.** Names the real thing: the screen, the number, the bug, the rule.
+   Every factual claim traces to the journal entry, and a post never says more
+   than its entry, which rests only on verified review-note answers.
+4. **Says why.** Includes the reason or the decision, not only what shipped.
+5. **Honest status.** "Built, not live yet" when that is true. No implied launches,
+   users or results that are not recorded.
+6. **Plain voice.** The site's voice: first person, direct, no buzzwords
+   (passionate, innovative, game-changer), no em dashes, no hype emoji, at most one
+   emoji and usually none. Hashtags: at most two, and only where the platform uses them.
+7. **One visual when it helps.** A real capture labeled as demo data, a labeled
+   concept or a clean diagram, with alt text that describes what is on screen.
+   Never a screenshot containing real data, secrets, notifications or browser
+   chrome with private tabs.
+8. **One link, to the site.** The journal entry on thesuperhuman.us, not the repo,
+   unless the post is about the code itself.
+9. **Fits the platform.** LinkedIn: 80 to 180 words, short paragraphs, the story
+   version. Short-form networks: within the character limit, one idea,
+   conversational. Never the same text pasted to both.
+10. **AI stated plainly** when it is relevant ("Built with Claude Code"), as a
+    fact about how you work, not a disclaimer or a boast.
+11. **Would you reply to comments on it?** If a post would invite a conversation
+    you do not want to have, it does not go out.
+12. **Read aloud once.** If it sounds like marketing, rewrite it or drop it.
 
 **Queue.** One Markdown file per post in `publicist/queue/`, named
 `<slot date>-<platform>-<slug>.md`, with front matter:
@@ -520,34 +493,34 @@ prompt (appendix) loads that canonical file first. In short:
 
 ## 10. Questions for the owner
 
-1. **Approval:** is "merge the publicist PR" the right approval for both journal
-   entries and post batches? Or should posts get their own PR?
-2. **Platforms:** LinkedIn plus Bluesky, with X going quiet (recommended)? If yes,
-   follow the [Bluesky setup](bluesky/README.md) and the sample X posts become
-   Bluesky posts with the link moved into the link card.
-3. **Kaillera-next attribution:** commits credit Claude almost throughout, with
-   Codex on six. Where did ChatGPT or Codex shape the work, so entries can say so
-   accurately?
-4. **Cadence:** start at 2 posts a day and move to 3 once the queue proves it has
-   enough good material?
-5. **Checkpoint rule:** add the intent-note rule (section 5) to both project
-   repositories?
-6. **Private repository:** create `kwilson21/publicist-private` for review notes
+**These block building** (answers are folded into this design before it merges):
+
+1. **Approval:** is merging the private review-note PR and then the public PR the
+   right approval for journal entries and post batches? Or should posts get their
+   own PR?
+2. **Private repository:** create `kwilson21/publicist-private` for review notes
    and exports, and attach it to the Routine's environment? Or prefer another
    private location that a fresh cloud session can read and write?
-7. **Tiers:** Kaillera-next and Tally both `shipped` by default, with individual
+3. **Tiers:** Kaillera-next and Tally both `shipped` by default, with individual
    explorations marked on their notes?
-
-8. **Enforcement:** add the `publicist-gate` build step and make `validate` a
+4. **Enforcement:** add the `publicist-gate` build step and make `validate` a
    required check (section 9)? It needs one fine-grained, read-only token for the
    private repository, which you create and store as an Actions secret and a
    Cloudflare build secret.
-
-9. **Readiness:** should a `shipped` entry marked `not yet` for the whiteboard
+5. **Readiness:** should a `shipped` entry marked `not yet` for the whiteboard
    defense stay held until you mark it `ready` (the proposed default, section 3)?
-10. **YouTube and Ko-fi:** the open questions are in
-    [channels/youtube.md](channels/youtube.md) (style, Old News rights, voice,
-    channel name) and [channels/ko-fi.md](channels/ko-fi.md).
+
+**These can be answered later:**
+
+6. **Platforms:** LinkedIn plus Bluesky or X. The comparison and setup are in the
+   follow-up PR; the queue works with either.
+7. **Kaillera-next attribution:** commits credit Claude almost throughout, with
+   Codex on six. Where did ChatGPT or Codex shape the work? Until answered, the
+   affected review-note answers stay `unverified` and those claims are held.
+8. **Cadence:** start at 2 posts a day and move to 3 once the queue proves it has
+   enough good material?
+9. **Checkpoint rule:** add the intent-note rule (section 5) to both project
+   repositories?
 
 After approval, in order:
 1. Move the skill to its canonical file and add the always-loaded layers, the

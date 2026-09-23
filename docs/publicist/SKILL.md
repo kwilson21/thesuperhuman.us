@@ -77,18 +77,6 @@ all still apply.
     locations, and other people's names unless they are already public credits.
 11. **No commercial game assets.** Never fetch, store or show ROMs. Kaillera-next
     gameplay media comes only from the owner.
-12. **Music needs verified rights.** Sound videos and releases use the release note
-    in the template. Nothing about a recording is published until its credits and
-    rights to publish are verified. Use only music the owner has the right to
-    publish, including for background beds.
-13. **Unreleased videos stay private.** A video's script, captions, metadata,
-    thumbnail and preview go only to the private repository and a private bucket
-    with expiring links. Nothing about it enters a public PR until the owner has
-    released the video.
-14. **One publicist, per-channel playbooks.** Follow `docs/publicist/channels/`
-    for each channel's format and cadence. Never operate a platform's website or
-    app on the owner's behalf; where there is no API, prepare a checklist for the
-    owner.
 
 ## Review notes
 
@@ -124,12 +112,11 @@ Stage 2, publish (public):
 4. Add media: CI screenshots at the PR's final head (phone at viewport height), or
    a short Playwright recording of a changed flow on demo data. Convert stills to
    WebP. Label each asset's kind, build and date. Inspect every image yourself.
-5. Draft posts into `publicist/queue/` only for entries drafted in this stage, saying
-   no more than the entry says. Posts pass the
-   post quality standards in `docs/publicist/bluesky/README.md` and the spacing
-   rules in the design doc (at most 3 a day, 1 LinkedIn a weekday, 3 hours apart,
-   new work first, at most 2 backfill a day). Re-slot unapproved drafts whose slot
-   has passed.
+5. Draft posts into `publicist/queue/` only for entries drafted in this stage,
+   saying no more than the entry says. Posts pass the quality standards and spacing
+   rules in the design doc, section 8 (at most 3 a day, 1 LinkedIn a weekday,
+   3 hours apart, new work first, at most 2 backfill a day). Re-slot unapproved
+   drafts whose slot has passed.
 6. Advance `publicist/state.json` here: entry IDs published, plus entry IDs from a
    public publicist PR closed without merging, recorded as declined. It holds IDs
    only.
