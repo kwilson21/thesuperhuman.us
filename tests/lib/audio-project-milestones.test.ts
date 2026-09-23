@@ -21,6 +21,8 @@ it('backfills revision and completion notes only when the same-instant pairing i
   note.run('progress', 'All done.', at(4)); audit.run('completed', at(4));
   // Two plain notes at one instant: which one the audit row belongs to is unknowable.
   note.run('progress', 'Ambiguous A.', at(5)); note.run('progress', 'Ambiguous B.', at(5)); audit.run('stage-changed', at(5));
+  // Starting work writes its own note and a stage-changed row; a plain note beside it is not a revision.
+  note.run('work_started', 'Started again.', at(6)); note.run('progress', 'Unrelated.', at(6)); audit.run('stage-changed', at(6));
   db.exec(migration);
   expect(db.prepare('SELECT body,milestone FROM audio_project_updates ORDER BY id').all()).toEqual([
     { body: 'Starting.', milestone: null },
@@ -29,6 +31,8 @@ it('backfills revision and completion notes only when the same-instant pairing i
     { body: 'All done.', milestone: 'completed' },
     { body: 'Ambiguous A.', milestone: null },
     { body: 'Ambiguous B.', milestone: null },
+    { body: 'Started again.', milestone: null },
+    { body: 'Unrelated.', milestone: null },
   ]);
   db.close();
 });
