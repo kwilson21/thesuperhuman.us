@@ -65,11 +65,12 @@ Apply these whenever work touches publicist journal entries, `publicist/`, or so
 2. **Every public item needs a verified private review note.** Before any change is
    drafted for the website or social posts (new work and every backfill entry
    alike), write its review note in the private repository (see "Review notes").
-   Draft a public entry or post only from answers the owner has marked
-   `verified` or `corrected`, and only when the owner's decision on the note is
-   `publish: yes` and its whiteboard-defense readiness fits its tier (`shipped`
-   needs `ready`; `not yet` holds the entry; `exploration` needs
-   `not applicable`). A claim that depends on an `unverified` answer is held, not
+   Draft a public entry or post only from the note's Refresher once the owner has
+   marked it `verified` or `corrected`, and only when the owner's decision on the
+   note is `publish: yes` and its whiteboard-defense readiness fits its tier
+   (`shipped` needs `ready`; `not yet` holds the entry; `exploration` needs
+   `not applicable`). Public copy states only what the verified Refresher states.
+   A claim found only in the detailed answers, or listed as open, is held, not
    published and not softened into something vaguer that implies the same thing.
 3. **Review notes stay private.** Never copy, quote, summarize or link a note's
    content into website content, social posts, public PRs, public commit messages,
@@ -77,9 +78,9 @@ Apply these whenever work touches publicist journal entries, `publicist/`, or so
 4. **Never certify the owner's understanding.** The owner's whiteboard defense
    standard (design doc, section 3) is theirs to meet. Notes prepare the owner for
    review;
-   the owner's answers are the review. Do not write, in any note or public text,
-   that the owner can explain, defend or has reviewed something unless the owner's
-   own verified answer says so.
+   the owner's own review and words are the review. Do not write, in any note or
+   public text, that the owner can explain, defend or has reviewed something unless
+   the owner's own words say so.
 5. **Tally uses demo data only.** Use the seeded fictional household, CI
    screenshots from the `screenshots` branch, local `wrangler dev` runs seeded
    through the scheduled handler, and the public demo once it is live. Never use
@@ -97,7 +98,7 @@ Apply these whenever work touches publicist journal entries, `publicist/`, or so
 8. **Only claim what the record supports.** Every "why" comes from a PR
    description, spec, plan, decision, roadmap, design-studies log, the project's
    `docs/journal/intent.md`, an owner-approved export note, or a verified review
-   note answer. If no source states it, leave it out. Report the status the work
+   note Refresher. If no source states it, leave it out. Report the status the work
    actually had at the time (planned, built, tested, available). Attribute AI
    assistance truthfully, per commit trailers and the owner's statements.
 9. **Respect the project's tier.** `publicist/config.json` records each project as

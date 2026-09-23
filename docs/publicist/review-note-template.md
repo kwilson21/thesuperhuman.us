@@ -4,9 +4,10 @@ Structure only. Filled notes live in the private publicist repository at
 `review-notes/<project>/<entry-id>/note.md`, with their images in `images/` beside
 them, and never in this repository, website content, social posts or public PRs. See [the design](README.md#3-private-review-gate).
 
-The publicist drafts every answer from repository evidence. The owner reviews each
-answer and sets its status. A public claim may use only `verified` or `corrected`
-answers.
+The publicist drafts every answer from repository evidence and condenses them into
+the Refresher. The owner reviews the Refresher, not each answer, and sets its
+status in "Owner review". A public claim may state only what a `verified` or
+`corrected` Refresher states.
 
 ```markdown
 ---
@@ -21,14 +22,18 @@ reviewed: null                    # the owner sets YYYY-MM-DD
 ---
 
 ## Refresher
-A two-minute read before a call. Condensed from the answers below and any grill records beside this note. It carries their status (unverified until you verify the answers) and adds nothing they don't support.
+A two-minute read before a call, and the part you verify. Condensed from the answers below and any walkthrough records beside this note; it adds nothing they don't support. Public copy may state only what this section states.
 
+- **In my words:** (optional) your own one or two sentences, added after a walkthrough.
 - **One line:** what it is and why it exists.
 - **The parts / how:** the pieces and how data or control moves between them.
 - **Why this way:** the decision, with the alternative that lost.
 - **Weak points:** misuse, failure and trade-offs, and what limits them.
 - **Open / don't claim:** unresolved questions and claims to avoid.
 - **Status then:** planned, built, tested or available.
+
+**Stories** (one to three, each a few sentences: what went wrong, what we found, what we did)
+- **<short title>:** <the arc>
 
 ## Visual aids
 Images in `images/` that explain the work before the questions: screenshots from the
@@ -67,11 +72,40 @@ Questions only the owner can answer, and which public claims wait on each.
 ## Owner review
 Filled in by the owner only.
 - Corrections: <text or none>
+- Refresher: verified | corrected
 - Whiteboard defense: ready | not yet (shipped tier) · not applicable (exploration tier)
 - Publish: yes | hold | no
 ```
 
-## Grill session record (`defense-<date>.md`)
+"Whiteboard defense" readiness is your own call: `ready` means "I'm comfortable
+talking about this". No test sits behind it.
+
+## Walkthrough record (`walkthrough-<date>.md`)
+
+```markdown
+---
+entry: <entry-id>
+date: YYYY-MM-DD
+trigger: readiness not yet | owner request
+---
+
+## What we walked through
+The diagram used, and the path followed (a request, a frame, a deploy), in order.
+
+## Stories told
+The stories from the Refresher, and any the owner added.
+
+## Questions the owner asked
+Each question and the answer, with links to the evidence.
+
+## In my words (optional)
+The owner's own summary, as given, and the tidied line added to the Refresher.
+```
+
+Nothing in a walkthrough is scored. The owner alone decides whether readiness
+changes.
+
+## Grill session record (`defense-<date>.md`, only when the owner asks)
 
 ```markdown
 ---
@@ -122,13 +156,16 @@ Where it is already released, and whether automatic copyright matching may claim
 ```
 
 Rules:
-- The publicist never fills in "Owner review" and never marks an answer verified.
-- The Refresher is five to eight bullets, drawn only from the note's answers and grill
-  records. After a grill session, fold the evidence-backed corrections into it. Then
-  run `node scripts/build-refreshers.mjs` in the private repository so
-  `refreshers/<project>.md` matches, in the same PR.
-- "No evidence found" is a valid answer. It stays `unverified` until the owner
-  answers it.
+- The publicist never fills in "Owner review", never marks the Refresher or an
+  answer verified, and never writes the "In my words" line except by tidying what
+  the owner said.
+- The Refresher is five to eight bullets plus one to three stories, drawn only from
+  the note's answers and walkthrough records. Anything uncertain goes under "Open /
+  don't claim", never into a plain statement. After a walkthrough, fold in the
+  corrections and the owner's words. Then run `node scripts/build-refreshers.mjs`
+  in the private repository so `refreshers/<project>.md` matches, in the same PR.
+- "No evidence found" is a valid answer. It stays `unverified`, and the Refresher
+  lists it as open.
 - A note can be verified with a `hold` decision; the entry then stays unpublished.
 - A `shipped` note clears the gate only with readiness `ready`; `not yet` holds it.
   An `exploration` note needs `not applicable`. Any other combination holds it.
