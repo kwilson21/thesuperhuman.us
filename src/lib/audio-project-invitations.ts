@@ -15,18 +15,19 @@ export async function deliverProjectInvitation(db: D1Database, requestId: string
   if (!claimed) return;
   let recipient: { email: string } | null;
   try {
-    recipient = await db.prepare(`SELECT email FROM owner_requests WHERE id=? AND kind='service' AND status<>'withdrawn' AND email<>''`)
+    recipient = await db.prepare(`SELECT r.email FROM owner_requests r JOIN audio_projects p ON p.request_id=r.id
+      WHERE r.id=? AND r.kind='service' AND r.status<>'withdrawn' AND r.email<>'' AND p.revoked_at IS NULL`)
       .bind(requestId).first<{ email: string }>();
   } catch {
     await db.prepare(`UPDATE audio_projects SET invitation_status='failed'
-      WHERE request_id=? AND invitation_status='sending'`).bind(requestId).run();
+      WHERE request_id=? AND invitation_status='sending' AND revoked_at IS NULL`).bind(requestId).run();
     return;
   }
   const sent = recipient && env.RESEND_API_KEY && env.CONTACT_FROM_EMAIL
     ? await sendStudioSignInNotice(env.RESEND_API_KEY, env.CONTACT_FROM_EMAIL, recipient.email, 'Your private studio project') : { ok: false };
   if (sent.uncertain) return;
   await db.prepare(`UPDATE audio_projects SET invitation_status=?,invitation_sent_at=?
-    WHERE request_id=? AND invitation_status='sending'`)
+    WHERE request_id=? AND invitation_status='sending' AND revoked_at IS NULL`)
     .bind(sent.ok ? 'sent' : 'failed', sent.ok ? new Date().toISOString() : null, requestId).run();
 }
 
