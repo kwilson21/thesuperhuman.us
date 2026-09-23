@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
 import { abortProjectUpload, beginProjectUpload, expectedPartLength, finishProjectUpload,
-  getProjectUpload, maxProjectFileSize, ownerProjectCanUpload, putProjectUploadPart, uploadPartSize } from '~/lib/audio-project-uploads';
+  getProjectUpload, maxPartEtagLength, maxProjectFileSize, ownerProjectCanUpload, putProjectUploadPart, uploadPartSize } from '~/lib/audio-project-uploads';
 import { musicRequest } from '~/lib/music-request';
 
 export const prerender = false;
@@ -11,7 +11,7 @@ const start = z.object({ action: z.literal('start'), version: z.enum(['review', 
   displayName: z.string().trim().min(1).max(160), mediaType: z.enum(['audio/mpeg', 'audio/wav']),
   byteSize: z.number().int().min(1).max(maxProjectFileSize) });
 const complete = z.object({ action: z.literal('complete'), uploadId: id,
-  parts: z.array(z.object({ partNumber: z.number().int().positive(), etag: z.string().max(128) })).min(1).max(Math.ceil(maxProjectFileSize / uploadPartSize)) });
+  parts: z.array(z.object({ partNumber: z.number().int().positive(), etag: z.string().min(1).max(maxPartEtagLength) })).min(1).max(Math.ceil(maxProjectFileSize / uploadPartSize)) });
 const abort = z.object({ action: z.literal('abort'), uploadId: id });
 const recover = z.object({ action: z.literal('recover'), uploadId: id });
 const input = z.discriminatedUnion('action', [start, complete, abort, recover]);
@@ -22,7 +22,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   const env = locals.runtime?.env;
   if (!clientPortalEnabled(env)) return fail('Not found.', 404);
   if (!params.id || !env.MUSIC_DB || !env.AUDIO) return fail('Private uploads are unavailable.', 503);
-  const body = await musicRequest(request, 24_000);
+  const body = await musicRequest(request, 32_000);
   if (body instanceof Response) return body;
   const parsed = input.safeParse(body);
   if (!parsed.success) return fail('Check the file details and try again.', 400);

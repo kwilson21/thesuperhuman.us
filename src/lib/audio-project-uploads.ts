@@ -2,6 +2,7 @@ import { privateProjectObjectKey, type ProjectFile } from './audio-project-files
 
 export const uploadPartSize = 10 * 1024 * 1024;
 export const maxProjectFileSize = 1024 * 1024 * 1024;
+export const maxPartEtagLength = 256;
 
 export type ProjectUpload = {
   id: string;
@@ -72,7 +73,8 @@ export async function finishProjectUpload(db: D1Database, bucket: R2Bucket, uplo
   const count = Math.ceil(upload.byte_size / uploadPartSize);
   let object = await bucket.head(upload.object_key);
   if (!object) {
-    if (!parts || parts.length !== count || parts.some((part, index) => part.partNumber !== index + 1 || !/^[a-fA-F0-9]{32}$/.test(part.etag))) return 'blocked';
+    if (!parts || parts.length !== count || parts.some((part, index) => part.partNumber !== index + 1 ||
+      typeof part.etag !== 'string' || !part.etag.length || part.etag.length > maxPartEtagLength)) return 'blocked';
     object = await bucket.resumeMultipartUpload(upload.object_key, upload.upload_id).complete(parts);
   }
   if (object.size !== upload.byte_size) return 'size-mismatch';
