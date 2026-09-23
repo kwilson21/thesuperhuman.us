@@ -7,6 +7,8 @@ import gamepad from '~/assets/projects/kaillera-next/gamepad-iphone.webp';
 import syncDiagram from '~/assets/projects/kaillera-next/staying-in-sync-diagram.webp';
 import bitsDiagram from '~/assets/projects/kaillera-next/identical-bits-diagram.webp';
 import rollbackDiagram from '~/assets/projects/kaillera-next/rollback-diagram.webp';
+import startupDiagram from '~/assets/projects/kaillera-next/startup-diagram.webp';
+import aiTeamDiagram from '~/assets/projects/kaillera-next/ai-team-diagram.webp';
 
 export const kailleraStory = {
   title: 'Kaillera Next',
@@ -95,5 +97,38 @@ export const kailleraMilestones: Milestone[] = [
     summary: 'Fighting games feel best with rollback: guess a late input, keep playing, and rewind if the guess was wrong. Doing that in JavaScript fell out of sync across devices, so Claude Code moved the whole loop into the emulator’s C code, then hardened it against the freezes and silent failures that playtests turned up.',
     backfilled: true,
     artifacts: [artifact(rollbackDiagram, 'Kaillera Next · Rollback', 'One tick of the rollback engine in C.', 'Diagram')],
+  },
+  {
+    id: 'kaillera-next-launch-readiness', day: '2026-04-13',
+    title: 'Fewer dead ends before the game',
+    summary: 'Starting a game took 30 to 40 seconds, and some failures left players on a spinner with no explanation. Claude Code now downloads the emulator while you’re still in the lobby and keeps the starting game state on your device for next time, and failures before gameplay now tell the player what happened.',
+    backfilled: true,
+    artifacts: [artifact(startupDiagram, 'Kaillera Next · Before the game starts', 'The three changes: an early download, a saved starting state, and no silent spinners.', 'Diagram')],
+  },
+  {
+    id: 'kaillera-next-n64recomp', day: '2026-04-14',
+    title: 'Exploring a faster core',
+    summary: 'I asked what it would take to build an N64 emulator made for rollback. The design we landed on uses N64Recomp to translate the game’s code ahead of time instead of interpreting it, for an estimated 5 to 20 times speedup that would leave plenty of room for rewinds. It’s an exploration on its own branch, not part of the site.',
+    status: 'Exploration',
+    backfilled: true,
+  },
+  {
+    id: 'kaillera-next-late-join', day: '2026-04-29',
+    title: 'Joining a game in progress',
+    summary: 'We tried having late joiners watch first and then step in as players. It added too many moving parts, so we went back: if there’s a free slot you join as a player, and if the room is full you watch. Then Claude Code fixed the bugs a real session turned up, like a correct game file being flagged as wrong.',
+    backfilled: true,
+  },
+  {
+    id: 'kaillera-next-hardening', day: '2026-04-30',
+    title: 'A security and polish pass',
+    summary: 'Claude Code ran a security pass: upload and reconnect tokens now expire, one room can no longer overwrite another game’s cached state, and spoofed IP headers are ignored by default. Alongside it came a round of phone polish: lobby controls that stack, overlays that stay out of the way, and slide-to-press on the gamepad.',
+    backfilled: true,
+  },
+  {
+    id: 'kaillera-next-ai-team', day: '2026-04-29',
+    title: 'A team of AI models',
+    summary: 'I set up a team of AI models with clear roles: Claude writes most of the code and integrates the work, Codex takes on engineering tasks and cross-reviews designs, and DeepSeek audits the reasoning. A nightly tech-debt audit only opens a draft pull request for me when two models agree on a fix.',
+    backfilled: true,
+    artifacts: [artifact(aiTeamDiagram, 'Kaillera Next · A team of AI models', 'The roles as designed and the nightly two-model audit.', 'Diagram')],
   },
 ];
