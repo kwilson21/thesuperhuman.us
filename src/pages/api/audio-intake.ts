@@ -1,5 +1,7 @@
 import type { APIRoute } from 'astro';
 import { ownerRequestForIntake, validateIntake } from '~/lib/audio-intake';
+import { clientPortalEnabled } from '~/lib/audio-client-access';
+import { deliverProjectInvitation } from '~/lib/audio-project-invitations';
 import { musicRequest } from '~/lib/music-request';
 import { sendUrgentOwnerAlert } from '~/lib/owner-alerts';
 import { saveOwnerRequest } from '~/lib/owner-requests';
@@ -25,8 +27,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (!await verifyTurnstile(input.turnstileToken, env.TURNSTILE_SECRET_KEY, ip)) return Response.json({ ok: false, errors: { turnstileToken: 'Please complete the security check again.' } }, { status: 403 });
     const limit = await checkRateLimit(env.RATE_LIMIT, ip, 'rl:audio:');
     if (!limit.allowed) return Response.json({ ok: false, error: 'Please wait a few minutes before sending again.' }, { status: 429 });
+    let saved: Awaited<ReturnType<typeof saveOwnerRequest>>;
     try {
-      await saveOwnerRequest(env.MUSIC_DB, ownerRequestForIntake(input));
+      saved = await saveOwnerRequest(env.MUSIC_DB, ownerRequestForIntake(input));
     } catch {
       await env.RATE_LIMIT.delete(`rl:audio:${ip}`);
       await sendUrgentOwnerAlert(env, {
@@ -34,6 +37,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
         code: 'd1-write-failed', occurredAt: new Date().toISOString(),
       });
       return Response.json({ ok: false, error: 'We couldn’t confirm delivery. Your details are still here. Try again later or email kazon.wilson@thesuperhuman.us.' }, { status: 503 });
+    }
+    if (clientPortalEnabled(env)) {
+      const delivery = deliverProjectInvitation(env.MUSIC_DB, saved.id, env)
+        .catch(() => console.error('Studio invitation email state is uncertain.'));
+      if (locals.runtime?.ctx) locals.runtime.ctx.waitUntil(delivery);
+      else await delivery;
     }
     return Response.json({ ok: true });
   } catch {

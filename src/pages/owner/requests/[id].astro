@@ -6,6 +6,7 @@ import ProjectMessages from '~/components/ProjectMessages.astro';
 import AudioProjectUpdates from '~/components/AudioProjectUpdates.astro';
 import { getAudioPayment } from '~/lib/audio-payments';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
+import type { ProjectInvitation } from '~/lib/audio-project-invitations';
 import { listProjectMessages } from '~/lib/audio-project-messages';
 import { listProjectUpdates } from '~/lib/audio-project-updates';
 import { getOwnerRequest, listOwnerRequestAudit, listOwnerRequests } from '~/lib/owner-requests';
@@ -18,7 +19,8 @@ if (!request) return new Response('Request not found.', { status: 404 });
 const [audit, newRequests] = await Promise.all([listOwnerRequestAudit(db, request.id), listOwnerRequests(db, { status: 'new' })]);
 const payment = request.kind === 'service' ? await getAudioPayment(db, request.id) : null;
 const portalProject = request.kind === 'service' && clientPortalEnabled(Astro.locals.runtime.env)
-  ? await db.prepare('SELECT stage,current_due_at,revoked_at FROM audio_projects WHERE request_id=?').bind(request.id).first<{ stage: string; current_due_at: string | null; revoked_at: string | null }>() : null;
+  ? await db.prepare('SELECT stage,current_due_at,revoked_at,invitation_status,invitation_attempted_at,invitation_sent_at FROM audio_projects WHERE request_id=?').bind(request.id).first<
+    { stage: string; current_due_at: string | null; revoked_at: string | null } & ProjectInvitation>() : null;
 const projectMessages = portalProject ? await listProjectMessages(db, request.id) : [];
 const projectUpdates = portalProject ? await listProjectUpdates(db, request.id) : [];
 const allowed = request.status === 'new' ? ['review', 'resolve', 'withdraw'] : request.status === 'reviewed' ? ['resolve', 'reopen', 'withdraw'] : request.status === 'resolved' ? ['reopen', 'withdraw'] : [];
@@ -39,8 +41,14 @@ const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') 
     </section>
   </div>
   {request.kind === 'service' && <AudioPaymentPanel requestId={request.id} payment={payment} stripeEnabled={stripeAvailable(Astro.locals.runtime.env)} />}
+  {portalProject && <section class="owner-section request-invitation" data-project-invitation data-endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/invitation`}>
+    <p class="owner-kicker">Client access</p><h2>Private project invitation</h2>
+    <p>{portalProject.invitation_status === 'sent' ? `Sign-in link sent to ${request.email}.` : portalProject.invitation_status === 'failed' ? 'The sign-in email failed. The project and request are saved.' : portalProject.invitation_status === 'sending' ? 'Sign-in email is being sent. If this remains here, check Resend before trying again.' : 'The sign-in email has not been sent yet.'}</p>
+    {['pending', 'failed'].includes(portalProject.invitation_status) && request.status !== 'withdrawn' && !portalProject.revoked_at && <button type="button" data-send-project-invitation>{portalProject.invitation_status === 'failed' ? 'Retry invitation' : 'Send invitation'}</button>}
+    <p data-invitation-status role="status" aria-live="polite"></p>
+  </section>}
   {portalProject && <AudioProjectUpdates updates={projectUpdates} currentDueAt={portalProject.current_due_at} stage={portalProject.stage} requestStatus={request.status} bookingPaid={payment?.bookingStatus === 'paid'} revoked={Boolean(portalProject.revoked_at)} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/updates`} />}
   {portalProject && <ProjectMessages messages={projectMessages} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/messages`} reader="owner" closed={portalProject.stage === 'complete' || Boolean(portalProject.revoked_at) || request.status === 'withdrawn'} />}
   <section class="owner-section audit-trail"><p class="owner-kicker">Audit trail</p><h2>What changed</h2><ol>{audit.map(item => <li><strong>{item.action.replace('-', ' ')}</strong><span>{item.actor}</span><time datetime={item.occurredAt}>{new Date(item.occurredAt).toLocaleString()}</time>{item.note && <p>{item.note}</p>}</li>)}</ol></section>
-  <script>import { setupOwnerRequestActions } from '~/scripts/owner-request-actions'; import { setupOwnerPaymentActions } from '~/scripts/owner-payment-actions'; import { setupProjectMessages } from '~/scripts/project-messages'; import { setupProjectUpdates } from '~/scripts/project-updates'; setupOwnerRequestActions(); setupOwnerPaymentActions(); setupProjectMessages(); setupProjectUpdates();</script>
+  <script>import { setupOwnerRequestActions } from '~/scripts/owner-request-actions'; import { setupOwnerPaymentActions } from '~/scripts/owner-payment-actions'; import { setupProjectMessages } from '~/scripts/project-messages'; import { setupProjectUpdates } from '~/scripts/project-updates'; import { setupProjectInvitation } from '~/scripts/project-invitation'; setupOwnerRequestActions(); setupOwnerPaymentActions(); setupProjectMessages(); setupProjectUpdates(); setupProjectInvitation();</script>
 </OwnerLayout>

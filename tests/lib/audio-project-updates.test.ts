@@ -1,13 +1,13 @@
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { sendAudioMessage } from '~/lib/audio-resend';
+import { sendStudioSignInNotice } from '~/lib/audio-resend';
 import {
   deliverProjectUpdateNotice, listProjectUpdates, queueProjectNoticeForDelivery,
   saveProjectUpdate, validProjectDate,
 } from '~/lib/audio-project-updates';
 
-vi.mock('~/lib/audio-resend', () => ({ sendAudioMessage: vi.fn(async () => ({ ok: true })) }));
+vi.mock('~/lib/audio-resend', () => ({ sendStudioSignInNotice: vi.fn(async () => ({ ok: true })) }));
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 const baseline = readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8');
 const now = new Date('2026-09-22T12:00:00Z');
@@ -84,15 +84,15 @@ describe('project updates', () => {
     sql.prepare("UPDATE owner_requests SET status='reviewed' WHERE id='song-1'").run();
     const update = (await saveProjectUpdate(db, 'song-1', 'owner@example.com', { action: 'accept', dueDate: '2026-10-01', body: 'We are set.' }, now))!;
     const env = { RESEND_API_KEY: 'test', CONTACT_FROM_EMAIL: 'noreply@example.com' } as Env;
-    vi.mocked(sendAudioMessage).mockResolvedValueOnce({ ok: false });
+    vi.mocked(sendStudioSignInNotice).mockResolvedValueOnce({ ok: false });
     await deliverProjectUpdateNotice(db, update.id, env);
     expect(sql.prepare('SELECT notification_status FROM audio_project_updates WHERE id=?').get(update.id))
       .toEqual({ notification_status: 'failed' });
     expect(await queueProjectNoticeForDelivery(db, 'song-1', update.id)).toBe(true);
     await deliverProjectUpdateNotice(db, update.id, env);
     await deliverProjectUpdateNotice(db, update.id, env);
-    expect(sendAudioMessage).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(sendAudioMessage).mock.calls[1][0].payload.text).not.toContain('We are set.');
+    expect(sendStudioSignInNotice).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(sendStudioSignInNotice).mock.calls[1]).not.toContain('We are set.');
     expect(sql.prepare('SELECT notification_status FROM audio_project_updates WHERE id=?').get(update.id))
       .toEqual({ notification_status: 'sent' });
     expect(await queueProjectNoticeForDelivery(db, 'song-1', update.id)).toBe(false);

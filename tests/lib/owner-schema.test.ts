@@ -39,7 +39,8 @@ describe('owner insights schema', () => {
     const clientAccess = readFileSync(new URL('../../migrations/music/0006_audio_client_access.sql', import.meta.url), 'utf8');
     const messages = readFileSync(new URL('../../migrations/music/0007_audio_project_messages.sql', import.meta.url), 'utf8');
     const updates = readFileSync(new URL('../../migrations/music/0008_audio_project_updates.sql', import.meta.url), 'utf8');
-    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(`${baseline.trim()}\n${retention.trim()}\n${payments.trim()}\n${reconciliation.trim()}\n${projects.trim()}\n${clientAccess.trim()}\n${messages.trim()}\n${updates.trim()}\n`);
+    const invitations = readFileSync(new URL('../../migrations/music/0009_audio_project_invitations.sql', import.meta.url), 'utf8');
+    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(`${baseline.trim()}\n${retention.trim()}\n${payments.trim()}\n${reconciliation.trim()}\n${projects.trim()}\n${clientAccess.trim()}\n${messages.trim()}\n${updates.trim()}\n${invitations.trim()}\n`);
     const db = apply('../../db/music.sql');
     const expected = [
       'music_event_daily', 'music_events', 'music_interest', 'music_playback_daily',

@@ -64,6 +64,8 @@ The private message-thread slice requires `migrations/music/0007_audio_project_m
 
 Owner progress updates require `migrations/music/0008_audio_project_updates.sql` after 0007. Accepting a reviewed request sets an initial delivery date; later date moves require a reason and preserve the prior date in the timeline. Updates are saved before a minimal sign-in-link email is attempted. The owner view shows whether that email was sent, failed, or remains unconfirmed. A failed delivery can be retried; an unconfirmed delivery requires checking Resend first and confirming that it did not accept the email. The portal gate stays `false` until initial project invitations, private delivery, retention, and full operations checks are ready.
 
+Project invitations require `migrations/music/0009_audio_project_invitations.sql` after 0008. When the portal is enabled, a new service request saves its provisional project first, then attempts a minimal sign-in-link email. The owner request view shows the delivery state and can send or retry an invitation for an existing project. Neither the invitation nor its link authorizes access; clients still need their own email code. The portal gate stays `false` until private delivery, retention, and full operations checks are ready.
+
 The forms read `Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY` first, with
 `import.meta.env.PUBLIC_TURNSTILE_SITE_KEY` as a build-time fallback. Wrangler
 runtime vars are not automatically Astro build-time variables. An empty runtime
