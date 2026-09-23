@@ -83,10 +83,10 @@ the publicist's word.
 
 **Tiers.** `publicist/config.json` gives each project a default tier that the owner sets:
 `shipped` (customer-facing) or `exploration` (PoC, demo, experiment). Each review
-note can override it for one change. Proposed defaults: Kaillera-next `shipped`
-(a public site people play on); Tally `shipped` (the family relies on it and the
-demo is public). Explorations inside a shipped project, such as Kaillera-next's
-N64Recomp work, are marked `exploration` on their note. **Owner question 3.**
+note can override it for one change. Owner decision (2026-09-23): Kaillera-next
+`shipped` (a public site people play on) and Tally `shipped` (the family relies on it
+and the demo is public). Explorations inside a shipped project, such as
+Kaillera-next's N64Recomp work, are marked `exploration` on their note.
 
 **A review note for every publicized change.** Every change the publicist proposes
 to publicize, new work and every backfill entry alike, whatever its tier, gets a
@@ -100,6 +100,15 @@ private note following [review-note-template.md](review-note-template.md):
 6. Supporting sources.
 7. Unresolved uncertainty, and which public claims wait on it.
 
+**Visual aids in every note.** Each note is a folder with the note and the images
+that help the owner re-understand the work before answering: screenshots from the
+time (demo data only), the design studies that led to it, a before and after where
+there is one, and a simple labeled diagram of how the parts connect. Owner decision
+(2026-09-23): the owner may need to relearn what was built before reviewing it, so
+the note explains with pictures first. Images follow the same rules as text (no
+secrets, no real household data) and stay private; a public entry chooses its own
+reviewed media.
+
 The publicist drafts the answers from repository evidence, cites each source, and
 marks every answer `unverified`. The owner reviews the answers, marks each one
 `verified` or `corrected`, then decides `publish`, `hold` or `no`. For shipped work
@@ -112,9 +121,20 @@ verified and `publish: yes`, until the owner changes it. If the work was really 
 proof of concept, the owner can re-tier the note to `exploration` (readiness
 `not applicable`); its public copy then cannot present it as shipped. An
 `exploration` entry needs readiness `not applicable`. Any other combination is
-invalid and holds the entry. This is a conservative default: it keeps public
-claims about customer-facing work behind the owner's own shipping standard. The
-owner can relax it.
+invalid and holds the entry. Owner decision (2026-09-23): hold.
+
+**Grill sessions and the defense record.** When a shipped entry is held at
+`not yet`, or whenever the owner asks, the publicist runs a grill session: a live
+drill in which it asks the questions a skeptical interviewer or reviewer would ask
+about that work, one at a time, and the owner answers in their own words. Questions
+cover how it works end to end, why this approach and not the alternatives, what
+happens when a part fails, how someone could misuse it, and what the owner would
+change. After each answer the publicist points out what the repository evidence
+confirms, what it contradicts and what was missed, with links to the evidence. The
+session is saved as `defense-<date>.md` in the note's folder: each question, the
+owner's answer as given, the evidence-based feedback, and the gaps to revisit. The
+record is the owner's memory aid for later reviews and interviews. The owner, not
+the publicist, then decides whether readiness becomes `ready`.
 
 **The gate.** An entry clears the gate when its note has the required answers
 `verified` or `corrected`, the decision `publish: yes`, and a readiness value that
@@ -131,7 +151,10 @@ holds the notes and the backfill raw material:
 
 ```text
 publicist-private/
-  review-notes/<project>/<entry-id>.md   one note per publicized change
+  review-notes/<project>/<entry-id>/
+    note.md                              the review note
+    images/                              screenshots, studies and diagrams for the owner
+    defense-<date>.md                    grill session records, if any
   state.json                             last merged work drafted into notes
   videos/<entry-id>/                     unreleased video scripts, captions, metadata
   exports/claude/  exports/chatgpt/      conversation exports, backfill only
@@ -255,13 +278,13 @@ has none.
 
 ## 6. Automation
 
-**Approval flow (to confirm).** Two merges, both by the owner. First the private
+**Approval flow (owner decision, 2026-09-23).** Two merges, both by the owner. First the private
 review-note PR (section 3), then the public PR in this repository with the entries,
 media and queued posts that cleared the gate. The owner edits or deletes anything in
 either and merges. Merging the public PR is publication approval; Cloudflare's Git
 integration then deploys the entries. This matches how the curated
 personal-website milestones are approved today. The MCP publication feed stays as
-it is for owner-driven sessions. **Owner question 1.**
+it is for owner-driven sessions.
 
 **Routine.** A Claude Code Routine that creates a fresh session on each firing,
 in this environment, once a day at 06:30 America/New_York (`30 10 * * *` UTC while
@@ -495,24 +518,21 @@ prompt (appendix) loads that canonical file first. In short:
 
 ## 10. Questions for the owner
 
-**These block building** (answers are folded into this design before it merges):
+**Decided by the owner (2026-09-23):**
 
-1. **Approval:** is merging the private review-note PR and then the public PR the
-   right approval for journal entries and post batches? Or should posts get their
-   own PR?
-2. **Private repository:** create `kwilson21/publicist-private` for review notes
-   and exports, and attach it to the Routine's environment? Or prefer another
-   private location that a fresh cloud session can read and write?
-3. **Tiers:** Kaillera-next and Tally both `shipped` by default, with individual
-   explorations marked on their notes?
+1. **Approval:** two merges. The private review-note PR first, then the public PR
+   with journal entries and queued posts. Notes include visual aids (section 3).
+2. **Private repository:** the publicist creates `kwilson21/publicist-private`;
+   the owner attaches it to the Routine's environment.
+3. **Tiers:** Tally and Kaillera-next are both `shipped`; experiments inside them
+   are marked `exploration` on their own notes.
 4. **Enforcement:** add the `publicist-gate` build step and make `validate` a
-   required check (section 9)? It needs one fine-grained, read-only token for the
-   private repository, which you create and store as an Actions secret and a
-   Cloudflare build secret.
-5. **Readiness:** should a `shipped` entry marked `not yet` for the whiteboard
-   defense stay held until you mark it `ready` (the proposed default, section 3)?
+   required check. The owner creates the read-only token for the private
+   repository and stores it as an Actions secret and a Cloudflare build secret.
+5. **Readiness:** `not yet` holds a shipped entry, and triggers a grill session
+   whose record is saved with the note (section 3).
 
-**These can be answered later:**
+**Still open (not blocking):**
 
 6. **Platforms:** LinkedIn plus Bluesky or X. The comparison is in
    [channels/](channels/README.md#feed-platforms) and the Bluesky setup in
