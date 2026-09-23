@@ -1,5 +1,7 @@
-# Claude Code & Superpowers
-.claude/
+# Claude Code & Superpowers (shared skills and settings are committed)
+.claude/*
+!.claude/skills/
+!.claude/settings.json
 .superpowers/
 .worktrees/
 

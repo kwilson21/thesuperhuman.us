@@ -83,6 +83,13 @@ These describe prior capabilities, not a service menu to promote. Lead with the 
 - `scripts/`: OG image generation and utilities
 - `wrangler.jsonc`: Cloudflare Worker config, KV bindings, non-secret env vars
 
+## Publicist
+
+Publicizing Tally and Kaillera-next work follows the design in
+[docs/publicist/README.md](docs/publicist/README.md). Its rules are always loaded:
+
+@.agents/skills/publicist/SKILL.md
+
 ## Things to Never Do
 
 - Never display Kazon's personal home address anywhere on the site
