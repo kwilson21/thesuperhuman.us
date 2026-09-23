@@ -37,6 +37,22 @@ function fixture() {
 beforeEach(() => vi.clearAllMocks());
 
 describe('project updates', () => {
+  it('records only one acceptance when two stale actions share a millisecond', async () => {
+    const { sql, db } = fixture();
+    sql.prepare("UPDATE owner_requests SET status='reviewed' WHERE id='song-1'").run();
+    const command = { action: 'accept' as const, dueDate: '2026-10-01', body: 'I have your song.' };
+    const results = await Promise.all([
+      saveProjectUpdate(db, 'song-1', 'owner@example.com', command, now),
+      saveProjectUpdate(db, 'song-1', 'owner@example.com', command, now),
+    ]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(sql.prepare("SELECT COUNT(*) AS count FROM audio_project_updates WHERE request_id='song-1'").get())
+      .toEqual({ count: 1 });
+    expect(sql.prepare("SELECT COUNT(*) AS count FROM audio_project_audit WHERE request_id='song-1' AND action='accepted'").get())
+      .toEqual({ count: 1 });
+    sql.close();
+  });
+
   it('accepts a reviewed project, starts paid work, and records a later date with its reason', async () => {
     const { sql, db } = fixture();
     expect(validProjectDate('2026-02-30')).toBe(false);

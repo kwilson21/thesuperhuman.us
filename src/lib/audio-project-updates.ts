@@ -76,11 +76,11 @@ export async function saveProjectUpdate(db: D1Database, requestId: string, actor
         .bind(command.dueDate, command.dueDate, at, requestId, state.updated_at, requestId),
       db.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,new_due_at,actor,created_at)
         SELECT request_id,'accepted',?,?,?,? FROM audio_projects
-        WHERE request_id=? AND stage='accepted' AND updated_at=? AND original_due_at=? RETURNING ${columns}`)
+        WHERE request_id=? AND stage='accepted' AND updated_at=? AND original_due_at=? AND changes()=1 RETURNING ${columns}`)
         .bind(body, command.dueDate, actor, at, requestId, at, command.dueDate),
       db.prepare(`INSERT INTO audio_project_audit(request_id,action,actor,occurred_at)
         SELECT request_id,'accepted',?,? FROM audio_projects
-        WHERE request_id=? AND stage='accepted' AND updated_at=? AND original_due_at=?`)
+        WHERE request_id=? AND stage='accepted' AND updated_at=? AND original_due_at=? AND changes()=1`)
         .bind(actor, at, requestId, at, command.dueDate),
     ]);
     return changed.results.length ? update.results[0] as ProjectUpdate : null;
@@ -96,11 +96,11 @@ export async function saveProjectUpdate(db: D1Database, requestId: string, actor
         .bind(at, requestId, state.updated_at, requestId, requestId),
       db.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at)
         SELECT request_id,'work_started',?,?,? FROM audio_projects
-        WHERE request_id=? AND stage='in_progress' AND updated_at=? RETURNING ${columns}`)
+        WHERE request_id=? AND stage='in_progress' AND updated_at=? AND changes()=1 RETURNING ${columns}`)
         .bind(body, actor, at, requestId, at),
       db.prepare(`INSERT INTO audio_project_audit(request_id,action,actor,occurred_at)
         SELECT request_id,'stage-changed',?,? FROM audio_projects
-        WHERE request_id=? AND stage='in_progress' AND updated_at=?`)
+        WHERE request_id=? AND stage='in_progress' AND updated_at=? AND changes()=1`)
         .bind(actor, at, requestId, at),
     ]);
     return changed.results.length ? update.results[0] as ProjectUpdate : null;
@@ -114,11 +114,11 @@ export async function saveProjectUpdate(db: D1Database, requestId: string, actor
       RETURNING request_id`).bind(command.dueDate, at, requestId, state.current_due_at, state.updated_at, requestId),
     db.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,reason,previous_due_at,new_due_at,actor,created_at)
       SELECT request_id,'date_changed',?,?,?,?,?,? FROM audio_projects
-      WHERE request_id=? AND current_due_at=? AND updated_at=? RETURNING ${columns}`)
+      WHERE request_id=? AND current_due_at=? AND updated_at=? AND changes()=1 RETURNING ${columns}`)
       .bind(body, command.reason, state.current_due_at, command.dueDate, actor, at, requestId, command.dueDate, at),
     db.prepare(`INSERT INTO audio_project_audit(request_id,action,actor,occurred_at)
       SELECT request_id,'date-changed',?,? FROM audio_projects
-      WHERE request_id=? AND current_due_at=? AND updated_at=?`)
+      WHERE request_id=? AND current_due_at=? AND updated_at=? AND changes()=1`)
       .bind(actor, at, requestId, command.dueDate, at),
   ]);
   return changed.results.length ? update.results[0] as ProjectUpdate : null;
