@@ -27,6 +27,12 @@ import currentWork from '~/assets/projects/website/work-after.png';
 import oldNewsPremiere from '~/assets/site/old-news-premiere.webp';
 import oldNewsMerchConcepts from '~/assets/site/old-news-merch-concepts.webp';
 import musicSkyline from '~/assets/site/music-skyline.webp';
+import playbackBefore from '~/assets/projects/website/bugfixes/playback-before.png';
+import playbackAfter from '~/assets/projects/website/bugfixes/playback-after.png';
+import comparisonLayoutBefore from '~/assets/projects/website/bugfixes/comparison-layout-before.png';
+import comparisonLayoutAfter from '~/assets/projects/website/bugfixes/comparison-layout-after.png';
+import ownerTooltipBefore from '~/assets/projects/website/bugfixes/owner-tooltip-before.png';
+import ownerTooltipAfter from '~/assets/projects/website/bugfixes/owner-tooltip-after.png';
 
 export const websiteStory = {
   title: 'Personal website',
@@ -51,6 +57,11 @@ export const websiteMilestones: Milestone[] = [
     summary: 'The A/B player now initializes more reliably on phones and requests iOS playback audio when the device ringer is silent.',
     detailLabel: 'What changed',
     detail: 'The player keeps a browser-compatible Web Audio initialization path, then uses the optional playback audio-session category when iOS exposes it. The change preserves fallback behavior for browsers without that API.',
+    visualProof: {
+      label: 'A/B player mobile playback context',
+      before: artifact(playbackBefore, 'Before · mobile A/B player', 'The player’s visible controls did not reveal the iPhone silent-mode failure. The problem was the browser audio category, not the layout.', 'Browser capture'),
+      after: artifact(playbackAfter, 'After · mobile A/B player', 'The same player after the repair. Still images cannot prove silent-mode audio, so the behavior is also covered by the player regression checks.', 'Browser capture'),
+    },
   },
   {
     id: 'website-mobile-comparison-layout', day: '2026-09-21',
@@ -58,6 +69,11 @@ export const websiteMilestones: Milestone[] = [
     summary: 'The compact A/B selector no longer stretches to match the loudness controls, and each playback line now follows only its own waveform.',
     detailLabel: 'What changed',
     detail: 'The selector is sized to its content rather than a shared grid column. Each playhead lives inside its own waveform stage, so it stops at the waveform it represents.',
+    visualProof: {
+      label: 'A/B player layout before and after',
+      before: artifact(comparisonLayoutBefore, 'Before · shared playback line', 'At phone width, one playhead crossed both waveforms and the selector was governed by the wider control grid.', 'Browser capture'),
+      after: artifact(comparisonLayoutAfter, 'After · waveform-bounded playback line', 'Each line now ends with its own waveform, and the A/B selector keeps only the width its controls need.', 'Browser capture'),
+    },
   },
   {
     id: 'website-owner-mobile-tooltips', day: '2026-09-21',
@@ -65,6 +81,11 @@ export const websiteMilestones: Milestone[] = [
     summary: 'The owner dashboard’s metric explanations now open inward on a phone instead of being clipped off-screen.',
     detailLabel: 'What changed',
     detail: 'Left-anchored metric explanations open to the right. Right-anchored supporting-evidence explanations open to the left. The private owner dashboard is not shown in this public timeline.',
+    visualProof: {
+      label: 'Owner-tooltip placement before and after',
+      before: artifact(ownerTooltipBefore, 'Before · clipped explanation', 'A data-free browser fixture showing the original placement: each explanation could run outside a phone viewport. No owner metrics are shown.', 'Browser capture'),
+      after: artifact(ownerTooltipAfter, 'After · inward explanation', 'The same data-free fixture after the repair: left and right explanations each open toward readable space.', 'Browser capture'),
+    },
   },
   {
     id: 'website-old-news-release-experience', day: '2026-09-15',
@@ -156,13 +177,13 @@ export const websiteMilestones: Milestone[] = [
     title: 'Make the words fit the work I want to do.', status: 'Positioning',
     summary: 'I wanted the site to reflect the work I enjoy now: shaping and building useful software with AI. My production engineering history provides evidence of what I bring to that work.',
     detailLabel: 'What clarified in the conversation',
-    detail: 'The exciting part is shaping and building the solution; I do not need to originate the idea. Independent work is my preference, with room for an interesting full-time opportunity. Work keeps the engineering history as evidence. The introduction describes where I want to go.',
+    detail: 'I enjoy shaping and building the solution; I do not need to originate the idea. I work independently, through contracts and projects, and I am selective about full-time roles. Work keeps the engineering history as evidence. The introduction describes where I want to go.',
     artifacts: [artifact(work, 'Earlier positioning', 'The initial Work study led with backend and data engineering.'), artifact(currentWork, 'The current direction', 'The introduction now leads with building with AI. Work retains the career evidence.', 'Local implementation capture')],
   },
   {
     id: 'website-general-resume', day: '2026-09-10',
     title: 'One resume, an easier next step.', status: 'Contact and resume',
-    summary: 'One general resume gives people a clear professional profile and an easier next step, with room for both contract work and interesting full-time opportunities.',
+    summary: 'One general resume gives people a clear professional profile and an easier next step, whether that leads to a contract, a project or a well-matched full-time role.',
     artifacts: [artifact(resume1, 'Resume v1 · Earlier choice', 'The first study offered general and DoD-focused variants. This is a historical design, not the current form.'), artifact(resume2, 'Resume v2 · Selected', 'A single request form. The lower part of the sheet explores submission and error states.')],
   },
   {

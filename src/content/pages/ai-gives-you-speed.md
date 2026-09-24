@@ -5,7 +5,7 @@ description: "Why AI-assisted software development benefits from smaller validat
 
 I've been thinking a lot about the difference between **speed and velocity** when using AI to build software.
 
-Speed is simply how fast you're moving.
+Speed is how fast you're moving.
 
 Velocity is how fast you're moving **in a specific direction**.
 
@@ -25,7 +25,7 @@ Either there is **no clear direction**, and speed is being prioritized above eve
 
 Or there is a direction, but no series of **small, reliable milestones and feedback loops** for getting there.
 
-In the first case, you're moving quickly without really knowing where you're going.
+In the first case, you're moving quickly without knowing where you're going.
 
 In the second, you know where you want to go, but you're allowing AI to make too many unverified decisions between where you are and your destination.
 
@@ -33,7 +33,7 @@ Both can produce an enormous amount of code.
 
 Neither necessarily produces good software.
 
-My approach has increasingly become:
+My approach has become:
 
 **AI + Direction + Small Validated Steps + Feedback = Velocity**
 
@@ -72,7 +72,7 @@ AI shouldn't eliminate the engineering process.
 
 ## We Have Seen This Problem Before
 
-There's an interesting progression here when you look at how software engineering has evolved.
+Software engineering has moved through a familiar progression.
 
 Waterfall emphasized planning and predictability. Requirements were defined, systems were designed, software was built, and validation happened relatively late in the process.
 
@@ -86,7 +86,7 @@ Instead of trying to eliminate uncertainty before building, we started working i
 
 MVPs pushed this idea further by limiting the amount of **unvalidated scope** we were willing to build before getting feedback.
 
-The breakthrough wasn't simply that Agile made developers faster.
+The breakthrough wasn't that Agile made developers faster.
 
 It allowed us to **correct direction more frequently**.
 
@@ -94,7 +94,7 @@ AI relaxes a different constraint entirely: implementation speed.
 
 What used to take days can sometimes take hours. What took hours can sometimes take minutes.
 
-But that creates an interesting temptation.
+That creates a temptation.
 
 Because AI can do more work between checkpoints, we naturally want to **give it more work between checkpoints**.
 
@@ -116,7 +116,7 @@ Eventually the agent returns an enormous amount of working software that isn't q
 
 We've essentially recreated one of Waterfall's biggest weaknesses.
 
-We just discover the problem three hours later instead of three months later.
+We discover the problem three hours later instead of three months later.
 
 That's more speed.
 
@@ -138,7 +138,7 @@ One lesson is built locally for review. Code execution and saved progress are st
 
 Working on a language keeps bringing me back to the difference between an idea being implemented and an idea being ready to rely on.
 
-One principle from Servant has become increasingly important to how I think about AI-assisted development:
+One principle from Servant has become important to how I think about AI-assisted development:
 
 **Implementation does not mean acceptance.**
 
@@ -152,7 +152,7 @@ It doesn't mean we've learned enough to commit to the decision.
 
 And it doesn't mean we're moving in the right direction.
 
-These projects have become practical environments for refining how I use AI as an engineer rather than simply as a code generator.
+These projects have become practical environments for refining how I use AI as an engineer rather than only as a code generator.
 
 ## The Engineer Becomes a Steward
 
@@ -166,9 +166,9 @@ AI can accelerate execution.
 
 It cannot absolve us of responsibility for the outcome.
 
-That's why I don't think the future of AI-assisted development is simply giving agents larger and larger tasks.
+That's why I don't think the future of AI-assisted development is giving agents larger and larger tasks.
 
-I think it's preserving the things that make good engineering reliable while dramatically reducing the time it takes to move between them:
+I think it's preserving the things that make good engineering reliable while reducing the time it takes to move between them:
 
 **Clear direction. Small steps. Validation. Feedback. Correction.**
 
