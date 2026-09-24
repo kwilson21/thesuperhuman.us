@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   clientProjectForSession, clientProjectsForSession, completeClientCode,
-  discardUndeliveredCode, groupStudioProjects, issueClientCode, listStudioSignInFailures, normalizeClientEmail, revokeClientSession,
+  discardUndeliveredCode, groupStudioProjects, issueClientCode, listStudioSignInFailures, normalizeClientEmail, revokeClientSession, takeStudioAllowance,
 } from '~/lib/audio-client-access';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
@@ -88,6 +88,29 @@ describe('audio client access', () => {
     expect(await clientProjectForSession(db, token!, 'song-2', now)).not.toBeNull();
     await revokeClientSession(db, token!, now);
     expect(await clientProjectForSession(db, token!, 'song-2', now)).toBeNull();
+    sql.close();
+  });
+
+  it('locks a code after five wrong guesses, even when they arrive together', async () => {
+    const { sql, db, addRequest } = fixture();
+    addRequest('song-1');
+    const code = (await issueClientCode(db, 'artist@example.com', secret, now))!;
+    const wrong = code === '00000000' ? '11111111' : '00000000';
+    const guesses = await Promise.all(Array.from({ length: 10 }, () => completeClientCode(db, 'artist@example.com', wrong, secret, now)));
+    expect(guesses.every(token => token === null)).toBe(true);
+    expect(sql.prepare("SELECT attempts FROM audio_client_codes WHERE email='artist@example.com'").get()).toEqual({ attempts: 5 });
+    expect(await completeClientCode(db, 'artist@example.com', code, secret, now)).toBeNull();
+    sql.close();
+  });
+
+  it('admits exactly the allowance when requests arrive together, then opens a new window', async () => {
+    const { sql, db } = fixture();
+    const results = await Promise.all(Array.from({ length: 20 }, () => takeStudioAllowance(db, 'code-email', 'artist@example.com', 3, secret, now)));
+    expect(results.filter(Boolean)).toHaveLength(3);
+    expect(await takeStudioAllowance(db, 'code-email', 'other@example.com', 3, secret, now)).toBe(true);
+    expect(await takeStudioAllowance(db, 'code-email', 'artist@example.com', 3, secret, new Date(now.getTime() + 5 * 60_000 + 1))).toBe(true);
+    const stored = sql.prepare('SELECT key FROM audio_client_allowances').all() as { key: string }[];
+    expect(stored.every(row => !row.key.includes('artist'))).toBe(true);
     sql.close();
   });
 

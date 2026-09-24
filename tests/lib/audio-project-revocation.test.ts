@@ -87,3 +87,19 @@ it('leaves delivered work available when its request is resolved', () => {
     .toEqual({ revoked_at: null });
   sql.close();
 });
+
+it('reopens a completed project when its only final is revoked, so a replacement can ship', async () => {
+  const { sql, db } = fixture();
+  sql.prepare(`INSERT INTO audio_project_files
+    (id,request_id,version,object_key,display_name,media_type,byte_size,status,uploaded_at,published_at,expires_at)
+    VALUES ('final-1','song-1','final','studio/projects/song-1/final-1.wav','Final','audio/wav',5,'published',?,?,?)`)
+    .run(now.toISOString(), now.toISOString(), '2027-09-22T12:00:00Z');
+  sql.prepare("UPDATE audio_projects SET stage='complete',completed_at=? WHERE request_id='song-1'").run(now.toISOString());
+  const result = await revokeProjectFile(db, 'song-1', 'final-1', 'owner@example.com', 'That export was wrong; a corrected final is coming.', now);
+  expect(result?.updateId).toBeGreaterThan(0);
+  expect(sql.prepare("SELECT stage,completed_at FROM audio_projects WHERE request_id='song-1'").get())
+    .toEqual({ stage: 'in_progress', completed_at: null });
+  expect(sql.prepare("SELECT action,actor FROM audio_project_audit WHERE request_id='song-1' ORDER BY id DESC LIMIT 1").get())
+    .toEqual({ action: 'stage-changed', actor: 'owner@example.com' });
+  sql.close();
+});

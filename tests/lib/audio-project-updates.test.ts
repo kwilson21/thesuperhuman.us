@@ -185,4 +185,21 @@ describe('project updates', () => {
     expect(sql.prepare("SELECT stage FROM audio_projects WHERE request_id='song-1'").get()).toEqual({ stage: 'revision_in_progress' });
     sql.close();
   });
+
+  it('completes a paid, delivered project after the owner marks the request resolved', async () => {
+    const { sql, db } = fixture();
+    sql.prepare(`INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
+      offer_accepted_at,booking_status,balance_status,created_at,updated_at)
+      VALUES ('song-1','Two-track vocal mix',20000,10000,10000,?,'paid','paid',?,?)`)
+      .run(now.toISOString(), now.toISOString(), now.toISOString());
+    sql.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,status,uploaded_at,published_at,expires_at)
+      VALUES ('final-1','song-1','final','studio/projects/song-1/final-1.mp3','Final','audio/mpeg',5,'published',?,?,?)`)
+      .run(now.toISOString(), now.toISOString(), '2027-09-22T12:00:00Z');
+    sql.prepare("UPDATE audio_projects SET stage='final_files_ready' WHERE request_id='song-1'").run();
+    sql.prepare("UPDATE owner_requests SET status='resolved' WHERE id='song-1'").run();
+    const close = { action: 'complete' as const, body: 'Your final is ready. Thank you for trusting me with your song.' };
+    expect(await saveProjectUpdate(db, 'song-1', 'owner@example.com', close, now)).toMatchObject({ kind: 'progress' });
+    expect(sql.prepare("SELECT stage FROM audio_projects WHERE request_id='song-1'").get()).toEqual({ stage: 'complete' });
+    sql.close();
+  });
 });

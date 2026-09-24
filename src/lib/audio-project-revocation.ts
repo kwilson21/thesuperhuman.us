@@ -35,18 +35,25 @@ export async function revokeProjectFile(db: D1Database, requestId: string, fileI
       WHERE request_id=? AND id=? AND status=?
         AND EXISTS(SELECT 1 FROM audio_projects WHERE request_id=? AND revoked_at IS NULL)
       RETURNING id`).bind(at, actor, revocationId, requestId, fileId, file.status, requestId),
-    db.prepare(`UPDATE audio_projects SET stage='in_progress',updated_at=? WHERE request_id=?
-      AND stage=? AND NOT EXISTS(SELECT 1 FROM audio_project_files
+    // Without a published file of its version, the project returns to In progress so a replacement
+    // can be uploaded and published. That includes a completed project losing its only final;
+    // the earlier completion stays in the audit history.
+    db.prepare(`UPDATE audio_projects SET stage='in_progress',completed_at=NULL,updated_at=? WHERE request_id=?
+      AND stage IN (?,?) AND NOT EXISTS(SELECT 1 FROM audio_project_files
         WHERE request_id=? AND version=? AND status='published')
       AND EXISTS(SELECT 1 FROM audio_project_files WHERE id=? AND revocation_id=?)`)
-      .bind(at, requestId, file.version === 'review' ? 'review_ready' : 'final_files_ready',
+      .bind(at, requestId, ...(file.version === 'review' ? ['review_ready', 'review_ready'] : ['final_files_ready', 'complete']),
         requestId, file.version, fileId, revocationId),
+    db.prepare(`INSERT INTO audio_project_audit(request_id,action,actor,occurred_at)
+      SELECT request_id,'stage-changed',?,? FROM audio_projects
+      WHERE request_id=? AND stage='in_progress' AND updated_at=? AND changes()=1`)
+      .bind(actor, at, requestId, at),
   ];
   if (file.status === 'published') statements.push(db.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at)
     SELECT request_id,'progress',?,?,? FROM audio_project_files WHERE id=? AND revocation_id=?
     RETURNING id`).bind(body, actor, at, fileId, revocationId));
   const results = await db.batch(statements);
   if (!results[0].results.length) return null;
-  const update = file.status === 'published' ? results[2].results[0] as { id: number } : null;
+  const update = file.status === 'published' ? results[3].results[0] as { id: number } : null;
   return { updateId: update?.id ?? null };
 }
