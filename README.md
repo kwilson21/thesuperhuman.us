@@ -52,6 +52,10 @@ Apply `migrations/music/0003_audio_payments.sql` and `migrations/music/0004_stri
 
 Keep `STRIPE_PAYMENTS_ENABLED=false` until [Stripe invoicing readiness](docs/stripe-invoicing-readiness.md) passes. Disabling this variable stops new invoice creation while preserving owner status readback and signed webhook processing after the Worker is redeployed with the change.
 
+### Audio client portal foundation
+
+Apply `migrations/music/0005_audio_projects.sql` before deploying portal code. It creates one provisional project and audit entry with each new audio-service request, and backfills open service requests. The project references the existing request email instead of storing another copy. This migration alone adds no client access or file-delivery route. The [portal design](docs/superpowers/specs/2026-09-21-audio-client-portal-design.md) defines the later communication, authentication, and delivery gates.
+
 The forms read `Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY` first, with
 `import.meta.env.PUBLIC_TURNSTILE_SITE_KEY` as a build-time fallback. Wrangler
 runtime vars are not automatically Astro build-time variables. An empty runtime
