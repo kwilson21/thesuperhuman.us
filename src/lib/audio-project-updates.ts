@@ -205,3 +205,15 @@ export async function queueProjectNoticeForDelivery(db: D1Database, requestId: s
     RETURNING id`).bind(updateId, requestId, confirmedNotSent ? 1 : 0, staleBefore, requestId).first<{ id: number }>();
   return Boolean(result);
 }
+
+const firstUpdates = {
+  mixing: 'Thanks for sending this. I’m setting up the session and building a solid static mix first, then shaping it from there. You’ll see an update here when there’s something to hear.',
+  mastering: 'Thanks for sending this. I’m setting up the session and listening through your mix first, then shaping the master from there. You’ll see an update here when there’s something to hear.',
+  custom: 'Thanks for sending this. I’m setting up the session and starting on the plan we agreed. You’ll see an update here when there’s something to hear.',
+};
+
+/** The Accept form's starting first update for a service. The owner edits it before sending. */
+export function defaultFirstUpdate(serviceId: string | null | undefined): string {
+  return serviceId === 'mastering' ? firstUpdates.mastering
+    : serviceId === 'vocal-mix' || serviceId === 'bundle' ? firstUpdates.mixing : firstUpdates.custom;
+}

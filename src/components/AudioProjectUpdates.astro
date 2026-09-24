@@ -1,6 +1,7 @@
 ---
 import type { ProjectUpdate } from '~/lib/audio-project-updates';
 import { projectToday } from '~/lib/audio-project-updates';
+import type { NextStep } from '~/lib/audio-project-next-step';
 import '~/styles/studio.css';
 
 type Props = {
@@ -11,8 +12,12 @@ type Props = {
   bookingPaid?: boolean;
   revoked?: boolean;
   endpoint?: string;
+  /** The Accept form's starting first update. */
+  firstUpdate?: string;
+  /** The owner's next step, shown above the actions. */
+  nextStep?: NextStep | null;
 };
-const { updates, currentDueAt, stage, requestStatus, bookingPaid = false, revoked = false, endpoint } = Astro.props;
+const { updates, currentDueAt, stage, requestStatus, bookingPaid = false, revoked = false, endpoint, firstUpdate = '', nextStep = null } = Astro.props;
 const owner = Boolean(endpoint);
 const active = stage !== 'complete' && requestStatus !== 'withdrawn' && !revoked;
 const reasonLabels = {
@@ -56,14 +61,19 @@ const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month
   </ol> : <p class="project-updates-empty">No progress updates yet.</p>}
 
   {owner && active && <div class="project-update-actions">
-    {stage === 'files_under_review' && requestStatus === 'new' && <p class="project-update-hint">Mark the request reviewed to accept the project and set its delivery date.</p>}
-    {stage === 'files_under_review' && requestStatus === 'reviewed' && <form class="panel" data-project-update-form data-action="accept">
+    {nextStep && <div class:list={['next-step', { waiting: nextStep.waiting }]} role="note" aria-labelledby="next-step-title">
+      <p class="next-step-kicker">{nextStep.waiting ? 'Waiting' : 'Next step'}</p>
+      <p class="next-step-title" id="next-step-title">{nextStep.title}</p>
+      <p class="next-step-detail">{nextStep.detail}</p>
+      {nextStep.target && <a class="next-step-link" href={nextStep.target}>{nextStep.waiting ? 'See where it stands' : 'Go there'} <span aria-hidden="true">→</span></a>}
+    </div>}
+    {stage === 'files_under_review' && requestStatus === 'reviewed' && <form class="panel" id="accept-project" data-project-update-form data-action="accept">
       <h3>Accept the project</h3><p>Set a cautious delivery date and tell the client what happens next.</p>
       <label class="studio-field">Expected by <input class="studio-input" type="date" name="dueDate" min={today} required /></label>
-      <label class="studio-field">First update <textarea class="studio-textarea" name="body" rows="3" maxlength="1000" required></textarea></label>
+      <label class="studio-field">First update <textarea class="studio-textarea" name="body" rows="4" maxlength="1000" required>{firstUpdate}</textarea></label>
       <button type="submit" class="studio-button">Accept and update client</button><p class="studio-status" role="status" data-update-status></p>
     </form>}
-    {stage === 'accepted' && bookingPaid && <form class="panel" data-project-update-form data-action="start_work">
+    {stage === 'accepted' && bookingPaid && <form class="panel" id="start-work" data-project-update-form data-action="start_work">
       <h3>Start the work</h3><p>Tell the client what you are focusing on first.</p>
       <label class="studio-field">Focus <textarea class="studio-textarea" name="body" rows="3" maxlength="1000" required></textarea></label>
       <button type="submit" class="studio-button">Mark in progress</button><p class="studio-status" role="status" data-update-status></p>
@@ -73,7 +83,7 @@ const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month
       <label class="studio-field">What you will address <textarea class="studio-textarea" name="body" rows="3" maxlength="1000" required></textarea></label>
       <button type="submit" class="studio-button">Begin revision</button><p class="studio-status" role="status" data-update-status></p>
     </form>}
-    {stage === 'final_files_ready' && <form class="panel" data-project-update-form data-action="complete">
+    {stage === 'final_files_ready' && <form class="panel" id="close-project" data-project-update-form data-action="complete">
       <h3>Close the project</h3><p>The final file stays available until its expiry date. Messages become read-only.</p>
       <label class="studio-field">Closing note <textarea class="studio-textarea" name="body" rows="3" maxlength="1000" required></textarea></label>
       <button type="submit" class="studio-button">Mark complete</button><p class="studio-status" role="status" data-update-status></p>
@@ -130,8 +140,16 @@ const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month
   .timeline-notice .failed::before { background: var(--accent); }
   .project-updates-empty { font: 1rem/1.6 Inter, sans-serif; color: var(--studio-muted); }
   .project-update-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 1.25rem; margin-top: 2.5rem; }
+  /* Clears the phone section links when Mark reviewed lands here. */
+  #accept-project, #start-work, #close-project { scroll-margin-top: 5rem; }
+  .next-step { grid-column: 1 / -1; display: grid; gap: .35rem; padding: 1.1rem 1.4rem; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--paper)); }
+  .next-step.waiting { border-left-color: var(--studio-line); background: color-mix(in srgb, var(--studio-field) 60%, var(--paper)); }
+  .next-step-kicker { margin: 0; color: var(--accent); font: 500 .72rem/1.4 Inter, sans-serif; letter-spacing: .18em; text-transform: uppercase; }
+  .next-step.waiting .next-step-kicker { color: var(--studio-muted); }
+  .next-step-title { margin: 0; font: 400 1.5rem/1.15 Newsreader, Georgia, serif; }
+  .next-step-detail { margin: 0; max-width: 40rem; font: .92rem/1.55 Inter, sans-serif; color: var(--studio-muted); }
+  .next-step-link { justify-self: start; margin-top: .25rem; color: var(--ink); font: 500 .88rem/1.4 Inter, sans-serif; }
   .panel { display: grid; align-content: start; gap: .9rem; padding: 1.4rem; border: 1px solid var(--rule); border-radius: 2px; background: color-mix(in srgb, var(--studio-field) 60%, var(--paper)); }
   h3 { margin: 0; font: 400 1.5rem/1.15 Newsreader, Georgia, serif; }
   .panel > p:not(.studio-status) { margin: -.4rem 0 0; color: var(--studio-muted); font: .85rem/1.5 Inter, sans-serif; }
-  .project-update-hint { grid-column: 1 / -1; margin: 0; color: var(--studio-muted); font: .9rem/1.5 Inter, sans-serif; }
 </style>

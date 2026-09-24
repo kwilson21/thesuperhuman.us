@@ -5,6 +5,8 @@ import AudioPaymentPanel from '~/components/owner/AudioPaymentPanel.astro';
 import { paymentDefaults } from '~/lib/audio-payments';
 import ProjectMessages from '~/components/ProjectMessages.astro';
 import AudioProjectUpdates from '~/components/AudioProjectUpdates.astro';
+import { defaultFirstUpdate } from '~/lib/audio-project-updates';
+import { ownerNextStep } from '~/lib/audio-project-next-step';
 import OwnerProjectFiles from '~/components/owner/OwnerProjectFiles.astro';
 import StageTrack from '~/components/StageTrack.astro';
 import { getAudioPayment } from '~/lib/audio-payments';
@@ -24,6 +26,8 @@ const payment = request.kind === 'service' ? await getAudioPayment(db, request.i
 const portalProject = request.kind === 'service' && clientPortalEnabled(Astro.locals.runtime.env)
   ? await db.prepare('SELECT stage,current_due_at,revoked_at,invitation_status,invitation_attempted_at,invitation_sent_at FROM audio_projects WHERE request_id=?').bind(request.id).first<
     { stage: string; current_due_at: string | null; revoked_at: string | null } & ProjectInvitation>() : null;
+const stripeEnabled = stripeAvailable(Astro.locals.runtime.env);
+const nextStep = portalProject ? ownerNextStep({ stage: portalProject.stage, requestStatus: request.status, revoked: Boolean(portalProject.revoked_at), payment, stripeEnabled }) : null;
 const projectMessages = portalProject ? await listProjectMessages(db, request.id) : [];
 const projectUpdates = portalProject ? await listProjectUpdates(db, request.id) : [];
 const projectFiles = portalProject ? (await db.prepare(`SELECT id,version,display_name,byte_size,status,uploaded_at,published_at,peaks
@@ -45,7 +49,7 @@ const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') 
   <div class:list={['request-layout', { portal: portalProject }]} data-request-id={request.id}>
     <div class="request-main" id="request-work">
       {portalProject && <section class="portal-stage" aria-label="Studio project stage"><StageTrack stage={portalProject.stage} bookingPaid={payment?.bookingStatus === 'paid'} /></section>}
-      {portalProject && <AudioProjectUpdates updates={projectUpdates} currentDueAt={portalProject.current_due_at} stage={portalProject.stage} requestStatus={request.status} bookingPaid={payment?.bookingStatus === 'paid'} revoked={Boolean(portalProject.revoked_at)} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/updates`} />}
+      {portalProject && <AudioProjectUpdates nextStep={nextStep} firstUpdate={defaultFirstUpdate(request.serviceId)} updates={projectUpdates} currentDueAt={portalProject.current_due_at} stage={portalProject.stage} requestStatus={request.status} bookingPaid={payment?.bookingStatus === 'paid'} revoked={Boolean(portalProject.revoked_at)} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/updates`} />}
       {portalProject && <OwnerProjectFiles files={projectFiles} pending={pendingUploads} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/uploads`}
         publishEndpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/files`}
         canUpload={(['in_progress','review_ready','revision_in_progress'].includes(portalProject.stage)
@@ -56,7 +60,7 @@ const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') 
         bookingPaid={payment?.bookingStatus === 'paid'} balancePaid={payment?.balanceStatus === 'paid'} />}
       {portalProject && <ProjectMessages messages={projectMessages} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/messages`} reader="owner" closed={portalProject.stage === 'complete' || Boolean(portalProject.revoked_at) || request.status === 'withdrawn'} />}
       {!portalProject && detailRows.length > 0 && <section class="rail-section wide" aria-labelledby="submission-heading"><h2 id="submission-heading">Submitted details</h2><p class="rail-muted rail-caption">Submitted with this request, as the client wrote it.</p><dl class="rail-list">{detailRows.map(([key, value]) => { const href = /url|link/i.test(key) ? safeExternalUrl(value) : null; return <><dt>{label(key)}</dt><dd>{href ? <a href={href} rel="noreferrer">Open link ↗</a> : detailValue(value)}</dd></>; })}</dl></section>}
-      {!portalProject && request.kind === 'service' && <AudioPaymentPanel requestId={request.id} payment={payment} stripeEnabled={stripeAvailable(Astro.locals.runtime.env)} defaults={paymentDefaults(request.serviceId, request.details)} />}
+      {!portalProject && request.kind === 'service' && <AudioPaymentPanel requestId={request.id} payment={payment} stripeEnabled={stripeEnabled} defaults={paymentDefaults(request.serviceId, request.details)} />}
     </div>
     <aside class="request-rail" id="request-client" aria-label="Request details">
       <section class="rail-section" aria-labelledby="contact-heading"><h2 id="contact-heading">Client</h2>
@@ -66,7 +70,7 @@ const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') 
         {(request.releaseId || request.serviceId || request.campaignId) && <p class="rail-links">{request.releaseId && <a href={`/music/${request.releaseId.replace(/-single$/, '')}`}>Release →</a>}{request.serviceId && <a href="/audio/services">Service →</a>}{request.campaignId && <a href={`/owner/campaigns/${request.campaignId}`}>Campaign →</a>}</p>}
       </section>
       {portalProject && detailRows.length > 0 && <section class="rail-section" aria-labelledby="submission-heading"><h2 id="submission-heading">Submitted details</h2><p class="rail-muted rail-caption">Submitted with this request, as the client wrote it.</p><dl class="rail-list">{detailRows.map(([key, value]) => { const href = /url|link/i.test(key) ? safeExternalUrl(value) : null; return <><dt>{label(key)}</dt><dd>{href ? <a href={href} rel="noreferrer">Open link ↗</a> : detailValue(value)}</dd></>; })}</dl></section>}
-      {portalProject && <AudioPaymentPanel requestId={request.id} payment={payment} stripeEnabled={stripeAvailable(Astro.locals.runtime.env)} defaults={paymentDefaults(request.serviceId, request.details)} />}
+      {portalProject && <AudioPaymentPanel requestId={request.id} payment={payment} stripeEnabled={stripeEnabled} defaults={paymentDefaults(request.serviceId, request.details)} />}
       {portalProject && <section class="rail-section request-access" aria-labelledby="access-heading"><h2 id="access-heading">Client access</h2>
         <div data-project-invitation data-endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/invitation`}>
           <p class="rail-state"><span class:list={['state-dot', portalProject.revoked_at ? 'closed' : portalProject.invitation_status]} aria-hidden="true"></span>{portalProject.revoked_at ? 'Access closed. Sign-in and private files are unavailable.' : portalProject.invitation_status === 'sent' ? 'Sign-in link sent' : portalProject.invitation_status === 'failed' ? 'Sign-in email failed. The project is saved.' : portalProject.invitation_status === 'sending' ? 'Sign-in email unconfirmed. Check Resend before retrying.' : 'Sign-in email not sent yet'}</p>
@@ -160,7 +164,7 @@ const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') 
       .request-jump { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; display: flex; gap: 1.4rem; overflow-x: auto; margin: 0 0 1.5rem; padding: .8rem 0; border-bottom: 1px solid var(--rule); background: var(--paper); }
       .request-jump a { flex: none; border: 0; color: var(--ink); font: 500 .85rem/1.4 Inter, sans-serif; }
       .request-jump a:hover, .request-jump a:focus-visible { color: var(--accent); }
-      :global(#request-work), :global(#project-files-heading), :global(#project-messages-heading), :global(#request-client) { scroll-margin-top: 4rem; }
+      :global(#request-work), :global(#project-files-heading), :global(#project-messages-heading), :global(#request-client), :global(#payment-heading), :global(#request-heading) { scroll-margin-top: 4rem; }
     }
   </style>
 </OwnerLayout>

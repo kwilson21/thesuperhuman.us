@@ -8,6 +8,7 @@ it('binds only request status buttons, not project update forms that share data-
   const element = (name: string, data: Record<string, string> = {}) => ({ dataset: data, addEventListener: () => { bound.push(name); } });
   const statusButton = element('resolve button', { action: 'resolve' });
   const revisionForm = element('begin_revision form', { action: 'begin_revision' });
+  vi.stubGlobal('location', { hash: '' });
   vi.stubGlobal('document', {
     querySelector: (selector: string) => selector === '[data-request-id]' ? { dataset: { requestId: 'song-1' } }
       : selector === '[data-action-status]' ? { textContent: '' } : null,
@@ -44,4 +45,47 @@ it('asks before resolving a request whose provisional studio is still open', asy
   await Promise.resolve();
   expect(confirm).toHaveBeenCalledTimes(1);
   expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it('reloads a newly reviewed request onto the Accept panel', async () => {
+  const handlers: Record<string, () => void> = {};
+  const button = { dataset: { action: 'review' }, closest: () => null,
+    addEventListener: (_: string, handler: () => void) => { handlers.review = handler; } };
+  const replaceState = vi.fn();
+  const reload = vi.fn();
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true })));
+  vi.stubGlobal('history', { replaceState });
+  vi.stubGlobal('location', { pathname: '/owner/requests/song-1', search: '', reload });
+  vi.stubGlobal('document', {
+    querySelector: (selector: string) => selector === '[data-request-id]' ? { dataset: { requestId: 'song-1' } }
+      : selector === '[data-action-status]' ? { textContent: '' } : null,
+    querySelectorAll: () => [button],
+  });
+  setupOwnerRequestActions();
+  handlers.review();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(replaceState).toHaveBeenCalledWith(null, '', '/owner/requests/song-1#accept-project');
+  // The reload must not restore the old scroll position over the Accept panel.
+  expect(history.scrollRestoration).toBe('manual');
+  expect(reload).toHaveBeenCalledOnce();
+});
+
+it('scrolls to the Accept panel on the reloaded page and clears the fragment', () => {
+  const scrollIntoView = vi.fn();
+  const focus = vi.fn();
+  const replaceState = vi.fn();
+  const accept = { scrollIntoView, querySelector: () => ({ focus }) };
+  vi.stubGlobal('history', { replaceState });
+  vi.stubGlobal('location', { pathname: '/owner/requests/song-1', search: '', hash: '#accept-project', reload: vi.fn() });
+  vi.stubGlobal('document', {
+    getElementById: (id: string) => id === 'accept-project' ? accept : null,
+    querySelector: (selector: string) => selector === '[data-request-id]' ? { dataset: { requestId: 'song-1' } }
+      : selector === '[data-action-status]' ? { textContent: '' } : null,
+    querySelectorAll: () => [],
+  });
+  setupOwnerRequestActions();
+  expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+  expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+  expect(replaceState).toHaveBeenCalledWith(null, '', '/owner/requests/song-1');
+  expect(history.scrollRestoration).toBe('auto');
 });
