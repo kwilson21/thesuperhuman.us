@@ -48,6 +48,60 @@ export const SCENARIO_PAGES = {
   'src/pages/studio/projects/[id].astro': { scenario: 'studio-client', route: '/studio/projects/' },
 };
 
+// Show representative routes when shared UI changes, and focused routes for content changes.
+// The full capture still runs in CI; this only selects which validated captures appear in the PR.
+const SHARED_SITE_PAGES = ['home', 'work', 'audio', 'services', 'audio-services'];
+const PAGE_NAMES_BY_FILE = {
+  'src/components/SiteNav.astro': SHARED_SITE_PAGES,
+  'src/components/Footer.astro': SHARED_SITE_PAGES,
+  'src/layouts/BaseLayout.astro': SHARED_SITE_PAGES,
+  'src/components/ExperienceRow.astro': ['work'],
+  'src/data/profile.ts': ['work'],
+  'src/data/audio.ts': ['audio-portfolio'],
+  'src/data/services.ts': ['services'],
+  'src/styles/global.css': SHARED_SITE_PAGES,
+};
+
+function routeForPageFile(file) {
+  if (file === 'src/pages/404.astro') return '/this-page-does-not-exist';
+  if (!file.startsWith('src/pages/') || !file.endsWith('.astro')) return null;
+  const route = file.replace(/^src\/pages/, '').replace(/\.astro$/, '').replace(/\/index$/, '');
+  return route || '/';
+}
+
+/** Select a small set of validated captures that represent files changed by the PR. */
+export function relevantScreenshots(manifest, changedFiles) {
+  const pageNames = new Set();
+  const scenarioNames = new Set();
+  const files = Array.isArray(changedFiles) ? changedFiles.filter(file => typeof file === 'string') : [];
+
+  for (const file of files) {
+    for (const name of (Object.hasOwn(PAGE_NAMES_BY_FILE, file) ? PAGE_NAMES_BY_FILE[file] : [])) pageNames.add(name);
+
+    const scenario = Object.hasOwn(SCENARIO_PAGES, file) ? SCENARIO_PAGES[file] : null;
+    if (scenario) scenarioNames.add(scenario.scenario);
+
+    const route = routeForPageFile(file);
+    if (route) {
+      const dynamicPrefix = route.replace(/\[[^\]]+\]/g, '');
+      for (const page of manifest.pages) {
+        if (page.path === route || (dynamicPrefix !== route
+          && (page.path === dynamicPrefix.replace(/\/$/, '') || page.path.startsWith(dynamicPrefix)))) pageNames.add(page.name);
+      }
+    }
+
+    if (file.startsWith('src/components/audio/')) {
+      for (const page of manifest.pages.filter(item => item.path === '/audio' || item.path.startsWith('/audio/'))) pageNames.add(page.name);
+    }
+    if (file.startsWith('src/content/audio-tracks/')) pageNames.add('audio-portfolio');
+  }
+
+  return {
+    pages: manifest.pages.filter(page => pageNames.has(page.name)),
+    scenarios: manifest.scenarios.filter(scenario => scenarioNames.has(scenario.name)),
+  };
+}
+
 /**
  * Page files in SCENARIO_PAGES whose scenario never rendered the route: a page under it when the
  * route ends in a slash, otherwise that exact path.
@@ -153,6 +207,7 @@ export function sanitizeManifest(manifest, images) {
     .filter(page => typeof page?.name === 'string' && has(`${page.name}-desktop.png`) && has(`${page.name}-phone.png`))
     .map(page => ({ name: page.name, path: escape(page.path ?? '') }));
   const scenarios = (Array.isArray(manifest?.scenarios) ? manifest.scenarios : []).slice(0, 20).map(scenario => ({
+    name: /^[a-z0-9-]{1,100}$/.test(scenario?.name ?? '') ? scenario.name : '',
     title: escape(scenario?.title ?? 'Scenario'),
     steps: (Array.isArray(scenario?.steps) ? scenario.steps : []).slice(0, 40).map(step => ({
       title: escape(step?.title ?? ''),
@@ -167,16 +222,17 @@ export function sanitizeManifest(manifest, images) {
 export function screenshotSection(manifest, rawBase, sha) {
   const [desktop, phone] = VIEWPORTS;
   const img = (file, alt, width) => `<img src="${rawBase}/${file}" width="${width}" alt="${alt.replaceAll('"', '&quot;')}">`;
-  const lines = [START, '## Screenshots',
-    `_Taken by CI at ${sha.slice(0, 7)} on a local preview with seeded data. Desktop ${desktop.width}×${desktop.height}, phone ${phone.width}×${phone.height}. Owner pages use a test Access identity._`, ''];
+  const lines = [START, '## Relevant screenshots',
+    `_Captured by CI at ${sha.slice(0, 7)} on a local preview. Desktop ${desktop.width}×${desktop.height}, phone ${phone.width}×${phone.height}._`, ''];
   for (const scenario of manifest.scenarios) {
     lines.push(`### ${scenario.title}`, '');
     scenario.steps.forEach((step, index) => {
       lines.push(`**${index + 1}. ${step.title}**`, '', step.images.map(image => img(image.file, image.caption, image.file.includes('-phone') ? 180 : 420)).join(' '), '');
     });
   }
-  lines.push('<details><summary>Every page</summary>', '', '| Page | Desktop | Phone |', '|---|---|---|',
-    ...manifest.pages.map(page => `| \`${page.path}\` | ${img(`${page.name}-desktop.png`, `${page.name}, desktop`, 420)} | ${img(`${page.name}-phone.png`, `${page.name}, phone`, 160)} |`),
-    '', '</details>', END);
+  if (manifest.pages.length) lines.push('| Page | Desktop | Phone |', '|---|---|---|',
+    ...manifest.pages.map(page => `| \`${page.path}\` | ${img(`${page.name}-desktop.png`, `${page.name}, desktop`, 420)} | ${img(`${page.name}-phone.png`, `${page.name}, phone`, 160)} |`));
+  if (!manifest.pages.length && !manifest.scenarios.length) lines.push('_No captured page matched the changed files._');
+  lines.push(END);
   return lines.join('\n');
 }

@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   missingScenarioRoutes, NOT_PAGES, PAGES, parseJsonc, PREVIEW_OVERRIDES, previewWrangler, REDIRECTS, SCENARIO_PAGES,
-  sanitizeManifest, screenshotSection, withScreenshots,
+  relevantScreenshots, sanitizeManifest, screenshotSection, withScreenshots,
 } from '../../scripts/screenshots/config.mjs';
 
 function pageFiles(directory: string): string[] {
@@ -63,6 +63,7 @@ describe('screenshot coverage', () => {
     const clean = sanitizeManifest(manifest, ['home-desktop.png', 'home-phone.png', 'flow-desktop.png', 'Evil.PNG']);
     expect(clean.pages).toEqual([{ name: 'home', path: '/' }]);
     expect(clean.scenarios).toHaveLength(1);
+    expect(clean.scenarios[0].name).toBe('');
     expect(clean.scenarios[0].steps).toHaveLength(1);
     expect(clean.scenarios[0].steps[0].images).toEqual([{ file: 'flow-desktop.png', caption: '&#34;quoted&#34; &#60;b&#62;' }]);
     const section = screenshotSection(clean, 'https://raw.example/pr-1/abc1234', 'abc1234def');
@@ -84,9 +85,54 @@ describe('screenshot coverage', () => {
       pages: [{ name: 'home', path: '/' }],
       scenarios: [{ title: 'A flow', steps: [{ title: 'First', images: [{ file: 'flow-01-desktop.png', caption: 'First "step"' }] }] }],
     }, 'https://raw.example/pr-1/abc1234', 'abc1234def');
-    expect(section.indexOf('### A flow')).toBeLessThan(section.indexOf('Every page'));
+    expect(section.indexOf('### A flow')).toBeLessThan(section.indexOf('| Page |'));
     expect(section).toContain('alt="First &quot;step&quot;"');
     expect(section).toContain('https://raw.example/pr-1/abc1234/home-phone.png');
+  });
+
+  it('publishes representative routes for shared navigation and only the changed content route', () => {
+    const manifest = {
+      pages: [
+        { name: 'home', path: '/' }, { name: 'work', path: '/work' }, { name: 'audio', path: '/audio' },
+        { name: 'services', path: '/services' }, { name: 'audio-services', path: '/audio/services' },
+        { name: 'privacy', path: '/privacy' }, { name: 'owner-today', path: '/owner' },
+      ],
+      scenarios: [{ name: 'owner-details', title: 'Owner detail pages', steps: [] }],
+    };
+    const selected = relevantScreenshots(manifest, ['src/components/SiteNav.astro', 'src/data/profile.ts']);
+    expect(selected.pages.map((page: { name: string }) => page.name)).toEqual(['home', 'work', 'audio', 'services', 'audio-services']);
+    expect(selected.scenarios).toEqual([]);
+  });
+
+  it('includes a seeded scenario only when one of its routes changed', () => {
+    const manifest = {
+      pages: [{ name: 'owner-requests', path: '/owner/requests' }, { name: 'work', path: '/work' }],
+      scenarios: [
+        { name: 'owner-details', title: 'Owner detail pages', steps: [{ title: 'Request', images: [] }] },
+        { name: 'studio-client', title: 'Client studio', steps: [{ title: 'Project', images: [] }] },
+      ],
+    };
+    const selected = relevantScreenshots(manifest, ['src/pages/owner/requests/[id].astro']);
+    expect(selected.pages.map((page: { name: string }) => page.name)).toEqual(['owner-requests']);
+    expect(selected.scenarios.map((scenario: { name: string }) => scenario.name)).toEqual(['owner-details']);
+  });
+
+  it('keeps page-specific audio captures focused on that route', () => {
+    const manifest = { pages: [
+      { name: 'audio', path: '/audio' }, { name: 'audio-services', path: '/audio/services' },
+      { name: 'audio-about', path: '/audio/about' },
+    ], scenarios: [] };
+    expect(relevantScreenshots(manifest, ['src/pages/audio/services.astro']).pages.map((page: { name: string }) => page.name))
+      .toEqual(['audio-services']);
+  });
+
+  it('fails closed to no unrelated images when changed files have no mapped route', () => {
+    const selected = relevantScreenshots({
+      pages: [{ name: 'home', path: '/' }, { name: 'work', path: '/work' }], scenarios: [],
+    }, ['src/assets/unmapped-artwork.webp']);
+    expect(selected).toEqual({ pages: [], scenarios: [] });
+    expect(screenshotSection(selected, 'https://raw.example/pr-1/abc1234', 'abc1234def'))
+      .toContain('No captured page matched the changed files.');
   });
 });
 

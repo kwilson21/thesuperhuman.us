@@ -93,7 +93,7 @@ try {
   for (const name of (await readdir(directory)).filter(file => file.endsWith('.mjs')).sort()) {
     const scenario = (await import(pathToFileURL(`${directory}/${name}`).href)).default;
     currentScenario = name.replace(/\.mjs$/, '');
-    scenarios.push({ title: scenario.title, steps: await scenario.run({ base: BASE, capture, sql, ownerFetch }) });
+    scenarios.push({ name: currentScenario, title: scenario.title, steps: await scenario.run({ base: BASE, capture, sql, ownerFetch }) });
   }
   errors.push(...missingScenarioRoutes(SCENARIO_PAGES, captured).map(file => `${file}: its scenario captured no page under its route`));
   await writeFile(`${OUT}/manifest.json`, JSON.stringify({ pages, scenarios }, null, 2));
