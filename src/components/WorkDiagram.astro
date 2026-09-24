@@ -7,16 +7,21 @@ const { kind } = Astro.props;
     <div><p><strong>Before</strong> · A handoff to engineering</p><div class="diagram-flow"><span>Support</span><span aria-hidden="true">→</span><span>On-call engineer</span></div></div>
     <div><p><strong>After</strong> · Support can run the work</p><div class="diagram-flow"><span>Support</span><span aria-hidden="true">→</span><span class="self-serve">Self-service</span></div></div>
   </div> : <div class="analyst">
-    <p class="diagram-step">Python troubleshooting scripts</p>
-    <p class="diagram-connector" aria-hidden="true">↓</p>
-    <p class="diagram-step"><strong>Flask application</strong><br /><span>Huey background tasks - MySQL on AWS</span></p>
-    <p class="diagram-connector" aria-hidden="true">↓</p>
-    <div class="workflow-interfaces">
-      <p class="diagram-step"><strong>Google Sheets</strong><br /><span>Automated updates to the shared source of truth</span></p>
-      <p class="diagram-step"><strong>Existing React page</strong><br /><span>Extended for data operators to use the tools</span></p>
-    </div>
+    <ol class="timeline" role="list">
+      <li>
+        <span class="phase">01 - Automation</span>
+        <h4>Automating the workflow</h4>
+        <p>Python scripts automated troubleshooting and Google Sheets updates.</p>
+      </li>
+      <li>
+        <span class="phase">02 - System ownership</span>
+        <h4>Owning the system</h4>
+        <p>I built a Flask application to manage those scripts as scheduled Huey tasks.</p>
+      </li>
+    </ol>
+    <p class="continuity">Google Sheets stayed the shared source of truth. I extended the existing React page so data operators could use the tools.</p>
   </div>}
-  <figcaption>{kind === 'bonus' ? 'Illustrated change in responsibility' : 'Illustration of the workflow change'}</figcaption>
+  <figcaption>{kind === 'bonus' ? 'Illustrated change in responsibility' : 'From individual scripts to an application I owned.'}</figcaption>
 </figure>
 <style>
   .responsibility, .analyst { padding: 1.75rem; background: #f3eee5; border-radius: 3px; }
@@ -27,11 +32,16 @@ const { kind } = Astro.props;
   .diagram-flow > span:not([aria-hidden]) { border: 1px solid #c5b9a7; border-radius: 3px; min-height: 64px; display: grid; place-items: center; text-align: center; padding: .5rem; }
   .diagram-flow > .self-serve { border-color: var(--accent) !important; color: var(--ink); }
   .diagram-flow [aria-hidden] { color: var(--accent); }
-  .diagram-step { border: 1px solid #c5b9a7; border-radius: 3px; padding: .85rem; text-align: center; line-height: 1.45; }
-  .diagram-step span { font-size: .85rem; color: var(--muted); }
-  .diagram-connector { color: var(--accent); text-align: center; margin-block: .35rem; }
-  .workflow-interfaces { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
-  @media(max-width: 400px) { .workflow-interfaces { grid-template-columns: 1fr; } }
+  .timeline { list-style: none; margin: 0; padding: 0 0 0 1.625rem; }
+  .timeline li { position: relative; padding-bottom: 2rem; }
+  .timeline li:last-child { padding-bottom: 0; }
+  .timeline li::before { content: ''; position: absolute; left: -1.625rem; top: .3125rem; width: .625rem; height: .625rem; border: 1.5px solid var(--accent); background: #f3eee5; border-radius: 50%; z-index: 1; }
+  .timeline li:last-child::before { background: var(--accent); }
+  .timeline li:first-child::after { content: ''; position: absolute; left: -1.34375rem; top: .9375rem; bottom: -.3125rem; width: 1px; background: #c5b9a7; }
+  .phase { display: block; font: .625rem/1.5 'JetBrains Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: .5rem; }
+  .timeline h4 { font-size: 1.4375rem; font-weight: 400; line-height: 1.2; margin-bottom: .5rem; }
+  .timeline p { font-size: 1.0625rem; line-height: 1.45; color: var(--muted); }
+  .continuity { border-top: 1px solid #d9d0c2; margin-top: 1.5625rem; padding-top: 1.25rem; font-size: .9375rem; line-height: 1.5; color: var(--muted); }
   figcaption { font-size: .75rem; color: var(--muted); margin-top: .65rem; }
   @media(max-width: 400px) { .responsibility, .analyst { padding: 1.1rem; }.diagram-flow { font-size: .95rem; gap: .5rem; } }
 </style>
