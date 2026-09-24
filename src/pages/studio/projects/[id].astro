@@ -2,10 +2,11 @@
 export const prerender = false;
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import { clientPortalEnabled, clientProjectForSession, studioSessionFromRequest } from '~/lib/audio-client-access';
-import { listProjectMessages } from '~/lib/audio-project-messages';
+import { latestReviewDecision, listProjectMessages } from '~/lib/audio-project-messages';
 import { listProjectUpdates } from '~/lib/audio-project-updates';
 import { clientProjectFiles } from '~/lib/audio-project-files';
 import ProjectMessages from '~/components/ProjectMessages.astro';
+import ReviewResponse from '~/components/ReviewResponse.astro';
 import AudioProjectUpdates from '~/components/AudioProjectUpdates.astro';
 import ProjectPlayer from '~/components/ProjectPlayer.astro';
 import StageTrack from '~/components/StageTrack.astro';
@@ -21,11 +22,15 @@ const messages = project ? await listProjectMessages(env.MUSIC_DB, project.reque
 const updates = project ? await listProjectUpdates(env.MUSIC_DB, project.request_id) : [];
 const files = project ? await clientProjectFiles(env.MUSIC_DB, project.request_id, token) : [];
 const finalExpiry = files.find(file => file.version === 'final')?.expires_at;
+const reviewShared = project?.stage === 'review_ready' && files.some(file => file.version === 'review');
+const decision = reviewShared ? await latestReviewDecision(env.MUSIC_DB, project!.request_id) : null;
 const next = !project ? '' : project.stage === 'files_under_review' ? 'I’m checking the files and direction you sent.' :
   project.stage === 'accepted' && project.booking_status !== 'paid' ? 'Your booking details are being confirmed.' :
   project.stage === 'accepted' ? 'Your song is booked. I’ll post an update when work begins.' :
   project.stage === 'in_progress' ? 'I’m working on your song. You’ll get an email when there’s something to hear.' :
-  project.stage === 'review_ready' && files.some(file => file.version === 'review') ? 'Your review is ready below. Listen when you can, then send one set of notes.' :
+  reviewShared && decision === 'approved' ? 'You approved this mix. Next come the remaining balance and your final files.' :
+  reviewShared && decision === 'changes' ? 'Your notes are in. I’ll start on the changes.' :
+  reviewShared ? 'Your review is ready below. Listen, then approve it or request changes.' :
   project.stage === 'revision_in_progress' ? 'Your notes are in. I’m working on the revision now.' :
   project.stage === 'final_files_ready' && finalExpiry ? 'Your final audio is ready to listen to or download below.' :
   project.stage === 'complete' && finalExpiry ? 'Your completed audio stays here through its availability date.' :
@@ -49,6 +54,7 @@ const moved = project?.original_due_at && project.current_due_at && project.orig
         return <ProjectPlayer src={href} name={file.display_name} label={file.version === 'final' ? 'Final audio' : 'Review audio'} peaks={file.peaks} downloadHref={file.downloadable ? `${href}?download=1` : undefined} />;
       })}
     </section>}
+    {reviewShared && !decision && <ReviewResponse endpoint={`/api/studio/projects/${encodeURIComponent(project.request_id)}/messages`} />}
     <AudioProjectUpdates updates={updates} currentDueAt={project.current_due_at} stage={project.stage} />
     <ProjectMessages messages={messages} endpoint={`/api/studio/projects/${encodeURIComponent(project.request_id)}/messages`} reader="client" closed={project.stage === 'complete'} />
   </article>
@@ -66,5 +72,5 @@ const moved = project?.original_due_at && project.current_due_at && project.orig
     .studio-files :global(.player + .player) { border-top: 1px solid var(--rule); }
     @media (max-width: 45rem) { .studio-date { text-align: left; } }
   </style>
-  <script>import { setupProjectMessages } from '~/scripts/project-messages'; import { setupProjectPlayers } from '~/scripts/project-player'; setupProjectMessages(); setupProjectPlayers();</script>
+  <script>import { setupProjectMessages } from '~/scripts/project-messages'; import { setupProjectPlayers } from '~/scripts/project-player'; import { setupReviewResponse } from '~/scripts/review-response'; setupProjectMessages(); setupProjectPlayers(); setupReviewResponse();</script>
 </BaseLayout> : <StudioUnavailable />}

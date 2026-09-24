@@ -31,7 +31,7 @@ function parts(body: string) {
   <div class="project-messages-heading"><p class="project-messages-kicker">Conversation</p><h2 id="project-messages-heading">Stay in the loop</h2></div>
   {messages.length ? <ol class="project-message-list">{messages.map(message =>
     <li class:list={{ mine: message.actor === reader }} data-unread-message={message.actor !== reader && !message.read_at ? message.id : undefined}>
-      <div class="project-message-meta"><strong>{message.actor === reader ? 'You' : message.actor === 'owner' ? 'Kazon' : 'Client'}</strong><time datetime={message.created_at}>{new Date(message.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' })}</time>{message.actor !== reader && !message.read_at && <span class="unread">New</span>}</div>
+      <div class="project-message-meta"><strong>{message.actor === reader ? 'You' : message.actor === 'owner' ? 'Kazon' : 'Client'}</strong>{message.review_decision && <span class:list={['decision', message.review_decision]}>{message.review_decision === 'approved' ? 'Approved the mix' : 'Requested changes'}</span>}<time datetime={message.created_at}>{new Date(message.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' })}</time>{message.actor !== reader && !message.read_at && <span class="unread">New</span>}</div>
       <p>{parts(message.body).map(part => part.href ? <a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a> : part.text)}</p>
     </li>
   )}</ol> : <p class="project-messages-empty">No messages yet.</p>}
@@ -54,6 +54,8 @@ function parts(body: string) {
   .project-message-list li { display: grid; gap: .45rem; }
   .project-message-meta { display: flex; gap: .9rem; align-items: baseline; flex-wrap: wrap; font: .78rem/1.4 Inter, sans-serif; color: var(--studio-muted); }
   .project-message-meta strong { color: var(--ink); font-weight: 600; }
+  .decision { padding: .05rem .5rem; border-radius: 1rem; font-weight: 600; background: color-mix(in srgb, var(--studio-done) 18%, var(--paper)); color: var(--ink); }
+  .decision.changes { background: color-mix(in srgb, var(--accent) 14%, var(--paper)); }
   .unread { padding: .05rem .45rem; border-radius: 1rem; background: color-mix(in srgb, var(--accent) 14%, var(--paper)); color: var(--accent); font-weight: 500; }
   .project-message-list p { margin: 0; padding: .85rem 1rem; border: 1px solid var(--rule); border-radius: 2px; background: var(--studio-field); white-space: pre-wrap; overflow-wrap: anywhere; font: .98rem/1.6 Inter, sans-serif; }
   .project-message-list li.mine p { background: var(--studio-soft); border-color: transparent; }

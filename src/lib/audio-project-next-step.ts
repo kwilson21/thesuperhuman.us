@@ -4,6 +4,8 @@ export type NextStepInput = {
   revoked: boolean;
   payment: { bookingStatus: string; balanceStatus: string; bookingCreationStartedAt?: string | null; balanceCreationStartedAt?: string | null } | null;
   stripeEnabled: boolean;
+  /** The client's answer to the latest published review, if any. */
+  reviewDecision?: 'approved' | 'changes' | null;
 };
 
 /** One instruction for the owner, the control on the request page that does it, and that control's name. */
@@ -19,7 +21,7 @@ const invoiceProblem = (which: string, status: string, stripeEnabled: boolean): 
   : { title: `Sort out the ${which} invoice`, detail: `The ${which} invoice was not paid. Follow the note in Book the work before taking another step.`, target: payment, action: 'See the invoice status' };
 
 /** What the owner does next to move a studio project along, or null once there is nothing left. */
-export function ownerNextStep({ stage, requestStatus, revoked, payment: pay, stripeEnabled }: NextStepInput): NextStep | null {
+export function ownerNextStep({ stage, requestStatus, revoked, payment: pay, stripeEnabled, reviewDecision = null }: NextStepInput): NextStep | null {
   if (revoked || requestStatus === 'withdrawn' || stage === 'complete') return null;
   // Resolving an unaccepted request closes its studio (migration 0015), so only new and reviewed remain.
   if (stage === 'files_under_review') return requestStatus === 'new'
@@ -41,10 +43,14 @@ export function ownerNextStep({ stage, requestStatus, revoked, payment: pay, str
   if (stage === 'review_ready') {
     const balance = pay?.balanceStatus ?? 'not_created';
     if (balance === 'paid') return { title: 'Deliver the final files', detail: 'The balance is paid. Upload the final file under Review and delivery with Version set to Final, then publish it.', target: upload, action: 'Upload file' };
-    if (balance === 'not_created') return pay?.balanceCreationStartedAt ? reconciling
-      : { title: 'Wait for notes, then revise or finish', detail: stripeEnabled
-        ? 'If the client asks for changes, begin a revision. If they approve the mix, create the balance invoice in Book the work; the final can be shared once it is paid.'
-        : 'If the client asks for changes, begin a revision. If they approve the mix, collect the balance another way and record it in Book the work; the final can be shared once it is recorded.', target: '#project-messages-heading', action: 'Read the conversation' };
+    if (balance === 'not_created') {
+      if (pay?.balanceCreationStartedAt) return reconciling;
+      if (reviewDecision === 'changes') return { title: 'Begin the revision', detail: 'The client requested changes. Their notes are in the conversation. Begin the revision to tell them you are on it.', target: '#begin-revision', action: 'Begin revision' };
+      if (reviewDecision === 'approved') return stripeEnabled
+        ? { title: 'Send the balance invoice', detail: 'The client approved the mix. Create the balance invoice in Book the work; the final can be shared once it is paid.', target: '#create-balance-invoice', action: 'Create balance invoice' }
+        : { title: 'Record the balance payment', detail: 'The client approved the mix. Collect the balance another way, then record it in Book the work; that unlocks the final delivery.', target: '#record-balance-payment', action: 'Record balance received' };
+      return { title: 'Waiting on the client’s answer', detail: 'The client was emailed the review and asked to approve it or request changes. Their answer appears in the conversation and updates this step. If they answer another way, begin a revision or record the balance yourself.', target: '#project-messages-heading', action: 'Read the conversation', waiting: true };
+    }
     if (balance === 'draft' || balance === 'open') return { title: 'Waiting on the balance payment', detail: 'The final file can be uploaded now, but it stays private until Stripe confirms the balance.', target: payment, action: 'See the balance status', waiting: true };
     return invoiceProblem('balance', balance, stripeEnabled);
   }

@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { completeClientCode, issueClientCode, revokeClientSession } from '~/lib/audio-client-access';
 import {
-  clientMessageRateLimited, listProjectMessages, markProjectMessagesRead, postClientProjectMessage,
-  postOwnerProjectMessage, validateProjectMessage,
+  clientMessageRateLimited, latestReviewDecision, listProjectMessages, markProjectMessagesRead, postClientProjectMessage,
+  postClientReviewDecision, postOwnerProjectMessage, validateProjectMessage,
 } from '~/lib/audio-project-messages';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
@@ -77,6 +77,38 @@ describe('audio project messages', () => {
     expect((await listProjectMessages(db, 'song-1'))[1].read_at).toBe(now.toISOString());
     await revokeClientSession(db, token, now);
     expect(await postClientProjectMessage(db, 'song-1', token, 'After revocation.', now)).toBeNull();
+    sql.close();
+  });
+
+  it('takes one answer per published review and starts over when a new review is shared', async () => {
+    const { sql, db, addRequest } = fixture();
+    addRequest('song-1');
+    const code = (await issueClientCode(db, 'artist@example.com', secret, now))!;
+    const token = (await completeClientCode(db, 'artist@example.com', code, secret, now))!;
+    const publish = (id: string, at: string) => sql.prepare(`INSERT INTO audio_project_files
+      (id,request_id,version,object_key,display_name,media_type,byte_size,status,uploaded_at,published_at)
+      VALUES (?,'song-1','review',?,'Mix.wav','audio/wav',10,'published',?,?)`).run(id, `key-${id}`, at, at);
+    // No answer before a review is shared, even at the right stage.
+    sql.prepare("UPDATE audio_projects SET stage='review_ready' WHERE request_id='song-1'").run();
+    expect(await postClientReviewDecision(db, 'song-1', token, 'approved', 'I approve this mix.', now)).toBeNull();
+    publish('review-1', '2026-09-22T11:00:00.000Z');
+    expect(await latestReviewDecision(db, 'song-1')).toBeNull();
+    const changes = await postClientReviewDecision(db, 'song-1', token, 'changes', 'Vocal up in verse two.', now);
+    expect(changes).toMatchObject({ actor: 'client', body: 'Vocal up in verse two.', review_decision: 'changes' });
+    expect(await latestReviewDecision(db, 'song-1')).toBe('changes');
+    // One answer per review.
+    expect(await postClientReviewDecision(db, 'song-1', token, 'approved', 'I approve this mix.', now)).toBeNull();
+    // Not while the revision is under way.
+    sql.prepare("UPDATE audio_projects SET stage='revision_in_progress' WHERE request_id='song-1'").run();
+    expect(await postClientReviewDecision(db, 'song-1', token, 'approved', 'I approve this mix.', now)).toBeNull();
+    // A new review clears the old answer and takes a fresh one.
+    sql.prepare("UPDATE audio_projects SET stage='review_ready' WHERE request_id='song-1'").run();
+    publish('review-2', '2026-09-22T13:00:00.000Z');
+    expect(await latestReviewDecision(db, 'song-1')).toBeNull();
+    const later = new Date('2026-09-22T14:00:00.000Z');
+    expect(await postClientReviewDecision(db, 'song-1', token, 'approved', 'I approve this mix.', later)).toMatchObject({ review_decision: 'approved' });
+    expect(await latestReviewDecision(db, 'song-1')).toBe('approved');
+    expect((await listProjectMessages(db, 'song-1')).map(message => message.review_decision)).toEqual(['changes', 'approved']);
     sql.close();
   });
 

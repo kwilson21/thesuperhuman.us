@@ -1,0 +1,31 @@
+---
+import '~/styles/studio.css';
+
+type Props = { endpoint: string };
+const { endpoint } = Astro.props;
+---
+<section class="review-response" aria-labelledby="review-response-heading">
+  <form data-review-response data-endpoint={endpoint}>
+    <p class="review-response-kicker">Your answer</p>
+    <h2 id="review-response-heading">What do you think of this mix?</h2>
+    <p class="review-response-lead">Approve it if it’s ready. If not, list every change you’d like in one set of notes.</p>
+    <label class="studio-field">Notes <small>Needed to request changes. Optional when approving.</small>
+      <textarea class="studio-textarea" name="body" rows="4" maxlength="4000" placeholder="For example: vocal up a little in the second verse, less reverb on the ad-libs."></textarea>
+    </label>
+    <div class="review-response-actions">
+      <button type="submit" class="studio-button" value="approved">Approve this mix</button>
+      <button type="submit" class="studio-button secondary" value="changes">Request changes</button>
+    </div>
+    <p class="studio-status" data-review-response-status role="status" aria-live="polite"></p>
+  </form>
+</section>
+<style>
+  .review-response { border-top: 1px solid var(--rule); padding: 2.5rem 0; }
+  form { display: grid; gap: 1rem; max-width: 46rem; }
+  .review-response-kicker { margin: 0; color: var(--accent); font: 500 .78rem/1.4 Inter, sans-serif; letter-spacing: .18em; text-transform: uppercase; }
+  h2 { margin: 0; font: 400 clamp(2rem, 4vw, 3rem)/1.1 Newsreader, Georgia, serif; }
+  .review-response-lead { margin: 0; color: var(--studio-muted); font: 1rem/1.6 Inter, sans-serif; }
+  .review-response-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+  .secondary { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .secondary:hover { color: var(--paper); }
+</style>
