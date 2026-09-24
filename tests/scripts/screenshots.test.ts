@@ -94,14 +94,35 @@ describe('screenshot coverage', () => {
     const manifest = {
       pages: [
         { name: 'home', path: '/' }, { name: 'work', path: '/work' }, { name: 'audio', path: '/audio' },
-        { name: 'services', path: '/services' }, { name: 'audio-services', path: '/audio/services' },
+        { name: 'about', path: '/about' }, { name: 'services', path: '/services' }, { name: 'audio-services', path: '/audio/services' },
         { name: 'privacy', path: '/privacy' }, { name: 'owner-today', path: '/owner' },
       ],
       scenarios: [{ name: 'owner-details', title: 'Owner detail pages', steps: [] }],
     };
     const selected = relevantScreenshots(manifest, ['src/components/SiteNav.astro', 'src/data/profile.ts']);
-    expect(selected.pages.map((page: { name: string }) => page.name)).toEqual(['home', 'work', 'audio', 'services', 'audio-services']);
+    expect(selected.pages.map((page: { name: string }) => page.name)).toEqual(['home', 'work', 'audio', 'about', 'services', 'audio-services']);
     expect(selected.scenarios).toEqual([]);
+  });
+
+  it('shows pages that consume changed public content and shared components', () => {
+    const manifest = { pages: [
+      { name: 'home', path: '/' }, { name: 'work', path: '/work' }, { name: 'about', path: '/about' },
+      { name: 'audio', path: '/audio' }, { name: 'audio-portfolio', path: '/audio/portfolio' },
+      { name: 'audio-releases', path: '/audio/releases' }, { name: 'audio-services', path: '/audio/services' },
+      { name: 'music-old-news', path: '/music/old-news' }, { name: 'services', path: '/services' },
+    ], scenarios: [] };
+    expect(relevantScreenshots(manifest, ['src/data/profile.ts']).pages.map((page: { name: string }) => page.name))
+      .toEqual(['home', 'work', 'about']);
+    expect(relevantScreenshots(manifest, ['src/content/pages/about.md']).pages.map((page: { name: string }) => page.name))
+      .toEqual(['about']);
+    expect(relevantScreenshots(manifest, ['src/layouts/ServiceSheet.astro', 'src/components/SoftwareServiceIllustration.astro'])
+      .pages.map((page: { name: string }) => page.name)).toEqual(['services']);
+    expect(relevantScreenshots(manifest, ['src/data/audio.ts']).pages.map((page: { name: string }) => page.name))
+      .toEqual(['audio']);
+    expect(relevantScreenshots(manifest, ['src/components/audio/LyricVideo.astro']).pages.map((page: { name: string }) => page.name))
+      .toEqual(['music-old-news']);
+    expect(relevantScreenshots(manifest, ['src/components/audio/AudioPlayer.astro']).pages.map((page: { name: string }) => page.name))
+      .toEqual(['audio-releases', 'music-old-news']);
   });
 
   it('includes a seeded scenario only when one of its routes changed', () => {

@@ -51,15 +51,31 @@ export const SCENARIO_PAGES = {
 // Show representative routes when shared UI changes, and focused routes for content changes.
 // The full capture still runs in CI; this only selects which validated captures appear in the PR.
 const SHARED_SITE_PAGES = ['home', 'work', 'audio', 'services', 'audio-services'];
+const AUDIO_SHELL_PAGES = ['audio', 'audio-about', 'audio-portfolio', 'audio-releases', 'audio-services', 'audio-start', 'music-old-news'];
 const PAGE_NAMES_BY_FILE = {
   'src/components/SiteNav.astro': SHARED_SITE_PAGES,
   'src/components/Footer.astro': SHARED_SITE_PAGES,
   'src/layouts/BaseLayout.astro': SHARED_SITE_PAGES,
   'src/components/ExperienceRow.astro': ['work'],
-  'src/data/profile.ts': ['work'],
-  'src/data/audio.ts': ['audio-portfolio'],
+  'src/components/SoftwareServiceIllustration.astro': ['services'],
+  'src/layouts/ServiceSheet.astro': ['services'],
+  'src/content/pages/about.md': ['about'],
+  'src/data/profile.ts': ['home', 'work', 'about'],
+  'src/data/audio.ts': ['audio'],
   'src/data/services.ts': ['services'],
   'src/styles/global.css': SHARED_SITE_PAGES,
+  'src/components/audio/AudioHero.astro': ['audio'],
+  'src/components/audio/AudioFooter.astro': AUDIO_SHELL_PAGES,
+  'src/components/audio/MusicNav.astro': AUDIO_SHELL_PAGES,
+  'src/components/audio/BookingForm.astro': ['audio'],
+  'src/components/audio/ServiceSection.astro': ['audio'],
+  'src/components/audio/ServiceIcon.astro': ['audio', 'audio-portfolio'],
+  'src/components/audio/TrackRow.astro': ['audio'],
+  'src/components/audio/ComparisonPlayer.astro': ['audio-portfolio', 'audio-services'],
+  'src/components/audio/PlayIcon.astro': ['audio-portfolio', 'audio-releases', 'audio-services', 'music-old-news'],
+  'src/components/audio/LyricVideo.astro': ['music-old-news'],
+  'src/components/audio/ReleaseInterest.astro': ['music-old-news'],
+  'src/components/audio/AudioPlayer.astro': ['audio-releases', 'music-old-news'],
 };
 
 function routeForPageFile(file) {
@@ -90,9 +106,6 @@ export function relevantScreenshots(manifest, changedFiles) {
       }
     }
 
-    if (file.startsWith('src/components/audio/')) {
-      for (const page of manifest.pages.filter(item => item.path === '/audio' || item.path.startsWith('/audio/'))) pageNames.add(page.name);
-    }
     if (file.startsWith('src/content/audio-tracks/')) pageNames.add('audio-portfolio');
   }
 
