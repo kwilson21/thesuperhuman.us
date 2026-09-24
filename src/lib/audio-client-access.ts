@@ -131,7 +131,8 @@ export async function clientProjectForSession(db: D1Database, token: string, pro
   if (!/^[0-9a-f-]{72}$/i.test(token)) return null;
   const tokenHash = await hashValue(token);
   return db.prepare(`SELECT p.request_id,p.stage,p.original_due_at,p.current_due_at,p.completed_at,
-    r.summary,r.service_id,pay.booking_status,pay.balance_status
+    r.summary,r.service_id,pay.booking_status,pay.balance_status,pay.booking_invoice_url,pay.balance_invoice_url,
+    pay.booking_amount_cents,pay.balance_amount_cents
     FROM audio_client_sessions s
     JOIN owner_requests r ON r.email=s.email
     JOIN audio_projects p ON p.request_id=r.id
@@ -141,7 +142,27 @@ export async function clientProjectForSession(db: D1Database, token: string, pro
     .bind(tokenHash, now.toISOString(), projectId)
     .first<{ request_id: string; stage: string; original_due_at: string | null; current_due_at: string | null;
       completed_at: string | null; summary: string; service_id: string | null;
-      booking_status: string | null; balance_status: string | null }>();
+      booking_status: string | null; balance_status: string | null; booking_invoice_url: string | null;
+      balance_invoice_url: string | null; booking_amount_cents: number | null; balance_amount_cents: number | null }>();
+}
+
+type PayableProject = Pick<NonNullable<Awaited<ReturnType<typeof clientProjectForSession>>>,
+  'booking_status' | 'balance_status' | 'booking_invoice_url' | 'balance_invoice_url' | 'booking_amount_cents' | 'balance_amount_cents'>;
+const unpaid = ['open', 'payment_failed'];
+/** A Stripe-hosted invoice link, and nothing else, so a stored value can never send the client elsewhere. */
+function stripeInvoiceUrl(value: string | null) {
+  try {
+    const url = new URL(value ?? '');
+    return url.protocol === 'https:' && url.hostname === 'invoice.stripe.com' ? url.href : null;
+  } catch { return null; }
+}
+
+/** The invoice the client can pay now, if any: the booking first, then the balance. */
+export function clientPaymentDue(project: PayableProject): { installment: 'booking' | 'balance'; href: string; amountCents: number } | null {
+  const booking = unpaid.includes(project.booking_status ?? '') ? stripeInvoiceUrl(project.booking_invoice_url) : null;
+  if (booking) return { installment: 'booking', href: booking, amountCents: Number(project.booking_amount_cents ?? 0) };
+  const balance = project.booking_status === 'paid' && unpaid.includes(project.balance_status ?? '') ? stripeInvoiceUrl(project.balance_invoice_url) : null;
+  return balance ? { installment: 'balance', href: balance, amountCents: Number(project.balance_amount_cents ?? 0) } : null;
 }
 
 export async function clientProjectsForSession(db: D1Database, token: string, now = new Date()) {

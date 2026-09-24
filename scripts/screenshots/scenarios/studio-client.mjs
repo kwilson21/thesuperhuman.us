@@ -55,6 +55,10 @@ export default {
     await ownerFetch(`${project}/updates`, { action: 'accept', dueDate: day(10), body: 'Thanks for sending this. I will start with the lead vocal and keep the arrangement as it is.' });
     await ownerFetch(`/api/owner/requests/${id}/payment`, { action: 'approve', approvedService: 'Two-track vocal mixing: Sample Song', totalAmountCents: 15000, offerAccepted: true });
     steps.push(await shots('Terms confirmed: record the booking paid outside Stripe', `/owner/requests/${id}`, 'studio-01b-owner-booking', { owner: true }));
+    // With Stripe on, the client sees the open booking invoice. Seeded here: invoices need Stripe.
+    sql(`UPDATE audio_payments SET booking_status='open',booking_invoice_url='https://invoice.stripe.com/i/acct_demo/test_booking' WHERE request_id='${id}'`);
+    steps.push(await shots('The client sees the booking invoice to pay', `/studio/projects/${id}`, 'studio-01c-client-pay', { cookie }));
+    sql(`UPDATE audio_payments SET booking_status='not_created',booking_invoice_url=NULL WHERE request_id='${id}'`);
     await ownerFetch(`/api/owner/requests/${id}/payment`, { action: 'record-payment-received', installment: 'booking', method: 'Zelle', received: true });
     await ownerFetch(`${project}/updates`, { action: 'start_work', body: 'Working on the lead vocal balance and de-essing first.' });
     await ownerFetch(`${project}/updates`, { action: 'revise_date', dueDate: day(14), reason: 'client_clarification', body: 'Moving the date while I wait on the alternate chorus take you mentioned.' });
