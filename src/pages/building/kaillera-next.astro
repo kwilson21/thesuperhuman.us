@@ -1,0 +1,13 @@
+---
+import ProjectLayout from '~/layouts/ProjectLayout.astro';
+import ProjectTimeline from '~/components/ProjectTimeline.astro';
+import { kailleraStory, kailleraMilestones } from '~/data/project-stories/kaillera-next';
+const entries = [...kailleraMilestones].sort((a, b) => a.day.localeCompare(b.day));
+---
+<ProjectLayout title={kailleraStory.title} subtitle={kailleraStory.subtitle} description={kailleraStory.description} status="In development" journalHref="#kaillera-next-updates-title">
+  <ProjectTimeline id="kaillera-next-updates" title="Development journal" entries={entries} selectedId="kaillera-next-first-playable" />
+  <p class="source-links"><a class="site-link" href="https://kaillera-next.thesuperhuman.us">Kaillera Next <span aria-hidden="true">↗</span></a><a class="site-link" href="https://github.com/kwilson21/kaillera-next">Kaillera Next on GitHub <span aria-hidden="true">↗</span></a></p>
+</ProjectLayout>
+<style>
+  .source-links { margin-top: 2rem; display: flex; flex-wrap: wrap; gap: 1.5rem; }
+</style>
