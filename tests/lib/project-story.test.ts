@@ -83,4 +83,17 @@ describe('one journal for curated and published milestones', () => {
   ]));
  });
 
+ it('pairs every documented mobile repair with an accessible before-and-after capture', () => {
+  const repairs = websiteMilestones.filter(({ id }) => [
+    'website-mobile-ab-playback',
+    'website-mobile-comparison-layout',
+    'website-owner-mobile-tooltips',
+  ].includes(id));
+  expect(repairs).toHaveLength(3);
+  for (const repair of repairs) {
+    expect(repair.visualProof?.before.kind).toBe('Browser capture');
+    expect(repair.visualProof?.after.kind).toBe('Browser capture');
+  }
+ });
+
 });
