@@ -24,9 +24,15 @@ Open a request from **Today**, **Campaigns**, or **Requests**. Each path reaches
 
 - **Reviewed** means you have assessed it.
 - **Resolved** means the next step is complete or the request will not proceed.
-- **Reopen** returns a resolved request to active review.
-- **Withdraw** stops the request and makes its contact detail eligible for immediate removal.
+- **Reopen** returns a resolved request to active review. If the request was declined before file approval, its provisional studio access was closed and does not reopen; ask the client to submit a new service request if the project resumes.
+- **Withdraw** stops the request. Non-studio contact detail becomes eligible for immediate removal; a private studio project's content is reviewed after 30 days before its contact detail is removed.
 - **Delete personal data** is performed by reviewed retention. It preserves the request category, status, dates, and audit trail while blanking contact fields and private notes. A service request stays out of retention while either payment installment is unfinished, so invoice recovery and file delivery remain possible.
+
+## Private studio projects
+
+When the portal is enabled, **Today** links to projects with unread client messages, failed progress-update emails, or a delivery date within two calendar days or already past due. Open the request from that list. Read and acknowledge client messages there; a response is optional when an update is enough. If an update email failed, check the saved update and retry it. If delivery needs more time, choose one of the documented reasons and give the client a revised date before the previous date passes. The project timeline preserves both dates.
+
+An invitation marked **sending** is uncertain, not proof that Resend accepted it. Check Resend before selecting the explicit retry. A failed private upload remains a draft; discard it from the owner request and retry only after R2 cleanup succeeds. A storage failure must not be described to the client as a delivered file. Closing project access signs the client out of that project and blocks future file requests; it does not void or refund invoices.
 
 Routine purchase, merchandise, and service requests do not send email. They appear in the owner center. A redacted urgent email is sent only when a valid request cannot be stored. Treat repeated storage alerts, owner authentication failures, media failures, or retention failures as urgent.
 
@@ -48,14 +54,27 @@ To stop new invoices, set `STRIPE_PAYMENTS_ENABLED=false` and deploy the reviewe
 
 ## Retention
 
-Raw playback is kept for 90 days. Daily human totals remain after cleanup, with sparse cities stored only as **Other locations**. City thresholds count distinct tab sessions, so replays in one tab do not increase the city toward visibility. Resolved purchase and merchandise contact data is removed after 90 days, resolved service contact data after one year, and withdrawn request contact data immediately unless an invoice exists, invoice creation is still reserved, or a paid booking still has a balance due.
+Raw playback is kept for 90 days. Daily human totals remain after cleanup, with sparse cities stored only as **Other locations**. City thresholds count distinct tab sessions, so replays in one tab do not increase the city toward visibility. Resolved purchase and merchandise contact data is removed after 90 days, resolved service contact data after one year, and non-studio withdrawn request contact data immediately unless an invoice exists, invoice creation is still reserved, or a paid booking still has a balance due. Studio contact data waits for its private-content cleanup and any live payment reconciliation.
+
+Studio data has a separate first step. Codes and expired, revoked, or inactive sessions become eligible 30 days after they stop being useful. Access and project audit rows become eligible after two years. For a withdrawn or declined project without an active payment, private content is eligible 30 days after closure, even if work had already started. Delivered project content becomes eligible 30 days after the last final file's one-year access period, at least 30 days after the last project activity, and at least 30 days after any newer unpublished file upload. A revoked final follows the same expiry and activity rules. Pending multipart uploads block project cleanup until the owner discards them. This is manual cleanup; the published privacy notice must say so.
+
+Revoking a project also signs out all studio sessions for that client's email. If the client has another active project, they can request a fresh sign-in code to reopen it.
+
+A sign-in code locks after five incorrect entries. Someone who knows a client's email could exhaust those attempts or the three-codes-per-five-minutes issuance limit. The client can request a fresh code when the limit clears; check the access audit and email delivery if they report repeated lockouts.
+
+Run studio cleanup at least monthly while the portal is in use:
+
+1. Run `npm run studio:retention:preview -- --remote` and review `.private/studio-retention-review.html`. It contains counts and hashes, not client messages, email addresses, or R2 keys.
+2. Apply the exact manifest with `npm run studio:retention:apply -- --remote` within 24 hours. The manifest records the database and R2 bucket from the selected Wrangler config (add `--config path` for another environment), and apply refuses to run against a different one. The command closes eligible project access before deleting private R2 objects. It then atomically clears project messages, updates, file metadata and old access records, and marks content removed.
+3. If R2 deletion fails, access stays closed but database content remains for recovery. Fix storage access, generate a new preview, and retry; do not manually erase the project row or remove its payment references.
+4. After studio cleanup, run the owner-retention preview and apply below to clear eligible request contact fields and Stripe references. A live or reconciling payment still blocks that step.
 
 1. Run `npm run owner:retention:preview -- --remote`.
 2. Open `.private/owner-retention-review.html`. Save any useful conclusions in the private development journal. The review must not contain names, email addresses, notes, IP addresses, or secrets.
 3. Apply only the matching manifest: `npm run owner:retention:apply -- --remote`.
 4. Run `npm run owner:health -- --remote` and confirm the retention check passes.
 
-There is no scheduled deletion at launch. To pause retention, do not run the apply command. A preview never deletes data.
+There is no scheduled deletion at launch. To pause retention, do not run an apply command. A preview never deletes data. Record each monthly run or reason it could not complete in the private operations journal; overdue cleanup is a launch or operations issue, not a silent exception.
 
 ## Recovery controls
 

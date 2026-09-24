@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { loadCampaignDesk, loadStudioLedger } from '~/lib/owner-reporting';
+import { listStudioProjectAttention, loadCampaignDesk, loadStudioLedger } from '~/lib/owner-reporting';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 
@@ -54,4 +54,39 @@ it('uses the same campaign evidence for the campaign desk', async () => {
   expect(desk?.demand).toEqual({ purchase: 7, merchandise: 7 });
   expect(desk?.requests).toHaveLength(10);
   expect(await loadCampaignDesk(fixture(), 'missing', new Date())).toBeNull();
+});
+
+it('shows unread client messages, failed notices, and approaching delivery dates in owner attention', async () => {
+  const sql = new DatabaseSync(':memory:');
+  sql.exec(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8'));
+  sql.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
+    VALUES ('due','service','due@example.com','Due song','reviewed','2026-09-01','2026-09-01'),
+      ('quiet','service','quiet@example.com','Quiet song','reviewed','2026-09-01','2026-09-01'),
+      ('review','service','review@example.com','Review song','reviewed','2026-09-01','2026-09-01'),
+      ('closed','service','closed@example.com','Closed song','withdrawn','2026-09-01','2026-09-01'),
+      ('late','service','late@example.com','Late song','reviewed','2026-09-01','2026-09-01');
+    UPDATE audio_projects SET stage='revision_in_progress',current_due_at='2026-09-21' WHERE request_id='late';
+    UPDATE audio_projects SET stage='in_progress',current_due_at='2026-09-24' WHERE request_id='due';
+    UPDATE audio_projects SET stage='in_progress',current_due_at='2026-10-01' WHERE request_id='quiet';
+    UPDATE audio_projects SET stage='review_ready',current_due_at='2026-09-24' WHERE request_id='review';
+    UPDATE audio_projects SET stage='in_progress',current_due_at='2026-09-24' WHERE request_id='closed';
+    INSERT INTO audio_project_messages(request_id,actor,actor_id,body,created_at)
+      VALUES ('due','client','session','Please check my files','2026-09-23');
+    INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at,notification_status)
+      VALUES ('due','progress','I have an update','owner','2026-09-23','failed');
+    INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at,notification_status,notification_attempted_at)
+      VALUES ('quiet','progress','Timed out a day ago','owner','2026-09-22T12:00:00Z','sending','2026-09-22T12:00:00Z'),
+        ('review','progress','Still sending','owner','2026-09-23T11:59:50Z','sending','2026-09-23T11:59:50Z');`);
+  const statement = (query: string, args: unknown[] = []) => ({
+    bind: (...values: unknown[]) => statement(query, values),
+    all: async () => ({ results: sql.prepare(query).all(...args) }),
+  });
+  const db = { prepare: (query: string) => statement(query) } as unknown as D1Database;
+  expect(await listStudioProjectAttention(db, new Date('2026-09-23T12:00:00Z'))).toEqual([
+    { requestId: 'due', summary: 'Due song', unreadMessages: 1, failedNotices: 1, uncheckedNotices: 0, dueSoon: true, stage: 'in_progress', bookingPaid: false, dueInDays: 1 },
+    { requestId: 'late', summary: 'Late song', unreadMessages: 0, failedNotices: 0, uncheckedNotices: 0, dueSoon: true, stage: 'revision_in_progress', bookingPaid: false, dueInDays: -2 },
+    // A notice still marked sending a day later needs a delivery check; one sent seconds ago does not.
+    { requestId: 'quiet', summary: 'Quiet song', unreadMessages: 0, failedNotices: 0, uncheckedNotices: 1, dueSoon: false, stage: 'in_progress', bookingPaid: false, dueInDays: null },
+  ]);
+  sql.close();
 });

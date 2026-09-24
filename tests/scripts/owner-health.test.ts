@@ -7,6 +7,8 @@ const requiredSchema = [
   'owner_campaigns', 'owner_requests', 'owner_request_audit',
   'music_playback_events', 'music_playback_daily', 'music_playback_geography_daily', 'owner_retention_runs',
   'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts', 'stripe_unmatched_events',
+  'audio_projects', 'audio_client_codes', 'audio_client_sessions', 'audio_client_access_audit',
+  'audio_project_messages', 'audio_project_updates', 'audio_project_files', 'audio_project_uploads',
 ];
 
 function healthyFixture() {
@@ -17,6 +19,7 @@ function healthyFixture() {
       if (sql.includes('sqlite_master')) return requiredSchema.map(name => ({ name }));
       if (sql.includes('owner_retention_runs')) return [{ completed_at: '2026-09-18T12:00:00Z' }];
       if (sql.includes('stripe_unmatched_events')) return [{ total: 0 }];
+      if (sql.includes('audio_client_codes')) return [{ total: 0 }];
       return [{ total: 2 }];
     },
     media: [
@@ -72,4 +75,13 @@ it('requires attention when a Stripe invoice event needs reconciliation', async 
   fixture.query = async (sql: string) => sql.includes('stripe_unmatched_events') ? [{ total: 1 }] : baseQuery(sql);
   const report = await ownerHealth(fixture);
   expect(report.checks).toContainEqual(expect.objectContaining({ id: 'stripe-unmatched', status: 'attention' }));
+});
+
+it('flags overdue studio cleanup without revealing client details', async () => {
+  const fixture = healthyFixture();
+  const baseQuery = fixture.query;
+  fixture.query = async (sql: string) => sql.includes('audio_client_codes') ? [{ total: 3 }] : baseQuery(sql);
+  const report = await ownerHealth(fixture);
+  expect(report.checks).toContainEqual(expect.objectContaining({ id: 'studio-retention', status: 'attention' }));
+  expect(JSON.stringify(report)).not.toContain('example.com');
 });

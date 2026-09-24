@@ -1,32 +1,60 @@
 ---
 export const prerender = false;
 import BaseLayout from '~/layouts/BaseLayout.astro';
-import { clientPortalEnabled, clientProjectsForSession, studioSessionFromRequest } from '~/lib/audio-client-access';
+import StageTrack from '~/components/StageTrack.astro';
+import { clientPortalEnabled, clientProjectsForSession, groupStudioProjects, studioSessionFromRequest } from '~/lib/audio-client-access';
 const env = Astro.locals.runtime?.env;
 if (!clientPortalEnabled(env)) return new Response('Not found', { status: 404 });
 if (!env.MUSIC_DB) return new Response('Studio is temporarily unavailable.', { status: 503 });
 const token = studioSessionFromRequest(Astro.request);
 const projects = token ? await clientProjectsForSession(env.MUSIC_DB, token) : null;
 if (!projects) return Astro.redirect('/studio/sign-in');
+const { active, delivered: done } = groupStudioProjects(projects);
+const stageName = (stage: string, bookingStatus: string | null) => stage === 'accepted' && bookingStatus === 'paid' ? 'Booking paid'
+  : stage.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase());
+const longDate = (value: string) => new Date(value).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+const through = (project: { final_expires_at: string | null; available: boolean }) => project.available ? `Available through ${longDate(project.final_expires_at!)}` : `Final files expired ${longDate(project.final_expires_at!)}`;
 ---
 <BaseLayout title="Your studio · Kazon" description="Your private audio projects." noindex>
   <article class="site-shell studio-home">
     <p class="studio-kicker">Your private studio</p>
     <h1>Your songs</h1>
-    {projects.length ? <ul>{projects.map(project => <li><a href={`/studio/projects/${project.request_id}`}><span>{project.summary}</span><span aria-hidden="true">→</span></a></li>)}</ul> : <p>No active projects are available for this email.</p>}
-    <button id="studio-sign-out" type="button">Sign out</button>
-    <p id="studio-sign-out-status" role="status"></p>
+    {projects.length === 0 && <p class="studio-empty">No active projects are available for this email.</p>}
+    {active.length > 0 && <ul class="song-list">{active.map(project => <li><a href={`/studio/projects/${project.request_id}`}>
+      <span class="song-title">{project.summary}</span>
+      <span class:list={['song-stage', { now: project.stage !== 'files_under_review' }]}>{stageName(project.stage, project.booking_status)}</span>
+      <StageTrack stage={project.stage} bookingPaid={project.booking_status === 'paid'} size="mini" />
+    </a></li>)}</ul>}
+    {done.length > 0 && <section class="delivered" aria-labelledby="delivered-heading">
+      <h2 id="delivered-heading"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.5" /><path d="M6 10.3l2.6 2.6L14.2 7.3" /></svg>Delivered</h2>
+      <ul class="song-list">{done.map(project => <li><a href={`/studio/projects/${project.request_id}`}>
+        <span class="song-title">{project.summary}</span>
+        <span class="song-stage">{through(project)}</span>
+        <StageTrack stage={project.stage} size="mini" />
+      </a></li>)}</ul>
+    </section>}
+    <button id="studio-sign-out" class="studio-quiet" type="button">Sign out</button>
+    <p id="studio-sign-out-status" class="studio-status" role="status"></p>
   </article>
   <style>
     .studio-home { max-width: 70rem; margin: 0 auto; padding: clamp(4rem, 10vw, 8rem) 1.5rem 8rem; }
-    .studio-kicker { color: #a4512f; font: 500 .78rem/1.4 Inter, sans-serif; letter-spacing: .18em; text-transform: uppercase; }
+    .studio-kicker { color: var(--accent); font: 500 .78rem/1.4 Inter, sans-serif; letter-spacing: .18em; text-transform: uppercase; }
     h1 { font: 400 clamp(3.8rem, 9vw, 7rem)/1 Newsreader, Georgia, serif; margin: 1rem 0 3rem; }
-    ul { list-style: none; padding: 0; }
-    li { border-top: 1px solid #d8d2c9; }
-    li:last-child { border-bottom: 1px solid #d8d2c9; }
-    a { display: flex; justify-content: space-between; gap: 2rem; padding: 1.5rem 0; font: 400 clamp(1.5rem, 4vw, 2.3rem)/1.2 Newsreader, Georgia, serif; text-decoration: none; }
-    a:hover { color: #a4512f; }
-    button { margin-top: 3rem; padding: .5rem 0; border: 0; border-bottom: 1px solid currentColor; background: none; cursor: pointer; font: 500 .9rem/1.4 Inter, sans-serif; }
+    .studio-empty { color: var(--studio-muted); font: 1rem/1.6 Inter, sans-serif; }
+    .song-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+    .song-list li { border-bottom: 1px solid var(--rule); }
+    .song-list a { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; align-items: center; gap: .6rem 2rem; padding: 1.6rem .25rem; border: 0; text-decoration: none; }
+    .song-list a:hover .song-title { color: var(--accent); }
+    .song-list a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .song-title { font: 400 clamp(1.5rem, 3.4vw, 2.2rem)/1.15 Newsreader, Georgia, serif; }
+    .song-stage { color: var(--studio-muted); font: .95rem/1.4 Inter, sans-serif; }
+    .song-stage.now { color: var(--accent); }
+    .delivered { margin-top: 3.5rem; }
+    .delivered h2 { display: flex; align-items: center; gap: .6rem; margin: 0 0 1rem; color: var(--accent); font: 500 .78rem/1.4 Inter, sans-serif; letter-spacing: .18em; text-transform: uppercase; }
+    .delivered svg { width: 1.3rem; height: 1.3rem; fill: none; stroke: currentColor; stroke-width: 1.4; }
+    .delivered .song-title { color: #3a3833; }
+    #studio-sign-out { margin-top: 3.5rem; }
+    @media (max-width: 45rem) { .song-list a { grid-template-columns: 1fr; gap: .5rem; } }
   </style>
   <script>
     document.querySelector('#studio-sign-out')?.addEventListener('click', async () => {

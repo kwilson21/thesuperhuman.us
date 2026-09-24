@@ -74,6 +74,12 @@ Owner publication requires `migrations/music/0012_audio_project_publication.sql`
 
 File and project revocation require `migrations/music/0013_audio_project_revocation.sql` after 0012. Revoking a published file immediately blocks playback and sends a minimal sign-in-link notice attached to the owner's explanation in the timeline. Closing project access immediately hides the project, invalidates that client's current sessions and pending code, and records an audit event; it does not change Stripe invoices. Resolving a provisional request before acceptance also closes that project's access through `migrations/music/0015_audio_project_close_declined.sql`; apply it after 0014 when deploying the full portal stack. The portal gate remains `false` until retention and operations checks are complete.
 
+Studio retention requires `migrations/music/0014_audio_project_retention.sql` after 0013. The [owner operations guide](docs/owner-operations.md) describes its review-first cleanup, private R2 deletion, failure recovery, and the order for running owner-request retention afterward. The owner Today page shows unread studio messages, failed update notices, and delivery dates needing attention when the portal is enabled. Keep `AUDIO_CLIENT_PORTAL_ENABLED=false` until migration reconciliation and the portal's accessibility, mobile, storage-failure, and email checks pass in the target environment.
+
+Waveform display requires `migrations/music/0016_audio_project_file_peaks.sql` after 0015. The owner's browser measures 160 loudness bars while uploading and sends them with the finished upload; the server only checks that they are whole numbers from 0 to 100. Files without them, including anything uploaded before 0016, show a plain progress bar instead of a waveform.
+
+Timeline milestones require `migrations/music/0017_audio_project_update_milestones.sql` after 0016. It adds a nullable `milestone` to owner updates so starting a revision and completing a project show by name instead of as a general studio update, and backfills existing notes from the audit row written in the same batch.
+
 The forms read `Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY` first, with
 `import.meta.env.PUBLIC_TURNSTILE_SITE_KEY` as a build-time fallback. Wrangler
 runtime vars are not automatically Astro build-time variables. An empty runtime

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   clientProjectForSession, clientProjectsForSession, completeClientCode,
-  discardUndeliveredCode, issueClientCode, listStudioSignInFailures, normalizeClientEmail, revokeClientSession, takeStudioAllowance,
+  discardUndeliveredCode, groupStudioProjects, issueClientCode, listStudioSignInFailures, normalizeClientEmail, revokeClientSession, takeStudioAllowance,
 } from '~/lib/audio-client-access';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
@@ -114,16 +114,17 @@ describe('audio client access', () => {
     sql.close();
   });
 
-  it('keeps a correct code usable after wrong attempts and rejects expired or undelivered codes', async () => {
+  it('locks a code after five wrong attempts and rejects expired or undelivered codes', async () => {
     const { sql, db, addRequest } = fixture();
     addRequest('song-1');
     const code = (await issueClientCode(db, 'artist@example.com', secret, now))!;
     const wrong = code === '00000000' ? '11111111' : '00000000';
-    for (let attempt = 0; attempt < 4; attempt++) {
+    for (let attempt = 0; attempt < 5; attempt++) {
       expect(await completeClientCode(db, 'artist@example.com', wrong, secret, now)).toBeNull();
     }
-    expect(await completeClientCode(db, 'artist@example.com', code, secret, now)).toBeTruthy();
+    expect(await completeClientCode(db, 'artist@example.com', code, secret, now)).toBeNull();
     const newer = (await issueClientCode(db, 'artist@example.com', secret, new Date(now.getTime() + 31_000)))!;
+    expect(await completeClientCode(db, 'artist@example.com', newer, secret, new Date(now.getTime() + 31_000))).toBeTruthy();
     expect(await completeClientCode(db, 'artist@example.com', newer, secret, new Date('2026-09-22T12:11:00Z'))).toBeNull();
     const undelivered = (await issueClientCode(db, 'artist@example.com', secret, new Date('2026-09-22T12:12:00Z')))!;
     await discardUndeliveredCode(db, 'artist@example.com', undelivered, secret, now);
@@ -143,5 +144,21 @@ describe('audio client access', () => {
       VALUES ('song-1','signed-in',?)`).run(now.toISOString());
     expect(await listStudioSignInFailures(db)).toEqual([]);
     sql.close();
+  });
+});
+
+describe('studio song groups', () => {
+  it('delivers only songs with a published final and marks expired ones', () => {
+    const now = new Date('2026-09-23T12:00:00Z');
+    const { active, delivered } = groupStudioProjects([
+      { id: 'working', stage: 'in_progress', final_expires_at: null },
+      { id: 'revoked-final', stage: 'final_files_ready', final_expires_at: null },
+      { id: 'current', stage: 'final_files_ready', final_expires_at: '2027-09-23T12:00:00Z' },
+      { id: 'expired', stage: 'complete', final_expires_at: '2026-09-01T12:00:00Z' },
+    ], now);
+    expect(active.map(project => project.id)).toEqual(['working', 'revoked-final']);
+    expect(delivered.map(({ id, available }) => ({ id, available }))).toEqual([
+      { id: 'current', available: true }, { id: 'expired', available: false },
+    ]);
   });
 });

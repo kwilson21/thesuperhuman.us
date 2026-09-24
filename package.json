@@ -27,6 +27,8 @@
     "music:report": "node scripts/music-report.mjs",
     "owner:retention:preview": "node scripts/owner-retention.mjs",
     "owner:retention:apply": "node scripts/owner-retention.mjs --apply .private/owner-retention-review.json",
+    "studio:retention:preview": "node scripts/studio-retention.mjs",
+    "studio:retention:apply": "node scripts/studio-retention.mjs --apply .private/studio-retention-review.json",
     "owner:health": "node scripts/owner-health.mjs",
     "owner:stripe:reconcile": "node scripts/stripe-reconciliation.mjs"
   },

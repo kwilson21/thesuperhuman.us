@@ -112,7 +112,7 @@ describe('project updates', () => {
     sql.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,status,uploaded_at,published_at)
       VALUES ('review-1','song-1','review','studio/projects/song-1/review-1.mp3','Review','audio/mpeg',5,'published',?,?)`)
       .run(now.toISOString(), now.toISOString());
-    expect(await saveProjectUpdate(db, 'song-1', 'owner@example.com', revision, now)).toMatchObject({ kind: 'progress' });
+    expect(await saveProjectUpdate(db, 'song-1', 'owner@example.com', revision, now)).toMatchObject({ kind: 'progress', milestone: 'revision_started' });
     expect(await saveProjectUpdate(db, 'song-1', 'owner@example.com', revision, now)).toBeNull();
     expect(sql.prepare("SELECT stage FROM audio_projects WHERE request_id='song-1'").get())
       .toEqual({ stage: 'revision_in_progress' });
@@ -125,8 +125,9 @@ describe('project updates', () => {
     sql.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,status,uploaded_at,published_at,expires_at)
       VALUES ('final-1','song-1','final','studio/projects/song-1/final-1.mp3','Final','audio/mpeg',5,'published',?,?,?)`)
       .run(now.toISOString(), now.toISOString(), '2027-09-22T12:00:00Z');
+    sql.prepare("UPDATE owner_requests SET status='resolved' WHERE id='song-1'").run();
     expect(await saveProjectUpdate(db, 'song-1', 'owner@example.com', close, new Date(now.getTime() + 1000)))
-      .toMatchObject({ kind: 'progress' });
+      .toMatchObject({ kind: 'progress', milestone: 'completed' });
     expect(await saveProjectUpdate(db, 'song-1', 'owner@example.com', close, new Date(now.getTime() + 1000))).toBeNull();
     expect(sql.prepare("SELECT stage,completed_at FROM audio_projects WHERE request_id='song-1'").get())
       .toEqual({ stage: 'complete', completed_at: new Date(now.getTime() + 1000).toISOString() });

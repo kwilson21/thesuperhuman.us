@@ -25,3 +25,17 @@ it('rejects a wrongly sized part before sending it to R2', async () => {
   expect((await PUT(context)).status).toBe(400);
   expect(reachedR2).toBe(false);
 });
+
+it('checks the received part size even without a content-length header', async () => {
+  let reachedR2 = false;
+  const db = { prepare: (query: string) => ({ bind: () => ({ first: async () => query.includes('audio_project_uploads')
+    ? { id: uuid, request_id: 'song-1', object_key: 'studio/projects/song-1/test.wav', upload_id: 'r2-id', byte_size: 10, state: 'pending' }
+    : { '1': 1 } }) }) };
+  const body = new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(9)); controller.close(); } });
+  const request = new Request(`${url}?uploadId=${uuid}&part=1`, { method: 'PUT', body, duplex: 'half' } as RequestInit);
+  const context = { params: { id: 'song-1' }, request, locals: { owner: { email: 'owner@example.com' }, runtime: { env: {
+    AUDIO_CLIENT_PORTAL_ENABLED: 'true', MUSIC_DB: db, AUDIO: { resumeMultipartUpload: () => { reachedR2 = true; } },
+  } } } } as any;
+  expect((await PUT(context)).status).toBe(400);
+  expect(reachedR2).toBe(false);
+});

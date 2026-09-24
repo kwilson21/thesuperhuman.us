@@ -60,14 +60,34 @@ export function expectedPartLength(byteSize: number, partNumber: number): number
   return Math.min(uploadPartSize, byteSize - (partNumber - 1) * uploadPartSize);
 }
 
+/** Reads a request body only up to `limit` bytes; returns null as soon as it would exceed it. */
+export async function readBodyWithin(body: ReadableStream<Uint8Array>, limit: number): Promise<ArrayBuffer | null> {
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > limit) { await reader.cancel().catch(() => {}); return null; }
+      chunks.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  const joined = new Uint8Array(total);
+  let at = 0;
+  for (const chunk of chunks) { joined.set(chunk, at); at += chunk.byteLength; }
+  return joined.buffer;
+}
+
 export async function putProjectUploadPart(bucket: R2Bucket, upload: ProjectUpload, partNumber: number,
-  body: ReadableStream): Promise<R2UploadedPart> {
+  body: ArrayBuffer): Promise<R2UploadedPart> {
   if (upload.state !== 'pending') throw new Error('This upload is being discarded.');
   return bucket.resumeMultipartUpload(upload.object_key, upload.upload_id).uploadPart(partNumber, body);
 }
 
 export async function finishProjectUpload(db: D1Database, bucket: R2Bucket, upload: ProjectUpload,
-  parts: R2UploadedPart[] | null, now = new Date()): Promise<'saved' | 'blocked' | 'size-mismatch'> {
+  parts: R2UploadedPart[] | null, now = new Date(), peaks: number[] | null = null): Promise<'saved' | 'blocked' | 'size-mismatch'> {
   if (upload.state !== 'pending') return 'blocked';
   if (!await ownerProjectCanUpload(db, upload.request_id, upload.version)) return 'blocked';
   const count = Math.ceil(upload.byte_size / uploadPartSize);
@@ -78,11 +98,11 @@ export async function finishProjectUpload(db: D1Database, bucket: R2Bucket, uplo
     object = await bucket.resumeMultipartUpload(upload.object_key, upload.upload_id).complete(parts);
   }
   if (object.size !== upload.byte_size) return 'size-mismatch';
-  const saved = await db.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,uploaded_at)
-    SELECT id,request_id,version,object_key,display_name,media_type,byte_size,?
+  const saved = await db.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,uploaded_at,peaks)
+    SELECT id,request_id,version,object_key,display_name,media_type,byte_size,?,?
     FROM audio_project_uploads WHERE id=? AND request_id=? AND state='pending' AND ${activeProject(upload.version)}
     ON CONFLICT(id) DO NOTHING RETURNING id`)
-    .bind(now.toISOString(), upload.id, upload.request_id, upload.request_id).first<{ id: string }>();
+    .bind(now.toISOString(), peaks ? JSON.stringify(peaks) : null, upload.id, upload.request_id, upload.request_id).first<{ id: string }>();
   const existing = saved || await db.prepare('SELECT id FROM audio_project_files WHERE id=? AND request_id=?')
     .bind(upload.id, upload.request_id).first<{ id: string }>();
   if (!existing) return 'blocked';

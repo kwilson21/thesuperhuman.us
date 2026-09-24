@@ -151,11 +151,16 @@ export async function clientProjectsForSession(db: D1Database, token: string, no
     WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL`)
     .bind(tokenHash, now.toISOString()).first<{ email: string }>();
   if (!session) return null;
-  const projects = await db.prepare(`SELECT p.request_id,p.stage,r.summary FROM audio_projects p
+  // Only a published, unrevoked final with an expiry counts as delivered for the list.
+  const projects = await db.prepare(`SELECT p.request_id,p.stage,r.summary,pay.booking_status,
+      (SELECT MAX(f.expires_at) FROM audio_project_files f WHERE f.request_id=p.request_id
+        AND f.version='final' AND f.status='published' AND f.expires_at IS NOT NULL) AS final_expires_at
+    FROM audio_projects p
     JOIN owner_requests r ON r.id=p.request_id
+    LEFT JOIN audio_payments pay ON pay.request_id=p.request_id
     WHERE r.email=? AND r.status<>'withdrawn' AND p.revoked_at IS NULL
     ORDER BY p.created_at DESC`).bind(session.email)
-    .all<{ request_id: string; stage: string; summary: string }>();
+    .all<{ request_id: string; stage: string; summary: string; booking_status: string | null; final_expires_at: string | null }>();
   return projects.results;
 }
 
@@ -177,4 +182,17 @@ export function clearStudioSessionCookie(secure: boolean): string {
 export function studioSessionFromRequest(request: Request): string | null {
   const match = request.headers.get('cookie')?.match(/(?:^|;\s*)studio_session=([0-9a-f-]{72})(?:;|$)/i);
   return match?.[1] ?? null;
+}
+
+type ListedProject = { stage: string; final_expires_at: string | null };
+/**
+ * Splits a client's songs into active and delivered. Delivered needs a published final file, not just
+ * a stage, so a revoked final keeps the song active. `available` is false once the final has expired.
+ */
+export function groupStudioProjects<T extends ListedProject>(projects: T[], now = new Date()) {
+  const delivered = (project: T) => (project.stage === 'final_files_ready' || project.stage === 'complete') && Boolean(project.final_expires_at);
+  return {
+    active: projects.filter(project => !delivered(project)),
+    delivered: projects.filter(delivered).map(project => ({ ...project, available: Date.parse(project.final_expires_at!) > now.getTime() })),
+  };
 }

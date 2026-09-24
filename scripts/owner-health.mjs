@@ -5,9 +5,11 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { openMusicDatabase } from './music-analytics.mjs';
 import { renderMusicReport } from './music-report-view.mjs';
+import { studioRetentionProjectPredicate } from './studio-retention.mjs';
 
 const requiredConfiguration = ['MUSIC_DB', 'AUDIO', 'OWNER_ACCESS_TEAM_DOMAIN', 'OWNER_ACCESS_AUD', 'OWNER_EMAIL'];
-const requiredSchema = ['owner_campaigns', 'owner_requests', 'owner_request_audit', 'music_playback_events', 'music_playback_daily', 'music_playback_geography_daily', 'owner_retention_runs', 'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts', 'stripe_unmatched_events'];
+const requiredSchema = ['owner_campaigns', 'owner_requests', 'owner_request_audit', 'music_playback_events', 'music_playback_daily', 'music_playback_geography_daily', 'owner_retention_runs', 'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts', 'stripe_unmatched_events',
+  'audio_projects', 'audio_client_codes', 'audio_client_sessions', 'audio_client_access_audit', 'audio_project_messages', 'audio_project_updates', 'audio_project_files', 'audio_project_uploads'];
 const attention = (id, summary, next) => ({ id, status: 'attention', summary, next });
 const pass = (id, summary) => ({ id, status: 'pass', summary, next: '' });
 
@@ -74,6 +76,23 @@ export async function ownerHealth({ now = new Date(), configuredNames, query, me
       : attention('retention', 'No successful retention run was recorded in the last 100 days.', 'Preview retention, preserve important aggregate observations, then apply the exact reviewed manifest.'));
   } catch {
     checks.push(attention('retention', 'Retention history could not be read.', 'Confirm the retention migration and run the preview again.'));
+  }
+
+  try {
+    const old = new Date(now.getTime() - 30 * 86400000).toISOString();
+    const rows = await query(`SELECT
+      (SELECT COUNT(*) FROM audio_client_codes WHERE COALESCE(used_at,expires_at)< '${old}')
+      +(SELECT COUNT(*) FROM audio_client_sessions WHERE expires_at<'${old}' OR revoked_at<'${old}' OR last_seen_at<'${old}')
+      +(SELECT COUNT(*) FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
+        WHERE ${studioRetentionProjectPredicate(now)}) AS total`);
+    const total = Number(rows[0]?.total);
+    if (!Number.isFinite(total)) throw new Error('invalid summary');
+    checks.push(total > 0
+      ? attention('studio-retention', `${total} studio retention item${total === 1 ? '' : 's'} need review.`,
+        'Preview studio retention, resolve pending uploads or payments, then apply the exact reviewed manifest.')
+      : pass('studio-retention', 'No overdue studio retention items were found.'));
+  } catch {
+    checks.push(attention('studio-retention', 'Studio retention could not be checked.', 'Confirm migration 0014 and the music database, then run the studio retention preview.'));
   }
 
   return { status: checks.every(check => check.status === 'pass') ? 'healthy' : 'attention', checkedAt: now.toISOString(), checks };

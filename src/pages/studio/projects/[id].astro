@@ -7,59 +7,64 @@ import { listProjectUpdates } from '~/lib/audio-project-updates';
 import { clientProjectFiles } from '~/lib/audio-project-files';
 import ProjectMessages from '~/components/ProjectMessages.astro';
 import AudioProjectUpdates from '~/components/AudioProjectUpdates.astro';
+import ProjectPlayer from '~/components/ProjectPlayer.astro';
+import StageTrack from '~/components/StageTrack.astro';
+import StudioUnavailable from '~/components/StudioUnavailable.astro';
 const env = Astro.locals.runtime?.env;
 if (!clientPortalEnabled(env)) return new Response('Not found', { status: 404 });
 if (!env.MUSIC_DB) return new Response('Studio is temporarily unavailable.', { status: 503 });
 const token = studioSessionFromRequest(Astro.request);
 if (!token) return Astro.redirect('/studio/sign-in');
 const project = Astro.params.id ? await clientProjectForSession(env.MUSIC_DB, token, Astro.params.id) : null;
-if (!project) return new Response('Project not found.', { status: 404 });
-const messages = await listProjectMessages(env.MUSIC_DB, project.request_id);
-const updates = await listProjectUpdates(env.MUSIC_DB, project.request_id);
-const files = await clientProjectFiles(env.MUSIC_DB, project.request_id, token);
+if (!project) Astro.response.status = 404;
+const messages = project ? await listProjectMessages(env.MUSIC_DB, project.request_id) : [];
+const updates = project ? await listProjectUpdates(env.MUSIC_DB, project.request_id) : [];
+const files = project ? await clientProjectFiles(env.MUSIC_DB, project.request_id, token) : [];
 const finalExpiry = files.find(file => file.version === 'final')?.expires_at;
-const stage = project.stage === 'accepted' && project.booking_status === 'paid' ? 'Booking paid' :
-  project.stage.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase());
-const next = project.stage === 'files_under_review' ? 'I’m checking the files and direction you sent.' :
+const next = !project ? '' : project.stage === 'files_under_review' ? 'I’m checking the files and direction you sent.' :
   project.stage === 'accepted' && project.booking_status !== 'paid' ? 'Your booking details are being confirmed.' :
   project.stage === 'accepted' ? 'Your song is booked. I’ll post an update when work begins.' :
+  project.stage === 'in_progress' ? 'I’m working on your song. You’ll get an email when there’s something to hear.' :
   project.stage === 'review_ready' && files.some(file => file.version === 'review') ? 'Your review is ready below. Listen when you can, then send one set of notes.' :
+  project.stage === 'revision_in_progress' ? 'Your notes are in. I’m working on the revision now.' :
   project.stage === 'final_files_ready' && finalExpiry ? 'Your final audio is ready to listen to or download below.' :
-  project.stage === 'complete' && finalExpiry ? 'Your completed audio remains here through its availability date.' :
+  project.stage === 'complete' && finalExpiry ? 'Your completed audio stays here through its availability date.' :
   'I’ll keep this page updated as your song moves forward.';
+const longDate = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+const moved = project?.original_due_at && project.current_due_at && project.original_due_at !== project.current_due_at;
 ---
-<BaseLayout title={`${project.summary} · Studio`} description="Your private audio project." noindex>
+{project ? <BaseLayout title={`${project.summary} · Studio`} description="Your private audio project." noindex>
   <article class="site-shell studio-project">
     <p class="studio-kicker"><a href="/studio">Your songs</a> / Project</p>
     <h1>{project.summary}</h1>
-    <div class="studio-rule"></div>
-    <section aria-labelledby="studio-stage"><p class="studio-label">Where we are</p><h2 id="studio-stage">{stage}</h2><p>{next}</p></section>
-    {finalExpiry ? <section aria-labelledby="studio-date"><p class="studio-label">Available through</p><h2 id="studio-date">{new Date(finalExpiry).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}</h2></section>
-      : project.current_due_at && <section aria-labelledby="studio-date"><p class="studio-label">Expected by</p><h2 id="studio-date">{new Date(`${project.current_due_at}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</h2></section>}
-    {files.length > 0 && <section class="studio-files" aria-labelledby="studio-files-heading"><p class="studio-label">Listen</p><h2 id="studio-files-heading">Your audio</h2><ol>{files.map(file => {
-      const href = `/api/studio/projects/${encodeURIComponent(project.request_id)}/files/${encodeURIComponent(file.id)}`;
-      return <li><strong>{file.display_name}</strong><span>{file.version === 'final' ? 'Final audio' : 'Review audio'}</span><audio controls preload="none" src={href} aria-label={`Play ${file.display_name}`}></audio>{Boolean(file.downloadable) && <a href={`${href}?download=1`}>Download {file.display_name}</a>}</li>;
-    })}</ol></section>}
+    <StageTrack stage={project.stage} bookingPaid={project.booking_status === 'paid'} />
+    <div class="studio-status-row">
+      <p class="studio-next">{next}</p>
+      {finalExpiry ? <p class="studio-date"><span>Available through</span><strong>{new Date(finalExpiry).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}</strong></p>
+        : project.current_due_at && <p class="studio-date"><span>Expected by</span><strong>{longDate(project.current_due_at)}</strong>{moved && <del>{longDate(project.original_due_at!)}</del>}</p>}
+    </div>
+    {files.length > 0 && <section class="studio-files" aria-labelledby="studio-files-heading"><h2 id="studio-files-heading" class="studio-kicker">Listen</h2>
+      {files.map(file => {
+        const href = `/api/studio/projects/${encodeURIComponent(project.request_id)}/files/${encodeURIComponent(file.id)}`;
+        return <ProjectPlayer src={href} name={file.display_name} label={file.version === 'final' ? 'Final audio' : 'Review audio'} peaks={file.peaks} downloadHref={file.downloadable ? `${href}?download=1` : undefined} />;
+      })}
+    </section>}
     <AudioProjectUpdates updates={updates} currentDueAt={project.current_due_at} stage={project.stage} />
     <ProjectMessages messages={messages} endpoint={`/api/studio/projects/${encodeURIComponent(project.request_id)}/messages`} reader="client" closed={project.stage === 'complete'} />
   </article>
   <style>
     .studio-project { max-width: 72rem; margin: 0 auto; padding: clamp(4rem, 9vw, 7rem) 1.5rem 8rem; }
-    .studio-kicker,.studio-label { color: #a4512f; font: 500 .78rem/1.4 Inter, sans-serif; letter-spacing: .18em; text-transform: uppercase; }
+    .studio-kicker { margin: 0; color: var(--accent); font: 500 .78rem/1.4 Inter, sans-serif; letter-spacing: .18em; text-transform: uppercase; }
     .studio-kicker a { text-decoration: underline; text-underline-offset: .25em; }
-    h1 { font: 400 clamp(3.5rem, 8vw, 6.8rem)/1 Newsreader, Georgia, serif; margin: 1.5rem 0 3rem; max-width: 60rem; }
-    .studio-rule { border-top: 1px solid #d8d2c9; }
-    section { display: grid; grid-template-columns: minmax(9rem, 1fr) minmax(0, 3fr); gap: .8rem 1.5rem; border-bottom: 1px solid #d8d2c9; padding: 2.3rem 0; }
-    .studio-label { grid-row: span 2; margin: .6rem 0 0; }
-    h2 { font: 400 clamp(2rem, 5vw, 3.6rem)/1.1 Newsreader, Georgia, serif; margin: 0; }
-    section p:last-child { font: 1rem/1.6 Inter, sans-serif; color: #4d4b47; }
-    .studio-files ol { grid-column: 2; list-style: none; display: grid; gap: 1.5rem; padding: 0; margin: 0; }
-    .studio-files li { display: grid; gap: .7rem; padding: 1rem 0; border-top: 1px solid #d8d2c9; font: .9rem/1.5 Inter, sans-serif; }
-    .studio-files li strong { font: 400 1.5rem/1.2 Newsreader, Georgia, serif; }
-    .studio-files li span { color: #66615a; }
-    .studio-files audio { width: min(100%, 38rem); }
-    .studio-files a { justify-self: start; text-decoration: underline; text-underline-offset: .2em; }
-    @media(max-width: 45rem) { section { grid-template-columns: 1fr; } .studio-label { grid-row: auto; } .studio-files ol { grid-column: 1; } }
+    h1 { font: 400 clamp(3.2rem, 8vw, 6.4rem)/1 Newsreader, Georgia, serif; margin: 1.5rem 0 3rem; max-width: 60rem; text-wrap: balance; }
+    .studio-status-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 1.5rem 3rem; margin: 3rem 0 0; padding: 2rem 0; border-top: 1px solid var(--rule); }
+    .studio-next { max-width: 34rem; margin: 0; font: 400 clamp(1.35rem, 2.6vw, 1.8rem)/1.3 Newsreader, Georgia, serif; }
+    .studio-date { display: grid; gap: .2rem; margin: 0; text-align: right; font: .82rem/1.4 Inter, sans-serif; color: var(--studio-muted); }
+    .studio-date strong { color: var(--ink); font: 400 1.7rem/1.1 Newsreader, Georgia, serif; }
+    .studio-date del { font-size: .82rem; }
+    .studio-files { display: grid; padding: 1.5rem 0 2rem; border-top: 1px solid var(--rule); }
+    .studio-files :global(.player + .player) { border-top: 1px solid var(--rule); }
+    @media (max-width: 45rem) { .studio-date { text-align: left; } }
   </style>
-  <script>import { setupProjectMessages } from '~/scripts/project-messages'; setupProjectMessages();</script>
-</BaseLayout>
+  <script>import { setupProjectMessages } from '~/scripts/project-messages'; import { setupProjectPlayers } from '~/scripts/project-player'; setupProjectMessages(); setupProjectPlayers();</script>
+</BaseLayout> : <StudioUnavailable />}

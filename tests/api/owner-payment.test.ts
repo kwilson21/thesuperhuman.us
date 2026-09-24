@@ -103,6 +103,7 @@ it('creates and records one booking invoice after approval', async () => {
 it('does not create an invoice after retention deletes a withdrawn request', async () => {
   await POST(context({ action: 'approve', approvedService: 'Mix', totalAmountCents: 20_000, offerAccepted: true }));
   sql.exec("UPDATE owner_requests SET status='withdrawn' WHERE id='request-1'");
+  sql.exec("UPDATE audio_projects SET revoked_at='2026-09-19',content_deleted_at='2026-09-20' WHERE request_id='request-1'");
   const retentionDb = {
     query: async (query: string) => sql.prepare(query).all(),
     batch: async (queries: string[]) => {

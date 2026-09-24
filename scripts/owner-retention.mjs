@@ -15,13 +15,15 @@ const unstartedPaymentInstallment = installment => `(${installment}_status='not_
 const finishedBookingInstallment = `(booking_status IN (${terminalPaymentStatuses}) OR ${unstartedPaymentInstallment('booking')})`;
 const finishedBalanceInstallment = `(balance_status IN (${terminalPaymentStatuses})
   OR (${unstartedPaymentInstallment('balance')} AND booking_status<>'paid'))`;
-const finishedPaymentTerms = `${finishedBookingInstallment} AND ${finishedBalanceInstallment}`;
-const requestEligibility = (now, paymentGuard = '1') => `(status='withdrawn' OR (contact_delete_after IS NOT NULL AND contact_delete_after<=${quote(now.toISOString())})
+export const finishedPaymentTerms = `${finishedBookingInstallment} AND ${finishedBalanceInstallment}`;
+const requestEligibility = (now, paymentGuard = '1', portalGuard = '1', portalCompleted = '0') => `(status='withdrawn' OR (contact_delete_after IS NOT NULL AND contact_delete_after<=${quote(now.toISOString())})
   OR (status='resolved' AND kind<>'service' AND resolved_at<${quote(dayCutoff(now, 90))})
-  OR (status='resolved' AND kind='service' AND resolved_at<${quote(dayCutoff(now, 365))}))
-  AND (name<>'' OR email<>'' OR city_region<>'' OR details_json<>'{}' OR private_note<>'') AND (${paymentGuard})`;
-const requestSnapshot = (now, selection = '1', paymentGuard = '1') => `SELECT json_group_array(json_array(id,updated_at)) AS snapshot FROM
-  (SELECT id,updated_at FROM owner_requests WHERE ${requestEligibility(now, paymentGuard)} AND (${selection}) ORDER BY id)`;
+  OR (status='resolved' AND kind='service' AND resolved_at<${quote(dayCutoff(now, 365))})
+  OR (${portalCompleted}))
+  AND (name<>'' OR email<>'' OR city_region<>'' OR details_json<>'{}' OR private_note<>'' OR summary<>'')
+  AND (${paymentGuard}) AND (${portalGuard})`;
+const requestSnapshot = (now, selection = '1', paymentGuard = '1', portalGuard = '1', portalCompleted = '0') => `SELECT json_group_array(json_array(id,updated_at)) AS snapshot FROM
+  (SELECT id,updated_at FROM owner_requests WHERE ${requestEligibility(now, paymentGuard, portalGuard, portalCompleted)} AND (${selection}) ORDER BY id)`;
 const playbackSnapshot = (cutoff, selection = '1') => `SELECT json_group_array(json_array(id,occurred_at)) AS snapshot FROM
   (SELECT id,occurred_at FROM music_playback_events WHERE occurred_at<${quote(cutoff)} AND (${selection}) ORDER BY id LIMIT 1000)`;
 const playbackSummary = (cutoff, selection = '1') => `SELECT substr(occurred_at,1,10) AS day,release_id,recording_id,medium,event,
@@ -37,15 +39,27 @@ async function paymentRetentionGuard(database) {
     AND NOT (${finishedPaymentTerms}))`;
 }
 
+async function portalRetentionGuard(database) {
+  const tables = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='audio_projects'");
+  if (!tables.length) return { guard: '1', completed: '0' };
+  const columns = new Set((await database.query('PRAGMA table_info(audio_projects)')).map(row => String(row.name)));
+  if (!columns.has('content_deleted_at')) throw new Error('Studio retention migration 0014 is required before owner retention can run.');
+  return {
+    guard: `NOT EXISTS(SELECT 1 FROM audio_projects p WHERE p.request_id=owner_requests.id AND p.content_deleted_at IS NULL)`,
+    completed: `EXISTS(SELECT 1 FROM audio_projects p WHERE p.request_id=owner_requests.id AND p.content_deleted_at IS NOT NULL)`,
+  };
+}
+
 export async function previewOwnerRetention(database, environment, now = new Date()) {
   const cutoff = dayCutoff(now, 90);
   const paymentGuard = await paymentRetentionGuard(database);
-  const [{ snapshot: requests }] = await database.query(requestSnapshot(now, '1', paymentGuard));
+  const portal = await portalRetentionGuard(database);
+  const [{ snapshot: requests }] = await database.query(requestSnapshot(now, '1', paymentGuard, portal.guard, portal.completed));
   const [{ snapshot: playback }] = await database.query(playbackSnapshot(cutoff));
   const playbackRows = JSON.parse(playback); const selection = idsSelection(playbackRows);
   const dailySummary = await database.query(playbackSummary(cutoff, selection));
   const [{ total: allPlayback }] = await database.query(`SELECT COUNT(*) AS total FROM music_playback_events WHERE occurred_at<${quote(cutoff)}`);
-  const [requestCheck] = await database.query(requestSnapshot(now, '1', paymentGuard));
+  const [requestCheck] = await database.query(requestSnapshot(now, '1', paymentGuard, portal.guard, portal.completed));
   const [playbackCheck] = await database.query(playbackSnapshot(cutoff));
   if (requestCheck.snapshot !== requests || playbackCheck.snapshot !== playback) throw new Error('Eligible owner data changed during preview. Generate a fresh review.');
   return {
@@ -77,7 +91,8 @@ async function verifyTriggers(database) {
 export async function applyOwnerRetention(database, review, environment, now = new Date()) {
   validateReview(review, environment, now);
   const paymentGuard = await paymentRetentionGuard(database);
-  const [{ snapshot: requests }] = await database.query(requestSnapshot(now, '1', paymentGuard));
+  const portal = await portalRetentionGuard(database);
+  const [{ snapshot: requests }] = await database.query(requestSnapshot(now, '1', paymentGuard, portal.guard, portal.completed));
   const [{ snapshot: playback }] = await database.query(playbackSnapshot(review.playbackCutoff));
   if (hash(requests) !== review.requestSourceHash || hash(playback) !== review.playbackSourceHash) throw new Error('Eligible owner data changed or this review was already applied. Generate and review a fresh preview.');
   const playbackRows = JSON.parse(playback); const playbackSelection = idsSelection(playbackRows);
@@ -108,10 +123,10 @@ export async function applyOwnerRetention(database, review, environment, now = n
   const guard = (query, expected) => `SELECT CASE WHEN (${query})=${quote(expected)} THEN 1 ELSE json_extract('retention source changed','$') END`;
   const runId = hash(`${review.generatedAt}:${review.requestSourceHash}:${review.playbackSourceHash}`);
   const statements = [
-    guard(requestSnapshot(now, '1', paymentGuard), requests),
+    guard(requestSnapshot(now, '1', paymentGuard, portal.guard, portal.completed), requests),
     guard(playbackSnapshot(review.playbackCutoff), playback),
     ...paymentCleanup,
-    `UPDATE owner_requests SET name='',email='',city_region='',details_json='{}',private_note='',updated_at=${quote(now.toISOString())} WHERE ${requestSelection}`,
+    `UPDATE owner_requests SET name='',email='',city_region='',details_json='{}',private_note='',summary='',updated_at=${quote(now.toISOString())} WHERE ${requestSelection}`,
     `INSERT INTO music_playback_daily(day,release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,city,count)
       SELECT day,release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,'' AS city,SUM(count) FROM
         (${playbackSummary(review.playbackCutoff, playbackSelection).replace(/ ORDER BY day,release_id,event$/,'')})
