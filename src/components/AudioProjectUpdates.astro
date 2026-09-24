@@ -11,8 +11,10 @@ type Props = {
   bookingPaid?: boolean;
   revoked?: boolean;
   endpoint?: string;
+  /** The Accept form's starting first update. */
+  firstUpdate?: string;
 };
-const { updates, currentDueAt, stage, requestStatus, bookingPaid = false, revoked = false, endpoint } = Astro.props;
+const { updates, currentDueAt, stage, requestStatus, bookingPaid = false, revoked = false, endpoint, firstUpdate = '' } = Astro.props;
 const owner = Boolean(endpoint);
 const active = stage !== 'complete' && requestStatus !== 'withdrawn' && !revoked;
 const reasonLabels = {
@@ -57,10 +59,10 @@ const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month
 
   {owner && active && <div class="project-update-actions">
     {stage === 'files_under_review' && requestStatus === 'new' && <p class="project-update-hint">Mark the request reviewed to accept the project and set its delivery date.</p>}
-    {stage === 'files_under_review' && requestStatus === 'reviewed' && <form class="panel" data-project-update-form data-action="accept">
+    {stage === 'files_under_review' && requestStatus === 'reviewed' && <form class="panel" id="accept-project" data-project-update-form data-action="accept">
       <h3>Accept the project</h3><p>Set a cautious delivery date and tell the client what happens next.</p>
       <label class="studio-field">Expected by <input class="studio-input" type="date" name="dueDate" min={today} required /></label>
-      <label class="studio-field">First update <textarea class="studio-textarea" name="body" rows="3" maxlength="1000" required></textarea></label>
+      <label class="studio-field">First update <textarea class="studio-textarea" name="body" rows="4" maxlength="1000" required>{firstUpdate}</textarea></label>
       <button type="submit" class="studio-button">Accept and update client</button><p class="studio-status" role="status" data-update-status></p>
     </form>}
     {stage === 'accepted' && bookingPaid && <form class="panel" data-project-update-form data-action="start_work">
@@ -130,6 +132,8 @@ const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month
   .timeline-notice .failed::before { background: var(--accent); }
   .project-updates-empty { font: 1rem/1.6 Inter, sans-serif; color: var(--studio-muted); }
   .project-update-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 1.25rem; margin-top: 2.5rem; }
+  /* Clears the phone section links when Mark reviewed lands here. */
+  #accept-project { scroll-margin-top: 5rem; }
   .panel { display: grid; align-content: start; gap: .9rem; padding: 1.4rem; border: 1px solid var(--rule); border-radius: 2px; background: color-mix(in srgb, var(--studio-field) 60%, var(--paper)); }
   h3 { margin: 0; font: 400 1.5rem/1.15 Newsreader, Georgia, serif; }
   .panel > p:not(.studio-status) { margin: -.4rem 0 0; color: var(--studio-muted); font: .85rem/1.5 Inter, sans-serif; }

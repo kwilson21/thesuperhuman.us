@@ -73,7 +73,7 @@ Every item receives **PASS**, **FAIL**, **UNVERIFIED**, or **N/A with a reason**
 
 ## 8. Private owner center (N/A if absent)
 
-- [ ] Cloudflare Access has one approved owner identity for `/owner*`; the Worker independently verifies the signed JWT issuer, audience, signature, and email. Unsigned and wrong-owner requests fail closed.
+- [ ] Cloudflare Access has one approved owner identity for both `/owner*` and `/api/owner*` (the owner pages post their actions to `/api/owner`, and without Access there every action returns 403); the Worker independently verifies the signed JWT issuer, audience, signature, and email. Unsigned and wrong-owner requests fail closed.
 - [ ] Every owner response uses `Cache-Control: private, no-store` and `X-Robots-Tag: noindex, nofollow`. Private routes stay out of the sitemap.
 - [ ] Reconcile the production MUSIC_DB schema and migration ledger before applying any migration. Record backup and recovery evidence separately from local schema tests.
 - [ ] Verify a valid request persists before success. Force storage failure and confirm the visitor receives an honest retry while the urgent email contains no request content or raw database error.

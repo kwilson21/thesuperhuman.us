@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { sendStudioSignInNotice } from '~/lib/audio-resend';
 import {
+  defaultFirstUpdate,
   deliverProjectUpdateNotice, listProjectUpdates, queueProjectNoticeForDelivery,
   saveProjectUpdate, validProjectDate,
 } from '~/lib/audio-project-updates';
@@ -201,5 +202,20 @@ describe('project updates', () => {
     expect(await saveProjectUpdate(db, 'song-1', 'owner@example.com', close, now)).toMatchObject({ kind: 'progress' });
     expect(sql.prepare("SELECT stage FROM audio_projects WHERE request_id='song-1'").get()).toEqual({ stage: 'complete' });
     sql.close();
+  });
+});
+
+describe('default first update', () => {
+  it('starts each service with a first update the owner can edit', () => {
+    expect(defaultFirstUpdate('vocal-mix')).toContain('solid static mix');
+    expect(defaultFirstUpdate('bundle')).toBe(defaultFirstUpdate('vocal-mix'));
+    expect(defaultFirstUpdate('mastering')).toContain('shaping the master');
+    expect(defaultFirstUpdate('custom')).toContain('plan we agreed');
+    expect(defaultFirstUpdate(null)).toBe(defaultFirstUpdate('custom'));
+    for (const service of ['vocal-mix', 'mastering', 'custom']) {
+      const text = defaultFirstUpdate(service);
+      expect(text.length).toBeLessThanOrEqual(1000);
+      expect(text).not.toContain(' — ');
+    }
   });
 });

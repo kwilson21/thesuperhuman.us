@@ -5,6 +5,7 @@ import AudioPaymentPanel from '~/components/owner/AudioPaymentPanel.astro';
 import { paymentDefaults } from '~/lib/audio-payments';
 import ProjectMessages from '~/components/ProjectMessages.astro';
 import AudioProjectUpdates from '~/components/AudioProjectUpdates.astro';
+import { defaultFirstUpdate } from '~/lib/audio-project-updates';
 import OwnerProjectFiles from '~/components/owner/OwnerProjectFiles.astro';
 import StageTrack from '~/components/StageTrack.astro';
 import { getAudioPayment } from '~/lib/audio-payments';
@@ -45,7 +46,7 @@ const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') 
   <div class:list={['request-layout', { portal: portalProject }]} data-request-id={request.id}>
     <div class="request-main" id="request-work">
       {portalProject && <section class="portal-stage" aria-label="Studio project stage"><StageTrack stage={portalProject.stage} bookingPaid={payment?.bookingStatus === 'paid'} /></section>}
-      {portalProject && <AudioProjectUpdates updates={projectUpdates} currentDueAt={portalProject.current_due_at} stage={portalProject.stage} requestStatus={request.status} bookingPaid={payment?.bookingStatus === 'paid'} revoked={Boolean(portalProject.revoked_at)} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/updates`} />}
+      {portalProject && <AudioProjectUpdates firstUpdate={defaultFirstUpdate(request.serviceId)} updates={projectUpdates} currentDueAt={portalProject.current_due_at} stage={portalProject.stage} requestStatus={request.status} bookingPaid={payment?.bookingStatus === 'paid'} revoked={Boolean(portalProject.revoked_at)} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/updates`} />}
       {portalProject && <OwnerProjectFiles files={projectFiles} pending={pendingUploads} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/uploads`}
         publishEndpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/files`}
         canUpload={(['in_progress','review_ready','revision_in_progress'].includes(portalProject.stage)

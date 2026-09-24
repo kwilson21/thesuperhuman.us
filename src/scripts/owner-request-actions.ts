@@ -9,6 +9,8 @@ export function setupOwnerRequestActions() {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
       });
       if (!response.ok) { status!.textContent = 'That change was not saved. Refresh and try again.'; return; }
+      // A reviewed request's next step is accepting the project, so reload onto that panel.
+      if (payload.action === 'review') history.replaceState(null, '', `${location.pathname}${location.search}#accept-project`);
       location.reload();
     } catch { status!.textContent = 'Connection lost. The change may not have been saved. Refresh before trying again.'; }
   }

@@ -45,3 +45,24 @@ it('asks before resolving a request whose provisional studio is still open', asy
   expect(confirm).toHaveBeenCalledTimes(1);
   expect(fetch).toHaveBeenCalledTimes(1);
 });
+
+it('reloads a newly reviewed request onto the Accept panel', async () => {
+  const handlers: Record<string, () => void> = {};
+  const button = { dataset: { action: 'review' }, closest: () => null,
+    addEventListener: (_: string, handler: () => void) => { handlers.review = handler; } };
+  const replaceState = vi.fn();
+  const reload = vi.fn();
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true })));
+  vi.stubGlobal('history', { replaceState });
+  vi.stubGlobal('location', { pathname: '/owner/requests/song-1', search: '', reload });
+  vi.stubGlobal('document', {
+    querySelector: (selector: string) => selector === '[data-request-id]' ? { dataset: { requestId: 'song-1' } }
+      : selector === '[data-action-status]' ? { textContent: '' } : null,
+    querySelectorAll: () => [button],
+  });
+  setupOwnerRequestActions();
+  handlers.review();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(replaceState).toHaveBeenCalledWith(null, '', '/owner/requests/song-1#accept-project');
+  expect(reload).toHaveBeenCalledOnce();
+});
