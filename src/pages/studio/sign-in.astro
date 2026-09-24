@@ -1,9 +1,12 @@
 ---
 export const prerender = false;
 import BaseLayout from '~/layouts/BaseLayout.astro';
-import { clientPortalEnabled } from '~/lib/audio-client-access';
+import { clientPortalEnabled, clientProjectsForSession, studioSessionFromRequest } from '~/lib/audio-client-access';
 const env = Astro.locals.runtime?.env;
 if (!clientPortalEnabled(env)) return new Response('Not found', { status: 404 });
+// A client following an email link with a live session goes straight to their songs.
+const existing = studioSessionFromRequest(Astro.request);
+if (existing && env.MUSIC_DB && await clientProjectsForSession(env.MUSIC_DB, existing)) return Astro.redirect('/studio');
 const siteKey = env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 const partialSignOut = Astro.url.searchParams.get('signout') === 'partial';
 ---
