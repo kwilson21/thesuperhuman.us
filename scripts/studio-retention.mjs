@@ -25,7 +25,7 @@ export function studioRetentionProjectPredicate(now) {
       AND NOT EXISTS(SELECT 1 FROM audio_project_files f WHERE f.request_id=p.request_id
         AND f.version='final' AND f.published_at IS NOT NULL)
       AND NOT EXISTS(SELECT 1 FROM audio_payments pay WHERE pay.request_id=p.request_id
-        AND NOT (${finishedPaymentTerms})))
+        AND NOT (${finishedPaymentTerms('pay')})))
       OR ((p.stage IN ('final_files_ready','complete') OR (p.stage='in_progress'
           AND EXISTS(SELECT 1 FROM audio_project_files f WHERE f.request_id=p.request_id
             AND f.version='final' AND f.status='revoked')
@@ -90,6 +90,8 @@ const sameStorage = (a, b) => ['accountId', 'databaseId', 'bucket', 'jurisdictio
 async function ensureSchema(database) {
   const rows = await database.query('PRAGMA table_info(audio_projects)');
   if (!rows.some(row => row.name === 'content_deleted_at')) throw new Error('Apply studio retention migration 0014 before running retention.');
+  const messages = await database.query('PRAGMA table_info(audio_project_messages)');
+  if (!messages.some(row => row.name === 'review_decision')) throw new Error('Apply review decisions migration 0018 before running retention.');
 }
 
 export async function previewStudioRetention(database, environment, storage, now = new Date()) {

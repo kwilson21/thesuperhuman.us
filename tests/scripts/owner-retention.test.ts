@@ -177,3 +177,25 @@ it('keeps a withdrawn service request while its paid booking still permits a bal
   expect((await database.query("SELECT stripe_customer_id,booking_invoice_id FROM audio_payments WHERE request_id='balance-due-service'"))[0])
     .toEqual({ stripe_customer_id: 'cus_balance_due', booking_invoice_id: 'in_booking' });
 });
+
+it('treats a stopped project’s unstarted balance as finished, and only for that request', async () => {
+  const database = fixture();
+  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at) VALUES
+      ('stopped','service','Stopped Artist','stopped@example.com','Mix','resolved','2025-01-01T00:00:00Z','2025-01-02T00:00:00Z','2025-01-02T00:00:00Z'),
+      ('owed','service','Owed Artist','owed@example.com','Mix','resolved','2025-01-01T00:00:00Z','2025-01-02T00:00:00Z','2025-01-02T00:00:00Z');
+    UPDATE audio_projects SET content_deleted_at='2025-03-01T00:00:00Z' WHERE request_id IN ('stopped','owed');
+    INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
+      offer_accepted_at,stripe_customer_id,booking_invoice_id,booking_invoice_url,booking_status,created_at,updated_at) VALUES
+      ('stopped','Mix',10000,5000,5000,'2025-01-01T00:00:00Z','cus_stopped','in_stopped','https://invoice.stripe.com/stopped','paid','2025-01-01T00:00:00Z','2025-01-01T00:00:00Z'),
+      ('owed','Mix',10000,5000,5000,'2025-01-01T00:00:00Z','cus_owed','in_owed','https://invoice.stripe.com/owed','paid','2025-01-01T00:00:00Z','2025-01-01T00:00:00Z');
+    INSERT INTO audio_project_messages(request_id,actor,actor_id,body,created_at,review_decision)
+      VALUES ('stopped','client','session','I’m stopping the project here.','2025-01-01T12:00:00Z','stopped');`);
+  const review = await previewOwnerRetention(database, 'Local test data', now);
+  await applyOwnerRetention(database, review, 'Local test data', now);
+  expect((await database.query("SELECT email FROM owner_requests WHERE id='stopped'"))[0]).toEqual({ email: '' });
+  expect((await database.query("SELECT stripe_customer_id,booking_invoice_id FROM audio_payments WHERE request_id='stopped'"))[0])
+    .toEqual({ stripe_customer_id: null, booking_invoice_id: null });
+  expect((await database.query("SELECT email FROM owner_requests WHERE id='owed'"))[0]).toEqual({ email: 'owed@example.com' });
+  expect((await database.query("SELECT stripe_customer_id,booking_invoice_id FROM audio_payments WHERE request_id='owed'"))[0])
+    .toEqual({ stripe_customer_id: 'cus_owed', booking_invoice_id: 'in_owed' });
+});
