@@ -1,7 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { POST } from '~/pages/api/studio/projects/[id]/messages';
 import { postClientReviewDecision } from '~/lib/audio-project-messages';
-import { revokeProjectAccess } from '~/lib/audio-project-revocation';
 
 vi.mock('~/lib/audio-client-access', async importOriginal => ({
   ...(await importOriginal<typeof import('~/lib/audio-client-access')>()),
@@ -9,10 +8,9 @@ vi.mock('~/lib/audio-client-access', async importOriginal => ({
 }));
 vi.mock('~/lib/audio-project-messages', async importOriginal => ({
   ...(await importOriginal<typeof import('~/lib/audio-project-messages')>()),
-  postClientReviewDecision: vi.fn(async (_db: unknown, _id: string, _token: string, decision: string, body: string) => ({ id: 1, actor: 'client', body, review_decision: decision })),
+  postClientReviewDecision: vi.fn(async (_db: unknown, _id: string, _token: string, _review: string, decision: string, body: string) => ({ id: 1, actor: 'client', body, review_decision: decision })),
   clientMessageRateLimited: vi.fn(async () => false),
 }));
-vi.mock('~/lib/audio-project-revocation', () => ({ revokeProjectAccess: vi.fn(async () => true) }));
 
 const token = '00000000-0000-4000-8000-000000000000'.repeat(2);
 function context(body: unknown) {
@@ -28,21 +26,19 @@ function context(body: unknown) {
 beforeEach(() => vi.clearAllMocks());
 
 it('approves with a default note, requires notes for changes, and never closes access for either', async () => {
-  expect((await POST(context({ action: 'respond', decision: 'approved', body: '' }))).status).toBe(200);
-  expect(postClientReviewDecision).toHaveBeenLastCalledWith({}, 'song-1', token, 'approved', 'I approve this mix.');
-  expect((await POST(context({ action: 'respond', decision: 'changes', body: '  ' }))).status).toBe(400);
-  expect((await POST(context({ action: 'respond', decision: 'changes', body: 'Vocal up in verse two.' }))).status).toBe(200);
-  expect(revokeProjectAccess).not.toHaveBeenCalled();
+  expect((await POST(context({ action: 'respond', reviewId: 'review-1', decision: 'approved', body: '' }))).status).toBe(200);
+  expect(postClientReviewDecision).toHaveBeenLastCalledWith({}, 'song-1', token, 'review-1', 'approved', 'I approve this mix.');
+  expect((await POST(context({ action: 'respond', reviewId: 'review-1', decision: 'changes', body: '  ' }))).status).toBe(400);
+  expect((await POST(context({ action: 'respond', reviewId: 'review-1', decision: 'changes', body: 'Vocal up in verse two.' }))).status).toBe(200);
 });
 
-it('closes the client’s access when they stop the project', async () => {
-  expect((await POST(context({ action: 'respond', decision: 'stopped', body: '' }))).status).toBe(200);
-  expect(postClientReviewDecision).toHaveBeenLastCalledWith({}, 'song-1', token, 'stopped', 'I’m stopping the project here.');
-  expect(revokeProjectAccess).toHaveBeenCalledWith({}, 'song-1', 'client-stopped');
+it('passes a stop through with a default note', async () => {
+  expect((await POST(context({ action: 'respond', reviewId: 'review-1', decision: 'stopped', body: '' }))).status).toBe(200);
+  expect(postClientReviewDecision).toHaveBeenLastCalledWith({}, 'song-1', token, 'review-1', 'stopped', 'I’m stopping the project here.');
 });
 
-it('refuses an answer the project does not allow without closing access', async () => {
+it('refuses an answer the project does not allow, and one without the review it answers', async () => {
   vi.mocked(postClientReviewDecision).mockResolvedValueOnce(null);
-  expect((await POST(context({ action: 'respond', decision: 'stopped', body: '' }))).status).toBe(409);
-  expect(revokeProjectAccess).not.toHaveBeenCalled();
+  expect((await POST(context({ action: 'respond', reviewId: 'review-1', decision: 'stopped', body: '' }))).status).toBe(409);
+  expect((await POST(context({ action: 'respond', decision: 'approved', body: '' }))).status).toBe(400);
 });

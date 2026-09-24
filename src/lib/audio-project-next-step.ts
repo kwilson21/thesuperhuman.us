@@ -20,8 +20,12 @@ const invoiceProblem = (which: string, status: string, stripeEnabled: boolean): 
   ? stripeEnabled ? { title: `Replace the ${which} invoice`, detail: `The ${which} invoice was voided. Create a replacement in Book the work.`, target: '#replace-invoice', action: `Create replacement ${which} invoice` } : stripeOff
   : { title: `Sort out the ${which} invoice`, detail: `The ${which} invoice was not paid. Follow the note in Book the work before taking another step.`, target: payment, action: 'See the invoice status' };
 
+const clientStopped: NextStep = { title: 'The client stopped the project', detail: 'They chose to stop after the last revision round, so their access is closed and no balance is due. Mark the request resolved to close it out.', target: '#request-heading', action: 'Mark resolved' };
+
 /** What the owner does next to move a studio project along, or null once there is nothing left. */
 export function ownerNextStep({ stage, requestStatus, revoked, payment: pay, stripeEnabled, reviewDecision = null }: NextStepInput): NextStep | null {
+  // A client who stops closes their own access, so a revoked project can still have a step.
+  if (revoked && reviewDecision === 'stopped' && requestStatus !== 'resolved') return clientStopped;
   if (revoked || requestStatus === 'withdrawn' || stage === 'complete') return null;
   // Resolving an unaccepted request closes its studio (migration 0015), so only new and reviewed remain.
   if (stage === 'files_under_review') return requestStatus === 'new'
@@ -45,7 +49,7 @@ export function ownerNextStep({ stage, requestStatus, revoked, payment: pay, str
     if (balance === 'paid') return { title: 'Deliver the final files', detail: 'The balance is paid. Upload the final file under Review and delivery with Version set to Final, then publish it.', target: upload, action: 'Upload file' };
     if (balance === 'not_created') {
       if (pay?.balanceCreationStartedAt) return reconciling;
-      if (reviewDecision === 'stopped') return { title: 'The client stopped the project', detail: 'They chose to stop after the last revision round, so their access is closed and no balance is due. Mark the request resolved to close it out.', target: '#request-heading', action: 'See the request' };
+      if (reviewDecision === 'stopped') return clientStopped;
       if (reviewDecision === 'changes') return { title: 'Begin the revision', detail: 'The client requested changes. Their notes are in the conversation. Begin the revision to tell them you are on it.', target: '#begin-revision', action: 'Begin revision' };
       if (reviewDecision === 'approved') return stripeEnabled
         ? { title: 'Send the balance invoice', detail: 'The client approved the mix. Create the balance invoice in Book the work; the final can be shared once it is paid.', target: '#create-balance-invoice', action: 'Create balance invoice' }

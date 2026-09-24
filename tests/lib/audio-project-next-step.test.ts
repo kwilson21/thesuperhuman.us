@@ -28,7 +28,9 @@ describe('ownerNextStep', () => {
     expect(step({ stage: 'in_progress', payment: pay('paid') })).toMatchObject({ title: 'Share a review mix', target: '#upload-file' });
     expect(step({ stage: 'revision_in_progress', payment: pay('paid') })).toMatchObject({ title: 'Share the revised mix' });
     expect(step({ stage: 'review_ready', payment: pay('paid') })).toMatchObject({ title: 'Waiting on the client’s answer', waiting: true });
-    expect(step({ stage: 'review_ready', payment: pay('paid'), reviewDecision: 'stopped' })).toMatchObject({ title: 'The client stopped the project', target: '#request-heading' });
+    // Stopping revokes the project, and the owner still gets a step until the request is resolved.
+    expect(step({ stage: 'review_ready', revoked: true, payment: pay('paid'), reviewDecision: 'stopped' })).toMatchObject({ title: 'The client stopped the project', target: '#request-heading' });
+    expect(step({ stage: 'review_ready', revoked: true, requestStatus: 'resolved', payment: pay('paid'), reviewDecision: 'stopped' })).toBeNull();
     expect(step({ stage: 'review_ready', payment: pay('paid'), reviewDecision: 'changes' })).toMatchObject({ title: 'Begin the revision', target: '#begin-revision', action: 'Begin revision' });
     expect(step({ stage: 'review_ready', payment: pay('paid'), reviewDecision: 'approved' })).toMatchObject({ title: 'Send the balance invoice', target: '#create-balance-invoice' });
     expect(step({ stage: 'review_ready', payment: pay('paid'), reviewDecision: 'approved', stripeEnabled: false })).toMatchObject({ title: 'Record the balance payment', target: '#record-balance-payment', action: 'Record balance received' });

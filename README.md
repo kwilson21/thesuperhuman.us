@@ -80,6 +80,8 @@ Waveform display requires `migrations/music/0016_audio_project_file_peaks.sql` a
 
 Timeline milestones require `migrations/music/0017_audio_project_update_milestones.sql` after 0016. It adds a nullable `milestone` to owner updates so starting a revision and completing a project show by name instead of as a general studio update, and backfills existing notes from the audit row written in the same batch.
 
+Review answers require `migrations/music/0018_audio_project_review_decisions.sql` after 0017, applied **before** deploying the code that reads it: every message query selects the new `review_decision` column. A client answers each published review by approving it, requesting changes while revision rounds remain (two), or stopping once they are used. Stopping closes that project's access in the same write, without signing the client out of other projects.
+
 The forms read `Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY` first, with
 `import.meta.env.PUBLIC_TURNSTILE_SITE_KEY` as a build-time fallback. Wrangler
 runtime vars are not automatically Astro build-time variables. An empty runtime

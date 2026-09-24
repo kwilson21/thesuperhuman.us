@@ -90,23 +90,25 @@ describe('audio project messages', () => {
       VALUES (?,'song-1','review',?,'Mix.wav','audio/wav',10,'published',?,?)`).run(id, `key-${id}`, at, at);
     // No answer before a review is shared, even at the right stage.
     sql.prepare("UPDATE audio_projects SET stage='review_ready' WHERE request_id='song-1'").run();
-    expect(await postClientReviewDecision(db, 'song-1', token, 'approved', 'I approve this mix.', now)).toBeNull();
+    expect(await postClientReviewDecision(db, 'song-1', token, 'review-1', 'approved', 'I approve this mix.', now)).toBeNull();
     publish('review-1', '2026-09-22T11:00:00.000Z');
     expect(await latestReviewDecision(db, 'song-1')).toBeNull();
-    const changes = await postClientReviewDecision(db, 'song-1', token, 'changes', 'Vocal up in verse two.', now);
+    const changes = await postClientReviewDecision(db, 'song-1', token, 'review-1', 'changes', 'Vocal up in verse two.', now);
     expect(changes).toMatchObject({ actor: 'client', body: 'Vocal up in verse two.', review_decision: 'changes' });
     expect(await latestReviewDecision(db, 'song-1')).toBe('changes');
     // One answer per review.
-    expect(await postClientReviewDecision(db, 'song-1', token, 'approved', 'I approve this mix.', now)).toBeNull();
+    expect(await postClientReviewDecision(db, 'song-1', token, 'review-1', 'approved', 'I approve this mix.', now)).toBeNull();
     // Not while the revision is under way.
     sql.prepare("UPDATE audio_projects SET stage='revision_in_progress' WHERE request_id='song-1'").run();
-    expect(await postClientReviewDecision(db, 'song-1', token, 'approved', 'I approve this mix.', now)).toBeNull();
+    expect(await postClientReviewDecision(db, 'song-1', token, 'review-1', 'approved', 'I approve this mix.', now)).toBeNull();
     // A new review clears the old answer and takes a fresh one.
     sql.prepare("UPDATE audio_projects SET stage='review_ready' WHERE request_id='song-1'").run();
     publish('review-2', '2026-09-22T13:00:00.000Z');
     expect(await latestReviewDecision(db, 'song-1')).toBeNull();
     const later = new Date('2026-09-22T14:00:00.000Z');
-    expect(await postClientReviewDecision(db, 'song-1', token, 'approved', 'I approve this mix.', later)).toMatchObject({ review_decision: 'approved' });
+    // A page still showing the old review cannot answer the new one.
+    expect(await postClientReviewDecision(db, 'song-1', token, 'review-1', 'approved', 'I approve this mix.', later)).toBeNull();
+    expect(await postClientReviewDecision(db, 'song-1', token, 'review-2', 'approved', 'I approve this mix.', later)).toMatchObject({ review_decision: 'approved' });
     expect(await latestReviewDecision(db, 'song-1')).toBe('approved');
     expect((await listProjectMessages(db, 'song-1')).map(message => message.review_decision)).toEqual(['changes', 'approved']);
     sql.close();
@@ -121,14 +123,18 @@ describe('audio project messages', () => {
     sql.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,status,uploaded_at,published_at)
       VALUES ('review-3','song-1','review','key-3','Mix.wav','audio/wav',10,'published',?,?)`).run('2026-09-22T11:00:00.000Z', '2026-09-22T11:00:00.000Z');
     expect(await revisionRoundsLeft(db, 'song-1')).toBe(2);
-    expect(await postClientReviewDecision(db, 'song-1', token, 'stopped', 'Stop.', now)).toBeNull();
+    expect(await postClientReviewDecision(db, 'song-1', token, 'review-3', 'stopped', 'Stop.', now)).toBeNull();
     for (const at of ['2026-09-20T12:00:00.000Z', '2026-09-21T12:00:00.000Z']) {
       sql.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at,milestone)
         VALUES ('song-1','progress','Revising.','owner@example.com',?,'revision_started')`).run(at);
     }
     expect(await revisionRoundsLeft(db, 'song-1')).toBe(0);
-    expect(await postClientReviewDecision(db, 'song-1', token, 'changes', 'One more pass.', now)).toBeNull();
-    expect(await postClientReviewDecision(db, 'song-1', token, 'stopped', 'I’m stopping the project here.', now)).toMatchObject({ review_decision: 'stopped' });
+    expect(await postClientReviewDecision(db, 'song-1', token, 'review-3', 'changes', 'One more pass.', now)).toBeNull();
+    expect(await postClientReviewDecision(db, 'song-1', token, 'review-3', 'stopped', 'I’m stopping the project here.', now)).toMatchObject({ review_decision: 'stopped' });
+    // Stopping closes this project in the same write, but leaves the client signed in for others.
+    expect(sql.prepare("SELECT revoked_at FROM audio_projects WHERE request_id='song-1'").get()).toEqual({ revoked_at: now.toISOString() });
+    expect(sql.prepare("SELECT actor FROM audio_project_audit WHERE request_id='song-1' AND action='revoked'").get()).toEqual({ actor: 'client-stopped' });
+    expect(sql.prepare('SELECT COUNT(*) AS open FROM audio_client_sessions WHERE revoked_at IS NULL').get()).toEqual({ open: 1 });
     expect(await latestReviewDecision(db, 'song-1')).toBe('stopped');
     sql.close();
   });

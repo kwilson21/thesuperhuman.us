@@ -22,7 +22,8 @@ const messages = project ? await listProjectMessages(env.MUSIC_DB, project.reque
 const updates = project ? await listProjectUpdates(env.MUSIC_DB, project.request_id) : [];
 const files = project ? await clientProjectFiles(env.MUSIC_DB, project.request_id, token) : [];
 const finalExpiry = files.find(file => file.version === 'final')?.expires_at;
-const reviewShared = project?.stage === 'review_ready' && files.some(file => file.version === 'review');
+const currentReview = project?.stage === 'review_ready' ? files.find(file => file.version === 'review') : undefined;
+const reviewShared = Boolean(currentReview);
 const decision = reviewShared ? await latestReviewDecision(env.MUSIC_DB, project!.request_id) : null;
 const roundsLeft = reviewShared ? await revisionRoundsLeft(env.MUSIC_DB, project!.request_id) : 0;
 const next = !project ? '' : project.stage === 'files_under_review' ? 'I’m checking the files and direction you sent.' :
@@ -55,7 +56,7 @@ const moved = project?.original_due_at && project.current_due_at && project.orig
         return <ProjectPlayer src={href} name={file.display_name} label={file.version === 'final' ? 'Final audio' : 'Review audio'} peaks={file.peaks} downloadHref={file.downloadable ? `${href}?download=1` : undefined} />;
       })}
     </section>}
-    {reviewShared && !decision && <ReviewResponse endpoint={`/api/studio/projects/${encodeURIComponent(project.request_id)}/messages`} roundsLeft={roundsLeft} rounds={REVISION_ROUNDS} />}
+    {reviewShared && !decision && <ReviewResponse endpoint={`/api/studio/projects/${encodeURIComponent(project.request_id)}/messages`} reviewId={currentReview!.id} roundsLeft={roundsLeft} rounds={REVISION_ROUNDS} />}
     <AudioProjectUpdates updates={updates} currentDueAt={project.current_due_at} stage={project.stage} />
     <ProjectMessages messages={messages} endpoint={`/api/studio/projects/${encodeURIComponent(project.request_id)}/messages`} reader="client" closed={project.stage === 'complete'} />
   </article>

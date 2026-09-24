@@ -1,16 +1,16 @@
 ---
 import '~/styles/studio.css';
 
-type Props = { endpoint: string; roundsLeft: number; rounds: number };
-const { endpoint, roundsLeft, rounds } = Astro.props;
+type Props = { endpoint: string; reviewId: string; roundsLeft: number; rounds: number };
+const { endpoint, reviewId, roundsLeft, rounds } = Astro.props;
 const final = roundsLeft === 0;
 ---
 <section class="review-response" aria-labelledby="review-response-heading">
-  <form data-review-response data-endpoint={endpoint}>
+  <form data-review-response data-endpoint={endpoint} data-review-id={reviewId}>
     <p class="review-response-kicker">Your answer</p>
     <h2 id="review-response-heading">What do you think of this mix?</h2>
     {final
-      ? <p class="review-response-lead">You’ve used both included revision rounds, so this is the final mix. Approve it to receive your final files after the remaining balance, or stop the project here. Stopping ends your access; the booking payment is not refunded.</p>
+      ? <p class="review-response-lead">You’ve used both included revision rounds, so this is the final mix. Approve it to receive your final files after the remaining balance, or stop the project here. Stopping ends your access to this song; the booking payment is not refunded.</p>
       : <p class="review-response-lead">Approve it if it’s ready. If not, list every change you’d like in one set of notes. You have <strong>{roundsLeft} of {rounds}</strong> revision {roundsLeft === 1 ? 'round' : 'rounds'} left.</p>}
     <label class="studio-field">Notes <small>{final ? 'Optional.' : 'Needed to request changes. Optional when approving.'}</small>
       <textarea class="studio-textarea" name="body" rows="4" maxlength="4000" placeholder={final ? 'Anything you want me to know.' : 'For example: vocal up a little in the second verse, less reverb on the ad-libs.'}></textarea>

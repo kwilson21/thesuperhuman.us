@@ -68,12 +68,15 @@ export async function postClientProjectMessage(db: D1Database, requestId: string
  * The client's answer to the latest published review: approve it, request changes with notes
  * while revision rounds remain, or stop once they are used. Allowed only while that review
  * awaits an answer (stage review_ready, no decision since it was published), under the same
- * session and rate limit as any client message. Stopping also closes the client's access.
+ * session and rate limit as any client message. The answer names the review the client heard,
+ * so a page left open across a newer review cannot answer it. Stopping closes this project's
+ * access in the same write; the client's other projects and session are untouched.
  */
-export async function postClientReviewDecision(db: D1Database, requestId: string, token: string, decision: ReviewDecision, body: string, now = new Date()): Promise<ProjectMessage | null> {
+export async function postClientReviewDecision(db: D1Database, requestId: string, token: string, reviewId: string, decision: ReviewDecision, body: string, now = new Date()): Promise<ProjectMessage | null> {
   const tokenHash = await hashValue(token);
+  const at = now.toISOString();
   const windowStart = new Date(now.getTime() - CLIENT_MESSAGE_WINDOW_MS).toISOString();
-  return db.prepare(`INSERT INTO audio_project_messages(request_id,actor,actor_id,body,created_at,review_decision)
+  const insert = db.prepare(`INSERT INTO audio_project_messages(request_id,actor,actor_id,body,created_at,review_decision)
     SELECT p.request_id,'client',?,?,?,? FROM audio_projects p
     JOIN owner_requests r ON r.id=p.request_id
     JOIN audio_client_sessions s ON s.email=r.email
@@ -83,9 +86,22 @@ export async function postClientReviewDecision(db: D1Database, requestId: string
         WHERE m.request_id=? AND m.actor='client' AND m.created_at>?)<?
       AND ${reviewAwaitingAnswer('p.request_id')}
       AND (? = 'approved' OR (${roundsUsed('p.request_id')} < ${REVISION_ROUNDS}) = (? = 'changes'))
+      AND ?=(SELECT f.id FROM audio_project_files f WHERE f.request_id=p.request_id AND f.version='review'
+        AND f.status='published' ORDER BY f.published_at DESC LIMIT 1)
     RETURNING ${messageColumns}`)
-    .bind(tokenHash, body, now.toISOString(), decision, requestId, tokenHash, now.toISOString(),
-      requestId, windowStart, CLIENT_MESSAGE_LIMIT, decision, decision).first<ProjectMessage>();
+    .bind(tokenHash, body, at, decision, requestId, tokenHash, at,
+      requestId, windowStart, CLIENT_MESSAGE_LIMIT, decision, decision, reviewId);
+  if (decision !== 'stopped') return insert.first<ProjectMessage>();
+  const stopped = `EXISTS(SELECT 1 FROM audio_project_messages WHERE request_id=? AND review_decision='stopped' AND created_at=?)`;
+  const [saved] = await db.batch([
+    insert,
+    db.prepare(`UPDATE audio_projects SET revoked_at=?,updated_at=? WHERE request_id=? AND revoked_at IS NULL AND ${stopped}`)
+      .bind(at, at, requestId, requestId, at),
+    db.prepare(`INSERT INTO audio_project_audit(request_id,action,actor,occurred_at)
+      SELECT request_id,'revoked','client-stopped',? FROM audio_projects WHERE request_id=? AND revoked_at=? AND ${stopped}`)
+      .bind(at, requestId, at, requestId, at),
+  ]);
+  return (saved.results[0] as ProjectMessage | undefined) ?? null;
 }
 
 /** SQL: revision rounds begun on this project. */
