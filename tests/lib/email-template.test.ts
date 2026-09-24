@@ -25,7 +25,8 @@ describe('renderEmail', () => {
   it('keeps Outlook-safe markup: longhand fonts, padded button cell, fixed-width frame, hidden preheader', () => {
     const { html } = studioInvitationEmail();
     expect(html).not.toMatch(/font:\s*\d/);
-    expect(html).toMatch(/<td style="[^"]*padding:14px 28px;"><a href="https:\/\/thesuperhuman.us\/studio\/sign-in"/);
+    // The whole button is clickable (padding on the link), and Outlook pads the cell instead.
+    expect(html).toMatch(/<td style="[^"]*mso-padding-alt:14px 28px;"><a href="https:\/\/thesuperhuman.us\/studio\/sign-in" style="display:inline-block;padding:14px 28px;/);
     expect(html).toContain('<!--[if mso]><table role="presentation" width="600"');
     expect(html).toContain('mso-hide:all');
     expect(html).toContain('<!--[if !mso]><!--><link href="https://fonts.googleapis.com');
