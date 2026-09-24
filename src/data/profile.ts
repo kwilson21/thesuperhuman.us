@@ -1,33 +1,84 @@
 // Curated from the owner's career account. Update professional facts here.
-export const workFocus = 'I’m interested in work where I can help shape the solution, build with AI, and stay close to how people use the result.';
+export const workFocus = 'I want to own the system behind a feature, including how it’s built and the infrastructure it needs.';
 export const workingPreference = 'I work independently, through contracts and projects, and I’m selective about full-time roles.';
-export const workingPreferenceDetail = 'I work independently, through contracts and projects. I’ll consider full-time roles where I’d own meaningful work end to end, work remotely, and build with AI as a normal part of the job. If that isn’t your role, a contract is probably the better fit, and I’m glad to talk about that too.';
+export const workingPreferenceDetail = 'I work independently, through contracts and projects. I’ll consider full-time roles where I’d own a system end to end, work fully remotely, and build with AI as a normal part of the job. If that isn’t your role, a contract is probably the better fit, and I’m glad to talk about that too.';
 export const lyftBonus = { before: '5,000', after: '100,000+', evidence: 'Owner-reported batch capacity' };
 // Team scope clarified by the owner on September 10, 2026. Rentals projects come
 // from the existing career account. Quiet hours was completed after the July 2026
 // candidate summary and is recorded separately from that historical account.
 export const lyftTeams = [
   {
-    name: 'Rentals',
-    projects: [
-      { title: 'Rental rebooking', description: 'Led a third-party rebooking integration from ideation through deployment, identifying vendor regressions and coordinating API changes across organizational boundaries.' },
-      { title: 'Service migration', description: 'Owned a 40,000-row migration during a rentals-service deprecation. Designed a dry-run-capable plan, audited and backfilled 18,000 closed rentals, and added safeguards against duplicate customer fee charges.' },
-      { title: 'Touchless drop-off', description: 'Coordinated delivery across backend, frontend, mobile, operations and program management, spanning six services and iOS and Android clients.' },
-    ],
+    "name": "Rentals team",
+    "projects": [
+      {
+        "title": "Rental migration",
+        "description": "Led migration of 40,000 rental records off a third-party service. Wrote the technical spec and risk assessment, audited discrepancies, and ran an 18,000-record audit and backfill. Built dry-run verification and caught a duplicate-charge edge case. Worked with backend engineering and support on a safeguard."
+      },
+      {
+        "title": "Sixt reservation editing",
+        "description": "Owned delivery of Sixt reservation editing from planning through deployment. Implemented changes in Lyft’s rentals service and coordinated the required Sixt API changes and mobile/web interface changes with the engineers responsible. Identified regressions in Sixt’s rebooking API and worked with its engineers to resolve them. Fixed incorrect fees for additional drivers under 25 and compatibility issues with other features in development."
+      },
+      {
+        "title": "Touchless drop-off",
+        "description": "Owned delivery of touchless rental drop-off, spanning six services and the iOS and Android apps. Implemented backend changes and coordinated with backend, design, and client engineers to meet the first milestone without delay. Worked with operations to test the feature in staging, reviewed changes from contributing teams, and helped resolve service and mobile-client issues."
+      }
+    ]
   },
   {
-    name: 'Associate Tools',
-    projects: [
-      { title: 'Bulk driver bonuses', description: `Refactored the customer incident response team’s bonus tool from a ${lyftBonus.before}-row batch limit to handling ${lyftBonus.after} rows. Added Grafana observability so support could monitor and run the work without escalating to on-call engineers.` },
-      { title: 'Fare recalculation', description: 'Led the end-to-end migration of a driver and rider fare-recalculation tool off a legacy internal service, integrating seven services and coordinating backend and frontend delivery.' },
-    ],
+    "name": "Associate Tools team",
+    "projects": [
+      {
+        "title": "Bulk driver bonuses",
+        "description": "Refactored a tool for correcting driver bonuses to process 100,000+ rows per batch, up from 5,000. Added real-time dashboards so support could track runs and diagnose failures without asking on-call engineers to investigate."
+      },
+      {
+        "title": "Fare recalculation",
+        "description": "Led migration of a fare-recalculation tool off a legacy service, integrating seven internal services. Wrote the technical design, implemented backend and frontend changes, and added metrics and mismatch logging. Wrote a rollout guide that another engineer used to deploy the changes successfully."
+      }
+    ]
   },
   {
-    name: 'Comms Platform',
-    projects: [
-      { title: 'Quiet hours', description: 'Implemented quiet-hours checks so marketing campaign emails respected users’ preferences. Integrated with the separate microservice owned by the team responsible for that preference data.' },
-    ],
+    "name": "Comms Platform team",
+    "projects": [
+      {
+        "title": "Quiet hours",
+        "description": "Implemented quiet-hours checks so marketing campaign emails respected users’ preferences. Integrated with the separate microservice owned by the team responsible for that preference data."
+      }
+    ]
+  }
+] as const;
+
+export const skuposStages = [
+  {
+    "name": "Internal tools and automation",
+    "projects": [
+      {
+        "title": "Workflow",
+        "description": "Wrote Python scripts that automated tobacco scan-data troubleshooting and updates to Google Sheets, the shared source of truth for data operations and account managers, removing the need for manual updates and spreadsheet formulas."
+      },
+      {
+        "title": "System ownership",
+        "description": "Built and owned a Flask application backed by MySQL on AWS, using Huey to run and schedule the troubleshooting scripts as background tasks. Extended an existing internal React page for data operators to use the tools."
+      },
+      {
+        "title": "Result",
+        "description": "The application supported transaction-data troubleshooting across 3,000+ retailer locations; the tobacco scan-data automation supported 3–5× store growth without increasing operations headcount."
+      },
+      {
+        "title": "Performance",
+        "description": "Sped up I/O-bound Python data-loading scripts by making SQL, GraphQL, and Google Sheets API calls asynchronous."
+      }
+    ]
   },
+  {
+    "name": "Core product development",
+    "projects": [
+      {
+        "title": "Multipack matching",
+        "description": "Took ownership of multipack matching in the core product’s Rails reporting rewrite after the original developer left. Completed the feature using Python logic that generated configurations from sampled transactions, avoiding prohibitively expensive queries and refreshing configurations weekly."
+      }
+    ]
+  }
 ] as const;
 
 export const experience = [
@@ -37,7 +88,7 @@ export const experience = [
     outcome: 'Sole data engineer maintaining retail transaction data pipelines.',
     context: [
       'Maintained and operated inherited ETL pipelines in a Ruby on Rails platform, using GoodJob, EC2, and S3 to transform legacy store transaction data and bulk-load results.',
-      'Handled recurring alarms and prototyped internal, unshipped tools for store onboarding and PII debugging.',
+      'Handled on-call issues and deployed fixes for bugs causing recurring alarms. Prototyped an MCP-driven store-onboarding pipeline and a PII-stripping debug tool; both remained internal prototypes and were not shipped.',
       'Conducted scenario-based senior engineering interviews and contributed to hiring decisions. Advocated for AI-assisted development and helped the engineering team adopt it.',
     ],
   },
@@ -74,12 +125,9 @@ export const experience = [
   {
     id: 'skupos', company: 'Skupos', role: 'Associate Software Engineer / Data Operations Analyst',
     dates: 'November 2018 – January 2021', location: 'San Francisco',
-    outcome: 'Progressed from intern to associate engineer while building data tools for retail POS operations.',
+    outcome: 'Intern → Associate Software Engineer: from internal system ownership to core product features.',
     context: [
-      'Built a Flask and React application backed by MySQL on AWS, replacing Google Sheets and ad-hoc scripts used by operations and account-management teams across 3,000+ retailer locations.',
-      'Automated tobacco-scan troubleshooting as transaction volume grew 3–5× without additional operations headcount.',
-      'Rewrote manufacturer reporting in Rails, with Python configuration logic that sampled data to avoid an expensive query and refreshed results weekly.',
-      'Built asynchronous data workflows with SQL, GraphQL, and Google Sheets, and mentored two teammates while establishing code-review standards.',
+      "Established code-review standards and mentored two interns on Python, code review, debugging, and Agile workflows.",
     ],
   },
 ] as const;
