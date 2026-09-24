@@ -7,12 +7,14 @@ const { kind } = Astro.props;
     <div><p><strong>Before</strong> · A handoff to engineering</p><div class="diagram-flow"><span>Support</span><span aria-hidden="true">→</span><span>On-call engineer</span></div></div>
     <div><p><strong>After</strong> · Support can run the work</p><div class="diagram-flow"><span>Support</span><span aria-hidden="true">→</span><span class="self-serve">Self-service</span></div></div>
   </div> : <div class="analyst">
-    <svg viewBox="0 0 460 225" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5">
-      <g transform="translate(28 35) rotate(-7 70 65)"><rect width="116" height="137" rx="3" fill="var(--paper)"/><path stroke="var(--muted)" d="M15 25h85M15 43h85M15 61h85M15 79h85M15 97h85M15 115h85M15 25v90M43 25v90M72 25v90M100 25v90"/><path d="M15 25h85v18H15z" fill="var(--rule)" stroke="none"/></g>
-      <path d="M167 94c26 0 32 30 66 30m-9-7 9 7-9 7M167 155c26 0 32-30 66-30" stroke="var(--accent)"/>
-      <rect x="263" y="56" width="170" height="133" rx="5" fill="var(--paper)"/><path d="M263 81h170M285 68h3m8 0h3m8 0h3M326 110l-17 15 17 15m48-30 17 15-17 15m-32 19 14-40"/><path d="m419 37 8-12m5 20 14-4" stroke="var(--accent)"/>
-    </svg>
-    <div class="diagram-labels"><span>Spreadsheets & scripts</span><span>One internal application</span></div>
+    <p class="diagram-step">Python troubleshooting scripts</p>
+    <p class="diagram-connector" aria-hidden="true">↓</p>
+    <p class="diagram-step"><strong>Flask application</strong><br /><span>Huey background tasks - MySQL on AWS</span></p>
+    <p class="diagram-connector" aria-hidden="true">↓</p>
+    <div class="workflow-interfaces">
+      <p class="diagram-step"><strong>Google Sheets</strong><br /><span>Automated updates to the shared source of truth</span></p>
+      <p class="diagram-step"><strong>Existing React page</strong><br /><span>Extended for data operators to use the tools</span></p>
+    </div>
   </div>}
   <figcaption>{kind === 'bonus' ? 'Illustrated change in responsibility' : 'Illustration of the workflow change'}</figcaption>
 </figure>
@@ -25,9 +27,11 @@ const { kind } = Astro.props;
   .diagram-flow > span:not([aria-hidden]) { border: 1px solid #c5b9a7; border-radius: 3px; min-height: 64px; display: grid; place-items: center; text-align: center; padding: .5rem; }
   .diagram-flow > .self-serve { border-color: var(--accent) !important; color: var(--accent); }
   .diagram-flow [aria-hidden] { color: var(--accent); }
-  svg { display: block; width: 100%; }
-  .diagram-labels { display: flex; justify-content: space-between; gap: 2rem; font-size: .85rem; color: var(--muted); }
-  .diagram-labels span { max-width: 45%; }
+  .diagram-step { border: 1px solid #c5b9a7; border-radius: 3px; padding: .85rem; text-align: center; line-height: 1.45; }
+  .diagram-step span { font-size: .85rem; color: var(--muted); }
+  .diagram-connector { color: var(--accent); text-align: center; margin-block: .35rem; }
+  .workflow-interfaces { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+  @media(max-width: 400px) { .workflow-interfaces { grid-template-columns: 1fr; } }
   figcaption { font-size: .75rem; color: var(--muted); margin-top: .65rem; }
   @media(max-width: 400px) { .responsibility, .analyst { padding: 1.1rem; }.diagram-flow { font-size: .95rem; gap: .5rem; } }
 </style>
