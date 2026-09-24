@@ -2,9 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from '~/pages/api/audio-intake';
 import { saveOwnerRequest } from '~/lib/owner-requests';
 import { sendUrgentOwnerAlert } from '~/lib/owner-alerts';
+import { deliverProjectInvitation } from '~/lib/audio-project-invitations';
 
 vi.mock('~/lib/owner-requests', () => ({ saveOwnerRequest: vi.fn(async (_db, input) => ({ id: 'request-123', ...input })) }));
 vi.mock('~/lib/owner-alerts', () => ({ sendUrgentOwnerAlert: vi.fn(async () => true) }));
+vi.mock('~/lib/audio-project-invitations', () => ({ deliverProjectInvitation: vi.fn(async () => {}) }));
 const base = { service:'vocal-mix', title:'My song', direction:'judgment', preferences:{}, name:'Artist', email:'artist@example.com', permission:true, turnstileToken:'test', fileLink:'https://drive.google.com/example' };
 function context(body: unknown = base, origin = 'https://thesuperhuman.us') {
   return { request: new Request('https://thesuperhuman.us/api/audio-intake', { method:'POST', headers:{origin,'content-type':'application/json'}, body:JSON.stringify(body) }), locals:{runtime:{env:{MUSIC_DB:{},RESEND_API_KEY:'test',CONTACT_FROM_EMAIL:'test@example.com',CONTACT_TO_EMAIL:'owner@example.com',TURNSTILE_SECRET_KEY:'test',RATE_LIMIT:{get:vi.fn(async()=>null),put:vi.fn(async()=>{}),delete:vi.fn(async()=>{})}}}} } as any;
@@ -12,6 +14,15 @@ function context(body: unknown = base, origin = 'https://thesuperhuman.us') {
 beforeEach(()=>{ vi.clearAllMocks(); vi.stubGlobal('fetch',vi.fn(async (url:string)=> url.includes('siteverify') ? {ok:true,json:async()=>({success:true})} : {ok:true})); });
 describe('intake endpoint',()=>{
  it('stores reviewed details without fetching the shared file or sending routine email',async()=>{const res=await POST(context());expect(res.status).toBe(200);expect(fetch).toHaveBeenCalledTimes(1);expect(saveOwnerRequest).toHaveBeenCalledWith(expect.anything(),expect.objectContaining({kind:'service',serviceId:'vocal-mix',email:'artist@example.com'}));});
+ it('queues a sign-in invitation only when the private portal is enabled', async () => {
+   const ctx = context();
+   const waitUntil = vi.fn();
+   ctx.locals.runtime.ctx = { waitUntil };
+   ctx.locals.runtime.env.AUDIO_CLIENT_PORTAL_ENABLED = 'true';
+   expect((await POST(ctx)).status).toBe(200);
+   expect(deliverProjectInvitation).toHaveBeenCalledWith(ctx.locals.runtime.env.MUSIC_DB, 'request-123', ctx.locals.runtime.env);
+   expect(waitUntil).toHaveBeenCalledTimes(1);
+ });
  it('rejects cross-origin and oversized requests before external calls',async()=>{expect((await POST(context(base,'https://evil.example'))).status).toBe(403);expect((await POST(context({padding:'x'.repeat(33000)}))).status).toBe(413);expect(fetch).not.toHaveBeenCalled();});
  it('requires files and permission before sending',async()=>{expect((await POST(context({...base,fileLink:'',permission:false}))).status).toBe(400);expect(fetch).not.toHaveBeenCalled();});
  it('does not accept obsolete upload session instead of files',async()=>{expect((await POST(context({...base,fileLink:'',uploadSession:'00000000-0000-0000-0000-000000000001'}))).status).toBe(400);});

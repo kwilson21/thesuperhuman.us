@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { sendAudioInquiry, sendAudioMessage } from '~/lib/audio-resend';
+import { sendAudioInquiry, sendAudioMessage, sendStudioSignInNotice } from '~/lib/audio-resend';
 import type { AudioInquiryInput } from '~/lib/audio-validation';
 
 const input: AudioInquiryInput = {
@@ -57,4 +57,21 @@ describe('sendAudioInquiry', () => {
     const body = JSON.parse((fetch as any).mock.calls[0][1].body);
     expect(body.text).toContain('Target date: flexible');
   });
+});
+
+it('sends only a sign-in link for private project notices', async () => {
+  await sendStudioSignInNotice('k', 'studio@example.com', 'artist@example.com', 'Your private studio project');
+  const body = JSON.parse((fetch as any).mock.calls[0][1].body);
+  expect(body.to).toEqual(['artist@example.com']);
+  expect(body.text).toContain('https://thesuperhuman.us/studio/sign-in');
+  expect(body.text).not.toContain('song');
+  expect(body.text).not.toContain('invoice');
+});
+
+it('opens a first invitation without calling it an update', async () => {
+  await sendStudioSignInNotice('k', 'studio@example.com', 'artist@example.com', 'Your private studio project', 'invitation');
+  const body = JSON.parse((fetch as any).mock.calls.at(-1)[1].body);
+  expect(body.text).toMatch(/^Your private audio project is ready\./);
+  expect(body.text).not.toContain('update to');
+  expect(body.text).not.toContain('song');
 });

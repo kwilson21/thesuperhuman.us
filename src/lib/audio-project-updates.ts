@@ -1,4 +1,4 @@
-import { sendAudioMessage } from './audio-resend';
+import { sendStudioSignInNotice } from './audio-resend';
 
 export type ProjectUpdate = {
   id: number;
@@ -139,10 +139,7 @@ export async function deliverProjectUpdateNotice(db: D1Database, updateId: numbe
     return;
   }
   const sent = recipient && env.RESEND_API_KEY && env.CONTACT_FROM_EMAIL
-    ? await sendAudioMessage({ apiKey: env.RESEND_API_KEY, payload: {
-      from: env.CONTACT_FROM_EMAIL, to: [recipient.email], subject: 'Your studio project has an update',
-      text: 'There is an update to your audio project. Sign in to see it: https://thesuperhuman.us/studio/sign-in',
-    } }) : { ok: false };
+    ? await sendStudioSignInNotice(env.RESEND_API_KEY, env.CONTACT_FROM_EMAIL, recipient.email, 'Your studio project has an update') : { ok: false };
   if (sent.uncertain) return;
   await db.prepare(`UPDATE audio_project_updates SET notification_status=?,notification_sent_at=?
     WHERE id=? AND notification_status='sending'`).bind(sent.ok ? 'sent' : 'failed', sent.ok ? new Date().toISOString() : null, updateId).run();
