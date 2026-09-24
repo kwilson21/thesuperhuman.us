@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { sendAudioInquiry } from '~/lib/audio-resend';
+import { sendAudioInquiry, sendAudioMessage } from '~/lib/audio-resend';
 import type { AudioInquiryInput } from '~/lib/audio-validation';
 
 const input: AudioInquiryInput = {
@@ -17,6 +17,12 @@ const input: AudioInquiryInput = {
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ id: 'em_1' }) } as any)));
+});
+
+it('keeps a timed-out email delivery unconfirmed', async () => {
+  vi.mocked(fetch).mockRejectedValueOnce(new Error('request timed out'));
+  expect(await sendAudioMessage({ apiKey: 'k', payload: { from: 'a@example.com', to: ['b@example.com'], subject: 'Notice', text: 'Sign in.' } }))
+    .toEqual({ ok: false, uncertain: true });
 });
 
 describe('sendAudioInquiry', () => {

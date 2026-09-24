@@ -1,0 +1,91 @@
+---
+import type { ProjectUpdate } from '~/lib/audio-project-updates';
+import { projectToday } from '~/lib/audio-project-updates';
+
+type Props = {
+  updates: ProjectUpdate[];
+  currentDueAt: string | null;
+  stage: string;
+  requestStatus?: string;
+  bookingPaid?: boolean;
+  revoked?: boolean;
+  endpoint?: string;
+};
+const { updates, currentDueAt, stage, requestStatus, bookingPaid = false, revoked = false, endpoint } = Astro.props;
+const owner = Boolean(endpoint);
+const active = stage !== 'complete' && requestStatus !== 'withdrawn' && !revoked;
+const reasonLabels = {
+  protect_song: 'More time to protect the song',
+  client_clarification: 'Waiting on client clarification',
+  schedule_conflict: 'Scheduling conflict',
+};
+const dateLabel = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+const today = projectToday();
+const nextDay = currentDueAt ? new Date(Date.parse(`${currentDueAt}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10) : today;
+const laterDate = nextDay > today ? nextDay : today;
+---
+<section class="project-updates" data-audio-project-updates data-endpoint={endpoint} aria-labelledby="project-updates-heading">
+  <div class="project-updates-heading"><p class="project-updates-kicker">Progress</p><h2 id="project-updates-heading">Your song’s timeline</h2></div>
+  {updates.length ? <ol>{[...updates].reverse().map(update =>
+    <li>
+      <div class="project-update-meta"><time datetime={update.created_at}>{new Date(update.created_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</time><span>{update.kind === 'accepted' ? 'Project accepted' : update.kind === 'work_started' ? 'Work started' : update.kind === 'date_changed' ? 'Date updated' : 'Studio update'}</span></div>
+      <p>{update.body}</p>
+      {update.kind === 'date_changed' && update.previous_due_at && update.new_due_at && <p class="project-update-date">{reasonLabels[update.reason ?? 'protect_song']}: {dateLabel(update.previous_due_at)} → {dateLabel(update.new_due_at)}</p>}
+      {owner && <div class="project-update-notice">
+        {update.notification_status === 'sent' ? <span>Client email sent</span> : update.notification_status === 'failed' ? <><span>Client email failed</span><button type="button" data-retry-update={update.id}>Retry email</button></> : update.notification_status === 'sending' ? update.notification_attempted_at && Date.now() - Date.parse(update.notification_attempted_at) > 60_000 ? <><span>Delivery unconfirmed. Check Resend. If it did not accept the email, retry here.</span><button type="button" data-retry-update={update.id} data-confirmed-not-sent="true">I checked Resend; retry</button></> : <span>Client email sending</span> : <><span>Client email pending</span><button type="button" data-retry-update={update.id}>Try sending</button></>}
+      </div>}
+    </li>
+  )}</ol> : <p class="project-updates-empty">No progress updates yet.</p>}
+
+  {owner && active && <div class="project-update-actions">
+    {stage === 'files_under_review' && requestStatus === 'new' && <p class="project-update-hint">Mark the request reviewed to accept the project and set its delivery date.</p>}
+    {stage === 'files_under_review' && requestStatus === 'reviewed' && <form data-project-update-form data-action="accept">
+      <h3>Accept the project</h3><p>Set a cautious delivery date and tell the client what happens next.</p>
+      <label>Expected by <input type="date" name="dueDate" min={today} required /></label>
+      <label>First update <textarea name="body" rows="3" maxlength="1000" required></textarea></label>
+      <button type="submit">Accept and update client</button><p role="status" data-update-status></p>
+    </form>}
+    {stage === 'accepted' && bookingPaid && <form data-project-update-form data-action="start_work">
+      <h3>Start the work</h3><label>What you’re focusing on <textarea name="body" rows="3" maxlength="1000" required></textarea></label>
+      <button type="submit">Mark in progress</button><p role="status" data-update-status></p>
+    </form>}
+    {stage !== 'files_under_review' && <form data-project-update-form data-action="progress">
+      <h3>Share progress</h3><label>Meaningful update <textarea name="body" rows="3" maxlength="1000" required></textarea></label>
+      <button type="submit">Post update</button><p role="status" data-update-status></p>
+    </form>}
+    {currentDueAt && <form data-project-update-form data-action="revise_date">
+      <h3>Change the delivery date</h3><p>Current date: {dateLabel(currentDueAt)}. A later date needs a clear reason.</p>
+      <label>New date <input type="date" name="dueDate" min={laterDate} required /></label>
+      <label>Reason <select name="reason" required><option value="">Choose a reason</option><option value="protect_song">More time to protect the song</option><option value="client_clarification">Waiting on client clarification</option><option value="schedule_conflict">Scheduling conflict</option></select></label>
+      <label>Note to the client <textarea name="body" rows="3" maxlength="1000" required></textarea></label>
+      <button type="submit">Update date and client</button><p role="status" data-update-status></p>
+    </form>}
+  </div>}
+</section>
+<style>
+  .project-updates { border-top: 1px solid #d8d2c9; padding: 2.5rem 0; }
+  .project-updates-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1.5rem; margin-bottom: 1.5rem; }
+  .project-updates-kicker { margin: 0; color: #a4512f; font: 500 .78rem/1.4 Inter, sans-serif; letter-spacing: .18em; text-transform: uppercase; }
+  h2 { margin: 0; font: 400 clamp(2rem, 4vw, 3rem)/1.1 Newsreader, Georgia, serif; }
+  ol { list-style: none; margin: 0; padding: 0; border-bottom: 1px solid #d8d2c9; }
+  li { border-top: 1px solid #d8d2c9; padding: 1.3rem 0; max-width: 50rem; }
+  .project-update-meta { display: flex; flex-wrap: wrap; gap: 1rem; color: #66615a; font: .8rem/1.4 Inter, sans-serif; }
+  .project-update-meta span { color: #a4512f; }
+  li > p { margin: .7rem 0 0; font: 1rem/1.6 Inter, sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .project-update-date { color: #514d47; }
+  .project-update-notice { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1rem; margin-top: .8rem; color: #66615a; font: .8rem/1.4 Inter, sans-serif; }
+  .project-update-notice button { margin: 0; }
+  .project-updates-empty { font: 1rem/1.6 Inter, sans-serif; color: #514d47; }
+  .project-update-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 2rem; margin-top: 2rem; }
+  .project-update-hint { margin: 0; color: #66615a; font: .9rem/1.5 Inter, sans-serif; }
+  form { display: grid; align-content: start; gap: .8rem; border-top: 1px solid #d8d2c9; padding-top: 1rem; }
+  h3 { margin: 0; font: 400 1.6rem/1.15 Newsreader, Georgia, serif; }
+  form p { margin: 0; color: #514d47; font: .9rem/1.5 Inter, sans-serif; }
+  label { display: grid; gap: .4rem; font: 500 .85rem/1.4 Inter, sans-serif; }
+  input,textarea,select { width: 100%; padding: .7rem .8rem; border: 1px solid #9d968c; border-radius: 0; background: #fffdf9; font: 1rem/1.4 Inter, sans-serif; }
+  textarea { resize: vertical; }
+  button { justify-self: start; border: 0; border-bottom: 1px solid currentColor; background: none; padding: .4rem 0; cursor: pointer; font: 500 .9rem/1.4 Inter, sans-serif; }
+  button:hover { color: #a4512f; }
+  button:disabled { opacity: .5; cursor: wait; }
+  [data-update-status] { min-height: 1.4rem; }
+</style>
