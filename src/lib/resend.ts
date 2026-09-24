@@ -1,5 +1,6 @@
 import type { ContactInput } from './validation';
 import type { ResumeAudience, StoredResumeRequest } from './resume-requests';
+import { contactReplyEmail, resumeDeliveryEmail } from './client-emails';
 
 const ENDPOINT = 'https://api.resend.com/emails';
 
@@ -28,22 +29,13 @@ function primaryBody(input: ContactInput): string {
     .join('\n');
 }
 
-function autoresponderBody(): string {
-  return [
-    'Thanks for reaching out. Your message has been received.',
-    '',
-    'For a deeper look at my background, you can request my resume at https://thesuperhuman.us/about#resumes. Each request is reviewed before a copy is emailed.',
-    '',
-    'Kazon',
-  ].join('\n');
-}
-
 async function sendOne(args: {
   apiKey: string;
   from: string;
   to: string;
   subject: string;
   text: string;
+  html?: string;
   replyTo?: string;
   attachments?: Attachment[];
 }): Promise<boolean> {
@@ -53,6 +45,7 @@ async function sendOne(args: {
     subject: args.subject,
     text: args.text,
   };
+  if (args.html) payload.html = args.html;
   if (args.replyTo) payload.reply_to = args.replyTo;
   if (args.attachments && args.attachments.length > 0) {
     payload.attachments = args.attachments;
@@ -101,7 +94,7 @@ export async function sendContactEmails(args: SendArgs): Promise<{ ok: boolean }
     from: args.from,
     to: args.input.email,
     subject: 'Thanks for reaching out (Kazon Wilson)',
-    text: autoresponderBody(),
+    ...contactReplyEmail(),
   }).catch(() => false);
 
   return { ok: true };
@@ -158,17 +151,6 @@ interface ResumeDeliveryArgs {
   filename: string;
 }
 
-function deliveryBody(name: string): string {
-  return [
-    `Hi ${name},`,
-    '',
-    'My resume is attached. Let me know if anything sparks a conversation.',
-    'Reply to this email or use the contact form at https://thesuperhuman.us/#contact.',
-    '',
-    'Kazon',
-  ].join('\n');
-}
-
 export async function sendResumeDelivery(
   args: ResumeDeliveryArgs,
 ): Promise<{ ok: boolean }> {
@@ -177,7 +159,7 @@ export async function sendResumeDelivery(
     from: args.from,
     to: args.to,
     subject: 'Your requested resume (Kazon Wilson)',
-    text: deliveryBody(args.name),
+    ...resumeDeliveryEmail(args.name),
     attachments: [
       {
         filename: args.filename,

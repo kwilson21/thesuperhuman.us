@@ -59,19 +59,21 @@ describe('sendAudioInquiry', () => {
   });
 });
 
-it('sends only a sign-in link for private project notices', async () => {
+it('sends only a sign-in link for private project notices, as HTML with a plain-text twin', async () => {
   await sendStudioSignInNotice('k', 'studio@example.com', 'artist@example.com', 'Your private studio project');
   const body = JSON.parse((fetch as any).mock.calls[0][1].body);
   expect(body.to).toEqual(['artist@example.com']);
   expect(body.text).toContain('https://thesuperhuman.us/studio/sign-in');
-  expect(body.text).not.toContain('song');
-  expect(body.text).not.toContain('invoice');
+  expect(body.html).toContain('href="https://thesuperhuman.us/studio/sign-in"');
+  // Notices name no project, file, stage or payment: the client signs in to see those.
+  for (const part of [body.text, body.html]) for (const detail of ['invoice', 'review mix is ready', 'balance', '$']) expect(part).not.toContain(detail);
+  expect(body.text).toContain('There’s something new on your song.');
 });
 
 it('opens a first invitation without calling it an update', async () => {
   await sendStudioSignInNotice('k', 'studio@example.com', 'artist@example.com', 'Your private studio project', 'invitation');
   const body = JSON.parse((fetch as any).mock.calls.at(-1)[1].body);
-  expect(body.text).toMatch(/^Your private audio project is ready\./);
-  expect(body.text).not.toContain('update to');
-  expect(body.text).not.toContain('song');
+  expect(body.text).toMatch(/^Your song has a private studio\./);
+  expect(body.text).not.toContain('update');
+  expect(body.html).toContain('Open your studio');
 });
