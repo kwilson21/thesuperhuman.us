@@ -99,6 +99,7 @@ describe('sendResumeDelivery', () => {
     expect(body.to).toEqual(['jane@example.com']);
     expect(body.subject).toContain('resume');
     expect(body.text).toContain('Jane Doe');
+    expect(body.html).toContain('Here’s the resume you asked for.');
     expect(body.attachments).toHaveLength(1);
     expect(body.attachments[0].filename).toBe('kazon-wilson-resume-dod.pdf');
     // "%PDF" base64-encoded = "JVBERg=="

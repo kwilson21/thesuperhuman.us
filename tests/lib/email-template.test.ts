@@ -10,14 +10,25 @@ describe('renderEmail', () => {
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
     expect(html).toContain('href="https://example.com/?a=1&amp;b=&quot;2&quot;"');
     expect(html).toContain('A&amp;B');
+    expect(html).toContain('<title>&quot;Hi&quot;</title>');
+    expect(html).toContain('>&lt;p&gt;</div>');
     expect(text).toContain('<script>alert(1)</script>');
   });
 
-  it('groups a sign-in code for reading and keeps it whole in the plain text', () => {
+  it('groups a sign-in code into two blocks of four in both versions', () => {
     const { html, text } = studioCodeEmail('48271936');
     expect(html).toContain('4827 1936');
     expect(text).toContain('4827 1936');
     expect(text).toContain('expires in 10 minutes');
+  });
+
+  it('keeps Outlook-safe markup: longhand fonts, padded button cell, fixed-width frame, hidden preheader', () => {
+    const { html } = studioInvitationEmail();
+    expect(html).not.toMatch(/font:\s*\d/);
+    expect(html).toMatch(/<td style="[^"]*padding:14px 28px;"><a href="https:\/\/thesuperhuman.us\/studio\/sign-in"/);
+    expect(html).toContain('<!--[if mso]><table role="presentation" width="600"');
+    expect(html).toContain('mso-hide:all');
+    expect(html).toContain('<!--[if !mso]><!--><link href="https://fonts.googleapis.com');
   });
 
   it('gives every client email a heading, a reason and a plain-text twin without em-dashes', () => {
