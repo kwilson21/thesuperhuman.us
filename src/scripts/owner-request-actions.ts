@@ -15,7 +15,8 @@ export function setupOwnerRequestActions() {
   document.querySelector<HTMLFormElement>('[data-request-note]')?.addEventListener('submit', event => {
     event.preventDefault(); const data = new FormData(event.currentTarget as HTMLFormElement); void update({ action: 'note', note: data.get('note') });
   });
-  document.querySelectorAll<HTMLButtonElement>('[data-action]').forEach(button => button.addEventListener('click', () => {
+  // Scoped: project update forms also carry data-action, and must not post request status changes.
+  document.querySelectorAll<HTMLButtonElement>('[data-request-actions] button[data-action]').forEach(button => button.addEventListener('click', () => {
     const action = button.dataset.action;
     if (action === 'withdraw' && !confirm('Honor this withdrawal and close the request?')) return;
     void update({ action });
