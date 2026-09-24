@@ -11,10 +11,10 @@ const replaceAction = payment?.bookingStatus === 'void' ? 'booking' : payment?.b
 ---
 <section class="owner-section payment-panel" aria-labelledby="payment-heading" data-payment-panel data-request-id={requestId}>
   <div class="payment-heading"><div><p class="owner-kicker">Payment</p><h2 id="payment-heading">Book the work</h2></div>{payment && <p class="payment-total"><span>Fixed project price</span><strong>{money(payment.totalAmountCents)}</strong></p>}</div>
-  {!payment ? <form data-payment-approval>
+  {!payment ? <form id="confirm-terms" data-payment-approval>
     <p class="payment-guidance">Record the exact written offer only after the files, scope, price, and availability are settled. {defaults.approvedService ? 'The service and price start from the request; check them against your offer, because they lock once confirmed.' : 'The service and price lock once confirmed.'}</p>
     <div class="payment-fields"><label>Approved service<input name="approvedService" required maxlength="160" autocomplete="off" value={defaults.approvedService} placeholder="Service: song title" /></label><label>Total fixed price <span>USD</span><input name="totalAmount" required inputmode="decimal" placeholder="200.00" value={defaults.totalAmount} /></label></div>
-    <label class="payment-acceptance"><input type="checkbox" name="offerAccepted" required /> Client accepted the written offer</label>
+    <label class="payment-acceptance"><input type="checkbox" name="offerAccepted" required data-next-step-focus /> Client accepted the written offer</label>
     <button class="owner-primary-action" type="submit">Confirm terms <span aria-hidden="true">→</span></button>
   </form> : <div class="payment-ledger">
     <p class="payment-service">{payment.approvedService}</p>
@@ -22,9 +22,9 @@ const replaceAction = payment?.bookingStatus === 'void' ? 'booking' : payment?.b
       <li><div><span class="payment-step">02</span><div><strong>Remaining balance</strong><small>{money(payment.balanceAmountCents)}</small></div></div><div class:list={['payment-state',payment.balanceStatus]}><span>{statusLabel(payment.balanceStatus)}</span>{payment.balanceInvoiceUrl && <a href={payment.balanceInvoiceUrl} rel="noreferrer">Open invoice ↗</a>}</div></li></ol>
     {payment.bookingStatus === 'paid' && payment.balanceStatus === 'paid' && <p class="payment-complete">Both payments are confirmed. Final downloadable files may be released.</p>}
   </div>}
-  {nextAction === 'booking' && <button class="owner-primary-action" type="button" data-payment-action="create-booking-invoice" disabled={!stripeEnabled}>Create booking invoice <span aria-hidden="true">→</span></button>}
+  {nextAction === 'booking' && <button class="owner-primary-action" type="button" id="create-booking-invoice" data-payment-action="create-booking-invoice" disabled={!stripeEnabled}>Create booking invoice <span aria-hidden="true">→</span></button>}
   {nextAction === 'balance' && <button class="owner-primary-action" type="button" data-payment-action="create-balance-invoice" disabled={!stripeEnabled}>Create balance invoice <span aria-hidden="true">→</span></button>}
-  {replaceAction && <button class="owner-primary-action" type="button" data-payment-action={`replace-${replaceAction}-invoice`} disabled={!stripeEnabled}>Create replacement {replaceAction} invoice <span aria-hidden="true">→</span></button>}
+  {replaceAction && <button class="owner-primary-action" type="button" id="replace-invoice" data-payment-action={`replace-${replaceAction}-invoice`} disabled={!stripeEnabled}>Create replacement {replaceAction} invoice <span aria-hidden="true">→</span></button>}
   {payment && payment.bookingStatus !== 'paid' && payment.bookingStatus !== 'not_created' && <p class="payment-next">Work is booked when Stripe confirms the booking payment.</p>}
   {payment?.bookingStatus === 'paid' && payment.balanceStatus !== 'paid' && payment.balanceStatus !== 'not_created' && <p class="payment-next">Keep final downloadable files private until Stripe confirms the remaining balance.</p>}
   {(payment?.bookingStatus === 'payment_failed' || payment?.balanceStatus === 'payment_failed') && <p class="payment-next">Open the invoice in Stripe to retry payment, void it, or contact the client before taking another action.</p>}

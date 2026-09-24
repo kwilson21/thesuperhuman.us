@@ -38,7 +38,7 @@ const size = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
     </details>}
   </li>; })}</ol> : <p class="file-empty">No files uploaded yet.</p>}
   {pending.length > 0 && <div class="unfinished"><h3>Unfinished uploads</h3><p>If an upload finished but did not appear above, try recovery. Otherwise discard it and start again.</p><ul>{pending.map(upload => <li><div><strong>{upload.display_name}</strong><span>{upload.state === 'discarding' ? 'Cleanup needs another try' : 'Started'} {when(upload.created_at)}</span></div><div class="upload-actions">{upload.state === 'pending' && <button type="button" class="studio-quiet" data-upload-action="recover" data-upload-id={upload.id}>Recover</button>}<button type="button" class="studio-quiet danger" data-upload-action="abort" data-upload-id={upload.id}>{upload.state === 'discarding' ? 'Retry cleanup' : 'Discard'}</button></div></li>)}</ul><p class="studio-status" data-pending-status role="status" aria-live="polite"></p></div>}
-  {canUpload && <form class="upload" data-project-upload-form>
+  {canUpload && <form class="upload" id="upload-file" data-project-upload-form>
     <div class="upload-heading"><h3>Upload a private file</h3><p>Uploading does not share it. You choose when to publish.</p></div>
     <label class="drop" data-upload-drop>
       <input name="file" type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" required />

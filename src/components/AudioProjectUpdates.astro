@@ -65,7 +65,7 @@ const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month
       <p class="next-step-kicker">{nextStep.waiting ? 'Waiting' : 'Next step'}</p>
       <p class="next-step-title" id="next-step-title">{nextStep.title}</p>
       <p class="next-step-detail">{nextStep.detail}</p>
-      {nextStep.target && <a class="next-step-link" href={nextStep.target}>{nextStep.waiting ? 'See where it stands' : 'Go there'} <span aria-hidden="true">→</span></a>}
+      {nextStep.target && <a class="next-step-link" href={nextStep.target} data-next-step-link>{nextStep.action ?? 'Go there'} <span aria-hidden="true">→</span></a>}
     </div>}
     {stage === 'files_under_review' && requestStatus === 'reviewed' && <form class="panel" id="accept-project" data-project-update-form data-action="accept">
       <h3>Accept the project</h3><p>Set a cautious delivery date and tell the client what happens next.</p>
@@ -148,7 +148,13 @@ const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month
   .next-step.waiting .next-step-kicker { color: var(--studio-muted); }
   .next-step-title { margin: 0; font: 400 1.5rem/1.15 Newsreader, Georgia, serif; }
   .next-step-detail { margin: 0; max-width: 40rem; font: .92rem/1.55 Inter, sans-serif; color: var(--studio-muted); }
-  .next-step-link { justify-self: start; margin-top: .25rem; color: var(--ink); font: 500 .88rem/1.4 Inter, sans-serif; }
+  .next-step-link { justify-self: start; margin-top: .35rem; padding: .5rem .9rem; border: 1px solid var(--ink); border-radius: 2px; color: var(--ink); font: 500 .88rem/1.4 Inter, sans-serif; text-decoration: none; }
+  .next-step-link:hover { background: var(--ink); color: var(--paper); }
+  .waiting .next-step-link { border-color: var(--studio-line); }
+  /* The control the Next step link points at, highlighted after the jump. */
+  :global(.next-step-target) { outline: 3px solid var(--accent); outline-offset: 4px; border-radius: 2px; animation: next-step-pulse 1.2s ease-out 2; }
+  @keyframes next-step-pulse { from { outline-offset: 12px; outline-color: transparent; } to { outline-offset: 4px; } }
+  @media (prefers-reduced-motion: reduce) { :global(.next-step-target) { animation: none; } }
   .panel { display: grid; align-content: start; gap: .9rem; padding: 1.4rem; border: 1px solid var(--rule); border-radius: 2px; background: color-mix(in srgb, var(--studio-field) 60%, var(--paper)); }
   h3 { margin: 0; font: 400 1.5rem/1.15 Newsreader, Georgia, serif; }
   .panel > p:not(.studio-status) { margin: -.4rem 0 0; color: var(--studio-muted); font: .85rem/1.5 Inter, sans-serif; }
