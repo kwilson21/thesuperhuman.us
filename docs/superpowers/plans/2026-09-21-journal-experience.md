@@ -19,6 +19,10 @@
 - The default view shows at most five recent choices and never expands the archive inline.
 - Verify 390px and 1440px views, keyboard selection, and no-JavaScript fallback.
 
+### Browser-check setup
+
+`tests/browser/personal-website-journal.cjs` loads Playwright from `PW_SKILL_DIR/node_modules/playwright` and visits `TARGET_URL`. In one terminal, run `npm run dev -- --host 127.0.0.1 --port 4321`. In a second terminal, set `PW_SKILL_DIR` to the absolute path of an installed Playwright skill runtime and verify it with `test -f "$PW_SKILL_DIR/node_modules/playwright/package.json"`. Then run `PW_SKILL_DIR="$PW_SKILL_DIR" TARGET_URL=http://127.0.0.1:4321 node tests/browser/personal-website-journal.cjs`. Fail setup explicitly if the package or local server is unavailable; a browser check that never launched is not a pass. Use this command for the browser checks in Tasks 2–4.
+
 ---
 
 ### Task 1: Classify journal presentation
@@ -72,9 +76,9 @@
 - Modify: `tests/browser/personal-website-journal.cjs`
 - Modify: `docs/superpowers/specs/2026-09-21-journal-experience.md`
 
-**Interfaces:** Browser checks assert the visible current state, latest change, and next path in the mobile initial reading flow.
+**Interfaces:** Browser checks assert the visible current state, latest change, and next path in the mobile initial reading flow. Give those three pieces stable semantic landmarks or test IDs. At a 390×844 viewport before scrolling, require each landmark to be visible and its bounding rectangle to end no lower than `2 * window.innerHeight` (1,688 CSS pixels). A label present several screens down must fail the check.
 
-- [ ] Write a failing assertion for `Latest work`, `View project story`, and `Browse archive` in the initial mobile flow.
+- [ ] Write failing assertions for `Latest work`, `View project story`, and `Browse archive`, plus the current-state, latest-change, and next-action landmarks. Check visibility and viewport-relative positions at 390×844 before scrolling; repeat the bounded-choice and overflow checks at 1440px.
 - [ ] Implement only missing labels or accessible landmarks.
 - [ ] Run `npm test && npm run check && npm run build`, then the focused browser checks. Commit `Protect journal reading flow`.
 

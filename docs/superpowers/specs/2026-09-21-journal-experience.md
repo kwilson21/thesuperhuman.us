@@ -54,7 +54,9 @@ Every journal change must pass these product checks before review:
 - **Order:** updates are newest-first. Chronological order needs an explicit
   Project-story label and authored chapter order.
 - **First two screens:** a new visitor can identify current state, latest
-  change, and one next action without scrolling through previous updates.
+  change, and one next action without scrolling through previous updates. At a
+  390×844 viewport, each must be rendered without opening a panel and end
+  within 1,688 CSS pixels of the top of the document.
 - **Evidence:** image proof has visible captions, useful alternative text, and
   a working full-size link.
 - **Accessibility:** keyboard selection exposes the active panel state.
