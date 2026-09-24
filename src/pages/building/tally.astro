@@ -1,0 +1,12 @@
+---
+import ProjectLayout from '~/layouts/ProjectLayout.astro';
+import ProjectTimeline from '~/components/ProjectTimeline.astro';
+import { tallyStory, tallyMilestones } from '~/data/project-stories/tally';
+---
+<ProjectLayout title={tallyStory.title} subtitle={tallyStory.subtitle} description={tallyStory.description} status="In development" journalHref="#tally-updates-title">
+  <ProjectTimeline id="tally-updates" title="Development journal" entries={tallyMilestones} selectedId="tally-home-screen" />
+  <p class="source-link"><a class="site-link" href="https://github.com/kwilson21/tally">Tally on GitHub <span aria-hidden="true">↗</span></a></p>
+</ProjectLayout>
+<style>
+  .source-link { margin-top: 2rem; }
+</style>

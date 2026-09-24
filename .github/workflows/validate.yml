@@ -26,3 +26,5 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
+        env:
+          PUBLICIST_PRIVATE_TOKEN: ${{ secrets.PUBLICIST_PRIVATE_TOKEN }}
