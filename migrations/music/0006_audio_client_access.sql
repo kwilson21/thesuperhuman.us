@@ -25,3 +25,11 @@ CREATE TABLE IF NOT EXISTS audio_client_access_audit (
   occurred_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS audio_client_access_audit_request ON audio_client_access_audit(request_id,id);
+-- Sign-in allowances counted atomically in D1, keyed by an HMAC of the scope and
+-- subject. Rows live only for their five-minute window.
+CREATE TABLE IF NOT EXISTS audio_client_allowances (
+  key TEXT PRIMARY KEY,
+  window_start TEXT NOT NULL,
+  uses INTEGER NOT NULL CHECK(uses > 0)
+);
+CREATE INDEX IF NOT EXISTS audio_client_allowances_window ON audio_client_allowances(window_start);
