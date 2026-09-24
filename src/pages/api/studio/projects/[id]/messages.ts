@@ -1,14 +1,17 @@
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { clientPortalEnabled, clientProjectForSession, studioSessionFromRequest } from '~/lib/audio-client-access';
-import { clientMessageRateLimited, markProjectMessagesRead, postClientProjectMessage, validateProjectMessage } from '~/lib/audio-project-messages';
+import { clientMessageRateLimited, markProjectMessagesRead, postClientProjectMessage, postClientReviewDecision, validateProjectMessage } from '~/lib/audio-project-messages';
 import { musicRequest } from '~/lib/music-request';
 
 export const prerender = false;
 const inputSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('send'), body: z.unknown() }),
   z.object({ action: z.literal('read'), messageId: z.number().int().positive() }),
+  // Approval and stopping need no notes; a change request does.
+  z.object({ action: z.literal('respond'), reviewId: z.string().min(1).max(100), decision: z.enum(['approved', 'changes', 'stopped']), body: z.unknown() }),
 ]);
+const defaultText = { approved: 'I approve this mix.', stopped: 'I’m stopping the project here.' };
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
   const env = locals.runtime?.env;
@@ -26,6 +29,21 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     if (parsed.data.action === 'read') {
       await markProjectMessagesRead(env.MUSIC_DB, params.id, 'client', parsed.data.messageId, token);
       return Response.json({ ok: true });
+    }
+    if (parsed.data.action === 'respond') {
+      const { decision } = parsed.data;
+      const notes = typeof parsed.data.body === 'string' && parsed.data.body.trim() ? validateProjectMessage(parsed.data.body) : null;
+      if (decision === 'changes' && !notes) return Response.json({ ok: false, error: 'Write the changes you would like, up to 4,000 characters.' }, { status: 400 });
+      if (typeof parsed.data.body === 'string' && parsed.data.body.trim() && !notes) return Response.json({ ok: false, error: 'Write up to 4,000 characters. Shared links must start with https://.' }, { status: 400 });
+      // Stopping closes this project's access in the same write, so the review stops playing.
+      const saved = await postClientReviewDecision(env.MUSIC_DB, params.id, token, parsed.data.reviewId, decision, notes ?? defaultText[decision as 'approved' | 'stopped']);
+      if (!saved) {
+        if (await clientMessageRateLimited(env.MUSIC_DB, params.id)) {
+          return Response.json({ ok: false, error: 'Please wait a few minutes before sending another message.' }, { status: 429 });
+        }
+        return Response.json({ ok: false, error: 'That answer is not available for this review. Refresh the page to see where your song stands.' }, { status: 409 });
+      }
+      return Response.json({ ok: true, message: saved });
     }
     const message = validateProjectMessage(parsed.data.body);
     if (!message) return Response.json({ ok: false, error: 'Write up to 4,000 characters. Shared links must start with https://.' }, { status: 400 });

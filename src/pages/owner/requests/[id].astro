@@ -12,7 +12,7 @@ import StageTrack from '~/components/StageTrack.astro';
 import { getAudioPayment } from '~/lib/audio-payments';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
 import type { ProjectInvitation } from '~/lib/audio-project-invitations';
-import { listProjectMessages } from '~/lib/audio-project-messages';
+import { latestReviewDecision, listProjectMessages } from '~/lib/audio-project-messages';
 import { listProjectUpdates } from '~/lib/audio-project-updates';
 import { getOwnerRequest, listOwnerRequestAudit, listOwnerRequests } from '~/lib/owner-requests';
 import { safeExternalUrl } from '~/lib/owner-model';
@@ -27,7 +27,8 @@ const portalProject = request.kind === 'service' && clientPortalEnabled(Astro.lo
   ? await db.prepare('SELECT stage,current_due_at,revoked_at,invitation_status,invitation_attempted_at,invitation_sent_at FROM audio_projects WHERE request_id=?').bind(request.id).first<
     { stage: string; current_due_at: string | null; revoked_at: string | null } & ProjectInvitation>() : null;
 const stripeEnabled = stripeAvailable(Astro.locals.runtime.env);
-const nextStep = portalProject ? ownerNextStep({ stage: portalProject.stage, requestStatus: request.status, revoked: Boolean(portalProject.revoked_at), payment, stripeEnabled }) : null;
+const reviewDecision = portalProject?.stage === 'review_ready' ? await latestReviewDecision(db, request.id) : null;
+const nextStep = portalProject ? ownerNextStep({ stage: portalProject.stage, requestStatus: request.status, revoked: Boolean(portalProject.revoked_at), payment, stripeEnabled, reviewDecision }) : null;
 const projectMessages = portalProject ? await listProjectMessages(db, request.id) : [];
 const projectUpdates = portalProject ? await listProjectUpdates(db, request.id) : [];
 const projectFiles = portalProject ? (await db.prepare(`SELECT id,version,display_name,byte_size,status,uploaded_at,published_at,peaks

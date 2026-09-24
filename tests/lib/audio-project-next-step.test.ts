@@ -27,7 +27,14 @@ describe('ownerNextStep', () => {
   it('leads from reviews to the final delivery and close', () => {
     expect(step({ stage: 'in_progress', payment: pay('paid') })).toMatchObject({ title: 'Share a review mix', target: '#upload-file' });
     expect(step({ stage: 'revision_in_progress', payment: pay('paid') })).toMatchObject({ title: 'Share the revised mix' });
-    expect(step({ stage: 'review_ready', payment: pay('paid') })).toMatchObject({ title: 'Wait for notes, then revise or finish' });
+    expect(step({ stage: 'review_ready', payment: pay('paid') })).toMatchObject({ title: 'Waiting on the client’s answer', waiting: true });
+    // Stopping revokes the project, and the owner still gets a step until the request is resolved.
+    expect(step({ stage: 'review_ready', revoked: true, payment: pay('paid'), reviewDecision: 'stopped' })).toMatchObject({ title: 'The client stopped the project', target: '#request-heading' });
+    expect(step({ stage: 'review_ready', revoked: true, requestStatus: 'resolved', payment: pay('paid'), reviewDecision: 'stopped' })).toBeNull();
+    expect(step({ stage: 'review_ready', revoked: true, requestStatus: 'withdrawn', payment: pay('paid'), reviewDecision: 'stopped' })).toBeNull();
+    expect(step({ stage: 'review_ready', payment: pay('paid'), reviewDecision: 'changes' })).toMatchObject({ title: 'Begin the revision', target: '#begin-revision', action: 'Begin revision' });
+    expect(step({ stage: 'review_ready', payment: pay('paid'), reviewDecision: 'approved' })).toMatchObject({ title: 'Send the balance invoice', target: '#create-balance-invoice' });
+    expect(step({ stage: 'review_ready', payment: pay('paid'), reviewDecision: 'approved', stripeEnabled: false })).toMatchObject({ title: 'Record the balance payment', target: '#record-balance-payment', action: 'Record balance received' });
     expect(step({ stage: 'review_ready', payment: pay('paid', 'open') })).toMatchObject({ title: 'Waiting on the balance payment', waiting: true });
     expect(step({ stage: 'review_ready', payment: pay('paid', 'paid') })).toMatchObject({ title: 'Deliver the final files' });
     expect(step({ stage: 'final_files_ready', payment: pay('paid', 'paid') })).toMatchObject({ title: 'Close the project', target: '#close-project' });
@@ -41,7 +48,7 @@ describe('ownerNextStep', () => {
     expect(step({ stage: 'review_ready', payment: pay('paid', 'payment_failed') })).toMatchObject({ title: 'Sort out the balance invoice' });
     expect(step({ stage: 'review_ready', payment: pay('paid', 'uncollectible') })).toMatchObject({ title: 'Sort out the balance invoice' });
     expect(step({ stage: 'review_ready', payment: { ...pay('paid'), balanceCreationStartedAt: '2026-09-24T12:00:00Z' } })).toMatchObject({ title: 'Check the invoice in Stripe' });
-    expect(step({ stage: 'review_ready', payment: pay('paid'), stripeEnabled: false })?.detail).toContain('collect the balance another way');
+    expect(step({ stage: 'review_ready', payment: pay('paid'), stripeEnabled: false })?.detail).toContain('record the balance yourself');
   });
 
   it('has nothing to suggest for a closed, withdrawn or revoked project', () => {
@@ -55,13 +62,13 @@ describe('ownerNextStep', () => {
       'src/components/owner/OwnerProjectFiles.astro', 'src/components/ProjectMessages.astro'].map(file => readFileSync(file, 'utf8')).join('\n');
     const stages = ['files_under_review', 'accepted', 'in_progress', 'review_ready', 'revision_in_progress', 'final_files_ready'];
     const payments = [null, pay('not_created'), pay('open'), pay('void'), pay('payment_failed'), pay('paid'), pay('paid', 'open'), pay('paid', 'void'), pay('paid', 'paid')];
-    for (const stage of stages) for (const requestStatus of ['new', 'reviewed']) for (const payment of payments) for (const stripeEnabled of [true, false]) {
-      const next = step({ stage, requestStatus, payment, stripeEnabled });
+    for (const stage of stages) for (const requestStatus of ['new', 'reviewed']) for (const payment of payments) for (const stripeEnabled of [true, false]) for (const reviewDecision of [null, 'approved', 'changes', 'stopped'] as const) {
+      const next = step({ stage, requestStatus, payment, stripeEnabled, reviewDecision });
       if (!next) continue;
       // The link names the control it lands on, so its label is text the page shows.
       const label = next.action!.replace(/^Create replacement (booking|balance) invoice$/, 'Create replacement {replaceAction} invoice')
         .replace(/^Record (booking|balance) received$/, 'Record {manual} received');
-      expect(next.target === '#payment-heading' || next.target === '#project-messages-heading' || page.includes(label), `${next.title}: ${label}`).toBe(true);
+      expect(next.target === '#payment-heading' || next.target === '#project-messages-heading' || next.target === '#request-heading' || page.includes(label), `${next.title}: ${label}`).toBe(true);
       const id = next.target!.slice(1).replace(/^record-(booking|balance)-payment$/, 'record-${manual}-payment');
       expect(page.includes(`id="${id}"`) || page.includes(`'${id}'`) || page.includes(`\`${id}\``), next.target).toBe(true);
     }

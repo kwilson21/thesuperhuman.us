@@ -78,7 +78,7 @@ const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month
       <label class="studio-field">Focus <textarea class="studio-textarea" name="body" rows="3" maxlength="1000" required></textarea></label>
       <button type="submit" class="studio-button">Mark in progress</button><p class="studio-status" role="status" data-update-status></p>
     </form>}
-    {stage === 'review_ready' && <form class="panel" data-project-update-form data-action="begin_revision">
+    {stage === 'review_ready' && <form class="panel" id="begin-revision" data-project-update-form data-action="begin_revision">
       <h3>Begin a revision</h3><p>Show the client their notes were understood.</p>
       <label class="studio-field">What you will address <textarea class="studio-textarea" name="body" rows="3" maxlength="1000" required></textarea></label>
       <button type="submit" class="studio-button">Begin revision</button><p class="studio-status" role="status" data-update-status></p>

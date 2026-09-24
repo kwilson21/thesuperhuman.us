@@ -27,7 +27,7 @@ const replaceAction = payment?.bookingStatus === 'void' ? 'booking' : payment?.b
     {payment.bookingStatus === 'paid' && payment.balanceStatus === 'paid' && <p class="payment-complete">Both payments are confirmed. Final downloadable files may be released.</p>}
   </div>}
   {nextAction === 'booking' && stripeEnabled && <button class="owner-primary-action" type="button" id="create-booking-invoice" data-payment-action="create-booking-invoice" disabled={!stripeEnabled}>Create booking invoice <span aria-hidden="true">→</span></button>}
-  {nextAction === 'balance' && stripeEnabled && <button class="owner-primary-action" type="button" data-payment-action="create-balance-invoice" disabled={!stripeEnabled}>Create balance invoice <span aria-hidden="true">→</span></button>}
+  {nextAction === 'balance' && stripeEnabled && <button class="owner-primary-action" type="button" id="create-balance-invoice" data-payment-action="create-balance-invoice" disabled={!stripeEnabled}>Create balance invoice <span aria-hidden="true">→</span></button>}
   {replaceAction && <button class="owner-primary-action" type="button" id="replace-invoice" data-payment-action={`replace-${replaceAction}-invoice`} disabled={!stripeEnabled}>Create replacement {replaceAction} invoice <span aria-hidden="true">→</span></button>}
   {payment && payment.bookingStatus !== 'paid' && payment.bookingStatus !== 'not_created' && <p class="payment-next">Work is booked when Stripe confirms the booking payment.</p>}
   {/* An unpaid invoice the client settled another way is closed in Stripe, not here. */}
