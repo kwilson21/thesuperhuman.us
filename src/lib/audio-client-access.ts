@@ -139,7 +139,7 @@ export async function clientProjectsForSession(db: D1Database, token: string, no
 }
 
 export function studioSessionCookie(token: string, secure: boolean): string {
-  return `studio_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${sessionLifetimeMs / 1000}${secure ? '; Secure' : ''}`;
+  return `studio_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${sessionLifetimeMs / 1000}${secure ? '; Secure' : ''}`;
 }
 
 export async function revokeClientSession(db: D1Database, token: string, now = new Date()): Promise<void> {
@@ -150,7 +150,7 @@ export async function revokeClientSession(db: D1Database, token: string, now = n
 }
 
 export function clearStudioSessionCookie(secure: boolean): string {
-  return `studio_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure ? '; Secure' : ''}`;
+  return `studio_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`;
 }
 
 export function studioSessionFromRequest(request: Request): string | null {
