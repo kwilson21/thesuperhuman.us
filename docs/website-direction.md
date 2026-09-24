@@ -35,9 +35,11 @@ defining the work the website should attract.
 
 ## Opportunity positioning
 
-Independent contracting is a preference; compelling full-time opportunities are
-also welcome. Autonomy over time, meaningful ownership, choice of collaborators,
-and interest in the work matter more than the engagement label alone.
+Kazon works independently, through contracts and projects, and is selective about
+full-time roles: remote, with meaningful ownership end to end, and with AI as a
+normal part of the job. If a role doesn't fit, a contract is the suggested path.
+Autonomy over time, meaningful ownership, choice of collaborators, and interest
+in the work matter more than the engagement label alone.
 
 This agreed direction supersedes the contractor-only positioning in CLAUDE.md
 where it conflicts. The owner approved the corresponding copy changes on
@@ -140,6 +142,6 @@ product launch, or open-source contribution is implied.
 
 The preferred opportunity allows Kazon to help shape the solution, use AI in the
 building process, and stay close to how people use the result. Independent work
-is preferred and a compatible full-time team is welcome. “Product engineer” is a
+is the default; full-time roles are considered selectively. “Product engineer” is a
 possible search term, not a replacement for historical titles or an adopted niche.
 The public site need not repeat private descriptions of former work as boring.
