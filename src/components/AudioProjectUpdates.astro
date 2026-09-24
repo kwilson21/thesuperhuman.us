@@ -78,7 +78,7 @@ const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month
       <label class="studio-field">Closing note <textarea class="studio-textarea" name="body" rows="3" maxlength="1000" required></textarea></label>
       <button type="submit" class="studio-button">Mark complete</button><p class="studio-status" role="status" data-update-status></p>
     </form>}
-    {currentDueAt && <form class="panel" data-project-update-form data-action="revise_date">
+    {currentDueAt && stage !== 'final_files_ready' && <form class="panel" data-project-update-form data-action="revise_date">
       <h3>Change the delivery date</h3><p>Now {dateLabel(currentDueAt)}. A later date needs a clear reason.</p>
       <label class="studio-field">New date <input class="studio-input" type="date" name="dueDate" min={laterDate} required /></label>
       <label class="studio-field">Reason <select class="studio-select" name="reason" required><option value="">Choose a reason</option><option value="protect_song">More time to protect the song</option><option value="client_clarification">Waiting on client clarification</option><option value="schedule_conflict">Scheduling conflict</option></select></label>
