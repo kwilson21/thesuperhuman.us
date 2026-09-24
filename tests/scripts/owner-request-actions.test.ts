@@ -8,6 +8,7 @@ it('binds only request status buttons, not project update forms that share data-
   const element = (name: string, data: Record<string, string> = {}) => ({ dataset: data, addEventListener: () => { bound.push(name); } });
   const statusButton = element('resolve button', { action: 'resolve' });
   const revisionForm = element('begin_revision form', { action: 'begin_revision' });
+  vi.stubGlobal('location', { hash: '' });
   vi.stubGlobal('document', {
     querySelector: (selector: string) => selector === '[data-request-id]' ? { dataset: { requestId: 'song-1' } }
       : selector === '[data-action-status]' ? { textContent: '' } : null,
@@ -65,4 +66,23 @@ it('reloads a newly reviewed request onto the Accept panel', async () => {
   await new Promise(resolve => setTimeout(resolve, 0));
   expect(replaceState).toHaveBeenCalledWith(null, '', '/owner/requests/song-1#accept-project');
   expect(reload).toHaveBeenCalledOnce();
+});
+
+it('scrolls to the Accept panel on the reloaded page and clears the fragment', () => {
+  const scrollIntoView = vi.fn();
+  const focus = vi.fn();
+  const replaceState = vi.fn();
+  const accept = { scrollIntoView, querySelector: () => ({ focus }) };
+  vi.stubGlobal('history', { replaceState });
+  vi.stubGlobal('location', { pathname: '/owner/requests/song-1', search: '', hash: '#accept-project', reload: vi.fn() });
+  vi.stubGlobal('document', {
+    getElementById: (id: string) => id === 'accept-project' ? accept : null,
+    querySelector: (selector: string) => selector === '[data-request-id]' ? { dataset: { requestId: 'song-1' } }
+      : selector === '[data-action-status]' ? { textContent: '' } : null,
+    querySelectorAll: () => [],
+  });
+  setupOwnerRequestActions();
+  expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+  expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+  expect(replaceState).toHaveBeenCalledWith(null, '', '/owner/requests/song-1');
 });

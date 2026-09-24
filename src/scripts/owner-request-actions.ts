@@ -3,6 +3,14 @@ export function setupOwnerRequestActions() {
   const status = document.querySelector<HTMLElement>('[data-action-status]');
   const requestId = root?.dataset.requestId;
   if (!requestId || !status) return;
+  // After Mark reviewed, land on the Accept panel. A reload restores the old scroll position over
+  // the fragment, so scroll here, then drop the fragment so later reloads keep their place.
+  if (location.hash === '#accept-project') {
+    const accept = document.getElementById('accept-project');
+    accept?.scrollIntoView({ block: 'start' });
+    accept?.querySelector<HTMLInputElement>('input[name="dueDate"]')?.focus({ preventScroll: true });
+    history.replaceState(null, '', `${location.pathname}${location.search}`);
+  }
   async function update(payload: Record<string, unknown>) {
     try {
       const response = await fetch(`/api/owner/requests/${requestId}`, {
