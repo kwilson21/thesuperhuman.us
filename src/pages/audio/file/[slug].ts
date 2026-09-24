@@ -45,6 +45,7 @@ export const GET: APIRoute = async (context) => {
 
   const env = (context.locals as any).runtime.env as Env;
   const key = entry.data.file;
+  if (key.startsWith('studio/')) return new Response('not found', { status: 404 });
 
   const rangeHeader = context.request.headers.get('range');
   const shape = parseRangeShape(rangeHeader);

@@ -66,6 +66,8 @@ Owner progress updates require `migrations/music/0008_audio_project_updates.sql`
 
 Project invitations require `migrations/music/0009_audio_project_invitations.sql` after 0008. When the portal is enabled, a new service request saves its provisional project first, then attempts a minimal sign-in-link email. The owner request view shows the delivery state and can send or retry an invitation for an existing project. An unconfirmed send requires checking Resend before another attempt. Neither the invitation nor its link authorizes access; clients still need their own email code. The portal gate stays `false` until private delivery, retention, and full operations checks are ready.
 
+Private project audio requires `migrations/music/0010_audio_project_files.sql` after 0009. Only the authenticated studio route can read objects under `studio/projects/`; it rechecks session, project, publication, payment, and expiry for each request and uses private, non-cacheable responses. The public media routes reject that prefix. This slice supplies the read boundary and client player; owner upload and publication controls are the next delivery slice, so the portal gate stays `false`.
+
 The forms read `Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY` first, with
 `import.meta.env.PUBLIC_TURNSTILE_SITE_KEY` as a build-time fallback. Wrangler
 runtime vars are not automatically Astro build-time variables. An empty runtime

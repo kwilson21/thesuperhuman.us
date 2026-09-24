@@ -20,3 +20,11 @@ it('allows public media responses to use shared caching', async () => {
   });
   expect(response.headers.get('cache-control')).toBe('public, max-age=3600, s-maxage=3600');
 });
+
+it('refuses to serve a private project object through the public media helper', async () => {
+  const bucket = { head: async () => { throw new Error('should not reach R2'); } } as unknown as R2Bucket;
+  const response = await streamMusic(new Request('https://thesuperhuman.us/music/file/example/master'), bucket, {
+    key: 'studio/projects/request/file.mp3', type: 'audio/mpeg',
+  });
+  expect(response.status).toBe(404);
+});

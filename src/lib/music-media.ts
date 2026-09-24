@@ -9,6 +9,7 @@ export function mediaRange(header: string | null, size: number): { offset: numbe
   return { offset: start, length: end - start + 1 };
 }
 export async function streamMusic(request: Request, bucket: R2Bucket, asset: { key: string; type: string }) {
+  if (asset.key.startsWith('studio/')) return new Response('Media unavailable', { status: 404 });
   const head = await bucket.head(asset.key);
   if (!head) return new Response('Media unavailable', { status: 404 });
   const range = request.method === 'HEAD' ? null : mediaRange(request.headers.get('range'), head.size);
