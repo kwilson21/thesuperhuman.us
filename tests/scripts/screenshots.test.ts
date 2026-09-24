@@ -109,7 +109,7 @@ describe('screenshot coverage', () => {
       { name: 'home', path: '/' }, { name: 'work', path: '/work' }, { name: 'about', path: '/about' },
       { name: 'audio', path: '/audio' }, { name: 'audio-portfolio', path: '/audio/portfolio' },
       { name: 'audio-releases', path: '/audio/releases' }, { name: 'audio-services', path: '/audio/services' },
-      { name: 'music-old-news', path: '/music/old-news' }, { name: 'services', path: '/services' },
+      { name: 'audio-start', path: '/audio/start' }, { name: 'music-old-news', path: '/music/old-news' }, { name: 'services', path: '/services' },
     ], scenarios: [] };
     expect(relevantScreenshots(manifest, ['src/data/profile.ts']).pages.map((page: { name: string }) => page.name))
       .toEqual(['home', 'work', 'about']);
@@ -123,6 +123,12 @@ describe('screenshot coverage', () => {
       .toEqual(['music-old-news']);
     expect(relevantScreenshots(manifest, ['src/components/audio/AudioPlayer.astro']).pages.map((page: { name: string }) => page.name))
       .toEqual(['audio-releases', 'music-old-news']);
+    expect(relevantScreenshots(manifest, ['src/components/audio/MusicNav.astro']).pages.map((page: { name: string }) => page.name))
+      .not.toContain('audio-start');
+    expect(relevantScreenshots(manifest, ['src/styles/music-premiere.css']).pages.map((page: { name: string }) => page.name))
+      .toEqual(['music-old-news']);
+    expect(relevantScreenshots(manifest, ['src/content/releases/old-news-single.json']).pages.map((page: { name: string }) => page.name))
+      .toEqual(['audio', 'audio-portfolio', 'audio-releases', 'audio-services', 'music-old-news']);
   });
 
   it('includes a seeded scenario only when one of its routes changed', () => {

@@ -52,6 +52,9 @@ export const SCENARIO_PAGES = {
 // The full capture still runs in CI; this only selects which validated captures appear in the PR.
 const SHARED_SITE_PAGES = ['home', 'work', 'audio', 'services', 'audio-services'];
 const AUDIO_SHELL_PAGES = ['audio', 'audio-about', 'audio-portfolio', 'audio-releases', 'audio-services', 'audio-start', 'music-old-news'];
+const AUDIO_NAV_PAGES = AUDIO_SHELL_PAGES.filter(name => name !== 'audio-start');
+const MUSIC_CATALOG_PAGES = ['audio', 'audio-portfolio', 'audio-releases', 'audio-services', 'music-old-news'];
+const MUSIC_HUB_PAGES = ['audio-portfolio', 'audio-releases', 'audio-services'];
 const PAGE_NAMES_BY_FILE = {
   'src/components/SiteNav.astro': SHARED_SITE_PAGES,
   'src/components/Footer.astro': SHARED_SITE_PAGES,
@@ -64,9 +67,14 @@ const PAGE_NAMES_BY_FILE = {
   'src/data/audio.ts': ['audio'],
   'src/data/services.ts': ['services'],
   'src/styles/global.css': SHARED_SITE_PAGES,
+  'src/styles/audio-intake.css': ['audio-start'],
+  'src/styles/music.css': MUSIC_CATALOG_PAGES,
+  'src/styles/music-hubs.css': MUSIC_HUB_PAGES,
+  'src/styles/music-premiere.css': ['music-old-news'],
+  'src/content/pages/ai-gives-you-speed.md': ['writing-ai-gives-you-speed'],
   'src/components/audio/AudioHero.astro': ['audio'],
   'src/components/audio/AudioFooter.astro': AUDIO_SHELL_PAGES,
-  'src/components/audio/MusicNav.astro': AUDIO_SHELL_PAGES,
+  'src/components/audio/MusicNav.astro': AUDIO_NAV_PAGES,
   'src/components/audio/BookingForm.astro': ['audio'],
   'src/components/audio/ServiceSection.astro': ['audio'],
   'src/components/audio/ServiceIcon.astro': ['audio', 'audio-portfolio'],
@@ -106,7 +114,10 @@ export function relevantScreenshots(manifest, changedFiles) {
       }
     }
 
-    if (file.startsWith('src/content/audio-tracks/')) pageNames.add('audio-portfolio');
+    if (file.startsWith('src/content/releases/') || file.startsWith('src/content/recordings/')
+      || file.startsWith('src/content/audio-examples/')) {
+      for (const name of MUSIC_CATALOG_PAGES) pageNames.add(name);
+    }
   }
 
   return {
