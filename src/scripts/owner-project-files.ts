@@ -5,6 +5,28 @@ export function setupOwnerProjectFiles() {
     const form = root.querySelector<HTMLFormElement>('[data-project-upload-form]');
     const endpoint = root.dataset.endpoint;
     if (!endpoint) return;
+    const publishEndpoint = root.dataset.publishEndpoint;
+    if (publishEndpoint) root.querySelectorAll<HTMLFormElement>('[data-project-publish-form]').forEach(publishForm => {
+      publishForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        const button = publishForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+        const status = publishForm.querySelector<HTMLElement>('[data-publish-status]');
+        const note = publishForm.querySelector<HTMLTextAreaElement>('textarea[name="note"]')?.value;
+        const fileId = publishForm.dataset.fileId;
+        if (!button || !status || !note || !fileId) return;
+        button.disabled = true;
+        try {
+          const response = await fetch(`${publishEndpoint}/${encodeURIComponent(fileId)}`, {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ action: 'publish', note, downloadable: Boolean(publishForm.querySelector<HTMLInputElement>('input[name="downloadable"]')?.checked) }),
+          });
+          const result = await response.json() as { error?: string };
+          if (!response.ok) throw new Error(result.error ?? 'Could not publish this file.');
+          location.reload();
+        } catch (error) { status.textContent = error instanceof Error ? error.message : 'Could not publish this file.'; }
+        finally { button.disabled = false; }
+      });
+    });
     root.querySelectorAll<HTMLButtonElement>('[data-upload-action]').forEach(button => {
       button.addEventListener('click', async () => {
         const status = root.querySelector<HTMLElement>('[data-pending-status]');

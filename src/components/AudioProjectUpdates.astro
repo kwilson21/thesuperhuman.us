@@ -28,7 +28,7 @@ const laterDate = nextDay > today ? nextDay : today;
   <div class="project-updates-heading"><p class="project-updates-kicker">Progress</p><h2 id="project-updates-heading">Your song’s timeline</h2></div>
   {updates.length ? <ol>{[...updates].reverse().map(update =>
     <li>
-      <div class="project-update-meta"><time datetime={update.created_at}>{new Date(update.created_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</time><span>{update.kind === 'accepted' ? 'Project accepted' : update.kind === 'work_started' ? 'Work started' : update.kind === 'date_changed' ? 'Date updated' : 'Studio update'}</span></div>
+      <div class="project-update-meta"><time datetime={update.created_at}>{new Date(update.created_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</time><span>{update.file_version === 'review' ? 'Review ready' : update.file_version === 'final' ? 'Final files ready' : update.kind === 'accepted' ? 'Project accepted' : update.kind === 'work_started' ? 'Work started' : update.kind === 'date_changed' ? 'Date updated' : 'Studio update'}</span></div>
       <p>{update.body}</p>
       {update.kind === 'date_changed' && update.previous_due_at && update.new_due_at && <p class="project-update-date">{reasonLabels[update.reason ?? 'protect_song']}: {dateLabel(update.previous_due_at)} → {dateLabel(update.new_due_at)}</p>}
       {owner && <div class="project-update-notice">
@@ -48,6 +48,15 @@ const laterDate = nextDay > today ? nextDay : today;
     {stage === 'accepted' && bookingPaid && <form data-project-update-form data-action="start_work">
       <h3>Start the work</h3><label>What you’re focusing on <textarea name="body" rows="3" maxlength="1000" required></textarea></label>
       <button type="submit">Mark in progress</button><p role="status" data-update-status></p>
+    </form>}
+    {stage === 'review_ready' && <form data-project-update-form data-action="begin_revision">
+      <h3>Begin a revision</h3><label>What you’ll address <textarea name="body" rows="3" maxlength="1000" required></textarea></label>
+      <button type="submit">Update the client</button><p role="status" data-update-status></p>
+    </form>}
+    {stage === 'final_files_ready' && <form data-project-update-form data-action="complete">
+      <h3>Close the project</h3><p>The final file stays available until its expiry date. Messages become read-only.</p>
+      <label>Closing note <textarea name="body" rows="3" maxlength="1000" required></textarea></label>
+      <button type="submit">Mark complete</button><p role="status" data-update-status></p>
     </form>}
     {stage !== 'files_under_review' && <form data-project-update-form data-action="progress">
       <h3>Share progress</h3><label>Meaningful update <textarea name="body" rows="3" maxlength="1000" required></textarea></label>

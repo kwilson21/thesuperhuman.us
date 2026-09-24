@@ -58,7 +58,12 @@ const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') 
   </section>}
   {portalProject && <AudioProjectUpdates updates={projectUpdates} currentDueAt={portalProject.current_due_at} stage={portalProject.stage} requestStatus={request.status} bookingPaid={payment?.bookingStatus === 'paid'} revoked={Boolean(portalProject.revoked_at)} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/updates`} />}
   {portalProject && <OwnerProjectFiles files={projectFiles} pending={pendingUploads} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/uploads`}
-    canUpload={['in_progress','review_ready','revision_in_progress'].includes(portalProject.stage) && payment?.bookingStatus === 'paid' && !portalProject.revoked_at && request.status !== 'withdrawn'} />}
+    publishEndpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/files`}
+    canUpload={(['in_progress','review_ready','revision_in_progress'].includes(portalProject.stage)
+      || (portalProject.stage === 'final_files_ready' && payment?.balanceStatus === 'paid'))
+      && payment?.bookingStatus === 'paid' && !portalProject.revoked_at && request.status !== 'withdrawn'}
+    finalOnly={portalProject.stage === 'final_files_ready'}
+    bookingPaid={payment?.bookingStatus === 'paid'} balancePaid={payment?.balanceStatus === 'paid'} />}
   {portalProject && <ProjectMessages messages={projectMessages} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/messages`} reader="owner" closed={portalProject.stage === 'complete' || Boolean(portalProject.revoked_at) || request.status === 'withdrawn'} />}
   <section class="owner-section audit-trail"><p class="owner-kicker">Audit trail</p><h2>What changed</h2><ol>{audit.map(item => <li><strong>{item.action.replace('-', ' ')}</strong><span>{item.actor}</span><time datetime={item.occurredAt}>{new Date(item.occurredAt).toLocaleString()}</time>{item.note && <p>{item.note}</p>}</li>)}</ol></section>
   <script>import { setupOwnerRequestActions } from '~/scripts/owner-request-actions'; import { setupOwnerPaymentActions } from '~/scripts/owner-payment-actions'; import { setupProjectMessages } from '~/scripts/project-messages'; import { setupProjectUpdates } from '~/scripts/project-updates'; import { setupProjectInvitation } from '~/scripts/project-invitation'; import { setupOwnerProjectFiles } from '~/scripts/owner-project-files'; setupOwnerRequestActions(); setupOwnerPaymentActions(); setupProjectMessages(); setupProjectUpdates(); setupProjectInvitation(); setupOwnerProjectFiles();</script>

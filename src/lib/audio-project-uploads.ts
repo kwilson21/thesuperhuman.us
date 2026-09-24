@@ -17,25 +17,26 @@ export type ProjectUpload = {
   created_at: string;
 };
 
-const activeProject = `EXISTS(SELECT 1 FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
+const activeProject = (version: ProjectUpload['version']) => `EXISTS(SELECT 1 FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
   LEFT JOIN audio_payments pay ON pay.request_id=p.request_id
   WHERE p.request_id=? AND p.revoked_at IS NULL AND r.status<>'withdrawn'
-    AND p.stage IN ('in_progress','review_ready','revision_in_progress') AND pay.booking_status='paid')`;
+    AND (p.stage IN ('in_progress','review_ready','revision_in_progress')${version === 'final' ? " OR p.stage='final_files_ready'" : ''})
+    AND pay.booking_status='paid')`;
 
-export async function ownerProjectCanUpload(db: D1Database, requestId: string): Promise<boolean> {
-  return Boolean(await db.prepare(`SELECT 1 WHERE ${activeProject}`).bind(requestId).first());
+export async function ownerProjectCanUpload(db: D1Database, requestId: string, version: ProjectUpload['version']): Promise<boolean> {
+  return Boolean(await db.prepare(`SELECT 1 WHERE ${activeProject(version)}`).bind(requestId).first());
 }
 
 export async function beginProjectUpload(db: D1Database, bucket: R2Bucket, requestId: string,
   input: { version: ProjectUpload['version']; displayName: string; mediaType: ProjectUpload['media_type']; byteSize: number }, now = new Date()): Promise<ProjectUpload | null> {
-  if (!await ownerProjectCanUpload(db, requestId)) return null;
+  if (!await ownerProjectCanUpload(db, requestId, input.version)) return null;
   const id = crypto.randomUUID();
   const key = privateProjectObjectKey(requestId, id, input.mediaType);
   if (!key) return null;
   const upload = await bucket.createMultipartUpload(key, { httpMetadata: { contentType: input.mediaType } });
   try {
     const row = await db.prepare(`INSERT INTO audio_project_uploads(id,request_id,upload_id,object_key,version,display_name,media_type,byte_size,created_at)
-      SELECT ?,?,?,?,?,?,?,?,? WHERE ${activeProject}
+      SELECT ?,?,?,?,?,?,?,?,? WHERE ${activeProject(input.version)}
       RETURNING id,request_id,upload_id,object_key,version,display_name,media_type,byte_size,state,created_at`)
       .bind(id, requestId, upload.uploadId, key, input.version, input.displayName, input.mediaType, input.byteSize, now.toISOString(), requestId)
       .first<ProjectUpload>();
@@ -68,7 +69,7 @@ export async function putProjectUploadPart(bucket: R2Bucket, upload: ProjectUplo
 export async function finishProjectUpload(db: D1Database, bucket: R2Bucket, upload: ProjectUpload,
   parts: R2UploadedPart[] | null, now = new Date()): Promise<'saved' | 'blocked' | 'size-mismatch'> {
   if (upload.state !== 'pending') return 'blocked';
-  if (!await ownerProjectCanUpload(db, upload.request_id)) return 'blocked';
+  if (!await ownerProjectCanUpload(db, upload.request_id, upload.version)) return 'blocked';
   const count = Math.ceil(upload.byte_size / uploadPartSize);
   let object = await bucket.head(upload.object_key);
   if (!object) {
@@ -79,7 +80,7 @@ export async function finishProjectUpload(db: D1Database, bucket: R2Bucket, uplo
   if (object.size !== upload.byte_size) return 'size-mismatch';
   const saved = await db.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,uploaded_at)
     SELECT id,request_id,version,object_key,display_name,media_type,byte_size,?
-    FROM audio_project_uploads WHERE id=? AND request_id=? AND state='pending' AND ${activeProject}
+    FROM audio_project_uploads WHERE id=? AND request_id=? AND state='pending' AND ${activeProject(upload.version)}
     ON CONFLICT(id) DO NOTHING RETURNING id`)
     .bind(now.toISOString(), upload.id, upload.request_id, upload.request_id).first<{ id: string }>();
   const existing = saved || await db.prepare('SELECT id FROM audio_project_files WHERE id=? AND request_id=?')

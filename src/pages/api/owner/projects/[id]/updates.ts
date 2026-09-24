@@ -11,6 +11,8 @@ const inputSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('accept'), dueDate: date, body: note }),
   z.object({ action: z.literal('progress'), body: note }),
   z.object({ action: z.literal('start_work'), body: note }),
+  z.object({ action: z.literal('begin_revision'), body: note }),
+  z.object({ action: z.literal('complete'), body: note }),
   z.object({ action: z.literal('revise_date'), dueDate: date,
     reason: z.enum(['protect_song', 'client_clarification', 'schedule_conflict']), body: note }),
   z.object({ action: z.literal('retry_email'), updateId: z.number().int().positive(), confirmedNotSent: z.boolean().optional() }),
