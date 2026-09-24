@@ -45,13 +45,13 @@ const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') 
     </section>
     {detailRows.length > 0 && <section class="owner-section request-submission" aria-labelledby="submission-heading"><p class="owner-kicker">Submitted with this request</p><h2 id="submission-heading">Project details</h2><dl>{detailRows.map(([key, value]) => { const href = /url|link/i.test(key) ? safeExternalUrl(value) : null; return <><dt>{label(key)}</dt><dd>{href ? <a href={href} rel="noreferrer">Open supplied link →</a> : detailValue(value)}</dd></>; })}</dl></section>}
     <section class="owner-section request-work" aria-labelledby="work-heading"><p class="owner-kicker">Your working note</p><h2 id="work-heading">Keep the next step clear</h2><form data-request-note><label for="owner-private-note">Private note</label><textarea id="owner-private-note" name="note" maxlength="1000" rows="5">{request.privateNote}</textarea><button type="submit">Save private note</button><p data-action-status aria-live="polite"></p></form>
-      {allowed.length > 0 && <div class="request-actions" data-request-actions>{allowed.map(action => <button type="button" data-action={action} class:list={{ danger: action === 'withdraw' }}>{action === 'review' ? 'Mark reviewed' : action === 'resolve' ? 'Mark resolved' : action === 'reopen' ? 'Reopen request' : 'Honor withdrawal'}</button>)}</div>}
+      {allowed.length > 0 && <div class="request-actions" data-request-actions data-open-studio={portalProject && portalProject.stage === 'files_under_review' && !portalProject.revoked_at ? 'true' : undefined}>{allowed.map(action => <button type="button" data-action={action} class:list={{ danger: action === 'withdraw' }}>{action === 'review' ? 'Mark reviewed' : action === 'resolve' ? 'Mark resolved' : action === 'reopen' ? 'Reopen request' : 'Honor withdrawal'}</button>)}</div>}
     </section>
   </div>
   {request.kind === 'service' && <AudioPaymentPanel requestId={request.id} payment={payment} stripeEnabled={stripeAvailable(Astro.locals.runtime.env)} />}
   {portalProject && <section class="owner-section request-invitation" data-project-invitation data-endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/invitation`}>
     <p class="owner-kicker">Client access</p><h2>Private project invitation</h2>
-    <p>{portalProject.invitation_status === 'sent' ? `Sign-in link sent to ${request.email}.` : portalProject.invitation_status === 'failed' ? 'The sign-in email failed. The project and request are saved.' : portalProject.invitation_status === 'sending' ? 'Sign-in email unconfirmed. Check Resend before another attempt.' : 'The sign-in email has not been sent yet.'}</p>
+    <p>{portalProject.revoked_at ? 'Client access is closed. Sign-in and private files are unavailable.' : portalProject.invitation_status === 'sent' ? `Sign-in link sent to ${request.email}.` : portalProject.invitation_status === 'failed' ? 'The sign-in email failed. The project and request are saved.' : portalProject.invitation_status === 'sending' ? 'Sign-in email unconfirmed. Check Resend before another attempt.' : 'The sign-in email has not been sent yet.'}</p>
     {['pending', 'failed'].includes(portalProject.invitation_status) && request.status !== 'withdrawn' && !portalProject.revoked_at && <button type="button" data-send-project-invitation>{portalProject.invitation_status === 'failed' ? 'Retry invitation' : 'Send invitation'}</button>}
     {portalProject.invitation_status === 'sending' && portalProject.invitation_attempted_at && Date.now() - Date.parse(portalProject.invitation_attempted_at) > 60_000 && request.status !== 'withdrawn' && !portalProject.revoked_at && <button type="button" data-send-project-invitation data-confirmed-not-sent="true">I checked Resend; retry</button>}
     <p data-invitation-status role="status" aria-live="polite"></p>
@@ -63,8 +63,18 @@ const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') 
       || (portalProject.stage === 'final_files_ready' && payment?.balanceStatus === 'paid'))
       && payment?.bookingStatus === 'paid' && !portalProject.revoked_at && request.status !== 'withdrawn'}
     finalOnly={portalProject.stage === 'final_files_ready'}
+    canRevoke={!portalProject.revoked_at && request.status !== 'withdrawn'}
     bookingPaid={payment?.bookingStatus === 'paid'} balancePaid={payment?.balanceStatus === 'paid'} />}
+  {portalProject && !portalProject.revoked_at && <section class="owner-section" data-project-access data-endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/access`}>
+    <p class="owner-kicker">Client access</p><details><summary>Close this private project</summary><p>This signs the client out and hides the project and its files immediately. It does not change invoices.</p><button type="button" data-revoke-project>Close client access</button><p data-access-status role="status" aria-live="polite"></p></details>
+  </section>}
   {portalProject && <ProjectMessages messages={projectMessages} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/messages`} reader="owner" closed={portalProject.stage === 'complete' || Boolean(portalProject.revoked_at) || request.status === 'withdrawn'} />}
   <section class="owner-section audit-trail"><p class="owner-kicker">Audit trail</p><h2>What changed</h2><ol>{audit.map(item => <li><strong>{item.action.replace('-', ' ')}</strong><span>{item.actor}</span><time datetime={item.occurredAt}>{new Date(item.occurredAt).toLocaleString()}</time>{item.note && <p>{item.note}</p>}</li>)}</ol></section>
   <script>import { setupOwnerRequestActions } from '~/scripts/owner-request-actions'; import { setupOwnerPaymentActions } from '~/scripts/owner-payment-actions'; import { setupProjectMessages } from '~/scripts/project-messages'; import { setupProjectUpdates } from '~/scripts/project-updates'; import { setupProjectInvitation } from '~/scripts/project-invitation'; import { setupOwnerProjectFiles } from '~/scripts/owner-project-files'; setupOwnerRequestActions(); setupOwnerPaymentActions(); setupProjectMessages(); setupProjectUpdates(); setupProjectInvitation(); setupOwnerProjectFiles();</script>
+  <style>
+    [data-project-access] summary { width: fit-content; cursor: pointer; font: 400 1.6rem/1.2 Newsreader,Georgia,serif; }
+    [data-project-access] details p { max-width: 38rem; margin: .8rem 0; color: #514d47; font: .9rem/1.5 Inter,sans-serif; }
+    [data-project-access] button { border: 0; border-bottom: 1px solid currentColor; background: none; padding: .4rem 0; color: #a4512f; cursor: pointer; font: 500 .9rem/1.4 Inter,sans-serif; }
+    [data-project-access] button:disabled { opacity: .5; cursor: wait; }
+  </style>
 </OwnerLayout>

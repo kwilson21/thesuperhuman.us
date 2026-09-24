@@ -3,8 +3,8 @@ type FileRow = { id: string; version: 'review' | 'final'; display_name: string; 
   status: 'uploaded' | 'published' | 'revoked'; uploaded_at: string; published_at: string | null };
 type PendingUpload = { id: string; display_name: string; state: 'pending' | 'discarding'; created_at: string };
 type Props = { files: FileRow[]; pending: PendingUpload[]; endpoint: string; publishEndpoint: string;
-  canUpload: boolean; finalOnly: boolean; bookingPaid: boolean; balancePaid: boolean };
-const { files, pending, endpoint, publishEndpoint, canUpload, finalOnly, bookingPaid, balancePaid } = Astro.props;
+  canUpload: boolean; canRevoke: boolean; finalOnly: boolean; bookingPaid: boolean; balancePaid: boolean };
+const { files, pending, endpoint, publishEndpoint, canUpload, canRevoke, finalOnly, bookingPaid, balancePaid } = Astro.props;
 ---
 <section class="owner-section project-files" data-owner-project-files data-endpoint={endpoint} data-publish-endpoint={publishEndpoint} aria-labelledby="project-files-heading">
   <p class="owner-kicker">Private files</p><h2 id="project-files-heading">Review and delivery</h2>
@@ -15,6 +15,10 @@ const { files, pending, endpoint, publishEndpoint, canUpload, finalOnly, booking
       <button type="submit">Publish {file.version === 'review' ? 'review' : 'final file'}</button><p data-publish-status role="status" aria-live="polite"></p>
     </form>}
     {file.status === 'uploaded' && file.version === 'final' && !balancePaid && <span>Waiting for confirmed balance payment before sharing.</span>}
+    {file.status !== 'revoked' && canRevoke && <form data-project-revoke-form data-file-id={file.id} data-was-published={file.status === 'published'}>
+      {file.status === 'published' && <label>Why this file is no longer available <textarea name="note" rows="2" maxlength="1000" required></textarea></label>}
+      <button type="submit">{file.status === 'published' ? 'Revoke file access' : 'Discard draft'}</button><p data-revoke-status role="status" aria-live="polite"></p>
+    </form>}
     </div><time datetime={file.uploaded_at}>{new Date(file.uploaded_at).toLocaleDateString('en-US', { dateStyle: 'medium' })}</time></li>)}</ul> : <p>No files uploaded yet.</p>}
   {pending.length > 0 && <div class="unfinished"><h3>Unfinished uploads</h3><p>If an upload finished but did not appear above, try recovery. Otherwise discard it and start again.</p><ul>{pending.map(upload => <li><div><strong>{upload.display_name}</strong><span>{upload.state === 'discarding' ? 'Cleanup needs another try' : 'Started'} {new Date(upload.created_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</span></div><div class="upload-actions">{upload.state === 'pending' && <button type="button" data-upload-action="recover" data-upload-id={upload.id}>Recover</button>}<button type="button" data-upload-action="abort" data-upload-id={upload.id}>{upload.state === 'discarding' ? 'Retry cleanup' : 'Discard'}</button></div></li>)}</ul><p data-pending-status role="status" aria-live="polite"></p></div>}
   {canUpload && <form data-project-upload-form>
@@ -41,6 +45,8 @@ const { files, pending, endpoint, publishEndpoint, canUpload, finalOnly, booking
   textarea { width: 100%; padding: .65rem; border: 1px solid #9d968c; background: #fffdf9; font: 1rem/1.4 Inter,sans-serif; resize: vertical; }
   .download-choice { display: flex; align-items: center; gap: .6rem; }
   .download-choice input { width: auto; }
+  [data-project-revoke-form] { margin-top: .6rem; }
+  [data-project-revoke-form] button { color: #a4512f; }
   button { justify-self: start; border: 0; border-bottom: 1px solid currentColor; background: none; padding: .4rem 0; font: 500 .9rem/1.4 Inter,sans-serif; cursor: pointer; }
   button:hover { color: #a4512f; } button:disabled { opacity: .5; cursor: wait; }
   .unfinished { margin-top: 1.5rem; } .unfinished h3 { margin-bottom: .5rem; } .unfinished p { color: #514d47; font: .9rem/1.5 Inter,sans-serif; }

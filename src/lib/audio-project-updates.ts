@@ -113,11 +113,11 @@ export async function saveProjectUpdate(db: D1Database, requestId: string, actor
   }
 
   if (command.action === 'begin_revision') {
-    if (state.stage !== 'review_ready' || state.booking_status !== 'paid' || state.request_status !== 'reviewed') return null;
+    if (state.stage !== 'review_ready' || state.booking_status !== 'paid') return null;
     const [changed, update] = await db.batch([
       db.prepare(`UPDATE audio_projects SET stage='revision_in_progress',updated_at=?
         WHERE request_id=? AND stage='review_ready' AND updated_at=? AND revoked_at IS NULL
-          AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND status='reviewed')
+          AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND status<>'withdrawn')
           AND EXISTS(SELECT 1 FROM audio_project_files WHERE request_id=? AND version='review' AND status='published')
         RETURNING request_id`).bind(at, requestId, state.updated_at, requestId, requestId),
       db.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at)
@@ -178,7 +178,8 @@ export async function deliverProjectUpdateNotice(db: D1Database, updateId: numbe
   if (!claimed) return;
   let recipient: { email: string } | null;
   try {
-    recipient = await db.prepare(`SELECT email FROM owner_requests WHERE id=? AND status<>'withdrawn' AND email<>''`)
+    recipient = await db.prepare(`SELECT r.email FROM owner_requests r JOIN audio_projects p ON p.request_id=r.id
+      WHERE r.id=? AND r.status<>'withdrawn' AND r.email<>'' AND p.revoked_at IS NULL`)
       .bind(claimed.request_id).first<{ email: string }>();
   } catch {
     await db.prepare(`UPDATE audio_project_updates SET notification_status='failed'

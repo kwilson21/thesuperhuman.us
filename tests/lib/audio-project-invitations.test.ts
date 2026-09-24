@@ -74,4 +74,31 @@ describe('project invitations', () => {
     expect(sendStudioSignInNotice).not.toHaveBeenCalled();
     sql.close();
   });
+
+  it('does not send an invitation when access closes after the delivery claim', async () => {
+    const { sql, db } = fixture();
+    const env = { RESEND_API_KEY: 'test', CONTACT_FROM_EMAIL: 'studio@example.com' } as Env;
+    const interleavedDb = {
+      prepare(query: string) {
+        const statement = db.prepare(query);
+        if (!query.includes('SELECT r.email FROM owner_requests')) return statement;
+        return {
+          bind(...values: unknown[]) {
+            const bound = statement.bind(...values);
+            return {
+              first: async () => {
+                sql.prepare("UPDATE audio_projects SET revoked_at='2026-09-22' WHERE request_id='song-1'").run();
+                return bound.first();
+              },
+            };
+          },
+        };
+      },
+    } as unknown as D1Database;
+    await deliverProjectInvitation(interleavedDb, 'song-1', env);
+    expect(sendStudioSignInNotice).not.toHaveBeenCalled();
+    expect(sql.prepare("SELECT invitation_status FROM audio_projects WHERE request_id='song-1'").get())
+      .toEqual({ invitation_status: 'sending' });
+    sql.close();
+  });
 });

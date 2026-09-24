@@ -19,6 +19,9 @@ export function setupOwnerRequestActions() {
   document.querySelectorAll<HTMLButtonElement>('[data-request-actions] button[data-action]').forEach(button => button.addEventListener('click', () => {
     const action = button.dataset.action;
     if (action === 'withdraw' && !confirm('Honor this withdrawal and close the request?')) return;
+    // Resolving before acceptance closes the provisional studio for good; reopening does not restore it.
+    if (action === 'resolve' && button.closest<HTMLElement>('[data-open-studio]')
+      && !confirm('Resolving closes this client’s studio access. Reopening the request will not restore it. Resolve anyway?')) return;
     void update({ action });
   }));
 }
