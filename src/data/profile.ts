@@ -58,6 +58,14 @@ export const experience = [
     ],
   },
   {
+    id: 'faith-church', company: 'Faith Church', companyHref: 'https://lifeatfaith.tv/', role: 'Live Sound Engineer',
+    dates: '2022–2025', location: 'Houston, Texas',
+    outcome: 'Live sound at Faith Church for three years.',
+    context: [
+      'Worked on Allen & Heath SQ-6 and SQ-5 consoles, mixing three to four vocalists, electric guitar, drums, bass, keys, and a synth/backing track.',
+    ],
+  },
+  {
     id: 'lyft', company: 'Lyft', role: 'Software Engineer',
     dates: 'January 2021 – December 2023', location: 'Remote',
     outcome: 'From junior to mid-level engineer, with growing ownership across three teams.',

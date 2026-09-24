@@ -7,12 +7,13 @@ interface Props {
   id: string;
   location: string;
   context: readonly string[];
+  companyHref?: string;
 }
-const { company, role, dates, outcome, id, location, context } = Astro.props;
+const { company, companyHref, role, dates, outcome, id, location, context } = Astro.props;
 ---
 <details id={id + '-background'} class="experience-row">
   <summary><span class="company">{company}</span><span class="role">{role}</span><span class="dates">{dates}</span><span class="toggle" aria-hidden="true">+</span></summary>
-  <div class="experience-context"><p class="eyebrow">{location}</p><h3>{outcome}</h3><slot />{context.map(paragraph => <p>{paragraph}</p>)}</div>
+  <div class="experience-context"><p class="eyebrow">{companyHref ? <><a href={companyHref}>{company}</a> · </> : null}{location}</p><h3>{outcome}</h3><slot />{context.map(paragraph => <p>{paragraph}</p>)}</div>
 </details>
 <style>
   details { border-top: 1px solid var(--rule); scroll-margin-top: 2rem; }
