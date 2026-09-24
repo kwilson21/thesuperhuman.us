@@ -1,7 +1,7 @@
 ---
 export const prerender = false;
 import BaseLayout from '~/layouts/BaseLayout.astro';
-import { clientPortalEnabled, clientProjectForSession, studioSessionFromRequest } from '~/lib/audio-client-access';
+import { clientPaymentDue, clientPortalEnabled, clientProjectForSession, studioSessionFromRequest } from '~/lib/audio-client-access';
 import { latestReviewDecision, listProjectMessages, REVISION_ROUNDS, revisionRoundsLeft } from '~/lib/audio-project-messages';
 import { listProjectUpdates } from '~/lib/audio-project-updates';
 import { clientProjectFiles } from '~/lib/audio-project-files';
@@ -22,11 +22,13 @@ const messages = project ? await listProjectMessages(env.MUSIC_DB, project.reque
 const updates = project ? await listProjectUpdates(env.MUSIC_DB, project.request_id) : [];
 const files = project ? await clientProjectFiles(env.MUSIC_DB, project.request_id, token) : [];
 const finalExpiry = files.find(file => file.version === 'final')?.expires_at;
+const paymentDue = project ? clientPaymentDue(project) : null;
 const currentReview = project?.stage === 'review_ready' ? files.find(file => file.version === 'review') : undefined;
 const reviewShared = Boolean(currentReview);
 const decision = reviewShared ? await latestReviewDecision(env.MUSIC_DB, project!.request_id) : null;
 const roundsLeft = reviewShared ? await revisionRoundsLeft(env.MUSIC_DB, project!.request_id) : 0;
 const next = !project ? '' : project.stage === 'files_under_review' ? 'I’m checking the files and direction you sent.' :
+  paymentDue?.installment === 'booking' ? 'Your booking invoice is ready below. Stripe also emailed it to you.' :
   project.stage === 'accepted' && project.booking_status !== 'paid' ? 'Your booking details are being confirmed.' :
   project.stage === 'accepted' ? 'Your song is booked. I’ll post an update when work begins.' :
   project.stage === 'in_progress' ? 'I’m working on your song. You’ll get an email when there’s something to hear.' :
@@ -37,6 +39,7 @@ const next = !project ? '' : project.stage === 'files_under_review' ? 'I’m che
   project.stage === 'final_files_ready' && finalExpiry ? 'Your final audio is ready to listen to or download below.' :
   project.stage === 'complete' && finalExpiry ? 'Your completed audio stays here through its availability date.' :
   'I’ll keep this page updated as your song moves forward.';
+const money = (cents: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
 const longDate = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 const moved = project?.original_due_at && project.current_due_at && project.original_due_at !== project.current_due_at;
 ---
@@ -50,6 +53,11 @@ const moved = project?.original_due_at && project.current_due_at && project.orig
       {finalExpiry ? <p class="studio-date"><span>Available through</span><strong>{new Date(finalExpiry).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}</strong></p>
         : project.current_due_at && <p class="studio-date"><span>Expected by</span><strong>{longDate(project.current_due_at)}</strong>{moved && <del>{longDate(project.original_due_at!)}</del>}</p>}
     </div>
+    {paymentDue && <section class="studio-pay" aria-labelledby="studio-pay-heading">
+      <div><p class="studio-kicker">Payment</p><h2 id="studio-pay-heading">{paymentDue.installment === 'booking' ? 'Your booking invoice is ready' : 'Your remaining balance is ready'}</h2>
+        <p>{paymentDue.installment === 'booking' ? 'Paying it books your song, and work starts once it clears.' : 'Your final files are released here after it clears.'} Payment is handled securely by Stripe.</p></div>
+      <a class="studio-button" href={paymentDue.href} target="_blank" rel="noopener noreferrer">Pay {money(paymentDue.amountCents)} <span aria-hidden="true">↗</span></a>
+    </section>}
     {files.length > 0 && <section class="studio-files" aria-labelledby="studio-files-heading"><h2 id="studio-files-heading" class="studio-kicker">Listen</h2>
       {files.map(file => {
         const href = `/api/studio/projects/${encodeURIComponent(project.request_id)}/files/${encodeURIComponent(file.id)}`;
@@ -70,6 +78,10 @@ const moved = project?.original_due_at && project.current_due_at && project.orig
     .studio-date { display: grid; gap: .2rem; margin: 0; text-align: right; font: .82rem/1.4 Inter, sans-serif; color: var(--studio-muted); }
     .studio-date strong { color: var(--ink); font: 400 1.7rem/1.1 Newsreader, Georgia, serif; }
     .studio-date del { font-size: .82rem; }
+    .studio-pay { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1.25rem 2rem; padding: 1.75rem 0 2rem; border-top: 1px solid var(--rule); }
+    .studio-pay h2 { margin: .5rem 0 .4rem; font: 400 clamp(1.6rem, 3vw, 2.2rem)/1.15 Newsreader, Georgia, serif; }
+    .studio-pay p:not(.studio-kicker) { margin: 0; max-width: 34rem; color: var(--studio-muted); font: .95rem/1.55 Inter, sans-serif; }
+    .studio-pay .studio-button { text-decoration: none; }
     .studio-files { display: grid; padding: 1.5rem 0 2rem; border-top: 1px solid var(--rule); }
     .studio-files :global(.player + .player) { border-top: 1px solid var(--rule); }
     @media (max-width: 45rem) { .studio-date { text-align: left; } }
