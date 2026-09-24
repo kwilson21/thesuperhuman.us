@@ -23,6 +23,7 @@ const wave = bars ? waveformRects(bars) : '';
       <input type="range" class="player-seek" data-player-seek min="0" max="1000" value="0" step="1" aria-label={`Position in ${name}`} />
     </div>
     <div class="player-foot"><span class="player-time" data-player-time>0:00</span>{downloadHref && <a href={downloadHref} class="player-download">Download</a>}</div>
+    <p class="player-problem" data-player-problem hidden><span role="status" aria-live="polite" data-player-status></span><button type="button" class="studio-quiet" data-player-retry>Try again</button></p>
   </div>
 </div>
 <style>
@@ -49,6 +50,10 @@ const wave = bars ? waveformRects(bars) : '';
   .player-foot { display: flex; justify-content: space-between; gap: 1rem; }
   .player-download { color: var(--ink); font: 500 .8rem/1.4 Inter, sans-serif; }
   .player-download:hover { color: var(--accent); }
+  .player-problem { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem 1rem; margin: 0; color: var(--studio-danger); font: .85rem/1.5 Inter, sans-serif; }
+  .player-problem[hidden] { display: none; }
+  .player.unavailable .player-toggle { background: var(--studio-line); cursor: not-allowed; }
+  .player.unavailable .player-wave { opacity: .45; }
   @media (max-width: 30rem) { .player { gap: .8rem 1rem; } .player-toggle { width: 3rem; height: 3rem; } }
   @media (prefers-reduced-motion: reduce) { .player-toggle { transition: none; } }
 </style>

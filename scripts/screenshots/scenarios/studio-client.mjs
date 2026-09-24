@@ -1,4 +1,5 @@
-// A studio project from request to first review, through the owner's real routes. Seeds only what
+// A studio project from request to first review and back out again (revoking the review, then
+// closing access), through the owner's real routes. Seeds only what
 // needs an outside service: the request (Turnstile intake), the paid booking (a Stripe webhook),
 // the client's session and message (an emailed code). Client notices fail without a Resend key.
 import { createHash } from 'node:crypto';
@@ -70,6 +71,13 @@ export default {
     steps.push(await shots('Your songs (session seeded; sign-in needs an emailed code)', '/studio', 'studio-home', { cookie }));
     steps.push(await shots('The client hears the review', `/studio/projects/${id}`, 'studio-project', { cookie }));
     steps.push(await shots('Today lists the song', '/owner', 'studio-03-owner-today', { owner: true }));
+
+    // Recovery: withdraw the review, then close the client's access entirely.
+    await ownerFetch(`${project}/files/${start.uploadId}`, { action: 'revoke', note: 'I found a clipped vocal in this review. A corrected mix is coming.' });
+    steps.push(await shots('Review revoked: the client sees the note, not the file', `/studio/projects/${id}`, 'studio-04-client-revoked', { cookie }));
+    await ownerFetch(`${project}/access`, { action: 'revoke' });
+    steps.push(await shots('Access closed: the owner view', `/owner/requests/${id}`, 'studio-05-owner-closed', { owner: true }));
+    steps.push(await shots('Access closed: the client link now explains itself', `/studio/projects/${id}`, 'studio-06-client-closed', { cookie, status: 404 }));
     return steps;
   },
 };
