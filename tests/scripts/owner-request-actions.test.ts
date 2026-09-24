@@ -65,6 +65,8 @@ it('reloads a newly reviewed request onto the Accept panel', async () => {
   handlers.review();
   await new Promise(resolve => setTimeout(resolve, 0));
   expect(replaceState).toHaveBeenCalledWith(null, '', '/owner/requests/song-1#accept-project');
+  // The reload must not restore the old scroll position over the Accept panel.
+  expect(history.scrollRestoration).toBe('manual');
   expect(reload).toHaveBeenCalledOnce();
 });
 
@@ -85,4 +87,5 @@ it('scrolls to the Accept panel on the reloaded page and clears the fragment', (
   expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
   expect(focus).toHaveBeenCalledWith({ preventScroll: true });
   expect(replaceState).toHaveBeenCalledWith(null, '', '/owner/requests/song-1');
+  expect(history.scrollRestoration).toBe('auto');
 });

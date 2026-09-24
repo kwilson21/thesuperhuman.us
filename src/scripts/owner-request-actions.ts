@@ -10,6 +10,7 @@ export function setupOwnerRequestActions() {
     accept?.scrollIntoView({ block: 'start' });
     accept?.querySelector<HTMLInputElement>('input[name="dueDate"]')?.focus({ preventScroll: true });
     history.replaceState(null, '', `${location.pathname}${location.search}`);
+    history.scrollRestoration = 'auto';
   }
   async function update(payload: Record<string, unknown>) {
     try {
@@ -18,7 +19,10 @@ export function setupOwnerRequestActions() {
       });
       if (!response.ok) { status!.textContent = 'That change was not saved. Refresh and try again.'; return; }
       // A reviewed request's next step is accepting the project, so reload onto that panel.
-      if (payload.action === 'review') history.replaceState(null, '', `${location.pathname}${location.search}#accept-project`);
+      if (payload.action === 'review') {
+    history.scrollRestoration = 'manual';
+    history.replaceState(null, '', `${location.pathname}${location.search}#accept-project`);
+  }
       location.reload();
     } catch { status!.textContent = 'Connection lost. The change may not have been saved. Refresh before trying again.'; }
   }

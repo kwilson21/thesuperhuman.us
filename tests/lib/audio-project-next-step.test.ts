@@ -32,6 +32,21 @@ describe('ownerNextStep', () => {
     expect(step({ stage: 'final_files_ready', payment: pay('paid', 'paid') })).toMatchObject({ title: 'Close the project', target: '#close-project' });
   });
 
+  it('names the real action when an invoice is pending, voided, failed or unavailable', () => {
+    expect(step({ payment: { ...pay('not_created'), bookingCreationStartedAt: '2026-09-24T12:00:00Z' } })).toMatchObject({ title: 'Check the invoice in Stripe' });
+    expect(step({ payment: pay('void') })).toMatchObject({ title: 'Replace the booking invoice' });
+    expect(step({ payment: pay('void'), stripeEnabled: false })).toMatchObject({ title: 'Waiting on invoices', waiting: true });
+    expect(step({ stage: 'review_ready', payment: pay('paid', 'void') })).toMatchObject({ title: 'Replace the balance invoice' });
+    expect(step({ stage: 'review_ready', payment: pay('paid', 'payment_failed') })).toMatchObject({ title: 'Sort out the balance invoice' });
+    expect(step({ stage: 'review_ready', payment: pay('paid', 'uncollectible') })).toMatchObject({ title: 'Sort out the balance invoice' });
+    expect(step({ stage: 'review_ready', payment: { ...pay('paid'), balanceCreationStartedAt: '2026-09-24T12:00:00Z' } })).toMatchObject({ title: 'Check the invoice in Stripe' });
+    expect(step({ stage: 'review_ready', payment: pay('paid'), stripeEnabled: false })?.detail).toContain('waits until Stripe is set up');
+  });
+
+  it('sends a resolved request back through Reopen rather than to a missing Accept form', () => {
+    expect(step({ stage: 'files_under_review', requestStatus: 'resolved' })).toMatchObject({ title: 'Reopen to accept', target: '#request-heading' });
+  });
+
   it('has nothing to suggest for a closed, withdrawn or revoked project', () => {
     expect(step({ stage: 'complete' })).toBeNull();
     expect(step({ requestStatus: 'withdrawn' })).toBeNull();
