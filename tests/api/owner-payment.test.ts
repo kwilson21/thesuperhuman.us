@@ -180,3 +180,16 @@ it('creates a replacement after a voided booking invoice', async () => {
   expect(sql.prepare('SELECT booking_invoice_id,booking_status FROM audio_payments').get())
     .toEqual({ booking_invoice_id: 'in_replacement', booking_status: 'open' });
 });
+
+it('records a payment received outside Stripe with invoices off, and never calls Stripe for it', async () => {
+  const received = { action: 'record-payment-received', installment: 'booking', method: 'Zelle', received: true };
+  expect((await POST(context(received))).status).toBe(409);
+  await POST(context({ action: 'approve', approvedService: 'Mix', totalAmountCents: 15_000, offerAccepted: true }));
+  expect((await POST(context({ ...received, received: false }))).status).toBe(400);
+  expect((await POST(context({ ...received, method: 'Bitcoin' }))).status).toBe(400);
+  expect((await POST(context(received, false))).status).toBe(403);
+  expect((await POST(context(received))).status).toBe(200);
+  expect(sql.prepare('SELECT booking_status,booking_invoice_id FROM audio_payments').get()).toEqual({ booking_status: 'paid', booking_invoice_id: null });
+  expect((await POST(context({ action: 'create-booking-invoice' }, true, stripeEnv))).status).toBe(409);
+  expect(invoiceMocks.booking).not.toHaveBeenCalled();
+});

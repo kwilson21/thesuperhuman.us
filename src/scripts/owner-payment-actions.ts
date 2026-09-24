@@ -10,6 +10,7 @@ export function setupOwnerPaymentActions() {
       if (!response.ok) {
         const result = await response.clone().json().catch(() => ({})) as { recoveryPending?: boolean };
         status!.textContent = payload.action === 'approve' ? 'Those terms were not saved. Check the price and acceptance, then try again.'
+          : payload.action === 'record-payment-received' ? 'That payment was not recorded. Refresh the payment status before trying again.'
           : result.recoveryPending ? 'Stripe may have sent the invoice. Check Stripe and wait for webhook recovery before taking another action.'
             : response.status === 503 ? 'Stripe invoicing is unavailable. Refresh the payment status before trying again.' : 'That invoice was not created. Refresh the payment status before trying again.';
         button.disabled=false; return;
@@ -22,6 +23,12 @@ export function setupOwnerPaymentActions() {
     if (!/^\d+(\.\d{1,2})?$/.test(amount)) { status.textContent='Enter the fixed project price with no more than two decimal places.'; return; }
     const [dollars,decimal='']=amount.split('.'); const totalAmountCents=Number(dollars)*100+Number(decimal.padEnd(2,'0'));
     void send({action:'approve',approvedService:String(data.get('approvedService')??''),totalAmountCents,offerAccepted:data.get('offerAccepted')==='on'},form.querySelector<HTMLButtonElement>('button[type="submit"]')!);
+  });
+  panel.querySelector<HTMLFormElement>('[data-payment-received]')?.addEventListener('submit',event=>{
+    event.preventDefault(); const form=event.currentTarget as HTMLFormElement; const data=new FormData(form);
+    const installment=form.dataset.installment;
+    if (!confirm(`Record the ${installment} as paid outside Stripe? This cannot be undone.`)) return;
+    void send({action:'record-payment-received',installment,method:String(data.get('method')??''),reference:String(data.get('reference')??'').trim()||undefined,received:data.get('received')==='on'},form.querySelector<HTMLButtonElement>('button[type="submit"]')!);
   });
   panel.querySelectorAll<HTMLButtonElement>('[data-payment-action]').forEach(button=>button.addEventListener('click',()=>{ void send({action:button.dataset.paymentAction},button); }));
 }

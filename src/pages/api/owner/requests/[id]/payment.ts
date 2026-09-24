@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
-import { approveAudioPayment, getAudioPayment, recordInvoice, replaceTerminalInvoice, reserveInvoiceCreation, type AudioPayment } from '~/lib/audio-payments';
+import { approveAudioPayment, getAudioPayment, manualPaymentMethods, recordInvoice, recordManualPayment, replaceTerminalInvoice, reserveInvoiceCreation, type AudioPayment } from '~/lib/audio-payments';
 import { getOwnerRequest } from '~/lib/owner-requests';
 import { createBalanceInvoice, createBookingInvoice, stripeAvailable } from '~/lib/stripe-invoicing';
 
@@ -17,6 +17,13 @@ const commandSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('create-balance-invoice') }),
   z.object({ action: z.literal('replace-booking-invoice') }),
   z.object({ action: z.literal('replace-balance-invoice') }),
+  z.object({
+    action: z.literal('record-payment-received'),
+    installment: z.enum(['booking', 'balance']),
+    method: z.enum(manualPaymentMethods),
+    reference: z.string().max(120).optional(),
+    received: z.literal(true),
+  }),
 ]);
 
 function ownerView(payment: AudioPayment) {
@@ -56,6 +63,12 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
     let payment = await getAudioPayment(db, requestRecord.id);
     if (!payment) return Response.json({ ok: false }, { status: 409, headers });
+    if (parsed.data.action === 'record-payment-received') {
+      // Needs no Stripe: the owner confirms money that arrived another way.
+      payment = await recordManualPayment(db, { requestId: requestRecord.id, installment: parsed.data.installment,
+        method: parsed.data.method, reference: parsed.data.reference, actor: locals.owner.email });
+      return Response.json({ ok: true, payment: ownerView(payment) }, { headers });
+    }
     if (parsed.data.action.startsWith('replace-')) {
       if (!stripeAvailable(locals.runtime.env)) return Response.json({ ok: false }, { status: 503, headers });
       const installment = parsed.data.action === 'replace-booking-invoice' ? 'booking' : 'balance';

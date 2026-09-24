@@ -180,6 +180,48 @@ export async function replaceTerminalInvoice(db: D1Database, input: {
   return (await getAudioPayment(db, input.requestId))!;
 }
 
+/** How a payment taken outside Stripe arrived. */
+export const manualPaymentMethods = ['Zelle', 'Venmo', 'PayPal', 'Cash App', 'Cash', 'Bank transfer', 'Other'] as const;
+export type ManualPaymentMethod = typeof manualPaymentMethods[number];
+
+/**
+ * Marks an installment paid when the client paid outside Stripe. Only an installment with no
+ * invoice and no pending invoice creation qualifies, so it can never overwrite a Stripe invoice;
+ * the balance still follows the booking. A paid installment with no invoice id reads as paid
+ * outside Stripe, and the audit entry records the method and any reference.
+ */
+export async function recordManualPayment(db: D1Database, input: {
+  requestId: string; installment: Installment; method: ManualPaymentMethod; reference?: string; actor: string;
+}): Promise<AudioPayment> {
+  const payment = await getAudioPayment(db, input.requestId);
+  if (!payment) throw new Error('Payment terms are not approved.');
+  if (!input.actor.trim()) throw new Error('Invalid request actor.');
+  if (!manualPaymentMethods.includes(input.method)) throw new Error('Invalid payment method.');
+  const reference = (input.reference ?? '').trim().replace(/\s+/g, ' ');
+  if (reference.length > 120) throw new Error('Invalid payment reference.');
+  const prefix = input.installment;
+  if (payment[`${prefix}Status`] === 'paid' && !payment[`${prefix}InvoiceId`]) return payment;
+  if (payment[`${prefix}Status`] !== 'not_created' || payment[`${prefix}InvoiceId`] || payment[`${prefix}CreationStartedAt`] || payment.externalRefsDeletedAt) {
+    throw new Error('This payment already has an invoice.');
+  }
+  if (prefix === 'balance' && payment.bookingStatus !== 'paid') throw new Error('The booking must be paid before the balance.');
+  const amount = (payment[`${prefix}AmountCents`] / 100).toFixed(2);
+  const now = new Date().toISOString();
+  const eligible = `request_id=? AND ${prefix}_status='not_created' AND ${prefix}_invoice_id IS NULL
+    AND ${prefix}_creation_started_at IS NULL AND external_refs_deleted_at IS NULL${prefix === 'balance' ? " AND booking_status='paid'" : ''}`;
+  await db.batch([
+    db.prepare(`INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at)
+      SELECT ?,?,?,?,? WHERE EXISTS (SELECT 1 FROM audio_payments WHERE ${eligible})`)
+      .bind(input.requestId, `${prefix}-payment-updated`, input.actor.trim().toLowerCase(),
+        `Received outside Stripe: USD ${amount} via ${input.method}${reference ? `; ${reference}` : ''}`, now, input.requestId),
+    db.prepare(`UPDATE audio_payments SET ${prefix}_status='paid',${prefix}_status_updated_at=?,updated_at=? WHERE ${eligible}`)
+      .bind(now, now, input.requestId),
+  ]);
+  const updated = (await getAudioPayment(db, input.requestId))!;
+  if (updated[`${prefix}Status`] !== 'paid' || updated[`${prefix}InvoiceId`]) throw new Error('This payment already has an invoice.');
+  return updated;
+}
+
 export async function reserveInvoiceCreation(db: D1Database, input: {
   requestId: string; installment: Installment;
 }): Promise<AudioPayment> {
@@ -187,7 +229,7 @@ export async function reserveInvoiceCreation(db: D1Database, input: {
   const now = new Date().toISOString();
   const reservation = await db.prepare(`UPDATE audio_payments SET ${prefix}_creation_started_at=?,updated_at=?
     WHERE request_id=? AND ${prefix}_invoice_id IS NULL AND ${prefix}_creation_started_at IS NULL
-      AND external_refs_deleted_at IS NULL`)
+      AND ${prefix}_status='not_created' AND external_refs_deleted_at IS NULL`)
     .bind(now, now, input.requestId).run();
   if (reservation.meta.changes !== 1) throw new Error('Invoice creation is already pending or complete.');
   const payment = await getAudioPayment(db, input.requestId);
@@ -223,7 +265,7 @@ export async function recoverInvoiceFromWebhook(db: D1Database, input: {
   const receivedAt = new Date().toISOString();
   const expectedAmount = payment?.[`${prefix}AmountCents`];
   const invalidInvoice = payment && (input.totalAmountCents !== expectedAmount || input.currency !== payment.currency
-    || (input.installment === 'balance' && payment.bookingStatus !== 'paid'));
+    || (input.installment === 'balance' && payment.bookingStatus !== 'paid') || payment[`${prefix}Status`] === 'paid');
   if (!payment || currentId || invalidInvoice) {
     await recordUnmatchedStripeEvent(db, {
       eventId: input.eventId, eventType: input.eventType, invoiceId: input.invoiceId, requestId: input.requestId,
@@ -236,7 +278,7 @@ export async function recoverInvoiceFromWebhook(db: D1Database, input: {
     db.prepare(`UPDATE audio_payments SET stripe_customer_id=COALESCE(?,stripe_customer_id),
       ${prefix}_invoice_id=?,${prefix}_invoice_url=?,${prefix}_status=?,${prefix}_status_updated_at=?,
       ${prefix}_recovery_event_id=?,${prefix}_creation_started_at=NULL,updated_at=?
-      WHERE request_id=? AND ${prefix}_invoice_id IS NULL`)
+      WHERE request_id=? AND ${prefix}_invoice_id IS NULL AND ${prefix}_status<>'paid'`)
       .bind(input.stripeCustomerId, input.invoiceId, input.hostedInvoiceUrl, input.status, input.occurredAt,
         input.eventId, receivedAt, input.requestId),
     db.prepare(`INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at)

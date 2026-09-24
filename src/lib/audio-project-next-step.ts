@@ -31,8 +31,8 @@ export function ownerNextStep({ stage, requestStatus, revoked, payment: pay, str
     if (!pay) return { title: 'Record the agreed terms', detail: 'Once the client accepts your written offer, check the service and price in Book the work, tick that the client accepted, then confirm the terms.', target: '#confirm-terms', action: 'Confirm terms' };
     if (pay.bookingStatus === 'paid') return { title: 'Start the work', detail: 'The booking is paid. Tell the client what you are focusing on first.', target: '#start-work', action: 'Mark in progress' };
     if (pay.bookingStatus === 'not_created') return pay.bookingCreationStartedAt ? reconciling : stripeEnabled
-      ? { title: 'Send the booking invoice', detail: 'Create the booking invoice in Book the work. Stripe emails it to the client.', target: '#create-booking-invoice', action: 'Create booking invoice' }
-      : { title: 'Waiting on booking payments', detail: 'Invoices are off until Stripe is set up, so the booking cannot be paid yet and work cannot start. Messages and date changes still work meanwhile.', target: payment, action: 'See the booking status', waiting: true };
+      ? { title: 'Send the booking invoice', detail: 'Create the booking invoice in Book the work. Stripe emails it to the client. If they paid another way, use Paid another way? instead.', target: '#create-booking-invoice', action: 'Create booking invoice' }
+      : { title: 'Record the booking payment', detail: 'Stripe invoices are off, so collect the booking another way. Once it arrives, record it in Book the work; that unlocks Start the work.', target: '#record-booking-payment', action: 'Record booking received' };
     if (pay.bookingStatus === 'draft' || pay.bookingStatus === 'open') return { title: 'Waiting on the booking payment', detail: 'Work unlocks when Stripe confirms the client paid. Nothing to do until then.', target: payment, action: 'See the booking status', waiting: true };
     return invoiceProblem('booking', pay.bookingStatus, stripeEnabled);
   }
@@ -44,7 +44,7 @@ export function ownerNextStep({ stage, requestStatus, revoked, payment: pay, str
     if (balance === 'not_created') return pay?.balanceCreationStartedAt ? reconciling
       : { title: 'Wait for notes, then revise or finish', detail: stripeEnabled
         ? 'If the client asks for changes, begin a revision. If they approve the mix, create the balance invoice in Book the work; the final can be shared once it is paid.'
-        : 'If the client asks for changes, begin a revision. Finishing needs the balance invoice, which waits until Stripe is set up.', target: '#project-messages-heading', action: 'Read the conversation' };
+        : 'If the client asks for changes, begin a revision. If they approve the mix, collect the balance another way and record it in Book the work; the final can be shared once it is recorded.', target: '#project-messages-heading', action: 'Read the conversation' };
     if (balance === 'draft' || balance === 'open') return { title: 'Waiting on the balance payment', detail: 'The final file can be uploaded now, but it stays private until Stripe confirms the balance.', target: payment, action: 'See the balance status', waiting: true };
     return invoiceProblem('balance', balance, stripeEnabled);
   }

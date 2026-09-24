@@ -1,5 +1,5 @@
 ---
-import type { AudioPayment } from '~/lib/audio-payments';
+import { manualPaymentMethods, type AudioPayment } from '~/lib/audio-payments';
 interface Props { requestId: string; payment: AudioPayment | null; stripeEnabled: boolean; defaults?: { approvedService: string; totalAmount: string } }
 const { requestId, payment, stripeEnabled, defaults = { approvedService: '', totalAmount: '' } } = Astro.props;
 const money = (cents: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
@@ -7,6 +7,9 @@ const statusLabel = (status: string) => ({ not_created:'Not created',draft:'Draf
 const nextAction = !payment ? 'approve'
   : payment.bookingStatus === 'not_created' && !payment.bookingCreationStartedAt ? 'booking'
     : payment.bookingStatus === 'paid' && payment.balanceStatus === 'not_created' && !payment.balanceCreationStartedAt ? 'balance' : null;
+// A payment the client sent another way (Zelle, cash, and so on) is recorded instead of invoiced.
+const manual = nextAction === 'booking' || nextAction === 'balance' ? nextAction : null;
+const paidLabel = (status: string, invoiceId: string | null) => status === 'paid' && !invoiceId ? 'Paid outside Stripe' : statusLabel(status);
 const replaceAction = payment?.bookingStatus === 'void' ? 'booking' : payment?.bookingStatus === 'paid' && payment.balanceStatus === 'void' ? 'balance' : null;
 ---
 <section class="owner-section payment-panel" aria-labelledby="payment-heading" data-payment-panel data-request-id={requestId}>
@@ -18,18 +21,29 @@ const replaceAction = payment?.bookingStatus === 'void' ? 'booking' : payment?.b
     <button class="owner-primary-action" type="submit">Confirm terms <span aria-hidden="true">→</span></button>
   </form> : <div class="payment-ledger">
     <p class="payment-service">{payment.approvedService}</p>
-    <ol><li><div><span class="payment-step">01</span><div><strong>Booking payment</strong><small>{money(payment.bookingAmountCents)}</small></div></div><div class:list={['payment-state',payment.bookingStatus]}><span>{statusLabel(payment.bookingStatus)}</span>{payment.bookingInvoiceUrl && <a href={payment.bookingInvoiceUrl} rel="noreferrer">Open invoice ↗</a>}</div></li>
-      <li><div><span class="payment-step">02</span><div><strong>Remaining balance</strong><small>{money(payment.balanceAmountCents)}</small></div></div><div class:list={['payment-state',payment.balanceStatus]}><span>{statusLabel(payment.balanceStatus)}</span>{payment.balanceInvoiceUrl && <a href={payment.balanceInvoiceUrl} rel="noreferrer">Open invoice ↗</a>}</div></li></ol>
+    <ol><li><div><span class="payment-step">01</span><div><strong>Booking payment</strong><small>{money(payment.bookingAmountCents)}</small></div></div><div class:list={['payment-state',payment.bookingStatus]}><span>{paidLabel(payment.bookingStatus, payment.bookingInvoiceId)}</span>{payment.bookingInvoiceUrl && <a href={payment.bookingInvoiceUrl} rel="noreferrer">Open invoice ↗</a>}</div></li>
+      <li><div><span class="payment-step">02</span><div><strong>Remaining balance</strong><small>{money(payment.balanceAmountCents)}</small></div></div><div class:list={['payment-state',payment.balanceStatus]}><span>{paidLabel(payment.balanceStatus, payment.balanceInvoiceId)}</span>{payment.balanceInvoiceUrl && <a href={payment.balanceInvoiceUrl} rel="noreferrer">Open invoice ↗</a>}</div></li></ol>
     {payment.bookingStatus === 'paid' && payment.balanceStatus === 'paid' && <p class="payment-complete">Both payments are confirmed. Final downloadable files may be released.</p>}
   </div>}
-  {nextAction === 'booking' && <button class="owner-primary-action" type="button" id="create-booking-invoice" data-payment-action="create-booking-invoice" disabled={!stripeEnabled}>Create booking invoice <span aria-hidden="true">→</span></button>}
-  {nextAction === 'balance' && <button class="owner-primary-action" type="button" data-payment-action="create-balance-invoice" disabled={!stripeEnabled}>Create balance invoice <span aria-hidden="true">→</span></button>}
+  {nextAction === 'booking' && stripeEnabled && <button class="owner-primary-action" type="button" id="create-booking-invoice" data-payment-action="create-booking-invoice" disabled={!stripeEnabled}>Create booking invoice <span aria-hidden="true">→</span></button>}
+  {nextAction === 'balance' && stripeEnabled && <button class="owner-primary-action" type="button" data-payment-action="create-balance-invoice" disabled={!stripeEnabled}>Create balance invoice <span aria-hidden="true">→</span></button>}
   {replaceAction && <button class="owner-primary-action" type="button" id="replace-invoice" data-payment-action={`replace-${replaceAction}-invoice`} disabled={!stripeEnabled}>Create replacement {replaceAction} invoice <span aria-hidden="true">→</span></button>}
   {payment && payment.bookingStatus !== 'paid' && payment.bookingStatus !== 'not_created' && <p class="payment-next">Work is booked when Stripe confirms the booking payment.</p>}
   {payment?.bookingStatus === 'paid' && payment.balanceStatus !== 'paid' && payment.balanceStatus !== 'not_created' && <p class="payment-next">Keep final downloadable files private until Stripe confirms the remaining balance.</p>}
   {(payment?.bookingStatus === 'payment_failed' || payment?.balanceStatus === 'payment_failed') && <p class="payment-next">Open the invoice in Stripe to retry payment, void it, or contact the client before taking another action.</p>}
   {(payment?.bookingStatus === 'uncollectible' || payment?.balanceStatus === 'uncollectible') && <p class="payment-next">This invoice remains in Stripe. Void it there before creating a replacement.</p>}
   {(payment?.bookingCreationStartedAt || payment?.balanceCreationStartedAt) && <p class="payment-next">Invoice creation is awaiting Stripe reconciliation. Check Stripe before clearing or retrying this request.</p>}
-  {!stripeEnabled && nextAction !== 'approve' && (nextAction || replaceAction) && <p class="payment-unavailable">Invoice creation is disabled until Stripe setup and launch checks are complete.</p>}
+  {!stripeEnabled && replaceAction && <p class="payment-unavailable">Invoice creation is disabled until Stripe setup and launch checks are complete.</p>}
+  {payment && manual && (() => {
+    const amount = money(manual === 'booking' ? payment.bookingAmountCents : payment.balanceAmountCents);
+    const form = <form class="payment-received" id={`record-${manual}-payment`} data-payment-received data-installment={manual}>
+      <p class="payment-guidance">{stripeEnabled ? 'If the client paid another way, record it here instead of sending an invoice.' : 'Stripe invoices are off. When the client pays another way, record it here.'} This cannot be undone.</p>
+      <div class="payment-fields"><label>Paid with<select name="method" required><option value="">Choose</option>{manualPaymentMethods.map(method => <option value={method}>{method}</option>)}</select></label>
+        <label>Reference (optional)<input name="reference" maxlength="120" autocomplete="off" placeholder="Transaction ID or note" /></label></div>
+      <label class="payment-acceptance"><input type="checkbox" name="received" required data-next-step-focus /> I received {amount} for the {manual}</label>
+      <button class="owner-primary-action" type="submit">Record {manual} received <span aria-hidden="true">→</span></button>
+    </form>;
+    return stripeEnabled ? <details class="payment-other"><summary>Paid another way?</summary>{form}</details> : form;
+  })()}
   <p data-payment-status class="payment-action-status" role="status" aria-live="polite"></p>
 </section>
