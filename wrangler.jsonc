@@ -26,7 +26,10 @@
     // Keep invoice creation off until Stripe account review, test-mode lifecycle,
     // D1 migration, webhook registration, and launch verification all pass.
     "STRIPE_PAYMENTS_ENABLED": "false",
-    "AUDIO_CLIENT_PORTAL_ENABLED": "false",
+    // Private studio portal. Migrations 0005-0017 are applied to production, the
+    // code key is set, and the audio bucket has no public access. Clients reach it
+    // only through an invitation sent from their request page.
+    "AUDIO_CLIENT_PORTAL_ENABLED": "true",
     "PUBLICATION_PROJECTS": "threadline,the-engineers-daily,personal-website",
     "PUBLICATION_OWNER_ID": "10987837",
     "PUBLICATION_GITHUB_CLIENT_ID": "Ov23liewYmTNLlpkrYjz"
