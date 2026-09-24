@@ -52,6 +52,7 @@ describe('checkRateLimit', () => {
     expect(kv.put.mock.calls[0][0]).toBe('rl:audio:1.2.3.4');
     expect(kv.get.mock.calls[0][0]).toBe('rl:audio:1.2.3.4');
   });
+
 });
 
 it('supports a bounded burst for metrics without blocking a second listener', async () => {
