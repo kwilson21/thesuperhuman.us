@@ -10,7 +10,7 @@ const links = [
   { href: '/building', label: 'Building' },
   { href: '/writing', label: 'Writing' },
   { href: '/audio/', label: 'Audio' },
-  { href: '/services', label: isAudio ? 'Software services' : 'Services' },
+  { href: '/services', label: 'Services' },
   { href: '/about', label: 'About' },
 ];
 const current = isAudio ? '' : Astro.url.pathname.replace(/\/$/, '') || '/';
