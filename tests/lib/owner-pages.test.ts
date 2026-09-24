@@ -62,6 +62,8 @@ it('keeps audio payment work inside the service request with one clear next acti
   expect(panel).toContain('Create booking invoice');
   expect(panel).toContain('Create balance invoice');
   expect(panel).toContain("payment.bookingStatus === 'paid'");
+  // While an invoice is unpaid, remind the owner how to close it when the client paid another way.
+  expect(panel).toContain('Mark as paid</strong>, not Void');
   expect(panel).not.toContain('stripeCustomerId');
   expect(script).toContain('/payment');
   expect(script).toContain('That invoice was not created');
