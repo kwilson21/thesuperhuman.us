@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { openMusicDatabase } from './music-analytics.mjs';
 import { renderMusicReport } from './music-report-view.mjs';
 import { finishedPaymentTerms } from './owner-retention.mjs';
+import { parseJsonc } from './screenshots/config.mjs';
 
 const quote = value => `'${String(value).replaceAll("'", "''")}'`;
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -66,12 +67,33 @@ const contentSnapshot = (table, projectIds) => snapshot({
 const unwrap = rows => JSON.parse(rows[0].snapshot);
 async function readSource(database, query) { return unwrap(await database.query(query)); }
 
+/**
+ * The database and bucket a Wrangler config points at. Retention records this in the reviewed
+ * manifest and refuses to apply against anything else, so rows and objects always come from the
+ * same environment.
+ */
+export function studioStorageIdentity(config) {
+  const database = config?.d1_databases?.find(item => item.binding === 'MUSIC_DB');
+  const bucket = config?.r2_buckets?.find(item => item.binding === 'AUDIO');
+  if (!database?.database_id || !bucket?.bucket_name) throw new Error('The selected Wrangler config needs MUSIC_DB and AUDIO bindings.');
+  return { accountId: config.account_id ?? null, databaseId: database.database_id,
+    bucket: bucket.bucket_name, jurisdiction: bucket.jurisdiction ?? null };
+}
+
+export async function readStudioStorageIdentity(configPath) {
+  if (!/\.jsonc?$/.test(configPath)) throw new Error('Studio retention reads JSON or JSONC Wrangler configs only.');
+  return studioStorageIdentity(parseJsonc(await readFile(resolve(configPath), 'utf8')));
+}
+
+const sameStorage = (a, b) => ['accountId', 'databaseId', 'bucket', 'jurisdiction'].every(key => a?.[key] === b?.[key]);
+
 async function ensureSchema(database) {
   const rows = await database.query('PRAGMA table_info(audio_projects)');
   if (!rows.some(row => row.name === 'content_deleted_at')) throw new Error('Apply studio retention migration 0014 before running retention.');
 }
 
-export async function previewStudioRetention(database, environment, now = new Date()) {
+export async function previewStudioRetention(database, environment, storage, now = new Date()) {
+  if (!storage?.databaseId || !storage.bucket) throw new Error('Studio retention needs the selected database and bucket.');
   await ensureSchema(database);
   const sql = sources(now);
   const projects = await readSource(database, sql.projects);
@@ -86,7 +108,7 @@ export async function previewStudioRetention(database, environment, now = new Da
   const accessAudit = await readSource(database, sql.accessAudit);
   const projectAudit = await readSource(database, sql.projectAudit);
   return {
-    version: 1, environment, generatedAt: now.toISOString(),
+    version: 2, environment, storage, generatedAt: now.toISOString(),
     sources: { projects: hash(JSON.stringify(projects)), files: hash(JSON.stringify(files)),
       messages: hash(JSON.stringify(messages)), updates: hash(JSON.stringify(updates)),
       codes: hash(JSON.stringify(codes)), sessions: hash(JSON.stringify(sessions)),
@@ -98,8 +120,11 @@ export async function previewStudioRetention(database, environment, now = new Da
   };
 }
 
-export async function applyStudioRetention(database, review, environment, deleteObject, now = new Date()) {
-  if (review?.version !== 1 || review.environment !== environment ||
+export async function applyStudioRetention(database, review, environment, storage, deleteObject, now = new Date()) {
+  if (!sameStorage(review?.storage, storage)) {
+    throw new Error('Studio retention review was generated for another database or bucket. Nothing was changed.');
+  }
+  if (review?.version !== 2 || review.environment !== environment ||
     !Number.isFinite(Date.parse(review.generatedAt)) ||
     now.getTime() < Date.parse(review.generatedAt) || now.getTime() - Date.parse(review.generatedAt) > 86400000) {
     throw new Error('Studio retention review is invalid, for another environment, or older than 24 hours.');
@@ -160,11 +185,18 @@ export async function applyStudioRetention(database, review, environment, delete
   return review.counts;
 }
 
-async function remoteObjectDeleter(key, configPath) {
+export function remoteObjectDeleteArgs(key, storage, configPath) {
+  // Wrangler takes the bucket from the object path, so it must come from the reviewed identity.
+  const args = ['node_modules/wrangler/bin/wrangler.js', 'r2', 'object', 'delete', `${storage.bucket}/${key}`, '--remote'];
+  if (storage.jurisdiction) args.push('--jurisdiction', storage.jurisdiction);
+  if (configPath) args.push('--config', resolve(configPath));
+  return args;
+}
+
+async function remoteObjectDeleter(key, storage, configPath) {
   const temporary = await mkdtemp(resolve('.private/studio-retention-'));
   try {
-    const args = ['node_modules/wrangler/bin/wrangler.js', 'r2', 'object', 'delete', `superhuman-audio/${key}`, '--remote'];
-    if (configPath) args.push('--config', resolve(configPath));
+    const args = remoteObjectDeleteArgs(key, storage, configPath);
     const result = spawnSync(process.execPath, args, {
       encoding: 'utf8', env: { ...process.env, WRANGLER_LOG_PATH: resolve(temporary, 'wrangler.log') },
     });
@@ -183,6 +215,7 @@ async function main() {
   }
   await mkdir('.private', { recursive: true });
   const environment = remote ? (configPath ? `Remote ${configPath}` : 'Production') : 'Local test data';
+  const storage = await readStudioStorageIdentity(remote ? configPath ?? 'wrangler.jsonc' : '.private/wrangler-music-preview.json');
   const database = await openMusicDatabase(remote, configPath);
   const proxy = !remote && applyIndex >= 0 ? await (await import('wrangler')).getPlatformProxy({
     configPath: resolve('.private/wrangler-music-preview.json'), persist: { path: '.wrangler/state/v3' },
@@ -190,11 +223,11 @@ async function main() {
   try {
     if (applyIndex >= 0) {
       const review = JSON.parse(await readFile(resolve(reviewPath), 'utf8'));
-      const counts = await applyStudioRetention(database, review, environment,
-        key => remote ? remoteObjectDeleter(key, configPath) : proxy.env.AUDIO.delete(key));
+      const counts = await applyStudioRetention(database, review, environment, storage,
+        key => remote ? remoteObjectDeleter(key, storage, configPath) : proxy.env.AUDIO.delete(key));
       console.log(`Removed ${counts.objects} private objects and cleared ${counts.projects} closed projects. Run owner request retention next.`);
     } else {
-      const review = await previewStudioRetention(database, environment);
+      const review = await previewStudioRetention(database, environment, storage);
       await writeFile(reviewPath, JSON.stringify(review, null, 2), { mode: 0o600 });
       await writeFile('.private/studio-retention-review.html', renderMusicReport('Studio retention review',
         `${environment} · ${review.generatedAt}`, review.notes, { Counts: review.counts }), { mode: 0o600 });

@@ -4,6 +4,8 @@ import { expect, it } from 'vitest';
 import { applyOwnerRetention, previewOwnerRetention } from '../../scripts/owner-retention.mjs';
 import { applyStudioRetention, previewStudioRetention } from '../../scripts/studio-retention.mjs';
 import { lifetimeOwnerPlayback } from '../../scripts/music-analytics.mjs';
+
+const storage = { accountId: null, databaseId: 'local-music', bucket: 'local-audio', jurisdiction: null };
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 const now = new Date('2026-09-19T12:00:00Z');
 
@@ -138,8 +140,8 @@ it('clears request contact and summary after studio cleanup has removed withdraw
     INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
       offer_accepted_at,created_at,updated_at)
     VALUES ('studio-withdrawn','Mix',10000,5000,5000,'2026-09-01','2026-09-01','2026-09-01');`);
-  const studioReview = await previewStudioRetention(database, 'Local test data', later);
-  await applyStudioRetention(database, studioReview, 'Local test data', async () => {}, later);
+  const studioReview = await previewStudioRetention(database, 'Local test data', storage, later);
+  await applyStudioRetention(database, studioReview, 'Local test data', storage, async () => {}, later);
   const ownerReview = await previewOwnerRetention(database, 'Local test data', later);
   await applyOwnerRetention(database, ownerReview, 'Local test data', later);
   expect((await database.query("SELECT name,email,summary FROM owner_requests WHERE id='studio-withdrawn'"))[0])

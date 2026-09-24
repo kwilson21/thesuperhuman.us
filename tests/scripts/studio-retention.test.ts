@@ -1,7 +1,9 @@
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { expect, it, vi } from 'vitest';
-import { applyStudioRetention, previewStudioRetention } from '../../scripts/studio-retention.mjs';
+import { applyStudioRetention, previewStudioRetention, remoteObjectDeleteArgs, studioStorageIdentity } from '../../scripts/studio-retention.mjs';
+
+const storage = { accountId: null, databaseId: 'local-music', bucket: 'local-audio', jurisdiction: null };
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 const now = new Date('2028-01-15T12:00:00Z');
@@ -51,11 +53,11 @@ function fixture() {
 
 it('previews without private values and removes only eligible closed project content', async () => {
   const { sql, database } = fixture();
-  const review = await previewStudioRetention(database, 'Local test data', now);
+  const review = await previewStudioRetention(database, 'Local test data', storage, now);
   expect(review.counts).toMatchObject({ projects: 2, objects: 2, codes: 1, sessions: 1, accessAudit: 1 });
   expect(JSON.stringify(review)).not.toMatch(/one@example|Private note|studio\/projects\/withdrawn/);
   const deleted: string[] = [];
-  await applyStudioRetention(database, review, 'Local test data', async (key: string) => { deleted.push(key); }, now);
+  await applyStudioRetention(database, review, 'Local test data', storage, async (key: string) => { deleted.push(key); }, now);
   expect(deleted).toEqual([
     'studio/projects/delivered/file-delivered.mp3', 'studio/projects/withdrawn/file-withdrawn.mp3',
   ]);
@@ -72,14 +74,14 @@ it('previews without private values and removes only eligible closed project con
 
 it('closes eligible access before object deletion and keeps records for a safe retry after storage failure', async () => {
   const { sql, database } = fixture();
-  const review = await previewStudioRetention(database, 'Local test data', now);
+  const review = await previewStudioRetention(database, 'Local test data', storage, now);
   const fail = vi.fn(async () => { throw new Error('R2 unavailable'); });
-  await expect(applyStudioRetention(database, review, 'Local test data', fail, now)).rejects.toThrow('R2 unavailable');
+  await expect(applyStudioRetention(database, review, 'Local test data', storage, fail, now)).rejects.toThrow('R2 unavailable');
   expect(sql.prepare("SELECT revoked_at IS NOT NULL AS closed,content_deleted_at FROM audio_projects WHERE request_id='delivered'").get())
     .toEqual({ closed: 1, content_deleted_at: null });
   expect(sql.prepare("SELECT count(*) AS total FROM audio_project_files WHERE request_id='delivered'").get()).toEqual({ total: 1 });
-  const retry = await previewStudioRetention(database, 'Local test data', new Date(now.getTime() + 1000));
-  await applyStudioRetention(database, retry, 'Local test data', async () => {}, new Date(now.getTime() + 1000));
+  const retry = await previewStudioRetention(database, 'Local test data', storage, new Date(now.getTime() + 1000));
+  await applyStudioRetention(database, retry, 'Local test data', storage, async () => {}, new Date(now.getTime() + 1000));
   expect(sql.prepare("SELECT content_deleted_at IS NOT NULL AS removed FROM audio_projects WHERE request_id='delivered'").get())
     .toEqual({ removed: 1 });
   sql.close();
@@ -88,9 +90,9 @@ it('closes eligible access before object deletion and keeps records for a safe r
 it('retains a withdrawn delivered project until its final expires, then cleans it', async () => {
   const { sql, database } = fixture();
   sql.prepare("UPDATE owner_requests SET status='withdrawn' WHERE id='delivered'").run();
-  const review = await previewStudioRetention(database, 'Local test data', now);
+  const review = await previewStudioRetention(database, 'Local test data', storage, now);
   expect(review.counts.projects).toBe(2);
-  await applyStudioRetention(database, review, 'Local test data', async () => {}, now);
+  await applyStudioRetention(database, review, 'Local test data', storage, async () => {}, now);
   expect(sql.prepare("SELECT content_deleted_at IS NOT NULL AS removed FROM audio_projects WHERE request_id='delivered'").get())
     .toEqual({ removed: 1 });
   sql.close();
@@ -99,9 +101,9 @@ it('retains a withdrawn delivered project until its final expires, then cleans i
 it.each(['accepted', 'in_progress'])('cleans a withdrawn project after work reached %s', async stage => {
   const { sql, database } = fixture();
   sql.prepare("UPDATE audio_projects SET stage=? WHERE request_id='withdrawn'").run(stage);
-  const review = await previewStudioRetention(database, 'Local test data', now);
+  const review = await previewStudioRetention(database, 'Local test data', storage, now);
   expect(review.counts.projects).toBe(2);
-  await applyStudioRetention(database, review, 'Local test data', async () => {}, now);
+  await applyStudioRetention(database, review, 'Local test data', storage, async () => {}, now);
   expect(sql.prepare("SELECT content_deleted_at IS NOT NULL AS removed FROM audio_projects WHERE request_id='withdrawn'").get())
     .toEqual({ removed: 1 });
   sql.close();
@@ -111,10 +113,10 @@ it('waits 30 days after a new unpublished draft before cleaning delivered conten
   const { sql, database } = fixture();
   sql.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,uploaded_at)
     VALUES ('recent-draft','delivered','final','studio/projects/delivered/recent-draft.mp3','New final draft','audio/mpeg',100,'2028-01-10')`).run();
-  const early = await previewStudioRetention(database, 'Local test data', now);
+  const early = await previewStudioRetention(database, 'Local test data', storage, now);
   expect(early.counts.projects).toBe(1);
   sql.prepare("UPDATE audio_project_files SET uploaded_at='2027-12-01' WHERE id='recent-draft'").run();
-  const later = await previewStudioRetention(database, 'Local test data', now);
+  const later = await previewStudioRetention(database, 'Local test data', storage, now);
   expect(later.counts.projects).toBe(2);
   sql.close();
 });
@@ -123,35 +125,61 @@ it('cleans a revoked final after its access expiry and 30 days without project a
   const { sql, database } = fixture();
   sql.prepare("UPDATE audio_project_files SET status='revoked',revoked_at='2028-01-10' WHERE id='file-delivered'").run();
   sql.prepare("UPDATE audio_projects SET stage='in_progress',updated_at='2028-01-10' WHERE request_id='delivered'").run();
-  expect((await previewStudioRetention(database, 'Local test data', now)).counts.projects).toBe(1);
+  expect((await previewStudioRetention(database, 'Local test data', storage, now)).counts.projects).toBe(1);
   sql.prepare("UPDATE audio_projects SET updated_at='2027-12-01' WHERE request_id='delivered'").run();
-  expect((await previewStudioRetention(database, 'Local test data', now)).counts.projects).toBe(2);
+  expect((await previewStudioRetention(database, 'Local test data', storage, now)).counts.projects).toBe(2);
   sql.close();
 });
 
 it('refuses changed data, wrong environment, and already applied reviews before object deletion', async () => {
   const { sql, database } = fixture();
-  const review = await previewStudioRetention(database, 'Local test data', now);
+  const review = await previewStudioRetention(database, 'Local test data', storage, now);
   const deleteObject = vi.fn(async () => {});
-  await expect(applyStudioRetention(database, review, 'Production', deleteObject, now)).rejects.toThrow('environment');
+  await expect(applyStudioRetention(database, review, 'Production', storage, deleteObject, now)).rejects.toThrow('environment');
   sql.prepare("UPDATE audio_project_files SET display_name='Changed' WHERE id='file-delivered'").run();
   // The source hash guards access-critical columns; a new file must also be detected.
   sql.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,uploaded_at)
     VALUES ('new-file','delivered','review','studio/projects/delivered/new-file.mp3','New','audio/mpeg',1,'2028-01-15')`).run();
-  await expect(applyStudioRetention(database, review, 'Local test data', deleteObject, now)).rejects.toThrow('source changed');
+  await expect(applyStudioRetention(database, review, 'Local test data', storage, deleteObject, now)).rejects.toThrow('source changed');
   expect(deleteObject).not.toHaveBeenCalled();
   sql.close();
 });
 
 it('does not discard a message added after the owner reviewed the cleanup', async () => {
   const { sql, database } = fixture();
-  const review = await previewStudioRetention(database, 'Local test data', now);
+  const review = await previewStudioRetention(database, 'Local test data', storage, now);
   sql.prepare(`INSERT INTO audio_project_messages(request_id,actor,actor_id,body,created_at)
     VALUES ('delivered','client','new-session','A late private note','2028-01-15')`).run();
   const deleteObject = vi.fn(async () => {});
-  await expect(applyStudioRetention(database, review, 'Local test data', deleteObject, now)).rejects.toThrow('source changed');
+  await expect(applyStudioRetention(database, review, 'Local test data', storage, deleteObject, now)).rejects.toThrow('source changed');
   expect(deleteObject).not.toHaveBeenCalled();
   expect(sql.prepare("SELECT revoked_at FROM audio_projects WHERE request_id='delivered'").get())
     .toEqual({ revoked_at: null });
   sql.close();
+});
+
+it('refuses a review made for another database or bucket before changing anything', async () => {
+  const { sql, database } = fixture();
+  const review = await previewStudioRetention(database, 'Local test data', storage, now);
+  const deleteObject = vi.fn(async () => {});
+  const before = sql.prepare('SELECT request_id,revoked_at FROM audio_projects ORDER BY request_id').all();
+  for (const other of [{ ...storage, bucket: 'superhuman-audio' }, { ...storage, databaseId: 'staging-music' }, { ...storage, jurisdiction: 'eu' }]) {
+    await expect(applyStudioRetention(database, review, 'Local test data', other, deleteObject, now)).rejects.toThrow('another database or bucket');
+  }
+  expect(deleteObject).not.toHaveBeenCalled();
+  expect(sql.prepare('SELECT request_id,revoked_at FROM audio_projects ORDER BY request_id').all()).toEqual(before);
+  sql.close();
+});
+
+it('reads the storage identity from the selected config and deletes from that bucket', () => {
+  const staging = studioStorageIdentity({
+    d1_databases: [{ binding: 'MUSIC_DB', database_id: 'staging-db' }],
+    r2_buckets: [{ binding: 'AUDIO', bucket_name: 'staging-audio', jurisdiction: 'eu' }],
+  });
+  expect(staging).toEqual({ accountId: null, databaseId: 'staging-db', bucket: 'staging-audio', jurisdiction: 'eu' });
+  const args = remoteObjectDeleteArgs('studio/projects/song-1/file-1.wav', staging, 'staging.json');
+  expect(args).toContain('staging-audio/studio/projects/song-1/file-1.wav');
+  expect(args.join(' ')).not.toContain('superhuman-audio');
+  expect(args.slice(args.indexOf('--jurisdiction'), args.indexOf('--jurisdiction') + 2)).toEqual(['--jurisdiction', 'eu']);
+  expect(() => studioStorageIdentity({ d1_databases: [], r2_buckets: [] })).toThrow('MUSIC_DB and AUDIO');
 });

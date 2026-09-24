@@ -65,7 +65,7 @@ A sign-in code locks after five incorrect entries. Someone who knows a client's 
 Run studio cleanup at least monthly while the portal is in use:
 
 1. Run `npm run studio:retention:preview -- --remote` and review `.private/studio-retention-review.html`. It contains counts and hashes, not client messages, email addresses, or R2 keys.
-2. Apply the exact manifest with `npm run studio:retention:apply -- --remote` within 24 hours. The command closes eligible project access before deleting private R2 objects. It then atomically clears project messages, updates, file metadata and old access records, and marks content removed.
+2. Apply the exact manifest with `npm run studio:retention:apply -- --remote` within 24 hours. The manifest records the database and R2 bucket from the selected Wrangler config (add `--config path` for another environment), and apply refuses to run against a different one. The command closes eligible project access before deleting private R2 objects. It then atomically clears project messages, updates, file metadata and old access records, and marks content removed.
 3. If R2 deletion fails, access stays closed but database content remains for recovery. Fix storage access, generate a new preview, and retry; do not manually erase the project row or remove its payment references.
 4. After studio cleanup, run the owner-retention preview and apply below to clear eligible request contact fields and Stripe references. A live or reconciling payment still blocks that step.
 
