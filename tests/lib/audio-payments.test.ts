@@ -5,6 +5,7 @@ import {
   applyStripeInvoiceEvent,
   approveAudioPayment,
   getAudioPayment,
+  paymentDefaults,
   recordInvoice,
   recoverInvoiceFromWebhook,
   reserveInvoiceCreation,
@@ -281,5 +282,20 @@ describe('audio payments', () => {
     expect(await recoverInvoiceFromWebhook(db, { ...base, installment: 'booking', totalAmountCents: 1 })).toBe('unmatched');
     expect(await recoverInvoiceFromWebhook(db, { ...base, eventId: 'evt_balance', invoiceId: 'in_balance', installment: 'balance', totalAmountCents: 10_000 })).toBe('unmatched');
     expect(sql.prepare('SELECT COUNT(*) AS total FROM stripe_unmatched_events').get()).toEqual({ total: 2 });
+  });
+});
+
+describe('payment form defaults', () => {
+  it('starts from the requested service, song title and published starting price', () => {
+    expect(paymentDefaults('vocal-mix', { title: '  PVP  ' })).toEqual({ approvedService: 'Two-track vocal mixing: PVP', totalAmount: '150.00' });
+    expect(paymentDefaults('mastering', { title: 'Old News' })).toEqual({ approvedService: 'Mastering: Old News', totalAmount: '75.00' });
+    expect(paymentDefaults('bundle', {})).toEqual({ approvedService: 'Two-track vocal mix + master', totalAmount: '200.00' });
+    expect(paymentDefaults('vocal-mix', { title: 'x'.repeat(300) }).approvedService).toHaveLength(160);
+  });
+
+  it('leaves custom and unknown requests for the owner to write', () => {
+    expect(paymentDefaults('custom', { title: 'Album' })).toEqual({ approvedService: '', totalAmount: '' });
+    expect(paymentDefaults(null, {})).toEqual({ approvedService: '', totalAmount: '' });
+    expect(paymentDefaults('unknown', { title: 'Song' })).toEqual({ approvedService: '', totalAmount: '' });
   });
 });

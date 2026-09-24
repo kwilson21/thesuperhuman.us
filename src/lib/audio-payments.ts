@@ -1,3 +1,5 @@
+import { audioOffers } from './audio-intake';
+
 export const invoiceStatuses = ['not_created', 'draft', 'open', 'paid', 'payment_failed', 'void', 'uncollectible'] as const;
 export type InvoiceStatus = typeof invoiceStatuses[number];
 export type Installment = 'booking' | 'balance';
@@ -316,4 +318,16 @@ export async function applyStripeInvoiceEvent(db: D1Database, input: {
   );
   await db.batch(statements);
   return { applied: shouldApply, payment: await getAudioPayment(db, row.request_id) };
+}
+
+/**
+ * Starting values for the Book the work form: the requested service and song title, and that
+ * service's published starting price. The owner reviews both before confirming, and terms lock
+ * once saved. Custom requests have no set name or price, so those fields start empty.
+ */
+export function paymentDefaults(serviceId: string | null | undefined, details: Record<string, unknown>): { approvedService: string; totalAmount: string } {
+  const offer = serviceId && serviceId in audioOffers ? audioOffers[serviceId as keyof typeof audioOffers] : null;
+  if (!offer?.price) return { approvedService: '', totalAmount: '' };
+  const title = typeof details.title === 'string' ? details.title.trim().replace(/\s+/g, ' ') : '';
+  return { approvedService: (title ? `${offer.name}: ${title}` : offer.name).slice(0, 160), totalAmount: offer.price.toFixed(2) };
 }
