@@ -39,6 +39,7 @@ const dueLabel = (days: number) => days > 1 ? `Due in ${days} days` : days === 1
       <span class="attention-chips">
         {item.unreadMessages > 0 && <span class="studio-pill signal">{item.unreadMessages} unread {item.unreadMessages === 1 ? 'message' : 'messages'}</span>}
         {item.failedNotices > 0 && <span class="studio-pill signal">{item.failedNotices} {item.failedNotices === 1 ? 'email' : 'emails'} to retry</span>}
+            {item.uncheckedNotices > 0 && <span class="studio-pill signal">{item.uncheckedNotices} {item.uncheckedNotices === 1 ? 'email' : 'emails'} to check delivery</span>}
         {item.dueInDays !== null && <span class:list={['studio-pill', item.dueInDays < 0 ? 'late' : 'signal']}>{dueLabel(item.dueInDays)}</span>}
       </span>
       <span class="attention-arrow" aria-hidden="true">→</span>

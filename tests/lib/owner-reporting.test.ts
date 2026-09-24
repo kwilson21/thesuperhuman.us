@@ -73,15 +73,20 @@ it('shows unread client messages, failed notices, and approaching delivery dates
     INSERT INTO audio_project_messages(request_id,actor,actor_id,body,created_at)
       VALUES ('due','client','session','Please check my files','2026-09-23');
     INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at,notification_status)
-      VALUES ('due','progress','I have an update','owner','2026-09-23','failed');`);
+      VALUES ('due','progress','I have an update','owner','2026-09-23','failed');
+    INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at,notification_status,notification_attempted_at)
+      VALUES ('quiet','progress','Timed out a day ago','owner','2026-09-22T12:00:00Z','sending','2026-09-22T12:00:00Z'),
+        ('review','progress','Still sending','owner','2026-09-23T11:59:50Z','sending','2026-09-23T11:59:50Z');`);
   const statement = (query: string, args: unknown[] = []) => ({
     bind: (...values: unknown[]) => statement(query, values),
     all: async () => ({ results: sql.prepare(query).all(...args) }),
   });
   const db = { prepare: (query: string) => statement(query) } as unknown as D1Database;
   expect(await listStudioProjectAttention(db, new Date('2026-09-23T12:00:00Z'))).toEqual([
-    { requestId: 'due', summary: 'Due song', unreadMessages: 1, failedNotices: 1, dueSoon: true, stage: 'in_progress', bookingPaid: false, dueInDays: 1 },
-    { requestId: 'late', summary: 'Late song', unreadMessages: 0, failedNotices: 0, dueSoon: true, stage: 'revision_in_progress', bookingPaid: false, dueInDays: -2 },
+    { requestId: 'due', summary: 'Due song', unreadMessages: 1, failedNotices: 1, uncheckedNotices: 0, dueSoon: true, stage: 'in_progress', bookingPaid: false, dueInDays: 1 },
+    { requestId: 'late', summary: 'Late song', unreadMessages: 0, failedNotices: 0, uncheckedNotices: 0, dueSoon: true, stage: 'revision_in_progress', bookingPaid: false, dueInDays: -2 },
+    // A notice still marked sending a day later needs a delivery check; one sent seconds ago does not.
+    { requestId: 'quiet', summary: 'Quiet song', unreadMessages: 0, failedNotices: 0, uncheckedNotices: 1, dueSoon: false, stage: 'in_progress', bookingPaid: false, dueInDays: null },
   ]);
   sql.close();
 });

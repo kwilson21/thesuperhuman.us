@@ -30,6 +30,8 @@ export type StudioProjectAttention = {
   summary: string;
   unreadMessages: number;
   failedNotices: number;
+  /** Update emails whose delivery is unconfirmed: still sending after a minute, or never attempted. */
+  uncheckedNotices: number;
   dueSoon: boolean;
   stage: string;
   bookingPaid: boolean;
@@ -55,16 +57,20 @@ export async function listStudioProjectAttention(db: D1Database, now: Date): Pro
         WHERE m.request_id=p.request_id AND m.actor='client' AND m.read_at IS NULL) AS unreadMessages,
       (SELECT COUNT(*) FROM audio_project_updates u
         WHERE u.request_id=p.request_id AND u.notification_status='failed') AS failedNotices,
+      (SELECT COUNT(*) FROM audio_project_updates u WHERE u.request_id=p.request_id
+        AND ((u.notification_status='sending' AND COALESCE(u.notification_attempted_at,u.created_at)<=?)
+          OR (u.notification_status='pending' AND u.created_at<=?))) AS uncheckedNotices,
       CASE WHEN p.current_due_at IS NOT NULL AND p.current_due_at<=?
         AND p.stage IN ('accepted','in_progress','revision_in_progress') THEN 1 ELSE 0 END AS dueSoon
     FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
     WHERE p.revoked_at IS NULL AND r.status<>'withdrawn'
   ) SELECT * FROM project_attention
-    WHERE unreadMessages>0 OR failedNotices>0 OR dueSoon=1
+    WHERE unreadMessages>0 OR failedNotices>0 OR uncheckedNotices>0 OR dueSoon=1
     ORDER BY dueSoon DESC,unreadMessages DESC,requestId`)
-    .bind(dueLimit.toISOString().slice(0, 10)).all<{
+    .bind(new Date(now.getTime() - 60_000).toISOString(), new Date(now.getTime() - 5 * 60_000).toISOString(),
+      dueLimit.toISOString().slice(0, 10)).all<{
       requestId: string; summary: string; stage: string; dueAt: string | null; bookingPaid: number;
-      unreadMessages: number; failedNotices: number; dueSoon: number;
+      unreadMessages: number; failedNotices: number; uncheckedNotices: number; dueSoon: number;
     }>();
   const day = (value: string) => Date.parse(`${value}T12:00:00Z`) / 86_400_000;
   return rows.results.map(({ dueAt, ...row }) => ({ ...row, dueSoon: Boolean(row.dueSoon), bookingPaid: Boolean(row.bookingPaid),
