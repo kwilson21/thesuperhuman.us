@@ -21,11 +21,12 @@ const invoiceProblem = (which: string, status: string, stripeEnabled: boolean): 
 /** What the owner does next to move a studio project along, or null once there is nothing left. */
 export function ownerNextStep({ stage, requestStatus, revoked, payment: pay, stripeEnabled }: NextStepInput): NextStep | null {
   if (revoked || requestStatus === 'withdrawn' || stage === 'complete') return null;
+  // Resolving an unaccepted request closes its studio (migration 0015), so only new and reviewed remain.
   if (stage === 'files_under_review') return requestStatus === 'new'
     ? { title: 'Mark the request reviewed', detail: 'Check the files and details, then use Mark reviewed under Request. That opens the Accept form.', target: '#request-heading' }
     : requestStatus === 'reviewed'
       ? { title: 'Accept the project', detail: 'Set a cautious delivery date and send the first update. The client sees both in their studio.', target: '#accept-project' }
-      : { title: 'Reopen to accept', detail: 'This request is resolved. To take it on, Reopen it under Request, then Mark reviewed.', target: '#request-heading' };
+      : null;
   if (stage === 'accepted') {
     if (!pay) return { title: 'Record the agreed terms', detail: 'Once the client accepts your written offer, confirm the service and price in Book the work.', target: payment };
     if (pay.bookingStatus === 'paid') return { title: 'Start the work', detail: 'The booking is paid. Tell the client what you are focusing on first.', target: '#start-work' };

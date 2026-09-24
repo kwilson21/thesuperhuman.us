@@ -43,10 +43,6 @@ describe('ownerNextStep', () => {
     expect(step({ stage: 'review_ready', payment: pay('paid'), stripeEnabled: false })?.detail).toContain('waits until Stripe is set up');
   });
 
-  it('sends a resolved request back through Reopen rather than to a missing Accept form', () => {
-    expect(step({ stage: 'files_under_review', requestStatus: 'resolved' })).toMatchObject({ title: 'Reopen to accept', target: '#request-heading' });
-  });
-
   it('has nothing to suggest for a closed, withdrawn or revoked project', () => {
     expect(step({ stage: 'complete' })).toBeNull();
     expect(step({ requestStatus: 'withdrawn' })).toBeNull();

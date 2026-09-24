@@ -20,9 +20,9 @@ export function setupOwnerRequestActions() {
       if (!response.ok) { status!.textContent = 'That change was not saved. Refresh and try again.'; return; }
       // A reviewed request's next step is accepting the project, so reload onto that panel.
       if (payload.action === 'review') {
-    history.scrollRestoration = 'manual';
-    history.replaceState(null, '', `${location.pathname}${location.search}#accept-project`);
-  }
+        history.scrollRestoration = 'manual';
+        history.replaceState(null, '', `${location.pathname}${location.search}#accept-project`);
+      }
       location.reload();
     } catch { status!.textContent = 'Connection lost. The change may not have been saved. Refresh before trying again.'; }
   }
