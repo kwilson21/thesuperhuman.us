@@ -21,7 +21,7 @@ describe('ownerNextStep', () => {
   });
 
   it('says plainly that the booking cannot be paid while Stripe is off', () => {
-    expect(step({ payment: pay('not_created'), stripeEnabled: false })).toMatchObject({ title: 'Waiting on booking payments', waiting: true });
+    expect(step({ payment: pay('not_created'), stripeEnabled: false })).toMatchObject({ title: 'Record the booking payment', target: '#record-booking-payment', action: 'Record booking received' });
   });
 
   it('leads from reviews to the final delivery and close', () => {
@@ -41,7 +41,7 @@ describe('ownerNextStep', () => {
     expect(step({ stage: 'review_ready', payment: pay('paid', 'payment_failed') })).toMatchObject({ title: 'Sort out the balance invoice' });
     expect(step({ stage: 'review_ready', payment: pay('paid', 'uncollectible') })).toMatchObject({ title: 'Sort out the balance invoice' });
     expect(step({ stage: 'review_ready', payment: { ...pay('paid'), balanceCreationStartedAt: '2026-09-24T12:00:00Z' } })).toMatchObject({ title: 'Check the invoice in Stripe' });
-    expect(step({ stage: 'review_ready', payment: pay('paid'), stripeEnabled: false })?.detail).toContain('waits until Stripe is set up');
+    expect(step({ stage: 'review_ready', payment: pay('paid'), stripeEnabled: false })?.detail).toContain('collect the balance another way');
   });
 
   it('has nothing to suggest for a closed, withdrawn or revoked project', () => {
@@ -59,9 +59,11 @@ describe('ownerNextStep', () => {
       const next = step({ stage, requestStatus, payment, stripeEnabled });
       if (!next) continue;
       // The link names the control it lands on, so its label is text the page shows.
-      const label = next.action!.replace(/^Create replacement (booking|balance) invoice$/, 'Create replacement {replaceAction} invoice');
+      const label = next.action!.replace(/^Create replacement (booking|balance) invoice$/, 'Create replacement {replaceAction} invoice')
+        .replace(/^Record (booking|balance) received$/, 'Record {manual} received');
       expect(next.target === '#payment-heading' || next.target === '#project-messages-heading' || page.includes(label), `${next.title}: ${label}`).toBe(true);
-      expect(page, next.target).toMatch(new RegExp(`id="${next.target!.slice(1)}"|'${next.target!.slice(1)}'`));
+      const id = next.target!.slice(1).replace(/^record-(booking|balance)-payment$/, 'record-${manual}-payment');
+      expect(page.includes(`id="${id}"`) || page.includes(`'${id}'`) || page.includes(`\`${id}\``), next.target).toBe(true);
     }
   });
 });

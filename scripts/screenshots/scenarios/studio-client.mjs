@@ -1,7 +1,7 @@
 // A studio project from request to first review and back out again (revoking the review, then
-// closing access), through the owner's real routes. Seeds only what
-// needs an outside service: the request (Turnstile intake), the paid booking (a Stripe webhook),
-// the client's session and message (an emailed code). Client notices fail without a Resend key.
+// closing access), through the owner's real routes, including terms and a booking paid outside
+// Stripe. Seeds only what needs an outside service: the request (Turnstile intake) and the
+// client's session and message (an emailed code). Client notices fail without a Resend key.
 import { createHash } from 'node:crypto';
 
 const at = '2026-09-22T12:00:00.000Z';
@@ -36,8 +36,6 @@ export default {
     sql(`INSERT OR IGNORE INTO owner_requests(id,kind,service_id,name,email,city_region,summary,details_json,status,private_note,created_at,updated_at)
       VALUES ('${id}','service','vocal-mix','Studio Client','${email}','Richmond, VA','Sample Song · Two-track vocal mixing',
       '{"title":"Sample Song","direction":"judgment"}','new','','${at}','${at}')`);
-    sql(`INSERT OR IGNORE INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
-      offer_accepted_at,booking_status,created_at,updated_at) VALUES ('${id}','Two-track vocal mixing',15000,7500,7500,'${at}','paid','${at}','${at}')`);
     sql(`INSERT OR IGNORE INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at)
       VALUES ('${createHash('sha256').update(token).digest('hex')}','${email}','${at}','2099-01-01T00:00:00.000Z','${at}')`);
     const cookie = { name: 'studio_session', value: token };
@@ -55,6 +53,9 @@ export default {
     steps.push(await shots('Request reviewed and ready to accept', `/owner/requests/${id}`, 'studio-01-owner-reviewed', { owner: true }));
 
     await ownerFetch(`${project}/updates`, { action: 'accept', dueDate: day(10), body: 'Thanks for sending this. I will start with the lead vocal and keep the arrangement as it is.' });
+    await ownerFetch(`/api/owner/requests/${id}/payment`, { action: 'approve', approvedService: 'Two-track vocal mixing: Sample Song', totalAmountCents: 15000, offerAccepted: true });
+    steps.push(await shots('Terms confirmed: record the booking paid outside Stripe', `/owner/requests/${id}`, 'studio-01b-owner-booking', { owner: true }));
+    await ownerFetch(`/api/owner/requests/${id}/payment`, { action: 'record-payment-received', installment: 'booking', method: 'Zelle', received: true });
     await ownerFetch(`${project}/updates`, { action: 'start_work', body: 'Working on the lead vocal balance and de-essing first.' });
     await ownerFetch(`${project}/updates`, { action: 'revise_date', dueDate: day(14), reason: 'client_clarification', body: 'Moving the date while I wait on the alternate chorus take you mentioned.' });
     sql(`INSERT INTO audio_project_messages(request_id,actor,actor_id,body,created_at)
