@@ -55,7 +55,7 @@ const moved = project?.original_due_at && project.current_due_at && project.orig
     </div>
     {paymentDue && <section class="studio-pay" aria-labelledby="studio-pay-heading">
       <div><p class="studio-kicker">Payment</p><h2 id="studio-pay-heading">{paymentDue.installment === 'booking' ? 'Your booking invoice is ready' : 'Your remaining balance is ready'}</h2>
-        <p>{paymentDue.installment === 'booking' ? 'Paying it books your song, and work starts once it clears.' : 'Once it clears, your final files are released here.'} Payment is handled securely by Stripe.</p></div>
+        <p>{paymentDue.installment === 'booking' ? 'Paying it books your song, and work starts once it clears.' : 'Your final files are released here after it clears.'} Payment is handled securely by Stripe.</p></div>
       <a class="studio-button" href={paymentDue.href} target="_blank" rel="noopener noreferrer">Pay {money(paymentDue.amountCents)} <span aria-hidden="true">↗</span></a>
     </section>}
     {files.length > 0 && <section class="studio-files" aria-labelledby="studio-files-heading"><h2 id="studio-files-heading" class="studio-kicker">Listen</h2>
