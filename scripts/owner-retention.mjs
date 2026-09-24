@@ -13,9 +13,14 @@ const terminalPaymentStatuses = "'paid','void'";
 const unstartedPaymentInstallment = installment => `(${installment}_status='not_created'
   AND ${installment}_invoice_id IS NULL AND ${installment}_creation_started_at IS NULL)`;
 const finishedBookingInstallment = `(booking_status IN (${terminalPaymentStatuses}) OR ${unstartedPaymentInstallment('booking')})`;
-const finishedBalanceInstallment = `(balance_status IN (${terminalPaymentStatuses})
-  OR (${unstartedPaymentInstallment('balance')} AND booking_status<>'paid'))`;
-export const finishedPaymentTerms = `${finishedBookingInstallment} AND ${finishedBalanceInstallment}`;
+// A balance never started is finished when the booking was not paid, or when the client stopped
+// the project after the last revision round (no balance is due then; migration 0018).
+const clientStopped = table => `EXISTS(SELECT 1 FROM audio_project_messages stop
+  WHERE stop.request_id=${table}.request_id AND stop.review_decision='stopped')`;
+const finishedBalanceInstallment = table => `(balance_status IN (${terminalPaymentStatuses})
+  OR (${unstartedPaymentInstallment('balance')} AND (booking_status<>'paid' OR ${clientStopped(table)})))`;
+/** Payment terms with nothing left to collect or reconcile, for the audio_payments row named `table`. */
+export const finishedPaymentTerms = (table = 'audio_payments') => `${finishedBookingInstallment} AND ${finishedBalanceInstallment(table)}`;
 const requestEligibility = (now, paymentGuard = '1', portalGuard = '1', portalCompleted = '0') => `(status='withdrawn' OR (contact_delete_after IS NOT NULL AND contact_delete_after<=${quote(now.toISOString())})
   OR (status='resolved' AND kind<>'service' AND resolved_at<${quote(dayCutoff(now, 90))})
   OR (status='resolved' AND kind='service' AND resolved_at<${quote(dayCutoff(now, 365))})
@@ -36,7 +41,7 @@ async function paymentRetentionGuard(database) {
   const tables = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='audio_payments'");
   if (!tables.length) return '1';
   return `NOT EXISTS (SELECT 1 FROM audio_payments AS payment WHERE payment.request_id=owner_requests.id
-    AND NOT (${finishedPaymentTerms}))`;
+    AND NOT (${finishedPaymentTerms('payment')}))`;
 }
 
 async function portalRetentionGuard(database) {
@@ -118,7 +123,7 @@ export async function applyOwnerRetention(database, review, environment, now = n
       booking_creation_started_at=NULL,balance_creation_started_at=NULL,
       external_refs_deleted_at=${quote(now.toISOString())},updated_at=${quote(now.toISOString())}
       WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})
-        AND ${finishedPaymentTerms}`,
+        AND ${finishedPaymentTerms()}`,
   ] : [];
   const guard = (query, expected) => `SELECT CASE WHEN (${query})=${quote(expected)} THEN 1 ELSE json_extract('retention source changed','$') END`;
   const runId = hash(`${review.generatedAt}:${review.requestSourceHash}:${review.playbackSourceHash}`);

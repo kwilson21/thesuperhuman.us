@@ -183,3 +183,17 @@ it('reads the storage identity from the selected config and deletes from that bu
   expect(args.slice(args.indexOf('--jurisdiction'), args.indexOf('--jurisdiction') + 2)).toEqual(['--jurisdiction', 'eu']);
   expect(() => studioStorageIdentity({ d1_databases: [], r2_buckets: [] })).toThrow('MUSIC_DB and AUDIO');
 });
+
+it('cleans a resolved project the client stopped, but keeps a paid booking still owed a balance', async () => {
+  const { sql, database } = fixture();
+  // The active project is now resolved long ago, with a paid booking and no balance invoice.
+  sql.exec(`UPDATE owner_requests SET status='resolved',resolved_at='2027-11-01',updated_at='2027-11-01' WHERE id='active';
+    UPDATE audio_projects SET stage='review_ready',revoked_at='2027-11-01' WHERE request_id='active';
+    UPDATE audio_project_files SET published_at='2027-10-15',uploaded_at='2027-10-15' WHERE id='file-active';
+    UPDATE audio_project_messages SET created_at='2027-10-20' WHERE request_id='active';`);
+  expect((await previewStudioRetention(database, 'Local test data', storage, now)).counts.projects).toBe(2);
+  // The client stopped after the last round, so no balance is due and the project can be cleaned.
+  sql.exec(`INSERT INTO audio_project_messages(request_id,actor,actor_id,body,created_at,review_decision)
+    VALUES ('active','client','active-session','I’m stopping the project here.','2027-10-25','stopped')`);
+  expect((await previewStudioRetention(database, 'Local test data', storage, now)).counts.projects).toBe(3);
+});

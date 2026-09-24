@@ -25,7 +25,7 @@ export function studioRetentionProjectPredicate(now) {
       AND NOT EXISTS(SELECT 1 FROM audio_project_files f WHERE f.request_id=p.request_id
         AND f.version='final' AND f.published_at IS NOT NULL)
       AND NOT EXISTS(SELECT 1 FROM audio_payments pay WHERE pay.request_id=p.request_id
-        AND NOT (${finishedPaymentTerms})))
+        AND NOT (${finishedPaymentTerms('pay')})))
       OR ((p.stage IN ('final_files_ready','complete') OR (p.stage='in_progress'
           AND EXISTS(SELECT 1 FROM audio_project_files f WHERE f.request_id=p.request_id
             AND f.version='final' AND f.status='revoked')
