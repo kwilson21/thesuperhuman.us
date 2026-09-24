@@ -111,6 +111,11 @@ export async function finishProjectUpload(db: D1Database, bucket: R2Bucket, uplo
   return 'saved';
 }
 
+/** R2 reports an upload it no longer has as error 10024, "The specified multipart upload does not exist." */
+export function multipartUploadGone(error: unknown): boolean {
+  return error instanceof Error && /\b10024\b|multipart upload does not exist/i.test(error.message);
+}
+
 export async function abortProjectUpload(db: D1Database, bucket: R2Bucket, upload: ProjectUpload): Promise<void> {
   const discarding = await db.prepare(`UPDATE audio_project_uploads SET state='discarding'
     WHERE id=? AND request_id=? AND NOT EXISTS(SELECT 1 FROM audio_project_files WHERE id=?) RETURNING id`)
@@ -125,8 +130,10 @@ export async function abortProjectUpload(db: D1Database, bucket: R2Bucket, uploa
   else {
     try { await bucket.resumeMultipartUpload(upload.object_key, upload.upload_id).abort(); }
     catch (error) {
-      if (!await bucket.head(upload.object_key)) throw error;
-      await bucket.delete(upload.object_key);
+      if (await bucket.head(upload.object_key)) await bucket.delete(upload.object_key);
+      // R2 already dropped the upload (an earlier abort or its incomplete-upload lifecycle),
+      // so there is nothing left to clean. Any other failure stays retryable.
+      else if (!multipartUploadGone(error)) throw error;
     }
   }
   await db.prepare(`DELETE FROM audio_project_uploads WHERE id=? AND request_id=? AND state='discarding'

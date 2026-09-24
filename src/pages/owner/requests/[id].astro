@@ -84,7 +84,7 @@ const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') 
         <form class="rail-note" data-request-note><label class="visually-hidden" for="owner-private-note">Private note</label><textarea class="studio-textarea" id="owner-private-note" name="note" maxlength="1000" rows="3" placeholder="A note for yourself…">{request.privateNote}</textarea><button type="submit" class="studio-quiet">Save note</button></form>
       </section>
       {allowed.length > 0 && <section class="rail-section" aria-labelledby="request-heading"><h2 id="request-heading">Request</h2>
-        <div class="rail-actions" data-request-actions>{allowed.map(action => <button type="button" data-action={action} class:list={{ danger: action === 'withdraw' }}>{action === 'review' ? 'Mark reviewed' : action === 'resolve' ? 'Mark resolved' : action === 'reopen' ? 'Reopen' : 'Honor withdrawal'}</button>)}</div>
+        <div class="rail-actions" data-request-actions data-open-studio={portalProject && portalProject.stage === 'files_under_review' && !portalProject.revoked_at ? 'true' : undefined}>{allowed.map(action => <button type="button" data-action={action} class:list={{ danger: action === 'withdraw' }}>{action === 'review' ? 'Mark reviewed' : action === 'resolve' ? 'Mark resolved' : action === 'reopen' ? 'Reopen' : 'Honor withdrawal'}</button>)}</div>
       </section>}
       <p class="studio-status" data-action-status aria-live="polite"></p>
       <details class="rail-section rail-activity"><summary><span>Activity</span><span>{audit.length} {audit.length === 1 ? 'entry' : 'entries'}</span></summary>

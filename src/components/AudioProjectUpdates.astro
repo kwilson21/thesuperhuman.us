@@ -56,6 +56,7 @@ const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month
   </ol> : <p class="project-updates-empty">No progress updates yet.</p>}
 
   {owner && active && <div class="project-update-actions">
+    {stage === 'files_under_review' && requestStatus === 'new' && <p class="project-update-hint">Mark the request reviewed to accept the project and set its delivery date.</p>}
     {stage === 'files_under_review' && requestStatus === 'reviewed' && <form class="panel" data-project-update-form data-action="accept">
       <h3>Accept the project</h3><p>Set a cautious delivery date and tell the client what happens next.</p>
       <label class="studio-field">Expected by <input class="studio-input" type="date" name="dueDate" min={today} required /></label>
@@ -132,4 +133,5 @@ const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month
   .panel { display: grid; align-content: start; gap: .9rem; padding: 1.4rem; border: 1px solid var(--rule); border-radius: 2px; background: color-mix(in srgb, var(--studio-field) 60%, var(--paper)); }
   h3 { margin: 0; font: 400 1.5rem/1.15 Newsreader, Georgia, serif; }
   .panel > p:not(.studio-status) { margin: -.4rem 0 0; color: var(--studio-muted); font: .85rem/1.5 Inter, sans-serif; }
+  .project-update-hint { grid-column: 1 / -1; margin: 0; color: var(--studio-muted); font: .9rem/1.5 Inter, sans-serif; }
 </style>

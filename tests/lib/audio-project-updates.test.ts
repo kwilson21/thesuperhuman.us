@@ -167,4 +167,22 @@ describe('project updates', () => {
     expect(await queueProjectNoticeForDelivery(db, 'song-1', update.id)).toBe(false);
     sql.close();
   });
+  it('takes a revision on a booked request the owner marked resolved, but not a withdrawn one', async () => {
+    const { sql, db } = fixture();
+    sql.prepare(`INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
+      offer_accepted_at,booking_status,balance_status,created_at,updated_at)
+      VALUES ('song-1','Two-track vocal mix',20000,10000,10000,?,'paid','open',?,?)`)
+      .run(now.toISOString(), now.toISOString(), now.toISOString());
+    sql.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,status,uploaded_at,published_at)
+      VALUES ('review-1','song-1','review','studio/projects/song-1/review-1.mp3','Review','audio/mpeg',5,'published',?,?)`)
+      .run(now.toISOString(), now.toISOString());
+    sql.prepare("UPDATE audio_projects SET stage='review_ready' WHERE request_id='song-1'").run();
+    const revision = { action: 'begin_revision' as const, body: 'I heard your notes and am revising the vocal balance.' };
+    sql.prepare("UPDATE owner_requests SET status='withdrawn' WHERE id='song-1'").run();
+    expect(await saveProjectUpdate(db, 'song-1', 'owner@example.com', revision, now)).toBeNull();
+    sql.prepare("UPDATE owner_requests SET status='resolved' WHERE id='song-1'").run();
+    expect(await saveProjectUpdate(db, 'song-1', 'owner@example.com', revision, now)).toMatchObject({ kind: 'progress' });
+    expect(sql.prepare("SELECT stage FROM audio_projects WHERE request_id='song-1'").get()).toEqual({ stage: 'revision_in_progress' });
+    sql.close();
+  });
 });

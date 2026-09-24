@@ -54,9 +54,15 @@ export async function sendAudioMessage({ payload, apiKey }: { payload: { from: s
   }
 }
 
-export async function sendStudioSignInNotice(apiKey: string, from: string, to: string, subject: string): Promise<{ ok: boolean; uncertain?: boolean }> {
+const noticeIntro = {
+  invitation: 'Your private audio project is ready. Follow its progress and send messages there.',
+  update: 'There is an update to your private audio project.',
+};
+
+export async function sendStudioSignInNotice(apiKey: string, from: string, to: string, subject: string,
+  kind: keyof typeof noticeIntro = 'update'): Promise<{ ok: boolean; uncertain?: boolean }> {
   return sendAudioMessage({ apiKey, payload: {
     from, to: [to], subject,
-    text: 'There is an update to your private audio project. Sign in to see it: https://thesuperhuman.us/studio/sign-in',
+    text: `${noticeIntro[kind]} Sign in to see it: https://thesuperhuman.us/studio/sign-in`,
   } });
 }
