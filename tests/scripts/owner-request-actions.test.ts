@@ -17,3 +17,31 @@ it('binds only request status buttons, not project update forms that share data-
   setupOwnerRequestActions();
   expect(bound).toEqual(['resolve button']);
 });
+
+it('asks before resolving a request whose provisional studio is still open', async () => {
+  const handlers: Record<string, () => void> = {};
+  const button = (action: string, openStudio: boolean) => ({
+    dataset: { action },
+    closest: (selector: string) => selector === '[data-open-studio]' && openStudio ? {} : null,
+    addEventListener: (_: string, handler: () => void) => { handlers[`${action}-${openStudio}`] = handler; },
+  });
+  const fetch = vi.fn(async () => ({ ok: true }));
+  const confirm = vi.fn(() => false);
+  vi.stubGlobal('fetch', fetch);
+  vi.stubGlobal('confirm', confirm);
+  vi.stubGlobal('location', { reload: () => {} });
+  const buttons = [button('resolve', true), button('resolve', false)];
+  vi.stubGlobal('document', {
+    querySelector: (selector: string) => selector === '[data-request-id]' ? { dataset: { requestId: 'song-1' } }
+      : selector === '[data-action-status]' ? { textContent: '' } : null,
+    querySelectorAll: () => buttons,
+  });
+  setupOwnerRequestActions();
+  handlers['resolve-true']();
+  expect(confirm).toHaveBeenCalledTimes(1);
+  expect(fetch).not.toHaveBeenCalled();
+  handlers['resolve-false']();
+  await Promise.resolve();
+  expect(confirm).toHaveBeenCalledTimes(1);
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
