@@ -48,14 +48,6 @@ export const experience = [
     context: ['Built per-state Dagster pipelines ingesting medical-board data from SFTP feeds, REST APIs, and Selenium-driven web sources. Applied credentialing logic for multiple states, including North Carolina, and contributed to the early transition from legacy Python connectors to per-state pipelines.'],
   },
   {
-    id: 'faith-church', company: 'Faith Church', companyHref: 'https://lifeatfaith.tv/', role: 'Live Sound Engineer',
-    dates: '2022–2025', location: 'Houston, Texas',
-    outcome: 'Live sound at Faith Church for three years.',
-    context: [
-      'Worked on Allen & Heath SQ-6 and SQ-5 consoles, mixing three to four vocalists, electric guitar, drums, bass, keys, and a synth/backing track.',
-    ],
-  },
-  {
     id: 'sure', company: 'Sure', role: 'Software Engineer',
     dates: 'December 2023 – February 2025', location: 'Remote',
     outcome: 'Backend engineering for Toggle homeowners insurance.',
@@ -63,6 +55,14 @@ export const experience = [
       'Added document types to the insurance pipeline, adapting HTML and CSS to carrier reference PDFs and generating application documents with Jinja.',
       'Stored documents in S3 with versioned metadata in MongoDB, and maintained document generation in Django and third-party carrier integrations.',
       'The role ended in a company-wide layoff in early 2025.',
+    ],
+  },
+  {
+    id: 'faith-church', company: 'Faith Church', companyHref: 'https://lifeatfaith.tv/', role: 'Live Sound Engineer',
+    dates: '2022–2025', location: 'Houston, Texas',
+    outcome: 'Live sound at Faith Church for three years.',
+    context: [
+      'Worked on Allen & Heath SQ-6 and SQ-5 consoles, mixing three to four vocalists, electric guitar, drums, bass, keys, and a synth/backing track.',
     ],
   },
   {
