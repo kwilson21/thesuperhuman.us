@@ -58,7 +58,9 @@ describe('ownerNextStep', () => {
     for (const stage of stages) for (const requestStatus of ['new', 'reviewed']) for (const payment of payments) for (const stripeEnabled of [true, false]) {
       const next = step({ stage, requestStatus, payment, stripeEnabled });
       if (!next) continue;
-      expect(next.action, next.title).toBeTruthy();
+      // The link names the control it lands on, so its label is text the page shows.
+      const label = next.action!.replace(/^Create replacement (booking|balance) invoice$/, 'Create replacement {replaceAction} invoice');
+      expect(next.target === '#payment-heading' || next.target === '#project-messages-heading' || page.includes(label), `${next.title}: ${label}`).toBe(true);
       expect(page, next.target).toMatch(new RegExp(`id="${next.target!.slice(1)}"|'${next.target!.slice(1)}'`));
     }
   });

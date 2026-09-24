@@ -36,11 +36,11 @@ export function ownerNextStep({ stage, requestStatus, revoked, payment: pay, str
     if (pay.bookingStatus === 'draft' || pay.bookingStatus === 'open') return { title: 'Waiting on the booking payment', detail: 'Work unlocks when Stripe confirms the client paid. Nothing to do until then.', target: payment, action: 'See the booking status', waiting: true };
     return invoiceProblem('booking', pay.bookingStatus, stripeEnabled);
   }
-  if (stage === 'in_progress') return { title: 'Share a review mix', detail: 'Upload the mix under Review and delivery as a review version, then publish it. The client is emailed a link to listen.', target: upload, action: 'Upload a file' };
-  if (stage === 'revision_in_progress') return { title: 'Share the revised mix', detail: 'Upload the revision as a review version and publish it with a note on what changed.', target: upload, action: 'Upload a file' };
+  if (stage === 'in_progress') return { title: 'Share a review mix', detail: 'Upload the mix under Review and delivery as a review version, then publish it. The client is emailed a link to listen.', target: upload, action: 'Upload file' };
+  if (stage === 'revision_in_progress') return { title: 'Share the revised mix', detail: 'Upload the revision as a review version and publish it with a note on what changed.', target: upload, action: 'Upload file' };
   if (stage === 'review_ready') {
     const balance = pay?.balanceStatus ?? 'not_created';
-    if (balance === 'paid') return { title: 'Deliver the final files', detail: 'The balance is paid. Upload the final version under Review and delivery and publish it.', target: upload, action: 'Upload a file' };
+    if (balance === 'paid') return { title: 'Deliver the final files', detail: 'The balance is paid. Upload the final file under Review and delivery with Version set to Final, then publish it.', target: upload, action: 'Upload file' };
     if (balance === 'not_created') return pay?.balanceCreationStartedAt ? reconciling
       : { title: 'Wait for notes, then revise or finish', detail: stripeEnabled
         ? 'If the client asks for changes, begin a revision. If they approve the mix, create the balance invoice in Book the work; the final can be shared once it is paid.'

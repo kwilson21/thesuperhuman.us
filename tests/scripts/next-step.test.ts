@@ -30,3 +30,20 @@ it('jumps to the named control, highlights it and focuses the field that comes f
   vi.advanceTimersByTime(4000);
   expect(classes.has('next-step-target')).toBe(false);
 });
+
+it('highlights the whole section for a heading and focuses nothing in it', () => {
+  let click: (event: { preventDefault: () => void }) => void = () => {};
+  const classes = new Set<string>();
+  const section = { scrollIntoView: vi.fn(), classList: { add: (name: string) => classes.add(name), remove: (name: string) => classes.delete(name) } };
+  const heading = { matches: (selector: string) => selector === 'h2, h3', closest: () => section, querySelector: () => null };
+  vi.stubGlobal('matchMedia', () => ({ matches: true }));
+  vi.stubGlobal('document', {
+    querySelector: () => ({ hash: '#payment-heading', addEventListener: (_: string, handler: typeof click) => { click = handler; } }),
+    getElementById: () => heading,
+    querySelectorAll: () => [],
+  });
+  setupNextStep();
+  click({ preventDefault: () => {} });
+  expect(section.scrollIntoView).toHaveBeenCalledWith({ block: 'center', behavior: 'auto' });
+  expect(classes.has('next-step-target')).toBe(true);
+});

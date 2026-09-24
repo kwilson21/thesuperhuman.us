@@ -1,4 +1,6 @@
 /** The Next step link jumps to the control it names, highlights it and focuses it. */
+let clearTimer: ReturnType<typeof setTimeout> | undefined;
+
 export function setupNextStep() {
   const link = document.querySelector<HTMLAnchorElement>('[data-next-step-link]');
   link?.addEventListener('click', event => {
@@ -15,6 +17,7 @@ export function setupNextStep() {
     focus?.focus({ preventScroll: true });
     document.querySelectorAll('.next-step-target').forEach(element => element.classList.remove('next-step-target'));
     highlight.classList.add('next-step-target');
-    setTimeout(() => highlight.classList.remove('next-step-target'), 4000);
+    clearTimeout(clearTimer);
+    clearTimer = setTimeout(() => highlight.classList.remove('next-step-target'), 4000);
   });
 }
