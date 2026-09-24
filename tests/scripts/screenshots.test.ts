@@ -110,7 +110,13 @@ describe('screenshot coverage', () => {
       { name: 'audio', path: '/audio' }, { name: 'audio-portfolio', path: '/audio/portfolio' },
       { name: 'audio-releases', path: '/audio/releases' }, { name: 'audio-services', path: '/audio/services' },
       { name: 'audio-start', path: '/audio/start' }, { name: 'music-old-news', path: '/music/old-news' }, { name: 'services', path: '/services' },
-    ], scenarios: [] };
+      { name: 'building-personal-website', path: '/building/personal-website' }, { name: 'owner-today', path: '/owner' },
+      { name: 'owner-requests', path: '/owner/requests' }, { name: 'owner-campaigns', path: '/owner/campaigns' },
+      { name: 'studio-sign-in', path: '/studio/sign-in' },
+    ], scenarios: [
+      { name: 'owner-details', title: 'Owner details', steps: [{ title: 'Request', images: [{ file: 'owner.png', caption: 'Owner' }] }] },
+      { name: 'studio-client', title: 'Studio', steps: [{ title: 'Project', images: [{ file: 'studio.png', caption: 'Studio' }] }] },
+    ] };
     expect(relevantScreenshots(manifest, ['src/data/profile.ts']).pages.map((page: { name: string }) => page.name))
       .toEqual(['home', 'work', 'about']);
     expect(relevantScreenshots(manifest, ['src/content/pages/about.md']).pages.map((page: { name: string }) => page.name))
@@ -128,7 +134,25 @@ describe('screenshot coverage', () => {
     expect(relevantScreenshots(manifest, ['src/styles/music-premiere.css']).pages.map((page: { name: string }) => page.name))
       .toEqual(['music-old-news']);
     expect(relevantScreenshots(manifest, ['src/content/releases/old-news-single.json']).pages.map((page: { name: string }) => page.name))
-      .toEqual(['audio', 'audio-portfolio', 'audio-releases', 'audio-services', 'music-old-news']);
+      .toEqual(['audio-portfolio', 'audio-releases', 'music-old-news']);
+    expect(relevantScreenshots(manifest, ['src/content/recordings/old-news-recording.json']).pages.map((page: { name: string }) => page.name))
+      .toEqual(['audio-portfolio', 'audio-releases', 'audio-services', 'music-old-news']);
+    expect(relevantScreenshots(manifest, ['src/content/audio-examples/old-news-mastering.json']).pages.map((page: { name: string }) => page.name))
+      .toEqual(['audio-portfolio', 'audio-services']);
+    expect(relevantScreenshots(manifest, ['src/content/audio-tracks/demo.json']).pages.map((page: { name: string }) => page.name))
+      .toEqual(['audio']);
+    expect(relevantScreenshots(manifest, ['src/styles/music.css']).pages.map((page: { name: string }) => page.name))
+      .toEqual(['audio-portfolio', 'audio-releases', 'audio-services', 'music-old-news']);
+    expect(relevantScreenshots(manifest, ['src/styles/project-journal.css']).pages.map((page: { name: string }) => page.name))
+      .toEqual(['building-personal-website']);
+    expect(relevantScreenshots(manifest, ['src/styles/owner.css']).pages.map((page: { name: string }) => page.name))
+      .toEqual(['owner-today', 'owner-requests', 'owner-campaigns']);
+    expect(relevantScreenshots(manifest, ['src/styles/owner.css']).scenarios.map((scenario: { name: string }) => scenario.name))
+      .toEqual(['owner-details']);
+    expect(relevantScreenshots(manifest, ['src/styles/studio.css']).pages.map((page: { name: string }) => page.name))
+      .toEqual(['studio-sign-in']);
+    expect(relevantScreenshots(manifest, ['src/styles/studio.css']).scenarios.map((scenario: { name: string }) => scenario.name))
+      .toEqual(['studio-client']);
   });
 
   it('includes a seeded scenario only when one of its routes changed', () => {

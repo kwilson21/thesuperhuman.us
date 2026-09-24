@@ -53,8 +53,10 @@ export const SCENARIO_PAGES = {
 const SHARED_SITE_PAGES = ['home', 'work', 'audio', 'services', 'audio-services'];
 const AUDIO_SHELL_PAGES = ['audio', 'audio-about', 'audio-portfolio', 'audio-releases', 'audio-services', 'audio-start', 'music-old-news'];
 const AUDIO_NAV_PAGES = AUDIO_SHELL_PAGES.filter(name => name !== 'audio-start');
-const MUSIC_CATALOG_PAGES = ['audio', 'audio-portfolio', 'audio-releases', 'audio-services', 'music-old-news'];
+const MUSIC_CATALOG_PAGES = ['audio-portfolio', 'audio-releases', 'audio-services', 'music-old-news'];
 const MUSIC_HUB_PAGES = ['audio-portfolio', 'audio-releases', 'audio-services'];
+const PROJECT_STORY_PAGES = ['building-personal-website', 'building-kaillera-next', 'building-tally', 'building-threadline', 'building-the-engineers-daily'];
+const OWNER_PAGES = ['owner-today', 'owner-requests', 'owner-campaigns'];
 const PAGE_NAMES_BY_FILE = {
   'src/components/SiteNav.astro': SHARED_SITE_PAGES,
   'src/components/Footer.astro': SHARED_SITE_PAGES,
@@ -71,6 +73,9 @@ const PAGE_NAMES_BY_FILE = {
   'src/styles/music.css': MUSIC_CATALOG_PAGES,
   'src/styles/music-hubs.css': MUSIC_HUB_PAGES,
   'src/styles/music-premiere.css': ['music-old-news'],
+  'src/styles/project-journal.css': PROJECT_STORY_PAGES,
+  'src/styles/owner.css': OWNER_PAGES,
+  'src/styles/studio.css': ['studio-sign-in'],
   'src/content/pages/ai-gives-you-speed.md': ['writing-ai-gives-you-speed'],
   'src/components/audio/AudioHero.astro': ['audio'],
   'src/components/audio/AudioFooter.astro': AUDIO_SHELL_PAGES,
@@ -84,6 +89,10 @@ const PAGE_NAMES_BY_FILE = {
   'src/components/audio/LyricVideo.astro': ['music-old-news'],
   'src/components/audio/ReleaseInterest.astro': ['music-old-news'],
   'src/components/audio/AudioPlayer.astro': ['audio-releases', 'music-old-news'],
+};
+const SCENARIO_NAMES_BY_FILE = {
+  'src/styles/owner.css': ['owner-details'],
+  'src/styles/studio.css': ['studio-client'],
 };
 
 function routeForPageFile(file) {
@@ -101,6 +110,7 @@ export function relevantScreenshots(manifest, changedFiles) {
 
   for (const file of files) {
     for (const name of (Object.hasOwn(PAGE_NAMES_BY_FILE, file) ? PAGE_NAMES_BY_FILE[file] : [])) pageNames.add(name);
+    for (const name of (Object.hasOwn(SCENARIO_NAMES_BY_FILE, file) ? SCENARIO_NAMES_BY_FILE[file] : [])) scenarioNames.add(name);
 
     const scenario = Object.hasOwn(SCENARIO_PAGES, file) ? SCENARIO_PAGES[file] : null;
     if (scenario) scenarioNames.add(scenario.scenario);
@@ -114,9 +124,15 @@ export function relevantScreenshots(manifest, changedFiles) {
       }
     }
 
-    if (file.startsWith('src/content/releases/') || file.startsWith('src/content/recordings/')
-      || file.startsWith('src/content/audio-examples/')) {
+    if (file.startsWith('src/content/releases/')) {
+      for (const name of ['audio-portfolio', 'audio-releases', 'music-old-news']) pageNames.add(name);
+    }
+    if (file.startsWith('src/content/audio-tracks/')) pageNames.add('audio');
+    if (file.startsWith('src/content/recordings/')) {
       for (const name of MUSIC_CATALOG_PAGES) pageNames.add(name);
+    }
+    if (file.startsWith('src/content/audio-examples/')) {
+      for (const name of ['audio-portfolio', 'audio-services']) pageNames.add(name);
     }
   }
 
