@@ -4,6 +4,7 @@ import { clientPortalEnabled, discardUndeliveredCode, issueClientCode, normalize
 import { sendAudioMessage } from '~/lib/audio-resend';
 import { musicRequest } from '~/lib/music-request';
 import { verifyTurnstile } from '~/lib/turnstile';
+import { studioCodeEmail } from '~/lib/client-emails';
 
 export const prerender = false;
 const inputSchema = z.object({ email: z.string().max(320), turnstileToken: z.string().min(1).max(2048) });
@@ -30,8 +31,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const code = await issueClientCode(env.MUSIC_DB, email, env.AUDIO_CLIENT_CODE_KEY);
     if (code) locals.runtime.ctx.waitUntil((async () => {
       const sent = await sendAudioMessage({ apiKey: env.RESEND_API_KEY, payload: {
-        from: env.CONTACT_FROM_EMAIL, to: [email], subject: 'Your studio sign-in code',
-        text: `Your sign-in code is ${code}. It expires in 10 minutes.\n\nOpen https://thesuperhuman.us/studio/sign-in to use it.`,
+        from: env.CONTACT_FROM_EMAIL, to: [email], subject: 'Your studio sign-in code', ...studioCodeEmail(code),
       } });
       // Discard only a confirmed rejection. After a timeout or provider error the email may still
       // arrive, so that code stays usable until it expires.

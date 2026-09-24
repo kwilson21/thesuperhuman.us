@@ -58,6 +58,7 @@ describe('sendContactEmails', () => {
     expect(autoBody.to).toContain('jane@example.com');
     expect(autoBody.subject).toMatch(/thanks/i);
     expect(autoBody.text).toContain('https://thesuperhuman.us/about#resumes');
+    expect(autoBody.html).toContain('Thanks, I’ve got your message.');
     expect(autoBody.text).not.toMatch(/DoD|two business days/);
   });
 

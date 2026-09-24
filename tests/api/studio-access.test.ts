@@ -46,7 +46,8 @@ describe('studio access routes', () => {
     const known = await requestCode(knownContext);
     expect(known.status).toBe(200);
     expect(await known.json()).toEqual(await unknown.json());
-    expect(sendAudioMessage).toHaveBeenCalledWith(expect.objectContaining({ payload: expect.objectContaining({ to: ['artist@example.com'] }) }));
+    expect(sendAudioMessage).toHaveBeenCalledWith(expect.objectContaining({ payload: expect.objectContaining({
+      to: ['artist@example.com'], html: expect.stringContaining('1234 5678'), text: expect.stringContaining('1234 5678') }) }));
     await Promise.all(knownContext.pending);
   });
 

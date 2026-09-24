@@ -1,4 +1,5 @@
 import type { AudioInquiryInput } from './audio-validation';
+import { studioInvitationEmail, studioUpdateEmail } from './client-emails';
 
 const ENDPOINT = 'https://api.resend.com/emails';
 
@@ -36,7 +37,7 @@ export async function sendAudioInquiry(args: SendArgs): Promise<{ ok: boolean }>
   return sendAudioMessage({ payload, apiKey: args.apiKey });
 }
 
-export async function sendAudioMessage({ payload, apiKey }: { payload: { from: string; to: string[]; subject: string; text: string; reply_to?: string }; apiKey: string }): Promise<{ ok: boolean; uncertain?: boolean }> {
+export async function sendAudioMessage({ payload, apiKey }: { payload: { from: string; to: string[]; subject: string; text: string; html?: string; reply_to?: string }; apiKey: string }): Promise<{ ok: boolean; uncertain?: boolean }> {
   try {
     const res = await fetch(ENDPOINT, {
       method: 'POST',
@@ -54,15 +55,9 @@ export async function sendAudioMessage({ payload, apiKey }: { payload: { from: s
   }
 }
 
-const noticeIntro = {
-  invitation: 'Your private audio project is ready. Follow its progress and send messages there.',
-  update: 'There is an update to your private audio project.',
-};
+const notices = { invitation: studioInvitationEmail, update: studioUpdateEmail };
 
 export async function sendStudioSignInNotice(apiKey: string, from: string, to: string, subject: string,
-  kind: keyof typeof noticeIntro = 'update'): Promise<{ ok: boolean; uncertain?: boolean }> {
-  return sendAudioMessage({ apiKey, payload: {
-    from, to: [to], subject,
-    text: `${noticeIntro[kind]} Sign in to see it: https://thesuperhuman.us/studio/sign-in`,
-  } });
+  kind: keyof typeof notices = 'update'): Promise<{ ok: boolean; uncertain?: boolean }> {
+  return sendAudioMessage({ apiKey, payload: { from, to: [to], subject, ...notices[kind]() } });
 }
