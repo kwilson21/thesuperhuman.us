@@ -1,5 +1,7 @@
-# Claude Code & Superpowers
-.claude/
+# Claude Code & Superpowers (shared skills and settings are committed)
+.claude/*
+!.claude/skills/
+!.claude/settings.json
 .superpowers/
 .worktrees/
 
@@ -38,3 +40,7 @@ CLAUDE.local.*
 # Python journal utilities
 __pycache__/
 *.py[cod]
+
+# Local screenshot runs (CI publishes them to the screenshots branch)
+/screenshots/
+.screenshots/

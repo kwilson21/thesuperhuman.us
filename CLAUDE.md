@@ -7,9 +7,9 @@ You are working on the personal website of **Kazon Wilson**, who also operates *
 The September 2026 redesign direction in [docs/website-direction.md](docs/website-direction.md)
 and [docs/website-content-model.md](docs/website-content-model.md) supersedes the
 original contractor-only positioning. The site introduces the person, interests,
-and evidence of work. Contracts are preferred; interesting full-time opportunities
-are welcome. The [system plan](docs/website-system-plan.md) describes the implementation
-in the redesign PR stack; deployment is a separate decision. All generated website imagery must
+and evidence of work. Kazon works independently, through contracts and projects,
+and is selective about full-time roles. The [system plan](docs/website-system-plan.md)
+describes the implementation in the redesign PR stack; deployment is a separate decision. All generated website imagery must
 pass [image QA](docs/generated-image-qa.md).
 
 ## About Kazon
@@ -38,7 +38,7 @@ See `README.md` for environment variables, KV bindings, the full resume request 
 
 ## Positioning & Brand Voice
 
-- **Person and interests first.** Show what Kazon cares about, makes, and contributes. Make professional evidence easy to assess. Express a preference for compatible contract work without excluding interesting full-time opportunities or turning every page into a services pitch.
+- **Person and interests first.** Show what Kazon cares about, makes, and contributes. Make professional evidence easy to assess. Present independent work (contracts and projects) as the default and full-time as selective: remote roles with meaningful ownership where building with AI is a normal part of the job. Don't turn every page into a services pitch.
 - **Tone:** Direct, confident, technically specific. No fluff, no buzzwords
 - **Audience:** curious visitors, potential collaborators, recruiters, and hiring managers
 - **Key differentiators:**
@@ -83,6 +83,13 @@ These describe prior capabilities, not a service menu to promote. Lead with the 
 - `scripts/`: OG image generation and utilities
 - `wrangler.jsonc`: Cloudflare Worker config, KV bindings, non-secret env vars
 
+## Publicist
+
+Publicizing Tally and Kaillera-next work follows the design in
+[docs/publicist/README.md](docs/publicist/README.md). Its rules are always loaded:
+
+@.agents/skills/publicist/SKILL.md
+
 ## Things to Never Do
 
 - Never display Kazon's personal home address anywhere on the site
@@ -105,3 +112,4 @@ These describe prior capabilities, not a service menu to promote. Lead with the 
 - Keep Tailwind classes clean and consistent with existing design system
 - Run `npm run check` before committing any Astro changes
 - Run `npm test` before committing any TypeScript logic changes
+- UI PRs need screenshots. The Screenshots workflow captures every page at 1280×800 and 390×844 and writes them into the PR description; look at them before asking for review. A PR that adds a stateful flow (sign-in, a multi-step owner action, a client journey) adds a scenario in `scripts/screenshots/scenarios/` so CI captures each step. Stacked PRs only get the workflow once their branch contains it, so merge main into the bottom of the stack
