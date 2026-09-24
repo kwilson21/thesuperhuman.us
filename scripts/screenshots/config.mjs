@@ -75,7 +75,7 @@ const PAGE_NAMES_BY_FILE = {
   'src/styles/music-premiere.css': ['music-old-news'],
   'src/styles/project-journal.css': PROJECT_STORY_PAGES,
   'src/styles/owner.css': OWNER_PAGES,
-  'src/styles/studio.css': ['studio-sign-in'],
+  'src/styles/studio.css': ['studio-sign-in', 'owner-today'],
   'src/content/pages/ai-gives-you-speed.md': ['writing-ai-gives-you-speed'],
   'src/components/audio/AudioHero.astro': ['audio'],
   'src/components/audio/AudioFooter.astro': AUDIO_SHELL_PAGES,
@@ -92,7 +92,7 @@ const PAGE_NAMES_BY_FILE = {
 };
 const SCENARIO_NAMES_BY_FILE = {
   'src/styles/owner.css': ['owner-details'],
-  'src/styles/studio.css': ['studio-client'],
+  'src/styles/studio.css': ['studio-client', 'owner-details'],
 };
 
 function routeForPageFile(file) {
