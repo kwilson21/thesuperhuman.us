@@ -1,0 +1,39 @@
+---
+export const prerender = false;
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { clientPortalEnabled, clientProjectForSession, studioSessionFromRequest } from '~/lib/audio-client-access';
+const env = Astro.locals.runtime?.env;
+if (!clientPortalEnabled(env)) return new Response('Not found', { status: 404 });
+if (!env.MUSIC_DB) return new Response('Studio is temporarily unavailable.', { status: 503 });
+const token = studioSessionFromRequest(Astro.request);
+if (!token) return Astro.redirect('/studio/sign-in');
+const project = Astro.params.id ? await clientProjectForSession(env.MUSIC_DB, token, Astro.params.id) : null;
+if (!project) return new Response('Project not found.', { status: 404 });
+const stage = project.stage === 'accepted' && project.booking_status === 'paid' ? 'Booking paid' :
+  project.stage.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase());
+const next = project.stage === 'files_under_review' ? 'I’m checking the files and direction you sent.' :
+  project.stage === 'accepted' && project.booking_status !== 'paid' ? 'Your booking details are being confirmed.' :
+  project.stage === 'accepted' ? 'Your song is booked. I’ll post an update when work begins.' :
+  'I’ll keep this page updated as your song moves forward.';
+---
+<BaseLayout title={`${project.summary} · Studio`} description="Your private audio project." noindex>
+  <article class="site-shell studio-project">
+    <p class="studio-kicker"><a href="/studio">Your songs</a> / Project</p>
+    <h1>{project.summary}</h1>
+    <div class="studio-rule"></div>
+    <section aria-labelledby="studio-stage"><p class="studio-label">Where we are</p><h2 id="studio-stage">{stage}</h2><p>{next}</p></section>
+    {project.current_due_at && <section aria-labelledby="studio-date"><p class="studio-label">Expected by</p><h2 id="studio-date">{new Date(project.current_due_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</h2></section>}
+  </article>
+  <style>
+    .studio-project { max-width: 72rem; margin: 0 auto; padding: clamp(4rem, 9vw, 7rem) 1.5rem 8rem; }
+    .studio-kicker,.studio-label { color: #a4512f; font: 500 .78rem/1.4 Inter, sans-serif; letter-spacing: .18em; text-transform: uppercase; }
+    .studio-kicker a { text-decoration: underline; text-underline-offset: .25em; }
+    h1 { font: 400 clamp(3.5rem, 8vw, 6.8rem)/1 Newsreader, Georgia, serif; margin: 1.5rem 0 3rem; max-width: 60rem; }
+    .studio-rule { border-top: 1px solid #d8d2c9; }
+    section { display: grid; grid-template-columns: minmax(9rem, 1fr) minmax(0, 3fr); gap: .8rem 1.5rem; border-bottom: 1px solid #d8d2c9; padding: 2.3rem 0; }
+    .studio-label { grid-row: span 2; margin: .6rem 0 0; }
+    h2 { font: 400 clamp(2rem, 5vw, 3.6rem)/1.1 Newsreader, Georgia, serif; margin: 0; }
+    section p:last-child { font: 1rem/1.6 Inter, sans-serif; color: #4d4b47; }
+    @media(max-width: 45rem) { section { grid-template-columns: 1fr; } .studio-label { grid-row: auto; } }
+  </style>
+</BaseLayout>

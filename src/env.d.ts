@@ -19,6 +19,8 @@ interface Env {
   STRIPE_PAYMENTS_ENABLED?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
+  AUDIO_CLIENT_PORTAL_ENABLED?: string;
+  AUDIO_CLIENT_CODE_KEY?: string;
   PUBLICATION_OWNER_ID?: string;
   OAUTH_KV?: KVNamespace;
   PUBLICATION_GITHUB_CLIENT_ID?: string;

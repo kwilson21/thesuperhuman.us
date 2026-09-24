@@ -25,6 +25,11 @@ describe('middleware.onRequest', () => {
     ctx.isPrerendered = true;
     await expect(onRequest(ctx, vi.fn())).rejects.toThrow('Owner routes must be server-rendered');
   });
+  it('fails the build when a studio route is accidentally prerendered', async () => {
+    const ctx = makeContext('https://thesuperhuman.us/studio/projects/request-1');
+    ctx.isPrerendered = true;
+    await expect(onRequest(ctx, vi.fn())).rejects.toThrow('Studio routes must be server-rendered');
+  });
   it('rejects unauthenticated owner routes without exposing a cacheable response', async () => {
     vi.mocked(verifyOwnerAccess).mockResolvedValueOnce(null);
     const ctx = makeContext('https://thesuperhuman.us/owner/requests');
@@ -77,6 +82,19 @@ describe('middleware.onRequest', () => {
     const ctx = makeContext('https://thesuperhuman.us/api/owner/campaigns');
     const next = vi.fn(async () => new Response('private content'));
     expect(((await onRequest(ctx, next)) as Response).status).toBe(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('keeps studio pages private and rejects cross-site studio mutations', async () => {
+    const page = makeContext('https://thesuperhuman.us/studio/projects/request-1');
+    const pageResponse = (await onRequest(page, async () => new Response('private project'))) as Response;
+    expect(pageResponse.headers.get('cache-control')).toBe('private, no-store');
+    expect(pageResponse.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+
+    const api = makeContext('https://thesuperhuman.us/api/studio/session');
+    api.request = new Request(api.url, { method: 'POST', headers: { origin: 'https://evil.example', 'content-type': 'application/json' }, body: '{}' });
+    const next = vi.fn(async () => new Response('accepted'));
+    expect(((await onRequest(api, next)) as Response).status).toBe(403);
     expect(next).not.toHaveBeenCalled();
   });
 

@@ -5,10 +5,12 @@ import AttentionIndex from '~/components/owner/AttentionIndex.astro';
 import ListeningPath from '~/components/owner/ListeningPath.astro';
 import RequestList from '~/components/owner/RequestList.astro';
 import MetricDefinition from '~/components/owner/MetricDefinition.astro';
+import { clientPortalEnabled, listStudioSignInFailures } from '~/lib/audio-client-access';
 import { loadStudioLedger } from '~/lib/owner-reporting';
 const db = Astro.locals.runtime.env.MUSIC_DB;
 if (!db) return new Response('Owner reporting is unavailable.', { status: 503 });
 const ledger = await loadStudioLedger(db, new Date());
+const signInFailures = clientPortalEnabled(Astro.locals.runtime.env) ? await listStudioSignInFailures(db) : [];
 ---
 <OwnerLayout title="Today" current="today" newRequestCount={ledger.attention.newRequests} ownerEmail={Astro.locals.owner?.email ?? ''}>
   <header class="owner-page-heading">
@@ -20,6 +22,11 @@ const ledger = await loadStudioLedger(db, new Date());
     <div class="section-heading-line"><div><p class="owner-kicker">People</p><h2 id="waiting-heading">{ledger.attention.newRequests ? `${ledger.attention.newRequests} waiting for review` : 'No one is waiting'}</h2></div><a href="/owner/requests">Open requests →</a></div>
     <RequestList requests={ledger.attentionRequests} />
   </section>
+  {signInFailures.length > 0 && <section class="owner-section" aria-labelledby="studio-sign-in-heading">
+    <p class="owner-kicker">Studio access</p><h2 id="studio-sign-in-heading">Sign-in needs attention</h2>
+    <p>A code could not be delivered. Check the request's email address and ask the client to try again.</p>
+    <ul>{signInFailures.map(item => <li><a href={`/owner/requests/${encodeURIComponent(item.requestId)}`}>{item.clientName || 'Studio client'}: open request →</a></li>)}</ul>
+  </section>}
   <section class="owner-section campaign-preview" aria-labelledby="campaign-heading">
     <div class="campaign-copy"><p class="owner-kicker">Active promotion</p><h2 id="campaign-heading">{ledger.activeCampaign?.name ?? 'No active campaign'}</h2>
       <p>{ledger.activeCampaign?.primaryGoal ?? 'Start a campaign when you are ready to promote a release or service.'}</p>

@@ -26,6 +26,7 @@
     // Keep invoice creation off until Stripe account review, test-mode lifecycle,
     // D1 migration, webhook registration, and launch verification all pass.
     "STRIPE_PAYMENTS_ENABLED": "false",
+    "AUDIO_CLIENT_PORTAL_ENABLED": "false",
     "PUBLICATION_PROJECTS": "threadline,the-engineers-daily,personal-website",
     "PUBLICATION_OWNER_ID": "10987837",
     "PUBLICATION_GITHUB_CLIENT_ID": "Ov23liewYmTNLlpkrYjz"

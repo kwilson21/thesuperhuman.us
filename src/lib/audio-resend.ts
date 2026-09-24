@@ -36,7 +36,7 @@ export async function sendAudioInquiry(args: SendArgs): Promise<{ ok: boolean }>
   return sendAudioMessage({ payload, apiKey: args.apiKey });
 }
 
-export async function sendAudioMessage({ payload, apiKey }: { payload: { from: string; to: string[]; subject: string; text: string; reply_to?: string }; apiKey: string }): Promise<{ ok: boolean }> {
+export async function sendAudioMessage({ payload, apiKey }: { payload: { from: string; to: string[]; subject: string; text: string; reply_to?: string }; apiKey: string }): Promise<{ ok: boolean; uncertain?: boolean }> {
   try {
     const res = await fetch(ENDPOINT, {
       method: 'POST',
@@ -47,8 +47,9 @@ export async function sendAudioMessage({ payload, apiKey }: { payload: { from: s
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(10_000),
     });
-    return { ok: res.ok };
+    return { ok: res.ok, uncertain: !res.ok && res.status >= 500 };
   } catch {
-    return { ok: false };
+    // A timeout does not prove the provider rejected the email.
+    return { ok: false, uncertain: true };
   }
 }

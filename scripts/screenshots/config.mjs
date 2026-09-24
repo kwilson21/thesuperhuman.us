@@ -22,6 +22,7 @@ export const PAGES = [
   { name: 'audio-services', path: '/audio/services' },
   { name: 'audio-start', path: '/audio/start' },
   { name: 'music-old-news', path: '/music/old-news' },
+  { name: 'studio-sign-in', path: '/studio/sign-in' },
   { name: 'not-found', path: '/this-page-does-not-exist', status: 404 },
   { name: 'owner-today', path: '/owner', owner: true },
   { name: 'owner-requests', path: '/owner/requests', owner: true },
@@ -43,15 +44,19 @@ export const REDIRECTS = {
 export const SCENARIO_PAGES = {
   'src/pages/owner/requests/[id].astro': { scenario: 'owner-details', route: '/owner/requests/' },
   'src/pages/owner/campaigns/[id].astro': { scenario: 'owner-details', route: '/owner/campaigns/' },
+  'src/pages/studio/index.astro': { scenario: 'studio-client', route: '/studio' },
+  'src/pages/studio/projects/[id].astro': { scenario: 'studio-client', route: '/studio/projects/' },
 };
 
 /**
- * Page files in SCENARIO_PAGES whose scenario never rendered a page under the route.
+ * Page files in SCENARIO_PAGES whose scenario never rendered the route: a page under it when the
+ * route ends in a slash, otherwise that exact path.
  * `captured` lists `{ scenario, path }` for every capture that returned its expected status.
  */
 export function missingScenarioRoutes(scenarioPages, captured) {
   return Object.entries(scenarioPages).filter(([, { scenario, route }]) =>
-    !captured.some(item => item.scenario === scenario && item.path.startsWith(route) && item.path.length > route.length))
+    !captured.some(item => item.scenario === scenario && (route.endsWith('/')
+      ? item.path.startsWith(route) && item.path.length > route.length : item.path === route)))
     .map(([file]) => file);
 }
 

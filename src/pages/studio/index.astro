@@ -1,0 +1,43 @@
+---
+export const prerender = false;
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import { clientPortalEnabled, clientProjectsForSession, studioSessionFromRequest } from '~/lib/audio-client-access';
+const env = Astro.locals.runtime?.env;
+if (!clientPortalEnabled(env)) return new Response('Not found', { status: 404 });
+if (!env.MUSIC_DB) return new Response('Studio is temporarily unavailable.', { status: 503 });
+const token = studioSessionFromRequest(Astro.request);
+const projects = token ? await clientProjectsForSession(env.MUSIC_DB, token) : null;
+if (!projects) return Astro.redirect('/studio/sign-in');
+---
+<BaseLayout title="Your studio · Kazon" description="Your private audio projects." noindex>
+  <article class="site-shell studio-home">
+    <p class="studio-kicker">Your private studio</p>
+    <h1>Your songs</h1>
+    {projects.length ? <ul>{projects.map(project => <li><a href={`/studio/projects/${project.request_id}`}><span>{project.summary}</span><span aria-hidden="true">→</span></a></li>)}</ul> : <p>No active projects are available for this email.</p>}
+    <button id="studio-sign-out" type="button">Sign out</button>
+    <p id="studio-sign-out-status" role="status"></p>
+  </article>
+  <style>
+    .studio-home { max-width: 70rem; margin: 0 auto; padding: clamp(4rem, 10vw, 8rem) 1.5rem 8rem; }
+    .studio-kicker { color: #a4512f; font: 500 .78rem/1.4 Inter, sans-serif; letter-spacing: .18em; text-transform: uppercase; }
+    h1 { font: 400 clamp(3.8rem, 9vw, 7rem)/1 Newsreader, Georgia, serif; margin: 1rem 0 3rem; }
+    ul { list-style: none; padding: 0; }
+    li { border-top: 1px solid #d8d2c9; }
+    li:last-child { border-bottom: 1px solid #d8d2c9; }
+    a { display: flex; justify-content: space-between; gap: 2rem; padding: 1.5rem 0; font: 400 clamp(1.5rem, 4vw, 2.3rem)/1.2 Newsreader, Georgia, serif; text-decoration: none; }
+    a:hover { color: #a4512f; }
+    button { margin-top: 3rem; padding: .5rem 0; border: 0; border-bottom: 1px solid currentColor; background: none; cursor: pointer; font: 500 .9rem/1.4 Inter, sans-serif; }
+  </style>
+  <script>
+    document.querySelector('#studio-sign-out')?.addEventListener('click', async () => {
+      const status = document.querySelector<HTMLElement>('#studio-sign-out-status');
+      try {
+        const response = await fetch('/api/studio/sign-out', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+        const result = await response.json() as { localSignedOut?: boolean };
+        if (response.ok) { location.assign('/studio/sign-in'); return; }
+        if (result.localSignedOut) { location.assign('/studio/sign-in?signout=partial'); return; }
+      } catch { /* Display the same retry message below. */ }
+      if (status) status.textContent = 'Could not sign out. Please try again.';
+    });
+  </script>
+</BaseLayout>
