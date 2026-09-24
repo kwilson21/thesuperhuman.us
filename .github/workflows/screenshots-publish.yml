@@ -81,9 +81,12 @@ jobs:
           git -C shots add .
           # A rerun of the same commit can produce identical images; nothing to commit is fine.
           git -C shots diff --cached --quiet || git -C shots commit -m "chore: screenshots for #${PR} at ${SHA::7}"
-          # Each run writes its own folder, so a rebase after a race never conflicts.
-          for i in 1 2 3; do
+          # Each run writes its own folder, so a rebase after a race never conflicts. A whole
+          # stack pushed at once starts many runs together, so retry with a random pause
+          # until they spread out.
+          for i in $(seq 1 12); do
             if git -C shots push origin HEAD:screenshots; then pushed=1; break; fi
+            sleep $(( (RANDOM % 5) + i ))
             git -C shots fetch origin screenshots && git -C shots rebase FETCH_HEAD
           done
           [ -n "${pushed:-}" ] || { echo "Could not push screenshots"; exit 1; }
