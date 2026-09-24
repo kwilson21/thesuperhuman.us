@@ -5,7 +5,7 @@ export type NextStepInput = {
   payment: { bookingStatus: string; balanceStatus: string; bookingCreationStartedAt?: string | null; balanceCreationStartedAt?: string | null } | null;
   stripeEnabled: boolean;
   /** The client's answer to the latest published review, if any. */
-  reviewDecision?: 'approved' | 'changes' | null;
+  reviewDecision?: 'approved' | 'changes' | 'stopped' | null;
 };
 
 /** One instruction for the owner, the control on the request page that does it, and that control's name. */
@@ -45,11 +45,12 @@ export function ownerNextStep({ stage, requestStatus, revoked, payment: pay, str
     if (balance === 'paid') return { title: 'Deliver the final files', detail: 'The balance is paid. Upload the final file under Review and delivery with Version set to Final, then publish it.', target: upload, action: 'Upload file' };
     if (balance === 'not_created') {
       if (pay?.balanceCreationStartedAt) return reconciling;
+      if (reviewDecision === 'stopped') return { title: 'The client stopped the project', detail: 'They chose to stop after the last revision round, so their access is closed and no balance is due. Mark the request resolved to close it out.', target: '#request-heading', action: 'See the request' };
       if (reviewDecision === 'changes') return { title: 'Begin the revision', detail: 'The client requested changes. Their notes are in the conversation. Begin the revision to tell them you are on it.', target: '#begin-revision', action: 'Begin revision' };
       if (reviewDecision === 'approved') return stripeEnabled
         ? { title: 'Send the balance invoice', detail: 'The client approved the mix. Create the balance invoice in Book the work; the final can be shared once it is paid.', target: '#create-balance-invoice', action: 'Create balance invoice' }
         : { title: 'Record the balance payment', detail: 'The client approved the mix. Collect the balance another way, then record it in Book the work; that unlocks the final delivery.', target: '#record-balance-payment', action: 'Record balance received' };
-      return { title: 'Waiting on the client’s answer', detail: 'The client was emailed the review and asked to approve it or request changes. Their answer appears in the conversation and updates this step. If they answer another way, begin a revision or record the balance yourself.', target: '#project-messages-heading', action: 'Read the conversation', waiting: true };
+      return { title: 'Waiting on the client’s answer', detail: 'The client was emailed the review. They can approve it, request changes while revision rounds remain, or stop after the last round. Their answer appears in the conversation and updates this step. If they answer another way, begin a revision or record the balance yourself.', target: '#project-messages-heading', action: 'Read the conversation', waiting: true };
     }
     if (balance === 'draft' || balance === 'open') return { title: 'Waiting on the balance payment', detail: 'The final file can be uploaded now, but it stays private until Stripe confirms the balance.', target: payment, action: 'See the balance status', waiting: true };
     return invoiceProblem('balance', balance, stripeEnabled);

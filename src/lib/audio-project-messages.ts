@@ -9,7 +9,9 @@ export type ProjectMessage = {
   /** Set when a client message answers a published review. */
   review_decision: ReviewDecision | null;
 };
-export type ReviewDecision = 'approved' | 'changes';
+export type ReviewDecision = 'approved' | 'changes' | 'stopped';
+/** Revision rounds included with every project, as the services page promises. */
+export const REVISION_ROUNDS = 2;
 
 const messageColumns = 'id,actor,body,created_at,read_at,review_decision';
 const CLIENT_MESSAGE_WINDOW_MS = 300_000;
@@ -63,9 +65,10 @@ export async function postClientProjectMessage(db: D1Database, requestId: string
 }
 
 /**
- * The client's answer to the latest published review: approve it, or request changes with
- * notes. Allowed only while that review awaits an answer (stage review_ready, no decision
- * since it was published), under the same session and rate limit as any client message.
+ * The client's answer to the latest published review: approve it, request changes with notes
+ * while revision rounds remain, or stop once they are used. Allowed only while that review
+ * awaits an answer (stage review_ready, no decision since it was published), under the same
+ * session and rate limit as any client message. Stopping also closes the client's access.
  */
 export async function postClientReviewDecision(db: D1Database, requestId: string, token: string, decision: ReviewDecision, body: string, now = new Date()): Promise<ProjectMessage | null> {
   const tokenHash = await hashValue(token);
@@ -79,9 +82,21 @@ export async function postClientReviewDecision(db: D1Database, requestId: string
       AND (SELECT count(*) FROM audio_project_messages m
         WHERE m.request_id=? AND m.actor='client' AND m.created_at>?)<?
       AND ${reviewAwaitingAnswer('p.request_id')}
+      AND (? = 'approved' OR (${roundsUsed('p.request_id')} < ${REVISION_ROUNDS}) = (? = 'changes'))
     RETURNING ${messageColumns}`)
     .bind(tokenHash, body, now.toISOString(), decision, requestId, tokenHash, now.toISOString(),
-      requestId, windowStart, CLIENT_MESSAGE_LIMIT).first<ProjectMessage>();
+      requestId, windowStart, CLIENT_MESSAGE_LIMIT, decision, decision).first<ProjectMessage>();
+}
+
+/** SQL: revision rounds begun on this project. */
+function roundsUsed(requestId: string) {
+  return `(SELECT count(*) FROM audio_project_updates u WHERE u.request_id=${requestId} AND u.milestone='revision_started')`;
+}
+
+/** Revision rounds the client has left to request. */
+export async function revisionRoundsLeft(db: D1Database, requestId: string): Promise<number> {
+  const row = await db.prepare(`SELECT ${roundsUsed('?')} AS used`).bind(requestId).first<{ used: number }>();
+  return Math.max(0, REVISION_ROUNDS - Number(row?.used ?? 0));
 }
 
 /** SQL: the project has a published review and no client decision since the latest one. */

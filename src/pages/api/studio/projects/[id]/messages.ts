@@ -3,15 +3,16 @@ import { z } from 'zod';
 import { clientPortalEnabled, clientProjectForSession, studioSessionFromRequest } from '~/lib/audio-client-access';
 import { clientMessageRateLimited, markProjectMessagesRead, postClientProjectMessage, postClientReviewDecision, validateProjectMessage } from '~/lib/audio-project-messages';
 import { musicRequest } from '~/lib/music-request';
+import { revokeProjectAccess } from '~/lib/audio-project-revocation';
 
 export const prerender = false;
 const inputSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('send'), body: z.unknown() }),
   z.object({ action: z.literal('read'), messageId: z.number().int().positive() }),
-  // Approval needs no notes; a change request does.
-  z.object({ action: z.literal('respond'), decision: z.enum(['approved', 'changes']), body: z.unknown() }),
+  // Approval and stopping need no notes; a change request does.
+  z.object({ action: z.literal('respond'), decision: z.enum(['approved', 'changes', 'stopped']), body: z.unknown() }),
 ]);
-const approvalText = 'I approve this mix.';
+const defaultText = { approved: 'I approve this mix.', stopped: 'I’m stopping the project here.' };
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
   const env = locals.runtime?.env;
@@ -35,12 +36,14 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       const notes = typeof parsed.data.body === 'string' && parsed.data.body.trim() ? validateProjectMessage(parsed.data.body) : null;
       if (decision === 'changes' && !notes) return Response.json({ ok: false, error: 'Write the changes you would like, up to 4,000 characters.' }, { status: 400 });
       if (typeof parsed.data.body === 'string' && parsed.data.body.trim() && !notes) return Response.json({ ok: false, error: 'Write up to 4,000 characters. Shared links must start with https://.' }, { status: 400 });
-      const saved = await postClientReviewDecision(env.MUSIC_DB, params.id, token, decision, notes ?? approvalText);
+      const saved = await postClientReviewDecision(env.MUSIC_DB, params.id, token, decision, notes ?? defaultText[decision as 'approved' | 'stopped']);
+      // Stopping ends the project for the client: access closes and the review stops playing.
+      if (saved && decision === 'stopped') await revokeProjectAccess(env.MUSIC_DB, params.id, 'client-stopped');
       if (!saved) {
         if (await clientMessageRateLimited(env.MUSIC_DB, params.id)) {
           return Response.json({ ok: false, error: 'Please wait a few minutes before sending another message.' }, { status: 429 });
         }
-        return Response.json({ ok: false, error: 'This review already has your answer. Send a message if anything changed.' }, { status: 409 });
+        return Response.json({ ok: false, error: 'That answer is not available for this review. Refresh the page to see where your song stands.' }, { status: 409 });
       }
       return Response.json({ ok: true, message: saved });
     }

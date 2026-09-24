@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { completeClientCode, issueClientCode, revokeClientSession } from '~/lib/audio-client-access';
 import {
-  clientMessageRateLimited, latestReviewDecision, listProjectMessages, markProjectMessagesRead, postClientProjectMessage,
+  clientMessageRateLimited, latestReviewDecision, revisionRoundsLeft, listProjectMessages, markProjectMessagesRead, postClientProjectMessage,
   postClientReviewDecision, postOwnerProjectMessage, validateProjectMessage,
 } from '~/lib/audio-project-messages';
 
@@ -109,6 +109,27 @@ describe('audio project messages', () => {
     expect(await postClientReviewDecision(db, 'song-1', token, 'approved', 'I approve this mix.', later)).toMatchObject({ review_decision: 'approved' });
     expect(await latestReviewDecision(db, 'song-1')).toBe('approved');
     expect((await listProjectMessages(db, 'song-1')).map(message => message.review_decision)).toEqual(['changes', 'approved']);
+    sql.close();
+  });
+
+  it('allows changes only while revision rounds remain, and stopping only once they are used', async () => {
+    const { sql, db, addRequest } = fixture();
+    addRequest('song-1');
+    const code = (await issueClientCode(db, 'artist@example.com', secret, now))!;
+    const token = (await completeClientCode(db, 'artist@example.com', code, secret, now))!;
+    sql.prepare("UPDATE audio_projects SET stage='review_ready' WHERE request_id='song-1'").run();
+    sql.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,status,uploaded_at,published_at)
+      VALUES ('review-3','song-1','review','key-3','Mix.wav','audio/wav',10,'published',?,?)`).run('2026-09-22T11:00:00.000Z', '2026-09-22T11:00:00.000Z');
+    expect(await revisionRoundsLeft(db, 'song-1')).toBe(2);
+    expect(await postClientReviewDecision(db, 'song-1', token, 'stopped', 'Stop.', now)).toBeNull();
+    for (const at of ['2026-09-20T12:00:00.000Z', '2026-09-21T12:00:00.000Z']) {
+      sql.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at,milestone)
+        VALUES ('song-1','progress','Revising.','owner@example.com',?,'revision_started')`).run(at);
+    }
+    expect(await revisionRoundsLeft(db, 'song-1')).toBe(0);
+    expect(await postClientReviewDecision(db, 'song-1', token, 'changes', 'One more pass.', now)).toBeNull();
+    expect(await postClientReviewDecision(db, 'song-1', token, 'stopped', 'I’m stopping the project here.', now)).toMatchObject({ review_decision: 'stopped' });
+    expect(await latestReviewDecision(db, 'song-1')).toBe('stopped');
     sql.close();
   });
 

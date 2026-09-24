@@ -2,7 +2,7 @@
 export const prerender = false;
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import { clientPortalEnabled, clientProjectForSession, studioSessionFromRequest } from '~/lib/audio-client-access';
-import { latestReviewDecision, listProjectMessages } from '~/lib/audio-project-messages';
+import { latestReviewDecision, listProjectMessages, REVISION_ROUNDS, revisionRoundsLeft } from '~/lib/audio-project-messages';
 import { listProjectUpdates } from '~/lib/audio-project-updates';
 import { clientProjectFiles } from '~/lib/audio-project-files';
 import ProjectMessages from '~/components/ProjectMessages.astro';
@@ -24,6 +24,7 @@ const files = project ? await clientProjectFiles(env.MUSIC_DB, project.request_i
 const finalExpiry = files.find(file => file.version === 'final')?.expires_at;
 const reviewShared = project?.stage === 'review_ready' && files.some(file => file.version === 'review');
 const decision = reviewShared ? await latestReviewDecision(env.MUSIC_DB, project!.request_id) : null;
+const roundsLeft = reviewShared ? await revisionRoundsLeft(env.MUSIC_DB, project!.request_id) : 0;
 const next = !project ? '' : project.stage === 'files_under_review' ? 'I’m checking the files and direction you sent.' :
   project.stage === 'accepted' && project.booking_status !== 'paid' ? 'Your booking details are being confirmed.' :
   project.stage === 'accepted' ? 'Your song is booked. I’ll post an update when work begins.' :
@@ -54,7 +55,7 @@ const moved = project?.original_due_at && project.current_due_at && project.orig
         return <ProjectPlayer src={href} name={file.display_name} label={file.version === 'final' ? 'Final audio' : 'Review audio'} peaks={file.peaks} downloadHref={file.downloadable ? `${href}?download=1` : undefined} />;
       })}
     </section>}
-    {reviewShared && !decision && <ReviewResponse endpoint={`/api/studio/projects/${encodeURIComponent(project.request_id)}/messages`} />}
+    {reviewShared && !decision && <ReviewResponse endpoint={`/api/studio/projects/${encodeURIComponent(project.request_id)}/messages`} roundsLeft={roundsLeft} rounds={REVISION_ROUNDS} />}
     <AudioProjectUpdates updates={updates} currentDueAt={project.current_due_at} stage={project.stage} />
     <ProjectMessages messages={messages} endpoint={`/api/studio/projects/${encodeURIComponent(project.request_id)}/messages`} reader="client" closed={project.stage === 'complete'} />
   </article>
