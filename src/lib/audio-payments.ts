@@ -137,11 +137,11 @@ export async function recordInvoice(db: D1Database, input: {
   await db.batch([
     db.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
       SELECT ?,?,?,?,? WHERE EXISTS (
-        SELECT 1 FROM audio_payments WHERE request_id=? AND ${prefix}_invoice_id IS NULL
+        SELECT 1 FROM audio_payments WHERE request_id=? AND ${prefix}_invoice_id IS NULL AND ${prefix}_status='not_created'
       )`).bind(input.requestId, `${prefix}-invoice-created`, input.actor.trim().toLowerCase(), input.invoiceId, now, input.requestId),
     db.prepare(`UPDATE audio_payments SET stripe_customer_id=?,${prefix}_invoice_id=?,
       ${prefix}_invoice_url=?,${prefix}_status=?,${prefix}_creation_started_at=NULL,updated_at=?
-      WHERE request_id=? AND ${prefix}_invoice_id IS NULL`)
+      WHERE request_id=? AND ${prefix}_invoice_id IS NULL AND ${prefix}_status='not_created'`)
       .bind(input.stripeCustomerId, input.invoiceId, input.hostedInvoiceUrl, input.status, now, input.requestId),
     db.prepare(`INSERT OR IGNORE INTO stripe_invoice_attempts(invoice_id,request_id,installment,created_at)
       VALUES (?,?,?,?)`).bind(input.invoiceId, input.requestId, input.installment, now),
@@ -198,7 +198,7 @@ export async function recordManualPayment(db: D1Database, input: {
   if (!input.actor.trim()) throw new Error('Invalid request actor.');
   if (!manualPaymentMethods.includes(input.method)) throw new Error('Invalid payment method.');
   const reference = (input.reference ?? '').trim().replace(/\s+/g, ' ');
-  if (reference.length > 120) throw new Error('Invalid payment reference.');
+  if (reference.length > 120 || !/^[A-Za-z0-9 #._:/-]*$/.test(reference)) throw new Error('Invalid payment reference.');
   const prefix = input.installment;
   if (payment[`${prefix}Status`] === 'paid' && !payment[`${prefix}InvoiceId`]) return payment;
   if (payment[`${prefix}Status`] !== 'not_created' || payment[`${prefix}InvoiceId`] || payment[`${prefix}CreationStartedAt`] || payment.externalRefsDeletedAt) {
@@ -308,7 +308,8 @@ export async function recoverInvoiceFromWebhook(db: D1Database, input: {
     db.prepare(`INSERT OR IGNORE INTO stripe_unmatched_events
       (event_id,event_type,invoice_id,request_id,installment,status,occurred_at,received_at,reason)
       SELECT ?,?,?,?,?,?,?,?,'invoice-conflict' WHERE EXISTS (
-        SELECT 1 FROM audio_payments WHERE request_id=? AND ${prefix}_invoice_id IS NOT NULL AND ${prefix}_invoice_id<>?
+        SELECT 1 FROM audio_payments WHERE request_id=? AND ((${prefix}_invoice_id IS NOT NULL AND ${prefix}_invoice_id<>?)
+          OR (${prefix}_invoice_id IS NULL AND ${prefix}_status='paid'))
       )`).bind(input.eventId, input.eventType, input.invoiceId, input.requestId, input.installment,
         input.status, input.occurredAt, receivedAt, input.requestId, input.invoiceId),
     db.prepare(`DELETE FROM stripe_unmatched_events WHERE event_id=? AND EXISTS (

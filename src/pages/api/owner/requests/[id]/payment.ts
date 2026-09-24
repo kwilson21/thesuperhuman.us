@@ -21,7 +21,8 @@ const commandSchema = z.discriminatedUnion('action', [
     action: z.literal('record-payment-received'),
     installment: z.enum(['booking', 'balance']),
     method: z.enum(manualPaymentMethods),
-    reference: z.string().max(120).optional(),
+    // A transaction ID, not a name or phone number: it stays in the audit log after data deletion.
+    reference: z.string().trim().max(120).regex(/^[A-Za-z0-9 #._:/-]*$/).optional(),
     received: z.literal(true),
   }),
 ]);

@@ -317,6 +317,39 @@ describe('audio payments', () => {
     await expect(recordManualPayment(db, manual)).rejects.toThrow('already has an invoice');
     expect(await getAudioPayment(db, 'request-1')).toMatchObject({ bookingStatus: 'open' });
   });
+
+  it('holds a recovered Stripe invoice as unmatched when a manual payment lands between its read and its write', async () => {
+    const { db, sql } = fixture();
+    await approveAudioPayment(db, approval);
+    let raced = false;
+    const racing = { ...db, prepare: db.prepare.bind(db), batch: async (items: Parameters<D1Database['batch']>[0]) => {
+      if (!raced) { raced = true; sql.exec("UPDATE audio_payments SET booking_status='paid'"); }
+      return db.batch(items);
+    } } as unknown as D1Database;
+    expect(await recoverInvoiceFromWebhook(racing, { eventId: 'evt_race', eventType: 'invoice.paid', requestId: 'request-1', installment: 'booking',
+      invoiceId: 'in_race', stripeCustomerId: 'cus_1', hostedInvoiceUrl: 'https://invoice.stripe.com/in_race', status: 'paid',
+      occurredAt: '2026-09-20T15:00:00.000Z', totalAmountCents: 10_001, currency: 'usd' })).toBe('unmatched');
+    expect(await getAudioPayment(db, 'request-1')).toMatchObject({ bookingStatus: 'paid', bookingInvoiceId: null });
+  });
+
+  it('does not attach a late invoice to a payment recorded outside Stripe', async () => {
+    const { db, sql } = fixture();
+    await approveAudioPayment(db, approval);
+    await recordManualPayment(db, { requestId: 'request-1', installment: 'booking', method: 'Cash', actor: 'owner@example.com' });
+    await expect(recordInvoice(db, { requestId: 'request-1', installment: 'booking', stripeCustomerId: 'cus_1', invoiceId: 'in_late',
+      hostedInvoiceUrl: 'https://invoice.stripe.com/in_late', status: 'open', actor: 'owner@example.com' })).rejects.toThrow();
+    expect(await getAudioPayment(db, 'request-1')).toMatchObject({ bookingStatus: 'paid', bookingInvoiceId: null });
+    expect(sql.prepare("SELECT COUNT(*) AS total FROM owner_request_audit WHERE action='booking-invoice-created'").get()).toEqual({ total: 0 });
+  });
+
+  it('refuses a manual payment after retention or with a reference that is not a transaction ID', async () => {
+    const { db, sql } = fixture();
+    await approveAudioPayment(db, approval);
+    const manual = { requestId: 'request-1', installment: 'booking' as const, method: 'Zelle' as const, actor: 'owner@example.com' };
+    await expect(recordManualPayment(db, { ...manual, reference: 'Jane Doe <555-1234>' })).rejects.toThrow('reference');
+    sql.exec("UPDATE audio_payments SET external_refs_deleted_at='2026-09-21T00:00:00.000Z'");
+    await expect(recordManualPayment(db, manual)).rejects.toThrow();
+  });
 });
 
 describe('payment form defaults', () => {

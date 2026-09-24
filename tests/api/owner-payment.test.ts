@@ -193,3 +193,13 @@ it('records a payment received outside Stripe with invoices off, and never calls
   expect((await POST(context({ action: 'create-booking-invoice' }, true, stripeEnv))).status).toBe(409);
   expect(invoiceMocks.booking).not.toHaveBeenCalled();
 });
+
+it('records the balance only after the booking and rejects a reference that is not a transaction ID', async () => {
+  await POST(context({ action: 'approve', approvedService: 'Mix', totalAmountCents: 15_000, offerAccepted: true }));
+  const received = { action: 'record-payment-received', method: 'Cash App', received: true };
+  expect((await POST(context({ ...received, installment: 'balance' }))).status).toBe(409);
+  expect((await POST(context({ ...received, installment: 'booking', reference: 'Jane (555) 123' }))).status).toBe(400);
+  expect((await POST(context({ ...received, installment: 'booking', reference: 'TX-4411/09' }))).status).toBe(200);
+  expect((await POST(context({ ...received, installment: 'balance' }))).status).toBe(200);
+  expect(sql.prepare('SELECT booking_status,balance_status FROM audio_payments').get()).toEqual({ booking_status: 'paid', balance_status: 'paid' });
+});

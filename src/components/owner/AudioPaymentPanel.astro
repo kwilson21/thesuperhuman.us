@@ -9,7 +9,8 @@ const nextAction = !payment ? 'approve'
     : payment.bookingStatus === 'paid' && payment.balanceStatus === 'not_created' && !payment.balanceCreationStartedAt ? 'balance' : null;
 // A payment the client sent another way (Zelle, cash, and so on) is recorded instead of invoiced.
 const manual = nextAction === 'booking' || nextAction === 'balance' ? nextAction : null;
-const paidLabel = (status: string, invoiceId: string | null) => status === 'paid' && !invoiceId ? 'Paid outside Stripe' : statusLabel(status);
+// Retention also clears invoice ids, so only a live payment row reads as paid outside Stripe.
+const paidLabel = (status: string, invoiceId: string | null) => status === 'paid' && !invoiceId && !payment?.externalRefsDeletedAt ? 'Paid outside Stripe' : statusLabel(status);
 const replaceAction = payment?.bookingStatus === 'void' ? 'booking' : payment?.bookingStatus === 'paid' && payment.balanceStatus === 'void' ? 'balance' : null;
 ---
 <section class="owner-section payment-panel" aria-labelledby="payment-heading" data-payment-panel data-request-id={requestId}>
@@ -39,7 +40,7 @@ const replaceAction = payment?.bookingStatus === 'void' ? 'booking' : payment?.b
     const form = <form class="payment-received" id={`record-${manual}-payment`} data-payment-received data-installment={manual}>
       <p class="payment-guidance">{stripeEnabled ? 'If the client paid another way, record it here instead of sending an invoice.' : 'Stripe invoices are off. When the client pays another way, record it here.'} This cannot be undone.</p>
       <div class="payment-fields"><label>Paid with<select name="method" required><option value="">Choose</option>{manualPaymentMethods.map(method => <option value={method}>{method}</option>)}</select></label>
-        <label>Reference (optional)<input name="reference" maxlength="120" autocomplete="off" placeholder="Transaction ID or note" /></label></div>
+        <label>Transaction ID (optional)<input name="reference" maxlength="120" autocomplete="off" pattern="[A-Za-z0-9 #._:\/\-]*" title="Letters, numbers and # . _ : / - only. No names or phone numbers." placeholder="No names or phone numbers" /></label></div>
       <label class="payment-acceptance"><input type="checkbox" name="received" required data-next-step-focus /> I received {amount} for the {manual}</label>
       <button class="owner-primary-action" type="submit">Record {manual} received <span aria-hidden="true">→</span></button>
     </form>;
