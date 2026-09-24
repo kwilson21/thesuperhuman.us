@@ -18,12 +18,14 @@ export async function hashValue(value: string): Promise<string> {
   return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function codeHash(email: string, code: string, secret: string): Promise<string> {
+async function keyedHash(secret: string, message: string): Promise<string> {
   if (secret.length < 32) throw new Error('Studio code key is not configured.');
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const bytes = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${email}:${code}`)));
+  const bytes = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message)));
   return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
 }
+
+const codeHash = (email: string, code: string, secret: string) => keyedHash(secret, `${email}:${code}`);
 
 function newCode(): string {
   const values = new Uint32Array(1);
@@ -88,9 +90,13 @@ export async function completeClientCode(db: D1Database, email: string, code: st
   const tokenHash = await hashValue(token);
   const at = now.toISOString();
   const expiresAt = new Date(now.getTime() + sessionLifetimeMs).toISOString();
-  const [used] = await db.batch([
+  // One transaction: charge the attempt first, then accept the code only if that charge landed.
+  // Concurrent guesses each spend one of the code's five attempts before any comparison.
+  const [, used] = await db.batch([
+    db.prepare(`UPDATE audio_client_codes SET attempts=attempts+1
+      WHERE email=? AND used_at IS NULL AND expires_at>? AND attempts<5`).bind(email, at),
     db.prepare(`UPDATE audio_client_codes SET used_at=?,session_token_hash=?
-      WHERE email=? AND code_hash=? AND used_at IS NULL AND expires_at>?
+      WHERE email=? AND code_hash=? AND used_at IS NULL AND expires_at>? AND changes()=1
       RETURNING email`).bind(at, tokenHash, email, digest, at),
     db.prepare(`INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at)
       SELECT ?,email,?,?,? FROM audio_client_codes WHERE email=? AND session_token_hash=?`)
@@ -100,10 +106,25 @@ export async function completeClientCode(db: D1Database, email: string, code: st
       WHERE r.email=? AND p.revoked_at IS NULL
         AND EXISTS(SELECT 1 FROM audio_client_sessions WHERE token_hash=?)`).bind(at, email, tokenHash),
   ]);
-  if (used.results.length) return token;
-  await db.prepare(`UPDATE audio_client_codes SET attempts=attempts+1
-    WHERE email=? AND used_at IS NULL AND attempts<5 AND expires_at>?`).bind(email, at).run();
-  return null;
+  return used.results.length ? token : null;
+}
+
+const allowanceWindowMs = 5 * 60 * 1000;
+
+/**
+ * An atomic sign-in allowance: at most `limit` uses per five minutes for one scope and subject
+ * (an email address or IP). Subjects are stored only as keyed hashes, and stale windows are
+ * pruned in the same transaction.
+ */
+export async function takeStudioAllowance(db: D1Database, scope: string, subject: string, limit: number,
+  secret: string, now = new Date()): Promise<boolean> {
+  const key = await keyedHash(secret, `${scope}:${subject}`);
+  const [, counted] = await db.batch([
+    db.prepare('DELETE FROM audio_client_allowances WHERE window_start<=?').bind(new Date(now.getTime() - allowanceWindowMs).toISOString()),
+    db.prepare(`INSERT INTO audio_client_allowances(key,window_start,uses) VALUES(?,?,1)
+      ON CONFLICT(key) DO UPDATE SET uses=uses+1 RETURNING uses`).bind(key, now.toISOString()),
+  ]);
+  return Number((counted.results[0] as { uses: number } | undefined)?.uses ?? Infinity) <= limit;
 }
 
 export async function clientProjectForSession(db: D1Database, token: string, projectId: string, now = new Date()) {
