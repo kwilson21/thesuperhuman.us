@@ -31,7 +31,7 @@ describe('project invitations', () => {
     const env = { RESEND_API_KEY: 'test', CONTACT_FROM_EMAIL: 'studio@example.com' } as Env;
     await Promise.all([deliverProjectInvitation(db, 'song-1', env), deliverProjectInvitation(db, 'song-1', env)]);
     expect(sendStudioSignInNotice).toHaveBeenCalledTimes(1);
-    expect(sendStudioSignInNotice).toHaveBeenCalledWith('test', 'studio@example.com', 'artist@example.com', 'Your private studio project');
+    expect(sendStudioSignInNotice).toHaveBeenCalledWith('test', 'studio@example.com', 'artist@example.com', 'Your private studio project', 'invitation');
     expect(sql.prepare("SELECT invitation_status,invitation_sent_at IS NOT NULL AS delivered FROM audio_projects WHERE request_id='song-1'").get())
       .toEqual({ invitation_status: 'sent', delivered: 1 });
     expect(await queueProjectInvitation(db, 'song-1')).toBe(false);

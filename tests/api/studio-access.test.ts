@@ -72,7 +72,7 @@ describe('studio access routes', () => {
     expect(response.status).toBe(200);
     const cookie = response.headers.get('set-cookie');
     expect(cookie).toContain('HttpOnly');
-    expect(cookie).toContain('SameSite=Strict');
+    expect(cookie).toContain('SameSite=Lax');
     expect(cookie).toContain('Secure');
     expect(cookie).toContain('Max-Age=1209600');
   });

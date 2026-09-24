@@ -38,6 +38,7 @@ const laterDate = nextDay > today ? nextDay : today;
   )}</ol> : <p class="project-updates-empty">No progress updates yet.</p>}
 
   {owner && active && <div class="project-update-actions">
+    {stage === 'files_under_review' && requestStatus === 'new' && <p class="project-update-hint">Mark the request reviewed to accept the project and set its delivery date.</p>}
     {stage === 'files_under_review' && requestStatus === 'reviewed' && <form data-project-update-form data-action="accept">
       <h3>Accept the project</h3><p>Set a cautious delivery date and tell the client what happens next.</p>
       <label>Expected by <input type="date" name="dueDate" min={today} required /></label>
@@ -85,6 +86,7 @@ const laterDate = nextDay > today ? nextDay : today;
   .project-update-notice button { margin: 0; }
   .project-updates-empty { font: 1rem/1.6 Inter, sans-serif; color: #514d47; }
   .project-update-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 2rem; margin-top: 2rem; }
+  .project-update-hint { margin: 0; color: #66615a; font: .9rem/1.5 Inter, sans-serif; }
   form { display: grid; align-content: start; gap: .8rem; border-top: 1px solid #d8d2c9; padding-top: 1rem; }
   h3 { margin: 0; font: 400 1.6rem/1.15 Newsreader, Georgia, serif; }
   form p { margin: 0; color: #514d47; font: .9rem/1.5 Inter, sans-serif; }

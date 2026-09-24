@@ -149,6 +149,38 @@ it('keeps a failed discard recoverable and retries R2 cleanup', async () => {
   sql.close();
 });
 
+it('finishes a discard when R2 no longer has the multipart upload', async () => {
+  const { sql, db, bucket } = fixture();
+  sql.prepare("UPDATE audio_payments SET booking_status='paid' WHERE request_id='song-1'").run();
+  const upload = (await beginProjectUpload(db, bucket, 'song-1', {
+    version: 'review', displayName: 'Draft.wav', mediaType: 'audio/wav', byteSize: uploadPartSize + 3,
+  }, now))!;
+  // R2's incomplete-upload lifecycle, or an earlier abort, already removed it.
+  vi.spyOn(bucket, 'resumeMultipartUpload').mockReturnValue({
+    abort: async () => { throw new Error('abort: The specified multipart upload does not exist. (10024)'); },
+  } as unknown as R2MultipartUpload);
+  await abortProjectUpload(db, bucket, upload);
+  expect(await getProjectUpload(db, 'song-1', upload.id)).toBeNull();
+  sql.close();
+});
+
+it('keeps a discard retryable when aborting the upload fails for another reason', async () => {
+  const { sql, db, bucket } = fixture();
+  sql.prepare("UPDATE audio_payments SET booking_status='paid' WHERE request_id='song-1'").run();
+  const upload = (await beginProjectUpload(db, bucket, 'song-1', {
+    version: 'review', displayName: 'Draft.wav', mediaType: 'audio/wav', byteSize: uploadPartSize + 3,
+  }, now))!;
+  const original = bucket.resumeMultipartUpload.bind(bucket);
+  vi.spyOn(bucket, 'resumeMultipartUpload').mockReturnValueOnce({
+    abort: async () => { throw new Error('R2 unavailable'); },
+  } as unknown as R2MultipartUpload).mockImplementation(original);
+  await expect(abortProjectUpload(db, bucket, upload)).rejects.toThrow('R2 unavailable');
+  expect((await getProjectUpload(db, 'song-1', upload.id))?.state).toBe('discarding');
+  await abortProjectUpload(db, bucket, upload);
+  expect(await getProjectUpload(db, 'song-1', upload.id)).toBeNull();
+  sql.close();
+});
+
 it('cleans an object completed while a discard is starting', async () => {
   const { sql, db, bucket, objects } = fixture();
   sql.prepare("UPDATE audio_payments SET booking_status='paid' WHERE request_id='song-1'").run();

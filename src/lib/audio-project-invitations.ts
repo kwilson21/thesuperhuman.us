@@ -24,7 +24,7 @@ export async function deliverProjectInvitation(db: D1Database, requestId: string
     return;
   }
   const sent = recipient && env.RESEND_API_KEY && env.CONTACT_FROM_EMAIL
-    ? await sendStudioSignInNotice(env.RESEND_API_KEY, env.CONTACT_FROM_EMAIL, recipient.email, 'Your private studio project') : { ok: false };
+    ? await sendStudioSignInNotice(env.RESEND_API_KEY, env.CONTACT_FROM_EMAIL, recipient.email, 'Your private studio project', 'invitation') : { ok: false };
   if (sent.uncertain) return;
   await db.prepare(`UPDATE audio_projects SET invitation_status=?,invitation_sent_at=?
     WHERE request_id=? AND invitation_status='sending' AND revoked_at IS NULL`)
