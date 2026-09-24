@@ -12,7 +12,7 @@ const replaceAction = payment?.bookingStatus === 'void' ? 'booking' : payment?.b
 <section class="owner-section payment-panel" aria-labelledby="payment-heading" data-payment-panel data-request-id={requestId}>
   <div class="payment-heading"><div><p class="owner-kicker">Payment</p><h2 id="payment-heading">Book the work</h2></div>{payment && <p class="payment-total"><span>Fixed project price</span><strong>{money(payment.totalAmountCents)}</strong></p>}</div>
   {!payment ? <form data-payment-approval>
-    <p class="payment-guidance">Record the exact written offer only after the files, scope, price, and availability are settled. The service and price start from the request; check them against your offer, because they lock once confirmed.</p>
+    <p class="payment-guidance">Record the exact written offer only after the files, scope, price, and availability are settled. {defaults.approvedService ? 'The service and price start from the request; check them against your offer, because they lock once confirmed.' : 'The service and price lock once confirmed.'}</p>
     <div class="payment-fields"><label>Approved service<input name="approvedService" required maxlength="160" autocomplete="off" value={defaults.approvedService} placeholder="Service: song title" /></label><label>Total fixed price <span>USD</span><input name="totalAmount" required inputmode="decimal" placeholder="200.00" value={defaults.totalAmount} /></label></div>
     <label class="payment-acceptance"><input type="checkbox" name="offerAccepted" required /> Client accepted the written offer</label>
     <button class="owner-primary-action" type="submit">Confirm terms <span aria-hidden="true">→</span></button>

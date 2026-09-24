@@ -8,7 +8,7 @@ General philosophy is permitted; private operational recipes remain excluded.
 Existing checks, permissions, and review requirements still apply.
 UI pull requests follow the screenshot rule in [CLAUDE.md](CLAUDE.md): review the CI screenshots, and add a scenario in `scripts/screenshots/scenarios/` for any new stateful flow.
 
-Every pull request follows the review rule in [CLAUDE.md](CLAUDE.md): without a Greptile review of the current head, run independent review agents on the diff, fix each verified finding, and review again until a pass finds nothing. Merge only then, with CI green; findings that need a product or design decision go to the owner.
+Every pull request follows the review rule in [CLAUDE.md](CLAUDE.md): without a Greptile review of the current head, run independent review agents on the diff. Whichever reviewer ran, fix each verified finding and review the new head again until a pass finds nothing, then merge with CI green. Never merge publicist pull requests (hard rule 1 below), and follow the Website deployment gate, because merging to `main` deploys production. Findings that need a product or design decision go to the owner.
 
 ## Website deployment gate
 
