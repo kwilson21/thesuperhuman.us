@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { POST as requestCode } from '~/pages/api/studio/code';
 import { POST as completeCode } from '~/pages/api/studio/session';
 import { POST as signOut } from '~/pages/api/studio/sign-out';
-import { issueClientCode, completeClientCode, discardUndeliveredCode, revokeClientSession } from '~/lib/audio-client-access';
+import { issueClientCode, completeClientCode, discardUndeliveredCode, revokeClientSession, takeStudioAllowance } from '~/lib/audio-client-access';
 import { sendAudioMessage } from '~/lib/audio-resend';
 
 vi.mock('~/lib/audio-client-access', async importOriginal => ({
@@ -11,6 +11,7 @@ vi.mock('~/lib/audio-client-access', async importOriginal => ({
   completeClientCode: vi.fn(),
   discardUndeliveredCode: vi.fn(),
   revokeClientSession: vi.fn(),
+  takeStudioAllowance: vi.fn(async () => true),
 }));
 vi.mock('~/lib/audio-resend', () => ({ sendAudioMessage: vi.fn(async () => ({ ok: true })) }));
 
@@ -23,7 +24,7 @@ function context(path: string, body: unknown, enabled = true) {
     }),
     locals: { runtime: { ctx: { waitUntil: vi.fn((work: Promise<unknown>) => { pending.push(work); }) }, env: {
       AUDIO_CLIENT_PORTAL_ENABLED: enabled ? 'true' : 'false', AUDIO_CLIENT_CODE_KEY: 'a'.repeat(32),
-      MUSIC_DB: {}, RATE_LIMIT: { get: vi.fn(async () => null), put: vi.fn(async () => {}) },
+      MUSIC_DB: {},
       TURNSTILE_SECRET_KEY: 'test', RESEND_API_KEY: 'test', CONTACT_FROM_EMAIL: 'noreply@example.com',
     } } },
     pending,
@@ -92,6 +93,24 @@ describe('studio access routes', () => {
     expect(response.status).toBe(200);
     expect(revokeClientSession).toHaveBeenCalled();
     expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
+  });
+
+  it('keeps a code whose delivery is uncertain, since the email may still arrive', async () => {
+    vi.mocked(issueClientCode).mockResolvedValueOnce('12345678');
+    vi.mocked(sendAudioMessage).mockResolvedValueOnce({ ok: false, uncertain: true });
+    const codeContext = context('/api/studio/code', { email, turnstileToken: 'challenge' });
+    expect((await requestCode(codeContext)).status).toBe(200);
+    await Promise.all(codeContext.pending);
+    expect(discardUndeliveredCode).not.toHaveBeenCalled();
+  });
+
+  it('refuses code requests and guesses past their allowance', async () => {
+    vi.mocked(takeStudioAllowance).mockResolvedValueOnce(false);
+    expect((await requestCode(context('/api/studio/code', { email, turnstileToken: 'challenge' }))).status).toBe(429);
+    vi.mocked(takeStudioAllowance).mockResolvedValueOnce(false);
+    expect((await completeCode(context('/api/studio/session', { email, code: '12345678' }))).status).toBe(429);
+    expect(issueClientCode).not.toHaveBeenCalled();
+    expect(completeClientCode).not.toHaveBeenCalled();
   });
 
   it('clears the browser cookie when session revocation fails', async () => {
