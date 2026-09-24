@@ -90,6 +90,8 @@ const sameStorage = (a, b) => ['accountId', 'databaseId', 'bucket', 'jurisdictio
 async function ensureSchema(database) {
   const rows = await database.query('PRAGMA table_info(audio_projects)');
   if (!rows.some(row => row.name === 'content_deleted_at')) throw new Error('Apply studio retention migration 0014 before running retention.');
+  const messages = await database.query('PRAGMA table_info(audio_project_messages)');
+  if (!messages.some(row => row.name === 'review_decision')) throw new Error('Apply review decisions migration 0018 before running retention.');
 }
 
 export async function previewStudioRetention(database, environment, storage, now = new Date()) {

@@ -40,6 +40,8 @@ const idsSelection = rows => rows.length ? `id IN (${rows.map(row => quote(row[0
 async function paymentRetentionGuard(database) {
   const tables = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='audio_payments'");
   if (!tables.length) return '1';
+  const messages = new Set((await database.query('PRAGMA table_info(audio_project_messages)')).map(row => String(row.name)));
+  if (!messages.has('review_decision')) throw new Error('Review decisions migration 0018 is required before owner retention can run.');
   return `NOT EXISTS (SELECT 1 FROM audio_payments AS payment WHERE payment.request_id=owner_requests.id
     AND NOT (${finishedPaymentTerms('payment')}))`;
 }
