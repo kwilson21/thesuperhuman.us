@@ -25,7 +25,7 @@ const clientStopped: NextStep = { title: 'The client stopped the project', detai
 /** What the owner does next to move a studio project along, or null once there is nothing left. */
 export function ownerNextStep({ stage, requestStatus, revoked, payment: pay, stripeEnabled, reviewDecision = null }: NextStepInput): NextStep | null {
   // A client who stops closes their own access, so a revoked project can still have a step.
-  if (revoked && reviewDecision === 'stopped' && requestStatus !== 'resolved') return clientStopped;
+  if (revoked && reviewDecision === 'stopped' && requestStatus !== 'resolved' && requestStatus !== 'withdrawn') return clientStopped;
   if (revoked || requestStatus === 'withdrawn' || stage === 'complete') return null;
   // Resolving an unaccepted request closes its studio (migration 0015), so only new and reviewed remain.
   if (stage === 'files_under_review') return requestStatus === 'new'

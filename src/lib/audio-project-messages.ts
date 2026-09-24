@@ -10,7 +10,7 @@ export type ProjectMessage = {
   review_decision: ReviewDecision | null;
 };
 export type ReviewDecision = 'approved' | 'changes' | 'stopped';
-/** Revision rounds included with every project, as the services page promises. */
+/** Revision rounds included with every project, bundle and custom quotes too, as the services page states. */
 export const REVISION_ROUNDS = 2;
 
 const messageColumns = 'id,actor,body,created_at,read_at,review_decision';
