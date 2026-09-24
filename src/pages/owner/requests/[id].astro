@@ -4,6 +4,7 @@ import OwnerLayout from '~/layouts/OwnerLayout.astro';
 import AudioPaymentPanel from '~/components/owner/AudioPaymentPanel.astro';
 import ProjectMessages from '~/components/ProjectMessages.astro';
 import AudioProjectUpdates from '~/components/AudioProjectUpdates.astro';
+import OwnerProjectFiles from '~/components/owner/OwnerProjectFiles.astro';
 import { getAudioPayment } from '~/lib/audio-payments';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
 import type { ProjectInvitation } from '~/lib/audio-project-invitations';
@@ -23,6 +24,13 @@ const portalProject = request.kind === 'service' && clientPortalEnabled(Astro.lo
     { stage: string; current_due_at: string | null; revoked_at: string | null } & ProjectInvitation>() : null;
 const projectMessages = portalProject ? await listProjectMessages(db, request.id) : [];
 const projectUpdates = portalProject ? await listProjectUpdates(db, request.id) : [];
+const projectFiles = portalProject ? (await db.prepare(`SELECT id,version,display_name,byte_size,status,uploaded_at,published_at
+  FROM audio_project_files WHERE request_id=? ORDER BY uploaded_at DESC`).bind(request.id).all<
+  { id: string; version: 'review' | 'final'; display_name: string; byte_size: number;
+    status: 'uploaded' | 'published' | 'revoked'; uploaded_at: string; published_at: string | null }>()).results : [];
+const pendingUploads = portalProject ? (await db.prepare(`SELECT id,display_name,state,created_at FROM audio_project_uploads
+  WHERE request_id=? ORDER BY created_at DESC`).bind(request.id).all<
+  { id: string; display_name: string; state: 'pending' | 'discarding'; created_at: string }>()).results : [];
 const allowed = request.status === 'new' ? ['review', 'resolve', 'withdraw'] : request.status === 'reviewed' ? ['resolve', 'reopen', 'withdraw'] : request.status === 'resolved' ? ['reopen', 'withdraw'] : [];
 const label = (key: string) => key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, character => character.toUpperCase());
 const detailRows = Object.entries(request.details).filter(([, value]) => value !== '' && value !== null && value !== false && (!Array.isArray(value) || value.length));
@@ -49,7 +57,9 @@ const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') 
     <p data-invitation-status role="status" aria-live="polite"></p>
   </section>}
   {portalProject && <AudioProjectUpdates updates={projectUpdates} currentDueAt={portalProject.current_due_at} stage={portalProject.stage} requestStatus={request.status} bookingPaid={payment?.bookingStatus === 'paid'} revoked={Boolean(portalProject.revoked_at)} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/updates`} />}
+  {portalProject && <OwnerProjectFiles files={projectFiles} pending={pendingUploads} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/uploads`}
+    canUpload={['in_progress','review_ready','revision_in_progress'].includes(portalProject.stage) && payment?.bookingStatus === 'paid' && !portalProject.revoked_at && request.status !== 'withdrawn'} />}
   {portalProject && <ProjectMessages messages={projectMessages} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/messages`} reader="owner" closed={portalProject.stage === 'complete' || Boolean(portalProject.revoked_at) || request.status === 'withdrawn'} />}
   <section class="owner-section audit-trail"><p class="owner-kicker">Audit trail</p><h2>What changed</h2><ol>{audit.map(item => <li><strong>{item.action.replace('-', ' ')}</strong><span>{item.actor}</span><time datetime={item.occurredAt}>{new Date(item.occurredAt).toLocaleString()}</time>{item.note && <p>{item.note}</p>}</li>)}</ol></section>
-  <script>import { setupOwnerRequestActions } from '~/scripts/owner-request-actions'; import { setupOwnerPaymentActions } from '~/scripts/owner-payment-actions'; import { setupProjectMessages } from '~/scripts/project-messages'; import { setupProjectUpdates } from '~/scripts/project-updates'; import { setupProjectInvitation } from '~/scripts/project-invitation'; setupOwnerRequestActions(); setupOwnerPaymentActions(); setupProjectMessages(); setupProjectUpdates(); setupProjectInvitation();</script>
+  <script>import { setupOwnerRequestActions } from '~/scripts/owner-request-actions'; import { setupOwnerPaymentActions } from '~/scripts/owner-payment-actions'; import { setupProjectMessages } from '~/scripts/project-messages'; import { setupProjectUpdates } from '~/scripts/project-updates'; import { setupProjectInvitation } from '~/scripts/project-invitation'; import { setupOwnerProjectFiles } from '~/scripts/owner-project-files'; setupOwnerRequestActions(); setupOwnerPaymentActions(); setupProjectMessages(); setupProjectUpdates(); setupProjectInvitation(); setupOwnerProjectFiles();</script>
 </OwnerLayout>
