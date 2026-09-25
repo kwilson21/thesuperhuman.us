@@ -12,7 +12,7 @@ agent inside the same run, still under the same gate and the same approval PR.
 | Bluesky (or X) | Feed | One idea per post, conversation with developers | 1 to 2 a day | API once approved; X is paid per post |
 | YouTube | Video | Software and music on one channel, @KazonTheOne ([playbook](youtube.md)) | At most 1 video a week, plus releases | Uploaded by hand in YouTube Studio at first |
 | GitHub | Profile | Profile README (`kwilson21/kwilson21`), project READMEs, pinned repos | When a milestone lands | PRs for README changes; pinning by hand |
-| Ko-fi | Profile | Support for all of the owner's work | On hold ([plan needed](ko-fi.md)) | By hand; no posting API is known |
+| Ko-fi | Profile | Support for all of the owner's work, tips only | Permanent links; at most 1 support post a month ([plan](ko-fi.md)) | By hand; no posting API is known |
 
 The shared limit of 3 feed posts a day covers LinkedIn and Bluesky (or X) together.
 YouTube videos and profile updates sit outside that limit, but a post announcing a

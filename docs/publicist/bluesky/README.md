@@ -48,10 +48,9 @@ small number of good conversations, with LinkedIn carrying the professional reac
 5. **Pinned post:** a short introduction with one link, the website.
    > I build useful software with AI, and I mix and master audio. I'm posting what I make and why: Tally, kaillera-next and more. Everything lives at thesuperhuman.us.
 
-   Replace it with a strong project post later if you prefer. **Ko-fi is on hold**
-   ([channels/ko-fi.md](../channels/ko-fi.md)): no Ko-fi link goes in the pinned post,
-   the bio or any post until the owner answers that plan's questions. Once they do,
-   this line can be appended to the pinned post:
+   Replace it with a strong project post later if you prefer. The Ko-fi plan is
+   decided ([channels/ko-fi.md](../channels/ko-fi.md)), so append this line to the
+   pinned post (not the bio, and not routine posts):
    > If the work is useful to you, you can support it on Ko-fi: ko-fi.com/kazonwilson
 6. **Settings worth changing:** turn on two-factor sign-in by email; leave
    "adult content" off; set who can reply to "everyone" at first.
