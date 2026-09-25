@@ -438,8 +438,11 @@ status: draft                   # draft | approved (merged) | posted | skipped
 ```
 
 **Choosing and spacing.**
-- At most 3 posts a day across platforms, and 2 on days without strong material.
-  At most 1 LinkedIn post a day, weekdays only. At least 3 hours between posts.
+- Limits are per network (owner decision, 2026-09-25: post on LinkedIn, Bluesky
+  and X). LinkedIn: at most 1 post a day, weekdays only. Bluesky and X: at most 2
+  posts a day each. At least 3 hours between posts on the same network, and at most
+  5 posts a day across all networks. The same entry can go to several networks in
+  the same slot, but never with the same text.
 - Priority: a finished milestone with a visual, then a clear "why" story, then
   backfill. New work takes the first slot of the day when any is waiting; backfill
   fills the rest, at most two a day. Within a day, no two posts in a row about
@@ -455,7 +458,21 @@ Edit or delete files in the PR, then merge; merged files are the approved batch.
 Unmerged drafts whose slot has passed are moved to the next open slot by the next run.
 
 **Posting.** Manual at first: each morning, post that day's approved files and set
-`status: skipped` on any you pass on (the next PR can include that edit). After a
+`status: skipped` on any you pass on (the next PR can include that edit).
+
+**Morning digest (owner decision, 2026-09-25).** The daily run posts a "Today's
+posts" message in the publicist session: for each post, the network to post on, the
+time, the exact text, the link, the image path and its alt text. It lists only
+approved files on `main`. The queue waits for the owner:
+- Nothing is marked `posted` or `skipped` until the owner says so.
+- While the owner hasn't reported on a digest, the next digest repeats the same
+  posts with a one-line note that they are still waiting. It never adds more to
+  catch up.
+- Once the owner reports, the next run records it in a small PR and moves the
+  remaining posts forward to the next open slots, keeping their order and the
+  per-network limits. Missed days are not made up by posting more on one day.
+
+After a
 few batches, if you want, the next step is a proposal (not a switch) for an
 automated poster: a scheduled GitHub Action in this repo that posts approved files
 from `main` at their slot and records `posted` with the post URL, one platform at
@@ -583,9 +600,11 @@ loads that canonical file first. In short:
 
 **Still open (not blocking):**
 
-6. **Platforms:** LinkedIn plus Bluesky or X. The comparison is in
-   [channels/](channels/README.md#feed-platforms) and the Bluesky setup in
-   [bluesky/](bluesky/README.md); the queue works with either.
+6. **Platforms:** decided 2026-09-25: LinkedIn, Bluesky
+   ([@thesuperhuman.us](https://bsky.app/profile/thesuperhuman.us)) and X
+   (@TechGnostic_), each at its full cadence.
+   The comparison is in [channels/](channels/README.md#feed-platforms) and the setup in
+   [bluesky/](bluesky/README.md).
 7. **Kaillera-next attribution:** resolved 2026-09-23 from commit trailers, as the
    owner asked: Claude co-authors almost every commit; Codex appears only on six
    spec-review commits on 2026-04-27.
@@ -593,9 +612,10 @@ loads that canonical file first. In short:
    enough good material?
 9. **Checkpoint rule:** add the intent-note rule (section 5) to both project
    repositories?
-10. **YouTube and Ko-fi:** the open questions are in
+10. **YouTube:** the open questions are in
     [channels/youtube.md](channels/youtube.md) (style, Old News rights, voice,
-    display name, existing videos) and [channels/ko-fi.md](channels/ko-fi.md).
+    display name, existing videos). Ko-fi's plan was decided 2026-09-25
+    ([channels/ko-fi.md](channels/ko-fi.md)).
 
 After approval, in order:
 1. Move the skill to its canonical file and add the always-loaded layers, the

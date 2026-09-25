@@ -158,8 +158,9 @@ Stage 2, publish (public):
    WebP. Label each asset's kind, build and date. Inspect every image yourself.
 5. Draft posts into `publicist/queue/` only for entries drafted in this stage,
    saying no more than the entry says. Posts pass the quality standards and spacing
-   rules in the design doc, section 8 (at most 3 a day, 1 LinkedIn a weekday,
-   3 hours apart, new work first, at most 2 backfill a day). Re-slot unapproved
+   rules in the design doc, section 8 (per network: 1 LinkedIn a weekday, at most
+   2 a day each on Bluesky and X, 3 hours apart; at most 5 a day in all; never the
+   same text on two networks; new work first, at most 2 backfill a day). Re-slot unapproved
    drafts whose slot has passed.
 6. Advance `publicist/state.json` here: entry IDs published, plus entry IDs from a
    public publicist PR closed without merging, recorded as declined. It holds IDs
@@ -168,3 +169,13 @@ Stage 2, publish (public):
    PR titled "Publicist: <date range>" listing each entry by ID, its public sources
    and each queued post, plus the count of entries held for an unapproved draft (IDs
    only). If nothing is ready, open nothing.
+
+Stage 3, morning digest (in conversation only):
+8. Post a "Today's posts" message in the session, following the design doc,
+   section 8 ("Morning digest"). List only files on `main` (merged means
+   approved) not yet marked `posted` or `skipped`, grouped by network: the network, the slot, the exact text, the
+   link, the image path and its alt text. If the owner hasn't reported on the last
+   digest, repeat those posts with a one-line "still waiting, no rush" note and add
+   nothing more. Record `posted` or `skipped` only from the owner's own words, in a
+   small PR, then move the remaining posts to the next open slots without
+   compressing missed days. Showing drafts is not posting.
