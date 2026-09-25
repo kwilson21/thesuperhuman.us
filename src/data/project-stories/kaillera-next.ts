@@ -9,6 +9,10 @@ import bitsDiagram from '~/assets/projects/kaillera-next/identical-bits-diagram.
 import rollbackDiagram from '~/assets/projects/kaillera-next/rollback-diagram.webp';
 import startupDiagram from '~/assets/projects/kaillera-next/startup-diagram.webp';
 import aiTeamDiagram from '~/assets/projects/kaillera-next/ai-team-diagram.webp';
+import staticDemoDiagram from '~/assets/projects/kaillera-next/static-demo-diagram.webp';
+import recoveryDiagram from '~/assets/projects/kaillera-next/recovery-syncs-diagram.webp';
+import selfHostingDiagram from '~/assets/projects/kaillera-next/self-hosting-diagram.webp';
+import supportedRoms from '~/assets/projects/kaillera-next/supported-roms-lobby-annotated.webp';
 
 export const kailleraStory = {
   title: 'Kaillera Next',
@@ -21,7 +25,7 @@ const artifact = (image: ImageMetadata, title: string, caption: string, kind: st
   alt: `${title}. ${caption}`,
 });
 
-// Publicist backfill. Each entry is the owner-approved draft from its private
+// Publicist entries. Each is the owner-approved draft from its private
 // review note (same ID), changed only for formatting. Page renders use the
 // site's own files at each tag with no server; no game footage is shown.
 export const kailleraMilestones: Milestone[] = [
@@ -130,5 +134,29 @@ export const kailleraMilestones: Milestone[] = [
     summary: 'I set up a team of AI models with clear roles: Claude writes most of the code and integrates the work, Codex takes on engineering tasks and cross-reviews designs, and DeepSeek audits the reasoning. A nightly tech-debt audit only opens a draft pull request for me when two models agree on a fix.',
     backfilled: true,
     artifacts: [artifact(aiTeamDiagram, 'Kaillera Next · A team of AI models', 'The roles as designed and the nightly two-model audit.', 'Diagram')],
+  },
+  {
+    id: 'kaillera-next-static-demo', day: '2026-09-24',
+    title: 'A demo build with no ROMs',
+    summary: 'Kaillera Next now has a static demo build that runs on Cloudflare with no ROMs and no ROM sharing anywhere in the deploy. The same change fixed several rollback bugs, including a build step that quietly zeroed negative stick inputs. It also added a real two-browser test that plays against the server with added latency and jitter and compares both players’ game state. Claude Code built it.',
+    artifacts: [artifact(staticDemoDiagram, 'Kaillera Next · A demo build with no ROMs', 'The static demo build and the rollback fixes that came with it.', 'Diagram')],
+  },
+  {
+    id: 'kaillera-next-recovery-syncs', day: '2026-09-24',
+    title: 'Getting a stuck player back in sync',
+    summary: 'When one player’s game drifts or freezes, the host sends a fresh copy of its game state to bring them back. These fixes make that recovery work in rollback mode: the host sends it only once its own state is final, waits until the connection is open, and retries a send that was skipped. A separate fix makes any stick mismatch between players trigger a rollback, where small differences used to slip through. Claude Code wrote the fixes and a test that freezes one player and checks both games match afterward. Released in v0.51.3.',
+    artifacts: [artifact(recoveryDiagram, 'Kaillera Next · Getting a stuck player back in sync', 'The recovery path from drift to resync, and the stick-prediction fix.', 'Diagram')],
+  },
+  {
+    id: 'kaillera-next-self-hosting', day: '2026-09-24',
+    title: 'Moving Kaillera Next onto one small server',
+    summary: 'Kaillera Next needs a server for rooms, plus a relay for players whose networks block direct connections. It’s now set up to run on one small server behind a Cloudflare Tunnel, with no open inbound ports, and it redeploys itself when I merge to main. A free-tier host can take over with one command if needed. Players who can’t connect directly get short-lived relay credentials, and the key never reaches the browser. ROM sharing is off on the public server, and the server enforces that. Claude Code built the setup. The site now runs on the free-tier host, with the small server ready as the alternative.',
+    artifacts: [artifact(selfHostingDiagram, 'Kaillera Next · One small server', 'The request path through the tunnel, the relay for direct play, and the server-side ROM switch.', 'Diagram')],
+  },
+  {
+    id: 'kaillera-next-supported-roms', day: '2026-09-23',
+    title: 'Saying which games work',
+    summary: 'Kaillera Next only works with three ROMs right now: Super Smash Bros. (US) and Smash Remix 2.0.0 and 2.0.1. The lobby now lists them. If you load anything else, the play page warns that it may not work and names the supported ones. It’s a warning, not a block. Claude Code built the warning from the server’s own list and added a test that fails if the lobby’s copy drifts from it. Released in v0.50.0.',
+    artifacts: [artifact(supportedRoms, 'Kaillera Next · Saying which games work', 'The v0.50.0 lobby with the Supported ROMs list, rendered from the site’s own files without a server or ROMs, with numbered pointers.', 'Annotated page render')],
   },
 ];
