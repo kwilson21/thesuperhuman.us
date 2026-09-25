@@ -29,7 +29,8 @@
     "tally-phase-1-done",
     "kaillera-next-static-demo",
     "kaillera-next-recovery-syncs",
-    "kaillera-next-self-hosting"
+    "kaillera-next-self-hosting",
+    "kaillera-next-supported-roms"
   ],
   "declined": []
 }
