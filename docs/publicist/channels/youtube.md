@@ -36,8 +36,8 @@ proposes keep, move to a playlist, or unlist for each.
    > I build useful software with AI and make music. Build videos show what I made,
    > why, and how it works. Sound videos are releases and notes on how a mix or
    > master came together. Everything lives at thesuperhuman.us.
-4. **Links:** thesuperhuman.us first, then Bluesky (or X), LinkedIn and GitHub.
-   Ko-fi joins once its plan exists ([ko-fi.md](ko-fi.md)).
+4. **Links:** thesuperhuman.us first, then Bluesky (or X), LinkedIn, GitHub and
+   Ko-fi ([ko-fi.md](ko-fi.md)).
 5. **Home page sections:** Build playlist, Sound playlist, latest release. A channel
    trailer can come later from the first good Build and Sound videos.
 6. **Playlists:** Build: Tally · Build: kaillera-next · Build: the website ·

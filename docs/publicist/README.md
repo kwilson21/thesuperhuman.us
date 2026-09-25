@@ -593,9 +593,10 @@ loads that canonical file first. In short:
    enough good material?
 9. **Checkpoint rule:** add the intent-note rule (section 5) to both project
    repositories?
-10. **YouTube and Ko-fi:** the open questions are in
+10. **YouTube:** the open questions are in
     [channels/youtube.md](channels/youtube.md) (style, Old News rights, voice,
-    display name, existing videos) and [channels/ko-fi.md](channels/ko-fi.md).
+    display name, existing videos). Ko-fi's plan was decided 2026-09-25
+    ([channels/ko-fi.md](channels/ko-fi.md)).
 
 After approval, in order:
 1. Move the skill to its canonical file and add the always-loaded layers, the
