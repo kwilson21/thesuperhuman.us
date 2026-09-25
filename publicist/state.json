@@ -22,7 +22,14 @@
     "kaillera-next-n64recomp",
     "kaillera-next-late-join",
     "kaillera-next-hardening",
-    "kaillera-next-ai-team"
+    "kaillera-next-ai-team",
+    "tally-transactions",
+    "tally-demo-environment",
+    "tally-jev-categorization",
+    "tally-phase-1-done",
+    "kaillera-next-static-demo",
+    "kaillera-next-recovery-syncs",
+    "kaillera-next-self-hosting"
   ],
   "declined": []
 }

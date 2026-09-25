@@ -2,6 +2,10 @@ import type { ImageMetadata } from 'astro';
 import type { Milestone } from '~/lib/project-story';
 import designSystem from '~/assets/projects/tally/design-system-annotated.webp';
 import home from '~/assets/projects/tally/home-annotated.webp';
+import transactionsEdit from '~/assets/projects/tally/transactions-edit-annotated.webp';
+import demoDiagram from '~/assets/projects/tally/demo-environment-diagram.webp';
+import jevDiagram from '~/assets/projects/tally/jev-categorization-diagram.webp';
+import phaseOneHome from '~/assets/projects/tally/phase-1-home-annotated.webp';
 
 export const tallyStory = {
   title: 'Tally',
@@ -14,7 +18,7 @@ const artifact = (image: ImageMetadata, title: string, caption: string, kind: st
   alt: `${title}. ${caption}`,
 });
 
-// Publicist backfill. Each entry is the owner-approved draft from its private
+// Publicist entries. Each is the owner-approved draft from its private
 // review note (same ID), changed only for formatting. Captures use demo data.
 export const tallyMilestones: Milestone[] = [
   {
@@ -54,5 +58,29 @@ export const tallyMilestones: Milestone[] = [
     summary: 'Home answers the question my family asks most: how much can we still spend this month? Safe to spend leads, and everything below it explains that number. Bills arrive in Phase 3, so for now it doesn’t subtract them.',
     backfilled: true,
     artifacts: [artifact(home, 'Tally · The Home screen', 'The Home screen from PR #41 on demo data, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-transactions', day: '2026-09-24',
+    title: 'Finding and fixing transactions',
+    summary: 'Home tells you how many transactions still need a category. This is where you fix them. The Transactions list has search, month and category filters, and a Needs category filter that always matches Home’s count. Tap a row to pick a category, rename the merchant, add a note, or tick one box to always use that category for the merchant. Saving updates the list and Home together. Claude Code built it, including a browser test that goes from Home’s band through one fix. Built and tested on demo data.',
+    artifacts: [artifact(transactionsEdit, 'Tally · Finding and fixing transactions', 'The edit panel over the Needs category list, from PR #45 on demo data, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-demo-environment', day: '2026-09-24',
+    title: 'A demo that cleans up after itself',
+    summary: 'I wanted to try each change on my phone or laptop without running anything locally. So Tally’s demo is the same code deployed a second time, with its own database, a single public address and only fictional data. Every night it resets to that fictional household. The reset erases every table, so at my request it also checks for bank credentials, which the real app always has, and refuses to run if it finds any. Claude Code built the setup and a test that pins those safety settings. Deploying stays a step I run myself.',
+    artifacts: [artifact(demoDiagram, 'Tally · A demo that cleans up after itself', 'The demo deployment, its own database, the nightly reset and the two-part guard.', 'Diagram')],
+  },
+  {
+    id: 'tally-jev-categorization', day: '2026-09-24',
+    title: 'AI suggests, people decide',
+    summary: 'Tally’s rule is that AI suggests, code calculates and people decide. So each night, after merchant rules run, Tally asks Jev, an AI classifier, about up to 40 transactions that still need a category. Code applies an answer only when Jev is at least 80% sure, and never over a choice a person or a rule already made. The edit panel shows "Picked by Jev · 93% sure" so you can change it. After Jev’s first run on the demo, I added a "None of these fit" answer, because Household had turned into a catch-all. Claude Code built it.',
+    artifacts: [artifact(jevDiagram, 'Tally · AI suggests, people decide', 'The nightly order: merchant rules first, then Jev, with the 80% rule and a write that never overrides a person.', 'Diagram')],
+  },
+  {
+    id: 'tally-phase-1-done', day: '2026-09-25',
+    title: 'Phase 1 done: a demo that explains itself',
+    summary: 'Tally’s first phase is done: the demo loads over HTTPS, every Phase 1 screen works, and there are no console errors. The demo now explains itself. Home has a short Things to try list, and How Tally works shows the system diagram, each rule in plain words, and worked examples computed from the demo’s own live numbers. Claude Code then reviewed what was built against the spec, and I approved its proposals: default categories and excluding transfers move into Phase 2, so the numbers are right from day one. Try it at tally-demo.thesuperhuman.us.',
+    artifacts: [artifact(phaseOneHome, 'Tally · Phase 1 done', 'The demo Home with Things to try, from PR #52 on demo data, with numbered pointers.', 'Annotated screen capture, demo data')],
   },
 ];
