@@ -438,8 +438,11 @@ status: draft                   # draft | approved (merged) | posted | skipped
 ```
 
 **Choosing and spacing.**
-- At most 3 posts a day across platforms, and 2 on days without strong material.
-  At most 1 LinkedIn post a day, weekdays only. At least 3 hours between posts.
+- Limits are per network (owner decision, 2026-09-25: post on LinkedIn, Bluesky
+  and X). LinkedIn: at most 1 post a day, weekdays only. Bluesky and X: at most 2
+  posts a day each. At least 3 hours between posts on the same network, and at most
+  5 posts a day across all networks. The same entry can go to several networks in
+  the same slot, but never with the same text.
 - Priority: a finished milestone with a visual, then a clear "why" story, then
   backfill. New work takes the first slot of the day when any is waiting; backfill
   fills the rest, at most two a day. Within a day, no two posts in a row about
@@ -583,8 +586,9 @@ loads that canonical file first. In short:
 
 **Still open (not blocking):**
 
-6. **Platforms:** decided 2026-09-25: LinkedIn plus Bluesky
-   ([@thesuperhuman.us](https://bsky.app/profile/thesuperhuman.us)), with X going quiet.
+6. **Platforms:** decided 2026-09-25: LinkedIn, Bluesky
+   ([@thesuperhuman.us](https://bsky.app/profile/thesuperhuman.us)) and X
+   (@TechGnostic_), each at its full cadence.
    The comparison is in [channels/](channels/README.md#feed-platforms) and the setup in
    [bluesky/](bluesky/README.md).
 7. **Kaillera-next attribution:** resolved 2026-09-23 from commit trailers, as the

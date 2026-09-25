@@ -8,10 +8,12 @@ were not reachable from this environment, so confirm menu names as you go.
 
 ## Is it worth it as a reset?
 
-Yes, if the reset means **replacing X, not adding a third network.** The plan
-becomes LinkedIn (professional audience) plus Bluesky (developers and conversation),
-and X goes quiet: pin a final post pointing to Bluesky and the website, then stop
-posting there.
+Update, 2026-09-25: the owner decided to keep posting on X as well, so Bluesky is
+added alongside it, not instead of it. The original reasoning follows for the record.
+
+The first proposal was **replacing X, not adding a third network**: LinkedIn
+(professional audience) plus Bluesky (developers and conversation), with X going
+quiet.
 
 What you gain:
 - Your domain as your handle: **@thesuperhuman.us**. It is verified by a DNS record
@@ -59,9 +61,8 @@ small number of good conversations, with LinkedIn carrying the professional reac
 7. **Later, only for automated posting:** create an **app password** (Settings,
    Privacy and security, App passwords). It goes straight into the poster's secret
    store, never into chat, a PR or a file. Not needed during manual posting.
-8. **On X:** a final pinned post: "I'm posting about my work on Bluesky now:
-   @thesuperhuman.us. Everything lives at thesuperhuman.us." Then stop posting.
-   Deleting the account is optional and not recommended; it keeps the handle.
+8. **On X:** keep posting (owner decision, 2026-09-25). Optionally add
+   "Also on Bluesky: @thesuperhuman.us" to the X bio.
 
 ## Banner
 

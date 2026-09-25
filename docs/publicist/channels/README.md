@@ -9,14 +9,16 @@ agent inside the same run, still under the same gate and the same approval PR.
 | --- | --- | --- | --- | --- |
 | Website journal | Home | The full story of each change; every post links here | Per merged milestone | Merge of the public PR deploys it |
 | LinkedIn | Feed | Professional story posts for recruiters and hiring managers | At most 1 a weekday | API for posts once approved; profile edits by hand |
-| Bluesky (or X) | Feed | One idea per post, conversation with developers | 1 to 2 a day | API once approved; X is paid per post |
+| Bluesky | Feed | One idea per post, conversation with developers (@thesuperhuman.us) | 1 to 2 a day | API once approved (free) |
+| X | Feed | One idea per post, wider reach (@TechGnostic_) | 1 to 2 a day | By hand; the API is paid per post |
 | YouTube | Video | Software and music on one channel, @KazonTheOne ([playbook](youtube.md)) | At most 1 video a week, plus releases | Uploaded by hand in YouTube Studio at first |
 | GitHub | Profile | Profile README (`kwilson21/kwilson21`), project READMEs, pinned repos | When a milestone lands | PRs for README changes; pinning by hand |
 | Ko-fi | Profile | Support for all of the owner's work, tips only | Permanent links; at most 1 support post a month ([plan](ko-fi.md)) | By hand; no posting API is known |
 
-The shared limit of 3 feed posts a day covers LinkedIn and Bluesky (or X) together.
-YouTube videos and profile updates sit outside that limit, but a post announcing a
-video counts against it.
+Feed limits are per network (design doc, section 8): at most 1 LinkedIn post a
+weekday, at most 2 posts a day each on Bluesky and X, and at most 5 across all
+networks. YouTube videos and profile updates sit outside those limits, but a post
+announcing a video counts against them.
 
 **Where there is no API, the owner clicks.** For profile setup, the Ko-fi page,
 YouTube uploads and pinned repos, the publicist prepares a checklist with the exact
@@ -42,7 +44,9 @@ signed-in session to the owner's accounts.
   shrinking: about 10 million monthly app users in mid-2026, roughly half its
   late-2024 peak, and posts reach far fewer people than on X.
 
-Recommendation: **two networks, not three. LinkedIn plus Bluesky as a reset,
+**Decision (owner, 2026-09-25): all three networks.** The owner still uses X and
+wants posts there at the same cadence as Bluesky. The original recommendation
+follows for the record: **two networks, not three. LinkedIn plus Bluesky as a reset,
 with X going quiet.** A third platform works against the goal of doing less. Since
 you are open to a reset and not fond of X, Bluesky is the better second network:
 your domain becomes your handle (@thesuperhuman.us), it costs nothing to automate,
