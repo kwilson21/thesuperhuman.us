@@ -169,3 +169,13 @@ Stage 2, publish (public):
    PR titled "Publicist: <date range>" listing each entry by ID, its public sources
    and each queued post, plus the count of entries held for an unapproved draft (IDs
    only). If nothing is ready, open nothing.
+
+Stage 3, morning digest (in conversation only):
+8. Post a "Today's posts" message in the session, following the design doc,
+   section 8 ("Morning digest"). List only files on `main` (merged means
+   approved) not yet marked `posted` or `skipped`, grouped by network: the network, the slot, the exact text, the
+   link, the image path and its alt text. If the owner hasn't reported on the last
+   digest, repeat those posts with a one-line "still waiting, no rush" note and add
+   nothing more. Record `posted` or `skipped` only from the owner's own words, in a
+   small PR, then move the remaining posts to the next open slots without
+   compressing missed days. Showing drafts is not posting.

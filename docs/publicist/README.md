@@ -458,7 +458,21 @@ Edit or delete files in the PR, then merge; merged files are the approved batch.
 Unmerged drafts whose slot has passed are moved to the next open slot by the next run.
 
 **Posting.** Manual at first: each morning, post that day's approved files and set
-`status: skipped` on any you pass on (the next PR can include that edit). After a
+`status: skipped` on any you pass on (the next PR can include that edit).
+
+**Morning digest (owner decision, 2026-09-25).** The daily run posts a "Today's
+posts" message in the publicist session: for each post, the network to post on, the
+time, the exact text, the link, the image path and its alt text. It lists only
+approved files on `main`. The queue waits for the owner:
+- Nothing is marked `posted` or `skipped` until the owner says so.
+- While the owner hasn't reported on a digest, the next digest repeats the same
+  posts with a one-line note that they are still waiting. It never adds more to
+  catch up.
+- Once the owner reports, the next run records it in a small PR and moves the
+  remaining posts forward to the next open slots, keeping their order and the
+  per-network limits. Missed days are not made up by posting more on one day.
+
+After a
 few batches, if you want, the next step is a proposal (not a switch) for an
 automated poster: a scheduled GitHub Action in this repo that posts approved files
 from `main` at their slot and records `posted` with the post URL, one platform at
