@@ -9,7 +9,7 @@ media: src/assets/projects/kaillera-next/self-hosting-diagram.webp
 alt: Diagram of Kaillera Next's hosting: browser to Cloudflare to a tunnel into one small server, peer-to-peer play with a relay fallback, and ROM sharing switched off on the server.
 status: draft
 ---
-Kaillera Next, my browser-based N64 netplay project, needs a server for rooms, plus a relay for players whose networks block direct connections.
+Kaillera Next needs a server for rooms, plus a relay for players whose networks block direct connections.
 
 It's now set up to run on one small server behind a Cloudflare Tunnel, with no open inbound ports, and it redeploys itself when I merge to main. A free-tier host can take over with one command if needed, and that's where the site runs today.
 
