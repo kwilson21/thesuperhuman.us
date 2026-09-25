@@ -583,9 +583,10 @@ loads that canonical file first. In short:
 
 **Still open (not blocking):**
 
-6. **Platforms:** LinkedIn plus Bluesky or X. The comparison is in
-   [channels/](channels/README.md#feed-platforms) and the Bluesky setup in
-   [bluesky/](bluesky/README.md); the queue works with either.
+6. **Platforms:** decided 2026-09-25: LinkedIn plus Bluesky
+   ([@thesuperhuman.us](https://bsky.app/profile/thesuperhuman.us)), with X going quiet.
+   The comparison is in [channels/](channels/README.md#feed-platforms) and the setup in
+   [bluesky/](bluesky/README.md).
 7. **Kaillera-next attribution:** resolved 2026-09-23 from commit trailers, as the
    owner asked: Claude co-authors almost every commit; Codex appears only on six
    spec-review commits on 2026-04-27.

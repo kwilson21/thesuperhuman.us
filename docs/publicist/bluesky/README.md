@@ -1,6 +1,8 @@
 # Bluesky: setup, banner and profile
 
-Proposal for owner review, 2026-09-23. Nothing here has been created or posted.
+Status: the account is live at [@thesuperhuman.us](https://bsky.app/profile/thesuperhuman.us), verified
+by the `_atproto` DNS record on 2026-09-25. The profile, bio and pinned post below are
+the owner's to set by hand; posting stays manual until an autopost switch is approved.
 Facts below come from search results checked 2026-09-23; Bluesky's own help pages
 were not reachable from this environment, so confirm menu names as you go.
 
