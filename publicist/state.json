@@ -30,7 +30,11 @@
     "kaillera-next-static-demo",
     "kaillera-next-recovery-syncs",
     "kaillera-next-self-hosting",
-    "kaillera-next-supported-roms"
+    "kaillera-next-supported-roms",
+    "tally-exclusions",
+    "tally-settings",
+    "tally-how-diagrams",
+    "kaillera-next-remix-freezes"
   ],
   "declined": []
 }

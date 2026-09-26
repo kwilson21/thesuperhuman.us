@@ -6,6 +6,9 @@ import transactionsEdit from '~/assets/projects/tally/transactions-edit-annotate
 import demoDiagram from '~/assets/projects/tally/demo-environment-diagram.webp';
 import jevDiagram from '~/assets/projects/tally/jev-categorization-diagram.webp';
 import phaseOneHome from '~/assets/projects/tally/phase-1-home-annotated.webp';
+import exclusionsEdit from '~/assets/projects/tally/exclusions-edit-annotated.webp';
+import settingsEdit from '~/assets/projects/tally/settings-edit-annotated.webp';
+import howDiagrams from '~/assets/projects/tally/how-diagrams-annotated.webp';
 
 export const tallyStory = {
   title: 'Tally',
@@ -82,5 +85,23 @@ export const tallyMilestones: Milestone[] = [
     title: 'Phase 1 done: a demo that explains itself',
     summary: 'Tally’s first phase is done: the demo loads over HTTPS, every Phase 1 screen works, and there are no console errors. The demo now explains itself. Home has a short Things to try list, and How Tally works shows the system diagram, each rule in plain words, and worked examples computed from the demo’s own live numbers. Claude Code then reviewed what was built against the spec, and I approved its proposals: default categories and excluding transfers move into Phase 2, so the numbers are right from day one. Try it at tally-demo.thesuperhuman.us.',
     artifacts: [artifact(phaseOneHome, 'Tally · Phase 1 done', 'The demo Home with Things to try, from PR #52 on demo data, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-exclusions', day: '2026-09-25',
+    title: 'Leaving transfers out of the budget',
+    summary: 'Moving money between your own accounts or getting paid back isn’t spending, so Tally shouldn’t count it. Excluded transactions already stayed out of spending, safe to spend and the Needs category count; now you decide which ones. Any transaction can be excluded, or counted again, with one toggle in its edit panel: "Exclude from budget". Transactions Jev, Tally’s AI classifier, flags as a transfer or reimbursement start excluded, but Jev never overrides a choice a person made. The first panel was too cluttered, so I picked a simpler layout from three mockups. Claude Code built it, including a browser test that excludes a transaction and checks Home. Built and tested on demo data.',
+    artifacts: [artifact(exclusionsEdit, 'Tally · Leaving transfers out of the budget', 'The edit panel with the Exclude from budget toggle, from PR #59 on demo data, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-settings', day: '2026-09-25',
+    title: 'Settings for categories and budgets',
+    summary: 'A new Tally household starts with no data, so it needs a way to set up categories and monthly budgets before real use. Every new database now starts with 14 default categories, and Settings lets you rename them, set a budget from this month on, reorder them and add new ones. Categories are archived, never deleted, so past transactions keep theirs, and an archived category stays on Home for any month it has spending in. Claude Code built it from design studies I picked. I capped the list at 50 categories so every screen shows them all without paging. Built and tested on demo data.',
+    artifacts: [artifact(settingsEdit, 'Tally · Settings for categories and budgets', 'Settings with one category open for editing, from PR #63 on demo data, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-how-diagrams', day: '2026-09-25',
+    title: 'How Tally works, now with pictures',
+    summary: 'How Tally works explains each rule with a worked example from the demo’s own numbers. The goal: anyone trying the demo should see how those numbers fit together. So each section now has a small diagram, which Claude Code drew in code from the same numbers as the example beside it; a test checks that they match. Budget, Transactions and Categories are boxes and arrows. Excluding is one bar, with each kind of exclusion a dashed slice. I picked those styles from a mockup of two. The examples now also name each kind of exclusion and the income that needs no category. Built, tested and merged, on demo data.',
+    artifacts: [artifact(howDiagrams, 'Tally · How Tally works, now with pictures', 'The Transactions diagram and the Excluding bar with their worked examples, from PR #64 on demo data, with numbered pointers.', 'Annotated screen capture, demo data')],
   },
 ];
