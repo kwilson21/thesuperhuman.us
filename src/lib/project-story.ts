@@ -3,12 +3,19 @@ import type { ProjectFeed, PublicEntry } from './publication/read';
 export interface ProjectArtifact {
   src: string; title: string; alt: string; caption: string; kind: string; width: number; height: number;
 }
+/** Where a milestone reads by default. Only 'story' is ever set explicitly on a
+ * curated milestone; 'latest' and 'archive' are computed by recency in the
+ * projections below, never stored on the milestone itself. */
+export type JournalPlacement = 'latest' | 'story' | 'archive';
 export interface Milestone {
   id: string; day: string; title: string; summary: string; detail?: string;
   illustration?: 'payload-review'; detailLabel?: string;
   status?: string; basis?: string; publishedAt?: string; backfilled?: boolean;
   artifacts?: ProjectArtifact[];
   visualProof?: { label: string; before: ProjectArtifact; after: ProjectArtifact };
+  /** Explicit authored placement. Curators mark a milestone 'story' deliberately;
+   * a published entry is never given this value automatically. */
+  placement?: JournalPlacement;
 }
 const entries = (feed: ProjectFeed): PublicEntry[] => [...new Map([...feed.history, ...(feed.current ? [feed.current] : [])].map(entry => [entry.entryId, entry])).values()];
 export function publicationMilestones(feed: ProjectFeed | null): Milestone[] {
@@ -28,6 +35,22 @@ export function publicationMilestones(feed: ProjectFeed | null): Milestone[] {
 /** Curated history remains repository-owned; publish new milestones under separate IDs. */
 export function journalMilestones(feed: ProjectFeed | null, curated: Milestone[] = []): Milestone[] {
   return [...curated, ...publicationMilestones(feed)].sort((a, b) => a.day.localeCompare(b.day));
+}
+/** Explicitly authored narrative chapters, in the order they happened. Never inferred from dates. */
+export function storyMilestones(entries: Milestone[]): Milestone[] {
+  return entries.filter(entry => entry.placement === 'story').sort((a, b) => a.day.localeCompare(b.day));
+}
+/** Everything not in the authored story, newest first: the pool Latest work and Archive divide by recency. */
+function readingPool(entries: Milestone[]): Milestone[] {
+  return entries.filter(entry => entry.placement !== 'story').slice().sort((a, b) => b.day.localeCompare(a.day));
+}
+/** The default view: at most `limit` recent, non-story updates, newest first. */
+export function latestJournalMilestones(entries: Milestone[], limit = 5): Milestone[] {
+  return readingPool(entries).slice(0, limit);
+}
+/** Non-story updates older than the Latest work window, newest first. Nothing is deleted, only relocated. */
+export function archiveMilestones(entries: Milestone[], limit = 5): Milestone[] {
+  return readingPool(entries).slice(limit);
 }
 export function feedChange(previous: ProjectFeed, next: ProjectFeed): 'ignore' | 'unchanged' | 'new' | 'replace' {
   if (next.projectId !== previous.projectId || !Number.isSafeInteger(next.revision)) return 'ignore';

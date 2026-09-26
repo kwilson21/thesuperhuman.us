@@ -19,6 +19,10 @@
 .project-state p:not(.page-kicker) { font-size: 1.15rem; line-height: 1.5; }
 .project-note { color: var(--muted); font-size: .85rem; line-height: 1.7; max-width: 80ch; }
 .project-close { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1.5rem; padding-block: 2rem; border-top: 1px solid var(--rule); margin-top: 3rem; }
+/* An entry moved to the project story or archive keeps a small anchor at its old fragment ID, so an
+   existing link still lands somewhere useful without JavaScript. Hidden until it is the URL's target. */
+.moved-entry { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.moved-entry:target { position: static; width: auto; height: auto; margin: 0 0 1.5rem; padding: .9rem 1.1rem; overflow: visible; clip: auto; white-space: normal; display: block; border: 1px solid var(--rule); font-size: .95rem; line-height: 1.6; }
 @media(max-width: 700px) {
   .project-pair, .project-state { grid-template-columns: 1fr; }
   .project-state { gap: 1.5rem; }

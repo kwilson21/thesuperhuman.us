@@ -1,15 +1,36 @@
 ---
 import ProjectTimeline from './ProjectTimeline.astro';
-import { journalMilestones, type Milestone } from '~/lib/project-story';
+import { journalMilestones, latestJournalMilestones, storyMilestones, archiveMilestones, type Milestone } from '~/lib/project-story';
 import type { ProjectFeed } from '~/lib/publication/read';
-interface Props { feed: ProjectFeed | null; projectId: string; title?: string; milestones?: Milestone[]; selectedId?: string; }
-const { feed, projectId, title = 'Development journal', milestones = [], selectedId } = Astro.props;
+interface Props {
+  feed: ProjectFeed | null; projectId: string; title?: string; milestones?: Milestone[]; selectedId?: string;
+  /** Personal Website only. 'latest' bounds the default view to five, newest-first, non-story
+   * updates with links onward to the story and archive routes. 'story' and 'archive' render the
+   * matching projection, unbounded. Omitted, every other project keeps today's full merged feed. */
+  view?: 'latest' | 'story' | 'archive';
+}
+const { feed, projectId, title = 'Development journal', milestones = [], selectedId, view } = Astro.props;
+const project = (entries: Milestone[]) => view === 'latest' ? latestJournalMilestones(entries)
+  : view === 'story' ? storyMilestones(entries)
+  : view === 'archive' ? archiveMilestones(entries)
+  : entries;
+const merged = journalMilestones(feed, milestones);
+const visible = project(merged);
+const fallbackVisible = project(milestones);
+const bounded = view === 'latest';
+// Keep the anchor stable for existing cross-page links to Personal Website's Latest work section.
+const domId = view === 'story' ? `${projectId}-story` : view === 'archive' ? `${projectId}-archive` : `${projectId}-updates`;
+const storyHref = bounded ? `/building/${projectId}/story` : undefined;
+const archiveHref = bounded ? `/building/${projectId}/archive` : undefined;
+// Latest work and Archive read newest-first, so the newest entry opens by default. The story
+// route reads chronologically, so its own newest (last) chapter is already the component default.
+const defaultSelectedId = (view === 'latest' || view === 'archive') ? visible[0]?.id : undefined;
 ---
 <div data-project-updates data-project={projectId} data-snapshot={JSON.stringify(feed)}>
   {!feed && milestones.length > 0 && <p class="update-notice">Recent updates are temporarily unavailable. Earlier milestones are shown below.</p>}
   <p class="update-notice" data-notice aria-live="polite" hidden><span></span> <a href={Astro.url.pathname}>Load latest updates</a></p>
-  <div data-update-content><ProjectTimeline selectedId={feed?.current?.entryId ?? selectedId} id={`${projectId}-updates`} title={title} entries={journalMilestones(feed, milestones)} unavailable={!feed} /></div>
-  {milestones.length > 0 && <template data-curated-fallback><ProjectTimeline id={`${projectId}-updates`} title={title} entries={milestones} /></template>}
+  <div data-update-content><ProjectTimeline selectedId={feed?.current?.entryId ?? selectedId ?? defaultSelectedId} id={domId} title={title} entries={visible} unavailable={!feed} bounded={bounded} storyHref={storyHref} archiveHref={archiveHref} /></div>
+  {fallbackVisible.length > 0 && <template data-curated-fallback><ProjectTimeline id={domId} title={title} entries={fallbackVisible} bounded={bounded} storyHref={storyHref} archiveHref={archiveHref} /></template>}
 </div>
 <script>
   import { feedChange } from '~/lib/project-story';

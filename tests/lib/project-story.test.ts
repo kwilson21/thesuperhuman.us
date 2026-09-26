@@ -1,7 +1,7 @@
 import approved from '../../src/data/project-stories/threadline-review.json';
 import type { Story } from '../../src/lib/publication/contract';
 import {describe, expect, it} from 'vitest';
-import {feedChange, publicationMilestones, journalMilestones} from '../../src/lib/project-story';
+import {feedChange, publicationMilestones, journalMilestones, latestJournalMilestones, storyMilestones, archiveMilestones} from '../../src/lib/project-story';
 import type {Milestone} from '../../src/lib/project-story';
 import type {ProjectFeed, PublicEntry} from '../../src/lib/publication/read';
 import {websiteMilestones} from '../../src/data/project-stories/personal-website';
@@ -96,4 +96,43 @@ describe('one journal for curated and published milestones', () => {
   }
  });
 
+});
+
+describe('journal presentation: Latest work, Project story and Archive', () => {
+ const chapter = (id: string, day: string): Milestone => ({id, day, title: id, summary: 'A chapter.', placement: 'story'});
+ const update = (id: string, day: string): Milestone => ({id, day, title: id, summary: 'An update.'});
+
+ it('keeps an authored story chronological and never infers it from dates', () => {
+  const entries = [chapter('b', '2026-09-10'), update('mixed-in', '2026-09-10'), chapter('a', '2026-09-09')];
+  expect(storyMilestones(entries).map(e => e.id)).toEqual(['a', 'b']);
+ });
+
+ it('bounds Latest work to the limit, newest first, excluding the authored story', () => {
+  const entries = [chapter('story-1', '2026-09-30'), update('e', '2026-09-25'), update('d', '2026-09-24'), update('c', '2026-09-23'), update('b', '2026-09-22'), update('a', '2026-09-21')];
+  expect(latestJournalMilestones(entries).map(e => e.id)).toEqual(['e', 'd', 'c', 'b', 'a']);
+  expect(latestJournalMilestones(entries, 2).map(e => e.id)).toEqual(['e', 'd']);
+ });
+
+ it('keeps older, non-story updates reachable in the Archive rather than deleting them', () => {
+  const entries = [update('e', '2026-09-25'), update('d', '2026-09-24'), update('c', '2026-09-23'), update('b', '2026-09-22'), update('a', '2026-09-21'), update('oldest', '2026-09-20')];
+  expect(archiveMilestones(entries).map(e => e.id)).toEqual(['oldest']);
+  expect(archiveMilestones(entries, 2).map(e => e.id)).toEqual(['c', 'b', 'a', 'oldest']);
+ });
+
+ it('never places a published entry into the authored story without an explicit editorial choice', () => {
+  const published = publicationMilestones(feed([entry('shipped', '2026-09-25')]));
+  expect(storyMilestones(published)).toEqual([]);
+  expect(latestJournalMilestones(published).map(e => e.id)).toEqual(['shipped']);
+ });
+
+ it('classifies every curated Personal Website milestone deliberately, with no overlap and nothing lost', () => {
+  const story = storyMilestones(websiteMilestones);
+  const latest = latestJournalMilestones(websiteMilestones);
+  const archive = archiveMilestones(websiteMilestones);
+  expect(story.length).toBeGreaterThan(0);
+  expect(latest.length).toBeLessThanOrEqual(5);
+  const ids = [...story, ...latest, ...archive].map(e => e.id);
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(ids.length).toBe(websiteMilestones.length);
+ });
 });

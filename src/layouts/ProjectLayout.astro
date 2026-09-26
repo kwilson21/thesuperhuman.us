@@ -19,7 +19,7 @@ const { title, subtitle, description, status, journalHref, ogImage } = Astro.pro
       <h1 class="page-title">{title}</h1>
       <p class="project-subtitle">{subtitle}</p>
       <p class="project-description">{description}</p>
-      <p class="project-status">{status}</p>
+      <p class="project-status" data-testid="journal-current-state">{status}</p>
       <a class="site-link" href={journalHref}>Development journal <span aria-hidden="true">↓</span></a>
     </header>
     <slot />
