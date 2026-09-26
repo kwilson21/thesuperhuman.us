@@ -4,7 +4,7 @@ import PersonalName from '~/components/PersonalName.astro';
 const host = Astro.isPrerendered ? Astro.url.host : Astro.request.headers.get('host') ?? Astro.url.host;
 const mainHref = (path: string) => Astro.isPrerendered ? new URL(path, Astro.site).href : mainSitePath(host, path);
 const audioHref = Astro.isPrerendered ? new URL('/audio/', Astro.site).href : audioPath(host, '/');
-const servicesHref = mainHref('/services');
+const hireHref = mainHref('/services');
 const privacyHref = mainHref('/privacy');
 const homeHref = mainHref('/');
 const year = new Date().getFullYear();
@@ -14,7 +14,7 @@ const { compact = false } = Astro.props;
 {compact ? <footer class="compact-footer site-shell">
   <div class="compact-footer-inner">
     <a class="footer-name" href={homeHref}><PersonalName variant="full" /></a>
-    <nav aria-label="Elsewhere"><a href="https://github.com/kwilson21">GitHub</a><a href="https://www.linkedin.com/in/kazonwilson/">LinkedIn</a><a href="https://ko-fi.com/kazonwilson">Support my work</a><a href={audioHref}>Audio</a><a href={servicesHref}>Services</a><a href={privacyHref}>Privacy</a></nav>
+    <nav aria-label="Elsewhere"><a href="https://github.com/kwilson21">GitHub</a><a href="https://www.linkedin.com/in/kazonwilson/">LinkedIn</a><a href={audioHref}>Audio</a><a href={hireHref}>Work with me</a><a href="https://ko-fi.com/kazonwilson">Support my work</a><a href={privacyHref}>Privacy</a></nav>
 
     <p>The Superhuman Group LLC · {year}</p>
   </div>

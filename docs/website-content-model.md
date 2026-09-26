@@ -278,12 +278,18 @@ Deployment and renewed OAuth consent are required before the publisher can use
 this additional project. Private journal writes never depend on the website being
 online. A finished essay will develop the argument rather than duplicate the journal.
 
-## Shareable services overviews
+## Work with me hub and services overviews
 
-Software at `/services` and Audio at `/audio/services` use ServiceSheet with data
-from `src/data/services.ts`. Audio offerings reuse `src/data/audio.ts`. These are
-concise follow-ups to direct conversations, discoverable from Work, Audio and
-secondary footer navigation. The old `/services.html` address redirects to the
-software sheet. Both support a one-page print view; ordinary contact and inquiry
-routes remain the next step. Audio belongs within the personal site, with its
-existing hostname retained as an alternate entry and main-site canonicals.
+`/services` is the "Work with me" hub. It opens with three doors, one per thing a
+visitor can hire Kazon for (mixing and mastering, website design, software
+engineering), each with a picture of real, verifiable work, one line and one
+button (`src/data/work-with-me.ts`, rendered by `WorkWithMe.astro`). Below them
+the software engineering offerings from `src/data/services.ts` keep their
+one-page print view, followed by the experience line, a closing contact and a
+line for the other two audiences (request a resume, get in touch). The hub is
+one step from every page: the header button, the phone menu's "Work with me"
+group, the footer, the Home strip under the hero, and Work. Audio's prices and
+scope live at `/audio/services`, and the mixing door starts the `/audio/start`
+intake. The old `/services.html` address redirects to the hub. Audio belongs
+within the personal site, with its existing hostname retained as an alternate
+entry and main-site canonicals.
