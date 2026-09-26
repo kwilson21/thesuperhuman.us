@@ -1,6 +1,9 @@
 # Website simplification audit
 
-Date: September 26, 2026. Status: findings and recommendations for the owner.
+Date: September 26, 2026. Status: findings, recommendations and recorded
+decisions. Updated the same day after a second review (Astra) and the owner's
+answers; the [reconciliation](#review-reconciliation-september-26) section
+records what changed and why.
 Basis: [Website direction](../../website-direction.md),
 [content responsibilities](../../website-content-model.md), and the
 [September 9 audit](../2026-09-09/website-audit.md). Local HEAD: `26fc4b9`.
@@ -10,28 +13,35 @@ keep the main purpose, remove distractions, and improve the overall design.
 
 ## Main finding
 
-The redesign already solved the reading burden. Home renders about 130 words,
-Work about 400, About about 270. The load that remains is not prose. It is
-**choices**: eight top-level destinations, a row of jump links at the top of every
-primary page, a contact invitation two or three times per page, and the same
-destination offered under four or five different labels. A visitor is asked to
-decide where to go far more often than they are asked to read.
+The redesign already solved brevity. Home renders about 130 words, Work about
+400, About about 270. Brevity is not the same as clarity: the Audio landing
+page describes an interest ("Audio is still part of my life") where the site's
+purpose includes selling mixing and mastering, and that needs sharper
+positioning rather than fewer words. But the load that remains across the site
+is mostly **choices**, and above all **orientation placed before evidence**:
+eight top-level destinations, a row of jump links at the top of every primary
+page, a contact invitation two or three times per page, and the same destination
+offered under four or five labels. On the phone, Work's first screen is spent
+entirely on introduction, links and a summary list before the first diagram.
 
 The second finding is that the visual system is coherent at the token level
-(paper, ink, terracotta, Newsreader) but not at the section level. Each page
-composes its sections differently, and several illustrations appear on three to
-five pages. That variety reads as busyness even where the word count is low.
+(paper, ink, terracotta, Newsreader) but not at the framing level. Each page
+composes its sections with different headings, spacing and closing blocks, and
+one generic illustration appears on five pages. That variety reads as busyness
+even where the word count is low.
 
-The fix is subtractive and mostly mechanical: fewer navigation items, one
-invitation per page, one label per destination, one section pattern, and one
+The fix is subtractive: fewer header items, one clear path to each service line,
+evidence brought forward, one contact pattern, shared section framing, and one
 audio funnel. No new visual identity, framework, or dependency is needed.
 
 ## What was measured
 
 Chromium at 1280 × 800 and 390 × 844 against a local preview at HEAD. Counts use
 rendered DOM with default disclosure states. "Clickable" counts links, buttons and
-disclosure summaries outside the mobile menu. Numbers indicate choice load, not
-targets.
+disclosure summaries outside the mobile menu. These are an inventory of choice
+load, not usability scores: a navigation link, an experience disclosure and an
+audio playback control make different demands, and visitors meet them at
+different moments. No count below is a target.
 
 | Page | Words in `main` | Clickable elements | Phone height (screens) | Nav destinations repeated in `main` |
 |---|---|---|---|---|
@@ -45,41 +55,44 @@ targets.
 | Audio services | 162 | 43 | 2.5 | 2 |
 | Personal website journal | 488 | 110 | 5.2 | 3 |
 
-Home carries 34 clickable elements for 131 words: about one choice for every four
-words. The personal website journal carries 110.
-
 No horizontal overflow was observed on any page at either width. Lazy images
 below the fold load correctly once scrolled; a blank "Beyond the code" area in an
 unscrolled capture was a capture artifact, not a defect.
 
 ## Findings
 
-Ordered by how much simplification each one buys.
+Ordered by how much simplification each one buys. Recommendations are the
+reconciled versions; the original wording is summarized in the reconciliation
+section where it changed.
 
-### S1. Primary navigation offers eight destinations; the agreed model has five
+### S1. Primary navigation offers eight destinations; two of them are service sheets
 
 **Priority: high. Effort: small.**
 
 `SiteNav` lists Home, Work, Building, Writing, Audio, Services, About, plus the
 "Get in touch" button. The content model agreed on five primary areas, with Audio
-as a secondary destination reached from About and the footer, and Services as a
-"concise follow-up to direct conversations, discoverable from Work, Audio and
-secondary footer navigation". Both are already in the footer.
+secondary and Services as a "concise follow-up to direct conversations,
+discoverable from Work, Audio and secondary footer navigation".
 
 On audio pages a second bar (Audio, Releases, Portfolio, Services) sits under the
 first. On the services sheet a third bar (Services: Software, Audio) appears.
 `/audio/services` therefore opens with two stacked navigations before its heading
 ([capture](assets/audio-services-navs.webp)). The phone menu lists eight items.
 
-Putting Services in the primary bar also re-centres the services pitch that the
-direction deliberately moved to the background.
+Putting Services in the primary bar re-centres the services pitch that the
+direction deliberately moved to the background. Audio is different: it serves a
+distinct audience and is the service line most likely to bring paid work, so it
+earns header space even though the content model placed it second.
 
-**Recommendation.** Primary nav: Work, Building, Writing, About, and the contact
-button. Drop "Home" (the name is the home link, and the logo already does this
-job). Keep Audio and Services in the footer and in the About and Work links that
-already exist. Reduce the audio bar to Listen, Portfolio, Services, or fold it
-into the audio page's own sections. Remove the Software/Audio switcher from the
-services sheet; the footer covers it.
+**Recommendation (decided).** Header: **Work · Building · Writing · Audio · About
+· [Get in touch]**. The name mark is the Home link. Services leaves the header
+with explicit replacements, so each service line is one sensible click away:
+a "Software services" link on Work beside the engagement statement, an "Audio
+services" link near the top of Audio, and "Software services" (not the ambiguous
+"Services") in the footer. No dropdown. Remove the Software/Audio switcher from
+the services sheet. Reduce the audio bar to Listen, Portfolio, Services, or fold
+it into the page's sections. Update the content model's "Audio" paragraph once
+this ships.
 
 Evidence: [`SiteNav.astro`](../../../src/components/SiteNav.astro),
 [`MusicNav.astro`](../../../src/components/audio/MusicNav.astro),
@@ -104,10 +117,12 @@ more choices above the fold. The only page where a table of contents earns its
 place is the essay, at nine desktop screens; keep that one.
 
 **Recommendation.** Remove the jump-link rows from Work, Building and About. Keep
-at most one action in each header: Work keeps "Request resume"; Building and
-About keep none. Fold the three facts in "At a glance" into the Work lede as one
-sentence, and drop item four ("AI-assisted website project"), which is a link,
-not a fact, and breaks the list.
+the actions that do a job a recruiter needs on first view: Work keeps "Request
+resume" and "Software services" near the introduction; Building and About keep
+none. Fold the three facts in "At a glance" into the Work lede as one sentence.
+Its fourth item, the website project, is not a fact but it is the current
+evidence for the AI positioning, so it moves into the lede or the first highlight
+rather than disappearing.
 
 Evidence: [`work.astro`](../../../src/pages/work.astro),
 [`building.astro`](../../../src/pages/building.astro),
@@ -133,11 +148,14 @@ Seven closing-block styles exist in the CSS for this one job (`page-connect`,
 `writing-invitation`, `about-connect`, `audio-beyond`, `hub-outro`,
 `sheet-contact`, `project-close`).
 
-**Recommendation.** One invitation per page, in one voice. The header button is
-the invitation everywhere; Home keeps the contact section as the destination.
-Remove the closing blocks from Work, Building, Writing, About and the project
-layout, or reduce each to one line that reuses the `page-connect` pattern. Delete
-the other six variants.
+**Recommendation.** No redundant contact panels. On phones the header button is
+inside the Menu, so one quiet closing invitation after the evidence earns its
+place; the redundancy is the mid-page repeats, the blocks that only link to
+header destinations, and the six headline variants. Keep one closing pattern
+(`page-connect`) in one voice, use it at most once per page, and delete the other
+six styles as the pages stop using them. Home keeps the contact section as the
+destination. The opening and closing "Start your song" on the audio services page
+serve readers at different stages and both stay.
 
 Evidence: [`global.css`](../../../src/styles/global.css),
 [`writing/index.astro`](../../../src/pages/writing/index.astro),
@@ -158,10 +176,12 @@ the first button says "Explore".
 Different labels for one place make the visitor re-evaluate every link. Repeated
 verbs flatten the copy.
 
-**Recommendation.** A fixed vocabulary, used everywhere: Work, Building, Writing,
-About, Audio, Get in touch, Request resume, Development journal, Read the essay.
-Use a verb only where it differs from navigation (Read, Listen). Reserve "Explore"
-for the hero, once.
+**Recommendation.** Consistency for destinations, not for behavior. One label per
+place: Work, Building, Writing, About, Audio, Software services, Audio services,
+Request resume, Development journal, Read the essay. Labels that describe a
+different action keep their difference: "Email me" opens mail, "Get in touch"
+opens the form, "Start your song" begins the intake. Reserve "Explore" for the
+hero, once.
 
 Evidence: heading and link inventory in the verification record below.
 
@@ -170,27 +190,31 @@ Evidence: heading and link inventory in the verification record below.
 **Priority: high. Effort: medium.**
 
 The hero stacks a tagline ("Software, sound, and things worth exploring.") and an
-intro ("Software engineer exploring ideas and building with AI.") that say the
-same thing, then two links. Below it, five sections each use a different layout:
-a two-column project grid, a boxed Lyft figure with a source footnote, an
-image-left editorial pair, an image-right editorial pair (re-ordered on the
-phone), and a split contact block ([desktop](assets/home-desktop.webp),
+intro ("Software engineer exploring ideas and building with AI."). They do
+different jobs, breadth and profession, but share the verb, and the first button
+repeats it. Below, five sections each use a different layout: a two-column
+project grid, a boxed Lyft figure with a source footnote, an image-left editorial
+pair, an image-right editorial pair (re-ordered on the phone), and a split
+contact block ([desktop](assets/home-desktop.webp),
 [phone](assets/home-phone.webp)).
 
 "Beyond the code" is a full-width illustration, one sentence and two links to
 About and Audio. Both destinations are in the header. On the phone that section
-alone is more than 500 px tall.
+alone is more than 500 px tall. It is also, at present, the only place on Home
+that mentions audio at all.
 
-**Recommendation.**
+**Recommendation (decided: remove "Beyond the code").**
 
-- Hero: one identity line, one sentence, one button. The approved Work heading,
-  "Software engineer. Building with AI.", can carry the identity; the tagline can
-  stay as the page title.
-- Sections: Building (two projects), one Work proof, Writing (one essay),
-  Contact. Remove "Beyond the code". Home drops from five sections to four and
-  from 3.9 phone screens to roughly 3.
-- One section pattern for all four: the existing `site-section-heading` rule,
-  one item, one link. Retire the boxed Lyft treatment on desktop; the figure
+- Hero: keep the name, the studio scene and the personal introduction. Fix the
+  repeated "exploring" rather than replacing the introduction with the Work
+  heading. Add one short line that names mixing and mastering with a modest
+  Audio link, so removing the section does not remove the service line from
+  Home.
+- Sections: Building (up to two projects, a maximum not a quota), one Work
+  proof, Writing (one essay), Contact. Home drops from five sections to four.
+- Shared framing for all four: the existing `site-section-heading` rule,
+  spacing and link behavior. Inside that frame each section keeps the layout
+  its content needs. Retire the boxed Lyft treatment on desktop; the figure
   already reads on the phone without a box.
 
 Evidence: [`index.astro`](../../../src/pages/index.astro),
@@ -209,15 +233,19 @@ asks for AI-assisted development to read as a feature, not a disclaimer. The
 Lyft and Skupos diagrams are the best evidence on the site; the working
 preference is repeated in full on About.
 
-**Recommendation.** Keep the lede (with the three facts folded in), the two
-highlight stories and their diagrams, and the experience rows. Move the working
-preference to About only, with one sentence and a link from Work. Fold "How I
-work" into one confident sentence in the lede or drop it. Drop the second link
-under each highlight ("Explore my work across three Lyft teams"); the experience
-row is one scroll away.
+**Recommendation.** Keep the lede, the two highlight stories and their diagrams,
+and the experience rows. Remove "At a glance" and the three-column "How I work".
+Retain, in short form near the introduction: one sentence that independent work
+is the default and full-time roles are selective (a recruiter should not need
+About to establish fit), "Request resume", "Software services", and the website
+project as the direct example behind the AI positioning. The full
+working-preference explanation lives on About. Drop the second link under each
+highlight ("Explore my work across three Lyft teams"); the experience row is one
+scroll away.
 
-Owner check: the direction records the approved Work heading as "Software
-engineer. Building with AI." The page renders "Software engineer." only.
+Heading (decided): "Software engineer. Building with AI.", the approved wording,
+supported by truthful attribution and current evidence, without implying that
+historical employer work used the same process.
 
 Evidence: [`work.astro`](../../../src/pages/work.astro),
 [`profile.ts`](../../../src/data/profile.ts).
@@ -231,10 +259,14 @@ Engineer's Daily shows a status and date; Threadline's status ("Internal
 prototype") and Tally's ("In development") appear only on their own pages.
 servant-lang has no destination. The closing block links to Work and Writing.
 
-**Recommendation.** One row treatment with a small thumbnail, a one-line status
-on every row (Local prototype, Internal prototype, In development, Released), and
-the two current projects first. Hide servant-lang until there is something to
-visit, or link its repository. Remove the header links and the closing block.
+**Recommendation (decided).** One row treatment with a small thumbnail and a
+one-line status on every row (Local prototype, Internal prototype, In development,
+Released), current work first. The Engineer's Daily stays featured. Threadline
+moves to a row with its status; its page and journal stay, and it returns to a
+feature slot when there is a representative screenshot, recording or inspectable
+artifact (a public launch is not required). Hide servant-lang until it has a
+public explanation, repository or artifact; this does not delete anything.
+Remove the header links and the closing block.
 
 Evidence: [`building.astro`](../../../src/pages/building.astro).
 
@@ -248,78 +280,96 @@ full 63-word working preference that Work also summarizes. On the phone the
 chapter path renders as small disconnected curves between sections that read as
 stray marks ([capture](assets/about-phone.webp)).
 
-**Recommendation.** Remove the chapter links. Keep the preference here in one
-place. Hide the path below 800 px, or replace it with the plain rule the other
-pages use. The resume disclosure at the end is right where it should be.
+**Recommendation.** Remove the chapter links. The full preference lives here;
+Work keeps its one-sentence summary. Hide the path below 800 px, or replace it
+with the plain rule the other pages use. Keep the audio, laptop, controller and
+notebook chapter imagery: it tells the story and is not decoration. The resume
+disclosure at the end is right where it should be.
 
 Evidence: [`about.astro`](../../../src/pages/about.astro).
 
 ### S9. Audio is a second site inside the site, with two intake funnels and a leftover About page
 
-**Priority: high for audio visitors. Effort: medium. Needs an owner decision.**
+**Priority: high, and second in the order of work. Effort: medium.**
 
 - Two funnels. The audio hero button "Discuss a project" and the "Discuss an
-  audio project" disclosure open the `BookingForm` on `/audio#book`. The services
-  and portfolio pages send visitors to the three-step `/audio/start` intake. A
-  musician who arrives on `/audio` and one who arrives on `/audio/services` fill
-  in different forms.
+  audio project" disclosure open `BookingForm`, which posts to
+  `/api/audio-inquiry`. The services and portfolio pages send visitors to the
+  three-step `/audio/start` intake, which posts to `/api/audio-intake` and leads
+  into the offer and invoice flow. A musician who arrives on `/audio` and one who
+  arrives on `/audio/services` fill in different forms.
 - `/audio/about` repeats the university line, lists gear, and says "Looking for
   the software-engineering side of The Superhuman Group? That lives at
   thesuperhuman.us", a remnant of the separate hostname. Its revision and payment
   terms already appear under "Before we start" on `/audio/services`.
-- The audio index has five sections plus a disclosure and its own "Beyond audio"
-  block for a page of 121 words.
+- The landing page positions audio as an interest. The services page already
+  communicates the paid offering more clearly than the landing page does.
 
-**Recommendation.** One funnel: `/audio/start`, which captures more and leads
-into the offer flow. Replace the hero's "Discuss a project" and the booking
-disclosure with "Start your song", and retire `BookingForm` and its API route once
-the owner confirms. Fold `/audio/about` into "Before we start", give that section
-an anchor, and redirect the old route to it. Reduce the index to hero (one
-button), Listen (releases and portfolio), Services (four items with a prices
-link), Start.
+**Recommendation (decided: keep `/audio/start`).**
+
+- One funnel. Replace the hero's "Discuss a project" and the booking disclosure
+  with "Start your song". Keep a working path from old `/audio#book` links (the
+  hero, `/audio/about`, the unused `audioSheet` entry and any external link) to
+  the intake. Verify the intake's submission and delivery end to end before
+  retiring `BookingForm` and `/api/audio-inquiry`.
+- Lead the landing page with what someone can hire you to do and something they
+  can hear: hero with the offering and one button, a listening area where artist
+  releases and engineering examples keep distinct roles and credits, the four
+  services with the approved prices, then Start.
+- Fold `/audio/about` into "Before we start", give that section an anchor, and
+  redirect the old route to it permanently. Carry over its unique expectations
+  first: async written briefs, delivery through Drive, Dropbox or WeTransfer,
+  reference checks, and the line about recommending someone else when a project
+  is outside what he does well. The gear inventory does not need its own page.
 
 Evidence: [`audio/index.astro`](../../../src/pages/audio/index.astro),
 [`AudioHero.astro`](../../../src/components/audio/AudioHero.astro),
+[`BookingForm.astro`](../../../src/components/audio/BookingForm.astro),
 [`audio/services.astro`](../../../src/pages/audio/services.astro),
 [`audio/about.astro`](../../../src/pages/audio/about.astro).
 
 ### S10. Project journals carry the heaviest load on the site
 
-**Priority: medium. Effort: medium.**
+**Priority: medium. Effort: medium. Governed by an existing plan.**
 
 `/building/personal-website` renders 110 clickable elements, 65 images and a
 17-entry timeline, with two "Development journal" links in the header area, a
 before/after comparison, a six-page comparison accordion and a closing section
-([capture](assets/personal-website-journal-desktop.webp)). The Engineer's Daily
-page has a hero capture, a two-item "Behind the idea" with a reused notebook
-illustration, a three-column "Where it stands", and the journal.
+([capture](assets/personal-website-journal-desktop.webp)). The clearest evidence
+on that page, the "What changed, page by page" accordion, sits below the
+seventeen design-study milestones.
 
-The clearest evidence on the website page is the "What changed, page by page"
-accordion. It sits below the seventeen design-study milestones.
+The [September 21 journal plan](../../superpowers/plans/2026-09-21-journal-experience.md)
+already specifies the reading model for this page: a Latest work view capped at
+five entries, an authored project story, and a separate archive route, never the
+full archive inline, scoped to the Personal Website page so that the shared
+`ProjectTimeline` and `ProjectUpdates` components keep serving Threadline and The
+Engineer's Daily unchanged.
 
-**Recommendation.** Show the latest three to five journal entries by default
-with the existing "Show all entries". On the website page, move the page-by-page
-comparison above the journal and remove the duplicate header link. Keep every
-milestone, caption and bookmark; this is ordering, not deletion.
+**Recommendation.** Implement that plan rather than a new one. This audit adds
+two ordering points to it: place the page-by-page comparison above the journal,
+and remove the duplicate "Development journal" header link. Keep every
+milestone, caption, date, ID and bookmark reachable, as the plan requires.
 
 Evidence: [`building/personal-website.astro`](../../../src/pages/building/personal-website.astro),
 [`ProjectTimeline.astro`](../../../src/components/ProjectTimeline.astro).
 
-### S11. Five illustrations are spread across many pages
+### S11. One generic illustration is spread across five pages
 
 **Priority: medium. Effort: small.**
 
 The notebook appears on Home, About, Audio, the audio portfolio and The
 Engineer's Daily. The headphones appear on About and Audio, the controller on
-About and Building, the Threadline still on Home, Building and Threadline. Each
-reuse weakens the image's association with its page and makes pages look alike
-for the wrong reason. Masks also vary (radial on About and Building rows, linear
-elsewhere).
+About and Building, the Threadline still on Home, Building and Threadline. Masks
+also vary (radial on About and Building rows, linear elsewhere).
 
-**Recommendation.** One home per illustration: notebook on Writing, headphones on
-Audio, controller on Building, Threadline on its own page, studio scene on Home,
-terrain on About. Where a section loses its image, use the plain section pattern
-rather than a substitute picture. Choose one mask treatment.
+**Recommendation.** One primary purpose per illustration. Remove the notebook
+where it is generic decoration on unrelated pages (Audio "Working together", the
+portfolio outro, The Engineer's Daily "Behind the idea") and keep it where it
+means something (Writing, the About chapter). A project image that identifies
+the same project may appear on Home, Building and the project page. About's
+chapter imagery stays. Where a section loses its image, use the plain section
+framing rather than a substitute picture. Choose one mask treatment.
 
 Evidence: `src/assets/site/` usage in the verification record.
 
@@ -340,9 +390,12 @@ Evidence: `src/assets/site/` usage in the verification record.
 - Page titles end in "· Kazon Wilson" on six pages, "· Kazon" on six audio pages,
   and "· The Superhuman Group" on one.
 
-**Recommendation.** One section heading, one closing block, two link styles
-(underlined link, filled button), one kicker face. Delete the unused variants and
-the unused footer branch. One title suffix.
+**Recommendation.** Standardize the framing, not the content: one section heading
+treatment, one spacing scale, one alignment, one closing block, two link styles
+(underlined link, filled button), one kicker face, one title suffix. Sections
+keep the internal layout their content needs; a diagram, a project preview, an
+essay and an A/B player explain different things. Remove each unused style in
+the PR whose change makes it unused, not in one broad sweep.
 
 Evidence: [`global.css`](../../../src/styles/global.css),
 [`Footer.astro`](../../../src/components/Footer.astro),
@@ -353,53 +406,110 @@ Evidence: [`global.css`](../../../src/styles/global.css),
 These already serve the purpose and should survive the simplification untouched:
 
 - The palette, the Newsreader display type, the name mark and the paper texture.
-- The Home studio scene and the About terrain and chapter structure.
+- The Home studio scene and personal introduction; the About terrain, chapters
+  and chapter imagery.
 - The Lyft before/after and Skupos progression diagrams on Work.
 - Collapsed experience rows with the grouped Lyft and Skupos accounts.
 - The approval-gated resume request and the single general resume.
-- The A/B comparison player and the approved audio prices.
+- The A/B comparison player, the actual music, and the approved audio prices.
 - Journal captions, dates, milestone IDs and bookmarks.
 
-## Proposed structure after simplification
+## Agreed structure
 
 ```
-Header     Work · Building · Writing · About · [Get in touch]
-Footer     GitHub · LinkedIn · Audio · Services · Support my work · Privacy
+Header     Work · Building · Writing · Audio · About · [Get in touch]
+Footer     GitHub · LinkedIn · Audio · Software services · Support my work · Privacy
 
-Home       Hero (1 button) · Building (2) · Work (1 proof) · Writing (1) · Contact
-Work       Lede with three facts · 2 highlights with diagrams · Experience rows · Request resume
-Building   Intro · project rows with status · (no closing block)
+Home       Hero (name, intro, one audio line, 1 button) · Building (≤2) · Work (1 proof) · Writing (1) · Contact
+Work       Lede with three facts, preference sentence, Request resume, Software services · 2 highlights with diagrams · Experience rows · one closing invitation
+Building   Intro · project rows, each with a status · (no closing block)
 Writing    Intro · essay · topic in progress
-About      Intro · 4 chapters · working preference · Contact · Request resume
-Audio      Hero (Start your song) · Listen · Services · Start
+About      Intro · 4 chapters · full working preference · Contact · Request resume
+Audio      Hero (offering, Start your song) · Listen · Services with prices · Start
 ```
 
-## Suggested order of work
+## Agreed order of work
 
-Each step is one reviewable PR and can ship on its own.
+Each step is one narrow, reviewable PR. Unused styles leave in the PR that
+stops using them.
 
-1. **Navigation and labels.** S1, S3, S4, S12. Header to five items, one
-   invitation per page, one vocabulary, dead variants removed. No layout change.
-2. **Headers.** S2, S6, S8. Remove jump-link rows and "At a glance"; fold facts
-   into ledes; move the working preference to About.
-3. **Home.** S5. Remove "Beyond the code", tighten the hero, one section pattern.
-4. **Building and illustrations.** S7, S11. Rows with status; one home per image.
-5. **Audio funnel.** S9. After the owner picks the intake to keep.
-6. **Journals.** S10. Latest entries first, page comparison promoted.
+1. **Header and destination labels.** Six header items, the three replacement
+   Services links, one label per destination. No layout change.
+2. **Audio consolidation.** One funnel on `/audio/start`, a preserved path from
+   `#book`, verified delivery before the old endpoint retires, `/audio/about`
+   redirected, landing page repositioned around the paid offering and something
+   to hear.
+3. **Page introductions.** Work, Building and About headers; "At a glance" and
+   "How I work" removed with their content redistributed as in S6; evidence
+   brought forward.
+4. **Home.** "Beyond the code" removed, hero copy tightened with the audio line,
+   shared section framing, contact pattern unified.
+5. **Website journal.** The September 21 plan, plus the two ordering points in
+   S10.
+6. **Building rows and remaining decorative duplication.** Status on every row,
+   Threadline and servant-lang per S7, notebook removed where generic.
 
-## Decisions for the owner
+**Success check.** After steps 1 to 4, ask a few unfamiliar people to complete
+three short tasks and watch where they hesitate: assess the engineering
+experience and find the resume request; hear the engineering work and begin an
+inquiry; understand what is being built and make contact. That observation, not
+a link count or a screen count, decides whether the simplification worked.
 
-1. Drop Audio and Services from the primary header, as the content model states?
-2. Which audio intake stays: the three-step `/audio/start` flow (recommended) or
-   the `#book` booking form?
-3. Retire `/audio/about` with a redirect to the "Before we start" section of
-   `/audio/services`?
-4. Remove "Beyond the code" from Home, or keep it as one line under the hero?
-5. Hide servant-lang from Building until it has a destination?
-6. Keep Threadline featured with illustration-only evidence, or list it as a row
-   until there is an artifact?
-7. Work heading: keep "Software engineer." or use the approved "Software
-   engineer. Building with AI."?
+## Decisions recorded
+
+Owner decisions, given in conversation on September 26:
+
+- Header: keep Audio and Services findable; dropping both was not acceptable.
+  Resolved as six header items with Audio, and Services through the three
+  explicit links in S1.
+- Audio intake: `/audio/start` stays; it is the flow most likely to bring paid
+  work. The booking form retires after delivery is verified.
+- Home "Beyond the code": remove it, since that simplifies the page.
+
+Answers from the second review (Astra), accepted:
+
+- Redirect `/audio/about` permanently to an anchored "Before we start" after
+  carrying over its unique expectations.
+- Hide servant-lang for now.
+- Threadline becomes a row with its status until there is an inspectable
+  artifact.
+- Work heading: "Software engineer. Building with AI."
+
+## Review reconciliation, September 26
+
+The second review agreed with simplifying, and with six of the seven decisions
+as proposed, and changed the following. Each change is already reflected above.
+
+- **"Reading burden is solved" was too strong.** Low word counts establish
+  brevity, not clarity; the Audio landing page is the clear case. The main
+  finding now says so, and the click counts are described as inventory rather
+  than scores.
+- **Header: six items, not five.** Audio serves a distinct audience and a
+  commercial purpose. Services leaves the header only with explicit named
+  replacements (S1).
+- **Labels: consistent destinations, not uniform actions.** "Email me", "Get in
+  touch" and "Start your song" describe different behavior and stay distinct
+  (S4).
+- **Home keeps an audio mention.** Removing "Beyond the code" must not remove the
+  service line from Home, and the personal introduction is not replaced by the
+  Work heading (S5).
+- **Work keeps four short things near its introduction**: the preference
+  sentence, Request resume, Software services, and the website project as AI
+  evidence (S2, S6).
+- **Framing is standardized, content is not.** Shared heading, spacing, alignment
+  and link behavior; internal section layouts follow their content (S5, S12).
+- **"One home per illustration" became "one primary purpose per illustration."**
+  Project thumbnails may repeat where they identify the same project; About's
+  chapter imagery stays (S11).
+- **"One contact invitation per page" became "no redundant contact panels."** The
+  header button is inside the phone Menu, so one closing invitation after the
+  evidence stays (S3).
+- **Audio moved from fifth to second in the order of work**, and the first PR
+  was narrowed to the header and labels. Style cleanup rides the PR that makes
+  each style unused.
+- **The journal recommendation defers to the September 21 plan**, which this
+  audit had not reconciled (S10).
+- **A visitor test was added** as the success check.
 
 ## Verification record
 
@@ -410,6 +520,10 @@ Each step is one reviewable PR and can ship on its own.
 - Illustration reuse counted from imports in `src/pages` and `src/components`.
 - Dead code confirmed by grep: no `<Footer>` without `compact`; no route imports
   `audioSheet`; no markup uses `btn-primary` or `lede`.
+- Audio form endpoints confirmed in source: `BookingForm` posts to
+  `/api/audio-inquiry`; the `/audio/start` flow posts to `/api/audio-intake`.
+- The September 21 journal plan was read after the second review raised it; its
+  scope and constraints are quoted in S10.
 - Forms were not submitted. No resume, publication or payment flow was exercised.
 - This is an editorial, information-architecture and visual-consistency audit
   with rendered measurements. It is not user research or an accessibility audit;
