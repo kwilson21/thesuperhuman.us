@@ -1,18 +1,20 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { sendAudioInquiry, sendAudioMessage, sendStudioSignInNotice } from '~/lib/audio-resend';
-import type { AudioInquiryInput } from '~/lib/audio-validation';
+import { sendAudioMessage, sendOwnerRequestNotice, sendStudioSignInNotice } from '~/lib/audio-resend';
+import type { IntakeInput } from '~/lib/audio-intake';
 
-const input: AudioInquiryInput = {
+const intake: IntakeInput = {
+  service: 'vocal-mix',
+  title: 'Night Drive',
+  direction: 'preferences',
+  preferences: { vocal: 'natural', space: 'dry' },
+  preserve: 'Keep the ad-lib at the end.',
+  referenceUrl: 'https://example.com/reference',
+  referenceNote: 'Something like the bridge on this one.',
   name: 'Jane',
   email: 'jane@example.com',
-  services: ['mixing', 'mastering'],
-  trackCount: 3,
-  targetDate: '2026-08-01',
-  flexible: false,
-  references: 'https://example.com/ref',
-  delivery: 'Dropbox',
-  notes: 'Long enough description of the project that explains the work clearly.',
+  permission: true,
   turnstileToken: 'tok',
+  fileLink: 'https://drive.google.com/example',
 };
 
 beforeEach(() => {
@@ -25,37 +27,58 @@ it('keeps a timed-out email delivery unconfirmed', async () => {
     .toEqual({ ok: false, uncertain: true });
 });
 
-describe('sendAudioInquiry', () => {
-  it('posts to Resend with the expected payload', async () => {
-    const res = await sendAudioInquiry({ input, apiKey: 'k', from: 'noreply@notifs.x', to: 'kazon@x' });
+describe('sendOwnerRequestNotice', () => {
+  it('posts to Resend with the service, title, client, files, direction, notes and a dashboard link', async () => {
+    const res = await sendOwnerRequestNotice({ input: intake, requestId: 'req-1', apiKey: 'k', from: 'noreply@notifs.x', to: 'kazon@x' });
     expect(res.ok).toBe(true);
     const calls = (fetch as any).mock.calls;
     expect(calls.length).toBe(1);
     const body = JSON.parse(calls[0][1].body);
     expect(body.from).toBe('noreply@notifs.x');
     expect(body.to).toEqual(['kazon@x']);
-    expect(body.subject).toContain('Audio inquiry');
     expect(body.subject).toContain('Jane');
-    expect(body.subject).toContain('mixing');
-    expect(body.text).toContain('Services: mixing, mastering');
-    expect(body.text).toContain('Track count: 3');
-    expect(body.text).toContain('Target date: 2026-08-01');
-    expect(body.text).toContain('Delivery: Dropbox');
+    expect(body.subject).toContain('Two-track vocal mixing');
+    expect(body.subject).not.toContain('—');
+    expect(body.text).not.toContain('—');
+    expect(body.text).toContain('Service: Two-track vocal mixing');
+    expect(body.text).toContain('Title: Night Drive');
+    expect(body.text).toContain('Name: Jane');
+    expect(body.text).toContain('Email: jane@example.com');
+    expect(body.text).toContain('Files: https://drive.google.com/example');
+    expect(body.text).toContain('Direction: I have a few preferences');
+    expect(body.text).toContain('Vocal character: Natural & intimate');
+    expect(body.text).toContain('Space: Close & dry');
+    expect(body.text).toContain('Keep or avoid: Keep the ad-lib at the end.');
+    expect(body.text).toContain('Reference link: https://example.com/reference');
+    expect(body.text).toContain('Notes: Something like the bridge on this one.');
+    expect(body.text).toContain('https://thesuperhuman.us/owner/requests/req-1');
     expect(body.reply_to).toBe('jane@example.com');
+  });
+
+  it('notes when no files were shared yet, without a Files line breaking', async () => {
+    await sendOwnerRequestNotice({ input: { ...intake, fileLink: '' }, requestId: 'req-2', apiKey: 'k', from: 'a', to: 'b' });
+    const body = JSON.parse((fetch as any).mock.calls[0][1].body);
+    expect(body.text).toContain('Files: none provided yet.');
+  });
+
+  it('omits preferences, keep-or-avoid, reference and notes lines when none were given', async () => {
+    const minimal: IntakeInput = { ...intake, direction: 'judgment', preferences: {}, preserve: '', referenceUrl: '', referenceNote: '' };
+    await sendOwnerRequestNotice({ input: minimal, requestId: 'req-3', apiKey: 'k', from: 'a', to: 'b' });
+    const body = JSON.parse((fetch as any).mock.calls[0][1].body);
+    expect(body.text).toContain('Direction: Use your judgment');
+    for (const label of ['Preferences:', 'Keep or avoid:', 'Reference link:', 'Notes:']) expect(body.text).not.toContain(label);
   });
 
   it('reports failure when Resend returns non-ok', async () => {
     (fetch as any).mockImplementation(async () => ({ ok: false, json: async () => ({}) } as any));
-    const res = await sendAudioInquiry({ input, apiKey: 'k', from: 'noreply@notifs.x', to: 'kazon@x' });
+    const res = await sendOwnerRequestNotice({ input: intake, requestId: 'req-1', apiKey: 'k', from: 'noreply@notifs.x', to: 'kazon@x' });
     expect(res.ok).toBe(false);
   });
 
-  it('renders "flexible" when no target date is set', async () => {
-    (fetch as any).mockImplementation(async () => ({ ok: true } as any));
-    const flex: AudioInquiryInput = { ...input, targetDate: undefined, flexible: true };
-    await sendAudioInquiry({ input: flex, apiKey: 'k', from: 'a', to: 'b' });
-    const body = JSON.parse((fetch as any).mock.calls[0][1].body);
-    expect(body.text).toContain('Target date: flexible');
+  it('does not call Resend when the owner address is not configured', async () => {
+    const res = await sendOwnerRequestNotice({ input: intake, requestId: 'req-1', apiKey: '', from: '', to: '' });
+    expect(res).toEqual({ ok: false });
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
 

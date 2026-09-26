@@ -1,41 +1,8 @@
-import type { AudioInquiryInput } from './audio-validation';
+import type { IntakeInput } from './audio-intake';
+import { audioOffers, describePreferences } from './audio-intake';
 import { studioInvitationEmail, studioUpdateEmail } from './client-emails';
 
 const ENDPOINT = 'https://api.resend.com/emails';
-
-interface SendArgs {
-  input: AudioInquiryInput;
-  apiKey: string;
-  from: string;
-  to: string;
-}
-
-function body(input: AudioInquiryInput): string {
-  const lines = [
-    `Name: ${input.name}`,
-    `Email: ${input.email}`,
-    `Services: ${input.services.join(', ')}`,
-    input.trackCount !== undefined ? `Track count: ${input.trackCount}` : null,
-    `Target date: ${input.flexible || !input.targetDate ? 'flexible' : input.targetDate}`,
-    `Delivery: ${input.delivery}`,
-    input.references ? `References: ${input.references}` : null,
-    '',
-    'Notes:',
-    input.notes,
-  ];
-  return lines.filter((l) => l !== null).join('\n');
-}
-
-export async function sendAudioInquiry(args: SendArgs): Promise<{ ok: boolean }> {
-  const payload = {
-    from: args.from,
-    to: [args.to],
-    subject: `Audio inquiry: ${args.input.services.join(', ')} from ${args.input.name}`,
-    text: body(args.input),
-    reply_to: args.input.email,
-  };
-  return sendAudioMessage({ payload, apiKey: args.apiKey });
-}
 
 export async function sendAudioMessage({ payload, apiKey }: { payload: { from: string; to: string[]; subject: string; text: string; html?: string; reply_to?: string }; apiKey: string }): Promise<{ ok: boolean; uncertain?: boolean }> {
   try {
@@ -60,4 +27,56 @@ const notices = { invitation: studioInvitationEmail, update: studioUpdateEmail }
 export async function sendStudioSignInNotice(apiKey: string, from: string, to: string, subject: string,
   kind: keyof typeof notices = 'update'): Promise<{ ok: boolean; uncertain?: boolean }> {
   return sendAudioMessage({ apiKey, payload: { from, to: [to], subject, ...notices[kind]() } });
+}
+
+const DIRECTION_LABELS: Record<IntakeInput['direction'], string> = {
+  judgment: 'Use your judgment',
+  preferences: 'I have a few preferences',
+  specific: 'I have a specific direction',
+};
+
+function ownerRequestNoticeSubject(input: IntakeInput): string {
+  return `Song request from ${input.name}: ${audioOffers[input.service].name}`;
+}
+
+function ownerRequestNoticeBody(input: IntakeInput, requestId: string): string {
+  const preferences = describePreferences(input.service, input.preferences);
+  const lines = [
+    `Service: ${audioOffers[input.service].name}`,
+    `Title: ${input.title}`,
+    `Name: ${input.name}`,
+    `Email: ${input.email}`,
+    input.fileLink ? `Files: ${input.fileLink}` : 'Files: none provided yet.',
+    `Direction: ${DIRECTION_LABELS[input.direction]}`,
+    preferences.length ? `Preferences: ${preferences.join('; ')}` : null,
+    input.preserve ? `Keep or avoid: ${input.preserve}` : null,
+    input.referenceUrl ? `Reference link: ${input.referenceUrl}` : null,
+    input.referenceNote ? `Notes: ${input.referenceNote}` : null,
+    '',
+    `Review this request: https://thesuperhuman.us/owner/requests/${requestId}`,
+  ];
+  return lines.filter((line): line is string => line !== null).join('\n');
+}
+
+interface OwnerRequestNoticeArgs {
+  input: IntakeInput;
+  requestId: string;
+  apiKey: string;
+  from: string;
+  to: string;
+}
+
+/** Alerts the operator to a new song request, regardless of the client-portal flag. */
+export async function sendOwnerRequestNotice(args: OwnerRequestNoticeArgs): Promise<{ ok: boolean; uncertain?: boolean }> {
+  if (!args.apiKey || !args.from || !args.to) return { ok: false };
+  return sendAudioMessage({
+    apiKey: args.apiKey,
+    payload: {
+      from: args.from,
+      to: [args.to],
+      subject: ownerRequestNoticeSubject(args.input),
+      text: ownerRequestNoticeBody(args.input, args.requestId),
+      reply_to: args.input.email,
+    },
+  });
 }
