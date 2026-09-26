@@ -13,6 +13,7 @@ Astro.response.headers.set('Cache-Control', 'no-store');
   description="Updates that have moved past the latest five on the project page, newest first. Nothing here was deleted, only relocated."
   status="An ongoing design project"
   journalHref="/building/personal-website#personal-website-updates-title"
+  pageTitle={`${websiteStory.title} · Archive · Kazon Wilson`}
 >
   <ProjectUpdates feed={feed} projectId="personal-website" title="Archive" milestones={websiteMilestones} view="archive" />
   <p class="journal-crosslink"><a class="site-link" href="/building/personal-website/story">View project story <span aria-hidden="true">→</span></a></p>

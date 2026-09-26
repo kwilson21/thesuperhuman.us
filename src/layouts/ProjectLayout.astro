@@ -9,10 +9,14 @@ interface Props {
   status: string;
   journalHref: string;
   ogImage?: string;
+  /** Overrides the browser tab title (and og:title) only; the visible <h1> always uses `title`.
+   * Falls back to "`${title} · Project journal · Kazon Wilson`" when omitted. Lets a project's
+   * separate routes (for example a story or archive view) carry their own tab title. */
+  pageTitle?: string;
 }
-const { title, subtitle, description, status, journalHref, ogImage } = Astro.props;
+const { title, subtitle, description, status, journalHref, ogImage, pageTitle } = Astro.props;
 ---
-<BaseLayout title={`${title} · Project journal · Kazon Wilson`} description={description} ogImage={ogImage}>
+<BaseLayout title={pageTitle ?? `${title} · Project journal · Kazon Wilson`} description={description} ogImage={ogImage}>
   <div class="site-shell project-shell">
     <header class="project-intro">
       <p class="page-kicker"><a href="/building">Building</a> / {title}</p>

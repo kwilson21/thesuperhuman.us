@@ -51,6 +51,7 @@ const targetUrl = process.env.TARGET_URL || 'http://127.0.0.1:4321';
       const nextAction = document.querySelector('[data-testid="journal-next-action"]');
       return {
         heading: document.getElementById('personal-website-updates-title')?.textContent ?? null,
+        headingTop: rect(document.getElementById('personal-website-updates-title'))?.top ?? null,
         pickCount: scoped('[data-pick]').length,
         panelCount: scoped('[data-panel]').length,
         showAllPresent: scoped('[data-all]').length > 0,
@@ -74,15 +75,19 @@ const targetUrl = process.env.TARGET_URL || 'http://127.0.0.1:4321';
     assert.ok(bounded.latestChange, 'Missing the latest-change landmark (data-testid="journal-latest-change")');
     assert.ok(bounded.nextAction, 'Missing the next-action landmark (data-testid="journal-next-action")');
     const twoScreenBudget = 2 * 844; // the Sept 21 spec's guardrail at a 390x844 viewport
+    // Owner amendment, September 26, 2026: the Sept 26 audit (S10) places "What changed, page by
+    // page" above the journal, so current-state (in the shared project header, above every journal
+    // surface) keeps its budget from the document top, while latest-change and next-action are
+    // measured from the top of the "Latest work" section instead, within the same budget.
     assert.ok(bounded.currentState.bottom <= twoScreenBudget,
-      `The current-state landmark must end within ${twoScreenBudget}px of the top, ends at ${bounded.currentState.bottom}`);
-    // Owner note: the Sept 26 audit (S10) moved "What changed, page by page" above the journal, which
-    // pushes Latest work's own landmarks well past the spec's two-screen budget (measured below). The
-    // PR description raises this as a tradeoff to confirm; this check only holds the guardrail that
-    // survives the reordering (current-state) and otherwise just requires latest-change and next-action
-    // to render, without a panel needing to be opened first.
-    console.log(`personal website journal: latest-change ends at ${Math.round(bounded.latestChange.bottom)}px, `
-      + `next-action at ${Math.round(bounded.nextAction.bottom)}px (spec budget was ${twoScreenBudget}px, before the S10 reorder)`);
+      `The current-state landmark must end within ${twoScreenBudget}px of the document top, ends at ${bounded.currentState.bottom}`);
+    assert.ok(bounded.headingTop !== null, 'Missing the "Latest work" heading to measure the other two landmarks from');
+    const latestChangeFromHeading = bounded.latestChange.bottom - bounded.headingTop;
+    const nextActionFromHeading = bounded.nextAction.bottom - bounded.headingTop;
+    assert.ok(latestChangeFromHeading <= twoScreenBudget,
+      `The latest-change landmark must end within ${twoScreenBudget}px of the "Latest work" heading, ends at ${latestChangeFromHeading}px`);
+    assert.ok(nextActionFromHeading <= twoScreenBudget,
+      `The next-action landmark must end within ${twoScreenBudget}px of the "Latest work" heading, ends at ${nextActionFromHeading}px`);
 
     // A moved entry's old fragment still resolves, without JavaScript, to a link at its new location.
     const noJsContext = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
