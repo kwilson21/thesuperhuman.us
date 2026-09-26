@@ -257,7 +257,12 @@ that mentions audio at all.
   Kaillera Next from the owner's own captures, no gameplay media.
 - Kaillera Next's card picture (owner, September 26): a capture of the new
   Kaillera Next landing page in use, once that page exists. The lobby capture
-  is the placeholder until then.
+  is the placeholder until then. The landing page is kaillera-next pull
+  request #29 (a new web/index.html with its own stylesheet and script, on top
+  of the listed-rooms and public-stats plumbing merged in #28). When #29
+  merges, capture the live page at kaillera-next.thesuperhuman.us; if the
+  capture environment cannot reach that host, render the merged page locally
+  and note that rooms and stats show their empty state without the server.
 - Motion previews on the two featured cards (owner, September 26): a still
   picture that starts moving on hover, the way video thumbnails do. Rules for
   the implementation, drawn from the direction document and the publicist
