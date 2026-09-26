@@ -63,6 +63,8 @@ const PAGE_NAMES_BY_FILE = {
   'src/layouts/BaseLayout.astro': SHARED_SITE_PAGES,
   'src/components/ExperienceRow.astro': ['work'],
   'src/components/SoftwareServiceIllustration.astro': ['services'],
+  'src/components/WorkWithMe.astro': ['home', 'services'],
+  'src/data/work-with-me.ts': ['home', 'services'],
   'src/layouts/ServiceSheet.astro': ['services'],
   'src/content/pages/about.md': ['about'],
   'src/data/profile.ts': ['home', 'work', 'about'],
