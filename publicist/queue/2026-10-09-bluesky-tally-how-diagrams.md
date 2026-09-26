@@ -2,7 +2,7 @@
 id: tally-how-diagrams-bsky
 source: tally-how-diagrams
 platform: bluesky
-slot: 2026-10-06T13:00-04:00
+slot: 2026-10-09T13:00-04:00
 kind: new
 link: https://thesuperhuman.us/building/tally#tally-how-diagrams
 media: src/assets/projects/tally/how-diagrams-annotated.webp
