@@ -255,14 +255,16 @@ that mentions audio at all.
   publicist rules forbid calling exploration work production-ready. Captures
   follow the publicist rules: Tally on demo data with the banner in frame,
   Kaillera Next from the owner's own captures, no gameplay media.
-- Kaillera Next's card picture (owner, September 26): a capture of the new
-  Kaillera Next landing page in use, once that page exists. The lobby capture
-  is the placeholder until then. The landing page is kaillera-next pull
-  request #29 (a new web/index.html with its own stylesheet and script, on top
-  of the listed-rooms and public-stats plumbing merged in #28). When #29
-  merges, capture the live page at kaillera-next.thesuperhuman.us; if the
-  capture environment cannot reach that host, render the merged page locally
-  and note that rooms and stats show their empty state without the server.
+- Kaillera Next's card picture (owner, September 26): a capture of the live
+  Kaillera Next landing page, which merged as kaillera-next pull request #29
+  (a new web/index.html on top of the listed-rooms and public-stats plumbing
+  from #28). The capture comes from kaillera-next.thesuperhuman.us itself, so
+  it shows the real open-rooms board. The page has two video slots, "Intro"
+  and "Rollback explained", that render only once each has a YouTube video id;
+  the owner asked for real game footage in them. Under publicist rule 11 that
+  footage comes only from the owner: the site never fetches, stores or shows
+  ROMs or gameplay it did not receive from him. The slots stay hidden until he
+  supplies the two recordings.
 - Motion previews on the two featured cards (owner, September 26): a still
   picture that starts moving on hover, the way video thumbnails do. Rules for
   the implementation, drawn from the direction document and the publicist
