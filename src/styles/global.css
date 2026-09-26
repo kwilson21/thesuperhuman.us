@@ -113,23 +113,6 @@
     line-height: 1.5;
   }
 
-  .btn-primary {
-    display: inline-block;
-    background: var(--ink);
-    color: var(--paper);
-    font-family: theme('fontFamily.sans');
-    font-size: 13px;
-    font-weight: 500;
-    padding: 11px 22px;
-    border-radius: 5px;
-    border-bottom: none;
-  }
-
-  .btn-primary:hover {
-    background: var(--accent);
-    color: var(--paper);
-  }
-
   .skip-link {
     position: absolute;
     left: -9999px;
