@@ -305,9 +305,9 @@ servant-lang has no destination. The closing block links to Work and Writing.
 **Recommendation (decided, revised September 26).** One row treatment with a
 small thumbnail and a one-line status on every row, public work first. Tally
 takes the featured slot (in development, public demo). Rows follow in this
-order: Kaillera Next (in development, playable demo build), The Engineer's
-Daily (local prototype), Threadline (internal prototype), Personal website (an
-ongoing design project). The two prototypes keep their pages and journals and
+order: Kaillera Next (in development, playable demo build), Personal website
+(live, an ongoing design project), The Engineer's Daily (local prototype),
+Threadline (internal prototype). The two prototypes keep their pages and journals and
 return to a feature slot when each has a public demo or an inspectable
 artifact. Hide servant-lang until it has a public explanation, repository or
 artifact; this does not delete anything. Remove the header links and the
