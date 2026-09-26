@@ -1,11 +1,13 @@
 ---
 import headphones from '~/assets/site/headphones-v1.webp';
 import { mainSitePath, audioPath } from '~/lib/host-routing';
+import { audioOffers } from '~/lib/audio-intake';
 const host = Astro.request.headers.get('host') ?? Astro.url.host;
 const mainHref = (path: string) => mainSitePath(host, path);
+const prices = `$${audioOffers['vocal-mix'].price} two-track vocal mixing. $${audioOffers.mastering.price} mastering. $${audioOffers.bundle.price} for both. Custom mixing, production or recording work is quoted after review.`;
 ---
 <header class="audio-hero">
-  <div><p class="page-kicker"><a href={mainHref('/about')}>About</a> / Audio</p><h1 class="page-title">Audio<br />engineering.</h1><p class="page-lede">I studied audio production at Middle Tennessee State University. Audio is still part of my life.</p><div class="site-links"><a class="site-button" href={audioPath(host, '/services')}>Audio services</a><a class="site-button site-button-outline" href="#book">Discuss a project</a></div></div>
+  <div><p class="page-kicker"><a href={mainHref('/about')}>About</a> / Audio</p><h1 class="page-title">Mixing and<br />mastering.</h1><p class="page-lede">{prices}</p><div class="site-links"><a class="site-button" href={audioPath(host, '/start')}>Start your song</a><a class="site-button site-button-outline" href={audioPath(host, '/services')}>Prices and scope</a></div></div>
   <img class="audio-art" src={headphones.src} alt="" width={headphones.width} height={headphones.height} fetchpriority="high" />
 </header>
 <style>

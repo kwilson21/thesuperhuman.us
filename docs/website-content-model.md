@@ -168,19 +168,33 @@ without presenting a fully scoped project. The approved
 [contact study](design-concepts/README.md#resume-and-contact) simplifies the
 general inquiry; implementation must preserve delivery and privacy safeguards.
 
-## Audio: a connected practice with its own destination
+## Audio: one funnel, offer led
 
-Recommendation: retain the current audio destination and make it discoverable
-from About and shared secondary navigation. Selected audio evidence may also
-appear on Work or Home when it serves those pages.
+`/audio/` leads with the paid offer and the approved prices ($150 two-track
+vocal mixing, $75 mastering, $200 for both; custom mixing, production or
+recording work is quoted after review), a "Start your song" button and a
+"Prices and scope" link to `/audio/services`. Below the hero: Listen (releases
+and any selected recordings), What I work on (the four service categories,
+linking back to prices and scope), and Getting started (the process
+expectations below, with the same "Start your song" button). Audio is a
+primary header destination alongside Work, Building, Writing and About; it
+serves a distinct, commercial audience and earns that placement.
 
-The audio destination owns recordings, credits, listening context, and audio
-engagement detail. This avoids a second copy of each recording's metadata on the
-main site. Lack of recordings should not prevent mentioning audio as part of
-Kazon's background; it does prevent presenting an empty player as evidence.
+There is exactly one intake funnel: the three-step `/audio/start` form,
+posting to `/api/audio-intake`. `/audio/#book` keeps working through the
+"Getting started" section's own anchor, which carries the "Start your song"
+button. The secondary Audio bar (`MusicNav`) is Listen, Portfolio, Services.
 
-There is no demonstrated need to add a sixth primary navigation area or move the
-audio site during this stage. Revisit that if the selected content warrants it.
+`/audio/about` permanently redirects to the Audio landing page. Its unique
+process detail, async written briefs, file delivery through Drive, Dropbox or
+WeTransfer, checking mixes on multiple reference systems before delivery, and
+recommending someone else when a project is outside what Kazon does well, now
+lives in "Getting started". The gear inventory and the university line (already
+on About's Audio chapter) did not need their own page.
+
+The audio destination still owns recordings, credits, listening context, and
+audio engagement detail. This avoids a second copy of each recording's
+metadata on the main site.
 
 ## Proposed treatment of existing material
 
@@ -252,7 +266,7 @@ Work exposes a direct link from the featured Associate Tools story to the full t
 
 ### Audio and forms, September 10
 
-`src/data/audio.ts` owns the short service descriptions. Recording metadata stays in the audio-tracks collection with optional notes. `src/scripts/form-submission.ts` shares only interaction states across the three existing forms; each retains its own payload and server endpoint. Home /#contact remains the accepted general-contact destination, with name/email/message and optional company. Audio #book remains the structured inquiry. About /about#resumes keeps the general, approval-gated resume request.
+`src/data/audio.ts` owns the short service descriptions. Recording metadata stays in the audio-tracks collection with optional notes. `src/scripts/form-submission.ts` shares only interaction states across the three existing forms; each retains its own payload and server endpoint. Home /#contact remains the accepted general-contact destination, with name/email/message and optional company. About /about#resumes keeps the general, approval-gated resume request. (September 26: Audio #book now leads into the `/audio/start` intake rather than a separate inquiry form; see "Audio: one funnel, offer led" above.)
 
 ## Website project and writing topic
 
