@@ -112,7 +112,7 @@ Re-run any of these whenever a resume changes.
 
 ### Rebuilding the services one-pager PDF
 
-The services overviews share `src/layouts/ServiceSheet.astro` and `src/data/services.ts`. Software lives at `/services` (the existing `/services.html` redirects there); Audio lives at `/audio/services`. Both are readable on phones and have a Print / Save PDF action. Existing PDFs in KV are not updated by editing the pages.
+`/services` is the Work with me hub, rendered by `src/layouts/ServiceSheet.astro` from `src/data/services.ts` and `src/data/work-with-me.ts`; the existing `/services.html` redirects there. Its Print / Save PDF action hides the hub's doors and prints the software engineering sheet on one page. Audio's prices and scope live at `/audio/services`, which has no print action. Existing PDFs in KV are not updated by editing the pages.
 
 For scripted export, start a local preview and specify its URL:
 
