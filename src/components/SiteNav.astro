@@ -34,8 +34,8 @@ const onHub = current === '/services';
     <nav aria-label="Primary mobile">
       {links.map(({ href, label }) => <a href={mainHref(href)} aria-current={active(href) ? (isAudio ? 'location' : 'page') : undefined}>{label}</a>)}
       <div class="menu-group">
-        <a href={mainHref('/services')} aria-current={onHub ? 'page' : undefined}>Work with me</a>
-        {hire.map(({ href, label }) => <a href={href}>{label}</a>)}
+        <a id="menu-hire" href={mainHref('/services')} aria-current={onHub ? 'page' : undefined}>Work with me</a>
+        <div role="group" aria-labelledby="menu-hire">{hire.map(({ href, label }) => <a href={href}>{label}</a>)}</div>
       </div>
     </nav>
   </details>
@@ -69,7 +69,8 @@ const onHub = current === '/services';
     .menu-mark i { height: 1px; background: var(--accent); }
     .mobile-menu nav { position: absolute; top: calc(100% - 10px); left: 0; right: 0; display: grid; padding: 1rem var(--site-gutter) 1.5rem; background: var(--paper); border-bottom: 1px solid var(--rule); box-shadow: 0 18px 24px -24px #0e0e0e55; }
     .mobile-menu nav a { min-height: 44px; width: fit-content; }
-    .menu-group { display: grid; margin-top: .5rem; padding-top: .5rem; border-top: 1px solid var(--rule); }
-    .menu-group a + a { padding-left: 1rem; font-size: .95rem; }
+    .menu-group, .menu-group > div { display: grid; }
+    .menu-group { margin-top: .5rem; padding-top: .5rem; border-top: 1px solid var(--rule); }
+    .menu-group > div a { padding-left: 1rem; font-size: .95rem; }
   }
 </style>

@@ -1,4 +1,5 @@
 ---
+import PersonalNameText from '~/components/PersonalNameText.astro';
 import { doors } from '~/data/work-with-me';
 interface Props { headingLevel?: 'h2' | 'h3'; }
 const { headingLevel = 'h3' } = Astro.props;
@@ -6,26 +7,29 @@ const { headingLevel = 'h3' } = Astro.props;
 <div class="doors">
   {doors.map(door => <article class="door">
     <a class="door-art" href={door.href} tabindex="-1" aria-hidden="true"><img src={door.picture.src} width={door.picture.width} height={door.picture.height} alt="" loading="lazy" /></a>
-    <div class="door-copy">
-      <p class="door-caption">{door.caption}</p>
-      {headingLevel === 'h2' ? <h2 class="door-title">{door.title}</h2> : <h3 class="door-title">{door.title}</h3>}
-      <p class="door-line">{door.line}</p>
-      <a class="site-button" href={door.href}>{door.label}</a>
-    </div>
+    <p class="door-caption"><PersonalNameText text={door.caption} /></p>
+    {headingLevel === 'h2' ? <h2 class="door-title">{door.title}</h2> : <h3 class="door-title">{door.title}</h3>}
+    <p class="door-line">{door.line}</p>
+    <a class="door-button site-button" href={door.href}>{door.label}</a>
   </article>)}
 </div>
 <style>
-  .doors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.5rem; }
+  /* Subgrid keeps the captions, titles, lines and buttons on shared rows, so the three doors line up whatever wraps. */
+  .doors { display: grid; grid-template-columns: repeat(3, 1fr); column-gap: 2.5rem; }
+  .door { display: grid; grid-template-rows: subgrid; grid-row: span 5; }
   .door-art { display: block; aspect-ratio: 3 / 2; border: 1px solid var(--rule); border-radius: 3px; padding: 0; overflow: hidden; background: #f3eee5; }
   .door-art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
   .door-caption { font-family: theme('fontFamily.sans'); font-size: .78rem; color: var(--muted); margin: .7rem 0 .8rem; }
   .door-title { font-size: 1.55rem; line-height: 1.2; letter-spacing: -.02em; margin: 0 0 .35rem; }
   .door-line { font-size: 1.05rem; line-height: 1.5; color: var(--muted); max-width: 30ch; margin: 0 0 .9rem; }
-  .door .site-button { min-height: 42px; padding: .45rem 1.15rem; }
+  .door-button { justify-self: start; align-self: start; min-height: 42px; padding: .45rem 1.15rem; }
   @media (max-width: 800px) {
-    .doors { grid-template-columns: 1fr; gap: 1.75rem; }
-    .door { display: grid; grid-template-columns: 104px 1fr; gap: 1rem; align-items: start; }
-    .door-caption { margin: 0 0 .4rem; }
-    .door-title { font-size: 1.4rem; }
+    .doors { grid-template-columns: 1fr; row-gap: 1.75rem; }
+    .door { grid-template-columns: 104px 1fr; grid-template-rows: none; grid-template-areas: "art caption" "art title" "art line" "art button"; grid-row: auto; column-gap: 1rem; align-items: start; }
+    .door-art { grid-area: art; }
+    .door-caption { grid-area: caption; margin: 0 0 .4rem; }
+    .door-title { grid-area: title; font-size: 1.4rem; }
+    .door-line { grid-area: line; }
+    .door-button { grid-area: button; }
   }
 </style>

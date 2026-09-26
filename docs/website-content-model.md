@@ -283,13 +283,15 @@ online. A finished essay will develop the argument rather than duplicate the jou
 `/services` is the "Work with me" hub. It opens with three doors, one per thing a
 visitor can hire Kazon for (mixing and mastering, website design, software
 engineering), each with a picture of real, verifiable work, one line and one
-button (`src/data/work-with-me.ts`, rendered by `WorkWithMe.astro`). Below them
-the software engineering offerings from `src/data/services.ts` keep their
-one-page print view, followed by the experience line, a closing contact and a
-line for the other two audiences (request a resume, get in touch). The hub is
-one step from every page: the header button, the phone menu's "Work with me"
-group, the footer, the Home strip under the hero, and Work. Audio's prices and
-scope live at `/audio/services`, and the mixing door starts the `/audio/start`
-intake. The old `/services.html` address redirects to the hub. Audio belongs
-within the personal site, with its existing hostname retained as an alternate
-entry and main-site canonicals.
+button that starts the conversation (`src/data/work-with-me.ts`, rendered by
+`WorkWithMe.astro`): the mixing door opens the `/audio/start` intake, the other
+two open the contact form. Below them the software engineering offerings from
+`src/data/services.ts` keep their one-page print view, followed by the
+experience line, a closing contact and a line for the other two audiences
+(request a resume, get in touch). The hub is one step from every page: the
+header button, the phone menu's "Work with me" group (which also names the
+hub's offer sections), the footer, and Work; the Home strip under the hero
+shows the same three doors. Audio's prices and scope live at `/audio/services`.
+The old `/services.html` address redirects to the hub. Audio belongs within the
+personal site, with its existing hostname retained as an alternate entry and
+main-site canonicals.
