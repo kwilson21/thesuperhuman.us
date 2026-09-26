@@ -84,15 +84,27 @@ direction deliberately moved to the background. Audio is different: it serves a
 distinct audience and is the service line most likely to bring paid work, so it
 earns header space even though the content model placed it second.
 
-**Recommendation (decided).** Header: **Work · Building · Writing · Audio · About
-· [Get in touch]**. The name mark is the Home link. Services leaves the header
-with explicit replacements, so each service line is one sensible click away:
-a "Software services" link on Work beside the engagement statement, an "Audio
-services" link near the top of Audio, and "Software services" (not the ambiguous
-"Services") in the footer. No dropdown. Remove the Software/Audio switcher from
-the services sheet. Reduce the audio bar to Listen, Portfolio, Services, or fold
-it into the page's sections. Update the content model's "Audio" paragraph once
-this ships.
+**Recommendation (decided, revised September 26).** Header: **Work · Building ·
+Writing · Audio · About · [Work with me]**. The name mark is the Home link. The
+header button changes from "Get in touch" to "Work with me" and leads to one hub
+page (the current `/services`, retitled) that names the three things a visitor
+can hire him for, each with one line and one link: mixing and mastering (to
+`/audio/services`), website design (to the hub's own section, with this site as
+the example) and software engineering (to the hub's offerings). The hub also
+carries "Request my resume" and "Get in touch" for the other two audiences. On
+the phone, the menu's last item becomes a "Work with me" group listing those
+three offers and "Get in touch", each one tap away. The footer says "Work with
+me". Work keeps a "Hire me for software" link near its introduction and Audio
+leads with the offer. No dropdown on desktop: a visible hub page is more robust
+than a hover menu, and the phone menu already groups the routes. Remove the
+Software/Audio switcher from the services sheet. Reduce the audio bar to Listen,
+Portfolio, Services. Update the content model's "Audio" and services paragraphs
+once this ships.
+
+Owner requirement behind this (September 26): someone looking for mixing and
+mastering, for a website designed, or for a serious software project must find
+it from any point on the site without digging, and a label like "Services" or
+"Audio" does not tell them what is on offer. A footer link is not enough.
 
 Evidence: [`SiteNav.astro`](../../../src/components/SiteNav.astro),
 [`MusicNav.astro`](../../../src/components/audio/MusicNav.astro),
@@ -207,11 +219,15 @@ that mentions audio at all.
 
 - Hero: keep the name, the studio scene and the personal introduction. Fix the
   repeated "exploring" rather than replacing the introduction with the Work
-  heading. Add one short line that names mixing and mastering with a modest
-  Audio link, so removing the section does not remove the service line from
-  Home.
-- Sections: Building (up to two projects, a maximum not a quota), one Work
-  proof, Writing (one essay), Contact. Home drops from five sections to four.
+  heading. One hero link.
+- Directly under the hero, a compact "Work with me" strip: the same three
+  offers as the hub, one line and one link each, plus "All services". This is
+  wayfinding, not a pitch: the hero still leads with the person, and the strip
+  is the only place on Home that sells anything. It replaces the earlier idea of
+  a single audio line.
+- Sections: Work with me, Building (up to two projects, a maximum not a quota),
+  one Work proof, Writing (one essay), Contact. Home swaps "Beyond the code" for
+  the strip and ends about the same height on the phone and shorter on desktop.
 - Shared framing for all four: the existing `site-section-heading` rule,
   spacing and link behavior. Inside that frame each section keeps the layout
   its content needs. Retire the boxed Lyft treatment on desktop; the figure
@@ -417,24 +433,33 @@ These already serve the purpose and should survive the simplification untouched:
 ## Agreed structure
 
 ```
-Header     Work · Building · Writing · Audio · About · [Get in touch]
-Footer     GitHub · LinkedIn · Audio · Software services · Support my work · Privacy
+Header        Work · Building · Writing · Audio · About · [Work with me]
+Phone menu    Work · Building · Writing · Audio · About · Work with me: Mixing & mastering · Website design · Software engineering · Get in touch
+Footer        GitHub · LinkedIn · Audio · Work with me · Support my work · Privacy
 
-Home       Hero (name, intro, one audio line, 1 button) · Building (≤2) · Work (1 proof) · Writing (1) · Contact
-Work       Lede with three facts, preference sentence, Request resume, Software services · 2 highlights with diagrams · Experience rows · one closing invitation
-Building   Intro · project rows, each with a status · (no closing block)
-Writing    Intro · essay · topic in progress
-About      Intro · 4 chapters · full working preference · Contact · Request resume
-Audio      Hero (offering, Start your song) · Listen · Services with prices · Start
+Home          Hero (name, intro, 1 link) · Work with me strip (3 offers) · Building (≤2) · Work (1 proof) · Writing (1) · Contact
+Work with me  Hub at /services: 3 doors · Software engineering offerings (Prototypes, Products & tools, Website design, Integrations) · experience line · contact · resume
+Work          Lede with three facts, preference sentence, Request resume, Hire me for software · 2 highlights with diagrams · Experience rows · one closing invitation
+Building      Intro · project rows, each with a status · (no closing block)
+Writing       Intro · essay · topic in progress
+About         Intro · 4 chapters · full working preference · Contact · Request resume
+Audio         Hero (offer and prices, Start your song, Prices and scope) · Listen · Services · Start
 ```
+
+Three journeys this structure guarantees, from any page: mixing and mastering
+in two clicks (Work with me, then the offer) or one from Home; a website
+designed in two clicks or one from Home; a software project in two clicks or
+one from Home. On the phone each is two taps from the menu.
 
 ## Agreed order of work
 
 Each step is one narrow, reviewable PR. Unused styles leave in the PR that
 stops using them.
 
-1. **Header and destination labels.** Six header items, the three replacement
-   Services links, one label per destination. No layout change.
+1. **Header, hub and destination labels.** Six header items with the "Work
+   with me" button, the phone menu group, the footer label, the `/services` hub
+   (three doors, section anchors, resume and contact lines, switcher removed),
+   the Home strip, and one label per destination.
 2. **Audio consolidation.** One funnel on `/audio/start`, a preserved path from
    `#book`, verified delivery before the old endpoint retires, `/audio/about`
    redirected, landing page repositioned around the paid offering and something
@@ -465,6 +490,13 @@ Owner decisions, given in conversation on September 26:
 - Audio intake: `/audio/start` stays; it is the flow most likely to bring paid
   work. The booking form retires after delivery is verified.
 - Home "Beyond the code": remove it, since that simplifies the page.
+- Wayfinding (after seeing the rendered preview): a footer "Software services"
+  link is too hard to find, and "Services" or "Audio" as labels do not tell a
+  visitor what is offered. Anyone looking for mixing and mastering, a website
+  designed, or a serious software project must find it from any point on the
+  site without digging. Resolved as the "Work with me" button, hub, Home strip
+  and phone menu group in S1 and S5. This supersedes the earlier placement of
+  Services in the footer and on Work only.
 
 Answers from the second review (Astra), accepted:
 
@@ -510,6 +542,14 @@ as proposed, and changed the following. Each change is already reflected above.
 - **The journal recommendation defers to the September 21 plan**, which this
   audit had not reconciled (S10).
 - **A visitor test was added** as the success check.
+
+Owner revision after the rendered preview, September 26:
+
+- **Services links moved from the footer to a named door on every page.** The
+  review's "Software services on Work and in the footer" was accepted first,
+  then revised once the owner saw it rendered: it did not make the three offers
+  findable. The header button, hub, Home strip and phone menu group replace it
+  (S1, S5). The review's "no dropdown" still holds; the hub is a page.
 
 ## Verification record
 
