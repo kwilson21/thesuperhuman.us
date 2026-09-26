@@ -264,7 +264,11 @@ that mentions audio at all.
   the owner asked for real game footage in them. Under publicist rule 11 that
   footage comes only from the owner: the site never fetches, stores or shows
   ROMs or gameplay it did not receive from him. The slots stay hidden until he
-  supplies the two recordings.
+  supplies the two recordings. The card's still shows the board as it was at
+  capture time (no open rooms). The owner preferred a populated board but
+  chose not to stage one; a capture during a real session, real aggregate
+  stats on the page, and his own footage as the hover clip are the honest
+  routes, all deferred by the owner on September 26.
 - Motion previews on the two featured cards (owner, September 26): a still
   picture that starts moving on hover, the way video thumbnails do. Rules for
   the implementation, drawn from the direction document and the publicist
