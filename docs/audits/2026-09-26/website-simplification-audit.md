@@ -220,11 +220,16 @@ that mentions audio at all.
 - Hero: keep the name, the studio scene and the personal introduction. Fix the
   repeated "exploring" rather than replacing the introduction with the Work
   heading. One hero link.
-- Directly under the hero, a compact "Work with me" strip: the same three
-  offers as the hub, one line and one link each, plus "All services". This is
-  wayfinding, not a pitch: the hero still leads with the person, and the strip
-  is the only place on Home that sells anything. It replaces the earlier idea of
-  a single audio line.
+- Directly under the hero, a "Work with me" strip: the same three offers as
+  the hub, each with a small illustration from the site's existing line-drawn
+  set (the audio waveform, the website layout, the product illustration), one
+  line, and a button with its own verb ("Start your song", "Plan your website",
+  "Discuss your project"), plus "All services". Placement under the hero and
+  the illustration-plus-button treatment were both confirmed by the owner on
+  September 26 after seeing the rendered preview. This is wayfinding, not a
+  pitch: the hero still leads with the person, and the strip is the only place
+  on Home that sells anything. It replaces the earlier idea of a single audio
+  line. The hub's three doors use the same treatment.
 - Sections: Work with me, Building (up to two projects, a maximum not a quota),
   one Work proof, Writing (one essay), Contact. Home swaps "Beyond the code" for
   the strip and ends about the same height on the phone and shorter on desktop.
