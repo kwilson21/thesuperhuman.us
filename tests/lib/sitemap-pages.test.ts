@@ -25,6 +25,7 @@ describe('shouldIncludeSitemapPage', () => {
     expect(shouldIncludeSitemapPage('https://thesuperhuman.us/services')).toBe(true);
     expect(shouldIncludeSitemapPage('https://thesuperhuman.us/audio/services')).toBe(true);
     expect(shouldIncludeSitemapPage('https://thesuperhuman.us/services.html')).toBe(false);
+    expect(shouldIncludeSitemapPage('https://thesuperhuman.us/audio/about')).toBe(false);
     expect(shouldIncludeSitemapPage('https://thesuperhuman.us/api/contact')).toBe(false);
     expect(shouldIncludeSitemapPage('https://thesuperhuman.us/owner')).toBe(false);
     expect(shouldIncludeSitemapPage('https://thesuperhuman.us/owner/requests')).toBe(false);

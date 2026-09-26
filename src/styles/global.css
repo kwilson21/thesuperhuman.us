@@ -144,18 +144,6 @@
     left: 16px;
     top: 16px;
   }
-
-  /* Drop cap for the first paragraph of /about */
-  .prose-about > p:first-of-type::first-letter {
-    float: left;
-    font-family: theme('fontFamily.serif');
-    font-size: 4.5rem;
-    line-height: 0.85;
-    font-weight: 400;
-    padding-right: 0.5rem;
-    padding-top: 0.4rem;
-    color: var(--ink);
-  }
 }
 
 /* Shared foundations for the September 2026 page compositions. */

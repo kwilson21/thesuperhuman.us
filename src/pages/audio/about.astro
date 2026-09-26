@@ -1,6 +1,5 @@
 ---
 export const prerender = false;
 import { audioPath } from '~/lib/host-routing';
-const target = audioPath(Astro.request.headers.get('host') ?? Astro.url.host, '/');
-return Astro.redirect(target, 301);
+return Astro.redirect(audioPath(Astro.request.headers.get('host') ?? Astro.url.host, '/services#before-we-start'), 301);
 ---

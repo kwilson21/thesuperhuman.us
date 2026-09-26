@@ -1,10 +1,12 @@
 # Website content responsibilities
 
-Status: Refined through September 10, 2026. The five primary areas and the
+Status: Refined through September 10, 2026, and updated September 26 for the
+website simplification audit. The five primary areas and the
 distinction between Work as capability evidence and Building as project exploration
 are agreed. The [visual-study index](design-concepts/README.md) records
-selected page compositions and deeper templates. Audio remains a secondary
-destination associated with About. Final copy, production assets, and interaction
+selected page compositions and deeper templates. Audio is now a primary header
+destination alongside Work, Building, Writing and About: it serves a distinct,
+commercial audience. Final copy, production assets, and interaction
 behavior still require validation. The proposed [system plan](website-system-plan.md)
 turns these responsibilities into repository conventions. Home and the four primary
 page compositions, project/article details, Audio and the contact flow are implemented locally. Integrated whole-site verification passes. The website project and redesign topic are also implemented locally; see the [journal increment review](redesign-story-material.md). Nothing has been deployed.
@@ -170,27 +172,30 @@ general inquiry; implementation must preserve delivery and privacy safeguards.
 
 ## Audio: one funnel, offer led
 
-`/audio/` leads with the paid offer and the approved prices ($150 two-track
-vocal mixing, $75 mastering, $200 for both; custom mixing, production or
-recording work is quoted after review), a "Start your song" button and a
-"Prices and scope" link to `/audio/services`. Below the hero: Listen (releases
-and any selected recordings), What I work on (the four service categories,
-linking back to prices and scope), and Getting started (the process
-expectations below, with the same "Start your song" button). Audio is a
-primary header destination alongside Work, Building, Writing and About; it
-serves a distinct, commercial audience and earns that placement.
+`/audio/` leads with the paid offer and the approved starting prices (from
+$150 for two-track vocal mixing, from $75 for mastering, from $200 for both;
+custom mixing, production or recording work is quoted after review), a
+"Start your song" button and a "Prices and scope" link to `/audio/services`.
+Below the hero: Listen (the Old News release, distinct from the mastering
+engineering example that demonstrates the work, plus one "Portfolio" link),
+What I work on (the four service categories, linking back to prices and
+scope), and Start (a one-line lead and the same "Start your song" button).
+Audio is a primary header destination alongside Work, Building, Writing and
+About; it serves a distinct, commercial audience and earns that placement.
 
 There is exactly one intake funnel: the three-step `/audio/start` form,
 posting to `/api/audio-intake`. `/audio/#book` keeps working through the
-"Getting started" section's own anchor, which carries the "Start your song"
-button. The secondary Audio bar (`MusicNav`) is Listen, Portfolio, Services.
+Start section's own anchor, which carries the "Start your song" button. The
+secondary Audio bar (`MusicNav`) is Listen, Portfolio, Services.
 
-`/audio/about` permanently redirects to the Audio landing page. Its unique
-process detail, async written briefs, file delivery through Drive, Dropbox or
-WeTransfer, checking mixes on multiple reference systems before delivery, and
-recommending someone else when a project is outside what Kazon does well, now
-lives in "Getting started". The gear inventory and the university line (already
-on About's Audio chapter) did not need their own page.
+`/audio/about` permanently redirects to `/audio/services#before-we-start`.
+Its unique process detail now lives in that section's opening paragraph:
+communication is async, most projects start with a written brief and files
+shared through Drive, Dropbox or WeTransfer, mixes are checked on multiple
+reference systems before delivery, and a project outside what Kazon does
+well gets a recommendation elsewhere rather than accepted. The gear
+inventory and the university line (already on About's Audio chapter) did not
+need their own page.
 
 The audio destination still owns recordings, credits, listening context, and
 audio engagement detail. This avoids a second copy of each recording's
