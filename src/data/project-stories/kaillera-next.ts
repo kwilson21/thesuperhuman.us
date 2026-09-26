@@ -13,6 +13,7 @@ import staticDemoDiagram from '~/assets/projects/kaillera-next/static-demo-diagr
 import recoveryDiagram from '~/assets/projects/kaillera-next/recovery-syncs-diagram.webp';
 import selfHostingDiagram from '~/assets/projects/kaillera-next/self-hosting-diagram.webp';
 import supportedRoms from '~/assets/projects/kaillera-next/supported-roms-lobby-annotated.webp';
+import remixFreezesDiagram from '~/assets/projects/kaillera-next/remix-freezes-diagram.webp';
 
 export const kailleraStory = {
   title: 'Kaillera Next',
@@ -158,5 +159,11 @@ export const kailleraMilestones: Milestone[] = [
     title: 'Saying which games work',
     summary: 'Kaillera Next only works with three ROMs right now: Super Smash Bros. (US) and Smash Remix 2.0.0 and 2.0.1. The lobby now lists them. If you load anything else, the play page warns that it may not work and names the supported ones. It’s a warning, not a block. Claude Code built the warning from the server’s own list and added a test that fails if the lobby’s copy drifts from it. Released in v0.50.0.',
     artifacts: [artifact(supportedRoms, 'Kaillera Next · Saying which games work', 'The v0.50.0 lobby with the Supported ROMs list, rendered from the site’s own files without a server or ROMs, with numbered pointers.', 'Annotated page render')],
+  },
+  {
+    id: 'kaillera-next-remix-freezes', day: '2026-09-25',
+    title: 'Fixing two Smash Remix freezes',
+    summary: 'Smash Remix matches could freeze in two places, both traced from one session’s logs. At match start, each player waited 5 seconds a frame for menu inputs that had already been used and deleted. On pause, one player’s frame count reset while the other’s didn’t, so their inputs never lined up again. Claude Code fixed both, then made the rollback engine wait for late inputs before it shuts down on a pause or match end, so a wrong guess can’t quietly leave the two games different. Code review by Greptile caught follow-up issues along the way. Released in v0.53.4.',
+    artifacts: [artifact(remixFreezesDiagram, 'Kaillera Next · Fixing two Smash Remix freezes', 'The freeze at match start, the freeze on pause, and the shutdown hold that followed. Drawn from the commits, not a gameplay capture.', 'Diagram')],
   },
 ];
