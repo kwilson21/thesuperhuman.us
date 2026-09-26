@@ -242,9 +242,19 @@ that mentions audio at all.
   a visitor can verify. A released record, a live site, a public demo. A
   prototype appears on a door only once it has a public demo, and its caption
   says what it is.
-- Sections: Work with me, Building (up to two projects, a maximum not a quota),
-  one Work proof, Writing (one essay), Contact. Home swaps "Beyond the code" for
-  the strip and ends about the same height on the phone and shorter on desktop.
+- Sections: Work with me, Currently building (up to two projects, a maximum not
+  a quota), one Work proof, Writing (one essay), Contact. Home swaps "Beyond the
+  code" for the strip and ends about the same height on the phone and shorter
+  on desktop.
+- Currently building features real, public work (owner, September 26): Tally
+  (in development, public demo on fictional data) and Kaillera Next (in
+  development, playable demo build with no ROMs), each with its status in the
+  card kicker. The Engineer's Daily (local prototype) and Threadline (internal
+  prototype) leave Home and become rows on Building. Neither Tally nor Kaillera
+  Next is described as finished; their own pages say "In development", and the
+  publicist rules forbid calling exploration work production-ready. Captures
+  follow the publicist rules: Tally on demo data with the banner in frame,
+  Kaillera Next from the owner's own lobby capture, no gameplay media.
 - Shared framing for all four: the existing `site-section-heading` rule,
   spacing and link behavior. Inside that frame each section keeps the layout
   its content needs. Retire the boxed Lyft treatment on desktop; the figure
@@ -292,14 +302,18 @@ Engineer's Daily shows a status and date; Threadline's status ("Internal
 prototype") and Tally's ("In development") appear only on their own pages.
 servant-lang has no destination. The closing block links to Work and Writing.
 
-**Recommendation (decided).** One row treatment with a small thumbnail and a
-one-line status on every row (Local prototype, Internal prototype, In development,
-Released), current work first. The Engineer's Daily stays featured. Threadline
-moves to a row with its status; its page and journal stay, and it returns to a
-feature slot when there is a representative screenshot, recording or inspectable
-artifact (a public launch is not required). Hide servant-lang until it has a
-public explanation, repository or artifact; this does not delete anything.
-Remove the header links and the closing block.
+**Recommendation (decided, revised September 26).** One row treatment with a
+small thumbnail and a one-line status on every row, public work first. Tally
+takes the featured slot (in development, public demo). Rows follow in this
+order: Kaillera Next (in development, playable demo build), The Engineer's
+Daily (local prototype), Threadline (internal prototype), Personal website (an
+ongoing design project). The two prototypes keep their pages and journals and
+return to a feature slot when each has a public demo or an inspectable
+artifact. Hide servant-lang until it has a public explanation, repository or
+artifact; this does not delete anything. Remove the header links and the
+closing block. Publish the Tally demo address on the Tally page and card once
+the owner confirms it is meant to be public; the journal already describes the
+demo, but the site does not yet link it.
 
 Evidence: [`building.astro`](../../../src/pages/building.astro).
 
@@ -536,6 +550,12 @@ Owner decisions, given in conversation on September 26:
   public demo rather than The Engineer's Daily until the Daily has a demo of
   its own. Longer term, one real example behind each of the four software
   offerings (see "Evidence to present").
+
+- Featured projects: Home's "Currently building" and Building's featured slot
+  show real, public work (Tally, Kaillera Next) rather than the two prototypes,
+  which move to Building rows with their status. Recorded with the owner's
+  wording corrected from "finished" to "in development with public demos",
+  which is what the project pages and publicist records support.
 
 Answers from the second review (Astra), accepted:
 
