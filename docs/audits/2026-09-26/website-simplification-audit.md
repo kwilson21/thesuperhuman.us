@@ -254,7 +254,33 @@ that mentions audio at all.
   Next is described as finished; their own pages say "In development", and the
   publicist rules forbid calling exploration work production-ready. Captures
   follow the publicist rules: Tally on demo data with the banner in frame,
-  Kaillera Next from the owner's own lobby capture, no gameplay media.
+  Kaillera Next from the owner's own captures, no gameplay media.
+- Kaillera Next's card picture (owner, September 26): a capture of the new
+  Kaillera Next landing page in use, once that page exists. The lobby capture
+  is the placeholder until then.
+- Motion previews on the two featured cards (owner, September 26): a still
+  picture that starts moving on hover, the way video thumbnails do. Rules for
+  the implementation, drawn from the direction document and the publicist
+  rules:
+  - A short muted clip (six to ten seconds, looped, no sound) in WebM or MP4
+    with the still as its poster. Not a GIF: a GIF of a product screen is many
+    times larger and lower quality than a muted video of the same length.
+  - Plays on hover and on keyboard focus; pauses and returns to the still when
+    the pointer or focus leaves. The clip is not fetched until the pointer is
+    over the card or the card is about to enter view.
+  - When the visitor prefers reduced motion, nothing plays on its own; a small
+    "Play preview" control offers the clip instead. The still is the content,
+    so nothing is lost without motion.
+  - On touch screens there is no hover. Choose between playing once, muted,
+    when the card scrolls into view, or staying still with the "Play preview"
+    control. The owner decides; the in-view option is closer to the reference.
+  - Clips are recordings of the real products under the same rules as the
+    stills: Tally on the public demo with the "Demo data" banner in frame;
+    Kaillera Next from the owner's own recording of the landing page, never
+    gameplay. Playwright can record both. Each clip gets the same visual review
+    record as an image.
+  - Ships as an enhancement inside the Home step, after the static cards. The
+    static cards do not wait for the clips.
 - Shared framing for all four: the existing `site-section-heading` rule,
   spacing and link behavior. Inside that frame each section keeps the layout
   its content needs. Retire the boxed Lyft treatment on desktop; the figure
