@@ -24,7 +24,7 @@ export const doors: Door[] = [
     id: 'mixing', title: 'Mixing & mastering',
     line: 'Two-track vocal mixing from $150, mastering from $75.',
     href: '/audio/start', label: 'Start your song',
-    picture: mixing, caption: 'Old News · vocal mix and master by Kazon',
+    picture: mixing, caption: 'Old News · recorded, mixed and mastered by Kazon',
   },
   {
     id: 'website', title: 'Website design',
