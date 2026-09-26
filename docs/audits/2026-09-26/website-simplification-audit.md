@@ -221,15 +221,27 @@ that mentions audio at all.
   repeated "exploring" rather than replacing the introduction with the Work
   heading. One hero link.
 - Directly under the hero, a "Work with me" strip: the same three offers as
-  the hub, each with a small illustration from the site's existing line-drawn
-  set (the audio waveform, the website layout, the product illustration), one
-  line, and a button with its own verb ("Start your song", "Plan your website",
-  "Discuss your project"), plus "All services". Placement under the hero and
-  the illustration-plus-button treatment were both confirmed by the owner on
-  September 26 after seeing the rendered preview. This is wayfinding, not a
-  pitch: the hero still leads with the person, and the strip is the only place
-  on Home that sells anything. It replaces the earlier idea of a single audio
-  line. The hub's three doors use the same treatment.
+  the hub, each with a picture of real work, one line, and a button with its
+  own verb ("Start your song", "Plan your website", "Discuss your project"),
+  plus "All services". Four image treatments were rendered (line drawings,
+  still-life photos, real work with a before-and-after pair, real work with one
+  image each); the owner chose real work, one image each, on September 26. The
+  pictures: the Old News single for mixing and mastering (recorded, mixed and
+  mastered by the owner, per the recording's credits), this site's redesigned
+  Home for website design, and for software engineering a product that a
+  visitor can actually open. That is Tally on its public demo (fictional
+  household, "Demo data" banner, per the publicist rules), not The Engineer's
+  Daily, which is a local prototype with no public demo yet. Each picture
+  carries a one-line caption saying what it is. Placement under the hero and
+  the picture-plus-button treatment were confirmed by the owner after seeing
+  the rendered preview. This is wayfinding, not a pitch: the hero still leads
+  with the person, and the strip is the only place on Home that sells
+  anything. The hub's three doors use the same treatment.
+
+  Honesty rule for door pictures (owner, September 26): a door shows only work
+  a visitor can verify. A released record, a live site, a public demo. A
+  prototype appears on a door only once it has a public demo, and its caption
+  says what it is.
 - Sections: Work with me, Building (up to two projects, a maximum not a quota),
   one Work proof, Writing (one essay), Contact. Home swaps "Beyond the code" for
   the strip and ends about the same height on the phone and shorter on desktop.
@@ -479,6 +491,22 @@ stops using them.
 6. **Building rows and remaining decorative duplication.** Status on every row,
    Threadline and servant-lang per S7, notebook removed where generic.
 
+## Evidence to present for each software offering
+
+The hub lists four software offerings. The owner wants a real, openable example
+behind each one over time, and nothing implied before it exists. What the
+repository and the publicist records support today:
+
+| Offering | Available now | Next |
+|---|---|---|
+| Prototypes | Threadline and The Engineer's Daily have journals and captures, but no public demo. | Put the Daily's lesson page up as a public demo with its "local prototype" status stated; then it can appear on a door. |
+| Products and internal tools | Tally: a shipped-tier product with a public demo on fictional data that resets nightly. Kaillera Next: a static demo build with no ROMs. This site's owner dashboard (requests, campaigns, payments) is a real internal tool; the screenshots workflow already renders it on seeded data. | Use Tally on the software door now. Add a short "internal tools" account of the owner dashboard with seeded-data captures. |
+| Website design | This site, live, with the redesign journal and page-by-page comparisons. | None needed. |
+| Integrations | Real and in production on this site: the audio intake to Stripe invoicing, Resend email delivery, Turnstile, the KV-backed resume approval, and the music publication MCP. | Write one short integration account (the intake-to-invoice flow) with a diagram; no new build required. |
+
+Everything in the "Available now" column can be shown honestly today. The
+"Next" column is content to create, not a prerequisite for the strip.
+
 **Success check.** After steps 1 to 4, ask a few unfamiliar people to complete
 three short tasks and watch where they hesitate: assess the engineering
 experience and find the resume request; hear the engineering work and begin an
@@ -502,6 +530,12 @@ Owner decisions, given in conversation on September 26:
   site without digging. Resolved as the "Work with me" button, hub, Home strip
   and phone menu group in S1 and S5. This supersedes the earlier placement of
   Services in the footer and on Work only.
+
+- Door pictures: real work, one image each (treatment D of four rendered).
+  The software door must show something a visitor can open, so it uses Tally's
+  public demo rather than The Engineer's Daily until the Daily has a demo of
+  its own. Longer term, one real example behind each of the four software
+  offerings (see "Evidence to present").
 
 Answers from the second review (Astra), accepted:
 
