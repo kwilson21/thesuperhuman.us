@@ -25,7 +25,7 @@ import StudioLife from '~/components/home/StudioLife.astro';
   h1 { font-size: clamp(5rem, 8.8vw, 7.5rem); line-height: .88; letter-spacing: -.065em; margin: 0 0 1.65rem; }
   .studio-tagline { font-size: clamp(1.8rem, 2.8vw, 2.25rem); line-height: 1.14; letter-spacing: -.025em; max-width: 420px; margin: 0 0 1.1rem; }
   .studio-intro { max-width: 340px; color: var(--muted); font-size: 1.125rem; line-height: 1.5; margin: 0 0 1.7rem; }
-  .studio-art { position: absolute; z-index: -1; width: 84%; right: -5%; top: 0; pointer-events: none; --lift: calc(var(--p, 0) * 70px); }
+  .studio-art { position: absolute; z-index: -1; width: 84%; right: -5%; top: 0; pointer-events: none; --lift: calc(var(--p, 0) * -32px); }
   /* The overlay shares the image's box and mask, so it fades out exactly where the picture does. */
   .studio-scene { position: relative; transform: translate3d(calc(var(--mx, 0) * -10px), calc(var(--my, 0) * -6px + var(--lift)), 0); transition: transform 600ms cubic-bezier(.2, .7, .2, 1); }
   .studio-scene :global(img) { display: block; width: 100%; height: auto; mix-blend-mode: multiply; }
@@ -51,7 +51,7 @@ import StudioLife from '~/components/home/StudioLife.astro';
     h1 { font-size: clamp(4.7rem, 16vw, 6rem); margin-bottom: 1.25rem; }
     .studio-tagline { font-size: clamp(1.7rem, 5.8vw, 2.1rem); max-width: 410px; }
     .studio-intro { font-size: 1.1rem; max-width: 350px; }
-    .studio-art { position: relative; top: auto; right: auto; width: calc(100% + 3rem); margin: -1rem -1.5rem -1rem; --lift: calc(var(--p, 0) * 30px); }
+    .studio-art { position: relative; top: auto; right: auto; width: calc(100% + 3rem); margin: -1rem -1.5rem -1rem; --lift: calc(var(--p, 0) * -16px); }
     .studio-scene :global(img), .studio-scene :global(.studio-life) { mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 85%, transparent); }
   }
 </style>

@@ -9,7 +9,7 @@
 - Corrections and recheck: Desktop hero initially clipped the headphone headband. Reduced width and moved the composition inward; the final silhouette fits. Mobile uses the same scene below the introduction.
 - In-page inspection: pass on 1440px desktop, 800px tablet, and 390px/320px mobile in both development and the locally bundled Worker; complete intended content, no distorted resizing or unreadable required image text.
 - Accessibility: decorative image has empty alternative text. Links have visible text or explicit accessible names; meaning is provided in the surrounding HTML.
-- Motion: artwork is static. Link-arrow feedback is disabled for reduced motion. No hidden surfaces or disconnected animated parts.
+- Motion: artwork is static. Link-arrow feedback is disabled for reduced motion. No hidden surfaces or disconnected animated parts. (Superseded for Home by the animated layer recorded below, September 27.)
 - Publication: no private information, personal portrait, false product evidence, or generated credit. The illustration does not claim a real studio photograph.
 - Delivery verification: production HTTP response SHA-256 matches this exact source file. See `docs/design-concepts/2026-09-10/home-prototype/production-results.json`.
 - Outcome: ready for production asset use within this prototype. Deployment is a separate step.
@@ -79,5 +79,7 @@ mask. No raster edit and no new generated object; the hash above still applies.
   motion or without JavaScript the artwork shows unchanged apart from the trail.
 - Meaning: the typing re-plays existing illustrated code and asserts nothing; the
   rings and trail are symbolic of sound and sketching, not product evidence.
+- Outcome: ready for production use within the Home motion layer; the owner kept
+  the trail in the resting frame (September 27). Deployment is a separate step.
 
 Archive note: source PNGs, prompts and raw browser-evidence paths above refer to the private recovery archive. The committed production file and hash record are authoritative for the asset gate; see [the evidence index](../design-concepts/README.md).

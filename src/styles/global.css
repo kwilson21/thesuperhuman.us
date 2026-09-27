@@ -151,6 +151,16 @@
     .site-link span { transition: none; }
     .site-link:is(:hover, :focus-visible) span { transform: none; }
   }
+  /* Motion layer (src/scripts/scroll-scenes.ts adds .motion only when motion is welcome):
+     [data-reveal] blocks rise in once, and a section heading's rule draws in with them. */
+  @media screen and (prefers-reduced-motion: no-preference) {
+    .motion [data-reveal] { transition: opacity 900ms cubic-bezier(.2, .7, .2, 1), transform 900ms cubic-bezier(.2, .7, .2, 1); }
+    .motion [data-reveal]:not(.is-in) { opacity: 0; transform: translateY(26px); }
+    .motion .site-section-heading::after { transform-origin: left; transition: transform 1100ms cubic-bezier(.2, .7, .2, 1) 200ms; }
+    .motion [data-reveal]:not(.is-in) .site-section-heading::after, .motion .site-section-heading[data-reveal]:not(.is-in)::after { transform: scaleX(0); }
+    /* A block revealed by keyboard focus appears at once, children included. */
+    .motion .is-instant, .motion .is-instant *, .motion .is-instant *::after { transition-duration: 0s !important; transition-delay: 0s !important; }
+  }
 }
 
 @layer components {

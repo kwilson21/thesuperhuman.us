@@ -276,9 +276,10 @@ the page is complete without JavaScript and with reduced motion (the view CI
 screenshots use). Motion that plays by itself finishes within five seconds;
 everything else is tied to scroll or pointer. A keyboard user who lands inside a
 block that has not revealed yet sees it at once. No new dependency, image or
-copy; the script is about 2.4 KB gzipped. Three.js was not needed for this
-concept. Code: `src/components/home/`, `src/scripts/home-worlds.ts`,
-`src/lib/home-motion.ts`.
+claim; the only new visible text is the capacity key (one cell = 5,000 rows).
+The script is about 2.4 KB gzipped. Three.js was not needed for this
+concept. Code: `src/components/home/`, `src/scripts/home-worlds.ts` and
+`src/lib/home-motion.ts`, on the shared layer in `src/scripts/scroll-scenes.ts`.
 
 ## Implemented content locations, September 10
 

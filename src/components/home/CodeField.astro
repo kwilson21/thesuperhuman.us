@@ -27,14 +27,14 @@ const width = 560;
 </svg>
 <style>
   .code-field { display: block; width: 100%; height: auto; overflow: visible; }
-  .code-gutter { font: 10px/1 'JetBrains Mono', monospace; fill: #5a534a; text-anchor: end; }
+  .code-gutter { font-family: theme('fontFamily.mono'); font-size: 10px; fill: #5a534a; text-anchor: end; }
   .tone-0 { fill: #6f8fb5; }
   .tone-1 { fill: #d17f59; }
   .tone-2 { fill: #8fa66b; }
   .tone-3 { fill: #c9a95a; }
   .tone-4 { fill: #5c564e; }
   .code-caret { fill: #e8e1d5; opacity: 0; }
-  @media (prefers-reduced-motion: no-preference) {
+  @media screen and (prefers-reduced-motion: no-preference) {
     :global(.motion) .code-field:not(.is-in) .code-row rect { transform: scaleX(0); }
     :global(.motion) .code-field .code-row rect { transform-box: fill-box; transform-origin: left; transition: transform 380ms steps(6, end); transition-delay: calc(var(--i) * 90ms + 150ms); }
     :global(.motion) .code-field.is-in .code-caret { animation: code-caret 1.4s steps(1, end) calc(11 * 90ms + 400ms) both; }

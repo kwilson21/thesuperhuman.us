@@ -20,8 +20,7 @@ const rest = signalFrame(peaks, 0.5);
   </svg>
 </div>
 <style>
-  /* The paper under the zero line also covers any subpixel seam at the foot of the dark section. */
-  .signal-edge { height: clamp(88px, 11vw, 150px); margin-top: var(--site-section-space); background: linear-gradient(to bottom, transparent 60%, var(--page-paper) 60%); }
+  .signal-edge { height: var(--signal-height, clamp(88px, 11vw, 150px)); margin-top: var(--site-section-space); }
   .signal-edge svg { display: block; width: 100%; height: 100%; }
   .signal-paper { fill: var(--page-paper); }
   .signal-screen { fill: var(--screen); }
