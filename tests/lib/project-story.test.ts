@@ -1,7 +1,7 @@
 import approved from '../../src/data/project-stories/threadline-review.json';
 import type { Story } from '../../src/lib/publication/contract';
 import {describe, expect, it} from 'vitest';
-import {feedChange, publicationMilestones, journalMilestones, latestJournalMilestones, storyMilestones, archiveMilestones} from '../../src/lib/project-story';
+import {feedChange, publicationMilestones, journalMilestones, latestJournalMilestones, storyMilestones, archiveMilestones, journalSelection} from '../../src/lib/project-story';
 import type {Milestone} from '../../src/lib/project-story';
 import type {ProjectFeed, PublicEntry} from '../../src/lib/publication/read';
 import {websiteMilestones} from '../../src/data/project-stories/personal-website';
@@ -98,10 +98,9 @@ describe('one journal for curated and published milestones', () => {
 
 });
 
+const chapter = (id: string, day: string): Milestone => ({id, day, title: id, summary: 'A chapter.', placement: 'story'});
+const update = (id: string, day: string): Milestone => ({id, day, title: id, summary: 'An update.'});
 describe('journal presentation: Latest work, Project story and Archive', () => {
- const chapter = (id: string, day: string): Milestone => ({id, day, title: id, summary: 'A chapter.', placement: 'story'});
- const update = (id: string, day: string): Milestone => ({id, day, title: id, summary: 'An update.'});
-
  it('keeps an authored story chronological and never infers it from dates', () => {
   const entries = [chapter('b', '2026-09-10'), update('mixed-in', '2026-09-10'), chapter('a', '2026-09-09')];
   expect(storyMilestones(entries).map(e => e.id)).toEqual(['a', 'b']);
@@ -134,5 +133,42 @@ describe('journal presentation: Latest work, Project story and Archive', () => {
   const ids = [...story, ...latest, ...archive].map(e => e.id);
   expect(new Set(ids).size).toBe(ids.length);
   expect(ids.length).toBe(websiteMilestones.length);
+ });
+
+ it('keeps the Personal Website project story at its full eleven authored chapters, in order', () => {
+  // The spec originally capped a project story at five chapters; the owner amended it (Sept 26,
+  // 2026) to an authored sequence with no fixed count once the redesign's own story reached eleven.
+  const chapters = storyMilestones(websiteMilestones);
+  expect(chapters).toHaveLength(11);
+  expect(chapters.map(c => c.day)).toEqual([...chapters.map(c => c.day)].sort());
+ });
+
+ it('lets published entries push older curated entries out of Latest work and into the Archive', () => {
+  const curated = [update('curated-a', '2026-09-01'), update('curated-b', '2026-09-02'), update('curated-c', '2026-09-03'), update('curated-d', '2026-09-04'), update('curated-e', '2026-09-05')];
+  const merged = journalMilestones(feed([entry('published-1', '2026-09-10'), entry('published-2', '2026-09-09')]), curated);
+  expect(latestJournalMilestones(merged).map(e => e.id)).toEqual(['published-1', 'published-2', 'curated-e', 'curated-d', 'curated-c']);
+  expect(archiveMilestones(merged).map(e => e.id)).toEqual(['curated-b', 'curated-a']);
+ });
+});
+
+describe('journal default selection', () => {
+ const newestFirst = [update('newest', '2026-09-25'), update('older', '2026-09-20')];
+ const chronological = [chapter('first', '2026-09-09'), chapter('last', '2026-09-10')];
+
+ it('opens Latest work and the Archive on their own newest entry, even if the live feed points elsewhere', () => {
+  expect(journalSelection('latest', newestFirst, 'older', undefined)).toBe('newest');
+  expect(journalSelection('archive', newestFirst, 'older', undefined)).toBe('newest');
+  expect(journalSelection('latest', newestFirst, undefined, undefined)).toBe('newest');
+ });
+
+ it('opens the project story on its first chapter, not the live feed pointer', () => {
+  expect(journalSelection('story', chronological, 'last', undefined)).toBe('first');
+  expect(journalSelection('story', chronological, undefined, undefined)).toBe('first');
+ });
+
+ it('keeps the live feed pointer as the default for project pages with no named view', () => {
+  expect(journalSelection(undefined, newestFirst, 'older', undefined)).toBe('older');
+  expect(journalSelection(undefined, newestFirst, undefined, 'explicit')).toBe('explicit');
+  expect(journalSelection(undefined, newestFirst, undefined, undefined)).toBeUndefined();
  });
 });

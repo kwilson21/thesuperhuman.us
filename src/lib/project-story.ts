@@ -3,19 +3,16 @@ import type { ProjectFeed, PublicEntry } from './publication/read';
 export interface ProjectArtifact {
   src: string; title: string; alt: string; caption: string; kind: string; width: number; height: number;
 }
-/** Where a milestone reads by default. Only 'story' is ever set explicitly on a
- * curated milestone; 'latest' and 'archive' are computed by recency in the
- * projections below, never stored on the milestone itself. */
-export type JournalPlacement = 'latest' | 'story' | 'archive';
 export interface Milestone {
   id: string; day: string; title: string; summary: string; detail?: string;
   illustration?: 'payload-review'; detailLabel?: string;
   status?: string; basis?: string; publishedAt?: string; backfilled?: boolean;
   artifacts?: ProjectArtifact[];
   visualProof?: { label: string; before: ProjectArtifact; after: ProjectArtifact };
-  /** Explicit authored placement. Curators mark a milestone 'story' deliberately;
-   * a published entry is never given this value automatically. */
-  placement?: JournalPlacement;
+  /** Explicit authored placement. Curators mark a milestone 'story' deliberately; a published
+   * entry is never given this value automatically. Latest work and Archive are never stored on a
+   * milestone; the projections below compute them from recency instead. */
+  placement?: 'story';
 }
 const entries = (feed: ProjectFeed): PublicEntry[] => [...new Map([...feed.history, ...(feed.current ? [feed.current] : [])].map(entry => [entry.entryId, entry])).values()];
 export function publicationMilestones(feed: ProjectFeed | null): Milestone[] {
@@ -51,6 +48,13 @@ export function latestJournalMilestones(entries: Milestone[], limit = 5): Milest
 /** Non-story updates older than the Latest work window, newest first. Nothing is deleted, only relocated. */
 export function archiveMilestones(entries: Milestone[], limit = 5): Milestone[] {
   return readingPool(entries).slice(limit);
+}
+/** The panel a reading view opens on. A named view (Latest work, Story, Archive) always opens on
+ * the first entry of its own projection: newest for Latest work and Archive, oldest for the
+ * chronological story. The live feed's current entry only takes precedence when there is no named
+ * view (every project page besides Personal Website), matching that page's existing behavior. */
+export function journalSelection(view: 'latest' | 'story' | 'archive' | undefined, visible: Milestone[], currentEntryId: string | undefined, selectedId: string | undefined): string | undefined {
+  return view ? (visible[0]?.id ?? selectedId) : (currentEntryId ?? selectedId);
 }
 export function feedChange(previous: ProjectFeed, next: ProjectFeed): 'ignore' | 'unchanged' | 'new' | 'replace' {
   if (next.projectId !== previous.projectId || !Number.isSafeInteger(next.revision)) return 'ignore';

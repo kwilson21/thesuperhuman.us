@@ -16,9 +16,10 @@ The journal has three separate surfaces:
 
 1. **Latest work** is the default. It opens on the newest public-safe update
    and lists at most five recent updates in reverse chronological order.
-2. **Project story** is an explicitly authored sequence of at most five
-   chapters. It may be chronological only when that order explains a deliberate
-   before-to-after narrative.
+2. **Project story** is an explicitly authored sequence of chapters (the
+   Personal Website story has eleven, per the amendment recorded below). It may
+   be chronological only when that order explains a deliberate before-to-after
+   narrative.
 3. **Archive** is a separate, clearly labeled path for older updates. It is
    reverse chronological, paginated or grouped by year/topic, and never
    expands the main project page into a continuous feed.
@@ -80,6 +81,13 @@ latest-change and next-action landmarks are measured from the top of the
 allowance. This reflects the page order S10 sets, without asking a visitor
 who has already reached the journal to scroll further within it before
 finding either landmark.
+
+Decided by the owner. The Personal Website redesign has eleven authored
+chapters, not five. Rather than cut the story to fit the original cap, or
+split it across a second authored sequence, the "Project story" definition
+is amended to an authored sequence of chapters, with no fixed count. The
+Personal Website story keeps all eleven chapters in the order the redesign
+happened. A future project's story is free to use fewer.
 
 ## Research basis
 

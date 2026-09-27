@@ -54,6 +54,7 @@ const targetUrl = process.env.TARGET_URL || 'http://127.0.0.1:4321';
         headingTop: rect(document.getElementById('personal-website-updates-title'))?.top ?? null,
         pickCount: scoped('[data-pick]').length,
         panelCount: scoped('[data-panel]').length,
+        visiblePanelCount: scoped('[data-panel]:not([hidden])').length,
         showAllPresent: scoped('[data-all]').length > 0,
         storyLinkText: nextAction?.querySelector('a[href="/building/personal-website/story"]')?.textContent ?? null,
         archiveLinkText: nextAction?.querySelector('a[href="/building/personal-website/archive"]')?.textContent ?? null,
@@ -64,9 +65,12 @@ const targetUrl = process.env.TARGET_URL || 'http://127.0.0.1:4321';
         clientWidth: document.documentElement.clientWidth,
       };
     });
-    assert.equal(bounded.heading, 'Latest work', 'Personal Website’s default journal view must be headed "Latest work"');
+    // The heading reads "Development journal" (not the plan's own name, "Latest work") so it matches
+    // the one label the shared header link and Building already use for this destination.
+    assert.equal(bounded.heading, 'Development journal', 'Personal Website’s default journal view must be headed "Development journal", matching the header link');
     assert.ok(bounded.pickCount > 0 && bounded.pickCount <= 5, `Latest work must offer at most five choices, got ${bounded.pickCount}`);
-    assert.equal(bounded.panelCount, bounded.pickCount, 'Latest work must render only the bounded set of panels, never the full history inline');
+    assert.ok(bounded.panelCount > 0 && bounded.panelCount <= 5, `Latest work must render only the bounded set of panels, never the full history inline, got ${bounded.panelCount}`);
+    assert.equal(bounded.visiblePanelCount, 1, `Exactly one panel should be visible once the picker script runs, got ${bounded.visiblePanelCount}`);
     assert.equal(bounded.showAllPresent, false, '"Show all entries" must not be a primary action in the Personal Website bounded view');
     assert.ok(bounded.storyLinkText, 'Missing a "View project story" link out of Latest work');
     assert.ok(bounded.archiveLinkText, 'Missing a "Browse archive" link out of Latest work');
@@ -88,6 +92,16 @@ const targetUrl = process.env.TARGET_URL || 'http://127.0.0.1:4321';
       `The latest-change landmark must end within ${twoScreenBudget}px of the "Latest work" heading, ends at ${latestChangeFromHeading}px`);
     assert.ok(nextActionFromHeading <= twoScreenBudget,
       `The next-action landmark must end within ${twoScreenBudget}px of the "Latest work" heading, ends at ${nextActionFromHeading}px`);
+
+    // Moved-entry anchors are not tabbable or announced on an ordinary visit: they must be removed
+    // from the accessibility tree (display:none), not merely clipped out of view.
+    const movedAccessibility = await page.evaluate(() => [...document.querySelectorAll('.moved-entry')].map(el => ({
+      id: el.id, display: getComputedStyle(el).display, tabbable: el.tabIndex >= 0,
+    })));
+    assert.ok(movedAccessibility.length > 0, 'Expected at least one moved entry on the bounded main page');
+    for (const entry of movedAccessibility) {
+      assert.equal(entry.display, 'none', `Moved entry #${entry.id} must be display:none by default, was ${entry.display}`);
+    }
 
     // A moved entry's old fragment still resolves, without JavaScript, to a link at its new location.
     const noJsContext = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
@@ -133,6 +147,41 @@ const targetUrl = process.env.TARGET_URL || 'http://127.0.0.1:4321';
     const archiveDays = await panelDays(archivePage);
     assert.ok(archiveDays.length >= 1, 'The archive should hold at least the one entry bumped past Latest work’s limit');
     assert.deepEqual(archiveDays, [...archiveDays].sort().reverse(), 'The archive must read newest first');
+
+    // The story reads in order, so it must open on its FIRST chapter, not the newest (last) one.
+    const storyOpenState = await storyPage.evaluate(() => ({
+      openHeading: document.querySelector('article[data-panel]:not([hidden]) h3')?.textContent ?? null,
+      position: document.querySelector('[data-position]')?.textContent ?? null,
+    }));
+    assert.equal(storyOpenState.position, `1 / ${storyDays.length}`, `The project story must default to its first chapter, was at ${storyOpenState.position}`);
+
+    // The shared header link's arrow matches whether it jumps within the page or to another route:
+    // "#" on the main page (a same-page jump), "->" on the story and archive pages (another route).
+    const arrowOf = targetPage => targetPage.evaluate(() => document.querySelector('.project-intro a.site-link span[aria-hidden]')?.textContent ?? null);
+    assert.equal(await arrowOf(page), '↓', 'The main page’s header link jumps within the page and should keep the down arrow');
+    assert.equal(await arrowOf(storyPage), '→', 'The story page’s header link goes to another page and should use the forward arrow');
+    assert.equal(await arrowOf(archivePage), '→', 'The archive page’s header link goes to another page and should use the forward arrow');
+
+    // A live withdrawal (simulated as a 404 from the work-feed endpoint) must replace the moved-entry
+    // anchors along with the rest of the bounded view, never leaving a stale one behind or duplicating
+    // an ID with whatever the curated fallback renders in its place.
+    const clockPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await clockPage.clock.install();
+    await clockPage.route('**/api/work-feed*', route => route.fulfill({ status: 404, body: '{}' }));
+    await clockPage.goto(new URL('/building/personal-website', targetUrl).href, { waitUntil: 'networkidle' });
+    await clockPage.clock.runFor(16000); // fires the 15s poll, which sees the 404 and clears published content
+    await clockPage.waitForTimeout(50);
+    const afterWithdrawal = await clockPage.evaluate(() => {
+      const ids = [...document.querySelectorAll('[id]')].map(el => el.id);
+      return {
+        noticeHidden: document.querySelector('[data-notice]')?.hidden ?? true,
+        noticeText: document.querySelector('[data-notice] span')?.textContent ?? '',
+        duplicateIds: ids.length - new Set(ids).size,
+      };
+    });
+    assert.equal(afterWithdrawal.noticeHidden, false, 'The live-update notice should appear once the feed is reported removed');
+    assert.match(afterWithdrawal.noticeText, /removed/i, `Expected a "removed" notice, got: ${afterWithdrawal.noticeText}`);
+    assert.equal(afterWithdrawal.duplicateIds, 0, `No element should share an id with another after the withdrawal swap, found ${afterWithdrawal.duplicateIds}`);
 
     // Repeat the bounded-choice and overflow checks at 1440px.
     const desktopPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
