@@ -340,8 +340,8 @@ Each run:
    published or declined, nothing else).
 2. Clones each configured project repo read-only and lists PRs merged since then
    (merge commits on `main`, plus the GitHub API when the repo is attached). For
-   this website, it skips its own PRs ("Publicist: …", review notes, posted or
-   skipped updates).
+   this website, it skips its own PRs ("Publicist: …" and the posted or skipped
+   updates).
 3. For each merged PR, gathers intent from the PR description, linked spec, plan
    and decision entries, and `docs/journal/intent.md`. Skips PRs with no user-visible
    outcome (dependency bumps, formatting) and groups related PRs into one candidate.
