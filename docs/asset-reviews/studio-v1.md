@@ -75,7 +75,8 @@ mask. No raster edit and no new generated object; the hash above still applies.
   part of the layer in the resting frame.
 - Resting state, motion extremes, phone (390px), tablet (900px) and desktop
   (1280px) placements, and the reduced-motion view inspected by Claude Code agent
-  visual review, September 27, 2026. Not human production approval. With reduced
+  visual review, September 27, 2026, and again after a fix that keeps each
+  sound ring invisible during its start delay. Not human production approval. With reduced
   motion or without JavaScript the artwork shows unchanged apart from the trail.
 - Meaning: the typing re-plays existing illustrated code and asserts nothing; the
   rings and trail are symbolic of sound and sketching, not product evidence.

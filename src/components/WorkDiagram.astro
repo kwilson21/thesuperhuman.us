@@ -50,8 +50,6 @@ const { kind } = Astro.props;
     :global(.motion) .work-diagram:not(.is-in) :is(.responsibility > div, .timeline li, .continuity) { opacity: 0; transform: translateY(12px); }
     :global(.motion) .work-diagram :is(.responsibility > div:nth-child(2), .timeline li:nth-child(2)) { transition-delay: 450ms; }
     :global(.motion) .work-diagram .continuity { transition-delay: 900ms; }
-    :global(.motion) .work-diagram .self-serve { transition: box-shadow 600ms ease 1000ms; }
-    :global(.motion) .work-diagram.is-in .self-serve { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
     :global(.motion) .work-diagram .timeline li:first-child::after { transform-origin: top; transition: transform 700ms ease 300ms; }
     :global(.motion) .work-diagram:not(.is-in) .timeline li:first-child::after { transform: scaleY(0); }
   }

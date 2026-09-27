@@ -69,7 +69,7 @@ const jsonLd = {
         </section>
         <section class="site-section" aria-labelledby="work-title">
           <div class="site-section-heading" data-reveal><h2 id="work-title">Work highlights</h2></div>
-          <div class="work-preview" data-count={lyftBonus.after} data-count-from={lyftBonus.before}>
+          <div class="work-preview" data-reveal data-count={lyftBonus.after} data-count-from={lyftBonus.before}>
             <p class="work-company">Lyft</p>
             <div class="work-outcome">
               <p class="work-figure">{lyftBonus.before} <span aria-hidden="true">→</span><span class="sr-only">to</span> <span class="count-slot"><span class="count-ghost" aria-hidden="true">{lyftBonus.after}</span><span class="count-live" aria-hidden="true" data-count-display>{lyftBonus.after}</span><span class="sr-only">{lyftBonus.after}</span></span> rows</p>

@@ -37,7 +37,7 @@ const width = 560;
   @media screen and (prefers-reduced-motion: no-preference) {
     :global(.motion) .code-field:not(.is-in) .code-row rect { transform: scaleX(0); }
     :global(.motion) .code-field .code-row rect { transform-box: fill-box; transform-origin: left; transition: transform 380ms steps(6, end); transition-delay: calc(var(--i) * 90ms + 150ms); }
-    :global(.motion) .code-field.is-in .code-caret { animation: code-caret 1.4s steps(1, end) calc(11 * 90ms + 400ms) both; }
+    :global(.motion) .code-field.is-in .code-caret { animation: code-caret 1.4s steps(1, end) calc(11 * 90ms + 400ms) forwards; }
   }
   @keyframes code-caret { 0%, 50% { opacity: 1; } 25%, 75%, 100% { opacity: 0; } }
 </style>

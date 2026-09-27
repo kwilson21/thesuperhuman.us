@@ -71,7 +71,8 @@ runMotion(({ signal, finePointer, onScene, onReveal, cleanup }) => {
     // In-between numbers are plain; the "+" belongs to the final figure only.
     const counting = { ...to, suffix: '' };
     let frame = 0;
-    // Below the fold it waits at the old capacity, so the count never visibly jumps back.
+    // Below the fold it waits, hidden (it is a [data-reveal] block), at the old capacity, so
+    // the count never visibly jumps back or shows no change.
     if (element.getBoundingClientRect().top >= innerHeight) {
       display.textContent = formatFigure(counting, from.value);
       cells?.style.setProperty('--lit', '1');

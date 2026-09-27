@@ -1,8 +1,8 @@
 ---
 // A short scene over one of the site's object illustrations (headphones, laptop,
 // controller, notebook), drawn in the image's own pixel coordinates (all 1536 × 1024)
-// inside the same mask, like the Home studio. It plays once when its [data-play]
-// ancestor reveals (scroll-scenes.ts) and rests within five seconds. Used by About's
+// inside the same mask, like the Home studio. It plays once when its [data-scene-play]
+// ancestor is half on screen (scroll-scenes.ts) and rests within five seconds. Used by About's
 // chapters and the Audio hero. Nothing is drawn in the resting frame: reduced motion,
 // no-JS and print show the untouched artwork.
 interface Props { kind: 'audio' | 'software' | 'play' | 'whats-next' }
@@ -43,15 +43,16 @@ const buttons = [
   @media screen and (prefers-reduced-motion: no-preference) {
     :global(.is-playing) .life-rings ellipse { transform-box: fill-box; transform-origin: center; animation: ring-out 2.2s cubic-bezier(.2, .6, .3, 1) var(--at) both; }
     :global(.is-playing) .glyph-glow { animation: glyph-glow 2.6s ease-in-out .3s both; }
-    :global(.is-playing) .glyph-caret { animation: caret-blink 1.6s steps(1, end) 1.2s both; }
+    :global(.is-playing) .glyph-caret { animation: caret-blink 1.6s steps(1, end) 1.2s forwards; }
     :global(.is-playing) .life-buttons .press { animation: button-press 380ms ease-out var(--at) both; }
     :global(.is-playing) .life-buttons .press-ring { transform-box: fill-box; transform-origin: center; animation: press-ring 700ms ease-out var(--at) both; }
     :global(.is-playing) .life-sun circle { transform-box: fill-box; transform-origin: center; animation: sun-glow 2.4s ease-out var(--at) both; }
   }
-  @keyframes ring-out { from { transform: scale(1); opacity: .55; } to { transform: scale(1.7); opacity: 0; } }
+  /* Each keyframe starts invisible, so nothing shows during a scene's start delay. */
+  @keyframes ring-out { 0% { transform: scale(1); opacity: 0; } 4% { opacity: .55; } 100% { transform: scale(1.7); opacity: 0; } }
   @keyframes glyph-glow { 0%, 100% { opacity: 0; } 45% { opacity: 1; } }
   @keyframes caret-blink { 0%, 50% { opacity: 1; } 25%, 75%, 100% { opacity: 0; } }
   @keyframes button-press { 0%, 100% { opacity: 0; } 25% { opacity: .55; } }
-  @keyframes press-ring { from { transform: scale(1); opacity: .7; } to { transform: scale(1.7); opacity: 0; } }
-  @keyframes sun-glow { from { transform: scale(.6); opacity: .9; } to { transform: scale(1.9); opacity: 0; } }
+  @keyframes press-ring { 0% { transform: scale(1); opacity: 0; } 6% { opacity: .7; } 100% { transform: scale(1.7); opacity: 0; } }
+  @keyframes sun-glow { 0% { transform: scale(.6); opacity: 0; } 5% { opacity: .9; } 100% { transform: scale(1.9); opacity: 0; } }
 </style>

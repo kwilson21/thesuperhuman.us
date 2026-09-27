@@ -43,7 +43,7 @@ Archive note: source PNGs, prompts and raw browser-evidence paths above refer to
 
 ## Animated layer, September 27
 
-Drawn by `src/components/ObjectLife.astro` as an inline SVG in the image's own 1536 × 1024 coordinates, inside the same mask; the file and hash above are unchanged. It plays once when its section reveals and rests within five seconds; nothing is drawn in the resting frame, so reduced motion, no-JS and print show the untouched art. Inspected at 2x mid-scene on desktop (1280px) and in the phone placement (390px) by Claude Code agent visual review, September 27, 2026. Not human production approval.
+Drawn by `src/components/ObjectLife.astro` as an inline SVG in the image's own 1536 × 1024 coordinates, inside the same mask; the file and hash above are unchanged. It plays once when at least half of it is on screen and rests within five seconds; nothing is drawn in the resting frame, so reduced motion, no-JS and print show the untouched art. Inspected at 2x mid-scene on desktop (1280px) and in the phone placement (390px) by Claude Code agent visual review, September 27, 2026, and again after a fix that keeps every ring and glow invisible during its start delay. Not human production approval.
 
 - About (What's next chapter): two soft terracotta halos grow from the drawn sun (centre 1053, 266, radius 34) and fade. The sketch itself is not retraced; a first attempt to trace the trail did not register closely enough and was dropped.
 - Outcome: ready for production use within the motion layer. Deployment is a separate step.

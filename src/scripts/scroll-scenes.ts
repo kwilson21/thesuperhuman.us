@@ -4,7 +4,8 @@
 // - gives each [data-scene] its scroll progress as --p (data-start / data-end are
 //   viewport fractions for the element's top edge; see sceneProgress),
 // - reveals each [data-reveal] once (.is-in), at once if a keyboard user lands inside it,
-// - plays a [data-play="ms"] element's .is-playing scene once when it reveals,
+// - plays a [data-scene-play="ms"] element's .is-playing scene once, when at least half of it
+//   is on screen,
 // - lets [data-tilt] elements lean toward a fine pointer (--rx, --ry).
 // Anything that plays by itself must rest within five seconds (WCAG 2.2.2).
 import { sceneProgress } from '~/lib/scroll-scenes';
@@ -80,16 +81,22 @@ function start(setup?: (context: MotionContext) => void): () => void {
   measure();
   cleanups.push(() => { cancelAnimationFrame(pending); scenes.forEach(element => element.style.removeProperty('--p')); });
 
+  // A scene plays once, when at least half of it is on screen, so it is never spent off screen.
   const players = new Map<Element, ReturnType<typeof scenePlayer>>();
-  document.querySelectorAll<HTMLElement>('[data-play]').forEach(element => players.set(element, scenePlayer(element, Number(element.dataset.play) || 4800)));
-  cleanups.push(() => players.forEach(player => player.stop()));
+  document.querySelectorAll<HTMLElement>('[data-scene-play]').forEach(element => players.set(element, scenePlayer(element, Number(element.dataset.scenePlay) || 4800)));
+  const playWatch = new IntersectionObserver(entries => entries.forEach(entry => {
+    if (entry.intersectionRatio < 0.5) return;
+    players.get(entry.target)?.play();
+    playWatch.unobserve(entry.target);
+  }), { threshold: 0.5 });
+  players.forEach((_, element) => playWatch.observe(element));
+  cleanups.push(() => { playWatch.disconnect(); players.forEach(player => player.stop()); });
   const reveals = [...new Set([...document.querySelectorAll<HTMLElement>('[data-reveal]'), ...onRevealRuns.keys()])] as HTMLElement[];
   const revealed = (element: Element) => {
     if (element.classList.contains('is-in')) return;
     element.classList.add('is-in');
     observer.unobserve(element);
     onRevealRuns.get(element)?.forEach(run => run());
-    players.get(element)?.play();
   };
   const observer = new IntersectionObserver(entries => entries.forEach(entry => entry.isIntersecting && revealed(entry.target)),
     { rootMargin: '0px 0px -12% 0px' });
@@ -105,6 +112,8 @@ function start(setup?: (context: MotionContext) => void): () => void {
     if (!block) return;
     block.classList.add('is-instant');
     revealed(block);
+    // A fade already under way is finished too, so the focused link is fully visible now.
+    block.getAnimations({ subtree: true }).forEach(animation => animation.finish());
     requestAnimationFrame(() => requestAnimationFrame(() => block.classList.remove('is-instant')));
   }, { signal });
   cleanups.push(() => {
@@ -120,15 +129,18 @@ function start(setup?: (context: MotionContext) => void): () => void {
         card.style.setProperty('--ry', (((event.clientX - box.left) / box.width) * 2 - 1).toFixed(3));
       }, { signal });
       card.addEventListener('pointerleave', () => { card.style.removeProperty('--rx'); card.style.removeProperty('--ry'); }, { signal });
+      cleanups.push(() => { card.style.removeProperty('--rx'); card.style.removeProperty('--ry'); });
     });
   }
 
-  // Added last: if anything above throws, nothing is ever hidden.
-  root.classList.add('motion');
+  // Added last: if anything above throws, nothing is ever hidden. For the first frames the
+  // blocks below the fold hide at once rather than visibly fading out.
+  root.classList.add('motion', 'motion-starting');
+  requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('motion-starting')));
   return () => {
     controller.abort();
     cleanups.forEach(cleanup => cleanup());
-    root.classList.remove('motion');
+    root.classList.remove('motion', 'motion-starting');
   };
 }
 
@@ -145,6 +157,8 @@ export function runMotion(setup?: (context: MotionContext) => void) {
   };
   motionQuery.addEventListener('change', sync);
   // A printed or saved page gets every resting frame; motion stays off afterwards.
-  addEventListener('beforeprint', () => { printed = true; halt(); });
+  const print = () => { printed = true; halt(); };
+  addEventListener('beforeprint', print);
+  matchMedia('print').addEventListener('change', event => { if (event.matches) print(); });
   sync();
 }

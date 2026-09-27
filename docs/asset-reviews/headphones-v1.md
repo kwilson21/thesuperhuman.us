@@ -8,7 +8,7 @@
 - Delivery: WebP quality 86, 1536 × 1024, 39,920 bytes. Same aspect ratio; no alternate crop or runtime transformation.
 - Page inspection: pass at 1440px desktop and 390px/320px mobile in the development preview, with 800px layout checks. See primary-pages visual evidence. Images retain proportions, stay separate from copy and controls, and blend against the paper background.
 - Corrections: CSS edge masks keep rectangular backgrounds out of decorative placements. Building’s small controller received an additional soft edge mask; the image itself is unchanged.
-- Accessibility and motion: empty alternative text, with meaning in adjacent HTML. Static artwork; link feedback respects reduced motion. No autoplay.
+- Accessibility and motion: empty alternative text, with meaning in adjacent HTML. Static artwork; link feedback respects reduced motion. No autoplay. (Superseded by the animated layer recorded below, September 27.)
 - Publication check: no private content, generated factual labels, claims about a real studio photograph, or unsupported product evidence.
 - Outcome: ready for production asset use in the local prototype. Deployment is separate.
 
@@ -35,7 +35,7 @@ Archive note: source PNGs, prompts and raw browser-evidence paths above refer to
 
 ## Animated layer, September 27
 
-Drawn by `src/components/ObjectLife.astro` as an inline SVG in the image's own 1536 × 1024 coordinates, inside the same mask; the file and hash above are unchanged. It plays once when its section reveals and rests within five seconds; nothing is drawn in the resting frame, so reduced motion, no-JS and print show the untouched art. Inspected at 2x mid-scene on desktop (1280px) and in the phone placement (390px) by Claude Code agent visual review, September 27, 2026. Not human production approval.
+Drawn by `src/components/ObjectLife.astro` as an inline SVG in the image's own 1536 × 1024 coordinates, inside the same mask; the file and hash above are unchanged. It plays once when at least half of it is on screen and rests within five seconds; nothing is drawn in the resting frame, so reduced motion, no-JS and print show the untouched art. Inspected at 2x mid-scene on desktop (1280px) and in the phone placement (390px) by Claude Code agent visual review, September 27, 2026, and again after a fix that keeps every ring and glow invisible during its start delay. Not human production approval.
 
 - About (Audio chapter) and the Audio hero: three thin terracotta rings leave the front ear cup (centre measured at 700, 585) and fade. At their widest they pass over the headband and desk inside the soft mask; they read as a drawn effect, not part of the object.
 - Outcome: ready for production use within the motion layer. Deployment is a separate step.

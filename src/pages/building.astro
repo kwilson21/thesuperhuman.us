@@ -55,7 +55,8 @@ import threadline from '~/assets/site/threadline-v1.webp';
   .tally-feature:is(:hover, :focus-within) .tally-image { box-shadow: 0 26px 50px -30px #0e0e0e80; }
   .tally-feature img { width: 100%; height: auto; display: block; }
   .tally-feature h2 { font-size: clamp(2rem, 3.2vw, 2.8rem); line-height: 1.15; letter-spacing: -.025em; }
-  .tally-feature .site-link::after { content: ''; position: absolute; inset: 0; }
+  /* Above the picture, whose tilt transform would otherwise paint over the link. */
+  .tally-feature .site-link::after { content: ''; position: absolute; inset: 0; z-index: 1; }
   .project-subtitle { font-size: 1.4rem; line-height: 1.4; margin-top: .25rem; }
   .project-description { color: var(--muted); font-size: 1.125rem; margin-block: 1rem 1.5rem; max-width: 27rem; }
   .project-rows { margin-top: 3rem; }

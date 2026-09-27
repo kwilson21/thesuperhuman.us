@@ -8,7 +8,7 @@ const prices = `From $${audioOffers['vocal-mix'].price} per song for two-track v
 ---
 <header class="audio-hero">
   <div><p class="page-kicker">Audio</p><h1 class="page-title">Mixing and<br />mastering.</h1><p class="page-lede">{prices}</p><div class="site-links"><a class="site-button" href={audioPath(host, '/start')}>Start your song</a><a class="site-button site-button-outline" href={audioPath(host, '/services')}>Prices and scope</a></div></div>
-  <div class="audio-scene" data-reveal data-play="4000"><img class="audio-art" src={headphones.src} alt="" width={headphones.width} height={headphones.height} fetchpriority="high" /><ObjectLife kind="audio" /></div>
+  <div class="audio-scene" data-reveal data-scene-play="4000"><img class="audio-art" src={headphones.src} alt="" width={headphones.width} height={headphones.height} fetchpriority="high" /><ObjectLife kind="audio" /></div>
 </header>
 <style>
   .audio-hero { display: grid; grid-template-columns: 1fr 1.15fr; align-items: center; gap: 2rem; padding-block: 1rem 3rem; }

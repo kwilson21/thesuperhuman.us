@@ -160,6 +160,7 @@
     .motion [data-reveal]:not(.is-in) .site-section-heading::after, .motion .site-section-heading[data-reveal]:not(.is-in)::after { transform: scaleX(0); }
     /* A block revealed by keyboard focus appears at once, children included. */
     .motion .is-instant, .motion .is-instant *, .motion .is-instant *::after { transition-duration: 0s !important; transition-delay: 0s !important; }
+    .motion-starting [data-reveal], .motion-starting [data-reveal] * { transition: none !important; }
   }
 }
 

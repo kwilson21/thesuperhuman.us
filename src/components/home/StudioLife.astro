@@ -63,9 +63,11 @@ const slope = 0.105;
   @keyframes type-row { from { transform: translateX(0); } to { transform: translateX(var(--run)); } }
   @keyframes caret-on { from, to { opacity: 1; } }
   @keyframes caret-blink { 0%, 50% { opacity: 1; } 25%, 75%, 100% { opacity: 0; } }
+  /* Starts invisible, so a ring waiting for its turn does not show as an outline. */
   @keyframes sound-ring {
-    from { transform: scale(1); opacity: .55; }
-    to { transform: scale(1.75); opacity: 0; }
+    0% { transform: scale(1); opacity: 0; }
+    4% { opacity: .55; }
+    100% { transform: scale(1.75); opacity: 0; }
   }
   @keyframes sketch-draw { from { stroke-dasharray: 1; stroke-dashoffset: 1; } to { stroke-dasharray: 1; stroke-dashoffset: 0; } }
   @keyframes sketch-sun { from { transform: scale(0); } to { transform: scale(1); } }

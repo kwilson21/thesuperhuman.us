@@ -37,8 +37,8 @@ if (!essay) throw new Error('AI essay content missing');
   figcaption { text-align: right; color: var(--muted); font-size: .8rem; margin-top: .5rem; }
   .writing-invitation { padding-block: 2.5rem; border-top: 1px solid var(--rule); }
   .writing-invitation h2 { font-size: 2rem; line-height: 1.2; }.writing-invitation p { font-size: 1.2rem; color: var(--muted); margin-block: .5rem 1rem; }
-  /* On arrival (it is on screen at load on every size, so CSS alone, once): the path is found
-     through its checkpoints. It draws, each checkpoint lands, then the branches and the arrow. */
+  /* On arrival, CSS alone, once (it sits at or near the first screen on most sizes): the path is
+     found through its checkpoints. It draws, each checkpoint lands, then the branches and the arrow. */
   @media screen and (prefers-reduced-motion: no-preference) {
     .direction .dir-path { stroke-dasharray: 1; animation: dir-draw 2s cubic-bezier(.45, .05, .3, 1) .4s both; }
     .direction .dir-point { animation: dir-in 500ms ease both; animation-delay: calc(.85s + var(--i) * .38s); }
