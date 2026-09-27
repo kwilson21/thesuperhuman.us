@@ -1,6 +1,6 @@
 # Asset: threadline-v1
 
-- Purpose and placement: Threadline project metaphor, Home prototype.
+- Purpose and placement: Threadline project metaphor, Building and /building/threadline (corrected 2026-09-26; the Home redesign PR removed this asset's Home placement).
 - Reviewer: Codex agent visual review, September 10, 2026. Not human production approval.
 - Reference basis: `docs/design-concepts/2026-09-09/home-quiet-studio-v2.png`. Owner-selected original generated illustration; no third-party product photograph or logo. No exact real-world product identity asserted.
 - Source original: `docs/design-concepts/2026-09-10/production/threadline-v1.png`.
