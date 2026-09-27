@@ -298,8 +298,9 @@ its job, on the shared layer; content, copy and order are unchanged everywhere.
 - **Work:** restrained for recruiters. Only the two evidence diagrams build as
   they arrive (before, then after; each timeline step in turn).
 - **Writing:** the direction illustration draws its path through the checkpoints
-  on arrival, once. It starts on load; on small phones, where it begins below the
-  fold, it waits until it is half on screen. The essay page itself is unchanged.
+  on arrival, once. It starts on load; where the page first shows it below the
+  fold (small phones, or a link to a piece further down), it waits until it is
+  half on screen. The essay page itself is unchanged.
 
 ## Implemented content locations, September 10
 

@@ -29,7 +29,8 @@ if (!essay) throw new Error('AI essay content missing');
 </BaseLayout>
 <script>
   import { runMotion } from '~/scripts/scroll-scenes';
-  // Where the illustration starts below the fold (small phones), its entrance waits until it is seen.
+  // Where the page first shows the illustration below the fold (small phones, or a link to a
+  // piece further down), its entrance waits until it is seen.
   runMotion();
 </script>
 <style>
