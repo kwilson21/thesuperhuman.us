@@ -6,6 +6,8 @@ export const PAGES = [
   { name: 'work', path: '/work' },
   { name: 'building', path: '/building' },
   { name: 'building-personal-website', path: '/building/personal-website' },
+  { name: 'building-personal-website-story', path: '/building/personal-website/story' },
+  { name: 'building-personal-website-archive', path: '/building/personal-website/archive' },
   { name: 'building-kaillera-next', path: '/building/kaillera-next' },
   { name: 'building-tally', path: '/building/tally' },
   { name: 'building-threadline', path: '/building/threadline' },
@@ -55,7 +57,7 @@ const AUDIO_SHELL_PAGES = ['audio', 'audio-portfolio', 'audio-releases', 'audio-
 const AUDIO_NAV_PAGES = AUDIO_SHELL_PAGES.filter(name => name !== 'audio-start');
 const MUSIC_CATALOG_PAGES = ['audio-portfolio', 'audio-releases', 'audio-services', 'music-old-news'];
 const MUSIC_HUB_PAGES = ['audio-portfolio', 'audio-releases', 'audio-services'];
-const PROJECT_STORY_PAGES = ['building-personal-website', 'building-kaillera-next', 'building-tally', 'building-threadline', 'building-the-engineers-daily'];
+const PROJECT_STORY_PAGES = ['building-personal-website', 'building-personal-website-story', 'building-personal-website-archive', 'building-kaillera-next', 'building-tally', 'building-threadline', 'building-the-engineers-daily'];
 const OWNER_PAGES = ['owner-today', 'owner-requests', 'owner-campaigns'];
 const PAGE_NAMES_BY_FILE = {
   'src/components/SiteNav.astro': SHARED_SITE_PAGES,

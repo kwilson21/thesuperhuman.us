@@ -16,9 +16,10 @@ The journal has three separate surfaces:
 
 1. **Latest work** is the default. It opens on the newest public-safe update
    and lists at most five recent updates in reverse chronological order.
-2. **Project story** is an explicitly authored sequence of at most five
-   chapters. It may be chronological only when that order explains a deliberate
-   before-to-after narrative.
+2. **Project story** is an explicitly authored sequence of chapters (the
+   Personal Website story has eleven, per the amendment recorded below). It may
+   be chronological only when that order explains a deliberate before-to-after
+   narrative.
 3. **Archive** is a separate, clearly labeled path for older updates. It is
    reverse chronological, paginated or grouped by year/topic, and never
    expands the main project page into a continuous feed.
@@ -55,11 +56,38 @@ Every journal change must pass these product checks before review:
   Project-story label and authored chapter order.
 - **First two screens:** a new visitor can identify current state, latest
   change, and one next action without scrolling through previous updates. At a
-  390×844 viewport, each must be rendered without opening a panel and end
-  within 1,688 CSS pixels of the top of the document.
+  390×844 viewport, each must be rendered without opening a panel. The
+  current-state landmark must end within 1,688 CSS pixels of the top of the
+  document. The latest-change and next-action landmarks must each end within
+  1,688 CSS pixels of the top of the "Latest work" section instead, per the
+  amendment recorded below.
 - **Evidence:** image proof has visible captions, useful alternative text, and
   a working full-size link.
 - **Accessibility:** keyboard selection exposes the active panel state.
+
+## Amendment, September 26, 2026
+
+Decided by the owner. The September 26, 2026 website simplification audit
+(finding S10) places "What changed, page by page" above the journal on the
+Personal Website page, ahead of Latest work. That ordering stands.
+
+The "First two screens" guardrail is amended to measure each landmark from
+where a visitor actually meets it, not uniformly from the document top. The
+current-state landmark keeps its original budget, measured from the top of
+the document: it lives in the shared project header, above every journal
+surface, and moving other sections around does not move it. The
+latest-change and next-action landmarks are measured from the top of the
+"Latest work" section instead, within the same 1,688 CSS pixel, two-screen
+allowance. This reflects the page order S10 sets, without asking a visitor
+who has already reached the journal to scroll further within it before
+finding either landmark.
+
+Decided by the owner. The Personal Website redesign has eleven authored
+chapters, not five. Rather than cut the story to fit the original cap, or
+split it across a second authored sequence, the "Project story" definition
+is amended to an authored sequence of chapters, with no fixed count. The
+Personal Website story keeps all eleven chapters in the order the redesign
+happened. A future project's story is free to use fewer.
 
 ## Research basis
 

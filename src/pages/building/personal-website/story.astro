@@ -1,0 +1,26 @@
+---
+export const prerender = false;
+import ProjectLayout from '~/layouts/ProjectLayout.astro';
+import ProjectUpdates from '~/components/ProjectUpdates.astro';
+import { websiteFeed } from '~/lib/publication/website';
+import { websiteStory, websiteMilestones } from '~/data/project-stories/personal-website';
+const feed = await websiteFeed(Astro.locals.runtime.env, 'personal-website');
+Astro.response.headers.set('Cache-Control', 'no-store');
+---
+<ProjectLayout
+  title={websiteStory.title}
+  subtitle="How the redesign took shape, in order."
+  description="The redesign's chapters, from the brief to launch, in the order they happened."
+  status="An ongoing design project"
+  journalHref="/building/personal-website#personal-website-updates-title"
+  pageTitle={`${websiteStory.title} · Project story · Kazon Wilson`}
+  crumbHref="/building/personal-website"
+>
+  <p class="journal-note">Read in the order it happened. These are historical design options: generated wording, equipment and interfaces are part of the studies, not finished copy or product evidence. Open any image to inspect the full page.</p>
+  <ProjectUpdates feed={feed} projectId="personal-website" title="Project story" milestones={websiteMilestones} view="story" />
+  <p class="journal-crosslink"><a class="site-link" href="/building/personal-website/archive">Browse archive <span aria-hidden="true">→</span></a></p>
+</ProjectLayout>
+<style>
+  .journal-note { max-width: 70ch; font-size: .9rem; line-height: 1.6; color: var(--muted); }
+  .journal-crosslink { margin-top: 1rem; }
+</style>
