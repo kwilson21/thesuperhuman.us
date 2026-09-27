@@ -1,6 +1,6 @@
 ---
 name: publicist
-description: "Draft private review notes, then development-journal entries and queued social posts for kwilson21/tally and kwilson21/kaillera-next from merged work, and open review PRs. Use for the scheduled publicist Routine and for publicist backfill runs."
+description: "Draft private review notes, then development-journal entries and queued social posts for kwilson21/tally, kwilson21/kaillera-next and this website (kwilson21/thesuperhuman.us) from merged work, and open review PRs. Use for the scheduled publicist Routine and for publicist backfill runs."
 ---
 
 # Publicist
@@ -141,8 +141,9 @@ Stage 1, notes (private):
 1. Read `publicist/config.json` on `main` of this repository and `state.json` on
    `main` of the private repository (the last merged work drafted into notes, per
    project). Clone each configured project read-only and list work merged after
-   that point. Skip changes with no meaningful outcome; group related PRs
-   into one candidate entry.
+   that point. A project not yet in `state.json` starts from its `notesSince`
+   date in the config, never from its whole history. Skip changes with no
+   meaningful outcome; group related PRs into one candidate entry.
 2. For each new candidate, write its review note and add it to one open private PR
    titled "Review notes: <date range>" (reuse an open one). Advance the private
    `state.json` in the same PR.

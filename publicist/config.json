@@ -2,7 +2,8 @@
   "privateRepo": "kwilson21/publicist-private",
   "projects": {
     "tally": { "repo": "kwilson21/tally", "tier": "shipped", "data": "src/data/project-stories/tally.ts" },
-    "kaillera-next": { "repo": "kwilson21/kaillera-next", "tier": "shipped", "data": "src/data/project-stories/kaillera-next.ts" }
+    "kaillera-next": { "repo": "kwilson21/kaillera-next", "tier": "shipped", "data": "src/data/project-stories/kaillera-next.ts" },
+    "personal-website": { "repo": "kwilson21/thesuperhuman.us", "tier": "shipped", "data": "src/data/project-stories/personal-website.ts", "notesSince": "2026-09-27" }
   },
   "autopost": { "linkedin": false, "bluesky": false, "x": false }
 }

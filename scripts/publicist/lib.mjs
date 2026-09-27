@@ -29,6 +29,18 @@ export function entryIds(source) {
   return [...source.matchAll(/\bid:\s*'([a-z0-9-]+)'/g)].map(m => m[1]);
 }
 
+/**
+ * Entry IDs that need a private review note. A project with `notesSince` in the config joined
+ * the publicist after it already had a curated journal: entries dated before that day were
+ * reviewed and published in their own PRs and are not re-reviewed. An entry without a day
+ * always needs a note.
+ */
+export function entriesNeedingNotes(source, notesSince) {
+  return [...source.matchAll(/\bid:\s*'([a-z0-9-]+)'(?:,\s*day:\s*'(\d{4}-\d{2}-\d{2})')?/g)]
+    .filter(([, , day]) => !notesSince || !day || day >= notesSince)
+    .map(([, id]) => id);
+}
+
 /** Front matter fields of a queued post. */
 export function frontMatter(text) {
   const block = text.match(/^---\n([\s\S]*?)\n---/);

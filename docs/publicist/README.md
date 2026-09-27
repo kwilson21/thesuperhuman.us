@@ -380,6 +380,10 @@ each project repo that calls it on `pull_request: closed` with `merged == true`.
   Chromium. After Phase 1, flows run against `demo.thesuperhuman.us` instead.
 - **Kaillera-next:** lobby and room screenshots from a local server, labeled
   diagrams for netcode ideas, owner-supplied gameplay captures only.
+- **Website:** page recordings (MP4, plus GIF for networks that want one) in
+  `src/assets/projects/website/motion/`, each labeled in that folder's
+  `README.md` with kind, build, date and suggested alt text. They show the site
+  as built on a local preview; a post uses them only as its note allows.
 - Every capture is checked visually before it goes in a PR: no real data, no
   secrets or tokens in the address bar or console, no clipped fixed elements.
 
@@ -513,8 +517,9 @@ enforced in four layers, plus the owner's review of the final public PR:
    `publicist-gate`, runs as a `prebuild` step, the same way `assets:check` already
    does. Every `npm run build` therefore runs it: the existing `validate` workflow on
    each PR, and Cloudflare's own Workers Build on each PR preview and each
-   production deploy. It checks Tally and Kaillera-next journal data, their assets
-   and `publicist/queue/`, and fails the build when:
+   production deploy. It checks the configured projects' journal data (Tally,
+   Kaillera-next and, from September 27, the website), their assets and
+   `publicist/queue/`, and fails the build when:
    - an entry or queued post has no note on the private repository's `main`, or
      the note has no Draft entry or it is not `verified` or `corrected`, or its
      decision is not `publish: yes`, or its readiness does not fit its tier
@@ -586,7 +591,11 @@ loads that canonical file first. In short:
 2. **Private repository:** the publicist creates `kwilson21/publicist-private`;
    the owner attaches it to the Routine's environment.
 3. **Tiers:** Tally and Kaillera-next are both `shipped`; experiments inside them
-   are marked `exploration` on their own notes.
+   are marked `exploration` on their own notes. The website joined on September 27
+   (owner, in conversation) as `shipped`, with `notesSince: 2026-09-27`: its
+   journal already held curated entries reviewed and published in their own PRs,
+   so the gate asks for notes only on entries dated from that day, and the
+   publicist starts from work merged then, not from the site's whole history.
 4. **Enforcement:** add the `publicist-gate` build step and make `validate` a
    required check. The owner creates the read-only token for the private
    repository and stores it as an Actions secret and a Cloudflare build secret.
