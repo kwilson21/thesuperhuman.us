@@ -32,3 +32,10 @@ Built-preview verification: the same additional placement passed at 1440px, 800p
 September 10 Audio placement review (Codex agent): Audio hero reuses the same exact WebP. Inspected final built desktop (1440px) and phone (390px at 2×) composition, with 800px/320px layout checks. Existing soft edge masking blends the background; the objects remain fully visible at their intrinsic aspect ratio. No new crop, equipment, physical connection, proportion or texture defect. Empty alt marks decorative artwork. Native SVG service icons were separately checked for consistent strokes and adjacent text labels. Static/reduced-motion presentation; no autoplay. Evidence: `docs/design-concepts/2026-09-10/audio-contact/`.
 
 Archive note: source PNGs, prompts and raw browser-evidence paths above refer to the private recovery archive. The committed production file and hash record are authoritative for the asset gate; see [the evidence index](../design-concepts/README.md).
+
+## Animated layer, September 27
+
+Drawn by `src/components/ObjectLife.astro` as an inline SVG in the image's own 1536 × 1024 coordinates, inside the same mask; the file and hash above are unchanged. It plays once when its section reveals and rests within five seconds; nothing is drawn in the resting frame, so reduced motion, no-JS and print show the untouched art. Inspected at 2x mid-scene on desktop (1280px) and in the phone placement (390px) by Claude Code agent visual review, September 27, 2026. Not human production approval.
+
+- About (Audio chapter) and the Audio hero: three thin terracotta rings leave the front ear cup (centre measured at 700, 585) and fade. At their widest they pass over the headband and desk inside the soft mask; they read as a drawn effect, not part of the object.
+- Outcome: ready for production use within the motion layer. Deployment is a separate step.

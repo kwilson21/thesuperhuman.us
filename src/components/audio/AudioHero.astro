@@ -2,16 +2,18 @@
 import headphones from '~/assets/site/headphones-v1.webp';
 import { audioPath } from '~/lib/host-routing';
 import { audioOffers } from '~/lib/audio-intake';
+import ObjectLife from '~/components/ObjectLife.astro';
 const host = Astro.request.headers.get('host') ?? Astro.url.host;
 const prices = `From $${audioOffers['vocal-mix'].price} per song for two-track vocal mixing. From $${audioOffers.mastering.price} for mastering. From $${audioOffers.bundle.price} for both. Custom work is quoted after review.`;
 ---
 <header class="audio-hero">
   <div><p class="page-kicker">Audio</p><h1 class="page-title">Mixing and<br />mastering.</h1><p class="page-lede">{prices}</p><div class="site-links"><a class="site-button" href={audioPath(host, '/start')}>Start your song</a><a class="site-button site-button-outline" href={audioPath(host, '/services')}>Prices and scope</a></div></div>
-  <img class="audio-art" src={headphones.src} alt="" width={headphones.width} height={headphones.height} fetchpriority="high" />
+  <div class="audio-scene" data-reveal data-play="4000"><img class="audio-art" src={headphones.src} alt="" width={headphones.width} height={headphones.height} fetchpriority="high" /><ObjectLife kind="audio" /></div>
 </header>
 <style>
   .audio-hero { display: grid; grid-template-columns: 1fr 1.15fr; align-items: center; gap: 2rem; padding-block: 1rem 3rem; }
   .audio-hero .page-lede { max-width: 32ch; font-size: 1.25rem; line-height: 1.6; margin-block: 1.5rem 2rem; }
-  .audio-hero img { width: 100%; height: auto; mix-blend-mode: multiply; }
-  @media(max-width: 800px) { .audio-hero { grid-template-columns: 1fr; gap: 1rem; }.audio-hero img { max-width: 580px; margin-inline: auto; } }
+  .audio-scene { position: relative; }
+  .audio-hero img { display: block; width: 100%; height: auto; mix-blend-mode: multiply; }
+  @media(max-width: 800px) { .audio-hero { grid-template-columns: 1fr; gap: 1rem; }.audio-scene { max-width: 580px; margin-inline: auto; width: 100%; } }
 </style>

@@ -1,0 +1,57 @@
+---
+// A short scene over one of the site's object illustrations (headphones, laptop,
+// controller, notebook), drawn in the image's own pixel coordinates (all 1536 × 1024)
+// inside the same mask, like the Home studio. It plays once when its [data-play]
+// ancestor reveals (scroll-scenes.ts) and rests within five seconds. Used by About's
+// chapters and the Audio hero. Nothing is drawn in the resting frame: reduced motion,
+// no-JS and print show the untouched artwork.
+interface Props { kind: 'audio' | 'software' | 'play' | 'whats-next' }
+const { kind } = Astro.props;
+// Top faces of the controller's four buttons, measured on controller-v1, in press order.
+const buttons = [
+  { x: 1128, y: 413, at: 0.5 }, { x: 1214, y: 489, at: 0.8 }, { x: 1097, y: 536, at: 1.1 },
+  { x: 1011, y: 459, at: 1.4 }, { x: 1128, y: 413, at: 2.05 }, { x: 1214, y: 489, at: 2.05 },
+];
+---
+<svg class="chapter-life" viewBox="0 0 1536 1024" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
+  {kind === 'audio' && <g class="life-rings" transform="translate(700 585)">
+    {[0.35, 0.9, 1.45].map(at => <ellipse rx="172" ry="150" style={`--at:${at}s`} />)}
+  </g>}
+  {kind === 'software' && <g class="life-screen">
+    <defs><radialGradient id="glyph-glow"><stop offset="0" stop-color="#f6e8d2" stop-opacity=".55" /><stop offset="1" stop-color="#f6e8d2" stop-opacity="0" /></radialGradient></defs>
+    <ellipse class="glyph-glow" cx="712" cy="427" rx="150" ry="100" fill="url(#glyph-glow)" />
+    <rect class="glyph-caret" x="812" y="402" width="5" height="52" rx="1" />
+  </g>}
+  {kind === 'play' && <g class="life-buttons">
+    {buttons.map(button => <g style={`--at:${button.at}s`}>
+      <ellipse class="press" cx={button.x} cy={button.y} rx="44" ry="27" />
+      <ellipse class="press-ring" cx={button.x} cy={button.y} rx="50" ry="31" />
+    </g>)}
+  </g>}
+  {kind === 'whats-next' && <g class="life-sun" transform="translate(1053 266)">
+    <defs><radialGradient id="sun-glow"><stop offset=".45" stop-color="#e08a62" stop-opacity=".5" /><stop offset="1" stop-color="#e08a62" stop-opacity="0" /></radialGradient></defs>
+    {[0.4, 1.3].map(at => <circle r="70" fill="url(#sun-glow)" style={`--at:${at}s`} />)}
+  </g>}
+</svg>
+<style>
+  .chapter-life { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  .chapter-life :is(ellipse, circle, rect) { opacity: 0; }
+  .life-rings ellipse { fill: none; stroke: var(--accent); stroke-width: 2.4; vector-effect: non-scaling-stroke; }
+  .glyph-caret { fill: #eadfca; }
+  .life-buttons .press { fill: #3b1206; }
+  .life-buttons .press-ring { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+  @media screen and (prefers-reduced-motion: no-preference) {
+    :global(.is-playing) .life-rings ellipse { transform-box: fill-box; transform-origin: center; animation: ring-out 2.2s cubic-bezier(.2, .6, .3, 1) var(--at) both; }
+    :global(.is-playing) .glyph-glow { animation: glyph-glow 2.6s ease-in-out .3s both; }
+    :global(.is-playing) .glyph-caret { animation: caret-blink 1.6s steps(1, end) 1.2s both; }
+    :global(.is-playing) .life-buttons .press { animation: button-press 380ms ease-out var(--at) both; }
+    :global(.is-playing) .life-buttons .press-ring { transform-box: fill-box; transform-origin: center; animation: press-ring 700ms ease-out var(--at) both; }
+    :global(.is-playing) .life-sun circle { transform-box: fill-box; transform-origin: center; animation: sun-glow 2.4s ease-out var(--at) both; }
+  }
+  @keyframes ring-out { from { transform: scale(1); opacity: .55; } to { transform: scale(1.7); opacity: 0; } }
+  @keyframes glyph-glow { 0%, 100% { opacity: 0; } 45% { opacity: 1; } }
+  @keyframes caret-blink { 0%, 50% { opacity: 1; } 25%, 75%, 100% { opacity: 0; } }
+  @keyframes button-press { 0%, 100% { opacity: 0; } 25% { opacity: .55; } }
+  @keyframes press-ring { from { transform: scale(1); opacity: .7; } to { transform: scale(1.7); opacity: 0; } }
+  @keyframes sun-glow { from { transform: scale(.6); opacity: .9; } to { transform: scale(1.9); opacity: 0; } }
+</style>

@@ -281,6 +281,25 @@ The script is about 2.4 KB gzipped. Three.js was not needed for this
 concept. Code: `src/components/home/`, `src/scripts/home-worlds.ts` and
 `src/lib/home-motion.ts`, on the shared layer in `src/scripts/scroll-scenes.ts`.
 
+### Motion on the other pages, September 27
+
+The owner asked for the same life across the site. Each page gets motion sized to
+its job, on the shared layer; content, copy and order are unchanged everywhere.
+
+- **About:** the path between chapters draws as far as the reader has scrolled
+  (still hidden below 800 px, per the audit), and each chapter's object plays one
+  short scene as it arrives: rings from the headphones, a glow and caret on the
+  laptop's `</>`, the controller's buttons pressing in turn, a glow from the
+  notebook's sun. The terrain drifts slightly with scroll.
+- **Audio:** the hero headphones give off the same rings on arrival and the
+  sections rise in. It stays light: this page sells, and playback is untouched.
+- **Building:** the feature and the project rows rise in; the Tally capture leans
+  toward a fine pointer and the row pictures lift on hover.
+- **Work:** restrained for recruiters. Only the two evidence diagrams build as
+  they arrive (before, then after; each timeline step in turn).
+- **Writing:** the direction illustration draws its path through the checkpoints
+  on arrival (CSS only, once). The essay page itself is unchanged.
+
 ## Implemented content locations, September 10
 
 - Shared career chronology, dates, working preference, and Lyft capacity values: `src/data/profile.ts`.
