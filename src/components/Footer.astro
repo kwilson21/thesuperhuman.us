@@ -8,59 +8,18 @@ const hireHref = mainHref('/services');
 const privacyHref = mainHref('/privacy');
 const homeHref = mainHref('/');
 const year = new Date().getFullYear();
+// Every caller currently passes `compact`; kept accepted (but unused) for one release
+// rather than changing every call site in the same pull request.
 interface Props { compact?: boolean; }
-const { compact = false } = Astro.props;
 ---
-{compact ? <footer class="compact-footer site-shell">
+<footer class="compact-footer site-shell">
   <div class="compact-footer-inner">
     <a class="footer-name" href={homeHref}><PersonalName variant="full" /></a>
     <nav aria-label="Elsewhere"><a href="https://github.com/kwilson21">GitHub</a><a href="https://www.linkedin.com/in/kazonwilson/">LinkedIn</a><a href={audioHref}>Audio</a><a href={hireHref}>Work with me</a><a href="https://ko-fi.com/kazonwilson">Support my work</a><a href={privacyHref}>Privacy</a></nav>
 
     <p>The Superhuman Group LLC · {year}</p>
   </div>
-</footer> : <footer class="border-t border-rule mt-24">
-  <div class="mx-auto max-w-page px-6 py-12">
-    <div class="grid gap-8 md:grid-cols-4 text-sm text-muted">
-      <div>
-        <div class="eyebrow mb-3">Contact</div>
-        <p>
-          <a href="mailto:kazon.wilson@thesuperhuman.us" style="color: var(--ink);">kazon.wilson@thesuperhuman.us</a>
-        </p>
-        <p class="mt-1">Fairfield, CT → Northern Virginia</p>
-      </div>
-
-      <div>
-        <div class="eyebrow mb-3">Work</div>
-        <ul class="space-y-1">
-          <li><a href="/work" style="color: var(--ink);">Engineering work</a></li>
-          <li><a href="/writing/ai-gives-you-speed" style="color: var(--ink);">Technical writing</a></li>
-          <li><a href="/about#resumes" style="color: var(--ink);">Resume</a></li>
-        </ul>
-      </div>
-
-      <div>
-        <div class="eyebrow mb-3">Elsewhere</div>
-        <ul class="space-y-1">
-          <li>
-            <a href="https://github.com/kwilson21" target="_blank" rel="noopener" style="color: var(--ink);">GitHub</a>
-          </li>
-          <li>
-            <a href="https://www.linkedin.com/in/kazonwilson/" target="_blank" rel="noopener" style="color: var(--ink);">LinkedIn</a>
-          </li>
-          <li>
-            <a href="https://ko-fi.com/kazonwilson" target="_blank" rel="noopener" style="color: var(--ink);">Support my work</a>
-          </li>
-        </ul>
-      </div>
-
-      <div>
-        <div class="eyebrow mb-3">Identity</div>
-        <p>The Superhuman Group LLC</p>
-        <p class="mt-1">© {year}</p><p class="mt-1"><a href={privacyHref}>Privacy</a></p>
-      </div>
-    </div>
-  </div>
-</footer>}
+</footer>
 <style>
   .compact-footer-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1.5rem; padding-block: 2rem 3rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: .9rem; }
   .compact-footer a { border: 0; }

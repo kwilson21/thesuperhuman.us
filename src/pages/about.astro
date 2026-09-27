@@ -23,16 +23,16 @@ const chapters = [
 <BaseLayout jsonLd={personJsonLd} title={entry.data.title} description={entry.data.description}>
   <div class="about-page">
     <header class="site-shell about-intro">
-      <div class="about-intro-copy"><p class="page-kicker">About</p><h1 class="page-title">A little more<br />about me.</h1><div class="page-lede"><Content /></div><nav class="site-links" aria-label="About chapters"><a class="site-link" href="#audio">Audio <span aria-hidden="true">→</span></a><a class="site-link" href="#software">Software <span aria-hidden="true">→</span></a><a class="site-link" href="#play">Play <span aria-hidden="true">→</span></a><a class="site-link" href="#whats-next">What’s next <span aria-hidden="true">→</span></a></nav></div>
+      <div class="about-intro-copy"><p class="page-kicker">About</p><h1 class="page-title">A little more<br />about me.</h1><div class="page-lede"><Content /></div></div>
       <img class="terrain" src={terrain.src} width={terrain.width} height={terrain.height} alt="" fetchpriority="high" />
     </header>
     <div class="site-shell path-chapters">
       {chapters.map((chapter, index) => <section id={chapter.id} class:list={['path-chapter', { reverse: index % 2 === 1 }]}>
         <div class="chapter-copy"><p class="page-kicker">{chapter.label}</p><h2>{chapter.title}</h2><p>{chapter.text}</p>{chapter.extra && <p class="chapter-extra">{chapter.extra}</p>}{chapter.href && <a class="site-link" href={chapter.href}>{chapter.link} <span aria-hidden="true">→</span></a>}</div>
         <div class="chapter-art"><img src={chapter.image.src} width={chapter.image.width} height={chapter.image.height} alt="" loading="lazy" /></div>
-        <svg class="chapter-path" viewBox="0 0 1000 500" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d={index % 2 === 0 ? 'M780 0C780 120 930 260 780 330C630 400 280 340 280 500' : 'M280 0C280 120 130 260 280 330C430 400 780 340 780 500'} fill="none" stroke="var(--accent)" stroke-width="1.4" vector-effect="non-scaling-stroke" /></svg>
+        {index < chapters.length - 1 && <svg class="chapter-path" viewBox="0 0 1000 500" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d={index % 2 === 0 ? 'M780 0C780 120 930 260 780 330C630 400 280 340 280 500' : 'M280 0C280 120 130 260 280 330C430 400 780 340 780 500'} fill="none" stroke="var(--accent)" stroke-width="1.4" vector-effect="non-scaling-stroke" /></svg>}
       </section>)}
-      <section id="contact" class="about-connect"><p class="page-kicker">Let’s connect</p><h2>Let’s talk.</h2><p>An idea, a shared interest, or an opportunity worth discussing.</p><div class="site-links"><a class="site-button" href="/#contact">Get in touch</a></div></section>
+      <section id="contact" class="page-connect"><div><p class="page-kicker">Let’s connect</p><h2>Let’s talk.</h2><p>An idea, a shared interest, or an opportunity worth discussing.</p></div><a class="site-button" href="/#contact">Get in touch</a></section>
       <details id="resumes" class="resume-section context-disclosure"><summary>Request my resume <span aria-hidden="true">+</span></summary><div><h2>My professional background.</h2><p class="resume-description">One general resume, covering my work history and technical experience.</p><ResumeRequestForm /></div></details>
     </div>
   </div><Footer compact slot="footer" />
@@ -67,7 +67,7 @@ const chapters = [
   .about-page { overflow: clip; }
   .about-intro { position: relative; padding-top: 4rem; min-height: 640px; }
   .about-intro-copy { position: relative; z-index: 1; max-width: 34rem; }
-  .about-intro .page-lede { max-width: 30rem; }.about-intro .site-links { margin-top: 2rem; gap: 1rem 1.5rem; }
+  .about-intro .page-lede { max-width: 30rem; }
   .terrain { position: absolute; width: 90%; max-width: none; right: -16%; top: -1rem; z-index: 0; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 28%, #000 85%, transparent), linear-gradient(to bottom, #000 75%, transparent); mask-composite: intersect; pointer-events: none; }
   .path-chapter { position: relative; display: grid; grid-template-columns: 1fr 1.2fr; align-items: center; gap: 2rem; min-height: 465px; padding-bottom: 100px; scroll-margin-top: 3rem; }
   .chapter-copy { position: relative; z-index: 2; max-width: 30rem; }.chapter-copy h2 { font-size: clamp(2.2rem, 3.7vw, 3.2rem); line-height: 1.1; letter-spacing: -.035em; }.chapter-copy > p:not(.page-kicker) { font-size: 1.2rem; line-height: 1.5; color: var(--muted); margin-top: 1rem; }.chapter-copy .site-link { margin-top: 1.5rem; }.chapter-copy > p.chapter-extra { font-size: 1.05rem; }
@@ -79,14 +79,12 @@ const chapters = [
     .trace-path path { animation: trace-chapter 1.2s ease-out both; }
     @keyframes trace-chapter { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
   }
-  .about-connect { position: relative; z-index: 1; padding-block: 2rem 3rem; }.about-connect h2 { font-size: clamp(2.5rem, 5vw, 4rem); line-height: 1.1; letter-spacing: -.035em; }.about-connect > p:not(.page-kicker) { color: var(--muted); font-size: 1.25rem; margin-block: 1rem 1.5rem; }
   .resume-section { margin: 0 0 3rem; border-top: 1px solid var(--rule); padding-top: 1.5rem; }.resume-section > div { max-width: 46rem; padding-top: 1rem; }.resume-section h2 { font-size: 2rem; }.resume-description { margin-block: .5rem 2rem; color: var(--muted); }
   @media(min-width: 801px) and (max-width: 1100px) { .about-intro { min-height: 590px; }.terrain { top: 6rem; }.path-chapter { min-height: 430px; }.about-intro-copy { max-width: 30rem; } }
   @media(max-width: 800px) {
     .about-intro { padding-top: 2rem; min-height: auto; }.about-intro-copy { max-width: 36rem; }.terrain { position: relative; width: 125%; right: auto; top: auto; margin: -1rem 0 -1rem -10%; mask-image: radial-gradient(ellipse at center, #000 40%, transparent 72%); }
     .path-chapter, .reverse { display: flex; flex-direction: column; align-items: stretch; gap: 0; padding-bottom: 3.5rem; min-height: auto; }
     .chapter-copy { max-width: 36rem; }.chapter-art img { width: 110%; margin-left: -5%; }.chapter-art { margin-top: -.25rem; }
-    .chapter-path { top: auto; bottom: 0; height: 75px; width: 80%; left: 10%; opacity: .5; }.path-chapter + .path-chapter { padding-top: 1rem; }
-    .about-connect { padding-top: 1.5rem; }.about-connect .site-links { align-items: flex-start; flex-direction: column; }
+    .chapter-path { display: none; }.path-chapter + .path-chapter { padding-top: 1rem; }
   }
 </style>

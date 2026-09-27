@@ -4,21 +4,22 @@ import BaseLayout from '~/layouts/BaseLayout.astro';
 import Footer from '~/components/Footer.astro';
 import ExperienceRow from '~/components/ExperienceRow.astro';
 import WorkDiagram from '~/components/WorkDiagram.astro';
-import { personJsonLd, experience, lyftBonus, lyftTeams, skuposStages, workFocus, workingPreference } from '~/data/profile';
+import { personJsonLd, experience, lyftBonus, lyftTeams, skuposStages, workingPreference } from '~/data/profile';
 ---
 <BaseLayout jsonLd={personJsonLd} title="Work · Kazon Wilson" description="Software engineering experience from owning an internal system at Skupos to delivering features across distributed systems at Lyft. Explore the work and the progression.">
   <div class="site-shell primary-page work-page">
     <header class="work-intro">
-      <div><p class="page-kicker">Work</p><h1 class="page-title">Software engineer.</h1><p class="page-lede">At Skupos, I built and owned an internal system. At Lyft, I owned feature delivery across distributed systems.</p><div class="site-links"><a class="site-link" href="#selected-work">Work highlights <span aria-hidden="true">→</span></a><a class="site-link" href="#experience">Experience <span aria-hidden="true">→</span></a><a class="site-link" href="/services#software">Hire me for software <span aria-hidden="true">→</span></a><a class="site-link" href="/about#resumes">Request my resume <span aria-hidden="true">→</span></a></div></div>
-      <aside aria-label="At a glance"><h2>At a glance</h2><ul><li><span aria-hidden="true">01</span>7+ years in production engineering</li><li><span aria-hidden="true">02</span>System ownership</li><li><span aria-hidden="true">03</span>Distributed systems and cross-team delivery</li><li><span aria-hidden="true">04</span><a href="/building/personal-website">AI-assisted website project</a></li></ul></aside>
+      <p class="page-kicker">Work</p>
+      <h1 class="page-title">Software engineer.<br />Building with AI.</h1>
+      <p class="page-lede">7+ years in production engineering: I built and owned an internal system at Skupos, then owned feature delivery across distributed systems at Lyft. {workingPreference}</p>
+      <p class="work-evidence">This site is my current example of building with AI: I directed the design and used AI to build it. <a class="site-link" href="/building/personal-website">Personal website <span aria-hidden="true">→</span></a></p>
+      <div class="site-links"><a class="site-link" href="/about#resumes">Request my resume <span aria-hidden="true">→</span></a><a class="site-link" href="/services#software">Hire me for software <span aria-hidden="true">→</span></a></div>
     </header>
-    <p class="working-preference">{workFocus} {workingPreference}</p>
     <section id="selected-work" class="site-section">
       <div class="site-section-heading"><h2>Work highlights</h2></div>
       <article id="lyft" class="selected-story">
         <div><p class="page-kicker">Lyft - Associate Tools team</p><h3>More independence for support.</h3><p class="story-summary">Refactored a bonus tool and added visibility so support could run and monitor the work.</p><p class="capacity-figure">{lyftBonus.before} <span aria-hidden="true">→</span><span class="sr-only">to</span> {lyftBonus.after} rows</p><p class="text-muted text-sm">{lyftBonus.evidence}</p>
           <details class="context-disclosure"><summary>Read the context <span aria-hidden="true">+</span></summary><div><p>The customer incident response team used this tool to issue driver bonuses. I rewrote its batch handling and added Grafana observability, making runs visible to the people responsible for them.</p><p>The figures describe rows handled per batch. They are from my career account; they do not measure runtime or a new benchmark.</p></div></details>
-          <a class="site-link story-context-link" href="#lyft-background">Explore my work across three Lyft teams <span aria-hidden="true">→</span></a>
         </div><WorkDiagram kind="bonus" />
       </article>
       <article id="skupos" class="selected-story">
@@ -27,7 +28,7 @@ import { personJsonLd, experience, lyftBonus, lyftTeams, skuposStages, workFocus
             <p>I started with Python scripts that automated tobacco scan-data troubleshooting and updates to Google Sheets for data operations and account managers. Those scripts became background tasks managed by a Flask application, scheduled through Huey, with MySQL on AWS. I extended an existing internal React page so data operators could use the tools.</p>
             <p>The application supported transaction-data troubleshooting across 3,000+ retailer locations. The tobacco scan-data automation supported 3–5× store growth without increasing operations headcount.</p>
             <p>I then took ownership of multipack matching in the core product’s Rails reporting rewrite. That move into product feature ownership continued at Lyft.</p>
-          </div></details><a class="site-link story-context-link" href="#skupos-background">From intern to associate engineer <span aria-hidden="true">→</span></a>
+          </div></details>
         </div><WorkDiagram kind="analyst" />
       </article>
     </section>
@@ -37,7 +38,6 @@ import { personJsonLd, experience, lyftBonus, lyftTeams, skuposStages, workFocus
         <ul>{team.projects.map(project => <li><strong>{project.title}.</strong> {project.description}</li>)}</ul>
       </section>)}</div>}
     </ExperienceRow>)}</section>
-    <section class="site-section"><div class="site-section-heading"><h2>How I work</h2></div><div class="working-values"><div><h3>Ownership</h3><p>I’ve owned an internal system from the ground up and led features through delivery across existing services.</p></div><div><h3>Async collaboration</h3><p>Clear communication keeps work moving.</p></div><div><h3>AI-assisted development</h3><p>I use AI in my current independent work. For this website, I directed the design and used AI to build it. The professional experience above describes my hands-on engineering work.</p></div></div><div class="site-links"><a class="site-link" href="/writing/ai-gives-you-speed">Read my perspective <span aria-hidden="true">→</span></a><a class="site-link" href="/building/the-engineers-daily">Explore The Engineer’s Daily prototype <span aria-hidden="true">→</span></a></div></section>
     <section class="page-connect"><div><p class="page-kicker">Let’s talk</p><h2>Have a problem worth exploring?</h2><p>I’d love to hear about it.</p></div><a class="site-button" href="/#contact">Get in touch</a></section>
   </div><Footer compact slot="footer" />
 </BaseLayout>
@@ -53,20 +53,13 @@ import { personJsonLd, experience, lyftBonus, lyftTeams, skuposStages, workFocus
   });
 </script>
 <style>
-  .work-intro { display: grid; grid-template-columns: 1.55fr 1fr; gap: 5rem; align-items: center; }
-  .work-intro .page-title { font-size: clamp(3.25rem, 5.5vw, 4.75rem); }
+  .work-intro { max-width: 46rem; }
+  .work-evidence { margin-top: 1rem; color: var(--muted); font-size: 1.125rem; }
   .work-intro .site-links { margin-top: 2rem; }
-  aside { border-left: 1px solid var(--rule); padding-left: 2.5rem; }
-  aside h2 { font-size: 1.75rem; }
-  aside li { display: flex; gap: 1.5rem; align-items: center; padding-block: 1.4rem; font-size: 1.125rem; line-height: 1.4; }
-  aside li + li { border-top: 1px solid var(--rule); }
-  aside li span { color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: .8rem; }
-  .working-preference { border-top: 1px solid var(--rule); padding-top: 1.5rem; margin-top: 2.5rem; font-size: 1.125rem; }
   .selected-story { display: grid; grid-template-columns: 1.05fr 1fr; gap: 3.5rem; align-items: start; padding-block: .5rem 2rem; }
   .selected-story + .selected-story { border-top: 1px solid var(--rule); padding-top: 2.5rem; }
   h3 { font-size: clamp(1.65rem, 2.7vw, 2.2rem); line-height: 1.15; letter-spacing: -.025em; }
   .story-summary { font-size: 1.2rem; line-height: 1.45; color: var(--muted); margin-block: .8rem 1.5rem; max-width: 30rem; }
-  .story-context-link { margin-top: 1rem; font-size: .95rem; }
   .experience-groups { margin-block: 1.5rem; }
   .experience-groups section { border-left: 2px solid var(--rule); padding-left: 1.25rem; }
   .experience-groups section + section { margin-top: 1.75rem; }
@@ -77,11 +70,7 @@ import { personJsonLd, experience, lyftBonus, lyftTeams, skuposStages, workFocus
   .experience-groups strong { font-weight: 600; }
   .capacity-figure { font-size: clamp(1.9rem, 3vw, 2.65rem); line-height: 1.2; letter-spacing: -.025em; }
   .capacity-figure span { color: var(--accent); }
-  .working-values { display: grid; grid-template-columns: repeat(3,1fr); gap: 2rem; margin-bottom: 2rem; }
-  .working-values > div { border-left: 2px solid var(--rule); padding-left: 1.3rem; }
-  .working-values h3 { font-size: 1.4rem; margin-bottom: .5rem; }.working-values p { color: var(--muted); }
   @media(max-width: 800px) {
-    .work-intro { grid-template-columns: 1fr; gap: 2.5rem; } aside { border-left: 0; border-top: 1px solid var(--rule); padding: 1.5rem 0 0; } aside li { padding-block: 1rem; }
-    .selected-story { grid-template-columns: 1fr; gap: 1.5rem; }.working-values { grid-template-columns: 1fr; gap: 1.5rem; }
+    .selected-story { grid-template-columns: 1fr; gap: 1.5rem; }
   }
 </style>
