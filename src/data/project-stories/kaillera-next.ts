@@ -14,6 +14,7 @@ import recoveryDiagram from '~/assets/projects/kaillera-next/recovery-syncs-diag
 import selfHostingDiagram from '~/assets/projects/kaillera-next/self-hosting-diagram.webp';
 import supportedRoms from '~/assets/projects/kaillera-next/supported-roms-lobby-annotated.webp';
 import remixFreezesDiagram from '~/assets/projects/kaillera-next/remix-freezes-diagram.webp';
+import landingPage from '~/assets/projects/kaillera-next/landing-page-annotated.webp';
 
 export const kailleraStory = {
   title: 'Kaillera Next',
@@ -165,5 +166,11 @@ export const kailleraMilestones: Milestone[] = [
     title: 'Fixing two Smash Remix freezes',
     summary: 'Smash Remix matches could freeze in two places, both traced from one session’s logs. At match start, each player waited 5 seconds a frame for menu inputs that had already been used and deleted. On pause, one player’s frame count reset while the other’s didn’t, so their inputs never lined up again. Claude Code fixed both, then made the rollback engine wait for late inputs before it shuts down on a pause or match end, so a wrong guess can’t quietly leave the two games different. Code review by Greptile caught follow-up issues along the way. Released in v0.53.4.',
     artifacts: [artifact(remixFreezesDiagram, 'Kaillera Next · Fixing two Smash Remix freezes', 'The freeze at match start, the freeze on pause, and the shutdown hold that followed. Drawn from the commits, not a gameplay capture.', 'Diagram')],
+  },
+  {
+    id: 'kaillera-next-landing-page', day: '2026-09-26',
+    title: 'A front page that shows who’s playing',
+    summary: 'Kaillera Next’s room server runs on a free tier that naps when idle and takes about a minute to wake. It also served the front page, so the first visitor after a nap stared at a loading tab. The new front page leads with open rooms that hosts choose to list, each with a recent frame and Watch or Join. While the server wakes, it shows a clock and the lag visualizer. Invite links now open a page that says who invited you and what joining needs. A Cloudflare Worker is built to serve both pages without waiting on the server. Claude Code and Codex built it to a design doc that records my decisions. Released in v0.56.1.',
+    artifacts: [artifact(landingPage, 'Kaillera Next · A front page that shows who’s playing', 'The v0.56.1 front page in its waking state, rendered from the site’s own files without a server or ROMs, with numbered pointers.', 'Annotated page render')],
   },
 ];

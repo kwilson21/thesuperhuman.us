@@ -9,6 +9,9 @@ import phaseOneHome from '~/assets/projects/tally/phase-1-home-annotated.webp';
 import exclusionsEdit from '~/assets/projects/tally/exclusions-edit-annotated.webp';
 import settingsEdit from '~/assets/projects/tally/settings-edit-annotated.webp';
 import howDiagrams from '~/assets/projects/tally/how-diagrams-annotated.webp';
+import designCatalog from '~/assets/projects/tally/design-system-catalog-annotated.webp';
+import adjustBudgets from '~/assets/projects/tally/adjust-budgets-annotated.webp';
+import homeSafeToSpend from '~/assets/projects/tally/home-safe-to-spend-annotated.webp';
 
 export const tallyStory = {
   title: 'Tally',
@@ -103,5 +106,23 @@ export const tallyMilestones: Milestone[] = [
     title: 'How Tally works, now with pictures',
     summary: 'How Tally works explains each rule with a worked example from the demo’s own numbers. The goal: anyone trying the demo should see how those numbers fit together. So each section now has a small diagram, which Claude Code drew in code from the same numbers as the example beside it; a test checks that they match. Budget, Transactions and Categories are boxes and arrows. Excluding is one bar, with each kind of exclusion a dashed slice. I picked those styles from a mockup of two. The examples now also name each kind of exclusion and the income that needs no category. Built, tested and merged, on demo data.',
     artifacts: [artifact(howDiagrams, 'Tally · How Tally works, now with pictures', 'The Transactions diagram and the Excluding bar with their worked examples, from PR #64 on demo data, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-design-system-catalog', day: '2026-09-26',
+    title: 'A catalog for Tally’s design system',
+    summary: 'The money input had drifted from my design, and there was nowhere to see and approve a component on its own. So Tally now has a catalog at /design-system, in the demo and development only. It renders the app’s real components with sample data, so it can’t show a copy that has drifted, and marks each one Visual, Interactive or Flow. Claude Code built it, with tests that fail on colors, radii or shadows outside the design tokens. I then wrote a design brief, and each built screen was audited against it. I decided six proposals by seeing each beside today’s version, and each ships in its own PR, so undoing one is a single revert.',
+    artifacts: [artifact(designCatalog, 'Tally · A catalog for the design system', 'The top of the design system catalog, from PR #91 on demo data, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-adjust-budgets', day: '2026-09-26',
+    title: 'Adjust budgets on Home',
+    summary: 'Changing a budget in Settings felt odd. My earlier budgeting app and Mint change it where you see the bars, so Tally does too. Tapping a budget on Home opens a sheet with the money input from my earlier app: round ±$1 buttons, cent arrows, and chips to round up or use last month’s spending. For quick changes, "Adjust" puts a − and + on every row, and each tap saves the budget at the next round $10. I picked that from three layouts drawn side by side, because buttons on every row looked cluttered on a phone. It all works without JavaScript. Built and tested on demo data.',
+    artifacts: [artifact(adjustBudgets, 'Tally · Adjust budgets on Home', 'Home’s budget list in Adjust mode, from PR #98 on demo data, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-home-safe-to-spend', day: '2026-09-26',
+    title: 'Home leads with safe to spend',
+    summary: 'Tally is meant for people who gave up on other budgeting apps, and an audit against its design language found Home burying its one number. On a phone, the demo’s Things to try and a large month title came first, and "Safe to spend" started halfway down the screen. I saw each fix next to today’s Home and picked there. Claude Code built them: the month is now a small heading, the number sits on a phone’s first screen, and Things to try moves below the budget list. "Needs a category" is said once, with its amount. Budget bars are thinner, and an over-budget row says by how much ("$36 over"). Built and tested on demo data.',
+    artifacts: [artifact(homeSafeToSpend, 'Tally · Home leads with safe to spend', 'Home on a phone before and after PR #99, on demo data, with numbered pointers.', 'Annotated screen captures, demo data')],
   },
 ];
