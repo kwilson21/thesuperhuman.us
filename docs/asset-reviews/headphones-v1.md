@@ -2,7 +2,7 @@
 
 - Purpose and placement: decorative illustration; About audio chapter.
 - Reviewer: Codex agent, September 10, 2026. This is agent QA, not owner acceptance of the implemented page.
-- Reference basis: Existing interests-v1 production illustration. Original generated artwork already selected by the owner; no third-party photo or logo. The visual study is a style reference, not production evidence.
+- Reference basis: Existing interests-v1 production illustration (retired 2026-09-26; last present at 8a44c76). Original generated artwork already selected by the owner; no third-party photo or logo. The visual study is a style reference, not production evidence.
 - Source original: `docs/design-concepts/2026-09-10/production/headphones-v1.png`. Prompt: `primary-page-prompts.json` in the same directory.
 - Native-resolution inspection: pass. Two earcups, bronze rings, headband, and hinges retain the accepted design and credible proportions. Both cups join the band; no cables or extra equipment. Decorative generic headphones, not a representation of the owner’s exact equipment.
 - Delivery: WebP quality 86, 1536 × 1024, 39,920 bytes. Same aspect ratio; no alternate crop or runtime transformation.

@@ -7,11 +7,10 @@ import Hero from '~/components/Hero.astro';
 import Footer from '~/components/Footer.astro';
 import ContactForm from '~/components/ContactForm.astro';
 import WorkWithMe from '~/components/WorkWithMe.astro';
-import threadline from '~/assets/site/threadline-v1.webp';
 import notebook from '~/assets/site/notebook-v1.webp';
-import interests from '~/assets/site/interests-v1.webp';
-import dailyPreview from '~/assets/projects/daily-preview.webp';
-import dailyStory from '~/data/project-stories/the-engineers-daily.json';
+import tallyTransactions from '~/assets/projects/tally/transactions-demo-2026-09-26.webp';
+import kailleraLanding from '~/assets/projects/kaillera-next/landing-2026-09-26.webp';
+import { tallyStory } from '~/data/project-stories/tally';
 const essay = await getEntry('pages', 'ai-gives-you-speed');
 if (!essay) throw new Error('AI essay content missing');
 const jsonLd = {
@@ -21,7 +20,7 @@ const jsonLd = {
   worksFor: { '@type': 'Organization', name: 'The Superhuman Group LLC' },
 };
 ---
-<BaseLayout title="Kazon Wilson · Software, sound, and things worth exploring" description="Software engineer exploring ideas and building with AI. Discover my projects, engineering work, writing, and continuing practice in sound." jsonLd={jsonLd}>
+<BaseLayout title="Kazon Wilson · Software, sound, and things worth exploring" description="Software engineer shaping ideas and building with AI. Discover my projects, engineering work, writing, and continuing practice in sound." jsonLd={jsonLd}>
   <div class="home-page">
     <Hero />
     <div class="site-shell">
@@ -31,28 +30,25 @@ const jsonLd = {
       </section>
       <section class="site-section building-section" aria-labelledby="building-title">
         <div class="site-section-heading"><h2 id="building-title">Currently building</h2><a class="heading-link site-link" href="/building">All projects <span aria-hidden="true">→</span></a></div>
+        {/* Motion preview (audit S5): each still below can take a poster-backed, muted, looped <video> on hover/focus once the owner supplies a clip; no motion is faked here. */}
         <div class="project-grid">
-          <article class="daily-preview">
-            <a class="project-art daily-art" href="/building/the-engineers-daily" aria-label="Explore The Engineer’s Daily journal">
-              <img src={dailyPreview.src} alt="The Engineer’s Daily local lesson prototype, with a harbor story and a code exercise." width="1440" height="1000" loading="lazy" />
-            </a>
-            <div class="project-copy">
-              <p class="art-caption">Local prototype</p>
-              <h3>{dailyStory.title}</h3>
-              <p>{dailyStory.subtitle}</p>
-              <a class="site-link" href="/building/the-engineers-daily">Explore the journal <span aria-hidden="true">→</span></a>
+          <article class="project-card">
+            <div class="project-art">
+              <img src={tallyTransactions.src} width={tallyTransactions.width} height={tallyTransactions.height} alt="Tally’s Transactions screen on demo data, a CI capture from September 2026, with the demo data banner." loading="lazy" />
             </div>
+            <p class="page-kicker">In development · public demo</p>
+            <h3>Tally</h3>
+            <p>{tallyStory.subtitle}</p>
+            <a class="site-link project-link" href="/building/tally#tally-updates-title">Development journal <span aria-hidden="true">→</span><span class="sr-only">Tally</span></a>
           </article>
-          <article class="threadline-preview">
-            <a class="project-art threadline-art" href="/building/threadline" aria-label="Explore Threadline">
-              <img src={threadline.src} width={threadline.width} height={threadline.height} alt="" loading="lazy" />
-              <span class="illustration-label">Illustration</span>
-            </a>
-            <div class="project-copy">
-              <h3>Threadline</h3>
-              <p>Finding your way back to interrupted work.</p>
-              <a class="site-link" href="/building/threadline">Explore the project <span aria-hidden="true">→</span></a>
+          <article class="project-card">
+            <div class="project-art">
+              <img src={kailleraLanding.src} width={kailleraLanding.width} height={kailleraLanding.height} alt="Kaillera Next’s landing page, September 2026, with no open rooms." loading="lazy" />
             </div>
+            <p class="page-kicker">In development · playable demo build</p>
+            <h3>Kaillera Next</h3>
+            <p>Super Smash Bros. 64 online with friends, in the browser.</p>
+            <a class="site-link project-link" href="/building/kaillera-next#kaillera-next-updates-title">Development journal <span aria-hidden="true">→</span><span class="sr-only">Kaillera Next</span></a>
           </article>
         </div>
       </section>
@@ -70,13 +66,6 @@ const jsonLd = {
           <div class="editorial-art notebook-art"><img src={notebook.src} width={notebook.width} height={notebook.height} alt="" loading="lazy" /></div>
           <div class="editorial-copy"><h3>{essay.data.title}</h3><a class="site-link" href="/writing/ai-gives-you-speed">Read the essay <span aria-hidden="true">→</span></a></div>
         </article>
-      </section>
-      <section class="site-section" aria-labelledby="beyond-title">
-        <div class="site-section-heading"><h2 id="beyond-title">Beyond the code</h2></div>
-        <div class="editorial-pair beyond-preview">
-          <div class="editorial-art interests-art"><img src={interests.src} width={interests.width} height={interests.height} alt="" loading="lazy" /></div>
-          <div class="editorial-copy"><p class="interest-intro">Audio, retro games, and the work I keep coming back to.</p><div class="site-links"><a class="site-link" href="/about">More about me <span aria-hidden="true">→</span></a><a class="site-link" href="/audio/">Audio engineering <span aria-hidden="true">→</span></a></div></div>
-        </div>
       </section>
       <section id="contact" class="site-section contact-section" aria-labelledby="contact-title">
         <div class="contact-intro"><div><h2 id="contact-title">Have something in mind?<br />Let’s talk.</h2><p>Ideas, opportunities, or a conversation worth having.</p></div><a class="site-button" href="mailto:kazon.wilson@thesuperhuman.us">Email me</a></div>
@@ -105,19 +94,18 @@ const jsonLd = {
   .home-page { overflow: clip; }
   .hire-section { margin-top: .5rem; }
   .site-section-heading .heading-link { order: 1; margin-left: auto; font-size: .95rem; white-space: nowrap; }
-  .project-grid { display: grid; grid-template-columns: 1.45fr 1fr; gap: 2rem; }
-  .project-art { display: block; position: relative; border: 0; padding: 0; height: 340px; }
-  .project-art :global(img) { width: 100%; height: 100%; object-fit: cover; }
-  .daily-art { border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; background: #f2f5f5; }
-  .daily-art img { object-position: top left; }
-  .threadline-art :global(img) { mix-blend-mode: multiply; object-fit: cover; }
-  .illustration-label { position: absolute; bottom: .4rem; right: .65rem; font-size: .8rem; font-style: italic; color: var(--muted); }
-  .project-copy { margin-top: 1.2rem; }
-  .project-copy h3 { font-size: clamp(1.9rem, 3vw, 2.6rem); letter-spacing: -.035em; line-height: 1.1; margin: 0 0 .4rem; }
-  .project-copy p:not(.art-caption) { font-size: 1.125rem; color: var(--muted); line-height: 1.45; margin: 0 0 1rem; }
-  .art-caption { color: var(--accent); font-family: theme('fontFamily.sans'); font-size: .75rem; margin: 0 0 .65rem; }
-  .threadline-preview .project-copy { padding-top: 1.75rem; }
-  .work-preview { display: flex; align-items: center; gap: 2rem; padding: 2rem 2.25rem; background: #f1ede5; border-radius: 3px; }
+  /* Subgrid keeps each card's art, kicker, title, line and link on shared rows, so both cards
+     line up whatever wraps (WorkWithMe.astro's doors use the same pattern). */
+  .project-grid { display: grid; grid-template-columns: repeat(2, 1fr); column-gap: 2.5rem; }
+  .project-card { display: grid; grid-template-rows: subgrid; grid-row: span 5; position: relative; }
+  .project-art { display: block; margin-bottom: 1.2rem; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; background: #f2f5f5; aspect-ratio: 3 / 2; }
+  .project-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .project-card h3 { font-size: clamp(1.7rem, 2.6vw, 2.3rem); letter-spacing: -.035em; line-height: 1.1; margin: 0 0 .4rem; }
+  .project-card p:not(.page-kicker) { font-size: 1.125rem; color: var(--muted); line-height: 1.45; margin: 0 0 1rem; }
+  .project-link { justify-self: start; align-self: start; }
+  /* The picture stays a plain image; this link (with the visible arrow) is the card's only tab stop. */
+  .project-link::after { content: ''; position: absolute; inset: 0; }
+  .work-preview { display: flex; align-items: center; gap: 2rem; }
   .work-company { font-size: 3rem; letter-spacing: -.04em; margin: 0; padding-right: 2.5rem; border-right: 1px solid #d9d2c7; }
   .work-outcome { flex: 1; }
   .work-outcome p { margin: 0; }
@@ -127,9 +115,6 @@ const jsonLd = {
   .editorial-art { overflow: hidden; }
   .editorial-art :global(img) { display: block; width: 100%; height: auto; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent); mask-composite: intersect; }
   .editorial-copy h3 { font-size: clamp(2rem, 3.4vw, 2.9rem); line-height: 1.08; letter-spacing: -.04em; margin: 0 0 2rem; }
-  .interest-intro { font-size: clamp(1.6rem, 2.7vw, 2.1rem); line-height: 1.2; letter-spacing: -.025em; margin: 0 0 2rem; }
-  .interests-art { aspect-ratio: 1.65; position: relative; }
-  .interests-art :global(img) { width: 100%; height: 100%; object-fit: cover; }
   .contact-section { border-top: 1px solid var(--rule); padding-block: 3rem; scroll-margin-top: 2rem; }
   .contact-intro { display: flex; justify-content: space-between; gap: 2rem; align-items: center; }
   .contact-intro h2 { font-size: clamp(2rem, 3.5vw, 2.7rem); line-height: 1.07; letter-spacing: -.035em; margin: 0 0 .7rem; }
@@ -138,11 +123,11 @@ const jsonLd = {
   .contact-disclosure summary { width: fit-content; cursor: pointer; font-size: .95rem; padding: .4rem 0; }
   .contact-form-content { padding-block: 2rem; color: var(--ink); }
   @media (max-width: 800px) {
-    .project-grid { grid-template-columns: 1fr; gap: 2.25rem; }
-    .project-art { height: auto; aspect-ratio: 1.5; }
+    .project-grid { grid-template-columns: 1fr; row-gap: 2.25rem; }
+    .project-card { display: block; }
     .site-section-heading { gap: 1rem; }
     .site-section-heading .heading-link { font-size: .85rem; }
-    .work-preview { display: block; padding: 0; background: none; }
+    .work-preview { display: block; }
     .work-company { border: 0; font-size: 3rem; padding: 0; margin: 0 0 .65rem; }
     .work-outcome { margin-bottom: 1.2rem; }
     .work-outcome .work-figure { font-size: clamp(1.65rem, 6vw, 2.1rem); }
@@ -150,21 +135,11 @@ const jsonLd = {
     .writing-preview .editorial-copy { order: -1; }
     .editorial-copy h3 { font-size: clamp(2rem, 7.4vw, 2.6rem); margin-bottom: 1.2rem; }
     .notebook-art { margin-inline: -1.5rem; }
-    .beyond-preview .editorial-copy { display: contents; }
-    .beyond-preview .interest-intro { grid-row: 1; }
-    .beyond-preview .interests-art { grid-row: 2; margin-inline: -1.5rem; }
-    .beyond-preview .site-links { grid-row: 3; }
-    .interest-intro { margin-bottom: 1.2rem; }
     .contact-intro { align-items: flex-start; flex-direction: column; gap: 1.2rem; }
     .contact-section { padding-block: 2rem; }
   }
   @media (max-width: 420px) {
     .site-section-heading .heading-link { display: none; }
-    .threadline-preview { display: grid; grid-template-columns: 1.2fr 1fr; align-items: center; gap: .75rem; padding-top: 1.75rem; border-top: 1px solid var(--rule); }
-    .threadline-preview .project-copy { grid-column: 1; grid-row: 1; padding: 0; margin: 0; }
-    .threadline-art { grid-column: 2; grid-row: 1; aspect-ratio: 1; margin-right: -.75rem; }
-    .threadline-art :global(img) { object-fit: contain; mask-image: radial-gradient(ellipse at center, #000 55%, transparent 76%); }
-    .project-copy h3 { font-size: 1.9rem; }
-    .project-copy p:not(.art-caption) { font-size: 1.05rem; }
+    .project-card p:not(.page-kicker) { font-size: 1.05rem; }
   }
 </style>
