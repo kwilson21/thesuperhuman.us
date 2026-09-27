@@ -7,8 +7,8 @@
 // - plays a [data-scene-play="ms"] element's .is-playing scene once, when at least half of it
 //   is on screen,
 // - holds a [data-scene-arrive] element's CSS entrance (paused, .is-waiting) when the page
-//   first shows it below the fold, until at least half of it is on screen, so it plays when
-//   it is seen,
+//   first shows it off screen (or only a sliver of it), until half of it, or half the
+//   viewport, is filled by it, so it plays when it is seen,
 // - lets [data-tilt] elements lean toward a fine pointer (--rx, --ry).
 // Anything that plays by itself must rest within five seconds (WCAG 2.2.2).
 import { sceneProgress } from '~/lib/scroll-scenes';
@@ -95,20 +95,22 @@ function start(setup?: (context: MotionContext) => void): () => void {
   players.forEach((_, element) => playWatch.observe(element));
   cleanups.push(() => { playWatch.disconnect(); players.forEach(player => player.stop()); });
 
-  // An entrance that starts on load waits, still in its opening delay, if the first frame
-  // shows it below the fold (or only a sliver of it), until half of it is on screen; one
-  // already on screen plays. The first observation comes after any #fragment jump, so a
-  // deep link that lands past it holds it too.
+  // An entrance that starts on load waits, normally still in its opening delay, if the first
+  // frame shows it off screen (or only a sliver of it), until half of it is on screen, or it
+  // fills half the viewport when it is taller than two viewports; one already on screen plays.
+  // The first observation comes after any #fragment jump, so a deep link past it holds it too.
   const arrivals = [...document.querySelectorAll<HTMLElement>('[data-scene-arrive]')];
   const looked = new Set<Element>();
+  const seen = (entry: IntersectionObserverEntry) => entry.intersectionRatio >= 0.5
+    || entry.intersectionRect.height >= (entry.rootBounds?.height ?? innerHeight) / 2;
   const arriveWatch = new IntersectionObserver(entries => entries.forEach(entry => {
     if (!looked.has(entry.target)) {
       looked.add(entry.target);
       if (entry.intersectionRatio < 0.1) { entry.target.classList.add('is-waiting'); return; }
-    } else if (entry.intersectionRatio < 0.5) return;
+    } else if (!seen(entry)) return;
     entry.target.classList.remove('is-waiting');
     arriveWatch.unobserve(entry.target);
-  }), { threshold: [0, 0.1, 0.5] });
+  }), { threshold: [0.1, 0.2, 0.3, 0.4, 0.5] });
   arrivals.forEach(element => arriveWatch.observe(element));
   cleanups.push(() => { arriveWatch.disconnect(); arrivals.forEach(element => element.classList.remove('is-waiting')); });
   const reveals = [...new Set([...document.querySelectorAll<HTMLElement>('[data-reveal]'), ...onRevealRuns.keys()])] as HTMLElement[];

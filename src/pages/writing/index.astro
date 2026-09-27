@@ -29,8 +29,8 @@ if (!essay) throw new Error('AI essay content missing');
 </BaseLayout>
 <script>
   import { runMotion } from '~/scripts/scroll-scenes';
-  // Where the page first shows the illustration below the fold (small phones, or a link to a
-  // piece further down), its entrance waits until it is seen.
+  // Where the page first shows the illustration off screen (small or landscape phones, or a
+  // link to a piece further down), its entrance waits until it is seen.
   runMotion();
 </script>
 <style>
@@ -44,8 +44,8 @@ if (!essay) throw new Error('AI essay content missing');
   .writing-invitation { padding-block: 2.5rem; border-top: 1px solid var(--rule); }
   .writing-invitation h2 { font-size: 2rem; line-height: 1.2; }.writing-invitation p { font-size: 1.2rem; color: var(--muted); margin-block: .5rem 1rem; }
   /* On arrival, once: the path is found through its checkpoints. It draws, each checkpoint lands,
-     then the branches and the arrow. It starts on load; where the illustration begins below the
-     fold, the shared motion layer holds it in its opening delay until it is half on screen. */
+     then the branches and the arrow. It starts on load; where the page first shows the illustration
+     off screen, the shared motion layer holds it until it is half on screen. */
   @media screen and (prefers-reduced-motion: no-preference) {
     .direction .dir-path { stroke-dasharray: 1; animation: dir-draw 2s cubic-bezier(.45, .05, .3, 1) .4s both; }
     .direction .dir-point { animation: dir-in 500ms ease both; animation-delay: calc(.85s + var(--i) * .38s); }
