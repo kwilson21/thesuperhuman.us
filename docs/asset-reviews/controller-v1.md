@@ -2,7 +2,7 @@
 
 - Purpose and placement: decorative illustration; About play chapter and Building Kaillera Next row.
 - Reviewer: Codex agent, September 10, 2026. This is agent QA, not owner acceptance of the implemented page.
-- Reference basis: Existing interests-v1 production illustration. Original generated artwork already selected by the owner; no third-party photo or logo. The visual study is a style reference, not production evidence.
+- Reference basis: Existing interests-v1 production illustration (retired 2026-09-26; last present at 8a44c76). Original generated artwork already selected by the owner; no third-party photo or logo. The visual study is a style reference, not production evidence.
 - Source original: `docs/design-concepts/2026-09-10/production/controller-v1.png`. Prompt: `primary-page-prompts.json` in the same directory.
 - Native-resolution inspection: pass. Gray shell, cross D-pad, two center buttons, and four terracotta face buttons retain the accepted identity. Perspective, shell seam, button depth, and contact shadow are coherent. No cable or false branding.
 - Delivery: WebP quality 86, 1536 × 1024, 50,928 bytes. Same aspect ratio; no alternate crop or runtime transformation.
