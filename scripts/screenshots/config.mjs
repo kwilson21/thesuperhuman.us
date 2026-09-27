@@ -18,7 +18,6 @@ export const PAGES = [
   { name: 'services', path: '/services' },
   { name: 'privacy', path: '/privacy' },
   { name: 'audio', path: '/audio' },
-  { name: 'audio-about', path: '/audio/about' },
   { name: 'audio-portfolio', path: '/audio/portfolio' },
   { name: 'audio-releases', path: '/audio/releases' },
   { name: 'audio-services', path: '/audio/services' },
@@ -40,6 +39,7 @@ export const NOT_PAGES = {
 /** Page files that only redirect. Capture checks each one answers with this status and location. */
 export const REDIRECTS = {
   'src/pages/services.html.astro': { from: '/services.html', to: '/services', status: 301 },
+  'src/pages/audio/about.astro': { from: '/audio/about', to: '/audio/services', status: 301 },
 };
 
 /** Pages that need seeded data. The coverage test checks the named scenario captures the route. */
@@ -53,7 +53,7 @@ export const SCENARIO_PAGES = {
 // Show representative routes when shared UI changes, and focused routes for content changes.
 // The full capture still runs in CI; this only selects which validated captures appear in the PR.
 const SHARED_SITE_PAGES = ['home', 'work', 'audio', 'services', 'audio-services'];
-const AUDIO_SHELL_PAGES = ['audio', 'audio-about', 'audio-portfolio', 'audio-releases', 'audio-services', 'audio-start', 'music-old-news'];
+const AUDIO_SHELL_PAGES = ['audio', 'audio-portfolio', 'audio-releases', 'audio-services', 'audio-start', 'music-old-news'];
 const AUDIO_NAV_PAGES = AUDIO_SHELL_PAGES.filter(name => name !== 'audio-start');
 const MUSIC_CATALOG_PAGES = ['audio-portfolio', 'audio-releases', 'audio-services', 'music-old-news'];
 const MUSIC_HUB_PAGES = ['audio-portfolio', 'audio-releases', 'audio-services'];
@@ -85,11 +85,8 @@ const PAGE_NAMES_BY_FILE = {
   'src/components/audio/AudioHero.astro': ['audio'],
   'src/components/audio/AudioFooter.astro': AUDIO_SHELL_PAGES,
   'src/components/audio/MusicNav.astro': AUDIO_NAV_PAGES,
-  'src/components/audio/BookingForm.astro': ['audio'],
-  'src/components/audio/ServiceSection.astro': ['audio'],
   'src/components/audio/ServiceIcon.astro': ['audio', 'audio-portfolio'],
-  'src/components/audio/TrackRow.astro': ['audio'],
-  'src/components/audio/ComparisonPlayer.astro': ['audio-portfolio', 'audio-services'],
+  'src/components/audio/ComparisonPlayer.astro': ['audio', 'audio-portfolio', 'audio-services'],
   'src/components/audio/PlayIcon.astro': ['audio-portfolio', 'audio-releases', 'audio-services', 'music-old-news'],
   'src/components/audio/LyricVideo.astro': ['music-old-news'],
   'src/components/audio/ReleaseInterest.astro': ['music-old-news'],
