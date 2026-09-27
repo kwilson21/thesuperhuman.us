@@ -34,8 +34,8 @@ material from the other areas rather than maintaining a second portfolio.
 
 Approved desktop composition: [Quiet studio, version 2](design-concepts/2026-09-09/home-quiet-studio-v2.png).
 Home mobile v2 is also approved. The owner accepted the implemented Home prototype.
-Its production assets and responsive behavior have local QA records; additional
-motion is still a separate exploration.
+Its production assets and responsive behavior have local QA records. The motion
+layer proposed on September 27 is described under "Home motion" below.
 
 The owner welcomes an expressive homepage with motion and potentially 3D,
 including exploration of Three.js. This is permission to explore the experience,
@@ -237,10 +237,47 @@ No universal animation, card, timeline, or demonstration format is selected.
 1. Which current interests and existing material should lead, after project
    currency and public evidence are confirmed?
 2. What experience should motion or potential 3D create on Home, and how does
-   it connect to the selected content and Kazon's personality?
+   it connect to the selected content and Kazon's personality? A proposal is
+   implemented for review (see "Home motion" below); the owner decides whether
+   it stays.
 
 Use the selected presentation models and system plan to prototype Home, then
 validate behavior and content before expanding across the site.
+
+## Home motion, September 27
+
+Proposed after the owner asked for a Home that feels alive and changes worlds as
+you scroll, while keeping the site's goals. The content, order and copy of Home
+are unchanged from the September 26 audit (hero, Work with me, Currently
+building, one Work proof, Writing, Contact); only presentation and motion change.
+
+The worlds follow the hero tagline, "Software, sound, and things worth exploring":
+
+- **Studio (paper).** The hero artwork plays one short scene on arrival: the
+  monitor re-types its last lines of code, the headphones give off three rings,
+  and a terracotta trail is drawn on the notepad from the pen tip. It rests within
+  five seconds and replays only when the visitor returns to the top or points at
+  the studio. Work with me stays on paper; its doors rise in turn.
+- **Screen (software, dark).** Currently building and the Lyft proof sit inside
+  a dark screen that arrives as a rounded panel and widens to full width. The
+  site's own tokens are inverted for that subtree, with the terracotta lifted for
+  contrast. Project captures glow like screens and lean toward a fine pointer.
+  The Lyft figure counts up beside one cell per 5,000 rows.
+- **Sound.** The screen ends in a waveform: paper peaks rise into the dark and
+  dark peaks fall into the paper. It swells as it crosses the viewport and is
+  silent at either edge. It is a picture of sound; nothing plays.
+- **Notebook and horizon (things worth exploring).** The essay title is inked in
+  and underlined with a pen stroke; a sun rises over the contact rule as the page
+  ends.
+
+Rules the implementation keeps: every resting frame is in the HTML and CSS, so
+the page is complete without JavaScript and with reduced motion (the view CI
+screenshots use). Motion that plays by itself finishes within five seconds;
+everything else is tied to scroll or pointer. A keyboard user who lands inside a
+block that has not revealed yet sees it at once. No new dependency, image or
+copy; the script is about 2.4 KB gzipped. Three.js was not needed for this
+concept. Code: `src/components/home/`, `src/scripts/home-worlds.ts`,
+`src/lib/home-motion.ts`.
 
 ## Implemented content locations, September 10
 

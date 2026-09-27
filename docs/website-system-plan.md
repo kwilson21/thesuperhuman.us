@@ -37,7 +37,11 @@ nothing useful to put in them.
 - **Motion:** start with the static composition. Enhance a specific interaction
   only after it works on keyboard and touch. Reduced motion preserves the full
   page; sound begins only on request. Three.js remains an option to evaluate if
-  an agreed interaction benefits from actual 3D.
+  an agreed interaction benefits from actual 3D. Home's scroll worlds (see the
+  content model, "Home motion") are the working example: resting frames live in
+  markup and CSS, scroll progress arrives as a `--p` custom property on each
+  `[data-scene]`, `[data-reveal]` blocks reveal once, and anything that plays on
+  its own rests within five seconds.
 
 `BaseLayout.astro` retains document structure, metadata, canonical URLs, and the
 skip link. Add one shared navigation component used by main-site pages, and
