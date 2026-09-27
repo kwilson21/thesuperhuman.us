@@ -598,9 +598,8 @@ loads that canonical file first. In short:
    the owner attaches it to the Routine's environment.
 3. **Tiers:** Tally and Kaillera-next are both `shipped`; experiments inside them
    are marked `exploration` on their own notes. The owner added the website on
-   September 27 (in conversation). Its tier, `shipped` (the live site is
-   customer-facing), and its start, `notesSince: 2026-09-27` (the day of that
-   decision), were proposed with the change for the owner to confirm. Its journal
+   September 27 (in conversation) and confirmed its tier, `shipped` (the live site
+   is customer-facing), and its start, `notesSince: 2026-09-27`, the same day. Its journal
    already held 17 curated entries, reviewed and published in their own PRs; they
    are listed by ID as `preexisting` and need no note. Every other entry does,
    whatever its date, since an entry's day is the day of the work. `notesSince` is
