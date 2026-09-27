@@ -228,7 +228,7 @@ validate behavior and content before expanding across the site.
 - Shared career chronology, dates, working preference, and Lyft capacity values: `src/data/profile.ts`.
 - Work story summaries and explanatory context: `src/pages/work.astro`; native diagrams: `src/components/WorkDiagram.astro`. `ExperienceRow` provides the five optional career disclosures.
 - About introduction: `src/content/pages/about.md`; short personal chapters and their artwork: `src/pages/about.astro`. Older career anchors offer an onward link to Work. Detailed private operational material from the old About body is no longer rendered or retained in current content; this does not erase Git history.
-- Building selection and summaries: `src/pages/building.astro`. Daily title/subtitle and its journal remain driven by the existing story JSON. Threadline progress remains in its existing journal. Other project rows use supported descriptions and existing destinations; servant-lang has no invented link.
+- Building selection and summaries: `src/pages/building.astro`. Daily title/subtitle and its journal remain driven by the existing story JSON. Threadline progress remains in its existing journal. Other project rows use supported descriptions and existing destinations; servant-lang is hidden until it has a public repository, explanation, or artifact (per the September 26 simplification audit, S7).
 - Writing feature: existing essay metadata via the content collection. No new date, article, or newsletter was invented.
 - New resume requests: general only in the form and validation. Stored legacy audiences and PDFs remain compatible with approval and delivery. No KV migration, PDF deletion, or remote delivery occurred.
 
