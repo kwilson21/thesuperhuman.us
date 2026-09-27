@@ -2,8 +2,9 @@
 
 Date: September 27, 2026  
 Repository: `kwilson21/thesuperhuman.us`  
+Pull request: [#133](https://github.com/kwilson21/thesuperhuman.us/pull/133)  
 Code revision: `c328e96b7383070b62b2f09dbfc479d34a8c860c` (this record is committed on top of it)  
-Target: production `https://thesuperhuman.us` (Home, `/services`, `/building`) and the alternate `https://audio.thesuperhuman.us` entry served by the same Worker  
+Target: production `https://thesuperhuman.us` (Home, `/services`, `/building`). The `audio.thesuperhuman.us` entry routes those paths to audio pages, so the door never renders there  
 Reviewer and deployment authorization: Kazon Wilson. Asked "Say the word if you want me to refresh it", they answered “the word”  
 Scope: one image, `src/assets/site/work-with-me-website.webp`, replaced by a current capture of Home, and its asset review record  
 Rollback revision: `10945a29202e251d56c3e534505e815697fcae02`
@@ -65,5 +66,5 @@ Only one existing picture changes; every item outside it is N/A with the reason.
 - **PASS · Rollback.** `10945a2` is the current `main`; reverting restores the
   September 26 picture.
 - **UNVERIFIED · Post-deployment production.** After the merge deploys, confirm
-  the door on Home, `/services` and `/building` serves the new picture on both
-  hosts.
+  the door on Home, `/services` and `/building` serves the new picture on
+  `thesuperhuman.us`.
