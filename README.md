@@ -136,7 +136,7 @@ These render to `/tmp/services-overview.pdf` and `/tmp/audio-services-overview.p
 
 ## Audio site
 
-Audio is part of the personal site at `/audio/`. `audio.thesuperhuman.us` remains an alternate entry using the same repository, build and Worker. Its pages point to main-site `/audio` canonical URLs. Main-site and local-preview links stay within the site; legacy audio-host pages, inquiry APIs and file links retain their existing routing. No separate studio brand or deployment pipeline.
+Audio is part of the personal site at `/audio/`. `audio.thesuperhuman.us` remains an alternate entry using the same repository, build and Worker. Its pages point to main-site `/audio` canonical URLs. Main-site and local-preview links stay within the site; legacy audio-host pages, the single intake API at `/api/audio-intake`, and file links retain their existing routing. No separate studio brand or deployment pipeline.
 
 ### R2 audio storage
 
