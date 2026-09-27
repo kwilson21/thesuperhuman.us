@@ -10,7 +10,7 @@ review note allows, and says no more than the note's approved entry.
 - **Date:** September 27, 2026
 - **Formats:** MP4 (H.264, 30 fps; prefer this where a network accepts video) and
   GIF (10 fps, 640 px desktop or 320 px phone wide, 96 colours) for networks that
-  want a GIF. Phone recordings are captured at 2x.
+  want a GIF. Desktop recordings are 1280 × 800; phone recordings are 390 × 844.
 - **Checked:** every recording was reviewed frame by frame. Recorded headless, so no
   address bar, console, cursor or private data appears. The pages show Tally's demo
   data capture (with its banner), the owner's Kaillera Next landing capture and the

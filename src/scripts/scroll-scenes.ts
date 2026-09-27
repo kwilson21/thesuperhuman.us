@@ -6,6 +6,8 @@
 // - reveals each [data-reveal] once (.is-in), at once if a keyboard user lands inside it,
 // - plays a [data-scene-play="ms"] element's .is-playing scene once, when at least half of it
 //   is on screen,
+// - holds a [data-scene-arrive] element's CSS entrance (paused, .is-waiting) while less
+//   than half of it is on screen, so an entrance below the fold plays when it is seen,
 // - lets [data-tilt] elements lean toward a fine pointer (--rx, --ry).
 // Anything that plays by itself must rest within five seconds (WCAG 2.2.2).
 import { sceneProgress } from '~/lib/scroll-scenes';
@@ -91,6 +93,20 @@ function start(setup?: (context: MotionContext) => void): () => void {
   }), { threshold: 0.5 });
   players.forEach((_, element) => playWatch.observe(element));
   cleanups.push(() => { playWatch.disconnect(); players.forEach(player => player.stop()); });
+
+  // An entrance that starts on load waits, still in its opening delay, until it is seen.
+  const visibleShare = (element: Element) => {
+    const box = element.getBoundingClientRect();
+    return box.height ? Math.max(0, Math.min(innerHeight, box.bottom) - Math.max(0, box.top)) / box.height : 0;
+  };
+  const arrivals = [...document.querySelectorAll<HTMLElement>('[data-scene-arrive]')].filter(element => visibleShare(element) < 0.5);
+  const arriveWatch = new IntersectionObserver(entries => entries.forEach(entry => {
+    if (entry.intersectionRatio < 0.5) return;
+    entry.target.classList.remove('is-waiting');
+    arriveWatch.unobserve(entry.target);
+  }), { threshold: 0.5 });
+  arrivals.forEach(element => { element.classList.add('is-waiting'); arriveWatch.observe(element); });
+  cleanups.push(() => { arriveWatch.disconnect(); arrivals.forEach(element => element.classList.remove('is-waiting')); });
   const reveals = [...new Set([...document.querySelectorAll<HTMLElement>('[data-reveal]'), ...onRevealRuns.keys()])] as HTMLElement[];
   const revealed = (element: Element) => {
     if (element.classList.contains('is-in')) return;

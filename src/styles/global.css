@@ -161,6 +161,7 @@
     /* A block revealed by keyboard focus appears at once, children included. */
     .motion .is-instant, .motion .is-instant *, .motion .is-instant *::after { transition-duration: 0s !important; transition-delay: 0s !important; }
     .motion-starting [data-reveal], .motion-starting [data-reveal] * { transition: none !important; }
+    .motion .is-waiting, .motion .is-waiting * { animation-play-state: paused !important; }
   }
 }
 

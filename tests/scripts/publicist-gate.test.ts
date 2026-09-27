@@ -104,16 +104,21 @@ describe('text checks', () => {
 });
 
 describe('entries needing notes', () => {
-  const source = "[{ id: 'site-old', day: '2026-09-20' }, { id: 'site-new', day: '2026-09-27' }, { id: 'site-undated' }]";
-  it('needs a note for every entry without a start date', () => {
-    expect(entriesNeedingNotes(source)).toEqual(['site-old', 'site-new', 'site-undated']);
+  const source = "[{ id: 'site-old', day: '2026-09-20' }, { id: 'site-new', day: '2026-09-27' }, { id: 'site-backdated', day: '2026-09-01' }]";
+  it('needs a note for every entry when nothing predates the publicist', () => {
+    expect(entriesNeedingNotes(source)).toEqual(['site-old', 'site-new', 'site-backdated']);
   });
-  it('leaves out entries dated before the project joined, never undated ones', () => {
-    expect(entriesNeedingNotes(source, '2026-09-27')).toEqual(['site-new', 'site-undated']);
+  it('exempts only the listed entries, whatever their dates', () => {
+    expect(entriesNeedingNotes(source, ['site-old'])).toEqual(['site-new', 'site-backdated']);
   });
-  it('keeps the website joined from September 27', () => {
+  it('lists only website entries that exist, and dates the start plainly', () => {
     const config = JSON.parse(readFileSync('publicist/config.json', 'utf8'));
-    expect(config.projects['personal-website']).toMatchObject({ repo: 'kwilson21/thesuperhuman.us', notesSince: '2026-09-27' });
+    const website = config.projects['personal-website'];
+    expect(website).toMatchObject({ repo: 'kwilson21/thesuperhuman.us', notesSince: '2026-09-27' });
+    expect(website.notesSince).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const ids = entryIds(readFileSync(website.data, 'utf8'));
+    expect(website.preexisting).toHaveLength(17);
+    expect(website.preexisting.filter((id: string) => !ids.includes(id))).toEqual([]);
   });
 });
 
@@ -156,13 +161,13 @@ describe('gate runner', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('PUBLICIST_PRIVATE_TOKEN is not set');
   });
-  it('does not ask for notes on website entries from before the website joined', () => {
-    const result = run(fixture(null, "export const x = [{ id: 'website-start', day: '2026-09-09' }];"), { CI: 'true' });
+  it('does not ask for notes on the website entries that predate the publicist', () => {
+    const result = run(fixture(null, "export const x = [{ id: 'website-start-with-the-reader', day: '2026-09-09' }];"), { CI: 'true' });
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('0 entries checked');
   });
-  it('asks for notes on website entries from the day it joined', () => {
-    const result = run(fixture(null, "export const x = [{ id: 'website-motion', day: '2026-09-27' }];"), { CI: 'true' });
+  it('asks for a note on a new website entry, even one dated before the website joined', () => {
+    const result = run(fixture(null, "export const x = [{ id: 'website-motion-layer', day: '2026-09-26' }];"), { CI: 'true' });
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('PUBLICIST_PRIVATE_TOKEN is not set');
   });

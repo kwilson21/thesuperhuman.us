@@ -9,7 +9,7 @@
 - Corrections and recheck: Soft edge masks blend the background with the site paper. Replaced the first elliptical mask with shallow edge fades to keep notebook corners visible.
 - In-page inspection: pass on 1440px desktop, 800px tablet, and 390px/320px mobile in both development and the locally bundled Worker; complete intended content, no distorted resizing or unreadable required image text.
 - Accessibility: decorative image has empty alternative text. Links have visible text or explicit accessible names; meaning is provided in the surrounding HTML.
-- Motion: artwork is static. Link-arrow feedback is disabled for reduced motion. No hidden surfaces or disconnected animated parts. (See the animated layer recorded below, September 27.)
+- Motion: artwork is static. Link-arrow feedback is disabled for reduced motion. No hidden surfaces or disconnected animated parts. (See the animated layer recorded below, September 27. On Home's writing preview the unchanged image drifts up to 18px with scroll; still under reduced motion.)
 - Publication: no private information, personal portrait, false product evidence, or generated credit. The illustration does not claim a real studio photograph.
 - Delivery verification: production HTTP response SHA-256 matches this exact source file. See `docs/design-concepts/2026-09-10/home-prototype/production-results.json`.
 - Outcome: ready for production asset use within this prototype. Deployment is a separate step.

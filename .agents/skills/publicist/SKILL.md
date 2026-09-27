@@ -142,8 +142,10 @@ Stage 1, notes (private):
    `main` of the private repository (the last merged work drafted into notes, per
    project). Clone each configured project read-only and list work merged after
    that point. A project not yet in `state.json` starts from its `notesSince`
-   date in the config, never from its whole history. Skip changes with no
-   meaningful outcome; group related PRs into one candidate entry.
+   date in the config, never from its whole history. In this website's own
+   repository, skip the publicist's PRs ("Publicist: …", posted or skipped
+   updates). Skip changes with no meaningful outcome; group related PRs into one
+   candidate entry.
 2. For each new candidate, write its review note and add it to one open private PR
    titled "Review notes: <date range>" (reuse an open one). Advance the private
    `state.json` in the same PR.

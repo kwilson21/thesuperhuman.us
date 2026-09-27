@@ -3,7 +3,28 @@
   "projects": {
     "tally": { "repo": "kwilson21/tally", "tier": "shipped", "data": "src/data/project-stories/tally.ts" },
     "kaillera-next": { "repo": "kwilson21/kaillera-next", "tier": "shipped", "data": "src/data/project-stories/kaillera-next.ts" },
-    "personal-website": { "repo": "kwilson21/thesuperhuman.us", "tier": "shipped", "data": "src/data/project-stories/personal-website.ts", "notesSince": "2026-09-27" }
+    "personal-website": {
+      "repo": "kwilson21/thesuperhuman.us", "tier": "shipped", "data": "src/data/project-stories/personal-website.ts", "notesSince": "2026-09-27",
+      "preexisting": [
+        "website-mobile-ab-playback",
+        "website-mobile-comparison-layout",
+        "website-owner-mobile-tooltips",
+        "website-old-news-release-experience",
+        "website-old-news-listening-comparison",
+        "website-old-news-interest-and-merch",
+        "website-start-with-the-reader",
+        "website-four-directions",
+        "website-keep-the-feeling",
+        "website-mobile-continuity",
+        "website-page-responsibilities",
+        "website-show-the-point",
+        "website-remove-repetition",
+        "website-audio-restraint",
+        "website-current-direction",
+        "website-general-resume",
+        "website-make-change-repeatable"
+      ]
+    }
   },
   "autopost": { "linkedin": false, "bluesky": false, "x": false }
 }

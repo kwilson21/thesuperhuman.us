@@ -41,7 +41,8 @@ nothing useful to put in them.
   `src/scripts/scroll-scenes.ts` (with `src/lib/scroll-scenes.ts`): resting frames
   live in markup and CSS, scroll progress arrives as a `--p` custom property on
   each `[data-scene]`, `[data-reveal]` blocks reveal once (at once on keyboard
-  focus), a `[data-scene-play="ms"]` scene plays once when half of it is on screen, `[data-tilt]`
+  focus), a `[data-scene-play="ms"]` scene plays once when half of it is on screen, a
+  `[data-scene-arrive]` CSS entrance waits in its opening delay until it is seen, `[data-tilt]`
   leans toward a fine pointer, and anything that plays on its own rests within
   five seconds. Printing stops it. Home's worlds (content model, "Home motion")
   are the fullest example; page-specific scenes plug in through `runMotion()`.

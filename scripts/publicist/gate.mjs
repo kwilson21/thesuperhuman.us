@@ -15,10 +15,10 @@ if (!readFileSync('AGENTS.md', 'utf8').includes(agentsBlock(skill))) {
 
 const entries = [];
 const earlier = new Set();
-for (const [project, { data, notesSince }] of Object.entries(config.projects)) {
+for (const [project, { data, preexisting = [] }] of Object.entries(config.projects)) {
   if (!existsSync(data)) continue;
   const source = readFileSync(data, 'utf8');
-  const needed = entriesNeedingNotes(source, notesSince);
+  const needed = entriesNeedingNotes(source, preexisting);
   for (const id of needed) entries.push({ project, id });
   for (const id of entryIds(source)) if (!needed.includes(id)) earlier.add(id);
   for (const problem of textProblems(source)) errors.push(`${data}: ${problem}`);

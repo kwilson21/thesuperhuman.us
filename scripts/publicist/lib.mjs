@@ -30,15 +30,14 @@ export function entryIds(source) {
 }
 
 /**
- * Entry IDs that need a private review note. A project with `notesSince` in the config joined
- * the publicist after it already had a curated journal: entries dated before that day were
- * reviewed and published in their own PRs and are not re-reviewed. An entry without a day
- * always needs a note.
+ * Entry IDs that need a private review note: every entry except those listed in the
+ * project's `preexisting` config, which were already in a curated journal, reviewed and
+ * published in their own PRs, before the project joined the publicist. An exemption names
+ * entries, not dates: an entry's day is the day of the work, so a new entry can carry an
+ * earlier one.
  */
-export function entriesNeedingNotes(source, notesSince) {
-  return [...source.matchAll(/\bid:\s*'([a-z0-9-]+)'(?:,\s*day:\s*'(\d{4}-\d{2}-\d{2})')?/g)]
-    .filter(([, , day]) => !notesSince || !day || day >= notesSince)
-    .map(([, id]) => id);
+export function entriesNeedingNotes(source, preexisting = []) {
+  return entryIds(source).filter(id => !preexisting.includes(id));
 }
 
 /** Front matter fields of a queued post. */
