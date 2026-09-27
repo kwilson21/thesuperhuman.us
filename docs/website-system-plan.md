@@ -43,7 +43,7 @@ nothing useful to put in them.
   each `[data-scene]`, `[data-reveal]` blocks reveal once (at once on keyboard
   focus), a `[data-scene-play="ms"]` scene plays once when half of it is on screen, a
   `[data-scene-arrive]` CSS entrance that the page first shows off screen waits
-  until half of it is on screen, `[data-tilt]` leans toward a fine
+  until half of it is on screen or it fills half the screen, `[data-tilt]` leans toward a fine
   pointer, and anything that plays on its own rests within
   five seconds. Printing stops it. Home's worlds (content model, "Home motion")
   are the fullest example; page-specific scenes plug in through `runMotion()`.

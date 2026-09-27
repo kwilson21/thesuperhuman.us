@@ -83,7 +83,7 @@ access reads it back.
 
 - **N/A · Images.** No image changes.
 - **PASS · Client and font cost.** No dependency, embed, font file or weight was
-  added. The shared motion layer is 3.9 KB (1.5 KB gzip); Home's scenes add
+  added. The shared motion layer is 4.1 KB (1.6 KB gzip); Home's scenes add
   3.7 KB (1.7 KB gzip); each other page adds under 0.4 KB. The recordings under
   `src/assets/projects/website/motion/` are not imported and are absent from the
   build output.

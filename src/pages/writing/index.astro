@@ -45,7 +45,7 @@ if (!essay) throw new Error('AI essay content missing');
   .writing-invitation h2 { font-size: 2rem; line-height: 1.2; }.writing-invitation p { font-size: 1.2rem; color: var(--muted); margin-block: .5rem 1rem; }
   /* On arrival, once: the path is found through its checkpoints. It draws, each checkpoint lands,
      then the branches and the arrow. It starts on load; where the page first shows the illustration
-     off screen, the shared motion layer holds it until it is half on screen. */
+     off screen, the shared motion layer holds it until half of it, or half the screen, is filled. */
   @media screen and (prefers-reduced-motion: no-preference) {
     .direction .dir-path { stroke-dasharray: 1; animation: dir-draw 2s cubic-bezier(.45, .05, .3, 1) .4s both; }
     .direction .dir-point { animation: dir-in 500ms ease both; animation-delay: calc(.85s + var(--i) * .38s); }

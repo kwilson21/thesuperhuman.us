@@ -300,7 +300,7 @@ its job, on the shared layer; content, copy and order are unchanged everywhere.
 - **Writing:** the direction illustration draws its path through the checkpoints
   on arrival, once. It starts on load; where the page first shows it off screen
   (small or landscape phones, or a link to a piece further down), it waits until
-  it is half on screen. The essay page itself is unchanged.
+  half of it is on screen or it fills half the screen. The essay page itself is unchanged.
 
 ## Implemented content locations, September 10
 

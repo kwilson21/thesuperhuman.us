@@ -96,8 +96,9 @@ function start(setup?: (context: MotionContext) => void): () => void {
   cleanups.push(() => { playWatch.disconnect(); players.forEach(player => player.stop()); });
 
   // An entrance that starts on load waits, normally still in its opening delay, if the first
-  // frame shows it off screen (or only a sliver of it), until half of it is on screen, or it
-  // fills half the viewport when it is taller than two viewports; one already on screen plays.
+  // frame shows it off screen (or only a sliver of it), until half of it is on screen or it
+  // fills half the viewport (sooner for anything taller than the viewport); one already on
+  // screen plays.
   // The first observation comes after any #fragment jump, so a deep link past it holds it too.
   const arrivals = [...document.querySelectorAll<HTMLElement>('[data-scene-arrive]')];
   const looked = new Set<Element>();
