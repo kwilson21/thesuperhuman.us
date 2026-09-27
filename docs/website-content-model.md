@@ -237,9 +237,8 @@ No universal animation, card, timeline, or demonstration format is selected.
 1. Which current interests and existing material should lead, after project
    currency and public evidence are confirmed?
 2. What experience should motion or potential 3D create on Home, and how does
-   it connect to the selected content and Kazon's personality? A proposal is
-   implemented for review (see "Home motion" below); the owner decides whether
-   it stays.
+   it connect to the selected content and Kazon's personality? Answered by the
+   "Home motion" worlds below, which the owner kept on September 27.
 
 Use the selected presentation models and system plan to prototype Home, then
 validate behavior and content before expanding across the site.
@@ -247,7 +246,9 @@ validate behavior and content before expanding across the site.
 ## Home motion, September 27
 
 Proposed after the owner asked for a Home that feels alive and changes worlds as
-you scroll, while keeping the site's goals. The content, order and copy of Home
+you scroll, while keeping the site's goals. The owner chose to keep the dark
+screen world and the notepad trail in the hero's resting frame (September 27,
+in conversation). The content, order and copy of Home
 are unchanged from the September 26 audit (hero, Work with me, Currently
 building, one Work proof, Writing, Contact); only presentation and motion change.
 
