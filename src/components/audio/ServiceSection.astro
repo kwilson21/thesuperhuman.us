@@ -1,9 +1,0 @@
----
-import TrackRow from './TrackRow.astro';
-import { audioServices } from '~/data/audio';
-import type { AudioService, AudioTrack } from '~/lib/audio-tracks';
-interface Props { service: AudioService; tracks: AudioTrack[]; }
-const { service, tracks } = Astro.props;
----
-{tracks.length > 0 && <section class="recording-group"><h3>{audioServices[service].label}</h3>{tracks.map(track => <TrackRow track={track} />)}</section>}
-<style>.recording-group { margin-top: 2rem; }.recording-group > h3 { font-size: 1.7rem; margin-bottom: 1rem; }</style>

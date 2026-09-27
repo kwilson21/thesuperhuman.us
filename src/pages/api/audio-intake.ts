@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { ownerRequestForIntake, validateIntake } from '~/lib/audio-intake';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
 import { deliverProjectInvitation } from '~/lib/audio-project-invitations';
+import { sendOwnerRequestNotice } from '~/lib/audio-resend';
 import { musicRequest } from '~/lib/music-request';
 import { sendUrgentOwnerAlert } from '~/lib/owner-alerts';
 import { saveOwnerRequest } from '~/lib/owner-requests';
@@ -38,12 +39,20 @@ export const POST: APIRoute = async ({ request, locals }) => {
       });
       return Response.json({ ok: false, error: 'We couldn’t confirm delivery. Your details are still here. Try again later or email kazon.wilson@thesuperhuman.us.' }, { status: 503 });
     }
+    // Best-effort notices: neither blocks the response, and neither can undo the stored request.
+    const notices: Promise<unknown>[] = [
+      sendOwnerRequestNotice({
+        input, requestId: saved.id,
+        apiKey: env.RESEND_API_KEY, from: env.CONTACT_FROM_EMAIL, to: env.CONTACT_TO_EMAIL,
+      }).catch(() => console.error('Owner notification email state is uncertain.')),
+    ];
     if (clientPortalEnabled(env)) {
-      const delivery = deliverProjectInvitation(env.MUSIC_DB, saved.id, env)
-        .catch(() => console.error('Studio invitation email state is uncertain.'));
-      if (locals.runtime?.ctx) locals.runtime.ctx.waitUntil(delivery);
-      else await delivery;
+      notices.push(deliverProjectInvitation(env.MUSIC_DB, saved.id, env)
+        .catch(() => console.error('Studio invitation email state is uncertain.')));
     }
+    const pending = Promise.all(notices);
+    if (locals.runtime?.ctx) locals.runtime.ctx.waitUntil(pending);
+    else await pending;
     return Response.json({ ok: true });
   } catch {
     return Response.json({ ok: false, error: 'Sending is temporarily unavailable. Your details are still here. Please try again later.' }, { status: 503 });

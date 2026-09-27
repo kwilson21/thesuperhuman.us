@@ -13,8 +13,27 @@ function context(body: unknown = base, origin = 'https://thesuperhuman.us') {
 }
 beforeEach(()=>{ vi.clearAllMocks(); vi.stubGlobal('fetch',vi.fn(async (url:string)=> url.includes('siteverify') ? {ok:true,json:async()=>({success:true})} : {ok:true})); });
 describe('intake endpoint',()=>{
- it('stores reviewed details without fetching the shared file or sending routine email',async()=>{const res=await POST(context());expect(res.status).toBe(200);expect(fetch).toHaveBeenCalledTimes(1);expect(saveOwnerRequest).toHaveBeenCalledWith(expect.anything(),expect.objectContaining({kind:'service',serviceId:'vocal-mix',email:'artist@example.com'}));});
- it('queues a sign-in invitation only when the private portal is enabled', async () => {
+ it('stores reviewed details without fetching the shared file',async()=>{const res=await POST(context());expect(res.status).toBe(200);expect(saveOwnerRequest).toHaveBeenCalledWith(expect.anything(),expect.objectContaining({kind:'service',serviceId:'vocal-mix',email:'artist@example.com'}));});
+ it('sends the owner an immediate notice with the service, title, client, files, direction and a dashboard link, regardless of the client portal flag', async () => {
+   const res = await POST(context());
+   expect(res.status).toBe(200);
+   expect(deliverProjectInvitation).not.toHaveBeenCalled();
+   const resendCalls = (fetch as any).mock.calls.filter(([url]: [string]) => String(url).includes('api.resend.com'));
+   expect(resendCalls).toHaveLength(1);
+   const body = JSON.parse(resendCalls[0][1].body);
+   expect(body.to).toEqual(['owner@example.com']);
+   expect(body.reply_to).toBe('artist@example.com');
+   expect(body.subject).not.toContain('—');
+   expect(body.text).not.toContain('—');
+   expect(body.text).toContain('Service: Two-track vocal mixing');
+   expect(body.text).toContain('Title: My song');
+   expect(body.text).toContain('Name: Artist');
+   expect(body.text).toContain('Email: artist@example.com');
+   expect(body.text).toContain('Files: https://drive.google.com/example');
+   expect(body.text).toContain('Direction: Use your judgment');
+   expect(body.text).toContain('https://thesuperhuman.us/owner/requests/request-123');
+ });
+ it('queues a sign-in invitation in addition to the owner notice when the private portal is enabled', async () => {
    const ctx = context();
    const waitUntil = vi.fn();
    ctx.locals.runtime.ctx = { waitUntil };
@@ -22,6 +41,12 @@ describe('intake endpoint',()=>{
    expect((await POST(ctx)).status).toBe(200);
    expect(deliverProjectInvitation).toHaveBeenCalledWith(ctx.locals.runtime.env.MUSIC_DB, 'request-123', ctx.locals.runtime.env);
    expect(waitUntil).toHaveBeenCalledTimes(1);
+ });
+ it('still returns success when the owner notice fails to send, since the request is already stored', async () => {
+   (fetch as any).mockImplementation(async (url: string) => url.includes('siteverify') ? { ok: true, json: async () => ({ success: true }) } : { ok: false, json: async () => ({}) });
+   const res = await POST(context());
+   expect(res.status).toBe(200);
+   expect(await res.json()).toEqual({ ok: true });
  });
  it('rejects cross-origin and oversized requests before external calls',async()=>{expect((await POST(context(base,'https://evil.example'))).status).toBe(403);expect((await POST(context({padding:'x'.repeat(33000)}))).status).toBe(413);expect(fetch).not.toHaveBeenCalled();});
  it('requires files and permission before sending',async()=>{expect((await POST(context({...base,fileLink:'',permission:false}))).status).toBe(400);expect(fetch).not.toHaveBeenCalled();});
@@ -42,7 +67,8 @@ describe('intake endpoint',()=>{
    expect(stored.has('rl:audio:0.0.0.0')).toBe(false);
    expect((await submit()).status).toBe(200);
    expect((await submit()).status).toBe(429);
-   expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(0);
+   // Exactly one submission succeeded, so exactly one owner notice went out.
+   expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(1);
  });
  it('bounds repeated failed captcha attempts before external verification', async () => {
    const ctx = context();
