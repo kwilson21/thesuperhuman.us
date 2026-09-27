@@ -7,12 +7,18 @@ import Hero from '~/components/Hero.astro';
 import Footer from '~/components/Footer.astro';
 import ContactForm from '~/components/ContactForm.astro';
 import WorkWithMe from '~/components/WorkWithMe.astro';
+import CodeField from '~/components/home/CodeField.astro';
+import SignalEdge from '~/components/home/SignalEdge.astro';
 import notebook from '~/assets/site/notebook-v1.webp';
 import tallyTransactions from '~/assets/projects/tally/transactions-demo-2026-09-26.webp';
 import kailleraLanding from '~/assets/projects/kaillera-next/landing-2026-09-26.webp';
 import { tallyStory } from '~/data/project-stories/tally';
+import { capacityCells, parseFigure } from '~/lib/home-motion';
 const essay = await getEntry('pages', 'ai-gives-you-speed');
 if (!essay) throw new Error('AI essay content missing');
+const before = parseFigure(lyftBonus.before);
+const after = parseFigure(lyftBonus.after);
+const cells = before && after ? capacityCells(before, after) : 0;
 const jsonLd = {
   '@context': 'https://schema.org', '@type': 'Person', name: 'Kazon Wilson',
   jobTitle: 'Software Engineer', url: 'https://thesuperhuman.us',
@@ -21,53 +27,79 @@ const jsonLd = {
 };
 ---
 <BaseLayout title="Kazon Wilson · Software, sound, and things worth exploring" description="Software engineer shaping ideas and building with AI. Discover my projects, engineering work, writing, and continuing practice in sound." jsonLd={jsonLd}>
+  {/* One page, four worlds, following the tagline: the studio (paper), the screen (software, dark),
+      a waveform back to paper (sound), then the notebook and the horizon (things worth exploring).
+      Motion is layered on by src/scripts/home-worlds.ts; every resting frame is complete without it. */}
   <div class="home-page">
     <Hero />
     <div class="site-shell">
-      <section class="hire-section" aria-labelledby="hire-title">
+      <section class="hire-section" aria-labelledby="hire-title" data-reveal>
         <div class="site-section-heading"><h2 id="hire-title">Work with me</h2></div>
         <WorkWithMe />
       </section>
-      <section class="site-section building-section" aria-labelledby="building-title">
-        <div class="site-section-heading"><h2 id="building-title">Currently building</h2><a class="heading-link site-link" href="/building">All projects <span aria-hidden="true">→</span></a></div>
-        {/* Motion preview (audit S5): each still below can take a poster-backed, muted, looped <video> on hover/focus once the owner supplies a clip; no motion is faked here. */}
-        <div class="project-grid">
-          <article class="project-card">
-            <div class="project-art">
-              <img src={tallyTransactions.src} width={tallyTransactions.width} height={tallyTransactions.height} alt="Tally’s Transactions screen on demo data, a CI capture from September 2026, with the demo data banner." loading="lazy" />
+    </div>
+
+    <div class="world-screen" data-scene="screen" data-start="1" data-end="0.55">
+      <div class="screen-light" aria-hidden="true"></div>
+      <div class="screen-code"><CodeField /></div>
+      <div class="site-shell">
+        <section class="building-section" aria-labelledby="building-title">
+          <div class="site-section-heading" data-reveal><h2 id="building-title">Currently building</h2><a class="heading-link site-link" href="/building">All projects <span aria-hidden="true">→</span></a></div>
+          {/* Motion preview (audit S5): each still below can take a poster-backed, muted, looped <video> on hover/focus once the owner supplies a clip; no motion is faked here. */}
+          <div class="project-grid">
+            <article class="project-card" data-reveal data-tilt>
+              <div class="project-art">
+                <img src={tallyTransactions.src} width={tallyTransactions.width} height={tallyTransactions.height} alt="Tally’s Transactions screen on demo data, a CI capture from September 2026, with the demo data banner." loading="lazy" />
+              </div>
+              <p class="page-kicker">In development · public demo</p>
+              <h3>Tally</h3>
+              <p>{tallyStory.subtitle}</p>
+              <a class="site-link project-link" href="/building/tally#tally-updates-title">Development journal <span aria-hidden="true">→</span><span class="sr-only">Tally</span></a>
+            </article>
+            <article class="project-card" data-reveal data-tilt>
+              <div class="project-art">
+                <img src={kailleraLanding.src} width={kailleraLanding.width} height={kailleraLanding.height} alt="Kaillera Next’s landing page, September 2026, with no open rooms." loading="lazy" />
+              </div>
+              <p class="page-kicker">In development · playable demo build</p>
+              <h3>Kaillera Next</h3>
+              <p>Super Smash Bros. 64 online with friends, in the browser.</p>
+              <a class="site-link project-link" href="/building/kaillera-next#kaillera-next-updates-title">Development journal <span aria-hidden="true">→</span><span class="sr-only">Kaillera Next</span></a>
+            </article>
+          </div>
+        </section>
+        <section class="site-section" aria-labelledby="work-title">
+          <div class="site-section-heading" data-reveal><h2 id="work-title">Work highlights</h2></div>
+          <div class="work-preview" data-reveal data-count={lyftBonus.after} data-count-from={lyftBonus.before}>
+            <p class="work-company">Lyft</p>
+            <div class="work-outcome">
+              <p class="work-figure">{lyftBonus.before} <span aria-hidden="true">→</span><span class="sr-only">to</span> <span class="count-slot"><span class="count-ghost" aria-hidden="true">{lyftBonus.after}</span><span class="count-live" aria-hidden="true" data-count-display>{lyftBonus.after}</span><span class="sr-only">{lyftBonus.after}</span></span> rows</p>
+              {cells > 1 && <div class="capacity" aria-hidden="true">
+                <span class="capacity-cells" data-count-cells style={`--cells:${cells}`}>{Array.from({ length: cells }, (_, index) => <i class="cell" style={`--i:${index}`}></i>)}</span>
+                <span class="capacity-key" style={`--cells:${cells}`}><i class="cell"></i><span>= {lyftBonus.before} rows</span></span>
+              </div>}
+              <p>More capacity. More independence for support.</p><p class="source-note">{lyftBonus.evidence}</p>
             </div>
-            <p class="page-kicker">In development · public demo</p>
-            <h3>Tally</h3>
-            <p>{tallyStory.subtitle}</p>
-            <a class="site-link project-link" href="/building/tally#tally-updates-title">Development journal <span aria-hidden="true">→</span><span class="sr-only">Tally</span></a>
-          </article>
-          <article class="project-card">
-            <div class="project-art">
-              <img src={kailleraLanding.src} width={kailleraLanding.width} height={kailleraLanding.height} alt="Kaillera Next’s landing page, September 2026, with no open rooms." loading="lazy" />
-            </div>
-            <p class="page-kicker">In development · playable demo build</p>
-            <h3>Kaillera Next</h3>
-            <p>Super Smash Bros. 64 online with friends, in the browser.</p>
-            <a class="site-link project-link" href="/building/kaillera-next#kaillera-next-updates-title">Development journal <span aria-hidden="true">→</span><span class="sr-only">Kaillera Next</span></a>
-          </article>
-        </div>
-      </section>
-      <section class="site-section" aria-labelledby="work-title">
-        <div class="site-section-heading"><h2 id="work-title">Work highlights</h2></div>
-        <div class="work-preview">
-          <p class="work-company">Lyft</p>
-          <div class="work-outcome"><p class="work-figure">{lyftBonus.before} <span aria-hidden="true">→</span><span class="sr-only">to</span> {lyftBonus.after} rows</p><p>More capacity. More independence for support.</p><p class="source-note">{lyftBonus.evidence}</p></div>
-          <a class="site-link" href="/work#lyft">Explore my work <span aria-hidden="true">→</span></a>
-        </div>
-      </section>
+            <a class="site-link" href="/work#lyft">Explore my work <span aria-hidden="true">→</span></a>
+          </div>
+        </section>
+      </div>
+      <SignalEdge />
+    </div>
+
+    <div class="site-shell">
       <section class="site-section" aria-labelledby="writing-title">
-        <div class="site-section-heading"><h2 id="writing-title">Writing</h2></div>
-        <article class="editorial-pair writing-preview">
-          <div class="editorial-art notebook-art"><img src={notebook.src} width={notebook.width} height={notebook.height} alt="" loading="lazy" /></div>
-          <div class="editorial-copy"><h3>{essay.data.title}</h3><a class="site-link" href="/writing/ai-gives-you-speed">Read the essay <span aria-hidden="true">→</span></a></div>
+        <div class="site-section-heading" data-reveal><h2 id="writing-title">Writing</h2></div>
+        <article class="editorial-pair writing-preview" data-reveal>
+          <div class="editorial-art notebook-art" data-scene="notebook" data-start="1" data-end="0"><img src={notebook.src} width={notebook.width} height={notebook.height} alt="" loading="lazy" /></div>
+          <div class="editorial-copy">
+            <h3>{essay.data.title}</h3>
+            <svg class="pen-stroke" viewBox="0 0 300 14" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M3 9 C 60 3, 110 12, 170 7 S 262 4, 297 8" /></svg>
+            <a class="site-link" href="/writing/ai-gives-you-speed">Read the essay <span aria-hidden="true">→</span></a>
+          </div>
         </article>
       </section>
-      <section id="contact" class="site-section contact-section" aria-labelledby="contact-title">
+      <section id="contact" class="site-section contact-section" aria-labelledby="contact-title" data-scene="horizon" data-start="1" data-end="0.3">
+        <div class="horizon" aria-hidden="true"><span class="horizon-sun"></span></div>
         <div class="contact-intro"><div><h2 id="contact-title">Have something in mind?<br />Let’s talk.</h2><p>Ideas, opportunities, or a conversation worth having.</p></div><a class="site-button" href="mailto:kazon.wilson@thesuperhuman.us">Email me</a></div>
         <details class="contact-disclosure"><summary>Send a message</summary><div class="contact-form-content"><ContactForm /></div></details>
       </section>
@@ -76,6 +108,7 @@ const jsonLd = {
   <Footer compact slot="footer" />
 </BaseLayout>
 <script>
+  import '~/scripts/home-worlds';
   const contact = document.getElementById('contact')!;
   const message = contact.querySelector<HTMLDetailsElement>('.contact-disclosure')!;
   function revealContact() {
@@ -91,38 +124,102 @@ const jsonLd = {
   });
 </script>
 <style>
-  .home-page { overflow: clip; }
+  /* Page colours captured before the screen world redefines the tokens for its own subtree. */
+  .home-page { overflow: clip; --page-paper: var(--paper); --screen: #14120f; --signal-height: clamp(88px, 11vw, 150px); }
   .hire-section { margin-top: .5rem; }
   .site-section-heading .heading-link { order: 1; margin-left: auto; font-size: .95rem; white-space: nowrap; }
+
+  /* The screen world: the site's tokens, inverted, so every shared style follows. The terracotta
+     is lifted to keep text contrast on the dark ground (7:1 for the kicker text). */
+  .world-screen {
+    --paper: var(--screen); --ink: #f2ede4; --muted: #b0a799; --rule: #3a342d; --accent: #e08a62; --well: #1d1b18;
+    --grow: var(--p, 1);
+    position: relative; margin-top: var(--site-section-space); padding-top: clamp(13rem, 36vh, 20rem);
+    /* The dark ends at the waveform's zero line: painting it down to the section's fractional
+       bottom edge leaves a grey hairline on high-density screens, even under the paper. */
+    background: linear-gradient(var(--paper), var(--paper)) top / 100% calc(100% - var(--signal-height) / 2 + 1px) no-repeat; color: var(--ink);
+    /* Arrives as a screen that widens to fill the window. Finished (full width) without script. */
+    clip-path: inset(0 calc((1 - var(--grow)) * 21%) 0 round calc((1 - var(--grow)) * 28px) calc((1 - var(--grow)) * 28px) 0 0);
+  }
+  .screen-light { position: absolute; inset: 0 0 auto; height: 70vh; background: radial-gradient(55% 60% at 50% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%); pointer-events: none; }
+  .screen-code { position: absolute; top: clamp(2rem, 6vh, 3.5rem); left: 58%; width: min(500px, 70vw); opacity: .7; transform: translate(-50%, calc((1 - var(--grow)) * 40px)); mask-image: linear-gradient(to bottom, #000 50%, transparent 92%); pointer-events: none; }
+
   /* Subgrid keeps each card's art, kicker, title, line and link on shared rows, so both cards
      line up whatever wraps (WorkWithMe.astro's doors use the same pattern). */
   .project-grid { display: grid; grid-template-columns: repeat(2, 1fr); column-gap: 2.5rem; }
   .project-card { display: grid; grid-template-rows: subgrid; grid-row: span 5; position: relative; }
-  .project-art { display: block; margin-bottom: 1.2rem; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; background: #f2f5f5; aspect-ratio: 3 / 2; }
+  /* Each project glows like a screen in the dark and leans toward a fine pointer. */
+  .project-art { display: block; margin-bottom: 1.2rem; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; background: var(--well); aspect-ratio: 3 / 2; box-shadow: 0 28px 70px -34px color-mix(in srgb, var(--accent) 45%, transparent), 0 14px 30px -18px #000c; transform: perspective(1100px) rotateX(calc(var(--rx, 0) * 3deg)) rotateY(calc(var(--ry, 0) * 4deg)); transition: transform 500ms cubic-bezier(.2, .7, .2, 1), box-shadow 500ms ease; }
+  .project-card:hover .project-art, .project-card:focus-within .project-art { box-shadow: 0 34px 90px -30px color-mix(in srgb, var(--accent) 65%, transparent), 0 18px 36px -18px #000e; }
   .project-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
   .project-card h3 { font-size: clamp(1.7rem, 2.6vw, 2.3rem); letter-spacing: -.035em; line-height: 1.1; margin: 0 0 .4rem; }
   .project-card p:not(.page-kicker) { font-size: 1.125rem; color: var(--muted); line-height: 1.45; margin: 0 0 1rem; }
   .project-link { justify-self: start; align-self: start; }
   /* The picture stays a plain image; this link (with the visible arrow) is the card's only tab stop. */
   .project-link::after { content: ''; position: absolute; inset: 0; }
+
   .work-preview { display: flex; align-items: center; gap: 2rem; }
-  .work-company { font-size: 3rem; letter-spacing: -.04em; margin: 0; padding-right: 2.5rem; border-right: 1px solid #d9d2c7; }
+  .work-company { font-size: 3rem; letter-spacing: -.04em; margin: 0; padding-right: 2.5rem; border-right: 1px solid var(--rule); }
   .work-outcome { flex: 1; }
   .work-outcome p { margin: 0; }
   .work-outcome .work-figure { font-size: clamp(1.5rem, 2.6vw, 2.2rem); letter-spacing: -.04em; line-height: 1.2; margin-bottom: .35rem; }
   .work-outcome .source-note { color: var(--muted); font-size: .85rem; margin-top: .4rem; }
+  /* The counting figure is drawn over a hidden copy of its final text, so nothing shifts. */
+  .count-slot { position: relative; display: inline-block; font-variant-numeric: tabular-nums; }
+  .count-ghost { visibility: hidden; }
+  .count-live { position: absolute; right: 0; top: 0; white-space: nowrap; }
+  /* One cell per 5,000 rows: the old capacity is one cell, the new one fills the row. */
+  .capacity { margin: .7rem 0 .9rem; }
+  .capacity-cells, .capacity-key { display: grid; grid-template-columns: repeat(var(--cells), minmax(0, 1fr)); gap: 3px; max-width: 26rem; }
+  .cell { display: block; height: 12px; border-radius: 2px; background: var(--accent); }
+  .capacity-cells .cell { opacity: clamp(.16, (var(--lit, 999) - var(--i)) * 10, 1); transition: opacity 180ms ease; }
+  .capacity-key { align-items: center; margin-top: .55rem; font-family: theme('fontFamily.mono'); font-size: .7rem; color: var(--muted); }
+  .capacity-key > span { grid-column: 2 / -1; padding-left: .3rem; white-space: nowrap; }
+
   .editorial-pair { display: grid; grid-template-columns: 1.4fr 1fr; gap: 3rem; align-items: center; }
-  .editorial-art { overflow: hidden; }
-  .editorial-art :global(img) { display: block; width: 100%; height: auto; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent); mask-composite: intersect; }
-  .editorial-copy h3 { font-size: clamp(2rem, 3.4vw, 2.9rem); line-height: 1.08; letter-spacing: -.04em; margin: 0 0 2rem; }
-  .contact-section { border-top: 1px solid var(--rule); padding-block: 3rem; scroll-margin-top: 2rem; }
+  .editorial-art :global(img) { display: block; width: 100%; height: auto; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent); mask-composite: intersect; transform: translateY(calc((.5 - var(--p, .5)) * 36px)); }
+  .editorial-copy h3 { font-size: clamp(2rem, 3.4vw, 2.9rem); line-height: 1.08; letter-spacing: -.04em; margin: 0; }
+  .pen-stroke { display: block; width: min(15rem, 80%); height: 14px; margin: .9rem 0 1.6rem; overflow: visible; }
+  /* No non-scaling-stroke here: with it, Chromium dashes in screen space and pathLength no longer lines up. */
+  .pen-stroke path { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; }
+
+  /* The horizon: the contact rule, with a sun that rises over it as the page ends. */
+  .contact-section { position: relative; border-top: 1px solid var(--rule); padding-block: 3rem; margin-top: calc(var(--site-section-space) + 4rem); scroll-margin-top: 2rem; }
+  .horizon { position: absolute; left: calc(var(--site-gutter) * -1); right: calc(var(--site-gutter) * -1); bottom: 100%; height: 150px; overflow: hidden; pointer-events: none; }
+  .horizon::before { content: ''; position: absolute; inset: 0; background: radial-gradient(36% 90% at 74% 100%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%); opacity: var(--p, 1); }
+  .horizon::after { content: ''; position: absolute; left: var(--site-gutter); right: var(--site-gutter); bottom: 0; height: 1px; background: linear-gradient(to right, transparent, var(--accent) 74%, transparent); opacity: calc(var(--p, 1) * .7); }
+  .horizon-sun { position: absolute; bottom: 0; left: 74%; width: 84px; height: 84px; margin-left: -42px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 72%, var(--paper)); box-shadow: 0 0 50px 14px color-mix(in srgb, var(--accent) 14%, transparent); transform: translateY(calc((1 - var(--p, 1)) * 100% + 30%)); }
+
   .contact-intro { display: flex; justify-content: space-between; gap: 2rem; align-items: center; }
   .contact-intro h2 { font-size: clamp(2rem, 3.5vw, 2.7rem); line-height: 1.07; letter-spacing: -.035em; margin: 0 0 .7rem; }
   .contact-intro p { font-size: 1.1rem; color: var(--muted); margin: 0; }
   .contact-disclosure { margin-top: 1.25rem; color: var(--muted); }
   .contact-disclosure summary { width: fit-content; cursor: pointer; font-size: .95rem; padding: .4rem 0; }
   .contact-form-content { padding-block: 2rem; color: var(--ink); }
+
+  /* Home's own reveals; the shared ones (fade up, heading rule drawing in) are in global.css. */
+  @media screen and (prefers-reduced-motion: no-preference) {
+    :global(.motion) .project-card[data-reveal]:nth-child(2) { transition-delay: 140ms; }
+    /* Work with me: the heading stays put and the three doors rise in turn. */
+    :global(.motion) .hire-section[data-reveal]:not(.is-in) { opacity: 1; transform: none; }
+    :global(.motion) .hire-section :global(.door) { transition: opacity 800ms cubic-bezier(.2, .7, .2, 1), transform 800ms cubic-bezier(.2, .7, .2, 1); }
+    :global(.motion) .hire-section:not(.is-in) :global(.door) { opacity: 0; transform: translateY(24px); }
+    :global(.motion) .hire-section :global(.door:nth-child(2)) { transition-delay: 120ms; }
+    :global(.motion) .hire-section :global(.door:nth-child(3)) { transition-delay: 240ms; }
+    /* Writing: the title is inked in from the left and the pen stroke follows. */
+    :global(.motion) .writing-preview h3 { transition: clip-path 1200ms cubic-bezier(.6, .1, .2, 1) 250ms; clip-path: inset(-10% 0 -20% 0); }
+    :global(.motion) .writing-preview:not(.is-in) h3 { clip-path: inset(-10% 100% -20% 0); }
+    :global(.motion) .writing-preview .pen-stroke path { stroke-dasharray: 1; stroke-dashoffset: 0; transition: stroke-dashoffset 900ms ease-in-out 1200ms; }
+    :global(.motion) .writing-preview:not(.is-in) .pen-stroke path { stroke-dashoffset: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .project-art, .editorial-art :global(img) { transform: none; transition: none; }
+  }
+  @media print { .world-screen { clip-path: none; } }
+
   @media (max-width: 800px) {
+    .world-screen { padding-top: 12.5rem; --grow: clamp(0, var(--p, 1) * 1.5, 1); clip-path: inset(0 calc((1 - var(--grow)) * 7%) 0 round calc((1 - var(--grow)) * 22px) calc((1 - var(--grow)) * 22px) 0 0); }
+    .screen-code { top: 1.75rem; left: 50%; width: 86vw; }
     .project-grid { grid-template-columns: 1fr; row-gap: 2.25rem; }
     .project-card { display: block; }
     .site-section-heading { gap: 1rem; }
@@ -133,10 +230,13 @@ const jsonLd = {
     .work-outcome .work-figure { font-size: clamp(1.65rem, 6vw, 2.1rem); }
     .editorial-pair { grid-template-columns: 1fr; gap: .75rem; }
     .writing-preview .editorial-copy { order: -1; }
-    .editorial-copy h3 { font-size: clamp(2rem, 7.4vw, 2.6rem); margin-bottom: 1.2rem; }
+    .editorial-copy h3 { font-size: clamp(2rem, 7.4vw, 2.6rem); }
+    .pen-stroke { margin: .7rem 0 1.2rem; }
     .notebook-art { margin-inline: -1.5rem; }
     .contact-intro { align-items: flex-start; flex-direction: column; gap: 1.2rem; }
-    .contact-section { padding-block: 2rem; }
+    .contact-section { padding-block: 2rem; margin-top: calc(var(--site-section-space) + 3rem); }
+    .horizon { height: 110px; }
+    .horizon-sun { width: 60px; height: 60px; margin-left: -30px; left: 76%; }
   }
   @media (max-width: 420px) {
     .site-section-heading .heading-link { display: none; }

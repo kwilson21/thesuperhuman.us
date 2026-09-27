@@ -1,0 +1,43 @@
+---
+// Rows of syntax-coloured bars, in the style of the code on the studio monitor, so
+// scrolling into the dark screen feels like arriving inside that monitor. Decorative:
+// it spells nothing, and home-worlds.ts only types the rows in once it comes into view.
+import { codeRows } from '~/lib/home-motion';
+
+const rows = codeRows(11);
+const pitch = 22;
+const unit = 7;
+const width = 560;
+---
+<svg class="code-field" viewBox={`0 0 ${width} ${rows.length * pitch + 12}`} aria-hidden="true" focusable="false" data-reveal>
+  {rows.map((row, index) => {
+    let x = 40 + row.indent * 22;
+    return (
+      <g class="code-row" style={`--i:${index}`}>
+        <text class="code-gutter" x="18" y={index * pitch + 16}>{index + 1}</text>
+        {row.segments.map(segment => {
+          const bar = <rect class={`tone-${segment.tone}`} x={x} y={index * pitch + 9.5} width={segment.width * unit} height="6" rx="3" />;
+          x += segment.width * unit + 8;
+          return bar;
+        })}
+      </g>
+    );
+  })}
+  <rect class="code-caret" x="40" y={(rows.length - 1) * pitch + 7} width="2" height="11" />
+</svg>
+<style>
+  .code-field { display: block; width: 100%; height: auto; overflow: visible; }
+  .code-gutter { font-family: theme('fontFamily.mono'); font-size: 10px; fill: #5a534a; text-anchor: end; }
+  .tone-0 { fill: #6f8fb5; }
+  .tone-1 { fill: #d17f59; }
+  .tone-2 { fill: #8fa66b; }
+  .tone-3 { fill: #c9a95a; }
+  .tone-4 { fill: #5c564e; }
+  .code-caret { fill: #e8e1d5; opacity: 0; }
+  @media screen and (prefers-reduced-motion: no-preference) {
+    :global(.motion) .code-field:not(.is-in) .code-row rect { transform: scaleX(0); }
+    :global(.motion) .code-field .code-row rect { transform-box: fill-box; transform-origin: left; transition: transform 380ms steps(6, end); transition-delay: calc(var(--i) * 90ms + 150ms); }
+    :global(.motion) .code-field.is-in .code-caret { animation: code-caret 1.4s steps(1, end) calc(11 * 90ms + 400ms) forwards; }
+  }
+  @keyframes code-caret { 0%, 50% { opacity: 1; } 25%, 75%, 100% { opacity: 0; } }
+</style>

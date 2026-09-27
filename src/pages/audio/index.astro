@@ -48,7 +48,7 @@ const jsonLd = {
     <section class="audio-section" aria-labelledby="listen-title">
       <div class="site-section-heading"><h2 id="listen-title">Listen</h2></div>
       {release && recording && example ? (
-        <div class="audio-listen">
+        <div class="audio-listen" data-reveal>
           <a class="listen-release" href={mainSitePath(host, `/music/${release.slug}`)}>
             <img src={release.artwork} alt={`${release.displayTitle ?? release.title} cover artwork`} width="1254" height="1254" />
             <p class="listen-kicker">Released</p>
@@ -66,9 +66,9 @@ const jsonLd = {
     </section>
     <section class="audio-section" aria-labelledby="audio-services-title">
       <div class="site-section-heading"><h2 id="audio-services-title">What I work on</h2><a class="site-link" href={audioHref('/services')}>Prices and scope <span aria-hidden="true">→</span></a></div>
-      <div class="audio-services">{groups.map(({service}) => <article><ServiceIcon service={service} /><div><h3>{audioServices[service].label}</h3><p>{audioServices[service].description}</p></div></article>)}</div>
+      <div class="audio-services" data-reveal>{groups.map(({service}) => <article><ServiceIcon service={service} /><div><h3>{audioServices[service].label}</h3><p>{audioServices[service].description}</p></div></article>)}</div>
     </section>
-    <section id="book" class="audio-section audio-start" aria-labelledby="audio-start-title">
+    <section id="book" class="audio-section audio-start" aria-labelledby="audio-start-title" data-reveal>
       <h2 id="audio-start-title">Start</h2>
       <p>Share your song, and I’ll review it before you book.</p>
       <a class="site-button" href={audioHref('/start')}>Start your song</a>
@@ -78,14 +78,17 @@ const jsonLd = {
   <script>
     import '~/scripts/audio-player-coordinator';
     import { setupComparisonPlayers } from '~/scripts/comparison-player';
+    import { runMotion } from '~/scripts/scroll-scenes';
     setupComparisonPlayers();
+    // The headphones give off a few rings on arrival and the sections rise in; nothing plays sound.
+    runMotion();
   </script>
 
   <AudioFooter slot="footer" />
 </BaseLayout>
 
 <style>
-  .audio-page :global(.audio-art) { mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent); mask-composite: intersect; }
+  .audio-page :global(.audio-art), .audio-page :global(.audio-scene .chapter-life) { mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent); mask-composite: intersect; }
   .audio-section { border-top: 1px solid var(--rule); padding-block: 2.5rem; scroll-margin-top: 2rem; }
   .audio-section h2 { font-size: clamp(2rem, 3.5vw, 2.75rem); line-height: 1.15; }
   .audio-listen { display: grid; grid-template-columns: .85fr 1.15fr; gap: 3rem; align-items: start; margin-top: 1.5rem; }
