@@ -5,14 +5,14 @@ import { getCollection } from 'astro:content';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import AudioHero from '~/components/audio/AudioHero.astro';
 import MusicNav from '~/components/audio/MusicNav.astro';
-import ServiceSection from '~/components/audio/ServiceSection.astro';
-import BookingForm from '~/components/audio/BookingForm.astro';
+import ComparisonPlayer from '~/components/audio/ComparisonPlayer.astro';
+import PersonalNameText from '~/components/PersonalNameText.astro';
 import AudioFooter from '~/components/audio/AudioFooter.astro';
-import notebook from '~/assets/site/notebook-v1.webp';
 import ServiceIcon from '~/components/audio/ServiceIcon.astro';
 import { audioServices } from '~/data/audio';
-import { mainSitePath, audioPath } from '~/lib/host-routing';
+import { audioPath, mainSitePath } from '~/lib/host-routing';
 import { groupTracksByService, type AudioTrack } from '~/lib/audio-tracks';
+import { loadMusicCatalog } from '~/lib/music-content';
 
 const entries = await getCollection('audio-tracks');
 const tracks: AudioTrack[] = entries.map((e) => ({
@@ -21,7 +21,12 @@ const tracks: AudioTrack[] = entries.map((e) => ({
 }));
 const groups = groupTracksByService(tracks);
 const host = Astro.request.headers.get('host') ?? Astro.url.host;
-const mainHref = (path: string) => mainSitePath(host, path);
+const audioHref = (path: string) => audioPath(host, path);
+
+const catalog = await loadMusicCatalog();
+const example = catalog.examples.find(example => example.service === 'mastering');
+const recording = example && catalog.recordings.find(track => track.id === example.recordingId);
+const release = recording && catalog.releases.find(release => release.tracks.includes(recording.id));
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -40,50 +45,66 @@ const jsonLd = {
   <div class="site-shell primary-page audio-page">
     <MusicNav />
     <AudioHero />
-    <section class="audio-section"><div class="site-section-heading"><h2>Music and recordings</h2></div><div class="site-links"><a class="site-link" href={audioPath(host, "/releases")}>Listen to my releases</a><a class="site-link" href={audioPath(host, "/portfolio")}>Hear my engineering work</a></div></section>
-    {tracks.length > 0 && <section class="audio-section" aria-labelledby="selected-audio-title"><div class="site-section-heading"><h2 id="selected-audio-title">Selected audio</h2></div>{groups.filter(group => group.tracks.length > 0).map(group => <ServiceSection service={group.service} tracks={group.tracks} />)}</section>}
+    <section class="audio-section" aria-labelledby="listen-title">
+      <div class="site-section-heading"><h2 id="listen-title">Listen</h2></div>
+      {release && recording && example ? (
+        <div class="audio-listen">
+          <a class="listen-release" href={mainSitePath(host, `/music/${release.slug}`)}>
+            <img src={release.artwork} alt={`${release.displayTitle ?? release.title} cover artwork`} width="1254" height="1254" />
+            <p class="listen-kicker">Released</p>
+            <h3>{release.displayTitle ?? release.title}</h3>
+            <span class="site-link">Hear the song <span aria-hidden="true">→</span></span>
+          </a>
+          <div class="listen-example">
+            <p class="listen-kicker">Engineering example</p>
+            <ComparisonPlayer example={example} recording={recording} />
+            <details class="listen-credits"><summary>Credits</summary><p>This comparison demonstrates mastering.</p>{recording.credits.map(credit => <p>{credit.role}: <PersonalNameText text={credit.name} />.</p>)}</details>
+          </div>
+        </div>
+      ) : <p class="listen-empty">New audio work is on its way.</p>}
+      <a class="listen-more site-link" href={audioHref('/portfolio')}>Portfolio <span aria-hidden="true">→</span></a>
+    </section>
     <section class="audio-section" aria-labelledby="audio-services-title">
-      <div class="site-section-heading"><h2 id="audio-services-title">What I work on</h2><a class="site-link" href={audioPath(host, '/services')}>See audio services <span aria-hidden="true">→</span></a></div>
+      <div class="site-section-heading"><h2 id="audio-services-title">What I work on</h2><a class="site-link" href={audioHref('/services')}>Prices and scope <span aria-hidden="true">→</span></a></div>
       <div class="audio-services">{groups.map(({service}) => <article><ServiceIcon service={service} /><div><h3>{audioServices[service].label}</h3><p>{audioServices[service].description}</p></div></article>)}</div>
     </section>
-    <section class="audio-section audio-working" aria-labelledby="audio-working-title">
-      <div><h2 id="audio-working-title">Working together</h2><p>Projects are scoped individually, with written communication and clear deliverables.</p><a class="audio-detail-link" href={audioPath(host, '/about')}>Approach and project details</a></div>
-      <img class="audio-art" src={notebook.src} alt="" width={notebook.width} height={notebook.height} loading="lazy" />
+    <section id="book" class="audio-section audio-start" aria-labelledby="audio-start-title">
+      <h2 id="audio-start-title">Start</h2>
+      <p>Share your song, and I’ll review it before you book.</p>
+      <a class="site-button" href={audioHref('/start')}>Start your song</a>
     </section>
-    <details id="book" class="audio-booking context-disclosure"><summary>Discuss an audio project <span aria-hidden="true">+</span></summary><div class="audio-booking-content"><h2>Tell me about the project.</h2><p>Share the scope, timing, and how you’d like to send your files.</p><BookingForm /></div></details>
-    <section class="audio-section audio-beyond"><h2>Beyond audio</h2><p>Software, writing, and the other things I’m exploring.</p><div class="site-links"><a class="site-link" href={mainHref('/work')}>Explore my work <span aria-hidden="true">→</span></a><a class="site-link" href={mainHref('/about')}>More about me <span aria-hidden="true">→</span></a></div></section>
   </div>
 
   <script>
     import '~/scripts/audio-player-coordinator';
+    import { setupComparisonPlayers } from '~/scripts/comparison-player';
+    setupComparisonPlayers();
   </script>
 
   <AudioFooter slot="footer" />
 </BaseLayout>
 
-<script>
-  const booking = document.getElementById('book') as HTMLDetailsElement;
-  function revealBooking() { if (location.hash === '#book') { booking.open = true; booking.scrollIntoView(); } }
-  revealBooking();
-  window.addEventListener('hashchange', revealBooking);
-  document.querySelectorAll('a[href="#book"]').forEach(link => link.addEventListener('click', () => { booking.open = true; }));
-</script>
 <style>
   .audio-page :global(.audio-art) { mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent); mask-composite: intersect; }
-  .audio-section { border-top: 1px solid var(--rule); padding-block: 2.5rem; }
+  .audio-section { border-top: 1px solid var(--rule); padding-block: 2.5rem; scroll-margin-top: 2rem; }
   .audio-section h2 { font-size: clamp(2rem, 3.5vw, 2.75rem); line-height: 1.15; }
+  .audio-listen { display: grid; grid-template-columns: .85fr 1.15fr; gap: 3rem; align-items: start; margin-top: 1.5rem; }
+  .listen-kicker { font: 600 .75rem/1.4 Inter, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 0 0 .5rem; }
+  .listen-release { display: block; border: 0; }
+  .listen-release img { width: 100%; height: auto; display: block; box-shadow: 0 7px 15px #38261520; margin-bottom: 1rem; }
+  .listen-release h3 { font-size: 1.75rem; line-height: 1.15; margin-bottom: .5rem; }
+  .listen-credits { font-size: .85rem; color: var(--muted); text-align: right; margin-top: .75rem; }
+  .listen-credits p { text-align: left; padding: .5rem 0; }
+  .listen-credits summary { cursor: pointer; }
+  .listen-empty { color: var(--muted); font-size: 1.2rem; padding-block: 1rem; }
+  .listen-more { display: block; width: fit-content; margin-top: 2rem; }
   .audio-services { display: grid; grid-template-columns: 1fr 1fr; column-gap: 4rem; }
   .audio-services article { display: flex; align-items: start; gap: 1.5rem; padding-block: 2rem; }
   .audio-services article:nth-child(n+3) { border-top: 1px solid var(--rule); }
   .audio-services :global(svg) { flex-shrink: 0; }
   .audio-services h3 { font-size: 2rem; line-height: 1.2; }
-  .audio-services p, .audio-working p, .audio-beyond p { color: var(--muted); font-size: 1.2rem; line-height: 1.6; margin-top: .75rem; max-width: 35ch; }
-  .audio-working { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center; }
-  .audio-working img { display: block; width: 100%; height: auto; mix-blend-mode: multiply; }
-  .audio-detail-link { display: block; width: fit-content; font-size: .9rem; margin-top: 1rem; }
-  .audio-booking { border-top: 1px solid var(--rule); padding-top: 1.25rem; margin-bottom: 2rem; scroll-margin-top: 2rem; }
-  .audio-booking-content { margin-top: 2rem; max-width: 48rem; }
-  .audio-booking-content h2 { font-size: 2rem; }.audio-booking-content > p { margin-block: .5rem 2rem; color: var(--muted); }
-  .audio-beyond .site-links { margin-top: 1.5rem; }
-  @media(max-width: 650px) { .audio-services, .audio-working { grid-template-columns: 1fr; gap: 1rem; }.audio-services article + article { border-top: 1px solid var(--rule); }.audio-services article { gap: 1rem; }.audio-services h3 { font-size: 1.75rem; } }
+  .audio-services p, .audio-start p { color: var(--muted); font-size: 1.2rem; line-height: 1.6; margin-top: .75rem; max-width: 35ch; }
+  .audio-start .site-button { margin-top: 1.5rem; }
+  @media(max-width: 650px) { .audio-services { grid-template-columns: 1fr; gap: 1rem; }.audio-services article + article { border-top: 1px solid var(--rule); }.audio-services article { gap: 1rem; }.audio-services h3 { font-size: 1.75rem; }.audio-listen { grid-template-columns: 1fr; gap: 1.5rem; } }
+  @media(max-width: 400px) { .site-section-heading { flex-wrap: wrap; row-gap: .5rem; } }
 </style>

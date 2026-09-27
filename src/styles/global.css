@@ -113,23 +113,6 @@
     line-height: 1.5;
   }
 
-  .btn-primary {
-    display: inline-block;
-    background: var(--ink);
-    color: var(--paper);
-    font-family: theme('fontFamily.sans');
-    font-size: 13px;
-    font-weight: 500;
-    padding: 11px 22px;
-    border-radius: 5px;
-    border-bottom: none;
-  }
-
-  .btn-primary:hover {
-    background: var(--accent);
-    color: var(--paper);
-  }
-
   .skip-link {
     position: absolute;
     left: -9999px;
@@ -143,18 +126,6 @@
   .skip-link:focus {
     left: 16px;
     top: 16px;
-  }
-
-  /* Drop cap for the first paragraph of /about */
-  .prose-about > p:first-of-type::first-letter {
-    float: left;
-    font-family: theme('fontFamily.serif');
-    font-size: 4.5rem;
-    line-height: 0.85;
-    font-weight: 400;
-    padding-right: 0.5rem;
-    padding-top: 0.4rem;
-    color: var(--ink);
   }
 }
 

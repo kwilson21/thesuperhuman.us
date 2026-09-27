@@ -1,5 +1,4 @@
 // Curated from the owner's career account. Update professional facts here.
-export const workFocus = 'I want to own the system behind a feature, including how it’s built and the infrastructure it needs.';
 export const workingPreference = 'I work independently, through contracts and projects, and I’m selective about full-time roles.';
 export const workingPreferenceDetail = 'I work independently, through contracts and projects. I’ll consider full-time roles where I’d own a system end to end, work fully remotely, and build with AI as a normal part of the job. If that isn’t your role, a contract is probably the better fit, and I’m glad to talk about that too.';
 export const lyftBonus = { before: '5,000', after: '100,000+', evidence: 'Owner-reported batch capacity' };

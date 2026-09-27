@@ -135,7 +135,9 @@ implementation proposal as accepted before these findings inform the choice.
 
 Approved Work heading: “Software engineer. Building with AI.” The introduction
 expresses exploration, iteration, and engineering judgment. Home introduces a
-software engineer exploring ideas and building with AI. Work and About share the
+software engineer shaping ideas and building with AI (updated 2026-09-26 to
+remove a repeated “exploring” shared with the hero tagline; wording is the
+owner's to confirm). Work and About share the
 current opportunity statement from `src/data/profile.ts`. Historical job titles,
 dates, and outcomes remain accurate. No AI/ML specialization, new credential,
 product launch, or open-source contribution is implied.

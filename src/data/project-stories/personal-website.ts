@@ -112,7 +112,7 @@ export const websiteMilestones: Milestone[] = [
     artifacts: [artifact(oldNewsMerchConcepts, 'Old News · Merchandise concepts', 'A reviewed concept sheet shown as a direction for interest, not as a storefront.', 'Reviewed concept artwork')],
   },
   {
-    id: 'website-start-with-the-reader', day: '2026-09-09',
+    id: 'website-start-with-the-reader', day: '2026-09-09', placement: 'story',
     title: 'Start with the person visiting.', status: 'The brief',
     summary: 'I wanted visitors to understand who I am, what I do and what I am building, with visuals that make complex work easier to grasp.',
     detailLabel: 'What I wanted visitors to leave with',
@@ -120,7 +120,7 @@ export const websiteMilestones: Milestone[] = [
     artifacts: [artifact(readerPaths, 'Give each question a place to go', 'A map of the intended reader paths. The short services pages support direct conversations.', 'Content map')],
   },
   {
-    id: 'website-four-directions', day: '2026-09-09',
+    id: 'website-four-directions', day: '2026-09-09', placement: 'story',
     title: 'Four ways the same palette could feel.', status: 'Alternatives',
     summary: 'I wanted a peaceful introduction that invites curiosity. Keeping the existing palette let us explore how composition could express that feeling.',
     artifacts: [
@@ -131,13 +131,13 @@ export const websiteMilestones: Milestone[] = [
     ],
   },
   {
-    id: 'website-keep-the-feeling', day: '2026-09-09',
+    id: 'website-keep-the-feeling', day: '2026-09-09', placement: 'story',
     title: 'A studio for Home. A path for About.', status: 'Selected direction',
     summary: 'Home needed to introduce my interests at a glance. About could take a slower path through the experiences that connect them.',
     artifacts: [artifact(home, 'Home · Selected refinement', 'The quiet studio leads into current projects, professional work and writing.'), artifact(about, 'About · Selected adaptation', 'Audio, software and play follow a path, with room for what comes next.')],
   },
   {
-    id: 'website-mobile-continuity', day: '2026-09-09',
+    id: 'website-mobile-continuity', day: '2026-09-09', placement: 'story',
     title: 'Mobile needed the same sense of flow.', status: 'Revision',
     summary: 'I wanted mobile to feel as smooth as desktop. The revision replaced disjointed image blocks with a continuous paper surface.',
     visualProof: {
@@ -147,25 +147,25 @@ export const websiteMilestones: Milestone[] = [
     },
   },
   {
-    id: 'website-page-responsibilities', day: '2026-09-09',
+    id: 'website-page-responsibilities', day: '2026-09-09', placement: 'story',
     title: 'Give each destination something to do.', status: 'Page studies',
     summary: 'Each destination needed a clear purpose: assess my experience in Work, explore projects in Building, and follow ideas in Writing.',
     artifacts: [artifact(work, 'Work · Initial study', 'Professional evidence and career history. The backend/data headline was later changed as my current direction became clearer.'), artifact(building, 'Building · Selected study', 'Projects lead into their own demonstrations and development histories.'), artifact(writing, 'Writing · Selected study', 'One existing essay gets room to breathe. There is no need to invent a library of posts.')],
   },
   {
-    id: 'website-show-the-point', day: '2026-09-09',
+    id: 'website-show-the-point', day: '2026-09-09', placement: 'story',
     title: 'Share the structure, customize the explanation.', status: 'Project details',
     summary: 'I wanted project pages to be consistent to navigate, with explanations shaped around each idea: a lesson for Daily, a return-to-work sequence for Threadline.',
     artifacts: [artifact(daily, 'Daily · Selected study', 'The composition uses a lesson preview. Implementation uses the actual lesson screenshot, not this generated reinterpretation.'), artifact(threadline, 'Threadline · Selected second study', 'The second version was preferred. Its return-to-work sequence is illustrative; the journal preserves the reviewed inspect-before-sending example.')],
   },
   {
-    id: 'website-remove-repetition', day: '2026-09-09',
+    id: 'website-remove-repetition', day: '2026-09-09', placement: 'story',
     title: 'Let the diagram carry the explanation.', status: 'Work story revision',
     summary: 'The diagram already explained the contribution. Removing the repeated text let readers see the change and its outcome without reading the same point twice.',
     artifacts: [artifact(lyft1, 'Lyft v1 · Repeated explanation', 'The What I changed section repeated information already visible above.'), artifact(lyft2, 'Lyft v2 · Selected', 'The before/after and capacity comparison remain; additional source context can be opened when needed.')],
   },
   {
-    id: 'website-audio-restraint', day: '2026-09-10',
+    id: 'website-audio-restraint', day: '2026-09-10', placement: 'story',
     title: 'Keep the character. Remove the strange equipment.', status: 'Audio revisions',
     summary: 'I wanted the audio page to feel inviting and credible. Keeping the headphones and using simple service icons preserved its character without distracting, implausible equipment.',
     detailLabel: 'A quality standard for future images',
@@ -173,7 +173,7 @@ export const websiteMilestones: Milestone[] = [
     artifacts: [artifact(audio1, 'Audio v1 · Rejected equipment treatment', 'The interface, knobs and extra equipment distracted from the page. Shown as the rejected study, not a reference for real equipment.'), artifact(audio2, 'Audio v2 · Simpler scene', 'Headphones and a notebook remain; the service imagery is removed.'), artifact(audio3, 'Audio v3 · Selected icons', 'Small line icons distinguish the services without inventing more equipment.')],
   },
   {
-    id: 'website-current-direction', day: '2026-09-10',
+    id: 'website-current-direction', day: '2026-09-10', placement: 'story',
     title: 'Make the words fit the work I want to do.', status: 'Positioning',
     summary: 'I wanted the site to reflect the work I enjoy now: shaping and building useful software with AI. My production engineering history provides evidence of what I bring to that work.',
     detailLabel: 'What clarified in the conversation',
@@ -181,13 +181,13 @@ export const websiteMilestones: Milestone[] = [
     artifacts: [artifact(work, 'Earlier positioning', 'The initial Work study led with backend and data engineering.'), artifact(currentWork, 'The current direction', 'The introduction now leads with building with AI. Work retains the career evidence.', 'Local implementation capture')],
   },
   {
-    id: 'website-general-resume', day: '2026-09-10',
+    id: 'website-general-resume', day: '2026-09-10', placement: 'story',
     title: 'One resume, an easier next step.', status: 'Contact and resume',
     summary: 'One general resume gives people a clear professional profile and an easier next step, whether that leads to a contract, a project or a well-matched full-time role.',
     artifacts: [artifact(resume1, 'Resume v1 · Earlier choice', 'The first study offered general and DoD-focused variants. This is a historical design, not the current form.'), artifact(resume2, 'Resume v2 · Selected', 'A single request form. The lower part of the sheet explores submission and error states.')],
   },
   {
-    id: 'website-make-change-repeatable', day: '2026-09-10',
+    id: 'website-make-change-repeatable', day: '2026-09-10', placement: 'story',
     title: 'Make the next conversation easier.', status: 'Pre-launch review',
     summary: 'After an in-person conversation, I wanted a short page someone could read or share immediately. Separate software and audio overviews help them understand how we might work together.',
     detailLabel: 'How the short pages fit',

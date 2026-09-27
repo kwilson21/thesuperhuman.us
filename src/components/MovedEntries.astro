@@ -1,0 +1,16 @@
+---
+// A small anchor per entry that no longer shows inline in a bounded reading view (Personal
+// Website's Latest work). A browser lands on it natively at its old fragment ID, without
+// JavaScript, and it links onward to where the entry actually lives now. Hidden entirely (not
+// merely visually) until it is the URL's target, so nothing here is tabbable or announced on an
+// ordinary visit. Rendered inside ProjectUpdates' [data-update-content] and its curated-only
+// fallback template, so a live withdrawal or correction replaces this list along with the rest.
+interface MovedEntry { id: string; title: string; destination: 'story' | 'archive'; }
+interface Props { entries: MovedEntry[]; projectId: string; }
+const { entries, projectId } = Astro.props;
+---
+{entries.length > 0 && <div class="moved-entries">{entries.map(entry => (
+  <a id={entry.id} class="moved-entry" href={`/building/${projectId}/${entry.destination}#${entry.id}`}>
+    This entry (“{entry.title}”) now lives in the {entry.destination === 'story' ? 'project story' : 'archive'}. <span class="moved-entry-cta">Continue reading <span aria-hidden="true">→</span></span>
+  </a>
+))}</div>}

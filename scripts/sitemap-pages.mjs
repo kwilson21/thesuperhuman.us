@@ -19,7 +19,8 @@ export function publicReleasePages(releasesDirectory, site) {
 
 export function shouldIncludeSitemapPage(page) {
   const pathname = new URL(page).pathname.replace(/\/$/, '') || '/';
-  if (pathname === '/services.html') return false;
+  // Redirect-only pages: services.html.astro and audio/about.astro answer with a 301, never 200.
+  if (pathname === '/services.html' || pathname === '/audio/about') return false;
   return !pathname.startsWith('/api/')
     && pathname !== '/owner'
     && !pathname.startsWith('/owner/')

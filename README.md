@@ -154,13 +154,13 @@ npm run audio:upload path/to/track.mp3
 
 ### Audio tracks content collection
 
-Track metadata lives in `src/content/audio-tracks/` as one YAML file per track. The schema is defined in `src/content/config.ts`. Add a YAML file, upload the corresponding MP3 to R2 via the upload script, and the track appears on the audio site automatically.
+Track metadata lives in `src/content/audio-tracks/` as one YAML file per track. The schema is defined in `src/content/config.ts`. Add a YAML file and upload the corresponding MP3 to R2 via the upload script, and the file is servable at `/audio/file/<slug>`. No page currently renders these tracks; a future page can group them by `groupTracksByService` from `src/lib/audio-tracks.ts`.
 
-Notes are optional. The Selected audio section appears only when recordings exist; the page does not render empty players. Native audio controls and explicit user-initiated playback remain the baseline.
+Notes are optional. Native audio controls and explicit user-initiated playback remain the baseline.
 
-### Audio booking inquiries
+### Audio intake
 
-Booking inquiries POST to `/api/audio-inquiry`. The endpoint uses the same Turnstile verification, KV rate limiting, and Resend delivery as the software-site contact form. Rate-limit keys use the `rl:audio:` KV prefix (vs. `rl:` for the software form) so the two forms track separate windows per IP.
+Song requests start at `/audio/start`, a three-step form that POSTs to `/api/audio-intake`. A successful submission stores the request in `MUSIC_DB` and immediately emails the operator (`CONTACT_TO_EMAIL`) the service, working title, client name and email, file link, direction choices and notes, and a link to the request in the owner dashboard (`/owner/requests/<id>`), reply-to the client. This owner notice sends regardless of `AUDIO_CLIENT_PORTAL_ENABLED`. When that flag is `true`, the client also receives a private studio sign-in invitation. Both use the same Turnstile verification, KV rate limiting, and Resend delivery as the software-site contact form; rate-limit keys use the `rl:audio:` KV prefix (vs. `rl:` for the software form) so the two track separate windows per IP.
 
 ### Operator prerequisites before serving audio.thesuperhuman.us traffic
 
@@ -182,7 +182,7 @@ Editing `scripts/og.html` updates the layout and copy. The card reuses the revie
 
 ## General contact
 
-The local redesign keeps general contact at `/#contact`: required name, email and message (nonempty after trimming, at most 4000 characters), with optional company. `/api/contact` uses this same schema and preserves origin checks, Turnstile, rate limiting and Resend delivery. Project type, timeline and budget are no longer part of the general form. The structured Audio inquiry remains separate.
+The local redesign keeps general contact at `/#contact`: required name, email and message (nonempty after trimming, at most 4000 characters), with optional company. `/api/contact` uses this same schema and preserves origin checks, Turnstile, rate limiting and Resend delivery. Project type, timeline and budget are no longer part of the general form. The three-step audio intake at `/audio/start` remains a separate flow.
 
 The three forms share pending, error, focus and receipt behavior in `src/scripts/form-submission.ts`. Without JavaScript or a configured public Turnstile key, submit remains disabled and a direct email alternative stays available. Resume receipt still means a request awaits approval, not that a PDF was sent.
 

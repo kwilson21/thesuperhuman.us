@@ -9,18 +9,28 @@ interface Props {
   status: string;
   journalHref: string;
   ogImage?: string;
+  /** Overrides the browser tab title (and og:title) only; the visible <h1> always uses `title`.
+   * Falls back to "`${title} · Project journal · Kazon Wilson`" when omitted. Lets a project's
+   * separate routes (for example a story or archive view) carry their own tab title. */
+  pageTitle?: string;
+  /** When set, the title segment of the breadcrumb links here instead of being plain text. Used
+   * by a project's subpages (for example a story or archive view) to link back to its main page;
+   * omitted on that main page itself, where the segment names the current page. */
+  crumbHref?: string;
 }
-const { title, subtitle, description, status, journalHref, ogImage } = Astro.props;
+const { title, subtitle, description, status, journalHref, ogImage, pageTitle, crumbHref } = Astro.props;
+// A same-page jump gets a down arrow; a link to another page gets a forward arrow.
+const journalArrow = journalHref.startsWith('#') ? '↓' : '→';
 ---
-<BaseLayout title={`${title} · Project journal · Kazon Wilson`} description={description} ogImage={ogImage}>
+<BaseLayout title={pageTitle ?? `${title} · Project journal · Kazon Wilson`} description={description} ogImage={ogImage}>
   <div class="site-shell project-shell">
     <header class="project-intro">
-      <p class="page-kicker"><a href="/building">Building</a> / {title}</p>
+      <p class="page-kicker"><a href="/building">Building</a> / {crumbHref ? <a href={crumbHref}>{title}</a> : title}</p>
       <h1 class="page-title">{title}</h1>
       <p class="project-subtitle">{subtitle}</p>
       <p class="project-description">{description}</p>
-      <p class="project-status">{status}</p>
-      <a class="site-link" href={journalHref}>Development journal <span aria-hidden="true">↓</span></a>
+      <p class="project-status" data-testid="journal-current-state">{status}</p>
+      <a class="site-link" href={journalHref}>Development journal <span aria-hidden="true">{journalArrow}</span></a>
     </header>
     <slot />
     <nav class="project-close" aria-label="Continue exploring">

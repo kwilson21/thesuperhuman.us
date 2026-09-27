@@ -1,10 +1,12 @@
 # Website content responsibilities
 
-Status: Refined through September 10, 2026. The five primary areas and the
+Status: Refined through September 10, 2026, and updated September 26 for the
+website simplification audit. The five primary areas and the
 distinction between Work as capability evidence and Building as project exploration
 are agreed. The [visual-study index](design-concepts/README.md) records
-selected page compositions and deeper templates. Audio remains a secondary
-destination associated with About. Final copy, production assets, and interaction
+selected page compositions and deeper templates. Audio is now a primary header
+destination alongside Work, Building, Writing and About: it serves a distinct,
+commercial audience. Final copy, production assets, and interaction
 behavior still require validation. The proposed [system plan](website-system-plan.md)
 turns these responsibilities into repository conventions. Home and the four primary
 page compositions, project/article details, Audio and the contact flow are implemented locally. Integrated whole-site verification passes. The website project and redesign topic are also implemented locally; see the [journal increment review](redesign-story-material.md). Nothing has been deployed.
@@ -168,19 +170,36 @@ without presenting a fully scoped project. The approved
 [contact study](design-concepts/README.md#resume-and-contact) simplifies the
 general inquiry; implementation must preserve delivery and privacy safeguards.
 
-## Audio: a connected practice with its own destination
+## Audio: one funnel, offer led
 
-Recommendation: retain the current audio destination and make it discoverable
-from About and shared secondary navigation. Selected audio evidence may also
-appear on Work or Home when it serves those pages.
+`/audio/` leads with the paid offer and the approved starting prices (from
+$150 for two-track vocal mixing, from $75 for mastering, from $200 for both;
+custom mixing, production or recording work is quoted after review), a
+"Start your song" button and a "Prices and scope" link to `/audio/services`.
+Below the hero: Listen (the Old News release, distinct from the mastering
+engineering example that demonstrates the work, plus one "Portfolio" link),
+What I work on (the four service categories, linking back to prices and
+scope), and Start (a one-line lead and the same "Start your song" button).
+Audio is a primary header destination alongside Work, Building, Writing and
+About; it serves a distinct, commercial audience and earns that placement.
 
-The audio destination owns recordings, credits, listening context, and audio
-engagement detail. This avoids a second copy of each recording's metadata on the
-main site. Lack of recordings should not prevent mentioning audio as part of
-Kazon's background; it does prevent presenting an empty player as evidence.
+There is exactly one intake funnel: the three-step `/audio/start` form,
+posting to `/api/audio-intake`. `/audio/#book` keeps working through the
+Start section's own anchor, which carries the "Start your song" button. The
+secondary Audio bar (`MusicNav`) is Listen, Portfolio, Services.
 
-There is no demonstrated need to add a sixth primary navigation area or move the
-audio site during this stage. Revisit that if the selected content warrants it.
+`/audio/about` permanently redirects to `/audio/services#before-we-start`.
+Its unique process detail now lives in that section's opening paragraph:
+communication is async, most projects start with a written brief and files
+shared through Drive, Dropbox or WeTransfer, mixes are checked on multiple
+reference systems before delivery, and a project outside what Kazon does
+well gets a recommendation elsewhere rather than accepted. The gear
+inventory and the university line (already on About's Audio chapter) did not
+need their own page.
+
+The audio destination still owns recordings, credits, listening context, and
+audio engagement detail. This avoids a second copy of each recording's
+metadata on the main site.
 
 ## Proposed treatment of existing material
 
@@ -228,7 +247,7 @@ validate behavior and content before expanding across the site.
 - Shared career chronology, dates, working preference, and Lyft capacity values: `src/data/profile.ts`.
 - Work story summaries and explanatory context: `src/pages/work.astro`; native diagrams: `src/components/WorkDiagram.astro`. `ExperienceRow` provides the five optional career disclosures.
 - About introduction: `src/content/pages/about.md`; short personal chapters and their artwork: `src/pages/about.astro`. Older career anchors offer an onward link to Work. Detailed private operational material from the old About body is no longer rendered or retained in current content; this does not erase Git history.
-- Building selection and summaries: `src/pages/building.astro`. Daily title/subtitle and its journal remain driven by the existing story JSON. Threadline progress remains in its existing journal. Other project rows use supported descriptions and existing destinations; servant-lang has no invented link.
+- Building selection and summaries: `src/pages/building.astro`. Daily title/subtitle and its journal remain driven by the existing story JSON. Threadline progress remains in its existing journal. Other project rows use supported descriptions and existing destinations; servant-lang is hidden until it has a public repository, explanation, or artifact (per the September 26 simplification audit, S7).
 - Writing feature: existing essay metadata via the content collection. No new date, article, or newsletter was invented.
 - New resume requests: general only in the form and validation. Stored legacy audiences and PDFs remain compatible with approval and delivery. No KV migration, PDF deletion, or remote delivery occurred.
 
@@ -252,7 +271,7 @@ Work exposes a direct link from the featured Associate Tools story to the full t
 
 ### Audio and forms, September 10
 
-`src/data/audio.ts` owns the short service descriptions. Recording metadata stays in the audio-tracks collection with optional notes. `src/scripts/form-submission.ts` shares only interaction states across the three existing forms; each retains its own payload and server endpoint. Home /#contact remains the accepted general-contact destination, with name/email/message and optional company. Audio #book remains the structured inquiry. About /about#resumes keeps the general, approval-gated resume request.
+`src/data/audio.ts` owns the short service descriptions. Recording metadata stays in the audio-tracks collection with optional notes. `src/scripts/form-submission.ts` shares only interaction states across the three existing forms; each retains its own payload and server endpoint. Home /#contact remains the accepted general-contact destination, with name/email/message and optional company. About /about#resumes keeps the general, approval-gated resume request. (September 26: Audio #book now leads into the `/audio/start` intake rather than a separate inquiry form; see "Audio: one funnel, offer led" above.)
 
 ## Website project and writing topic
 
