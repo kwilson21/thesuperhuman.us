@@ -3,7 +3,7 @@
 Date: September 27, 2026  
 Repository: `kwilson21/thesuperhuman.us`  
 Pull request: [#132](https://github.com/kwilson21/thesuperhuman.us/pull/132)  
-Code revision: `b87b63af028ebc65b37444489b3cccdcff6ec2c3` (this record is committed on top of it)  
+Code revision: `f8c15150a7877359823f088377a6334ccdc449f0` (this record is committed on top of it)  
 Target: production `https://thesuperhuman.us` (Home, About, Audio, Building, Work, Writing) and the alternate `https://audio.thesuperhuman.us` entry served by the same Worker  
 Reviewer and deployment authorization: Kazon Wilson, “Once the PRs are green and no more review issues go ahead and merge everything”  
 Scope: a shared scroll and entrance motion layer with Home's worlds (living studio, dark screen world, waveform edge, inked notebook title, horizon) and lighter scenes on About, Audio, Building, Work and Writing; the website added as a `shipped` publicist project whose 17 existing entries are exempt from review notes; silent page recordings for the publicist (not deployed); docs  
@@ -70,8 +70,9 @@ access reads it back.
 - **PASS · Responsive behavior.** All six pages at 320, 390, 640, 768, 1280 and
   1440 pixels, with and without reduced motion: no horizontal overflow and no
   page errors. The Writing illustration holds its entrance when the first frame
-  shows it below the fold (320 × 568, 568 × 320, 844 × 390, and deep links past
-  it at 360 and 390) and plays on load where it is on screen.
+  shows it off screen (320 × 568, 568 × 320, 844 × 390, 800 × 280, and deep
+  links past it at 360 and 390), plays once half of it or half the viewport is
+  filled, and plays on load where it is on screen.
 - **UNVERIFIED · Browser coverage.** Only Chromium is available in this
   environment, and no real device. The motion uses widely supported CSS and
   IntersectionObserver, fails safe to the resting frame, and the page is
