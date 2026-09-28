@@ -84,5 +84,5 @@ either way; the profile already shows your name and avatar.
 
 Every post passes the quality standards in the
 [design doc, section 8](../README.md#8-social-posts). On Bluesky specifically: no
-hashtags, under 300 characters, and the link goes in the link card, so the text
-can use the full length.
+hashtags, under 300 characters, and no URL in the text: the link goes in the
+first reply (quality standard 8).

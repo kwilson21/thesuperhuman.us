@@ -7,7 +7,7 @@ agent inside the same run, still under the same gate and the same approval PR.
 
 | Channel | Kind | Job | Cadence | How it is published |
 | --- | --- | --- | --- | --- |
-| Website journal | Home | The full story of each change; every post links here | Per merged milestone | Merge of the public PR deploys it |
+| Website journal | Home | The full story of each change; most posts link here | Per merged milestone | Merge of the public PR deploys it |
 | LinkedIn | Feed | Professional story posts for recruiters and hiring managers | 1 to 2 a weekday, 3 on rare days | API for posts once approved; profile edits by hand |
 | Bluesky | Feed | One idea per post, conversation with developers (@thesuperhuman.us) | 1 to 2 a day, 3 on rare days | API once approved (free) |
 | X | Feed | One idea per post, wider reach (@TechGnostic_) | 1 to 2 a day, 3 on rare days | By hand; the API is paid per post |

@@ -423,8 +423,8 @@ checklist, not by a GUI-driving agent.
    thesuperhuman.us. A post about an open project may link instead to that
    project's public repository or its public demo, when the post asks the reader
    to try it, read the code or contribute (owner decision, 2026-09-28). The
-   repository must be listed in `publicist/config.json` `projects`, and a Tally
-   link goes only to the public demo, never to anything with real data. Still one
+   repository must be listed in `publicist/config.json` `projects`, and a demo
+   link is used only once that demo is public and live. Still one
    link per post, and it goes in the first reply (on LinkedIn, the first
    comment), never in the post itself: posts carrying an outside link tend to
    reach fewer people (owner decision, 2026-09-28). The post text has no URL;
@@ -459,7 +459,10 @@ status: draft                   # draft | approved (merged) | posted | skipped
   LinkedIn posts on weekdays only. The minimum applies only when an approved post
   is waiting; never write a filler post to meet it. The review PR names each
   3-post day. At least 3 hours between posts on the same network, and at most
-  5 posts a day across all networks. The same entry can go to several networks in
+  5 posts a day across all networks. The 5-a-day total and the slot list below
+  win over the per-network numbers, so 3-post days fall on weekdays; when the
+  minimum would break the backfill or alternation rules, that network skips the
+  day. The same entry can go to several networks in
   the same slot, but never with the same text.
 - Priority: a finished milestone with a visual, then a clear "why" story, then
   backfill. New work takes the first slot of the day when any is waiting; backfill
