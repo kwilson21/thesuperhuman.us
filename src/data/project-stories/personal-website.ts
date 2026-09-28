@@ -106,7 +106,7 @@ export const websiteMilestones: Milestone[] = [
   {
     id: 'website-old-news-interest-and-merch', day: '2026-09-15',
     title: 'Make room for the next signal of interest.', status: 'Release follow-through',
-    summary: 'The release page also makes space for people who want more—whether that means future music, a purchase, or merchandise—without pretending those ideas are already for sale.',
+    summary: 'The release page also makes space for people who want more, whether that means future music, a purchase, or merchandise, without pretending those ideas are already for sale.',
     detailLabel: 'What remains deliberately provisional',
     detail: 'The merchandise image is a reviewed concept, not a product listing. The page uses an interest flow so future release decisions can be informed by explicit, consented requests.',
     artifacts: [artifact(oldNewsMerchConcepts, 'Old News · Merchandise concepts', 'A reviewed concept sheet shown as a direction for interest, not as a storefront.', 'Reviewed concept artwork')],
