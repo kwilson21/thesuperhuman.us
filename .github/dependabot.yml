@@ -14,6 +14,15 @@ updates:
         update-types:
           - "minor"
           - "patch"
+        exclude-patterns:
+          - "wrangler"
+          - "@cloudflare/workers-oauth-provider"
+      astro-major:
+        update-types:
+          - "major"
+        patterns:
+          - "astro"
+          - "@astrojs/*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
