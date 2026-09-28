@@ -419,8 +419,13 @@ checklist, not by a GUI-driving agent.
    concept or a clean diagram, with alt text that describes what is on screen.
    Never a screenshot containing real data, secrets, notifications or browser
    chrome with private tabs.
-8. **One link, to the site.** The journal entry on thesuperhuman.us, not the repo,
-   unless the post is about the code itself.
+8. **One link, to where the reader acts.** Usually the journal entry on
+   thesuperhuman.us. A post about an open project may link instead to that
+   project's public repository or its public demo, when the post asks the reader
+   to try it, read the code or contribute (owner decision, 2026-09-28). The
+   repository must be listed in `publicist/config.json` `projects`, and a Tally
+   link goes only to the public demo, never to anything with real data. Still one
+   link per post.
 9. **Fits the platform.** LinkedIn: 80 to 180 words, short paragraphs, the story
    version. Short-form networks: within the character limit, one idea,
    conversational. Never the same text pasted to both.

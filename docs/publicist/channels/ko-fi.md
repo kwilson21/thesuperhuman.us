@@ -43,7 +43,8 @@ Ko-fi gets a permanent place rather than a spot in every post:
   structured-data profile links.
 - **Profiles:** in the pinned Bluesky post, in LinkedIn's contact info (it allows
   several website links) and in the X bio.
-- **Posts:** routine posts keep their one link, to the site. At most one explicit
+- **Posts:** routine posts keep their one link (quality standard 8 in the design
+  doc: the site, or an open project's public repository or demo). At most one explicit
   support post a month, drafted only when there is a concrete milestone to point to,
   and queued like any other post for the owner's approval.
 - **Tone:** plain and specific ("If this work is useful to you, you can support it

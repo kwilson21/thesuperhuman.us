@@ -48,7 +48,8 @@ small number of good conversations, with LinkedIn carrying the professional reac
    > I build useful software with AI, grounded in 7+ years of production engineering (Lyft, insurance, healthcare).
    > Now: Tally (family budgeting) and kaillera-next (browser netplay for retro games).
    > Also mixing and mastering audio. thesuperhuman.us
-   Routine posts keep one link, to the site (quality standard 8 in the design doc).
+   Routine posts keep one link: the site, or an open project's public repository or
+   demo (quality standard 8 in the design doc).
 5. **Pinned post:** a short introduction with one link, the website.
    > I build useful software with AI, and I mix and master audio. I'm posting what I make and why: Tally, kaillera-next and more. Everything lives at thesuperhuman.us.
 
