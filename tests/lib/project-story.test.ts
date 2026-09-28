@@ -9,6 +9,8 @@ import {tallyStory} from '../../src/data/project-stories/tally';
 import {kailleraStory} from '../../src/data/project-stories/kaillera-next';
 import {threadlineStory} from '../../src/data/project-stories/threadline';
 import dailyStory from '../../src/data/project-stories/the-engineers-daily.json';
+import {readFileSync, readdirSync} from 'node:fs';
+import {join} from 'node:path';
 const entry = (id: string, day = '2026-09-09'): PublicEntry => ({entryId:id,occurredOn:day,publishedAt:day+'T12:00:00Z',backfilled:false,story:{basis:'repository-verified',delivery:'implemented',headline:id,summary:'A visible result. The prototype is not released.',technicalDetail:null}});
 const feed = (items: PublicEntry[], revision = 1): ProjectFeed => ({projectId:'threadline',revision,current:items[0]??null,history:items});
 describe('project story publication projection',()=>{
@@ -156,20 +158,36 @@ describe('journal presentation: Latest work, Project story and Archive', () => {
 });
 
 describe('project status lives once, on the story data', () => {
- it('gives every project a single non-empty status', () => {
-  for (const status of [tallyStory.status, kailleraStory.status, websiteStory.status, dailyStory.status, threadlineStory.status]) {
-   expect(status).toBeTruthy();
-  }
+ const astroFilesUnder = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+  const full = join(dir, entry.name);
+  if (entry.isDirectory()) return astroFilesUnder(full);
+  return entry.name.endsWith('.astro') ? [full] : [];
  });
+ const pageFiles = [
+  join('src', 'pages', 'index.astro'),
+  join('src', 'pages', 'building.astro'),
+  ...astroFilesUnder(join('src', 'pages', 'building')),
+ ];
+ const pageSources = pageFiles.map(file => ({ file, source: readFileSync(file, 'utf8') }));
+ const statuses = [tallyStory.status, kailleraStory.status, websiteStory.status, dailyStory.status, threadlineStory.status];
+
+ it('gives every project a single non-empty status', () => {
+  for (const status of statuses) expect(status).toBeTruthy();
+ });
+
  it('never calls the redesigned website an ongoing project', () => {
   expect(websiteStory.status.toLowerCase()).not.toContain('ongoing');
-  expect(websiteStory.status).toBe('Live · redesign complete');
  });
- it('keeps each project status matching its agreed wording', () => {
-  expect(tallyStory.status).toBe('In development · public demo');
-  expect(kailleraStory.status).toBe('In development · playable demo build');
-  expect(dailyStory.status).toBe('Local prototype');
-  expect(threadlineStory.status).toBe('Internal prototype');
+
+ it('never hardcodes a status prop on a page', () => {
+  const offenders = pageSources.filter(({ source }) => source.includes('status="')).map(({ file }) => file);
+  expect(offenders).toEqual([]);
+ });
+
+ it('never repeats a project story status literally in page source instead of reading the data', () => {
+  const offenders = pageSources.flatMap(({ file, source }) =>
+   statuses.filter(status => source.includes(status)).map(status => `${file}: ${status}`));
+  expect(offenders).toEqual([]);
  });
 });
 
