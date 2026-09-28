@@ -10,5 +10,3 @@ alt: Tally's demo Home screen on demo data, with a Things to try box and numbere
 status: draft
 ---
 Phase 1 of Tally is done. The demo loads over HTTPS, every Phase 1 screen works, no console errors. And it explains itself: How Tally works shows each rule with examples from the demo's live numbers.
-
-https://thesuperhuman.us/building/tally#tally-phase-1-done

@@ -8,7 +8,7 @@ agent inside the same run, still under the same gate and the same approval PR.
 | Channel | Kind | Job | Cadence | How it is published |
 | --- | --- | --- | --- | --- |
 | Website journal | Home | The full story of each change; most posts link here | Per merged milestone | Merge of the public PR deploys it |
-| LinkedIn | Feed | Professional story posts for recruiters and hiring managers | 1 to 2 a weekday, 3 on rare days | API for posts once approved; profile edits by hand |
+| LinkedIn | Feed | Professional story posts for recruiters and hiring managers | 1 to 2 a day, 3 on rare days | API for posts once approved; profile edits by hand |
 | Bluesky | Feed | One idea per post, conversation with developers (@thesuperhuman.us) | 1 to 2 a day, 3 on rare days | API once approved (free) |
 | X | Feed | One idea per post, wider reach (@TechGnostic_) | 1 to 2 a day, 3 on rare days | By hand; the API is paid per post |
 | YouTube | Video | Software and music on one channel, @KazonTheOne ([playbook](youtube.md)) | At most 1 video a week, plus releases | Uploaded by hand in YouTube Studio at first |
@@ -17,7 +17,7 @@ agent inside the same run, still under the same gate and the same approval PR.
 
 Feed limits are per network (design doc, section 8): at least 1 post a day on
 each network when an approved post is waiting, usually 1 or 2, and 3 only on rare
-days (LinkedIn on weekdays only), and at most 5 across all networks. Every post's
+days, and at most 5 across all networks. Every post's
 link goes in its first reply (on LinkedIn, the first comment). YouTube videos and profile updates sit outside those limits, but a post
 announcing a video counts against them.
 

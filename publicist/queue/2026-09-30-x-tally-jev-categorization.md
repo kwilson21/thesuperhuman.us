@@ -10,5 +10,3 @@ alt: Diagram of Tally's nightly categorization: merchant rules first, then Jev, 
 status: draft
 ---
 After Jev's first night on Tally's demo, Household had become a catch-all. So Jev can now answer "None of these fit", and nothing is applied below 80% confidence.
-
-https://thesuperhuman.us/building/tally#tally-jev-categorization

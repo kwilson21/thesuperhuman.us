@@ -15,4 +15,4 @@ So the demo is the same code deployed a second time, with its own database, a si
 
 The reset erases every table. So at my request it also checks for bank credentials, which the real app always has, and refuses to run if it finds any.
 
-Claude Code built the setup and a test that pins those safety settings. Deploying stays a step I run myself. More here: https://thesuperhuman.us/building/tally#tally-demo-environment
+Claude Code built the setup and a test that pins those safety settings. Deploying stays a step I run myself.

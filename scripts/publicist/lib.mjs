@@ -84,6 +84,12 @@ export function textProblems(text) {
   return problems;
 }
 
+/** A queued post's link goes in its first reply, so the post text has no URL. */
+export function queueBodyProblems(text) {
+  const body = text.replace(/^---\n[\s\S]*?\n---\n?/, '');
+  return /https?:\/\//.test(body) ? ['URL in the post text; the link goes in the first reply'] : [];
+}
+
 /** Tally captures must be labeled as demo data. */
 export function captureProblems(source) {
   const kinds = [...source.matchAll(/'((?:[^'\\]|\\.)*capture(?:[^'\\]|\\.)*)'\s*\)/gi)].map(m => m[1]);

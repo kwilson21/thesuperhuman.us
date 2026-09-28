@@ -163,7 +163,7 @@ Stage 2, publish (public):
    saying no more than the entry says. Posts pass the quality standards and spacing
    rules in the design doc, section 8 (per network: at least 1 a day when an
    approved post is waiting, usually 1 or 2, 3 only on rare days (a launch or big
-   milestone) that the review PR names, LinkedIn on weekdays only, 3 hours apart; at most 5 a day in all; never
+   milestone) that the review PR names, 3 hours apart; at most 5 a day in all; never
    the same text on two networks; the link goes in the first reply, not the post;
    new work first, at most 2 backfill a day). Re-slot unapproved
    drafts whose slot has passed.

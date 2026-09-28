@@ -15,4 +15,4 @@ Excluded transactions already stayed out of spending, safe to spend and the Need
 
 The first panel was too cluttered, so I picked a simpler layout from three mockups. Claude Code built it, including a browser test that excludes a transaction and checks Home.
 
-Built and tested on demo data: https://thesuperhuman.us/building/tally#tally-exclusions
+Built and tested on demo data.

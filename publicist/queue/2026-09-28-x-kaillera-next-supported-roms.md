@@ -10,5 +10,3 @@ alt: Kaillera Next's lobby with the Supported ROMs list: Super Smash Bros. (US),
 status: draft
 ---
 Kaillera Next works with exactly three ROMs today: Super Smash Bros. (US) and Smash Remix 2.0.0 and 2.0.1. The lobby lists them now, and loading anything else gets a warning, not a block.
-
-https://thesuperhuman.us/building/kaillera-next#kaillera-next-supported-roms

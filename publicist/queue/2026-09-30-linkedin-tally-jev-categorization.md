@@ -15,4 +15,4 @@ Each night, after merchant rules run, Tally asks Jev, an AI classifier, about up
 
 After Jev's first run on the demo, Household had turned into a catch-all. So I added a "None of these fit" answer.
 
-Built with Claude Code. The journal entry: https://thesuperhuman.us/building/tally#tally-jev-categorization
+Built with Claude Code.

@@ -13,4 +13,4 @@ How Tally works explains each rule with a worked example from the demo's own num
 
 Each section now has a small diagram. Claude Code drew them in code from the same numbers as the example beside each one, and a test checks that they match. Budget, Transactions and Categories are boxes and arrows. Excluding is one bar, with each kind of exclusion a dashed slice. I picked those styles from a mockup of two.
 
-On demo data: https://thesuperhuman.us/building/tally#tally-how-diagrams
+On demo data.

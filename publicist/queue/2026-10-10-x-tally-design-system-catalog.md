@@ -10,5 +10,3 @@ alt: The top of Tally's design system catalog on demo data.
 status: draft
 ---
 The money input in Tally had drifted from my design, and there was nowhere to see a component on its own. Now there's a catalog that renders the real components, so it can't show a drifted copy.
-
-https://thesuperhuman.us/building/tally#tally-design-system-catalog

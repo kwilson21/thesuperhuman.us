@@ -10,5 +10,3 @@ alt: Tally's Settings page on demo data with one category open for editing.
 status: draft
 ---
 Tally's new Settings: start from 14 default categories, then rename, reorder, add, and set budgets from this month on. I capped it at 50 categories so every screen shows them all without paging.
-
-https://thesuperhuman.us/building/tally#tally-settings

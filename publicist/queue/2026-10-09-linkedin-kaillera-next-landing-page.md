@@ -13,4 +13,4 @@ Kaillera Next's room server runs on a free tier that naps when idle and takes ab
 
 The new front page leads with open rooms that hosts choose to list, each with a recent frame and Watch or Join. While the server wakes, it shows a clock and the lag visualizer. Invite links now open a page that says who invited you and what joining needs.
 
-Claude Code and Codex built it to a design doc that records my decisions. Released in v0.56.1: https://thesuperhuman.us/building/kaillera-next#kaillera-next-landing-page
+Claude Code and Codex built it to a design doc that records my decisions. Released in v0.56.1.

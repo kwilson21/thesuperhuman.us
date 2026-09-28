@@ -456,8 +456,9 @@ status: draft                   # draft | approved (merged) | posted | skipped
 - Limits are per network (owner decision, 2026-09-25: post on LinkedIn, Bluesky
   and X). Each network gets at least 1 post a day, usually 1 or 2, and 3 only on
   rare days such as a launch or a big milestone (owner decision, 2026-09-28).
-  LinkedIn posts on weekdays only. The minimum applies only when an approved post
-  is waiting; never write a filler post to meet it. The review PR names each
+  LinkedIn posts on weekends too (owner decision, 2026-09-28). The minimum
+  applies only when an approved post is waiting; never write a filler post to
+  meet it. The review PR names each
   3-post day. At least 3 hours between posts on the same network, and at most
   5 posts a day across all networks. The 5-a-day total and the slot list below
   win over the per-network numbers, so 3-post days fall on weekdays; when the

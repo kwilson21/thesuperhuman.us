@@ -15,4 +15,4 @@ It's now set up to run on one small server behind a Cloudflare Tunnel, with no o
 
 Players who can't connect directly get short-lived relay credentials, and the key never reaches the browser. ROM sharing is off on the public server, and the server enforces that.
 
-Built with Claude Code. More in the journal: https://thesuperhuman.us/building/kaillera-next#kaillera-next-self-hosting
+Built with Claude Code.

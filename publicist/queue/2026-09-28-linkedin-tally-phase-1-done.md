@@ -14,5 +14,3 @@ Tally's first phase is done. The demo loads over HTTPS, every Phase 1 screen wor
 The demo now explains itself. Home has a short Things to try list. How Tally works shows the system diagram, each rule in plain words, and worked examples computed from the demo's own live numbers.
 
 Before moving on, Claude Code reviewed what was built against the spec, and I approved its proposals. Default categories and excluding transfers move into Phase 2, so the numbers are right from day one.
-
-The journal entry: https://thesuperhuman.us/building/tally#tally-phase-1-done
