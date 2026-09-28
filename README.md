@@ -25,7 +25,7 @@ npm run preview   # serve the built Worker locally after npm run build
 
 Local env vars live in `.dev.vars` (not committed). See `src/env.d.ts` for the full list.
 
-Dependabot opens dependency update PRs every Monday: one grouped PR for npm minor and patch updates, one for Astro major upgrades, a separate PR for other npm majors and for the pinned `wrangler` and OAuth provider, and one grouped PR for GitHub Actions.
+Dependabot opens dependency update PRs every Monday: one grouped PR for npm minor and patch updates, one for Astro major upgrades, a separate PR for each other npm major and for each `wrangler` or OAuth provider update, and one grouped PR for GitHub Actions.
 
 ## Deployment
 
