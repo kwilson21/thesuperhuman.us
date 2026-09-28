@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { agentsBlock, captureProblems, entryIds, frontMatter, hardRules, noteProblems, syncAgents, textProblems } from '../../scripts/publicist/lib.mjs';
+import { agentsBlock, captureProblems, entriesNeedingNotes, entryIds, frontMatter, hardRules, noteProblems, syncAgents, textProblems } from '../../scripts/publicist/lib.mjs';
 
 const note = ({ tier = 'shipped', draft = 'verified', publish = 'yes', readiness = 'ready', bullets = true, draftText = true } = {}) => `---
 entry: tally-home-screen
@@ -103,6 +103,25 @@ describe('text checks', () => {
   });
 });
 
+describe('entries needing notes', () => {
+  const source = "[{ id: 'site-old', day: '2026-09-20' }, { id: 'site-new', day: '2026-09-27' }, { id: 'site-backdated', day: '2026-09-01' }]";
+  it('needs a note for every entry when nothing predates the publicist', () => {
+    expect(entriesNeedingNotes(source)).toEqual(['site-old', 'site-new', 'site-backdated']);
+  });
+  it('exempts only the listed entries, whatever their dates', () => {
+    expect(entriesNeedingNotes(source, ['site-old'])).toEqual(['site-new', 'site-backdated']);
+  });
+  it('lists only website entries that exist, and dates the start plainly', () => {
+    const config = JSON.parse(readFileSync('publicist/config.json', 'utf8'));
+    const website = config.projects['personal-website'];
+    expect(website).toMatchObject({ repo: 'kwilson21/thesuperhuman.us', notesSince: '2026-09-27' });
+    expect(website.notesSince).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const ids = entryIds(readFileSync(website.data, 'utf8'));
+    expect(website.preexisting).toHaveLength(17);
+    expect(website.preexisting.filter((id: string) => !ids.includes(id))).toEqual([]);
+  });
+});
+
 describe('AGENTS.md sync', () => {
   const skill = '# S\n\n## Hard rules (never break these)\n\n1. Rule one.\n\n## Review notes\n\nText.\n';
   it('extracts the hard rules and inserts the block idempotently', () => {
@@ -120,7 +139,7 @@ describe('AGENTS.md sync', () => {
 describe('gate runner', () => {
   const roots: string[] = [];
   afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
-  function fixture(entrySource: string | null) {
+  function fixture(entrySource: string | null, websiteSource?: string) {
     const root = mkdtempSync(join(tmpdir(), 'publicist-gate-')); roots.push(root);
     for (const dir of ['publicist', '.agents/skills/publicist', 'src/data/project-stories']) mkdirSync(join(root, dir), { recursive: true });
     const skill = readFileSync('.agents/skills/publicist/SKILL.md', 'utf8');
@@ -128,6 +147,7 @@ describe('gate runner', () => {
     writeFileSync(join(root, 'AGENTS.md'), syncAgents('# Agents\n', skill));
     writeFileSync(join(root, 'publicist/config.json'), readFileSync('publicist/config.json'));
     if (entrySource) writeFileSync(join(root, 'src/data/project-stories/tally.ts'), entrySource);
+    if (websiteSource) writeFileSync(join(root, 'src/data/project-stories/personal-website.ts'), websiteSource);
     return root;
   }
   const run = (root: string, env: Record<string, string>) => spawnSync(process.execPath, [resolve('scripts/publicist/gate.mjs')], {
@@ -138,6 +158,16 @@ describe('gate runner', () => {
   });
   it('fails in CI when entries exist but the private token is missing', () => {
     const result = run(fixture("export const x = [{ id: 'tally-home-screen', day: '2026-09-23' }];"), { CI: 'true' });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('PUBLICIST_PRIVATE_TOKEN is not set');
+  });
+  it('does not ask for notes on the website entries that predate the publicist', () => {
+    const result = run(fixture(null, "export const x = [{ id: 'website-start-with-the-reader', day: '2026-09-09' }];"), { CI: 'true' });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('0 entries checked');
+  });
+  it('asks for a note on a new website entry, even one dated before the website joined', () => {
+    const result = run(fixture(null, "export const x = [{ id: 'website-motion-layer', day: '2026-09-26' }];"), { CI: 'true' });
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('PUBLICIST_PRIVATE_TOKEN is not set');
   });

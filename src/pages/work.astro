@@ -42,6 +42,9 @@ import { personJsonLd, experience, lyftBonus, lyftTeams, skuposStages, workingPr
   </div><Footer compact slot="footer" />
 </BaseLayout>
 <script>
+  import { runMotion } from '~/scripts/scroll-scenes';
+  // Restrained on purpose: only the two evidence diagrams build as they arrive.
+  runMotion();
   function revealExperience(hash = location.hash) {
     const target = document.getElementById(hash.slice(1));
     if (target instanceof HTMLDetailsElement) { target.open = true; target.scrollIntoView(); }

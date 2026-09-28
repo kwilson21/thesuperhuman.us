@@ -9,7 +9,7 @@
 - Corrections and recheck: Soft edge masks blend the background with the site paper. Replaced the first elliptical mask with shallow edge fades to keep notebook corners visible.
 - In-page inspection: pass on 1440px desktop, 800px tablet, and 390px/320px mobile in both development and the locally bundled Worker; complete intended content, no distorted resizing or unreadable required image text.
 - Accessibility: decorative image has empty alternative text. Links have visible text or explicit accessible names; meaning is provided in the surrounding HTML.
-- Motion: artwork is static. Link-arrow feedback is disabled for reduced motion. No hidden surfaces or disconnected animated parts.
+- Motion: artwork is static. Link-arrow feedback is disabled for reduced motion. No hidden surfaces or disconnected animated parts. (See the animated layer recorded below, September 27. On Home's writing preview the unchanged image drifts up to 18px with scroll; still under reduced motion.)
 - Publication: no private information, personal portrait, false product evidence, or generated credit. The illustration does not claim a real studio photograph.
 - Delivery verification: production HTTP response SHA-256 matches this exact source file. See `docs/design-concepts/2026-09-10/home-prototype/production-results.json`.
 - Outcome: ready for production asset use within this prototype. Deployment is a separate step.
@@ -40,3 +40,10 @@ September 10 project detail placement review (Codex agent): Daily’s Behind the
 September 10 Audio placement review (Codex agent): Audio Working together reuses the same exact WebP. Inspected final built desktop (1440px) and phone (390px at 2×) composition, with 800px/320px layout checks. Existing soft edge masking blends the background; the objects remain fully visible at their intrinsic aspect ratio. No new crop, equipment, physical connection, proportion or texture defect. Empty alt marks decorative artwork. Native SVG service icons were separately checked for consistent strokes and adjacent text labels. Static/reduced-motion presentation; no autoplay. Evidence: `docs/design-concepts/2026-09-10/audio-contact/`.
 
 Archive note: source PNGs, prompts and raw browser-evidence paths above refer to the private recovery archive. The committed production file and hash record are authoritative for the asset gate; see [the evidence index](../design-concepts/README.md).
+
+## Animated layer, September 27
+
+Drawn by `src/components/ObjectLife.astro` as an inline SVG in the image's own 1536 × 1024 coordinates, inside the same mask; the file and hash above are unchanged. It plays once when at least half of it is on screen and rests within five seconds; nothing is drawn in the resting frame, so reduced motion, no-JS and print show the untouched art. Inspected at 2x mid-scene on desktop (1280px) and in the phone placement (390px) by Claude Code agent visual review, September 27, 2026, and again after a fix that keeps every ring and glow invisible during its start delay. Not human production approval.
+
+- About (What's next chapter): two soft terracotta halos grow from the drawn sun (centre 1053, 266, radius 34) and fade. The sketch itself is not retraced; a first attempt to trace the trail did not register closely enough and was dropped.
+- Outcome: ready for production use within the motion layer. Deployment is a separate step.

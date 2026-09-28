@@ -85,7 +85,7 @@ These describe prior capabilities, not a service menu to promote. Lead with the 
 
 ## Publicist
 
-Publicizing Tally and Kaillera-next work follows the design in
+Publicizing Tally, Kaillera-next and website work follows the design in
 [docs/publicist/README.md](docs/publicist/README.md). Its rules are always loaded:
 
 @.agents/skills/publicist/SKILL.md

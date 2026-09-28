@@ -1,6 +1,6 @@
 ---
 name: publicist
-description: "Draft private review notes, then development-journal entries and queued social posts for kwilson21/tally and kwilson21/kaillera-next from merged work, and open review PRs. Use for the scheduled publicist Routine and for publicist backfill runs."
+description: "Draft private review notes, then development-journal entries and queued social posts for kwilson21/tally, kwilson21/kaillera-next and this website (kwilson21/thesuperhuman.us) from merged work, and open review PRs. Use for the scheduled publicist Routine and for publicist backfill runs."
 ---
 
 # Publicist (pointer)
