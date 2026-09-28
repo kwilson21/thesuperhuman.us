@@ -11,7 +11,7 @@ Astro.response.headers.set('Cache-Control', 'no-store');
   title={websiteStory.title}
   subtitle="Earlier updates to the site, newest first."
   description="Updates that have moved off the main project page, newest first."
-  status="An ongoing design project"
+  status={websiteStory.status}
   journalHref="/building/personal-website#personal-website-updates-title"
   pageTitle={`${websiteStory.title} · Archive · Kazon Wilson`}
   crumbHref="/building/personal-website"

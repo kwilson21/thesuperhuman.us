@@ -6,7 +6,7 @@
   "goal": "A place for people who already code to practice engineering alongside Scripture, prayer and reflection. Over a series, the learner builds and grows a real application whose changes matter to an unfolding fantasy harbor world.",
   "audience": "For experienced developers. The first person I am designing for is myself.",
   "updatedOn": "2026-09-09",
-  "status": "Design exploration + local lesson prototype",
+  "status": "Local prototype",
   "current": "B2 Coastal Practice is selected. One Beacon lesson is built locally for review.",
   "next": "Try the lesson as a daily ritual, refine the stopping point and return path, and connect the wider website around it.",
   "cover": "b2-coastal-practice.png",

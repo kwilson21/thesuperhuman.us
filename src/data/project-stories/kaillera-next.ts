@@ -20,6 +20,7 @@ export const kailleraStory = {
   title: 'Kaillera Next',
   subtitle: 'Open a link and play N64 games with friends, nothing to install.',
   description: 'Kaillera introduced me to programming. I set the direction and Claude Code writes the code.',
+  status: 'In development · playable demo build',
 };
 
 const artifact = (image: ImageMetadata, title: string, caption: string, kind: string) => ({

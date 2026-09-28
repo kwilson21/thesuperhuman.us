@@ -13,6 +13,7 @@ import notebook from '~/assets/site/notebook-v1.webp';
 import tallyTransactions from '~/assets/projects/tally/transactions-demo-2026-09-26.webp';
 import kailleraLanding from '~/assets/projects/kaillera-next/landing-2026-09-26.webp';
 import { tallyStory } from '~/data/project-stories/tally';
+import { kailleraStory } from '~/data/project-stories/kaillera-next';
 import { capacityCells, parseFigure } from '~/lib/home-motion';
 const essay = await getEntry('pages', 'ai-gives-you-speed');
 if (!essay) throw new Error('AI essay content missing');
@@ -51,7 +52,7 @@ const jsonLd = {
               <div class="project-art">
                 <img src={tallyTransactions.src} width={tallyTransactions.width} height={tallyTransactions.height} alt="Tally’s Transactions screen on demo data, a CI capture from September 2026, with the demo data banner." loading="lazy" />
               </div>
-              <p class="page-kicker">In development · public demo</p>
+              <p class="page-kicker">{tallyStory.status}</p>
               <h3>Tally</h3>
               <p>{tallyStory.subtitle}</p>
               <a class="site-link project-link" href="/building/tally#tally-updates-title">Development journal <span aria-hidden="true">→</span><span class="sr-only">Tally</span></a>
@@ -60,7 +61,7 @@ const jsonLd = {
               <div class="project-art">
                 <img src={kailleraLanding.src} width={kailleraLanding.width} height={kailleraLanding.height} alt="Kaillera Next’s landing page, September 2026, with no open rooms." loading="lazy" />
               </div>
-              <p class="page-kicker">In development · playable demo build</p>
+              <p class="page-kicker">{kailleraStory.status}</p>
               <h3>Kaillera Next</h3>
               <p>Super Smash Bros. 64 online with friends, in the browser.</p>
               <a class="site-link project-link" href="/building/kaillera-next#kaillera-next-updates-title">Development journal <span aria-hidden="true">→</span><span class="sr-only">Kaillera Next</span></a>

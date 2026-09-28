@@ -4,6 +4,9 @@ import BaseLayout from '~/layouts/BaseLayout.astro';
 import Footer from '~/components/Footer.astro';
 import dailyStory from '~/data/project-stories/the-engineers-daily.json';
 import { tallyStory } from '~/data/project-stories/tally';
+import { kailleraStory } from '~/data/project-stories/kaillera-next';
+import { websiteStory } from '~/data/project-stories/personal-website';
+import { threadlineStory } from '~/data/project-stories/threadline';
 import dailyPreview from '~/assets/projects/daily-preview.webp';
 import tallyHome from '~/assets/projects/tally/home-demo-2026-09-26.webp';
 import kailleraLanding from '~/assets/projects/kaillera-next/landing-thumb-2026-09-26.webp';
@@ -15,28 +18,28 @@ import threadline from '~/assets/site/threadline-v1.webp';
     <header class="building-intro"><p class="page-kicker">Building</p><h1 class="page-title">Things I’m making.</h1><p class="page-lede">Projects, experiments, and ideas I want to explore.</p></header>
     <section class="site-section">
       <article class="tally-feature" data-reveal data-tilt>
-        <div><p class="page-kicker">In development · public demo</p><h2>{tallyStory.title}</h2><p class="project-subtitle">{tallyStory.subtitle}</p><p class="project-description">{tallyStory.description}</p><a class="site-link" href="/building/tally#tally-updates-title">Development journal <span class="sr-only">for Tally</span> <span aria-hidden="true">→</span></a></div>
+        <div><p class="page-kicker">{tallyStory.status}</p><h2>{tallyStory.title}</h2><p class="project-subtitle">{tallyStory.subtitle}</p><p class="project-description">{tallyStory.description}</p><a class="site-link" href="/building/tally#tally-updates-title">Development journal <span class="sr-only">for Tally</span> <span aria-hidden="true">→</span></a></div>
         <div class="tally-image"><img src={tallyHome.src} width={tallyHome.width} height={tallyHome.height} alt="Tally’s Home screen on demo data, a CI capture from September 2026, with the Demo data banner in frame." fetchpriority="high" /></div>
       </article>
       <div class="project-rows">
         <article class="project-row" data-reveal>
           <div class="row-image"><img src={kailleraLanding.src} width={kailleraLanding.width} height={kailleraLanding.height} alt="Kaillera Next's landing page, a capture from September 2026." loading="lazy" /></div>
-          <div><p class="page-kicker">In development · playable demo build</p><h2 class="row-title">Kaillera Next</h2><p>Retro gaming and online netplay.</p></div>
+          <div><p class="page-kicker">{kailleraStory.status}</p><h2 class="row-title">Kaillera Next</h2><p>Retro gaming and online netplay.</p></div>
           <a class="site-link" href="/building/kaillera-next#kaillera-next-updates-title">Development journal <span class="sr-only">for Kaillera Next</span> <span aria-hidden="true">→</span></a>
         </article>
         <article class="project-row" data-reveal>
           <div class="row-image"><img src={websiteHome.src} width={websiteHome.width} height={websiteHome.height} alt="" loading="lazy" /></div>
-          <div><p class="page-kicker">Live · ongoing design project</p><h2 class="row-title">Personal website</h2><p>The decisions behind a clearer, more manageable site.</p></div>
+          <div><p class="page-kicker">{websiteStory.status}</p><h2 class="row-title">Personal website</h2><p>The decisions behind a clearer, more manageable site.</p></div>
           <a class="site-link" href="/building/personal-website#personal-website-updates-title">Development journal <span class="sr-only">for Personal website</span> <span aria-hidden="true">→</span></a>
         </article>
         <article class="project-row" data-reveal>
           <div class="row-image"><img src={dailyPreview.src} width={dailyPreview.width} height={dailyPreview.height} alt="" loading="lazy" /></div>
-          <div><p class="page-kicker">Local prototype</p><h2 class="row-title">{dailyStory.title}</h2><p>A lesson prototype with story, practice, and reflection.</p></div>
+          <div><p class="page-kicker">{dailyStory.status}</p><h2 class="row-title">{dailyStory.title}</h2><p>A lesson prototype with story, practice, and reflection.</p></div>
           <a class="site-link" href="/building/the-engineers-daily#the-engineers-daily-updates-title">Development journal <span class="sr-only">for {dailyStory.title}</span> <span aria-hidden="true">→</span></a>
         </article>
         <article class="project-row" data-reveal>
           <div class="row-image threadline-thumb"><img src={threadline.src} width={threadline.width} height={threadline.height} alt="" loading="lazy" /><span class="art-note">Illustration</span></div>
-          <div><p class="page-kicker">Internal prototype</p><h2 class="row-title">Threadline</h2><p>Pick up interrupted development work with its context intact.</p></div>
+          <div><p class="page-kicker">{threadlineStory.status}</p><h2 class="row-title">Threadline</h2><p>Pick up interrupted development work with its context intact.</p></div>
           <a class="site-link" href="/building/threadline#threadline-updates-title">Development journal <span class="sr-only">for Threadline</span> <span aria-hidden="true">→</span></a>
         </article>
       </div>

@@ -17,6 +17,7 @@ export const tallyStory = {
   title: 'Tally',
   subtitle: 'A budgeting app so simple that using it teaches you how to budget.',
   description: 'Inspired by Mint. I set the direction and Claude Code writes the code.',
+  status: 'In development · public demo',
 };
 
 const artifact = (image: ImageMetadata, title: string, caption: string, kind: string) => ({
