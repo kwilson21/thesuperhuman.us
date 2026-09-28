@@ -425,7 +425,10 @@ checklist, not by a GUI-driving agent.
    to try it, read the code or contribute (owner decision, 2026-09-28). The
    repository must be listed in `publicist/config.json` `projects`, and a Tally
    link goes only to the public demo, never to anything with real data. Still one
-   link per post.
+   link per post, and it goes in the first reply (on LinkedIn, the first
+   comment), never in the post itself: posts carrying an outside link tend to
+   reach fewer people (owner decision, 2026-09-28). The post text has no URL;
+   the queue file's `link` field holds it.
 9. **Fits the platform.** LinkedIn: 80 to 180 words, short paragraphs, the story
    version. Short-form networks: within the character limit, one idea,
    conversational. Never the same text pasted to both.
@@ -451,8 +454,11 @@ status: draft                   # draft | approved (merged) | posted | skipped
 
 **Choosing and spacing.**
 - Limits are per network (owner decision, 2026-09-25: post on LinkedIn, Bluesky
-  and X). LinkedIn: at most 1 post a day, weekdays only. Bluesky and X: at most 2
-  posts a day each. At least 3 hours between posts on the same network, and at most
+  and X). Each network gets at least 1 post a day, usually 1 or 2, and 3 only on
+  rare days such as a launch or a big milestone (owner decision, 2026-09-28).
+  LinkedIn posts on weekdays only. The minimum applies only when an approved post
+  is waiting; never write a filler post to meet it. The review PR names each
+  3-post day. At least 3 hours between posts on the same network, and at most
   5 posts a day across all networks. The same entry can go to several networks in
   the same slot, but never with the same text.
 - Priority: a finished milestone with a visual, then a clear "why" story, then
@@ -469,12 +475,14 @@ status: draft                   # draft | approved (merged) | posted | skipped
 Edit or delete files in the PR, then merge; merged files are the approved batch.
 Unmerged drafts whose slot has passed are moved to the next open slot by the next run.
 
-**Posting.** Manual at first: each morning, post that day's approved files and set
+**Posting.** Manual at first: each morning, post that day's approved files, then
+reply to each one right away with its `link` (a comment on LinkedIn). Set
 `status: skipped` on any you pass on (the next PR can include that edit).
 
 **Morning digest (owner decision, 2026-09-25).** The daily run posts a "Today's
 posts" message in the publicist session: for each post, the network to post on, the
-time, the exact text, the link, the image path and its alt text. It lists only
+time, the exact text, the link to post as the first reply, the image path and its
+alt text. It lists only
 approved files on `main`. The queue waits for the owner:
 - Nothing is marked `posted` or `skipped` until the owner says so.
 - While the owner hasn't reported on a digest, the next digest repeats the same
@@ -487,7 +495,7 @@ approved files on `main`. The queue waits for the owner:
 After a
 few batches, if you want, the next step is a proposal (not a switch) for an
 automated poster: a scheduled GitHub Action in this repo that posts approved files
-from `main` at their slot and records `posted` with the post URL, one platform at
+from `main` at their slot, replies with each file's `link`, and records `posted` with the post URL, one platform at
 a time, each enabled by a separate PR that sets
 `publicist/config.json` `autopost.<platform>: true`. Credentials live only in
 GitHub Actions secrets. Nothing is ever posted automatically without that explicit,
