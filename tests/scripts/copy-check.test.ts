@@ -15,6 +15,19 @@ describe('lineViolations', () => {
     expect(hits).toEqual([{ rule: 'em-dash', label: 'em-dash (U+2014)', match: '—' }]);
   });
 
+  it('flags em-dash HTML entities, case-insensitively', () => {
+    expect(lineViolations('more&mdash;less').map(h => h.match)).toEqual(['&mdash;']);
+    expect(lineViolations('more&MDash;less').map(h => h.match)).toEqual(['&MDash;']);
+    expect(lineViolations('more&#8212;less').map(h => h.match)).toEqual(['&#8212;']);
+    expect(lineViolations('more&#x2014;less').map(h => h.match)).toEqual(['&#x2014;']);
+    expect(lineViolations('more&#X2014;less').map(h => h.match)).toEqual(['&#X2014;']);
+  });
+
+  it('flags a backslash-u escape for the em-dash character', () => {
+    expect(lineViolations('more\\u2014less').map(h => h.rule)).toEqual(['em-dash']);
+    expect(lineViolations('more\\U2014less').map(h => h.rule)).toEqual(['em-dash']);
+  });
+
   it('flags each buzzword, case-insensitively', () => {
     expect(lineViolations('a Passionate engineer').map(h => h.rule)).toEqual(['buzzword']);
     expect(lineViolations('an innovative approach').map(h => h.rule)).toEqual(['buzzword']);
@@ -26,14 +39,24 @@ describe('lineViolations', () => {
     expect(lineViolations('ninjastar is not a real word')).toEqual([]);
   });
 
-  it('flags hourly-rate phrasing', () => {
+  it('flags hourly-rate phrases', () => {
+    expect(lineViolations('our hourly rate is set').map(h => h.rule)).toEqual(['hourly-rate']);
+    expect(lineViolations('hourly rates vary').map(h => h.rule)).toEqual(['hourly-rate']);
     expect(lineViolations('billed hourly').map(h => h.rule)).toEqual(['hourly-rate']);
-    expect(lineViolations('$150 per hour').map(h => h.rule)).toEqual(['hourly-rate']);
-    expect(lineViolations('$150/hr').map(h => h.rule)).toEqual(['hourly-rate']);
-    expect(lineViolations('$150/hour').map(h => h.rule)).toEqual(['hourly-rate']);
+    expect(lineViolations('we charge hourly').map(h => h.rule)).toEqual(['hourly-rate']);
   });
 
-  it('does not flag unrelated uses of "hour"', () => {
+  it('flags a dollar amount billed by the hour', () => {
+    expect(lineViolations('$150/hr').map(h => h.rule)).toEqual(['hourly-rate']);
+    expect(lineViolations('$150/hour').map(h => h.rule)).toEqual(['hourly-rate']);
+    expect(lineViolations('$150 per hour').map(h => h.rule)).toEqual(['hourly-rate']);
+  });
+
+  it('does not flag plain mentions of hourly or per-hour cadence', () => {
+    expect(lineViolations('fixed-price, never hourly')).toEqual([]);
+    expect(lineViolations('5 requests per hour')).toEqual([]);
+    expect(lineViolations('an hourly cleanup job')).toEqual([]);
+    expect(lineViolations('see /hr-team for details')).toEqual([]);
     expect(lineViolations('hour: "numeric"')).toEqual([]);
     expect(lineViolations('What took hours can sometimes take minutes.')).toEqual([]);
     expect(lineViolations('Open hours: 9 to 5')).toEqual([]);
@@ -48,6 +71,18 @@ describe('lineViolations', () => {
 
   it('is case-insensitive for clearance phrases', () => {
     expect(lineViolations('Active Clearance').map(h => h.rule)).toEqual(['implied-clearance']);
+  });
+
+  it('does not flag approved negative clearance wording', () => {
+    expect(lineViolations('No active security clearance.')).toEqual([]);
+    expect(lineViolations('no active clearance')).toEqual([]);
+    expect(lineViolations('He does not currently hold an active clearance.')).toEqual([]);
+    expect(lineViolations("doesn't have an active security clearance")).toEqual([]);
+  });
+
+  it('still flags active clearance claims without a negation nearby', () => {
+    expect(lineViolations('Currently has an active security clearance.').map(h => h.rule)).toEqual(['implied-clearance']);
+    expect(lineViolations('Holds an active clearance today.').map(h => h.rule)).toEqual(['implied-clearance']);
   });
 
   it('skips a line carrying the allow marker', () => {
@@ -96,6 +131,7 @@ afterEach(() => { roots.splice(0).forEach(root => rmSync(root, { recursive: true
 
 function fixtureRepo() {
   const root = mkdtempSync(join(tmpdir(), 'website-copy-check-'));
+  roots.push(root);
   mkdirSync(join(root, 'src/pages'), { recursive: true });
   mkdirSync(join(root, 'public'), { recursive: true });
   return root;
@@ -140,6 +176,28 @@ describe('copy-check CLI', () => {
   it('honors the copy-check: allow escape hatch', () => {
     const root = fixtureRepo();
     writeFileSync(join(root, 'src/pages/index.astro'), 'a passionate guru <!-- copy-check: allow -->\n');
+    const result = run(root);
+    expect(result.status).toBe(0);
+  });
+
+  it('passes approved negative clearance wording', () => {
+    const root = fixtureRepo();
+    writeFileSync(join(root, 'src/pages/about.astro'), '<p>No active security clearance, but open to pursuing one.</p>\n');
+    const result = run(root);
+    expect(result.status).toBe(0);
+  });
+
+  it('fails on an em-dash HTML entity', () => {
+    const root = fixtureRepo();
+    writeFileSync(join(root, 'src/pages/about.astro'), 'more&mdash;less\n');
+    const result = run(root);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('em-dash');
+  });
+
+  it('does not flag ordinary per-hour or hourly-adjacent copy', () => {
+    const root = fixtureRepo();
+    writeFileSync(join(root, 'src/pages/about.astro'), 'Fixed-price, never hourly. Rate limited to 5 requests per hour.\n');
     const result = run(root);
     expect(result.status).toBe(0);
   });

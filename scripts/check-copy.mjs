@@ -6,25 +6,79 @@ import { pathToFileURL } from 'node:url';
 // Mechanical checks for the copy rules in CLAUDE.md ("Things to Never Do",
 // "Clearance posture"). This cannot judge tone or whether copy is true; it
 // only catches the specific banned characters and phrases below.
+//
+// Scope: text files under src/ and public/, plus README.md, limited to the
+// copy-bearing extensions in EXTENSIONS below. Code comments are scanned
+// along with everything else in a file; there is no special carve-out for
+// them. CLAUDE.md and AGENTS.md are excluded because they document these
+// rules and so legitimately contain the banned words themselves. A line
+// containing the marker "copy-check: allow" is skipped entirely; use it
+// sparingly and only for a real, reviewed exception.
 
 const ROOTS = ['src', 'public', 'README.md'];
 const EXTENSIONS = new Set(['.astro', '.ts', '.tsx', '.js', '.mjs', '.json', '.md', '.mdx', '.html', '.txt', '.svg']);
 const SKIP_BASENAMES = new Set(['CLAUDE.md', 'AGENTS.md']);
 const ALLOW_MARKER = 'copy-check: allow';
 
+/** Runs a regex (forced global) against a line and returns the matched substrings, in order. */
+function matchAll(line, pattern) {
+  const re = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
+  const hits = [];
+  let match;
+  while ((match = re.exec(line))) {
+    hits.push(match[0]);
+    if (match[0].length === 0) re.lastIndex += 1;
+  }
+  return hits;
+}
+
+// The literal em-dash character, its common HTML entities (named, decimal,
+// hex), and a literal backslash-u escape sequence for it, as text a source
+// file might contain instead of the character itself.
+const EM_DASH_RE = /—|&mdash;|&#8212;|&#x2014;|\\u2014/gi;
+
+const BUZZWORD_RE = /\b(passionate|innovative|guru|ninja|rockstar)\b/gi;
+
+// Rate-related hourly phrasing, and a dollar amount billed by the hour.
+// Plain uses of "hourly" or "per hour" that are not about a billing rate
+// (an hourly cleanup job, 5 requests per hour, "never hourly") are left
+// alone on purpose.
+const HOURLY_PHRASE_RE = /\bhourly rates?\b|\bbilled hourly\b|\bcharge(?:d)? hourly\b/gi;
+const HOURLY_MONEY_RE = /\$\s?\d[\d,]*(?:\.\d+)?\s?(?:\/hr\b|\/hour\b|per\s+hour\b)/gi;
+
+function findHourlyRate(line) {
+  return [...matchAll(line, HOURLY_PHRASE_RE), ...matchAll(line, HOURLY_MONEY_RE)];
+}
+
+// TS/SCI and "cleared engineer/developer" always claim current clearance.
+// "active clearance" and "active security clearance" are allowed when a
+// negation appears shortly before them ("no active security clearance",
+// "does not hold an active clearance"), since that copy is approved.
+const CLEARANCE_UNCONDITIONAL_RE = /\b(?:TS\/SCI|cleared engineer|cleared developer)\b/gi;
+const ACTIVE_CLEARANCE_RE = /\bactive(?: security)? clearance\b/gi;
+const NEGATION_RE = /\b(?:no|not|without)\b|n't\b/i;
+const NEGATION_WINDOW = 40;
+
+function findClearance(line) {
+  const hits = matchAll(line, CLEARANCE_UNCONDITIONAL_RE);
+  const re = new RegExp(ACTIVE_CLEARANCE_RE.source, ACTIVE_CLEARANCE_RE.flags);
+  let match;
+  while ((match = re.exec(line))) {
+    const context = line.slice(Math.max(0, match.index - NEGATION_WINDOW), match.index);
+    if (!NEGATION_RE.test(context)) hits.push(match[0]);
+  }
+  return hits;
+}
+
 /**
- * Rules, in the order CLAUDE.md lists them. Each pattern is matched per
- * line with the `g` flag so every occurrence on a line is reported.
+ * Rules, in the order CLAUDE.md lists them. Each rule's `find` takes a
+ * line and returns the matched substrings, in order.
  */
 export const RULES = [
-  { id: 'em-dash', label: 'em-dash (U+2014)', pattern: /—/g },
-  { id: 'buzzword', label: 'buzzword', pattern: /\b(passionate|innovative|guru|ninja|rockstar)\b/gi },
-  { id: 'hourly-rate', label: 'hourly rate copy', pattern: /\b(?:hourly|per hour)\b|\/hr\b|\/hour\b/gi },
-  {
-    id: 'implied-clearance',
-    label: 'implied current clearance',
-    pattern: /\b(?:TS\/SCI|active clearance|active security clearance|cleared engineer|cleared developer)\b/gi,
-  },
+  { id: 'em-dash', label: 'em-dash (U+2014)', find: line => matchAll(line, EM_DASH_RE) },
+  { id: 'buzzword', label: 'buzzword', find: line => matchAll(line, BUZZWORD_RE) },
+  { id: 'hourly-rate', label: 'hourly rate copy', find: findHourlyRate },
+  { id: 'implied-clearance', label: 'implied current clearance', find: findClearance },
 ];
 
 /**
@@ -35,12 +89,7 @@ export function lineViolations(line) {
   if (line.includes(ALLOW_MARKER)) return [];
   const hits = [];
   for (const rule of RULES) {
-    const re = new RegExp(rule.pattern.source, rule.pattern.flags);
-    let match;
-    while ((match = re.exec(line))) {
-      hits.push({ rule: rule.id, label: rule.label, match: match[0] });
-      if (match[0].length === 0) re.lastIndex += 1;
-    }
+    for (const match of rule.find(line)) hits.push({ rule: rule.id, label: rule.label, match });
   }
   return hits;
 }
