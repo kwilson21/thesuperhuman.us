@@ -10,5 +10,3 @@ alt: Diagram of Kaillera Next's static demo build on Cloudflare, with the rollba
 status: draft
 ---
 A Kaillera Next test now plays two real browsers against the server, adds latency and jitter, and compares both players' game state. The same change fixed a build step that quietly zeroed negative stick inputs.
-
-https://thesuperhuman.us/building/kaillera-next#kaillera-next-static-demo

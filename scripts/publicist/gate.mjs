@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { agentsBlock, captureProblems, entriesNeedingNotes, entryIds, frontMatter, noteProblems, textProblems } from './lib.mjs';
+import { agentsBlock, captureProblems, entriesNeedingNotes, entryIds, frontMatter, noteProblems, queueBodyProblems, textProblems } from './lib.mjs';
 
 // Mechanical safeguard for publicist content (docs/publicist/README.md, section 9).
 // It confirms approvals exist; it cannot judge whether copy follows from them.
@@ -33,7 +33,7 @@ if (existsSync(queue)) {
     const { source } = frontMatter(text);
     if (earlier.has(source)) errors.push(`${queue}/${name}: source entry "${source}" predates the publicist and has no review note`);
     else if (!ids.has(source)) errors.push(`${queue}/${name}: source entry "${source}" is not a journal entry`);
-    for (const problem of textProblems(text)) errors.push(`${queue}/${name}: ${problem}`);
+    for (const problem of [...textProblems(text), ...queueBodyProblems(text)]) errors.push(`${queue}/${name}: ${problem}`);
   }
 }
 

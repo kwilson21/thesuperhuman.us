@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { agentsBlock, captureProblems, entriesNeedingNotes, entryIds, frontMatter, hardRules, noteProblems, syncAgents, textProblems } from '../../scripts/publicist/lib.mjs';
+import { agentsBlock, captureProblems, entriesNeedingNotes, entryIds, frontMatter, hardRules, noteProblems, queueBodyProblems, syncAgents, textProblems } from '../../scripts/publicist/lib.mjs';
 
 const note = ({ tier = 'shipped', draft = 'verified', publish = 'yes', readiness = 'ready', bullets = true, draftText = true } = {}) => `---
 entry: tally-home-screen
@@ -96,6 +96,17 @@ describe('text checks', () => {
   it('requires Tally captures to be labeled demo data', () => {
     expect(captureProblems("artifact(a, 'Home', 'Caption.', 'Browser capture · demo data')")).toEqual([]);
     expect(captureProblems("artifact(a, 'Home', 'Caption.', 'Browser capture')")).toHaveLength(1);
+  });
+  it('keeps URLs out of queued post text but allows the link field', () => {
+    const post = (body: string) => `---\nsource: tally-home-screen\nlink: https://thesuperhuman.us/building/tally\n---\n${body}\n`;
+    expect(queueBodyProblems(post('Tally has a new Home screen.'))).toEqual([]);
+    expect(queueBodyProblems(post('More: https://thesuperhuman.us/building/tally'))).toHaveLength(1);
+    expect(queueBodyProblems(post('More: HTTPS://THESUPERHUMAN.US'))).toHaveLength(1);
+    expect(queueBodyProblems(post('More at thesuperhuman.us/building/tally'))).toHaveLength(1);
+    expect(queueBodyProblems(post('See www.example.org'))).toHaveLength(1);
+    expect(queueBodyProblems(post('Released in v0.51.3. Smash Remix 2.0.1 works.'))).toEqual([]);
+    expect(queueBodyProblems(post('Plain text.').replace(/\n/g, '\r\n'))).toEqual([]);
+    expect(frontMatter('\uFEFF---\r\nsource: a\r\n---\r\nBody')).toEqual({ source: 'a' });
   });
   it('reads entry IDs and queue front matter', () => {
     expect(entryIds("{ id: 'tally-home-screen', day: '2026-09-23' }, { id: 'tally-phase-0' }")).toEqual(['tally-home-screen', 'tally-phase-0']);

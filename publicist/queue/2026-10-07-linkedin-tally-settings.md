@@ -15,4 +15,4 @@ Every new database now starts with 14 default categories. Settings lets you rena
 
 Claude Code built it from design studies I picked. I capped the list at 50 categories so every screen shows them all without paging.
 
-Built and tested on demo data: https://thesuperhuman.us/building/tally#tally-settings
+Built and tested on demo data.

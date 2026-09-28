@@ -10,5 +10,3 @@ alt: Diagram of how Kaillera Next brings a drifted player back with a resync fro
 status: draft
 ---
 Small stick differences between Kaillera Next players used to slip through. Now any mismatch triggers a rollback, and a test freezes one player and checks both games match afterward.
-
-https://thesuperhuman.us/building/kaillera-next#kaillera-next-recovery-syncs

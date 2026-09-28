@@ -48,7 +48,10 @@ small number of good conversations, with LinkedIn carrying the professional reac
    > I build useful software with AI, grounded in 7+ years of production engineering (Lyft, insurance, healthcare).
    > Now: Tally (family budgeting) and kaillera-next (browser netplay for retro games).
    > Also mixing and mastering audio. thesuperhuman.us
-   Routine posts keep one link, to the site (quality standard 8 in the design doc).
+   Routine posts keep one link: the site, or an open project's public repository or
+   demo, in the first reply (quality standard 8 in the design doc). The bio and the
+   pinned post are profile elements, not feed posts, so they keep the site in their
+   text (owner decision, 2026-09-28).
 5. **Pinned post:** a short introduction with one link, the website.
    > I build useful software with AI, and I mix and master audio. I'm posting what I make and why: Tally, kaillera-next and more. Everything lives at thesuperhuman.us.
 
@@ -83,5 +86,5 @@ either way; the profile already shows your name and avatar.
 
 Every post passes the quality standards in the
 [design doc, section 8](../README.md#8-social-posts). On Bluesky specifically: no
-hashtags, under 300 characters, and the link goes in the link card, so the text
-can use the full length.
+hashtags, under 300 characters, and no URL in the text: the link goes in the
+first reply (quality standard 8).

@@ -10,5 +10,3 @@ alt: Tally's budget list in Adjust mode on demo data, with minus and plus button
 status: draft
 ---
 Changing a budget in Settings felt odd, so Tally now changes it on Home, where you see the bars. "Adjust" puts a minus and plus on every row, and each tap saves it at the next round $10.
-
-https://thesuperhuman.us/building/tally#tally-adjust-budgets

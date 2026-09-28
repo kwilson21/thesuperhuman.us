@@ -10,5 +10,3 @@ alt: Diagram of Kaillera Next's hosting: a tunnel into one small server, a relay
 status: draft
 ---
 Kaillera Next players whose networks block direct connections get short-lived relay credentials, and the key never reaches the browser. ROM sharing is off on the public server, enforced by the server.
-
-https://thesuperhuman.us/building/kaillera-next#kaillera-next-self-hosting

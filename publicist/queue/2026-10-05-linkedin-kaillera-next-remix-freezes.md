@@ -15,4 +15,4 @@ At match start, each player waited 5 seconds a frame for menu inputs that had al
 
 Claude Code fixed both, then made the rollback engine wait for late inputs before it shuts down on a pause or match end, so a wrong guess can't quietly leave the two games different. Code review by Greptile caught follow-up issues along the way.
 
-Released in v0.53.4: https://thesuperhuman.us/building/kaillera-next#kaillera-next-remix-freezes
+Released in v0.53.4.

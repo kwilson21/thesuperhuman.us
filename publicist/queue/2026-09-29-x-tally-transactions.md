@@ -10,5 +10,3 @@ alt: Tally's transaction edit panel on demo data: category chips, a merchant-rul
 status: draft
 ---
 In Tally, one tick sets a rule: "Always use this category for this merchant." The Needs category filter always matches Home's count, and saving updates the list and Home together.
-
-https://thesuperhuman.us/building/tally#tally-transactions

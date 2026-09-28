@@ -10,5 +10,3 @@ alt: Diagram of Tally's demo: its own database, a nightly reset, and a guard tha
 status: draft
 ---
 I wanted to try every Tally change from my phone without running anything locally. So the demo is the same code deployed twice, with its own database and only fictional data, reset nightly.
-
-https://thesuperhuman.us/building/tally#tally-demo-environment
