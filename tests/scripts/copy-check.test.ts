@@ -50,6 +50,16 @@ describe('lineViolations', () => {
     expect(lineViolations('$150/hr').map(h => h.rule)).toEqual(['hourly-rate']);
     expect(lineViolations('$150/hour').map(h => h.rule)).toEqual(['hourly-rate']);
     expect(lineViolations('$150 per hour').map(h => h.rule)).toEqual(['hourly-rate']);
+    expect(lineViolations('$150 an hour').map(h => h.rule)).toEqual(['hourly-rate']);
+    expect(lineViolations('$150 / hr').map(h => h.rule)).toEqual(['hourly-rate']);
+    expect(lineViolations('$150-per-hour').map(h => h.rule)).toEqual(['hourly-rate']);
+    expect(lineViolations('rate: $150 hourly').map(h => h.rule)).toEqual(['hourly-rate']);
+    expect(lineViolations('$150/h').map(h => h.rule)).toEqual(['hourly-rate']);
+  });
+
+  it('flags hourly billing and per-hour pricing phrasing', () => {
+    expect(lineViolations('hourly billing').map(h => h.rule)).toEqual(['hourly-rate']);
+    expect(lineViolations('per-hour pricing').map(h => h.rule)).toEqual(['hourly-rate']);
   });
 
   it('does not flag plain mentions of hourly or per-hour cadence', () => {
@@ -60,6 +70,17 @@ describe('lineViolations', () => {
     expect(lineViolations('hour: "numeric"')).toEqual([]);
     expect(lineViolations('What took hours can sometimes take minutes.')).toEqual([]);
     expect(lineViolations('Open hours: 9 to 5')).toEqual([]);
+    expect(lineViolations('$150 a head')).toEqual([]);
+  });
+
+  it('does not flag the approved flat audio starting prices', () => {
+    expect(lineViolations('Two-track vocal mixing starts at $150.')).toEqual([]);
+    expect(lineViolations('Mastering starts at $75.')).toEqual([]);
+    expect(lineViolations('Vocal mix plus master starts at $200.')).toEqual([]);
+  });
+
+  it('does not mistake a dollar amount before an unrelated "h" word for a rate', () => {
+    expect(lineViolations('$150/hero')).toEqual([]);
   });
 
   it('flags implied current clearance phrases', () => {
@@ -83,6 +104,20 @@ describe('lineViolations', () => {
   it('still flags active clearance claims without a negation nearby', () => {
     expect(lineViolations('Currently has an active security clearance.').map(h => h.rule)).toEqual(['implied-clearance']);
     expect(lineViolations('Holds an active clearance today.').map(h => h.rule)).toEqual(['implied-clearance']);
+  });
+
+  it('flags a real claim even when an earlier negation is in a different clause', () => {
+    expect(lineViolations('No problem: I hold an active clearance').map(h => h.rule)).toEqual(['implied-clearance']);
+    expect(lineViolations('Not sure? I hold an active security clearance.').map(h => h.rule)).toEqual(['implied-clearance']);
+    expect(lineViolations("I don't do fluff. I hold an active clearance").map(h => h.rule)).toEqual(['implied-clearance']);
+    expect(lineViolations('No, I hold an active clearance').map(h => h.rule)).toEqual(['implied-clearance']);
+  });
+
+  it('still allows negation adjacent to the claim within the same clause', () => {
+    expect(lineViolations('No active security clearance, but open to pursuing one for the right engagement.')).toEqual([]);
+    expect(lineViolations('I do not hold an active clearance')).toEqual([]);
+    expect(lineViolations("I don't currently hold an active clearance")).toEqual([]);
+    expect(lineViolations('without an active clearance')).toEqual([]);
   });
 
   it('skips a line carrying the allow marker', () => {

@@ -42,30 +42,34 @@ const BUZZWORD_RE = /\b(passionate|innovative|guru|ninja|rockstar)\b/gi;
 // Rate-related hourly phrasing, and a dollar amount billed by the hour.
 // Plain uses of "hourly" or "per hour" that are not about a billing rate
 // (an hourly cleanup job, 5 requests per hour, "never hourly") are left
-// alone on purpose.
-const HOURLY_PHRASE_RE = /\bhourly rates?\b|\bbilled hourly\b|\bcharge(?:d)? hourly\b/gi;
-const HOURLY_MONEY_RE = /\$\s?\d[\d,]*(?:\.\d+)?\s?(?:\/hr\b|\/hour\b|per\s+hour\b)/gi;
+// alone on purpose, as is a flat amount with no hourly indicator (the
+// approved audio starting prices).
+const HOURLY_PHRASE_RE = /\bhourly (?:rates?|billing|pricing)\b|\bbill(?:ed|s|ing)? hourly\b|\bcharge[sd]? hourly\b|\bper[-\s]hour (?:rates?|pricing|billing)\b/gi;
+const HOURLY_MONEY_RE = /\$\s?\d[\d,]*(?:\.\d+)?\s*(?:\/\s*(?:hr|hour|h)\b|[-\s]*(?:per|an|a|each)[-\s]+hour\b|[-\s]*hourly\b)/gi;
 
 function findHourlyRate(line) {
   return [...matchAll(line, HOURLY_PHRASE_RE), ...matchAll(line, HOURLY_MONEY_RE)];
 }
 
 // TS/SCI and "cleared engineer/developer" always claim current clearance.
-// "active clearance" and "active security clearance" are allowed when a
-// negation appears shortly before them ("no active security clearance",
-// "does not hold an active clearance"), since that copy is approved.
+// "active clearance" and "active security clearance" are allowed only when
+// a negation applies directly to them: the text since the start of the
+// current clause (the part after the last sentence- or list-level
+// punctuation) is a negation word optionally followed by a short run of
+// filler words ("no", "does not currently hold an", "without") leading
+// right up to the claim. A negation in an earlier clause of the same line
+// ("No problem: I hold an active clearance") does not count.
 const CLEARANCE_UNCONDITIONAL_RE = /\b(?:TS\/SCI|cleared engineer|cleared developer)\b/gi;
 const ACTIVE_CLEARANCE_RE = /\bactive(?: security)? clearance\b/gi;
-const NEGATION_RE = /\b(?:no|not|without)\b|n't\b/i;
-const NEGATION_WINDOW = 40;
+const NEGATED_RE = /(?:\bno|\bnot|\bnever|\bwithout|n't)\s+(?:(?:hold|have|holding|having|currently|yet|an?)\s+){0,3}$/i;
 
 function findClearance(line) {
   const hits = matchAll(line, CLEARANCE_UNCONDITIONAL_RE);
   const re = new RegExp(ACTIVE_CLEARANCE_RE.source, ACTIVE_CLEARANCE_RE.flags);
   let match;
   while ((match = re.exec(line))) {
-    const context = line.slice(Math.max(0, match.index - NEGATION_WINDOW), match.index);
-    if (!NEGATION_RE.test(context)) hits.push(match[0]);
+    const clause = line.slice(0, match.index).split(/[.:;?!,()]/).pop() ?? '';
+    if (!NEGATED_RE.test(clause)) hits.push(match[0]);
   }
   return hits;
 }
