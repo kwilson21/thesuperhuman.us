@@ -37,9 +37,10 @@ import ownerTooltipAfter from '~/assets/projects/website/bugfixes/owner-tooltip-
 export const websiteStory = {
   title: 'Personal website',
   subtitle: 'Finding a clearer way to share the work.',
-  description: 'From the original pages to the directions we explored, the choices I made, and the site taking shape.',
+  description: 'From the original pages to the directions we explored and the choices that shaped the site you’re reading.',
   essayTitle: 'Showing the work, finding the words.',
   essayDescription: 'A visual account of this redesign: what felt wrong, the alternatives we explored, and the choices that brought it together.',
+  status: 'Live · redesign complete',
 };
 
 const artifact = (image: ImageMetadata, title: string, caption: string, kind = 'Generated design study') => ({

@@ -4,10 +4,11 @@ import ProjectLayout from '~/layouts/ProjectLayout.astro';
 import threadline from '~/assets/site/threadline-v1.webp';
 import ProjectUpdates from '~/components/ProjectUpdates.astro';
 import { websiteFeed } from '~/lib/publication/website';
+import { threadlineStory } from '~/data/project-stories/threadline';
 const feed = await websiteFeed(Astro.locals.runtime.env, 'threadline');
 Astro.response.headers.set('Cache-Control', 'no-store');
 ---
-<ProjectLayout title="Threadline" subtitle="Pick up where you left off." description="Keep related work together, so an interruption doesn’t mean starting over." status="Internal prototype" journalHref="#threadline-updates-title">
+<ProjectLayout title="Threadline" subtitle="Pick up where you left off." description="Keep related work together, so an interruption doesn’t mean starting over." status={threadlineStory.status} journalHref="#threadline-updates-title">
   <figure class="thread-experience">
     <img src={threadline.src} alt="Notes connected by a terracotta thread, gathered beside a spool." width={threadline.width} height={threadline.height} fetchpriority="high" />
     <ol class="thread-steps">

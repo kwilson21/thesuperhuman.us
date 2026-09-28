@@ -4,7 +4,11 @@ import {describe, expect, it} from 'vitest';
 import {feedChange, publicationMilestones, journalMilestones, latestJournalMilestones, storyMilestones, archiveMilestones, journalSelection} from '../../src/lib/project-story';
 import type {Milestone} from '../../src/lib/project-story';
 import type {ProjectFeed, PublicEntry} from '../../src/lib/publication/read';
-import {websiteMilestones} from '../../src/data/project-stories/personal-website';
+import {websiteMilestones, websiteStory} from '../../src/data/project-stories/personal-website';
+import {tallyStory} from '../../src/data/project-stories/tally';
+import {kailleraStory} from '../../src/data/project-stories/kaillera-next';
+import {threadlineStory} from '../../src/data/project-stories/threadline';
+import dailyStory from '../../src/data/project-stories/the-engineers-daily.json';
 const entry = (id: string, day = '2026-09-09'): PublicEntry => ({entryId:id,occurredOn:day,publishedAt:day+'T12:00:00Z',backfilled:false,story:{basis:'repository-verified',delivery:'implemented',headline:id,summary:'A visible result. The prototype is not released.',technicalDetail:null}});
 const feed = (items: PublicEntry[], revision = 1): ProjectFeed => ({projectId:'threadline',revision,current:items[0]??null,history:items});
 describe('project story publication projection',()=>{
@@ -148,6 +152,24 @@ describe('journal presentation: Latest work, Project story and Archive', () => {
   const merged = journalMilestones(feed([entry('published-1', '2026-09-10'), entry('published-2', '2026-09-09')]), curated);
   expect(latestJournalMilestones(merged).map(e => e.id)).toEqual(['published-1', 'published-2', 'curated-e', 'curated-d', 'curated-c']);
   expect(archiveMilestones(merged).map(e => e.id)).toEqual(['curated-b', 'curated-a']);
+ });
+});
+
+describe('project status lives once, on the story data', () => {
+ it('gives every project a single non-empty status', () => {
+  for (const status of [tallyStory.status, kailleraStory.status, websiteStory.status, dailyStory.status, threadlineStory.status]) {
+   expect(status).toBeTruthy();
+  }
+ });
+ it('never calls the redesigned website an ongoing project', () => {
+  expect(websiteStory.status.toLowerCase()).not.toContain('ongoing');
+  expect(websiteStory.status).toBe('Live · redesign complete');
+ });
+ it('keeps each project status matching its agreed wording', () => {
+  expect(tallyStory.status).toBe('In development · public demo');
+  expect(kailleraStory.status).toBe('In development · playable demo build');
+  expect(dailyStory.status).toBe('Local prototype');
+  expect(threadlineStory.status).toBe('Internal prototype');
  });
 });
 

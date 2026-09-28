@@ -10,7 +10,7 @@ import after from '~/assets/projects/website/home-after.png';
 const feed = await websiteFeed(Astro.locals.runtime.env, 'personal-website');
 Astro.response.headers.set('Cache-Control', 'no-store');
 ---
-<ProjectLayout title={websiteStory.title} subtitle={websiteStory.subtitle} description={websiteStory.description} status="An ongoing design project" journalHref="#personal-website-updates-title">
+<ProjectLayout title={websiteStory.title} subtitle={websiteStory.subtitle} description={websiteStory.description} status={websiteStory.status} journalHref="#personal-website-updates-title">
   <section class="project-section" aria-labelledby="website-change">
     <div class="site-section-heading"><h2 id="website-change">Same palette. A different introduction.</h2></div>
     <div class="website-comparison">
