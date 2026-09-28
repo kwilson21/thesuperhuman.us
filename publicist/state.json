@@ -38,7 +38,17 @@
     "tally-design-system-catalog",
     "tally-adjust-budgets",
     "tally-home-safe-to-spend",
-    "kaillera-next-landing-page"
+    "kaillera-next-landing-page",
+    "tally-bank-sync",
+    "tally-accounts-page",
+    "tally-empty-states",
+    "tally-form-feedback",
+    "kaillera-next-direction-a",
+    "kaillera-next-remix-menu-rollback",
+    "kaillera-next-graphics-fixes",
+    "website-motion",
+    "website-pages-refresh",
+    "website-copy-check"
   ],
   "declined": []
 }

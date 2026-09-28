@@ -12,6 +12,10 @@ import howDiagrams from '~/assets/projects/tally/how-diagrams-annotated.webp';
 import designCatalog from '~/assets/projects/tally/design-system-catalog-annotated.webp';
 import adjustBudgets from '~/assets/projects/tally/adjust-budgets-annotated.webp';
 import homeSafeToSpend from '~/assets/projects/tally/home-safe-to-spend-annotated.webp';
+import bankSyncDiagram from '~/assets/projects/tally/bank-sync-diagram.webp';
+import accountsPage from '~/assets/projects/tally/accounts-annotated.webp';
+import emptyStates from '~/assets/projects/tally/empty-states-annotated.webp';
+import formFeedback from '~/assets/projects/tally/form-feedback-annotated.webp';
 
 export const tallyStory = {
   title: 'Tally',
@@ -125,5 +129,29 @@ export const tallyMilestones: Milestone[] = [
     title: 'Home leads with safe to spend',
     summary: 'Tally is meant for people who gave up on other budgeting apps, and an audit against its design language found Home burying its one number. On a phone, the demo’s Things to try and a large month title came first, and "Safe to spend" started halfway down the screen. I saw each fix next to today’s Home and picked there. Claude Code built them: the month is now a small heading, the number sits on a phone’s first screen, and Things to try moves below the budget list. "Needs a category" is said once, with its amount. Budget bars are thinner, and an over-budget row says by how much ("$36 over"). Built and tested on demo data.',
     artifacts: [artifact(homeSafeToSpend, 'Tally · Home leads with safe to spend', 'Home on a phone before and after PR #99, on demo data, with numbered pointers.', 'Annotated screen captures, demo data')],
+  },
+  {
+    id: 'tally-bank-sync', day: '2026-09-27',
+    title: 'Syncing bank data safely',
+    summary: 'I chose automatic bank sync over statement uploads for Tally, and this is the server side of it. A linked bank’s Plaid token is encrypted before it’s stored, and the person who linked it is read from Cloudflare Access’s signed login token, not a header. Plaid’s webhooks count only when Plaid’s signature matches the exact body. A daily job catches up each bank in turn, so one failure doesn’t stop the rest. Each page of transactions is saved with its sync position in one database batch, so a retry never duplicates or skips anything. Codex wrote most of it; Claude Code reviewed it and made some fixes. Built and tested against a faked Plaid.',
+    artifacts: [artifact(bankSyncDiagram, 'Tally · Syncing bank data safely', 'How linking, token encryption, webhook checks, the atomic sync and the daily job connect. Drawn from the code; no real bank data.', 'Diagram')],
+  },
+  {
+    id: 'tally-accounts-page', day: '2026-09-28',
+    title: 'An Accounts page grouped by bank',
+    summary: 'Account balances and net worth are one of the eight features planned for Tally. More → Accounts now shows net worth (what the accounts hold minus what is owed), then each linked bank with its accounts: the last four digits, the balance, and debt as a negative number. A bank whose login needs fixing says so in words with an icon, not color alone, and a bank linked before its first sync still appears. Claude Code built the page’s three pieces in the design system catalog from a design study I picked, and I signed them off there first. Built and tested on demo data with two made-up banks; the net-worth chart comes later.',
+    artifacts: [artifact(accountsPage, 'Tally · Accounts grouped by bank', 'The Accounts page on demo data with two made-up banks, from PR #115, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-empty-states', day: '2026-09-27',
+    title: 'Empty lists that look finished',
+    summary: 'An empty list in Tally was a blank space or one muted line. Claude Code drew three designs on Tally’s proposals page, each showing a search with no results and a list with nothing left to do, and I picked one by seeing them side by side. Codex built my pick as one component: a small line drawing, one sentence, a hint and at most one button. A magnifier means nothing matched and offers Clear filters; a tick means there’s nothing to do, so there’s no button. Transactions, Home’s budget list and Settings use it now. Built and tested on demo data.',
+    artifacts: [artifact(emptyStates, 'Tally · Empty lists that look finished', 'Both kinds of empty state in the design system catalog on demo data, from PR #114, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-form-feedback', day: '2026-09-27',
+    title: 'Saving, and a shake: form feedback in Tally',
+    summary: 'A design review of Tally found that its forms gave no sign a save was under way, nothing stopped a second tap from sending it twice, and an error didn’t draw the eye to the field. Now Save shows a ring and "Saving…" while it works and can’t be pressed again, and a field that comes back with an error shakes once, unless the device asks for reduced motion. Without JavaScript the forms still post normally. Codex built the shared Button and TextInput components and the busy state. I chose that Save stays full colour while saving, and Claude Code fixed two sheets where it still dimmed. Built and tested on demo data.',
+    artifacts: [artifact(formFeedback, 'Tally · Form feedback', 'The catalog’s busy Save, disabled Save and a field with an error, on demo data from PR #105, with numbered pointers.', 'Annotated screen capture, demo data')],
   },
 ];

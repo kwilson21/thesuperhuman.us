@@ -15,6 +15,9 @@ import selfHostingDiagram from '~/assets/projects/kaillera-next/self-hosting-dia
 import supportedRoms from '~/assets/projects/kaillera-next/supported-roms-lobby-annotated.webp';
 import remixFreezesDiagram from '~/assets/projects/kaillera-next/remix-freezes-diagram.webp';
 import landingPage from '~/assets/projects/kaillera-next/landing-page-annotated.webp';
+import directionADemo from '~/assets/projects/kaillera-next/direction-a-demo-annotated.webp';
+import remixMenuRollback from '~/assets/projects/kaillera-next/remix-menu-rollback-diagram.webp';
+import graphicsFixes from '~/assets/projects/kaillera-next/graphics-fixes-diagram.webp';
 
 export const kailleraStory = {
   title: 'Kaillera Next',
@@ -173,5 +176,23 @@ export const kailleraMilestones: Milestone[] = [
     title: 'A front page that shows who’s playing',
     summary: 'Kaillera Next’s room server runs on a free tier that naps when idle and takes about a minute to wake. It also served the front page, so the first visitor after a nap stared at a loading tab. The new front page leads with open rooms that hosts choose to list, each with a recent frame and Watch or Join. While the server wakes, it shows a clock and the lag visualizer. Invite links now open a page that says who invited you and what joining needs. A Cloudflare Worker is built to serve both pages without waiting on the server. Claude Code and Codex built it to a design doc that records my decisions. Released in v0.56.1.',
     artifacts: [artifact(landingPage, 'Kaillera Next · A front page that shows who’s playing', 'The v0.56.1 front page in its waking state, rendered from the site’s own files without a server or ROMs, with numbered pointers.', 'Annotated page render')],
+  },
+  {
+    id: 'kaillera-next-direction-a', day: '2026-09-27',
+    title: 'Direction A reaches the room and the demo',
+    summary: 'I chose one look for the new front page, a console-era online lobby, and asked for everything else to match it. This round carried it into the room page and the rollback demo. The room names the game the host is playing, says when a ROM doesn’t match, lets a player switch to watching without leaving, and explains plainly when a browser can’t run the game. The demo’s result card gets a timeline driven by the engine’s real rollbacks. The site has a KN logo and lighter link-preview cards. The Worker in front now notices when its copy of the front page is out of date. Claude Code and Codex built it. Released in v0.58.0.',
+    artifacts: [artifact(directionADemo, 'Kaillera Next · Direction A reaches the demo', 'The v0.58.0 rollback demo page, rendered from the site’s own files without a server or ROMs, with numbered pointers.', 'Annotated page render')],
+  },
+  {
+    id: 'kaillera-next-remix-menu-rollback', day: '2026-09-27',
+    title: 'Rollback through the Smash Remix menus, and two sync fixes',
+    summary: 'Smash Remix menus ran at 30 to 40 frames a second while matches ran near 60. The menus used lockstep because rollback had once crashed there; rollback now saves state a different way, so Claude Code turned it on from the start of the game, as Super Smash Bros. 64 already had it. Two fixes landed first. Players could reach different stages from the same picks, because each kept their own save file, so everyone now starts with the host’s. And a resync that arrived a frame early left a player one frame behind for good; now it waits for its frame. Late join also accepts Remix’s 16 MB states. Released in v0.59.0.',
+    artifacts: [artifact(remixMenuRollback, 'Kaillera Next · Rollback through the Remix menus', 'The shared save file at game start, the resync timing fix, and rollback from the first frame. Drawn from the commits, not a gameplay capture.', 'Diagram')],
+  },
+  {
+    id: 'kaillera-next-graphics-fixes', day: '2026-09-28',
+    title: 'Fixing two graphics glitches in Smash Remix',
+    summary: 'Two picture bugs showed up in Smash Remix while both players’ games stayed in sync. On Pokemon Stadium, stage pieces stretched into slabs: our copy of the GLideN64 renderer predated two upstream fixes for reading past its vertex buffer, so Claude Code backported them. The other glitch hit the first frame shown after a rollback caught up. Replay had skipped a graphics-state bookkeeping step while the renderer kept drawing, so that frame restored stale state. Claude Code kept the step running and added a per-frame picture comparison to our two-player test, since state hashes couldn’t see the problem. Released in v0.59.3 and v0.59.4.',
+    artifacts: [artifact(graphicsFixes, 'Kaillera Next · Two graphics glitches fixed', 'The vertex buffer read past its end, and the replay step that restored stale graphics state. Drawn from the commits, not a gameplay capture.', 'Diagram')],
   },
 ];

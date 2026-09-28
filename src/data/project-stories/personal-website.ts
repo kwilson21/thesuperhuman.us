@@ -33,6 +33,9 @@ import comparisonLayoutBefore from '~/assets/projects/website/bugfixes/compariso
 import comparisonLayoutAfter from '~/assets/projects/website/bugfixes/comparison-layout-after.png';
 import ownerTooltipBefore from '~/assets/projects/website/bugfixes/owner-tooltip-before.png';
 import ownerTooltipAfter from '~/assets/projects/website/bugfixes/owner-tooltip-after.png';
+import motionHomeWorlds from '~/assets/projects/website/motion-home-worlds-annotated.webp';
+import pagesRefreshBuilding from '~/assets/projects/website/pages-refresh-building-annotated.webp';
+import copyCheckDiagram from '~/assets/projects/website/copy-check-diagram.webp';
 
 export const websiteStory = {
   title: 'Personal website',
@@ -194,5 +197,23 @@ export const websiteMilestones: Milestone[] = [
     detailLabel: 'How the short pages fit',
     detail: 'Each overview explains what I can help with, the experience I bring, how a project starts, and where to get in touch. Both use one shared layout and print on a single page. Audio is part of the personal site, with its existing subdomain kept as another entry point.',
     artifacts: [artifact(softwareSheet, 'Software · A short overview to share', 'A later review added a concise services page for conversations that start in person. Shown in its one-page print layout.', 'Local implementation capture'), artifact(audioSheet, 'Audio · The same useful format', 'Audio belongs within the personal site, with its own services overview and a direct route into the inquiry form.', 'Local implementation capture')],
+  },
+  {
+    id: 'website-motion', day: '2026-09-27',
+    title: 'Let Home change worlds as you scroll',
+    summary: 'I wanted Home to feel alive and change worlds as you scroll, without changing what it says. It follows the tagline: the studio plays a short scene, my current projects sit on a dark screen where the Lyft figure counts up, a waveform leads back to paper, and a sun rises over the contact section. Claude Code built it as one shared motion layer that About, Audio, Building, Work and Writing also use, sized to each page’s job. Every page is complete without it: with reduced motion, without JavaScript or in print you see the finished frame, and anything that plays on its own rests within five seconds.',
+    artifacts: [artifact(motionHomeWorlds, 'Home · Four worlds as you scroll', 'Home’s resting frame from the last CI run on PR #132, with numbered pointers to each world.', 'Annotated screen capture')],
+  },
+  {
+    id: 'website-pages-refresh', day: '2026-09-27',
+    title: 'Fewer choices, real work first',
+    summary: 'An audit on September 26 found the site was already short, but asked visitors to choose too much before showing any work: jump links on every page, closing blocks that repeated the menu, and prototypes on Home. I set the goal and approved the cuts. Home now features Tally and Kaillera Next, two projects you can open, and drops "Beyond the code". Building is one list with a status on every row. This site’s journal shows the latest five updates, with the redesign story and older entries on their own pages. Claude Code built each step, then moved every project’s status into one place, so the finished redesign no longer reads as ongoing.',
+    artifacts: [artifact(pagesRefreshBuilding, 'Building · One list with a status on every row', 'The Building page from the last CI run on PR #135, with numbered pointers.', 'Annotated screen capture')],
+  },
+  {
+    id: 'website-copy-check', day: '2026-09-28',
+    title: 'Let the build check the copy rules',
+    summary: 'My site has a few firm copy rules: no em dashes, no buzzwords, no hourly rates, and nothing that implies a current security clearance. They were written down for the coding agents I work with, yet two em dashes had still made it into a journal summary. Claude Code wrote a check that reads the site’s pages, data and public files on every build and stops the build with the file and line of each match. It still passes wording I do use, like "No active security clearance, but open to pursuing one." It matches words and characters, not tone or truth. Built and tested; it now runs on every build of the site.', // copy-check: allow (the entry names the rule itself; approved text, reviewed exception)
+    artifacts: [artifact(copyCheckDiagram, 'Copy check · Rules the build enforces', 'The four rules, what the check reads and skips, and where it runs in the build.', 'Diagram')],
   },
 ];
