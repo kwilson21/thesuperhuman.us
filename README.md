@@ -25,6 +25,8 @@ npm run preview   # serve the built Worker locally after npm run build
 
 Local env vars live in `.dev.vars` (not committed). See `src/env.d.ts` for the full list.
 
+Dependabot opens dependency update PRs weekly, grouping minor and patch npm updates into one PR and leaving majors separate.
+
 ## Deployment
 
 Push to `main` → Cloudflare's git integration rebuilds and runs `wrangler deploy`.
