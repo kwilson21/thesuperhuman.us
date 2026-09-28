@@ -1,7 +1,8 @@
 # Sample queue: September 24 to 26
 
 This sample predates the owner's 2026-09-28 posting rules (link in the first
-reply, per-network cadence); follow the design doc, section 8, where they differ.
+reply, per-network cadence, LinkedIn on weekends); follow the design doc,
+section 8, where they differ.
 
 Drafts only. In the real flow these files live in `publicist/queue/` inside the
 public review PR, and merging the PR approves them. Posts are drafted only for

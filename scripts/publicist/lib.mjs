@@ -40,11 +40,13 @@ export function entriesNeedingNotes(source, preexisting = []) {
   return entryIds(source).filter(id => !preexisting.includes(id));
 }
 
+const FRONT_MATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
+
 /** Front matter fields of a queued post. */
 export function frontMatter(text) {
-  const block = text.match(/^---\n([\s\S]*?)\n---/);
+  const block = text.replace(/^\uFEFF/, '').match(FRONT_MATTER);
   if (!block) return {};
-  return Object.fromEntries(block[1].split('\n')
+  return Object.fromEntries(block[1].split(/\r?\n/)
     .map(line => line.replace(/\s+#.*$/, '').match(/^([a-z_]+):\s*(.*)$/))
     .filter(Boolean).map(([, k, v]) => [k, v.trim()]));
 }
@@ -84,10 +86,13 @@ export function textProblems(text) {
   return problems;
 }
 
+// Full URLs, www. hosts and bare domains, which the networks turn into links too.
+const URL_LIKE = /https?:\/\/|\bwww\.|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:us|com|org|net|dev|io|app|gg)\b/i;
+
 /** A queued post's link goes in its first reply, so the post text has no URL. */
 export function queueBodyProblems(text) {
-  const body = text.replace(/^---\n[\s\S]*?\n---\n?/, '');
-  return /https?:\/\//.test(body) ? ['URL in the post text; the link goes in the first reply'] : [];
+  const body = text.replace(/^\uFEFF/, '').replace(FRONT_MATTER, '');
+  return URL_LIKE.test(body) ? ['URL in the post text; the link goes in the first reply'] : [];
 }
 
 /** Tally captures must be labeled as demo data. */

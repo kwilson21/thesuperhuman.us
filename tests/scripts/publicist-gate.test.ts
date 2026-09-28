@@ -101,6 +101,12 @@ describe('text checks', () => {
     const post = (body: string) => `---\nsource: tally-home-screen\nlink: https://thesuperhuman.us/building/tally\n---\n${body}\n`;
     expect(queueBodyProblems(post('Tally has a new Home screen.'))).toEqual([]);
     expect(queueBodyProblems(post('More: https://thesuperhuman.us/building/tally'))).toHaveLength(1);
+    expect(queueBodyProblems(post('More: HTTPS://THESUPERHUMAN.US'))).toHaveLength(1);
+    expect(queueBodyProblems(post('More at thesuperhuman.us/building/tally'))).toHaveLength(1);
+    expect(queueBodyProblems(post('See www.example.org'))).toHaveLength(1);
+    expect(queueBodyProblems(post('Released in v0.51.3. Smash Remix 2.0.1 works.'))).toEqual([]);
+    expect(queueBodyProblems(post('Plain text.').replace(/\n/g, '\r\n'))).toEqual([]);
+    expect(frontMatter('\uFEFF---\r\nsource: a\r\n---\r\nBody')).toEqual({ source: 'a' });
   });
   it('reads entry IDs and queue front matter', () => {
     expect(entryIds("{ id: 'tally-home-screen', day: '2026-09-23' }, { id: 'tally-phase-0' }")).toEqual(['tally-home-screen', 'tally-phase-0']);
