@@ -37,7 +37,16 @@ nothing useful to put in them.
 - **Motion:** start with the static composition. Enhance a specific interaction
   only after it works on keyboard and touch. Reduced motion preserves the full
   page; sound begins only on request. Three.js remains an option to evaluate if
-  an agreed interaction benefits from actual 3D.
+  an agreed interaction benefits from actual 3D. The shared motion layer is
+  `src/scripts/scroll-scenes.ts` (with `src/lib/scroll-scenes.ts`): resting frames
+  live in markup and CSS, scroll progress arrives as a `--p` custom property on
+  each `[data-scene]`, `[data-reveal]` blocks reveal once (at once on keyboard
+  focus), a `[data-scene-play="ms"]` scene plays once when half of it is on screen, a
+  `[data-scene-arrive]` CSS entrance that the page first shows off screen waits
+  until half of it is on screen or it fills half the screen, `[data-tilt]` leans toward a fine
+  pointer, and anything that plays on its own rests within
+  five seconds. Printing stops it. Home's worlds (content model, "Home motion")
+  are the fullest example; page-specific scenes plug in through `runMotion()`.
 
 `BaseLayout.astro` retains document structure, metadata, canonical URLs, and the
 skip link. Add one shared navigation component used by main-site pages, and

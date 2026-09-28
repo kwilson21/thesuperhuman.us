@@ -34,8 +34,8 @@ material from the other areas rather than maintaining a second portfolio.
 
 Approved desktop composition: [Quiet studio, version 2](design-concepts/2026-09-09/home-quiet-studio-v2.png).
 Home mobile v2 is also approved. The owner accepted the implemented Home prototype.
-Its production assets and responsive behavior have local QA records; additional
-motion is still a separate exploration.
+Its production assets and responsive behavior have local QA records. The motion
+layer proposed on September 27 is described under "Home motion" below.
 
 The owner welcomes an expressive homepage with motion and potentially 3D,
 including exploration of Three.js. This is permission to explore the experience,
@@ -237,10 +237,70 @@ No universal animation, card, timeline, or demonstration format is selected.
 1. Which current interests and existing material should lead, after project
    currency and public evidence are confirmed?
 2. What experience should motion or potential 3D create on Home, and how does
-   it connect to the selected content and Kazon's personality?
+   it connect to the selected content and Kazon's personality? Answered by the
+   "Home motion" worlds below, which the owner kept on September 27.
 
 Use the selected presentation models and system plan to prototype Home, then
 validate behavior and content before expanding across the site.
+
+## Home motion, September 27
+
+Proposed after the owner asked for a Home that feels alive and changes worlds as
+you scroll, while keeping the site's goals. The owner chose to keep the dark
+screen world and the notepad trail in the hero's resting frame (September 27,
+in conversation). The content, order and copy of Home
+are unchanged from the September 26 audit (hero, Work with me, Currently
+building, one Work proof, Writing, Contact); only presentation and motion change.
+
+The worlds follow the hero tagline, "Software, sound, and things worth exploring":
+
+- **Studio (paper).** The hero artwork plays one short scene on arrival: the
+  monitor re-types its last lines of code, the headphones give off three rings,
+  and a terracotta trail is drawn on the notepad from the pen tip. It rests within
+  five seconds and replays only when the visitor returns to the top or points at
+  the studio. Work with me stays on paper; its doors rise in turn.
+- **Screen (software, dark).** Currently building and the Lyft proof sit inside
+  a dark screen that arrives as a rounded panel and widens to full width. The
+  site's own tokens are inverted for that subtree, with the terracotta lifted for
+  contrast. Project captures glow like screens and lean toward a fine pointer.
+  The Lyft figure counts up beside one cell per 5,000 rows.
+- **Sound.** The screen ends in a waveform: paper peaks rise into the dark and
+  dark peaks fall into the paper. It swells as it crosses the viewport and is
+  silent at either edge. It is a picture of sound; nothing plays.
+- **Notebook and horizon (things worth exploring).** The essay title is inked in
+  and underlined with a pen stroke; a sun rises over the contact rule as the page
+  ends.
+
+Rules the implementation keeps: every resting frame is in the HTML and CSS, so
+the page is complete without JavaScript and with reduced motion (the view CI
+screenshots use). Motion that plays by itself finishes within five seconds;
+everything else is tied to scroll or pointer. A keyboard user who lands inside a
+block that has not revealed yet sees it at once. No new dependency, image or
+claim; the only new visible text is the capacity key (one cell = 5,000 rows).
+The script is about 2.4 KB gzipped. Three.js was not needed for this
+concept. Code: `src/components/home/`, `src/scripts/home-worlds.ts` and
+`src/lib/home-motion.ts`, on the shared layer in `src/scripts/scroll-scenes.ts`.
+
+### Motion on the other pages, September 27
+
+The owner asked for the same life across the site. Each page gets motion sized to
+its job, on the shared layer; content, copy and order are unchanged everywhere.
+
+- **About:** the path between chapters draws as far as the reader has scrolled
+  (still hidden below 800 px, per the audit), and each chapter's object plays one
+  short scene as it arrives: rings from the headphones, a glow and caret on the
+  laptop's `</>`, the controller's buttons pressing in turn, a glow from the
+  notebook's sun. The terrain drifts slightly with scroll.
+- **Audio:** the hero headphones give off the same rings on arrival and the
+  sections rise in. It stays light: this page sells, and playback is untouched.
+- **Building:** the feature and the project rows rise in; the Tally capture leans
+  toward a fine pointer and the row pictures lift on hover.
+- **Work:** restrained for recruiters. Only the two evidence diagrams build as
+  they arrive (before, then after; each timeline step in turn).
+- **Writing:** the direction illustration draws its path through the checkpoints
+  on arrival, once. It starts on load; where the page first shows it off screen
+  (small or landscape phones, or a link to a piece further down), it waits until
+  half of it is on screen or it fills half the screen. The essay page itself is unchanged.
 
 ## Implemented content locations, September 10
 

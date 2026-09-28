@@ -2,7 +2,7 @@
 interface Props { kind: 'bonus' | 'analyst' }
 const { kind } = Astro.props;
 ---
-<figure class="work-diagram">
+<figure class="work-diagram" data-reveal>
   {kind === 'bonus' ? <div class="responsibility">
     <div><p><strong>Before</strong> · A handoff to engineering</p><div class="diagram-flow"><span>Support</span><span aria-hidden="true">→</span><span>On-call engineer</span></div></div>
     <div><p><strong>After</strong> · Support can run the work</p><div class="diagram-flow"><span>Support</span><span aria-hidden="true">→</span><span class="self-serve">Self-service</span></div></div>
@@ -44,4 +44,13 @@ const { kind } = Astro.props;
   .continuity { border-top: 1px solid #d9d0c2; margin-top: 1.5625rem; padding-top: 1.25rem; font-size: .9375rem; line-height: 1.5; color: var(--muted); }
   figcaption { font-size: .75rem; color: var(--muted); margin-top: .65rem; }
   @media(max-width: 400px) { .responsibility, .analyst { padding: 1.1rem; }.diagram-flow { font-size: .95rem; gap: .5rem; } }
+  /* Builds once as it arrives (scroll-scenes.ts): before, then after; each step of the timeline in turn. */
+  @media screen and (prefers-reduced-motion: no-preference) {
+    :global(.motion) .work-diagram :is(.responsibility > div, .timeline li, .continuity) { transition: opacity 700ms ease, transform 700ms cubic-bezier(.2, .7, .2, 1); }
+    :global(.motion) .work-diagram:not(.is-in) :is(.responsibility > div, .timeline li, .continuity) { opacity: 0; transform: translateY(12px); }
+    :global(.motion) .work-diagram :is(.responsibility > div:nth-child(2), .timeline li:nth-child(2)) { transition-delay: 450ms; }
+    :global(.motion) .work-diagram .continuity { transition-delay: 900ms; }
+    :global(.motion) .work-diagram .timeline li:first-child::after { transform-origin: top; transition: transform 700ms ease 300ms; }
+    :global(.motion) .work-diagram:not(.is-in) .timeline li:first-child::after { transform: scaleY(0); }
+  }
 </style>

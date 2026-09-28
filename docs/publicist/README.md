@@ -7,8 +7,9 @@ every publicized change passes a private owner review first
 ([section 3](#3-private-review-gate)). Samples live in [samples/](samples/). The
 daily Routine is created paused and turned on after the owner reviews a dry run.
 
-The publicist covers `kwilson21/tally` and `kwilson21/kaillera-next` on
-thesuperhuman.us and on social media. It extends the existing development journal;
+The publicist covers `kwilson21/tally`, `kwilson21/kaillera-next` and, from
+September 27, this website (`kwilson21/thesuperhuman.us`) on thesuperhuman.us and
+on social media. It extends the existing development journal;
 it does not add a second one.
 
 ## 1. What already exists (findings)
@@ -337,8 +338,10 @@ Each run:
 1. Reads two state files: `state.json` in the private repository (the last merged
    work drafted into notes, per project) and `publicist/state.json` here (entry IDs
    published or declined, nothing else).
-2. Clones both project repos read-only and lists PRs merged since then (merge
-   commits on `main`, plus the GitHub API when the repo is attached).
+2. Clones each configured project repo read-only and lists PRs merged since then
+   (merge commits on `main`, plus the GitHub API when the repo is attached). For
+   this website, it skips its own PRs ("Publicist: …" and the posted or skipped
+   updates).
 3. For each merged PR, gathers intent from the PR description, linked spec, plan
    and decision entries, and `docs/journal/intent.md`. Skips PRs with no user-visible
    outcome (dependency bumps, formatting) and groups related PRs into one candidate.
@@ -380,6 +383,10 @@ each project repo that calls it on `pull_request: closed` with `merged == true`.
   Chromium. After Phase 1, flows run against `demo.thesuperhuman.us` instead.
 - **Kaillera-next:** lobby and room screenshots from a local server, labeled
   diagrams for netcode ideas, owner-supplied gameplay captures only.
+- **Website:** page recordings (MP4, plus GIF for networks that want one) in
+  `src/assets/projects/website/motion/`, each labeled in that folder's
+  `README.md` with kind, build, date and suggested alt text. They show the site
+  as built on a local preview; a post uses them only as its note allows.
 - Every capture is checked visually before it goes in a PR: no real data, no
   secrets or tokens in the address bar or console, no clipped fixed elements.
 
@@ -513,13 +520,15 @@ enforced in four layers, plus the owner's review of the final public PR:
    `publicist-gate`, runs as a `prebuild` step, the same way `assets:check` already
    does. Every `npm run build` therefore runs it: the existing `validate` workflow on
    each PR, and Cloudflare's own Workers Build on each PR preview and each
-   production deploy. It checks Tally and Kaillera-next journal data, their assets
-   and `publicist/queue/`, and fails the build when:
+   production deploy. It checks the configured projects' journal data (Tally,
+   Kaillera-next and the website, whose 17 entries from before it joined are listed
+   as `preexisting`), their assets and `publicist/queue/`, and fails the build when:
    - an entry or queued post has no note on the private repository's `main`, or
      the note has no Draft entry or it is not `verified` or `corrected`, or its
      decision is not `publish: yes`, or its readiness does not fit its tier
      (`shipped` needs `ready`, `exploration` needs `not applicable`);
-   - a post points to an entry that is neither in the PR nor already published;
+   - a post points to an entry that is neither in the PR nor already published, or
+     to a `preexisting` entry, which has no review note;
    - text contains em dashes or matches a secret pattern, or a Tally capture lacks
      its demo-data label.
 
@@ -531,8 +540,10 @@ enforced in four layers, plus the owner's review of the final public PR:
    entry IDs and pass or fail, never note content. Local builds without the token
    skip the private lookup and say so; CI and deploy builds without it fail. Branch
    protection makes `validate` required, and only the owner merges. It covers only
-   the projects in `publicist/config.json`, so the existing personal-website
-   journal flow is unchanged.
+   the projects in `publicist/config.json`. Since the website joined on September
+   27, any new entry in its journal, from the publicist or from any other session's
+   PR, needs an approved private note, or CI and the Cloudflare build fail; only the
+   17 `preexisting` entries are exempt.
 
    **Cost and availability.** This repository is public, and GitHub-hosted
    runners are free for public repositories, including after GitHub's 2026 pricing
@@ -586,7 +597,13 @@ loads that canonical file first. In short:
 2. **Private repository:** the publicist creates `kwilson21/publicist-private`;
    the owner attaches it to the Routine's environment.
 3. **Tiers:** Tally and Kaillera-next are both `shipped`; experiments inside them
-   are marked `exploration` on their own notes.
+   are marked `exploration` on their own notes. The owner added the website on
+   September 27 (in conversation) and confirmed its tier, `shipped` (the live site
+   is customer-facing), and its start, `notesSince: 2026-09-27`, the same day. Its journal
+   already held 17 curated entries, reviewed and published in their own PRs; they
+   are listed by ID as `preexisting` and need no note. Every other entry does,
+   whatever its date, since an entry's day is the day of the work. `notesSince` is
+   only where the publicist starts reading merged work.
 4. **Enforcement:** add the `publicist-gate` build step and make `validate` a
    required check. The owner creates the read-only token for the private
    repository and stores it as an Actions secret and a Cloudflare build secret.

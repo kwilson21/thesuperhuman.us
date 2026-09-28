@@ -1,0 +1,27 @@
+---
+// Where the dark screen ends and the paper page resumes, the edge is a waveform: paper
+// peaks rise into the dark and dark peaks fall into the paper, so the zero line is the
+// border between the two worlds. home-worlds.ts redraws it with scroll (silent at the
+// viewport's edges, loudest crossing the middle); this is the resting frame, mid-phrase.
+// No sound plays: it is a picture of one, and aria-hidden.
+import { barsPath, signalFrame, waveformPeaks } from '~/lib/home-motion';
+
+const bars = 110;
+const width = 1200;
+const mid = 60;
+const peaks = waveformPeaks(bars);
+const rest = signalFrame(peaks, 0.5);
+---
+<div class="signal-edge" data-scene="signal" data-start="1.05" data-end="-0.1" data-bars={bars} data-width={width} data-mid={mid} aria-hidden="true">
+  <svg viewBox={`0 0 ${width} ${mid * 2}`} preserveAspectRatio="none" focusable="false">
+    <rect class="signal-paper" x="0" y={mid} width={width} height={mid} />
+    <path class="signal-paper" data-signal="up" d={barsPath(rest, { width, mid, depth: mid, direction: 'up' })} />
+    <path class="signal-screen" data-signal="down" d={barsPath(rest, { width, mid, depth: mid, direction: 'down' })} />
+  </svg>
+</div>
+<style>
+  .signal-edge { height: var(--signal-height, clamp(88px, 11vw, 150px)); margin-top: var(--site-section-space); }
+  .signal-edge svg { display: block; width: 100%; height: 100%; }
+  .signal-paper { fill: var(--page-paper); }
+  .signal-screen { fill: var(--screen); }
+</style>

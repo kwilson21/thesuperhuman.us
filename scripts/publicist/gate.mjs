@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { agentsBlock, captureProblems, entryIds, frontMatter, noteProblems, textProblems } from './lib.mjs';
+import { agentsBlock, captureProblems, entriesNeedingNotes, entryIds, frontMatter, noteProblems, textProblems } from './lib.mjs';
 
 // Mechanical safeguard for publicist content (docs/publicist/README.md, section 9).
 // It confirms approvals exist; it cannot judge whether copy follows from them.
@@ -14,10 +14,13 @@ if (!readFileSync('AGENTS.md', 'utf8').includes(agentsBlock(skill))) {
 }
 
 const entries = [];
-for (const [project, { data }] of Object.entries(config.projects)) {
+const earlier = new Set();
+for (const [project, { data, preexisting = [] }] of Object.entries(config.projects)) {
   if (!existsSync(data)) continue;
   const source = readFileSync(data, 'utf8');
-  for (const id of entryIds(source)) entries.push({ project, id });
+  const needed = entriesNeedingNotes(source, preexisting);
+  for (const id of needed) entries.push({ project, id });
+  for (const id of entryIds(source)) if (!needed.includes(id)) earlier.add(id);
   for (const problem of textProblems(source)) errors.push(`${data}: ${problem}`);
   if (project === 'tally') for (const problem of captureProblems(source)) errors.push(`${data}: ${problem}`);
 }
@@ -28,7 +31,8 @@ if (existsSync(queue)) {
   for (const name of readdirSync(queue).filter(name => name.endsWith('.md'))) {
     const text = readFileSync(join(queue, name), 'utf8');
     const { source } = frontMatter(text);
-    if (!ids.has(source)) errors.push(`${queue}/${name}: source entry "${source}" is not a journal entry`);
+    if (earlier.has(source)) errors.push(`${queue}/${name}: source entry "${source}" predates the publicist and has no review note`);
+    else if (!ids.has(source)) errors.push(`${queue}/${name}: source entry "${source}" is not a journal entry`);
     for (const problem of textProblems(text)) errors.push(`${queue}/${name}: ${problem}`);
   }
 }

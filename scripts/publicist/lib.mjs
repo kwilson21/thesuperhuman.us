@@ -29,6 +29,17 @@ export function entryIds(source) {
   return [...source.matchAll(/\bid:\s*'([a-z0-9-]+)'/g)].map(m => m[1]);
 }
 
+/**
+ * Entry IDs that need a private review note: every entry except those listed in the
+ * project's `preexisting` config, which were already in a curated journal, reviewed and
+ * published in their own PRs, before the project joined the publicist. An exemption names
+ * entries, not dates: an entry's day is the day of the work, so a new entry can carry an
+ * earlier one.
+ */
+export function entriesNeedingNotes(source, preexisting = []) {
+  return entryIds(source).filter(id => !preexisting.includes(id));
+}
+
 /** Front matter fields of a queued post. */
 export function frontMatter(text) {
   const block = text.match(/^---\n([\s\S]*?)\n---/);
