@@ -16,10 +16,10 @@ export const studioInvitationEmail = () => renderEmail({
 });
 
 export const studioUpdateEmail = () => renderEmail({
-  preheader: 'There’s an update in your private studio.',
+  preheader: 'A new update is ready in your private studio.',
   kicker: 'Update',
-  heading: 'There’s something new on your song.',
-  paragraphs: ['Your studio has an update. Sign in to see it.'],
+  heading: 'You have a new studio update.',
+  paragraphs: ['Sign in to see the latest update on your project.'],
   button: { label: 'Open your studio', href: studioSignIn },
   note: signInNote,
   reason: 'You received this because your studio project has an update.',

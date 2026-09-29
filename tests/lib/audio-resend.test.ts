@@ -90,7 +90,7 @@ it('sends only a sign-in link for private project notices, as HTML with a plain-
   expect(body.html).toContain('href="https://thesuperhuman.us/studio/sign-in"');
   // Notices name no project, file, stage or payment: the client signs in to see those.
   for (const part of [body.text, body.html]) for (const detail of ['invoice', 'review mix is ready', 'balance', '$']) expect(part).not.toContain(detail);
-  expect(body.text).toContain('There’s something new on your song.');
+  expect(body.text).toContain('You have a new studio update.');
 });
 
 it('opens a first invitation without calling it an update', async () => {
