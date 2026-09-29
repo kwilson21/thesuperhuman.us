@@ -1,18 +1,17 @@
 ---
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import WorkWithMe from '~/components/WorkWithMe.astro';
-import tallyImage from '~/assets/site/tally-transactions.webp';
 import PersonalName from '~/components/PersonalName.astro';
 import WorkDiagram from '~/components/WorkDiagram.astro';
-import { lyftBonus } from '~/data/profile';
 import '~/styles/service-pages.css';
+import '~/styles/audio-intake.css';
 import { audioPath, mainSitePath } from '~/lib/host-routing';
 import type { ServiceSheet } from '~/data/services';
 interface Props { sheet: ServiceSheet; }
 const { sheet } = Astro.props;
 const host = Astro.request.headers.get('host') ?? Astro.url.host;
 const href = (path: string) => mainSitePath(host, path);
-const lyft = sheet.evidence[0];
+const lyft = sheet.hero;
 ---
 <BaseLayout title="Work with me · Kazon Wilson" description="Three ways to work with Kazon Wilson: mixing and mastering, website design, and software engineering. Fixed-price projects, agreed in writing before work begins.">
   <article class="service-sheet site-shell">
@@ -24,66 +23,64 @@ const lyft = sheet.evidence[0];
     <div class="hub-doors"><WorkWithMe headingLevel="h2" /></div>
     <section id="software" class="sheet-software services-page" aria-labelledby="software-title">
       <div class="services-hero">
-        <header><p class="page-kicker">{sheet.kicker}</p><h2 id="software-title" class="service-display">{sheet.title}</h2><p>{sheet.introduction}</p><p class="sheet-approach">{sheet.approach}</p><div class="software-actions"><a class="site-button" href={href(sheet.workflow.path)}>{sheet.workflow.button} <span aria-hidden="true">→</span></a><a class="site-button site-button-outline" href={href(sheet.idea.path)}>{sheet.idea.button} <span aria-hidden="true">→</span></a></div></header>
-        <div class="service-evidence"><div class="service-evidence-heading"><h2>{sheet.differenceHeading}</h2><p>{lyft.title}</p></div><WorkDiagram kind="bonus" /><p class="software-figure"><span>{lyftBonus.before} <span class="figure-arrow">→</span> {lyftBonus.after}</span><small>{sheet.figureCaption}</small></p><div class="software-story"><p>{lyft.description}</p><a class="site-link" href={href(lyft.path)}>{sheet.storyLabel} <span class="sr-only">{lyft.context}</span> <span aria-hidden="true">→</span></a></div></div>
+        <header><p class="page-kicker">{sheet.kicker}</p><h2 id="software-title" class="service-display">{sheet.title}</h2><p>{sheet.introduction}</p><p class="sheet-approach">{sheet.approach}</p></header>
+        <div class="service-evidence" data-reveal><div class="service-evidence-heading"><h2>{sheet.differenceHeading}</h2><p>{lyft.title}</p></div><WorkDiagram kind="bonus" /><p class="software-figure"><span>{lyft.figure.before} <span aria-hidden="true">→</span><span class="sr-only">to</span> {lyft.figure.after}</span><small>{sheet.figureCaption}</small></p><div class="software-story"><p>{lyft.description}</p><a class="site-link" href={href(lyft.path)}>{sheet.storyLabel} <span class="sr-only">{lyft.context}</span> <span aria-hidden="true">→</span></a></div></div>
       </div>
-      <section class="service-offers"><header><h2>{sheet.fitHeading}</h2><p>{sheet.fitCaption}</p></header>
-        <details class="service-offer" open><summary><h3>{sheet.workflow.title}</h3><p>{sheet.workflow.lead}</p><span>{sheet.quote}</span><b aria-hidden="true">+</b></summary><div class="software-offer-body"><div><p>{sheet.workflow.detail}</p>
-          <div class="path-visual workflow-visual"><svg class="workflow-art" viewBox="0 0 420 80" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M47 12h27l10 10v43H47zM74 12v10h10M56 34h19M56 42h19M56 50h13"/><path d="M112 39h39m-8-7 8 7-8 7M269 39h39m-8-7 8 7-8 7" stroke="var(--accent)"/><rect x="180" y="15" width="60" height="48" rx="3"/><path d="M180 26h60M190 36h20M190 45h39M190 54h31"/><circle cx="336" cy="26" r="8"/><circle cx="360" cy="26" r="8"/><circle cx="384" cy="26" r="8"/><path d="M324 59c0-18 24-18 24 0M348 59c0-18 24-18 24 0M372 59c0-18 24-18 24 0"/></svg><div class="workflow-labels">{sheet.labels.map(label => <span>{label}</span>)}</div><small>{sheet.caption}</small></div>
-
-          <a class="site-button" href={href(sheet.workflow.path)}>{sheet.workflow.button} <span aria-hidden="true">→</span></a></div>
-          <div class="path-evidence"><p class="page-kicker">{sheet.evidenceLabel}</p>{[...sheet.evidence].reverse().map(item => <article><h4>{item.title}</h4><p>{item.description}</p><a class="site-link" href={href(item.path)}>{sheet.storyLabel} <span class="sr-only">{item.context}</span> <span aria-hidden="true">→</span></a></article>)}<a class="site-link history-link" href={href(sheet.historyPath)}>{sheet.historyLabel} <span aria-hidden="true">→</span></a></div>
+      <section class="service-offers"><header><h2>{sheet.fitHeading}</h2></header>
+        <details class="service-offer" open><summary><h3>{sheet.workflow.title}</h3><span class="service-description">{sheet.workflow.lead}</span><b aria-hidden="true">+</b></summary><div class="software-offer-body" data-reveal><div class="path-evidence"><p class="workflow-detail">{sheet.workflow.detail}</p>
+          <p class="page-kicker">{sheet.workflow.evidenceLabel}</p><article><h4>{sheet.workflow.evidence.title}</h4><p>{sheet.workflow.evidence.description}</p><a class="site-link" href={href(sheet.workflow.evidence.path)}>{sheet.storyLabel} <span class="sr-only">{sheet.workflow.evidence.context}</span> <span aria-hidden="true">→</span></a></article><a class="site-link history-link" href={href(sheet.workflow.historyPath)}>{sheet.workflow.historyLabel} <span aria-hidden="true">→</span></a>
+          <a class="site-button workflow-button" href={href(sheet.workflow.path)}>{sheet.workflow.button} <span aria-hidden="true">→</span></a></div><WorkDiagram kind="analyst" />
         </div></details>
-        <details class="service-offer" open><summary><h3>{sheet.idea.title}</h3><p>{sheet.idea.lead}</p><span>{sheet.quote}</span><b aria-hidden="true">+</b></summary><div class="software-offer-body"><figure><div class="tally-visual"><img src={tallyImage.src} width={tallyImage.width} height={tallyImage.height} alt={sheet.imageAlt} loading="lazy" decoding="async" /></div><figcaption>{sheet.imageCaption}</figcaption></figure><div class="path-evidence"><p class="idea-detail">{sheet.idea.detail}</p><p class="page-kicker">{sheet.ideaEvidenceLabel}</p><h4>{sheet.idea.project.title}</h4><p>{sheet.idea.project.subtitle}</p><p>{sheet.meta}</p><div class="site-links"><a class="site-link" href={sheet.demoUrl} target="_blank" rel="noopener">{sheet.demoLabel} <span aria-hidden="true">↗</span></a><a class="site-link" href={href(sheet.projectPath)}>{sheet.projectLabel} <span aria-hidden="true">→</span></a></div><a class="site-button idea-button" href={href(sheet.idea.path)}>{sheet.idea.button} <span aria-hidden="true">→</span></a></div></div></details>
+        <details class="service-offer" open><summary><h3>{sheet.idea.title}</h3><span class="service-description">{sheet.idea.lead}</span><b aria-hidden="true">+</b></summary><div class="software-offer-body" data-reveal><figure><div class="tally-visual"><img src={sheet.idea.image.src} width={sheet.idea.image.width} height={sheet.idea.image.height} alt={sheet.idea.imageAlt} loading="lazy" decoding="async" /></div><figcaption>{sheet.idea.imageCaption}</figcaption></figure><div class="path-evidence"><p class="idea-detail">{sheet.idea.detail}</p><p class="page-kicker">{sheet.idea.evidenceLabel}</p><h4>{sheet.idea.project.title}</h4><p>{sheet.idea.project.subtitle}</p><p>{sheet.idea.meta}</p><div class="site-links"><a class="site-link" href={sheet.idea.demoUrl} target="_blank" rel="noopener">{sheet.idea.demoLabel} <span aria-hidden="true">↗</span></a><a class="site-link" href={href(sheet.idea.projectPath)}>{sheet.idea.projectLabel} <span aria-hidden="true">→</span></a></div><a class="site-button idea-button" href={href(sheet.idea.path)}>{sheet.idea.button} <span aria-hidden="true">→</span></a></div></div></details>
       </section>
-      <section class="service-before"><h2 id="steps-title">{sheet.stepsHeading}</h2><div><p class="service-before-intro">{sheet.beforeIntro}</p><ol class="software-steps" aria-labelledby="steps-title" role="list">{sheet.steps.map((step, index) => <li><span class="step-number" aria-hidden="true">{index + 1}</span><h3>{step.title}</h3><p>{step.description}</p></li>)}</ol><div class="service-bottom"><p>{sheet.agreement}</p><a class="site-button" href={href(sheet.startPath)}>{sheet.startLabel} <span aria-hidden="true">→</span></a></div></div></section>
-      <p class="other-services">{sheet.audioLead} <a class="site-link" href={audioPath(host, sheet.audioPath)}>{sheet.audioLabel} <span aria-hidden="true">→</span></a></p>
+      <section class="service-before"><h2 id="steps-title">{sheet.stepsHeading}</h2><div><ol data-reveal class="software-steps" aria-labelledby="steps-title" role="list">{sheet.steps.map((step, index) => <li><span class="step-number" aria-hidden="true">{index + 1}</span><h3>{step.title}</h3><p>{step.description}</p></li>)}</ol></div></section>
+      <p class="other-services">{sheet.audioLead} <a class="site-link" href={audioPath(host, sheet.audioServicesPath)}>{sheet.audioLabel} <span aria-hidden="true">→</span></a></p>
     </section>
     <p class="hub-elsewhere">Hiring for a role? <a href={href('/about#resumes')}>Request my resume</a>. Something else? <a href={href('/#contact')}>Get in touch</a>.</p>
     <div class="sheet-address"><span>kazon.wilson@thesuperhuman.us</span><a href={href(sheet.path)}>thesuperhuman.us{sheet.path}</a></div>
     <footer class="sheet-footnote"><span><PersonalName variant="full" /> · The Superhuman Group LLC · <a href={href('/privacy')}>Privacy</a></span><button type="button" class="site-button site-button-outline" data-print-sheet><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H3V9h18v9h-3"/><path d="M6 14h12v7H6zM17 12h1"/></svg>Print / Save PDF</button></footer>
   </article>
 </BaseLayout>
-<script>document.querySelector('[data-print-sheet]')?.addEventListener('click', () => window.print());</script>
+<script>
+import { runMotion } from '~/scripts/scroll-scenes';
+runMotion();
+document.querySelector('[data-print-sheet]')?.addEventListener('click', () => window.print());
+const rows = [...document.querySelectorAll<HTMLDetailsElement>('#software .service-offer')];
+let closed: HTMLDetailsElement[] = [];
+window.addEventListener('beforeprint', () => {
+  closed = rows.filter(row => !row.open);
+  rows.forEach(row => { row.open = true; });
+});
+window.addEventListener('afterprint', () => {
+  closed.forEach(row => { row.open = false; });
+  closed = [];
+});
+</script>
 <style>
-.service-sheet {  max-width: 1100px; padding-block: 2rem 3rem;  }
-.hub-intro {  padding-block: 1rem 2.5rem;  }
-h1 {  font-size: clamp(2.75rem, 5.5vw, 4.5rem); line-height: 1.02; letter-spacing: -.04em; max-width: 14ch; margin-bottom: 1.25rem;  }
-h2 {  font-size: clamp(1.6rem, 3vw, 2rem); line-height: 1.15;  }
-p {  font-size: 1.2rem; line-height: 1.5; color: var(--muted);  }
-.sheet-introduction {  font-size: clamp(1.4rem, 2.3vw, 1.7rem); line-height: 1.3; color: var(--ink); max-width: 34ch;  }
-.sheet-software {  margin-top: var(--site-section-space); scroll-margin-top: 1.5rem;  }
-.hub-elsewhere {  font-size: 1.05rem; margin-top: 1.5rem;  }
-.sheet-address {  display: grid; justify-items: start; gap: .3rem; margin-top: 1.5rem; font-size: 1rem; overflow-wrap: anywhere;  }
-.sheet-footnote {  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; border-top: 1px solid var(--rule); margin-top: 2rem; padding-top: 1rem; font: .8rem/1.5 Inter,sans-serif; color: var(--muted);  }
-.sheet-footnote button {  min-height: 48px; font: 1rem/1.4 Inter,sans-serif; cursor: pointer;  }
-.sheet-footnote button svg {  flex-shrink: 0;  }
+.service-sheet { max-width: 1100px; padding-block: 2rem 3rem; }
+.hub-intro { padding-block: 1rem 2.5rem; }
+h1 { font-size: clamp(2.75rem, 5.5vw, 4.5rem); line-height: 1.02; letter-spacing: -.04em; max-width: 14ch; margin-bottom: 1.25rem; }
+.hub-elsewhere { line-height: 1.5; color: var(--muted); }
+.sheet-introduction { font-size: clamp(1.4rem, 2.3vw, 1.7rem); line-height: 1.3; color: var(--ink); max-width: 34ch; }
+.sheet-software { margin-top: var(--site-section-space); scroll-margin-top: 1.5rem; border-top: 1px solid var(--rule); padding-top: 2rem; }
+.hub-elsewhere { font-size: 1.05rem; margin-top: 1.5rem; }
+.sheet-address { display: grid; justify-items: start; gap: .3rem; margin-top: 1.5rem; font-size: 1rem; overflow-wrap: anywhere; }
+.sheet-footnote { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; border-top: 1px solid var(--rule); margin-top: 2rem; padding-top: 1rem; font: .8rem/1.5 Inter,sans-serif; color: var(--muted); }
+.sheet-footnote button { min-height: 48px; font: 1rem/1.4 Inter,sans-serif; cursor: pointer; }
+.sheet-footnote button svg { flex-shrink: 0; }
 
-  .sheet-software { border-top: 1px solid var(--rule); padding-top: 2rem; }
-  .services-page .services-hero header > .page-kicker { font: .6875rem/1.5 'JetBrains Mono', monospace; letter-spacing: .08em; color: var(--accent); margin: 0 0 .75rem; }
+  .services-page .services-hero header > .page-kicker { font-size: .6875rem; line-height: 1.5; color: var(--accent); margin: 0 0 .75rem; }
   .services-page .services-hero header > .sheet-approach { font-size: 1rem; margin: 0 0 1.5rem; }
-  .software-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
-  .services-page .software-actions .site-button { min-width: 0; }
   .software-figure { display: flex; flex-wrap: wrap; align-items: baseline; gap: .75rem; border-top: 1px solid var(--rule); margin-top: 1rem; padding-top: .75rem; }
-  .software-figure > span { font-size: 2rem; letter-spacing: -.04em; color: var(--ink); }
-  .figure-arrow { color: var(--accent); }
+  .software-figure > span { font-size: clamp(1.9rem, 3vw, 2.65rem); line-height: 1.2; letter-spacing: -.025em; color: var(--ink); }
+  .software-figure [aria-hidden] { color: var(--accent); }
   .software-figure small, .software-story p, figcaption { font: .78rem/1.5 Inter, sans-serif; color: var(--muted); }
   .software-story { display: flex; align-items: start; gap: 1rem; margin-top: 1rem; }
   .software-story .site-link { flex-shrink: 0; font-size: .95rem; }
   .services-page .service-offers { margin-top: 2.5rem; }
-  .services-page .service-offer > summary { grid-template-columns: 1.3fr 1.2fr 1fr 24px; }
-  .service-offer summary > span { font-size: .95rem; color: var(--muted); }
-  .services-page .service-offer summary > b { font-size: 0; }
-  .service-offer summary > b::after { content: '+'; font-size: 1.5rem; }
-  .services-page .service-offer[open] summary > b { transform: none; }
-  .service-offer[open] summary > b::after { content: '–'; }
+  .services-page .service-offer > summary { grid-template-columns: 1.3fr 1.2fr 24px; }
   .software-offer-body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2.5rem; padding: .5rem .5rem 2rem; }
   .software-offer-body p { font-size: 1rem; }
-  .path-visual { margin-block: 1.5rem; }
-  .workflow-visual { text-align: center; }
-  .workflow-art { display: block; width: 100%; height: auto; max-height: 80px; }
-  .workflow-labels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; font-size: 1rem; line-height: 1.2; }
-  .workflow-visual small { display: block; margin-top: 1rem; font: .78rem/1.5 Inter, sans-serif; color: var(--muted); }
   .tally-visual { border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--paper); }
   .tally-visual img { display: block; width: 100%; height: auto; }
   figcaption { margin-top: .65rem; }
@@ -94,37 +91,37 @@ p {  font-size: 1.2rem; line-height: 1.5; color: var(--muted);  }
   .path-evidence .site-link { display: inline-block; margin-top: .7rem; }
   .path-evidence .history-link { font-size: .95rem; }
   .path-evidence .idea-detail { margin: 0 0 1.5rem; }
+  .workflow-button { display: flex; width: fit-content; margin-top: 1.5rem; }
+  .path-evidence .workflow-detail { margin: 0 0 1.5rem; }
+  .software-steps .step-number { margin-bottom: .5rem; }
   .idea-button { margin-top: 1.5rem; }
   .services-page .service-before { margin-top: 2.5rem; }
   .software-steps { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-block: 1px solid var(--rule); margin-top: 1rem; padding: 0; }
   .software-steps li { padding: 1rem; border-left: 1px solid var(--rule); }
   .software-steps li:first-child { border-left: 0; padding-left: 0; }
-  .step-number { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--rule); border-radius: 50%; width: 1.85rem; height: 1.85rem; font: .85rem/1.5 Inter, sans-serif; margin-bottom: .5rem; }
   .software-steps h3 { font-size: 1.2rem; line-height: 1.2; }
   .software-steps p { font-size: 1rem; line-height: 1.4; margin-top: .4rem; }
   @media screen and (max-width: 800px) {
     .software-story { flex-direction: column; gap: .5rem; }
     .software-offer-body { gap: 1.5rem; }
-    .services-page .service-offer > summary { grid-template-columns: 1.3fr 1.2fr 1fr 20px; gap: 1rem; }
+    .services-page .service-before { grid-template-columns: 1fr; gap: .8rem; }
+    .services-page .service-offer > summary { grid-template-columns: 1.3fr 1.2fr 20px; gap: 1rem; }
   }
   @media screen and (max-width: 700px) { .hub-intro { padding-block: .5rem 2rem; } }
   @media screen and (max-width: 650px) {
     .software-offer-body { grid-template-columns: 1fr; }
     .services-page .service-offer > summary { grid-template-columns: 1fr 18px; gap: .3rem 1rem; }
-    .service-offer summary > span { grid-column: 1; grid-row: 3; }
     .services-page .service-offer summary > b { grid-column: 2; grid-row: 1; }
     .software-steps { grid-template-columns: 1fr; }
     .software-steps li, .software-steps li:first-child { padding: 1rem 0; border-left: 0; }
     .software-steps li + li { border-top: 1px solid var(--rule); }
-    .step-number { width: 1.45rem; height: 1.45rem; }
-    .software-actions { flex-direction: column; }
   }
   @media print {
     @page { size: letter; margin: .55in; }
-    :global(.site-header), :global(.compact-footer), :global(.skip-link), [data-print-sheet], .hub-intro, .hub-doors, .hub-elsewhere, .site-button, .sheet-software a, .sheet-software img, .path-visual, .software-offer-body figure, .sheet-software :global(.work-diagram) { display: none !important; }
+    :global(.site-header), :global(.compact-footer), :global(.skip-link), [data-print-sheet], .hub-intro, .hub-doors, .hub-elsewhere, .site-button, .other-services, .sheet-software a, .sheet-software img, .software-offer-body figure, .sheet-software :global(.work-diagram) { display: none !important; }
     .service-sheet { max-width: none; padding: 0; }
     .sheet-software { margin: 0; padding: 0; border: 0; }
-    .sheet-software p, .sheet-software .service-offer summary > p, .sheet-software .service-offer summary > span, .sheet-software .services-hero header > .sheet-approach, .sheet-software .service-bottom > p { font-size: 10.5pt; line-height: 1.35; }
+    .sheet-software p, .sheet-software .service-offer summary > .service-description, .sheet-software .service-offer summary > span, .sheet-software .services-hero header > .sheet-approach { font-size: 10.5pt; line-height: 1.35; }
     .sheet-software .services-hero { grid-template-columns: 1.2fr 1fr; gap: 15pt; padding: 0 0 10pt; }
     .sheet-software .services-hero .service-display { font-size: 24pt; }
     .sheet-software .services-hero header > p { margin: 5pt 0; }
@@ -138,25 +135,21 @@ p {  font-size: 1.2rem; line-height: 1.5; color: var(--muted);  }
     .software-story { margin-top: 5pt; }
     .sheet-software .service-offers { margin-top: 0; padding-top: 7pt; }
     .sheet-software .service-offers > header { margin-bottom: 5pt; }
-    .sheet-software .service-offers > header > p { font-size: 9pt; }
-    .sheet-software .service-offer > summary { grid-template-columns: 1.2fr 1.2fr 1fr; gap: 8pt; padding: 7pt 0; }
+    .sheet-software .service-offer > summary { grid-template-columns: 1fr 1fr; gap: 8pt; padding: 7pt 0; }
     .sheet-software .service-offer h3 { font-size: 13pt; }
     .sheet-software .service-offer summary > b { display: none; }
     .service-offer::details-content { display: block; content-visibility: visible; }
-    .sheet-software .software-offer-body { display: grid !important; grid-template-columns: 1fr 1fr; gap: 15pt; padding: 0 0 7pt; }
-    .sheet-software .software-offer-body:has(figure) { grid-template-columns: 1fr; }
+    .sheet-software .software-offer-body { display: grid !important; grid-template-columns: 1fr; gap: 0; padding: 0 0 7pt; }
     .path-evidence article { margin-bottom: 5pt; padding-bottom: 5pt; }
     .path-evidence h4 { font-size: 12pt; }
     .path-evidence p.page-kicker { font-size: 8pt; margin-bottom: 4pt; }
-    .path-evidence .idea-detail { margin-bottom: 5pt; }
+    .path-evidence .idea-detail, .path-evidence .workflow-detail { margin-bottom: 5pt; }
     .sheet-software .service-before { grid-template-columns: 1fr 2fr; gap: 15pt; margin-top: 7pt; padding-top: 7pt; }
     .software-steps { margin-top: 5pt; }
     .software-steps li { padding: 5pt; }
     .software-steps h3 { font-size: 12pt; }
     .software-steps p { margin-top: 2pt; }
     .step-number { width: 14pt; height: 14pt; font-size: 8pt; margin-bottom: 3pt; }
-    .sheet-software .service-bottom { margin-top: 5pt; }
-    .sheet-software .other-services { margin-top: 7pt; }
     .sheet-address { font-size: 9pt; margin-top: 8pt; }
     .sheet-footnote { font-size: 8pt; margin-top: 8pt; padding-top: 6pt; }
   }

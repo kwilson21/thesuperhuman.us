@@ -359,7 +359,22 @@ online. A finished essay will develop the argument rather than duplicate the jou
 
 ## Work with me hub and services overviews
 
-`/services` is the "Work with me" hub. Its three doors show mixing and mastering, website design and software engineering through real work: the audio door opens `/audio/start`, the website door opens the contact form, and the software door opens `/software/start`. Below them, the software section shares the anatomy of `/audio/services`: a headline beside Lyft before-and-after evidence, open "Find the right fit." rows for workflow and idea briefs with Skupos, Lyft and Tally evidence, and "Before we start." with written scope and fixed-price agreement steps. Copy comes from `src/data/services.ts`, shared section styles from `src/styles/service-pages.css`, and the hub doors from `src/data/work-with-me.ts` through `WorkWithMe.astro`. The software section retains a one-page print view, followed by resume and contact links, the address and print control. Header, phone menu, footer, Work and Home link visitors to the hub. Audio prices and scope live at `/audio/services`.
-The old `/services.html` address redirects to the hub. Audio belongs within the
-personal site, with its existing hostname retained as an alternate entry and
-main-site canonicals.
+`/services` is the "Work with me" hub. Its three doors show mixing and mastering,
+website design and software engineering through real work: the audio door opens
+`/audio/start`, the website door opens the contact form, and the software door
+opens `/software/start`. Below them, the software section shares the anatomy of
+`/audio/services`: a hero with its introduction and muted tagline beside Lyft
+before-and-after evidence, two open path rows with Skupos evidence and its existing
+work diagram for workflows and Tally demo imagery and text for ideas, then the
+three "Before we start." steps. Only the two path rows have software calls to
+action. The hero panel, row bodies and steps use the shared reveal motion, with
+fully visible resting frames without JavaScript, with reduced motion and in print.
+Copy comes from `src/data/services.ts`, shared section styles from
+`src/styles/service-pages.css`, and hub doors from `src/data/work-with-me.ts`
+through `WorkWithMe.astro`. The software section retains a one-page US Letter
+print view, followed on screen by resume and contact links, the address and print
+control. Header, footer, Work and Home link visitors to the hub; the phone menu
+links its sections (`#door-website`, `#software`). Audio prices and scope live at
+`/audio/services`. The old `/services.html` address redirects to the hub. Audio
+belongs within the personal site, with its existing hostname retained as an
+alternate entry and main-site canonicals.

@@ -124,9 +124,11 @@ describe('screenshot coverage', () => {
       .toEqual(['about']);
     expect(relevantScreenshots(manifest, ['src/layouts/ServiceSheet.astro', 'src/data/services.ts'])
       .pages.map((page: { name: string }) => page.name)).toEqual(['services']);
-    for (const file of ['src/layouts/ServiceSheet.astro', 'src/data/services.ts', 'src/styles/service-pages.css', 'src/components/WorkDiagram.astro', 'src/data/profile.ts']) {
+    for (const file of ['src/layouts/ServiceSheet.astro', 'src/data/services.ts', 'src/styles/service-pages.css', 'src/lib/software-inquiry.ts', 'src/data/profile.ts']) {
       expect(relevantScreenshots(manifest, [file]).scenarios.map((scenario: { name: string }) => scenario.name)).toEqual(['services-print']);
     }
+    expect(relevantScreenshots(manifest, ['src/components/WorkDiagram.astro']).scenarios).toEqual([]);
+    expect(relevantScreenshots(manifest, ['src/lib/software-inquiry.ts']).pages.map((page: { name: string }) => page.name)).toContain('services');
     expect(relevantScreenshots(manifest, ['src/styles/service-pages.css']).pages.map((page: { name: string }) => page.name))
       .toEqual(['audio-services', 'services']);
     expect(relevantScreenshots(manifest, ['src/data/audio.ts']).pages.map((page: { name: string }) => page.name))
