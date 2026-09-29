@@ -42,7 +42,7 @@ export function setupFormSubmission({ form, endpoint, payload, success, onSucces
         body: JSON.stringify({ ...payload(data), turnstileToken: String(data.get('cf-turnstile-response') ?? '') }),
         signal: AbortSignal.timeout(30_000),
       });
-      const result = await response.json() as { ok?: boolean; errors?: Record<string, string>; error?: string; brief?: unknown };
+      const result = await response.json() as { ok?: boolean; errors?: Record<string, string>; error?: string };
       if (response.ok && result.ok === true) {
         onSuccess?.(result);
         form.hidden = true;

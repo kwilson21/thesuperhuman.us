@@ -25,6 +25,7 @@ export default {
         await page.locator('[name=approver]').selectOption('other');
         await page.locator('[name=approverRole]').fill('Project sponsor');
         await page.locator('[data-next]').click();
+        await page.locator('iframe[src*="turnstile"]').waitFor({ state: 'visible', timeout: 30_000 });
       };
       steps.push({ title: `Client review, ${viewport}`, images: [{ file: await capture({ file: `software-brief-review-${viewport}.png`, path: '/software/start', viewport, prepare: review }), caption: 'Fictional review step' }] });
       steps.push({ title: `Client receipt, ${viewport}`, images: [{ file: await capture({ file: `software-brief-receipt-${viewport}.png`, path: '/software/start', viewport, prepare: async page => {

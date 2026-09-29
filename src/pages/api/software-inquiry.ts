@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { sendSoftwareRequestNotice } from '~/lib/audio-resend';
 import { musicRequest } from '~/lib/music-request';
 import { sendUrgentOwnerAlert } from '~/lib/owner-alerts';
-import { getOwnerRequest, saveOwnerRequest } from '~/lib/owner-requests';
+import { getOwnerRequest, RequestDetailsTooLargeError, saveOwnerRequest } from '~/lib/owner-requests';
 import { checkRateLimit } from '~/lib/rate-limit';
 import { softwareBrief, softwareRequest, validateSoftwareInquiry } from '~/lib/software-inquiry';
 import { verifyTurnstile } from '~/lib/turnstile';
@@ -48,8 +48,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
       if (raced) return raced.email.toLowerCase() === input.email.toLowerCase()
         ? Response.json({ ok: true, brief: softwareBrief(raced) })
         : Response.json({ ok: false, error: preserved }, { status: 409 });
-      if (error instanceof Error && error.message === 'Request details are too large.')
+      if (error instanceof RequestDetailsTooLargeError) {
+        await env.RATE_LIMIT.delete(`rl:software:${ip}`);
         return Response.json({ ok: false, errors: { _form: 'Keep the brief shorter and try again.' } }, { status: 400 });
+      }
       await env.RATE_LIMIT.delete(`rl:software:${ip}`);
       await sendUrgentOwnerAlert(env, { category: 'request-storage', route: '/api/software-inquiry', requestId: crypto.randomUUID(), code: 'd1-write-failed', occurredAt: new Date().toISOString() });
       return Response.json({ ok: false, error: preserved }, { status: 503 });

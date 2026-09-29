@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { POST } from '~/pages/api/software-inquiry';
 import { softwareBrief, validateSoftwareInquiry } from '~/lib/software-inquiry';
+import { RequestDetailsTooLargeError } from '~/lib/owner-requests';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 const id = '00000000-0000-4000-8000-000000000001';
@@ -75,7 +76,7 @@ it('preserves input and clears success limit after a storage failure', async () 
   const alert = JSON.parse(alertCall[1]?.body as string);
   expect(alert.text).toContain('/api/software-inquiry');
   expect(alert.text).toContain('d1-write-failed');
-  expect(JSON.stringify(alert)).not.toMatch(/First line|Second line|Alex@Example|Example Studio|One place to see/);
+  expect(JSON.stringify(alert)).not.toMatch(/alex|first line|second line|example studio|one place to see/i);
 });
 
 it('does not undo a saved request when the owner notice fails', async () => {
@@ -85,10 +86,11 @@ it('does not undo a saved request when the owner notice fails', async () => {
 });
 
 it('rejects invalid answers, unknown choices, line breaks, and unknown keys', () => {
+  const expectedErrors: Record<string, string> = { path: 'Choose a starting point.', name: 'Add your name.', email: 'Add a valid email address.', timing: 'Choose one.', budgetStatus: 'Choose one.', approver: 'Choose one.', submissionId: 'Invalid submission ID.' };
   for (const [key, value] of [['path', 'other'], ['today', ''], ['name', ''], ['email', ''], ['audience', ''], ['timing', ''], ['budgetStatus', ''], ['approver', ''], ['audience', 'x'.repeat(1001)], ['firstResult', ''], ['name', 'A\nB'], ['email', 'bad'], ['company', 'A\nB'], ['timing', 'soon'], ['budgetStatus', 'nope'], ['approver', 'nope'], ['submissionId', 'bad']] as const) {
     const result = validateSoftwareInquiry({ ...base, [key]: value });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.errors[key]).toBeTruthy();
+    if (!result.ok) expect(result.errors[key]).toBe(value.includes('\n') ? 'Use one line.' : value.length === 1001 ? 'Keep this under 1000 characters.' : expectedErrors[key] ?? 'This answer is required.');
   }
   const parsed = validateSoftwareInquiry({ ...base, extra: 'secret' });
   expect(parsed.ok).toBe(true);
@@ -107,7 +109,19 @@ it('guards origin, content type, size, and missing bindings', async () => {
 it('reports simultaneous field errors, including empty choices and controls', () => {
   const result = validateSoftwareInquiry({ ...base, name: '', audience: '', today: '\u0001', timing: '', budgetStatus: '', approver: '' });
   expect(result.ok).toBe(false);
-  if (!result.ok) for (const key of ['name', 'audience', 'today', 'timing', 'budgetStatus', 'approver']) expect(result.errors[key]).toBeTruthy();
+  if (!result.ok) expect(result.errors).toMatchObject({ name: 'Add your name.', audience: 'This answer is required.', today: 'Remove control characters.', timing: 'Choose one.', budgetStatus: 'Choose one.', approver: 'Choose one.' });
+});
+
+it('uses plain messages for missing fields, wrong types, and non-object bodies', () => {
+  for (const [input, field, message] of [
+    [{ ...base, today: undefined }, 'today', 'This answer is required.'],
+    [{ ...base, audience: 42 }, 'audience', 'This answer is required.'],
+    [[], '_form', 'Please send the form again.'],
+  ] as const) {
+    const result = validateSoftwareInquiry(input);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors[field]).toBe(message);
+  }
 });
 
 it('alerts and preserves input when the duplicate lookup fails', async () => {
@@ -116,6 +130,8 @@ it('alerts and preserves input when the duplicate lookup fails', async () => {
   expect(response.status).toBe(503);
   expect((await response.json() as { error: string }).error).toContain('Your details are still here');
   expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(1);
+  const alertCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes('api.resend.com'))!;
+  expect(JSON.stringify(JSON.parse(alertCall[1]?.body as string))).not.toMatch(/alex|first line|second line|example studio|one place to see/i);
 });
 
 it('rejects overlength and line breaks in every text field', () => {
@@ -128,7 +144,7 @@ it('rejects overlength and line breaks in every text field', () => {
   for (const key of ['name', 'email', 'company', 'timingReason', 'budgetNote', 'approverRole']) {
     const result = validateSoftwareInquiry({ ...base, [key]: 'a\nb' });
     expect(result.ok, key).toBe(false);
-    if (!result.ok) expect(result.errors[key], key).toBeTruthy();
+    if (!result.ok) expect(result.errors[key], key).toBe('Use one line.');
   }
 });
 
@@ -183,9 +199,10 @@ it('omits approver role from the API receipt when approver is self', async () =>
 });
 
 it('treats an oversized saved detail as a field error without an urgent alert', async () => {
-  const oversized = { prepare: db.prepare.bind(db), batch: async () => { throw new Error('Request details are too large.'); } } as unknown as D1Database;
+  const oversized = { prepare: db.prepare.bind(db), batch: async () => { throw new RequestDetailsTooLargeError(); } } as unknown as D1Database;
   const response = await POST(context(base, { db: oversized }));
   expect(response.status).toBe(400);
   expect((await response.json() as { errors: Record<string, string> }).errors).toEqual({ _form: 'Keep the brief shorter and try again.' });
+  expect(kv.delete).toHaveBeenCalledWith('rl:software:0.0.0.0');
   expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(0);
 });

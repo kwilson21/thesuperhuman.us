@@ -27,6 +27,10 @@ export type RequestCommand =
 
 export type OwnerRequestAudit = { id: number; action: string; actor: string; note: string; occurredAt: string };
 
+export class RequestDetailsTooLargeError extends Error {
+  constructor() { super('Request details are too large.'); }
+}
+
 const requestColumns = `id,kind,release_id,service_id,campaign_id,name,email,city_region,
   summary,details_json,status,private_note,created_at,updated_at,resolved_at,contact_delete_after`;
 
@@ -39,7 +43,7 @@ function validActor(actor: string) {
 export async function saveOwnerRequest(db: D1Database, input: NewOwnerRequest, actor = 'system'): Promise<OwnerRequest> {
   if (!ownerRequestKinds.includes(input.kind)) throw new Error('Invalid request kind.');
   const details = JSON.stringify(input.details ?? {});
-  if (details.length > 16_000) throw new Error('Request details are too large.');
+  if (details.length > 16_000) throw new RequestDetailsTooLargeError();
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await db.batch([
