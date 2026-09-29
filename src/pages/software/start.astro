@@ -37,18 +37,19 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
         <p class="intake-intro">Start with the problem or the idea.</p>
         <p class="intake-muted software-step-help">A few sentences per question is plenty. Specific examples help most.</p>
         <div class="intake-columns intake-service-columns">
-          <fieldset class="offer-list" aria-describedby="software-path-error"><legend class="sr-only">Choose a starting point</legend>
+          <fieldset class="offer-list"><legend class="sr-only">Choose a starting point</legend>
             {Object.entries(softwarePaths).map(([key, value]) => <label class="intake-offer"><input type="radio" name="path" value={key} checked={selected === key} /><span><strong>{value}</strong><small>{key === 'workflow' ? 'A focused tool, automation or integration for a task your team repeats.' : 'One core experience or product question people can try.'}</small></span></label>)}
-            <p id="software-path-error" data-form-error="path" hidden></p>
+            <p data-form-error="path" hidden></p>
           </fieldset>
           <div>
             <p class="intake-muted" data-choose-path hidden={selected !== null}>Choose a starting point to see its questions.</p>
             {Object.entries(questions).map(([path, items]) => <div data-questions={path} hidden={selected !== path}>
               {path === 'idea' && <p class="intake-muted software-idea-note">I build a first version people can try, not the whole product. These questions help us find the part worth testing first.</p>}
-              {items.map(([key, hint, example, max]) => <div>
-                <label class="intake-field" for={`software-${key}`}>{softwareLabels[key]}</label>
+              {items.map(([key, hint, example, max]) => <div><div class="intake-field">
+                <label for={`software-${key}`}>{softwareLabels[key]}</label>
                 <p id={`software-${key}-help`} class="intake-muted software-question-help">{hint}</p>
                 <textarea id={`software-${key}`} name={key} aria-describedby={`software-${key}-help`} placeholder={example} maxlength={max} rows="4" required={key !== 'signal'} disabled={selected !== path}></textarea>
+                </div>
                 <p data-form-error={key} hidden></p>
               </div>)}
             </div>)}

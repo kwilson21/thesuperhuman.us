@@ -23,7 +23,6 @@ export const approverLabels = { self: 'I do', other: 'Someone else, and I can in
 const single = (max: number) => z.string().trim().max(max, `Keep this under ${max} characters.`);
 const required = (max: number) => single(max).min(1, 'This answer is required.');
 const common = {
-  path: z.enum(['workflow', 'idea'], { errorMap: () => ({ message: 'Choose a starting point.' }) }),
   name: single(100).min(1, 'Add your name.'), email: single(120).email('Add a valid email address.'),
   company: single(120).default(''), timing: z.enum(['flexible', 'month', 'quarter', 'date'], { errorMap: () => ({ message: 'Choose one.' }) }),
   timingReason: single(500).default(''), budgetStatus: z.enum(['approved', 'pending', 'exploring', 'unsure'], { errorMap: () => ({ message: 'Choose one.' }) }),
@@ -58,7 +57,7 @@ export function validateSoftwareInquiry(input: unknown): { ok: true; value: Soft
 }
 export function softwareRequest(input: SoftwareInput): NewOwnerRequest {
   const firstLine = (input.path === 'idea' ? input.idea : input.firstResult).split(/\r?\n/, 1)[0];
-  const summaryCharacters = Array.from(firstLine);
+  const summaryCharacters = typeof Intl.Segmenter === 'function' ? [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(firstLine)].map(part => part.segment) : Array.from(firstLine);
   return {
     kind: 'software', serviceId: input.path, submissionId: input.submissionId,
     name: input.name, email: input.email,

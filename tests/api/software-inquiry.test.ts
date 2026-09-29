@@ -59,7 +59,8 @@ it('validates each idea answer with the same plain messages and drops unknown ke
   for (const [key, value, message] of [
     ['idea', '', 'This answer is required.'], ['audienceToday', '', 'This answer is required.'],
     ['firstVersion', '', 'This answer is required.'], ['idea', 'x'.repeat(1001), 'Keep this under 1000 characters.'],
-    ['signal', 'x'.repeat(501), 'Keep this under 500 characters.'], ['idea', '\u0001', 'Remove control characters.'],
+    ['audienceToday', 'x'.repeat(1001), 'Keep this under 1000 characters.'], ['firstVersion', 'x'.repeat(1001), 'Keep this under 1000 characters.'],
+    ['signal', 'x'.repeat(501), 'Keep this under 500 characters.'], ...(['idea', 'audienceToday', 'firstVersion', 'signal'] as const).map(key => [key, '\u0001', 'Remove control characters.'] as const),
   ] as const) {
     const result = validateSoftwareInquiry({ ...idea, [key]: value });
     expect(result.ok, key).toBe(false);
@@ -74,6 +75,23 @@ it('keeps an emoji intact at the summary cutoff', () => {
   const parsed = validateSoftwareInquiry({ ...base, firstResult: `${'a'.repeat(116)}😀${'b'.repeat(10)}` });
   expect(parsed.ok).toBe(true);
   if (parsed.ok) expect(softwareRequest(parsed.value).summary).toBe(`${'a'.repeat(116)}😀…`);
+});
+
+it('keeps a joined emoji intact at the summary cutoff', () => {
+  const parsed = validateSoftwareInquiry({ ...base, firstResult: `${'a'.repeat(116)}👩‍💻${'b'.repeat(10)}` });
+  expect(parsed.ok).toBe(true);
+  if (parsed.ok) expect(softwareRequest(parsed.value).summary).toBe(`${'a'.repeat(116)}👩‍💻…`);
+});
+
+it('orders workflow questions in the saved brief and uses idea labels on the owner page', () => {
+  const parsed = validateSoftwareInquiry(base);
+  expect(parsed.ok).toBe(true);
+  if (parsed.ok) {
+    const request = softwareRequest(parsed.value);
+    expect(Object.keys(softwareBrief({ ...request, details: request.details } as any)).slice(0, 4)).toEqual(['path', 'today', 'audience', 'firstResult']);
+  }
+  const ownerPage = readFileSync(new URL('../../src/pages/owner/requests/[id].astro', import.meta.url), 'utf8');
+  expect(ownerPage).toContain('softwareLabels[key as keyof typeof softwareLabels]');
 });
 
 it('deduplicates after rate limit, rejects another email without leaking the brief, and limits new IDs', async () => {
