@@ -20,7 +20,8 @@ function fixture() {
     INSERT INTO owner_requests(id,kind,release_id,email,summary,status,created_at,updated_at) VALUES
     ('r1','purchase','old-news-single','one@example.com','Wants the song','new','2026-09-18T10:00:00Z','2026-09-18T10:00:00Z'),
     ('r2','merchandise','old-news-single','two@example.com','Wants a shirt','new','2026-09-18T11:00:00Z','2026-09-18T11:00:00Z'),
-    ('r3','service',NULL,'three@example.com','Mastering request','reviewed','2026-09-18T12:00:00Z','2026-09-18T12:00:00Z');
+    ('r3','service',NULL,'three@example.com','Mastering request','reviewed','2026-09-18T12:00:00Z','2026-09-18T12:00:00Z'),
+    ('r4','software',NULL,'four@example.com','Workflow request','new','2026-09-18T12:30:00Z','2026-09-18T12:30:00Z');
     `);
   const request = sql.prepare(`INSERT INTO owner_requests(id,kind,release_id,campaign_id,email,summary,status,created_at,updated_at)
     VALUES (?,?,?,?,?,?,?,?,?)`);
@@ -40,11 +41,11 @@ function fixture() {
 
 it('orders attention first, suppresses sparse cities and excludes automated traffic', async () => {
   const ledger = await loadStudioLedger(fixture(), new Date('2026-09-19T12:00:00Z'));
-  expect(ledger.attention.newRequests).toBe(2);
+  expect(ledger.attention.newRequests).toBe(3);
   expect(ledger.geography.cities).toEqual([{ label: 'Other locations', reportedListens: 2 }]);
   expect(ledger.listening.reportedStarts).toBe(7);
   expect(ledger.activeCampaignListening.reportedStarts).toBe(6);
-  expect(ledger.attentionRequests.map(request => request.id)).toEqual(['r2', 'r1']);
+  expect(ledger.attentionRequests.map(request => request.id)).toEqual(['r4', 'r2', 'r1']);
   expect(ledger.activeCampaign?.id).toBe('old-news-launch');
 });
 

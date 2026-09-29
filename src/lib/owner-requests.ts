@@ -18,6 +18,7 @@ export type NewOwnerRequest = {
   cityRegion?: string;
   summary: string;
   details?: Record<string, unknown>;
+  submissionId?: string;
 };
 
 export type RequestCommand =
@@ -43,11 +44,11 @@ export async function saveOwnerRequest(db: D1Database, input: NewOwnerRequest, a
   const now = new Date().toISOString();
   await db.batch([
     db.prepare(`INSERT INTO owner_requests
-      (id,kind,release_id,service_id,campaign_id,name,email,city_region,summary,details_json,status,private_note,created_at,updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,'new','',?,?)`)
+      (id,kind,release_id,service_id,campaign_id,name,email,city_region,summary,details_json,status,private_note,created_at,updated_at,submission_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?,'new','',?,?,?)`)
       .bind(id, input.kind, input.releaseId ?? null, input.serviceId ?? null, input.campaignId ?? null,
-        input.name?.trim() ?? '', input.email.trim().toLowerCase(), input.cityRegion?.trim() ?? '',
-        input.summary.trim(), details, now, now),
+        input.name?.trim() ?? '', input.kind === 'software' ? input.email.trim() : input.email.trim().toLowerCase(), input.cityRegion?.trim() ?? '',
+        input.summary.trim(), details, now, now, input.submissionId ?? null),
     db.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
       VALUES (?,'created',?,'',?)`).bind(id, validActor(actor), now),
   ]);

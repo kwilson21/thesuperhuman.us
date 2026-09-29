@@ -55,6 +55,18 @@ it('preview is read-only and apply preserves aggregates while deleting eligible 
     .toEqual({ environment: 'Local test data', playback_rows: 5, request_contacts: 1 });
 });
 
+it('selects resolved software contact details after 90 days but keeps newer details', async () => {
+  const database = fixture();
+  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at) VALUES
+    ('old-software','software','Old Client','old@example.com','Tool','resolved','2026-01-01T00:00:00Z','2026-01-02T00:00:00Z','2026-01-02T00:00:00Z'),
+    ('new-software','software','New Client','new@example.com','Tool','resolved','2026-09-01T00:00:00Z','2026-09-02T00:00:00Z','2026-09-02T00:00:00Z');`);
+  const review = await previewOwnerRetention(database, 'Local test data', now);
+  expect(review.requestContacts).toBe(2);
+  await applyOwnerRetention(database, review, 'Local test data', now);
+  expect((await database.query("SELECT email FROM owner_requests WHERE id='old-software'"))[0]).toEqual({ email: '' });
+  expect((await database.query("SELECT email FROM owner_requests WHERE id='new-software'"))[0]).toEqual({ email: 'new@example.com' });
+});
+
 it('rolls back every retention mutation when an atomic batch statement fails', async () => {
   const database = fixture(); const review = await previewOwnerRetention(database, 'Local test data', now);
   const interrupted = { ...database, batch: async (statements: string[]) => {
