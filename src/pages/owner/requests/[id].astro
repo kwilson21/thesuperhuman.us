@@ -105,10 +105,10 @@ const brief = request.kind === 'software' ? softwareBrief(request) : null;
       {allowed.length > 0 && <section class="rail-section" aria-labelledby="request-heading"><h2 id="request-heading">Request</h2>
         <div class="rail-actions" data-request-actions data-open-studio={portalProject && portalProject.stage === 'files_under_review' && !portalProject.revoked_at ? 'true' : undefined}>{allowed.map(action => <button type="button" id={action === 'review' ? 'mark-reviewed' : undefined} data-action={action} class:list={{ danger: action === 'withdraw' }}>{action === 'review' ? 'Mark reviewed' : action === 'resolve' ? 'Mark resolved' : action === 'reopen' ? 'Reopen' : 'Honor withdrawal'}</button>)}</div>
       </section>}
-      {brief && <SoftwareQuestions requestId={request.id} />}
+      {brief && request.status !== 'resolved' && <SoftwareQuestions requestId={request.id} />}
       <p class="studio-status" data-action-status aria-live="polite"></p>
       <details class="rail-section rail-activity"><summary><span>Activity</span><span>{audit.length} {audit.length === 1 ? 'entry' : 'entries'}</span></summary>
-        <ol>{audit.map(item => <li><strong>{auditLabel(item)}</strong><span>{item.actor}</span><time datetime={item.occurredAt}>{new Date(item.occurredAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' })}</time>{item.note && <p>{item.note}</p>}</li>)}</ol>
+        <ol>{audit.map(item => <li><strong>{auditLabel(item)}</strong><span>{item.actor}</span><time datetime={item.occurredAt}>{new Date(item.occurredAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' })}</time>{item.note && item.note !== auditLabel(item) && <p>{item.note}</p>}</li>)}</ol>
       </details>
     </aside>
   </div>
@@ -120,14 +120,7 @@ const brief = request.kind === 'software' ? softwareBrief(request) : null;
     .owner-page-heading h1, .owner-breadcrumb { overflow-wrap: anywhere; }
     .portal-stage { padding: .5rem 0 2.5rem; }
     .request-rail { display: grid; border-left: 1px solid var(--rule); padding-left: clamp(1.5rem, 3vw, 2.5rem); }
-    .rail-section { display: grid; gap: .45rem; padding: 1.4rem 0; border-bottom: 1px solid var(--rule); }
-    .rail-section:first-child { padding-top: 0; }
-    .rail-section h2, .rail-section > summary span:first-child { font: 400 1.45rem/1.15 Newsreader, Georgia, serif; }
-    .rail-section.wide { max-width: 46rem; }
-    .rail-section p { margin: 0; font: .9rem/1.5 Inter, sans-serif; }
     .rail-name { font: 400 1.2rem/1.3 Newsreader, Georgia, serif !important; }
-    .rail-muted { color: var(--studio-muted); }
-    .rail-muted small, .rail-caption { font-size: .78rem !important; }
     .rail-links { display: flex; flex-wrap: wrap; gap: .4rem 1rem; }
     .rail-list { display: grid; grid-template-columns: minmax(5.5rem, auto) minmax(0, 1fr); gap: .35rem 1rem; margin: .2rem 0 0; font: .86rem/1.45 Inter, sans-serif; }
     .rail-list dt { color: var(--studio-muted); }
@@ -146,7 +139,6 @@ const brief = request.kind === 'software' ? softwareBrief(request) : null;
     .rail-close p:not(.studio-status) { color: var(--studio-muted); font-size: .82rem; }
     .rail-note { display: grid; gap: .5rem; }
     .rail-note .studio-textarea { min-height: 5rem; font-size: .9rem; }
-    .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
     .rail-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
     .rail-actions button { min-height: 2.4rem; padding: .45rem .85rem; border: 1px solid var(--ink); border-radius: 2px; background: none; color: var(--ink); font: 500 .8rem/1.2 Inter, sans-serif; cursor: pointer; }
     .rail-actions button:hover { background: var(--ink); color: var(--paper); }

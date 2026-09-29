@@ -10,8 +10,22 @@ export function setupSoftwareOffers() {
   };
   const post = async (endpoint: string, body: unknown) => {
     const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-    const result = await response.json() as { message?: string; errors?: Record<string,string>; version: number; updatedAt: string; link: string; emailSent: boolean; copySent?: boolean };
-    if (!response.ok) throw new Error(result.message ?? (Object.entries(result.errors ?? {}).map(([key, message]) => `${key}: ${message}`).join('\n') || 'Could not save. Try again.'));
+    const result = await response.json() as { message?: string; errors?: Record<string,string>; version: number; updatedAt: string; sentAt?: string; link: string; emailSent: boolean; uncertain?: boolean; copySent?: boolean };
+    if (!response.ok) {
+      const form = document.querySelector<HTMLElement>('[data-offer-form]');
+      const messages = Object.entries(result.errors ?? {}).map(([path, message]) => {
+        const parts = path.split('.');
+        const milestone = parts[0] === 'milestones' && /^\d+$/.test(parts[1] ?? '');
+        const scope = milestone ? document.querySelectorAll<HTMLElement>('[data-milestone]')[Number(parts[1])] : form;
+        const field = parts.at(-1)!;
+        const names: Record<string, string> = { name: 'milestoneName', feeCents: 'fee', label: 'checkpointLabel', cancellationPercent: 'checkpointPercent', lowCents: 'rangeLow', highCents: 'rangeHigh' };
+        const key = milestone ? parts[2] === 'checkpoint' ? parts[3] : parts[2] : field;
+        const labels: Record<string, string> = { outcome: 'Outcome', summary: 'Summary', milestones: 'Milestones', name: 'name', deliverables: 'deliverables', acceptance: 'acceptance examples', feeCents: 'fee', label: 'checkpoint label', cancellationPercent: 'checkpoint percent', clientInputs: 'What you need from them', exclusions: 'Outside this offer', timing: 'Timing', paymentMode: 'Payment mode', lowCents: 'Range low', highCents: 'Range high' };
+        scope?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(`[name="${names[key] ?? key}"]`).forEach(input => input.setAttribute('aria-invalid', 'true'));
+        return `${milestone ? `Milestone ${Number(parts[1]) + 1} ` : ''}${labels[key] ?? 'Offer'}: ${message}`;
+      });
+      throw new Error(result.message ?? (messages.join('\n') || 'Could not save. Try again.'));
+    }
     return result;
   };
   document.querySelectorAll<HTMLFormElement>('[data-software-action]').forEach(form => {
@@ -24,7 +38,7 @@ export function setupSoftwareOffers() {
         const result = await post(form.dataset.endpoint!, { action, ...Object.fromEntries(data) });
         status.textContent = result.copySent === false ? 'Sent to the client. The owner copy didn’t send.' : action === 'fit' ? 'Fit review saved.' : 'Sent.';
         const editor = document.querySelector<HTMLElement>('[data-software-editor]');
-        if (editor?.dataset.dirty === 'true' || editor?.dataset.busy === 'true') status.textContent += ' Your offer edits are kept. Reload after saving to refresh activity.';
+        if (action !== 'decline' && (editor?.dataset.dirty === 'true' || editor?.dataset.busy === 'true')) status.textContent += ' Your offer edits are kept. Reload after saving to refresh activity.';
         else { sessionValue(`software-flash:${form.dataset.endpoint}`, status.textContent); location.reload(); }
       } catch (error) { status.textContent = (error as Error).message; }
       finally { button.disabled = false; }
@@ -39,7 +53,7 @@ export function setupSoftwareOffers() {
   const flash = sessionValue(flashKey);
   if (flash) { status.textContent = flash; sessionValue(flashKey, null); }
   let saved = Boolean(root.dataset.updated), changed = false, inputRevision = 0;
-  let link = sessionValue(`software-link:${endpoint}`) ?? '';
+  let link = '';
   const get = (element: HTMLElement, name: string) => element.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${name}"]`)!.value.trim();
   const checked = (element: HTMLElement, name: string) => element.querySelector<HTMLInputElement>(`[name="${name}"]`)!.checked;
   const lines = (value: string) => value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
@@ -56,12 +70,17 @@ export function setupSoftwareOffers() {
     root.dataset.dirty = String(changed);
     root.querySelector<HTMLButtonElement>('[data-add-milestone]')!.disabled = list.children.length >= 3;
     list.querySelectorAll<HTMLButtonElement>('[data-remove-milestone]').forEach(button => { button.disabled = list.children.length <= 1; });
-    list.querySelectorAll<HTMLElement>('[data-milestone]').forEach(row => { const active = checked(row, 'hasCheckpoint'), block = row.querySelector<HTMLElement>('[data-checkpoint]')!; block.hidden = !active; block.querySelectorAll<HTMLInputElement>('input').forEach(input => { input.disabled = !active; input.required = active; }); });
+    list.querySelectorAll<HTMLElement>('[data-milestone]').forEach((row, index) => { row.querySelector('legend')!.textContent = `Milestone ${index + 1}`; const active = checked(row, 'hasCheckpoint'), block = row.querySelector<HTMLElement>('[data-checkpoint]')!; block.hidden = !active; block.querySelectorAll<HTMLInputElement>('input').forEach(input => { input.disabled = !active; input.required = active; }); });
     const rangeActive = checked(form, 'hasRange'), range = root.querySelector<HTMLElement>('[data-range]')!; range.hidden = !rangeActive; range.querySelectorAll<HTMLInputElement>('input').forEach(input => { input.disabled = !rangeActive; input.required = rangeActive; });
     send.disabled = changed || !(saved || (root.dataset.sentVersion && root.dataset.revoked === 'true'));
     preview.hidden = !saved || changed;
   };
-  form.addEventListener('input', () => { changed = true; inputRevision++; updateControls(); });
+  form.addEventListener('input', event => {
+    const input = event.target as HTMLInputElement;
+    input?.removeAttribute('aria-invalid');
+    if (input?.type === 'radio') form.querySelectorAll<HTMLInputElement>(`[name="${input.name}"]`).forEach(radio => radio.removeAttribute('aria-invalid'));
+    changed = true; inputRevision++; updateControls();
+  });
   form.addEventListener('change', updateControls);
   root.querySelector('[data-add-milestone]')!.addEventListener('click', () => {
     if (list.children.length >= 3) return;
@@ -82,24 +101,35 @@ export function setupSoftwareOffers() {
     if (!confirm(`Send offer v${version} to ${root.dataset.email}?`)) return;
     send.disabled = true; root.setAttribute('inert', ''); root.setAttribute('aria-busy', 'true'); root.dataset.busy = 'true';
     try { const result = await post(endpoint, { action: 'send', version, expectedUpdatedAt: saved ? root.dataset.updated : root.dataset.sentUpdated });
-      link = result.link; const persistedLink = sessionValue(`software-link:${endpoint}`, link);
-      status.textContent = result.emailSent ? `Offer v${version} sent.${result.copySent ? '' : ' The owner copy didn’t send.'}` : `Offer v${version} is saved as sent, but the email didn’t go out. Copy the link and send it yourself.`;
+      link = result.link;
+      status.textContent = result.uncertain ? `Offer v${version} is saved as sent. The email service didn’t confirm delivery, so check your inbox for the copy before sending the link yourself.` : result.emailSent ? `Offer v${version} sent.${result.copySent ? '' : ' The owner copy didn’t send.'}` : `Offer v${version} is saved as sent, but the email didn’t go out. Copy the link and send it yourself.`;
+      root.dataset.sentDate = new Date(result.sentAt ?? new Date().toISOString()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' });
       saved = false; root.dataset.updated = ''; root.dataset.sentVersion = String(version); root.dataset.sentUpdated = result.updatedAt; root.dataset.revoked = 'false';
-      root.querySelector<HTMLElement>('[data-link-actions]')!.hidden = false; root.querySelector<HTMLButtonElement>('[data-revoke-link]')!.disabled = false;
+      root.querySelector<HTMLElement>('[data-link-actions]')!.hidden = false; root.querySelector<HTMLElement>('[data-copy-link]')!.hidden = false; root.querySelector<HTMLButtonElement>('[data-revoke-link]')!.disabled = false;
       root.querySelector<HTMLElement>('[data-link-state]')!.textContent = ''; root.querySelector<HTMLElement>('[data-offer-state]')!.textContent = `v${version} sent · no changes since`; updateControls();
-      if (persistedLink) { sessionValue(flashKey, status.textContent); location.reload(); }
-      else { root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false'; status.textContent += ' Copy the link before reloading; browser storage is unavailable.'; }
+      const versions = root.querySelector<HTMLElement>('[data-offer-versions]')!, versionList = root.querySelector<HTMLElement>('[data-version-list]')!;
+      versions.hidden = false;
+      versionList.querySelectorAll<HTMLElement>('[data-version-status]').forEach(value => { if (value.textContent === 'sent') value.textContent = 'superseded'; });
+      let entry = versionList.querySelector<HTMLElement>(`[data-version="${version}"]`);
+      if (!entry) {
+        entry = document.createElement('li'); entry.dataset.version = String(version);
+        const anchor = document.createElement('a'); anchor.href = `${root.dataset.preview}?version=${version}`; anchor.target = '_blank'; anchor.rel = 'noopener'; anchor.textContent = `Offer v${version}`;
+        entry.appendChild(anchor); entry.appendChild(document.createTextNode(` · ${root.dataset.sentDate} · `));
+        const state = document.createElement('span'); state.dataset.versionStatus = ''; entry.appendChild(state); versionList.insertBefore(entry, versionList.firstChild);
+      }
+      entry.querySelector<HTMLElement>('[data-version-status]')!.textContent = 'sent';
+      root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false';
     } catch (error) { status.textContent = (error as Error).message; root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false'; updateControls(); }
   });
   root.querySelector('[data-copy-link]')!.addEventListener('click', async () => {
-    try { if (!link || root.dataset.revoked === 'true') { status.textContent = 'The link is only available in the browser that sent it. Revoke and send again to issue a new link.'; return; } await navigator.clipboard.writeText(link); status.textContent = 'Client link copied.'; }
+    try { if (!link || root.dataset.revoked === 'true') { status.textContent = 'The client link is in your copy of the offer email. To issue a new one, revoke this link and send again.'; return; } await navigator.clipboard.writeText(link); status.textContent = 'Client link copied.'; }
     catch { status.textContent = 'Clipboard unavailable. Try again in a secure browser.'; }
   });
   root.querySelector<HTMLButtonElement>('[data-revoke-link]')!.addEventListener('click', async event => {
     if (!confirm('Revoke the client link? Anyone using it will lose access.')) return;
     if (changed && !confirm('Revoking reloads this page and discards unsaved offer edits. Continue?')) return;
     const button = event.currentTarget as HTMLButtonElement; button.disabled = true; root.setAttribute('inert', ''); root.setAttribute('aria-busy', 'true'); root.dataset.busy = 'true';
-    try { await post(endpoint, { action: 'revoke' }); sessionValue(`software-link:${endpoint}`, null); location.reload(); }
+    try { await post(endpoint, { action: 'revoke' }); link = ''; location.reload(); }
     catch (error) { status.textContent = (error as Error).message; button.disabled = false; root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false'; }
   });
   updateControls();

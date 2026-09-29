@@ -25,8 +25,12 @@ export default {
         VALUES (${quote(`screenshot-offer-${mode}`)},${quote(id)},${index + 1},'sent',${quote(JSON.stringify({ ...terms, paymentMode:mode }))},'2026-09-29T12:00:00Z','2026-09-29T12:00:00Z','2026-09-29T12:00:00Z','owner@example.com');
         INSERT INTO software_offer_links(request_id,token_hash,created_at) VALUES (${quote(id)},${quote(hash)},'2026-09-29T12:00:00Z')
         ON CONFLICT(request_id) DO UPDATE SET token_hash=excluded.token_hash,revoked_at=NULL;`);
+      for (const viewport of ['desktop','phone']) steps.push({ title:`Owner sent v${index + 1}, ${viewport}`, images:[{ file:await capture({ file:`software-offer-owner-sent-${mode}-${viewport}.png`, path:`/owner/requests/${id}`, owner:true, viewport }), caption:'Seeded fictional sent state, versions and link controls; no email call' }] });
       for (const viewport of ['desktop','phone']) steps.push({ title:`Client ${mode} terms, ${viewport}`, images:[{ file:await capture({ file:`software-offer-${mode}-${viewport}.png`, path:`/offer/${token}`, viewport }), caption:'Seeded fictional sent offer; no external email call' }] });
     }
+    // Seed the same post-decline state as the guarded API batch; never send a real email.
+    sql(`UPDATE owner_requests SET status='resolved',resolved_at='2026-09-29T13:00:00Z' WHERE id=${quote(id)}; UPDATE software_offers SET status='withdrawn' WHERE request_id=${quote(id)} AND status IN ('sent','draft'); UPDATE software_offer_links SET revoked_at='2026-09-29T13:00:00Z' WHERE request_id=${quote(id)};`);
+    for (const viewport of ['desktop','phone']) steps.push({ title:`Declined client offer unavailable, ${viewport}`, images:[{ file:await capture({ file:`software-offer-declined-${viewport}.png`, path:`/offer/${'i'.repeat(43)}`, status:404, viewport }), caption:'Seeded decline withdraws the offer and revokes its actual fictional link' }] });
     for (const viewport of ['desktop','phone']) steps.push({ title:`Unavailable offer, ${viewport}`, images:[{ file:await capture({ file:`software-offer-unavailable-${viewport}.png`, path:'/offer/unavailable', status:404, viewport }), caption:'Identical response for unknown or revoked links' }] });
     return steps;
   },
