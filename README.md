@@ -216,3 +216,7 @@ invitations, updates, sign-in codes, and owner request notices. It defaults to
 Worker; never derive it from request headers. Test Workers must use separate D1,
 KV and private R2 resources, Stripe test credentials, and a hostname-restricted
 Turnstile widget.
+
+### Software offers migration
+
+Apply music migration `0020_software_offers.sql` before deploying code that uses fit reviews or software offers. Existing pages keep working before this migration; the new offer controls require it. Do not edit previously applied migrations.
