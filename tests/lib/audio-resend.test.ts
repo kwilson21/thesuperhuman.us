@@ -100,3 +100,11 @@ it('opens a first invitation without calling it an update', async () => {
   expect(body.text).not.toContain('update');
   expect(body.html).toContain('Open your studio');
 });
+
+it('keeps owner and client notification links in the configured environment', async () => {
+  const origin = 'https://test.example.com';
+  await sendOwnerRequestNotice({ input: intake, requestId: 'req-1', apiKey: 'k', from: 'a', to: 'b', origin });
+  expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string).text).toContain(`${origin}/owner/requests/req-1`);
+  await sendStudioSignInNotice('k', 'a', 'b', 'Update', 'update', origin);
+  expect(JSON.parse(vi.mocked(fetch).mock.calls[1][1]!.body as string).text).toContain(`${origin}/studio/sign-in`);
+});

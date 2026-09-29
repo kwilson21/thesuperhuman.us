@@ -42,7 +42,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     // Best-effort notices: neither blocks the response, and neither can undo the stored request.
     const notices: Promise<unknown>[] = [
       sendOwnerRequestNotice({
-        input, requestId: saved.id,
+        input, requestId: saved.id, origin: env.SITE_ORIGIN,
         apiKey: env.RESEND_API_KEY, from: env.CONTACT_FROM_EMAIL, to: env.CONTACT_TO_EMAIL,
       }).catch(() => console.error('Owner notification email state is uncertain.')),
     ];

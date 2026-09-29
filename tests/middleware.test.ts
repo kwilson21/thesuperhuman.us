@@ -156,3 +156,11 @@ describe('middleware.onRequest', () => {
     expect(ctx.rewrite).toHaveBeenCalledWith('/audio/');
   });
 });
+
+it('keeps dynamic Worker previews out of search results', async () => {
+  const ctx = makeContext('https://preview.example.workers.dev/audio/start');
+  const response = await onRequest(ctx, async () => new Response('preview')) as Response;
+  expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+  const production = await onRequest(makeContext('https://thesuperhuman.us/audio/start'), async () => new Response('live')) as Response;
+  expect(production.headers.has('x-robots-tag')).toBe(false);
+});
