@@ -25,7 +25,7 @@
     "MUSIC_EVENTS_ENABLED": "true",
     // Keep invoice creation off until Stripe account review, test-mode lifecycle,
     // D1 migration, webhook registration, and launch verification all pass.
-    "STRIPE_PAYMENTS_ENABLED": "false",
+    "STRIPE_PAYMENTS_ENABLED": "true",
     // Private studio portal. Migrations 0005-0017 are applied to production, the
     // code key is set, and the audio bucket has no public access. Clients reach it
     // only through an invitation sent from their request page.
