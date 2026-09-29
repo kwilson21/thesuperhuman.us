@@ -41,3 +41,5 @@
 
 /* Payment mode titles follow src/styles/audio-intake.css. */
 .software-offer-editor .intake-offer strong { font-size: 1.1rem; font-weight: 400; }
+
+.software-field { display: grid; gap: .35rem; min-width: 0; }

@@ -96,6 +96,8 @@ it('renders reload guidance, resolved controls, and the reopened editor', async 
     const closed = await renderEditor(true);
     expect(closed).toContain('This request is resolved. Reopen it to make a new offer.');
     expect(closed).not.toMatch(/data-offer-form|Save draft|data-preview-offer|data-send-offer/);
+    expect(closed).toContain('The client link is in your copy of the offer email.');
+    expect(closed).not.toContain('revoke this link and send again');
     expect(closed).toContain('data-revoke-link'); expect(closed).toContain('Offer v2');
     expect(await renderEditor(false)).toContain('data-offer-form');
     expect(await renderEditor(true,true)).toContain('The client link is revoked. Reopen this request to make a new offer.');
@@ -112,4 +114,10 @@ it('keeps question, decline and fit hints outside their accessible labels', asyn
   const fitHTML = await container.renderToString(fit, { props:{ requestId:'r', fit:null } });
   expect(fitHTML).toContain('aria-describedby="software-fit-note-hint"');
   expect(fitHTML).toContain('</label><p id="software-fit-note-hint"');
+});
+
+it('shows the next draft version after decline and reopen', async () => {
+  const container = await AstroContainer.create();
+  const html = await container.renderToString(editor, { props: { requestId:'r', email:'alex@example.com', revoked:true, offers:[{ version:2, status:'withdrawn', sent_at:'2026-09-29T12:00:00Z' },{ version:1, status:'superseded', sent_at:'2026-09-28T12:00:00Z' }] } });
+  expect(html).toContain('Draft v3 · Not sent');
 });

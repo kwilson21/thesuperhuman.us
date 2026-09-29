@@ -55,7 +55,7 @@ it('keeps a sent link only in this page view and refreshes versions without relo
   expect(targets['[data-offer-state]'].textContent).toBe('v1 sent Sep 29 · no changes since');
   vi.stubGlobal('navigator', { clipboard:{ writeText:vi.fn().mockRejectedValue(new Error('blocked')) } });
   await targets['[data-copy-link]'].emit('click');
-  expect(targets['[data-software-status]'].textContent).toContain('Select and copy the Client link above.');
+  expect(targets['[data-software-status]'].textContent).toContain('Select and copy the link in the Client link field.');
   expect(targets['[data-offer-versions]'].hidden).toBe(false);
 });
 

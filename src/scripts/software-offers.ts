@@ -57,7 +57,7 @@ export function setupSoftwareOffers() {
   linkInput.addEventListener('focus', () => linkInput.select());
   root.querySelector('[data-copy-link]')!.addEventListener('click', async () => {
     try { if (!link || root.dataset.revoked === 'true') { status.textContent = 'The client link is in your copy of the offer email. To issue a new one, revoke this link and send again.'; return; } await navigator.clipboard.writeText(link); status.textContent = 'Client link copied.'; }
-    catch { status.textContent = 'Clipboard unavailable. Select and copy the Client link above.'; }
+    catch { status.textContent = 'Clipboard unavailable. Select and copy the link in the Client link field.'; }
   });
   root.querySelector<HTMLButtonElement>('[data-revoke-link]')!.addEventListener('click', async event => {
     if (!confirm('Revoke the client link? Anyone using it will lose access.')) return;

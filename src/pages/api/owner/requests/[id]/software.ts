@@ -87,7 +87,9 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     const terms = validateOfferTerms(JSON.parse(offer.terms_json));
     if (!terms.ok) return json({ ok: false, errors: terms.errors }, 400);
     const token = newOfferToken(), tokenHash = await hashOfferToken(token);
-    const link = new URL(`/offer/${token}`, env.SITE_ORIGIN ?? 'https://thesuperhuman.us').href;
+    let link: string;
+    try { link = new URL(`/offer/${token}`, env.SITE_ORIGIN ?? 'https://thesuperhuman.us').href; }
+    catch { return json({ ok: false, message: 'The offer link couldn’t be built. Check SITE_ORIGIN. Nothing was sent.' }, 500); }
     await db.batch([
       requestGuard(),
       guard('SELECT 1 FROM software_offers WHERE id=? AND status=? AND updated_at=?', [offer.id, offer.status, offer.updated_at]),

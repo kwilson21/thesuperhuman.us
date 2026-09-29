@@ -155,7 +155,8 @@ it('loses a concurrent send inside the batch without replacing its link or email
 it('builds the client URL before saving sent state', async () => {
   const saved = await draft();
   const response = await call({ action:'send', version:saved.version, expectedUpdatedAt:saved.updatedAt }, true, 'invalid origin');
-  expect(response.status).toBe(409);
+  expect(response.status).toBe(500);
+  expect(await response.json()).toMatchObject({ message:'The offer link couldn’t be built. Check SITE_ORIGIN. Nothing was sent.' });
   expect(sql.prepare('SELECT status FROM software_offers').get()).toEqual({ status:'draft' });
   expect(sql.prepare('SELECT * FROM software_offer_links').all()).toEqual([]);
   expect(sql.prepare("SELECT * FROM owner_request_audit WHERE action='offer-sent'").all()).toEqual([]);
