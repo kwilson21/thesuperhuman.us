@@ -127,12 +127,17 @@ export async function applyOwnerRetention(database, review, environment, now = n
       WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})
         AND ${finishedPaymentTerms()}`,
   ] : [];
+  const softwareTables = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('software_fit_reviews','software_offers','software_offer_links')");
+  if (softwareTables.length && softwareTables.length !== 3) throw new Error('Software offers migration 0020 is required before owner retention can run.');
+  const softwareCleanup = softwareTables.length ? ['software_offer_links','software_offers','software_fit_reviews'].map(table =>
+    `DELETE FROM ${table} WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`) : [];
   const guard = (query, expected) => `SELECT CASE WHEN (${query})=${quote(expected)} THEN 1 ELSE json_extract('retention source changed','$') END`;
   const runId = hash(`${review.generatedAt}:${review.requestSourceHash}:${review.playbackSourceHash}`);
   const statements = [
     guard(requestSnapshot(now, '1', paymentGuard, portal.guard, portal.completed), requests),
     guard(playbackSnapshot(review.playbackCutoff), playback),
     ...paymentCleanup,
+    ...softwareCleanup,
     `UPDATE owner_requests SET name='',email='',city_region='',details_json='{}',private_note='',summary='',updated_at=${quote(now.toISOString())} WHERE ${requestSelection}`,
     `INSERT INTO music_playback_daily(day,release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,city,count)
       SELECT day,release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,'' AS city,SUM(count) FROM
