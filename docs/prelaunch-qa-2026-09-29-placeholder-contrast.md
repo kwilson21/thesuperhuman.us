@@ -17,7 +17,8 @@ it is N/A with the reason. It resolves the placeholder contrast exception in
 ## 1. Purpose and content
 
 - **PASS · Project and authorization.** Branch `claude/placeholder-contrast`
-  targets `main`; the owner asked for this follow-up and approved the look.
+  targets `main`. The owner accepted the #150 exception with this follow-up
+  planned and chose this color ("A", owner, in conversation, 2026-09-29).
 - **PASS · Approved design.** Local captures after the change, at 1280 × 800
   and 390 × 844 on both forms, are pixel-identical to the option the owner
   approved.
@@ -32,11 +33,12 @@ it is N/A with the reason. It resolves the placeholder contrast exception in
 
 - **PASS · Placeholder contrast.** Placeholders were Tailwind's default
   `#9ca3af` on `#fbf8f2` (about 2.4:1). They are now
-  `color-mix(in srgb, var(--muted) 80%, var(--paper))`, which Chromium renders
-  as `#6d6d6c`, about 4.9:1. Measured with `getComputedStyle(…, '::placeholder')`
-  on the software brief's "For example:" textarea and the audio song title and
-  file link fields at 1280 × 800 and 390 × 844; every intake input keeps the
-  paper background, including the one inside the tinted file link panel.
+  `color-mix(in srgb, var(--muted) 80%, var(--paper))`, about 4.9:1.
+  `getComputedStyle(…, '::placeholder')` in Chromium reports
+  `color(srgb 0.429 0.427 0.422)`, which is `#6d6d6c` in 8-bit. Measured on the
+  software brief's "For example:" textarea and the audio song title and file
+  link fields at 1280 × 800 and 390 × 844; every intake input keeps the paper
+  background, including the one inside the tinted file link panel.
 - **PASS · Why this color.** Derived from the existing `--muted` and `--paper`
   tokens, so no new color or token is added. 80% clears 4.5:1 with some margin
   (about 4.9:1); 75% falls short at about 4.3:1. The example stays a step
@@ -45,15 +47,17 @@ it is N/A with the reason. It resolves the placeholder contrast exception in
 - **PASS · Scope.** Every placeholder on both pages sits inside `.intake-field`,
   and only these two pages use that class. Contact, resume request and studio
   forms are unchanged.
-- **PASS · Responsive.** Before and after captures at both widths have
-  identical dimensions; only the placeholder color differs.
+- **PASS · Responsive.** Before and after captures at 1280 and 390 px have
+  identical dimensions; only the placeholder color differs. 320 and 768 px are
+  N/A: a color-only change has no layout effect.
 - **N/A · Structure, image alternatives, labels and errors, keyboard, focus,
   touch targets, zoom and motion.** Markup and layout are unchanged.
 - **UNVERIFIED · Other browsers.** Checked in Chromium only. A browser without
   `color-mix` support (older than Chrome 111, Safari 16.2 or Firefox 113)
   cannot resolve the value, so the placeholder inherits the field's ink color
   and looks like entered text. The site's other `color-mix` backgrounds rely on
-  the same support.
+  the same support. The owner accepted this limit ("Accept as recorded", owner,
+  in conversation, 2026-09-29).
 
 ## 4. Performance and resilience
 
@@ -74,11 +78,21 @@ it is N/A with the reason. It resolves the placeholder contrast exception in
   warnings; `npx vitest run` passed 103 files and 640 tests, including
   `tests/components/intake-placeholder-contrast.test.ts`; `npm run build`
   completed and the built CSS keeps the `color-mix` rule; `npm run copy:check`
-  passed.
-- **UNVERIFIED · Review.** Independent review of the final head is pending.
+  passed. CI `validate`, `capture` and the Cloudflare Workers build passed.
+- **PASS · Review.** Two rounds of independent review (correctness and
+  security; UI, copy and repository rules). The first found wording errors in
+  this record, fixed in `0046dc6`; the second found nothing above low, and its
+  low and nit wording findings are fixed in the commit that adds this line. The
+  Codex review bot's code and security reviews of `c6cd129`, the only code
+  commit, completed with no findings.
 - **N/A · Bindings and migrations.** None.
 - **PASS · Rollback.** `48ae7f7` is the current `main`; reverting restores the
   previous placeholder grey.
 - **UNVERIFIED · Post-deployment production.** After the merge deploys, confirm
-  the placeholders on `/software/start?path=workflow` and the audio song step
-  on `thesuperhuman.us` render `#6d6d6c`.
+  that the placeholders on `/software/start?path=workflow` and the audio song
+  step on `thesuperhuman.us` compute to `color(srgb 0.429 0.427 0.422)`
+  (`#6d6d6c`).
+
+## 8. Private owner center
+
+- **N/A · All items.** Owner pages, bindings and migrations are untouched.
