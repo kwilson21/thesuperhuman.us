@@ -60,3 +60,13 @@ export async function getLinkedOffer(db: D1Database, token: string) {
     JOIN owner_requests r ON r.id=o.request_id WHERE l.token_hash=? AND l.revoked_at IS NULL AND o.status='sent'
     AND r.kind='software' AND r.status<>'withdrawn' AND r.email<>''`).bind(await hashOfferToken(token)).first<SoftwareOffer>();
 }
+
+export const offerSendingMessage = 'An offer is still being sent. Try again in a moment.';
+const recentLiveLink = 'SELECT 1 FROM software_offer_links WHERE request_id=? AND revoked_at IS NULL AND created_at>?';
+export function offerSendingGuard(db: D1Database, requestId: string) {
+  return db.prepare(`SELECT CASE WHEN NOT EXISTS(${recentLiveLink}) THEN 1 ELSE json_extract('Offer still sending','$') END`)
+    .bind(requestId, new Date(Date.now() - 20_000).toISOString());
+}
+export async function offerIsSending(db: D1Database, requestId: string) {
+  return Boolean(await db.prepare(recentLiveLink).bind(requestId, new Date(Date.now() - 20_000).toISOString()).first());
+}

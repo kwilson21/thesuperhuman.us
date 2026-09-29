@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
 import { getOwnerRequest } from '~/lib/owner-requests';
-import { listSoftwareOffers, validateOfferTerms, hashOfferToken, newOfferToken } from '~/lib/software-offers';
+import { listSoftwareOffers, validateOfferTerms, hashOfferToken, newOfferToken, offerSendingGuard, offerIsSending, offerSendingMessage } from '~/lib/software-offers';
 import { sendAudioMessage } from '~/lib/audio-resend';
 export const prerender = false;
 const schema = z.discriminatedUnion('action', [
@@ -50,19 +50,20 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     }
     if (command.action === 'question' || command.action === 'decline') {
       if (command.action === 'decline' && record.status === 'resolved') return json({ ok: false, message: 'This request is already resolved.' }, 409);
+      if (command.action === 'decline' && await offerIsSending(db, record.id)) return json({ ok: false, message: offerSendingMessage }, 409);
       const sent = await email(command.action === 'question' ? 'A question about your project brief' : 'About your project brief', `${command.text}\n\nKazon`);
       if (!sent.ok) return json({ ok: false, uncertain: sent.uncertain, message: sent.uncertain ? 'The email service didn’t confirm. Check Resend before retrying. Nothing was recorded.' : 'The email didn’t send. Nothing changed. Try again.' }, 502);
       try { await db.batch([
         requestGuard(),
-        ...(command.action === 'decline' ? [db.prepare("UPDATE owner_requests SET status='resolved',resolved_at=?,updated_at=? WHERE id=?").bind(now, now, record.id),
+        ...(command.action === 'decline' ? [offerSendingGuard(db, record.id), db.prepare("UPDATE owner_requests SET status='resolved',resolved_at=?,updated_at=? WHERE id=?").bind(now, now, record.id),
           db.prepare("UPDATE software_offers SET status='withdrawn',updated_at=? WHERE request_id=? AND status IN ('sent','draft')").bind(now, record.id),
           db.prepare('UPDATE software_offer_links SET revoked_at=? WHERE request_id=? AND revoked_at IS NULL').bind(now, record.id)] : []),
         audit(command.action === 'question' ? 'question-sent' : 'declined'),
-      ]); } catch { return json({ ok: false, message: 'The client email was sent, but the request changed before it could be recorded. Reload before taking another action.' }, 409); }
+      ]); } catch { if (command.action === 'decline' && await offerIsSending(db, record.id)) return json({ ok: false, message: offerSendingMessage }, 409); return json({ ok: false, message: 'The client email was sent, but the request changed before it could be recorded. Reload before taking another action.' }, 409); }
       return json({ ok: true, copySent: sent.copySent });
     }
     if (command.action === 'revoke') {
-      await db.batch([requestGuard(), guard('SELECT 1 FROM software_offer_links WHERE request_id=? AND revoked_at IS NULL', [record.id]),
+      await db.batch([requestGuard(), offerSendingGuard(db, record.id), guard('SELECT 1 FROM software_offer_links WHERE request_id=? AND revoked_at IS NULL', [record.id]),
         db.prepare('UPDATE software_offer_links SET revoked_at=? WHERE request_id=?').bind(now, record.id), audit('offer-link-revoked')]);
       return json({ ok: true });
     }
@@ -103,8 +104,13 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       audit('offer-sent', `Offer v${offer.version} sent`),
     ]);
     const sent = await email(`Your project offer: ${terms.value.outcome}`, `Hi ${record.name.trim().split(/\s+/)[0] || 'there'},\n\nHere’s the offer for ${terms.value.outcome}: ${link}\n\nThe link is private to you. You can forward it to whoever approves the budget. Reply to this email with any questions.\n\nKazon`);
+    const live = await db.prepare(`SELECT 1 FROM software_offer_links WHERE request_id=? AND token_hash=? AND revoked_at IS NULL
+      AND EXISTS(SELECT 1 FROM software_offers WHERE id=? AND status='sent')
+      AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND status<>'withdrawn' AND email<>'')`).bind(record.id, tokenHash, offer.id, record.id).first();
+    if (sent.ok && !live) return json({ ok: false, message: 'The email went out, but the link was closed while it was sending. Send the offer again for a working link.' }, 409);
     return json({ ok: true, version: offer.version, link, sentAt: draft ? now : offer.sent_at, updatedAt: draft ? now : offer.updated_at, emailSent: sent.ok, uncertain: sent.uncertain, copySent: sent.copySent });
   } catch {
+    if (command.action === 'revoke' && await offerIsSending(db, record.id)) return json({ ok: false, message: offerSendingMessage }, 409);
     if (command.action === 'draft') {
       const draft = (await listSoftwareOffers(db, record.id)).find(offer => offer.status === 'draft');
       return json({ ok: false, updatedAt: draft?.updated_at ?? null, message: 'The saved draft changed since this page loaded. Save again to keep what’s on screen, or reload to see the saved version.' }, 409);

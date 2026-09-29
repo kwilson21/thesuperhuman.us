@@ -55,6 +55,7 @@ it('sends a saved version, supersedes it with the next draft and exposes only th
 });
 it('revokes and reissues access without mutating sent terms', async () => {
   const sent = await send(await draft()); const token = sent.link.split('/').pop();
+  sql.exec("UPDATE software_offer_links SET created_at='2020-01-01T00:00:00Z'");
   expect((await call({ action:'revoke' })).status).toBe(200); expect(await getLinkedOffer(db, token)).toBeNull();
   const row = sql.prepare("SELECT * FROM software_offers WHERE status='sent'").get();
   const reissued = await send({ version: row.version, updatedAt: row.updated_at });
@@ -127,7 +128,7 @@ it('decline withdraws live and draft offers and revokes access, but ordinary res
   await draft();
   sql.exec("UPDATE owner_requests SET status='resolved'");
   expect(await getLinkedOffer(db,token)).toMatchObject({ status:'sent' });
-  sql.exec("UPDATE owner_requests SET status='reviewed'");
+  sql.exec("UPDATE owner_requests SET status='reviewed'; UPDATE software_offer_links SET created_at='2020-01-01T00:00:00Z'");
   expect((await call({ action:'decline', text:'Thanks.' })).status).toBe(200);
   expect(await getLinkedOffer(db,token)).toBeNull();
   expect(sql.prepare('SELECT status FROM software_offers').all()).toEqual([{ status:'withdrawn' }, { status:'withdrawn' }]);
@@ -222,6 +223,7 @@ it.each(['resolved','withdrawn'])('rejects hidden fit/question actions for %s bu
   vi.mocked(fetch).mockClear();
   for (const command of [{ action:'fit',label:'potential-fit',note:'' }, { action:'question',text:'Hello' }]) expect((await call(command)).status).toBe(409);
   expect(fetch).not.toHaveBeenCalled();
+  sql.exec("UPDATE software_offer_links SET created_at='2020-01-01T00:00:00Z'");
   expect((await call({ action:'revoke' })).status).toBe(200);
 });
 it('rejects generic actions from a tab predating the fit save', async () => {
@@ -231,4 +233,50 @@ it('rejects generic actions from a tab predating the fit save', async () => {
   const action = (expectedUpdatedAt:string) => requestPost({ params:{ id:'software' }, request:new Request('https://thesuperhuman.us/api/owner/requests/software',{ method:'POST',body:JSON.stringify({ action:'note',note:'New note',expectedUpdatedAt }) }), locals:{ owner:{ email:'owner@example.com' },runtime:{ env:{ MUSIC_DB:db } } } } as any);
   expect((await action('now')).status).toBe(409);
   expect((await action(updatedAt)).status).toBe(200);
+});
+
+async function withdraw() {
+  const { POST: requestPost } = await import('~/pages/api/owner/requests/[id]');
+  return requestPost({ params:{ id:'software' }, request:new Request('https://example.com/api/owner/requests/software', { method:'POST', body:JSON.stringify({ action:'withdraw' }) }), locals:{ owner:{ email:'owner@example.com' },runtime:{ env:{ MUSIC_DB:db } } } } as any);
+}
+it.each(['revoke','decline','withdraw'])('refuses %s during the send window and allows it after 20 seconds', async action => {
+  const sent = await send(await draft());
+  const close = () => action === 'withdraw' ? withdraw() : call({ action, text:'Thanks.' });
+  vi.mocked(fetch).mockClear();
+  const response = await close();
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ ok:false, message:'An offer is still being sent. Try again in a moment.' });
+  expect(await getLinkedOffer(db, sent.link.split('/').pop())).toMatchObject({ status:'sent' });
+  expect(fetch).not.toHaveBeenCalled();
+  sql.prepare('UPDATE software_offer_links SET created_at=?').run(new Date(Date.now() - 20_001).toISOString());
+  expect((await close()).status).toBe(200);
+  expect(await getLinkedOffer(db, sent.link.split('/').pop())).toBeNull();
+});
+it.each(['revoke','decline','withdraw'])('guards %s inside its batch when a send starts after the read', async action => {
+  await send(await draft());
+  sql.exec("UPDATE software_offer_links SET created_at='2020-01-01T00:00:00Z'");
+  const batch = db.batch.bind(db);
+  db.batch = async items => {
+    sql.prepare('UPDATE software_offer_links SET created_at=?').run(new Date().toISOString());
+    return batch(items);
+  };
+  const response = await (action === 'withdraw' ? withdraw() : call({ action, text:'Thanks.' }));
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ message:'An offer is still being sent. Try again in a moment.' });
+  expect(sql.prepare('SELECT revoked_at FROM software_offer_links').get()).toEqual({ revoked_at:null });
+  expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({ status:'new' });
+  expect(sql.prepare("SELECT * FROM owner_request_audit WHERE action IN ('declined','withdrawn','offer-link-revoked')").all()).toEqual([]);
+});
+it.each(['replaced','revoked','withdrawn','superseded'])('reports a link %s while its email is pending', async change => {
+  const saved = await draft();
+  vi.mocked(fetch).mockImplementation(async () => {
+    if (change === 'replaced') sql.exec("UPDATE software_offer_links SET token_hash='replacement'");
+    if (change === 'revoked') sql.exec("UPDATE software_offer_links SET revoked_at='closed'");
+    if (change === 'withdrawn') sql.exec("UPDATE owner_requests SET status='withdrawn'");
+    if (change === 'superseded') sql.exec("UPDATE software_offers SET status='superseded'");
+    return new Response('{}');
+  });
+  const response = await call({ action:'send', version:saved.version, expectedUpdatedAt:saved.updatedAt });
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ ok:false, message:'The email went out, but the link was closed while it was sending. Send the offer again for a working link.' });
 });

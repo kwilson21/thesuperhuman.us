@@ -1,3 +1,4 @@
+import { offerSendingGuard, offerIsSending, offerSendingMessage } from './software-offers';
 import {
   ownerRequestFromRow,
   ownerRequestKinds,
@@ -115,7 +116,10 @@ export async function changeOwnerRequest(db: D1Database, command: RequestCommand
   if (!(transition.from as readonly OwnerRequestStatus[]).includes(current.status)) throw new Error('Invalid request transition.');
   const placeholders = transition.from.map(() => '?').join(',');
   const resolvedAt = transition.to === 'resolved' ? now : null;
-  const [update] = await db.batch([
+  const closingSoftware = current.kind === 'software' && command.action === 'withdraw';
+  let results: D1Result[];
+  try { results = await db.batch([
+    ...(closingSoftware ? [offerSendingGuard(db, command.id)] : []),
     db.prepare(`UPDATE owner_requests SET status=?,resolved_at=?,updated_at=?
       WHERE id=? AND updated_at=? AND status IN (${placeholders}) RETURNING ${requestColumns}`)
       .bind(transition.to, resolvedAt, now, command.id, current.updatedAt, ...transition.from),
@@ -124,6 +128,11 @@ export async function changeOwnerRequest(db: D1Database, command: RequestCommand
         (SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND status=?)`)
       .bind(command.id, transition.audit, actor, now, command.id, now, transition.to),
   ]);
+  } catch (error) {
+    if (closingSoftware && await offerIsSending(db, command.id)) throw new Error(offerSendingMessage);
+    throw error;
+  }
+  const update = results[closingSoftware ? 1 : 0];
   const row = update.results[0] as OwnerRequestRow | undefined;
   if (!row) throw new Error('Request changed while it was being updated.');
   return ownerRequestFromRow(row);
