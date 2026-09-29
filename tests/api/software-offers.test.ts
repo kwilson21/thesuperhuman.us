@@ -182,3 +182,53 @@ it.each(['resolve','decline'])('rejects offer editing and sending after %s, then
   expect((await change('reopen')).status).toBe(200);
   expect((await send(await draft(action === 'decline' ? null : saved.updatedAt))).emailSent).toBe(true);
 });
+
+it('advances fit timestamps, rejects a stale tab and changes the retention snapshot', async () => {
+  const { previewOwnerRetention } = await import('../../scripts/owner-retention.mjs');
+  sql.exec("UPDATE owner_requests SET contact_delete_after='2020-01-01T00:00:00Z'");
+  const database = { query: async (query: string) => sql.prepare(query).all() };
+  const before = await previewOwnerRetention(database, 'local');
+  const response = await call({ action:'fit', label:'potential-fit', note:'First', expectedRequestUpdatedAt:'now' });
+  const result = await response.json() as any;
+  expect(response.status).toBe(200);
+  expect(sql.prepare('SELECT updated_at FROM owner_requests').get().updated_at).toBe(result.updatedAt);
+  expect((await previewOwnerRetention(database, 'local')).requestSourceHash).not.toBe(before.requestSourceHash);
+  expect((await call({ action:'fit', label:'stated-mismatch', note:'Stale', expectedRequestUpdatedAt:'now' })).status).toBe(409);
+  expect(sql.prepare('SELECT note FROM software_fit_reviews').get().note).toBe('First');
+});
+it('returns the current draft timestamp for a recoverable save conflict', async () => {
+  const saved = await draft();
+  const conflict = await call({ action:'draft', terms, expectedUpdatedAt:'stale' });
+  expect(conflict.status).toBe(409);
+  const result = await conflict.json() as any;
+  expect(result.updatedAt).toBe(saved.updatedAt);
+  expect((await call({ action:'draft', terms:{ ...terms, outcome:'Newer edits' }, expectedUpdatedAt:result.updatedAt })).status).toBe(200);
+  expect(JSON.parse(sql.prepare('SELECT terms_json FROM software_offers').get().terms_json).outcome).toBe('Newer edits');
+});
+it('returns a newer draft timestamp when the guarded save batch races', async () => {
+  const saved = await draft();
+  const batch = db.batch.bind(db);
+  db.batch = (async (items: D1PreparedStatement[]) => {
+    sql.exec("UPDATE software_offers SET updated_at='concurrent'");
+    return batch(items);
+  }) as D1Database['batch'];
+  const response = await call({ action:'draft', terms, expectedUpdatedAt:saved.updatedAt });
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ updatedAt:'concurrent', message:expect.stringContaining('Save again') });
+});
+it.each(['resolved','withdrawn'])('rejects hidden fit/question actions for %s but permits link revocation', async status => {
+  await send(await draft());
+  sql.prepare('UPDATE owner_requests SET status=?').run(status);
+  vi.mocked(fetch).mockClear();
+  for (const command of [{ action:'fit',label:'potential-fit',note:'' }, { action:'question',text:'Hello' }]) expect((await call(command)).status).toBe(409);
+  expect(fetch).not.toHaveBeenCalled();
+  expect((await call({ action:'revoke' })).status).toBe(200);
+});
+it('rejects generic actions from a tab predating the fit save', async () => {
+  const { POST: requestPost } = await import('~/pages/api/owner/requests/[id]');
+  const fit = await call({ action:'fit',label:'potential-fit',note:'Current',expectedRequestUpdatedAt:'now' });
+  const { updatedAt } = await fit.json() as any;
+  const action = (expectedUpdatedAt:string) => requestPost({ params:{ id:'software' }, request:new Request('https://thesuperhuman.us/api/owner/requests/software',{ method:'POST',body:JSON.stringify({ action:'note',note:'New note',expectedUpdatedAt }) }), locals:{ owner:{ email:'owner@example.com' },runtime:{ env:{ MUSIC_DB:db } } } } as any);
+  expect((await action('now')).status).toBe(409);
+  expect((await action(updatedAt)).status).toBe(200);
+});

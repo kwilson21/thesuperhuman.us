@@ -4,8 +4,8 @@ import { changeOwnerRequest } from '~/lib/owner-requests';
 export const prerender = false;
 
 const commandSchema = z.discriminatedUnion('action', [
-  z.object({ action: z.enum(['review', 'resolve', 'reopen', 'withdraw']) }),
-  z.object({ action: z.literal('note'), note: z.string().trim().max(1000) }),
+  z.object({ action: z.enum(['review', 'resolve', 'reopen', 'withdraw']), expectedUpdatedAt: z.string().optional() }),
+  z.object({ action: z.literal('note'), note: z.string().trim().max(1000), expectedUpdatedAt: z.string().optional() }),
 ]);
 
 export const POST: APIRoute = async ({ params, request, locals }) => {

@@ -5,7 +5,7 @@ import { listSoftwareOffers, validateOfferTerms, hashOfferToken, newOfferToken }
 import { sendAudioMessage } from '~/lib/audio-resend';
 export const prerender = false;
 const schema = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('fit'), label: z.enum(['potential-fit','needs-clarification','stated-mismatch']), note: z.string().trim().max(500) }),
+  z.object({ action: z.literal('fit'), label: z.enum(['potential-fit','needs-clarification','stated-mismatch']), note: z.string().trim().max(500), expectedRequestUpdatedAt: z.string().optional() }),
   z.object({ action: z.literal('draft'), terms: z.unknown(), expectedUpdatedAt: z.string().nullable() }),
   z.object({ action: z.literal('send'), version: z.number().int().positive(), expectedUpdatedAt: z.string() }),
   z.object({ action: z.literal('revoke') }),
@@ -24,8 +24,8 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   const command = parsed.data;
   const record = await getOwnerRequest(db, params.id);
   if (!record || record.kind !== 'software') return json({ ok: false }, 404);
-  if (record.status === 'withdrawn' || !record.email) return json({ ok: false, message: 'This request is closed.' }, 409);
-  if (record.status === 'resolved' && (command.action === 'draft' || command.action === 'send')) return json({ ok: false, message: 'This request is resolved. Reopen it to make a new offer.' }, 409);
+  if ((record.status === 'withdrawn' && command.action !== 'revoke') || !record.email) return json({ ok: false, message: 'This request is closed.' }, 409);
+  if (record.status === 'resolved' && ['draft', 'send', 'fit', 'question'].includes(command.action)) return json({ ok: false, message: 'This request is resolved. Reopen it to make a new offer.' }, 409);
   const actor = locals.owner.email;
   let now = new Date().toISOString();
   const audit = (action: string, note = '') => db.prepare('INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at) VALUES (?,?,?,?,?)').bind(record.id, action, actor, note, now);
@@ -42,9 +42,11 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   const requestGuard = () => guard('SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND status=? AND email=?', [record.id, record.updatedAt, record.status, record.email]);
   try {
     if (command.action === 'fit') {
+      if (command.expectedRequestUpdatedAt !== undefined && command.expectedRequestUpdatedAt !== record.updatedAt) return json({ ok: false, message: 'The request changed or could not be saved. Reload and try again.' }, 409);
+      if (Date.parse(record.updatedAt) >= Date.parse(now)) now = new Date(Date.parse(record.updatedAt) + 1).toISOString();
       await db.batch([requestGuard(), db.prepare(`INSERT INTO software_fit_reviews(request_id,label,note,updated_at,updated_by) VALUES (?,?,?,?,?)
-        ON CONFLICT(request_id) DO UPDATE SET label=excluded.label,note=excluded.note,updated_at=excluded.updated_at,updated_by=excluded.updated_by`).bind(record.id, command.label, command.note, now, actor), audit('fit-reviewed')]);
-      return json({ ok: true });
+        ON CONFLICT(request_id) DO UPDATE SET label=excluded.label,note=excluded.note,updated_at=excluded.updated_at,updated_by=excluded.updated_by`).bind(record.id, command.label, command.note, now, actor), db.prepare('UPDATE owner_requests SET updated_at=? WHERE id=?').bind(now, record.id), audit('fit-reviewed')]);
+      return json({ ok: true, updatedAt: now });
     }
     if (command.action === 'question' || command.action === 'decline') {
       if (command.action === 'decline' && record.status === 'resolved') return json({ ok: false, message: 'This request is already resolved.' }, 409);
@@ -69,7 +71,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     if (command.action === 'draft') {
       const terms = validateOfferTerms(command.terms);
       if (!terms.ok) return json({ ok: false, errors: terms.errors }, 400);
-      if ((draft?.updated_at ?? null) !== command.expectedUpdatedAt) return json({ ok: false, message: 'Offer changed. Reload and try again.' }, 409);
+      if ((draft?.updated_at ?? null) !== command.expectedUpdatedAt) return json({ ok: false, updatedAt: draft?.updated_at ?? null, message: 'The saved draft changed since this page loaded. Save again to keep what’s on screen, or reload to see the saved version.' }, 409);
       const version = draft?.version ?? ((offers[0]?.version ?? 0) + 1), id = draft?.id ?? crypto.randomUUID();
       await db.batch([
         requestGuard(),
@@ -103,6 +105,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     const sent = await email(`Your project offer: ${terms.value.outcome}`, `Hi ${record.name.trim().split(/\s+/)[0] || 'there'},\n\nHere’s the offer for ${terms.value.outcome}: ${link}\n\nThe link is private to you. You can forward it to whoever approves the budget. Reply to this email with any questions.\n\nKazon`);
     return json({ ok: true, version: offer.version, link, sentAt: draft ? now : offer.sent_at, updatedAt: draft ? now : offer.updated_at, emailSent: sent.ok, uncertain: sent.uncertain, copySent: sent.copySent });
   } catch {
+    if (command.action === 'draft') {
+      const draft = (await listSoftwareOffers(db, record.id)).find(offer => offer.status === 'draft');
+      return json({ ok: false, updatedAt: draft?.updated_at ?? null, message: 'The saved draft changed since this page loaded. Save again to keep what’s on screen, or reload to see the saved version.' }, 409);
+    }
     return json({ ok: false, message: 'The request changed or could not be saved. Reload and try again.' }, 409);
   }
 };
