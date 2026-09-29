@@ -1,0 +1,7 @@
+.software-intake .intake-return{margin:.75rem 0}.software-intake .intake-return a{color:var(--accent)}
+.software-intake .intake-offer small{display:block;color:var(--muted);line-height:1.45;margin-top:.25rem}
+.software-intake .intake-review{min-width:0}.software-intake #software-success .intake-review{max-width:48rem;margin:1.5rem 0}
+.software-intake #software-success [data-print]{margin-top:1rem}
+.software-intake .intake-muted{font-size:.8rem;margin-top:.35rem}
+.software-intake .intake-field input,.software-intake .intake-field select{min-height:44px}
+@media print{header,footer,.intake-return,.intake-progress,#software-inquiry,.intake-contact,[data-print]{display:none!important}.software-intake #software-success{display:block!important}.software-intake{padding:0!important}}

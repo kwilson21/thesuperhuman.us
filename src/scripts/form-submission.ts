@@ -1,9 +1,11 @@
 /** Shared interaction states; each form retains its own payload and server rules. */
-export function setupFormSubmission({ form, endpoint, payload, success }: {
+export function setupFormSubmission({ form, endpoint, payload, success, onSuccess, onConflict }: {
   form: HTMLFormElement;
   endpoint: string;
   payload: (data: FormData) => Record<string, unknown>;
   success: HTMLElement;
+  onSuccess?: (result: { brief?: Record<string, string> }) => void;
+  onConflict?: () => void;
 }) {
   const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
   const status = form.querySelector<HTMLElement>('[data-form-status]')!;
@@ -40,13 +42,15 @@ export function setupFormSubmission({ form, endpoint, payload, success }: {
         body: JSON.stringify({ ...payload(data), turnstileToken: String(data.get('cf-turnstile-response') ?? '') }),
         signal: AbortSignal.timeout(30_000),
       });
-      const result = await response.json() as { ok?: boolean; errors?: Record<string, string>; error?: string };
+      const result = await response.json() as { ok?: boolean; errors?: Record<string, string>; error?: string; brief?: Record<string, string> };
       if (response.ok && result.ok === true) {
+        onSuccess?.(result);
         form.hidden = true;
         success.hidden = false;
         success.focus();
         return;
       }
+      if (response.status === 409) onConflict?.();
       let firstInvalid: HTMLElement | undefined;
       let hasDisplayedErrors = false;
       const generalErrors: string[] = [];

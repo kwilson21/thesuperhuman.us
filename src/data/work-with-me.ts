@@ -35,7 +35,7 @@ export const doors: Door[] = [
   {
     id: 'software', title: 'Software engineering',
     line: 'Prototypes, products, internal tools and integrations.',
-    href: '/#contact', label: 'Discuss your project',
+    href: '/software/start', label: 'Discuss your project',
     picture: software, caption: 'Tally · a budgeting app, public demo',
   },
 ];

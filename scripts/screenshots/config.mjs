@@ -22,6 +22,7 @@ export const PAGES = [
   { name: 'audio-releases', path: '/audio/releases' },
   { name: 'audio-services', path: '/audio/services' },
   { name: 'audio-start', path: '/audio/start' },
+  { name: 'software-start', path: '/software/start' },
   { name: 'music-old-news', path: '/music/old-news' },
   { name: 'studio-sign-in', path: '/studio/sign-in' },
   { name: 'not-found', path: '/this-page-does-not-exist', status: 404 },
