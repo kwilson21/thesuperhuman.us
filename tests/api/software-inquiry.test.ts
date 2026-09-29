@@ -11,8 +11,8 @@ let sql: InstanceType<typeof DatabaseSync>;
 let db: D1Database;
 let kv: { get: ReturnType<typeof vi.fn>; put: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
 let stored: Map<string, string>;
-function context(input: unknown = base, options: { origin?: string; type?: string; db?: D1Database | null; token?: string | null } = {}) {
-  return { request: new Request('https://thesuperhuman.us/api/software-inquiry', { method: 'POST', headers: { origin: options.origin ?? 'https://thesuperhuman.us', 'content-type': options.type ?? 'application/json' }, body: typeof input === 'string' ? input : JSON.stringify(input) }), locals: { runtime: { env: { MUSIC_DB: options.db === undefined ? db : options.db, TURNSTILE_SECRET_KEY: options.token === undefined ? 'test' : options.token, RATE_LIMIT: kv, RESEND_API_KEY: 'test', CONTACT_FROM_EMAIL: 'from@example.com', CONTACT_TO_EMAIL: 'owner@example.com' } } } } as any;
+function context(input: unknown = base, options: { origin?: string; type?: string; db?: D1Database | null; token?: string | null; rate?: typeof kv | null } = {}) {
+  return { request: new Request('https://thesuperhuman.us/api/software-inquiry', { method: 'POST', headers: { origin: options.origin ?? 'https://thesuperhuman.us', 'content-type': options.type ?? 'application/json' }, body: typeof input === 'string' ? input : JSON.stringify(input) }), locals: { runtime: { env: { MUSIC_DB: options.db === undefined ? db : options.db, TURNSTILE_SECRET_KEY: options.token === undefined ? 'test' : options.token, RATE_LIMIT: options.rate === undefined ? kv : options.rate, RESEND_API_KEY: 'test', CONTACT_FROM_EMAIL: 'from@example.com', CONTACT_TO_EMAIL: 'owner@example.com' } } } } as any;
 }
 beforeEach(() => {
   sql = new DatabaseSync(':memory:'); sql.exec(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8'));
@@ -28,8 +28,8 @@ beforeEach(() => {
 it('stores one verbatim software brief, audit, and no audio project, then returns a saved receipt', async () => {
   const response = await POST(context());
   expect(response.status).toBe(200);
-  expect((await response.json() as { brief: unknown }).brief).toMatchObject({ today: 'First line\nSecond line', email: 'Alex@Example.com', approverRole: 'Not provided' });
-  expect(sql.prepare('SELECT kind,service_id,email,summary,details_json,submission_id FROM owner_requests').get()).toMatchObject({ kind: 'software', service_id: 'workflow', email: 'Alex@Example.com', summary: 'One place to see next steps.', submission_id: id });
+  expect((await response.json() as { brief: unknown }).brief).toMatchObject({ today: 'First line\nSecond line', email: 'alex@example.com' });
+  expect(sql.prepare('SELECT kind,service_id,email,summary,details_json,submission_id FROM owner_requests').get()).toMatchObject({ kind: 'software', service_id: 'workflow', email: 'alex@example.com', summary: 'One place to see next steps.', submission_id: id });
   const details = JSON.parse((sql.prepare('SELECT details_json FROM owner_requests').get() as { details_json: string }).details_json);
   expect(details).toMatchObject({ today: 'First line\nSecond line', approverRole: '' });
   expect(sql.prepare('SELECT COUNT(*) AS n FROM audio_projects').get()).toEqual({ n: 0 });
@@ -38,7 +38,9 @@ it('stores one verbatim software brief, audit, and no audio project, then return
 
 it('deduplicates after rate limit, rejects another email without leaking the brief, and limits new IDs', async () => {
   expect((await POST(context({ ...base, email: 'alex@example.com' }))).status).toBe(200);
-  expect((await POST(context())).status).toBe(200);
+  const duplicate = await POST(context());
+  expect(duplicate.status).toBe(200);
+  expect((await duplicate.json() as { brief: Record<string, string> }).brief.today).toBe('First line\nSecond line');
   const conflict = await POST(context({ ...base, email: 'other@example.com' }));
   expect(conflict.status).toBe(409);
   expect(JSON.stringify(await conflict.json())).not.toContain('First line');
@@ -77,7 +79,7 @@ it('does not undo a saved request when the owner notice fails', async () => {
 });
 
 it('rejects invalid answers, unknown choices, line breaks, and unknown keys', () => {
-  for (const [key, value] of [['path', 'other'], ['today', ''], ['audience', 'x'.repeat(1001)], ['firstResult', ''], ['name', 'A\nB'], ['email', 'bad'], ['company', 'A\nB'], ['timing', 'soon'], ['budgetStatus', 'nope'], ['approver', 'nope'], ['submissionId', 'bad']] as const) {
+  for (const [key, value] of [['path', 'other'], ['today', ''], ['name', ''], ['email', ''], ['audience', ''], ['timing', ''], ['budgetStatus', ''], ['approver', ''], ['audience', 'x'.repeat(1001)], ['firstResult', ''], ['name', 'A\nB'], ['email', 'bad'], ['company', 'A\nB'], ['timing', 'soon'], ['budgetStatus', 'nope'], ['approver', 'nope'], ['submissionId', 'bad']] as const) {
     const result = validateSoftwareInquiry({ ...base, [key]: value });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errors[key]).toBeTruthy();
@@ -92,4 +94,55 @@ it('guards origin, content type, size, and missing bindings', async () => {
   expect((await POST(context('{}', { type: 'text/plain' }))).status).toBe(415);
   expect((await POST(context({ padding: 'x'.repeat(33000) }))).status).toBe(413);
   expect((await POST(context(base, { db: null }))).status).toBe(503);
+  expect((await POST(context(base, { token: null }))).status).toBe(503);
+  expect((await POST(context(base, { rate: null }))).status).toBe(503);
+});
+
+it('reports simultaneous field errors, including empty choices and controls', () => {
+  const result = validateSoftwareInquiry({ ...base, name: '', audience: '', today: '\u0001', timing: '', budgetStatus: '', approver: '' });
+  expect(result.ok).toBe(false);
+  if (!result.ok) for (const key of ['name', 'audience', 'today', 'timing', 'budgetStatus', 'approver']) expect(result.errors[key]).toBeTruthy();
+});
+
+it('alerts and preserves input when the duplicate lookup fails', async () => {
+  const failing = { prepare: () => ({ bind: () => ({ first: async () => { throw new Error('D1 unavailable'); } }) }) } as unknown as D1Database;
+  const response = await POST(context(base, { db: failing }));
+  expect(response.status).toBe(503);
+  expect((await response.json() as { error: string }).error).toContain('Your details are still here');
+  expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(1);
+});
+
+it('rejects overlength and line breaks in every text field', () => {
+  const lengths = { today: 2000, audience: 1000, firstResult: 2000, name: 100, email: 120, company: 120, timingReason: 500, budgetNote: 200, approverRole: 120 };
+  for (const [key, max] of Object.entries(lengths)) {
+    const result = validateSoftwareInquiry({ ...base, [key]: 'a'.repeat(max + 1) });
+    expect(result.ok, key).toBe(false);
+    if (!result.ok) expect(result.errors[key], key).toBeTruthy();
+  }
+  for (const key of ['name', 'email', 'company', 'timingReason', 'budgetNote', 'approverRole']) {
+    const result = validateSoftwareInquiry({ ...base, [key]: 'a\nb' });
+    expect(result.ok, key).toBe(false);
+    if (!result.ok) expect(result.errors[key], key).toBeTruthy();
+  }
+});
+
+it('does not reveal a raced brief to a different email', async () => {
+  const racing = { prepare: db.prepare.bind(db), batch: async () => {
+    sql.prepare(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,created_at,updated_at,submission_id)
+      VALUES ('raced','software','workflow','Other','other@example.com','Private stored summary',?,'new','now','now',?)`)
+      .run(JSON.stringify({ path: 'workflow', today: 'Private stored answer', audience: 'Other team', firstResult: 'Private stored summary', timing: 'flexible', budgetStatus: 'exploring', approver: 'self' }), id);
+    throw new Error('UNIQUE constraint failed');
+  } } as unknown as D1Database;
+  const response = await POST(context(base, { db: racing }));
+  expect(response.status).toBe(409);
+  expect(JSON.stringify(await response.json())).not.toContain('Private stored');
+});
+
+it('keeps the approver role only for someone else', () => {
+  const other = validateSoftwareInquiry({ ...base, approver: 'other', approverRole: 'Director' });
+  expect(other.ok).toBe(true);
+  if (other.ok) expect(other.value.approverRole).toBe('Director');
+  const self = validateSoftwareInquiry(base);
+  expect(self.ok).toBe(true);
+  if (self.ok) expect(self.value.approverRole).toBe('');
 });

@@ -4,7 +4,7 @@ export function setupFormSubmission({ form, endpoint, payload, success, onSucces
   endpoint: string;
   payload: (data: FormData) => Record<string, unknown>;
   success: HTMLElement;
-  onSuccess?: (result: { brief?: Record<string, string> }) => void;
+  onSuccess?: (result: { brief?: unknown }) => void;
   onConflict?: () => void;
 }) {
   const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
@@ -42,7 +42,7 @@ export function setupFormSubmission({ form, endpoint, payload, success, onSucces
         body: JSON.stringify({ ...payload(data), turnstileToken: String(data.get('cf-turnstile-response') ?? '') }),
         signal: AbortSignal.timeout(30_000),
       });
-      const result = await response.json() as { ok?: boolean; errors?: Record<string, string>; error?: string; brief?: Record<string, string> };
+      const result = await response.json() as { ok?: boolean; errors?: Record<string, string>; error?: string; brief?: unknown };
       if (response.ok && result.ok === true) {
         onSuccess?.(result);
         form.hidden = true;

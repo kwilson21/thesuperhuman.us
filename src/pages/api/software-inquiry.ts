@@ -29,7 +29,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (!attempts.allowed) return Response.json({ ok: false, error: 'Please wait a few minutes before sending again.' }, { status: 429 });
     if (!await verifyTurnstile(input.turnstileToken, env.TURNSTILE_SECRET_KEY, ip))
       return Response.json({ ok: false, errors: { turnstileToken: 'Please complete the security check again.' } }, { status: 403 });
-    const prior = await existing(env.MUSIC_DB, input.submissionId);
+    let prior;
+    try { prior = await existing(env.MUSIC_DB, input.submissionId); }
+    catch {
+      await sendUrgentOwnerAlert(env, { category: 'request-storage', route: '/api/software-inquiry', requestId: crypto.randomUUID(), code: 'd1-write-failed', occurredAt: new Date().toISOString() });
+      return Response.json({ ok: false, error: preserved }, { status: 503 });
+    }
     if (prior) return prior.email.toLowerCase() === input.email.toLowerCase()
       ? Response.json({ ok: true, brief: softwareBrief(prior) })
       : Response.json({ ok: false, error: preserved }, { status: 409 });

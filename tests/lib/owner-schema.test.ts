@@ -36,6 +36,8 @@ describe('owner insights schema', () => {
     db.exec(readFileSync(new URL('../../migrations/music/0019_software_requests.sql', import.meta.url), 'utf8'));
     db.exec('COMMIT');
     expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    expect(tableNames(db)).not.toContain('owner_requests_0019_stash');
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='owner_requests'").all().map((row: { name: string }) => row.name)).toEqual(expect.arrayContaining(['owner_requests_status_date', 'owner_requests_submission_id']));
     expect(db.prepare("SELECT campaign_id,email FROM owner_requests WHERE id='purchase'").get()).toEqual({ campaign_id: 'campaign', email: 'fan@example.com' });
     expect(db.prepare("SELECT details_json FROM owner_requests WHERE id='audio'").get()).toEqual({ details_json: '{"note":"keep"}' });
     expect(db.prepare("SELECT request_id FROM audio_payments WHERE request_id='audio'").get()).toEqual({ request_id: 'audio' });
@@ -52,6 +54,7 @@ describe('owner insights schema', () => {
     expect(db.prepare("SELECT action FROM owner_request_audit WHERE request_id='purchase' ORDER BY id DESC LIMIT 1").get()).toEqual({ action: 'personal-data-deleted' });
     db.exec("UPDATE owner_requests SET status='resolved',updated_at='later' WHERE id='audio'");
     expect(db.prepare("SELECT revoked_at FROM audio_projects WHERE request_id='audio'").get()).toEqual({ revoked_at: 'later' });
+    expect(db.prepare("SELECT action FROM audio_project_audit WHERE request_id='audio' ORDER BY id DESC LIMIT 1").get()).toEqual({ action: 'revoked' });
     db.close();
   });
   it('adds declined-studio closure to a database that already applied 0013 and 0014', () => {

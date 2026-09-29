@@ -9,7 +9,7 @@ import { studioRetentionProjectPredicate } from './studio-retention.mjs';
 
 const requiredConfiguration = ['MUSIC_DB', 'AUDIO', 'OWNER_ACCESS_TEAM_DOMAIN', 'OWNER_ACCESS_AUD', 'OWNER_EMAIL'];
 const requiredSchema = ['owner_campaigns', 'owner_requests', 'owner_request_audit', 'music_playback_events', 'music_playback_daily', 'music_playback_geography_daily', 'owner_retention_runs', 'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts', 'stripe_unmatched_events',
-  'audio_projects', 'audio_client_codes', 'audio_client_sessions', 'audio_client_access_audit', 'audio_project_messages', 'audio_project_updates', 'audio_project_files', 'audio_project_uploads'];
+  'audio_projects', 'audio_client_codes', 'audio_client_sessions', 'audio_client_access_audit', 'audio_project_messages', 'audio_project_updates', 'audio_project_files', 'audio_project_uploads', 'owner_requests_audit_personal_delete', 'audio_project_after_service_request', 'audio_project_close_declined_request'];
 const attention = (id, summary, next) => ({ id, status: 'attention', summary, next });
 const pass = (id, summary) => ({ id, status: 'pass', summary, next: '' });
 

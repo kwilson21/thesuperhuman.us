@@ -9,6 +9,7 @@ const requiredSchema = [
   'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts', 'stripe_unmatched_events',
   'audio_projects', 'audio_client_codes', 'audio_client_sessions', 'audio_client_access_audit',
   'audio_project_messages', 'audio_project_updates', 'audio_project_files', 'audio_project_uploads',
+  'owner_requests_audit_personal_delete', 'audio_project_after_service_request', 'audio_project_close_declined_request',
 ];
 
 function healthyFixture() {
