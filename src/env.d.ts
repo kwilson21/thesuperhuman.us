@@ -9,6 +9,8 @@ declare namespace App {
 }
 
 interface Env {
+  // Deployment-controlled email origin. Never populated from request headers.
+  SITE_ORIGIN?: string;
   MUSIC_DB?: D1Database;
   MUSIC_EVENTS_ENABLED?: string;
   OWNER_ACCESS_TEAM_DOMAIN?: string;

@@ -44,3 +44,13 @@ describe('renderEmail', () => {
     expect(resumeDeliveryEmail('Jane <x>').html).toContain('Hi Jane &lt;x&gt;');
   });
 });
+
+// Sandbox mail must not send clients into the production studio.
+it('uses the configured origin for every studio email', () => {
+  const origin = 'https://test.example.com';
+  for (const email of [studioInvitationEmail(origin), studioUpdateEmail(origin), studioCodeEmail('12345678', origin)]) {
+    expect(email.text).toContain(`${origin}/studio/sign-in`);
+    expect(email.html).toContain(`${origin}/studio/sign-in`);
+    expect(email.text).not.toContain('https://thesuperhuman.us/studio');
+  }
+});

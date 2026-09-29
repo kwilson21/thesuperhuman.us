@@ -31,7 +31,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const code = await issueClientCode(env.MUSIC_DB, email, env.AUDIO_CLIENT_CODE_KEY);
     if (code) locals.runtime.ctx.waitUntil((async () => {
       const sent = await sendAudioMessage({ apiKey: env.RESEND_API_KEY, payload: {
-        from: env.CONTACT_FROM_EMAIL, to: [email], subject: 'Your studio sign-in code', ...studioCodeEmail(code),
+        from: env.CONTACT_FROM_EMAIL, to: [email], subject: 'Your studio sign-in code', ...studioCodeEmail(code, env.SITE_ORIGIN),
       } });
       // Discard only a confirmed rejection. After a timeout or provider error the email may still
       // arrive, so that code stays usable until it expires.
