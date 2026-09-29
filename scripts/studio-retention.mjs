@@ -65,11 +65,12 @@ async function softwareValues(database, now, listObjects) {
   if (projects.length) {
     queries.softwareUpdates = softwareContentSnapshot('software_project_updates',projects);
     queries.softwareMessages = snapshot({columns:'id,request_id,created_at,read_at',from:'software_project_messages',where:`request_id IN (${ids(projects)})`,order:'request_id,id',limit:5000});
-    for (const name of ['softwareUpdates','softwareMessages']) {
+    queries.softwarePayments = snapshot({columns:'request_id,milestone_index,paid_recorded_at,recorded_by',from:'software_milestone_payments',where:`request_id IN (${ids(projects)})`,order:'request_id,milestone_index',limit:5000});
+    for (const name of ['softwareUpdates','softwareMessages','softwarePayments']) {
       values[name] = await readSource(database,queries[name]);
       if (values[name].length===5000) throw new Error('Software content batch reached its limit. Reduce project batch size.');
     }
-  } else { values.softwareUpdates=[]; values.softwareMessages=[]; }
+  } else { values.softwareUpdates=[]; values.softwareMessages=[]; values.softwarePayments=[]; }
   values.softwareObjects=[];
   for (const [id] of projects) {
     const keys = await listObjects(`software/${id}/`);
@@ -201,6 +202,7 @@ export async function applyStudioRetention(database, review, environment, storag
   const softwareStatements = software.values.softwareProjects.length ? [
     `DELETE FROM software_project_messages WHERE request_id IN (${softwareIds})`,
     `DELETE FROM software_project_updates WHERE request_id IN (${softwareIds})`,
+    `DELETE FROM software_milestone_payments WHERE request_id IN (${softwareIds})`,
     `UPDATE software_projects SET content_deleted_at=${quote(now.toISOString())} WHERE request_id IN (${softwareIds})`,
     `INSERT INTO software_project_audit(request_id,action,actor,occurred_at) SELECT request_id,'content-deleted','retention',${quote(now.toISOString())} FROM software_projects WHERE request_id IN (${softwareIds})`,
   ] : [];

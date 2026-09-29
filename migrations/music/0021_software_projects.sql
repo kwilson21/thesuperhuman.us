@@ -40,6 +40,7 @@ CREATE TABLE software_project_updates (
   client_request TEXT NOT NULL DEFAULT '',
   criteria_json TEXT NOT NULL DEFAULT '[]',
   links_json TEXT NOT NULL DEFAULT '[]',
+  review_window_days INTEGER CHECK(review_window_days IS NULL OR review_window_days BETWEEN 5 AND 30),
   next_update_on TEXT,
   email_client INTEGER NOT NULL DEFAULT 0 CHECK(email_client IN (0,1)),
   notification_status TEXT NOT NULL DEFAULT 'not_requested' CHECK(notification_status IN ('not_requested','pending','sending','sent','failed')),
@@ -69,8 +70,16 @@ CREATE UNIQUE INDEX software_project_messages_one_decision ON software_project_m
 CREATE TABLE software_project_audit (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   request_id TEXT NOT NULL REFERENCES software_projects(request_id),
-  action TEXT NOT NULL CHECK(action IN ('started','state-changed','update-draft-saved','update-shared','update-withdrawn','visual-replaced','decision-recorded','handoff-shared','access-revoked','completed','content-deleted')),
+  action TEXT NOT NULL CHECK(action IN ('started','state-changed','update-draft-saved','update-shared','update-withdrawn','visual-replaced','decision-recorded','milestone-paid','handoff-shared','access-revoked','completed','content-deleted')),
+  note TEXT NOT NULL DEFAULT '' CHECK(length(note) <= 200),
   actor TEXT NOT NULL,
   occurred_at TEXT NOT NULL
 );
 CREATE INDEX software_project_audit_request ON software_project_audit(request_id,id);
+CREATE TABLE software_milestone_payments (
+  request_id TEXT NOT NULL REFERENCES software_projects(request_id),
+  milestone_index INTEGER NOT NULL CHECK(milestone_index BETWEEN 0 AND 2),
+  paid_recorded_at TEXT NOT NULL,
+  recorded_by TEXT NOT NULL,
+  PRIMARY KEY(request_id,milestone_index)
+);

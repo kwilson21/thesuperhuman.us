@@ -147,6 +147,7 @@ describe('owner insights schema', () => {
       'audio_projects', 'audio_project_audit',
       'audio_client_codes', 'audio_client_sessions', 'audio_client_access_audit', 'audio_project_messages', 'audio_project_updates',
       'audio_project_files', 'audio_project_file_access', 'audio_project_uploads',
+      'software_projects', 'software_project_updates', 'software_project_messages', 'software_project_audit', 'software_milestone_payments',
     ];
     expect(tableNames(db)).toEqual(expect.arrayContaining(expected));
     expect(() => db.exec(`${baseline}\n${retention}\n${payments}`)).not.toThrow();

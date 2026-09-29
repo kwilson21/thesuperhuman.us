@@ -206,6 +206,7 @@ it('retains active software, cleans all prefix objects one year after completion
     sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,completed_at,revoked_at,created_at,updated_at) VALUES (?,?,'{}','standard','now','now','now','owner',?,?,'2026-01-01','2026-01-01')").run(id,id+'-offer',completed,revoked);
     sql.prepare("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,created_by,created_at,updated_at) VALUES (?,?,'progress','shared',0,'Private title','concept','owner','2026-01-01','2026-01-01')").run(id+'-update',id);
     sql.prepare("INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,created_at) VALUES (?,'client','client','Private message',?,'2026-01-01')").run(id,id+'-update');
+    sql.prepare("INSERT INTO software_milestone_payments VALUES (?,0,'2026-01-01','owner')").run(id);
     sql.prepare("INSERT INTO software_project_audit(request_id,action,actor,occurred_at) VALUES (?,'started','owner','2025-01-01'),(?,'state-changed','owner','2027-01-01')").run(id,id);
   }
   const list = async (prefix: string) => [prefix+'update/old-orphan.png', prefix+'update/current.png'];
@@ -217,6 +218,7 @@ it('retains active software, cleans all prefix objects one year after completion
   await applyStudioRetention(database,review,'Local test data',storage,async (key: string)=>{deleted.push(key);},now,list);
   expect(deleted.filter(key=>key.startsWith('software/'))).toHaveLength(4);
   expect(sql.prepare('SELECT request_id FROM software_project_updates ORDER BY request_id').all()).toEqual([{request_id:'software-active'},{request_id:'software-recent'}]);
+  expect(sql.prepare('SELECT request_id FROM software_milestone_payments ORDER BY request_id').all()).toEqual([{request_id:'software-active'},{request_id:'software-recent'}]);
   expect(sql.prepare("SELECT request_id FROM software_projects WHERE content_deleted_at IS NOT NULL ORDER BY request_id").all()).toEqual([{request_id:'software-closed'},{request_id:'software-complete'}]);
   expect(sql.prepare("SELECT COUNT(*) AS n FROM software_project_audit WHERE occurred_at='2027-01-01'").get()).toEqual({n:4});
   expect(sql.prepare("SELECT COUNT(*) AS n FROM software_project_audit WHERE action='content-deleted'").get()).toEqual({n:2});
