@@ -37,7 +37,7 @@ export function validateSoftwareInquiry(input: unknown): { ok: true; value: Soft
     for (const key of ['today', 'audience', 'firstResult', 'name', 'email', 'company', 'timingReason', 'budgetNote', 'approverRole'])
       if (typeof raw[key] === 'string' && /[\x00-\x08\x0b\x0c\x0e-\x1f]|\p{Cs}/u.test(raw[key])) lineErrors[key] = 'Remove control characters.';
   }
-  const parsed = schema.safeParse(input, { errorMap: (issue, context) => ({ message: issue.code === 'invalid_type' ? (issue.path.length ? 'This answer is required.' : 'Please send the form again.') : context.defaultError }) });
+  const parsed = schema.safeParse(input, { errorMap: (issue, context) => ({ message: issue.code === 'invalid_type' && !['path', 'timing', 'budgetStatus', 'approver'].includes(String(issue.path[0])) ? (issue.path.length ? 'This answer is required.' : 'Please send the form again.') : context.defaultError }) });
   if (!parsed.success || Object.keys(lineErrors).length) {
     const errors: Record<string, string> = {};
     if (!parsed.success) for (const issue of parsed.error.issues) errors[String(issue.path[0] ?? '_form')] ??= issue.message;

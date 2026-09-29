@@ -25,14 +25,15 @@ export default {
         await page.locator('[name=approver]').selectOption('other');
         await page.locator('[name=approverRole]').fill('Project sponsor');
         await page.locator('[data-next]').click();
-        await page.locator('iframe[src*="turnstile"]').waitFor({ state: 'visible', timeout: 30_000 });
+        await page.locator('[name=cf-turnstile-response]').waitFor({ state: 'attached', timeout: 30_000 });
+        await page.waitForFunction(() => !!document.querySelector('[name=cf-turnstile-response]')?.value, { timeout: 30_000 });
+        await page.locator('[data-step="2"]:visible').waitFor();
+        await page.waitForTimeout(1_500);
       };
       steps.push({ title: `Client review, ${viewport}`, images: [{ file: await capture({ file: `software-brief-review-${viewport}.png`, path: '/software/start', viewport, prepare: review }), caption: 'Fictional review step' }] });
       steps.push({ title: `Client receipt, ${viewport}`, images: [{ file: await capture({ file: `software-brief-receipt-${viewport}.png`, path: '/software/start', viewport, prepare: async page => {
         await page.context().route(url => url.origin === new URL(base).origin, route => route.continue({ headers: { ...route.request().headers(), 'cf-connecting-ip': viewport === 'desktop' ? '192.0.2.10' : '192.0.2.11' } }));
         await review(page);
-        await page.locator('[name=cf-turnstile-response]').waitFor({ state: 'attached', timeout: 30_000 });
-        await page.waitForFunction(() => !!document.querySelector('[name=cf-turnstile-response]')?.value, { timeout: 30_000 });
         await page.locator('[type=submit]').click();
         await page.locator('#software-success:visible').waitFor({ timeout: 30_000 });
       } }), caption: 'Saved fictional brief receipt' }] });

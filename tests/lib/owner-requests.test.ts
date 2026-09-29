@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { changeOwnerRequest, getOwnerRequest, listOwnerRequests, saveOwnerRequest } from '~/lib/owner-requests';
+import { changeOwnerRequest, getOwnerRequest, listOwnerRequests, RequestDetailsTooLargeError, saveOwnerRequest } from '~/lib/owner-requests';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 
@@ -60,6 +60,12 @@ describe('owner requests', () => {
     expect(await getOwnerRequest(db, request.id)).toEqual(request);
     expect(sql.prepare('SELECT action,actor FROM owner_request_audit WHERE request_id=?').get(request.id))
       .toEqual({ action: 'created', actor: 'system' });
+  });
+
+  it('rejects oversized request details with the typed error', async () => {
+    const { db } = fixture();
+    await expect(saveOwnerRequest(db, { ...purchase, details: { note: 'x'.repeat(16_000) } }))
+      .rejects.toBeInstanceOf(RequestDetailsTooLargeError);
   });
 
   it('applies only defined status transitions and records the owner actor', async () => {

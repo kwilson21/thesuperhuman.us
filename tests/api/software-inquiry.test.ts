@@ -76,7 +76,7 @@ it('preserves input and clears success limit after a storage failure', async () 
   const alert = JSON.parse(alertCall[1]?.body as string);
   expect(alert.text).toContain('/api/software-inquiry');
   expect(alert.text).toContain('d1-write-failed');
-  expect(JSON.stringify(alert)).not.toMatch(/alex|first line|second line|example studio|one place to see/i);
+  expect(JSON.stringify(alert)).not.toMatch(/alex|first line|second line|our team|example studio|one place to see/i);
 });
 
 it('does not undo a saved request when the owner notice fails', async () => {
@@ -116,6 +116,8 @@ it('uses plain messages for missing fields, wrong types, and non-object bodies',
   for (const [input, field, message] of [
     [{ ...base, today: undefined }, 'today', 'This answer is required.'],
     [{ ...base, audience: 42 }, 'audience', 'This answer is required.'],
+    [{ ...base, timing: undefined }, 'timing', 'Choose one.'],
+    [{ ...base, path: 5 }, 'path', 'Choose a starting point.'],
     [[], '_form', 'Please send the form again.'],
   ] as const) {
     const result = validateSoftwareInquiry(input);
@@ -131,7 +133,7 @@ it('alerts and preserves input when the duplicate lookup fails', async () => {
   expect((await response.json() as { error: string }).error).toContain('Your details are still here');
   expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(1);
   const alertCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes('api.resend.com'))!;
-  expect(JSON.stringify(JSON.parse(alertCall[1]?.body as string))).not.toMatch(/alex|first line|second line|example studio|one place to see/i);
+  expect(JSON.stringify(JSON.parse(alertCall[1]?.body as string))).not.toMatch(/alex|first line|second line|our team|example studio|one place to see/i);
 });
 
 it('rejects overlength and line breaks in every text field', () => {
