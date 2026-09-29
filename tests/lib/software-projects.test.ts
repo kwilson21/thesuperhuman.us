@@ -13,6 +13,9 @@ import { sharedSoftwareUpdates, queueSoftwareNotice, deliverSoftwareNotice } fro
 import { softwareInvitationEmail, softwareUpdateEmail } from '~/lib/client-emails';
 import { listStudioProjectAttention } from '~/lib/owner-reporting';
 import { postClientSoftwareProjectMessage } from '~/lib/software-project-messages';
+import { POST as reviewPost } from '~/pages/api/studio/software/[id]/reviews/[updateId]';
+import { correctionPeriodEnd } from '~/lib/software-projects';
+import { softwareReviewEmail, softwareHandoffEmail } from '~/lib/client-emails';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database, env: Env;
 const terms = { outcome: 'Onboarding tool', summary: 'One shared view.', milestones: [{ name: 'Tracker', deliverables: ['Status view'], acceptance: ['Add a client.'], feeCents: 240000 }], clientInputs: 'Sample', exclusions: 'Live rollout', timing: '', paymentMode: 'standard' };
@@ -46,6 +49,118 @@ const start = () => call(projectPost, { action: 'start', signatures: true, payme
 const update = { kind: 'progress', milestone_index: 0, title: 'Shared view', artifact_version: 'v1', evidence_type: 'concept', visual_alt: 'A fictional tracker.', preview_url: 'https://preview.example.com/tool', what_changed: 'Client status is visible.', checks_limitations: 'Sample only.', next_step: 'Build the shared view.', client_request: 'Send the sample.', next_update_on: '2026-10-02', email_client: false };
 async function draft() { const response = await call(updatePost, { action: 'draft', update, expectedUpdatedAt: null }); expect(response.status).toBe(200); return response.json() as Promise<{ id: string; updatedAt: string }>; }
 async function session(email = 'alex@example.com') { const code = await issueClientCode(db, email, secret); return (await completeClientCode(db, email, code!, secret))!; }
+async function shareReview(kind='delivery_review', artifact_version='Delivery v1') {
+  const response = await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind,artifact_version,criteria:['Try adding a client in the preview.']}});
+  expect(response.status).toBe(200); return response.json() as Promise<{id:string}>;
+}
+async function decide(updateId:string, body:unknown, token:string, id='software') {
+  return reviewPost({params:{id,updateId},request:new Request(`https://example.com/api/studio/software/${id}/reviews/${updateId}`,{method:'POST',headers:{origin:'https://example.com','content-type':'application/json',cookie:token ? `studio_session=${token}` : ''},body:JSON.stringify(body)}),locals:{runtime:{env}}} as never);
+}
+it('requires a named review version, evidence for every check and a bounded review window',async()=>{
+  await start();
+  for(const changed of [{artifact_version:''},{criteria:[]},{criteria:['']},{review_window_days:4},{review_window_days:31},{criteria:['x'.repeat(301)]}]) {
+    expect((await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',criteria:['Try it'],...changed}})).status).toBe(400);
+  }
+  expect(sql.prepare('SELECT count(*) AS n FROM software_project_updates').get()).toEqual({n:0});
+});
+it('records one version-specific decision and audit together, without confusing direction and acceptance',async()=>{
+  await start(); const token=await session(), direction=await shareReview('direction_review','Direction v1');
+  expect((await decide(direction.id,{decision:'milestone_accepted',confirm:true},token)).status).toBe(400);
+  expect((await decide(direction.id,{decision:'direction_confirmed'},token)).status).toBe(200);
+  expect((await decide(direction.id,{decision:'direction_confirmed'},token)).status).toBe(409);
+  const delivery=await shareReview();
+  expect((await decide(delivery.id,{decision:'direction_confirmed'},token)).status).toBe(400);
+  expect((await decide(delivery.id,{decision:'milestone_accepted'},token)).status).toBe(400);
+  expect((await decide(delivery.id,{decision:'milestone_accepted',confirm:true},token)).status).toBe(200);
+  expect(sql.prepare("SELECT note FROM software_project_audit WHERE action='decision-recorded' ORDER BY id").all()).toEqual([
+    {note:'Direction confirmed on Direction v1 · milestone 1'},{note:'Accepted on Delivery v1 · milestone 1'}]);
+  expect(sql.prepare('SELECT decision,read_at FROM software_project_messages ORDER BY id').all()).toEqual([{decision:'direction_confirmed',read_at:null},{decision:'milestone_accepted',read_at:null}]);
+});
+it('requires specific delivery criteria and bounded reproduction notes',async()=>{
+  await start(); const token=await session(), review=await shareReview();
+  for(const changed of [{criteria:[]},{criteria:[1]},{criteria:[-1]},{note:''},{note:'x'.repeat(2001)}])
+    expect((await decide(review.id,{decision:'changes_requested',criteria:[0],note:'Adding a client fails with the sample.',...changed},token)).status).toBe(400);
+  expect((await decide(review.id,{decision:'changes_requested',criteria:[0],note:'Adding a client fails with the sample.'},token)).status).toBe(200);
+  expect(sql.prepare('SELECT body FROM software_project_messages').get().body).toContain('Check 1: Add a client.');
+  expect(sql.prepare("SELECT note FROM software_project_audit WHERE action='decision-recorded'").get().note).toContain('checks 1');
+});
+it('supersedes only the same kind and milestone, keeping old versions and decisions private-safe',async()=>{
+  await start();const token=await session(),first=await shareReview();
+  await decide(first.id,{decision:'changes_requested',criteria:[0],note:'Try the sample.'},token);
+  const second=await shareReview('delivery_review','Delivery v2');
+  expect((await decide(first.id,{decision:'milestone_accepted',confirm:true},token)).status).toBe(409);
+  expect((await decide(second.id,{decision:'milestone_accepted',confirm:true},token)).status).toBe(200);
+  const projected=await sharedSoftwareUpdates(db,'software');
+  expect(projected.find(item=>item.id===first.id)).toMatchObject({status:'superseded',decision:'changes_requested'});
+  expect(JSON.stringify(projected)).not.toMatch(/PRIVATE NOTE|actor_id|visual_key|shared_by|notification_status/);
+});
+it('scopes review decisions to own active sessions and rejects unknown or revoked projects',async()=>{
+  await start();const token=await session(),review=await shareReview();
+  expect((await decide(review.id,{decision:'milestone_accepted',confirm:true},'')).status).toBe(401);
+  request('foreign','other@example.com');offer('foreign');await call(projectPost,{action:'start',signatures:true,payment:true,next_update_on:''},true,'foreign');
+  expect((await decide(review.id,{decision:'milestone_accepted',confirm:true},await session('other@example.com'))).status).toBe(404);
+  expect((await decide(review.id,{decision:'milestone_accepted',confirm:true},token,'missing')).status).toBe(404);
+  sql.exec("UPDATE software_projects SET revoked_at='now'");
+  expect((await decide(review.id,{decision:'milestone_accepted',confirm:true},token)).status).toBe(404);
+});
+it('rolls back the decision when the audit cannot be written',async()=>{
+  await start();const token=await session(),review=await shareReview();
+  sql.exec("CREATE TRIGGER fail_decision_audit BEFORE INSERT ON software_project_audit WHEN NEW.action='decision-recorded' BEGIN SELECT RAISE(ABORT,'test'); END");
+  expect((await decide(review.id,{decision:'milestone_accepted',confirm:true},token)).status).toBe(409);
+  expect(sql.prepare('SELECT count(*) AS n FROM software_project_messages').get()).toEqual({n:0});
+});
+it('gates handoff on accepted delivery, explicit full payment and safe delivered links; completes only after handoff',async()=>{
+  await start();const token=await session();
+  const handoff={...update,kind:'handoff',paid_confirmed:true,links:[{label:'Handoff notes',url:'https://files.example.com/notes'}]};
+  const share=(changed={})=>call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...handoff,...changed}});
+  expect((await share()).status).toBe(409);
+  expect((await call(projectPost,{action:'complete',confirmed:true})).status).toBe(409);
+  const review=await shareReview();await decide(review.id,{decision:'milestone_accepted',confirm:true},token);
+  for(const changed of [{paid_confirmed:false},{links:[]},{links:[{label:'Files',url:'http://files.example.com'}]},{links:[{label:'Files',url:'https://user:password@files.example.com'}]}]) expect((await share(changed)).status).toBe(400);
+  expect((await share()).status).toBe(200);
+  expect(sql.prepare('SELECT count(*) AS n FROM software_milestone_payments').get()).toEqual({n:1});
+  expect((await call(projectPost,{action:'payment',milestone_index:0,confirmed:true})).status).toBe(200);
+  expect(sql.prepare("SELECT count(*) AS n FROM software_project_audit WHERE action='milestone-paid'").get()).toEqual({n:1});
+  expect((await call(projectPost,{action:'complete',confirmed:true})).status).toBe(200);
+  expect(sql.prepare('SELECT state,completed_at FROM software_projects').get()).toMatchObject({state:'complete',completed_at:expect.any(String)});
+  expect((await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update})).status).toBe(409);
+});
+it('starts corrections at the earlier acceptance or full-payment New York date, across DST',()=>{
+  expect(correctionPeriodEnd('2026-10-01T02:00:00Z','2026-09-28T15:00:00Z')).toBe('2026-10-28');
+  expect(correctionPeriodEnd('2026-10-31T23:00:00Z')).toBe('2026-11-30');
+  expect(correctionPeriodEnd('2026-10-01T02:00:00Z','2026-10-05T12:00:00Z')).toBe('2026-10-30');
+});
+it('renders review and handoff notices with sign-in links and no project details',()=>{
+  for(const [render,heading] of [[softwareReviewEmail,'Ready for your review.'],[softwareHandoffEmail,'Your handoff is ready.']] as const) {
+    const email=render('https://preview.example.com');expect(email.text).toContain(heading);expect(email.html).toContain(heading);
+    expect(email.text).toContain('https://preview.example.com/studio/sign-in?for=software');expect(email.text).not.toContain(terms.outcome);
+  }
+});
+it('queues the correct review and handoff notice subjects using mocked email transport only',async()=>{
+  await start();vi.mocked(fetch).mockClear();const token=await session();
+  const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',criteria:['Try the preview.'],email_client:true}});
+  expect(response.status).toBe(200);const review=await response.json();
+  expect(JSON.parse(vi.mocked(fetch).mock.calls.at(-1)![1]!.body as string).subject).toBe('Your project is ready for review');
+  await decide(review.id,{decision:'milestone_accepted',confirm:true},token);
+  const handoff=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'handoff',paid_confirmed:true,links:[{label:'Notes',url:'https://example.com/notes'}],email_client:true}});
+  expect(handoff.status).toBe(200);expect(JSON.parse(vi.mocked(fetch).mock.calls.at(-1)![1]!.body as string).subject).toBe('Your project handoff is ready');
+});
+it('rejects a review that becomes superseded between validation and the decision batch',async()=>{
+  await start();const token=await session(),review=await shareReview();
+  const original=db.batch.bind(db);const batch=vi.spyOn(db,'batch').mockImplementationOnce(async statements=>{
+    sql.prepare("UPDATE software_project_updates SET status='superseded' WHERE id=?").run(review.id);return original(statements);
+  });
+  expect((await decide(review.id,{decision:'milestone_accepted',confirm:true},token)).status).toBe(409);
+  expect(sql.prepare('SELECT count(*) AS n FROM software_project_messages').get()).toEqual({n:0});batch.mockRestore();
+});
+it('enforces the new payment, review-window and factual audit-note schema limits',async()=>{
+  await start();await draft();
+  for(const value of [4,31]) expect(()=>sql.prepare('UPDATE software_project_updates SET review_window_days=?').run(value)).toThrow();
+  for(const value of [-1,3]) expect(()=>sql.prepare("INSERT INTO software_milestone_payments VALUES ('software',?,'now','owner')").run(value)).toThrow();
+  sql.exec("INSERT INTO software_milestone_payments VALUES ('software',0,'now','owner')");
+  expect(()=>sql.exec("INSERT INTO software_milestone_payments VALUES ('software',0,'later','owner')")).toThrow();
+  expect(()=>sql.prepare("INSERT INTO software_project_audit(request_id,action,actor,occurred_at,note) VALUES ('software','milestone-paid','owner','now',?)").run('x'.repeat(201))).toThrow();
+});
 it('starts only with an owner, sent offer and both explicit confirmations, preserving the exact snapshot', async () => {
   expect((await call(projectPost, { action:'start' }, false)).status).toBe(403);
   expect((await call(projectPost, { action:'start',signatures:true,payment:false,next_update_on:'' })).status).toBe(400);

@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
 import { musicRequest } from '~/lib/music-request';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
-import { updateInput, getSoftwareProject, projectTerms, softwareAudit, softwareGuard, openSoftwareGuard, deliverSoftwareNotice } from '~/lib/software-projects';
+import { updateInput, getSoftwareProject, projectTerms, softwareAudit, softwareGuard, openSoftwareGuard, deliverSoftwareNotice, recordMilestonePayment, acceptedDeliveryGuard } from '~/lib/software-projects';
 import type { SoftwareUpdate } from '~/lib/software-projects';
 export const prerender = false;
 export const POST: APIRoute = async ({ params, request, locals }) => {
@@ -11,7 +11,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   const env = locals.runtime.env, db = env.MUSIC_DB, id = params.id;
   if (!clientPortalEnabled(env)) return json({ ok: false }, 404);
   if (!db || !id) return json({ ok: false }, 503);
-  const body = await musicRequest(request, 16000); if (body instanceof Response) return body;
+  const body = await musicRequest(request, 40000); if (body instanceof Response) return body;
   const parsed = z.object({ action: z.enum(['draft','share']), expectedUpdatedAt: z.string().nullable(), confirmed: z.boolean().optional(), update: z.unknown() }).safeParse(body);
   if (!parsed.success) return json({ ok: false, error: 'Choose save or share and reload the current draft.' }, 400);
   const command = parsed.data;
@@ -20,26 +20,39 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   const value = input.data, actor = locals.owner.email;
   try {
     const project = await getSoftwareProject(db, id);
-    if (!project || project.revoked_at) return json({ ok: false }, 404);
+    if (!project || project.revoked_at || project.content_deleted_at) return json({ ok: false }, 404);
+    if (project.state === 'complete') return json({ ok: false, error: 'This project is complete.' }, 409);
     if (value.milestone_index >= projectTerms(project).milestones.length) return json({ ok: false, error: 'Choose a milestone from this project.' }, 400);
     const draft = await db.prepare("SELECT * FROM software_project_updates WHERE request_id=? AND status='draft'").bind(id).first<SoftwareUpdate>();
     if ((draft?.updated_at ?? null) !== command.expectedUpdatedAt) return json({ ok: false, error: 'The draft changed. Reload before saving.' }, 409);
     if (draft?.visual_key && !value.visual_alt) return json({ ok: false, error: 'Describe the visual for the client.' }, 400);
     const share = command.action === 'share';
     if (share && (!command.confirmed || !value.title || !value.what_changed)) return json({ ok: false, error: 'Add a title and what changed, then confirm sharing.' }, 400);
+    const review = value.kind.endsWith('_review');
+    if (share && review && !value.artifact_version) return json({ ok: false, error: 'Name the version before sharing.' }, 400);
+    const checks = projectTerms(project).milestones[value.milestone_index].acceptance;
+    if (share && value.kind === 'delivery_review' && (value.criteria.length !== checks.length || value.criteria.some(evidence => !evidence)))
+      return json({ ok: false, error: 'Add evidence for every acceptance check before sharing.' }, 400);
+    if (share && value.kind === 'handoff' && (!value.paid_confirmed || !value.links.length || !value.next_step || !value.checks_limitations))
+      return json({ ok: false, error: 'Confirm full payment and add delivered links, limitations and the support boundary.' }, 400);
     const updateId = draft?.id ?? crypto.randomUUID();
     const at = new Date(Math.max(Date.now(), draft ? Date.parse(draft.updated_at) + 1 : 0)).toISOString();
-    const columns = ['kind','milestone_index','title','artifact_version','evidence_type','visual_alt','preview_url','what_changed','checks_limitations','next_step','client_request','next_update_on','email_client'];
-    const values = columns.map(key => key === 'email_client' ? Number(value.email_client) : (key === 'next_update_on' || key === 'preview_url') ? value[key] || null : value[key as keyof typeof value]);
+    const columns = ['kind','milestone_index','title','artifact_version','evidence_type','visual_alt','preview_url','what_changed','checks_limitations','next_step','client_request','next_update_on','email_client','criteria_json','links_json','review_window_days'];
+    const stored = { ...value, evidence_type: value.kind === 'handoff' ? 'handoff' : value.evidence_type, email_client: Number(value.email_client), criteria_json: JSON.stringify(value.criteria), links_json: JSON.stringify(value.links), review_window_days: review ? value.review_window_days : null };
+    const values = columns.map(key => (key === 'next_update_on' || key === 'preview_url') ? stored[key] || null : stored[key as keyof typeof stored]);
     const status = share ? 'shared' : 'draft', notice = share && value.email_client ? 'pending' : 'not_requested';
     await db.batch([openSoftwareGuard(db, id),
+      softwareGuard(db,"SELECT 1 FROM software_projects WHERE request_id=? AND state<>'complete'",[id]),
+      ...(share && value.kind === 'handoff' ? [acceptedDeliveryGuard(db,id,value.milestone_index), ...recordMilestonePayment(db,id,value.milestone_index,actor,at)] : []),
+      ...(share && value.kind !== 'progress' ? [db.prepare("UPDATE software_project_updates SET status='superseded',updated_at=? WHERE request_id=? AND milestone_index=? AND kind=? AND status='shared'").bind(at,id,value.milestone_index,value.kind)] : []),
       ...(draft ? [softwareGuard(db, "SELECT 1 FROM software_project_updates WHERE id=? AND status='draft' AND updated_at=?", [draft.id, command.expectedUpdatedAt!])] : []),
       draft ? db.prepare(`UPDATE software_project_updates SET ${columns.map(key => `${key}=?`).join(',')},status=?,notification_status=?,shared_at=?,shared_by=?,updated_at=? WHERE id=?`)
         .bind(...values, status, notice, share ? at : null, share ? actor : null, at, updateId)
-        : db.prepare(`INSERT INTO software_project_updates(id,request_id,${columns.join(',')},status,notification_status,shared_at,shared_by,created_by,created_at,updated_at) VALUES (${Array(22).fill('?').join(',')})`)
+        : db.prepare(`INSERT INTO software_project_updates(id,request_id,${columns.join(',')},status,notification_status,shared_at,shared_by,created_by,created_at,updated_at) VALUES (${Array(columns.length+9).fill('?').join(',')})`)
           .bind(updateId, id, ...values, status, notice, share ? at : null, share ? actor : null, actor, at, at),
       ...(share ? [db.prepare('UPDATE software_projects SET next_update_on=?,updated_at=? WHERE request_id=?').bind(value.next_update_on || null, at, id)] : []),
-      softwareAudit(db, id, share ? 'update-shared' : 'update-draft-saved', actor, at)]);
+      softwareAudit(db, id, share ? 'update-shared' : 'update-draft-saved', actor, at),
+      ...(share && value.kind === 'handoff' ? [softwareAudit(db,id,'handoff-shared',actor,at,`Handoff shared · milestone ${value.milestone_index+1}`)] : [])]);
     if (share && value.email_client) {
       try { await deliverSoftwareNotice(db, id, env, updateId); } catch { return json({ ok: true, id: updateId, updatedAt: at, shared: true, noticeUnchecked: true }); }
     }

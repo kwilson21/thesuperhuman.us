@@ -2,13 +2,15 @@ import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
 import { musicRequest } from '~/lib/music-request';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
-import { getSoftwareProject, projectTerms, projectDate, softwareAudit, softwareGuard, openSoftwareGuard, deliverSoftwareNotice, queueSoftwareNotice, softwareAccessRevocation } from '~/lib/software-projects';
+import { getSoftwareProject, projectTerms, projectDate, softwareAudit, softwareGuard, openSoftwareGuard, deliverSoftwareNotice, queueSoftwareNotice, softwareAccessRevocation, recordMilestonePayment } from '~/lib/software-projects';
 export const prerender = false;
 const schema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('start'), signatures: z.literal(true), payment: z.literal(true), next_update_on: projectDate }),
   z.object({ action: z.literal('state'), state: z.enum(['preparing','building','waiting_for_input','ready_for_review','complete']), waiting_for: z.string().trim().max(200), milestone_index: z.number().int().min(0).max(2), step: z.enum(['direction','build','review','handoff']), next_update_on: projectDate, expectedUpdatedAt: z.string() }),
   z.object({ action: z.literal('revoke'), confirmed: z.literal(true) }),
   z.object({ action: z.literal('notice'), updateId: z.string().optional(), confirmedNotSent: z.boolean().default(false) }),
+  z.object({ action: z.literal('payment'), milestone_index: z.number().int().min(0).max(2), confirmed: z.literal(true) }),
+  z.object({ action: z.literal('complete'), confirmed: z.literal(true) }),
 ]);
 export const POST: APIRoute = async ({ params, request, locals }) => {
   const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'cache-control': 'private, no-store' } });
@@ -44,6 +46,22 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       await db.batch([openSoftwareGuard(db, id), ...softwareAccessRevocation(db, id, actor, at)]);
       return json({ ok: true });
     }
+    if (command.action === 'payment') {
+      if (command.milestone_index >= projectTerms(project).milestones.length) return json({ok:false},400);
+      await db.batch([openSoftwareGuard(db,id), ...recordMilestonePayment(db,id,command.milestone_index,actor,at)]);
+      return json({ok:true});
+    }
+    const completing = command.action === 'complete' || command.state === 'complete';
+    if (completing) {
+      const last = projectTerms(project).milestones.length-1;
+      await db.batch([openSoftwareGuard(db,id), softwareGuard(db,"SELECT 1 FROM software_projects WHERE request_id=? AND completed_at IS NULL",[id]),
+        ...(command.action==='state' ? [softwareGuard(db,'SELECT 1 FROM software_projects WHERE request_id=? AND updated_at=?',[id,command.expectedUpdatedAt])] : []),
+        softwareGuard(db,"SELECT 1 FROM software_project_updates WHERE request_id=? AND milestone_index=? AND kind='handoff' AND status='shared'",[id,last]),
+        db.prepare("UPDATE software_projects SET state='complete',completed_at=?,updated_at=? WHERE request_id=?").bind(at,at,id),
+        softwareAudit(db,id,'completed',actor,at,'Project completed after final milestone handoff')]);
+      return json({ok:true});
+    }
+    if (command.action !== 'state' || project.completed_at) return json({ok:false,error:'This project is complete.'},409);
     if (command.milestone_index >= projectTerms(project).milestones.length || (command.state === 'waiting_for_input' && !command.waiting_for))
       return json({ ok: false, error: 'Choose a milestone and name the one thing you need.' }, 400);
     at = new Date(Math.max(Date.now(), Date.parse(project.updated_at) + 1)).toISOString();

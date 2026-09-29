@@ -67,3 +67,15 @@ export const softwareUpdateEmail = (origin?: string) => renderEmail({
   button: { label: 'Open your project', href: softwareSignIn(origin) }, note: signInNote,
   reason: 'You received this because your software project has an update.',
 });
+export const softwareReviewEmail = (origin?: string) => renderEmail({
+  preheader: 'Something is ready for your review.', kicker: 'Review', heading: 'Ready for your review.',
+  paragraphs: ['Sign in to review the latest version on your project page.'],
+  button: { label: 'Open your project', href: softwareSignIn(origin) }, note: signInNote,
+  reason: 'You received this because your software project has something to review.',
+});
+export const softwareHandoffEmail = (origin?: string) => renderEmail({
+  preheader: 'Your handoff is ready.', kicker: 'Handoff', heading: 'Your handoff is ready.',
+  paragraphs: ['Sign in to download the delivered files and read the handoff notes.'],
+  button: { label: 'Open your project', href: softwareSignIn(origin) }, note: signInNote,
+  reason: 'You received this because your software project has a handoff.',
+});

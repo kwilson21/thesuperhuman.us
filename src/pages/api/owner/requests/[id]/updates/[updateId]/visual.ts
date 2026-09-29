@@ -36,7 +36,7 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
   try {
     await bucket.put(key, bytes, { httpMetadata: { contentType: type } });
     try {
-      await db.batch([openSoftwareGuard(db, id), softwareGuard(db, "SELECT 1 FROM software_project_updates WHERE id=? AND request_id=? AND status='draft' AND updated_at=?", [updateId, id, draft.updated_at]),
+      await db.batch([openSoftwareGuard(db, id), softwareGuard(db,"SELECT 1 FROM software_projects WHERE request_id=? AND state<>'complete'",[id]), softwareGuard(db, "SELECT 1 FROM software_project_updates WHERE id=? AND request_id=? AND status='draft' AND updated_at=?", [updateId, id, draft.updated_at]),
         db.prepare('UPDATE software_project_updates SET visual_key=?,visual_media_type=?,updated_at=? WHERE id=?').bind(key, type, at, updateId),
         softwareAudit(db, id, 'visual-replaced', locals.owner.email, at)]);
     } catch { await bucket.delete(key); return json({ ok: false, error: 'The draft changed. The visual was not replaced.' }, 409); }
