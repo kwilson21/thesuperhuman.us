@@ -31,8 +31,8 @@ export function validateOfferTerms(input: unknown) {
   return { ok: false as const, errors: Object.fromEntries(result.error.issues.map(issue => [issue.path.join('.'), issue.message])) };
 }
 export const paymentSchedules = {
-  standard: '50% of each milestone before it starts, the balance on delivery.',
-  invoice: 'Each milestone is invoiced when it starts, due within 30 days. The next milestone starts after the previous one is paid.',
+  standard: '50% of each milestone before it starts, the balance on delivery, due within 15 days.',
+  invoice: 'Each milestone is invoiced on delivery, due within 30 days. The next milestone starts after the previous one is paid.',
 } as const;
 export const offerTotal = (terms: Pick<OfferTerms, 'milestones'>) => terms.milestones.reduce((sum, milestone) => sum + milestone.feeCents, 0);
 export const formatUSD = (cents: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: cents % 100 ? 2 : 0 }).format(cents / 100);

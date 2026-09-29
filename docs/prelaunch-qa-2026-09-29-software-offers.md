@@ -13,7 +13,7 @@ This is a scoped deployment record against the reusable pre-launch checklist.
 
 ## 1. Purpose and content
 
-- **PASS · Authorization and claims.** Offer amounts come only from owner-entered terms; no software prices, hourly rates or availability appear anywhere public (`npm run copy:check` passes). Signing, invoices and payment are shown truthfully as not started ("Agreement · Not sent yet", "Invoice · Not issued", "Start date · Not confirmed").
+- **PASS · Authorization and claims.** Offer amounts come only from owner-entered terms; no software prices, hourly rates or availability appear anywhere public (`npm run copy:check` passes). Signing, invoices and payment are shown truthfully as not started ("Agreement · Not sent yet", "Invoice · Not issued", "Start date · Not confirmed"). Payment-mode wording matches the owner's agreement templates (interim MSA v2026-09-29, sections 4 and 7).
 - **PASS · Owner signage.** The owner-approved reminders sit beside milestones, fees, checkpoints and the range; every field has a hint with its limit and an example.
 - **PASS · Next step.** The client page offers "Ask a question" (email) and "Print or save"; the unavailable page tells the visitor how to get a current link.
 
