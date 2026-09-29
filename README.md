@@ -182,6 +182,18 @@ The `/og-image.png` social-share card is rendered from `scripts/og.html` via hea
 
 Editing `scripts/og.html` updates the layout and copy. The card reuses the reviewed studio artwork at `src/assets/site/studio-v1.webp`; the renderer reads that local asset directly. Inspect the regenerated card before sharing.
 
+## Email signature
+
+`public/email/signature.html` is the paste-ready signature. Mail clients cannot load the custom name font, so the name is a PNG nameplate, `public/email/nameplate.png`, rendered from `scripts/email-nameplate.html` via headless Chrome at 3x (570×129 for a 190×43 display size).
+
+```bash
+./scripts/build-email-nameplate.sh
+```
+
+The nameplate URL is permanent. Sent emails reference `https://thesuperhuman.us/email/nameplate.png`, so never rename or delete it, and know that regenerating it changes how past emails display too. Inspect the result before committing: the z should have a short bar above it, and the corners should be transparent.
+
+To install in Proton Mail, open `https://thesuperhuman.us/email/signature` in a browser, select all, copy, and paste into the signature editor under Settings › Identity and addresses. The nameplate and link styling need Proton's normal (HTML) composer, not plain text.
+
 ## General contact
 
 The local redesign keeps general contact at `/#contact`: required name, email and message (nonempty after trimming, at most 4000 characters), with optional company. `/api/contact` uses this same schema and preserves origin checks, Turnstile, rate limiting and Resend delivery. Project type, timeline and budget are no longer part of the general form. The three-step audio intake at `/audio/start` remains a separate flow.
