@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Email nameplate</title>
+<style>
+  @font-face { font-family: 'Kazon Name Text'; src: url('../public/fonts/kazon-name-text.woff2') format('woff2'); }
+  html, body { margin: 0; background: transparent; }
+  .plate { box-sizing: border-box; width: 190px; height: 43px; display: flex; align-items: center; gap: 10px; padding: 0 0 0 8px; background: #FBF8F2; border-radius: 5px; }
+  .plate img { display: block; width: 28px; height: 28px; }
+  .plate .rule { width: 1px; height: 22px; background: #E8E3DA; }
+  .plate .name { font-family: 'Kazon Name Text', serif; font-size: 21.5px; line-height: 1; letter-spacing: -0.25px; color: #0E0E0E; white-space: nowrap; }
+</style>
+</head>
+<body>
+  <div class="plate"><img src="../public/favicon.svg" alt=""><span class="rule"></span><span class="name">Kazon Wilson</span></div>
+</body>
+</html>
