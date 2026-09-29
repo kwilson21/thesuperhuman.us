@@ -7,7 +7,7 @@ function fixture() {
     const events: Record<string, Function> = {};
     return { dataset:{} as Record<string,string>,disabled:false,hidden:false,textContent:'',value:'',checked:false,
       addEventListener:(name:string, handler:Function) => { events[name] = handler; },
-      emit:async (name:string, target?:any) => events[name]?.({ preventDefault:vi.fn(), target }),
+      emit:async function(name:string, target?:any) { return events[name]?.({ preventDefault:vi.fn(), target, currentTarget:this }); },
       querySelector:() => null,querySelectorAll:() => [],setAttribute:vi.fn(),removeAttribute:vi.fn(),...extra };
   };
   const inputs: Record<string, any> = Object.fromEntries(Object.entries({ outcome:'Tracker',summary:'Shared view',clientInputs:'',exclusions:'',timing:'',paymentMode:'standard',hasRange:'',milestoneName:'First',deliverables:'Status view',acceptance:'Add a client',fee:'2400',hasCheckpoint:'' }).map(([name,value]) => [name,element({ value })]));
@@ -16,7 +16,7 @@ function fixture() {
   const list = element({ children:[row],querySelectorAll:(selector:string) => selector === '[data-milestone]' ? [row] : [] });
   const submit = element();
   const form = element({ querySelector:(selector:string) => selector === '[type="submit"]' ? submit : inputs[selector.match(/name="([^"]+)"/)?.[1] ?? ''],querySelectorAll:(selector:string) => { const input = inputs[selector.match(/name="([^"]+)"/)?.[1] ?? '']; return input ? [input] : []; } });
-  const targets: Record<string, any> = { '[data-offer-form]':form,'[data-milestones]':list,'[data-software-status]':status,'[data-send-offer]':send,'[data-preview-offer]':preview,'[data-add-milestone]':element(),'[data-range]':range,'[data-copy-link]':element(),'[data-revoke-link]':element(),'[data-offer-state]':state,'[data-link-actions]':element(),'[data-link-state]':element() };
+  const targets: Record<string, any> = { '[data-offer-form]':form,'[data-milestones]':list,'[data-software-status]':status,'[data-send-offer]':send,'[data-preview-offer]':preview,'[data-add-milestone]':element(),'[data-range]':range,'[data-copy-link]':element(),'[data-revoke-link]':element(),'[data-offer-state]':state,'[data-link-actions]':element(),'[data-link-state]':element(),'[data-client-link]':element({ select:vi.fn() }),'[data-client-link-field]':element() };
   const versionState = element({ textContent:'sent' }), versionEntry = element({ querySelector:() => versionState });
   targets['[data-offer-versions]'] = element(); targets['[data-version-list]'] = element({ querySelector:() => versionEntry,querySelectorAll:() => [versionState] });
   const root = element({ dataset:{ endpoint:'/api/software',updated:'saved',version:'1',sentVersion:'',revoked:'false',email:'alex@example.com' },querySelector:(selector:string) => targets[selector] });
@@ -43,11 +43,19 @@ it('keeps a sent link only in this page view and refreshes versions without relo
   vi.stubGlobal('fetch',vi.fn(() => new Promise<Response>(resolve => { finish = resolve; })));
   const pending = send.emit('click');
   expect(root.setAttribute).toHaveBeenCalledWith('inert',''); expect(root.dataset.busy).toBe('true');
-  finish(Response.json({ link:'https://thesuperhuman.us/offer/fictional',version:1,updatedAt:'new',emailSent:false,copySent:false })); await pending;
+  finish(Response.json({ link:'https://thesuperhuman.us/offer/fictional',version:1,updatedAt:'new',sentAt:'2026-09-29T12:00:00Z',emailSent:false,copySent:false })); await pending;
   expect(sessionStorage.setItem).not.toHaveBeenCalled();
   expect(location.reload).not.toHaveBeenCalled();
   expect(root.dataset.busy).toBe('false');
   expect(targets['[data-copy-link]'].hidden).toBe(false);
+  expect(targets['[data-client-link]'].value).toBe('https://thesuperhuman.us/offer/fictional');
+  expect(targets['[data-client-link-field]'].hidden).toBe(false);
+  await targets['[data-client-link]'].emit('focus');
+  expect(targets['[data-client-link]'].select).toHaveBeenCalledOnce();
+  expect(targets['[data-offer-state]'].textContent).toBe('v1 sent Sep 29 · no changes since');
+  vi.stubGlobal('navigator', { clipboard:{ writeText:vi.fn().mockRejectedValue(new Error('blocked')) } });
+  await targets['[data-copy-link]'].emit('click');
+  expect(targets['[data-software-status]'].textContent).toContain('Select and copy the Client link above.');
   expect(targets['[data-offer-versions]'].hidden).toBe(false);
 });
 
@@ -66,7 +74,7 @@ it('reports unconfirmed offer email without claiming rejection', async () => {
   const { send,status } = fixture();
   vi.stubGlobal('fetch',vi.fn(async () => Response.json({ link:'https://example.com/offer/fictional',version:1,updatedAt:'new',emailSent:false,uncertain:true })));
   await send.emit('click');
-  expect(status.textContent).toBe('Offer v1 is saved as sent. The email service didn’t confirm delivery, so check your inbox for the copy before sending the link yourself.');
+  expect(status.textContent).toBe('Offer v1 is saved as sent. The email service didn’t confirm delivery. Check Resend before sending the link yourself.');
 });
 
 it('clears radio group invalid state after selection changes', async () => {
@@ -85,5 +93,22 @@ it('reloads after decline even with unsaved offer edits, removing withdrawn link
   vi.stubGlobal('document',{ querySelector:() => root, querySelectorAll:(selector:string) => selector === '[data-software-action]' ? [form] : [] });
   vi.stubGlobal('fetch',vi.fn(async () => Response.json({ ok:true,copySent:true })));
   setupSoftwareOffers(); await submit({ preventDefault:vi.fn() });
+  expect(location.reload).toHaveBeenCalledOnce();
+});
+
+it('reports confirmed offer email rejection', async () => {
+  const { send,status } = fixture();
+  vi.stubGlobal('fetch',vi.fn(async () => Response.json({ link:'https://example.com/offer/fictional',version:1,updatedAt:'new',emailSent:false,uncertain:false })));
+  await send.emit('click');
+  expect(status.textContent).toBe('Offer v1 is saved as sent, but the email didn’t go out. Copy the link and send it yourself.');
+});
+
+it('keeps revoke working when the resolved editor form is absent', async () => {
+  const { root,targets } = fixture();
+  delete targets['[data-offer-form]'];
+  setupSoftwareOffers();
+  vi.stubGlobal('fetch',vi.fn(async () => Response.json({ ok:true })));
+  await targets['[data-revoke-link]'].emit('click');
+  expect(fetch).toHaveBeenCalledWith(root.dataset.endpoint,expect.objectContaining({ body:JSON.stringify({ action:'revoke' }) }));
   expect(location.reload).toHaveBeenCalledOnce();
 });

@@ -46,14 +46,30 @@ export function setupSoftwareOffers() {
   });
   const root = document.querySelector<HTMLElement>('[data-software-editor]');
   if (!root) return;
-  const form = root.querySelector<HTMLFormElement>('[data-offer-form]')!, list = root.querySelector<HTMLElement>('[data-milestones]')!;
-  const status = root.querySelector<HTMLElement>('[data-software-status]')!, send = root.querySelector<HTMLButtonElement>('[data-send-offer]')!, preview = root.querySelector<HTMLAnchorElement>('[data-preview-offer]')!;
+  const status = root.querySelector<HTMLElement>('[data-software-status]')!;
   const endpoint = root.dataset.endpoint!;
   const flashKey = `software-flash:${endpoint}`;
   const flash = sessionValue(flashKey);
   if (flash) { status.textContent = flash; sessionValue(flashKey, null); }
-  let saved = Boolean(root.dataset.updated), changed = false, inputRevision = 0;
   let link = '';
+  let changed = false;
+  const linkInput = root.querySelector<HTMLInputElement>('[data-client-link]')!;
+  linkInput.addEventListener('focus', () => linkInput.select());
+  root.querySelector('[data-copy-link]')!.addEventListener('click', async () => {
+    try { if (!link || root.dataset.revoked === 'true') { status.textContent = 'The client link is in your copy of the offer email. To issue a new one, revoke this link and send again.'; return; } await navigator.clipboard.writeText(link); status.textContent = 'Client link copied.'; }
+    catch { status.textContent = 'Clipboard unavailable. Select and copy the Client link above.'; }
+  });
+  root.querySelector<HTMLButtonElement>('[data-revoke-link]')!.addEventListener('click', async event => {
+    if (!confirm('Revoke the client link? Anyone using it will lose access.')) return;
+    if (changed && !confirm('Revoking reloads this page and discards unsaved offer edits. Continue?')) return;
+    const button = event.currentTarget as HTMLButtonElement; button.disabled = true; root.setAttribute('inert', ''); root.setAttribute('aria-busy', 'true'); root.dataset.busy = 'true';
+    try { await post(endpoint, { action: 'revoke' }); link = ''; location.reload(); }
+    catch (error) { status.textContent = (error as Error).message; button.disabled = false; root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false'; }
+  });
+  if (!root.querySelector('[data-offer-form]')) return;
+  const form = root.querySelector<HTMLFormElement>('[data-offer-form]')!, list = root.querySelector<HTMLElement>('[data-milestones]')!;
+  const send = root.querySelector<HTMLButtonElement>('[data-send-offer]')!, preview = root.querySelector<HTMLAnchorElement>('[data-preview-offer]')!;
+  let saved = Boolean(root.dataset.updated), inputRevision = 0;
   const get = (element: HTMLElement, name: string) => element.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${name}"]`)!.value.trim();
   const checked = (element: HTMLElement, name: string) => element.querySelector<HTMLInputElement>(`[name="${name}"]`)!.checked;
   const lines = (value: string) => value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
@@ -70,7 +86,17 @@ export function setupSoftwareOffers() {
     root.dataset.dirty = String(changed);
     root.querySelector<HTMLButtonElement>('[data-add-milestone]')!.disabled = list.children.length >= 3;
     list.querySelectorAll<HTMLButtonElement>('[data-remove-milestone]').forEach(button => { button.disabled = list.children.length <= 1; });
-    list.querySelectorAll<HTMLElement>('[data-milestone]').forEach((row, index) => { row.querySelector('legend')!.textContent = `Milestone ${index + 1}`; const active = checked(row, 'hasCheckpoint'), block = row.querySelector<HTMLElement>('[data-checkpoint]')!; block.hidden = !active; block.querySelectorAll<HTMLInputElement>('input').forEach(input => { input.disabled = !active; input.required = active; }); });
+    list.querySelectorAll<HTMLElement>('[data-milestone]').forEach((row, index) => {
+      row.querySelector('legend')!.textContent = `Milestone ${index + 1}`;
+      row.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[name]').forEach(input => {
+        input.id = `milestone-${index + 1}-${input.name}`;
+        if (input.hasAttribute('aria-describedby')) input.setAttribute('aria-describedby', `${input.id}-hint`);
+      });
+      row.querySelectorAll<HTMLElement>('[data-hint]').forEach(hint => { hint.id = `milestone-${index + 1}-${hint.dataset.hint}-hint`; });
+      const active = checked(row, 'hasCheckpoint'), block = row.querySelector<HTMLElement>('[data-checkpoint]')!;
+      block.hidden = !active;
+      block.querySelectorAll<HTMLInputElement>('input').forEach(input => { input.disabled = !active; input.required = active; });
+    });
     const rangeActive = checked(form, 'hasRange'), range = root.querySelector<HTMLElement>('[data-range]')!; range.hidden = !rangeActive; range.querySelectorAll<HTMLInputElement>('input').forEach(input => { input.disabled = !rangeActive; input.required = rangeActive; });
     send.disabled = changed || !(saved || (root.dataset.sentVersion && root.dataset.revoked === 'true'));
     preview.hidden = !saved || changed;
@@ -101,12 +127,12 @@ export function setupSoftwareOffers() {
     if (!confirm(`Send offer v${version} to ${root.dataset.email}?`)) return;
     send.disabled = true; root.setAttribute('inert', ''); root.setAttribute('aria-busy', 'true'); root.dataset.busy = 'true';
     try { const result = await post(endpoint, { action: 'send', version, expectedUpdatedAt: saved ? root.dataset.updated : root.dataset.sentUpdated });
-      link = result.link;
-      status.textContent = result.uncertain ? `Offer v${version} is saved as sent. The email service didn’t confirm delivery, so check your inbox for the copy before sending the link yourself.` : result.emailSent ? `Offer v${version} sent.${result.copySent ? '' : ' The owner copy didn’t send.'}` : `Offer v${version} is saved as sent, but the email didn’t go out. Copy the link and send it yourself.`;
+      link = result.link; linkInput.value = link; root.querySelector<HTMLElement>('[data-client-link-field]')!.hidden = false;
+      status.textContent = result.uncertain ? `Offer v${version} is saved as sent. The email service didn’t confirm delivery. Check Resend before sending the link yourself.` : result.emailSent ? `Offer v${version} sent.${result.copySent ? '' : ' The owner copy didn’t send.'}` : `Offer v${version} is saved as sent, but the email didn’t go out. Copy the link and send it yourself.`;
       root.dataset.sentDate = new Date(result.sentAt ?? new Date().toISOString()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' });
       saved = false; root.dataset.updated = ''; root.dataset.sentVersion = String(version); root.dataset.sentUpdated = result.updatedAt; root.dataset.revoked = 'false';
       root.querySelector<HTMLElement>('[data-link-actions]')!.hidden = false; root.querySelector<HTMLElement>('[data-copy-link]')!.hidden = false; root.querySelector<HTMLButtonElement>('[data-revoke-link]')!.disabled = false;
-      root.querySelector<HTMLElement>('[data-link-state]')!.textContent = ''; root.querySelector<HTMLElement>('[data-offer-state]')!.textContent = `v${version} sent · no changes since`; updateControls();
+      root.querySelector<HTMLElement>('[data-link-state]')!.textContent = ''; root.querySelector<HTMLElement>('[data-offer-state]')!.textContent = `v${version} sent ${root.dataset.sentDate} · no changes since`; updateControls();
       const versions = root.querySelector<HTMLElement>('[data-offer-versions]')!, versionList = root.querySelector<HTMLElement>('[data-version-list]')!;
       versions.hidden = false;
       versionList.querySelectorAll<HTMLElement>('[data-version-status]').forEach(value => { if (value.textContent === 'sent') value.textContent = 'superseded'; });
@@ -120,17 +146,6 @@ export function setupSoftwareOffers() {
       entry.querySelector<HTMLElement>('[data-version-status]')!.textContent = 'sent';
       root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false';
     } catch (error) { status.textContent = (error as Error).message; root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false'; updateControls(); }
-  });
-  root.querySelector('[data-copy-link]')!.addEventListener('click', async () => {
-    try { if (!link || root.dataset.revoked === 'true') { status.textContent = 'The client link is in your copy of the offer email. To issue a new one, revoke this link and send again.'; return; } await navigator.clipboard.writeText(link); status.textContent = 'Client link copied.'; }
-    catch { status.textContent = 'Clipboard unavailable. Try again in a secure browser.'; }
-  });
-  root.querySelector<HTMLButtonElement>('[data-revoke-link]')!.addEventListener('click', async event => {
-    if (!confirm('Revoke the client link? Anyone using it will lose access.')) return;
-    if (changed && !confirm('Revoking reloads this page and discards unsaved offer edits. Continue?')) return;
-    const button = event.currentTarget as HTMLButtonElement; button.disabled = true; root.setAttribute('inert', ''); root.setAttribute('aria-busy', 'true'); root.dataset.busy = 'true';
-    try { await post(endpoint, { action: 'revoke' }); link = ''; location.reload(); }
-    catch (error) { status.textContent = (error as Error).message; button.disabled = false; root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false'; }
   });
   updateControls();
 }

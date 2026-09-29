@@ -74,7 +74,7 @@ it.each(['question','decline'])('%s sends exact text and owner copy before audit
 it.each(['question','decline'])('%s changes nothing on client email failure', async action => {
   vi.mocked(fetch).mockResolvedValue(new Response('{}', { status: 503 }));
   const response = await call({ action, text:'Thanks.' }); expect(response.status).toBe(502);
-  expect(await response.json()).toMatchObject({ uncertain:true, message:'The email service didn’t confirm. Check your inbox for the copy before sending again.' });
+  expect(await response.json()).toMatchObject({ uncertain:true, message:'The email service didn’t confirm. Check Resend before retrying. Nothing was recorded.' });
   expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({ status:'new' });
   expect(sql.prepare('SELECT * FROM owner_request_audit').all()).toEqual([]);
 });
@@ -150,4 +150,34 @@ it('loses a concurrent send inside the batch without replacing its link or email
   expect(sql.prepare('SELECT token_hash FROM software_offer_links').get()).toEqual({ token_hash:winnerHash });
   expect(sql.prepare("SELECT * FROM owner_request_audit WHERE action='offer-sent'").all()).toEqual([]);
   expect(fetch).not.toHaveBeenCalled();
+});
+
+it('builds the client URL before saving sent state', async () => {
+  const saved = await draft();
+  const response = await call({ action:'send', version:saved.version, expectedUpdatedAt:saved.updatedAt }, true, 'invalid origin');
+  expect(response.status).toBe(409);
+  expect(sql.prepare('SELECT status FROM software_offers').get()).toEqual({ status:'draft' });
+  expect(sql.prepare('SELECT * FROM software_offer_links').all()).toEqual([]);
+  expect(sql.prepare("SELECT * FROM owner_request_audit WHERE action='offer-sent'").all()).toEqual([]);
+  expect(fetch).not.toHaveBeenCalled();
+});
+it('returns confirmed rejection for an offer email rejected by the provider', async () => {
+  vi.mocked(fetch).mockResolvedValue(new Response('{}', { status:422 }));
+  const result = await send(await draft());
+  expect(result).toMatchObject({ emailSent:false, uncertain:false, copySent:false });
+  expect(fetch).toHaveBeenCalledOnce();
+});
+it.each(['resolve','decline'])('rejects offer editing and sending after %s, then permits both after reopening', async action => {
+  const saved = await draft();
+  const { POST: changeRequest } = await import('~/pages/api/owner/requests/[id]');
+  const change = (action:string) => changeRequest({ params:{ id:'software' }, request:new Request('https://example.com/api/owner/requests/software', { method:'POST', body:JSON.stringify({ action }) }), locals:{ owner:{ email:'owner@example.com' },runtime:{ env:{ MUSIC_DB:db } } } } as any);
+  expect((await (action === 'decline' ? call({ action:'decline', text:'Thanks.' }) : change('resolve'))).status).toBe(200);
+  vi.mocked(fetch).mockClear();
+  for (const command of [{ action:'draft', terms, expectedUpdatedAt:saved.updatedAt }, { action:'send', version:saved.version, expectedUpdatedAt:saved.updatedAt }]) {
+    const response = await call(command); expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ message:'This request is resolved. Reopen it to make a new offer.' });
+  }
+  expect(fetch).not.toHaveBeenCalled();
+  expect((await change('reopen')).status).toBe(200);
+  expect((await send(await draft(action === 'decline' ? null : saved.updatedAt))).emailSent).toBe(true);
 });

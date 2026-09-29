@@ -30,6 +30,7 @@ export default {
     }
     // Seed the same post-decline state as the guarded API batch; never send a real email.
     sql(`UPDATE owner_requests SET status='resolved',resolved_at='2026-09-29T13:00:00Z' WHERE id=${quote(id)}; UPDATE software_offers SET status='withdrawn' WHERE request_id=${quote(id)} AND status IN ('sent','draft'); UPDATE software_offer_links SET revoked_at='2026-09-29T13:00:00Z' WHERE request_id=${quote(id)};`);
+    for (const viewport of ['desktop','phone']) steps.push({ title:`Resolved owner request, ${viewport}`, images:[{ file:await capture({ file:`software-offer-owner-resolved-${viewport}.png`, path:`/owner/requests/${id}`, owner:true, viewport }), caption:'Resolved request keeps versions and hides offer editing' }] });
     for (const viewport of ['desktop','phone']) steps.push({ title:`Declined client offer unavailable, ${viewport}`, images:[{ file:await capture({ file:`software-offer-declined-${viewport}.png`, path:`/offer/${'i'.repeat(43)}`, status:404, viewport }), caption:'Seeded decline withdraws the offer and revokes its actual fictional link' }] });
     for (const viewport of ['desktop','phone']) steps.push({ title:`Unavailable offer, ${viewport}`, images:[{ file:await capture({ file:`software-offer-unavailable-${viewport}.png`, path:'/offer/unavailable', status:404, viewport }), caption:'Identical response for unknown or revoked links' }] });
     return steps;

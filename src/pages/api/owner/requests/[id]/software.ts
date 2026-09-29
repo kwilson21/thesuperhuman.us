@@ -25,6 +25,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   const record = await getOwnerRequest(db, params.id);
   if (!record || record.kind !== 'software') return json({ ok: false }, 404);
   if (record.status === 'withdrawn' || !record.email) return json({ ok: false, message: 'This request is closed.' }, 409);
+  if (record.status === 'resolved' && (command.action === 'draft' || command.action === 'send')) return json({ ok: false, message: 'This request is resolved. Reopen it to make a new offer.' }, 409);
   const actor = locals.owner.email;
   let now = new Date().toISOString();
   const audit = (action: string, note = '') => db.prepare('INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at) VALUES (?,?,?,?,?)').bind(record.id, action, actor, note, now);
@@ -48,7 +49,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     if (command.action === 'question' || command.action === 'decline') {
       if (command.action === 'decline' && record.status === 'resolved') return json({ ok: false, message: 'This request is already resolved.' }, 409);
       const sent = await email(command.action === 'question' ? 'A question about your project brief' : 'About your project brief', `${command.text}\n\nKazon`);
-      if (!sent.ok) return json({ ok: false, uncertain: sent.uncertain, message: sent.uncertain ? 'The email service didn’t confirm. Check your inbox for the copy before sending again.' : 'The email didn’t send. Nothing changed. Try again.' }, 502);
+      if (!sent.ok) return json({ ok: false, uncertain: sent.uncertain, message: sent.uncertain ? 'The email service didn’t confirm. Check Resend before retrying. Nothing was recorded.' : 'The email didn’t send. Nothing changed. Try again.' }, 502);
       try { await db.batch([
         requestGuard(),
         ...(command.action === 'decline' ? [db.prepare("UPDATE owner_requests SET status='resolved',resolved_at=?,updated_at=? WHERE id=?").bind(now, now, record.id),
@@ -86,6 +87,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     const terms = validateOfferTerms(JSON.parse(offer.terms_json));
     if (!terms.ok) return json({ ok: false, errors: terms.errors }, 400);
     const token = newOfferToken(), tokenHash = await hashOfferToken(token);
+    const link = new URL(`/offer/${token}`, env.SITE_ORIGIN ?? 'https://thesuperhuman.us').href;
     await db.batch([
       requestGuard(),
       guard('SELECT 1 FROM software_offers WHERE id=? AND status=? AND updated_at=?', [offer.id, offer.status, offer.updated_at]),
@@ -96,7 +98,6 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
         ON CONFLICT(request_id) DO UPDATE SET token_hash=excluded.token_hash,created_at=excluded.created_at,revoked_at=NULL`).bind(record.id, tokenHash, now),
       audit('offer-sent', `Offer v${offer.version} sent`),
     ]);
-    const link = new URL(`/offer/${token}`, env.SITE_ORIGIN ?? 'https://thesuperhuman.us').href;
     const sent = await email(`Your project offer: ${terms.value.outcome}`, `Hi ${record.name.trim().split(/\s+/)[0] || 'there'},\n\nHere’s the offer for ${terms.value.outcome}: ${link}\n\nThe link is private to you. You can forward it to whoever approves the budget. Reply to this email with any questions.\n\nKazon`);
     return json({ ok: true, version: offer.version, link, sentAt: draft ? now : offer.sent_at, updatedAt: draft ? now : offer.updated_at, emailSent: sent.ok, uncertain: sent.uncertain, copySent: sent.copySent });
   } catch {

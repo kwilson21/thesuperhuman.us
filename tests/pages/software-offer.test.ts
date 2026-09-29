@@ -9,12 +9,12 @@ import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { beforeAll, afterAll, expect, it } from 'vitest';
 import { hashOfferToken } from '~/lib/software-offers';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
-let directory: string, page: any, preview: any;
+let directory: string, page: any, preview: any, editor: any, questions: any, fit: any;
 const token = 'a'.repeat(43);
 const terms = { outcome:'Current offer',summary:'A shared view.',milestones:[{ name:'Tracker',deliverables:['Status view'],acceptance:['Add a client.'],feeCents:240000 }],clientInputs:'',exclusions:'',timing:'',paymentMode:'standard' };
 beforeAll(async () => {
   directory = await mkdtemp(resolve('.software-render-'));
-  await build({ entryPoints:{ client:'src/pages/offer/[token].astro', preview:'src/pages/owner/requests/[id]/offer.astro' }, outdir:directory, outExtension:{ '.js':'.mjs' }, bundle:true, format:'esm', platform:'node', packages:'external',
+  await build({ entryPoints:{ client:'src/pages/offer/[token].astro', preview:'src/pages/owner/requests/[id]/offer.astro', editor:'src/components/owner/SoftwareOfferEditor.astro', questions:'src/components/owner/SoftwareQuestions.astro', fit:'src/components/owner/SoftwareFitReview.astro' }, outdir:directory, outExtension:{ '.js':'.mjs' }, bundle:true, format:'esm', platform:'node', packages:'external',
     plugins:[{ name:'astro-test-render', setup(builder) {
       builder.onResolve({ filter:/\.css(?:\?|$)|\?astro/ }, () => ({ path:'empty-style',namespace:'empty' }));
       builder.onLoad({ filter:/.*/,namespace:'empty' }, () => ({ contents:'',loader:'js' }));
@@ -23,13 +23,14 @@ beforeAll(async () => {
     } }],
   });
   const { readdir } = await import('node:fs/promises');
-  for (const file of await readdir(directory)) { const compiled = (await import(/* @vite-ignore */ pathToFileURL(resolve(directory,file)).href)).default; if (file.startsWith('client')) page = compiled; else preview = compiled; }
+  for (const file of await readdir(directory)) { const compiled = (await import(/* @vite-ignore */ pathToFileURL(resolve(directory,file)).href)).default; if (file.startsWith('client')) page = compiled; else if (file.startsWith('preview')) preview = compiled; else if (file.startsWith('editor')) editor = compiled; else if (file.startsWith('questions')) questions = compiled; else fit = compiled; }
 });
 afterAll(async () => { if (directory) await rm(directory,{ recursive:true,force:true }); });
 async function fixture() {
   const sql = new DatabaseSync(':memory:'); sql.exec(readFileSync(resolve('db/music.sql'),'utf8'));
   sql.prepare(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,private_note,created_at,updated_at)
     VALUES ('r','software','workflow','Alex Example','alex@example.com','Tool','{"company":"Example Studio","fit":"PRIVATE FIT"}','new','PRIVATE NOTE','now','now')`).run();
+  sql.prepare("INSERT INTO software_fit_reviews VALUES ('r','needs-clarification','PRIVATE FIT REVIEW','now','PRIVATE REVIEWER')").run();
   const offer = sql.prepare(`INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at,sent_at,sent_by) VALUES (?,'r',?,?,?,'now','now','now','PRIVATE ACTOR')`);
   offer.run('old',1,'superseded',JSON.stringify({ ...terms,outcome:'OLD PRIVATE TERMS' }));
   offer.run('current',2,'sent',JSON.stringify(terms));
@@ -74,10 +75,41 @@ it('protects owner previews and selects draft or exact sent version without priv
     const draftHTML = await (await renderPreview()).text();
     expect(draftHTML).toContain('Preview. This is what the client sees.');
     expect(draftHTML).toContain('DRAFT PRIVATE TERMS');
-    expect(draftHTML).not.toMatch(/PRIVATE NOTE|PRIVATE FIT|PRIVATE ACTOR|alex@example.com/);
+    expect(draftHTML).not.toMatch(/PRIVATE NOTE|PRIVATE FIT|PRIVATE ACTOR|PRIVATE REVIEWER|alex@example.com/);
     const sentHTML = await (await renderPreview(true,'?version=2')).text();
     expect(sentHTML).toContain('Current offer'); expect(sentHTML).not.toContain('DRAFT PRIVATE TERMS');
     expect((await renderPreview(true,'?version=3')).status).toBe(404);
     expect((await renderPreview(true,'?version=99')).status).toBe(404);
   } finally { sql.close(); }
+});
+
+it('renders reload guidance, resolved controls, and the reopened editor', async () => {
+  const { sql,db } = await fixture();
+  try {
+    const offers = (await db.prepare("SELECT * FROM software_offers WHERE request_id='r' ORDER BY version DESC").all()).results;
+    const container = await AstroContainer.create();
+    const renderEditor = (resolved:boolean, revoked = false) => container.renderToString(editor, { props:{ requestId:'r', email:'alex@example.com', offers, revoked, resolved } });
+    const open = await renderEditor(false);
+    expect(open).toContain('The client link is in your copy of the offer email. To issue a new one, revoke this link and send again.');
+    expect(open).toContain('data-offer-form');
+    expect(open).toContain('aria-describedby="milestone-1-deliverables-hint"');
+    const closed = await renderEditor(true);
+    expect(closed).toContain('This request is resolved. Reopen it to make a new offer.');
+    expect(closed).not.toMatch(/data-offer-form|Save draft|data-preview-offer|data-send-offer/);
+    expect(closed).toContain('data-revoke-link'); expect(closed).toContain('Offer v2');
+    expect(await renderEditor(false)).toContain('data-offer-form');
+    expect(await renderEditor(true,true)).toContain('The client link is revoked. Reopen this request to make a new offer.');
+  } finally { sql.close(); }
+});
+
+it('keeps question, decline and fit hints outside their accessible labels', async () => {
+  const container = await AstroContainer.create();
+  const questionHTML = await container.renderToString(questions, { props:{ requestId:'r' } });
+  for (const action of ['question','decline']) {
+    expect(questionHTML).toContain(`aria-describedby="software-${action}-hint"`);
+    expect(questionHTML).toContain(`</label><p id="software-${action}-hint"`);
+  }
+  const fitHTML = await container.renderToString(fit, { props:{ requestId:'r', fit:null } });
+  expect(fitHTML).toContain('aria-describedby="software-fit-note-hint"');
+  expect(fitHTML).toContain('</label><p id="software-fit-note-hint"');
 });
