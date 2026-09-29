@@ -54,7 +54,7 @@ If invoice creation fails, refresh the request before retrying. Stable Stripe id
 
 To stop new invoices, set `STRIPE_PAYMENTS_ENABLED=false` and deploy the reviewed configuration change. This does not erase payment history or disable signed status updates for invoices already sent.
 
-Software briefs appear in Requests and Today with the saved answers read only. Clarification, offer drafting and decline flows will be added later.
+Software briefs appear in Requests and Today with the saved answers read only. They have separate question sets for workflow and idea paths. Clarification, offer drafting and decline flows will be added later.
 
 ## Retention
 

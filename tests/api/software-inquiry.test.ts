@@ -37,6 +37,39 @@ it('stores one verbatim software brief, audit, and no audio project, then return
   expect(sql.prepare('SELECT action FROM owner_request_audit').all()).toEqual([{ action: 'created' }]);
 });
 
+it('stores and returns only the selected idea questions, including the optional signal', async () => {
+  const idea = { ...base, path: 'idea', idea: 'Volunteers need a simpler way to find shifts.\nThey use group texts now.', audienceToday: 'Food bank volunteers', firstVersion: 'See and claim one open shift.', signal: 'Repeat use after a month', today: 'inactive' };
+  const response = await POST(context(idea));
+  expect(response.status).toBe(200);
+  const brief = (await response.json() as { brief: Record<string, string> }).brief;
+  expect(Object.keys(brief).slice(0, 5)).toEqual(['path', 'idea', 'audienceToday', 'firstVersion', 'signal']);
+  expect(brief.idea).toBe(idea.idea);
+  expect(brief).not.toHaveProperty('today');
+  const saved = sql.prepare('SELECT service_id,summary,details_json FROM owner_requests').get() as { service_id: string; summary: string; details_json: string };
+  expect(saved.service_id).toBe('idea');
+  expect(saved.summary).toBe('Volunteers need a simpler way to find shifts.');
+  expect(JSON.parse(saved.details_json)).not.toHaveProperty('today');
+  const notice = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes('api.resend.com'))!;
+  const body = JSON.parse(notice[1]?.body as string);
+  expect(body.text).toContain('What’s the idea?\nVolunteers need a simpler way to find shifts.');
+});
+
+it('validates each idea answer with the same plain messages and drops unknown keys', () => {
+  const idea = { ...base, path: 'idea', idea: 'An idea', audienceToday: 'Volunteers', firstVersion: 'Claim a shift' };
+  for (const [key, value, message] of [
+    ['idea', '', 'This answer is required.'], ['audienceToday', '', 'This answer is required.'],
+    ['firstVersion', '', 'This answer is required.'], ['idea', 'x'.repeat(1001), 'Keep this under 1000 characters.'],
+    ['signal', 'x'.repeat(501), 'Keep this under 500 characters.'], ['idea', '\u0001', 'Remove control characters.'],
+  ] as const) {
+    const result = validateSoftwareInquiry({ ...idea, [key]: value });
+    expect(result.ok, key).toBe(false);
+    if (!result.ok) expect(result.errors[key]).toBe(message);
+  }
+  const result = validateSoftwareInquiry({ ...idea, today: 'inactive', unknown: 'dropped' });
+  expect(result.ok).toBe(true);
+  if (result.ok) { expect(result.value).not.toHaveProperty('today'); expect(result.value).not.toHaveProperty('unknown'); expect(result.value).toMatchObject({ signal: '' }); }
+});
+
 it('deduplicates after rate limit, rejects another email without leaking the brief, and limits new IDs', async () => {
   const first = await POST(context({ ...base, email: 'alex@example.com' }));
   expect(first.status).toBe(200);

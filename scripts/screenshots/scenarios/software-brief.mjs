@@ -8,11 +8,12 @@ export default {
       'new','','2026-09-29T12:00:00.000Z','2026-09-29T12:00:00.000Z','00000000-0000-4000-8000-000000000001')`);
     const steps = [];
     for (const viewport of ['desktop', 'phone']) {
-      steps.push({ title: `Client project, ${viewport}`, images: [{ file: await capture({ file: `software-brief-project-${viewport}.png`, path: '/software/start', viewport }), caption: 'Fictional project step' }] });
+      steps.push({ title: `Client project, ${viewport}`, images: [{ file: await capture({ file: `software-brief-project-${viewport}.png`, path: '/software/start?path=workflow', viewport }), caption: 'Fictional project step' }] });
+      steps.push({ title: `Client idea, ${viewport}`, images: [{ file: await capture({ file: `software-brief-idea-${viewport}.png`, path: '/software/start?path=idea', viewport }), caption: 'Fictional idea questions' }] });
       const fill = async page => {
-        await page.locator('[name=today]').fill('We track onboarding in spreadsheets.\nUpdates arrive by email.');
+        await page.locator('[name=today]').fill('We track client onboarding in several spreadsheets.\nUpdates arrive by email and are easy to miss.');
         await page.locator('[name=audience]').fill('The fictional client team');
-        await page.locator('[name=firstResult]').fill('A shared view of next steps.');
+        await page.locator('[name=firstResult]').fill('A shared view of next steps that the client team can check each morning.');
         await page.locator('[data-next]').click();
       };
       steps.push({ title: `Client details, ${viewport}`, images: [{ file: await capture({ file: `software-brief-details-${viewport}.png`, path: '/software/start', viewport, prepare: fill }), caption: 'Fictional details step' }] });

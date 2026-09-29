@@ -1,4 +1,4 @@
-import { approverLabels, budgetLabels, softwareLabels, softwarePaths, timingLabels, validateSoftwareInquiry } from '../lib/software-inquiry';
+import { approverLabels, budgetLabels, softwareDetailKeys, softwareLabels, softwarePaths, softwareQuestions, timingLabels, validateSoftwareInquiry } from '../lib/software-inquiry';
 import { setupFormSubmission } from './form-submission';
 
 const form = document.querySelector<HTMLFormElement>('#software-inquiry');
@@ -10,8 +10,10 @@ if (form) {
   const status = form.querySelector<HTMLElement>('[data-form-status]')!;
   let step = 0;
   let submissionId = crypto.randomUUID();
-  const keys = Object.keys(softwareLabels) as (keyof typeof softwareLabels)[];
-  const payload = (data: FormData) => Object.fromEntries(keys.map(key => [key, String(data.get(key) ?? '').trim()]));
+  const path = () => (new FormData(form!).get('path') === 'idea' ? 'idea' : 'workflow');
+  const keys = () => ['path', ...softwareQuestions[path()], ...softwareDetailKeys];
+  let nudged = false;
+  const payload = (data: FormData) => Object.fromEntries(keys().map(key => [key, String(data.get(key) ?? '').trim()]));
   const labelled = (input: Record<string, string>) => ({
     ...input,
     path: softwarePaths[input.path as keyof typeof softwarePaths] ?? input.path,
@@ -22,10 +24,10 @@ if (form) {
   });
   function renderRows(list: HTMLDListElement, values: Record<string, string>) {
     list.replaceChildren();
-    for (const key of keys) {
+    for (const key of keys()) {
       if (key === 'approverRole' && values.approver !== approverLabels.other) continue;
       const dt = document.createElement('dt'), dd = document.createElement('dd');
-      dt.textContent = softwareLabels[key];
+      dt.textContent = softwareLabels[key as keyof typeof softwareLabels];
       dd.textContent = values[key] || 'Not provided';
       list.appendChild(dt); list.appendChild(dd);
     }
@@ -43,7 +45,7 @@ if (form) {
     const input = payload(new FormData(form!));
     const result = validateSoftwareInquiry({ ...input, name: step === 0 ? 'Preview' : input.name, email: step === 0 ? 'preview@example.com' : input.email, turnstileToken: 'pending', submissionId });
     const errors: Record<string, string> = result.ok ? {} : result.errors;
-    const fields = step === 0 ? ['path', 'today', 'audience', 'firstResult'] : ['name', 'email', 'company', 'timing', 'timingReason', 'budgetStatus', 'budgetNote', 'approver', 'approverRole'];
+    const fields = step === 0 ? ['path', ...softwareQuestions[path()]] : [...softwareDetailKeys];
     let first: HTMLElement | null = null;
     for (const field of fields) {
       const error = form!.querySelector<HTMLElement>(`[data-form-error="${field}"]`);
@@ -63,11 +65,30 @@ if (form) {
     const other = new FormData(form!).get('approver') === 'other';
     form!.querySelector<HTMLElement>('[data-approver-role]')!.hidden = !other;
   }
-  form.addEventListener('change', approverRole);
-  next.addEventListener('click', () => { if (validateStep()) showStep(step + 1); });
+  function selectedQuestions() {
+    form!.querySelectorAll<HTMLElement>('[data-questions]').forEach(group => {
+      const active = group.dataset.questions === path();
+      group.hidden = !active;
+      group.querySelectorAll<HTMLTextAreaElement>('textarea').forEach(field => field.disabled = !active);
+    });
+    nudged = false;
+    status.textContent = '';
+  }
+  function continueStep() {
+    if (!validateStep()) return;
+    if (step === 0 && !nudged && (path() === 'workflow' ? ['today', 'firstResult'] : ['idea', 'firstVersion']).some(key => String(new FormData(form!).get(key) ?? '').trim().length < 40)) {
+      nudged = true;
+      status.textContent = 'A little more detail helps me reply with something useful. You can continue anyway.';
+      return;
+    }
+    nudged = false;
+    showStep(step + 1);
+  }
+  form.addEventListener('change', event => { approverRole(); if ((event.target as HTMLInputElement).name === 'path') selectedQuestions(); });
+  next.addEventListener('click', continueStep);
   back.addEventListener('click', () => showStep(Math.max(0, step - 1)));
   form.querySelectorAll<HTMLButtonElement>('[data-edit]').forEach(button => button.addEventListener('click', () => showStep(Number(button.dataset.edit))));
-  form.addEventListener('submit', event => { if (step !== 2) { event.preventDefault(); event.stopImmediatePropagation(); if (validateStep()) showStep(step + 1); } });
+  form.addEventListener('submit', event => { if (step !== 2) { event.preventDefault(); event.stopImmediatePropagation(); continueStep(); } });
   setupFormSubmission({
     form, endpoint: '/api/software-inquiry', success: document.getElementById('software-success')!,
     payload: data => ({ ...payload(data), submissionId }),
@@ -80,5 +101,5 @@ if (form) {
   });
   observer.observe(form, { attributes: true, subtree: true, attributeFilter: ['aria-invalid'] });
   document.querySelector<HTMLButtonElement>('[data-print]')?.addEventListener('click', () => window.print());
-  approverRole(); showStep(0, false);
+  approverRole(); selectedQuestions(); showStep(0, false);
 }

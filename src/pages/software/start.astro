@@ -11,6 +11,19 @@ const siteKey = env?.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 const available = Boolean(siteKey && env?.MUSIC_DB && env.TURNSTILE_SECRET_KEY && env.RATE_LIMIT);
 const requested = Astro.url.searchParams.get('path');
 const selected = requested === 'idea' ? 'idea' : 'workflow';
+const questions = {
+  workflow: [
+    ['today', 'Walk me through it as it works now: who does it, how often, and where it gets stuck.', 'For example: Every Monday our ops lead copies orders from three supplier emails into a spreadsheet. It takes about two hours and mistakes slip through.', 2000],
+    ['audience', 'The people who’d use it, and roughly how many.', 'For example: Four people on our operations team, plus the manager who reads the weekly report.', 1000],
+    ['firstResult', 'Something small you could try within a few weeks.', 'For example: Orders from all three suppliers land in one list each morning, with anything unusual flagged.', 2000],
+  ],
+  idea: [
+    ['idea', 'In a sentence or two, as you’d explain it to a friend.', 'For example: An app that lets food bank volunteers pick their own shifts, so coordinators stop juggling group texts.', 1000],
+    ['audienceToday', 'Real people you could put it in front of, and how they manage without it.', 'For example: About 30 volunteers and two coordinators. Today they sign up over group texts and a shared spreadsheet.', 1000],
+    ['firstVersion', 'Pick the single most important action. Everything else can wait.', 'For example: Let a volunteer see open shifts for the next two weeks and claim one.', 1000],
+    ['signal', 'What would you see after a few weeks of real use?', 'For example: Most volunteers use it for a month without going back to texts.', 500],
+  ],
+} as const;
 const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ?? Astro.url.host, path);
 ---
 <BaseLayout title="Start a software project · Kazon Wilson" description="Share a short software project brief for Kazon Wilson to review.">
@@ -22,15 +35,22 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
       <section data-step="0" aria-labelledby="software-step-one">
         <h1 id="software-step-one" tabindex="-1">What are you working on?</h1>
         <p class="intake-intro">Start with the problem or the idea.</p>
+        <p class="intake-muted software-step-help">A few sentences per question is plenty. Specific examples help most.</p>
         <div class="intake-columns intake-service-columns">
           <fieldset class="offer-list"><legend class="sr-only">Choose a starting point</legend>
             {Object.entries(softwarePaths).map(([key, value]) => <label class="intake-offer"><input type="radio" name="path" value={key} checked={selected === key} /><span><strong>{value}</strong><small>{key === 'workflow' ? 'A focused tool, automation or integration for a task your team repeats.' : 'One core experience or product question people can try.'}</small></span></label>)}
             <p data-form-error="path" hidden></p>
           </fieldset>
           <div>
-            <label class="intake-field" for="software-today">{softwareLabels.today}<textarea id="software-today" name="today" maxlength="2000" rows="4" required></textarea></label><p data-form-error="today" hidden></p>
-            <label class="intake-field" for="software-audience">{softwareLabels.audience}<textarea id="software-audience" name="audience" maxlength="1000" rows="3" required></textarea></label><p data-form-error="audience" hidden></p>
-            <label class="intake-field" for="software-result">{softwareLabels.firstResult}<textarea id="software-result" name="firstResult" maxlength="2000" rows="4" required></textarea></label><p data-form-error="firstResult" hidden></p>
+            {Object.entries(questions).map(([path, items]) => <div data-questions={path} hidden={selected !== path}>
+              {path === 'idea' && <p class="intake-muted software-idea-note">I build a first version people can try, not the whole product. These questions help us find the part worth testing first.</p>}
+              {items.map(([key, hint, example, max]) => <div>
+                <label class="intake-field" for={`software-${key}`}>{softwareLabels[key]}</label>
+                <p id={`software-${key}-help`} class="intake-muted software-question-help">{hint}</p>
+                <textarea id={`software-${key}`} name={key} aria-describedby={`software-${key}-help`} placeholder={example} maxlength={max} rows="4" required={key !== 'signal'} disabled={selected !== path}></textarea>
+                <p data-form-error={key} hidden></p>
+              </div>)}
+            </div>)}
             <p class="intake-footnote">Plain language is fine. We’ll work out the technical details together. Please leave out passwords, access details and real customer data.</p>
           </div>
         </div>

@@ -56,7 +56,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       await sendUrgentOwnerAlert(env, { category: 'request-storage', route: '/api/software-inquiry', requestId: crypto.randomUUID(), code: 'd1-write-failed', occurredAt: new Date().toISOString() });
       return Response.json({ ok: false, error: preserved }, { status: 503 });
     }
-    const notice = sendSoftwareRequestNotice({ requestId: saved.id, path: input.path, name: input.name, email: input.email,
+    const notice = sendSoftwareRequestNotice({ requestId: saved.id, path: input.path, name: input.name, email: input.email, brief: softwareBrief(saved),
       origin: env.SITE_ORIGIN, apiKey: env.RESEND_API_KEY, from: env.CONTACT_FROM_EMAIL, to: env.CONTACT_TO_EMAIL })
       .catch(() => console.error('Owner notification email state is uncertain.'));
     if (locals.runtime?.ctx) locals.runtime.ctx.waitUntil(notice);
