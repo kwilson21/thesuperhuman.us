@@ -21,7 +21,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const ownerBoundary = ownerPage || ownerApi;
   const studioPage = url.pathname === '/studio' || url.pathname.startsWith('/studio/');
   const studioApi = url.pathname === '/api/studio' || url.pathname.startsWith('/api/studio/');
-  const studioBoundary = studioPage || studioApi;
+  const offerPage = url.pathname.startsWith('/offer/');
+  const studioBoundary = studioPage || studioApi || offerPage;
   if (context.isPrerendered && ownerPage) throw new Error('Owner routes must be server-rendered.');
   if (context.isPrerendered && studioPage) throw new Error('Studio routes must be server-rendered.');
   if (!context.isPrerendered && ownerBoundary) {
@@ -53,6 +54,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
   const host = context.isPrerendered ? context.url.host : context.request.headers.get('host') ?? context.url.host;
+  if (offerPage && host.split(':')[0].toLowerCase() === 'audio.thesuperhuman.us') {
+    return new Response(null, { status: 302, headers: { ...studioPrivateHeaders, location: `https://thesuperhuman.us${url.pathname}` } });
+  }
   const rewritten = rewritePathForHost(host, context.url.pathname);
   if (rewritten) {
     const response = await context.rewrite(rewritten);

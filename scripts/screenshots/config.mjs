@@ -45,6 +45,8 @@ export const REDIRECTS = {
 
 /** Pages that need seeded data. The coverage test checks the named scenario captures the route. */
 export const SCENARIO_PAGES = {
+  'src/pages/offer/[token].astro': { scenario: 'software-offer', route: '/offer/' },
+  'src/pages/owner/requests/[id]/offer.astro': { scenario: 'software-offer', route: '/owner/requests/screenshot-offer/offer' },
   'src/pages/software/start.astro': { scenario: 'software-brief', route: '/software/start' },
   'src/pages/owner/requests/[id].astro': { scenario: 'owner-details', route: '/owner/requests/' },
   'src/pages/owner/campaigns/[id].astro': { scenario: 'owner-details', route: '/owner/campaigns/' },
@@ -98,13 +100,21 @@ const PAGE_NAMES_BY_FILE = {
   'src/components/audio/AudioPlayer.astro': ['audio-releases', 'music-old-news'],
 };
 const SCENARIO_NAMES_BY_FILE = {
+  'src/components/SoftwareOffer.astro': ['software-offer'],
+  'src/components/owner/SoftwareOfferEditor.astro': ['software-offer'],
+  'src/components/owner/SoftwareMilestone.astro': ['software-offer'],
+  'src/components/owner/SoftwareFitReview.astro': ['software-offer'],
+  'src/components/owner/SoftwareQuestions.astro': ['software-offer'],
+  'src/scripts/software-offers.ts': ['software-offer'],
+  'src/lib/software-offers.ts': ['software-offer'],
+  'src/pages/api/owner/requests/[id]/software.ts': ['software-offer'],
   'src/components/owner/OwnerProjectFiles.astro': ['studio-client'],
-  'src/styles/owner.css': ['owner-details', 'software-brief'],
+  'src/styles/owner.css': ['owner-details', 'software-brief', 'software-offer'],
   'src/lib/software-inquiry.ts': ['software-brief'],
   'src/scripts/software-inquiry.ts': ['software-brief'],
   'src/pages/api/software-inquiry.ts': ['software-brief'],
   'src/styles/software-intake.css': ['software-brief'],
-  'src/pages/owner/requests/[id].astro': ['software-brief'],
+  'src/pages/owner/requests/[id].astro': ['software-brief', 'software-offer'],
   'src/pages/owner/requests/index.astro': ['software-brief'],
   'src/components/owner/RequestList.astro': ['software-brief'],
   'src/styles/studio.css': ['studio-client', 'owner-details'],

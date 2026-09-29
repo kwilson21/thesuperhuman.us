@@ -1,0 +1,32 @@
+---
+import SoftwareMilestone from './SoftwareMilestone.astro';
+import { paymentSchedules, type SoftwareOffer, type OfferTerms } from '~/lib/software-offers';
+interface Props { requestId: string; email: string; offers: SoftwareOffer[]; revoked: boolean }
+const { requestId, email, offers, revoked } = Astro.props;
+const draft = offers.find(offer => offer.status === 'draft'), sent = offers.find(offer => offer.status === 'sent');
+const current = draft ?? sent;
+const terms: OfferTerms | null = current ? JSON.parse(current.terms_json) : null;
+const date = (value: string) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' });
+---
+<section class="rail-section wide software-offer-editor" data-software-editor data-endpoint={`/api/owner/requests/${encodeURIComponent(requestId)}/software`} data-preview={`/owner/requests/${encodeURIComponent(requestId)}/offer`} data-email={email} data-updated={draft?.updated_at ?? ''} data-version={draft?.version ?? ''} data-sent-updated={sent?.updated_at ?? ''} data-sent-version={sent?.version ?? ''} data-sent-date={sent?.sent_at ? date(sent.sent_at) : ''} data-revoked={String(revoked)}>
+  <h2>Offer</h2><p class="rail-muted rail-caption" data-offer-state>{sent ? `v${sent.version} sent ${date(sent.sent_at!)} · ${draft ? `Draft v${draft.version} in progress` : 'no changes since'}` : `Draft v${draft?.version ?? 1} · Not sent`}</p>
+  <form data-offer-form>
+    <label>Outcome<input class="studio-input" name="outcome" maxlength="120" required value={terms?.outcome ?? ''} /></label>
+    <label>Summary<input class="studio-input" name="summary" maxlength="300" required value={terms?.summary ?? ''} /></label>
+    <h3>Milestones</h3><p class="rail-muted rail-caption">A statement of work covers up to 3 milestones or 90 days.</p>
+    <div data-milestones>{(terms?.milestones ?? [undefined]).map(milestone => <SoftwareMilestone milestone={milestone} />)}</div>
+    <template data-milestone-template><SoftwareMilestone /></template>
+    <button type="button" class="studio-quiet" data-add-milestone>Add milestone</button>
+    {[['clientInputs', 'What you need from them', 1000], ['exclusions', 'Outside this offer', 1000], ['timing', 'Timing', 500]].map(([name, label, limit]) => <label>{label}<textarea class="studio-textarea" name={String(name)} maxlength={Number(limit)} rows="3">{terms?.[name as 'clientInputs' | 'exclusions' | 'timing'] ?? ''}</textarea></label>)}
+    <fieldset><legend>Payment mode</legend>{(['standard', 'invoice'] as const).map(mode => <label class="software-payment-card"><input type="radio" name="paymentMode" value={mode} checked={(terms?.paymentMode ?? 'standard') === mode} required /><strong>{mode === 'standard' ? 'Standard' : 'Invoice terms'}</strong><span class="rail-caption">{paymentSchedules[mode]}</span></label>)}</fieldset>
+    <label><input type="checkbox" name="hasRange" checked={Boolean(terms?.projectRange)} /> Whole-project range</label>
+    <p class="rail-muted rail-caption">Non-binding. Shown to the client as an estimate, not a quote.</p>
+    <div data-range hidden={!terms?.projectRange}><label>Low estimate (USD)<input class="studio-input" type="number" name="rangeLow" min="1" step="0.01" value={terms?.projectRange ? terms.projectRange.lowCents / 100 : ''} /></label><label>High estimate (USD)<input class="studio-input" type="number" name="rangeHigh" min="1" step="0.01" value={terms?.projectRange ? terms.projectRange.highCents / 100 : ''} /></label></div>
+    <div class="software-actions"><button type="submit" class="studio-quiet">Save draft</button><a class="studio-quiet" href={`/owner/requests/${encodeURIComponent(requestId)}/offer`} target="_blank" rel="noopener" data-preview-offer hidden={!draft}>Preview</a><button type="button" class="studio-button" data-send-offer disabled={!draft && !(sent && revoked)}>Send offer</button></div>
+    <p class="rail-muted rail-caption">Preview before sending. Saving a draft never sends it.</p>
+  </form>
+  <div class="software-actions" data-link-actions hidden={!sent}><button class="studio-quiet" type="button" data-copy-link>Copy client link</button><button class="studio-quiet" type="button" data-revoke-link disabled={revoked}>Revoke link</button></div>
+  <p data-link-state class="rail-muted rail-caption">{sent && revoked ? 'The client link is revoked. Send offer to issue a new link.' : ''}</p>
+  <p class="studio-status" data-software-status role="status" aria-live="polite"></p>
+  {offers.some(offer => offer.sent_at) && <><h3>Versions</h3><ul>{offers.filter(offer => offer.sent_at).map(offer => <li><a href={`/owner/requests/${encodeURIComponent(requestId)}/offer?version=${offer.version}`} target="_blank" rel="noopener">Offer v{offer.version}</a> · {date(offer.sent_at!)} · {offer.status}</li>)}</ul></>}
+</section>

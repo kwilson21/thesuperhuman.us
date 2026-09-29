@@ -1,0 +1,15 @@
+---
+export const prerender = false;
+import SoftwareOffer from '~/components/SoftwareOffer.astro';
+import { listSoftwareOffers, clientOffer } from '~/lib/software-offers';
+import { getOwnerRequest } from '~/lib/owner-requests';
+if (!Astro.locals.owner) return new Response('Owner access required.', { status: 403 });
+const db = Astro.locals.runtime.env.MUSIC_DB;
+const request = db && Astro.params.id ? await getOwnerRequest(db, Astro.params.id) : null;
+if (!request || request.kind !== 'software' || !db) return new Response('Request not found.', { status: 404 });
+const version = Astro.url.searchParams.get('version');
+const offers = await listSoftwareOffers(db, request.id);
+const selected = version ? offers.find(offer => offer.version === Number(version) && offer.sent_at) : offers.find(offer => offer.status === 'draft');
+if (!selected) return new Response('Offer not found.', { status: 404 });
+---
+<SoftwareOffer offer={clientOffer(request, selected)} preview />

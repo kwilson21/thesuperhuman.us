@@ -1,0 +1,11 @@
+---
+interface Props { requestId: string; fit: { label: string; note: string } | null }
+const { requestId, fit } = Astro.props;
+---
+<section class="rail-section software-rail"><h2>Fit review</h2>
+  <form data-software-action="fit" data-endpoint={`/api/owner/requests/${encodeURIComponent(requestId)}/software`}>
+    <fieldset><legend class="visually-hidden">Fit</legend>{[['potential-fit','Potential fit'],['needs-clarification','Needs clarification'],['stated-mismatch','Stated mismatch']].map(([value,label]) => <label><input type="radio" name="label" value={value} checked={fit?.label === value} required /> {label}</label>)}</fieldset>
+    <label>Review note<textarea class="studio-textarea" name="note" maxlength="500" rows="3">{fit?.note ?? ''}</textarea></label><button class="studio-quiet" type="submit">Save</button>
+    <p class="rail-muted rail-caption">Advisory. Your judgment decides.</p><p class="studio-status" data-software-status role="status" aria-live="polite"></p>
+  </form>
+</section>
