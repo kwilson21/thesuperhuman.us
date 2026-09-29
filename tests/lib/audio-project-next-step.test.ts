@@ -26,6 +26,7 @@ describe('ownerNextStep', () => {
 
   it('leads from reviews to the final delivery and close', () => {
     expect(step({ stage: 'in_progress', payment: pay('paid') })).toMatchObject({ title: 'Share a review mix', target: '#upload-file' });
+    expect(step({ stage: 'in_progress', payment: pay('paid') })?.detail).toContain('Add your watermark before exporting');
     expect(step({ stage: 'revision_in_progress', payment: pay('paid') })).toMatchObject({ title: 'Share the revised mix' });
     expect(step({ stage: 'review_ready', payment: pay('paid') })).toMatchObject({ title: 'Waiting on the client’s answer', waiting: true });
     // Stopping revokes the project, and the owner still gets a step until the request is resolved.
@@ -37,6 +38,7 @@ describe('ownerNextStep', () => {
     expect(step({ stage: 'review_ready', payment: pay('paid'), reviewDecision: 'approved', stripeEnabled: false })).toMatchObject({ title: 'Record the balance payment', target: '#record-balance-payment', action: 'Record balance received' });
     expect(step({ stage: 'review_ready', payment: pay('paid', 'open') })).toMatchObject({ title: 'Waiting on the balance payment', waiting: true });
     expect(step({ stage: 'review_ready', payment: pay('paid', 'paid') })).toMatchObject({ title: 'Deliver the final files' });
+    expect(step({ stage: 'review_ready', payment: pay('paid', 'paid') })?.detail).toContain('Export without the watermark');
     expect(step({ stage: 'final_files_ready', payment: pay('paid', 'paid') })).toMatchObject({ title: 'Close the project', target: '#close-project' });
   });
 

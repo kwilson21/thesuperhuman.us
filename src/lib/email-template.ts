@@ -56,7 +56,7 @@ export function renderEmail(content: EmailContent): { html: string; text: string
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${colors.paper};"><tr><td align="center" style="padding:32px 16px;">
 <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:${colors.card};border:1px solid ${colors.rule};">
-<tr><td style="padding:28px 32px 20px;border-bottom:1px solid ${colors.rule};${font(400, 20, 1.2, serif)}color:${colors.ink};">Kazon Wilson</td></tr>
+<tr><td style="padding:24px 32px 20px;border-bottom:1px solid ${colors.rule};"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="padding-right:12px;"><img src="https://thesuperhuman.us/apple-touch-icon.png" width="40" height="40" alt="" style="display:block;border:0;"></td><td style="${font(400, 20, 1.2, serif)}color:${colors.ink};">Kazon Wilson</td></tr></table></td></tr>
 <tr><td style="padding:32px 32px 24px;">
 <p style="margin:0 0 16px;${font(600, 12, 1.4, sans)}letter-spacing:2px;text-transform:uppercase;color:${colors.accent};">${e(content.kicker)}</p>
 <h1 style="margin:0 0 20px;${font(400, 34, 1.2, serif)}color:${colors.ink};">${e(content.heading)}</h1>

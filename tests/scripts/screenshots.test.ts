@@ -153,6 +153,8 @@ describe('screenshot coverage', () => {
       .toEqual(['owner-today', 'studio-sign-in']);
     expect(relevantScreenshots(manifest, ['src/styles/studio.css']).scenarios.map((scenario: { name: string }) => scenario.name))
       .toEqual(['owner-details', 'studio-client']);
+    expect(relevantScreenshots(manifest, ['src/components/owner/OwnerProjectFiles.astro']).scenarios.map((scenario: { name: string }) => scenario.name))
+      .toEqual(['studio-client']);
   });
 
   it('includes a seeded scenario only when one of its routes changed', () => {

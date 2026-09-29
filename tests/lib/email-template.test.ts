@@ -24,6 +24,8 @@ describe('renderEmail', () => {
 
   it('keeps Outlook-safe markup: longhand fonts, padded button cell, fixed-width frame, hidden preheader', () => {
     const { html } = studioInvitationEmail();
+    expect(html).toContain('<img src="https://thesuperhuman.us/apple-touch-icon.png" width="40" height="40" alt=""');
+    expect(html).toContain('Kazon Wilson</td>');
     expect(html).not.toMatch(/font:\s*\d/);
     // The whole button is clickable (padding on the link), and Outlook pads the cell instead.
     expect(html).toMatch(/<td style="[^"]*mso-padding-alt:14px 28px;"><a href="https:\/\/thesuperhuman.us\/studio\/sign-in" style="display:inline-block;padding:14px 28px;/);

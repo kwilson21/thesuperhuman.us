@@ -49,6 +49,7 @@ const size = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
       <label class="studio-field">Version <select class="studio-select" name="version">{!finalOnly && <option value="review">Review version</option>}<option value="final">Final version</option></select></label>
       <button type="submit" class="studio-button">Upload file</button>
     </div>
+    <p class="upload-guidance">Review version: add your watermark before exporting. Final version: export without the watermark before uploading.</p>
     <div class="upload-progress" data-upload-progress hidden><div class="upload-segments" data-upload-segments></div><p class="studio-status" data-upload-status role="status" aria-live="polite"></p></div>
   </form>}
 </section>
@@ -73,7 +74,7 @@ const size = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   .file-empty { color: var(--studio-muted); font: .95rem/1.5 Inter, sans-serif; }
   h3 { font: 400 1.5rem/1.15 Newsreader,Georgia,serif; }
   .upload { display: grid; gap: 1rem; max-width: 46rem; }
-  .upload-heading p, .unfinished p { margin: .3rem 0 0; color: var(--studio-muted); font: .85rem/1.5 Inter, sans-serif; }
+  .upload-heading p, .upload-guidance, .unfinished p { margin: .3rem 0 0; color: var(--studio-muted); font: .85rem/1.5 Inter, sans-serif; }
   .drop { position: relative; display: flex; align-items: center; justify-content: center; gap: 1rem; min-height: 7rem; padding: 1.5rem; border: 1.5px dashed var(--studio-line); border-radius: 2px; background: var(--studio-field); cursor: pointer; transition: border-color 140ms ease, background 140ms ease; }
   .drop:hover, .drop.dragging { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 5%, var(--studio-field)); }
   .drop:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 3px; }
