@@ -39,7 +39,8 @@ export default {
       await page.waitForFunction(() => document.querySelector('[data-preview-title]')?.textContent === 'One shared client view.');
     }});
     await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'share',confirmed:true,update,expectedUpdatedAt:visual.updatedAt});
-    await shot('Shared concept and Waiting on you',`/studio/software/${id}`,'shared',{cookie});
+    sql(`UPDATE software_projects SET state='waiting_for_input',waiting_for='A redacted sample export.' WHERE request_id=${quote(id)}`);
+    await shot('Shared concept and Waiting on you (project state seeded with SQL)',`/studio/software/${id}`,'shared',{cookie});
     await shot('Agreed project terms',`/studio/software/${id}`,'agreed',{cookie,prepare:async page=>{ await page.getByText('What we agreed',{exact:true}).click(); }});
     sql(`INSERT INTO software_project_messages(request_id,actor,actor_id,body,created_at) VALUES (${quote(id)},'client',${quote(email)},'Thanks. I will send the sample.',${quote(at)})`);
     await shot('Today with a software project','/owner','today',{owner:true});

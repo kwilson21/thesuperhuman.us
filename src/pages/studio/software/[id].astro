@@ -21,6 +21,7 @@ const updates = project ? await sharedSoftwareUpdates(env.MUSIC_DB, project.requ
 const messages = project ? await listSoftwareProjectMessages(env.MUSIC_DB, project.request_id) : [];
 const latest = updates[0], milestone = terms?.milestones[project?.milestone_index ?? 0];
 const visual = (id: string) => `/api/studio/software/${project!.request_id}/updates/${id}/visual`;
+const conversationClosed = project?.state === 'complete';
 const waiting = (project?.state === 'waiting_for_input' ? project.waiting_for : '');
 ---
 {!project || !terms ? <StudioUnavailable audio={false} backLabel="Back to your projects" /> : <BaseLayout title={`${terms.outcome} · Private project`} description="Your private project." noindex>
@@ -30,11 +31,11 @@ const waiting = (project?.state === 'waiting_for_input' ? project.waiting_for : 
     <div class="project-band"><div><h2>Milestone {project.milestone_index+1} · {milestone?.name}</h2><p>{softwareStateSentence(project)}</p></div><div>{latest?.shared_at && <p>Last update: {softwareDate(latest.shared_at)}</p>}{project.next_update_on && <p>Next update: {softwareDate(project.next_update_on)}</p>}</div><SoftwareStepTrack step={project.step} /></div>
     <div class="project-columns"><div class="project-main">
       {latest ? <SoftwareProjectUpdate update={latest} visualUrl={latest.has_visual ? visual(latest.id) : undefined} /> : <section><h2>Your first update is on its way.</h2>{project.next_update_on && <p>Next update: {softwareDate(project.next_update_on)}</p>}</section>}
-      <details><summary>What we agreed</summary>{terms.milestones.map(item => <section><h3>{item.name}</h3><h4>What you’ll receive</h4><ol>{item.deliverables.map(line => <li>{line}</li>)}</ol><h4>How we’ll know it’s ready</h4><ul>{item.acceptance.map(line => <li>{line}</li>)}</ul></section>)}<h3>What I’ll need from you</h3><p>{terms.clientInputs}</p><h3>Outside this offer</h3><p>{terms.exclusions}</p></details>
+      <details><summary>What we agreed</summary>{terms.milestones.map(item => <section><h3>{item.name}</h3><h4>What you’ll receive</h4><ol>{item.deliverables.map(line => <li>{line}</li>)}</ol><h4>How we’ll know it’s ready</h4><ul>{item.acceptance.map(line => <li>{line}</li>)}</ul></section>)}{terms.clientInputs && <><h3>What I’ll need from you</h3><p>{terms.clientInputs}</p></>}{terms.exclusions && <><h3>Outside this offer</h3><p>{terms.exclusions}</p></>}</details>
       {updates.length > 1 && <details><summary>Earlier updates</summary>{updates.slice(1).map(update => <SoftwareProjectUpdate update={update} visualUrl={update.has_visual ? visual(update.id) : undefined} />)}</details>}
-    </div><aside aria-label="Next steps and conversation">{waiting && <section><h2>Waiting on you</h2><p>{waiting}</p></section>}{latest?.next_step && <section><h2>Next from me</h2><p>{latest.next_step}</p></section>}<a class="site-link" href="#conversation">Ask a question ↓</a></aside></div>
-    <div id="conversation"><ProjectMessages messages={messages} endpoint={`/api/studio/software/${project.request_id}/messages`} reader="client" closed={project.state === 'complete'} heading="Ask a question" placeholder="Ask about a screen, a step or a date." hint="" /></div>
-    <footer class="project-records"><span>Agreement · Complete</span><span>{project.payment_mode === 'standard' ? 'Initial payment · Received' : 'First invoice · Sent'}</span><span>Start · Confirmed {softwareDate(project.started_at)}</span></footer>
+    </div><aside aria-label="Next steps">{waiting && <section><h2>Waiting on you</h2><p>{waiting}</p></section>}{latest?.next_step && <section><h2>Next from me</h2><p>{latest.next_step}</p></section>}{!conversationClosed && <a class="site-link" href="#conversation">Ask a question <span aria-hidden="true">↓</span></a>}</aside></div>
+    <div id="conversation"><ProjectMessages messages={messages} endpoint={`/api/studio/software/${project.request_id}/messages`} reader="client" closed={conversationClosed} heading="Ask a question" placeholder="Ask about a screen, a step or a date." hint="" /></div>
+    <footer class="project-records"><span>Agreement · Complete</span><span>{project.payment_mode === 'standard' ? 'Initial payment · Received' : 'Payment · Invoiced on delivery'}</span><span>Start · Confirmed {softwareDate(project.started_at)}</span></footer>
   </article><script>import { setupProjectMessages } from '~/scripts/project-messages'; setupProjectMessages();</script>
 </BaseLayout>}
 <style>
@@ -55,7 +56,8 @@ const waiting = (project?.state === 'waiting_for_input' ? project.waiting_for : 
   aside section { padding-bottom: 2rem; }
   details { border-top: 1px solid var(--rule); padding: 1.5rem 0; margin-top: 2rem; }
   summary { cursor: pointer; font: 400 1.5rem/1.4 Newsreader,Georgia,serif; }
-  details ol { list-style-type: decimal-leading-zero; padding-left: 1.5rem; }
+  details h4 { font: 400 1.25rem/1.25 Newsreader,Georgia,serif; margin: 1rem 0 .5rem; }
+  details ol { list-style-type: decimal-leading-zero; padding-left: 2rem; }
   details ol li::marker { color: var(--accent); }
   details li { padding-left: .2rem; margin-bottom: .4rem; }
   details ul { list-style: none; padding: 0; }

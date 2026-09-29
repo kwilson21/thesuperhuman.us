@@ -24,6 +24,13 @@ export function setupSoftwareComposer() {
     alt.required = hasVisual || Boolean(file.files?.length);
   }
   form.addEventListener('input', render); email.addEventListener('change', () => { emailChosen = true; });
+  const drop = file.closest<HTMLElement>('.drop');
+  drop?.addEventListener('dragover', event => { event.preventDefault(); drop.classList.add('dragging'); });
+  drop?.addEventListener('dragleave', () => drop.classList.remove('dragging'));
+  drop?.addEventListener('drop', event => {
+    event.preventDefault(); drop.classList.remove('dragging');
+    if (event.dataTransfer?.files.length) { file.files = event.dataTransfer.files; file.dispatchEvent(new Event('change')); }
+  });
   file.addEventListener('change', () => {
     const image = file.files?.[0]; if (!image) return;
     if (image.size > 5 * 1024 * 1024 || !['image/png','image/jpeg','image/webp'].includes(image.type)) { status.textContent = 'Choose a PNG, JPEG or WebP of 5 MB or less.'; file.value = ''; return; }
