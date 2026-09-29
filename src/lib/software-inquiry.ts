@@ -16,16 +16,16 @@ export const softwareLabels = {
 export const timingLabels = { flexible: 'Flexible', month: 'Within a month', quarter: 'In one to three months', date: 'By a specific date' } as const;
 export const budgetLabels = { approved: 'Approved', pending: 'Waiting for approval', exploring: 'Still exploring', unsure: 'Not sure yet' } as const;
 export const approverLabels = { self: 'I do', other: 'Someone else, and I can involve them', unsure: 'Not sure yet' } as const;
-const single = (max: number) => z.string().trim().max(max);
-const required = (max: number) => z.string().trim().min(1, 'This answer is required.').max(max);
+const single = (max: number) => z.string().trim().max(max, `Keep this under ${max} characters.`);
+const required = (max: number) => single(max).min(1, 'This answer is required.');
 const schema = z.object({
-  path: z.enum(['workflow', 'idea']), today: required(2000), audience: required(1000), firstResult: required(2000),
+  path: z.enum(['workflow', 'idea'], { errorMap: () => ({ message: 'Choose a starting point.' }) }), today: required(2000), audience: required(1000), firstResult: required(2000),
   name: single(100).min(1, 'Add your name.'), email: single(120).email('Add a valid email address.'),
-  company: single(120).default(''), timing: z.enum(['flexible', 'month', 'quarter', 'date']),
-  timingReason: single(500).default(''), budgetStatus: z.enum(['approved', 'pending', 'exploring', 'unsure']),
-  budgetNote: single(200).default(''), approver: z.enum(['self', 'other', 'unsure']),
-  approverRole: single(120).default(''), turnstileToken: z.string().min(1, 'Complete the security check.').max(2048),
-  submissionId: z.string().uuid(),
+  company: single(120).default(''), timing: z.enum(['flexible', 'month', 'quarter', 'date'], { errorMap: () => ({ message: 'Choose one.' }) }),
+  timingReason: single(500).default(''), budgetStatus: z.enum(['approved', 'pending', 'exploring', 'unsure'], { errorMap: () => ({ message: 'Choose one.' }) }),
+  budgetNote: single(200).default(''), approver: z.enum(['self', 'other', 'unsure'], { errorMap: () => ({ message: 'Choose one.' }) }),
+  approverRole: single(120).default(''), turnstileToken: z.string().min(1, 'Complete the security check.').max(2048, 'Keep this under 2048 characters.'),
+  submissionId: z.string().uuid('Invalid submission ID.'),
 });
 export type SoftwareInput = z.infer<typeof schema>;
 export function validateSoftwareInquiry(input: unknown): { ok: true; value: SoftwareInput } | { ok: false; errors: Record<string, string> } {
@@ -35,10 +35,14 @@ export function validateSoftwareInquiry(input: unknown): { ok: true; value: Soft
     for (const key of ['name', 'email', 'company', 'timingReason', 'budgetNote', 'approverRole'])
       if (typeof raw[key] === 'string' && /[\r\n]/.test(raw[key])) lineErrors[key] = 'Use one line.';
     for (const key of ['today', 'audience', 'firstResult', 'name', 'email', 'company', 'timingReason', 'budgetNote', 'approverRole'])
-      if (typeof raw[key] === 'string' && /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(raw[key])) lineErrors[key] = 'Remove control characters.';
+      if (typeof raw[key] === 'string' && /[\x00-\x08\x0b\x0c\x0e-\x1f]|\p{Cs}/u.test(raw[key])) lineErrors[key] = 'Remove control characters.';
   }
   const parsed = schema.safeParse(input);
-  if (!parsed.success || Object.keys(lineErrors).length) return { ok: false, errors: { ...Object.fromEntries((parsed.success ? [] : parsed.error.issues).map(issue => [String(issue.path[0] ?? '_form'), issue.message])), ...lineErrors } };
+  if (!parsed.success || Object.keys(lineErrors).length) {
+    const errors: Record<string, string> = {};
+    if (!parsed.success) for (const issue of parsed.error.issues) errors[String(issue.path[0] ?? '_form')] ??= issue.message;
+    return { ok: false, errors: { ...errors, ...lineErrors } };
+  }
   const value = parsed.data;
   if (value.approver !== 'other') value.approverRole = '';
   return { ok: true, value };

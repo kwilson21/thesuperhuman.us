@@ -4,7 +4,7 @@ export function setupFormSubmission({ form, endpoint, payload, success, onSucces
   endpoint: string;
   payload: (data: FormData) => Record<string, unknown>;
   success: HTMLElement;
-  onSuccess?: (result: { brief?: unknown }) => void;
+  onSuccess?: (result: Record<string, unknown>) => void;
   onConflict?: () => void;
 }) {
   const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;

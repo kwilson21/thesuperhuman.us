@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { POST } from '~/pages/api/software-inquiry';
-import { validateSoftwareInquiry } from '~/lib/software-inquiry';
+import { softwareBrief, validateSoftwareInquiry } from '~/lib/software-inquiry';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 const id = '00000000-0000-4000-8000-000000000001';
@@ -33,14 +33,16 @@ it('stores one verbatim software brief, audit, and no audio project, then return
   const details = JSON.parse((sql.prepare('SELECT details_json FROM owner_requests').get() as { details_json: string }).details_json);
   expect(details).toMatchObject({ today: 'First line\nSecond line', approverRole: '' });
   expect(sql.prepare('SELECT COUNT(*) AS n FROM audio_projects').get()).toEqual({ n: 0 });
-  expect(sql.prepare('SELECT action FROM owner_request_audit').get()).toEqual({ action: 'created' });
+  expect(sql.prepare('SELECT action FROM owner_request_audit').all()).toEqual([{ action: 'created' }]);
 });
 
 it('deduplicates after rate limit, rejects another email without leaking the brief, and limits new IDs', async () => {
-  expect((await POST(context({ ...base, email: 'alex@example.com' }))).status).toBe(200);
+  const first = await POST(context({ ...base, email: 'alex@example.com' }));
+  expect(first.status).toBe(200);
+  const firstBrief = (await first.json() as { brief: Record<string, string> }).brief;
   const duplicate = await POST(context());
   expect(duplicate.status).toBe(200);
-  expect((await duplicate.json() as { brief: Record<string, string> }).brief.today).toBe('First line\nSecond line');
+  expect((await duplicate.json() as { brief: Record<string, string> }).brief).toEqual(firstBrief);
   const conflict = await POST(context({ ...base, email: 'other@example.com' }));
   expect(conflict.status).toBe(409);
   expect(JSON.stringify(await conflict.json())).not.toContain('First line');
@@ -69,7 +71,11 @@ it('preserves input and clears success limit after a storage failure', async () 
   expect((await response.json() as { error: string }).error).toContain('Your details are still here');
   expect(kv.delete).toHaveBeenCalledWith('rl:software:0.0.0.0');
   expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(1);
-  expect(JSON.stringify(vi.mocked(fetch).mock.calls)).not.toContain('First line');
+  const alertCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes('api.resend.com'))!;
+  const alert = JSON.parse(alertCall[1]?.body as string);
+  expect(alert.text).toContain('/api/software-inquiry');
+  expect(alert.text).toContain('d1-write-failed');
+  expect(JSON.stringify(alert)).not.toMatch(/First line|Second line|Alex@Example|Example Studio|One place to see/);
 });
 
 it('does not undo a saved request when the owner notice fails', async () => {
@@ -117,7 +123,7 @@ it('rejects overlength and line breaks in every text field', () => {
   for (const [key, max] of Object.entries(lengths)) {
     const result = validateSoftwareInquiry({ ...base, [key]: 'a'.repeat(max + 1) });
     expect(result.ok, key).toBe(false);
-    if (!result.ok) expect(result.errors[key], key).toBeTruthy();
+    if (!result.ok) expect(result.errors[key], key).toBe(`Keep this under ${max} characters.`);
   }
   for (const key of ['name', 'email', 'company', 'timingReason', 'budgetNote', 'approverRole']) {
     const result = validateSoftwareInquiry({ ...base, [key]: 'a\nb' });
@@ -145,4 +151,41 @@ it('keeps the approver role only for someone else', () => {
   const self = validateSoftwareInquiry(base);
   expect(self.ok).toBe(true);
   if (self.ok) expect(self.value.approverRole).toBe('');
+});
+
+
+it('uses plain exact messages for choices, line breaks, controls, and lone surrogates', () => {
+  const cases = [
+    ['path', '', 'Choose a starting point.'],
+    ['timing', '', 'Choose one.'],
+    ['budgetStatus', '', 'Choose one.'],
+    ['approver', '', 'Choose one.'],
+    ['name', 'A\nB', 'Use one line.'],
+    ['today', '\u0001', 'Remove control characters.'],
+    ['today', '\ud800', 'Remove control characters.'],
+  ] as const;
+  for (const [key, value, message] of cases) {
+    const result = validateSoftwareInquiry({ ...base, [key]: value });
+    expect(result.ok, key).toBe(false);
+    if (!result.ok) expect(result.errors[key]).toBe(message);
+  }
+});
+
+it('renders saved script text and multiline answers verbatim for safe Astro text output', () => {
+  const request = { name: 'Alex', email: 'alex@example.com', details: { ...base, today: '<script>alert(1)</script>\nSecond line' } } as any;
+  expect(softwareBrief(request).today).toBe('<script>alert(1)</script>\nSecond line');
+});
+
+it('omits approver role from the API receipt when approver is self', async () => {
+  const response = await POST(context());
+  expect(response.status).toBe(200);
+  expect((await response.json() as { brief: Record<string, string> }).brief).not.toHaveProperty('approverRole');
+});
+
+it('treats an oversized saved detail as a field error without an urgent alert', async () => {
+  const oversized = { prepare: db.prepare.bind(db), batch: async () => { throw new Error('Request details are too large.'); } } as unknown as D1Database;
+  const response = await POST(context(base, { db: oversized }));
+  expect(response.status).toBe(400);
+  expect((await response.json() as { errors: Record<string, string> }).errors).toEqual({ _form: 'Keep the brief shorter and try again.' });
+  expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(0);
 });

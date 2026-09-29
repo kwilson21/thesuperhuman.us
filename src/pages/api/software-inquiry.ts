@@ -43,11 +43,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
     let saved;
     try {
       saved = await saveOwnerRequest(env.MUSIC_DB, softwareRequest(input));
-    } catch {
+    } catch (error) {
       const raced = await existing(env.MUSIC_DB, input.submissionId).catch(() => null);
       if (raced) return raced.email.toLowerCase() === input.email.toLowerCase()
         ? Response.json({ ok: true, brief: softwareBrief(raced) })
         : Response.json({ ok: false, error: preserved }, { status: 409 });
+      if (error instanceof Error && error.message === 'Request details are too large.')
+        return Response.json({ ok: false, errors: { _form: 'Keep the brief shorter and try again.' } }, { status: 400 });
       await env.RATE_LIMIT.delete(`rl:software:${ip}`);
       await sendUrgentOwnerAlert(env, { category: 'request-storage', route: '/api/software-inquiry', requestId: crypto.randomUUID(), code: 'd1-write-failed', occurredAt: new Date().toISOString() });
       return Response.json({ ok: false, error: preserved }, { status: 503 });

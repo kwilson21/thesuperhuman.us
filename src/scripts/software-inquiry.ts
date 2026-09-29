@@ -71,7 +71,7 @@ if (form) {
   setupFormSubmission({
     form, endpoint: '/api/software-inquiry', success: document.getElementById('software-success')!,
     payload: data => ({ ...payload(data), submissionId }),
-    onSuccess: result => renderRows(document.querySelector('[data-receipt]')!, result.brief && typeof result.brief === 'object' ? result.brief as Record<string, string> : {}),
+    onSuccess: result => renderRows(document.querySelector('[data-receipt]')!, result.brief && typeof result.brief === 'object' && !Array.isArray(result.brief) ? result.brief as Record<string, string> : {}),
     onConflict: () => { submissionId = crypto.randomUUID(); },
   });
   const observer = new MutationObserver(() => {
