@@ -18,6 +18,7 @@ export type NewOwnerRequest = {
   cityRegion?: string;
   summary: string;
   details?: Record<string, unknown>;
+  submissionId?: string;
 };
 
 export type RequestCommand =
@@ -25,6 +26,10 @@ export type RequestCommand =
   | { id: string; action: 'note'; actor: string; note: string };
 
 export type OwnerRequestAudit = { id: number; action: string; actor: string; note: string; occurredAt: string };
+
+export class RequestDetailsTooLargeError extends Error {
+  constructor() { super('Request details are too large.'); }
+}
 
 const requestColumns = `id,kind,release_id,service_id,campaign_id,name,email,city_region,
   summary,details_json,status,private_note,created_at,updated_at,resolved_at,contact_delete_after`;
@@ -38,16 +43,16 @@ function validActor(actor: string) {
 export async function saveOwnerRequest(db: D1Database, input: NewOwnerRequest, actor = 'system'): Promise<OwnerRequest> {
   if (!ownerRequestKinds.includes(input.kind)) throw new Error('Invalid request kind.');
   const details = JSON.stringify(input.details ?? {});
-  if (details.length > 16_000) throw new Error('Request details are too large.');
+  if (details.length > 16_000) throw new RequestDetailsTooLargeError();
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await db.batch([
     db.prepare(`INSERT INTO owner_requests
-      (id,kind,release_id,service_id,campaign_id,name,email,city_region,summary,details_json,status,private_note,created_at,updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,'new','',?,?)`)
+      (id,kind,release_id,service_id,campaign_id,name,email,city_region,summary,details_json,status,private_note,created_at,updated_at${input.submissionId ? ',submission_id' : ''})
+      VALUES (?,?,?,?,?,?,?,?,?,?,'new','',?,?${input.submissionId ? ',?' : ''})`)
       .bind(id, input.kind, input.releaseId ?? null, input.serviceId ?? null, input.campaignId ?? null,
         input.name?.trim() ?? '', input.email.trim().toLowerCase(), input.cityRegion?.trim() ?? '',
-        input.summary.trim(), details, now, now),
+        input.summary.trim(), details, now, now, ...(input.submissionId ? [input.submissionId] : [])),
     db.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
       VALUES (?,'created',?,'',?)`).bind(id, validActor(actor), now),
   ]);

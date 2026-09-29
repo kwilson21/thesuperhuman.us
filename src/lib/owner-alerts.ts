@@ -2,7 +2,7 @@ import { sendAudioMessage } from './audio-resend';
 
 export type OwnerIncident = {
   category: 'request-storage';
-  route: '/api/audio-intake' | '/api/music-interest';
+  route: '/api/audio-intake' | '/api/music-interest' | '/api/software-inquiry';
   requestId: string;
   code: 'd1-write-failed';
   occurredAt: string;

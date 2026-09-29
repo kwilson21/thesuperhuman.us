@@ -68,3 +68,12 @@ it('keeps audio payment work inside the service request with one clear next acti
   expect(script).toContain('/payment');
   expect(script).toContain('That invoice was not created');
 });
+
+it('renders software answers as Astro text with preserved line breaks', () => {
+  const page = read('src/pages/owner/requests/[id].astro');
+  expect(page).toContain('Their brief');
+  expect(page).toContain('As submitted by the client. Read only.');
+  expect(page).toContain('software-answer');
+  expect(page).toContain('white-space: pre-wrap');
+  expect(page).not.toContain('set:html');
+});

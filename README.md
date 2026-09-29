@@ -84,6 +84,8 @@ Timeline milestones require `migrations/music/0017_audio_project_update_mileston
 
 Review answers require `migrations/music/0018_audio_project_review_decisions.sql` after 0017, applied **before** deploying the code that reads it: every message query selects the new `review_decision` column. A client answers each published review by approving it, requesting changes while revision rounds remain (two), or stopping once they are used. Stopping closes that project's access in the same write, without signing the client out of other projects.
 
+Software project briefs require `migrations/music/0019_software_requests.sql` after 0018, applied **before** deploying code that stores software briefs. It enables storing software briefs; audio requests continue to work before 0019 is applied.
+
 The forms read `Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY` first, with
 `import.meta.env.PUBLIC_TURNSTILE_SITE_KEY` as a build-time fallback. Wrangler
 runtime vars are not automatically Astro build-time variables. An empty runtime
@@ -162,7 +164,7 @@ Notes are optional. Native audio controls and explicit user-initiated playback r
 
 ### Audio intake
 
-Song requests start at `/audio/start`, a three-step form that POSTs to `/api/audio-intake`. A successful submission stores the request in `MUSIC_DB` and immediately emails the operator (`CONTACT_TO_EMAIL`) the service, working title, client name and email, file link, direction choices and notes, and a link to the request in the owner dashboard (`/owner/requests/<id>`), reply-to the client. This owner notice sends regardless of `AUDIO_CLIENT_PORTAL_ENABLED`. When that flag is `true`, the client also receives a private studio sign-in invitation. Both use the same Turnstile verification, KV rate limiting, and Resend delivery as the software-site contact form; rate-limit keys use the `rl:audio:` KV prefix (vs. `rl:` for the software form) so the two track separate windows per IP.
+Song requests start at `/audio/start`, a three-step form that POSTs to `/api/audio-intake`. A successful submission stores the request in `MUSIC_DB` and immediately emails the operator (`CONTACT_TO_EMAIL`) the service, working title, client name and email, file link, direction choices and notes, and a link to the request in the owner dashboard (`/owner/requests/<id>`), reply-to the client. This owner notice sends regardless of `AUDIO_CLIENT_PORTAL_ENABLED`. When that flag is `true`, the client also receives a private studio sign-in invitation. Both use the same Turnstile verification, KV rate limiting, and Resend delivery as the general contact form; rate-limit keys use the `rl:audio:` KV prefix (vs. `rl:` for general contact) so the two track separate windows per IP.
 
 ### Operator prerequisites before serving audio.thesuperhuman.us traffic
 

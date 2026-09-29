@@ -23,6 +23,6 @@ export const softwareSheet: ServiceSheet = {
   working: 'Fixed-price projects. Clear deliverables. Written, async collaboration.',
   closing: 'Have something in mind?',
   starting: 'Share the idea, who it is for, and your timing.',
-  contact: '/#contact', contactLabel: 'Discuss your project',
+  contact: '/software/start', contactLabel: 'Discuss your project',
   evidence: '/work', evidenceLabel: 'Explore my work history',
 };

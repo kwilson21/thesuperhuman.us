@@ -40,4 +40,4 @@ export default {
 };
 ```
 
-`capture` takes `path`, `file`, `viewport` (`desktop` or `phone`), `owner`, `cookie` (for a studio session), `selector` (one section) and `status`. Seed only what depends on an outside service (Turnstile, Stripe webhooks, email codes) and say so in the step title or caption.
+`capture` takes `path`, `file`, `viewport` (`desktop` or `phone`), `owner`, `cookie` (for a studio session), `selector` (one section), `status`, and optional `prepare: async page => {}`. The callback runs after load and fonts settle, before capture. Seed only what depends on an outside service (Turnstile, Stripe webhooks, email codes) and say so in the step title or caption.

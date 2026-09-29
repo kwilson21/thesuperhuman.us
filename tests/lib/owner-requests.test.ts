@@ -1,13 +1,16 @@
 import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { changeOwnerRequest, getOwnerRequest, listOwnerRequests, saveOwnerRequest } from '~/lib/owner-requests';
+import { changeOwnerRequest, getOwnerRequest, listOwnerRequests, RequestDetailsTooLargeError, saveOwnerRequest } from '~/lib/owner-requests';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 
-function fixture() {
+function fixture(beforeSoftware = false) {
   const sql = new DatabaseSync(':memory:');
-  sql.exec(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8'));
+  if (beforeSoftware) {
+    for (const name of readdirSync(new URL('../../migrations/music/', import.meta.url)).filter(name => name.endsWith('.sql') && name < '0019').sort())
+      sql.exec(readFileSync(new URL(`../../migrations/music/${name}`, import.meta.url), 'utf8'));
+  } else sql.exec(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8'));
   const statement = (query: string, args: unknown[] = []) => ({
     query, args,
     bind: (...values: unknown[]) => statement(query, values),
@@ -59,6 +62,12 @@ describe('owner requests', () => {
       .toEqual({ action: 'created', actor: 'system' });
   });
 
+  it('rejects oversized request details with the typed error', async () => {
+    const { db } = fixture();
+    await expect(saveOwnerRequest(db, { ...purchase, details: { note: 'x'.repeat(16_000) } }))
+      .rejects.toBeInstanceOf(RequestDetailsTooLargeError);
+  });
+
   it('applies only defined status transitions and records the owner actor', async () => {
     const { db, sql } = fixture();
     const request = await saveOwnerRequest(db, purchase);
@@ -81,4 +90,11 @@ describe('owner requests', () => {
     await expect(changeOwnerRequest(db, { id: purchaseRequest.id, action: 'note', actor: 'owner@example.com', note: 'x'.repeat(1001) }))
       .rejects.toThrow('Private note');
   });
+});
+
+it('saves a service request before software migration 0019', async () => {
+  const { db, sql } = fixture(true);
+  const request = await saveOwnerRequest(db, { kind: 'service', serviceId: 'mixing', email: 'CLIENT@EXAMPLE.COM', summary: 'Audio inquiry' });
+  expect(request.email).toBe('client@example.com');
+  expect(sql.prepare('SELECT COUNT(*) AS n FROM owner_requests').get()).toEqual({ n: 1 });
 });

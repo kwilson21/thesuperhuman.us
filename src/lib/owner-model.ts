@@ -1,4 +1,4 @@
-export const ownerRequestKinds = ['purchase', 'merchandise', 'service'] as const;
+export const ownerRequestKinds = ['purchase', 'merchandise', 'service', 'software'] as const;
 export const ownerRequestStatuses = ['new', 'reviewed', 'resolved', 'withdrawn'] as const;
 
 export type OwnerRequestKind = typeof ownerRequestKinds[number];
