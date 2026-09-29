@@ -68,3 +68,5 @@ This is a scoped deployment record against the reusable pre-launch checklist.
 ## Owner decision on the placeholder contrast
 
 Owner-accepted exception (owner, in conversation, 2026-09-29: "A"). Release now with the placeholder contrast recorded as a known, pre-existing issue. Impact: the "For example:" text is hard to read for low-vision visitors; the visible hint above each field carries the same guidance at full contrast. Follow-up: one small pull request that raises placeholder contrast on both the audio and software forms together.
+
+Resolved by [#151](https://github.com/kwilson21/thesuperhuman.us/pull/151): placeholders on both forms render `#6d6d6c` in Chromium (about 4.9:1 on paper), mixed from the existing `--muted` and `--paper` tokens ("A", choosing this color over `var(--muted)`, owner, in conversation, 2026-09-29). See [its release record](prelaunch-qa-2026-09-29-placeholder-contrast.md).
