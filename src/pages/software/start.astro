@@ -15,7 +15,7 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
 ---
 <BaseLayout title="Start a software project · Kazon Wilson" description="Share a short software project brief for Kazon Wilson to review.">
   <article class="site-shell intake-page software-intake">
-    <p class="intake-return"><a class="site-link" href={href('/services#software')}>Software <span aria-hidden="true">←</span></a></p>
+    <p class="intake-return"><a class="site-link" href={href('/services#software')}>Back to Software <span aria-hidden="true">←</span></a></p>
     <ol class="intake-progress" aria-label="Your progress"><li aria-current="step"><span class="step-number">1</span> Project</li><li><span class="step-number">2</span> Details</li><li><span class="step-number">3</span> Review</li></ol>
     <form id="software-inquiry" data-available={available} novalidate>
       <noscript><p>Please enable JavaScript to use this form, or email <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>.</p></noscript>
@@ -59,7 +59,7 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
       <div class="intake-actions"><button type="button" data-back hidden>Back</button><button type="button" class="site-button" data-next>Continue</button><button type="submit" class="site-button" hidden disabled>Send project brief</button></div>
       <p class="intake-reassurance">No booking or payment at this stage.</p>
     </form>
-    <section id="software-success" hidden tabindex="-1" role="status"><h1>Your brief is in.</h1><p class="intake-intro">Received. I haven’t reviewed it yet. I’ll reply by email with a question, a proposed first milestone with a fixed price, or a note if it isn’t a fit. Nothing is booked and no payment is due.</p><div class="intake-review"><h2>Your brief</h2><dl data-receipt></dl></div><button type="button" class="site-button site-button-outline" data-print>Print or save</button></section>
+    <section id="software-success" hidden tabindex="-1" role="status"><h1>Your brief is in.</h1><p class="intake-intro">Received. I haven’t reviewed it yet. I’ll reply by email with a question, a proposed first milestone with a fixed price, or a note if it isn’t a fit. Nothing is booked and no payment is due.</p><div class="intake-review max-w-content"><h2>Your brief</h2><dl data-receipt></dl></div><button type="button" class="site-button site-button-outline" data-print>Print or save</button></section>
     <p class="intake-contact">Not sure it fits? <a href={href('/#contact')}>Get in touch</a>. Hiring for a role? <a href={href('/about#resumes')}>Request my resume</a>.</p>
   </article>
   <Footer compact slot="footer" />

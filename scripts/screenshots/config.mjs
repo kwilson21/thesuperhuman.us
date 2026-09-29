@@ -79,6 +79,7 @@ const PAGE_NAMES_BY_FILE = {
   'src/styles/audio-intake.css': ['audio-start', 'software-start'],
   'src/styles/software-intake.css': ['software-start'],
   'src/scripts/software-inquiry.ts': ['software-start'],
+  'src/lib/software-inquiry.ts': ['software-start'],
   'src/styles/music.css': MUSIC_CATALOG_PAGES,
   'src/styles/music-hubs.css': MUSIC_HUB_PAGES,
   'src/styles/music-premiere.css': ['music-old-news'],
@@ -103,8 +104,8 @@ const SCENARIO_NAMES_BY_FILE = {
   'src/scripts/software-inquiry.ts': ['software-brief'],
   'src/pages/api/software-inquiry.ts': ['software-brief'],
   'src/styles/software-intake.css': ['software-brief'],
-  'src/pages/software/start.astro': ['software-brief'],
   'src/pages/owner/requests/[id].astro': ['software-brief'],
+  'src/pages/owner/requests/index.astro': ['software-brief'],
   'src/components/owner/RequestList.astro': ['software-brief'],
   'src/styles/studio.css': ['studio-client', 'owner-details'],
 };

@@ -70,6 +70,17 @@ it('requires the payment projection and Stripe event ledger', async () => {
   expect(report.checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
 });
 
+it('reports attention when the request audit trigger is missing', async () => {
+  const fixture = healthyFixture();
+  const baseQuery = fixture.query;
+  fixture.query = async (sql: string) => sql.includes('sqlite_master')
+    ? requiredSchema.filter(name => name !== 'owner_requests_audit_personal_delete').map(name => ({ name }))
+    : baseQuery(sql);
+  const report = await ownerHealth(fixture);
+  expect(report.status).toBe('attention');
+  expect(report.checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
+});
+
 it('requires attention when a Stripe invoice event needs reconciliation', async () => {
   const fixture = healthyFixture();
   const baseQuery = fixture.query;

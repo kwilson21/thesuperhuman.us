@@ -179,6 +179,14 @@ describe('screenshot coverage', () => {
       .toEqual(['audio-services']);
   });
 
+  it('selects the software page and journey when software validation changes', () => {
+    const manifest = { pages: [{ name: 'software-start', path: '/software/start' }],
+      scenarios: [{ name: 'software-brief', title: 'Software brief journey', steps: [] }] };
+    const selected = relevantScreenshots(manifest, ['src/lib/software-inquiry.ts']);
+    expect(selected.pages.map((page: { name: string }) => page.name)).toEqual(['software-start']);
+    expect(selected.scenarios.map((scenario: { name: string }) => scenario.name)).toEqual(['software-brief']);
+  });
+
   it('fails closed to no unrelated images when changed files have no mapped route', () => {
     const selected = relevantScreenshots({
       pages: [{ name: 'home', path: '/' }, { name: 'work', path: '/work' }], scenarios: [],
