@@ -1,3 +1,4 @@
+// Capture the software service sheet at US Letter width in print media.
 export default {
   title: 'Software service sheet print',
   async run({ capture }) {
@@ -5,7 +6,10 @@ export default {
       file: 'services-print.png',
       path: '/services',
       viewport: 'desktop',
-      prepare: page => page.emulateMedia({ media: 'print' }),
+      prepare: async page => {
+        await page.setViewportSize({ width: 816, height: 1056 });
+        await page.emulateMedia({ media: 'print' });
+      },
     });
     return [{
       title: 'US Letter print layout',

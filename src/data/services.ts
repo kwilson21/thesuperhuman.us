@@ -1,5 +1,5 @@
-import { tallyStory } from './project-stories/tally';
-import { softwarePaths } from '../lib/software-inquiry';
+import { tallyStory } from '~/data/project-stories/tally';
+import { softwarePaths } from '~/lib/software-inquiry';
 
 export interface ServiceSheet {
   path: string;
@@ -22,6 +22,20 @@ export interface ServiceSheet {
   storyLabel: string;
   historyLabel: string;
   historyPath: string;
+  kicker: string;
+  differenceHeading: string;
+  figureCaption: string;
+  fitHeading: string;
+  fitCaption: string;
+  quote: string;
+  imageCaption: string;
+  beforeIntro: string;
+  agreement: string;
+  startLabel: string;
+  startPath: string;
+  audioLead: string;
+  audioLabel: string;
+  audioPath: string;
   stepsHeading: string;
   steps: { title: string; description: string }[];
 }
@@ -46,11 +60,25 @@ export const softwareSheet: ServiceSheet = {
   demoLabel: 'Try the demo',
   projectPath: '/building/tally',
   projectLabel: 'Explore the project',
-  imageAlt: 'Tally, a budgeting app, running on demo data',
+  imageAlt: 'Tally’s transactions screen, running on demo data',
   storyLabel: 'Read the work story',
   historyLabel: 'Explore my work history',
   historyPath: '/work',
-  stepsHeading: 'A clear first step.',
+  kicker: 'Software',
+  differenceHeading: 'See the difference.',
+  figureCaption: 'rows per batch · owner-reported',
+  fitHeading: 'Find the right fit.',
+  fitCaption: 'Fixed price · agreed in writing before work begins',
+  quote: 'Quoted after your brief',
+  imageCaption: 'Tally · public demo on demo data',
+  beforeIntro: 'Communication is async. Every project starts with a short written brief. I reply by email with a question, a proposed first milestone with a fixed price, or a note if it isn’t a fit.',
+  agreement: 'Nothing starts until we agree on the scope and price.',
+  startLabel: 'Start a project brief',
+  startPath: '/software/start',
+  audioLead: 'Looking for mixing or mastering?',
+  audioLabel: 'Audio services',
+  audioPath: '/services',
+  stepsHeading: 'Before we start.',
   steps: [
     { title: 'Share the situation', description: 'A short brief, in your own words.' },
     { title: 'Review the first milestone', description: 'Scope, deliverables and a fixed price.' },
