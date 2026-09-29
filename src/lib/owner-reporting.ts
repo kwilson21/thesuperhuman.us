@@ -26,6 +26,7 @@ export type StudioLedger = {
   observations: string[];
 };
 export type StudioProjectAttention = {
+  kind: 'audio' | 'software';
   requestId: string;
   summary: string;
   unreadMessages: number;
@@ -85,9 +86,9 @@ export async function listStudioProjectAttention(db: D1Database, now: Date): Pro
   ) SELECT * FROM attention WHERE unreadMessages>0 OR failedNotices>0 OR uncheckedNotices>0 OR dueSoon=1 ORDER BY dueSoon DESC,unreadMessages DESC,requestId`)
     .bind(new Date(now.getTime()-300_000).toISOString(),new Date(now.getTime()-60_000).toISOString(),dueLimit.toISOString().slice(0,10))
     .all<{requestId:string;summary:string;stage:string;dueAt:string|null;unreadMessages:number;failedNotices:number;uncheckedNotices:number;dueSoon:number}>();
-  const software = softwareRows.results.map(({dueAt,...row}) => ({...row,bookingPaid:false,dueSoon:Boolean(row.dueSoon),dueInDays:null,
+  const software = softwareRows.results.map(({dueAt,...row}) => ({...row,kind: 'software' as const,bookingPaid:false,dueSoon:Boolean(row.dueSoon),dueInDays:null,
     promisedUpdate: row.dueSoon && dueAt ? dueAt : undefined}));
-  return [...software, ...rows.results.map(({ dueAt, ...row }) => ({ ...row, dueSoon: Boolean(row.dueSoon), bookingPaid: Boolean(row.bookingPaid),
+  return [...software, ...rows.results.map(({ dueAt, ...row }) => ({ ...row, kind: 'audio' as const, dueSoon: Boolean(row.dueSoon), bookingPaid: Boolean(row.bookingPaid),
     dueInDays: row.dueSoon && dueAt ? Math.round(day(dueAt) - day(today)) : null }))];
 }
 

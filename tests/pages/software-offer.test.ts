@@ -9,12 +9,12 @@ import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { beforeAll, afterAll, expect, it } from 'vitest';
 import { hashOfferToken } from '~/lib/software-offers';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
-let directory: string, page: any, preview: any, editor: any, questions: any, fit: any;
+let directory: string, softwarePage: any, page: any, preview: any, editor: any, questions: any, fit: any;
 const token = 'a'.repeat(43);
 const terms = { outcome:'Current offer',summary:'A shared view.',milestones:[{ name:'Tracker',deliverables:['Status view'],acceptance:['Add a client.'],feeCents:240000 }],clientInputs:'',exclusions:'',timing:'',paymentMode:'standard' };
 beforeAll(async () => {
   directory = await mkdtemp(resolve('.software-render-'));
-  await build({ entryPoints:{ client:'src/pages/offer/[token].astro', preview:'src/pages/owner/requests/[id]/offer.astro', editor:'src/components/owner/SoftwareOfferEditor.astro', questions:'src/components/owner/SoftwareQuestions.astro', fit:'src/components/owner/SoftwareFitReview.astro' }, outdir:directory, outExtension:{ '.js':'.mjs' }, bundle:true, format:'esm', platform:'node', packages:'external',
+  await build({ entryPoints:{ software:'src/pages/studio/software/[id].astro', client:'src/pages/offer/[token].astro', preview:'src/pages/owner/requests/[id]/offer.astro', editor:'src/components/owner/SoftwareOfferEditor.astro', questions:'src/components/owner/SoftwareQuestions.astro', fit:'src/components/owner/SoftwareFitReview.astro' }, outdir:directory, outExtension:{ '.js':'.mjs' }, bundle:true, format:'esm', platform:'node', packages:'external',
     plugins:[{ name:'astro-test-render', setup(builder) {
       builder.onResolve({ filter:/\.css(?:\?|$)|\?astro/ }, () => ({ path:'empty-style',namespace:'empty' }));
       builder.onLoad({ filter:/.*/,namespace:'empty' }, () => ({ contents:'',loader:'js' }));
@@ -23,7 +23,7 @@ beforeAll(async () => {
     } }],
   });
   const { readdir } = await import('node:fs/promises');
-  for (const file of await readdir(directory)) { const compiled = (await import(/* @vite-ignore */ pathToFileURL(resolve(directory,file)).href)).default; if (file.startsWith('client')) page = compiled; else if (file.startsWith('preview')) preview = compiled; else if (file.startsWith('editor')) editor = compiled; else if (file.startsWith('questions')) questions = compiled; else fit = compiled; }
+  for (const file of await readdir(directory)) { const compiled = (await import(/* @vite-ignore */ pathToFileURL(resolve(directory,file)).href)).default; if (file.startsWith('software')) softwarePage = compiled; else if (file.startsWith('client')) page = compiled; else if (file.startsWith('preview')) preview = compiled; else if (file.startsWith('editor')) editor = compiled; else if (file.startsWith('questions')) questions = compiled; else fit = compiled; }
 });
 afterAll(async () => { if (directory) await rm(directory,{ recursive:true,force:true }); });
 async function fixture() {
@@ -139,4 +139,27 @@ it.each([false,true])('replaces only an earlier delivered version (earlier sent 
     const html = await (await render(db,token)).text();
     if (earlierSent) expect(html).toContain('replaces v1'); else expect(html).not.toContain('replaces');
   } finally { sql.close(); }
+});
+
+it('returns an unavailable 404 without project data for foreign and revoked software ids', async () => {
+  const {sql,db} = await fixture();
+  try {
+    sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,state,step,milestone_index,waiting_for,next_update_on,started_at,started_by,updated_at,signatures_recorded_at,first_payment_recorded_at,created_at,invitation_status) VALUES ('r','current',?,'standard','preparing','direction',0,'',NULL,'now','owner','now','now','now','now','sent')").run(JSON.stringify(terms));
+    const {createHash} = await import('node:crypto'); const token = 'a'.repeat(72);
+    sql.prepare("INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES (?,?,'now','2099-01-01','now')").run(createHash('sha256').update(token).digest('hex'),'foreign@example.com');
+    const container = await AstroContainer.create();
+    for (const revoked of [false,true]) {
+      if (revoked) { sql.exec("UPDATE audio_client_sessions SET email='alex@example.com'; UPDATE software_projects SET revoked_at='now'"); }
+      const response = await container.renderToResponse(softwarePage,{partial:false,request:new Request('https://thesuperhuman.us/studio/software/r',{headers:{cookie:`studio_session=${token}`}}),params:{id:'r'},locals:{runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}} as any});
+      const html = await response.text(); expect(response.status).toBe(404); expect(html).toContain('This project isn’t available');
+      for (const secret of ['Current offer','PRIVATE NOTE','PRIVATE FIT','Status view']) expect(html).not.toContain(secret);
+    }
+  } finally {sql.close();}
+});
+
+it('renders started offers as history without initializing editor actions', async () => {
+  const container = await AstroContainer.create();
+  const html = await container.renderToString(editor,{props:{requestId:'r',email:'alex@example.com',revoked:false,startedVersion:2,offers:[{id:'current',version:2,status:'sent',terms_json:JSON.stringify(terms),sent_at:'2026-09-29T12:00:00Z'}]}});
+  expect(html).toContain('The project started from offer v2.'); expect(html).toContain('Versions'); expect(html).toContain('Offer v2');
+  expect(html).not.toContain('data-software-editor'); expect(html).not.toContain('data-offer-form'); expect(html).not.toContain('data-send-offer');
 });

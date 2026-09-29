@@ -77,9 +77,9 @@ const brief = request.kind === 'software' ? softwareBrief(request) : null;
         canRevoke={!portalProject.revoked_at && request.status !== 'withdrawn'}
         bookingPaid={payment?.bookingStatus === 'paid'} balancePaid={payment?.balanceStatus === 'paid'} />}
       {portalProject && <ProjectMessages messages={projectMessages} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/messages`} reader="owner" closed={portalProject.stage === 'complete' || Boolean(portalProject.revoked_at) || request.status === 'withdrawn'} />}
-      {softwareProject && <ProjectMessages messages={softwareMessages} endpoint={`/api/owner/requests/${request.id}/messages`} reader="owner" closed={Boolean(softwareProject.revoked_at) || softwareProject.state === 'complete' || request.status === 'withdrawn'} />}
+      {softwareProject && <ProjectMessages heading="Messages" hint="Replies appear on the client’s project page." messages={softwareMessages} endpoint={`/api/owner/requests/${request.id}/messages`} reader="owner" closed={Boolean(softwareProject.revoked_at) || softwareProject.state === 'complete' || request.status === 'withdrawn'} />}
       {!portalProject && brief && <section class="rail-section wide software-brief" aria-labelledby="submission-heading"><h2 id="submission-heading">Their brief</h2><p class="rail-muted rail-caption">As submitted by the client. Read only.</p><dl class="rail-list">{Object.entries(brief).filter(([key]) => key !== 'name' && key !== 'email').map(([key]) => <><dt>{softwareLabels[key as keyof typeof softwareLabels]}</dt><dd class="software-answer">{brief[key]}</dd></>)}</dl></section>}
-      {brief && <SoftwareOfferEditor requestId={request.id} email={request.email} offers={offers} resolved={request.status === 'resolved'} withdrawn={request.status === 'withdrawn'} revoked={Boolean(offerLink?.revoked_at)} />}
+      {brief && <SoftwareOfferEditor requestId={request.id} email={request.email} offers={offers} startedVersion={softwareProject ? offers.find(offer => offer.id === softwareProject.offer_id)?.version : undefined} resolved={request.status === 'resolved'} withdrawn={request.status === 'withdrawn'} revoked={Boolean(offerLink?.revoked_at)} />}
       {!portalProject && !brief && detailRows.length > 0 && <section class="rail-section wide" aria-labelledby="submission-heading"><h2 id="submission-heading">Submitted details</h2><p class="rail-muted rail-caption">Submitted with this request, as the client wrote it.</p><dl class="rail-list">{detailRows.map(([key, value]) => { const href = /url|link/i.test(key) ? safeExternalUrl(value) : null; return <><dt>{label(key)}</dt><dd>{href ? <a href={href} rel="noreferrer">Open link ↗</a> : detailValue(value)}</dd></>; })}</dl></section>}
       {!portalProject && request.kind === 'service' && <AudioPaymentPanel requestId={request.id} payment={payment} stripeEnabled={stripeEnabled} defaults={paymentDefaults(request.serviceId, request.details)} />}
     </div>
@@ -114,7 +114,7 @@ const brief = request.kind === 'software' ? softwareBrief(request) : null;
       {allowed.length > 0 && <section class="rail-section" aria-labelledby="request-heading"><h2 id="request-heading">Request</h2>
         <div class="rail-actions" data-request-actions data-open-studio={portalProject && portalProject.stage === 'files_under_review' && !portalProject.revoked_at ? 'true' : undefined}>{allowed.map(action => <button type="button" id={action === 'review' ? 'mark-reviewed' : undefined} data-action={action} class:list={{ danger: action === 'withdraw' }}>{action === 'review' ? 'Mark reviewed' : action === 'resolve' ? 'Mark resolved' : action === 'reopen' ? 'Reopen' : 'Honor withdrawal'}</button>)}</div>
       </section>}
-      {brief && !closed && <SoftwareQuestions requestId={request.id} />}
+      {brief && !closed && !softwareProject && <SoftwareQuestions requestId={request.id} />}
       <p class="studio-status" data-action-status aria-live="polite"></p>
       <details class="rail-section rail-activity"><summary><span>Activity</span><span>{audit.length} {audit.length === 1 ? 'entry' : 'entries'}</span></summary>
         <ol>{audit.map(item => <li><strong>{auditLabel(item)}</strong><span>{item.actor}</span><time datetime={item.occurredAt}>{new Date(item.occurredAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' })}</time>{item.note && item.note !== auditLabel(item) && <p>{item.note}</p>}</li>)}</ol>
@@ -137,15 +137,7 @@ const brief = request.kind === 'software' ? softwareBrief(request) : null;
     .software-brief .rail-list { grid-template-columns: minmax(0, 1fr); }
     .software-brief .rail-list dd { margin-bottom: .75rem; }
     .rail-list dd.software-answer { white-space: pre-wrap; }
-    .rail-state { display: flex; align-items: baseline; gap: .55rem; }
-    .state-dot { flex: none; width: .55rem; height: .55rem; border-radius: 50%; background: var(--studio-line); transform: translateY(-.05rem); }
-    .state-dot.sent { background: var(--studio-done); }
-    .state-dot.failed, .state-dot.sending { background: var(--accent); }
-    .state-dot.closed { background: var(--muted); }
     .request-access [data-project-invitation] { display: grid; gap: .6rem; }
-    .rail-close summary { width: fit-content; cursor: pointer; color: var(--studio-danger); font: 500 .82rem/1.4 Inter, sans-serif; }
-    .rail-close[open] { display: grid; gap: .5rem; }
-    .rail-close p:not(.studio-status) { color: var(--studio-muted); font-size: .82rem; }
     .rail-note { display: grid; gap: .5rem; }
     .rail-note .studio-textarea { min-height: 5rem; font-size: .9rem; }
     .rail-actions { display: flex; flex-wrap: wrap; gap: .5rem; }

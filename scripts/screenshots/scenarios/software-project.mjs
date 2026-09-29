@@ -40,6 +40,9 @@ export default {
     }});
     await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'share',confirmed:true,update,expectedUpdatedAt:visual.updatedAt});
     await shot('Shared concept and Waiting on you',`/studio/software/${id}`,'shared',{cookie});
+    await shot('Agreed project terms',`/studio/software/${id}`,'agreed',{cookie,prepare:async page=>{ await page.getByText('What we agreed',{exact:true}).click(); }});
+    sql(`INSERT INTO software_project_messages(request_id,actor,actor_id,body,created_at) VALUES (${quote(id)},'client',${quote(email)},'Thanks. I will send the sample.',${quote(at)})`);
+    await shot('Today with a software project','/owner','today',{owner:true});
     await shot('Software-only project list','/studio','software-index',{cookie});
     sql(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,status,created_at,updated_at) VALUES ('screenshot-project-song','service','vocal-mix','Alex Example',${quote(email)},'Fictional song (mix)','new',${quote(at)},${quote(at)})`);
     await shot('Software and songs project list','/studio','mixed-index',{cookie});

@@ -1,16 +1,16 @@
 ---
 import SoftwareMilestone from './SoftwareMilestone.astro';
 import { paymentSchedules, type SoftwareOffer, type OfferTerms } from '~/lib/software-offers';
-interface Props { requestId: string; email: string; offers: SoftwareOffer[]; revoked: boolean; resolved?: boolean; withdrawn?: boolean }
-const { requestId, email, offers, revoked, resolved = false, withdrawn = false } = Astro.props;
-const closed = resolved || withdrawn;
+interface Props { requestId: string; email: string; offers: SoftwareOffer[]; revoked: boolean; resolved?: boolean; withdrawn?: boolean; startedVersion?: number }
+const { requestId, email, offers, revoked, resolved = false, withdrawn = false, startedVersion } = Astro.props;
+const closed = resolved || withdrawn || Boolean(startedVersion);
 const draft = offers.find(offer => offer.status === 'draft'), sent = offers.find(offer => offer.status === 'sent');
 const current = draft ?? sent;
 const terms: OfferTerms | null = current ? JSON.parse(current.terms_json) : null;
 const date = (value: string) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' });
 ---
-<section class="rail-section wide software-offer-editor" data-software-editor data-endpoint={`/api/owner/requests/${encodeURIComponent(requestId)}/software`} data-preview={`/owner/requests/${encodeURIComponent(requestId)}/offer`} data-email={email} data-updated={draft?.updated_at ?? ''} data-version={draft?.version ?? ''} data-sent-updated={sent?.updated_at ?? ''} data-sent-version={sent?.version ?? ''} data-sent-date={sent?.sent_at ? date(sent.sent_at) : ''} data-revoked={String(revoked)}>
-  <h2>Offer</h2><p class="rail-muted rail-caption" data-offer-state>{withdrawn ? 'This request is withdrawn.' : resolved ? 'This request is resolved. Reopen it to make a new offer.' : sent ? `v${sent.version} sent ${date(sent.sent_at!)} · ${draft ? `Draft v${draft.version} in progress` : 'no changes since'}` : `Draft v${draft?.version ?? ((offers[0]?.version ?? 0) + 1)} · Not sent`}</p>
+<section class="rail-section wide software-offer-editor" data-software-editor={startedVersion ? undefined : true} data-endpoint={`/api/owner/requests/${encodeURIComponent(requestId)}/software`} data-preview={`/owner/requests/${encodeURIComponent(requestId)}/offer`} data-email={email} data-updated={draft?.updated_at ?? ''} data-version={draft?.version ?? ''} data-sent-updated={sent?.updated_at ?? ''} data-sent-version={sent?.version ?? ''} data-sent-date={sent?.sent_at ? date(sent.sent_at) : ''} data-revoked={String(revoked)}>
+  {startedVersion ? <p>The project started from offer v{startedVersion}.</p> : <><h2>Offer</h2><p class="rail-muted rail-caption" data-offer-state>{withdrawn ? 'This request is withdrawn.' : resolved ? 'This request is resolved. Reopen it to make a new offer.' : sent ? `v${sent.version} sent ${date(sent.sent_at!)} · ${draft ? `Draft v${draft.version} in progress` : 'no changes since'}` : `Draft v${draft?.version ?? ((offers[0]?.version ?? 0) + 1)} · Not sent`}</p>
   {!closed && <form data-offer-form>
     <div class="software-field"><label>Outcome<input class="studio-input" name="outcome" placeholder="A shared view of client onboarding" maxlength="120" required value={terms?.outcome ?? ''} id="offer-outcome" aria-describedby="offer-outcome-hint" /></label><p id="offer-outcome-hint" class="rail-muted rail-caption">One line the client will recognize. Up to 120 characters.</p></div>
     <div class="software-field"><label>Summary<input class="studio-input" name="summary" placeholder="Your team sees each client’s status and next step in one place." maxlength="300" required value={terms?.summary ?? ''} id="offer-summary" aria-describedby="offer-summary-hint" /></label><p id="offer-summary-hint" class="rail-muted rail-caption">One or two sentences on what changes for them. Up to 300 characters.</p></div>
@@ -28,5 +28,6 @@ const date = (value: string) => new Date(value).toLocaleDateString('en-US', { mo
   <div class="software-actions" data-link-actions hidden={!sent}><label data-client-link-field hidden>Client link<input class="studio-input" type="text" readonly data-client-link /></label><button class="studio-quiet" type="button" data-copy-link hidden>Copy client link</button><button class="studio-quiet" type="button" data-revoke-link disabled={revoked}>Revoke link</button></div>
   <p data-link-state class="rail-muted rail-caption">{sent ? revoked ? withdrawn ? 'The client link is revoked.' : resolved ? 'The client link is revoked. Reopen this request to make a new offer.' : 'The client link is revoked. Send offer to issue a new link.' : closed ? 'The client link is in your copy of the offer email.' : 'The client link is in your copy of the offer email. To issue a new one, revoke this link and send again.' : ''}</p>
   <p class="studio-status" data-software-status role="status" aria-live="polite"></p>
+  </>}
   <div data-offer-versions hidden={!offers.some(offer => offer.sent_at)}><h3>Versions</h3><ul data-version-list>{offers.filter(offer => offer.sent_at).map(offer => <li data-version={offer.version}><a href={`/owner/requests/${encodeURIComponent(requestId)}/offer?version=${offer.version}`} target="_blank" rel="noopener">Offer v{offer.version}</a> · {date(offer.sent_at!)} · <span data-version-status>{offer.status}</span></li>)}</ul></div>
 </section>

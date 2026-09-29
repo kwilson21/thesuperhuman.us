@@ -21,17 +21,16 @@ const firstName = request.name.trim().split(/\s+/)[0] || 'the client';
 <OwnerLayout title="New project update" current="requests" newRequestCount={newRequests.length} ownerEmail={Astro.locals.owner.email}>
   <p class="owner-breadcrumb"><a href="/owner/requests">Requests</a> / <a href={`/owner/requests/${id}`}>{terms.outcome}</a> / New update</p>
   <div class="update-columns" data-software-composer data-endpoint={`/api/owner/requests/${id}/updates`} data-id={draft?.id} data-updated-at={draft?.updated_at}>
-    <section><header class="owner-page-heading compact"><div><h1>Show what changed.</h1><p>Prepare a useful update for {firstName}.</p><p class="owner-kicker">Draft · Not shared</p></div></header>
+    <section><header class="owner-page-heading compact"><div><p class="owner-kicker">New update</p><h1>Show what changed.</h1><p>Prepare a useful update for {firstName}.</p><p class="rail-state"><span class="state-dot" aria-hidden="true"></span>Draft · Not shared</p></div></header>
       <form class="software-update-form" data-update-form>
         <label>Kind<select class="studio-select" name="kind"><option value="progress">Progress</option></select></label>
         <label>Milestone<select class="studio-select" name="milestone_index">{terms.milestones.map((item,index) => <option value={index} selected={index === (draft?.milestone_index ?? project.milestone_index)}>Milestone {index+1} · {item.name}</option>)}</select></label>
         <label>Title<input class="studio-input" name="title" maxlength="120" required placeholder="What the client will notice" value={update.title} /></label>
         <label>Version<input class="studio-input" name="artifact_version" maxlength="60" placeholder="Prototype v1" value={update.artifact_version} /></label>
-        <label>Evidence type<select class="studio-select" name="evidence_type">{Object.entries(evidenceTypes).map(([value,label]) => <option value={value} selected={update.evidence_type === value}>{label}</option>)}</select><small>Concept means not implemented. Call something working only if the client can use it.</small></label>
-        <label>Visual<input type="file" name="visual" accept="image/png,image/jpeg,image/webp" /><small>Optional PNG, JPEG or WebP, 5 MB or less. Choose a file to replace the visual.</small></label>
-        {update.has_visual && <button type="button" class="studio-quiet" data-replace-visual>Replace visual</button>}
+        <div class="software-field"><label>Evidence type<select aria-describedby="update-field-1-hint" class="studio-select" name="evidence_type">{Object.entries(evidenceTypes).map(([value,label]) => <option value={value} selected={update.evidence_type === value}>{label}</option>)}</select></label><p id="update-field-1-hint" class="rail-muted rail-caption">Concept means not implemented. Call something working only if the client can use it.</p></div>
+        <div class="software-field"><label class="drop"><input type="file" name="visual" accept="image/png,image/jpeg,image/webp" aria-describedby="update-visual-hint" /><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4.5h14V14" fill="none" stroke="currentColor" stroke-width="1.5" /></svg><span class="drop-copy"><strong data-visual-name>{update.has_visual ? 'Replace visual' : 'Drop a PNG, JPEG or WebP'}</strong><span>or choose a file · up to 5 MB</span></span></label><p id="update-visual-hint" class="rail-muted rail-caption">Optional PNG, JPEG or WebP, 5 MB or less. Choose a file to replace the visual.</p></div>
         <label>Image description<input class="studio-input" name="visual_alt" maxlength="300" required={Boolean(update.has_visual)} value={update.visual_alt} /></label>
-        <label>Preview link<input class="studio-input" name="preview_url" type="url" value={update.preview_url} /><small>Link only to something the client is allowed to open.</small></label>
+        <div class="software-field"><label>Preview link<input aria-describedby="update-field-3-hint" class="studio-input" name="preview_url" type="url" value={update.preview_url} /></label><p id="update-field-3-hint" class="rail-muted rail-caption">Link only to something the client is allowed to open.</p></div>
         <label>What changed<textarea class="studio-textarea" name="what_changed" required maxlength="1000">{update.what_changed}</textarea></label>
         <label>Checks and limitations<textarea class="studio-textarea" name="checks_limitations" maxlength="1000">{update.checks_limitations}</textarea></label>
         <label>Next step<textarea class="studio-textarea" name="next_step" maxlength="300">{update.next_step}</textarea></label>
@@ -39,12 +38,11 @@ const firstName = request.name.trim().split(/\s+/)[0] || 'the client';
         <label>Next update<input class="studio-input" name="next_update_on" type="date" value={update.next_update_on} /></label>
         <label class="email-choice"><input type="checkbox" name="email_client" checked={draft ? Boolean(draft.email_client) : Boolean(update.client_request)} />Also email {firstName} about this update</label>
         <div class="software-actions"><button class="studio-quiet" type="button" data-save-draft>Save draft</button><button class="studio-button" type="submit">Share update</button></div>
-        <p class="rail-caption">Sharing adds this update to the client's project page.</p>
+        <p class="rail-caption">Sharing adds this update to the client’s project page.</p>
         <p class="studio-status" data-composer-status role="status" aria-live="polite"></p>
       </form>
     </section>
     <aside class="client-preview"><p class="owner-kicker">Client preview · Not yet shared</p><SoftwareProjectUpdate update={update} preview visualUrl={update.has_visual ? `/api/owner/requests/${id}/updates/${update.id}/visual` : undefined} />
-      <section data-preview-section="client_request" hidden={!update.client_request}><h3>Waiting on you</h3><p data-preview-text="client_request">{update.client_request}</p></section>
       <section data-preview-section="next_step" hidden={!update.next_step}><h3>Next from me</h3><p data-preview-text="next_step">{update.next_step}</p></section>
       <p data-preview-date hidden={!update.next_update_on}>Next update: <span>{update.next_update_on}</span></p>
       <p class="private-note">Private notes and fit review stay in the request.</p>
@@ -54,10 +52,9 @@ const firstName = request.name.trim().split(/\s+/)[0] || 'the client';
 </OwnerLayout>
 <style>
   .update-columns { display: grid; grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); gap: 3rem; align-items: start; }
-  .owner-page-heading h1 { max-width: none; font-size: clamp(2.6rem,5vw,4rem); }
+  .owner-page-heading.compact h1 + p { font-size: 1.15rem; color: var(--muted); max-width: 38ch; margin-top: .8rem; }
+  .owner-page-heading.compact .rail-state { font: .9rem/1.5 Inter,sans-serif; }
   .software-update-form { display: grid; gap: 1rem; }
-  label { display: grid; gap: .4rem; font: .85rem/1.5 Inter,sans-serif; }
-  small, .rail-caption { font: .78rem/1.5 Inter,sans-serif; color: var(--muted); }
   .email-choice { display: flex; align-items: center; gap: .6rem; }
   input[type=checkbox] { accent-color: var(--accent); }
   .client-preview { padding: 1.5rem; border: 1px solid var(--rule); min-width: 0; }

@@ -9,6 +9,7 @@ const current = projectSteps.indexOf(step as typeof projectSteps[number]);
   li { position: relative; display: grid; justify-items: center; gap: .6rem; color: var(--muted); font: .75rem/1.4 Inter,sans-serif; }
   li:not(:last-child)::after { content: ''; position: absolute; height: 1px; background: var(--rule); top: .45rem; left: calc(50% + .6rem); width: calc(100% - .8rem); }
   span { width: .9rem; height: .9rem; border: 1px solid var(--muted); border-radius: 50%; background: var(--paper); }
-  .done span, [aria-current] span { background: var(--accent); border-color: var(--accent); }
+  .done span { background: var(--studio-done); border-color: var(--studio-done); }
+  [aria-current] span { border: 2px solid var(--accent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 14%, transparent); }
   [aria-current] { color: var(--accent); }
 </style>

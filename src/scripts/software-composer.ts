@@ -11,7 +11,7 @@ export function setupSoftwareComposer() {
   function render() {
     const evidence = value('evidence_type') as keyof typeof evidenceTypes;
     text('[data-preview-kicker]', [evidenceTypes[evidence], value('artifact_version'), evidence === 'concept' ? 'Not implemented' : ''].filter(Boolean).join(' · '));
-    text('[data-preview-title]', value('title')); text('[data-preview-caption]', evidence === 'concept' ? 'Illustrative concept' : value('artifact_version'));
+    text('[data-preview-title]', value('title') || 'Untitled update'); preview.querySelector('[data-preview-title]')?.classList.toggle('rail-muted', !value('title')); text('[data-preview-caption]', evidence === 'concept' ? 'Illustrative concept' : value('artifact_version'));
     const image = preview.querySelector<HTMLImageElement>('[data-preview-image]')!; image.alt = alt.value;
     for (const key of ['what_changed','checks_limitations','client_request','next_step']) {
       text(`[data-preview-text=${key}]`, value(key)); preview.querySelector<HTMLElement>(`[data-preview-section=${key}]`)!.hidden = !value(key);
@@ -24,10 +24,10 @@ export function setupSoftwareComposer() {
     alt.required = hasVisual || Boolean(file.files?.length);
   }
   form.addEventListener('input', render); email.addEventListener('change', () => { emailChosen = true; });
-  root.querySelector('[data-replace-visual]')?.addEventListener('click', () => file.click());
   file.addEventListener('change', () => {
     const image = file.files?.[0]; if (!image) return;
     if (image.size > 5 * 1024 * 1024 || !['image/png','image/jpeg','image/webp'].includes(image.type)) { status.textContent = 'Choose a PNG, JPEG or WebP of 5 MB or less.'; file.value = ''; return; }
+    const name = form.querySelector('[data-visual-name]'); if (name) name.textContent = image.name;
     if (objectUrl) URL.revokeObjectURL(objectUrl); objectUrl = URL.createObjectURL(image);
     preview.querySelector<HTMLImageElement>('[data-preview-image]')!.src = objectUrl;
     preview.querySelector<HTMLElement>('[data-preview-figure]')!.hidden = false; render();

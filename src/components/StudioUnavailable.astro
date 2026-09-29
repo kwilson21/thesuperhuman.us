@@ -1,10 +1,10 @@
 ---
 import BaseLayout from '~/layouts/BaseLayout.astro';
-const { backLabel = 'Back to your songs', backHref = '/studio' } = Astro.props;
+const { backLabel = 'Back to your songs', backHref = '/studio', audio = true } = Astro.props;
 ---
 <BaseLayout title="Project unavailable · Studio" description="This studio project isn’t available." noindex>
   <article class="site-shell studio-unavailable">
-    <svg viewBox="0 0 24 32" aria-hidden="true"><path d="M9 26a4 4 0 1 1-2-3.46V4l11 3v5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" /></svg>
+    {audio && <svg viewBox="0 0 24 32" aria-hidden="true"><path d="M9 26a4 4 0 1 1-2-3.46V4l11 3v5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" /></svg>}
     <h1>This project isn’t available</h1>
     <p>The link may be old, or access to this project has closed.</p>
     <a href={backHref}>{backLabel}</a>
