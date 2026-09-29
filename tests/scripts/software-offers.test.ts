@@ -25,7 +25,7 @@ function fixture() {
   vi.stubGlobal('location',{ reload:vi.fn() }); vi.stubGlobal('confirm',vi.fn(() => true));
   vi.stubGlobal('window', { addEventListener: vi.fn() });
   setupSoftwareOffers();
-  return { root,form,send,preview,status,inputs,targets };
+  return { root,form,send,preview,status,inputs,targets,submit };
 }
 afterEach(() => vi.unstubAllGlobals());
 it('keeps newer edits unsaved when a draft save finishes', async () => {
@@ -143,4 +143,31 @@ it('prompts before unloading only while offer edits are dirty', async () => {
   const event = { preventDefault:vi.fn(), returnValue:undefined };
   handler(event); expect(event.preventDefault).not.toHaveBeenCalled();
   await form.emit('input'); handler(event); expect(event.preventDefault).toHaveBeenCalledOnce();
+});
+
+it.each([401,403,500])('preserves editor contents and restores controls for non-JSON status %s', async code => {
+  for (const action of ['draft','send','revoke']) {
+    const { root,form,send,inputs,status,targets,submit } = fixture();
+    vi.stubGlobal('fetch',vi.fn(async () => new Response('Owner access required.', { status:code })));
+    inputs.outcome.value = 'Keep this title';
+    if (action === 'draft') await form.emit('submit');
+    if (action === 'send') await send.emit('click');
+    if (action === 'revoke') await targets['[data-revoke-link]'].emit('click');
+    expect(status.textContent).toBe(code === 500 ? 'Something went wrong. Nothing was saved. Try again.' : 'Your owner session ended. Reload the page to sign in again.');
+    expect(inputs.outcome.value).toBe('Keep this title');
+    expect(submit.disabled).toBe(false); expect(send.disabled).toBe(false); expect(targets['[data-revoke-link]'].disabled).toBe(false);
+    expect(root.dataset.busy).not.toBe('true'); expect(location.reload).not.toHaveBeenCalled();
+  }
+});
+it.each(['fit','question','decline'])('keeps %s form contents and restores its button on a non-JSON session failure', async action => {
+  const { root } = fixture();
+  let submit!: (event:any) => Promise<void>;
+  const status = { textContent:'' }, button = { disabled:false }, input = { value:'Keep my message' };
+  const form = { dataset:{ softwareAction:action, endpoint:'/api/software' },addEventListener:(_name:string, handler:any) => { submit = handler; },querySelector:(selector:string) => selector === 'button' ? button : status };
+  vi.stubGlobal('FormData',class { *[Symbol.iterator]() { yield ['text',input.value]; } });
+  vi.stubGlobal('document',{ querySelector:() => root, querySelectorAll:(selector:string) => selector === '[data-software-action]' ? [form] : [] });
+  vi.stubGlobal('fetch',vi.fn(async () => new Response('Owner access required.', { status:403 })));
+  setupSoftwareOffers(); await submit({ preventDefault:vi.fn() });
+  expect(status.textContent).toBe('Your owner session ended. Reload the page to sign in again.');
+  expect(input.value).toBe('Keep my message'); expect(button.disabled).toBe(false); expect(location.reload).not.toHaveBeenCalled();
 });

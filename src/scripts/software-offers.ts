@@ -10,7 +10,10 @@ export function setupSoftwareOffers() {
   };
   const post = async (endpoint: string, body: unknown) => {
     const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-    const result = await response.json() as { message?: string; errors?: Record<string,string>; version: number; updatedAt: string; sentAt?: string; link: string; emailSent: boolean; uncertain?: boolean; copySent?: boolean };
+    let parsed: unknown;
+    try { parsed = await response.json(); }
+    catch { throw new Error(response.status === 401 || response.status === 403 ? 'Your owner session ended. Reload the page to sign in again.' : 'Something went wrong. Nothing was saved. Try again.'); }
+    const result = parsed as { message?: string; errors?: Record<string,string>; version: number; updatedAt: string; sentAt?: string; link: string; emailSent: boolean; uncertain?: boolean; copySent?: boolean };
     if (!response.ok) {
       if (response.status === 409 && (body as { action?: string }).action === 'draft' && 'updatedAt' in result) {
         const editor = document.querySelector<HTMLElement>('[data-software-editor]');
