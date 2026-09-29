@@ -4,9 +4,10 @@ import type { SoftwareProject, SoftwareUpdate } from '~/lib/software-projects';
 import type { SoftwareOffer } from '~/lib/software-offers';
 type Props = { requestId: string; project: SoftwareProject | null; sentOffer?: SoftwareOffer; updates: SoftwareUpdate[]; closed: boolean };
 const { requestId, project, sentOffer, updates, closed } = Astro.props;
-const terms = project ? projectTerms(project) : sentOffer ? projectTerms(sentOffer) : null;
+const terms = project?.content_deleted_at ? null : project ? projectTerms(project) : sentOffer ? projectTerms(sentOffer) : null;
 const draft = updates.find(update => update.status === 'draft');
 ---
+{project?.content_deleted_at && <section class="rail-section"><h2>Project</h2><p class="rail-muted">Project content was removed by reviewed retention cleanup.</p></section>}
 {terms && <section class="rail-section software-rail" data-software-project data-endpoint={`/api/owner/requests/${requestId}/project`}>
   <h2>{project ? 'Project' : 'Start the project'}</h2>
   {!project ? <form data-software-start>

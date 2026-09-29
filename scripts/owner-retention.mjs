@@ -140,7 +140,7 @@ export async function applyOwnerRetention(database, review, environment, now = n
     : `DELETE FROM software_offers WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`);
   if (projectsTable.length) softwareCleanup.push(
     `UPDATE software_projects SET terms_json='{}',waiting_for='',started_by='' WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection}) AND content_deleted_at IS NOT NULL`,
-    `UPDATE software_offers SET terms_json='{}',sent_by=NULL WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`);
+    `UPDATE software_offers SET terms_json='{}',sent_by=NULL,sent_at=NULL,status='withdrawn' WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`);
   const guard = (query, expected) => `SELECT CASE WHEN (${query})=${quote(expected)} THEN 1 ELSE json_extract('retention source changed','$') END`;
   const runId = hash(`${review.generatedAt}:${review.requestSourceHash}:${review.playbackSourceHash}`);
   const statements = [

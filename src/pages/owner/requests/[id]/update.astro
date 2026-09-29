@@ -2,7 +2,7 @@
 export const prerender = false;
 import OwnerLayout from '~/layouts/OwnerLayout.astro';
 import SoftwareProjectUpdate from '~/components/SoftwareProjectUpdate.astro';
-import { getOwnerRequest } from '~/lib/owner-requests';
+import { getOwnerRequest, listOwnerRequests } from '~/lib/owner-requests';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
 import { getSoftwareProject, listSoftwareUpdates, projectTerms, evidenceTypes } from '~/lib/software-projects';
 import type { ClientSoftwareUpdate } from '~/lib/software-projects';
@@ -15,9 +15,10 @@ const id = Astro.params.id!, request = await getOwnerRequest(db, id), project = 
 if (!request || request.kind !== 'software' || !project || project.revoked_at || request.status === 'withdrawn') return new Response('Project not found.', { status: 404 });
 const terms = projectTerms(project), draft = (await listSoftwareUpdates(db, id)).find(update => update.status === 'draft');
 const update: ClientSoftwareUpdate = { id: draft?.id ?? '', title: draft?.title ?? '', artifact_version: draft?.artifact_version ?? '', evidence_type: draft?.evidence_type ?? 'concept', visual_alt: draft?.visual_alt ?? '', preview_url: draft?.preview_url ?? '', what_changed: draft?.what_changed ?? '', checks_limitations: draft?.checks_limitations ?? '', next_step: draft?.next_step ?? '', client_request: draft?.client_request ?? '', next_update_on: draft?.next_update_on ?? '', shared_at: null, has_visual: draft?.visual_key ? 1 : 0 };
+const newRequests = await listOwnerRequests(db, { status: 'new' });
 const firstName = request.name.trim().split(/\s+/)[0] || 'the client';
 ---
-<OwnerLayout title="New project update" current="requests" newRequestCount={0} ownerEmail={Astro.locals.owner.email}>
+<OwnerLayout title="New project update" current="requests" newRequestCount={newRequests.length} ownerEmail={Astro.locals.owner.email}>
   <p class="owner-breadcrumb"><a href="/owner/requests">Requests</a> / <a href={`/owner/requests/${id}`}>{terms.outcome}</a> / New update</p>
   <div class="update-columns" data-software-composer data-endpoint={`/api/owner/requests/${id}/updates`} data-id={draft?.id} data-updated-at={draft?.updated_at}>
     <section><header class="owner-page-heading compact"><div><h1>Show what changed.</h1><p>Prepare a useful update for {firstName}.</p><p class="owner-kicker">Draft · Not shared</p></div></header>

@@ -1,3 +1,4 @@
+import { softwareAccessRevocation, softwareGuard } from './software-projects';
 import {
   ownerRequestFromRow,
   ownerRequestKinds,
@@ -122,6 +123,10 @@ export async function changeOwnerRequest(db: D1Database, command: RequestCommand
       SELECT ?,? ,?,'',? WHERE EXISTS
         (SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND status=?)`)
       .bind(command.id, transition.audit, actor, now, command.id, now, transition.to),
+    ...(current.kind === 'software' && command.action === 'withdraw' ? [
+      softwareGuard(db, "SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND status='withdrawn'", [command.id, now]),
+      ...softwareAccessRevocation(db, command.id, actor, now),
+    ] : []),
   ]);
   const row = update.results[0] as OwnerRequestRow | undefined;
   if (!row) throw new Error('Request changed while it was being updated.');

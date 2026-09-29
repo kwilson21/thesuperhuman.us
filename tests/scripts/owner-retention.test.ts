@@ -236,5 +236,6 @@ it('holds software request contact data until project content is deleted, then c
   review=await previewOwnerRetention(database,'Local test data',now); await applyOwnerRetention(database,review,'Local test data',now);
   expect(database.db.prepare("SELECT email FROM owner_requests WHERE id='software-project'").get()).toEqual({email:''});
   expect(database.db.prepare('SELECT terms_json,offer_id FROM software_projects').get()).toEqual({terms_json:'{}',offer_id:'snapshot-offer'});
+  expect(database.db.prepare('SELECT status,sent_at FROM software_offers').get()).toEqual({status:'withdrawn',sent_at:null});
   expect(database.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
 });

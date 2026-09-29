@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { readFileSync, readdirSync } from 'node:fs';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { changeOwnerRequest } from '~/lib/owner-requests';
 import { POST as projectPost } from '~/pages/api/owner/requests/[id]/project';
 import { POST as updatePost } from '~/pages/api/owner/requests/[id]/updates';
 import { GET as ownerVisual, PUT as uploadVisual } from '~/pages/api/owner/requests/[id]/updates/[updateId]/visual';
@@ -51,6 +52,7 @@ it('starts only with an owner, sent offer and both explicit confirmations, prese
   expect(sql.prepare('SELECT terms_json,offer_id,payment_mode,invitation_status FROM software_projects').get()).toEqual({ terms_json:termsJson,offer_id:'software-offer',payment_mode:'standard',invitation_status:'sent' });
   expect(sql.prepare('SELECT action,actor FROM software_project_audit').all()).toEqual([{action:'started',actor:'owner@example.com'}]);
   expect((await start()).status).toBe(409); expect(fetch).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toMatchObject({subject:'Your private project page',to:['alex@example.com'],text:expect.stringContaining('/studio/sign-in?for=software'),html:expect.stringContaining('/studio/sign-in?for=software')});
   sql.exec("UPDATE software_offers SET terms_json='{}'"); expect(sql.prepare('SELECT terms_json FROM software_projects').get()).toEqual({terms_json:termsJson});
 });
 it('supports invoice start, failed invitations and checked uncertain retries', async () => {
@@ -90,6 +92,7 @@ it('saves one draft, rejects stale forms, shares only with required content and 
   expect(fetch).not.toHaveBeenCalled(); expect(sql.prepare('SELECT next_update_on FROM software_projects').get()).toEqual({next_update_on:'2026-10-02'});
   const next = await draft(); vi.mocked(fetch).mockResolvedValue(new Response('{}',{status:400}));
   await call(updatePost,{action:'share',confirmed:true,update:{...update,email_client:true},expectedUpdatedAt:next.updatedAt});
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toMatchObject({subject:'Your project has an update',text:expect.stringContaining('/studio/sign-in?for=software'),html:expect.stringContaining('/studio/sign-in?for=software')});
   expect(sql.prepare('SELECT notification_status FROM software_project_updates WHERE id=?').get(next.id)).toEqual({notification_status:'failed'});
   expect(await sharedSoftwareUpdates(db,'software')).toHaveLength(2);
 });
@@ -128,6 +131,7 @@ it('state validation, messages and Today reminders use the project snapshot and 
   const command={action:'state',state:'waiting_for_input',waiting_for:'',milestone_index:0,step:'build',next_update_on:'2026-10-01',expectedUpdatedAt:project.updated_at};
   expect((await call(projectPost,command)).status).toBe(400); expect((await call(projectPost,{...command,waiting_for:'Sample',milestone_index:1})).status).toBe(400);
   expect((await call(projectPost,{...command,waiting_for:'Sample'})).status).toBe(200);
+  expect((await call(projectPost,{...command,waiting_for:'Stale edit'})).status).toBe(409);
   const token=await session(); await postClientSoftwareProjectMessage(db,'software',token,'A question.');
   const attention=await listStudioProjectAttention(db,new Date('2026-09-29T12:00:00Z'));
   expect(attention).toContainEqual(expect.objectContaining({requestId:'software',unreadMessages:1,promisedUpdate:'2026-10-01'}));
@@ -154,4 +158,13 @@ it('migration preserves every earlier row and enforces checks, draft uniqueness,
   const message=database.prepare("INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES ('s',?,'client',?,'d',?,'now')");message.run('client','Yes','direction_confirmed');expect(()=>message.run('client','Again','changes_requested')).toThrow();expect(()=>message.run('unknown','x',null)).toThrow();expect(()=>message.run('client','',null)).toThrow();expect(()=>message.run('client','x','unknown')).toThrow();
   expect(()=>database.exec("INSERT INTO software_project_audit(request_id,action,actor,occurred_at) VALUES ('s','unknown','owner','now')")).toThrow();
   expect(()=>database.exec("UPDATE software_projects SET offer_id='missing'")).toThrow(); expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);database.close();
+});
+
+it('withdrawal records access closure and its retention clock in the same transaction', async () => {
+  await start(); const token=await session();
+  await changeOwnerRequest(db,{id:'software',action:'withdraw',actor:'owner@example.com'});
+  expect(sql.prepare('SELECT revoked_at FROM software_projects').get().revoked_at).toBeTruthy();
+  expect(sql.prepare("SELECT action,actor FROM software_project_audit WHERE action='access-revoked'").all()).toEqual([{action:'access-revoked',actor:'owner@example.com'}]);
+  expect(await clientSoftwareProjectForSession(db,token,'software')).toBeNull();
+  expect(sql.prepare('SELECT revoked_at FROM audio_client_sessions').get().revoked_at).toBeTruthy();
 });

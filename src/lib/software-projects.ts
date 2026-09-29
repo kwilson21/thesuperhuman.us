@@ -88,3 +88,15 @@ export async function queueSoftwareNotice(db: D1Database, id: string, confirmedN
     AND EXISTS(SELECT 1 FROM software_projects p JOIN owner_requests r ON r.id=p.request_id WHERE p.request_id=? AND p.revoked_at IS NULL AND r.status<>'withdrawn')
     RETURNING request_id`).bind(...(updateId ? [updateId, id] : [id]), confirmedNotSent ? 1 : 0, new Date(Date.now() - 60_000).toISOString(), id).first());
 }
+
+/** Used by explicit access closure and request withdrawal, in the caller's transaction. */
+export function softwareAccessRevocation(db: D1Database, id: string, actor: string, at: string) {
+  const closedEmail = `SELECT r.email FROM owner_requests r JOIN software_projects p ON p.request_id=r.id WHERE p.request_id=? AND p.revoked_at=?`;
+  return [
+    db.prepare(`INSERT INTO software_project_audit(request_id,action,actor,occurred_at)
+      SELECT request_id,'access-revoked',?,? FROM software_projects WHERE request_id=? AND revoked_at IS NULL`).bind(actor, at, id),
+    db.prepare('UPDATE software_projects SET revoked_at=?,updated_at=? WHERE request_id=? AND revoked_at IS NULL').bind(at, at, id),
+    db.prepare(`UPDATE audio_client_sessions SET revoked_at=? WHERE email=(${closedEmail}) AND revoked_at IS NULL`).bind(at, id, at),
+    db.prepare(`DELETE FROM audio_client_codes WHERE email=(${closedEmail})`).bind(id, at),
+  ];
+}
