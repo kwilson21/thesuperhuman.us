@@ -1,7 +1,6 @@
 ---
 import BaseLayout from './BaseLayout.astro';
 import WorkWithMe from '~/components/WorkWithMe.astro';
-import { Image } from 'astro:assets';
 import tallyImage from '~/assets/site/work-with-me-software.webp';
 import PersonalName from '~/components/PersonalName.astro';
 import { mainSitePath } from '~/lib/host-routing';
@@ -25,25 +24,24 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
       <div class="sheet-paths">
         <div class="sheet-path">
           <h3>{sheet.workflow.title}</h3><p class="path-lead">{sheet.workflow.lead}</p><p class="path-detail">{sheet.workflow.detail}</p>
-          <div class="path-visual workflow-visual"><svg class="workflow-art" viewBox="0 0 420 80" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M47 12h27l10 10v43H47zM74 12v10h10M56 34h19M56 42h19M56 50h13"/><path d="M112 39h39m-8-7 8 7-8 7M269 39h39m-8-7 8 7-8 7" stroke="var(--accent)"/><rect x="180" y="15" width="60" height="48" rx="3"/><path d="M180 26h60M190 36h20M190 45h39M190 54h31"/><circle cx="336" cy="26" r="8"/><circle cx="360" cy="26" r="8"/><circle cx="384" cy="26" r="8"/><path d="M324 59c0-18 24-18 24 0M348 59c0-18 24-18 24 0M372 59c0-18 24-18 24 0"/></svg><div class="workflow-labels"><span>Manual steps</span><span>Shared tool</span><span>Team runs the work</span></div><small>Illustrated workflow</small></div>
+          <div class="path-visual workflow-visual"><svg class="workflow-art" viewBox="0 0 420 80" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M47 12h27l10 10v43H47zM74 12v10h10M56 34h19M56 42h19M56 50h13"/><path d="M112 39h39m-8-7 8 7-8 7M269 39h39m-8-7 8 7-8 7" stroke="var(--accent)"/><rect x="180" y="15" width="60" height="48" rx="3"/><path d="M180 26h60M190 36h20M190 45h39M190 54h31"/><circle cx="336" cy="26" r="8"/><circle cx="360" cy="26" r="8"/><circle cx="384" cy="26" r="8"/><path d="M324 59c0-18 24-18 24 0M348 59c0-18 24-18 24 0M372 59c0-18 24-18 24 0"/></svg><div class="workflow-labels">{sheet.labels.map(label => <span>{label}</span>)}</div><small>{sheet.caption}</small></div>
           <a class="site-button path-button" href={href(sheet.workflow.path)}>{sheet.workflow.button}</a>
-          <div class="path-evidence"><p class="page-kicker">Relevant work</p>
-            <article><h4>Lyft · Associate Tools</h4><p>Refactored a bonus tool and added visibility so support could run and monitor the work.</p><a class="site-link" href={href('/work#lyft')}>Read the work story <span aria-hidden="true">→</span></a></article>
-            <article><h4>Skupos · Internal tools</h4><p>Built and owned a Flask application that automated retail transaction-data troubleshooting.</p><a class="site-link" href={href('/work#skupos')}>Read the work story <span aria-hidden="true">→</span></a></article>
-            <a class="site-link" href={href('/work')}>Explore my work history <span aria-hidden="true">→</span></a>
+          <div class="path-evidence"><p class="page-kicker">{sheet.evidenceLabel}</p>
+            {sheet.evidence.map(item => <article><h4>{item.title}</h4><p>{item.description}</p><a class="site-link" href={href(item.path)}>{sheet.storyLabel} <span class="sr-only">{item.context}</span> <span aria-hidden="true">→</span></a></article>)}
+            <a class="site-link history-link" href={href(sheet.historyPath)}>{sheet.historyLabel} <span aria-hidden="true">→</span></a>
           </div>
         </div>
         <div class="sheet-path">
           <h3>{sheet.idea.title}</h3><p class="path-lead">{sheet.idea.lead}</p><p class="path-detail">{sheet.idea.detail}</p>
-          <div class="path-visual tally-visual"><Image src={tallyImage} alt="Tally, a budgeting app, running on demo data" widths={[360, 720, 900]} sizes="(max-width: 700px) 100vw, 50vw" loading="lazy" /></div>
+          <div class="path-visual tally-visual"><img src={tallyImage.src} width={tallyImage.width} height={tallyImage.height} alt={sheet.imageAlt} loading="lazy" decoding="async" /></div>
           <a class="site-button path-button" href={href(sheet.idea.path)}>{sheet.idea.button}</a>
-          <div class="path-evidence"><p class="page-kicker">Try something I’m building</p><h4>{sheet.idea.project.title}</h4><p>{sheet.idea.project.subtitle}</p><p class="path-meta">{sheet.idea.project.serviceMeta}</p>
-            <a class="site-link" href="https://tally-demo.thesuperhuman.us" rel="noopener">Try the demo <span aria-hidden="true">→</span></a><br /><a class="site-link" href={href('/building/tally')}>Explore the project <span aria-hidden="true">→</span></a>
+          <div class="path-evidence"><p class="page-kicker">{sheet.ideaEvidenceLabel}</p><h4>{sheet.idea.project.title}</h4><p>{sheet.idea.project.subtitle}</p><p class="path-meta">{sheet.meta}</p>
+            <div class="site-links"><a class="site-link" href={sheet.demoUrl} target="_blank" rel="noopener">{sheet.demoLabel} <span aria-hidden="true">↗</span></a><a class="site-link" href={href(sheet.projectPath)}>{sheet.projectLabel} <span aria-hidden="true">→</span></a></div>
           </div>
         </div>
       </div>
     </section>
-    <section class="sheet-steps"><h2>A clear first step.</h2><ol>{sheet.steps.map(step => <li><h3>{step.title}</h3><p>{step.description}</p></li>)}</ol></section>
+    <section class="sheet-steps"><div class="site-section-heading"><h2 id="steps-title">{sheet.stepsHeading}</h2></div><ol aria-labelledby="steps-title" role="list">{sheet.steps.map(step => <li><h3>{step.title}</h3><p>{step.description}</p></li>)}</ol></section>
     <p class="hub-elsewhere">Hiring for a role? <a href={href('/about#resumes')}>Request my resume</a>. Something else? <a href={href('/#contact')}>Get in touch</a>.</p>
     <div class="sheet-address"><span>kazon.wilson@thesuperhuman.us</span><a href={href(sheet.path)}>thesuperhuman.us{sheet.path}</a></div>
     <footer class="sheet-footnote"><span><PersonalName variant="full" /> · The Superhuman Group LLC · <a href={href('/privacy')}>Privacy</a></span><button type="button" class="site-button site-button-outline" data-print-sheet><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H3V9h18v9h-3"/><path d="M6 14h12v7H6zM17 12h1"/></svg>Print / Save PDF</button></footer>
@@ -61,27 +59,27 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
   .sheet-software > .sheet-introduction { max-width: 44ch; margin-top: 1rem; }
   .sheet-approach { margin-top: .75rem; font-size: 1rem; }
   .sheet-paths { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 3rem; }
-  .sheet-path { min-width: 0; display: flex; flex-direction: column; padding-right: 2rem; }
+  .sheet-path { min-width: 0; display: grid; grid-template-rows: subgrid; grid-row: span 6; padding-right: 2rem; }
   .sheet-path + .sheet-path { border-left: 1px solid var(--rule); padding-left: 2rem; padding-right: 0; }
   .sheet-path h3 { font-size: clamp(1.6rem, 3vw, 2rem); line-height: 1.15; }
   .path-lead { color: var(--ink); margin-top: .75rem; }
   .path-detail { font-size: 1rem; margin-top: .3rem; }
-  .path-visual { height: 190px; margin-block: 1.5rem; }
+  .path-visual { align-self: center; margin-block: 1.5rem; }
   .workflow-visual { display: flex; flex-direction: column; justify-content: center; text-align: center; }
-  .workflow-labels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+  .workflow-labels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; font-size: 1rem; line-height: 1.2; }
   .workflow-art { display: block; width: 100%; height: auto; max-height: 80px; }
-  .workflow-labels { font-size: 1rem; line-height: 1.2; }
-  .workflow-visual small { color: var(--muted); margin-top: 1rem; }
-  .tally-visual { display: flex; align-items: center; }
-  .tally-visual :global(img) { display: block; width: 100%; height: auto; max-height: 190px; object-fit: contain; object-position: left center; }
+  .workflow-visual small { color: var(--muted); margin-top: 1rem; font-family: theme('fontFamily.sans'); font-size: .78rem; }
+  .tally-visual { border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: #f3eee5; }
+  .tally-visual :global(img) { display: block; width: 100%; height: auto; }
   .site-button { gap: .75rem; text-align: center; }
-  .path-button { align-self: flex-start; }
+  .path-button { align-self: start; justify-self: start; }
   .path-evidence { border-top: 1px solid var(--rule); margin-top: 2rem; padding-top: 1.5rem; }
-  .path-evidence .page-kicker { font-size: .8rem; margin-bottom: 1rem; }
+  .path-evidence p.page-kicker { color: var(--accent); font-size: .6875rem; margin: 0 0 1rem; }
   .path-evidence article { border-bottom: 1px solid var(--rule); padding-block: 0 1rem; margin-bottom: 1rem; }
-  .path-evidence h4 { font-size: 1.35rem; line-height: 1.2; }
+  .path-evidence h4 { font-size: 1.2rem; line-height: 1.2; }
   .path-evidence p { font-size: 1rem; margin-top: .35rem; }
   .path-evidence .site-link { display: inline-block; margin-top: .7rem; }
+  .path-evidence .history-link { font-size: .95rem; }
   .path-meta { color: var(--muted); }
   .sheet-steps { border-top: 1px solid var(--rule); margin-top: 2.5rem; padding-top: 1.5rem; }
   .sheet-steps ol { list-style: none; counter-reset: step; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 1.5rem; padding: 0; }
@@ -93,13 +91,13 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
   .hub-elsewhere { font-size: 1.05rem; margin-top: 1.5rem; }
   .sheet-address { display: grid; justify-items: start; gap: .3rem; margin-top: 1.5rem; font-size: 1rem; overflow-wrap: anywhere; }
   .sheet-footnote { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; border-top: 1px solid var(--rule); margin-top: 2rem; padding-top: 1rem; font: .8rem/1.5 Inter,sans-serif; color: var(--muted); }.sheet-footnote button { min-height: 48px; font: 1rem/1.4 Inter,sans-serif; cursor: pointer; }.sheet-footnote button svg { flex-shrink: 0; }
-  @media screen and (max-width:700px) { .sheet-paths, .sheet-steps ol { grid-template-columns: 1fr; }.sheet-path, .sheet-path + .sheet-path { padding: 0; border-left: 0; }.sheet-path + .sheet-path { border-top: 1px solid var(--rule); padding-top: 2rem; margin-top: 2rem; }.sheet-steps li, .sheet-steps li:first-child { border: 0; padding: .75rem 0; } }
+  @media screen and (max-width:700px) { .hub-intro { padding-block: .5rem 2rem; } .sheet-path { grid-template-rows: none; grid-row: auto; } .sheet-paths, .sheet-steps ol { grid-template-columns: 1fr; }.sheet-path, .sheet-path + .sheet-path { padding: 0; border-left: 0; }.sheet-path + .sheet-path { border-top: 1px solid var(--rule); padding-top: 2rem; margin-top: 2rem; }.sheet-steps li, .sheet-steps li:first-child { border: 0; padding: .75rem 0; } }
   @media print {
-    @page { size: letter; margin: .4in; }
+    @page { size: letter; margin: .55in; }
     :global(.site-header), :global(.compact-footer), :global(.skip-link), [data-print-sheet], .hub-intro, .hub-doors, .hub-elsewhere, .site-button, .path-visual { display: none !important; }
-    .service-sheet { max-width: none; padding: 0; }.sheet-software { margin: 0; }.sheet-software .site-section-heading h2 { font-size: 20pt; }.sheet-software > .sheet-introduction { font-size: 11pt; margin-top: 5pt; max-width: none; }.sheet-approach { font-size: 9pt; margin-top: 3pt; }
+    .service-sheet { max-width: none; padding: 0; }.sheet-software { margin: 0; }.sheet-software .site-section-heading h2 { font-size: 24pt; }.sheet-software > .sheet-introduction { font-size: 14pt; margin-top: 5pt; max-width: none; }.sheet-approach { font-size: 10.5pt; margin-top: 6pt; }
     .sheet-paths { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12pt; }.sheet-path, .sheet-path + .sheet-path { padding: 0 10pt; border: 0; margin: 0; }.sheet-path:first-child { padding-left: 0; }.sheet-path + .sheet-path { border-left: 1px solid var(--rule); }
-    .sheet-path h3 { font-size: 14pt; }.sheet-path p, .path-evidence p, .sheet-steps p { font-size: 8.5pt; line-height: 1.2; }.path-lead { margin-top: 4pt; }.path-detail { margin-top: 2pt; }.path-evidence { margin-top: 8pt; padding-top: 7pt; }.path-evidence .page-kicker { font-size: 7pt; margin-bottom: 6pt; }.path-evidence article { padding-bottom: 5pt; margin-bottom: 5pt; }.path-evidence h4 { font-size: 10pt; }.path-evidence .site-link { font-size: 8pt; margin-top: 3pt; }
-    .sheet-steps { margin-top: 12pt; padding-top: 7pt; }.sheet-steps h2 { font-size: 14pt; }.sheet-steps ol { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 7pt; }.sheet-steps li, .sheet-steps li:first-child { padding: 0 7pt; }.sheet-steps li:first-child { padding-left: 0; }.sheet-steps li + li { border-left: 1px solid var(--rule); }.sheet-steps h3 { font-size: 9pt; }.sheet-steps p { margin-top: 2pt; }.sheet-address { font-size: 8pt; margin-top: 8pt; }.sheet-footnote { font-size: 7pt; margin-top: 8pt; padding-top: 6pt; }
+    .sheet-path h3 { font-size: 15pt; }.sheet-path p, .path-evidence p, .sheet-steps p { font-size: 10.5pt; line-height: 1.35; }.path-lead { margin-top: 4pt; }.path-detail { margin-top: 2pt; }.path-evidence { margin-top: 8pt; padding-top: 7pt; }.path-evidence p.page-kicker { font-size: .6875rem; margin-bottom: 6pt; }.path-evidence article { padding-bottom: 5pt; margin-bottom: 5pt; }.path-evidence h4 { font-size: 10pt; }.path-evidence .site-link { font-size: 8pt; margin-top: 3pt; }
+    .sheet-steps { margin-top: 12pt; padding-top: 7pt; }.sheet-steps h2 { font-size: 15pt; }.sheet-steps ol { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 7pt; }.sheet-steps li, .sheet-steps li:first-child { padding: 0 7pt; }.sheet-steps li:first-child { padding-left: 0; }.sheet-steps li + li { border-left: 1px solid var(--rule); }.sheet-steps h3 { font-size: 9pt; }.sheet-steps p { margin-top: 2pt; }.sheet-address { font-size: 8pt; margin-top: 8pt; }.sheet-footnote { font-size: 7pt; margin-top: 8pt; padding-top: 6pt; }
   }
 </style>
