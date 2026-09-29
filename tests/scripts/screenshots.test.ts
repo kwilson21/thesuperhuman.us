@@ -114,6 +114,7 @@ describe('screenshot coverage', () => {
       { name: 'owner-requests', path: '/owner/requests' }, { name: 'owner-campaigns', path: '/owner/campaigns' },
       { name: 'studio-sign-in', path: '/studio/sign-in' },
     ], scenarios: [
+      { name: 'services-print', title: 'Print', steps: [{ title: 'Letter', images: [{ file: 'services-print.png', caption: 'Print' }] }] },
       { name: 'owner-details', title: 'Owner details', steps: [{ title: 'Request', images: [{ file: 'owner.png', caption: 'Owner' }] }] },
       { name: 'studio-client', title: 'Studio', steps: [{ title: 'Project', images: [{ file: 'studio.png', caption: 'Studio' }] }] },
     ] };
@@ -121,8 +122,11 @@ describe('screenshot coverage', () => {
       .toEqual(['home', 'work', 'about']);
     expect(relevantScreenshots(manifest, ['src/content/pages/about.md']).pages.map((page: { name: string }) => page.name))
       .toEqual(['about']);
-    expect(relevantScreenshots(manifest, ['src/layouts/ServiceSheet.astro', 'src/components/SoftwareServiceIllustration.astro'])
+    expect(relevantScreenshots(manifest, ['src/layouts/ServiceSheet.astro', 'src/data/services.ts'])
       .pages.map((page: { name: string }) => page.name)).toEqual(['services']);
+    for (const file of ['src/layouts/ServiceSheet.astro', 'src/data/services.ts']) {
+      expect(relevantScreenshots(manifest, [file]).scenarios.map((scenario: { name: string }) => scenario.name)).toEqual(['services-print']);
+    }
     expect(relevantScreenshots(manifest, ['src/data/audio.ts']).pages.map((page: { name: string }) => page.name))
       .toEqual(['audio']);
     expect(relevantScreenshots(manifest, ['src/components/audio/LyricVideo.astro']).pages.map((page: { name: string }) => page.name))

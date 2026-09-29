@@ -67,7 +67,6 @@ const PAGE_NAMES_BY_FILE = {
   'src/layouts/BaseLayout.astro': SHARED_SITE_PAGES,
   'src/components/ExperienceRow.astro': ['work'],
   'src/components/Hero.astro': ['home'],
-  'src/components/SoftwareServiceIllustration.astro': ['services'],
   'src/components/WorkWithMe.astro': ['home', 'services'],
   'src/data/work-with-me.ts': ['home', 'services'],
   'src/layouts/ServiceSheet.astro': ['services'],
@@ -100,6 +99,8 @@ const PAGE_NAMES_BY_FILE = {
   'src/components/audio/AudioPlayer.astro': ['audio-releases', 'music-old-news'],
 };
 const SCENARIO_NAMES_BY_FILE = {
+  'src/layouts/ServiceSheet.astro': ['services-print'],
+  'src/data/services.ts': ['services-print'],
   'src/components/owner/OwnerProjectFiles.astro': ['studio-client'],
   'src/styles/owner.css': ['owner-details', 'software-brief'],
   'src/lib/software-inquiry.ts': ['software-brief'],
