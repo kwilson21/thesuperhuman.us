@@ -188,7 +188,7 @@ export async function deliverProjectUpdateNotice(db: D1Database, updateId: numbe
     return;
   }
   const sent = recipient && env.RESEND_API_KEY && env.CONTACT_FROM_EMAIL
-    ? await sendStudioSignInNotice(env.RESEND_API_KEY, env.CONTACT_FROM_EMAIL, recipient.email, 'Your studio project has an update') : { ok: false };
+    ? await sendStudioSignInNotice(env.RESEND_API_KEY, env.CONTACT_FROM_EMAIL, recipient.email, 'Your studio project has an update', 'update', env.SITE_ORIGIN) : { ok: false };
   if (sent.uncertain) return;
   await db.prepare(`UPDATE audio_project_updates SET notification_status=?,notification_sent_at=?
     WHERE id=? AND notification_status='sending'`).bind(sent.ok ? 'sent' : 'failed', sent.ok ? new Date().toISOString() : null, updateId).run();

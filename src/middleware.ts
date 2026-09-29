@@ -59,6 +59,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return ownerBoundary ? withOwnerHeaders(response) : response;
   }
   const response = await next();
+  if (url.hostname.endsWith('.workers.dev')) response.headers.set('x-robots-tag', 'noindex, nofollow');
   if (ownerBoundary) return withOwnerHeaders(response);
   if (studioBoundary) {
     for (const [name, value] of Object.entries(studioPrivateHeaders)) response.headers.set(name, value);

@@ -193,3 +193,12 @@ The three forms share pending, error, focus and receipt behavior in `src/scripts
 Use [the pre-launch checklist](docs/prelaunch-checklist.md) before each website deployment. See [the readiness QA record](docs/prelaunch-qa-2026-09-15.md) for verified checks and remaining release work.
 
 Regenerate browser icons from the existing brand SVG with `node scripts/build-icons.mjs`.
+
+### Isolated email links
+
+`SITE_ORIGIN` optionally sets the deployment-controlled HTTPS origin used in studio
+invitations, updates, sign-in codes, and owner request notices. It defaults to
+`https://thesuperhuman.us`. Set it to the preview origin when deploying a test
+Worker; never derive it from request headers. Test Workers must use separate D1,
+KV and private R2 resources, Stripe test credentials, and a hostname-restricted
+Turnstile widget.

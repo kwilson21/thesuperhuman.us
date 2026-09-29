@@ -25,8 +25,8 @@ export async function sendAudioMessage({ payload, apiKey }: { payload: { from: s
 const notices = { invitation: studioInvitationEmail, update: studioUpdateEmail };
 
 export async function sendStudioSignInNotice(apiKey: string, from: string, to: string, subject: string,
-  kind: keyof typeof notices = 'update'): Promise<{ ok: boolean; uncertain?: boolean }> {
-  return sendAudioMessage({ apiKey, payload: { from, to: [to], subject, ...notices[kind]() } });
+  kind: keyof typeof notices = 'update', origin?: string): Promise<{ ok: boolean; uncertain?: boolean }> {
+  return sendAudioMessage({ apiKey, payload: { from, to: [to], subject, ...notices[kind](origin) } });
 }
 
 const DIRECTION_LABELS: Record<IntakeInput['direction'], string> = {
@@ -39,7 +39,7 @@ function ownerRequestNoticeSubject(input: IntakeInput): string {
   return `Song request from ${input.name}: ${audioOffers[input.service].name}`;
 }
 
-function ownerRequestNoticeBody(input: IntakeInput, requestId: string): string {
+function ownerRequestNoticeBody(input: IntakeInput, requestId: string, origin = 'https://thesuperhuman.us'): string {
   const preferences = describePreferences(input.service, input.preferences);
   const lines = [
     `Service: ${audioOffers[input.service].name}`,
@@ -53,13 +53,14 @@ function ownerRequestNoticeBody(input: IntakeInput, requestId: string): string {
     input.referenceUrl ? `Reference link: ${input.referenceUrl}` : null,
     input.referenceNote ? `Notes: ${input.referenceNote}` : null,
     '',
-    `Review this request: https://thesuperhuman.us/owner/requests/${requestId}`,
+    `Review this request: ${new URL(`/owner/requests/${requestId}`, origin).href}`,
   ];
   return lines.filter((line): line is string => line !== null).join('\n');
 }
 
 interface OwnerRequestNoticeArgs {
   input: IntakeInput;
+  origin?: string;
   requestId: string;
   apiKey: string;
   from: string;
@@ -75,7 +76,7 @@ export async function sendOwnerRequestNotice(args: OwnerRequestNoticeArgs): Prom
       from: args.from,
       to: [args.to],
       subject: ownerRequestNoticeSubject(args.input),
-      text: ownerRequestNoticeBody(args.input, args.requestId),
+      text: ownerRequestNoticeBody(args.input, args.requestId, args.origin),
       reply_to: args.input.email,
     },
   });
