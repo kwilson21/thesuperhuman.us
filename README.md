@@ -210,7 +210,7 @@ Regenerate browser icons from the existing brand SVG with `node scripts/build-ic
 
 ### Isolated email links
 
-`SITE_ORIGIN` optionally sets the deployment-controlled HTTPS origin used in studio
+`SITE_ORIGIN` optionally sets the deployment-controlled HTTPS origin used in offer and studio
 invitations, updates, sign-in codes, and owner request notices. It defaults to
 `https://thesuperhuman.us`. Set it to the preview origin when deploying a test
 Worker; never derive it from request headers. Test Workers must use separate D1,

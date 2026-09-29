@@ -19,8 +19,6 @@
 .software-offer-editor fieldset, .software-rail fieldset { border: 0; padding: 0; min-width: 0; }
 .software-offer-editor legend { font: .8rem/1.5 Inter, sans-serif; }
 .software-actions { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
-.software-payment-card { border-bottom: 1px solid var(--rule); padding: .7rem 0; }
-.software-payment-card input { justify-self: start; }
 .software-offer-editor [hidden], .software-rail [hidden] { display: none !important; }
 .software-offer-editor .studio-status { white-space: pre-line; }
 .software-offer-editor li { overflow-wrap: anywhere; }
@@ -40,3 +38,6 @@
 .software-offer-editor .intake-offer input { margin-top: .2rem; flex-shrink: 0; }
 .software-offer-editor [aria-invalid=true] { border-color: var(--accent); }
 .software-milestone + .software-milestone { border-top: 1px solid var(--rule); padding-top: 1rem; }
+
+/* Payment mode titles follow src/styles/audio-intake.css. */
+.software-offer-editor .intake-offer strong { font-size: 1.1rem; font-weight: 400; }
