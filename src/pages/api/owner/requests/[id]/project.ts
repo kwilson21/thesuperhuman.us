@@ -1,0 +1,58 @@
+import type { APIRoute } from 'astro';
+import { z } from 'astro/zod';
+import { musicRequest } from '~/lib/music-request';
+import { clientPortalEnabled } from '~/lib/audio-client-access';
+import { getSoftwareProject, projectTerms, projectDate, softwareAudit, softwareGuard, openSoftwareGuard, deliverSoftwareNotice, queueSoftwareNotice } from '~/lib/software-projects';
+export const prerender = false;
+const schema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('start'), signatures: z.literal(true), payment: z.literal(true), next_update_on: projectDate }),
+  z.object({ action: z.literal('state'), state: z.enum(['preparing','building','waiting_for_input','ready_for_review','complete']), waiting_for: z.string().trim().max(200), milestone_index: z.number().int().min(0).max(2), step: z.enum(['direction','build','review','handoff']), next_update_on: projectDate, expectedUpdatedAt: z.string() }),
+  z.object({ action: z.literal('revoke'), confirmed: z.literal(true) }),
+  z.object({ action: z.literal('notice'), updateId: z.string().optional(), confirmedNotSent: z.boolean().default(false) }),
+]);
+export const POST: APIRoute = async ({ params, request, locals }) => {
+  const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'cache-control': 'private, no-store' } });
+  if (!locals.owner) return json({ ok: false }, 403);
+  const env = locals.runtime.env, db = env.MUSIC_DB, id = params.id;
+  if (!clientPortalEnabled(env)) return json({ ok: false }, 404);
+  if (!db || !id) return json({ ok: false }, 503);
+  const input = await musicRequest(request); if (input instanceof Response) return input;
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) return json({ ok: false, error: 'Check both confirmations and the project fields.' }, 400);
+  const command = parsed.data, actor = locals.owner.email, at = new Date().toISOString();
+  try {
+    if (command.action === 'start') {
+      await db.batch([
+        softwareGuard(db, `SELECT 1 FROM owner_requests r JOIN software_offers o ON o.request_id=r.id
+          WHERE r.id=? AND r.kind='software' AND r.status NOT IN ('withdrawn','resolved') AND r.email<>'' AND o.status='sent'
+          AND NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=r.id)`, [id]),
+        db.prepare(`INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,next_update_on,created_at,updated_at)
+          SELECT request_id,id,terms_json,json_extract(terms_json,'$.paymentMode'),?,?,?,?,?,?,? FROM software_offers WHERE request_id=? AND status='sent'`)
+          .bind(at, at, at, actor, command.next_update_on || null, at, at, id),
+        softwareAudit(db, id, 'started', actor, at),
+      ]);
+      try { await deliverSoftwareNotice(db, id, env); } catch { return json({ ok: true, noticeUnchecked: true }); }
+      return json({ ok: true });
+    }
+    const project = await getSoftwareProject(db, id); if (!project) return json({ ok: false }, 404);
+    if (command.action === 'notice') {
+      if (!await queueSoftwareNotice(db, id, command.confirmedNotSent, command.updateId)) return json({ ok: false, error: 'Check Resend before retrying an unconfirmed notice.' }, 409);
+      await deliverSoftwareNotice(db, id, env, command.updateId); return json({ ok: true });
+    }
+    if (command.action === 'revoke') {
+      await db.batch([openSoftwareGuard(db, id),
+        db.prepare('UPDATE software_projects SET revoked_at=?,updated_at=? WHERE request_id=?').bind(at, at, id),
+        db.prepare('UPDATE audio_client_sessions SET revoked_at=? WHERE email=(SELECT email FROM owner_requests WHERE id=?) AND revoked_at IS NULL').bind(at, id),
+        db.prepare('DELETE FROM audio_client_codes WHERE email=(SELECT email FROM owner_requests WHERE id=?)').bind(id),
+        softwareAudit(db, id, 'access-revoked', actor, at)]);
+      return json({ ok: true });
+    }
+    if (command.milestone_index >= projectTerms(project).milestones.length || (command.state === 'waiting_for_input' && !command.waiting_for))
+      return json({ ok: false, error: 'Choose a milestone and name the one thing you need.' }, 400);
+    await db.batch([openSoftwareGuard(db, id), softwareGuard(db, 'SELECT 1 FROM software_projects WHERE request_id=? AND updated_at=?', [id, command.expectedUpdatedAt]),
+      db.prepare(`UPDATE software_projects SET state=?,waiting_for=?,milestone_index=?,step=?,next_update_on=?,completed_at=?,updated_at=? WHERE request_id=?`)
+        .bind(command.state, command.waiting_for, command.milestone_index, command.step, command.next_update_on || null, command.state === 'complete' ? project.completed_at ?? at : null, at, id),
+      softwareAudit(db, id, 'state-changed', actor, at)]);
+    return json({ ok: true });
+  } catch { return json({ ok: false, error: 'The project changed or could not be saved. Reload and try again.' }, 409); }
+};

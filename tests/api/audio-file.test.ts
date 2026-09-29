@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('astro:content', () => {
   return {
     getCollection: vi.fn(async () => [
+      { id: 'private-software', data: { file: 'software/request/update/visual.png' } },
       { id: 'slow-burn', data: { file: 'tracks/slow-burn.mp3' } },
     ]),
   };
@@ -78,4 +79,9 @@ describe('GET /audio/file/[slug]', () => {
     const res = await GET(makeContext('slow-burn', 'malformed=foo'));
     expect(res.status).toBe(200);
   });
+});
+
+it('refuses software visuals through the public audio route without reading R2', async () => {
+  const context=makeContext('private-software'); const response=await GET(context);
+  expect(response.status).toBe(404); expect(context.locals.runtime.env.AUDIO.get).not.toHaveBeenCalled();
 });

@@ -33,7 +33,8 @@ function newCode(): string {
   return String(values[0] % 100_000_000).padStart(8, '0');
 }
 
-const activeProjects = `SELECT p.request_id FROM audio_projects p
+const studioProjects = `(SELECT request_id,revoked_at FROM audio_projects UNION ALL SELECT request_id,revoked_at FROM software_projects WHERE content_deleted_at IS NULL)`;
+const activeProjects = `SELECT p.request_id FROM ${studioProjects} p
   JOIN owner_requests r ON r.id=p.request_id
   WHERE r.email=? AND r.status<>'withdrawn' AND p.revoked_at IS NULL`;
 
@@ -51,7 +52,7 @@ export async function issueClientCode(db: D1Database, email: string, secret: str
       RETURNING email`)
       .bind(email, digest, issuedAt, expiresAt, email, new Date(now.getTime() - 30_000).toISOString(), issuedAt),
     db.prepare(`INSERT INTO audio_client_access_audit(request_id,action,occurred_at)
-      SELECT p.request_id,'code-issued',? FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
+      SELECT p.request_id,'code-issued',? FROM ${studioProjects} p JOIN owner_requests r ON r.id=p.request_id
       WHERE r.email=? AND p.revoked_at IS NULL
         AND EXISTS(SELECT 1 FROM audio_client_codes WHERE email=? AND code_hash=? AND created_at=?)`)
       .bind(issuedAt, email, email, digest, issuedAt),
@@ -63,7 +64,7 @@ export async function discardUndeliveredCode(db: D1Database, email: string, code
   const digest = await codeHash(email, code, secret);
   await db.batch([
     db.prepare(`INSERT INTO audio_client_access_audit(request_id,action,occurred_at)
-      SELECT p.request_id,'code-delivery-failed',? FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
+      SELECT p.request_id,'code-delivery-failed',? FROM ${studioProjects} p JOIN owner_requests r ON r.id=p.request_id
       WHERE r.email=? AND p.revoked_at IS NULL
         AND EXISTS(SELECT 1 FROM audio_client_codes WHERE email=? AND code_hash=? AND used_at IS NULL)`)
       .bind(now.toISOString(), email, email, digest),
@@ -74,7 +75,7 @@ export async function discardUndeliveredCode(db: D1Database, email: string, code
 export async function listStudioSignInFailures(db: D1Database): Promise<{ requestId: string; clientName: string | null }[]> {
   const rows = await db.prepare(`SELECT a.request_id AS requestId,r.name AS clientName,MAX(a.id) AS last_failure
     FROM audio_client_access_audit a
-    JOIN audio_projects p ON p.request_id=a.request_id
+    JOIN ${studioProjects} p ON p.request_id=a.request_id
     JOIN owner_requests r ON r.id=a.request_id
     WHERE a.action='code-delivery-failed' AND p.revoked_at IS NULL AND r.status<>'withdrawn'
       AND NOT EXISTS(SELECT 1 FROM audio_client_access_audit later
@@ -96,13 +97,13 @@ export async function completeClientCode(db: D1Database, email: string, code: st
     db.prepare(`UPDATE audio_client_codes SET attempts=attempts+1
       WHERE email=? AND used_at IS NULL AND expires_at>? AND attempts<5`).bind(email, at),
     db.prepare(`UPDATE audio_client_codes SET used_at=?,session_token_hash=?
-      WHERE email=? AND code_hash=? AND used_at IS NULL AND expires_at>? AND changes()=1
-      RETURNING email`).bind(at, tokenHash, email, digest, at),
+      WHERE email=? AND code_hash=? AND used_at IS NULL AND expires_at>? AND changes()=1 AND EXISTS (${activeProjects})
+      RETURNING email`).bind(at, tokenHash, email, digest, at, email),
     db.prepare(`INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at)
       SELECT ?,email,?,?,? FROM audio_client_codes WHERE email=? AND session_token_hash=?`)
       .bind(tokenHash, at, expiresAt, at, email, tokenHash),
     db.prepare(`INSERT INTO audio_client_access_audit(request_id,action,occurred_at)
-      SELECT p.request_id,'signed-in',? FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
+      SELECT p.request_id,'signed-in',? FROM ${studioProjects} p JOIN owner_requests r ON r.id=p.request_id
       WHERE r.email=? AND p.revoked_at IS NULL
         AND EXISTS(SELECT 1 FROM audio_client_sessions WHERE token_hash=?)`).bind(at, email, tokenHash),
   ]);
@@ -216,4 +217,24 @@ export function groupStudioProjects<T extends ListedProject>(projects: T[], now 
     active: projects.filter(project => !delivered(project)),
     delivered: projects.filter(delivered).map(project => ({ ...project, available: Date.parse(project.final_expires_at!) > now.getTime() })),
   };
+}
+
+/** Software client fields are an explicit projection; owner records never cross this boundary. */
+export async function clientSoftwareProjectsForSession(db: D1Database, token: string, now = new Date()) {
+  if (!/^[0-9a-f-]{72}$/i.test(token)) return null;
+  const session = await db.prepare(`SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL`)
+    .bind(await hashValue(token), now.toISOString()).first<{ email: string }>();
+  if (!session) return null;
+  return (await db.prepare(`SELECT p.request_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,
+    p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id
+    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL
+    ORDER BY p.created_at DESC`).bind(session.email).all<ClientSoftwareProject>()).results;
+}
+export type ClientSoftwareProject = {
+  request_id: string; terms_json: string; payment_mode: 'standard' | 'invoice'; state: string; waiting_for: string;
+  milestone_index: number; step: string; started_at: string; next_update_on: string | null;
+};
+export async function clientSoftwareProjectForSession(db: D1Database, token: string, id: string, now = new Date()) {
+  const projects = await clientSoftwareProjectsForSession(db, token, now);
+  return projects?.find(project => project.request_id === id) ?? null;
 }

@@ -1,0 +1,68 @@
+---
+export const prerender = false;
+import OwnerLayout from '~/layouts/OwnerLayout.astro';
+import SoftwareProjectUpdate from '~/components/SoftwareProjectUpdate.astro';
+import { getOwnerRequest } from '~/lib/owner-requests';
+import { clientPortalEnabled } from '~/lib/audio-client-access';
+import { getSoftwareProject, listSoftwareUpdates, projectTerms, evidenceTypes } from '~/lib/software-projects';
+import type { ClientSoftwareUpdate } from '~/lib/software-projects';
+import '~/styles/studio.css';
+const env = Astro.locals.runtime.env, db = env.MUSIC_DB;
+if (!Astro.locals.owner) return new Response('Forbidden', { status: 403 });
+if (!clientPortalEnabled(env)) return new Response('Not found', { status: 404 });
+if (!db) return new Response('Owner reporting is unavailable.', { status: 503 });
+const id = Astro.params.id!, request = await getOwnerRequest(db, id), project = await getSoftwareProject(db, id);
+if (!request || request.kind !== 'software' || !project || project.revoked_at || request.status === 'withdrawn') return new Response('Project not found.', { status: 404 });
+const terms = projectTerms(project), draft = (await listSoftwareUpdates(db, id)).find(update => update.status === 'draft');
+const update: ClientSoftwareUpdate = { id: draft?.id ?? '', title: draft?.title ?? '', artifact_version: draft?.artifact_version ?? '', evidence_type: draft?.evidence_type ?? 'concept', visual_alt: draft?.visual_alt ?? '', preview_url: draft?.preview_url ?? '', what_changed: draft?.what_changed ?? '', checks_limitations: draft?.checks_limitations ?? '', next_step: draft?.next_step ?? '', client_request: draft?.client_request ?? '', next_update_on: draft?.next_update_on ?? '', shared_at: null, has_visual: draft?.visual_key ? 1 : 0 };
+const firstName = request.name.trim().split(/\s+/)[0] || 'the client';
+---
+<OwnerLayout title="New project update" current="requests" newRequestCount={0} ownerEmail={Astro.locals.owner.email}>
+  <p class="owner-breadcrumb"><a href="/owner/requests">Requests</a> / <a href={`/owner/requests/${id}`}>{terms.outcome}</a> / New update</p>
+  <div class="update-columns" data-software-composer data-endpoint={`/api/owner/requests/${id}/updates`} data-id={draft?.id} data-updated-at={draft?.updated_at}>
+    <section><header class="owner-page-heading compact"><div><h1>Show what changed.</h1><p>Prepare a useful update for {firstName}.</p><p class="owner-kicker">Draft · Not shared</p></div></header>
+      <form class="software-update-form" data-update-form>
+        <label>Kind<select class="studio-select" name="kind"><option value="progress">Progress</option></select></label>
+        <label>Milestone<select class="studio-select" name="milestone_index">{terms.milestones.map((item,index) => <option value={index} selected={index === (draft?.milestone_index ?? project.milestone_index)}>Milestone {index+1} · {item.name}</option>)}</select></label>
+        <label>Title<input class="studio-input" name="title" maxlength="120" required placeholder="What the client will notice" value={update.title} /></label>
+        <label>Version<input class="studio-input" name="artifact_version" maxlength="60" placeholder="Prototype v1" value={update.artifact_version} /></label>
+        <label>Evidence type<select class="studio-select" name="evidence_type">{Object.entries(evidenceTypes).map(([value,label]) => <option value={value} selected={update.evidence_type === value}>{label}</option>)}</select><small>Concept means not implemented. Call something working only if the client can use it.</small></label>
+        <label>Visual<input type="file" name="visual" accept="image/png,image/jpeg,image/webp" /><small>Optional PNG, JPEG or WebP, 5 MB or less. Choose a file to replace the visual.</small></label>
+        {update.has_visual && <button type="button" class="studio-quiet" data-replace-visual>Replace visual</button>}
+        <label>Image description<input class="studio-input" name="visual_alt" maxlength="300" required={Boolean(update.has_visual)} value={update.visual_alt} /></label>
+        <label>Preview link<input class="studio-input" name="preview_url" type="url" value={update.preview_url} /><small>Link only to something the client is allowed to open.</small></label>
+        <label>What changed<textarea class="studio-textarea" name="what_changed" required maxlength="1000">{update.what_changed}</textarea></label>
+        <label>Checks and limitations<textarea class="studio-textarea" name="checks_limitations" maxlength="1000">{update.checks_limitations}</textarea></label>
+        <label>Next step<textarea class="studio-textarea" name="next_step" maxlength="300">{update.next_step}</textarea></label>
+        <label>What I need from the client<textarea class="studio-textarea" name="client_request" maxlength="300">{update.client_request}</textarea></label>
+        <label>Next update<input class="studio-input" name="next_update_on" type="date" value={update.next_update_on} /></label>
+        <label class="email-choice"><input type="checkbox" name="email_client" checked={draft ? Boolean(draft.email_client) : Boolean(update.client_request)} />Also email {firstName} about this update</label>
+        <div class="software-actions"><button class="studio-quiet" type="button" data-save-draft>Save draft</button><button class="studio-button" type="submit">Share update</button></div>
+        <p class="rail-caption">Sharing adds this update to the client's project page.</p>
+        <p class="studio-status" data-composer-status role="status" aria-live="polite"></p>
+      </form>
+    </section>
+    <aside class="client-preview"><p class="owner-kicker">Client preview · Not yet shared</p><SoftwareProjectUpdate update={update} preview visualUrl={update.has_visual ? `/api/owner/requests/${id}/updates/${update.id}/visual` : undefined} />
+      <section data-preview-section="client_request" hidden={!update.client_request}><h3>Waiting on you</h3><p data-preview-text="client_request">{update.client_request}</p></section>
+      <section data-preview-section="next_step" hidden={!update.next_step}><h3>Next from me</h3><p data-preview-text="next_step">{update.next_step}</p></section>
+      <p data-preview-date hidden={!update.next_update_on}>Next update: <span>{update.next_update_on}</span></p>
+      <p class="private-note">Private notes and fit review stay in the request.</p>
+    </aside>
+  </div>
+  <script>import { setupSoftwareComposer } from '~/scripts/software-composer'; setupSoftwareComposer();</script>
+</OwnerLayout>
+<style>
+  .update-columns { display: grid; grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); gap: 3rem; align-items: start; }
+  .owner-page-heading h1 { max-width: none; font-size: clamp(2.6rem,5vw,4rem); }
+  .software-update-form { display: grid; gap: 1rem; }
+  label { display: grid; gap: .4rem; font: .85rem/1.5 Inter,sans-serif; }
+  small, .rail-caption { font: .78rem/1.5 Inter,sans-serif; color: var(--muted); }
+  .email-choice { display: flex; align-items: center; gap: .6rem; }
+  input[type=checkbox] { accent-color: var(--accent); }
+  .client-preview { padding: 1.5rem; border: 1px solid var(--rule); min-width: 0; }
+  .client-preview h3 { font: 400 1.6rem/1.3 Newsreader,Georgia,serif; margin: 1.5rem 0 .5rem; }
+  .client-preview p { font: .9rem/1.6 Inter,sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .private-note { border-top: 1px solid var(--rule); padding-top: 1rem; margin-top: 2rem; color: var(--muted); }
+  [hidden] { display: none !important; }
+  @media(max-width: 55rem) { .update-columns { grid-template-columns: 1fr; } }
+</style>

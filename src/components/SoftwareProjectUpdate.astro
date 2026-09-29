@@ -1,0 +1,28 @@
+---
+import { evidenceTypes } from '~/lib/software-projects';
+import type { ClientSoftwareUpdate } from '~/lib/software-projects';
+type Props = { update: ClientSoftwareUpdate; visualUrl?: string; preview?: boolean };
+const { update, visualUrl, preview = false } = Astro.props;
+---
+<article class="software-update" data-software-update>
+  <p class="studio-kicker" data-preview-kicker>{[evidenceTypes[update.evidence_type], update.artifact_version, update.evidence_type === 'concept' ? 'Not implemented' : ''].filter(Boolean).join(' · ')}</p>
+  <h2 data-preview-title>{update.title}</h2>
+  <figure data-preview-figure hidden={!visualUrl}>
+    <img src={visualUrl} alt={update.visual_alt} data-preview-image loading={preview ? 'eager' : 'lazy'} />
+    <figcaption data-preview-caption>{update.evidence_type === 'concept' ? 'Illustrative concept' : update.artifact_version}</figcaption>
+  </figure>
+  <p hidden={!update.preview_url} data-preview-link-row><a href={update.preview_url || undefined} data-preview-link target="_blank" rel="noopener noreferrer">Open preview ↗</a></p>
+  {(['what_changed','checks_limitations'] as const).map((key, index) => <section data-preview-section={key} hidden={!update[key]}><h3>{index === 0 ? 'What changed' : 'Checks and limitations'}</h3><p data-preview-text={key}>{update[key]}</p></section>)}
+</article>
+<style>
+  .software-update { min-width: 0; overflow-wrap: anywhere; }
+  h2 { font: 400 clamp(2rem,4vw,3.2rem)/1.1 Newsreader,Georgia,serif; margin: .8rem 0 1.5rem; }
+  h3 { font: 400 1.6rem/1.2 Newsreader,Georgia,serif; margin: 1.5rem 0 .5rem; }
+  p { font: 1rem/1.6 Inter,sans-serif; white-space: pre-wrap; }
+  .studio-kicker { font: 500 .68rem/1.5 'JetBrains Mono',monospace; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  figure { margin: 1.5rem 0; }
+  img { display: block; width: 100%; height: auto; border: 1px solid var(--rule); }
+  figcaption { font: .8rem/1.5 Inter,sans-serif; color: var(--muted); margin-top: .4rem; }
+  section { border-top: 1px solid var(--rule); margin-top: 1.5rem; }
+  [hidden] { display: none !important; }
+</style>

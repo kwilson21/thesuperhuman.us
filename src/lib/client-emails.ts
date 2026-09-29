@@ -53,3 +53,17 @@ export const resumeDeliveryEmail = (name: string) => renderEmail({
   link: { label: 'Visit my website', href: site },
   reason: 'You received this because you requested my resume.',
 });
+
+const softwareSignIn = (origin = site) => new URL('/studio/sign-in?for=software', origin).href;
+export const softwareInvitationEmail = (origin?: string) => renderEmail({
+  preheader: 'Your project page is ready.', kicker: 'Project', heading: 'Your project page is ready.',
+  paragraphs: ['Your private project page is ready, with each update, what I need from you, and when you’ll hear from me next.'],
+  button: { label: 'Open your project', href: softwareSignIn(origin) }, note: signInNote,
+  reason: 'You received this invitation for your software project.',
+});
+export const softwareUpdateEmail = (origin?: string) => renderEmail({
+  preheader: 'A new update is ready on your project page.', kicker: 'Update', heading: 'You have a new project update.',
+  paragraphs: ['Sign in to see the latest update on your project.'],
+  button: { label: 'Open your project', href: softwareSignIn(origin) }, note: signInNote,
+  reason: 'You received this because your software project has an update.',
+});

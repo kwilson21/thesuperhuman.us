@@ -1,0 +1,14 @@
+---
+import { projectSteps } from '~/lib/software-projects';
+const { step } = Astro.props as { step: string };
+const current = projectSteps.indexOf(step as typeof projectSteps[number]);
+---
+<ol class="software-step-track" aria-label="Project steps">{projectSteps.map((item,index) => <li aria-current={item === step ? 'step' : undefined} class:list={{done: index < current}}><span aria-hidden="true"></span>{item[0].toUpperCase()+item.slice(1)}</li>)}</ol>
+<style>
+  ol { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: .4rem; }
+  li { position: relative; display: grid; justify-items: center; gap: .6rem; color: var(--muted); font: .75rem/1.4 Inter,sans-serif; }
+  li:not(:last-child)::after { content: ''; position: absolute; height: 1px; background: var(--rule); top: .45rem; left: calc(50% + .6rem); width: calc(100% - .8rem); }
+  span { width: .9rem; height: .9rem; border: 1px solid var(--muted); border-radius: 50%; background: var(--paper); }
+  .done span, [aria-current] span { background: var(--accent); border-color: var(--accent); }
+  [aria-current] { color: var(--accent); }
+</style>
