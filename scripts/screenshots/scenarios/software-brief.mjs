@@ -8,6 +8,7 @@ export default {
       'new','','2026-09-29T12:00:00.000Z','2026-09-29T12:00:00.000Z','00000000-0000-4000-8000-000000000001')`);
     const steps = [];
     for (const viewport of ['desktop', 'phone']) {
+      if (viewport === 'desktop') steps.push({ title: 'Client chooses a starting point', images: [{ file: await capture({ file: 'software-brief-no-path-desktop.png', path: '/software/start', viewport }), caption: 'No starting point selected' }] });
       steps.push({ title: `Client project, ${viewport}`, images: [{ file: await capture({ file: `software-brief-project-${viewport}.png`, path: '/software/start?path=workflow', viewport }), caption: 'Fictional project step' }] });
       steps.push({ title: `Client idea, ${viewport}`, images: [{ file: await capture({ file: `software-brief-idea-${viewport}.png`, path: '/software/start?path=idea', viewport }), caption: 'Fictional idea questions' }] });
       const fill = async page => {
@@ -16,7 +17,7 @@ export default {
         await page.locator('[name=firstResult]').fill('A shared view of next steps that the client team can check each morning.');
         await page.locator('[data-next]').click();
       };
-      steps.push({ title: `Client details, ${viewport}`, images: [{ file: await capture({ file: `software-brief-details-${viewport}.png`, path: '/software/start', viewport, prepare: fill }), caption: 'Fictional details step' }] });
+      steps.push({ title: `Client details, ${viewport}`, images: [{ file: await capture({ file: `software-brief-details-${viewport}.png`, path: '/software/start?path=workflow', viewport, prepare: fill }), caption: 'Fictional details step' }] });
       const review = async page => {
         await fill(page);
         await page.locator('[name=name]').fill('Alex Example');
@@ -31,8 +32,8 @@ export default {
         await page.locator('[data-step="2"]:visible').waitFor();
         await page.waitForTimeout(1_500);
       };
-      steps.push({ title: `Client review, ${viewport}`, images: [{ file: await capture({ file: `software-brief-review-${viewport}.png`, path: '/software/start', viewport, prepare: review }), caption: 'Fictional review step' }] });
-      steps.push({ title: `Client receipt, ${viewport}`, images: [{ file: await capture({ file: `software-brief-receipt-${viewport}.png`, path: '/software/start', viewport, prepare: async page => {
+      steps.push({ title: `Client review, ${viewport}`, images: [{ file: await capture({ file: `software-brief-review-${viewport}.png`, path: '/software/start?path=workflow', viewport, prepare: review }), caption: 'Fictional review step' }] });
+      steps.push({ title: `Client receipt, ${viewport}`, images: [{ file: await capture({ file: `software-brief-receipt-${viewport}.png`, path: '/software/start?path=workflow', viewport, prepare: async page => {
         await page.context().route(url => url.origin === new URL(base).origin, route => route.continue({ headers: { ...route.request().headers(), 'cf-connecting-ip': viewport === 'desktop' ? '192.0.2.10' : '192.0.2.11' } }));
         await review(page);
         await page.locator('[type=submit]').click();

@@ -58,10 +58,11 @@ export function validateSoftwareInquiry(input: unknown): { ok: true; value: Soft
 }
 export function softwareRequest(input: SoftwareInput): NewOwnerRequest {
   const firstLine = (input.path === 'idea' ? input.idea : input.firstResult).split(/\r?\n/, 1)[0];
+  const summaryCharacters = Array.from(firstLine);
   return {
     kind: 'software', serviceId: input.path, submissionId: input.submissionId,
     name: input.name, email: input.email,
-    summary: firstLine.length > 120 ? `${firstLine.slice(0, 117).trimEnd()}…` : firstLine,
+    summary: summaryCharacters.length > 120 ? `${summaryCharacters.slice(0, 117).join('').trimEnd()}…` : firstLine,
     details: Object.fromEntries(['path', ...softwareQuestions[input.path], ...softwareDetailKeys.filter(key => key !== 'name' && key !== 'email')].map(key => [key, input[key as keyof SoftwareInput]])),
   };
 }

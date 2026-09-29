@@ -10,8 +10,11 @@ if (form) {
   const status = form.querySelector<HTMLElement>('[data-form-status]')!;
   let step = 0;
   let submissionId = crypto.randomUUID();
-  const path = () => (new FormData(form!).get('path') === 'idea' ? 'idea' : 'workflow');
-  const keys = () => ['path', ...softwareQuestions[path()], ...softwareDetailKeys];
+  const path = () => {
+    const value = new FormData(form!).get('path');
+    return value === 'idea' || value === 'workflow' ? value : null;
+  };
+  const keys = () => ['path', ...(path() ? softwareQuestions[path()!] : []), ...softwareDetailKeys];
   let nudged = false;
   const payload = (data: FormData) => Object.fromEntries(keys().map(key => [key, String(data.get(key) ?? '').trim()]));
   const labelled = (input: Record<string, string>) => ({
@@ -45,11 +48,11 @@ if (form) {
     const input = payload(new FormData(form!));
     const result = validateSoftwareInquiry({ ...input, name: step === 0 ? 'Preview' : input.name, email: step === 0 ? 'preview@example.com' : input.email, turnstileToken: 'pending', submissionId });
     const errors: Record<string, string> = result.ok ? {} : result.errors;
-    const fields = step === 0 ? ['path', ...softwareQuestions[path()]] : [...softwareDetailKeys];
+    const fields = step === 0 ? ['path', ...(path() ? softwareQuestions[path()!] : [])] : [...softwareDetailKeys];
     let first: HTMLElement | null = null;
     for (const field of fields) {
       const error = form!.querySelector<HTMLElement>(`[data-form-error="${field}"]`);
-      const control = form!.elements.namedItem(field);
+      const control = field === 'path' ? form!.querySelector<HTMLInputElement>('[name="path"]') : form!.elements.namedItem(field);
       const message = errors[field];
       if (error) { error.textContent = message ?? ''; error.hidden = !message; }
       if (control instanceof HTMLElement) {
@@ -66,6 +69,7 @@ if (form) {
     form!.querySelector<HTMLElement>('[data-approver-role]')!.hidden = !other;
   }
   function selectedQuestions() {
+    form!.querySelector<HTMLElement>('[data-choose-path]')!.hidden = path() !== null;
     form!.querySelectorAll<HTMLElement>('[data-questions]').forEach(group => {
       const active = group.dataset.questions === path();
       group.hidden = !active;

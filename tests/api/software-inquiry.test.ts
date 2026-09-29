@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { POST } from '~/pages/api/software-inquiry';
-import { softwareBrief, validateSoftwareInquiry } from '~/lib/software-inquiry';
+import { softwareBrief, softwareRequest, validateSoftwareInquiry } from '~/lib/software-inquiry';
 import { RequestDetailsTooLargeError } from '~/lib/owner-requests';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
@@ -68,6 +68,12 @@ it('validates each idea answer with the same plain messages and drops unknown ke
   const result = validateSoftwareInquiry({ ...idea, today: 'inactive', unknown: 'dropped' });
   expect(result.ok).toBe(true);
   if (result.ok) { expect(result.value).not.toHaveProperty('today'); expect(result.value).not.toHaveProperty('unknown'); expect(result.value).toMatchObject({ signal: '' }); }
+});
+
+it('keeps an emoji intact at the summary cutoff', () => {
+  const parsed = validateSoftwareInquiry({ ...base, firstResult: `${'a'.repeat(116)}😀${'b'.repeat(10)}` });
+  expect(parsed.ok).toBe(true);
+  if (parsed.ok) expect(softwareRequest(parsed.value).summary).toBe(`${'a'.repeat(116)}😀…`);
 });
 
 it('deduplicates after rate limit, rejects another email without leaking the brief, and limits new IDs', async () => {

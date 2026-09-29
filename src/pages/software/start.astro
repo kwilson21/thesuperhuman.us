@@ -10,7 +10,7 @@ const env = Astro.locals.runtime?.env;
 const siteKey = env?.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 const available = Boolean(siteKey && env?.MUSIC_DB && env.TURNSTILE_SECRET_KEY && env.RATE_LIMIT);
 const requested = Astro.url.searchParams.get('path');
-const selected = requested === 'idea' ? 'idea' : 'workflow';
+const selected = requested === 'idea' || requested === 'workflow' ? requested : null;
 const questions = {
   workflow: [
     ['today', 'Walk me through it as it works now: who does it, how often, and where it gets stuck.', 'For example: Every Monday our ops lead copies orders from three supplier emails into a spreadsheet. It takes about two hours and mistakes slip through.', 2000],
@@ -37,11 +37,12 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
         <p class="intake-intro">Start with the problem or the idea.</p>
         <p class="intake-muted software-step-help">A few sentences per question is plenty. Specific examples help most.</p>
         <div class="intake-columns intake-service-columns">
-          <fieldset class="offer-list"><legend class="sr-only">Choose a starting point</legend>
+          <fieldset class="offer-list" aria-describedby="software-path-error"><legend class="sr-only">Choose a starting point</legend>
             {Object.entries(softwarePaths).map(([key, value]) => <label class="intake-offer"><input type="radio" name="path" value={key} checked={selected === key} /><span><strong>{value}</strong><small>{key === 'workflow' ? 'A focused tool, automation or integration for a task your team repeats.' : 'One core experience or product question people can try.'}</small></span></label>)}
-            <p data-form-error="path" hidden></p>
+            <p id="software-path-error" data-form-error="path" hidden></p>
           </fieldset>
           <div>
+            <p class="intake-muted" data-choose-path hidden={selected !== null}>Choose a starting point to see its questions.</p>
             {Object.entries(questions).map(([path, items]) => <div data-questions={path} hidden={selected !== path}>
               {path === 'idea' && <p class="intake-muted software-idea-note">I build a first version people can try, not the whole product. These questions help us find the part worth testing first.</p>}
               {items.map(([key, hint, example, max]) => <div>

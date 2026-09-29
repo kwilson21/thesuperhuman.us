@@ -1,4 +1,6 @@
 import { expect, it } from 'vitest';
+import { createRequire } from 'node:module';
+import { readFileSync, readdirSync } from 'node:fs';
 import * as ownerHealthModule from '../../scripts/owner-health.mjs';
 
 const { ownerHealth } = ownerHealthModule;
@@ -10,6 +12,7 @@ const requiredSchema = [
   'audio_projects', 'audio_client_codes', 'audio_client_sessions', 'audio_client_access_audit',
   'audio_project_messages', 'audio_project_updates', 'audio_project_files', 'audio_project_uploads',
   'owner_requests_audit_personal_delete', 'audio_project_after_service_request', 'audio_project_close_declined_request',
+  'owner_requests_submission_id',
 ];
 
 function healthyFixture() {
@@ -79,6 +82,22 @@ it('reports attention when the request audit trigger is missing', async () => {
   const report = await ownerHealth(fixture);
   expect(report.status).toBe('attention');
   expect(report.checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
+});
+
+it('detects a database stopped at 0018 and passes schema after 0019', async () => {
+  const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
+  const db = new DatabaseSync(':memory:');
+  const migrations = readdirSync(new URL('../../migrations/music/', import.meta.url)).filter(name => name.endsWith('.sql')).sort();
+  for (const name of migrations.filter(name => name < '0019')) db.exec(readFileSync(new URL(`../../migrations/music/${name}`, import.meta.url), 'utf8'));
+  const fixture = healthyFixture();
+  const baseQuery = fixture.query;
+  fixture.query = sql => sql.includes('sqlite_master') ? Promise.resolve(db.prepare(sql).all() as { name: string }[]) : baseQuery(sql);
+  expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
+  db.exec('BEGIN');
+  db.exec(readFileSync(new URL('../../migrations/music/0019_software_requests.sql', import.meta.url), 'utf8'));
+  db.exec('COMMIT');
+  expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'pass' }));
+  db.close();
 });
 
 it('requires attention when a Stripe invoice event needs reconciliation', async () => {
