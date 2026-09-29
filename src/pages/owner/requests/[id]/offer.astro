@@ -12,4 +12,4 @@ const offers = await listSoftwareOffers(db, request.id);
 const selected = version ? offers.find(offer => offer.version === Number(version) && offer.sent_at) : offers.find(offer => offer.status === 'draft');
 if (!selected) return new Response('Offer not found.', { status: 404 });
 ---
-<SoftwareOffer offer={clientOffer(request, selected)} preview />
+<SoftwareOffer offer={clientOffer(request, selected, offers)} preview />

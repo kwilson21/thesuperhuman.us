@@ -23,6 +23,7 @@ function fixture() {
   vi.stubGlobal('document',{ querySelector:(selector:string) => selector === '[data-offer-form]' ? form : root,querySelectorAll:(selector:string) => selector === '[data-milestone]' ? [row] : [] });
   vi.stubGlobal('sessionStorage',{ getItem:() => null,setItem:vi.fn(),removeItem:vi.fn() });
   vi.stubGlobal('location',{ reload:vi.fn() }); vi.stubGlobal('confirm',vi.fn(() => true));
+  vi.stubGlobal('window', { addEventListener: vi.fn() });
   setupSoftwareOffers();
   return { root,form,send,preview,status,inputs,targets };
 }
@@ -55,7 +56,7 @@ it('keeps a sent link only in this page view and refreshes versions without relo
   expect(targets['[data-offer-state]'].textContent).toBe('v1 sent Sep 29 · no changes since');
   vi.stubGlobal('navigator', { clipboard:{ writeText:vi.fn().mockRejectedValue(new Error('blocked')) } });
   await targets['[data-copy-link]'].emit('click');
-  expect(targets['[data-software-status]'].textContent).toContain('Select and copy the Client link above.');
+  expect(targets['[data-software-status]'].textContent).toContain('Select and copy the link in the Client link field.');
   expect(targets['[data-offer-versions]'].hidden).toBe(false);
 });
 
@@ -92,6 +93,7 @@ it('reloads after decline even with unsaved offer edits, removing withdrawn link
   vi.stubGlobal('FormData',class { *[Symbol.iterator]() { yield ['text','Thanks.']; } });
   vi.stubGlobal('document',{ querySelector:() => root, querySelectorAll:(selector:string) => selector === '[data-software-action]' ? [form] : [] });
   vi.stubGlobal('fetch',vi.fn(async () => Response.json({ ok:true,copySent:true })));
+  vi.stubGlobal('window', { addEventListener: vi.fn() });
   setupSoftwareOffers(); await submit({ preventDefault:vi.fn() });
   expect(location.reload).toHaveBeenCalledOnce();
 });
@@ -106,9 +108,39 @@ it('reports confirmed offer email rejection', async () => {
 it('keeps revoke working when the resolved editor form is absent', async () => {
   const { root,targets } = fixture();
   delete targets['[data-offer-form]'];
+  vi.stubGlobal('window', { addEventListener: vi.fn() });
   setupSoftwareOffers();
   vi.stubGlobal('fetch',vi.fn(async () => Response.json({ ok:true })));
   await targets['[data-revoke-link]'].emit('click');
   expect(fetch).toHaveBeenCalledWith(root.dataset.endpoint,expect.objectContaining({ body:JSON.stringify({ action:'revoke' }) }));
   expect(location.reload).toHaveBeenCalledOnce();
+});
+
+it('keeps on-screen edits and retries a conflicted save with the returned timestamp', async () => {
+  const { root, form, inputs, status } = fixture();
+  inputs.outcome.value = 'Newer edits'; await form.emit('input');
+  const message = 'The saved draft changed since this page loaded. Save again to keep what’s on screen, or reload to see the saved version.';
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(Response.json({ updatedAt:'current', message }, { status:409 })).mockResolvedValueOnce(Response.json({ version:1, updatedAt:'next' })));
+  await form.emit('submit');
+  expect(status.textContent).toBe(message); expect(inputs.outcome.value).toBe('Newer edits'); expect(root.dataset.dirty).toBe('true');
+  await form.emit('submit');
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body))).toMatchObject({ expectedUpdatedAt:'current', terms:{ outcome:'Newer edits' } });
+  expect(root.dataset.dirty).toBe('false');
+});
+it.each([true, false])('locks all request actions during send and restores them (success %s)', async success => {
+  const { root, send } = fixture();
+  let finish!: (value:Response) => void;
+  vi.stubGlobal('fetch',vi.fn(() => new Promise<Response>(resolve => { finish = resolve; })));
+  const pending = send.emit('click');
+  expect(root.dataset.offerSending).toBe('true');
+  finish(success ? Response.json({ link:'https://example.com/offer/test', version:1, updatedAt:'new', emailSent:true }) : Response.json({ message:'Failed' }, { status:500 }));
+  await pending;
+  expect(root.dataset.offerSending).toBe('false'); expect(root.removeAttribute).toHaveBeenCalledWith('inert');
+});
+it('prompts before unloading only while offer edits are dirty', async () => {
+  const { form } = fixture();
+  const handler = vi.mocked(window.addEventListener).mock.calls[0][1] as (event:any) => void;
+  const event = { preventDefault:vi.fn(), returnValue:undefined };
+  handler(event); expect(event.preventDefault).not.toHaveBeenCalled();
+  await form.emit('input'); handler(event); expect(event.preventDefault).toHaveBeenCalledOnce();
 });

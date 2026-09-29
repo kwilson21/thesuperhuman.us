@@ -12,10 +12,13 @@ export function setupOwnerRequestActions() {
     history.replaceState(null, '', `${location.pathname}${location.search}`);
     history.scrollRestoration = 'auto';
   }
+  const canDiscardOffer = () => root?.dataset.offerSending !== 'true' && (root?.querySelector<HTMLElement>('[data-software-editor]')?.dataset.dirty !== 'true'
+    || confirm('You have unsaved offer changes. Continue and lose them?'));
   async function update(payload: Record<string, unknown>) {
+    if (root?.dataset.offerSending === 'true') return;
     try {
       const response = await fetch(`/api/owner/requests/${requestId}`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...payload, expectedUpdatedAt: root?.dataset.requestUpdated }),
       });
       if (!response.ok) { status!.textContent = 'That change was not saved. Refresh and try again.'; return; }
       // A reviewed request's next step is accepting the project, so reload onto that panel.
@@ -27,10 +30,11 @@ export function setupOwnerRequestActions() {
     } catch { status!.textContent = 'Connection lost. The change may not have been saved. Refresh before trying again.'; }
   }
   document.querySelector<HTMLFormElement>('[data-request-note]')?.addEventListener('submit', event => {
-    event.preventDefault(); const data = new FormData(event.currentTarget as HTMLFormElement); void update({ action: 'note', note: data.get('note') });
+    event.preventDefault(); if (!canDiscardOffer()) return; const data = new FormData(event.currentTarget as HTMLFormElement); void update({ action: 'note', note: data.get('note') });
   });
   // Scoped: project update forms also carry data-action, and must not post request status changes.
   document.querySelectorAll<HTMLButtonElement>('[data-request-actions] button[data-action]').forEach(button => button.addEventListener('click', () => {
+    if (!canDiscardOffer()) return;
     const action = button.dataset.action;
     if (action === 'withdraw' && !confirm('Honor this withdrawal and close the request?')) return;
     // Resolving before acceptance closes the provisional studio for good; reopening does not restore it.

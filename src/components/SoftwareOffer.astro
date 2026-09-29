@@ -32,7 +32,7 @@ const terms = offer?.terms;
     {offer && terms ? <>
       <div class="offer-intro">{(offer.name || offer.company) && <p class="page-kicker">Prepared for {[offer.name, offer.company].filter(Boolean).join(' · ')}</p>}
         <h1 class="page-title">{terms.outcome}</h1><p class="page-lede">{terms.summary}</p>
-        <p class="offer-meta">Software · {offer.path} · Offer v{offer.version}{offer.version > 1 && ` · replaces v${offer.version - 1}`}</p>
+        <p class="offer-meta">Software · {offer.path} · Offer v{offer.version}{offer.replacesVersion && ` · replaces v${offer.replacesVersion}`}</p>
       </div>
       <div class="offer-columns"><div>
         {terms.milestones.map(milestone => <section class="offer-milestone">
@@ -42,7 +42,7 @@ const terms = offer?.terms;
         </section>)}
         {[['What I’ll need from you', terms.clientInputs], ['Outside this offer', terms.exclusions], ['Timing', terms.timing]].filter(([, content]) => content).map(([heading, content]) => <section><h2 class="text-3xl leading-tight">{heading}</h2><p class="offer-lines">{content}</p></section>)}
       </div><aside>
-        <section><h2 class="fee-heading">Fixed project fee</h2><p class="offer-total">{formatUSD(offerTotal(terms))}</p>
+        <section class="offer-fee"><h2 class="fee-heading">Fixed project fee</h2><p class="offer-total">{formatUSD(offerTotal(terms))}</p>
           <dl>{terms.milestones.map(milestone => <div><dt>{milestone.name}</dt><dd>{formatUSD(milestone.feeCents)}</dd></div>)}</dl>
           <p>{paymentSchedules[terms.paymentMode]}</p>
           {terms.milestones.filter(milestone => milestone.checkpoint).map(milestone => <p>{milestone.name}: if stopped after {milestone.checkpoint!.label}, {milestone.checkpoint!.cancellationPercent}% of this milestone is due.</p>)}
@@ -58,7 +58,7 @@ const terms = offer?.terms;
         <li><h3 class="text-xl leading-tight">{terms.paymentMode === 'standard' ? 'Initial invoice' : 'First invoice'}</h3><p>{terms.paymentMode === 'standard' ? 'Pay the agreed first installment.' : 'Due within 30 days.'}</p></li>
         <li><h3 class="text-xl leading-tight">Confirm the start</h3><p>We agree when work begins.</p></li>
       </ol></section>
-      <footer class="sheet-footnote"><span><PersonalName variant="full" /> · The Superhuman Group LLC · <a class="site-link" href="/privacy">Privacy</a></span></footer>
+      <footer class="sheet-footnote"><span><PersonalName variant="full" /> · The Superhuman Group LLC<span class="offer-privacy"> · <a class="site-link" href="/privacy">Privacy</a></span></span></footer>
     </> : <section class="offer-unavailable"><h1 class="page-title">This offer isn’t available.</h1><p>Ask Kazon for a current link: <a class="site-link" href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>.</p></section>}
   </main>
   <script>document.querySelector('[data-print-offer]')?.addEventListener('click', () => window.print());</script>
@@ -97,6 +97,6 @@ const terms = offer?.terms;
   .preview-banner { border-bottom: 1px solid var(--rule); padding-bottom: 1rem; font-weight: 500; }
   .offer-unavailable { margin-top: 3rem; }
   @media(max-width:700px) { .offer-columns,.offer-beginning ol { grid-template-columns: 1fr; gap: 1rem; } .offer-columns aside { padding-left: 0; border-left: 0; border-top: 1px solid var(--rule); padding-top: 1.5rem; } .offer-beginning ol { gap: .5rem; } }
-  @media print { @page { size: Letter; margin: .5in; } .offer-shell { padding: 0; max-width: none; } .preview-banner,button,a { display: none; } .page-kicker { font-size: 8.5pt; } .offer-columns { display: block; } .offer-columns aside { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; border: 0; padding: 0; } .offer-milestone { display: grid; grid-template-columns: 1.1fr 1fr; column-gap: 1rem; } .offer-milestone h2 { grid-column: 1 / -1; } .offer-milestone h3 { grid-row: 2; margin-top: .3rem; margin-bottom: .3rem; } .offer-milestone ol, .offer-milestone ul { grid-row: 3; } .offer-intro { padding: 1rem 0; } h2 small { font-size: 8.5pt; margin: .2rem 0 .3rem; } h1 { font-size: 26pt; } h2 { font-size: 14pt; } h3 { font-size: 10pt; } p,li,dt,dd { font-size: 8.5pt; line-height: 1.2; } .page-lede { font-size: 12pt; } section { margin-bottom: .5rem; } .offer-milestone { padding-bottom: .4rem; } li { margin-bottom: .2rem; } .offer-total { font-size: 30pt; } .offer-beginning ol { grid-template-columns: repeat(3,1fr); } li { break-inside: avoid; } }
+  @media print { @page { size: Letter; margin: .5in; } .offer-shell { padding: 0; max-width: none; } .preview-banner,button,a,.offer-privacy { display: none; } .page-kicker { font-size: 8.5pt; } .offer-columns { display: block; } .offer-columns aside { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; border: 0; padding: 0; } .offer-milestone { display: grid; grid-template-columns: 1.1fr 1fr; column-gap: 1rem; } .offer-milestone h2 { grid-column: 1 / -1; } .offer-milestone h3 { grid-row: 2; margin-top: .3rem; margin-bottom: .3rem; } .offer-milestone ol, .offer-milestone ul { grid-row: 3; } .offer-intro { padding: 1rem 0; } h2 small { font-size: 8.5pt; margin: .2rem 0 .3rem; } h1 { font-size: 26pt; } h2 { font-size: 14pt; } h3 { font-size: 10pt; } p,li,dt,dd { font-size: 8.5pt; line-height: 1.2; } .page-lede { font-size: 12pt; } section { margin-bottom: .5rem; } .offer-milestone { padding-bottom: .4rem; } li { margin-bottom: .2rem; } .offer-total { font-size: 30pt; } .offer-beginning ol { grid-template-columns: repeat(3,1fr); } h2, h3 { break-after: avoid; } .offer-beginning, .offer-fee { break-inside: avoid; } .offer-header { padding-bottom: .6rem; } .offer-intro { padding: .7rem 0; } p { margin: .35rem 0; } .offer-total { margin: .5rem 0 .7rem; } dl div { padding: .4rem 0; } .offer-beginning { padding-top: .5rem; } footer { padding-top: .5rem; font-size: 8.5pt; } li { break-inside: avoid; } }
 </style>
 </body></html>

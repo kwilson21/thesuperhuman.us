@@ -22,9 +22,9 @@ export type NewOwnerRequest = {
   submissionId?: string;
 };
 
-export type RequestCommand =
+export type RequestCommand = { expectedUpdatedAt?: string } & (
   | { id: string; action: 'review' | 'resolve' | 'reopen' | 'withdraw'; actor: string }
-  | { id: string; action: 'note'; actor: string; note: string };
+  | { id: string; action: 'note'; actor: string; note: string });
 
 export type OwnerRequestAudit = { id: number; action: string; actor: string; note: string; occurredAt: string };
 
@@ -87,6 +87,7 @@ export async function listOwnerRequests(db: D1Database, filter: { kind?: OwnerRe
 export async function changeOwnerRequest(db: D1Database, command: RequestCommand): Promise<OwnerRequest> {
   const current = await getOwnerRequest(db, command.id);
   if (!current) throw new Error('Request not found.');
+  if (command.expectedUpdatedAt !== undefined && command.expectedUpdatedAt !== current.updatedAt) throw new Error('Request changed while it was being updated.');
   const actor = validActor(command.actor);
   const now = new Date().toISOString();
   if (command.action === 'note') {
