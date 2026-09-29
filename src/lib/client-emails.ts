@@ -56,7 +56,7 @@ export const resumeDeliveryEmail = (name: string) => renderEmail({
 
 const softwareSignIn = (origin = site) => new URL('/studio/sign-in?for=software', origin).href;
 export const softwareInvitationEmail = (origin?: string) => renderEmail({
-  preheader: 'Your project page is ready.', kicker: 'Project', heading: 'Your project page is ready.',
+  preheader: 'Your project has started.', kicker: 'Project', heading: 'Your project has started.',
   paragraphs: ['Your private project page is ready, with each update, what I need from you, and when you’ll hear from me next.'],
   button: { label: 'Open your project', href: softwareSignIn(origin) }, note: signInNote,
   reason: 'You received this invitation for your software project.',

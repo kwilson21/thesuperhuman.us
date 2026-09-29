@@ -73,7 +73,7 @@ export async function deliverSoftwareNotice(db: D1Database, id: string, env: Env
     const recipient = await db.prepare(`SELECT r.email FROM owner_requests r JOIN software_projects p ON p.request_id=r.id
       WHERE r.id=? AND r.status<>'withdrawn' AND p.revoked_at IS NULL`).bind(id).first<{ email: string }>();
     if (recipient && env.RESEND_API_KEY && env.CONTACT_FROM_EMAIL) sent = await sendAudioMessage({ apiKey: env.RESEND_API_KEY,
-      payload: { from: env.CONTACT_FROM_EMAIL, to: [recipient.email], subject: updateId ? 'Your project has an update' : 'Your private project page',
+      payload: { from: env.CONTACT_FROM_EMAIL, to: [recipient.email], subject: updateId ? 'Your project has an update' : 'Your project has started',
         ...(updateId ? softwareUpdateEmail(env.SITE_ORIGIN) : softwareInvitationEmail(env.SITE_ORIGIN)) } });
   } catch { /* A lookup failure sends nothing. */ }
   if (sent.uncertain) return;

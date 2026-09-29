@@ -54,7 +54,7 @@ it('starts only with an owner, sent offer and both explicit confirmations, prese
   expect(sql.prepare('SELECT terms_json,offer_id,payment_mode,invitation_status FROM software_projects').get()).toEqual({ terms_json:termsJson,offer_id:'software-offer',payment_mode:'standard',invitation_status:'sent' });
   expect(sql.prepare('SELECT action,actor FROM software_project_audit').all()).toEqual([{action:'started',actor:'owner@example.com'}]);
   expect((await start()).status).toBe(409); expect(fetch).toHaveBeenCalledTimes(1);
-  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toMatchObject({subject:'Your private project page',to:['alex@example.com'],text:expect.stringContaining('/studio/sign-in?for=software'),html:expect.stringContaining('/studio/sign-in?for=software')});
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toMatchObject({subject:'Your project has started',to:['alex@example.com'],text:expect.stringContaining('/studio/sign-in?for=software'),html:expect.stringContaining('/studio/sign-in?for=software')});
   sql.exec("UPDATE software_offers SET terms_json='{}'"); expect(sql.prepare('SELECT terms_json FROM software_projects').get()).toEqual({terms_json:termsJson});
 });
 it('supports invoice start, failed invitations and checked uncertain retries', async () => {
@@ -141,7 +141,7 @@ it('state validation, messages and Today reminders use the project snapshot and 
   sql.exec("UPDATE software_project_updates SET notification_status='sending',notification_attempted_at='2020-01-01'");
   expect(await listStudioProjectAttention(db,new Date())).toContainEqual(expect.objectContaining({requestId:'software',uncheckedNotices:1}));
 });
-it.each([[softwareInvitationEmail,'Your project page is ready.'],[softwareUpdateEmail,'You have a new project update.']] as const)('renders private software email parts with configured origin', (render, heading) => {
+it.each([[softwareInvitationEmail,'Your project has started.'],[softwareUpdateEmail,'You have a new project update.']] as const)('renders private software email parts with configured origin', (render, heading) => {
   const mail=render('https://preview.example.com'); expect(mail.text).toContain(heading); expect(mail.html).toContain(heading);
   expect(mail.text).toContain('https://preview.example.com/studio/sign-in?for=software'); expect(mail.html).toContain('https://preview.example.com/studio/sign-in?for=software');
   expect(mail.text+mail.html).not.toMatch(/Onboarding tool|Alex|Tracker|PRIVATE NOTE/);

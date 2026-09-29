@@ -13,7 +13,7 @@ const draft = updates.find(update => update.status === 'draft');
   {!project ? <form data-software-start>
     <p class="rail-muted rail-caption">Record these only after checking them yourself. The client sees them as complete.</p>
     <label class="confirmation"><input type="checkbox" name="signatures" required disabled={closed} />All signatures are complete (checked in Dropbox Sign)</label>
-    <label class="confirmation"><input type="checkbox" name="payment" required disabled={closed} />{terms.paymentMode === 'standard' ? 'First installment received (checked in Stripe or the bank)' : 'First invoice sent'}</label>
+    <label class="confirmation"><input type="checkbox" name="payment" required disabled={closed} />{terms.paymentMode === 'standard' ? 'First installment received (checked in Stripe or the bank)' : 'Purchase order in place, or the client doesn’t use one'}</label>
     <div class="software-field"><label>Next update to the client<input aria-describedby="project-field-1-hint" class="studio-input" type="date" name="next_update_on" /></label><p id="project-field-1-hint" class="rail-muted rail-caption">Only promise a date you can keep.</p></div>
     <button class="studio-button" disabled type="submit">Confirm start</button>
   </form> : <>
@@ -28,7 +28,7 @@ const draft = updates.find(update => update.status === 'draft');
       </fieldset>
     </form>
     <h3>Updates</h3>
-    <ul class="software-update-list">{updates.map(update => <li><strong>{update.title || 'Untitled draft'}</strong><span>{update.kind === 'progress' ? 'Progress' : String(update.kind).replaceAll('_',' ')} · {update.status === 'shared' ? 'Shared' : 'Draft'}{update.shared_at ? ` · ${softwareDate(update.shared_at)}` : ''}</span>
+    <ul class="software-update-list">{updates.map(update => <li><strong>{update.title || 'Untitled draft'}</strong><span>{update.kind === 'progress' ? 'Progress' : String(update.kind).replaceAll('_',' ')} · {{ draft: 'Draft', shared: 'Shared', superseded: 'Superseded' }[update.status]}{update.shared_at ? ` · ${softwareDate(update.shared_at)}` : ''}</span>
       {['pending','failed','sending'].includes(update.notification_status) && <><p class="rail-muted">{update.notification_status === 'sending' ? 'Email unconfirmed. Check Resend before retrying.' : update.notification_status === 'failed' ? 'Update email failed.' : 'Update email pending.'}</p><button class="studio-quiet" type="button" data-software-notice={update.id} data-uncertain={update.notification_status === 'sending' ? 'true' : undefined}>{update.notification_status === 'sending' ? 'I checked Resend; retry' : 'Retry notice'}</button></>}
     </li>)}</ul>
     {!closed && !project.revoked_at && <a href={`/owner/requests/${requestId}/update`}>{draft ? 'Continue draft' : 'New update'} →</a>}
