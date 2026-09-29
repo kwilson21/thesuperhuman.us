@@ -3,3 +3,6 @@
   Referrer-Policy: strict-origin-when-cross-origin
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
+
+https://:version.:subdomain.workers.dev/*
+  X-Robots-Tag: noindex, nofollow

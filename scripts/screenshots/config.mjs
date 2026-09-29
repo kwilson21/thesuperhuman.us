@@ -93,6 +93,7 @@ const PAGE_NAMES_BY_FILE = {
   'src/components/audio/AudioPlayer.astro': ['audio-releases', 'music-old-news'],
 };
 const SCENARIO_NAMES_BY_FILE = {
+  'src/components/owner/OwnerProjectFiles.astro': ['studio-client'],
   'src/styles/owner.css': ['owner-details'],
   'src/styles/studio.css': ['studio-client', 'owner-details'],
 };
