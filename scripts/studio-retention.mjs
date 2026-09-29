@@ -43,6 +43,45 @@ export function studioRetentionProjectPredicate(now) {
       ))`;
 }
 
+
+export function softwareRetentionProjectPredicate(now) {
+  return `content_deleted_at IS NULL AND ((completed_at IS NOT NULL AND completed_at<=${quote(cutoff(now,365))})
+    OR (revoked_at IS NOT NULL AND revoked_at<=${quote(cutoff(now,365))}))`;
+}
+async function softwareSources(database, now) {
+  const exists = (await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_projects'")).length;
+  const empty = "SELECT '[]' AS snapshot";
+  return {
+    softwareProjects: exists ? snapshot({ columns:'request_id,updated_at', from:'software_projects', where:softwareRetentionProjectPredicate(now), order:'request_id',limit:25 }) : empty,
+    softwareAudit: exists ? snapshot({columns:'id,occurred_at',from:'software_project_audit',where:`occurred_at<${quote(cutoff(now,730))}`,order:'id',limit:1000}) : empty,
+  };
+}
+const softwareContentSnapshot = (table, projects) => snapshot({columns:'id,request_id,updated_at',from:table,where:`request_id IN (${ids(projects)})`,order:'request_id,id',limit:5000});
+async function softwareValues(database, now, listObjects) {
+  const queries = await softwareSources(database,now), values = {};
+  for (const [name,query] of Object.entries(queries)) values[name] = await readSource(database,query);
+  const projects = values.softwareProjects;
+  if (projects.length && !listObjects) throw new Error('Software cleanup requires a private bucket prefix listing before review or deletion.');
+  if (projects.length) {
+    queries.softwareUpdates = softwareContentSnapshot('software_project_updates',projects);
+    queries.softwareMessages = snapshot({columns:'id,request_id,created_at,read_at',from:'software_project_messages',where:`request_id IN (${ids(projects)})`,order:'request_id,id',limit:5000});
+    for (const name of ['softwareUpdates','softwareMessages']) {
+      values[name] = await readSource(database,queries[name]);
+      if (values[name].length===5000) throw new Error('Software content batch reached its limit. Reduce project batch size.');
+    }
+  } else { values.softwareUpdates=[]; values.softwareMessages=[]; }
+  values.softwareObjects=[];
+  for (const [id] of projects) {
+    const keys = await listObjects(`software/${id}/`);
+    for (const key of keys) {
+      if (!key.startsWith(`software/${id}/`) || !/^software\/[a-z0-9-]{1,100}\/[a-z0-9-]{1,100}\/[a-z0-9-]+\.(png|jpg|webp)$/.test(key)) throw new Error('Unexpected software object key.');
+      values.softwareObjects.push([key]);
+    }
+  }
+  values.softwareObjects.sort((a,b)=>a[0].localeCompare(b[0]));
+  return {queries,values};
+}
+
 function sources(now) {
   const old = quote(cutoff(now, 30));
   const auditOld = quote(cutoff(now, 730));
@@ -94,9 +133,10 @@ async function ensureSchema(database) {
   if (!messages.some(row => row.name === 'review_decision')) throw new Error('Apply review decisions migration 0018 before running retention.');
 }
 
-export async function previewStudioRetention(database, environment, storage, now = new Date()) {
+export async function previewStudioRetention(database, environment, storage, now = new Date(), listObjects) {
   if (!storage?.databaseId || !storage.bucket) throw new Error('Studio retention needs the selected database and bucket.');
   await ensureSchema(database);
+  const software = await softwareValues(database,now,listObjects);
   const sql = sources(now);
   const projects = await readSource(database, sql.projects);
   const files = await readSource(database, fileSnapshot(projects));
@@ -111,18 +151,18 @@ export async function previewStudioRetention(database, environment, storage, now
   const projectAudit = await readSource(database, sql.projectAudit);
   return {
     version: 2, environment, storage, generatedAt: now.toISOString(),
-    sources: { projects: hash(JSON.stringify(projects)), files: hash(JSON.stringify(files)),
+    sources: { ...Object.fromEntries(Object.entries(software.values).map(([name,rows])=>[name,hash(JSON.stringify(rows))])), projects: hash(JSON.stringify(projects)), files: hash(JSON.stringify(files)),
       messages: hash(JSON.stringify(messages)), updates: hash(JSON.stringify(updates)),
       codes: hash(JSON.stringify(codes)), sessions: hash(JSON.stringify(sessions)),
       accessAudit: hash(JSON.stringify(accessAudit)), projectAudit: hash(JSON.stringify(projectAudit)) },
-    counts: { projects: projects.length, objects: files.length, messages: messages.length, updates: updates.length,
+    counts: { ...Object.fromEntries(Object.entries(software.values).map(([name,rows])=>[name,rows.length])), projects: projects.length, objects: files.length, messages: messages.length, updates: updates.length,
       codes: codes.length, sessions: sessions.length,
       accessAudit: accessAudit.length, projectAudit: projectAudit.length },
     notes: 'Preview contains counts and source hashes only. Apply the matching manifest within 24 hours. Object deletion precedes atomic database cleanup; if it fails, client access remains closed and a fresh preview can be applied after the storage issue is fixed. Run owner request retention separately after studio cleanup.',
   };
 }
 
-export async function applyStudioRetention(database, review, environment, storage, deleteObject, now = new Date()) {
+export async function applyStudioRetention(database, review, environment, storage, deleteObject, now = new Date(), listObjects) {
   if (!sameStorage(review?.storage, storage)) {
     throw new Error('Studio retention review was generated for another database or bucket. Nothing was changed.');
   }
@@ -132,6 +172,10 @@ export async function applyStudioRetention(database, review, environment, storag
     throw new Error('Studio retention review is invalid, for another environment, or older than 24 hours.');
   }
   await ensureSchema(database);
+  const software = await softwareValues(database,new Date(review.generatedAt),listObjects);
+  for (const [name,rows] of Object.entries(software.values)) {
+    if (hash(JSON.stringify(rows))!==review.sources?.[name] || rows.length!==review.counts?.[name]) throw new Error('Software retention source changed. Generate a fresh preview.');
+  }
   const sql = sources(new Date(review.generatedAt));
   const queries = { projects: sql.projects, codes: sql.codes, sessions: sql.sessions,
     accessAudit: sql.accessAudit, projectAudit: sql.projectAudit };
@@ -153,7 +197,17 @@ export async function applyStudioRetention(database, review, environment, storag
   }
   const guard = (query, rows) => `SELECT CASE WHEN (${query})=${quote(JSON.stringify(rows))} THEN 1 ELSE json_extract('changed','$') END`;
   const fileIds = ids(objectRows);
+  const softwareIds=ids(software.values.softwareProjects);
+  const softwareStatements = software.values.softwareProjects.length ? [
+    `DELETE FROM software_project_messages WHERE request_id IN (${softwareIds})`,
+    `DELETE FROM software_project_updates WHERE request_id IN (${softwareIds})`,
+    `UPDATE software_projects SET content_deleted_at=${quote(now.toISOString())} WHERE request_id IN (${softwareIds})`,
+    `INSERT INTO software_project_audit(request_id,action,actor,occurred_at) SELECT request_id,'content-deleted','retention',${quote(now.toISOString())} FROM software_projects WHERE request_id IN (${softwareIds})`,
+  ] : [];
+  if (software.values.softwareAudit.length) softwareStatements.push(`DELETE FROM software_project_audit WHERE id IN (${ids(software.values.softwareAudit)})`);
   const statements = [
+    ...Object.entries(software.queries).map(([name,query])=>guard(query,software.values[name])),
+    ...softwareStatements,
     ...Object.entries(queries).map(([name, query]) => guard(query, values[name])),
     guard(fileSnapshot(values.projects), values.files),
     guard(contentSnapshot('audio_project_messages', values.projects), values.messages),
@@ -182,6 +236,11 @@ export async function applyStudioRetention(database, review, environment, storag
         WHERE request_id IN (${projectIds}) AND content_deleted_at IS NULL`,
     ]);
   }
+  if (software.values.softwareProjects.length) await database.batch([
+    ...Object.entries(software.queries).map(([name,query])=>guard(query,software.values[name])),
+    `UPDATE software_projects SET revoked_at=COALESCE(revoked_at,${quote(now.toISOString())}) WHERE request_id IN (${softwareIds})`,
+  ]);
+  for (const [key] of software.values.softwareObjects) await deleteObject(key);
   for (const [, , key] of objectRows) await deleteObject(key);
   await database.batch(statements);
   return review.counts;
@@ -219,23 +278,44 @@ async function main() {
   const environment = remote ? (configPath ? `Remote ${configPath}` : 'Production') : 'Local test data';
   const storage = await readStudioStorageIdentity(remote ? configPath ?? 'wrangler.jsonc' : '.private/wrangler-music-preview.json');
   const database = await openMusicDatabase(remote, configPath);
-  const proxy = !remote && applyIndex >= 0 ? await (await import('wrangler')).getPlatformProxy({
-    configPath: resolve('.private/wrangler-music-preview.json'), persist: { path: '.wrangler/state/v3' },
-  }) : null;
+  // A remote prefix listing uses only the selected AUDIO binding through Wrangler's
+  // existing platform proxy. It never falls back to another bucket or local storage.
+  const softwareTable = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_projects'");
+  const needsSoftwareObjects = softwareTable.length && (await database.query(`SELECT request_id FROM software_projects WHERE ${softwareRetentionProjectPredicate(new Date())} LIMIT 1`)).length;
+  const needsProxy = needsSoftwareObjects || (!remote && applyIndex >= 0);
+  const proxyDirectory = remote && needsProxy ? await mkdtemp(resolve('.private/software-retention-')) : null;
+  let proxy;
+  try {
+    let proxyConfig = resolve('.private/wrangler-music-preview.json');
+    if (remote && needsProxy) {
+      const selected = parseJsonc(await readFile(resolve(configPath ?? 'wrangler.jsonc'),'utf8'));
+      proxyConfig = resolve(proxyDirectory,'wrangler.json');
+      await writeFile(proxyConfig,JSON.stringify({name:'software-retention-list',compatibility_date:selected.compatibility_date,
+        ...(storage.accountId ? {account_id:storage.accountId} : {}),
+        r2_buckets:[{binding:'AUDIO',bucket_name:storage.bucket,remote:true,...(storage.jurisdiction ? {jurisdiction:storage.jurisdiction} : {})}]}),{mode:0o600});
+    }
+    if (needsProxy) proxy = await (await import('wrangler')).getPlatformProxy({configPath:proxyConfig,envFiles:[],
+      remoteBindings:remote,persist:remote ? false : {path:'.wrangler/state/v3'}});
+  } catch (error) { if (proxyDirectory) await rm(proxyDirectory,{recursive:true,force:true}); await database.close(); throw error; }
+  const listObjects = proxy ? async prefix => {
+    const keys=[]; let cursor;
+    do { const page=await proxy.env.AUDIO.list({prefix,cursor}); keys.push(...page.objects.map(object=>object.key)); cursor=page.truncated ? page.cursor : undefined; } while(cursor);
+    return keys;
+  } : undefined;
   try {
     if (applyIndex >= 0) {
       const review = JSON.parse(await readFile(resolve(reviewPath), 'utf8'));
       const counts = await applyStudioRetention(database, review, environment, storage,
-        key => remote ? remoteObjectDeleter(key, storage, configPath) : proxy.env.AUDIO.delete(key));
+        key => remote ? remoteObjectDeleter(key, storage, configPath) : proxy.env.AUDIO.delete(key), new Date(), listObjects);
       console.log(`Removed ${counts.objects} private objects and cleared ${counts.projects} closed projects. Run owner request retention next.`);
     } else {
-      const review = await previewStudioRetention(database, environment, storage);
+      const review = await previewStudioRetention(database, environment, storage, new Date(), listObjects);
       await writeFile(reviewPath, JSON.stringify(review, null, 2), { mode: 0o600 });
       await writeFile('.private/studio-retention-review.html', renderMusicReport('Studio retention review',
         `${environment} · ${review.generatedAt}`, review.notes, { Counts: review.counts }), { mode: 0o600 });
       console.log(`Preview only: ${review.counts.projects} closed projects and ${review.counts.objects} private objects are eligible. Review .private/studio-retention-review.html before apply.`);
     }
-  } finally { await proxy?.dispose(); await database.close(); }
+  } finally { await proxy?.dispose(); if (proxyDirectory) await rm(proxyDirectory,{recursive:true,force:true}); await database.close(); }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) main().catch(error => {
   console.error(error.message); process.exitCode = 1;

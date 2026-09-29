@@ -51,9 +51,12 @@ async function portalRetentionGuard(database) {
   if (!tables.length) return { guard: '1', completed: '0' };
   const columns = new Set((await database.query('PRAGMA table_info(audio_projects)')).map(row => String(row.name)));
   if (!columns.has('content_deleted_at')) throw new Error('Studio retention migration 0014 is required before owner retention can run.');
+  const software = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_projects'");
+  const softwareGuard = software.length ? " AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.request_id=owner_requests.id AND p.content_deleted_at IS NULL)" : '';
+  const softwareCompleted = software.length ? " OR EXISTS(SELECT 1 FROM software_projects p WHERE p.request_id=owner_requests.id AND p.content_deleted_at IS NOT NULL)" : '';
   return {
-    guard: `NOT EXISTS(SELECT 1 FROM audio_projects p WHERE p.request_id=owner_requests.id AND p.content_deleted_at IS NULL)`,
-    completed: `EXISTS(SELECT 1 FROM audio_projects p WHERE p.request_id=owner_requests.id AND p.content_deleted_at IS NOT NULL)`,
+    guard: `NOT EXISTS(SELECT 1 FROM audio_projects p WHERE p.request_id=owner_requests.id AND p.content_deleted_at IS NULL)${softwareGuard}`,
+    completed: `EXISTS(SELECT 1 FROM audio_projects p WHERE p.request_id=owner_requests.id AND p.content_deleted_at IS NOT NULL)${softwareCompleted}`,
   };
 }
 
@@ -129,8 +132,15 @@ export async function applyOwnerRetention(database, review, environment, now = n
   ] : [];
   const softwareTables = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('software_fit_reviews','software_offers','software_offer_links')");
   if (softwareTables.length && softwareTables.length !== 3) throw new Error('Software offers migration 0020 is required before owner retention can run.');
-  const softwareCleanup = softwareTables.length ? ['software_offer_links','software_offers','software_fit_reviews'].map(table =>
+  const projectsTable = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_projects'");
+  const softwareCleanup = softwareTables.length ? ['software_offer_links','software_fit_reviews'].map(table =>
     `DELETE FROM ${table} WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`) : [];
+  if (softwareTables.length) softwareCleanup.push(projectsTable.length
+    ? `DELETE FROM software_offers WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection}) AND id NOT IN (SELECT offer_id FROM software_projects)`
+    : `DELETE FROM software_offers WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`);
+  if (projectsTable.length) softwareCleanup.push(
+    `UPDATE software_projects SET terms_json='{}',waiting_for='',started_by='' WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection}) AND content_deleted_at IS NOT NULL`,
+    `UPDATE software_offers SET terms_json='{}',sent_by=NULL WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`);
   const guard = (query, expected) => `SELECT CASE WHEN (${query})=${quote(expected)} THEN 1 ELSE json_extract('retention source changed','$') END`;
   const runId = hash(`${review.generatedAt}:${review.requestSourceHash}:${review.playbackSourceHash}`);
   const statements = [

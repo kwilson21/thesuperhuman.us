@@ -224,3 +224,17 @@ it('clears fit notes, offer terms and links with eligible software contact data'
   for (const table of ['software_fit_reviews','software_offers','software_offer_links']) expect(await database.query(`SELECT * FROM ${table}`)).toEqual([]);
   expect((await database.query("SELECT email FROM owner_requests WHERE id='old-software'"))[0].email).toBe('');
 });
+
+it('holds software request contact data until project content is deleted, then cleans without breaking the offer FK', async () => {
+  const database=fixture(); database.db.exec('PRAGMA foreign_keys=ON');
+  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at) VALUES ('software-project','software','Alex','alex@example.com','Tool','resolved','2020-01-01','2020-01-01','2020-01-01');
+    INSERT INTO software_offers VALUES ('snapshot-offer','software-project',1,'sent','{"outcome":"Private outcome"}','now','now','now','owner');
+    INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('software-project','snapshot-offer','{"outcome":"Private outcome"}','standard','now','now','now','owner','now','now')`);
+  let review=await previewOwnerRetention(database,'Local test data',now); await applyOwnerRetention(database,review,'Local test data',now);
+  expect(database.db.prepare("SELECT email FROM owner_requests WHERE id='software-project'").get()).toEqual({email:'alex@example.com'});
+  database.db.exec("UPDATE software_projects SET revoked_at='2020-01-01',content_deleted_at='2021-01-01'");
+  review=await previewOwnerRetention(database,'Local test data',now); await applyOwnerRetention(database,review,'Local test data',now);
+  expect(database.db.prepare("SELECT email FROM owner_requests WHERE id='software-project'").get()).toEqual({email:''});
+  expect(database.db.prepare('SELECT terms_json,offer_id FROM software_projects').get()).toEqual({terms_json:'{}',offer_id:'snapshot-offer'});
+  expect(database.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+});
