@@ -1,7 +1,11 @@
-.software-intake .intake-return{margin:.75rem 0}.software-intake .intake-return a{color:var(--accent)}
-.software-intake .intake-offer small{display:block;color:var(--muted);line-height:1.45;margin-top:.25rem}
-.software-intake .intake-review{min-width:0}.software-intake #software-success .intake-review{max-width:48rem;margin:1.5rem 0}
+.software-intake .intake-return{margin:.75rem 0}.software-intake .intake-return a{display:inline-flex;align-items:center;min-height:44px}
+.software-intake .intake-offer{align-items:flex-start}.software-intake .intake-offer input{margin-top:.2rem}
+.software-intake .intake-offer small{display:block;color:var(--muted);font-size:.9rem;line-height:1.4;margin-top:.2rem}
+.software-intake .intake-columns>div>.intake-field:first-child{margin-top:0}
+.software-intake .intake-review{min-width:0}.software-intake .intake-review dl{grid-template-columns:minmax(0,13rem) minmax(0,1fr)}
+.software-intake #software-success .intake-review{max-width:42.5rem;margin:1.5rem 0}
 .software-intake #software-success [data-print]{margin-top:1rem}
 .software-intake .intake-muted{font-size:.8rem;margin-top:.35rem}
 .software-intake .intake-field input,.software-intake .intake-field select{min-height:44px}
-@media print{header,footer,.intake-return,.intake-progress,#software-inquiry,.intake-contact,[data-print]{display:none!important}.software-intake #software-success{display:block!important}.software-intake{padding:0!important}}
+@media(max-width:700px){.software-intake .intake-review dl{grid-template-columns:minmax(0,1fr)}.software-intake .intake-review dt{border-bottom:0;padding-bottom:.15rem}.software-intake .intake-review dd{padding-top:0}}
+@media print{.site-header,.compact-footer,.skip-link,.intake-return,.intake-progress,.intake-contact,[data-print]{display:none!important}.software-intake{padding:0!important}}

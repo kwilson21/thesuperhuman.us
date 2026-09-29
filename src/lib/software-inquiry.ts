@@ -8,7 +8,7 @@ export const softwarePaths = {
 } as const;
 export const softwareLabels = {
   path: 'Project', today: 'What happens today?', audience: 'Who needs this to work better?',
-  firstResult: 'What would a useful first result look like?', name: 'Name', email: 'Email',
+  firstResult: 'What would a useful first result look like?', name: 'Your name', email: 'Email',
   company: 'Company (optional)', timing: 'Timing', timingReason: 'Why this timing? (optional)',
   budgetStatus: 'Budget status', budgetNote: 'Budget amount, if you’d like to share it (optional)',
   approver: 'Who will approve the project?', approverRole: 'Their role (optional)',
@@ -29,15 +29,16 @@ const schema = z.object({
 });
 export type SoftwareInput = z.infer<typeof schema>;
 export function validateSoftwareInquiry(input: unknown): { ok: true; value: SoftwareInput } | { ok: false; errors: Record<string, string> } {
+  const lineErrors: Record<string, string> = {};
   if (input && typeof input === 'object') {
     const raw = input as Record<string, unknown>;
-    const lineErrors: Record<string, string> = {};
     for (const key of ['name', 'email', 'company', 'timingReason', 'budgetNote', 'approverRole'])
       if (typeof raw[key] === 'string' && /[\r\n]/.test(raw[key])) lineErrors[key] = 'Use one line.';
-    if (Object.keys(lineErrors).length) return { ok: false, errors: lineErrors };
+    for (const key of ['today', 'audience', 'firstResult', 'name', 'email', 'company', 'timingReason', 'budgetNote', 'approverRole'])
+      if (typeof raw[key] === 'string' && /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(raw[key])) lineErrors[key] = 'Remove control characters.';
   }
   const parsed = schema.safeParse(input);
-  if (!parsed.success) return { ok: false, errors: Object.fromEntries(parsed.error.issues.map(issue => [String(issue.path[0] ?? '_form'), issue.message])) };
+  if (!parsed.success || Object.keys(lineErrors).length) return { ok: false, errors: { ...Object.fromEntries((parsed.success ? [] : parsed.error.issues).map(issue => [String(issue.path[0] ?? '_form'), issue.message])), ...lineErrors } };
   const value = parsed.data;
   if (value.approver !== 'other') value.approverRole = '';
   return { ok: true, value };
@@ -51,14 +52,14 @@ export function softwareRequest(input: SoftwareInput): NewOwnerRequest {
     details: Object.fromEntries(Object.keys(softwareLabels).filter(key => key !== 'name' && key !== 'email').map(key => [key, input[key as keyof SoftwareInput]])),
   };
 }
-export function softwareBrief(request: OwnerRequest): Record<keyof typeof softwareLabels, string> {
+export function softwareBrief(request: OwnerRequest): Record<string, string> {
   const details = request.details;
-  return Object.fromEntries(Object.keys(softwareLabels).map(key => {
+  return Object.fromEntries(Object.keys(softwareLabels).filter(key => key !== 'approverRole' || details.approver === 'other').map(key => {
     const value = key === 'name' ? request.name : key === 'email' ? request.email : details[key];
     const display = key === 'path' ? softwarePaths[value as keyof typeof softwarePaths] :
       key === 'timing' ? timingLabels[value as keyof typeof timingLabels] :
       key === 'budgetStatus' ? budgetLabels[value as keyof typeof budgetLabels] :
       key === 'approver' ? approverLabels[value as keyof typeof approverLabels] : value;
     return [key, typeof display === 'string' && display ? display : 'Not provided'];
-  })) as Record<keyof typeof softwareLabels, string>;
+  }));
 }

@@ -15,13 +15,13 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
 ---
 <BaseLayout title="Start a software project · Kazon Wilson" description="Share a short software project brief for Kazon Wilson to review.">
   <article class="site-shell intake-page software-intake">
-    <p class="intake-return"><a href={href('/services#software')}>← Software</a></p>
+    <p class="intake-return"><a class="site-link" href={href('/services#software')}>Software <span aria-hidden="true">←</span></a></p>
     <ol class="intake-progress" aria-label="Your progress"><li aria-current="step"><span class="step-number">1</span> Project</li><li><span class="step-number">2</span> Details</li><li><span class="step-number">3</span> Review</li></ol>
     <form id="software-inquiry" data-available={available} novalidate>
       <noscript><p>Please enable JavaScript to use this form, or email <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>.</p></noscript>
       <section data-step="0" aria-labelledby="software-step-one">
-        <h1 id="software-step-one" tabindex="-1">What would you like to make easier?</h1>
-        <p class="intake-intro">Start with the problem or the idea. Plain language is fine.</p>
+        <h1 id="software-step-one" tabindex="-1">What are you working on?</h1>
+        <p class="intake-intro">Start with the problem or the idea.</p>
         <div class="intake-columns intake-service-columns">
           <fieldset class="offer-list"><legend class="sr-only">Choose a starting point</legend>
             {Object.entries(softwarePaths).map(([key, value]) => <label class="intake-offer"><input type="radio" name="path" value={key} checked={selected === key} /><span><strong>{value}</strong><small>{key === 'workflow' ? 'A focused tool, automation or integration for a task your team repeats.' : 'One core experience or product question people can try.'}</small></span></label>)}
@@ -38,20 +38,20 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
       <section data-step="1" aria-labelledby="software-step-two" hidden>
         <h1 id="software-step-two" tabindex="-1">A few practical details.</h1><p class="intake-intro">Tell me how to reach you and where the decision stands.</p>
         <div class="intake-columns intake-review-columns"><div class="intake-contact-fields">
-          <div class="intake-pair"><label class="intake-field" for="software-name">Name<input id="software-name" name="name" autocomplete="name" maxlength="100" required /></label><label class="intake-field" for="software-email">Email<input id="software-email" name="email" type="email" autocomplete="email" maxlength="120" required /></label></div><p data-form-error="name" hidden></p><p data-form-error="email" hidden></p>
+          <div class="intake-pair"><label class="intake-field" for="software-name">Your name<input id="software-name" name="name" autocomplete="name" maxlength="100" required /></label><label class="intake-field" for="software-email">Email<input id="software-email" name="email" type="email" autocomplete="email" maxlength="120" required /></label></div><p data-form-error="name" hidden></p><p data-form-error="email" hidden></p>
           <label class="intake-field" for="software-company">{softwareLabels.company}<input id="software-company" name="company" autocomplete="organization" maxlength="120" /></label><p data-form-error="company" hidden></p>
-          <label class="intake-field" for="software-timing">Timing<select id="software-timing" name="timing" required>{Object.entries(timingLabels).map(([key, value]) => <option value={key}>{value}</option>)}</select></label><p data-form-error="timing" hidden></p>
+          <label class="intake-field" for="software-timing">Timing<select id="software-timing" name="timing" required><option value="">Choose one</option>{Object.entries(timingLabels).map(([key, value]) => <option value={key}>{value}</option>)}</select></label><p data-form-error="timing" hidden></p>
           <label class="intake-field" for="software-timing-reason">{softwareLabels.timingReason}<input id="software-timing-reason" name="timingReason" maxlength="500" /></label><p data-form-error="timingReason" hidden></p>
         </div><div>
-          <label class="intake-field" for="software-budget">Budget status<select id="software-budget" name="budgetStatus" required>{Object.entries(budgetLabels).map(([key, value]) => <option value={key}>{value}</option>)}</select></label><p data-form-error="budgetStatus" hidden></p><p class="intake-muted">Choose the closest status. A fixed price is agreed later, in writing.</p>
-          <label class="intake-field" for="software-budget-note">{softwareLabels.budgetNote}<input id="software-budget-note" name="budgetNote" maxlength="200" /></label><p data-form-error="budgetNote" hidden></p><p class="intake-muted">Private. A figure or range is fine.</p>
-          <label class="intake-field" for="software-approver">{softwareLabels.approver}<select id="software-approver" name="approver" required>{Object.entries(approverLabels).map(([key, value]) => <option value={key}>{value}</option>)}</select></label><p data-form-error="approver" hidden></p>
+          <label class="intake-field" for="software-budget">Budget status<select id="software-budget" name="budgetStatus" aria-describedby="software-budget-help" required><option value="">Choose one</option>{Object.entries(budgetLabels).map(([key, value]) => <option value={key}>{value}</option>)}</select></label><p id="software-budget-help" class="intake-muted">Choose the closest status. A fixed price is agreed later, in writing.</p><p data-form-error="budgetStatus" hidden></p>
+          <label class="intake-field" for="software-budget-note">{softwareLabels.budgetNote}<input id="software-budget-note" name="budgetNote" aria-describedby="software-budget-note-help" maxlength="200" /></label><p id="software-budget-note-help" class="intake-muted">Private. A figure or range is fine.</p><p data-form-error="budgetNote" hidden></p>
+          <label class="intake-field" for="software-approver">{softwareLabels.approver}<select id="software-approver" name="approver" required><option value="">Choose one</option>{Object.entries(approverLabels).map(([key, value]) => <option value={key}>{value}</option>)}</select></label><p data-form-error="approver" hidden></p>
           <div data-approver-role hidden><label class="intake-field" for="software-approver-role">{softwareLabels.approverRole}<input id="software-approver-role" name="approverRole" maxlength="120" /></label><p data-form-error="approverRole" hidden></p></div>
         </div></div>
       </section>
       <section data-step="2" aria-labelledby="software-step-three" hidden><h1 id="software-step-three" tabindex="-1">Here’s your project brief.</h1><p class="intake-intro">Check every answer before sending.</p>
         <div class="intake-columns intake-review-columns"><div class="intake-review"><dl data-review></dl><div class="intake-edit"><button type="button" data-edit="0">Edit project</button><button type="button" data-edit="1">Edit details</button></div></div>
-          <div><h2>What happens next?</h2><p>I’ll read your brief and reply by email with a question, a proposed first milestone, or a note if it isn’t a fit. Sending it doesn’t book work or commit you to anything. No payment now.</p>
+          <div class="intake-service-detail"><h2>What happens next?</h2><p>I’ll read your brief and reply by email with a question, a proposed first milestone, or a note if it isn’t a fit. Sending it doesn’t book work or commit you to anything. No payment now.</p>
             {available ? <div class="cf-turnstile" data-sitekey={siteKey}></div> : <p class="intake-unavailable">This preview isn’t connected to delivery yet. You can try every step; sending is unavailable.</p>}<p data-form-error="turnstileToken" hidden></p>
           </div></div>
       </section>
@@ -59,7 +59,7 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
       <div class="intake-actions"><button type="button" data-back hidden>Back</button><button type="button" class="site-button" data-next>Continue</button><button type="submit" class="site-button" hidden disabled>Send project brief</button></div>
       <p class="intake-reassurance">No booking or payment at this stage.</p>
     </form>
-    <section id="software-success" hidden tabindex="-1" role="status"><h1>Your brief is in.</h1><p class="intake-intro">Received. I haven’t reviewed it yet. I’ll reply by email with a question, a proposed first milestone with a fixed price, or a note if it isn’t a fit. Nothing is booked and no payment is due.</p><div class="intake-review"><h2>Your brief</h2><dl data-receipt></dl></div><button type="button" class="site-button" data-print>Print or save</button></section>
+    <section id="software-success" hidden tabindex="-1" role="status"><h1>Your brief is in.</h1><p class="intake-intro">Received. I haven’t reviewed it yet. I’ll reply by email with a question, a proposed first milestone with a fixed price, or a note if it isn’t a fit. Nothing is booked and no payment is due.</p><div class="intake-review"><h2>Your brief</h2><dl data-receipt></dl></div><button type="button" class="site-button site-button-outline" data-print>Print or save</button></section>
     <p class="intake-contact">Not sure it fits? <a href={href('/#contact')}>Get in touch</a>. Hiring for a role? <a href={href('/about#resumes')}>Request my resume</a>.</p>
   </article>
   <Footer compact slot="footer" />

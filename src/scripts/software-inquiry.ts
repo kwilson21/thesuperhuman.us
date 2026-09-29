@@ -23,6 +23,7 @@ if (form) {
   function renderRows(list: HTMLDListElement, values: Record<string, string>) {
     list.replaceChildren();
     for (const key of keys) {
+      if (key === 'approverRole' && values.approver !== approverLabels.other) continue;
       const dt = document.createElement('dt'), dd = document.createElement('dd');
       dt.textContent = softwareLabels[key];
       dd.textContent = values[key] || 'Not provided';
@@ -50,7 +51,8 @@ if (form) {
       const message = errors[field];
       if (error) { error.textContent = message ?? ''; error.hidden = !message; }
       if (control instanceof HTMLElement) {
-        control.toggleAttribute('aria-invalid', Boolean(message));
+        if (message) control.setAttribute('aria-invalid', 'true');
+        else control.removeAttribute('aria-invalid');
         if (message) first ??= control;
       }
     }
@@ -69,7 +71,7 @@ if (form) {
   setupFormSubmission({
     form, endpoint: '/api/software-inquiry', success: document.getElementById('software-success')!,
     payload: data => ({ ...payload(data), submissionId }),
-    onSuccess: result => renderRows(document.querySelector('[data-receipt]')!, result.brief ?? {}),
+    onSuccess: result => renderRows(document.querySelector('[data-receipt]')!, result.brief && typeof result.brief === 'object' ? result.brief as Record<string, string> : {}),
     onConflict: () => { submissionId = crypto.randomUUID(); },
   });
   const observer = new MutationObserver(() => {
