@@ -32,7 +32,7 @@ const errors = [];
 const captured = [];
 
 /** Saves one PNG. Pass `owner` for owner pages, `cookie` for a studio session, `selector` for one section. */
-async function capture({ file, path, viewport = 'desktop', owner = false, cookie, selector, status = 200 }) {
+async function capture({ file, path, viewport = 'desktop', owner = false, cookie, selector, status = 200, prepare }) {
   const size = VIEWPORTS.find(item => item.name === viewport);
   const context = await browser.newContext({ viewport: { width: size.width, height: size.height }, reducedMotion: 'reduce' });
   // Access adds this header at the edge, so only our own origin sees it. Fonts and other hosts reject it.
@@ -56,6 +56,7 @@ async function capture({ file, path, viewport = 'desktop', owner = false, cookie
   // Turnstile keeps requesting in the background, so network idle is a best effort, not a requirement.
   await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
   await page.evaluate(() => document.fonts.ready);
+  if (prepare) await prepare(page);
   const target = selector ? page.locator(selector).first() : page;
   await target.screenshot({ path: `${OUT}/${file}`, ...(selector ? {} : { fullPage: true }), animations: 'disabled' });
   await context.close();

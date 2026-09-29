@@ -45,6 +45,7 @@ export const REDIRECTS = {
 
 /** Pages that need seeded data. The coverage test checks the named scenario captures the route. */
 export const SCENARIO_PAGES = {
+  'src/pages/software/start.astro': { scenario: 'software-brief', route: '/software/start' },
   'src/pages/owner/requests/[id].astro': { scenario: 'owner-details', route: '/owner/requests/' },
   'src/pages/owner/campaigns/[id].astro': { scenario: 'owner-details', route: '/owner/campaigns/' },
   'src/pages/studio/index.astro': { scenario: 'studio-client', route: '/studio' },
@@ -75,7 +76,9 @@ const PAGE_NAMES_BY_FILE = {
   'src/data/audio.ts': ['audio'],
   'src/data/services.ts': ['services'],
   'src/styles/global.css': SHARED_SITE_PAGES,
-  'src/styles/audio-intake.css': ['audio-start'],
+  'src/styles/audio-intake.css': ['audio-start', 'software-start'],
+  'src/styles/software-intake.css': ['software-start'],
+  'src/scripts/software-inquiry.ts': ['software-start'],
   'src/styles/music.css': MUSIC_CATALOG_PAGES,
   'src/styles/music-hubs.css': MUSIC_HUB_PAGES,
   'src/styles/music-premiere.css': ['music-old-news'],
@@ -95,7 +98,14 @@ const PAGE_NAMES_BY_FILE = {
 };
 const SCENARIO_NAMES_BY_FILE = {
   'src/components/owner/OwnerProjectFiles.astro': ['studio-client'],
-  'src/styles/owner.css': ['owner-details'],
+  'src/styles/owner.css': ['owner-details', 'software-brief'],
+  'src/lib/software-inquiry.ts': ['software-brief'],
+  'src/scripts/software-inquiry.ts': ['software-brief'],
+  'src/pages/api/software-inquiry.ts': ['software-brief'],
+  'src/styles/software-intake.css': ['software-brief'],
+  'src/pages/software/start.astro': ['software-brief'],
+  'src/pages/owner/requests/[id].astro': ['software-brief'],
+  'src/components/owner/RequestList.astro': ['software-brief'],
   'src/styles/studio.css': ['studio-client', 'owner-details'],
 };
 

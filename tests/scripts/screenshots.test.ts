@@ -218,3 +218,9 @@ describe('screenshot preview config', () => {
     expect(text).not.toContain(wrangler.vars.PUBLIC_TURNSTILE_SITE_KEY);
   });
 });
+
+it('software print styling never forces a receipt before submission', () => {
+  const css = readFileSync(new URL('../../src/styles/software-intake.css', import.meta.url), 'utf8');
+  expect(css).not.toMatch(/#software-success\s*\{\s*display:block/);
+  expect(css).not.toMatch(/@media print[^}]*#software-inquiry/);
+});
