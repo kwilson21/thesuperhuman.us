@@ -5,12 +5,12 @@ Repository: `kwilson21/thesuperhuman.us`
 Pull request: [#151](https://github.com/kwilson21/thesuperhuman.us/pull/151)  
 Code revision: `c6cd129901b67ca06f9d89607f659acbe97a6a03` (this record is committed on top of it)  
 Target: production `https://thesuperhuman.us` (`/audio/start` and `/software/start`)  
-Reviewer and deployment authorization: Kazon Wilson. They accepted the placeholder contrast exception in [#150](https://github.com/kwilson21/thesuperhuman.us/pull/150) on condition of this follow-up, then chose option A (this colour) over `var(--muted)` from a side-by-side of both forms at 1280 and 390 px ("A", owner, in conversation, 2026-09-29)  
-Scope: one placeholder colour rule in `src/styles/audio-intake.css`, which both intake pages load, and a test that recomputes its contrast from the tokens  
+Reviewer and deployment authorization: Kazon Wilson. They accepted the placeholder contrast exception in [#150](https://github.com/kwilson21/thesuperhuman.us/pull/150) with this follow-up planned, then chose option A (this color) over `var(--muted)` from a side-by-side of both forms at 1280 and 390 px ("A", owner, in conversation, 2026-09-29)  
+Scope: one placeholder color rule in `src/styles/audio-intake.css`, which both intake pages load, and a test that recomputes its contrast from the tokens  
 Rollback revision: `48ae7f75dc2d9e41e6f82bc4b0cf9f3c7ed35ae3` (current `main`)
 
 This is a scoped deployment record against the reusable pre-launch checklist.
-Only the placeholder colour on the two intake forms changes; every item outside
+Only the placeholder color on the two intake forms changes; every item outside
 it is N/A with the reason. It resolves the placeholder contrast exception in
 [the software brief record](prelaunch-qa-2026-09-29-software-brief.md).
 
@@ -18,6 +18,9 @@ it is N/A with the reason. It resolves the placeholder contrast exception in
 
 - **PASS · Project and authorization.** Branch `claude/placeholder-contrast`
   targets `main`; the owner asked for this follow-up and approved the look.
+- **PASS · Approved design.** Local captures after the change, at 1280 × 800
+  and 390 × 844 on both forms, are pixel-identical to the option the owner
+  approved.
 - **N/A · Claims, first screen, navigation and links.** No copy, route or link
   changes. The placeholder text itself is unchanged.
 
@@ -34,20 +37,23 @@ it is N/A with the reason. It resolves the placeholder contrast exception in
   on the software brief's "For example:" textarea and the audio song title and
   file link fields at 1280 × 800 and 390 × 844; every intake input keeps the
   paper background, including the one inside the tinted file link panel.
-- **PASS · Why this colour.** Derived from the existing `--muted` and `--paper`
-  tokens, so no new colour or token is added. 80% is the lightest mix that
-  clears 4.5:1 (75% gives about 4.3:1), which keeps the example a step lighter
-  than the hint above it (`--muted`, about 8.4:1) so it still reads as a
-  placeholder rather than entered text.
+- **PASS · Why this color.** Derived from the existing `--muted` and `--paper`
+  tokens, so no new color or token is added. 80% clears 4.5:1 with some margin
+  (about 4.9:1); 75% falls short at about 4.3:1. The example stays a step
+  lighter than the hint above it (`--muted`, about 8.4:1), so it still reads as
+  a placeholder rather than entered text.
 - **PASS · Scope.** Every placeholder on both pages sits inside `.intake-field`,
   and only these two pages use that class. Contact, resume request and studio
   forms are unchanged.
 - **PASS · Responsive.** Before and after captures at both widths have
-  identical dimensions; only the placeholder text differs.
-- **N/A · Structure, keyboard, focus, zoom and motion.** Markup and layout are
-  unchanged.
+  identical dimensions; only the placeholder color differs.
+- **N/A · Structure, image alternatives, labels and errors, keyboard, focus,
+  touch targets, zoom and motion.** Markup and layout are unchanged.
 - **UNVERIFIED · Other browsers.** Checked in Chromium only. A browser without
-  `color-mix` support drops the rule and shows the previous grey.
+  `color-mix` support (older than Chrome 111, Safari 16.2 or Firefox 113)
+  cannot resolve the value, so the placeholder inherits the field's ink color
+  and looks like entered text. The site's other `color-mix` backgrounds rely on
+  the same support.
 
 ## 4. Performance and resilience
 
