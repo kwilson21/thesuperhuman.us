@@ -1,28 +1,26 @@
 export type SoftwareIllustration = 'idea' | 'prototype' | 'product' | 'integration' | 'website';
+import { tallyStory } from './project-stories/tally';
 
 export interface ServiceSheet {
-  title: string; introduction: string; approach: string;
-  offerings: { id?: string; label: string; description: string; illustration: SoftwareIllustration; evidence?: string }[];
-  background: string; working: string; starting: string; closing: string;
-  contact: string; contactLabel: string; evidence: string; evidenceLabel: string;
   path: string;
+  title: string;
+  introduction: string;
+  approach: string;
+  workflow: { title: string; lead: string; detail: string; button: string; path: string };
+  idea: { title: string; lead: string; detail: string; button: string; path: string; project: typeof tallyStory };
+  steps: { title: string; description: string }[];
 }
 
 export const softwareSheet: ServiceSheet = {
   path: '/services',
-  title: 'Software engineering',
-  introduction: 'Bring an idea or a problem. Let’s turn it into something useful.',
-  approach: 'AI-assisted building, backed by production engineering experience.',
-  offerings: [
-    { label: 'Prototypes', description: 'An idea made tangible enough to try.', illustration: 'prototype' },
-    { label: 'Products & internal tools', description: 'Useful software, refined with the people using it.', illustration: 'product' },
-    { id: 'website-design', label: 'Website design', description: 'Clear structure, visual storytelling and responsive pages.', illustration: 'website', evidence: '/building/personal-website' },
-    { label: 'Integrations', description: 'Connect systems and simplify a workflow.', illustration: 'integration' },
+  title: 'Let’s build something useful.',
+  introduction: 'Make a workflow easier, or bring an idea to life. We’ll choose a clear first milestone together.',
+  approach: 'Fixed-price projects · Written, async collaboration · AI-assisted building',
+  workflow: { title: 'Make a workflow easier', lead: 'For the tasks your team keeps doing by hand.', detail: 'A focused tool, automation, or integration.', button: 'Tell me about your workflow', path: '/software/start?path=workflow' },
+  idea: { title: 'Bring an idea to life', lead: 'For an idea you want people to try.', detail: 'One core experience, built to explore.', button: 'Tell me about your idea', path: '/software/start?path=idea', project: tallyStory },
+  steps: [
+    { title: 'Share the situation', description: 'A short brief, in your own words.' },
+    { title: 'Review the first milestone', description: 'Scope, deliverables and a fixed price.' },
+    { title: 'Agree, then begin', description: 'Work starts after the terms are agreed.' },
   ],
-  background: '7+ years in software engineering · Lyft · Sure · Axuall',
-  working: 'Fixed-price projects. Clear deliverables. Written, async collaboration.',
-  closing: 'Have something in mind?',
-  starting: 'Share the idea, who it is for, and your timing.',
-  contact: '/software/start', contactLabel: 'Discuss your project',
-  evidence: '/work', evidenceLabel: 'Explore my work history',
 };

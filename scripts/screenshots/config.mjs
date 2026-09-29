@@ -75,6 +75,8 @@ const PAGE_NAMES_BY_FILE = {
   'src/data/profile.ts': ['home', 'work', 'about'],
   'src/data/audio.ts': ['audio'],
   'src/data/services.ts': ['services'],
+  'src/data/project-stories/tally.ts': ['building-tally', 'services'],
+  'src/assets/site/work-with-me-software.webp': ['home', 'services'],
   'src/styles/global.css': SHARED_SITE_PAGES,
   'src/styles/audio-intake.css': ['audio-start', 'software-start'],
   'src/styles/software-intake.css': ['software-start'],
