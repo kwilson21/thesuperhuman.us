@@ -239,3 +239,11 @@ it('holds software request contact data until project content is deleted, then c
   expect(database.db.prepare('SELECT status,sent_at FROM software_offers').get()).toEqual({status:'withdrawn',sent_at:null});
   expect(database.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
 });
+
+it('holds withdrawn software contact until revoked project content is deleted', async () => {
+  const database = fixture();
+  database.db.exec("INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,contact_delete_after) VALUES ('software-held','software','Client','client@example.com','Tool','withdrawn','2026-01-01','2026-01-02','2026-01-03'); INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('held-offer','software-held',1,'sent','{}','now','now'); INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,state,step,milestone_index,waiting_for,started_at,started_by,updated_at,revoked_at,signatures_recorded_at,first_payment_recorded_at,created_at) VALUES ('software-held','held-offer','{}','standard','preparing','direction',0,'','now','owner','now','2026-01-02','now','now','now');");
+  const review = await previewOwnerRetention(database,'Local test data',now);
+  await applyOwnerRetention(database,review,'Local test data',now);
+  expect(await database.query("SELECT name,email FROM owner_requests WHERE id='software-held'")).toEqual([{name:'Client',email:'client@example.com'}]);
+});

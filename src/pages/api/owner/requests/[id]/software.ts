@@ -24,6 +24,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   const command = parsed.data;
   const record = await getOwnerRequest(db, params.id);
   if (!record || record.kind !== 'software') return json({ ok: false }, 404);
+  if (['draft', 'send', 'question', 'decline'].includes(command.action) && await db.prepare('SELECT 1 FROM software_projects WHERE request_id=?').bind(record.id).first()) return json({ ok: false, message: 'This project has started. Use the project messages.' }, 409);
   if ((record.status === 'withdrawn' && command.action !== 'revoke') || !record.email) return json({ ok: false, message: 'This request is closed.' }, 409);
   if (record.status === 'resolved' && ['draft', 'send', 'fit', 'question'].includes(command.action)) return json({ ok: false, message: 'This request is resolved. Reopen it to make a new offer.' }, 409);
   const actor = locals.owner.email;
@@ -54,7 +55,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       if (!sent.ok) return json({ ok: false, uncertain: sent.uncertain, message: sent.uncertain ? 'The email service didn’t confirm. Check Resend before retrying. Nothing was recorded.' : 'The email didn’t send. Nothing changed. Try again.' }, 502);
       try { await db.batch([
         requestGuard(),
-        ...(command.action === 'decline' ? [db.prepare("UPDATE owner_requests SET status='resolved',resolved_at=?,updated_at=? WHERE id=?").bind(now, now, record.id),
+        ...(command.action === 'decline' ? [guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)', [record.id]), db.prepare("UPDATE owner_requests SET status='resolved',resolved_at=?,updated_at=? WHERE id=?").bind(now, now, record.id),
           db.prepare("UPDATE software_offers SET status='withdrawn',updated_at=? WHERE request_id=? AND status IN ('sent','draft')").bind(now, record.id),
           db.prepare('UPDATE software_offer_links SET revoked_at=? WHERE request_id=? AND revoked_at IS NULL').bind(now, record.id)] : []),
         audit(command.action === 'question' ? 'question-sent' : 'declined'),

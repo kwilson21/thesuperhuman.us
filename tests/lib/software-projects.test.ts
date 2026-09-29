@@ -2,6 +2,8 @@ import { createRequire } from 'node:module';
 import { readFileSync, readdirSync } from 'node:fs';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { changeOwnerRequest } from '~/lib/owner-requests';
+import { POST as offerPost } from '~/pages/api/owner/requests/[id]/software';
+import { POST as messagesPost } from '~/pages/api/studio/software/[id]/messages';
 import { POST as projectPost } from '~/pages/api/owner/requests/[id]/project';
 import { POST as updatePost } from '~/pages/api/owner/requests/[id]/updates';
 import { GET as ownerVisual, PUT as uploadVisual } from '~/pages/api/owner/requests/[id]/updates/[updateId]/visual';
@@ -134,7 +136,7 @@ it('state validation, messages and Today reminders use the project snapshot and 
   expect((await call(projectPost,{...command,waiting_for:'Stale edit'})).status).toBe(409);
   const token=await session(); await postClientSoftwareProjectMessage(db,'software',token,'A question.');
   const attention=await listStudioProjectAttention(db,new Date('2026-09-29T12:00:00Z'));
-  expect(attention).toContainEqual(expect.objectContaining({requestId:'software',unreadMessages:1,promisedUpdate:'2026-10-01'}));
+  expect(attention).toContainEqual(expect.objectContaining({kind:'software',requestId:'software',unreadMessages:1,promisedUpdate:'2026-10-01'}));
   const draftUpdate=await draft(); await call(updatePost,{action:'share',confirmed:true,update:{...update,email_client:true},expectedUpdatedAt:draftUpdate.updatedAt});
   sql.exec("UPDATE software_project_updates SET notification_status='sending',notification_attempted_at='2020-01-01'");
   expect(await listStudioProjectAttention(db,new Date())).toContainEqual(expect.objectContaining({requestId:'software',uncheckedNotices:1}));
@@ -167,4 +169,31 @@ it('withdrawal records access closure and its retention clock in the same transa
   expect(sql.prepare("SELECT action,actor FROM software_project_audit WHERE action='access-revoked'").all()).toEqual([{action:'access-revoked',actor:'owner@example.com'}]);
   expect(await clientSoftwareProjectForSession(db,token,'software')).toBeNull();
   expect(sql.prepare('SELECT revoked_at FROM audio_client_sessions').get().revoked_at).toBeTruthy();
+});
+
+it('rejects offer actions after project start before sending any email', async () => {
+  await start(); vi.mocked(fetch).mockClear();
+  for (const body of [{action:'draft',terms,expectedUpdatedAt:null},{action:'send',version:1,expectedUpdatedAt:'now'},{action:'question',text:'Question'},{action:'decline',text:'Decline'}]) {
+    const response = await call(offerPost,body);
+    expect(response.status).toBe(409); expect(await response.json()).toMatchObject({message:'This project has started. Use the project messages.'});
+  }
+  expect(fetch).not.toHaveBeenCalled(); expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({status:'new'});
+});
+it('rolls back a visual object when the database batch fails after storage', async () => {
+  await start(); const saved = await draft();
+  const batch = vi.spyOn(db,'batch').mockRejectedValueOnce(new Error('conflict'));
+  expect((await visualCall(uploadVisual,saved.id,{version:saved.updatedAt})).status).toBe(409);
+  expect(bucket.put).toHaveBeenCalledOnce(); expect(bucket.delete).toHaveBeenCalledWith(bucket.put.mock.calls[0][0]);
+  expect(sql.prepare('SELECT visual_key FROM software_project_updates').get()).toEqual({visual_key:null}); batch.mockRestore();
+});
+it('scopes the client message route to an active own session', async () => {
+  await start(); const token = await session();
+  const send = (id: string, cookie = token) => messagesPost({params:{id},request:new Request('https://example.com/api/studio/software/'+id+'/messages',{method:'POST',headers:{origin:'https://example.com','content-type':'application/json',cookie:cookie ? `studio_session=${cookie}` : ''},body:JSON.stringify({action:'send',body:'Hello'})}),locals:{runtime:{env}}} as never);
+  expect((await send('software','')).status).toBe(401);
+  request('foreign','other@example.com'); offer('foreign'); await call(projectPost,{action:'start',signatures:true,payment:true,next_update_on:''},true,'foreign');
+  expect((await send('foreign')).status).toBe(404);
+  expect((await send('software')).status).toBe(200);
+  sql.exec("UPDATE software_projects SET revoked_at='now' WHERE request_id='software'");
+  expect((await send('software')).status).toBe(404);
+  expect(sql.prepare('SELECT count(*) AS count FROM software_project_messages').get()).toEqual({count:1});
 });
