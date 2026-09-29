@@ -164,7 +164,7 @@ Notes are optional. Native audio controls and explicit user-initiated playback r
 
 ### Audio intake
 
-Song requests start at `/audio/start`, a three-step form that POSTs to `/api/audio-intake`. A successful submission stores the request in `MUSIC_DB` and immediately emails the operator (`CONTACT_TO_EMAIL`) the service, working title, client name and email, file link, direction choices and notes, and a link to the request in the owner dashboard (`/owner/requests/<id>`), reply-to the client. This owner notice sends regardless of `AUDIO_CLIENT_PORTAL_ENABLED`. When that flag is `true`, the client also receives a private studio sign-in invitation. Both use the same Turnstile verification, KV rate limiting, and Resend delivery as the software-site contact form; rate-limit keys use the `rl:audio:` KV prefix (vs. `rl:` for the software form) so the two track separate windows per IP.
+Song requests start at `/audio/start`, a three-step form that POSTs to `/api/audio-intake`. A successful submission stores the request in `MUSIC_DB` and immediately emails the operator (`CONTACT_TO_EMAIL`) the service, working title, client name and email, file link, direction choices and notes, and a link to the request in the owner dashboard (`/owner/requests/<id>`), reply-to the client. This owner notice sends regardless of `AUDIO_CLIENT_PORTAL_ENABLED`. When that flag is `true`, the client also receives a private studio sign-in invitation. Both use the same Turnstile verification, KV rate limiting, and Resend delivery as the general contact form; rate-limit keys use the `rl:audio:` KV prefix (vs. `rl:` for general contact) so the two track separate windows per IP.
 
 ### Operator prerequisites before serving audio.thesuperhuman.us traffic
 

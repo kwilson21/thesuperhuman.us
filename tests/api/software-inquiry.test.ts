@@ -47,6 +47,19 @@ it('deduplicates after rate limit, rejects another email without leaking the bri
   expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(1);
 });
 
+it('re-reads a unique-index race and returns only a matching stored brief', async () => {
+  const racing = { prepare: db.prepare.bind(db), batch: async () => {
+    sql.prepare(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,created_at,updated_at,submission_id)
+      VALUES ('raced','software','workflow','Alex','Alex@Example.com','Stored summary',?,'new','now','now',?)`)
+      .run(JSON.stringify({ path: 'workflow', today: 'Stored answer', audience: 'Our team', firstResult: 'Stored summary', timing: 'flexible', budgetStatus: 'exploring', approver: 'self' }), id);
+    throw new Error('UNIQUE constraint failed');
+  } } as unknown as D1Database;
+  const response = await POST(context(base, { db: racing }));
+  expect(response.status).toBe(200);
+  expect((await response.json() as { brief: Record<string, string> }).brief.today).toBe('Stored answer');
+  expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(0);
+});
+
 it('preserves input and clears success limit after a storage failure', async () => {
   const failing = { prepare: db.prepare.bind(db), batch: async () => { throw new Error('D1 unavailable'); } } as unknown as D1Database;
   const response = await POST(context(base, { db: failing }));

@@ -7,7 +7,7 @@ import software from '~/assets/site/work-with-me-software.webp';
  * The three things a visitor can hire Kazon for. Shown as doors on Home and on the
  * Work with me hub. Each picture is real, verifiable work: a released record, this
  * live site, a public demo. A prototype earns a door only once it has a public demo.
- * Each button starts the conversation: the audio intake, or the contact form.
+ * Each button starts the relevant intake or contact path.
  */
 export interface Door {
   id: 'mixing' | 'website' | 'software';
