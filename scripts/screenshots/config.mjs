@@ -79,7 +79,7 @@ const PAGE_NAMES_BY_FILE = {
   'src/assets/site/tally-transactions.webp': ['services'],
   'src/styles/service-pages.css': ['services', 'audio-services'],
   'src/styles/global.css': SHARED_SITE_PAGES,
-  'src/styles/audio-intake.css': ['audio-start', 'software-start'],
+  'src/styles/audio-intake.css': ['audio-start', 'software-start', 'services'],
   'src/styles/software-intake.css': ['software-start'],
   'src/scripts/software-inquiry.ts': ['software-start'],
   'src/lib/software-inquiry.ts': ['software-start', 'services'],
@@ -102,6 +102,7 @@ const PAGE_NAMES_BY_FILE = {
 };
 const SCENARIO_NAMES_BY_FILE = {
   'src/styles/service-pages.css': ['services-print'],
+  'src/styles/audio-intake.css': ['services-print'],
   'src/data/profile.ts': ['services-print'],
   'src/layouts/ServiceSheet.astro': ['services-print'],
   'src/data/services.ts': ['services-print'],
