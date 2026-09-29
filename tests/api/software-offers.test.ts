@@ -16,8 +16,8 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })));
 });
 afterEach(() => { sql.close(); vi.unstubAllGlobals(); });
-async function call(body: unknown, owner = true) {
-  return POST({ params: { id: 'software' }, request: new Request('https://thesuperhuman.us/api/owner/requests/software/software', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }), locals: { owner: owner ? { email: 'owner@example.com' } : undefined, runtime: { env: { MUSIC_DB: db, RESEND_API_KEY: 'fake', CONTACT_FROM_EMAIL: 'sender@example.com', OWNER_EMAIL: 'owner@example.com' } } } } as any);
+async function call(body: unknown, owner = true, origin?: string) {
+  return POST({ params: { id: 'software' }, request: new Request('https://thesuperhuman.us/api/owner/requests/software/software', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }), locals: { owner: owner ? { email: 'owner@example.com' } : undefined, runtime: { env: { MUSIC_DB: db, SITE_ORIGIN: origin, RESEND_API_KEY: 'fake', CONTACT_FROM_EMAIL: 'sender@example.com', OWNER_EMAIL: 'owner@example.com' } } } } as any);
 }
 async function draft(expectedUpdatedAt: string | null = null) { const response = await call({ action: 'draft', terms, expectedUpdatedAt }); expect(response.status).toBe(200); return response.json() as Promise<any>; }
 async function send(value: any) { const response = await call({ action: 'send', version: value.version, expectedUpdatedAt: value.updatedAt }); expect(response.status).toBe(200); return response.json() as Promise<any>; }
@@ -74,13 +74,13 @@ it.each(['question','decline'])('%s sends exact text and owner copy before audit
 it.each(['question','decline'])('%s changes nothing on client email failure', async action => {
   vi.mocked(fetch).mockResolvedValue(new Response('{}', { status: 503 }));
   const response = await call({ action, text:'Thanks.' }); expect(response.status).toBe(502);
-  expect(await response.json()).toMatchObject({ message:'The email didn’t send. Nothing changed. Try again.' });
+  expect(await response.json()).toMatchObject({ uncertain:true, message:'The email service didn’t confirm. Check your inbox for the copy before sending again.' });
   expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({ status:'new' });
   expect(sql.prepare('SELECT * FROM owner_request_audit').all()).toEqual([]);
 });
 it('keeps a sent offer and accessible link after email failure', async () => {
   vi.mocked(fetch).mockResolvedValue(new Response('{}', { status: 503 }));
-  const result = await send(await draft()); expect(result.emailSent).toBe(false);
+  const result = await send(await draft()); expect(result.emailSent).toBe(false); expect(result.uncertain).toBe(true);
   expect(await getLinkedOffer(db, result.link.split('/').pop())).toMatchObject({ status:'sent' });
 });
 it('reports failed owner copy truthfully without resending or undoing the client email', async () => {
@@ -99,4 +99,55 @@ it('does not overwrite a withdrawal while decline email is pending', async () =>
   expect(await response.json()).toMatchObject({ message: expect.stringContaining('client email was sent') });
   expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({ status:'withdrawn' });
   expect(sql.prepare('SELECT * FROM owner_request_audit').all()).toEqual([]);
+});
+
+it.each(['question','decline'])('%s changes nothing on confirmed rejection', async action => {
+  vi.mocked(fetch).mockResolvedValue(new Response('{}', { status: 422 }));
+  const response = await call({ action, text:'Thanks.' });
+  expect(response.status).toBe(502);
+  expect(await response.json()).toMatchObject({ uncertain:false, message:'The email didn’t send. Nothing changed. Try again.' });
+  expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({ status:'new' });
+  expect(sql.prepare('SELECT * FROM owner_request_audit').all()).toEqual([]);
+});
+it.each(['question','decline'])('%s changes nothing on timeout', async action => {
+  vi.mocked(fetch).mockRejectedValue(new Error('timeout'));
+  const response = await call({ action, text:'Thanks.' });
+  expect(await response.json()).toMatchObject({ ok:false, uncertain:true });
+  expect(sql.prepare('SELECT * FROM owner_request_audit').all()).toEqual([]);
+});
+it('uses the isolated site origin for the client link and email', async () => {
+  const saved = await draft();
+  const response = await call({ action:'send', version:saved.version, expectedUpdatedAt:saved.updatedAt }, true, 'https://preview.example.workers.dev');
+  const result = await response.json() as { link:string };
+  expect(result.link).toMatch(/^https:\/\/preview.example.workers.dev\/offer\//);
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body)).text).toContain(result.link);
+});
+it('decline withdraws live and draft offers and revokes access, but ordinary resolution keeps access', async () => {
+  const sent = await send(await draft()), token = sent.link.split('/').pop();
+  await draft();
+  sql.exec("UPDATE owner_requests SET status='resolved'");
+  expect(await getLinkedOffer(db,token)).toMatchObject({ status:'sent' });
+  sql.exec("UPDATE owner_requests SET status='reviewed'");
+  expect((await call({ action:'decline', text:'Thanks.' })).status).toBe(200);
+  expect(await getLinkedOffer(db,token)).toBeNull();
+  expect(sql.prepare('SELECT status FROM software_offers').all()).toEqual([{ status:'withdrawn' }, { status:'withdrawn' }]);
+  expect(sql.prepare('SELECT revoked_at FROM software_offer_links').get().revoked_at).toBeTruthy();
+});
+it('rejects software commands on other request kinds', async () => {
+  sql.exec("UPDATE owner_requests SET kind='purchase'");
+  expect((await call({ action:'question', text:'Thanks.' })).status).toBe(404);
+  expect(fetch).not.toHaveBeenCalled();
+});
+it('loses a concurrent send inside the batch without replacing its link or emailing', async () => {
+  const saved = await draft(), original = db.batch.bind(db);
+  const winnerHash = await hashOfferToken('w'.repeat(43));
+  db.batch = async items => {
+    sql.prepare("UPDATE software_offers SET status='sent',sent_at='winner',updated_at='winner' WHERE status='draft'").run();
+    sql.prepare("INSERT INTO software_offer_links VALUES ('software',?,'winner',NULL)").run(winnerHash);
+    return original(items);
+  };
+  expect((await call({ action:'send', version:saved.version, expectedUpdatedAt:saved.updatedAt })).status).toBe(409);
+  expect(sql.prepare('SELECT token_hash FROM software_offer_links').get()).toEqual({ token_hash:winnerHash });
+  expect(sql.prepare("SELECT * FROM owner_request_audit WHERE action='offer-sent'").all()).toEqual([]);
+  expect(fetch).not.toHaveBeenCalled();
 });

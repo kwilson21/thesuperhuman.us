@@ -1,5 +1,5 @@
 import { defineMiddleware } from 'astro:middleware';
-import { rewritePathForHost } from '~/lib/host-routing';
+import { mainSitePath, rewritePathForHost } from '~/lib/host-routing';
 import { verifyOwnerAccess } from '~/lib/owner-access';
 
 const ownerPrivateHeaders = {
@@ -55,7 +55,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   }
   const host = context.isPrerendered ? context.url.host : context.request.headers.get('host') ?? context.url.host;
   if (offerPage && host.split(':')[0].toLowerCase() === 'audio.thesuperhuman.us') {
-    return new Response(null, { status: 302, headers: { ...studioPrivateHeaders, location: `https://thesuperhuman.us${url.pathname}` } });
+    return new Response(null, { status: 302, headers: { ...studioPrivateHeaders, location: mainSitePath(host, url.pathname) } });
   }
   const rewritten = rewritePathForHost(host, context.url.pathname);
   if (rewritten) {

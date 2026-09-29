@@ -40,3 +40,5 @@ describe('software offer terms', () => {
 it('allows a whole-project estimate above an individual milestone ceiling', () => {
   expect(validateOfferTerms({ ...terms, milestones: Array(3).fill({ ...terms.milestones[0], feeCents:100000000 }), projectRange: { lowCents:300000000, highCents:500000000 } }).ok).toBe(true);
 });
+
+it.each([undefined, 'unknown'])('labels missing or unknown payment mode %s', paymentMode => { expect(errors({ ...terms, paymentMode }).paymentMode).toBe('Choose a payment mode.'); });

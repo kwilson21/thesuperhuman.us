@@ -174,3 +174,9 @@ it('marks offers unavailable or available private and redirects the audio host t
   const audio = await onRequest(makeContext('https://audio.thesuperhuman.us/offer/opaque'), next) as Response;
   expect(audio.status).toBe(302); expect(audio.headers.get('location')).toBe('https://thesuperhuman.us/offer/opaque'); expect(next).not.toHaveBeenCalled();
 });
+
+it('keeps isolated preview offer paths on their local origin', async () => {
+  const next = vi.fn(async () => new Response('offer'));
+  const response = await onRequest(makeContext('https://preview.example.workers.dev/offer/opaque'),next) as Response;
+  expect(response.status).toBe(200); expect(next).toHaveBeenCalledOnce(); expect(response.headers.has('location')).toBe(false);
+});

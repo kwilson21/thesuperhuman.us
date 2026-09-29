@@ -26,7 +26,7 @@ export const offerTermsSchema = z.object({
 });
 export type OfferTerms = z.infer<typeof offerTermsSchema>;
 export function validateOfferTerms(input: unknown) {
-  const result = offerTermsSchema.safeParse(input, { errorMap: () => ({ message: 'This answer is required.' }) });
+  const result = offerTermsSchema.safeParse(input, { errorMap: issue => ({ message: issue.path[0] === 'paymentMode' ? 'Choose a payment mode.' : 'This answer is required.' }) });
   if (result.success) return { ok: true as const, value: result.data };
   return { ok: false as const, errors: Object.fromEntries(result.error.issues.map(issue => [issue.path.join('.'), issue.message])) };
 }
