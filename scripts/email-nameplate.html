@@ -14,5 +14,12 @@
 </head>
 <body>
   <div class="plate"><img src="../public/favicon.svg" alt=""><span class="rule"></span><span class="name">Kazon Wilson</span></div>
+  <script>
+    // Paint the page red if the name font failed to load, so the build script's transparent-corner check fails.
+    document.fonts.ready.then(() => {
+      const loaded = [...document.fonts].some(face => face.family.replace(/["']/g, '') === 'Kazon Name Text' && face.status === 'loaded');
+      if (!loaded) document.documentElement.style.background = '#f00';
+    });
+  </script>
 </body>
 </html>

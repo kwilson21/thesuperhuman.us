@@ -12,10 +12,19 @@ function tags(name: string): string[] {
   return [...html.matchAll(new RegExp(`<${name}\\b([^>]*)>`, 'gi'))].map(match => match[1]);
 }
 
+/** Matches an attribute value written double-quoted, single-quoted or unquoted (capture groups 1 to 3). */
+const ATTRIBUTE_VALUE = String.raw`(?:"([^"]*)"|'([^']*)'|([^\s"'=<>\x60]+))`;
+
 /** Reads one attribute's value out of a raw attribute string, or null when absent. */
 function attribute(attributes: string, name: string): string | null {
-  const match = attributes.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'i'));
-  return match ? (match[1] ?? match[2]) : null;
+  const match = attributes.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*${ATTRIBUTE_VALUE}`, 'i'));
+  return match ? (match[1] ?? match[2] ?? match[3]) : null;
+}
+
+/** Returns every value of the named attribute anywhere in the source. */
+function attributeValues(source: string, name: string): string[] {
+  const matches = source.matchAll(new RegExp(`\\s${name}\\s*=\\s*${ATTRIBUTE_VALUE}`, 'gi'));
+  return [...matches].map(match => match[1] ?? match[2] ?? match[3]);
 }
 
 describe('email signature page', () => {
@@ -29,9 +38,22 @@ describe('email signature page', () => {
   });
 
   it('uses absolute https URLs for every link and image, since a mail client has no base URL', () => {
-    const urls = [...html.matchAll(/\s(?:href|src)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)].map(match => match[1] ?? match[2]);
+    const urls = [...attributeValues(html, 'href'), ...attributeValues(html, 'src')];
     expect(urls.length).toBeGreaterThan(0);
     for (const url of urls) expect(url).toMatch(/^https:\/\//);
+  });
+
+  it('keeps images out of inline CSS, since mail clients drop url() references', () => {
+    const styles = attributeValues(html, 'style');
+    expect(styles.length).toBeGreaterThan(0);
+    for (const style of styles) expect(style).not.toMatch(/url\(/i);
+  });
+
+  it('reads quoted and unquoted attribute values alike', () => {
+    expect(attributeValues('<a href="/a" data-x=1><img src=/b><i src=\'/c\'>', 'href')).toEqual(['/a']);
+    expect(attributeValues('<a href=/relative>', 'href')).toEqual(['/relative']);
+    expect(attributeValues('<img src=/b><i src=\'/c\'>', 'src')).toEqual(['/b', '/c']);
+    expect(attribute(' alt=Portrait width=90', 'alt')).toBe('Portrait');
   });
 
   it('gives every image alt text and explicit dimensions', () => {
