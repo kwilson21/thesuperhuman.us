@@ -27,7 +27,7 @@ if (form) {
   });
   function renderRows(list: HTMLDListElement, values: Record<string, string>, selected: ReturnType<typeof path> = path()) {
     list.replaceChildren();
-    for (const key of selected ? keys(selected) : Object.keys(softwareLabels).filter(key => key in values)) {
+    for (const key of selected ? keys(selected) : ['path', ...softwareQuestions.workflow, ...softwareQuestions.idea, ...softwareDetailKeys].filter(key => key in values)) {
       if (selected && key === 'approverRole' && values.approver !== approverLabels.other) continue;
       const dt = document.createElement('dt'), dd = document.createElement('dd');
       dt.textContent = softwareLabels[key as keyof typeof softwareLabels];
@@ -113,9 +113,10 @@ if (form) {
     },
     onConflict: () => { submissionId = crypto.randomUUID(); },
   });
-  const observer = new MutationObserver(() => {
-    const errorStep = steps.findIndex(section => section.hidden && section.querySelector('[aria-invalid="true"]'));
-    if (errorStep >= 0) { showStep(errorStep, false); steps[errorStep].querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(); }
+  const observer = new MutationObserver(records => {
+    const target = records.map(record => record.target as HTMLElement).find(node => node.getAttribute('aria-invalid') === 'true' && steps.some(section => section.hidden && section.contains(node)));
+    const errorStep = target ? steps.findIndex(section => section.hidden && section.contains(target)) : -1;
+    if (errorStep >= 0) { showStep(errorStep, false); target!.focus(); }
   });
   observer.observe(form, { attributes: true, subtree: true, attributeFilter: ['aria-invalid'] });
   document.querySelector<HTMLButtonElement>('[data-print]')?.addEventListener('click', () => window.print());
