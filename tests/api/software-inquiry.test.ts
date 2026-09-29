@@ -88,7 +88,7 @@ it('orders workflow questions in the saved brief and uses idea labels on the own
   expect(parsed.ok).toBe(true);
   if (parsed.ok) {
     const request = softwareRequest(parsed.value);
-    expect(Object.keys(softwareBrief({ ...request, details: request.details } as any)).slice(0, 4)).toEqual(['path', 'today', 'audience', 'firstResult']);
+    expect(Object.keys(softwareBrief(request as any)).slice(0, 4)).toEqual(['path', 'today', 'audience', 'firstResult']);
   }
   const ownerPage = readFileSync(new URL('../../src/pages/owner/requests/[id].astro', import.meta.url), 'utf8');
   expect(ownerPage).toContain('softwareLabels[key as keyof typeof softwareLabels]');

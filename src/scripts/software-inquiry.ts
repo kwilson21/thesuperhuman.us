@@ -27,8 +27,8 @@ if (form) {
   });
   function renderRows(list: HTMLDListElement, values: Record<string, string>, selected: ReturnType<typeof path> = path()) {
     list.replaceChildren();
-    for (const key of keys(selected)) {
-      if (key === 'approverRole' && values.approver !== approverLabels.other) continue;
+    for (const key of selected ? keys(selected) : Object.keys(softwareLabels).filter(key => key in values)) {
+      if (selected && key === 'approverRole' && values.approver !== approverLabels.other) continue;
       const dt = document.createElement('dt'), dd = document.createElement('dd');
       dt.textContent = softwareLabels[key as keyof typeof softwareLabels];
       dd.textContent = values[key] || 'Not provided';
@@ -78,7 +78,11 @@ if (form) {
     form!.querySelectorAll<HTMLElement>('[data-questions]').forEach(group => {
       const active = group.dataset.questions === path();
       group.hidden = !active;
-      group.querySelectorAll<HTMLTextAreaElement>('textarea').forEach(field => field.disabled = !active);
+      group.querySelectorAll<HTMLTextAreaElement>('textarea').forEach(field => {
+        field.disabled = !active;
+        if (!active) field.removeAttribute('aria-invalid');
+      });
+      if (!active) group.querySelectorAll<HTMLElement>('[data-form-error]').forEach(error => { error.textContent = ''; error.hidden = true; });
     });
     nudged = false;
     delete status.dataset.nudge;
@@ -105,7 +109,7 @@ if (form) {
     payload: data => ({ ...payload(data), submissionId }),
     onSuccess: result => {
       const brief = result.brief && typeof result.brief === 'object' && !Array.isArray(result.brief) ? result.brief as Record<string, string> : {};
-      renderRows(document.querySelector('[data-receipt]')!, brief, brief.path === softwarePaths.idea ? 'idea' : 'workflow');
+      renderRows(document.querySelector('[data-receipt]')!, brief, brief.path === softwarePaths.idea ? 'idea' : brief.path === softwarePaths.workflow ? 'workflow' : null);
     },
     onConflict: () => { submissionId = crypto.randomUUID(); },
   });

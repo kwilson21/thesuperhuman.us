@@ -44,7 +44,7 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
           <div>
             <p class="intake-muted" data-choose-path hidden={selected !== null}>Choose a starting point to see its questions.</p>
             {Object.entries(questions).map(([path, items]) => <div data-questions={path} hidden={selected !== path}>
-              {path === 'idea' && <p class="intake-muted software-idea-note">I build a first version people can try, not the whole product. These questions help us find the part worth testing first.</p>}
+              {path === 'idea' && <p class="software-idea-note">I build a first version people can try, not the whole product. These questions help us find the part worth testing first.</p>}
               {items.map(([key, hint, example, max]) => <div><div class="intake-field">
                 <label for={`software-${key}`}>{softwareLabels[key]}</label>
                 <p id={`software-${key}-help`} class="intake-muted software-question-help">{hint}</p>
