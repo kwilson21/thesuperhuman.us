@@ -1,12 +1,12 @@
 ---
 export const prerender = false;
 import SoftwareOffer from '~/components/SoftwareOffer.astro';
-import { getLinkedOffer, clientOffer } from '~/lib/software-offers';
+import { getLinkedOffer, clientOffer, listSoftwareOffers } from '~/lib/software-offers';
 import { getOwnerRequest } from '~/lib/owner-requests';
 const db = Astro.locals.runtime.env.MUSIC_DB;
 const sent = db && Astro.params.token ? await getLinkedOffer(db, Astro.params.token) : null;
 const request = sent && db ? await getOwnerRequest(db, sent.request_id) : null;
-const offer = sent && request ? clientOffer(request, sent) : null;
+const offer = sent && request ? clientOffer(request, sent, await listSoftwareOffers(db!, request.id)) : null;
 if (!offer) Astro.response.status = 404;
 Astro.response.headers.set('cache-control', 'private, no-store');
 Astro.response.headers.set('x-robots-tag', 'noindex, nofollow');

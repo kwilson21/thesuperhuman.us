@@ -1,11 +1,12 @@
 ---
-interface Props { requestId: string; fit: { label: string; note: string } | null }
-const { requestId, fit } = Astro.props;
+interface Props { requestId: string; fit: { label: string; note: string } | null; closed?: boolean }
+const { requestId, fit, closed = false } = Astro.props;
+const fitLabels: Record<string, string> = { 'potential-fit': 'Potential fit', 'needs-clarification': 'Needs clarification', 'stated-mismatch': 'Stated mismatch' };
 ---
 <section class="rail-section software-rail"><h2>Fit review</h2>
-  <form data-software-action="fit" data-endpoint={`/api/owner/requests/${encodeURIComponent(requestId)}/software`}>
+  {closed ? fit && <><p>{fitLabels[fit.label]}</p><p class="software-answer">{fit.note}</p></> : <form data-software-action="fit" data-endpoint={`/api/owner/requests/${encodeURIComponent(requestId)}/software`}>
     <fieldset><legend class="visually-hidden">Fit</legend>{[['potential-fit','Potential fit'],['needs-clarification','Needs clarification'],['stated-mismatch','Stated mismatch']].map(([value,label]) => <label><input type="radio" name="label" value={value} checked={fit?.label === value} required /> {label}</label>)}</fieldset>
     <div class="software-field"><label>Review note<textarea class="studio-textarea" name="note" id="software-fit-note" aria-describedby="software-fit-note-hint" placeholder="Clarify who will use the first version." maxlength="500" rows="3">{fit?.note ?? ''}</textarea></label><p id="software-fit-note-hint" class="rail-muted rail-caption">Private. Up to 500 characters.</p></div><button class="studio-quiet" type="submit">Save</button>
     <p class="rail-muted rail-caption">Advisory. Your judgment decides.</p><p class="studio-status" data-software-status role="status" aria-live="polite"></p>
-  </form>
+  </form>}
 </section>

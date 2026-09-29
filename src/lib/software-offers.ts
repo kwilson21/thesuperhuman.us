@@ -41,9 +41,10 @@ export async function listSoftwareOffers(db: D1Database, id: string) {
   return (await db.prepare('SELECT * FROM software_offers WHERE request_id=? ORDER BY version DESC').bind(id).all<SoftwareOffer>()).results;
 }
 // Explicit allowlist: client rendering never receives the owner record or audit data.
-export function clientOffer(request: OwnerRequest, offer: SoftwareOffer) {
+export function clientOffer(request: OwnerRequest, offer: SoftwareOffer, offers: SoftwareOffer[] = []) {
   return { name: request.name, company: typeof request.details.company === 'string' ? request.details.company : '',
     path: softwarePaths[request.serviceId === 'idea' ? 'idea' : 'workflow'], version: offer.version,
+    replacesVersion: offers.filter(previous => previous.version < offer.version && previous.sent_at && ['sent', 'superseded'].includes(previous.status)).sort((a, b) => b.version - a.version)[0]?.version,
     terms: offerTermsSchema.parse(JSON.parse(offer.terms_json)) };
 }
 export type ClientOffer = ReturnType<typeof clientOffer>;

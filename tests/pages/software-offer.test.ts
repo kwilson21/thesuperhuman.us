@@ -121,3 +121,22 @@ it('shows the next draft version after decline and reopen', async () => {
   const html = await container.renderToString(editor, { props: { requestId:'r', email:'alex@example.com', revoked:true, offers:[{ version:2, status:'withdrawn', sent_at:'2026-09-29T12:00:00Z' },{ version:1, status:'superseded', sent_at:'2026-09-28T12:00:00Z' }] } });
   expect(html).toContain('Draft v3 · Not sent');
 });
+
+it('hides withdrawn offer controls and renders saved fit history as text', async () => {
+  const container = await AstroContainer.create();
+  const html = await container.renderToString(editor, { props:{ requestId:'r',email:'alex@example.com',offers:[],revoked:false,withdrawn:true } });
+  expect(html).toContain('This request is withdrawn.'); expect(html).not.toMatch(/data-offer-form|data-send-offer|data-preview-offer/);
+  const fitHTML = await container.renderToString(fit, { props:{ requestId:'r',fit:{ label:'potential-fit',note:'Saved note' },closed:true } });
+  expect(fitHTML).toContain('Potential fit'); expect(fitHTML).toContain('Saved note'); expect(fitHTML).not.toContain('<form');
+});
+it.each([false,true])('replaces only an earlier delivered version (earlier sent %s)', async earlierSent => {
+  const { sql,db } = await fixture();
+  try {
+    sql.exec("UPDATE software_offers SET status='withdrawn',sent_at=NULL WHERE version=1");
+    if (earlierSent) {
+      sql.exec("UPDATE software_offers SET status='superseded',sent_at='now' WHERE version=1; UPDATE software_offers SET status='withdrawn',sent_at=NULL WHERE version=2; UPDATE software_offers SET status='sent',sent_at='now' WHERE version=3");
+    }
+    const html = await (await render(db,token)).text();
+    if (earlierSent) expect(html).toContain('replaces v1'); else expect(html).not.toContain('replaces');
+  } finally { sql.close(); }
+});

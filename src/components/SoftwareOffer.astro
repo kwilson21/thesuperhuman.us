@@ -32,7 +32,7 @@ const terms = offer?.terms;
     {offer && terms ? <>
       <div class="offer-intro">{(offer.name || offer.company) && <p class="page-kicker">Prepared for {[offer.name, offer.company].filter(Boolean).join(' · ')}</p>}
         <h1 class="page-title">{terms.outcome}</h1><p class="page-lede">{terms.summary}</p>
-        <p class="offer-meta">Software · {offer.path} · Offer v{offer.version}{offer.version > 1 && ` · replaces v${offer.version - 1}`}</p>
+        <p class="offer-meta">Software · {offer.path} · Offer v{offer.version}{offer.replacesVersion && ` · replaces v${offer.replacesVersion}`}</p>
       </div>
       <div class="offer-columns"><div>
         {terms.milestones.map(milestone => <section class="offer-milestone">

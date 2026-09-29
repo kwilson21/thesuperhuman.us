@@ -12,6 +12,10 @@ export function setupSoftwareOffers() {
     const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     const result = await response.json() as { message?: string; errors?: Record<string,string>; version: number; updatedAt: string; sentAt?: string; link: string; emailSent: boolean; uncertain?: boolean; copySent?: boolean };
     if (!response.ok) {
+      if (response.status === 409 && (body as { action?: string }).action === 'draft' && 'updatedAt' in result) {
+        const editor = document.querySelector<HTMLElement>('[data-software-editor]');
+        if (editor) editor.dataset.updated = result.updatedAt ?? '';
+      }
       const form = document.querySelector<HTMLElement>('[data-offer-form]');
       const messages = Object.entries(result.errors ?? {}).map(([path, message]) => {
         const parts = path.split('.');
@@ -31,11 +35,14 @@ export function setupSoftwareOffers() {
   document.querySelectorAll<HTMLFormElement>('[data-software-action]').forEach(form => {
     form.addEventListener('submit', async event => {
       event.preventDefault();
+      const requestPage = document.querySelector<HTMLElement>('[data-request-id]');
+      if (requestPage?.dataset.offerSending === 'true') return;
       const action = form.dataset.softwareAction!, data = new FormData(form), status = form.querySelector<HTMLElement>('[data-software-status]')!;
       if (action === 'decline' && !confirm('Send this message and decline the inquiry?')) return;
       const button = form.querySelector<HTMLButtonElement>('button')!; button.disabled = true;
       try {
-        const result = await post(form.dataset.endpoint!, { action, ...Object.fromEntries(data) });
+        const result = await post(form.dataset.endpoint!, { action, ...Object.fromEntries(data), expectedRequestUpdatedAt: requestPage?.dataset.requestUpdated });
+        if (action === 'fit' && requestPage) requestPage.dataset.requestUpdated = result.updatedAt;
         status.textContent = result.copySent === false ? 'Sent to the client. The owner copy didn’t send.' : action === 'fit' ? 'Fit review saved.' : 'Sent.';
         const editor = document.querySelector<HTMLElement>('[data-software-editor]');
         if (action !== 'decline' && (editor?.dataset.dirty === 'true' || editor?.dataset.busy === 'true')) status.textContent += ' Your offer edits are kept. Reload after saving to refresh activity.';
@@ -69,6 +76,9 @@ export function setupSoftwareOffers() {
   if (!root.querySelector('[data-offer-form]')) return;
   const form = root.querySelector<HTMLFormElement>('[data-offer-form]')!, list = root.querySelector<HTMLElement>('[data-milestones]')!;
   const send = root.querySelector<HTMLButtonElement>('[data-send-offer]')!, preview = root.querySelector<HTMLAnchorElement>('[data-preview-offer]')!;
+  window.addEventListener('beforeunload', event => {
+    if (changed) { event.preventDefault(); }
+  });
   let saved = Boolean(root.dataset.updated), inputRevision = 0;
   const get = (element: HTMLElement, name: string) => element.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${name}"]`)!.value.trim();
   const checked = (element: HTMLElement, name: string) => element.querySelector<HTMLInputElement>(`[name="${name}"]`)!.checked;
@@ -125,6 +135,8 @@ export function setupSoftwareOffers() {
     if (changed || send.disabled) return;
     const version = Number(saved ? root.dataset.version : root.dataset.sentVersion);
     if (!confirm(`Send offer v${version} to ${root.dataset.email}?`)) return;
+    const requestPage = document.querySelector<HTMLElement>('[data-request-id]') ?? root;
+    requestPage.setAttribute('inert', ''); requestPage.dataset.offerSending = 'true';
     send.disabled = true; root.setAttribute('inert', ''); root.setAttribute('aria-busy', 'true'); root.dataset.busy = 'true';
     try { const result = await post(endpoint, { action: 'send', version, expectedUpdatedAt: saved ? root.dataset.updated : root.dataset.sentUpdated });
       link = result.link; linkInput.value = link; root.querySelector<HTMLElement>('[data-client-link-field]')!.hidden = false;
@@ -146,6 +158,7 @@ export function setupSoftwareOffers() {
       entry.querySelector<HTMLElement>('[data-version-status]')!.textContent = 'sent';
       root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false';
     } catch (error) { status.textContent = (error as Error).message; root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false'; updateControls(); }
+    finally { requestPage.removeAttribute('inert'); requestPage.dataset.offerSending = 'false'; }
   });
   updateControls();
 }
