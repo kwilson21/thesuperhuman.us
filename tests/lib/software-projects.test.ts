@@ -360,6 +360,7 @@ it('keeps newer undecided review state and never moves the milestone backwards',
   await start(); const token=await session(), older=await shareReview();
   const multiTerms={...terms,milestones:[...terms.milestones,{...terms.milestones[0],name:'Follow-up'}]};
   sql.prepare('UPDATE software_projects SET terms_json=?').run(JSON.stringify(multiTerms));
+  sql.exec("INSERT INTO software_milestone_deposits VALUES ('software',1,'now','owner')");
   sql.exec("UPDATE software_project_updates SET shared_at='2020-01-01' WHERE id='"+older.id+"'");
   const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'direction_review',milestone_index:1,artifact_version:'Direction v2'}});
   expect(response.status).toBe(200);
@@ -518,7 +519,7 @@ it('blocks sending new terms for open, failed, creating or paid deposits and blo
   await reserveSoftwareInvoice(db,{requestId:'software',offerId:'software-offer',milestone:0,kind:'deposit',allowCard:false,actor:'owner'});
   const saved=await call(offerPost,{action:'draft',terms:{...terms,summary:'New terms'},expectedUpdatedAt:null});
   const value=await saved.json() as {version:number;updatedAt:string};
-  for(const status of ['creating','open','payment_failed','paid']) {
+  for(const status of ['creating','open','payment_failed','uncollectible','paid']) {
     sql.prepare('UPDATE software_invoices SET status=?').run(status);
     const sent=await call(offerPost,{action:'send',version:value.version,expectedUpdatedAt:value.updatedAt});
     expect(sent.status).toBe(409);
@@ -655,4 +656,86 @@ it('refuses no-invoice cancellation of recent or actively leased reservations',a
   sql.exec('UPDATE software_invoices SET creation_started_at=NULL');
   for(const statement of reconciliationStatements(['--software-no-invoice',invoice.id,'Confirmed']))sql.exec(statement);
   expect(sql.prepare('SELECT status FROM software_invoices').get().status).toBe('void');
+});
+
+function seedInvoice(status: string, kind='deposit', milestone=0, id='guard-invoice') {
+  sql.prepare(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,created_by,created_at,updated_at)
+    VALUES (?,'software','software-offer',?,?,120000,7,?,'owner','now','now')`).run(id,milestone,kind,status);
+}
+it.each(['creating','open','payment_failed','uncollectible'])('atomically rejects manual start with a %s deposit',async status=>{
+  const original=db.batch.bind(db);
+  db.batch=async items=>{seedInvoice(status);return original(items);};
+  const response=await start();
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({error:invoiceLib.manualPaymentReminder});
+  expect(sql.prepare('SELECT count(*) AS n FROM software_projects').get()).toEqual({n:0});
+  expect(sql.prepare("SELECT count(*) AS n FROM software_project_audit WHERE action='started'").get()).toEqual({n:0});
+  expect(fetch).not.toHaveBeenCalled();
+});
+it.each(['balance','milestone'])('atomically rejects manual full payment with a payable %s',async kind=>{
+  await start();
+  for(const status of ['creating','open','payment_failed','uncollectible']) {
+    const original=db.batch.bind(db);
+    db.batch=async items=>{seedInvoice(status,kind);return original(items);};
+    const response=await call(projectPost,{action:'payment',milestone_index:0,confirmed:true});
+    expect(response.status).toBe(409);expect(await response.json()).toMatchObject({error:invoiceLib.manualPaymentReminder});
+    expect(sql.prepare('SELECT count(*) AS n FROM software_milestone_payments').get()).toEqual({n:0});
+    expect(sql.prepare("SELECT count(*) AS n FROM software_project_audit WHERE action='milestone-paid'").get()).toEqual({n:0});
+    db.batch=original;sql.exec('DELETE FROM software_invoices');
+  }
+  seedInvoice('void',kind);
+  expect((await call(projectPost,{action:'payment',milestone_index:0,confirmed:true})).status).toBe(200);
+});
+it.each([false,true])('atomically blocks offer changes or declines for an uncollectible deposit (decline=%s)',async decline=>{
+  const saved=await call(offerPost,{action:'draft',terms:{...terms,summary:'Updated'},expectedUpdatedAt:null});
+  const draft=await saved.json() as {version:number;updatedAt:string};
+  const original=db.batch.bind(db);
+  db.batch=async items=>{seedInvoice('uncollectible');return original(items);};
+  expect((await call(offerPost,decline ? {action:'decline',text:'Cannot take it on.'} : {action:'send',version:draft.version,expectedUpdatedAt:draft.updatedAt})).status).toBe(409);
+  expect(sql.prepare("SELECT status FROM software_offers WHERE id='software-offer'").get()).toEqual({status:'sent'});
+  expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({status:'new'});
+});
+function laterTerms() {
+  sql.prepare('UPDATE software_offers SET terms_json=?').run(JSON.stringify({...terms,milestones:[terms.milestones[0],{...terms.milestones[0],name:'Second'}]}));
+}
+it.each(['manual','stripe'])('requires a destination deposit before Standard moves, paid by %s',async source=>{
+  laterTerms();await start();
+  const body={action:'state',state:'building',waiting_for:'',milestone_index:1,step:'build',next_update_on:'',expectedUpdatedAt:sql.prepare('SELECT updated_at FROM software_projects').get().updated_at};
+  expect((await call(projectPost,body)).status).toBe(409);
+  expect((await call(updatePost,{action:'share',expectedUpdatedAt:null,confirmed:true,update:{...update,kind:'direction_review',milestone_index:1}})).status).toBe(409);
+  expect(invoiceLib.invoiceAvailable({...terms,milestones:[terms.milestones[0],terms.milestones[0]]} as never,1,'deposit',{milestone_index:0,completed_at:null},false,false)).toBe(true);
+  if(source==='stripe') {
+    seedInvoice('paid','deposit',1);sql.exec("UPDATE software_invoices SET refunded_at='now'");
+    expect((await call(projectPost,body)).status).toBe(409);
+    sql.exec('UPDATE software_invoices SET refunded_at=NULL');
+  } else {
+    for(const status of ['creating','open','payment_failed','uncollectible']) {
+      seedInvoice(status,'deposit',1);
+      const response=await call(projectPost,{action:'deposit',milestone_index:1,confirmed:true});
+      expect(response.status).toBe(409);expect(await response.json()).toMatchObject({error:invoiceLib.manualPaymentReminder});
+      expect(sql.prepare('SELECT count(*) AS n FROM software_milestone_deposits').get()).toEqual({n:0});
+      sql.exec('DELETE FROM software_invoices');
+    }
+    expect((await call(projectPost,{action:'deposit',milestone_index:1,confirmed:false})).status).toBe(400);
+    expect((await call(projectPost,{action:'deposit',milestone_index:1,confirmed:true},false)).status).toBe(403);
+    for(let i=0;i<2;i++)expect((await call(projectPost,{action:'deposit',milestone_index:1,confirmed:true})).status).toBe(200);
+    expect(sql.prepare("SELECT note FROM software_project_audit WHERE action='deposit-paid'").all()).toEqual([{note:'Deposit received outside Stripe · milestone 2'}]);
+    expect(sql.prepare('SELECT count(*) AS n FROM software_milestone_payments').get()).toEqual({n:0});
+    await expect(invoiceLib.reserveSoftwareInvoice(db,{requestId:'software',offerId:'software-offer',milestone:1,kind:'deposit',allowCard:false,actor:'owner'})).rejects.toThrow('already paid');
+  }
+  expect((await call(projectPost,body)).status).toBe(200);
+  expect(sql.prepare('SELECT milestone_index FROM software_projects').get()).toEqual({milestone_index:1});
+});
+it('rolls back manual later deposit if an invoice is reserved just before the batch',async()=>{
+  laterTerms();await start();const original=db.batch.bind(db);
+  db.batch=async items=>{seedInvoice('creating','deposit',1);return original(items);};
+  expect((await call(projectPost,{action:'deposit',milestone_index:1,confirmed:true})).status).toBe(409);
+  expect(sql.prepare('SELECT count(*) AS n FROM software_milestone_deposits').get()).toEqual({n:0});
+  expect(sql.prepare("SELECT count(*) AS n FROM software_project_audit WHERE action='deposit-paid'").get()).toEqual({n:0});
+});
+it('does not reserve a later deposit racing a manual confirmation',async()=>{
+  laterTerms();await start();const original=db.batch.bind(db);
+  db.batch=async items=>{sql.exec("INSERT INTO software_milestone_deposits VALUES ('software',1,'now','owner')");return original(items);};
+  await expect(invoiceLib.reserveSoftwareInvoice(db,{requestId:'software',offerId:'software-offer',milestone:1,kind:'deposit',allowCard:false,actor:'owner'})).rejects.toThrow();
+  expect(sql.prepare('SELECT count(*) AS n FROM software_invoices').get()).toEqual({n:0});
 });

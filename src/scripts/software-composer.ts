@@ -28,7 +28,11 @@ export function setupSoftwareComposer() {
     const accepted = JSON.parse(handoffFields.dataset.accepted!) as boolean[];
     form.querySelector<HTMLOptionElement>('[name=kind] option[value=handoff]')!.disabled = !accepted[Number(milestone)];
     form.querySelector<HTMLElement>('[data-handoff-unavailable]')!.hidden = !handoff || accepted[Number(milestone)];
-    field('paid_confirmed').required = handoff;
+    const paymentBlocked = (JSON.parse(handoffFields.dataset.paymentBlocked ?? '[]') as boolean[])[Number(milestone)] ?? false;
+    form.querySelector<HTMLElement>('[data-handoff-payment]')!.hidden = paymentBlocked;
+    form.querySelector<HTMLElement>('[data-payment-reminder]')!.hidden = !paymentBlocked;
+    field('paid_confirmed').disabled = paymentBlocked;
+    field('paid_confirmed').required = handoff && !paymentBlocked;
     form.querySelectorAll<HTMLInputElement>('[name=link_label],[name=link_url]').forEach(input=>{
       input.disabled = !handoff || input.closest<HTMLElement>('[data-handoff-link]')!.hidden;
       input.required = handoff && !input.disabled;
@@ -99,6 +103,9 @@ export function setupSoftwareComposer() {
   });
   async function save(share: boolean) {
     if (busy || (share && !form.reportValidity())) return;
+    if (share && value('kind')==='handoff' && (form.elements.namedItem('paid_confirmed') as HTMLInputElement).disabled) {
+      status.textContent = form.querySelector<HTMLElement>('[data-payment-reminder]')!.textContent; return;
+    }
     if ((file.files?.length || hasVisual) && !alt.value.trim()) { status.textContent = 'Describe the visual for the client.'; alt.focus(); return; }
     if (share && !confirm('Share this update on the client’s project page?')) return;
     busy = true; form.querySelectorAll<HTMLButtonElement>('button').forEach(button => button.disabled = true);

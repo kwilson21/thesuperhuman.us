@@ -6,6 +6,7 @@ import SoftwareProjectUpdate from '~/components/SoftwareProjectUpdate.astro';
 import { getOwnerRequest, listOwnerRequests } from '~/lib/owner-requests';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
 import { getSoftwareProject, listSoftwareUpdates, projectTerms, evidenceTypes, updateKinds, sharedSoftwareUpdates } from '~/lib/software-projects';
+import { listSoftwareInvoices, payableSoftwareInvoice, manualPaymentReminder } from '~/lib/software-invoices';
 import type { ClientSoftwareUpdate } from '~/lib/software-projects';
 import '~/styles/studio.css';
 const env = Astro.locals.runtime.env, db = env.MUSIC_DB;
@@ -17,6 +18,8 @@ if (!request || request.kind !== 'software' || !project || project.revoked_at ||
 if (project.state === 'complete') return Astro.redirect(`/owner/requests/${id}`);
 const terms = projectTerms(project), draft = (await listSoftwareUpdates(db, id)).find(update => update.status === 'draft');
 const update: ClientSoftwareUpdate = { id: draft?.id ?? '', title: draft?.title ?? '', artifact_version: draft?.artifact_version ?? '', evidence_type: draft?.evidence_type ?? 'concept', visual_alt: draft?.visual_alt ?? '', preview_url: draft?.preview_url ?? '', what_changed: draft?.what_changed ?? '', checks_limitations: draft?.checks_limitations ?? '', next_step: draft?.next_step ?? '', client_request: draft?.client_request ?? '', next_update_on: draft?.next_update_on ?? '', shared_at: null, has_visual: draft?.visual_key ? 1 : 0 };
+const invoices = await listSoftwareInvoices(db,id,project.offer_id);
+const paymentBlocked = terms.milestones.map((_,index)=>payableSoftwareInvoice(invoices,index,['balance','milestone']));
 const newRequests = await listOwnerRequests(db, { status: 'new' });
 const firstName = request.name.trim().split(/\s+/)[0] || 'the client';
 const shared = await sharedSoftwareUpdates(db,id);
@@ -39,8 +42,9 @@ const links: {label:string;url:string}[] = draft ? JSON.parse(draft.links_json) 
           {terms.milestones.map((item,index)=><fieldset data-criteria-group={index} hidden={index!==(draft?.milestone_index ?? project.milestone_index)} disabled={index!==(draft?.milestone_index ?? project.milestone_index)}>{item.acceptance.map((check,checkIndex)=><label>{check}<textarea class="studio-textarea" name="criteria" maxlength="300" placeholder="Shown in the walkthrough at 1:20, or: Try it in the preview with the sample file">{index===draft?.milestone_index ? criteria[checkIndex] ?? '' : ''}</textarea></label>)}</fieldset>)}
           <div class="software-field"><label>Review window (Business Days)<input class="studio-input" type="number" name="review_window_days" min="5" max="30" value={draft?.review_window_days ?? 5} aria-describedby="review-window-hint" /></label><p id="review-window-hint" class="rail-caption">At least 5 Business Days. Use more for a large milestone.</p></div>
         </section>
-        <section data-handoff-fields data-accepted={JSON.stringify(accepted)} hidden>
-          <label class="email-choice"><input type="checkbox" name="paid_confirmed" />This milestone is paid in full (checked in Stripe or the bank)</label>
+        <section data-handoff-fields data-accepted={JSON.stringify(accepted)} data-payment-blocked={JSON.stringify(paymentBlocked)} hidden>
+          <p class="rail-caption" data-payment-reminder hidden>{manualPaymentReminder}</p>
+          <label class="email-choice" data-handoff-payment><input type="checkbox" name="paid_confirmed" />This milestone is paid in full (checked in Stripe or the bank)</label>
           <p class="rail-caption">Rights in this milestone’s work transfer on full payment. Hand off within 5 Business Days of payment.</p>
           <p class="rail-caption" data-handoff-unavailable hidden>Share an accepted delivery review before handing off this milestone.</p>
           <h2>Delivered links</h2>

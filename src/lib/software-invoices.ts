@@ -5,12 +5,20 @@ import type { CreatedStripeInvoice } from './stripe-invoicing';
 
 export type SoftwareInvoiceKind = 'deposit' | 'balance' | 'milestone';
 export type SoftwareInvoice = {
-  id: string; request_id: string; offer_id: string; due_at: string | null; refunded_at: string | null; creation_started_at: string | null; external_refs_deleted_at: string | null; milestone_index: number; kind: SoftwareInvoiceKind;
+  id: string; request_id: string; offer_id: string; due_at: string | null; refunded_at: string | null; creation_started_at: string | null; retention_fenced_at?: string | null; external_refs_deleted_at: string | null; milestone_index: number; kind: SoftwareInvoiceKind;
   amount_cents: number; days_until_due: 7 | 15 | 30; allow_card: number; attempt: number;
   stripe_customer_id: string | null; stripe_invoice_id: string | null; hosted_invoice_url: string | null;
   status: 'creating' | 'open' | 'paid' | 'payment_failed' | 'void' | 'uncollectible';
   status_updated_at: string | null; created_by: string; created_at: string; updated_at: string;
 };
+
+export const payableSoftwareInvoiceStatuses = "'creating','open','payment_failed','uncollectible'";
+export const manualPaymentReminder = 'Void the open invoice in Stripe first, then record the payment.';
+export const payableSoftwareInvoice = (invoices: SoftwareInvoice[], milestone: number, kinds: SoftwareInvoiceKind[]) =>
+  invoices.some(invoice => invoice.milestone_index === milestone && kinds.includes(invoice.kind) && ['creating','open','payment_failed','uncollectible'].includes(invoice.status));
+export const manualSoftwarePaymentGuard = (db: D1Database, id: string, offerId: string, milestone: number, deposit = false) => softwareGuard(db,
+  `SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_invoices WHERE request_id=? AND offer_id=? AND milestone_index=?
+    AND kind IN (${deposit ? "'deposit'" : "'balance','milestone'"}) AND status IN (${payableSoftwareInvoiceStatuses}))`, [id,offerId,milestone]);
 
 export const softwareInvoiceKindLabels = { deposit: 'Deposit', balance: 'Balance', milestone: 'Milestone' };
 export const softwareInvoiceStatusLabels = { creating: 'Creating', open: 'Open', paid: 'Paid', payment_failed: 'Payment failed', void: 'Void', uncollectible: 'Uncollectible' };
@@ -97,15 +105,15 @@ export const paidFirstDeposit = (invoices: SoftwareInvoice[], offerId: string) =
 export async function depositOfferBlock(db: D1Database, id: string, decline = false) {
   const rows = await db.prepare(`SELECT i.status FROM software_invoices i JOIN software_offers o ON o.id=i.offer_id
     WHERE i.request_id=? AND i.milestone_index=0 AND i.kind='deposit' ${decline ? '' : "AND o.status='sent'"}
-    AND i.refunded_at IS NULL AND i.status IN ('creating','open','payment_failed','paid')`).bind(id).all<{status:string}>();
-  if (rows.results.some(row=>['creating','open','payment_failed'].includes(row.status))) return 'Void the open deposit invoice in Stripe first, then send the new offer.';
+    AND i.refunded_at IS NULL AND i.status IN ('creating','open','payment_failed','uncollectible','paid')`).bind(id).all<{status:string}>();
+  if (rows.results.some(row=>['creating','open','payment_failed','uncollectible'].includes(row.status))) return 'Void the open deposit invoice in Stripe first, then send the new offer.';
   if (!decline && rows.results.some(row=>row.status==='paid')) return 'A deposit is already paid for this offer. Start the project, or refund it in Stripe before sending new terms.';
   return null;
 }
 export const depositOfferGuard = (db: D1Database, id: string, decline = false) => softwareGuard(db,
   `SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_invoices i JOIN software_offers o ON o.id=i.offer_id
    WHERE i.request_id=? AND i.milestone_index=0 AND i.kind='deposit' ${decline ? '' : "AND o.status='sent'"}
-   AND i.refunded_at IS NULL AND i.status IN (${decline ? "'creating','open','payment_failed'" : "'creating','open','payment_failed','paid'"}))`, [id]);
+   AND i.refunded_at IS NULL AND i.status IN (${decline ? "'creating','open','payment_failed','uncollectible'" : "'creating','open','payment_failed','uncollectible','paid'"}))`, [id]);
 
 export async function reserveSoftwareInvoice(db: D1Database, input: {
   requestId: string; offerId: string; milestone: number; kind: SoftwareInvoiceKind; allowCard: boolean; actor: string;
@@ -124,6 +132,7 @@ export async function reserveSoftwareInvoice(db: D1Database, input: {
   const paid = Boolean(await db.prepare('SELECT 1 FROM software_milestone_payments WHERE request_id=? AND milestone_index=?').bind(id,milestone).first());
   const invoices = (await listSoftwareInvoices(db,id,offerId)).filter(row=>row.milestone_index===milestone && row.kind===kind);
   const previous = invoices.find(row=>row.id===(input.retryId ?? input.replaceId));
+  if (kind==='deposit' && await db.prepare('SELECT 1 FROM software_milestone_deposits WHERE request_id=? AND milestone_index=?').bind(id,milestone).first()) throw new Error('This installment is already paid.');
   if (!invoiceAvailable(terms,milestone,kind,project,delivered,paid) && !input.retryId) throw new Error('This invoice is not available at this milestone.');
   if (invoices.some(row=>row.status==='paid' && !row.refunded_at)) throw new Error('This installment is already paid.');
   const at = new Date().toISOString();
@@ -131,6 +140,7 @@ export async function reserveSoftwareInvoice(db: D1Database, input: {
     project ? softwareGuard(db,'SELECT 1 FROM software_projects WHERE request_id=? AND updated_at=? AND revoked_at IS NULL AND content_deleted_at IS NULL',[id,project.updated_at])
       : softwareGuard(db,"SELECT 1 FROM software_offers WHERE id=? AND status='sent' AND NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)",[offerId,id]),
     softwareGuard(db,"SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_invoices WHERE request_id=? AND offer_id=? AND milestone_index=? AND kind=? AND status='paid' AND refunded_at IS NULL)",[id,offerId,milestone,kind])];
+  if (kind==='deposit') guards.push(softwareGuard(db,'SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_milestone_deposits WHERE request_id=? AND milestone_index=?)',[id,milestone]));
   if (input.retryId) {
     // Stripe retains idempotency keys for at least 24 hours. Older uncertain attempts need webhook/Stripe reconciliation.
     if (!previous || previous.status!=='creating' || previous.external_refs_deleted_at || Date.parse(previous.created_at)<Date.now()-23*3600_000) throw new Error('Check Stripe and reconcile this invoice before retrying.');
