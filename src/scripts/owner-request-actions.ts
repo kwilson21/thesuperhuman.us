@@ -15,8 +15,13 @@ export function setupOwnerRequestActions() {
   }
   const canDiscardChanges = (submitted?: HTMLElement) => root?.dataset.offerSending !== 'true' && (!hasUnsavedRequestChanges(submitted)
     || confirm('You have unsaved changes in another section. Continue and lose them?'));
+  let updating = false;
   async function update(payload: Record<string, unknown>) {
-    if (root?.dataset.offerSending === 'true') return;
+    if (updating || root?.dataset.offerSending === 'true') return;
+    updating = true;
+    root!.setAttribute('inert', '');
+    root!.setAttribute('aria-busy', 'true');
+    let reloading = false;
     try {
       const response = await fetch(`/api/owner/requests/${requestId}`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...payload, expectedUpdatedAt: root?.dataset.requestUpdated }),
@@ -28,8 +33,16 @@ export function setupOwnerRequestActions() {
         history.replaceState(null, '', `${location.pathname}${location.search}#accept-project`);
       }
       markRequestPageClean();
+      reloading = true;
       location.reload();
     } catch { status!.textContent = 'Connection lost. The change may not have been saved. Refresh before trying again.'; }
+    finally {
+      if (!reloading) {
+        updating = false;
+        root!.removeAttribute('inert');
+        root!.removeAttribute('aria-busy');
+      }
+    }
   }
   document.querySelector<HTMLFormElement>('[data-request-note]')?.addEventListener('submit', event => {
     event.preventDefault(); if (!canDiscardChanges(event.currentTarget as HTMLFormElement)) return; const data = new FormData(event.currentTarget as HTMLFormElement); void update({ action: 'note', note: data.get('note') });
