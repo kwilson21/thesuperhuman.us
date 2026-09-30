@@ -338,6 +338,12 @@ it('renders only the client project invoices with private payment links and pres
     const renderProject=()=>container.renderToString(softwarePage,{request:new Request('https://thesuperhuman.us/studio/software/r',{headers:{cookie:`studio_session=${session}`}}),params:{id:'r'},locals:{runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}} as any});
     let html=await renderProject();expect(html).toContain('Invoices');expect(html).toContain('Pay invoice ↗');expect(html).toContain('$1,200.00');expect(html).toContain('Due Oct 15, 2026');expect(html).toContain('Initial payment · Received');
     expect(html).not.toMatch(/PRIVATE|old-secret|1,111.11/);
+    for (const status of ['open','payment_failed','uncollectible','paid','void']) {
+      sql.prepare("UPDATE software_invoices SET status=? WHERE id='current-balance'").run(status);
+      html=await renderProject();
+      expect(html.includes('Pay invoice ↗')).toBe(['open','payment_failed','uncollectible'].includes(status));
+    }
+    sql.exec("UPDATE software_invoices SET status='open' WHERE id='current-balance'");
     sql.exec(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,created_by,created_at,updated_at)
       VALUES ('current-deposit','r','current',0,'deposit',120000,7,'payment_failed','https://example.com/deposit','owner','2026-09-30','2026-09-30')`);
     html=await renderProject();expect(html).toContain('Initial payment · Received');
