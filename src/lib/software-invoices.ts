@@ -195,7 +195,7 @@ export async function applySoftwareInvoiceEvent(db: D1Database, event: SoftwareI
     return 'unmatched';
   }
   if (await db.prepare('SELECT 1 FROM stripe_webhook_events WHERE id=?').bind(event.eventId).first()) return 'duplicate';
-  const eligible=`id=? AND external_refs_deleted_at IS NULL AND retention_fenced_at IS NULL AND status<>'paid' AND (status_updated_at IS NULL OR status_updated_at<? OR (status_updated_at=? AND ?='paid'))
+  const eligible=`id=? AND external_refs_deleted_at IS NULL AND retention_fenced_at IS NULL AND status<>'paid' AND (status_updated_at IS NULL OR status_updated_at<? OR (status_updated_at=? AND CASE ? WHEN 'paid' THEN 5 WHEN 'void' THEN 4 WHEN 'uncollectible' THEN 3 WHEN 'payment_failed' THEN 2 WHEN 'open' THEN 1 ELSE 0 END > CASE status WHEN 'paid' THEN 5 WHEN 'void' THEN 4 WHEN 'uncollectible' THEN 3 WHEN 'payment_failed' THEN 2 WHEN 'open' THEN 1 ELSE 0 END))
     AND NOT EXISTS(SELECT 1 FROM stripe_webhook_events WHERE id=?)`;
   const args=[invoice.id,event.occurredAt,event.occurredAt,event.status,event.eventId];
   await db.batch([

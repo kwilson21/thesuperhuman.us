@@ -776,3 +776,10 @@ it.each(['standard','invoice'])('blocks rejected newest delivery invoices and ra
   await shareReview('delivery_review','Delivery v2');
   expect((await invoiceLib.reserveSoftwareInvoice(db,input)).kind).toBe(input.kind);
 });
+it.each([['uncollectible','void'],['void','uncollectible']] as const)('same-second %s then %s ends void',async(first,second)=>{
+  const invoice=await invoiceLib.reserveSoftwareInvoice(db,{requestId:'software',offerId:'software-offer',milestone:0,kind:'deposit',allowCard:false,actor:'owner'});
+  const base={eventType:'invoice.updated',invoiceId:'in_equal',requestId:'software',localId:invoice.id,offerId:invoice.offer_id,milestone:'0',kind:'deposit',occurredAt:'2026-09-30T12:00:00Z',total:120000,currency:'usd',customerId:null,hostedUrl:null,dueAt:null};
+  await invoiceLib.applySoftwareInvoiceEvent(db,{...base,eventId:'evt_first',status:first});
+  await invoiceLib.applySoftwareInvoiceEvent(db,{...base,eventId:'evt_second',status:second});
+  expect(sql.prepare('SELECT status FROM software_invoices').get()).toEqual({status:'void'});
+});
