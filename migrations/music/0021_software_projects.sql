@@ -83,3 +83,5 @@ CREATE TABLE software_milestone_payments (
   recorded_by TEXT NOT NULL,
   PRIMARY KEY(request_id,milestone_index)
 );
+
+ALTER TABLE owner_requests ADD COLUMN reviewed_at TEXT;

@@ -121,9 +121,9 @@ export async function changeOwnerRequest(db: D1Database, command: RequestCommand
   let results: D1Result[];
   try { results = await db.batch([
     ...(closingSoftware ? [offerSendingGuard(db, command.id)] : []),
-    db.prepare(`UPDATE owner_requests SET status=?,resolved_at=?,updated_at=?
+    db.prepare(`UPDATE owner_requests SET status=?,resolved_at=?,updated_at=?,reviewed_at=CASE WHEN ?='reviewed' THEN ? ELSE reviewed_at END
       WHERE id=? AND updated_at=? AND status IN (${placeholders}) RETURNING ${requestColumns}`)
-      .bind(transition.to, resolvedAt, now, command.id, current.updatedAt, ...transition.from),
+      .bind(transition.to, resolvedAt, now, transition.to, now, command.id, current.updatedAt, ...transition.from),
     db.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
       SELECT ?,? ,?,'',? WHERE EXISTS
         (SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND status=?)`)
