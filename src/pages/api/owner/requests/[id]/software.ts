@@ -56,6 +56,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
         guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM audio_projects WHERE request_id=?)', [record.id]),
         db.prepare("UPDATE software_offers SET status='withdrawn',updated_at=? WHERE request_id=? AND status IN ('sent','draft')").bind(now, record.id),
         db.prepare('UPDATE software_offer_links SET revoked_at=? WHERE request_id=? AND revoked_at IS NULL').bind(now, record.id),
+        audit('offer-link-revoked', 'Offer withdrawn and link closed to decline the request'),
       ]);
       const sent = await email(command.action === 'question' ? 'A question about your project brief' : 'About your project brief', `${command.text}\n\nKazon`);
       if (!sent.ok) return json({ ok: false, uncertain: sent.uncertain, message: command.action === 'decline' ? (sent.uncertain ? 'The email service didn’t confirm. The offer is withdrawn and its link is closed. Check Resend before retrying.' : 'The email didn’t send. The offer is withdrawn and its link is closed; nothing else changed. Try again.') : sent.uncertain ? 'The email service didn’t confirm. Check Resend before retrying. Nothing was recorded.' : 'The email didn’t send. Nothing changed. Try again.' }, 502);
