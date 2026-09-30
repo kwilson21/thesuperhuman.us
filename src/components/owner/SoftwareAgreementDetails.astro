@@ -1,10 +1,32 @@
 ---
 import { signingEnabled } from '~/lib/agreement-access';
-import type { SoftwareOffer,OfferTerms } from '~/lib/software-offers';
-interface Props {requestId:string;offer:SoftwareOffer|null|undefined;terms:OfferTerms|null}
-const {requestId,offer,terms}=Astro.props,db=Astro.locals.runtime?.env.MUSIC_DB,enabled=db?await signingEnabled(db):false;
-const details=offer?.agreement_details_json?JSON.parse(offer.agreement_details_json):{};
-const candidates=db&&offer?.request_id?(await db.prepare("SELECT a.id,c.legal_name,c.entity_type,c.jurisdiction,a.effective_on FROM software_agreements a JOIN software_agreement_clients c ON c.id=a.client_id JOIN owner_requests r ON r.email=c.recipient_email WHERE r.id=? AND a.kind='msa' AND a.status='executed' AND a.terminated_at IS NULL").bind(offer.request_id).all<{id:string;legal_name:string;entity_type:string;jurisdiction:string;effective_on:string}>()).results:[];
+import type { SoftwareOffer, OfferTerms } from '~/lib/software-offers';
+interface Props {
+  requestId: string;
+  offer: SoftwareOffer | null | undefined;
+  terms: OfferTerms | null;
+}
+const { requestId, offer, terms } = Astro.props,
+  db = Astro.locals.runtime?.env.MUSIC_DB,
+  enabled = db ? await signingEnabled(db) : false;
+const details = offer?.agreement_details_json ? JSON.parse(offer.agreement_details_json) : {};
+const candidates =
+  db && offer?.request_id
+    ? (
+        await db
+          .prepare(
+            "SELECT a.id,c.legal_name,c.entity_type,c.jurisdiction,a.effective_on FROM software_agreements a JOIN software_agreement_clients c ON c.id=a.client_id JOIN owner_requests r ON r.email=c.recipient_email WHERE r.id=? AND a.kind='msa' AND a.status='executed' AND a.terminated_at IS NULL",
+          )
+          .bind(offer.request_id)
+          .all<{
+            id: string;
+            legal_name: string;
+            entity_type: string;
+            jurisdiction: string;
+            effective_on: string;
+          }>()
+      ).results
+    : [];
 ---
 {enabled&&<fieldset data-agreement-details><legend>Agreement details</legend><p class="rail-muted">Required before sending. Dates and deliverables must match the work you can promise.</p>
  {(['planned_start','planned_end'] as const).map(name=><label>{name==='planned_start'?'Planned start':'Planned end'}<input class="studio-input" type="date" name={`agreement.${name}`} value={details[name]??''} /></label>)}

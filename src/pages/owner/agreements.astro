@@ -1,13 +1,29 @@
 ---
-export const prerender=false;
+export const prerender = false;
 import OwnerLayout from '~/layouts/OwnerLayout.astro';
 import { currentTemplate, templateFields } from '~/lib/agreement-templates';
 import { signingEnabled } from '~/lib/agreement-access';
-const db=Astro.locals.runtime.env.MUSIC_DB!;
-const enabled=await signingEnabled(db),templates=await Promise.all(['msa','sow'].map(kind=>currentTemplate(db,kind as 'msa'|'sow')));
-const config=await db.prepare('SELECT version,values_json FROM software_contractor_config ORDER BY version DESC LIMIT 1').first<{version:number;values_json:string}>();
-const histories=await Promise.all(['msa','sow'].map(kind=>db.prepare('SELECT version,published_at FROM software_agreement_templates WHERE kind=? ORDER BY version DESC').bind(kind).all<{version:number;published_at:string}>()));
-const values=config?JSON.parse(config.values_json):{};
+const db = Astro.locals.runtime.env.MUSIC_DB!;
+const enabled = await signingEnabled(db),
+  templates = await Promise.all(
+    ['msa', 'sow'].map((kind) => currentTemplate(db, kind as 'msa' | 'sow')),
+  );
+const config = await db
+  .prepare(
+    'SELECT version,values_json FROM software_contractor_config ORDER BY version DESC LIMIT 1',
+  )
+  .first<{ version: number; values_json: string }>();
+const histories = await Promise.all(
+  ['msa', 'sow'].map((kind) =>
+    db
+      .prepare(
+        'SELECT version,published_at FROM software_agreement_templates WHERE kind=? ORDER BY version DESC',
+      )
+      .bind(kind)
+      .all<{ version: number; published_at: string }>(),
+  ),
+);
+const values = config ? JSON.parse(config.values_json) : {};
 ---
 <OwnerLayout title="Agreements" current="requests" newRequestCount={0} ownerEmail={Astro.locals.owner!.email}>
  <h1>Agreements</h1><p>Manage private templates and signing. Published versions and signed documents stay unchanged.</p>
@@ -17,15 +33,91 @@ const values=config?JSON.parse(config.values_json):{};
 <section class="rail-section"><h2>Reviewed agreement retention</h2><p>Preview the exact eligible set after the ten-year period. Open agreements, legal holds and active MSA reuse stay retained. This cleanup is separate from project messages and images.</p><form data-retention-preview><button class="studio-quiet">Preview eligible agreements</button><p role="status"></p><pre data-retention-preview-output></pre></form><form method="post" action="/api/owner/agreements"><input type="hidden" name="action" value="retention-apply" /><label>Reviewed manifest<textarea class="studio-textarea" name="manifest" rows="8" required></textarea></label><label><input type="checkbox" name="confirmed" value="true" required />I reviewed these exact IDs and hashes for deletion.</label><button class="studio-quiet">Apply reviewed cleanup</button></form></section>
 <section class="rail-section"><h2>Expired email verification data</h2><p>Remove challenges and sessions expired or revoked for at least 30 days. Saved signature evidence and signed agreements remain retained.</p><form method="post" action="/api/owner/agreements"><input type="hidden" name="action" value="access-cleanup" /><label><input type="checkbox" name="confirmed" value="true" required />Remove expired verification data only.</label><button class="studio-quiet">Clean up expired verification data</button></form></section>
 </OwnerLayout>
-<style>form {display:grid;gap:1rem;min-width:0}label{display:grid;gap:.4rem}textarea,input{max-width:100%;min-width:0}pre,code{white-space:pre-wrap;overflow-wrap:anywhere}section{max-width:60rem}</style>
+<style>
+form {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+label {
+  display: grid;
+  gap: 0.4rem;
+}
+textarea,
+input {
+  max-width: 100%;
+  min-width: 0;
+}
+pre,
+code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+section {
+  max-width: 60rem;
+}
+</style>
 <script>
- document.querySelector<HTMLFormElement>('[data-retention-preview]')!.addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget as HTMLFormElement,status=form.querySelector<HTMLElement>('[role="status"]')!;try{const response=await fetch('/api/owner/agreements',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'retention-preview'})}),result=await response.json() as {error:string;manifest:unknown};if(!response.ok)throw new Error(result.error);form.querySelector<HTMLElement>('[data-retention-preview-output]')!.textContent=JSON.stringify(result.manifest,null,2);document.querySelector<HTMLTextAreaElement>('[name="manifest"]')!.value=JSON.stringify(result.manifest);status.textContent='Review this exact manifest before applying cleanup.';}catch(error){status.textContent=(error as Error).message;}});
- for(const form of document.querySelectorAll<HTMLFormElement>('[data-template-editor],[data-agreement-config]')) form.addEventListener('submit',async event=>{
-  event.preventDefault();const data=Object.fromEntries(new FormData(form)),button=(event as SubmitEvent).submitter as HTMLButtonElement;
-  let payload:unknown;
-  if(form.hasAttribute('data-agreement-config')) {const {action,expectedCurrentVersion,...values}=data;payload={action,expectedCurrentVersion:Number(expectedCurrentVersion),values:{...values,registered_agent_confirmed:data.registered_agent_confirmed==='on'}};}
-  else payload={...data,action:button.value,expectedCurrentVersion:Number(data.expectedCurrentVersion),confirmed:data.confirmed==='true'};
-  const status=form.querySelector<HTMLElement>('[role="status"]')!;
-  try{const r=await fetch(form.action,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)}),result=await r.json() as {error:string;text?:string};if(!r.ok)throw new Error(result.error);if(result.text)form.querySelector<HTMLElement>('[data-template-preview]')!.textContent=result.text;else location.reload();}catch(e){status.textContent=(e as Error).message;}
- });
+document
+  .querySelector<HTMLFormElement>('[data-retention-preview]')!
+  .addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget as HTMLFormElement,
+      status = form.querySelector<HTMLElement>('[role="status"]')!;
+    try {
+      const response = await fetch('/api/owner/agreements', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ action: 'retention-preview' }),
+        }),
+        result = (await response.json()) as { error: string; manifest: unknown };
+      if (!response.ok) throw new Error(result.error);
+      form.querySelector<HTMLElement>('[data-retention-preview-output]')!.textContent =
+        JSON.stringify(result.manifest, null, 2);
+      document.querySelector<HTMLTextAreaElement>('[name="manifest"]')!.value = JSON.stringify(
+        result.manifest,
+      );
+      status.textContent = 'Review this exact manifest before applying cleanup.';
+    } catch (error) {
+      status.textContent = (error as Error).message;
+    }
+  });
+for (const form of document.querySelectorAll<HTMLFormElement>(
+  '[data-template-editor],[data-agreement-config]',
+))
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(form)),
+      button = (event as SubmitEvent).submitter as HTMLButtonElement;
+    let payload: unknown;
+    if (form.hasAttribute('data-agreement-config')) {
+      const { action, expectedCurrentVersion, ...values } = data;
+      payload = {
+        action,
+        expectedCurrentVersion: Number(expectedCurrentVersion),
+        values: { ...values, registered_agent_confirmed: data.registered_agent_confirmed === 'on' },
+      };
+    } else
+      payload = {
+        ...data,
+        action: button.value,
+        expectedCurrentVersion: Number(data.expectedCurrentVersion),
+        confirmed: data.confirmed === 'true',
+      };
+    const status = form.querySelector<HTMLElement>('[role="status"]')!;
+    try {
+      const r = await fetch(form.action, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        }),
+        result = (await r.json()) as { error: string; text?: string };
+      if (!r.ok) throw new Error(result.error);
+      if (result.text)
+        form.querySelector<HTMLElement>('[data-template-preview]')!.textContent = result.text;
+      else location.reload();
+    } catch (e) {
+      status.textContent = (e as Error).message;
+    }
+  });
 </script>
