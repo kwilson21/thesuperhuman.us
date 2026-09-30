@@ -332,6 +332,10 @@ it('countersigns identical hashes atomically and blocks start until artifact and
   expect(
     sql.prepare("SELECT count(*) n FROM software_agreements WHERE status='executed'").get().n,
   ).toBe(2);
+  expect(sql.prepare('SELECT DISTINCT party,ip_address,user_agent FROM software_agreement_signatures ORDER BY party').all()).toEqual([
+    { party: 'client', ip_address: '192.0.2.1', user_agent: 'Synthetic browser' },
+    { party: 'contractor', ip_address: '192.0.2.1', user_agent: 'Synthetic browser' },
+  ]);
   expect(await executedOfferAgreement(db, 'o')).toBeNull();
   const render = vi.fn(async () => new TextEncoder().encode('%PDF-synthetic'));
   await prepareAgreementArtifact(env, id, render);
@@ -1071,5 +1075,5 @@ it('prepares a real signed PDF through the API renderer module without font asse
   env.ASSETS = { fetch: async () => { throw new Error('Font asset access is unavailable.'); } } as unknown as Fetcher;
   await prepareAgreementArtifact(env, id, renderAgreementPacket);
   expect(sql.prepare('SELECT status,renderer_version FROM software_agreement_artifacts WHERE agreement_id=?').get(id))
-    .toMatchObject({ status: 'ready', renderer_version: 'website-pdf-v1' });
+    .toMatchObject({ status: 'ready', renderer_version: 'website-pdf-v2' });
 });

@@ -1,14 +1,14 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import interBase64 from '~/assets/agreement-fonts/Inter-400.base64?raw';
 import newsreaderBase64 from '~/assets/agreement-fonts/Newsreader-400.base64?raw';
-import { agreementDetailsSchema, contractorSchema } from '~/lib/agreement-fields';
-import { templateFields, type AgreementTemplate } from '~/lib/agreement-templates';
+import { agreementDetailsSchema, contractorSchema, agreementValues } from '~/lib/agreement-fields';
+import { templateFields, renderAgreement, type AgreementTemplate } from '~/lib/agreement-templates';
 import type { OfferTerms } from '~/lib/software-offers';
 import { expect, it } from 'vitest';
 import { inflateSync } from 'node:zlib';
 import { PDFDocument, PDFArray, PDFDict, PDFName, PDFRawStream } from 'pdf-lib';
 import { preflightAgreementPacket, renderAgreementPacket } from '~/lib/agreement-pdf';
-import { hashBytes } from '~/lib/agreement-artifacts';
+import { canonicalJson, hashBytes } from '~/lib/agreement-artifacts';
 import type { Agreement } from '~/lib/software-agreements';
 
 const assets = { fetch: async () => { throw new Error('PDF rendering must not fetch font assets.'); } };
@@ -48,10 +48,10 @@ it('renders selectable full legal text, Unicode, wrapped long words, certificate
   const sow = document('sow', 'Synthetic SOW\nNo missing terms.');
   sow.attachment_manifest_json = JSON.stringify([{ key: 'attachment', sha256: await hashBytes(bytes) }]);
   const env = { ASSETS: assets, AUDIO: { get: async () => ({ arrayBuffer: async () => bytes }) } } as unknown as Env;
-  const result = await renderAgreementPacket(env, [document('msa', text), sow], [{ verified_email: 'client@example.test', ip_address: '192.0.2.1', user_agent: 'Synthetic browser' }, { receipt_id: 'receipt-2' }]);
+  const result = await renderAgreementPacket(env, [document('msa', text), sow], [{}, { signatures: [{ verified_email: 'client@example.test', ip_address: '192.0.2.1', user_agent: 'Synthetic browser', receipt_id: 'receipt-2' }] }]);
   const pdf = await PDFDocument.load(result);
   const extracted = extract(pdf);
-  expect(extracted.replace(/Page \d+ of \d+ \| website-pdf-v1/g, '').replace(/\s/g, '')).toContain(text.replace(/\s/g, ''));
+  expect(extracted.replace(/(?:Master Services Agreement|Statement of Work) · Template v1/g, '').replace(/Page \d+ of \d+ \| website-pdf-v2/g, '').replace(/\s/g, '')).toContain(text.replace(/\s/g, ''));
   expect(extracted).toContain('client@example.test');
   expect(extracted).toContain('192.0.2.1');
   expect(extracted).toContain('Synthetic browser');
@@ -61,10 +61,10 @@ it('renders selectable full legal text, Unicode, wrapped long words, certificate
 });
 it('imports the original executed MSA pages unchanged before the later SOW', async () => {
   const env = { ASSETS: assets } as unknown as Env;
-  const original = await renderAgreementPacket(env, [document('msa', 'Original MSA')], [{ receipt_id: 'original-receipt' }]);
+  const original = await renderAgreementPacket(env, [document('msa', 'Original MSA')], [{ signatures: [{ receipt_id: 'original-receipt' }] }]);
   env.MUSIC_DB = { prepare: () => ({ bind: () => ({ first: async () => ({ pdf_key: 'original', pdf_sha256: await hashBytes(original) }) }) }) } as unknown as D1Database;
   env.AUDIO = { get: async () => ({ arrayBuffer: async () => original }) } as unknown as R2Bucket;
-  const result = await renderAgreementPacket(env, [document('msa', 'Must not regenerate', 'previous'), document('sow', 'Later SOW')], [{}, { receipt_id: 'later-receipt' }]);
+  const result = await renderAgreementPacket(env, [document('msa', 'Must not regenerate', 'previous'), document('sow', 'Later SOW')], [{}, { signatures: [{ receipt_id: 'later-receipt' }] }]);
   const pdf = await PDFDocument.load(result);
   const extracted = extract(pdf);
   expect(extracted).toContain('Original MSA');
@@ -104,3 +104,29 @@ it('formats PDF certificate dates in New York without changing source evidence',
   expect(text).not.toContain('2026-09-30');
   expect(JSON.stringify(certificate)).toBe(original);
 });
+
+// The audited source templates are intentionally private, supplied locally or by CI.
+const templateFile = process.env.AGREEMENT_TEMPLATE_FILE ?? '.private/signing/templates.json';
+it.runIf(existsSync(templateFile))('renders the real v1 agreements and embeds exact signing evidence', async () => {
+  const templates = JSON.parse(readFileSync(templateFile, 'utf8'));
+  const terms: OfferTerms = { outcome:'Client tracker',summary:'One shared view',milestones:[{name:'Tracker',deliverables:['A shared view'],acceptance:['Add a client'],feeCents:240000}],paymentMode:'standard',clientInputs:'Synthetic sample',exclusions:'Production rollout',timing:'Agreed dates' };
+  const details = agreementDetailsSchema.parse({ planned_start:'2026-10-01',planned_end:'2026-10-20',environment:'Browser prototype',operating_responsibilities:'Client',update_rhythm:'Weekly',milestones:[{start:'2026-10-01',target:'2026-10-20',handoff:'Source and notices'}] });
+  const contractor = contractorSchema.parse({legal_name:'Example Contractor LLC',entity_jurisdiction:'Wyoming LLC',signer_name:'Example Owner',signer_title:'Representative',notice_email:'owner@example.com',business_address:'200 Example Business Street',registered_agent_confirmed:true});
+  const client = { business_engagement:true as const,legal_name:'Example Client LLC',entity_type:'LLC',jurisdiction:'Wyoming',business_address:'100 Example Business Street',notice_email:'notices@example.com',signer_name:'Example Signer',signer_title:'Representative',reviewer_name:'Reviewer',reviewer_email:'reviewer@example.com',approver_name:'Approver',approver_email:'approver@example.com',portfolio:'deny' as const,naming:false,initials:'ES' };
+  const values = agreementValues(terms, details, client, contractor, {effective_on:'2026-09-30',msa_version:'2026-09-30 / template 1',sow_number:'SOW-1',offer_version:1,template_version:1});
+  const docs = (['msa','sow'] as const).map(kind => document(kind, renderAgreement(kind, templates[kind], values)));
+  for (const doc of docs) doc.text_sha256 = await hashBytes(new TextEncoder().encode(doc.canonical_text));
+  const certificates = docs.map(doc => ({document_id:doc.id,document_sha256:doc.text_sha256,effective_on:'2026-09-30',executed_at:'2026-09-30T13:25:00Z',versions:{template:1,offer:1},signatures:['client','contractor'].map(party=>({party,typed_name:party==='client'?'Example Signer':'Example Owner',title:'Representative',verified_email:party==='client'?'signer@example.com':'owner@example.com',verified_at:'2026-09-30T13:23:00Z',consent_at:'2026-09-30T13:25:00Z',signed_at:'2026-09-30T13:25:00Z',ip_address:'192.0.2.1',user_agent:'Synthetic browser 🧪',consent_text:'Electronic records consent',authority_text:'Authority for '+party,intent_text:'Signature intent for '+party}))}));
+  const pdf = await PDFDocument.load(await renderAgreementPacket({} as Env, docs, certificates));
+  const text = extract(pdf).replace(/\s+/g,' ');
+  for (const expected of ['1 Parties and scope','14 Signatures','1 Engagement details','9 Exceptions attachments and signatures','Example Client LLC','Client tracker','Signed electronically by Example Signer, Representative, on Sep 30, 2026, 9:25 AM EDT']) expect(text).toContain(expected);
+  expect(text).not.toContain('client.legal_name:');
+  expect(text).not.toContain('{{');
+  const certificateText = text.slice(text.indexOf('Signing certificate'));
+  for (const label of ['Party','Typed name','Title','Verified email','Verified at (New York)','Consent at (New York)','Signed at (New York)','IP address','Browser','Documents','Template version','SHA-256']) expect(certificateText).toContain(label);
+  expect(certificateText).not.toMatch(/[{}]/);
+  const names = pdf.catalog.lookup(PDFName.of('Names'), PDFDict).lookup(PDFName.of('EmbeddedFiles'), PDFDict).lookup(PDFName.of('Names'), PDFArray);
+  const file = names.lookup(1, PDFDict).lookup(PDFName.of('EF'), PDFDict).lookup(PDFName.of('F')) as PDFRawStream;
+  expect(inflateSync(file.contents).toString()).toBe(canonicalJson(certificates));
+  expect(certificates[0].signatures[0].user_agent).toBe('Synthetic browser 🧪');
+}, 30000);

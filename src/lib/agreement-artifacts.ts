@@ -72,7 +72,7 @@ export async function prepareAgreementArtifact(
         offer_id: d.offer_id,
         effective_on: d.effective_on,
         executed_at: d.executed_at,
-        renderer_version: 'website-pdf-v1',
+        renderer_version: 'website-pdf-v2',
         versions: {
           template:
             d.kind === 'msa'
@@ -119,7 +119,7 @@ export async function prepareAgreementArtifact(
         documents: documents.map((d) => ({ id: d.id, sha256: d.text_sha256 })),
         certificate_sha256: certificateHash,
         pdf_sha256: pdfHash,
-        renderer_version: 'website-pdf-v1',
+        renderer_version: 'website-pdf-v2',
       });
     errorCode = 'storage';
     if (!existing)
@@ -146,7 +146,7 @@ export async function prepareAgreementArtifact(
       throw new Error('Readback mismatch.');
     await db.batch([
       db.prepare(
-        "UPDATE software_agreement_artifacts SET status='ready',pdf_key=?,pdf_sha256=?,certificate_key=?,certificate_sha256=?,manifest_json=?,bytes=?,renderer_version='website-pdf-v1',ready_at=? WHERE agreement_id=? AND attempt_id=? AND status='rendering'",
+        "UPDATE software_agreement_artifacts SET status='ready',pdf_key=?,pdf_sha256=?,certificate_key=?,certificate_sha256=?,manifest_json=?,bytes=?,renderer_version='website-pdf-v2',ready_at=? WHERE agreement_id=? AND attempt_id=? AND status='rendering'",
       )
       .bind(
         key,

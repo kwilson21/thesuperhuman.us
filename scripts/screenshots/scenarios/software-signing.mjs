@@ -1,23 +1,13 @@
 import { createHash } from 'node:crypto';
-import { templateFields } from '../../../src/lib/agreement-template-fields.mjs';
+import { readFileSync } from 'node:fs';
 const hash = (text) => createHash('sha256').update(text).digest('hex');
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
-const template = (kind) =>
-  templateFields[kind]
-    .filter((f) => !f.startsWith('milestone.'))
-    .map((f) => `${f}: {{${f}}}`)
-    .join('\n') +
-  (kind === 'sow'
-    ? '\n{{#milestones}}\n' +
-      templateFields.sow
-        .filter((f) => f.startsWith('milestone.'))
-        .map((f) => `${f}: {{${f}}}`)
-        .join('\n') +
-      '\n{{/milestones}}'
-    : '');
 export default {
   title: 'Software agreement review, signatures and retained copies',
-  async run({ capture, sql, ownerFetch }) {
+  async run({ capture, sql, ownerFetch, templates }) {
+    // Legal sources remain private. Unit coverage may inject its small fixture.
+    templates ??= JSON.parse(readFileSync(process.env.AGREEMENT_TEMPLATE_FILE ?? '.private/signing/templates.json', 'utf8'));
+    const template = kind => templates[kind];
     const id = 'screenshot-signing',
       token = 'g'.repeat(43),
       at = new Date().toISOString(),

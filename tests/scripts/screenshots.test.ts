@@ -1,3 +1,5 @@
+import { templateFields } from '../../src/lib/agreement-template-fields.mjs';
+const signingTemplates = Object.fromEntries(['msa', 'sow'].map(kind => [kind, templateFields[kind as keyof typeof templateFields].filter(field => !field.startsWith('milestone.')).map(field => `${field}: {{${field}}}`).join('\n') + (kind === 'sow' ? '\n{{#milestones}}\n' + templateFields.sow.filter(field => field.startsWith('milestone.')).map(field => `${field}: {{${field}}}`).join('\n') + '\n{{/milestones}}' : '')]));
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -64,6 +66,7 @@ it('seeds a completed send so missing details reach the real agreement validatio
   try {
     const scenario = await import('../../scripts/screenshots/scenarios/software-signing.mjs');
     await expect(scenario.default.run({
+      templates: signingTemplates,
       sql: (query: string) => sql.exec(query),
       ownerFetch: async () => { throw new Error('No API setup is needed before this shot.'); },
       capture: async ({ file }: { file: string }) => { if (file.includes('missing-send-field')) throw stop; return file; },
@@ -109,6 +112,7 @@ describe('screenshot coverage', () => {
     for (const scenario of new Set(Object.values(SCENARIO_PAGES).map(item => item.scenario))) {
       const module = await import(pathToFileURL(`scripts/screenshots/scenarios/${scenario}.mjs`).href);
       const steps = await module.default.run({
+        templates: signingTemplates,
         base: 'http://127.0.0.1:4321',
         sql: (query: string) => query.startsWith('SELECT status FROM software_agreement_artifacts') ? '[{"results":[{"status":"ready"}]}]' : '[]',
         ownerFetch: async (path: string) => path.startsWith('/api/offer/') && path.endsWith('/review') ? {documents:[{id:'00000000-0000-4000-8000-000000000001',kind:'msa',hash:'a'.repeat(64)},{id:'00000000-0000-4000-8000-000000000002',kind:'sow',hash:'b'.repeat(64)}]} : {},
