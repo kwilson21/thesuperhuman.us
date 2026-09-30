@@ -7,6 +7,7 @@ export function setupSoftwareComposer() {
   const email = form.querySelector<HTMLInputElement>('[name=email_client]')!, alt = form.querySelector<HTMLInputElement>('[name=visual_alt]')!;
   let emailChosen = Boolean(root.dataset.id), hasVisual = Boolean(preview.querySelector<HTMLImageElement>('[data-preview-image]')?.getAttribute('src'));
   const updateId = root.dataset.id || crypto.randomUUID();
+  let savedVisual = preview.querySelector<HTMLImageElement>('[data-preview-image]')?.getAttribute('src') || '';
   let objectUrl: string | undefined, busy = false;
   const value = (key: string) => (form.elements.namedItem(key) as HTMLInputElement).value;
   const text = (selector: string, content: string) => { const element = preview.querySelector(selector); if (element) element.textContent = content; };
@@ -84,7 +85,13 @@ export function setupSoftwareComposer() {
   });
   file.addEventListener('change', () => {
     const image = file.files?.[0]; if (!image) return;
-    if (image.size > 5 * 1024 * 1024 || !['image/png','image/jpeg','image/webp'].includes(image.type)) { status.textContent = 'Choose a PNG, JPEG or WebP of 5 MB or less.'; file.value = ''; return; }
+    if (image.size > 5 * 1024 * 1024 || !['image/png','image/jpeg','image/webp'].includes(image.type)) { status.textContent = 'Choose a PNG, JPEG or WebP of 5 MB or less.'; file.value = '';
+      if (objectUrl) URL.revokeObjectURL(objectUrl); objectUrl = undefined;
+      const previewImage = preview.querySelector<HTMLImageElement>('[data-preview-image]')!;
+      if (savedVisual) previewImage.src = savedVisual; else previewImage.removeAttribute('src');
+      preview.querySelector<HTMLElement>('[data-preview-figure]')!.hidden = !savedVisual;
+      const name = form.querySelector('[data-visual-name]'); if (name) name.textContent = '';
+      render(); return; }
     const name = form.querySelector('[data-visual-name]'); if (name) name.textContent = image.name;
     if (objectUrl) URL.revokeObjectURL(objectUrl); objectUrl = URL.createObjectURL(image);
     preview.querySelector<HTMLImageElement>('[data-preview-image]')!.src = objectUrl;
@@ -113,7 +120,7 @@ export function setupSoftwareComposer() {
         const response = await fetch(`${root!.dataset.endpoint}/${root!.dataset.id}/visual`, { method: 'PUT', headers: { 'content-type': file.files[0].type, 'if-unmodified-since': root!.dataset.updatedAt! }, body: file.files[0] });
         const result = await response.json() as { updatedAt: string; error?: string; cleanupPending?: boolean };
         if (!response.ok) throw new Error(result.error ?? 'Could not upload the visual.');
-        root!.dataset.updatedAt = result.updatedAt; hasVisual = true; file.value = '';
+        root!.dataset.updatedAt = result.updatedAt; hasVisual = true; savedVisual = `${root!.dataset.endpoint}/${root!.dataset.id}/visual`; file.value = '';
         if (result.cleanupPending) { status.textContent = result.error!; return; }
       }
       await write(share ? 'share' : 'draft');
