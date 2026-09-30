@@ -19,7 +19,7 @@ import formFeedback from '~/assets/projects/tally/form-feedback-annotated.webp';
 
 export const tallyStory = {
   title: 'Tally',
-  subtitle: 'A budgeting app so simple that using it teaches you how to budget.',
+  subtitle: 'Review your transactions, set monthly budgets and see how much remains to spend.',
   description: 'Inspired by Mint. I set the direction and Claude Code writes the code.',
   status: 'In development · public demo',
 };

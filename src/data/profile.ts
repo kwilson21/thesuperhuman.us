@@ -1,7 +1,7 @@
 // Curated from the owner's career account. Update professional facts here.
 export const workingPreference = 'I work independently, through contracts and projects, and I’m selective about full-time roles.';
 export const workingPreferenceDetail = 'I work independently, through contracts and projects. I’ll consider full-time roles where I’d own a system end to end, work fully remotely, and build with AI as a normal part of the job. If that isn’t your role, a contract is probably the better fit, and I’m glad to talk about that too.';
-export const lyftBonus = { before: '5,000', after: '100,000+', evidence: 'Owner-reported batch capacity' };
+export const lyftBonus = { before: '5,000', after: '100,000+', evidence: 'Owner-reported batch capacity', description: 'I changed Lyft’s driver-bonus tool so support could run and monitor larger batches without handing the work to on-call engineers.' };
 // Team scope clarified by the owner on September 10, 2026. Rentals projects come
 // from the existing career account. Quiet hours was completed after the July 2026
 // candidate summary and is recorded separately from that historical account.
@@ -84,7 +84,7 @@ export const experience = [
   {
     id: 'scotch', company: 'Scotch', role: 'Data Engineer',
     dates: 'October 2025 – May 2026', location: 'Remote',
-    outcome: 'Sole data engineer maintaining retail transaction data pipelines.',
+    outcome: 'I kept the systems that process retail transaction data running and fixed bugs that triggered recurring alarms.',
     context: [
       'Maintained and operated inherited ETL pipelines in a Ruby on Rails platform, using GoodJob, EC2, and S3 to transform legacy store transaction data and bulk-load results.',
       'Handled on-call issues and deployed fixes for bugs causing recurring alarms. Prototyped an MCP-driven store-onboarding pipeline and a PII-stripping debug tool; both remained internal prototypes and were not shipped.',
@@ -94,13 +94,13 @@ export const experience = [
   {
     id: 'axuall', company: 'Vendorpass / Axuall', role: 'Senior Python Developer (Contract)',
     dates: 'July 2025 – November 2025', location: 'Remote',
-    outcome: 'Data ingestion for a healthcare credentialing platform.',
+    outcome: 'I built pipelines that brought state medical-board data into a healthcare credentialing platform.',
     context: ['Built per-state Dagster pipelines ingesting medical-board data from SFTP feeds, REST APIs, and Selenium-driven web sources. Applied credentialing logic for multiple states, including North Carolina, and contributed to the early transition from legacy Python connectors to per-state pipelines.'],
   },
   {
     id: 'sure', company: 'Sure', role: 'Software Engineer',
     dates: 'December 2023 – February 2025', location: 'Remote',
-    outcome: 'Backend engineering for Toggle homeowners insurance.',
+    outcome: 'I built and maintained the systems that generated insurance documents and connected to insurance carriers.',
     context: [
       'Added document types to the insurance pipeline, adapting HTML and CSS to carrier reference PDFs and generating application documents with Jinja.',
       'Stored documents in S3 with versioned metadata in MongoDB, and maintained document generation in Django and third-party carrier integrations.',
