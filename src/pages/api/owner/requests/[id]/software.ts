@@ -90,6 +90,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       return json({ ok: true, version, updatedAt: now });
     }
     if (command.action !== 'send') return json({ ok: false }, 400);
+    if (await offerIsSending(db, record.id)) return json({ ok: false, message: offerSendingMessage }, 409);
     // A revoked link can be reissued for the current sent version without changing its terms.
     const offer = draft ?? offers.find(value => value.status === 'sent');
     if (!offer || offer.version !== command.version || offer.updated_at !== command.expectedUpdatedAt) return json({ ok: false, message: 'Save a valid draft before sending.' }, 409);
@@ -100,7 +101,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     try { link = new URL(`/offer/${token}`, env.SITE_ORIGIN ?? 'https://thesuperhuman.us').href; }
     catch { return json({ ok: false, message: 'The offer link couldn’t be built. Check SITE_ORIGIN. Nothing was sent.' }, 500); }
     await db.batch([
-      requestGuard(),
+      requestGuard(), offerSendingGuard(db, record.id),
       guard('SELECT 1 FROM software_offers WHERE id=? AND status=? AND updated_at=?', [offer.id, offer.status, offer.updated_at]),
       ...(offer.status === 'sent' ? [guard('SELECT 1 FROM software_offer_links WHERE request_id=? AND revoked_at IS NOT NULL', [record.id])] : []),
       ...(draft ? [db.prepare("UPDATE software_offers SET status='superseded' WHERE request_id=? AND status='sent'").bind(record.id),
@@ -116,7 +117,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     if (sent.ok && !live) return json({ ok: false, message: 'The email went out, but the link was closed while it was sending. Send the offer again for a working link.' }, 409);
     return json({ ok: true, version: offer.version, link, sentAt: draft ? now : offer.sent_at, updatedAt: draft ? now : offer.updated_at, emailSent: sent.ok, uncertain: sent.uncertain, copySent: sent.copySent });
   } catch {
-    if (['revoke', 'decline'].includes(command.action) && await offerIsSending(db, record.id)) return json({ ok: false, message: offerSendingMessage }, 409);
+    if (['send', 'revoke', 'decline'].includes(command.action) && await offerIsSending(db, record.id)) return json({ ok: false, message: offerSendingMessage }, 409);
     if (command.action === 'draft') {
       const draft = (await listSoftwareOffers(db, record.id)).find(offer => offer.status === 'draft');
       return json({ ok: false, updatedAt: draft?.updated_at ?? null, message: 'The saved draft changed since this page loaded. Save again to keep what’s on screen, or reload to see the saved version.' }, 409);

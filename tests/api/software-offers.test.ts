@@ -44,6 +44,7 @@ it('sends a saved version, supersedes it with the next draft and exposes only th
   expect(JSON.stringify(sql.prepare('SELECT * FROM software_offer_links').get())).not.toContain(token);
   const secondDraft = await draft(); expect(secondDraft.version).toBe(2);
   expect(await getLinkedOffer(db, token)).toMatchObject({ version: 1 });
+  sql.exec("UPDATE software_offer_links SET created_at='2020-01-01T00:00:00Z'");
   const second = await send(secondDraft);
   expect(sql.prepare('SELECT version,status FROM software_offers ORDER BY version').all()).toEqual([{ version:1,status:'superseded' },{ version:2,status:'sent' }]);
   expect(await getLinkedOffer(db, second.link.split('/').pop())).toMatchObject({ version: 2 });
@@ -308,7 +309,7 @@ it('rejects an actual send batch that read the draft before decline reserved it'
   const reached = new Promise<void>(resolve => { read = resolve; });
   const reserved = new Promise<void>(resolve => { release = resolve; });
   db.batch = async items => {
-    if ((items[1] as any)?.query.includes('software_offers WHERE id=? AND status=?')) {
+    if (items.some(item => (item as any).query.includes('software_offers WHERE id=? AND status=?'))) {
       read(); await reserved;
     }
     return batch(items);
@@ -323,4 +324,39 @@ it('rejects an actual send batch that read the draft before decline reserved it'
   expect((await call({ action:'decline',text:'Thanks.' })).status).toBe(200);
   expect(sql.prepare("SELECT * FROM owner_request_audit WHERE action='offer-sent'").all()).toEqual([]);
   expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+it('allows a draft but blocks a second send while the first email is pending', async () => {
+  const first = await draft();
+  let started!: () => void, finish!: () => void;
+  const reached = new Promise<void>(resolve => { started = resolve; });
+  const delivery = new Promise<void>(resolve => { finish = resolve; });
+  vi.mocked(fetch).mockImplementationOnce(async () => { started(); await delivery; return new Response('{}'); });
+  const pending = call({ action:'send',version:first.version,expectedUpdatedAt:first.updatedAt });
+  await reached;
+  const link = sql.prepare('SELECT * FROM software_offer_links').get();
+  const second = await draft();
+  const response = await call({ action:'send',version:second.version,expectedUpdatedAt:second.updatedAt });
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ ok:false,message:'An offer is still being sent. Try again in a moment.' });
+  expect(sql.prepare('SELECT * FROM software_offer_links').get()).toEqual(link);
+  expect(sql.prepare('SELECT version,status FROM software_offers ORDER BY version').all()).toEqual([{ version:1,status:'sent' },{ version:2,status:'draft' }]);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  finish(); expect((await pending).status).toBe(200);
+});
+
+it('rolls back a send when another send reserves the link after its pre-check', async () => {
+  const saved = await draft();
+  const batch = db.batch.bind(db);
+  db.batch = async items => {
+    sql.prepare('INSERT INTO software_offer_links(request_id,token_hash,created_at) VALUES (?,?,?)').run('software','other-send',new Date().toISOString());
+    return batch(items);
+  };
+  const response = await call({ action:'send',version:saved.version,expectedUpdatedAt:saved.updatedAt });
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ message:'An offer is still being sent. Try again in a moment.' });
+  expect(sql.prepare('SELECT status FROM software_offers').get()).toEqual({ status:'draft' });
+  expect(sql.prepare('SELECT token_hash FROM software_offer_links').get()).toEqual({ token_hash:'other-send' });
+  expect(sql.prepare("SELECT * FROM owner_request_audit WHERE action='offer-sent'").all()).toEqual([]);
+  expect(fetch).not.toHaveBeenCalled();
 });
