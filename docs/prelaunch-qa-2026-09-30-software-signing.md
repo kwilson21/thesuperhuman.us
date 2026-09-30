@@ -3,17 +3,29 @@
 - Date: September 30, 2026
 - Repository: `kwilson21/thesuperhuman.us`
 - Pull request: #158
-- Code revision: `f5335fa` (integrates current main `2beb025` with the independently reviewed safeguards and editor fix)
-- Local continuation branch: `codex/continue-software-signing`
-- Remote PR revision before the authorized update: `308d668e0867ba4a1d063ce4a68051cac504095a`
+- Code revisions: signing baseline `f5335fa`; guided agreed-terms update `9916a9f592882a9d2be2e8854376f839c558caa7`. Both include current main `2beb025`.
+- Local continuation branch: `codex/guided-agreement-terms`
+- Initial remote PR revision before the authorized signing update: `308d668e0867ba4a1d063ce4a68051cac504095a`
 - Target: production `https://thesuperhuman.us`, private owner and client signing routes, production `MUSIC_DB` and private R2 agreement objects.
 - Authorization: Kazon explicitly approved updating PR #158 and checking CI on September 30, 2026 ("Yes", directly replying to the request to push reviewed fixes and check CI). This approval excludes production migration, merge and deployment. Earlier signing decisions remain unchanged.
-- Scope: Stage 4b signing implementation, recovered Agreements page structure, five verified PR review fixes, attachment-retention race safeguards, and this release record. Real MSA/SOW text and existing signed evidence were not edited.
+- Scope: Stage 4b signing implementation, recovered Agreements page structure, five verified PR review fixes, attachment-retention race safeguards, the approved guided client agreed-terms presentation, and this release record. Real MSA/SOW text and existing signed evidence were not edited.
 - Candidate rollback revision: `2beb02538c597789db8afbcaab4ebc0ff724ce4e`, the observed current GitHub main at verification time. The release operator must confirm the actual deployed revision and save its rollback receipt before production changes.
 
 PASS means observed locally unless an environment is stated. The approved PR update publishes this reviewed branch for CI. No production migration, merge, manual deployment, real signing, external email or payment is authorized or performed by this task. This record is not a launch-ready certification.
 
-## Local evidence
+## Guided agreed-terms continuation
+
+- **PASS:** The approved four-stage preview is implemented only inside the existing client project “What we agreed” panel: what you get, milestones/timing, cost/responsibilities, and review agreed terms. This page shows an already recorded agreement, so navigation has no consent, signature or acceptance action.
+- **PASS:** Frozen project fees, scope and payment mode; executed agreement dates, duties, handoff, working conditions and recorded payment amounts replace the prototype’s omissions. Complete immutable MSA/SOW text and signed downloads remain available. External agreements identify details/copies not stored here and direct the client to the kept complete signed copy.
+- **PASS:** Inline legal records obey recipient identity and archive-closure guards. Transfer-email, privacy, exact legal text, odd-cent recorded amounts and external/closed records have regression coverage. Signing APIs, agreement generation, legal wording and signed evidence were not edited.
+- **PASS:** Full suite: 119 files, 1,046 tests passed, one intentional private-template skip. Astro: 423 files, zero errors/warnings, 18 existing hints. Build and asset/copy/publicist prebuild gates pass.
+- **PASS:** Local fictional scenarios: 35 software-project and 56 software-signing states. Fresh browser checks cover all four stages and full review at 320, 390, 768 and 1280 pixels for external and website-signed projects. Keyboard/back navigation, focus visibility, long titles, full expansion, no reading mutations, no overflow, exact displayed legal SHA-256 hashes and signed PDF downloads pass.
+- **PASS:** Independent UI checks verify native no-JavaScript reading, actual Chromium print output, and long-title/200% text readability. Verified contrast and sticky/focus issues were corrected. The summary becomes static when enlarged text needs the viewport. Signed documents remain unchanged.
+- **PASS:** Fresh independent correctness/security and UI/copy reviews. No new dependency, database schema, owner-editor redesign or signing-flow changes.
+- **PASS baseline CI:** PR head `268fe3c` passed Validate, Screenshots and Workers Builds. The guided continuation’s exact-head CI and downloaded screenshot receipt are recorded after its approved push; prior-head success is not evidence for a later commit.
+- **PENDING production:** Migration 0023, merging, deployment, enabling signing and actual client signing remain outside this approval. The scoped implementation and PR checks do not certify production readiness.
+
+## Signing baseline local evidence
 
 - **PASS:** `npm test`: 119 files, 1,045 passed, one private-template test skipped (1,046 total). Includes local R2 upload verification with loopback access.
 - **PASS:** `npm run check`: 420 files, zero errors, zero warnings, 18 existing hints.
@@ -152,7 +164,7 @@ A code rollback can redeploy the prior build while leaving these additive databa
 ## Remaining release actions
 
 1. **PASS locally:** Recovered editor and continuation commits are integrated with current main `2beb025`; required local checks and independent reviews pass. Preserve history while updating the existing PR branch.
-2. Publish the approved PR #158 update and verify terminal CI/screenshots for its exact new head. Save the private final-head receipt; keep production gates below separate.
+2. The initial signing update was pushed and passed all triggered checks at `268fe3c`. Publish the approved guided-terms continuation to PR #158 and verify terminal CI/screenshots for its exact new head. Save the private final-head receipt; keep production gates below separate.
 3. Obtain exact production 0023 approval and complete the backup/recovery/apply/verification receipt above.
 4. Obtain/confirm production merge and deployment authorization; merge only with current-head checks and required review satisfied. Verify the deployed revision and scoped journeys.
 5. Keep signing off until the owner reviews templates/consent/configuration and approves enabling it. Real-client signing and PDF delivery remain separate live checks.
