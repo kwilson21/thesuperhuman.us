@@ -29,7 +29,7 @@ export function stripeWebhookAvailable(env: Env): boolean {
   return Boolean(env.STRIPE_SECRET_KEY) && Boolean(env.STRIPE_WEBHOOK_SECRET);
 }
 
-function stripeClient(env: Env, invoiceCreation = true): Stripe {
+export function stripeClient(env: Env, invoiceCreation = true): Stripe {
   if (invoiceCreation ? !stripeAvailable(env) : !stripeWebhookAvailable(env)) {
     throw new Error(invoiceCreation ? 'Stripe invoice creation is unavailable.' : 'Stripe webhooks are unavailable.');
   }

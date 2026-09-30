@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
 import { offerSendingMessage } from '~/lib/software-offers';
-import { changeOwnerRequest, projectStartedMessage } from '~/lib/owner-requests';
+import { changeOwnerRequest, projectStartedMessage, projectIncompleteMessage } from '~/lib/owner-requests';
 export const prerender = false;
 
 const commandSchema = z.discriminatedUnion('action', [
@@ -22,6 +22,6 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
     const status = message === 'Request not found.' ? 404 : 409;
-    return Response.json({ ok: false, ...((message === offerSendingMessage || message === projectStartedMessage) ? { message } : {}) }, { status, headers: { 'cache-control': 'private, no-store' } });
+    return Response.json({ ok: false, ...((message === offerSendingMessage || message === projectStartedMessage || message === projectIncompleteMessage) ? { message } : {}) }, { status, headers: { 'cache-control': 'private, no-store' } });
   }
 };

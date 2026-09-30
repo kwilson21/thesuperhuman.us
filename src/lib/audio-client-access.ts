@@ -225,14 +225,14 @@ export async function clientSoftwareProjectsForSession(db: D1Database, token: st
   const session = await db.prepare(`SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL`)
     .bind(await hashValue(token), now.toISOString()).first<{ email: string }>();
   if (!session) return null;
-  return (await db.prepare(`SELECT p.request_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,
-    p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id
+  return (await db.prepare(`SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,
+    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id
     WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL
     ORDER BY p.created_at DESC`).bind(session.email).all<ClientSoftwareProject>()).results;
 }
 export type ClientSoftwareProject = {
-  request_id: string; terms_json: string; payment_mode: 'standard' | 'invoice'; state: string; waiting_for: string;
-  milestone_index: number; step: string; started_at: string; next_update_on: string | null;
+  request_id: string; offer_id: string; terms_json: string; payment_mode: 'standard' | 'invoice'; state: string; waiting_for: string;
+  milestone_index: number; step: string; first_payment_recorded_at: string; started_at: string; next_update_on: string | null;
 };
 export async function clientSoftwareProjectForSession(db: D1Database, token: string, id: string, now = new Date()) {
   const projects = await clientSoftwareProjectsForSession(db, token, now);

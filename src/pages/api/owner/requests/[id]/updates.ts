@@ -2,8 +2,9 @@ import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
 import { musicRequest } from '~/lib/music-request';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
-import { updateInput, getSoftwareProject, projectTerms, softwareAudit, softwareGuard, openSoftwareGuard, deliverSoftwareNotice, recordMilestonePayment, acceptedDeliveryGuard } from '~/lib/software-projects';
+import { updateInput, getSoftwareProject, projectTerms, softwareAudit, softwareGuard, openSoftwareGuard, deliverSoftwareNotice, recordMilestonePayment, acceptedDeliveryGuard, priorMilestonePaymentGuard, milestoneDepositGuard } from '~/lib/software-projects';
 import type { SoftwareUpdate } from '~/lib/software-projects';
+import { listSoftwareInvoices, payableSoftwareInvoice, manualPaymentReminder } from '~/lib/software-invoices';
 export const prerender = false;
 export const POST: APIRoute = async ({ params, request, locals }) => {
   const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'cache-control': 'private, no-store' } });
@@ -53,6 +54,8 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     const status = share ? 'shared' : 'draft', notice = share && value.email_client ? 'pending' : 'not_requested';
     try { await db.batch([openSoftwareGuard(db, id),
       softwareGuard(db,"SELECT 1 FROM software_projects WHERE request_id=? AND state<>'complete'",[id]),
+      ...(share && review && project.payment_mode==='standard' && value.milestone_index>project.milestone_index ? [milestoneDepositGuard(db,id,value.milestone_index)] : []),
+      ...(share && review && project.payment_mode==='invoice' && value.milestone_index>project.milestone_index ? [priorMilestonePaymentGuard(db,id,value.milestone_index)] : []),
       ...(share && value.kind === 'handoff' ? [acceptedDeliveryGuard(db,id,value.milestone_index), ...recordMilestonePayment(db,id,value.milestone_index,actor,at)] : []),
       ...(share && value.kind !== 'progress' ? [db.prepare("UPDATE software_project_updates SET status='superseded',updated_at=? WHERE request_id=? AND milestone_index=? AND kind=? AND status='shared'").bind(at,id,value.milestone_index,value.kind)] : []),
       softwareGuard(db, "SELECT 1 FROM software_projects WHERE request_id=? AND updated_at=?", [id, command.expectedProjectUpdatedAt]),
@@ -71,5 +74,8 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       try { await deliverSoftwareNotice(db, id, env, updateId); } catch { return json({ ok: true, id: updateId, updatedAt: at, projectUpdatedAt: at, shared: true, noticeUnchecked: true }); }
     }
     return json({ ok: true, id: updateId, updatedAt: at, projectUpdatedAt: at, shared: share });
-  } catch { return json({ ok: false, error: 'The draft changed or could not be saved. Reload and try again.' }, 409); }
+  } catch {
+    const project = await getSoftwareProject(db,id);
+    if (command.action==='share' && value.kind==='handoff' && project && payableSoftwareInvoice(await listSoftwareInvoices(db,id,project.offer_id),value.milestone_index,['balance','milestone'])) return json({ok:false,error:manualPaymentReminder},409);
+    return json({ ok: false, error: 'The draft changed or could not be saved. Reload and try again.' }, 409); }
 };

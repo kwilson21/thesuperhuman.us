@@ -249,3 +249,22 @@ it('holds withdrawn software contact until revoked project content is deleted', 
   await applyOwnerRetention(database,review,'Local test data',now);
   expect(await database.query("SELECT name,email FROM owner_requests WHERE id='software-held'")).toEqual([{name:'Client',email:'client@example.com'}]);
 });
+
+it('holds unstarted request contacts for invoices younger than two years, then removes invoices before offer cleanup',async()=>{
+  const database=fixture();database.db.exec('PRAGMA foreign_keys=ON');
+  database.db.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at,resolved_at) VALUES ('software-invoice','software','client@example.com','Tool','resolved','2024-01-01','2024-01-01','2024-01-01');
+    INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('invoice-offer','software-invoice',1,'sent','{}','2024-01-01','2024-01-01');
+    INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,stripe_invoice_id,status,created_by,created_at,updated_at)
+      VALUES ('deposit','software-invoice','invoice-offer',0,'deposit',100,7,'in_accounting','paid','owner','2026-01-01','2026-01-01')`);
+  const review=await previewOwnerRetention(database,'Local test data',now);
+  expect(review.requestContacts).toBe(1);
+  await applyOwnerRetention(database,review,'Local test data',now);
+  expect(database.db.prepare("SELECT email FROM owner_requests WHERE id='software-invoice'").get().email).toBe('client@example.com');
+  expect(database.db.prepare('SELECT count(*) AS n FROM software_invoices').get()).toEqual({n:1});
+  const later=new Date('2028-01-02T12:00:00Z');
+  const expired=await previewOwnerRetention(database,'Local test data',later);
+  await applyOwnerRetention(database,expired,'Local test data',later);
+  expect(database.db.prepare('SELECT count(*) AS n FROM software_invoices').get()).toEqual({n:0});
+  expect(database.db.prepare("SELECT email FROM owner_requests WHERE id='software-invoice'").get().email).toBe('');
+  expect(database.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+});

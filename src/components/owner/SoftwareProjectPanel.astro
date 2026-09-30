@@ -1,5 +1,7 @@
 ---
 import { projectTerms, projectStates, projectSteps, softwareDate, sharedSoftwareUpdates, milestonePayments, updateKinds } from '~/lib/software-projects';
+import SoftwareInvoiceLine from './SoftwareInvoiceLine.astro';
+import { listSoftwareInvoices, invoiceAvailable, paidFirstDeposit, payableSoftwareInvoice, manualPaymentReminder } from '~/lib/software-invoices';
 import { addBusinessDays } from '~/lib/business-days';
 import type { SoftwareProject, SoftwareUpdate } from '~/lib/software-projects';
 import type { SoftwareOffer } from '~/lib/software-offers';
@@ -11,18 +13,27 @@ const retryReady = (attemptedAt: string | null) => Boolean(attemptedAt && Date.p
 const draft = updates.find(update => update.status === 'draft');
 const shared = project && terms ? await sharedSoftwareUpdates(Astro.locals.runtime.env.MUSIC_DB!,requestId) : [];
 const payments = project && terms ? await milestonePayments(Astro.locals.runtime.env.MUSIC_DB!,requestId) : [];
+const deposits=project && terms ? (await Astro.locals.runtime.env.MUSIC_DB!.prepare('SELECT milestone_index,paid_recorded_at FROM software_milestone_deposits WHERE request_id=?').bind(requestId).all<{milestone_index:number;paid_recorded_at:string}>()).results : [];
+const offerId=project?.offer_id ?? sentOffer?.id;
+const invoices=offerId && terms ? await listSoftwareInvoices(Astro.locals.runtime.env.MUSIC_DB!,requestId,offerId) : [];
+const depositBlocked=payableSoftwareInvoice(invoices,0,['deposit']);
+const deposit=offerId ? paidFirstDeposit(invoices,offerId) : undefined;
+const unmatched=(await Astro.locals.runtime.env.MUSIC_DB!.prepare('SELECT event_id,event_type,status FROM software_stripe_unmatched_events WHERE request_id=? AND resolved_at IS NULL ORDER BY received_at DESC').bind(requestId).all<{event_id:string;event_type:string;status:string}>()).results;
 const lastDelivery=terms && shared.find(update=>update.kind==='delivery_review' && update.status==='shared' && update.milestone_index===terms.milestones.length-1);
 const canComplete = lastDelivery?.decision==='milestone_accepted' && shared.some(update=>update.kind==='handoff' && update.status==='shared' && update.milestone_index===lastDelivery.milestone_index && update.shared_at!>=lastDelivery.decided_at!);
 ---
 {project?.content_deleted_at && <section class="rail-section"><h2>Project</h2><p class="rail-muted">Project content was removed by reviewed retention cleanup.</p></section>}
-{terms && <section class="rail-section software-rail" aria-labelledby="software-project-heading" data-software-project data-endpoint={`/api/owner/requests/${requestId}/project`}>
+{terms && <section class="rail-section software-rail" aria-labelledby="software-project-heading" data-software-project data-endpoint={`/api/owner/requests/${requestId}/project`} data-invoice-endpoint={`/api/owner/requests/${requestId}/invoices`}>
   <h2 id="software-project-heading">{project ? 'Project' : 'Start the project'}</h2>
-  {!project ? <form data-software-start data-request-updated-at={requestUpdatedAt}>
+  {unmatched.length>0 && <p class="rail-muted">Stripe events need reconciliation: {unmatched.map(event=>`${event.event_id} · ${event.event_type} · ${event.status}`).join('; ')}. Check the invoice in Stripe; no payment has been recorded from these events.</p>}
+  {!project && terms.paymentMode==='standard' && <SoftwareInvoiceLine offerId={offerId!} milestone={0} kind="deposit" invoices={invoices} available={!deposit} closed={closed} />}
+  {!project ? <form data-software-start data-request-updated-at={requestUpdatedAt} data-deposit-invoice-id={deposit?.id}>
     <input type="hidden" name="offer_id" value={sentOffer!.id} />
     <input type="hidden" name="offer_version" value={sentOffer!.version} />
     <p class="rail-muted rail-caption">Record these only after checking them yourself. The client sees them as complete.</p>
     <label class="confirmation"><input type="checkbox" name="signatures" required disabled={closed} />All signatures are complete (checked in Documenso)</label>
-    <label class="confirmation"><input type="checkbox" name="payment" required disabled={closed} />{terms.paymentMode === 'standard' ? 'First installment received (checked in Stripe or the bank)' : 'Purchase order in place, or the client doesn’t use one'}</label>
+    {terms.paymentMode==='standard' && depositBlocked && <p class="rail-muted">{manualPaymentReminder}</p>}
+    <label class="confirmation" hidden={terms.paymentMode==='standard' && depositBlocked}><input type="checkbox" name="payment" required checked={Boolean(deposit)} disabled={closed} />{terms.paymentMode === 'standard' ? 'First installment received (checked in Stripe or the bank)' : 'Purchase order in place, or the client doesn’t use one'}</label>
     <div class="software-field"><label>Next update to the client<input aria-describedby="project-field-1-hint" class="studio-input" type="date" name="next_update_on" /></label><p id="project-field-1-hint" class="rail-muted rail-caption">Only promise a date you can keep.</p></div>
     <button class="studio-button" disabled type="submit">Confirm start</button>
   </form> : <>
@@ -39,9 +50,20 @@ const canComplete = lastDelivery?.decision==='milestone_accepted' && shared.some
     <h3>Milestones</h3>
     <ul class="software-update-list">{terms.milestones.map((item,index)=>{
       const reviews=shared.filter(update=>update.milestone_index===index && update.status==='shared' && update.kind?.endsWith('_review')).reverse();
+      const depositBlocked=payableSoftwareInvoice(invoices,index,['deposit']);
+      const manualDeposit=deposits.find(payment=>payment.milestone_index===index);
+      const depositPaid=Boolean(manualDeposit) || invoices.some(invoice=>invoice.milestone_index===index && invoice.kind==='deposit' && invoice.status==='paid' && !invoice.refunded_at);
+      const delivery=shared.find(update=>update.kind==='delivery_review' && update.status==='shared' && update.milestone_index===index);
+      const paymentBlocked=payableSoftwareInvoice(invoices,index,['balance','milestone']);
       const paid=payments.find(payment=>payment.milestone_index===index),handoff=shared.find(update=>update.milestone_index===index && update.status==='shared' && update.kind==='handoff');
-      return <li><strong>Milestone {index+1} · {item.name}</strong>{reviews.map(review=><span>{review.decision==='direction_confirmed' ? 'Direction confirmed' : review.decision==='changes_requested' ? 'Changes requested' : review.decision==='milestone_accepted' ? `Accepted ${softwareDate(review.decided_at!)}` : `Ready for review${review.kind==='delivery_review' ? `, review by ${softwareDate(addBusinessDays(review.shared_at!,review.review_window_days ?? 5))}` : ''}`}</span>)}{paid && <span>Paid in full {softwareDate(paid.paid_recorded_at)}</span>}{handoff && <span>Handoff shared {softwareDate(handoff.shared_at!)}</span>}
-        {!paid && !closed && !project.revoked_at && project.state!=='complete' && <form data-software-payment data-milestone={index}><label class="confirmation"><input type="checkbox" name="confirmed" required />This milestone is paid in full (checked in Stripe or the bank)</label><button class="studio-quiet" type="submit">Record full payment</button></form>}
+      return <li><strong>Milestone {index+1} · {item.name}</strong>{reviews.map(review=><span>{review.decision==='direction_confirmed' ? 'Direction confirmed' : review.decision==='changes_requested' ? 'Changes requested' : review.decision==='milestone_accepted' ? `Accepted ${softwareDate(review.decided_at!)}` : `Ready for review${review.kind==='delivery_review' ? `, review by ${softwareDate(addBusinessDays(review.shared_at!,review.review_window_days ?? 5))}` : ''}`}</span>)}{manualDeposit && <span>Deposit recorded {softwareDate(manualDeposit.paid_recorded_at)}</span>}{paid && <span>Paid in full {softwareDate(paid.paid_recorded_at)}</span>}{handoff && <span>Handoff shared {softwareDate(handoff.shared_at!)}</span>}
+        {(terms.paymentMode==='standard' ? ['deposit','balance'] as const : ['milestone'] as const).map(kind=><SoftwareInvoiceLine offerId={offerId!} milestone={index} kind={kind} invoices={invoices}
+          available={(kind!=='deposit' || !depositPaid) && invoiceAvailable(terms,index,kind,project,Boolean(delivery && delivery.decision!=='changes_requested'),Boolean(paid))}
+          closed={closed || Boolean(project.revoked_at) || Boolean(project.completed_at)}
+          redeliveryAt={shared.some(update=>update.kind==='delivery_review' && update.milestone_index===index && update.status==='superseded' && update.decision==='changes_requested') ? shared.find(update=>update.kind==='delivery_review' && update.status==='shared' && update.milestone_index===index)?.shared_at ?? undefined : undefined} />)}
+        {terms.paymentMode==='standard' && index>project.milestone_index && !depositPaid && !closed && !project.revoked_at && !project.completed_at && (depositBlocked ? <p class="rail-muted">{manualPaymentReminder}</p> : <form data-software-deposit data-milestone={index}><label class="confirmation"><input type="checkbox" name="confirmed" required />Deposit received outside Stripe (checked in the bank)</label><button class="studio-quiet" type="submit">Record deposit</button></form>)}
+        {!paid && paymentBlocked && <p class="rail-muted">{manualPaymentReminder}</p>}
+        {!paid && !paymentBlocked && !closed && !project.revoked_at && project.state!=='complete' && <form data-software-payment data-milestone={index}><label class="confirmation"><input type="checkbox" name="confirmed" required />This milestone is paid in full (checked in Stripe or the bank)</label><button class="studio-quiet" type="submit">Record full payment</button></form>}
       </li>;
     })}</ul>
     {canComplete && !closed && !project.revoked_at && !project.completed_at && <button class="studio-button" type="button" data-software-complete>Mark project complete</button>}
@@ -59,8 +81,6 @@ const canComplete = lastDelivery?.decision==='milestone_accepted' && shared.some
 </section>}
 <style>
   fieldset { display: grid; gap: .8rem; }
-  label.confirmation { display: flex; align-items: start; gap: .6rem; }
-  input[type=checkbox] { accent-color: var(--accent); margin-top: .3rem; flex-shrink: 0; }
   h3 { font: 400 1.2rem/1.3 Newsreader,Georgia,serif; margin-top: 1rem; }
   .software-update-list { list-style: none; padding: 0; }
   li { display: grid; gap: .4rem; border-top: 1px solid var(--rule); padding: .8rem 0; overflow-wrap: anywhere; }

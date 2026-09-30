@@ -67,7 +67,7 @@ export async function sharedSoftwareUpdates(db: D1Database, id: string) {
 export const softwareAudit = (db: D1Database, id: string, action: string, actor: string, at: string, note = '') =>
   db.prepare('INSERT INTO software_project_audit(request_id,action,actor,occurred_at,note) VALUES (?,?,?,?,?)').bind(id, action, actor, at, note);
 export function recordMilestonePayment(db: D1Database, id: string, milestone: number, actor: string, at: string) {
-  return [db.prepare(`INSERT INTO software_project_audit(request_id,action,actor,occurred_at,note)
+  return [softwareGuard(db, `SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_invoices i JOIN software_projects p ON p.request_id=i.request_id AND p.offer_id=i.offer_id WHERE i.request_id=? AND i.milestone_index=? AND i.kind IN ('balance','milestone') AND i.status IN ('creating','open','payment_failed','uncollectible'))`, [id,milestone]), db.prepare(`INSERT INTO software_project_audit(request_id,action,actor,occurred_at,note)
     SELECT ?,'milestone-paid',?,?,? WHERE NOT EXISTS(SELECT 1 FROM software_milestone_payments WHERE request_id=? AND milestone_index=?)`)
     .bind(id,actor,at,`Paid in full · milestone ${milestone+1}`,id,milestone),
     db.prepare('INSERT OR IGNORE INTO software_milestone_payments VALUES (?,?,?,?)').bind(id,milestone,at,actor)];
@@ -91,6 +91,8 @@ export const acceptedDeliveryGuard = (db: D1Database, id: string, milestone: num
 /** Same atomic assertion as software offers: a stale write rolls back its whole batch. */
 export const softwareGuard = (db: D1Database, query: string, values: (string | number | null)[]) =>
   db.prepare(`SELECT CASE WHEN EXISTS(${query}) THEN 1 ELSE json_extract('Project changed. Reload and try again.','$') END`).bind(...values);
+export const priorMilestonePaymentGuard = (db: D1Database, id: string, milestone: number) => softwareGuard(db,
+  'SELECT 1 WHERE (SELECT count(*) FROM software_milestone_payments WHERE request_id=? AND milestone_index<?)=?', [id,milestone,milestone]);
 export const openSoftwareGuard = (db: D1Database, id: string) => softwareGuard(db, `SELECT 1 FROM software_projects p JOIN owner_requests r ON r.id=p.request_id
   WHERE p.request_id=? AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL AND r.status<>'withdrawn' AND r.email<>''`, [id]);
 
@@ -139,3 +141,8 @@ export function softwareAccessRevocation(db: D1Database, id: string, actor: stri
     db.prepare(`DELETE FROM audio_client_codes WHERE email=(${closedEmail})`).bind(id, at),
   ];
 }
+
+export const milestoneDepositGuard = (db: D1Database, id: string, milestone: number) => softwareGuard(db,
+  `SELECT 1 WHERE EXISTS(SELECT 1 FROM software_milestone_deposits WHERE request_id=? AND milestone_index=?)
+    OR EXISTS(SELECT 1 FROM software_invoices i JOIN software_projects p ON p.request_id=i.request_id AND p.offer_id=i.offer_id
+      WHERE i.request_id=? AND i.milestone_index=? AND i.kind='deposit' AND i.status='paid' AND i.refunded_at IS NULL)`, [id,milestone,id,milestone]);

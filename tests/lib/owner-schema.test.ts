@@ -134,10 +134,11 @@ describe('owner insights schema', () => {
     const peaks = readFileSync(new URL('../../migrations/music/0016_audio_project_file_peaks.sql', import.meta.url), 'utf8');
     const milestones = readFileSync(new URL('../../migrations/music/0017_audio_project_update_milestones.sql', import.meta.url), 'utf8');
     const decisions = readFileSync(new URL('../../migrations/music/0018_audio_project_review_decisions.sql', import.meta.url), 'utf8');
+    const softwareInvoices = readFileSync(new URL('../../migrations/music/0022_software_invoices.sql', import.meta.url), 'utf8');
     const softwareProjects = readFileSync(new URL('../../migrations/music/0021_software_projects.sql', import.meta.url), 'utf8');
     const offers = readFileSync(new URL('../../migrations/music/0020_software_offers.sql', import.meta.url), 'utf8');
     const software = readFileSync(new URL('../../migrations/music/0019_software_requests.sql', import.meta.url), 'utf8');
-    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(`${baseline.trim()}\n${retention.trim()}\n${payments.trim()}\n${reconciliation.trim()}\n${projects.trim()}\n${clientAccess.trim()}\n${messages.trim()}\n${updates.trim()}\n${invitations.trim()}\n${files.trim()}\n${uploads.trim()}\n${publication.trim()}\n${revocation.trim()}\n${studioRetention.trim()}\n${declined.trim()}\n${peaks.trim()}\n${milestones.trim()}\n${decisions.trim()}\n${software.trim()}\n${offers.trim()}\n${softwareProjects.trim()}\n`);
+    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(`${baseline.trim()}\n${retention.trim()}\n${payments.trim()}\n${reconciliation.trim()}\n${projects.trim()}\n${clientAccess.trim()}\n${messages.trim()}\n${updates.trim()}\n${invitations.trim()}\n${files.trim()}\n${uploads.trim()}\n${publication.trim()}\n${revocation.trim()}\n${studioRetention.trim()}\n${declined.trim()}\n${peaks.trim()}\n${milestones.trim()}\n${decisions.trim()}\n${software.trim()}\n${offers.trim()}\n${softwareProjects.trim()}\n${softwareInvoices.trim()}\n`);
     const db = apply('../../db/music.sql');
     const expected = [
       'music_event_daily', 'music_events', 'music_interest', 'music_playback_daily',
@@ -147,7 +148,7 @@ describe('owner insights schema', () => {
       'audio_projects', 'audio_project_audit',
       'audio_client_codes', 'audio_client_sessions', 'audio_client_access_audit', 'audio_project_messages', 'audio_project_updates',
       'audio_project_files', 'audio_project_file_access', 'audio_project_uploads',
-      'software_projects', 'software_project_updates', 'software_project_messages', 'software_project_audit', 'software_milestone_payments',
+      'software_invoices', 'software_stripe_unmatched_events', 'software_projects', 'software_project_updates', 'software_project_messages', 'software_project_audit', 'software_milestone_payments',
     ];
     expect(tableNames(db)).toEqual(expect.arrayContaining(expected));
     expect(() => db.exec(`${baseline}\n${retention}\n${payments}`)).not.toThrow();

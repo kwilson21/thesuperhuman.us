@@ -63,3 +63,6 @@
 .drop-copy span { color: var(--studio-muted); font: .78rem/1.4 Inter, sans-serif; }
 @media (prefers-reduced-motion: reduce) { .drop { transition: none; } }
 .software-update-form .rail-caption { font: .78rem/1.5 Inter, sans-serif; color: var(--studio-muted); }
+
+.software-rail label.confirmation { display: flex; align-items: start; gap: .6rem; }
+.software-rail input[type=checkbox] { accent-color: var(--accent); margin-top: .3rem; flex-shrink: 0; }

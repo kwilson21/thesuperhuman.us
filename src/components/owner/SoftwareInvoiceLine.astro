@@ -1,0 +1,22 @@
+---
+import { softwareDate } from '~/lib/software-projects';
+import { softwareInvoiceKindLabels, softwareInvoiceStatusLabels, type SoftwareInvoice, type SoftwareInvoiceKind } from '~/lib/software-invoices';
+type Props={offerId:string;milestone:number;kind:SoftwareInvoiceKind;invoices:SoftwareInvoice[];available:boolean;closed:boolean;redeliveryAt?:string};
+const {offerId,milestone,kind,invoices,available,closed,redeliveryAt}=Astro.props;
+const rows=invoices.filter(row=>row.milestone_index===milestone && row.kind===kind);
+const latest=rows.at(-1);
+const label=softwareInvoiceKindLabels[kind];
+const retry=latest?.status==='creating' && Date.parse(latest.created_at)>Date.now()-23*3600_000 && (!latest.creation_started_at || Date.parse(latest.creation_started_at)<Date.now()-60_000);
+const replace=latest && ['void','uncollectible','payment_failed'].includes(latest.status);
+const redeliveryPrompt=kind!=='deposit' && redeliveryAt && latest?.status==='open' && Date.parse(latest.created_at)<Date.parse(redeliveryAt);
+const create=available && !rows.some(row=>['creating','open','payment_failed','paid'].includes(row.status) && !row.refunded_at);
+---
+{rows.map(row=><p class="rail-muted rail-caption">{label} · {row.refunded_at ? `Refunded ${softwareDate(row.refunded_at)}` : softwareInvoiceStatusLabels[row.status]}{!row.refunded_at && row.status==='paid' && row.status_updated_at ? ` ${softwareDate(row.status_updated_at)}` : row.due_at ? ` · Due ${softwareDate(row.due_at)}` : ''}{row.hosted_invoice_url && <> · <a style="white-space: nowrap" href={row.hosted_invoice_url} target="_blank" rel="noopener noreferrer">Open invoice ↗</a></>}</p>)}
+{redeliveryPrompt && <p class="rail-muted rail-caption">Replace invoice: the due date restarts on redelivery under the agreement. Void this invoice in Stripe, then reload to create its replacement.</p>}
+{latest && ['payment_failed','uncollectible'].includes(latest.status) && <p class="rail-muted rail-caption">Void this invoice in Stripe before replacing it. Reload after Stripe confirms the void.</p>}
+{latest?.status==='creating' && <p class="rail-muted rail-caption">Invoice creation is unconfirmed. Check Stripe before retrying. After 23 hours, reconcile through its signed invoice event instead of retrying.</p>}
+{!closed && ((available && (create || replace)) || retry) && <form data-software-invoice data-offer-id={offerId} data-milestone={milestone} data-kind={kind} data-retry-id={retry ? latest!.id : undefined} data-replace-id={!retry && replace ? latest!.id : undefined}>
+  <label class="confirmation"><input type="checkbox" name="allow_card" checked={retry ? Boolean(latest!.allow_card) : false} disabled={retry} />Allow card for this invoice</label>
+  <p class="rail-muted rail-caption">{kind==='deposit' ? 'Due in 7 days. Work on this milestone starts after it’s paid.' : kind==='balance' ? 'Due 15 days after delivery. If the client names an unmet check, fix it first and replace this invoice so the due date restarts.' : 'Due 30 days after delivery. The next milestone starts after this is paid.'}</p>
+  <button type="submit" class="studio-quiet" disabled={latest?.status==='payment_failed' || latest?.status==='uncollectible'}>{retry ? 'Retry invoice' : replace ? 'Replace invoice' : `Create ${kind} invoice`}</button>
+</form>}

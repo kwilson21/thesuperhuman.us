@@ -115,3 +115,21 @@ it('dead-letters a late event for a replaced invoice without reviving it', async
   expect(sql.prepare('SELECT invoice_id,reason FROM stripe_unmatched_events').get())
     .toEqual({ invoice_id: 'in_booking', reason: 'invoice-conflict' });
 });
+
+it.each([
+  ['invoice.sent','open'],['invoice.paid','paid'],['invoice.payment_failed','payment_failed'],
+  ['invoice.voided','void'],['invoice.marked_uncollectible','uncollectible'],
+])('routes software %s without touching audio payments',async(type,status)=>{
+  sql.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES ('software','software','client@example.com','Tool','new','now','now');
+    INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('offer','software',1,'sent','{}','now','now');
+    INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,created_by,created_at,updated_at)
+      VALUES ('local','software','offer',0,'deposit',10000,7,'creating','owner','now','now')`);
+  const value={id:'evt_software',type,created:1790000000,data:{object:{id:'in_software',customer:'cus_software',total:10000,currency:'usd',due_date:1790600000,hosted_invoice_url:'https://example.com/pay',metadata:{software_request_id:'software',software_offer_id:'offer',software_invoice_id:'local',milestone_index:'0',kind:'deposit'}}}};
+  verify.mockResolvedValue(value);
+  expect((await POST(context())).status).toBe(200);
+  expect((await POST(context())).status).toBe(200);
+  expect(sql.prepare('SELECT status,stripe_invoice_id FROM software_invoices').get()).toEqual({status,stripe_invoice_id:'in_software'});
+  expect(sql.prepare('SELECT booking_status FROM audio_payments').get()).toEqual({booking_status:'open'});
+  expect(sql.prepare("SELECT count(*) AS n FROM software_project_audit WHERE action='invoice-status-updated'").get()).toEqual({n:1});
+  expect(sql.prepare('SELECT count(*) AS n FROM stripe_webhook_events').get()).toEqual({n:1});
+});

@@ -274,3 +274,71 @@ it.each(['invitation_status', 'invitation_attempted_at', 'invitation_sent_at'])(
   expect(sql.prepare("SELECT revoked_at FROM software_projects WHERE request_id='software'").get()).toEqual({ revoked_at: null });
   sql.close();
 });
+
+it('removes invoice references at one year, retains accounting fields until two years and detects invoice changes after review',async()=>{
+  const {sql,database}=fixture();sql.exec("UPDATE audio_projects SET content_deleted_at='already removed'");
+  sql.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES ('software','software','client@example.com','Tool','reviewed','2026-01-01','2026-01-01');
+    INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('offer','software',1,'sent','{}','2026-01-01','2026-01-01');
+    INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,completed_at)
+      VALUES ('software','offer','{}','standard','now','now','now','owner','2026-01-01','2026-01-01','2026-01-01');
+    INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,stripe_invoice_id,stripe_customer_id,hosted_invoice_url,created_by,created_at,updated_at)
+      VALUES ('invoice','software','offer',0,'deposit',100,7,'paid','in_accounting','cus_private','https://example.com/private','owner','2026-07-01','2026-07-01')`);
+  const list=async()=>[];
+  const first=await previewStudioRetention(database,'Local test data',storage,now,list);
+  sql.exec("UPDATE software_invoices SET updated_at='2028-01-15'");
+  await expect(applyStudioRetention(database,first,'Local test data',storage,async()=>{},now,list)).rejects.toThrow('changed');
+  const review=await previewStudioRetention(database,'Local test data',storage,now,list);
+  await applyStudioRetention(database,review,'Local test data',storage,async()=>{},now,list);
+  expect(sql.prepare('SELECT stripe_customer_id,hosted_invoice_url,created_by,kind,amount_cents,status,stripe_invoice_id,created_at FROM software_invoices').get())
+    .toEqual({stripe_customer_id:null,hosted_invoice_url:null,created_by:'',kind:'deposit',amount_cents:100,status:'paid',stripe_invoice_id:'in_accounting',created_at:'2026-07-01'});
+  const later=new Date('2028-07-02T12:00:00Z');
+  const expired=await previewStudioRetention(database,'Local test data',storage,later,list);
+  await applyStudioRetention(database,expired,'Local test data',storage,async()=>{},later,list);
+  expect(sql.prepare('SELECT count(*) AS n FROM software_invoices').get()).toEqual({n:0});
+  expect(sql.prepare('PRAGMA foreign_key_check').all()).toEqual([]);sql.close();
+});
+
+function retainedSoftware(sql: InstanceType<typeof DatabaseSync>, status: string) {
+  sql.exec(`UPDATE audio_projects SET content_deleted_at='removed';
+    INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES ('software','software','example@example.com','Tool','reviewed','now','now');
+    INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('offer','software',1,'sent','{}','now','now');
+    INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,completed_at,created_at,updated_at)
+      VALUES ('software','offer','{}','standard','now','now','now','owner','2026-01-01','now','now');`);
+  sql.prepare(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,created_by,created_at,updated_at)
+    VALUES ('invoice','software','offer',0,'balance',100,15,?,'owner','2027-01-01','now')`).run(status);
+}
+it.each(['creating','open','payment_failed','uncollectible'])('skips retention for %s software invoices until voided',async status=>{
+  const {sql,database}=fixture();retainedSoftware(sql,status);
+  const list=vi.fn(async()=>['software/software/update/visual.png']);
+  const preview=await previewStudioRetention(database,'Local test data',storage,now,list);
+  expect(preview.counts).toMatchObject({softwareProjects:0});expect(list).not.toHaveBeenCalled();
+  sql.exec("UPDATE software_invoices SET status='void'");
+  expect((await previewStudioRetention(database,'Local test data',storage,now,list)).counts).toMatchObject({softwareProjects:1});
+  sql.close();
+});
+it('fences invoices in the first batch before deleting objects and tolerates later invoice changes',async()=>{
+  const {sql,database}=fixture();retainedSoftware(sql,'void');
+  sql.exec("INSERT INTO software_milestone_deposits VALUES ('software',1,'now','owner')");
+  const list=async()=>['software/software/update/visual.png'];
+  const review=await previewStudioRetention(database,'Local test data',storage,now,list);
+  const deleted=vi.fn(async()=>{
+    expect(sql.prepare('SELECT retention_fenced_at FROM software_invoices').get().retention_fenced_at).toBe(now.toISOString());
+    expect(sql.prepare('SELECT content_deleted_at FROM software_projects').get()).toEqual({content_deleted_at:null});
+    sql.exec("UPDATE software_invoices SET updated_at='after-object-deletion',status='uncollectible'");
+  });
+  await applyStudioRetention(database,review,'Local test data',storage,deleted,now,list);
+  expect(deleted).toHaveBeenCalledOnce();
+  expect(sql.prepare('SELECT content_deleted_at FROM software_projects').get()).toEqual({content_deleted_at:now.toISOString()});
+  expect(sql.prepare('SELECT count(*) AS n FROM software_milestone_deposits').get()).toEqual({n:0});sql.close();
+});
+it('rejects an invoice becoming payable in the fencing batch before deleting any object',async()=>{
+  const {sql,database}=fixture();retainedSoftware(sql,'void');
+  const list=async()=>['software/software/update/visual.png'];
+  const review=await previewStudioRetention(database,'Local test data',storage,now,list);
+  const original=database.batch;
+  database.batch=async statements=>{sql.exec("UPDATE software_invoices SET status='open'");return original(statements);};
+  const deleted=vi.fn(async()=>{});
+  await expect(applyStudioRetention(database,review,'Local test data',storage,deleted,now,list)).rejects.toThrow();
+  expect(deleted).not.toHaveBeenCalled();
+  expect(sql.prepare('SELECT retention_fenced_at FROM software_invoices').get()).toEqual({retention_fenced_at:null});sql.close();
+});

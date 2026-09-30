@@ -29,8 +29,20 @@ export default {
     const steps=[];
     const projectAt=()=>JSON.parse(sql(`SELECT updated_at FROM software_projects WHERE request_id=${quote(id)}`))[0]?.results?.[0]?.updated_at ?? "";
     const shot=async(title,path,name,options={})=>{const images=[];for(const viewport of ['desktop','phone']) images.push({file:await capture({file:`software-project-${name}-${viewport}.png`,path,viewport,...options}),caption:`Fictional data: ${title}`});steps.push({title,images});};
+    sql(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,stripe_invoice_id,hosted_invoice_url,status,due_at,created_by,created_at,updated_at)
+      VALUES ('screenshot-deposit',${quote(id)},${quote(sentOffer.id)},0,'deposit',120000,7,'in_fictional_deposit','https://example.com/invoice/deposit','open','2026-10-07','owner@example.com',${quote(at)},${quote(at)})`);
+    await shot('Open deposit before start',`/owner/requests/${id}`,'deposit-open',{owner:true});
+    sql(`UPDATE software_invoices SET status='paid',status_updated_at=${quote(at)} WHERE id='screenshot-deposit'`);
+    await shot('Paid deposit checks first installment before start',`/owner/requests/${id}`,'deposit-paid',{owner:true});
     await shot('Start the project',`/owner/requests/${id}`,'start',{owner:true});
-    await ownerFetch(`/api/owner/requests/${id}/project`,{action:'start',offer_id:sentOffer.id,offer_version:sentOffer.version,expectedRequestUpdatedAt:at,signatures:true,payment:true,next_update_on:'2026-10-08'});
+    await ownerFetch(`/api/owner/requests/${id}/project`,{action:'start',offer_id:sentOffer.id,offer_version:sentOffer.version,expectedRequestUpdatedAt:at,signatures:true,payment:true,deposit_invoice_id:'screenshot-deposit',next_update_on:'2026-10-08'});
+    sql(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,stripe_invoice_id,hosted_invoice_url,status,due_at,created_by,created_at,updated_at)
+      VALUES ('screenshot-next-deposit',${quote(id)},${quote(sentOffer.id)},1,'deposit',60000,7,'in_fictional_next_deposit','https://example.com/invoice/next-deposit','open','2026-10-07','owner@example.com',${quote(at)},${quote(at)})`);
+    await shot('Owner milestone line with open later deposit',`/owner/requests/${id}`,'milestone-deposit-open',{owner:true});
+    sql(`UPDATE software_invoices SET status='void' WHERE id='screenshot-next-deposit'`);
+    await shot('Manual later deposit confirmation after void',`/owner/requests/${id}`,'milestone-deposit-manual',{owner:true});
+    await ownerFetch(`/api/owner/requests/${id}/project`,{action:'deposit',milestone_index:1,confirmed:true});
+    await shot('Later deposit recorded before milestone move',`/owner/requests/${id}`,'milestone-deposit-recorded',{owner:true});
     await shot('Project rail after start',`/owner/requests/${id}`,'rail',{owner:true});
     await shot('Before the first shared update',`/studio/software/${id}`,'first',{cookie});
     const update={kind:'progress',milestone_index:0,title:'First look at the tracker layout',artifact_version:'v1',evidence_type:'concept',visual_alt:'Illustrative table layout for client status and next actions.',preview_url:'',what_changed:'A proposed shared view of client status and the next action.',checks_limitations:'Concept only. Not implemented.',next_step:'Build the shared view after your feedback.',client_request:'Send a redacted sample export.',next_update_on:'2026-10-08',email_client:false};
@@ -61,14 +73,20 @@ export default {
     const deliveryDraft=await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'draft',expectedProjectUpdatedAt:projectAt(),update:delivery,expectedUpdatedAt:null});
     await shot('Owner composer with every delivery check',`/owner/requests/${id}/update`,'delivery-composer',{owner:true});
     const review=await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'share',expectedProjectUpdatedAt:deliveryDraft.projectUpdatedAt,confirmed:true,update:delivery,expectedUpdatedAt:deliveryDraft.updatedAt});
+    sql(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,stripe_invoice_id,hosted_invoice_url,status,due_at,created_by,created_at,updated_at)
+      VALUES ('screenshot-balance',${quote(id)},${quote(sentOffer.id)},0,'balance',120000,15,'in_fictional_balance','https://example.com/invoice/balance','open','2026-10-15','owner@example.com',${quote(at)},${quote(at)})`);
+    await shot('Open balance after delivery',`/owner/requests/${id}`,'balance-open',{owner:true});
+    await shot('Client invoices and payment strip',`/studio/software/${id}`,'invoices',{cookie,prepare:async page=>{await page.getByText('Invoices',{exact:true}).click();}});
     await shot('Delivery review awaiting a decision with all agreed checks',`/studio/software/${id}`,'delivery-review',{cookie});
     await share({kind:'progress',title:'The next update',client_request:''});
     await shot('Progress update with an undecided delivery review',`/studio/software/${id}`,'progress-pending-review',{cookie});
     await shot('Delivery change request form open',`/studio/software/${id}`,'changes-open',{cookie,prepare:async page=>{await page.locator('[data-request-changes] summary').click();await page.locator('[name=criteria]').first().check();await page.locator('[name=note]').fill('Adding the fictional sample client does not save.');}});
     await decide(review,{decision:'changes_requested',criteria:[0],note:'Adding the fictional sample client does not save.'});
     const corrected=await share({...delivery,artifact_version:'Delivery v2'});
+    await shot('Redelivery invoice replacement prompt',`/owner/requests/${id}`,'redelivery-invoice',{owner:true});
     await decide(corrected,{decision:'milestone_accepted',confirm:true});
     await shot('Accepted delivery before full-payment handoff',`/studio/software/${id}`,'accepted',{cookie});
+    sql(`UPDATE software_invoices SET status='paid',status_updated_at=${quote(at)} WHERE id='screenshot-balance'`);
     await share({kind:'handoff',artifact_version:'Delivery v2',title:'Your handoff is ready.',what_changed:'Delivered files and operating notes.',checks_limitations:'Fictional sample only. Live rollout is outside scope.',next_step:'Corrections within the correction period. Anything new is a separate milestone.',paid_confirmed:true,links:[{label:'Download handoff notes',url:'https://example.com/notes'},{label:'View delivered files',url:'https://example.com/files'}],client_request:''});
     await shot('Accepted milestone with handoff ready',`/studio/software/${id}`,'handoff',{cookie});
     await shot('Earlier versions with their own decisions',`/studio/software/${id}`,'earlier-versions',{cookie,prepare:async page=>{await page.getByText('Earlier versions',{exact:true}).click();}});
