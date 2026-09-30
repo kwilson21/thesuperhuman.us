@@ -257,6 +257,27 @@ it('decline batch rolls back when a project starts after its pre-check', async (
   expect(sql.prepare('SELECT request_id FROM software_projects').get()).toEqual({request_id:'software'});
 });
 
+it('draft batch rolls back when a project starts after its pre-check', async () => {
+  await send(await draft());
+  sql.exec("UPDATE software_offer_links SET created_at='2020-01-01T00:00:00Z'");
+  vi.mocked(fetch).mockClear();
+  const batch = db.batch.bind(db);
+  db.batch = (async (items: D1PreparedStatement[]) => {
+    sql.exec("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) SELECT 'software',id,terms_json,'standard','now','now','now','owner','now','now' FROM software_offers WHERE status='sent'");
+    return batch(items);
+  }) as D1Database['batch'];
+  const before = sql.prepare('SELECT * FROM owner_requests').all();
+  const response = await call({action:'draft',terms,expectedUpdatedAt:null});
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ok:false,message:'This project has started. Use the project messages.'});
+  expect(fetch).not.toHaveBeenCalled();
+  expect(sql.prepare('SELECT * FROM owner_requests').all()).toEqual(before);
+  expect(sql.prepare('SELECT status FROM software_offers').get()).toEqual({status:'sent'});
+  expect(sql.prepare('SELECT revoked_at FROM software_offer_links').get()).toEqual({revoked_at:null});
+  expect(sql.prepare("SELECT action FROM owner_request_audit WHERE action='declined'").all()).toEqual([]);
+  expect(sql.prepare('SELECT request_id FROM software_projects').get()).toEqual({request_id:'software'});
+});
+
 async function withdraw() {
   const { POST: requestPost } = await import('~/pages/api/owner/requests/[id]');
   return requestPost({ params:{ id:'software' }, request:new Request('https://example.com/api/owner/requests/software', { method:'POST', body:JSON.stringify({ action:'withdraw' }) }), locals:{ owner:{ email:'owner@example.com' },runtime:{ env:{ MUSIC_DB:db } } } } as any);
