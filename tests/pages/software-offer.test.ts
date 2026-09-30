@@ -459,11 +459,11 @@ it('reads immutable agreed fees, dates and complete legal text without enabling 
     let html=await render();
     expect(html).toContain('$1.01 fixed fee');expect(html).toContain('50% of each milestone before it starts');
     expect(html).toContain('signed outside the website');expect(html).toContain('Milestone delivery dates are not recorded');
-    expect(html).not.toContain('Download signed SOW');
+    expect(html).not.toContain('Download complete signed agreement packet');
     sql.prepare("INSERT INTO software_agreement_clients VALUES ('party','alex@example.com','Example Client LLC','example','LLC','WY','Example address','alex@example.com','now')").run();
     for (const kind of ['msa','sow']) {
       sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES (?,?,1,'Synthetic template',?,'now','PRIVATE TEMPLATE ACTOR')").run(kind,kind,hash);
-      sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,msa_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,executed_at,review_session_hash) VALUES (?,?,'current','r','party',?,?,'executed',?,?,?,'now','2026-09-30','now','PRIVATE SIGNING SESSION')").run(kind,kind,kind,kind==='sow'?'msa':null,kind==='msa'?'Exact MSA: <script>not executable</script> and every cancellation obligation.':'Exact SOW: full material terms and responsibilities.',hash,JSON.stringify(values));
+      sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,msa_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,executed_at,review_session_hash) VALUES (?,?,'current',?,'party',?,?,'executed',?,?,?,'now','2026-09-30','now','PRIVATE SIGNING SESSION')").run(kind,kind,kind==='msa'?'previous-request':'r',kind,kind==='sow'?'msa':null,kind==='msa'?'Exact MSA: <script>not executable</script> and every cancellation obligation.':'Exact SOW: full material terms and responsibilities.',hash,JSON.stringify(values));
     }
     sql.exec("UPDATE software_projects SET agreement_id='sow'; UPDATE software_offers SET terms_json='{}' WHERE id='current'");
     html=await render();
@@ -473,13 +473,16 @@ it('reads immutable agreed fees, dates and complete legal text without enabling 
     expect(html).toContain('$0.51 deposit / $0.50 balance');expect(html).toContain('80%, includes prior payments');
     for (const text of ['Synthetic access and sample.','Live rollout.','Client operates the delivered tool.','Source and notices','Every Thursday','Agreed support only','No extra expenses']) expect(html).toContain(text);
     expect(html).toContain('Exact MSA: &lt;script&gt;not executable&lt;/script&gt;');expect(html).toContain('Exact SOW: full material terms and responsibilities.');
-    expect(html).toContain('/api/agreements/msa/file');expect(html).toContain('/api/agreements/sow/file');
+    // Reused MSA belongs to an older request. Download the current SOW packet,
+    // whose authorization and artifact include this project's complete signed record.
+    expect(html).not.toContain('/api/agreements/msa/file');expect(html).toContain('/api/agreements/sow/file');
+    expect(html).toContain('Download complete signed agreement packet');
     expect(html).toContain('Opening stages or reading terms does not give consent');expect(html).not.toMatch(/name="consent"|data-agreement-flow|PRIVATE TEMPLATE ACTOR|PRIVATE SIGNING SESSION|PRIVATE OWNER/);
     for (let stage=0;stage<4;stage++) expect(html).toMatch(new RegExp(`id="agreed-stage-${stage}" data-terms-stage(?:="")? aria-labelledby=`));
     expect(html).toMatch(/data-terms-controls(?:="")? hidden/);
     const forbidden=await render('b'.repeat(72));expect(forbidden).not.toMatch(/Exact MSA|Exact SOW|Synthetic browser environment/);
     sql.exec("UPDATE owner_requests SET email='new-recipient@example.com' WHERE id='r'; UPDATE audio_client_sessions SET email='new-recipient@example.com'");
-    html=await render();expect(html).not.toMatch(/Exact MSA|Exact SOW|Synthetic browser environment|Download signed SOW/);expect(html).toContain('retained website agreement is unavailable here');
+    html=await render();expect(html).not.toMatch(/Exact MSA|Exact SOW|Synthetic browser environment|Download complete signed agreement packet/);expect(html).toContain('retained website agreement is unavailable here');
     sql.exec("UPDATE owner_requests SET email='alex@example.com' WHERE id='r'; UPDATE audio_client_sessions SET email='alex@example.com'; UPDATE software_agreements SET archive_closed_at='now' WHERE id='sow'");
     html=await render();expect(html).not.toMatch(/Exact MSA|Exact SOW|Synthetic browser environment/);expect(html).toContain('retained website agreement is unavailable here');expect(html).not.toContain('signed outside the website');
   } finally {sql.close();}

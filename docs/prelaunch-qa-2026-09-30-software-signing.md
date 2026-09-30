@@ -168,3 +168,7 @@ A code rollback can redeploy the prior build while leaving these additive databa
 3. Obtain exact production 0023 approval and complete the backup/recovery/apply/verification receipt above.
 4. Obtain/confirm production merge and deployment authorization; merge only with current-head checks and required review satisfied. Verify the deployed revision and scoped journeys.
 5. Keep signing off until the owner reviews templates/consent/configuration and approves enabling it. Real-client signing and PDF delivery remain separate live checks.
+
+### Complete signed-copy access
+
+The guided reader links to the current SOW’s complete signed packet, which includes its linked MSA and signing certificates. Both immutable legal texts and hashes remain available inline. Individual reused-MSA download authorization follows the older project request and may expire when that portal closes; using the current project packet preserves existing authorization boundaries without changing backend access. A render regression covers an MSA from an earlier request.

@@ -8,6 +8,7 @@ type Document = Pick<Agreement, 'id' | 'kind' | 'canonical_text' | 'effective_on
 interface Props { terms: OfferTerms; values?: ReturnType<typeof agreementValues> | null; documents: Document[]; websiteSigned: boolean; conversationOpen: boolean; }
 const { terms, values, documents, websiteSigned, conversationOpen } = Astro.props;
 const details = values?.owner;
+const packet = documents.find(document => document.kind === 'sow');
 const stages = ['What you get', 'Milestones & timing', 'Cost & responsibilities', 'Review agreed terms'];
 const workingTerms = details ? [
   ['Update channel', details.update_channel], ['Update rhythm', details.update_rhythm],
@@ -71,8 +72,9 @@ const workingTerms = details ? [
       <p>This project’s agreement is already recorded. Opening stages or reading terms does not give consent, sign anything, or change what you agreed.</p>
       {documents.length ? <>
         <p>Read the complete signed documents for all obligations, change and cancellation terms. This overview does not replace them.</p>
-        {documents.map(document => <div class="terms-document"><h3>{document.kind.toUpperCase()} · Effective {softwareDate(document.effective_on)}</h3><p><a class="site-link" href={`/api/agreements/${document.id}/file`}>Download signed {document.kind.toUpperCase()}</a></p><details class="terms-disclosure"><summary>Read complete {document.kind.toUpperCase()} text</summary><p class="terms-hash">SHA-256 {document.text_sha256}</p><pre class="terms-legal">{document.canonical_text}</pre></details></div>)}
-        {details?.attachments.length ? <><h3>Included attachments</h3><p>The signed SOW download includes the attached documents.</p><ul>{details.attachments.map(attachment => <li>{attachment.filename} · {attachment.version} · {softwareDate(attachment.date)}<span class="terms-hash">SHA-256 {attachment.sha256}</span></li>)}</ul></> : null}
+        {packet && <p><a class="site-link" data-terms-packet href={`/api/agreements/${packet.id}/file`}>Download complete signed agreement packet</a></p>}
+        {documents.map(document => <div class="terms-document"><h3>{document.kind.toUpperCase()} · Effective {softwareDate(document.effective_on)}</h3><details class="terms-disclosure"><summary>Read complete {document.kind.toUpperCase()} text</summary><p class="terms-hash">SHA-256 {document.text_sha256}</p><pre class="terms-legal">{document.canonical_text}</pre></details></div>)}
+        {details?.attachments.length ? <><h3>Included attachments</h3><p>The complete signed agreement packet includes the attached documents.</p><ul>{details.attachments.map(attachment => <li>{attachment.filename} · {attachment.version} · {softwareDate(attachment.date)}<span class="terms-hash">SHA-256 {attachment.sha256}</span></li>)}</ul></> : null}
       </> : websiteSigned ? <p>The retained website agreement is unavailable here. <a class="site-link" href="mailto:kazon.wilson@thesuperhuman.us">Ask Kazon about your retained signed copy</a>.</p> : <p>The agreement was signed outside the website. Its complete legal text and any dates or responsibilities not recorded here remain in the kept signed copy. <a class="site-link" href="mailto:kazon.wilson@thesuperhuman.us">Ask Kazon for your complete signed copy</a>.</p>}
       {conversationOpen && <p><a class="site-link" href="#conversation">Ask about an agreed term</a></p>}
     </section>
