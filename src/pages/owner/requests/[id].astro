@@ -88,7 +88,7 @@ const brief = request.kind === 'software' ? softwareBrief(request) : null;
       {!portalProject && request.kind === 'service' && <AudioPaymentPanel requestId={request.id} payment={payment} stripeEnabled={stripeEnabled} defaults={paymentDefaults(request.serviceId, request.details)} />}
     </div>
     <aside class="request-rail" id="request-client" aria-label="Request details">
-      {request.kind === 'software' && clientPortalEnabled(Astro.locals.runtime.env) && <SoftwareProjectPanel requestId={request.id} project={softwareProject} sentOffer={offers.find(offer => offer.status === 'sent')} updates={softwareUpdates} closed={request.status === 'withdrawn' || (!softwareProject && request.status === 'resolved')} />}
+      {request.kind === 'software' && clientPortalEnabled(Astro.locals.runtime.env) && <SoftwareProjectPanel requestId={request.id} requestUpdatedAt={request.updatedAt} project={softwareProject} sentOffer={offers.find(offer => offer.status === 'sent')} updates={softwareUpdates} closed={request.status === 'withdrawn' || (!softwareProject && request.status === 'resolved')} />}
       {brief && <SoftwareFitReview requestId={request.id} fit={fit} closed={closed} />}
       <section class="rail-section" aria-labelledby="contact-heading"><h2 id="contact-heading">Client</h2>
         <p class="rail-name">{request.name || 'Name not supplied'}</p>

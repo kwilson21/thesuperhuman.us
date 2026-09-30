@@ -52,7 +52,12 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     if (command.action === 'question' || command.action === 'decline') {
       if (command.action === 'decline' && record.status === 'resolved') return json({ ok: false, message: 'This request is already resolved.' }, 409);
       if (command.action === 'decline' && await offerIsSending(db, record.id)) return json({ ok: false, message: offerSendingMessage }, 409);
-      if (command.action === 'decline' && Date.parse(record.updatedAt) >= Date.parse(now)) now = new Date(Date.parse(record.updatedAt) + 1).toISOString();
+      if (Date.parse(record.updatedAt) >= Date.parse(now)) now = new Date(Date.parse(record.updatedAt) + 1).toISOString();
+      if (command.action === 'question') await db.batch([
+        requestGuard(),
+        guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)', [record.id]),
+        db.prepare('UPDATE owner_requests SET updated_at=? WHERE id=?').bind(now, record.id),
+      ]);
       if (command.action === 'decline') await db.batch([
         requestGuard(), offerSendingGuard(db, record.id),
         guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM audio_projects WHERE request_id=?)', [record.id]),
@@ -63,9 +68,9 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
         audit('offer-link-revoked', 'Offer withdrawn and link closed to decline the request'),
       ]);
       const sent = await email(command.action === 'question' ? 'A question about your project brief' : 'About your project brief', `${command.text}\n\nKazon`);
-      if (!sent.ok) return json({ ok: false, uncertain: sent.uncertain, message: command.action === 'decline' ? (sent.uncertain ? 'The email service didn’t confirm. The offer is withdrawn and its link is closed. Check Resend before retrying.' : 'The email didn’t send. The offer is withdrawn and its link is closed; nothing else changed. Try again.') : sent.uncertain ? 'The email service didn’t confirm. Check Resend before retrying. Nothing was recorded.' : 'The email didn’t send. Nothing changed. Try again.' }, 502);
+      if (!sent.ok) return json({ ok: false, uncertain: sent.uncertain, message: command.action === 'decline' ? (sent.uncertain ? 'The email service didn’t confirm. The offer is withdrawn and its link is closed. Check Resend before retrying.' : 'The email didn’t send. The offer is withdrawn and its link is closed; nothing else changed. Try again.') : sent.uncertain ? 'The email service didn’t confirm. Check Resend before retrying. The question was reserved, but delivery was not recorded.' : 'The email didn’t send. The question was reserved. Reload before retrying.' }, 502);
       try { await db.batch([
-        requestGuard(command.action === 'decline' ? now : record.updatedAt),
+        requestGuard(now),
         guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)', [record.id]),
         ...(command.action === 'decline' ? [offerSendingGuard(db, record.id),
           guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM audio_projects WHERE request_id=?)', [record.id]),

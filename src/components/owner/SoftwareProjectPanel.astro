@@ -3,8 +3,8 @@ import { projectTerms, projectStates, projectSteps, softwareDate, sharedSoftware
 import { addBusinessDays } from '~/lib/business-days';
 import type { SoftwareProject, SoftwareUpdate } from '~/lib/software-projects';
 import type { SoftwareOffer } from '~/lib/software-offers';
-type Props = { requestId: string; project: SoftwareProject | null; sentOffer?: SoftwareOffer; updates: SoftwareUpdate[]; closed: boolean };
-const { requestId, project, sentOffer, updates, closed } = Astro.props;
+type Props = { requestId: string; requestUpdatedAt: string; project: SoftwareProject | null; sentOffer?: SoftwareOffer; updates: SoftwareUpdate[]; closed: boolean };
+const { requestId, requestUpdatedAt, project, sentOffer, updates, closed } = Astro.props;
 const terms = project?.content_deleted_at ? null : project ? projectTerms(project) : sentOffer ? projectTerms(sentOffer) : null;
 const retryCutoff = Date.now() - 60_000;
 const retryReady = (attemptedAt: string | null) => Boolean(attemptedAt && Date.parse(attemptedAt) <= retryCutoff);
@@ -17,7 +17,7 @@ const canComplete = lastDelivery?.decision==='milestone_accepted' && shared.some
 {project?.content_deleted_at && <section class="rail-section"><h2>Project</h2><p class="rail-muted">Project content was removed by reviewed retention cleanup.</p></section>}
 {terms && <section class="rail-section software-rail" aria-labelledby="software-project-heading" data-software-project data-endpoint={`/api/owner/requests/${requestId}/project`}>
   <h2 id="software-project-heading">{project ? 'Project' : 'Start the project'}</h2>
-  {!project ? <form data-software-start>
+  {!project ? <form data-software-start data-request-updated-at={requestUpdatedAt}>
     <input type="hidden" name="offer_id" value={sentOffer!.id} />
     <input type="hidden" name="offer_version" value={sentOffer!.version} />
     <p class="rail-muted rail-caption">Record these only after checking them yourself. The client sees them as complete.</p>

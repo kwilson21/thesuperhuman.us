@@ -76,7 +76,7 @@ it.each(['question','decline'])('%s sends exact text and owner copy before audit
 it.each(['question','decline'])('%s leaves the request open on client email failure', async action => {
   vi.mocked(fetch).mockResolvedValue(new Response('{}', { status: 503 }));
   const response = await call({ action, text:'Thanks.' }); expect(response.status).toBe(502);
-  expect(await response.json()).toMatchObject({ uncertain:true, message:action === 'decline' ? 'The email service didn’t confirm. The offer is withdrawn and its link is closed. Check Resend before retrying.' : 'The email service didn’t confirm. Check Resend before retrying. Nothing was recorded.' });
+  expect(await response.json()).toMatchObject({ uncertain:true, message:action === 'decline' ? 'The email service didn’t confirm. The offer is withdrawn and its link is closed. Check Resend before retrying.' : 'The email service didn’t confirm. Check Resend before retrying. The question was reserved, but delivery was not recorded.' });
   expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({ status:'new' });
   expect(sql.prepare('SELECT action FROM owner_request_audit').all()).toEqual(action === 'decline' ? [{ action:'offer-link-revoked' }] : []);
 });
@@ -103,11 +103,11 @@ it('does not overwrite a withdrawal while decline email is pending', async () =>
   expect(sql.prepare('SELECT action FROM owner_request_audit').all()).toEqual([{ action:'offer-link-revoked' }]);
 });
 
-it.each(['question','decline'])('%s changes nothing on confirmed rejection', async action => {
+it.each(['question','decline'])('%s leaves the request open on confirmed rejection', async action => {
   vi.mocked(fetch).mockResolvedValue(new Response('{}', { status: 422 }));
   const response = await call({ action, text:'Thanks.' });
   expect(response.status).toBe(502);
-  expect(await response.json()).toMatchObject({ uncertain:false, message:action === 'decline' ? 'The email didn’t send. The offer is withdrawn and its link is closed; nothing else changed. Try again.' : 'The email didn’t send. Nothing changed. Try again.' });
+  expect(await response.json()).toMatchObject({ uncertain:false, message:action === 'decline' ? 'The email didn’t send. The offer is withdrawn and its link is closed; nothing else changed. Try again.' : 'The email didn’t send. The question was reserved. Reload before retrying.' });
   expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({ status:'new' });
   expect(sql.prepare('SELECT action FROM owner_request_audit').all()).toEqual(action === 'decline' ? [{ action:'offer-link-revoked' }] : []);
 });

@@ -5,7 +5,7 @@ import { clientPortalEnabled } from '~/lib/audio-client-access';
 import { getSoftwareProject, projectTerms, projectDate, softwareAudit, softwareGuard, openSoftwareGuard, deliverSoftwareNotice, queueSoftwareNotice, softwareAccessRevocation, recordMilestonePayment, acceptedDeliveryGuard } from '~/lib/software-projects';
 export const prerender = false;
 const schema = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('start'), offer_id: z.string().min(1), offer_version: z.number().int().positive(), signatures: z.literal(true), payment: z.literal(true), next_update_on: projectDate }),
+  z.object({ action: z.literal('start'), offer_id: z.string().min(1), offer_version: z.number().int().positive(), expectedRequestUpdatedAt: z.string().min(1), signatures: z.literal(true), payment: z.literal(true), next_update_on: projectDate }),
   z.object({ action: z.literal('state'), state: z.enum(['preparing','building','waiting_for_input','ready_for_review','complete']), waiting_for: z.string().trim().max(200), milestone_index: z.number().int().min(0).max(2), step: z.enum(['direction','build','review','handoff']), next_update_on: projectDate, expectedUpdatedAt: z.string() }),
   z.object({ action: z.literal('revoke'), confirmed: z.literal(true) }),
   z.object({ action: z.literal('notice'), updateId: z.string().optional(), confirmedNotSent: z.boolean().default(false) }),
@@ -26,6 +26,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   try {
     if (command.action === 'start') {
       await db.batch([
+        softwareGuard(db, 'SELECT 1 FROM owner_requests WHERE id=? AND updated_at=?', [id, command.expectedRequestUpdatedAt]),
         softwareGuard(db, `SELECT 1 FROM owner_requests r JOIN software_offers o ON o.request_id=r.id
           WHERE r.id=? AND r.kind='software' AND r.status NOT IN ('withdrawn','resolved') AND r.email<>'' AND o.status='sent' AND o.id=? AND o.version=?
           AND NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=r.id)`, [id, command.offer_id, command.offer_version]),
@@ -76,5 +77,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
         .bind(command.state, command.waiting_for, command.milestone_index, command.step, command.next_update_on || null, command.state === 'complete' ? project.completed_at ?? at : null, at, id),
       softwareAudit(db, id, 'state-changed', actor, at)]);
     return json({ ok: true });
-  } catch { return json({ ok: false, error: command.action === 'start' ? 'The offer changed since this page loaded. Reload to see the current offer.' : 'The project changed or could not be saved. Reload and try again.' }, 409); }
+  } catch {
+    if (command.action === 'start' && !await db.prepare('SELECT 1 FROM owner_requests WHERE id=? AND updated_at=?').bind(id, command.expectedRequestUpdatedAt).first()) return json({ ok: false, error: 'The request changed since this page loaded. Reload and try again.' }, 409);
+    return json({ ok: false, error: command.action === 'start' ? 'The offer changed since this page loaded. Reload to see the current offer.' : 'The project changed or could not be saved. Reload and try again.' }, 409); }
 };
