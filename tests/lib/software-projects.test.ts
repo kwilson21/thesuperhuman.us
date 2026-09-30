@@ -161,6 +161,17 @@ it('enforces the new payment, review-window and factual audit-note schema limits
   expect(()=>sql.exec("INSERT INTO software_milestone_payments VALUES ('software',0,'later','owner')")).toThrow();
   expect(()=>sql.prepare("INSERT INTO software_project_audit(request_id,action,actor,occurred_at,note) VALUES ('software','milestone-paid','owner','now',?)").run('x'.repeat(201))).toThrow();
 });
+it('does not complete a redelivered milestone using an earlier version’s handoff',async()=>{
+  await start();const token=await session(),review=await shareReview();
+  await decide(review.id,{decision:'milestone_accepted',confirm:true},token);
+  const handoff=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'handoff',paid_confirmed:true,links:[{label:'Notes',url:'https://example.com/notes'}]}});expect(handoff.status).toBe(200);
+  sql.exec("UPDATE software_project_updates SET shared_at='2020-01-01' WHERE kind='handoff'");
+  const redelivery=await shareReview('delivery_review','Delivery v2');
+  expect((await call(projectPost,{action:'complete',confirmed:true})).status).toBe(409);
+  await decide(redelivery.id,{decision:'milestone_accepted',confirm:true},token);
+  expect((await call(projectPost,{action:'complete',confirmed:true})).status).toBe(409);
+  expect(sql.prepare('SELECT completed_at FROM software_projects').get()).toEqual({completed_at:null});
+});
 it('starts only with an owner, sent offer and both explicit confirmations, preserving the exact snapshot', async () => {
   expect((await call(projectPost, { action:'start' }, false)).status).toBe(403);
   expect((await call(projectPost, { action:'start',signatures:true,payment:false,next_update_on:'' })).status).toBe(400);

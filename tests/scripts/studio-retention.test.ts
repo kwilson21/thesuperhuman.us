@@ -207,7 +207,7 @@ it('retains active software, cleans all prefix objects one year after completion
     sql.prepare("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,created_by,created_at,updated_at) VALUES (?,?,'progress','shared',0,'Private title','concept','owner','2026-01-01','2026-01-01')").run(id+'-update',id);
     sql.prepare("INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,created_at) VALUES (?,'client','client','Private message',?,'2026-01-01')").run(id,id+'-update');
     sql.prepare("INSERT INTO software_milestone_payments VALUES (?,0,'2026-01-01','owner')").run(id);
-    sql.prepare("INSERT INTO software_project_audit(request_id,action,actor,occurred_at) VALUES (?,'started','owner','2025-01-01'),(?,'state-changed','owner','2027-01-01')").run(id,id);
+    sql.prepare("INSERT INTO software_project_audit(request_id,action,actor,occurred_at,note) VALUES (?,'started','owner','2025-01-01',''),(?,'decision-recorded','client','2027-01-01','Accepted on Delivery v1 · milestone 1')").run(id,id);
   }
   const list = async (prefix: string) => [prefix+'update/old-orphan.png', prefix+'update/current.png'];
   await expect(previewStudioRetention(database,'Local test data',storage,now)).rejects.toThrow('prefix listing');
@@ -221,6 +221,7 @@ it('retains active software, cleans all prefix objects one year after completion
   expect(sql.prepare('SELECT request_id FROM software_milestone_payments ORDER BY request_id').all()).toEqual([{request_id:'software-active'},{request_id:'software-recent'}]);
   expect(sql.prepare("SELECT request_id FROM software_projects WHERE content_deleted_at IS NOT NULL ORDER BY request_id").all()).toEqual([{request_id:'software-closed'},{request_id:'software-complete'}]);
   expect(sql.prepare("SELECT COUNT(*) AS n FROM software_project_audit WHERE occurred_at='2027-01-01'").get()).toEqual({n:4});
+  expect(sql.prepare("SELECT DISTINCT note FROM software_project_audit WHERE action='decision-recorded'").all()).toEqual([{note:'Accepted on Delivery v1 · milestone 1'}]);
   expect(sql.prepare("SELECT COUNT(*) AS n FROM software_project_audit WHERE action='content-deleted'").get()).toEqual({n:2});
   expect(sql.prepare('PRAGMA foreign_key_check').all()).toEqual([]); sql.close();
 });

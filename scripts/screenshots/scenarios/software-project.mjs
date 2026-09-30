@@ -20,7 +20,7 @@ export default {
     const id='screenshot-software-project',at=new Date().toISOString(),email='software-example@example.com';
     const token='00000000-0000-4000-8000-000000000005'.repeat(2),cookie={name:'studio_session',value:token};
     const quote=value=>`'${String(value).replaceAll("'","''")}'`;
-    const terms={outcome:'A clear next step for every client.',summary:'Client onboarding tool',milestones:[{name:'Client onboarding tracker',deliverables:['A shared status view','Next actions with a named owner'],acceptance:['Add a client and identify the next action.'],feeCents:240000}],clientInputs:'A redacted sample export.',exclusions:'Live rollout and integrations.',timing:'Agreed before start.',paymentMode:'standard'};
+    const terms={outcome:'A clear next step for every client.',summary:'Client onboarding tool',milestones:[{name:'Client onboarding tracker',deliverables:['A shared status view','Next actions with a named owner'],acceptance:['Add a client.','Update their status.','Identify the next action.','Import the agreed sample CSV.','Read the handoff notes.'],feeCents:240000}],clientInputs:'A redacted sample export.',exclusions:'Live rollout and integrations.',timing:'Agreed before start.',paymentMode:'standard'};
     // Intake, sent offer and session need outside Turnstile/email, so only these are seeded.
     sql(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,created_at,updated_at) VALUES (${quote(id)},'software','workflow','Alex Example',${quote(email)},'Client onboarding tool','{"path":"workflow","company":"Example Studio"}','reviewed',${quote(at)},${quote(at)});
       INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at,sent_at,sent_by) VALUES ('screenshot-project-offer',${quote(id)},1,'sent',${quote(JSON.stringify(terms))},${quote(at)},${quote(at)},${quote(at)},'owner@example.com');
@@ -49,6 +49,26 @@ export default {
     await shot('Software and songs project list','/studio','mixed-index',{cookie});
     await shot('Software sign-in','/studio/sign-in?for=software','signin');
     await shot('Unknown project unavailable','/studio/software/unavailable','unavailable',{cookie,status:404});
+    const share=async value=>ownerFetch(`/api/owner/requests/${id}/updates`,{action:'share',confirmed:true,update:{...update,...value,email_client:false},expectedUpdatedAt:null});
+    const decide=async(review,decision)=>ownerFetch(`/api/studio/software/${id}/reviews/${review.id}`,decision,'POST',{cookie:`studio_session=${token}`});
+    const direction=await share({kind:'direction_review',artifact_version:'Direction v1',client_request:''});
+    await shot('Direction review awaiting a decision',`/studio/software/${id}`,'direction-review',{cookie});
+    await decide(direction,{decision:'direction_confirmed'});
+    await shot('Direction confirmed',`/studio/software/${id}`,'direction-confirmed',{cookie});
+    const delivery={...update,kind:'delivery_review',artifact_version:'Delivery v1',evidence_type:'working_preview',title:'Client onboarding',client_request:'',review_window_days:5,criteria:terms.milestones[0].acceptance.map((_,index)=>`Try check ${index+1} with the fictional sample in the preview.`),preview_url:'https://example.com/preview',email_client:false};
+    const deliveryDraft=await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'draft',update:delivery,expectedUpdatedAt:null});
+    await shot('Owner composer with every delivery check',`/owner/requests/${id}/update`,'delivery-composer',{owner:true});
+    const review=await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'share',confirmed:true,update:delivery,expectedUpdatedAt:deliveryDraft.updatedAt});
+    await shot('Delivery review awaiting a decision with all agreed checks',`/studio/software/${id}`,'delivery-review',{cookie});
+    await shot('Delivery change request form open',`/studio/software/${id}`,'changes-open',{cookie,prepare:async page=>{await page.locator('[data-request-changes] summary').click();await page.locator('[name=criteria]').first().check();await page.locator('[name=note]').fill('Adding the fictional sample client does not save.');}});
+    await decide(review,{decision:'changes_requested',criteria:[0],note:'Adding the fictional sample client does not save.'});
+    const corrected=await share({...delivery,artifact_version:'Delivery v2'});
+    await decide(corrected,{decision:'milestone_accepted',confirm:true});
+    await shot('Accepted delivery before full-payment handoff',`/studio/software/${id}`,'accepted',{cookie});
+    await share({kind:'handoff',artifact_version:'Delivery v2',title:'Your handoff is ready.',what_changed:'Delivered files and operating notes.',checks_limitations:'Fictional sample only. Live rollout is outside scope.',next_step:'Corrections within the correction period. Anything new is a separate milestone.',paid_confirmed:true,links:[{label:'Download handoff notes',url:'https://example.com/notes'},{label:'View delivered files',url:'https://example.com/files'}],client_request:''});
+    await shot('Accepted milestone with handoff ready',`/studio/software/${id}`,'handoff',{cookie});
+    await shot('Earlier versions with their own decisions',`/studio/software/${id}`,'earlier-versions',{cookie,prepare:async page=>{await page.getByText('Earlier versions',{exact:true}).click();}});
+    await shot('Owner milestone statuses and full-payment record',`/owner/requests/${id}`,'milestone-statuses',{owner:true});
     return steps;
   },
 };

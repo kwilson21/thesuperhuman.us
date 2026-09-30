@@ -1,5 +1,7 @@
 # Owner center operations
 
+Software reviews identify a direction or delivery version; confirming direction does not accept working software. Give evidence for every agreed delivery check and at least 5 Business Days for review. The client explicitly accepts the version or names unmet checks with reproduction notes; silence is never acceptance. Record full milestone payment only after checking Stripe or the bank. Share handoff links only after acceptance and full payment, within 5 Business Days of payment, and keep files available for at least 30 days. The correction period runs for 30 calendar days from the earlier of acceptance or full payment. The Project rail records milestone decisions, payment and handoff; Activity keeps the version-specific audit notes. Mark the project complete after the final milestone handoff.
+
 Use this page when a promotion is active or when the owner center says something needs attention. Routine requests stay in the owner center. Do not copy request details into logs, issues, or email.
 
 ## Start here
