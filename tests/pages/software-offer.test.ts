@@ -301,3 +301,43 @@ it('hides Reopen for a started request and gates both sending retry controls at 
     } finally {Date.now=clock;}
   } finally {sql.close();}
 });
+
+it('renders offer-scoped deposit controls before start and a paid deposit confirmation without a project',async()=>{
+  const {sql,db}=await fixture();
+  try {
+    const container=await AstroContainer.create(),sentOffer=sql.prepare("SELECT * FROM software_offers WHERE id='current'").get();
+    const ownerPanel=()=>container.renderToString(panel,{props:{requestId:'r',requestUpdatedAt:'now',sentOffer,project:null,updates:[],closed:false},locals:{runtime:{env:{MUSIC_DB:db}}} as any});
+    let html=await ownerPanel();expect(html).toContain('Create deposit invoice');expect(html).toContain('Allow card for this invoice');
+    sql.exec(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,created_by,created_at,updated_at)
+      VALUES ('old-deposit','r','old',0,'deposit',120000,7,'paid','PRIVATE OWNER','2026-09-29','2026-09-29')`);
+    html=await ownerPanel();expect(html).not.toContain('data-deposit-invoice-id');expect(html).toContain('Create deposit invoice');
+    sql.exec(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,stripe_customer_id,hosted_invoice_url,due_at,created_by,created_at,updated_at)
+      VALUES ('current-deposit','r','current',0,'deposit',120000,7,'open','cus_PRIVATE','https://example.com/deposit','2026-10-07','PRIVATE OWNER','2026-09-30','2026-09-30')`);
+    html=await ownerPanel();expect(html).toContain('Deposit · open · due Oct 7, 2026');expect(html).not.toContain('Create deposit invoice');
+    sql.exec("UPDATE software_invoices SET status='paid',status_updated_at='2026-09-30' WHERE id='current-deposit'");
+    html=await ownerPanel();expect(html).toContain('data-deposit-invoice-id="current-deposit"');expect(html).toMatch(/name="payment"[^>]*checked/);expect(html).not.toContain('cus_PRIVATE');
+    expect(sql.prepare('SELECT count(*) AS n FROM software_projects').get()).toEqual({n:0});
+  } finally {sql.close();}
+});
+it('renders only the client project invoices with private payment links and preserves manual initial payment',async()=>{
+  const {sql,db}=await fixture();
+  try {
+    sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('r','current',?,'standard','now','now','2026-09-29','owner','now','now')").run(JSON.stringify(terms));
+    const {createHash}=await import('node:crypto'),session='a'.repeat(72);
+    sql.prepare("INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES (?,'alex@example.com','now','2099-01-01','now')").run(createHash('sha256').update(session).digest('hex'));
+    sql.exec(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,stripe_customer_id,stripe_invoice_id,hosted_invoice_url,due_at,created_by,created_at,updated_at)
+      VALUES ('current-balance','r','current',0,'balance',120000,15,'open','cus_PRIVATE','in_PRIVATE','https://example.com/balance','2026-10-15','PRIVATE OWNER','2026-09-30','2026-09-30'),
+      ('old-deposit','r','old',0,'deposit',111111,7,'paid','cus_PRIVATE_OLD','in_PRIVATE_OLD','https://example.com/old-secret','2026-10-01','PRIVATE OWNER','2026-09-29','2026-09-29')`);
+    const container=await AstroContainer.create();
+    const renderProject=()=>container.renderToString(softwarePage,{request:new Request('https://thesuperhuman.us/studio/software/r',{headers:{cookie:`studio_session=${session}`}}),params:{id:'r'},locals:{runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}} as any});
+    let html=await renderProject();expect(html).toContain('Invoices');expect(html).toContain('Pay invoice ↗');expect(html).toContain('$1,200.00');expect(html).toContain('due Oct 15, 2026');expect(html).toContain('Initial payment · Received');
+    expect(html).not.toMatch(/PRIVATE|old-secret|1,111.11/);
+    sql.exec(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,created_by,created_at,updated_at)
+      VALUES ('current-deposit','r','current',0,'deposit',120000,7,'payment_failed','https://example.com/deposit','owner','2026-09-30','2026-09-30')`);
+    html=await renderProject();expect(html).toContain('Initial payment · Invoice sent');
+    sql.exec("UPDATE software_invoices SET status='paid' WHERE id='current-deposit'");
+    html=await renderProject();expect(html).toContain('Initial payment · Received');
+    sql.exec("UPDATE software_invoices SET status='void' WHERE id='current-deposit'");
+    html=await renderProject();expect(html).toContain('Initial payment · Not issued');
+  } finally {sql.close();}
+});
