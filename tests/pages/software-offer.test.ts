@@ -334,12 +334,14 @@ it('renders only the client project invoices with private payment links and pres
     expect(html).not.toMatch(/PRIVATE|old-secret|1,111.11/);
     sql.exec(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,created_by,created_at,updated_at)
       VALUES ('current-deposit','r','current',0,'deposit',120000,7,'payment_failed','https://example.com/deposit','owner','2026-09-30','2026-09-30')`);
-    html=await renderProject();expect(html).toContain('Initial payment · Invoice sent');
+    html=await renderProject();expect(html).toContain('Initial payment · Received');
     expect(html).toContain('Deposit · $1,200.00 · Payment failed');
+    sql.exec("UPDATE software_invoices SET status='void' WHERE id='current-deposit'");
+    html=await renderProject();expect(html).toContain('Initial payment · Received');expect(html).toContain('Deposit · $1,200.00 · Void');
     expect(html.indexOf('Deposit · $1,200.00')).toBeLessThan(html.indexOf('Balance · $1,200.00'));
     sql.exec("UPDATE software_invoices SET status='paid',status_updated_at='2026-10-01' WHERE id='current-deposit'");
     html=await renderProject();expect(html).toContain('Initial payment · Received');expect(html).toContain('Deposit · $1,200.00 · Paid Oct 1, 2026');
     sql.exec("UPDATE software_invoices SET status='void' WHERE id='current-deposit'");
-    html=await renderProject();expect(html).toContain('Initial payment · Not issued');
+    html=await renderProject();expect(html).toContain('Initial payment · Received');
   } finally {sql.close();}
 });

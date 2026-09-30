@@ -795,3 +795,8 @@ it.each(['creating','open','payment_failed','uncollectible'])('withdrawal blocks
   db.batch=original;sql.exec("UPDATE software_invoices SET status='void'");
   expect((await changeOwnerRequest(db,command)).status).toBe('withdrawn');
 });
+it('records bank start payment after a voided deposit',async()=>{
+  seedInvoice('void');expect((await start()).status).toBe(200);
+  expect(sql.prepare('SELECT first_payment_recorded_at FROM software_projects').get().first_payment_recorded_at).toBeTruthy();
+  expect(sql.prepare('SELECT status FROM software_invoices').get()).toEqual({status:'void'});
+});

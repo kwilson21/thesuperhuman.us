@@ -16,10 +16,11 @@ it.each(['sent', 'not_requested'])('hides %s notice actions', notification_statu
 it('preserves manual initial payment when only later invoices exist and limits redelivery prompts to delivery invoices',()=>{
   const client=readFileSync(new URL('../../src/pages/studio/software/[id].astro',import.meta.url),'utf8');
   const line=readFileSync(new URL('../../src/components/owner/SoftwareInvoiceLine.astro',import.meta.url),'utf8');
-  const fallback=client.match(/firstDeposit.length \? initialPayment : 'Received'/)![0];
-  const label=new Function('firstDeposit','initialPayment',`return ${fallback}`);
-  expect(label([],'Not issued')).toBe('Received');
-  expect(label([{status:'open'}],'Invoice sent')).toBe('Invoice sent');
+  const fallback=client.match(/project.first_payment_recorded_at \? 'Received' : 'Not recorded'/)![0];
+  const label=new Function('project',`return ${fallback}`);
+  // A void invoice remains history after the owner records the bank deposit and starts.
+  expect(label({first_payment_recorded_at:'2026-09-30'})).toBe('Received');
+  expect(label({first_payment_recorded_at:null})).toBe('Not recorded');
   const condition=line.match(/const redeliveryPrompt=(.+);/)![1];
   const prompt=new Function('kind','redeliveryAt','latest',`return ${condition}`);
   expect(prompt('deposit','2026-10-02',{status:'open',created_at:'2026-10-01'})).toBe(false);

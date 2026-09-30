@@ -24,8 +24,6 @@ const updates = project ? await sharedSoftwareUpdates(env.MUSIC_DB, project.requ
 const messages = project ? await listSoftwareProjectMessages(env.MUSIC_DB, project.request_id) : [];
 const latest = updates.find(update=>update.status==='shared'), milestone = terms?.milestones[project?.milestone_index ?? 0];
 const invoices=project ? await clientSoftwareInvoices(env.MUSIC_DB,project) : [];
-const firstDeposit=invoices.filter(invoice=>invoice.milestone_index===0 && invoice.kind==='deposit');
-const initialPayment=firstDeposit.some(invoice=>invoice.status==='paid' && !invoice.refunded_at) ? 'Received' : firstDeposit.some(invoice=>['open','payment_failed'].includes(invoice.status)) ? 'Invoice sent' : 'Not issued';
 const payments=project ? await milestonePayments(env.MUSIC_DB,project.request_id) : [];
 const acceptedDeliveries=updates.filter(update=>update.kind==='delivery_review' && update.status==='shared' && update.decision==='milestone_accepted').sort((a,b)=>(b.milestone_index ?? 0)-(a.milestone_index ?? 0));
 const reviews=updates.filter(update=>update.kind?.endsWith('_review') && update.status==='shared');
@@ -64,7 +62,7 @@ const waiting = (project?.state === 'waiting_for_input' ? project.waiting_for : 
       {earlierUpdates.length>0 && <details><summary>Earlier updates</summary>{earlierUpdates.map(update=><><SoftwareProjectUpdate update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} visualUrl={update.has_visual ? visual(update.id) : undefined} />{update.status==='shared' && update.kind?.endsWith('_review') && <SoftwareReviewResponse update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} milestoneName={terms.milestones[update.milestone_index ?? 0].name} endpoint={`/api/studio/software/${project.request_id}/reviews/${update.id}`} readonly={conversationClosed} />}</>)}</details>}
     </div></div>
     <div id="conversation"><ProjectMessages messages={messages} endpoint={`/api/studio/software/${project.request_id}/messages`} reader="client" closed={conversationClosed} heading="Ask a question" placeholder="Ask about a screen, a step or a date." hint="" /></div>
-    <footer class="project-records"><span>Agreement · Complete</span><span>{project.payment_mode === 'standard' ? `Initial payment · ${firstDeposit.length ? initialPayment : 'Received'}` : 'Payment · Invoiced on delivery'}</span><span>Start · Confirmed {softwareDate(project.started_at)}</span></footer>
+    <footer class="project-records"><span>Agreement · Complete</span><span>{project.payment_mode === 'standard' ? `Initial payment · ${project.first_payment_recorded_at ? 'Received' : 'Not recorded'}` : 'Payment · Invoiced on delivery'}</span><span>Start · Confirmed {softwareDate(project.started_at)}</span></footer>
   </article><script>import { setupProjectMessages } from '~/scripts/project-messages'; import { setupSoftwareReviews } from '~/scripts/software-review'; setupProjectMessages(); setupSoftwareReviews();</script>
 </BaseLayout>}
 <style>
