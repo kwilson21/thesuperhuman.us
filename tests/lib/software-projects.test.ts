@@ -369,3 +369,12 @@ it('keeps newer undecided review state and never moves the milestone backwards',
   expect((await decide(older.id,{decision:'changes_requested',criteria:[0],note:'Change the delivery.'},token)).status).toBe(200);
   expect(sql.prepare('SELECT milestone_index FROM software_projects').get()).toEqual({milestone_index:1});
 });
+
+it.each(['failed','pending','sending'])('includes stale %s invitations in Today',async status=>{
+  await start();
+  sql.prepare("UPDATE software_projects SET invitation_status=?,created_at='2026-09-01',invitation_attempted_at='2026-09-01',next_update_on=NULL").run(status);
+  const rows=await listStudioProjectAttention(db,new Date('2026-09-29T12:00:00Z'));
+  expect(rows).toContainEqual(expect.objectContaining({requestId:'software',failedNotices:status==='failed' ? 1 : 0,uncheckedNotices:status==='failed' ? 0 : 1}));
+  sql.exec("UPDATE software_projects SET invitation_status='pending',created_at='2026-09-29T11:59:59Z'");
+  expect(await listStudioProjectAttention(db,new Date('2026-09-29T12:00:00Z'))).toEqual([]);
+});

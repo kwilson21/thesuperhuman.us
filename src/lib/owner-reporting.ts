@@ -31,7 +31,7 @@ export type StudioProjectAttention = {
   summary: string;
   unreadMessages: number;
   failedNotices: number;
-  /** Update emails whose delivery is unconfirmed: still sending after a minute, or never attempted. */
+  /** Emails whose delivery is unconfirmed: still sending after a minute, or never attempted. */
   uncheckedNotices: number;
   dueSoon: boolean;
   stage: string;
@@ -78,13 +78,14 @@ export async function listStudioProjectAttention(db: D1Database, now: Date): Pro
   const softwareRows = await db.prepare(`WITH attention AS (
     SELECT p.request_id AS requestId,json_extract(p.terms_json,'$.outcome') AS summary,p.state AS stage,p.next_update_on AS dueAt,
       (SELECT COUNT(*) FROM software_project_messages m WHERE m.request_id=p.request_id AND m.actor='client' AND m.read_at IS NULL) AS unreadMessages,
-      (SELECT COUNT(*) FROM software_project_updates u WHERE u.request_id=p.request_id AND u.status='shared' AND u.notification_status='failed') AS failedNotices,
+      (SELECT COUNT(*) FROM software_project_updates u WHERE u.request_id=p.request_id AND u.status='shared' AND u.notification_status='failed') + (p.invitation_status='failed') AS failedNotices,
       (SELECT COUNT(*) FROM software_project_updates u WHERE u.request_id=p.request_id AND u.status='shared'
-        AND ((u.notification_status='pending' AND u.shared_at<=?) OR (u.notification_status='sending' AND u.notification_attempted_at<=?))) AS uncheckedNotices,
+        AND ((u.notification_status='pending' AND u.shared_at<=?) OR (u.notification_status='sending' AND u.notification_attempted_at<=?))) + ((p.invitation_status='pending' AND p.created_at<=?) OR (p.invitation_status='sending' AND COALESCE(p.invitation_attempted_at,p.created_at)<=?)) AS uncheckedNotices,
       p.next_update_on IS NOT NULL AND p.next_update_on<=? AND p.state<>'complete' AS dueSoon
     FROM software_projects p JOIN owner_requests r ON r.id=p.request_id WHERE p.revoked_at IS NULL AND p.content_deleted_at IS NULL AND r.status<>'withdrawn'
   ) SELECT * FROM attention WHERE unreadMessages>0 OR failedNotices>0 OR uncheckedNotices>0 OR dueSoon=1 ORDER BY dueSoon DESC,unreadMessages DESC,requestId`)
-    .bind(new Date(now.getTime()-300_000).toISOString(),new Date(now.getTime()-60_000).toISOString(),dueLimit.toISOString().slice(0,10))
+    .bind(new Date(now.getTime()-300_000).toISOString(),new Date(now.getTime()-60_000).toISOString(),
+      new Date(now.getTime()-300_000).toISOString(),new Date(now.getTime()-60_000).toISOString(),dueLimit.toISOString().slice(0,10))
     .all<{requestId:string;summary:string;stage:string;dueAt:string|null;unreadMessages:number;failedNotices:number;uncheckedNotices:number;dueSoon:number}>();
   const software = softwareRows.results.map(({dueAt,...row}) => ({...row,kind: 'software' as const,bookingPaid:false,dueSoon:Boolean(row.dueSoon),dueInDays:null,
     promisedUpdate: row.dueSoon && dueAt ? dueAt : undefined}));
