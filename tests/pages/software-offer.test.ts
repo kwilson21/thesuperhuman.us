@@ -213,6 +213,29 @@ it('renders version-specific direction, delivery, acceptance, handoff and earlie
   } finally {sql.close();}
 });
 
+it('renders the pending review before newer updates in a separate latest section', async () => {
+  const {sql,db} = await fixture();
+  try {
+    sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('r','current',?,'standard','now','now','2026-09-29','owner','now','now')").run(JSON.stringify(terms));
+    sql.exec("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,created_by,created_at,updated_at,shared_at) VALUES ('delivery','r','delivery_review','shared',0,'Pending delivery','Delivery v1','working_preview','owner','2026-09-29','2026-09-29','2026-09-29'),('progress','r','progress','shared',0,'Newer concept','v1','concept','owner','2026-09-30','2026-09-30','2026-09-30'),('progress2','r','progress','shared',0,'Newest concept','v2','concept','owner','2026-10-01','2026-10-01','2026-10-01')");
+    const {createHash} = await import('node:crypto'), session = 'a'.repeat(72);
+    sql.prepare("INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES (?,'alex@example.com','now','2099-01-01','now')").run(createHash('sha256').update(session).digest('hex'));
+    const container = await AstroContainer.create();
+    const renderProject = () => container.renderToString(softwarePage,{request:new Request('https://thesuperhuman.us/studio/software/r',{headers:{cookie:`studio_session=${session}`}}),params:{id:'r'},locals:{runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}} as any});
+    let html = await renderProject();
+    expect(html).toContain('Your first milestone is ready to review.');
+    const current = html.slice(html.indexOf('class="project-current'),html.indexOf('<aside'));
+    expect(current).toMatch(/Pending delivery[\s\S]*<section class="latest-updates[^>]*>[\s\S]*<h3[^>]*>Latest update<\/h3>[\s\S]*Newest concept[\s\S]*Newer concept/);
+    expect(html.match(/Newer concept/g)).toHaveLength(1);
+    expect(html.match(/Newest concept/g)).toHaveLength(1);
+    sql.exec("INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES ('r','client','client','Accepted','delivery','milestone_accepted','2026-10-02')");
+    html = await renderProject();
+    expect(html).not.toContain('Latest update');
+    expect(html.slice(html.indexOf('class="project-current'),html.indexOf('<aside'))).toContain('Newest concept');
+    expect(html.slice(html.indexOf('class="project-current'),html.indexOf('<aside'))).not.toContain('Pending delivery');
+  } finally {sql.close();}
+});
+
 it('keeps update requests separate from Waiting on you and renders the Today software row', async () => {
   const {sql,db} = await fixture();
   try {

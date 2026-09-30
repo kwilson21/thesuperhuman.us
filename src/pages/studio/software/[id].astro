@@ -29,8 +29,10 @@ const undecidedReviews=reviews.filter(update=>!update.decision);
 const review=undecidedReviews.find(update=>update.kind==='delivery_review') ?? undecidedReviews[0] ?? reviews.find(update=>update.decision);
 const railReviews=review ? [review,...undecidedReviews.filter(update=>update.id!==review.id)] : [];
 const pendingDelivery=review?.kind==='delivery_review' && !review.decision ? review : null;
+const currentUpdate=review && !review.decision ? review : latest;
+const newerUpdates=currentUpdate && currentUpdate!==latest ? updates.slice(0,updates.indexOf(currentUpdate)).filter(update=>update.status==='shared') : [];
 const earlierVersions=updates.filter(update=>update.kind?.endsWith('_review') && update.status==='superseded' && update.decision);
-const earlierUpdates=updates.filter(update=>update.id!==latest?.id && !undecidedReviews.includes(update) && !earlierVersions.includes(update));
+const earlierUpdates=updates.filter(update=>update.id!==latest?.id && !newerUpdates.includes(update) && !undecidedReviews.includes(update) && !earlierVersions.includes(update));
 const visual = (id: string) => `/api/studio/software/${project!.request_id}/updates/${id}/visual`;
 const conversationClosed = project?.state === 'complete';
 const waiting = (project?.state === 'waiting_for_input' ? project.waiting_for : '');
@@ -41,8 +43,8 @@ const waiting = (project?.state === 'waiting_for_input' ? project.waiting_for : 
     <header><p class="studio-kicker">Private project</p><h1>{pendingDelivery ? pendingDelivery.milestone_index===0 ? 'Your first milestone is ready to review.' : `Milestone ${(pendingDelivery.milestone_index ?? 0)+1} is ready to review.` : terms.outcome}</h1><p class="summary">{terms.summary}{pendingDelivery && ` · ${pendingDelivery.artifact_version}`}</p>{pendingDelivery && <p>Please review by {softwareDate(addBusinessDays(pendingDelivery.shared_at!,pendingDelivery.review_window_days ?? 5))}.</p>}</header>
     <div class="project-band"><div><h2>Milestone {(latest?.milestone_index ?? project.milestone_index)+1} · {milestone?.name}</h2><p>{softwareStateSentence(project)}</p></div><div>{latest?.shared_at && <p>Last update: {softwareDate(latest.shared_at)}</p>}{project.next_update_on && <p>Next update: {softwareDate(project.next_update_on)}</p>}</div><SoftwareStepTrack step={project.step} /></div>
     <div class="project-columns"><div class="project-current">
-      {latest ? <SoftwareProjectUpdate update={latest} checks={milestone?.acceptance} visualUrl={latest.has_visual ? visual(latest.id) : undefined} /> : <section><h2>Your first update is on its way.</h2>{project.next_update_on && <p>Next update: {softwareDate(project.next_update_on)}</p>}</section>}
-      {review && !review.decision && review.id!==latest?.id && <SoftwareProjectUpdate update={review} checks={terms.milestones[review.milestone_index ?? 0].acceptance} visualUrl={review.has_visual ? visual(review.id) : undefined} />}
+      {currentUpdate ? <SoftwareProjectUpdate update={currentUpdate} checks={terms.milestones[currentUpdate.milestone_index ?? 0].acceptance} visualUrl={currentUpdate.has_visual ? visual(currentUpdate.id) : undefined} /> : <section><h2>Your first update is on its way.</h2>{project.next_update_on && <p>Next update: {softwareDate(project.next_update_on)}</p>}</section>}
+      {newerUpdates.length>0 && <section class="latest-updates"><h3>Latest update</h3>{newerUpdates.map(update=><SoftwareProjectUpdate update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} visualUrl={update.has_visual ? visual(update.id) : undefined} />)}</section>}
     </div><aside aria-label="Next steps">{railReviews.map(review=><section><SoftwareReviewResponse update={review} checks={terms.milestones[review.milestone_index ?? 0].acceptance} milestoneName={terms.milestones[review.milestone_index ?? 0].name} endpoint={`/api/studio/software/${project.request_id}/reviews/${review.id}`} readonly={conversationClosed} /></section>)}{earlierVersions.length>0 && <section><a class="site-link" href="#earlier-versions">See earlier versions</a></section>}{waiting && <section><h2>Waiting on you</h2><p>{waiting}</p></section>}{latest?.next_step && <section><h2>Next from me</h2><p>{latest.next_step}</p></section>}{!conversationClosed && <section><a class="site-link" href="#conversation">Ask a question <span aria-hidden="true">↓</span></a></section>}</aside><div class="project-history">
       {acceptedDeliveries.map(accepted=>{
         const firstAcceptance=updates.filter(update=>update.milestone_index===accepted.milestone_index && update.decision==='milestone_accepted').map(update=>update.decided_at!).sort()[0];
@@ -76,6 +78,8 @@ const waiting = (project?.state === 'waiting_for_input' ? project.waiting_for : 
   .project-current, .project-history, aside { min-width: 0; }
   .project-current, .project-history { grid-column: 1; }
   .project-current { grid-row: 1; }
+  .latest-updates { border-top: 1px solid var(--rule); margin-top: 1.5rem; padding-top: 1.5rem; }
+  .latest-updates > h3 { font-size: 1.6rem; margin: 0 0 .5rem; }
   .project-history { grid-row: 2; }
   .handoff-strip { border-block: 1px solid var(--rule); padding: 1.5rem 0; margin: 2rem 0; }
   .handoff-strip ul { list-style: none; padding: 0; }
