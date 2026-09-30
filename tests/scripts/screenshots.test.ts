@@ -2,6 +2,12 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
+import { prepareWithDiagnostics } from '../../scripts/screenshots/prepare.mjs';
+import { POST as sendOffer } from '../../src/pages/api/owner/requests/[id]/software';
+import { contractorSchema } from '../../src/lib/agreement-fields';
 import {
   expectedResourceError, missingScenarioRoutes, NOT_PAGES, PAGES, parseJsonc, PREVIEW_OVERRIDES, previewWrangler, REDIRECTS, SCENARIO_PAGES,
   relevantScreenshots, sanitizeManifest, screenshotSection, withScreenshots,
@@ -19,6 +25,71 @@ function routeFor(file: string): string {
   const route = file.replace(/^src\/pages/, '').replace(/\.astro$/, '').replace(/\/index$/, '');
   return route || '/';
 }
+
+it('saves full-page prepare failure diagnostics and rethrows the original error', async () => {
+  const out = await mkdtemp(join(tmpdir(), 'screenshot-failure-'));
+  const error = new Error('Agreement message did not appear');
+  const page = {
+    url: () => 'http://localhost/owner/requests/example',
+    locator: (selector: string) => {
+      expect(selector).toBe('[role=status]');
+      return { allTextContents: async () => ['', 'Complete and validate Agreement details before sending.'] };
+    },
+    screenshot: async (options: { path: string; fullPage: boolean }) => {
+      expect(options.fullPage).toBe(true);
+      await writeFile(options.path, 'failure image');
+    },
+  };
+  try {
+    await expect(prepareWithDiagnostics(page, async () => { throw error; }, out, 'software-signing', 'software-signing-missing-send-field-phone.png')).rejects.toBe(error);
+    const name = '_failure-software-signing-missing-send-field-phone';
+    expect(await readFile(join(out, `${name}.png`), 'utf8')).toBe('failure image');
+    expect(await readFile(join(out, `${name}.txt`), 'utf8')).toBe(`URL: ${page.url()}\nError: ${error.message}\nStatuses:\n1: \n2: Complete and validate Agreement details before sending.\n`);
+    expect(sanitizeManifest({ scenarios: [{ steps: [{ images: [{ file: `${name}.png` }] }] }] }, [`${name}.png`]).scenarios).toEqual([]);
+  } finally {
+    await rm(out, { recursive: true, force: true });
+  }
+});
+
+it('seeds a completed send so missing details reach the real agreement validation', async () => {
+  const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
+  const sql = new DatabaseSync(':memory:');
+  sql.exec(readFileSync('db/music.sql', 'utf8'));
+  const stop = new Error('fixture ready');
+  const statement = (query: string, args: any[] = []): any => ({
+    bind: (...values: any[]) => statement(query, values),
+    first: async () => sql.prepare(query).get(...args) ?? null,
+    all: async () => ({ results: sql.prepare(query).all(...args) }),
+  });
+  try {
+    const scenario = await import('../../scripts/screenshots/scenarios/software-signing.mjs');
+    await expect(scenario.default.run({
+      sql: (query: string) => sql.exec(query),
+      ownerFetch: async () => { throw new Error('No API setup is needed before this shot.'); },
+      capture: async ({ file }: { file: string }) => { if (file.includes('missing-send-field')) throw stop; return file; },
+    })).rejects.toBe(stop);
+    const config = JSON.parse(sql.prepare('SELECT values_json FROM software_contractor_config').get().values_json);
+    expect(contractorSchema.safeParse(config).success).toBe(true);
+    const draft = sql.prepare("SELECT updated_at FROM software_offers WHERE status='draft'").get();
+    const send = () => sendOffer({
+      params: { id: 'screenshot-signing' },
+      request: new Request('https://example.com/api/owner/requests/screenshot-signing/software', {
+        method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'send', version: 2, expectedUpdatedAt: draft.updated_at }),
+      }),
+      locals: { owner: { email: 'owner@example.com' }, runtime: { env: { MUSIC_DB: { prepare: statement } } } },
+    } as any) as Promise<Response>;
+    const response = await send();
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ message: 'Complete and validate Agreement details before sending.' });
+    sql.prepare('UPDATE software_offer_links SET created_at=?').run(new Date().toISOString());
+    const sending = await send();
+    expect(sending.status).toBe(409);
+    expect(await sending.json()).toMatchObject({ message: 'An offer is still being sent. Try again in a moment.' });
+  } finally {
+    sql.close();
+  }
+});
 
 describe('screenshot coverage', () => {
   it('captures every page file or says why not', () => {

@@ -21,6 +21,8 @@ export default {
     const id = 'screenshot-signing',
       token = 'g'.repeat(43),
       at = new Date().toISOString(),
+      // This fixture represents a completed send, outside the live send guard.
+      sentAt = new Date(Date.now() - 60_000).toISOString(),
       session = 'v'.repeat(43),
       cookie = { name: 'agreement_session', value: session };
     const terms = {
@@ -57,7 +59,6 @@ export default {
       notice_email: 'owner@example.com',
       business_address: '200 Example Business Street',
       registered_agent_confirmed: true,
-      config_version: 1,
     };
     const client = {
       business_engagement: true,
@@ -80,8 +81,8 @@ export default {
    INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at) VALUES(${quote(id)},'software','Example Client','signer@example.com','Fictional tracker','reviewed',${quote(at)},${quote(at)});
    INSERT INTO software_contractor_config VALUES(1,${quote(JSON.stringify(contractor))},${quote(at)},'owner@example.com');
    ${['msa', 'sow'].map((kind) => `INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES('screenshot-${kind}',${quote(kind)},1,${quote(template(kind))},${quote(hash(template(kind)))},${quote(at)},'owner@example.com');`).join('\n')}
-   INSERT INTO software_offers(id,request_id,version,status,terms_json,agreement_details_json,msa_template_id,sow_template_id,contractor_snapshot_json,recipient_email_snapshot,created_at,updated_at,sent_at) VALUES('screenshot-signing-offer',${quote(id)},1,'sent',${quote(JSON.stringify(terms))},${quote(JSON.stringify(details))},'screenshot-msa','screenshot-sow',${quote(JSON.stringify(contractor))},'signer@example.com',${quote(at)},${quote(at)},${quote(at)});
-   INSERT INTO software_offer_links VALUES(${quote(id)},${quote(hash(token))},${quote(at)},NULL);
+   INSERT INTO software_offers(id,request_id,version,status,terms_json,agreement_details_json,msa_template_id,sow_template_id,contractor_snapshot_json,recipient_email_snapshot,created_at,updated_at,sent_at) VALUES('screenshot-signing-offer',${quote(id)},1,'sent',${quote(JSON.stringify(terms))},${quote(JSON.stringify(details))},'screenshot-msa','screenshot-sow',${quote(JSON.stringify({ ...contractor, config_version: 1 }))},'signer@example.com',${quote(at)},${quote(at)},${quote(sentAt)});
+   INSERT INTO software_offer_links VALUES(${quote(id)},${quote(hash(token))},${quote(sentAt)},NULL);
    INSERT INTO software_agreement_challenges(id,purpose,offer_id,link_hash,recipient_email,code_hash,issued_at,expires_at) VALUES('screenshot-challenge','agreement','screenshot-signing-offer',${quote(hash(token))},'signer@example.com','synthetic-code-hash',${quote(at)},'2099-01-01');
    INSERT INTO software_agreement_sessions VALUES(${quote(hash(session))},'agreement','screenshot-signing-offer',${quote(hash(token))},'signer@example.com','screenshot-challenge',${quote(at)},'2099-01-01',NULL,'screenshot-csrf');`);
     const steps = [];
@@ -129,8 +130,11 @@ export default {
       expectedResponses: [{ path: `/api/owner/requests/${id}/software`, status: 400 }],
       prepare:async page=>{
         page.once('dialog',dialog=>dialog.accept());
-        await page.locator('[data-send-offer]').click();
-        await page.locator('[data-software-status]').filter({hasText:'Agreement details'}).waitFor();
+        const editor = page.locator('[data-software-editor]');
+        const response = page.waitForResponse(res => new URL(res.url()).pathname === `/api/owner/requests/${id}/software` && res.request().method() === 'POST');
+        await editor.locator('[data-send-offer]').click();
+        if ((await response).status() !== 400) throw new Error('Incomplete agreement details must reject sending with HTTP 400.');
+        await editor.locator('[data-software-status]').filter({hasText:'Complete and validate Agreement details before sending.'}).waitFor();
       },
     });
     sql("DELETE FROM software_offers WHERE id='screenshot-incomplete-draft'");
@@ -144,7 +148,7 @@ export default {
         prepare:async page=>{
           await page.locator('[name=code]').fill('00000000');
           await page.locator('[data-agreement-session] button').click();
-          await page.locator('[role=status]').filter({hasText:'invalid or expired'}).waitFor();
+          await page.locator('[role=status]').filter({hasText:'That code is invalid or expired. Request a new one if needed.'}).waitFor();
         },
       });
     }
@@ -156,7 +160,7 @@ export default {
       expectedResponses: [{ path: `/api/offer/${token}/review`, status: 409 }],
       prepare:async page=>{
         await page.locator('[data-agreement-flow="review"]').evaluate(form=>form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
-        await page.locator('[role=status]').filter({hasText:/./}).waitFor();
+        await page.locator('[role=status]').filter({hasText:'"portfolio"'}).filter({hasText:'"business_engagement"'}).waitFor();
       },
     });
     const reviewed = await ownerFetch(
@@ -165,6 +169,9 @@ export default {
       'POST',
       { cookie: `agreement_session=${session}` },
     );
+    const sow = reviewed.documents?.find((d) => d.kind === 'sow'),
+      msa = reviewed.documents?.find((d) => d.kind === 'msa');
+    if (!sow || !msa) throw new Error('Agreement review did not return both exact snapshots.');
     await shot('preview', 'Complete exact agreement preview', `/offer/${token}/sign?review=1`, {
       cookie,
     });
@@ -176,8 +183,7 @@ export default {
       cookie,
       selector: '[data-agreement-flow="sign"]',
     });
-    if (reviewed.documents)
-      await ownerFetch(
+    await ownerFetch(
         `/api/offer/${token}/sign`,
         {
           csrf_nonce: 'screenshot-csrf',
@@ -196,7 +202,6 @@ export default {
       { cookie },
     );
     await shot('counter', 'Owner countersign review', `/owner/requests/${id}`, { owner: true });
-    if (!reviewed.documents) throw new Error('Agreement review did not return exact snapshots.');
     await ownerFetch(`/api/owner/requests/${id}/agreement`, {
       action: 'countersign',
       documents: reviewed.documents.map((d) => ({ id: d.id, hash: d.hash })),
@@ -205,8 +210,6 @@ export default {
       authority: true,
       intent: true,
     });
-    const sow = reviewed.documents.find((d) => d.kind === 'sow'),
-      msa = reviewed.documents.find((d) => d.kind === 'msa');
     await shot(
       'executed',
       'Both signatures saved and copy preparation status',

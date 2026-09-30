@@ -41,3 +41,5 @@ export default {
 ```
 
 `capture` takes `path`, `file`, `viewport` (`desktop` or `phone`), `owner`, `cookie` (for a studio session), `selector` (one section), `status`, and optional `prepare: async page => {}`. The callback runs after load and fonts settle, before capture. Seed only what depends on an outside service (Turnstile, Stripe webhooks, email codes) and say so in the step title or caption.
+
+If `prepare` throws, capture saves `_failure-<scenario>-<shot>.png` (full page) and a matching `.txt` with the URL, original error and every status element's text, then rethrows. CI retains these in the separate `screenshot-failures` artifact. They are excluded from the published gallery.
