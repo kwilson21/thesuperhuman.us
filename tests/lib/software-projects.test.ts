@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { readFileSync, readdirSync } from 'node:fs';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { changeOwnerRequest } from '~/lib/owner-requests';
+import { POST as requestPost } from '~/pages/api/owner/requests/[id]';
 import { POST as offerPost } from '~/pages/api/owner/requests/[id]/software';
 import { POST as messagesPost } from '~/pages/api/studio/software/[id]/messages';
 import { POST as projectPost } from '~/pages/api/owner/requests/[id]/project';
@@ -814,4 +815,25 @@ it.each([1,2])('refunds exact later deposit %s only before that milestone starts
   expect(sql.prepare("SELECT refunded_at FROM software_invoices WHERE id='refund-target'").get().refunded_at).toBeTruthy();
   expect(sql.prepare("SELECT refunded_at FROM software_invoices WHERE id='keep-first'").get().refunded_at).toBeNull();
   await expect(db.batch([milestoneDepositGuard(db,'software',milestone)])).rejects.toThrow();
+});
+
+it.each([false,true])('blocks resolving an active software project atomically (starts during batch=%s)',async races=>{
+  if (!races) await start();
+  const original=db.batch.bind(db);
+  if (races) db.batch=async items=>{
+    sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('software','software-offer',?,'standard','now','now','now','owner','now','now')").run(termsJson);
+    return original(items);
+  };
+  const response=await call(requestPost,{action:'resolve'});
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ok:false,message:'Mark the project complete first.'});
+  expect(sql.prepare("SELECT status,resolved_at FROM owner_requests WHERE id='software'").get()).toEqual({status:races ? 'new' : 'reviewed',resolved_at:null});
+  expect(sql.prepare("SELECT count(*) AS n FROM owner_request_audit WHERE action='resolved'").get()).toEqual({n:0});
+});
+it.each(['completed_at','revoked_at'])('allows resolving a software project with %s recorded',async column=>{
+  await start();sql.exec(`UPDATE software_projects SET ${column}='now'`);
+  expect((await call(requestPost,{action:'resolve'})).status).toBe(200);
+});
+it('allows resolving a software request without a project',async()=>{
+  expect((await call(requestPost,{action:'resolve'})).status).toBe(200);
 });

@@ -284,7 +284,13 @@ it('hides Reopen for a started request and gates both sending retry controls at 
     sql.exec("UPDATE owner_requests SET status='reviewed'");
     const container=await AstroContainer.create(),locals={owner:{email:'owner@example.com'},runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}};
     const ownerHTML=await container.renderToString(ownerRequest,{params:{id:'r'},request:new Request('https://thesuperhuman.us/owner/requests/r'),locals:locals as any});
-    expect(ownerHTML).not.toContain('data-action="reopen"');expect(ownerHTML).toContain('data-action="resolve"');
+    expect(ownerHTML).not.toContain('data-action="reopen"');expect(ownerHTML).not.toContain('data-action="resolve"');
+    for (const column of ['completed_at','revoked_at']) {
+      sql.exec(`UPDATE software_projects SET ${column}='now'`);
+      const closedHTML=await container.renderToString(ownerRequest,{params:{id:'r'},request:new Request('https://thesuperhuman.us/owner/requests/r'),locals:locals as any});
+      expect(closedHTML).toContain('data-action="resolve"');
+      sql.exec(`UPDATE software_projects SET ${column}=NULL`);
+    }
     const now=Date.now();
     const clock=Date.now; Date.now=()=>now;
     try {
