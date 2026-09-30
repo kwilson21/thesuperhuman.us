@@ -210,9 +210,13 @@ Regenerate browser icons from the existing brand SVG with `node scripts/build-ic
 
 ### Isolated email links
 
-`SITE_ORIGIN` optionally sets the deployment-controlled HTTPS origin used in studio
+`SITE_ORIGIN` optionally sets the deployment-controlled HTTPS origin used in offer and studio
 invitations, updates, sign-in codes, and owner request notices. It defaults to
 `https://thesuperhuman.us`. Set it to the preview origin when deploying a test
 Worker; never derive it from request headers. Test Workers must use separate D1,
 KV and private R2 resources, Stripe test credentials, and a hostname-restricted
 Turnstile widget.
+
+### Software offers migration
+
+Apply music migration `0020_software_offers.sql` before deploying code that uses fit reviews or software offers. Existing pages keep working before this migration; the new offer controls require it. Do not edit previously applied migrations.

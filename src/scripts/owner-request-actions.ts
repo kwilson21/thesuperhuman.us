@@ -1,3 +1,4 @@
+import { hasUnsavedRequestChanges, markRequestPageClean } from './software-offers';
 export function setupOwnerRequestActions() {
   const root = document.querySelector<HTMLElement>('[data-request-id]');
   const status = document.querySelector<HTMLElement>('[data-action-status]');
@@ -12,10 +13,18 @@ export function setupOwnerRequestActions() {
     history.replaceState(null, '', `${location.pathname}${location.search}`);
     history.scrollRestoration = 'auto';
   }
+  const canDiscardChanges = (submitted?: HTMLElement) => root?.dataset.offerSending !== 'true' && (!hasUnsavedRequestChanges(submitted)
+    || confirm('You have unsaved changes in another section. Continue and lose them?'));
+  let updating = false;
   async function update(payload: Record<string, unknown>) {
+    if (updating || root?.dataset.offerSending === 'true') return;
+    updating = true;
+    root!.setAttribute('inert', '');
+    root!.setAttribute('aria-busy', 'true');
+    let reloading = false;
     try {
       const response = await fetch(`/api/owner/requests/${requestId}`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...payload, expectedUpdatedAt: root?.dataset.requestUpdated }),
       });
       if (!response.ok) { status!.textContent = 'That change was not saved. Refresh and try again.'; return; }
       // A reviewed request's next step is accepting the project, so reload onto that panel.
@@ -23,14 +32,24 @@ export function setupOwnerRequestActions() {
         history.scrollRestoration = 'manual';
         history.replaceState(null, '', `${location.pathname}${location.search}#accept-project`);
       }
+      markRequestPageClean();
+      reloading = true;
       location.reload();
     } catch { status!.textContent = 'Connection lost. The change may not have been saved. Refresh before trying again.'; }
+    finally {
+      if (!reloading) {
+        updating = false;
+        root!.removeAttribute('inert');
+        root!.removeAttribute('aria-busy');
+      }
+    }
   }
   document.querySelector<HTMLFormElement>('[data-request-note]')?.addEventListener('submit', event => {
-    event.preventDefault(); const data = new FormData(event.currentTarget as HTMLFormElement); void update({ action: 'note', note: data.get('note') });
+    event.preventDefault(); if (!canDiscardChanges(event.currentTarget as HTMLFormElement)) return; const data = new FormData(event.currentTarget as HTMLFormElement); void update({ action: 'note', note: data.get('note') });
   });
   // Scoped: project update forms also carry data-action, and must not post request status changes.
   document.querySelectorAll<HTMLButtonElement>('[data-request-actions] button[data-action]').forEach(button => button.addEventListener('click', () => {
+    if (!canDiscardChanges()) return;
     const action = button.dataset.action;
     if (action === 'withdraw' && !confirm('Honor this withdrawal and close the request?')) return;
     // Resolving before acceptance closes the provisional studio for good; reopening does not restore it.

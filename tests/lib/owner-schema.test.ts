@@ -57,6 +57,38 @@ describe('owner insights schema', () => {
     expect(db.prepare("SELECT action FROM audio_project_audit WHERE request_id='audio' ORDER BY id DESC LIMIT 1").get()).toEqual({ action: 'revoked' });
     db.close();
   });
+  it('rebuilds offer audit without losing rows, ids or the personal-delete trigger', () => {
+    const db = new DatabaseSync(':memory:');
+    db.exec('PRAGMA foreign_keys=ON');
+    for (const name of readdirSync(new URL('../../migrations/music/', import.meta.url)).filter(name => name.endsWith('.sql') && name < '0020').sort())
+      db.exec(readFileSync(new URL(`../../migrations/music/${name}`, import.meta.url), 'utf8'));
+    for (const [index, kind] of ['purchase','merchandise','service','software'].entries()) {
+      db.prepare("INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES (?,?,'a@example.com','Keep','new','now','now')").run(String(index), kind);
+      db.prepare("INSERT INTO owner_request_audit(id,request_id,action,actor,note,occurred_at) VALUES (?,?,'created','system','keep','now')").run(index * 5 + 2, String(index));
+    }
+    const requests = db.prepare('SELECT * FROM owner_requests ORDER BY id').all();
+    const audit = db.prepare('SELECT * FROM owner_request_audit ORDER BY id').all();
+    db.exec('BEGIN');
+    db.exec(readFileSync(new URL('../../migrations/music/0020_software_offers.sql', import.meta.url), 'utf8'));
+    db.exec('COMMIT');
+    expect(db.prepare('SELECT * FROM owner_requests ORDER BY id').all()).toEqual(requests);
+    expect(db.prepare('SELECT * FROM owner_request_audit ORDER BY id').all()).toEqual(audit);
+    db.exec("UPDATE owner_requests SET email='',updated_at='later' WHERE id='0'");
+    expect(db.prepare('SELECT id,action FROM owner_request_audit ORDER BY id DESC LIMIT 1').get()).toEqual({ id: 18, action: 'personal-data-deleted' });
+    expect(() => db.exec("INSERT INTO owner_request_audit(request_id,action,actor,occurred_at) VALUES ('3','unknown','owner','now')")).toThrow();
+    expect(() => db.exec("INSERT INTO software_fit_reviews VALUES ('3','unknown','','now','owner')")).toThrow();
+    db.exec("INSERT INTO software_fit_reviews VALUES ('3','potential-fit','','now','owner')");
+    const offer = db.prepare("INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES (?,'3',?,?,'{}','now','now')");
+    offer.run('draft',1,'draft'); offer.run('sent',2,'sent');
+    expect(() => offer.run('draft-two',3,'draft')).toThrow();
+    expect(() => offer.run('sent-two',3,'sent')).toThrow();
+    expect(() => offer.run('unknown',3,'unknown')).toThrow();
+    expect(() => offer.run('zero',0,'superseded')).toThrow();
+    db.exec("INSERT INTO software_offer_links VALUES ('3','hash','now',NULL)");
+    expect(() => db.exec("INSERT INTO software_offer_links VALUES ('2','hash','now',NULL)")).toThrow();
+    expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    db.close();
+  });
   it('adds declined-studio closure to a database that already applied 0013 and 0014', () => {
     const db = new DatabaseSync(':memory:');
     const migrations = readdirSync(new URL('../../migrations/music/', import.meta.url)).filter(name => name.endsWith('.sql')).sort();
@@ -102,8 +134,9 @@ describe('owner insights schema', () => {
     const peaks = readFileSync(new URL('../../migrations/music/0016_audio_project_file_peaks.sql', import.meta.url), 'utf8');
     const milestones = readFileSync(new URL('../../migrations/music/0017_audio_project_update_milestones.sql', import.meta.url), 'utf8');
     const decisions = readFileSync(new URL('../../migrations/music/0018_audio_project_review_decisions.sql', import.meta.url), 'utf8');
+    const offers = readFileSync(new URL('../../migrations/music/0020_software_offers.sql', import.meta.url), 'utf8');
     const software = readFileSync(new URL('../../migrations/music/0019_software_requests.sql', import.meta.url), 'utf8');
-    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(`${baseline.trim()}\n${retention.trim()}\n${payments.trim()}\n${reconciliation.trim()}\n${projects.trim()}\n${clientAccess.trim()}\n${messages.trim()}\n${updates.trim()}\n${invitations.trim()}\n${files.trim()}\n${uploads.trim()}\n${publication.trim()}\n${revocation.trim()}\n${studioRetention.trim()}\n${declined.trim()}\n${peaks.trim()}\n${milestones.trim()}\n${decisions.trim()}\n${software.trim()}\n`);
+    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(`${baseline.trim()}\n${retention.trim()}\n${payments.trim()}\n${reconciliation.trim()}\n${projects.trim()}\n${clientAccess.trim()}\n${messages.trim()}\n${updates.trim()}\n${invitations.trim()}\n${files.trim()}\n${uploads.trim()}\n${publication.trim()}\n${revocation.trim()}\n${studioRetention.trim()}\n${declined.trim()}\n${peaks.trim()}\n${milestones.trim()}\n${decisions.trim()}\n${software.trim()}\n${offers.trim()}\n`);
     const db = apply('../../db/music.sql');
     const expected = [
       'music_event_daily', 'music_events', 'music_interest', 'music_playback_daily',

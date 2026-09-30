@@ -211,3 +211,16 @@ it('treats a stopped project’s unstarted balance as finished, and only for tha
   expect((await database.query("SELECT stripe_customer_id,booking_invoice_id FROM audio_payments WHERE request_id='owed'"))[0])
     .toEqual({ stripe_customer_id: 'cus_owed', booking_invoice_id: 'in_owed' });
 });
+
+it('clears fit notes, offer terms and links with eligible software contact data', async () => {
+  const database = fixture();
+  database.db.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at,resolved_at)
+    VALUES ('old-software','software','client@example.com','Private client','resolved','2026-01-01','2026-01-02','2026-01-02');
+    INSERT INTO software_fit_reviews VALUES ('old-software','potential-fit','Private client context','now','owner');
+    INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('old-offer','old-software',1,'sent','{"outcome":"Private client"}','now','now');
+    INSERT INTO software_offer_links VALUES ('old-software','hash','now',NULL);`);
+  const review = await previewOwnerRetention(database, 'Local test data', now);
+  await applyOwnerRetention(database, review, 'Local test data', now);
+  for (const table of ['software_fit_reviews','software_offers','software_offer_links']) expect(await database.query(`SELECT * FROM ${table}`)).toEqual([]);
+  expect((await database.query("SELECT email FROM owner_requests WHERE id='old-software'"))[0].email).toBe('');
+});

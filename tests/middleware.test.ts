@@ -164,3 +164,19 @@ it('keeps dynamic Worker previews out of search results', async () => {
   const production = await onRequest(makeContext('https://thesuperhuman.us/audio/start'), async () => new Response('live')) as Response;
   expect(production.headers.has('x-robots-tag')).toBe(false);
 });
+
+it('marks offers unavailable or available private and redirects the audio host to the main host', async () => {
+  const response = await onRequest(makeContext('https://thesuperhuman.us/offer/opaque'), async () => new Response('unavailable', { status:404 })) as Response;
+  expect(response.status).toBe(404);
+  expect(response.headers.get('cache-control')).toBe('private, no-store');
+  expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+  const next = vi.fn();
+  const audio = await onRequest(makeContext('https://audio.thesuperhuman.us/offer/opaque'), next) as Response;
+  expect(audio.status).toBe(302); expect(audio.headers.get('location')).toBe('https://thesuperhuman.us/offer/opaque'); expect(next).not.toHaveBeenCalled();
+});
+
+it('keeps isolated preview offer paths on their local origin', async () => {
+  const next = vi.fn(async () => new Response('offer'));
+  const response = await onRequest(makeContext('https://preview.example.workers.dev/offer/opaque'),next) as Response;
+  expect(response.status).toBe(200); expect(next).toHaveBeenCalledOnce(); expect(response.headers.has('location')).toBe(false);
+});

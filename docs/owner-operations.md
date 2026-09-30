@@ -54,7 +54,7 @@ If invoice creation fails, refresh the request before retrying. Stable Stripe id
 
 To stop new invoices, set `STRIPE_PAYMENTS_ENABLED=false` and deploy the reviewed configuration change. This does not erase payment history or disable signed status updates for invoices already sent.
 
-Software briefs appear in Requests and Today with the saved answers read only. They have separate question sets for workflow and idea paths. Clarification, offer drafting and decline flows will be added later.
+Software briefs appear in Requests and Today with the saved answers read only. They have separate question sets for workflow and idea paths. Fit review, clarification, offers and declines are described below.
 
 ## Retention
 
@@ -108,3 +108,7 @@ Set `MUSIC_EVENTS_ENABLED` to `false`, build, and deploy only after approval. Th
 ## Incident record
 
 Record the time, affected route, safe symptom, Worker version, database state, action taken, verification result, and remaining risk. Keep personal request content and credentials out of the incident record.
+
+## Software offers
+
+Software requests have a manual, advisory fit review. Questions and declines email the client and send an owner copy; declining resolves the request only after the client email succeeds. Save every offer term as a draft, preview the client projection, then confirm sending separately. Sent versions are immutable; a later draft starts from the latest sent terms and sending it supersedes the previous version. Client access uses a forwardable private link with no sign-in. Revoke it to close access; sending again issues a new link. Only its hash is stored, so copying the raw link is available in the browser session that sent it; otherwise revoke and reissue it. Signing, invoices and start confirmation are not started at this stage. Reviewed owner retention deletes associated fit notes, offers and private links when it clears eligible request contacts.

@@ -1,0 +1,9 @@
+---
+interface Props { requestId: string }
+const { requestId } = Astro.props;
+---
+{(['question','decline'] as const).map(action => <section class="rail-section software-rail"><h2>{action === 'question' ? 'Ask a question' : 'Decline'}</h2>
+  <form data-software-action={action} data-endpoint={`/api/owner/requests/${encodeURIComponent(requestId)}/software`}>
+    <div class="software-field"><label>{action === 'question' ? 'Question for the client' : 'Message to the client'}<textarea class="studio-textarea" name="text" id={`software-${action}`} aria-describedby={`software-${action}-hint`} placeholder={action === 'question' ? 'Could you share an example of the export you use today?' : 'Thanks for the brief. This isn’t a fit for me right now because…'} maxlength="2000" rows="3" required /></label><p id={`software-${action}-hint`} class="rail-muted rail-caption">Sent as an email from you. Up to 2,000 characters.</p></div>
+    <button class="studio-quiet" type="submit">{action === 'question' ? 'Send question' : 'Send and decline'}</button><p class="studio-status" data-software-status role="status" aria-live="polite"></p>
+  </form></section>)}

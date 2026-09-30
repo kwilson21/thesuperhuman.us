@@ -12,7 +12,7 @@ const requiredSchema = [
   'audio_projects', 'audio_client_codes', 'audio_client_sessions', 'audio_client_access_audit',
   'audio_project_messages', 'audio_project_updates', 'audio_project_files', 'audio_project_uploads',
   'owner_requests_audit_personal_delete', 'audio_project_after_service_request', 'audio_project_close_declined_request',
-  'owner_requests_submission_id',
+  'owner_requests_submission_id', 'software_fit_reviews', 'software_offers', 'software_offer_links', 'software_offers_one_draft', 'software_offers_one_sent',
 ];
 
 function healthyFixture() {
@@ -96,6 +96,8 @@ it('detects a database stopped at 0018 and passes schema after 0019', async () =
   db.exec('BEGIN');
   db.exec(readFileSync(new URL('../../migrations/music/0019_software_requests.sql', import.meta.url), 'utf8'));
   db.exec('COMMIT');
+  expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
+  db.exec(readFileSync(new URL('../../migrations/music/0020_software_offers.sql', import.meta.url), 'utf8'));
   expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'pass' }));
   db.close();
 });
