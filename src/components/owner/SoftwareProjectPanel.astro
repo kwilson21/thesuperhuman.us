@@ -18,6 +18,8 @@ const canComplete = lastDelivery?.decision==='milestone_accepted' && shared.some
 {terms && <section class="rail-section software-rail" aria-labelledby="software-project-heading" data-software-project data-endpoint={`/api/owner/requests/${requestId}/project`}>
   <h2 id="software-project-heading">{project ? 'Project' : 'Start the project'}</h2>
   {!project ? <form data-software-start>
+    <input type="hidden" name="offer_id" value={sentOffer!.id} />
+    <input type="hidden" name="offer_version" value={sentOffer!.version} />
     <p class="rail-muted rail-caption">Record these only after checking them yourself. The client sees them as complete.</p>
     <label class="confirmation"><input type="checkbox" name="signatures" required disabled={closed} />All signatures are complete (checked in Documenso)</label>
     <label class="confirmation"><input type="checkbox" name="payment" required disabled={closed} />{terms.paymentMode === 'standard' ? 'First installment received (checked in Stripe or the bank)' : 'Purchase order in place, or the client doesn’t use one'}</label>

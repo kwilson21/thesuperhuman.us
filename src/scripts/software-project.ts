@@ -20,7 +20,7 @@ export function setupSoftwareProject() {
     start?.addEventListener('change', syncStart);
     start?.addEventListener('submit', event => {
       event.preventDefault(); const data = new FormData(start);
-      void send({ action: 'start', signatures: data.has('signatures'), payment: data.has('payment'), next_update_on: data.get('next_update_on') });
+      void send({ action: 'start', offer_id: data.get('offer_id'), offer_version: Number(data.get('offer_version')), signatures: data.has('signatures'), payment: data.has('payment'), next_update_on: data.get('next_update_on') });
     });
     const state = root.querySelector<HTMLFormElement>('[data-software-state]');
     const syncWaiting = () => { if (state) state.querySelector<HTMLInputElement>('[name=waiting_for]')!.required = state.querySelector<HTMLInputElement>('[name=state]')!.value === 'waiting_for_input'; };

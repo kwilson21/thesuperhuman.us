@@ -5,7 +5,7 @@ import { clientPortalEnabled } from '~/lib/audio-client-access';
 import { getSoftwareProject, projectTerms, projectDate, softwareAudit, softwareGuard, openSoftwareGuard, deliverSoftwareNotice, queueSoftwareNotice, softwareAccessRevocation, recordMilestonePayment, acceptedDeliveryGuard } from '~/lib/software-projects';
 export const prerender = false;
 const schema = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('start'), signatures: z.literal(true), payment: z.literal(true), next_update_on: projectDate }),
+  z.object({ action: z.literal('start'), offer_id: z.string().min(1), offer_version: z.number().int().positive(), signatures: z.literal(true), payment: z.literal(true), next_update_on: projectDate }),
   z.object({ action: z.literal('state'), state: z.enum(['preparing','building','waiting_for_input','ready_for_review','complete']), waiting_for: z.string().trim().max(200), milestone_index: z.number().int().min(0).max(2), step: z.enum(['direction','build','review','handoff']), next_update_on: projectDate, expectedUpdatedAt: z.string() }),
   z.object({ action: z.literal('revoke'), confirmed: z.literal(true) }),
   z.object({ action: z.literal('notice'), updateId: z.string().optional(), confirmedNotSent: z.boolean().default(false) }),
@@ -27,11 +27,11 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     if (command.action === 'start') {
       await db.batch([
         softwareGuard(db, `SELECT 1 FROM owner_requests r JOIN software_offers o ON o.request_id=r.id
-          WHERE r.id=? AND r.kind='software' AND r.status NOT IN ('withdrawn','resolved') AND r.email<>'' AND o.status='sent'
-          AND NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=r.id)`, [id]),
+          WHERE r.id=? AND r.kind='software' AND r.status NOT IN ('withdrawn','resolved') AND r.email<>'' AND o.status='sent' AND o.id=? AND o.version=?
+          AND NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=r.id)`, [id, command.offer_id, command.offer_version]),
         db.prepare(`INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,next_update_on,created_at,updated_at)
-          SELECT request_id,id,terms_json,json_extract(terms_json,'$.paymentMode'),?,?,?,?,?,?,? FROM software_offers WHERE request_id=? AND status='sent'`)
-          .bind(at, at, at, actor, command.next_update_on || null, at, at, id),
+          SELECT request_id,id,terms_json,json_extract(terms_json,'$.paymentMode'),?,?,?,?,?,?,? FROM software_offers WHERE request_id=? AND status='sent' AND id=? AND version=?`)
+          .bind(at, at, at, actor, command.next_update_on || null, at, at, id, command.offer_id, command.offer_version),
         db.prepare(`INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at)
           SELECT id,'reviewed',?,'',? FROM owner_requests WHERE id=? AND status='new'`).bind(actor.trim().toLowerCase(),at,id),
         db.prepare("UPDATE owner_requests SET status='reviewed',updated_at=? WHERE id=? AND status='new'").bind(at,id),
@@ -76,5 +76,5 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
         .bind(command.state, command.waiting_for, command.milestone_index, command.step, command.next_update_on || null, command.state === 'complete' ? project.completed_at ?? at : null, at, id),
       softwareAudit(db, id, 'state-changed', actor, at)]);
     return json({ ok: true });
-  } catch { return json({ ok: false, error: 'The project changed or could not be saved. Reload and try again.' }, 409); }
+  } catch { return json({ ok: false, error: command.action === 'start' ? 'The offer changed since this page loaded. Reload to see the current offer.' : 'The project changed or could not be saved. Reload and try again.' }, 409); }
 };

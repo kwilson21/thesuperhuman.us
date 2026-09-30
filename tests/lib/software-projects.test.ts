@@ -45,7 +45,7 @@ afterEach(() => { sql.close(); vi.unstubAllGlobals(); });
 async function call(route: typeof projectPost, body: unknown, owner = true, id = 'software') {
   return route({ params: { id }, request: new Request(`https://example.com/api/owner/requests/${id}/project`, { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://example.com' }, body: JSON.stringify(body) }), locals: { owner: owner ? { email: 'owner@example.com' } : undefined, runtime: { env } } } as never);
 }
-const start = () => call(projectPost, { action: 'start', signatures: true, payment: true, next_update_on: '2026-10-01' });
+const start = () => call(projectPost, { action: 'start', offer_id: 'software-offer', offer_version: 1, signatures: true, payment: true, next_update_on: '2026-10-01' });
 const update = { kind: 'progress', milestone_index: 0, title: 'Shared view', artifact_version: 'v1', evidence_type: 'concept', visual_alt: 'A fictional tracker.', preview_url: 'https://preview.example.com/tool', what_changed: 'Client status is visible.', checks_limitations: 'Sample only.', next_step: 'Build the shared view.', client_request: 'Send the sample.', next_update_on: '2026-10-02', email_client: false };
 async function draft() { const response = await call(updatePost, { action: 'draft', update, expectedUpdatedAt: null }); expect(response.status).toBe(200); return response.json() as Promise<{ id: string; updatedAt: string }>; }
 async function session(email = 'alex@example.com') { const code = await issueClientCode(db, email, secret); return (await completeClientCode(db, email, code!, secret))!; }
@@ -98,7 +98,7 @@ it('supersedes only the same kind and milestone, keeping old versions and decisi
 it('scopes review decisions to own active sessions and rejects unknown or revoked projects',async()=>{
   await start();const token=await session(),review=await shareReview();
   expect((await decide(review.id,{decision:'milestone_accepted',confirm:true},'')).status).toBe(401);
-  request('foreign','other@example.com');offer('foreign');await call(projectPost,{action:'start',signatures:true,payment:true,next_update_on:''},true,'foreign');
+  request('foreign','other@example.com');offer('foreign');await call(projectPost,{action:'start',offer_id:'foreign-offer',offer_version:1,signatures:true,payment:true,next_update_on:''},true,'foreign');
   expect((await decide(review.id,{decision:'milestone_accepted',confirm:true},await session('other@example.com'))).status).toBe(404);
   expect((await decide(review.id,{decision:'milestone_accepted',confirm:true},token,'missing')).status).toBe(404);
   sql.exec("UPDATE software_projects SET revoked_at='now'");
@@ -176,7 +176,7 @@ it('does not complete a redelivered milestone using an earlier version’s hando
 });
 it('starts only with an owner, sent offer and both explicit confirmations, preserving the exact snapshot', async () => {
   expect((await call(projectPost, { action:'start' }, false)).status).toBe(403);
-  expect((await call(projectPost, { action:'start',signatures:true,payment:false,next_update_on:'' })).status).toBe(400);
+  expect((await call(projectPost, { action:'start',offer_id:'foreign-offer',offer_version:1,signatures:true,payment:false,next_update_on:'' })).status).toBe(400);
   sql.exec("UPDATE software_offers SET status='draft'"); expect((await start()).status).toBe(409);
   sql.exec("UPDATE software_offers SET status='sent'"); expect((await start()).status).toBe(200);
   expect(sql.prepare('SELECT terms_json,offer_id,payment_mode,invitation_status FROM software_projects').get()).toEqual({ terms_json:termsJson,offer_id:'software-offer',payment_mode:'standard',invitation_status:'sent' });
@@ -199,7 +199,7 @@ it('software-only codes and sessions are scoped across both project kinds and re
   expect(await clientSoftwareProjectForSession(db,token,'software')).toMatchObject({request_id:'software'}); expect(await clientProjectsForSession(db,token)).toEqual([]);
   request('foreign-audio','other@example.com','service'); expect(await clientProjectForSession(db,token,'foreign-audio')).toBeNull();
   request('audio','alex@example.com','service'); expect((await clientProjectsForSession(db,token))?.map(p=>p.request_id)).toEqual(['audio']);
-  request('foreign-software','other@example.com'); offer('foreign-software'); await call(projectPost,{action:'start',signatures:true,payment:true,next_update_on:''},true,'foreign-software');
+  request('foreign-software','other@example.com'); offer('foreign-software'); await call(projectPost,{action:'start',offer_id:'foreign-software-offer',offer_version:1,signatures:true,payment:true,next_update_on:''},true,'foreign-software');
   const other = await session('other@example.com'); expect(await clientSoftwareProjectForSession(db,other,'software')).toBeNull(); expect(await clientProjectForSession(db,other,'audio')).toBeNull();
   sql.exec("UPDATE owner_requests SET status='withdrawn' WHERE id='software'"); expect(await clientSoftwareProjectForSession(db,token,'software')).toBeNull();
   sql.exec("UPDATE owner_requests SET status='new' WHERE id='software'"); expect((await call(projectPost,{action:'revoke',confirmed:true})).status).toBe(200);
@@ -318,7 +318,7 @@ it('scopes the client message route to an active own session', async () => {
   await start(); const token = await session();
   const send = (id: string, cookie = token) => messagesPost({params:{id},request:new Request('https://example.com/api/studio/software/'+id+'/messages',{method:'POST',headers:{origin:'https://example.com','content-type':'application/json',cookie:cookie ? `studio_session=${cookie}` : ''},body:JSON.stringify({action:'send',body:'Hello'})}),locals:{runtime:{env}}} as never);
   expect((await send('software','')).status).toBe(401);
-  request('foreign','other@example.com'); offer('foreign'); await call(projectPost,{action:'start',signatures:true,payment:true,next_update_on:''},true,'foreign');
+  request('foreign','other@example.com'); offer('foreign'); await call(projectPost,{action:'start',offer_id:'foreign-offer',offer_version:1,signatures:true,payment:true,next_update_on:''},true,'foreign');
   expect((await send('foreign')).status).toBe(404);
   expect((await send('software')).status).toBe(200);
   sql.exec("UPDATE software_projects SET revoked_at='now' WHERE request_id='software'");
@@ -394,4 +394,19 @@ it('retries a first share with one row and one email, rejecting changed content'
   expect((await call(updatePost,{...body,update:{...body.update,title:'Changed'}})).status).toBe(409);
   expect(sql.prepare('SELECT count(*) AS n FROM software_project_updates').get()).toEqual({n:1});
   expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it.each(['id', 'version'])('rejects a stale Start tab when the offer %s changes', async field => {
+  sql.exec("UPDATE software_offers SET status='superseded'");
+  sql.prepare("INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('replacement','software',2,'sent',?,'now','now')").run(termsJson);
+  const response = await call(projectPost, { action: 'start', offer_id: field === 'id' ? 'software-offer' : 'replacement', offer_version: 1, signatures: true, payment: true, next_update_on: '' });
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ok:false,error:'The offer changed since this page loaded. Reload to see the current offer.'});
+  expect(sql.prepare('SELECT count(*) AS n FROM software_projects').get()).toEqual({n:0});
+  expect(sql.prepare('SELECT count(*) AS n FROM software_project_audit').get()).toEqual({n:0});
+  expect(sql.prepare('SELECT count(*) AS n FROM owner_request_audit').get()).toEqual({n:0});
+  expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({status:'new'});
+  expect(fetch).not.toHaveBeenCalled();
+  expect((await call(projectPost, { action: 'start', offer_id: 'replacement', offer_version: 2, signatures: true, payment: true, next_update_on: '' })).status).toBe(200);
+  expect(sql.prepare('SELECT offer_id,terms_json FROM software_projects').get()).toEqual({offer_id:'replacement',terms_json:termsJson});
 });
