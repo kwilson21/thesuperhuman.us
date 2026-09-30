@@ -414,3 +414,16 @@ it.each(['id', 'version'])('rejects a stale Start tab when the offer %s changes'
   expect((await call(projectPost, { action: 'start', offer_id: 'replacement', offer_version: 2, signatures: true, payment: true, next_update_on: '' })).status).toBe(200);
   expect(sql.prepare('SELECT offer_id,terms_json FROM software_projects').get()).toEqual({offer_id:'replacement',terms_json:termsJson});
 });
+
+it('records an older direction decision without moving the accepted newer delivery from handoff',async()=>{
+  await start(); const token=await session(), direction=await shareReview('direction_review','Direction v1');
+  const delivery=await shareReview();
+  sql.prepare("UPDATE software_project_updates SET shared_at='2020-01-01' WHERE id=?").run(direction.id);
+  await decide(delivery.id,{decision:'milestone_accepted',confirm:true},token);
+  const before=sql.prepare('SELECT * FROM software_projects').get();
+  expect(before).toMatchObject({state:'building',step:'handoff',milestone_index:0});
+  expect((await decide(direction.id,{decision:'direction_confirmed'},token)).status).toBe(200);
+  expect(sql.prepare('SELECT * FROM software_projects').get()).toEqual(before);
+  expect(sql.prepare("SELECT count(*) AS n FROM software_project_messages WHERE decision IS NOT NULL").get()).toEqual({n:2});
+  expect(sql.prepare("SELECT count(*) AS n FROM software_project_audit WHERE action='decision-recorded'").get()).toEqual({n:2});
+});

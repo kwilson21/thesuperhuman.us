@@ -36,9 +36,8 @@ export async function postSoftwareReviewDecision(db: D1Database, id: string, tok
     db.prepare('INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES (?,\'client\',?,?,?,?,?)')
       .bind(id,tokenHash,body,updateId,input.decision,at),
     db.prepare(`UPDATE software_projects SET state='building',step=?,waiting_for='',updated_at=? WHERE request_id=? AND milestone_index=?
-      AND NOT EXISTS(SELECT 1 FROM software_project_updates newer WHERE newer.request_id=? AND newer.status='shared'
-        AND newer.kind IN ('direction_review','delivery_review') AND (newer.shared_at>? OR (newer.shared_at=? AND newer.id>?))
-        AND NOT EXISTS(SELECT 1 FROM software_project_messages m WHERE m.update_id=newer.id AND m.decision IS NOT NULL))`)
+      AND NOT EXISTS(SELECT 1 FROM software_project_updates newer WHERE newer.request_id=? AND newer.milestone_index=software_projects.milestone_index AND newer.status='shared'
+        AND newer.kind IN ('direction_review','delivery_review') AND (newer.shared_at>? OR (newer.shared_at=? AND newer.id>?)))`)
       .bind(input.decision==='milestone_accepted' ? 'handoff' : direction && input.decision==='changes_requested' ? 'direction' : 'build',at,id,update.milestone_index,id,update.shared_at,update.shared_at,update.id),
     db.prepare("INSERT INTO software_project_audit(request_id,action,actor,occurred_at,note) SELECT ?,'state-changed','client',?,'' WHERE changes()>0").bind(id,at),
     softwareAudit(db,id,'decision-recorded','client',at,note),
