@@ -27,7 +27,7 @@ export default {
       INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at,sent_at,sent_by) VALUES (${quote(sentOffer.id)},${quote(id)},${sentOffer.version},'sent',${quote(JSON.stringify(terms))},${quote(at)},${quote(at)},${quote(at)},'owner@example.com');
       INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES (${quote(createHash('sha256').update(token).digest('hex'))},${quote(email)},${quote(at)},'2099-01-01',${quote(at)})`);
     const steps=[];
-    const projectAt=()=>JSON.parse(sql(`SELECT updated_at FROM software_projects WHERE request_id=${quote(id)}`))[0].results[0].updated_at;
+    const projectAt=()=>JSON.parse(sql(`SELECT updated_at FROM software_projects WHERE request_id=${quote(id)}`))[0]?.results?.[0]?.updated_at ?? "";
     const shot=async(title,path,name,options={})=>{const images=[];for(const viewport of ['desktop','phone']) images.push({file:await capture({file:`software-project-${name}-${viewport}.png`,path,viewport,...options}),caption:`Fictional data: ${title}`});steps.push({title,images});};
     await shot('Start the project',`/owner/requests/${id}`,'start',{owner:true});
     await ownerFetch(`/api/owner/requests/${id}/project`,{action:'start',offer_id:sentOffer.id,offer_version:sentOffer.version,expectedRequestUpdatedAt:at,signatures:true,payment:true,next_update_on:'2026-10-08'});
