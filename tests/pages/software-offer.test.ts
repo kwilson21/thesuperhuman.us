@@ -227,3 +227,14 @@ it('keeps update requests separate from Waiting on you and renders the Today sof
     html = await renderProject(); expect(html).not.toContain('href="#conversation"');
   } finally {sql.close();}
 });
+
+it('returns a private temporary-unavailable 503 without the database', async () => {
+  const response = await render(undefined,token), html = await response.text();
+  expect(response.status).toBe(503);
+  expect(response.headers.get('cache-control')).toBe('private, no-store');
+  expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+  expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+  expect(html).toContain('This offer is temporarily unavailable.');
+  expect(html).toContain('Please try again later.');
+  expect(html).not.toContain('Ask Kazon for a current link');
+});

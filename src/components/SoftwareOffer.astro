@@ -2,8 +2,8 @@
 import PersonalName from './PersonalName.astro';
 import { formatUSD, offerTotal, paymentSchedules, type ClientOffer } from '~/lib/software-offers';
 import '~/styles/global.css';
-interface Props { offer?: ClientOffer | null; preview?: boolean }
-const { offer, preview = false } = Astro.props;
+interface Props { offer?: ClientOffer | null; preview?: boolean; temporarilyUnavailable?: boolean }
+const { offer, preview = false, temporarilyUnavailable = false } = Astro.props;
 const terms = offer?.terms;
 ---
 <!doctype html><html lang="en"><head>
@@ -55,11 +55,11 @@ const terms = offer?.terms;
       </aside></div>
       <section class="offer-beginning"><h2 class="text-3xl leading-tight">A clear beginning.</h2><ol>
         <li><h3 class="text-xl leading-tight">Review and sign</h3><p>Confirm the scope and terms.</p></li>
-        <li><h3 class="text-xl leading-tight">{terms.paymentMode === 'standard' ? 'Initial invoice' : 'First invoice'}</h3><p>{terms.paymentMode === 'standard' ? 'Pay the agreed first installment.' : 'Due within 30 days.'}</p></li>
+        <li><h3 class="text-xl leading-tight">{terms.paymentMode === 'standard' ? 'Initial invoice' : 'Purchase order'}</h3><p>{terms.paymentMode === 'standard' ? 'Pay the agreed first installment.' : 'If you use one, it’s in place before work starts.'}</p></li>
         <li><h3 class="text-xl leading-tight">Confirm the start</h3><p>We agree when work begins.</p></li>
       </ol></section>
       <footer class="sheet-footnote"><span><PersonalName variant="full" /> · The Superhuman Group LLC<span class="offer-privacy"> · <a class="site-link" href="/privacy">Privacy</a></span></span></footer>
-    </> : <section class="offer-unavailable"><h1 class="page-title">This offer isn’t available.</h1><p>Ask Kazon for a current link: <a class="site-link" href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>.</p></section>}
+    </> : <section class="offer-unavailable"><h1 class="page-title">{temporarilyUnavailable ? 'This offer is temporarily unavailable.' : 'This offer isn’t available.'}</h1>{temporarilyUnavailable ? <p>Please try again later.</p> : <p>Ask Kazon for a current link: <a class="site-link" href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>.</p>}</section>}
   </main>
   <script>document.querySelector('[data-print-offer]')?.addEventListener('click', () => window.print());</script>
 <style>

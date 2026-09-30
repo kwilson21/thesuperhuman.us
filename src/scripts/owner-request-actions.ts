@@ -1,3 +1,4 @@
+import { hasUnsavedRequestChanges, markRequestPageClean } from './software-offers';
 export function setupOwnerRequestActions() {
   const root = document.querySelector<HTMLElement>('[data-request-id]');
   const status = document.querySelector<HTMLElement>('[data-action-status]');
@@ -12,8 +13,8 @@ export function setupOwnerRequestActions() {
     history.replaceState(null, '', `${location.pathname}${location.search}`);
     history.scrollRestoration = 'auto';
   }
-  const canDiscardOffer = () => root?.dataset.offerSending !== 'true' && (root?.querySelector<HTMLElement>('[data-software-editor]')?.dataset.dirty !== 'true'
-    || confirm('You have unsaved offer changes. Continue and lose them?'));
+  const canDiscardChanges = (submitted?: HTMLElement) => root?.dataset.offerSending !== 'true' && (!hasUnsavedRequestChanges(submitted)
+    || confirm('You have unsaved changes in another section. Continue and lose them?'));
   async function update(payload: Record<string, unknown>) {
     if (root?.dataset.offerSending === 'true') return;
     try {
@@ -26,15 +27,16 @@ export function setupOwnerRequestActions() {
         history.scrollRestoration = 'manual';
         history.replaceState(null, '', `${location.pathname}${location.search}#accept-project`);
       }
+      markRequestPageClean();
       location.reload();
     } catch { status!.textContent = 'Connection lost. The change may not have been saved. Refresh before trying again.'; }
   }
   document.querySelector<HTMLFormElement>('[data-request-note]')?.addEventListener('submit', event => {
-    event.preventDefault(); if (!canDiscardOffer()) return; const data = new FormData(event.currentTarget as HTMLFormElement); void update({ action: 'note', note: data.get('note') });
+    event.preventDefault(); if (!canDiscardChanges(event.currentTarget as HTMLFormElement)) return; const data = new FormData(event.currentTarget as HTMLFormElement); void update({ action: 'note', note: data.get('note') });
   });
   // Scoped: project update forms also carry data-action, and must not post request status changes.
   document.querySelectorAll<HTMLButtonElement>('[data-request-actions] button[data-action]').forEach(button => button.addEventListener('click', () => {
-    if (!canDiscardOffer()) return;
+    if (!canDiscardChanges()) return;
     const action = button.dataset.action;
     if (action === 'withdraw' && !confirm('Honor this withdrawal and close the request?')) return;
     // Resolving before acceptance closes the provisional studio for good; reopening does not restore it.

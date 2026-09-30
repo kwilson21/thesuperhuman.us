@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { setupSoftwareOffers } from '~/scripts/software-offers';
 
 // Small DOM stand-in for the two async editor races; actual routes render in page tests.
-function fixture() {
+function fixture(action = 'fit') {
   const element = (extra: Record<string, any> = {}) => {
     const events: Record<string, Function> = {};
     return { dataset:{} as Record<string,string>,disabled:false,hidden:false,textContent:'',value:'',checked:false,
@@ -19,13 +19,16 @@ function fixture() {
   const targets: Record<string, any> = { '[data-offer-form]':form,'[data-milestones]':list,'[data-software-status]':status,'[data-send-offer]':send,'[data-preview-offer]':preview,'[data-add-milestone]':element(),'[data-range]':range,'[data-copy-link]':element(),'[data-revoke-link]':element(),'[data-offer-state]':state,'[data-link-actions]':element(),'[data-link-state]':element(),'[data-client-link]':element({ select:vi.fn() }),'[data-client-link-field]':element() };
   const versionState = element({ textContent:'sent' }), versionEntry = element({ querySelector:() => versionState });
   targets['[data-offer-versions]'] = element(); targets['[data-version-list]'] = element({ querySelector:() => versionEntry,querySelectorAll:() => [versionState] });
+  const actionStatus = element(), siblingForm = element(), privateNote = element();
+  const actionForm = element({ dataset:{ softwareAction:action, endpoint:'/api/software' }, querySelector:(selector:string) => selector === 'button' ? element() : actionStatus });
   const root = element({ dataset:{ endpoint:'/api/software',updated:'saved',version:'1',sentVersion:'',revoked:'false',email:'alex@example.com' },querySelector:(selector:string) => targets[selector] });
-  vi.stubGlobal('document',{ querySelector:(selector:string) => selector === '[data-offer-form]' ? form : root,querySelectorAll:(selector:string) => selector === '[data-milestone]' ? [row] : [] });
+  vi.stubGlobal('document',{ querySelector:(selector:string) => selector === '[data-offer-form]' ? form : root,querySelectorAll:(selector:string) => selector === '[data-milestone]' ? [row] : selector === '[data-software-action]' ? [actionForm] : selector === '[data-software-action], [data-request-note], [data-software-editor]' ? [actionForm,siblingForm,privateNote,root] : selector === '[data-software-action], [data-request-note]' ? [actionForm,siblingForm,privateNote] : [] });
+  vi.stubGlobal('FormData',class { *[Symbol.iterator]() { yield ['text','Thanks.']; } });
   vi.stubGlobal('sessionStorage',{ getItem:() => null,setItem:vi.fn(),removeItem:vi.fn() });
   vi.stubGlobal('location',{ reload:vi.fn() }); vi.stubGlobal('confirm',vi.fn(() => true));
   vi.stubGlobal('window', { addEventListener: vi.fn() });
   setupSoftwareOffers();
-  return { root,form,send,preview,status,inputs,targets };
+  return { root,form,send,preview,status,inputs,targets,submit,actionForm,actionStatus,siblingForm,privateNote };
 }
 afterEach(() => vi.unstubAllGlobals());
 it('keeps newer edits unsaved when a draft save finishes', async () => {
@@ -85,7 +88,7 @@ it('clears radio group invalid state after selection changes', async () => {
   expect(inputs.paymentMode.removeAttribute).toHaveBeenCalledWith('aria-invalid');
 });
 
-it('reloads after decline even with unsaved offer edits, removing withdrawn link controls', async () => {
+it('reloads after decline with unsaved offer edits only after confirmed discard', async () => {
   const { root } = fixture(); root.dataset.dirty = 'true';
   let submit!: (event:any) => Promise<void>;
   const status = { textContent:'' }, button = { disabled:false };
@@ -143,4 +146,66 @@ it('prompts before unloading only while offer edits are dirty', async () => {
   const event = { preventDefault:vi.fn(), returnValue:undefined };
   handler(event); expect(event.preventDefault).not.toHaveBeenCalled();
   await form.emit('input'); handler(event); expect(event.preventDefault).toHaveBeenCalledOnce();
+});
+
+it.each([401,403,500])('preserves editor contents and restores controls for non-JSON status %s', async code => {
+  for (const action of ['draft','send','revoke']) {
+    const { root,form,send,inputs,status,targets,submit } = fixture();
+    vi.stubGlobal('fetch',vi.fn(async () => new Response('Owner access required.', { status:code })));
+    inputs.outcome.value = 'Keep this title';
+    if (action === 'draft') await form.emit('submit');
+    if (action === 'send') await send.emit('click');
+    if (action === 'revoke') await targets['[data-revoke-link]'].emit('click');
+    expect(status.textContent).toBe(code === 500 ? 'Something went wrong. Nothing was saved. Try again.' : 'Your owner session ended. Reload the page to sign in again.');
+    expect(inputs.outcome.value).toBe('Keep this title');
+    expect(submit.disabled).toBe(false); expect(send.disabled).toBe(false); expect(targets['[data-revoke-link]'].disabled).toBe(false);
+    expect(root.dataset.busy).not.toBe('true'); expect(location.reload).not.toHaveBeenCalled();
+  }
+});
+it.each(['fit','question','decline'])('keeps %s form contents and restores its button on a non-JSON session failure', async action => {
+  const { root } = fixture();
+  let submit!: (event:any) => Promise<void>;
+  const status = { textContent:'' }, button = { disabled:false }, input = { value:'Keep my message' };
+  const form = { dataset:{ softwareAction:action, endpoint:'/api/software' },addEventListener:(_name:string, handler:any) => { submit = handler; },querySelector:(selector:string) => selector === 'button' ? button : status };
+  vi.stubGlobal('FormData',class { *[Symbol.iterator]() { yield ['text',input.value]; } });
+  vi.stubGlobal('document',{ querySelector:() => root, querySelectorAll:(selector:string) => selector === '[data-software-action]' ? [form] : [] });
+  vi.stubGlobal('fetch',vi.fn(async () => new Response('Owner access required.', { status:403 })));
+  setupSoftwareOffers(); await submit({ preventDefault:vi.fn() });
+  expect(status.textContent).toBe('Your owner session ended. Reload the page to sign in again.');
+  expect(input.value).toBe('Keep my message'); expect(button.disabled).toBe(false); expect(location.reload).not.toHaveBeenCalled();
+});
+
+it.each(['fit','question','decline','revoke'])('keeps sibling text on canceled reload after %s', async action => {
+  const { actionForm,actionStatus,privateNote,targets,status } = fixture(action);
+  await privateNote.emit('input');
+  vi.mocked(confirm).mockImplementation(message => message !== 'You have unsaved changes in another section. Continue and lose them?');
+  vi.stubGlobal('fetch',vi.fn(async () => Response.json({ ok:true, updatedAt:'new',copySent:true })));
+  if (action === 'revoke') await targets['[data-revoke-link]'].emit('click'); else await actionForm.emit('submit');
+  expect(confirm).toHaveBeenCalledWith('You have unsaved changes in another section. Continue and lose them?');
+  expect(location.reload).not.toHaveBeenCalled();
+  expect(action === 'revoke' ? status.textContent : actionStatus.textContent).toBe(action === 'revoke' ? 'Client link revoked.' : action === 'fit' ? 'Fit review saved.' : 'Sent.');
+});
+it('tracks the other software forms and permits confirmed discard', async () => {
+  const { actionForm,siblingForm } = fixture();
+  await siblingForm.emit('input');
+  vi.stubGlobal('fetch',vi.fn(async () => Response.json({ ok:true,updatedAt:'new' })));
+  await actionForm.emit('submit');
+  expect(confirm).toHaveBeenCalledWith('You have unsaved changes in another section. Continue and lose them?');
+  expect(location.reload).toHaveBeenCalledOnce();
+});
+it('sending retains unsaved sibling forms without reloading', async () => {
+  const { siblingForm,send } = fixture(); await siblingForm.emit('input');
+  vi.stubGlobal('fetch',vi.fn(async () => Response.json({ link:'https://example.com/offer/test',version:1,updatedAt:'new',emailSent:true })));
+  await send.emit('click');
+  expect(siblingForm.dataset.dirty).toBe('true'); expect(location.reload).not.toHaveBeenCalled();
+});
+it('does not prompt on unload after a generic action marks the shared page clean', async () => {
+  const { markRequestPageClean } = await import('~/scripts/software-offers');
+  const { form,siblingForm } = fixture();
+  await form.emit('input'); await siblingForm.emit('input');
+  const handler = vi.mocked(window.addEventListener).mock.calls[0][1] as (event:any) => void;
+  const event = { preventDefault:vi.fn() };
+  handler(event); expect(event.preventDefault).toHaveBeenCalledOnce();
+  markRequestPageClean(); event.preventDefault.mockClear();
+  handler(event); expect(event.preventDefault).not.toHaveBeenCalled();
 });

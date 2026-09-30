@@ -1,4 +1,7 @@
 import type { OfferTerms } from '~/lib/software-offers';
+const editableSections = () => [...document.querySelectorAll<HTMLElement>('[data-software-action], [data-request-note], [data-software-editor]')];
+export const hasUnsavedRequestChanges = (submitted?: HTMLElement) => editableSections().some(section => section !== submitted && section.dataset.dirty === 'true');
+export const markRequestPageClean = () => editableSections().forEach(section => { section.dataset.dirty = 'false'; });
 export function setupSoftwareOffers() {
   const sessionValue = (key: string, value?: string | null) => {
     try {
@@ -10,7 +13,10 @@ export function setupSoftwareOffers() {
   };
   const post = async (endpoint: string, body: unknown) => {
     const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-    const result = await response.json() as { message?: string; errors?: Record<string,string>; version: number; updatedAt: string; sentAt?: string; link: string; emailSent: boolean; uncertain?: boolean; copySent?: boolean };
+    let parsed: unknown;
+    try { parsed = await response.json(); }
+    catch { throw new Error(response.status === 401 || response.status === 403 ? 'Your owner session ended. Reload the page to sign in again.' : 'Something went wrong. Nothing was saved. Try again.'); }
+    const result = parsed as { message?: string; errors?: Record<string,string>; version: number; updatedAt: string; sentAt?: string; link: string; emailSent: boolean; uncertain?: boolean; copySent?: boolean };
     if (!response.ok) {
       if (response.status === 409 && (body as { action?: string }).action === 'draft' && 'updatedAt' in result) {
         const editor = document.querySelector<HTMLElement>('[data-software-editor]');
@@ -32,6 +38,22 @@ export function setupSoftwareOffers() {
     }
     return result;
   };
+  const editableForms = [...document.querySelectorAll<HTMLFormElement>('[data-software-action], [data-request-note]')];
+  editableForms.forEach(form => form.addEventListener('input', () => {
+    form.dataset.dirty = 'true';
+    form.dataset.revision = String(Number(form.dataset.revision ?? 0) + 1);
+  }));
+  let reloading = false;
+  const hasUnsavedChanges = () => hasUnsavedRequestChanges();
+  const reload = (status: HTMLElement, submitted?: HTMLFormElement) => {
+    if (hasUnsavedChanges() && !confirm('You have unsaved changes in another section. Continue and lose them?')) return;
+    reloading = true;
+    sessionValue(`software-flash:${submitted?.dataset.endpoint ?? document.querySelector<HTMLElement>('[data-software-editor]')?.dataset.endpoint}`, status.textContent);
+    location.reload();
+  };
+  window.addEventListener('beforeunload', event => {
+    if (!reloading && hasUnsavedChanges()) event.preventDefault();
+  });
   document.querySelectorAll<HTMLFormElement>('[data-software-action]').forEach(form => {
     form.addEventListener('submit', async event => {
       event.preventDefault();
@@ -40,13 +62,13 @@ export function setupSoftwareOffers() {
       const action = form.dataset.softwareAction!, data = new FormData(form), status = form.querySelector<HTMLElement>('[data-software-status]')!;
       if (action === 'decline' && !confirm('Send this message and decline the inquiry?')) return;
       const button = form.querySelector<HTMLButtonElement>('button')!; button.disabled = true;
+      const revision = form.dataset.revision;
       try {
         const result = await post(form.dataset.endpoint!, { action, ...Object.fromEntries(data), expectedRequestUpdatedAt: requestPage?.dataset.requestUpdated });
         if (action === 'fit' && requestPage) requestPage.dataset.requestUpdated = result.updatedAt;
         status.textContent = result.copySent === false ? 'Sent to the client. The owner copy didn’t send.' : action === 'fit' ? 'Fit review saved.' : 'Sent.';
-        const editor = document.querySelector<HTMLElement>('[data-software-editor]');
-        if (action !== 'decline' && (editor?.dataset.dirty === 'true' || editor?.dataset.busy === 'true')) status.textContent += ' Your offer edits are kept. Reload after saving to refresh activity.';
-        else { sessionValue(`software-flash:${form.dataset.endpoint}`, status.textContent); location.reload(); }
+        if (form.dataset.revision === revision) form.dataset.dirty = 'false';
+        reload(status, form);
       } catch (error) { status.textContent = (error as Error).message; }
       finally { button.disabled = false; }
     });
@@ -68,17 +90,14 @@ export function setupSoftwareOffers() {
   });
   root.querySelector<HTMLButtonElement>('[data-revoke-link]')!.addEventListener('click', async event => {
     if (!confirm('Revoke the client link? Anyone using it will lose access.')) return;
-    if (changed && !confirm('Revoking reloads this page and discards unsaved offer edits. Continue?')) return;
     const button = event.currentTarget as HTMLButtonElement; button.disabled = true; root.setAttribute('inert', ''); root.setAttribute('aria-busy', 'true'); root.dataset.busy = 'true';
-    try { await post(endpoint, { action: 'revoke' }); link = ''; location.reload(); }
-    catch (error) { status.textContent = (error as Error).message; button.disabled = false; root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false'; }
+    try { await post(endpoint, { action: 'revoke' }); link = ''; root.dataset.revoked = 'true'; linkInput.value = ''; status.textContent = 'Client link revoked.'; reload(status); }
+    catch (error) { status.textContent = (error as Error).message; }
+    finally { button.disabled = false; root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false'; }
   });
   if (!root.querySelector('[data-offer-form]')) return;
   const form = root.querySelector<HTMLFormElement>('[data-offer-form]')!, list = root.querySelector<HTMLElement>('[data-milestones]')!;
   const send = root.querySelector<HTMLButtonElement>('[data-send-offer]')!, preview = root.querySelector<HTMLAnchorElement>('[data-preview-offer]')!;
-  window.addEventListener('beforeunload', event => {
-    if (changed) { event.preventDefault(); }
-  });
   let saved = Boolean(root.dataset.updated), inputRevision = 0;
   const get = (element: HTMLElement, name: string) => element.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${name}"]`)!.value.trim();
   const checked = (element: HTMLElement, name: string) => element.querySelector<HTMLInputElement>(`[name="${name}"]`)!.checked;
