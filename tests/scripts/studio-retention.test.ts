@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { expect, it, vi } from 'vitest';
-import { applyStudioRetention, previewStudioRetention, remoteObjectDeleteArgs, studioStorageIdentity } from '../../scripts/studio-retention.mjs';
+import { applyStudioRetention, studioRetentionCompletion, previewStudioRetention, remoteObjectDeleteArgs, studioStorageIdentity } from '../../scripts/studio-retention.mjs';
 
 const storage = { accountId: null, databaseId: 'local-music', bucket: 'local-audio', jurisdiction: null };
 
@@ -209,13 +209,15 @@ it('retains active software, cleans all prefix objects one year after completion
     sql.prepare("INSERT INTO software_milestone_payments VALUES (?,0,'2026-01-01','owner')").run(id);
     sql.prepare("INSERT INTO software_project_audit(request_id,action,actor,occurred_at,note) VALUES (?,'started','owner','2025-01-01',''),(?,'decision-recorded','client','2027-01-01','Accepted on Delivery v1 · milestone 1')").run(id,id);
   }
+  sql.exec("UPDATE audio_projects SET content_deleted_at='already removed'");
   const list = async (prefix: string) => [prefix+'update/old-orphan.png', prefix+'update/current.png'];
   await expect(previewStudioRetention(database,'Local test data',storage,now)).rejects.toThrow('prefix listing');
   const review = await previewStudioRetention(database,'Local test data',storage,now,list);
   expect(review.counts).toMatchObject({softwareProjects:2,softwareObjects:4,softwareMessages:2,softwareUpdates:2,softwareAudit:4});
   expect(JSON.stringify(review)).not.toMatch(/Private title|Private message|client@example|software\//);
   const deleted: string[]=[];
-  await applyStudioRetention(database,review,'Local test data',storage,async (key: string)=>{deleted.push(key);},now,list);
+  const counts=await applyStudioRetention(database,review,'Local test data',storage,async (key: string)=>{deleted.push(key);},now,list);
+  expect(studioRetentionCompletion(counts)).toBe('Removed 0 audio projects, 2 software projects and 4 stored files. Run owner request retention next.');
   expect(deleted.filter(key=>key.startsWith('software/'))).toHaveLength(4);
   expect(sql.prepare('SELECT request_id FROM software_project_updates ORDER BY request_id').all()).toEqual([{request_id:'software-active'},{request_id:'software-recent'}]);
   expect(sql.prepare('SELECT request_id FROM software_milestone_payments ORDER BY request_id').all()).toEqual([{request_id:'software-active'},{request_id:'software-recent'}]);

@@ -163,6 +163,10 @@ export async function previewStudioRetention(database, environment, storage, now
   };
 }
 
+export function studioRetentionCompletion(counts) {
+  return `Removed ${counts.projects} audio projects, ${counts.softwareProjects} software projects and ${counts.objects + counts.softwareObjects} stored files. Run owner request retention next.`;
+}
+
 export async function applyStudioRetention(database, review, environment, storage, deleteObject, now = new Date(), listObjects) {
   if (!sameStorage(review?.storage, storage)) {
     throw new Error('Studio retention review was generated for another database or bucket. Nothing was changed.');
@@ -309,7 +313,7 @@ async function main() {
       const review = JSON.parse(await readFile(resolve(reviewPath), 'utf8'));
       const counts = await applyStudioRetention(database, review, environment, storage,
         key => remote ? remoteObjectDeleter(key, storage, configPath) : proxy.env.AUDIO.delete(key), new Date(), listObjects);
-      console.log(`Removed ${counts.objects} private objects and cleared ${counts.projects} closed projects. Run owner request retention next.`);
+      console.log(studioRetentionCompletion(counts));
     } else {
       const review = await previewStudioRetention(database, environment, storage, new Date(), listObjects);
       await writeFile(reviewPath, JSON.stringify(review, null, 2), { mode: 0o600 });
