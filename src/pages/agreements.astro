@@ -1,0 +1,11 @@
+---
+export const prerender=false;
+import AgreementLayout from '~/layouts/AgreementLayout.astro';
+import { agreementSession } from '~/lib/agreement-access';
+const env=Astro.locals.runtime.env,db=env.MUSIC_DB,session=db?await agreementSession(db,Astro.request,'archive'):null;
+const agreements=session?(await db!.prepare("SELECT a.id,a.kind,a.effective_on,f.status FROM software_agreements a JOIN software_agreement_clients c ON c.id=a.client_id LEFT JOIN software_agreement_artifacts f ON f.agreement_id=a.id WHERE c.recipient_email=? AND a.status='executed' AND a.archive_closed_at IS NULL ORDER BY a.executed_at DESC").bind(session.recipient_email).all<{id:string;kind:string;effective_on:string;status:string}>()).results:[];
+---
+<AgreementLayout title="Agreement archive"><h1>Your signed agreements.</h1><p>Complete signed copies remain available separately from your project page. Sign in with the email used to sign.</p>
+ {session?<ul>{agreements.map(a=><li class="agreement-section">{a.kind.toUpperCase()} · {a.effective_on}<p>{a.status==='ready'?<a href={`/api/agreements/${a.id}/file`}>Download signed agreement</a>:'Signed by both parties. Copy preparation needs attention.'}</p></li>)}</ul>:<><form class="agreement-form" action="/api/agreements/code" method="post" data-agreement-code><label>Email<input class="studio-input" name="email" type="email" required maxlength="320" /></label><div class="cf-turnstile" data-sitekey={env.PUBLIC_TURNSTILE_SITE_KEY??import.meta.env.PUBLIC_TURNSTILE_SITE_KEY}></div><button class="studio-button">Send a code</button></form><form class="agreement-form" action="/api/agreements/session" method="post" data-agreement-session><input type="hidden" name="challenge_id" value={Astro.url.searchParams.get('challenge')??''} /><label>Eight-digit code<input class="studio-input" name="code" pattern="[0-9]{8}" inputmode="numeric" autocomplete="one-time-code" required /></label><button class="studio-button">Open archive</button></form><noscript><p>Contact Kazon to obtain your retained signed copy outside the website.</p></noscript><p role="status" aria-live="polite"></p><script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script></>}
+</AgreementLayout>
+<script>import { setupAgreementAccess } from '~/scripts/agreement-access';setupAgreementAccess();</script>

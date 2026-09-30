@@ -16,6 +16,7 @@ const signInFailures = clientPortalEnabled(Astro.locals.runtime.env) ? await lis
 const studioAttention = clientPortalEnabled(Astro.locals.runtime.env) ? await listStudioProjectAttention(db, new Date()) : [];
 const stageName = (stage: string, bookingPaid: boolean) => stage === 'accepted' && bookingPaid ? 'Booking paid' : stage.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase());
 const dueLabel = (days: number) => days > 1 ? `Due in ${days} days` : days === 1 ? 'Due tomorrow' : days === 0 ? 'Due today' : `Past due by ${-days} ${days === -1 ? 'day' : 'days'}`;
+const agreementAttention=Astro.locals.runtime.env.MUSIC_DB ? (await Astro.locals.runtime.env.MUSIC_DB.prepare("SELECT a.request_id,a.status,f.status AS artifact_status FROM software_agreements a LEFT JOIN software_agreement_artifacts f ON f.agreement_id=a.id WHERE a.kind='sow' AND (a.status='client_signed' OR (a.status='executed' AND (f.status<>'ready' OR EXISTS(SELECT 1 FROM software_agreement_deliveries d WHERE d.agreement_id=a.id AND d.status<>'sent' AND d.alternate_delivered_at IS NULL)))) ORDER BY a.created_at").all<{request_id:string;status:string;artifact_status:string}>()).results : [];
 ---
 <OwnerLayout title="Today" current="today" newRequestCount={ledger.attention.newRequests} ownerEmail={Astro.locals.owner?.email ?? ''}>
   <header class="owner-page-heading">
@@ -27,6 +28,7 @@ const dueLabel = (days: number) => days > 1 ? `Due in ${days} days` : days === 1
     <div class="section-heading-line"><div><p class="owner-kicker">People</p><h2 id="waiting-heading">{ledger.attention.newRequests ? `${ledger.attention.newRequests} waiting for review` : studioAttention.length ? 'No new requests' : 'No one is waiting'}</h2></div><a href="/owner/requests">Open requests →</a></div>
     <RequestList requests={ledger.attentionRequests} />
   </section>
+  {agreementAttention.length>0 && <section class="owner-section"><h2>Agreements needing attention</h2><ul>{agreementAttention.map(a=><li><a href={`/owner/requests/${a.request_id}`}>{a.status==='client_signed'?'Ready for countersignature':a.artifact_status!=='ready'?'Signed copy preparation needs attention':'Signed copy email needs attention'}</a></li>)}</ul></section>}
   {signInFailures.length > 0 && <section class="owner-section" aria-labelledby="studio-sign-in-heading">
     <p class="owner-kicker">Studio access</p><h2 id="studio-sign-in-heading">Sign-in needs attention</h2>
     <p>A code could not be delivered. Check the request's email address and ask the client to try again.</p>

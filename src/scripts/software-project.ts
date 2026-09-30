@@ -21,7 +21,7 @@ export function setupSoftwareProject() {
     start?.addEventListener('change', syncStart);
     start?.addEventListener('submit', event => {
       event.preventDefault(); const data = new FormData(start);
-      void send({ action: 'start', expectedRequestUpdatedAt: start.dataset.requestUpdatedAt, offer_id: data.get('offer_id'), offer_version: Number(data.get('offer_version')), signatures: data.has('signatures'), payment: data.has('payment'), deposit_invoice_id: start.dataset.depositInvoiceId, next_update_on: data.get('next_update_on') });
+      void send({ action: 'start', expectedRequestUpdatedAt: start.dataset.requestUpdatedAt, offer_id: data.get('offer_id'), offer_version: Number(data.get('offer_version')), signature_source:data.get('signature_source'),external_signed_on:data.get('external_signed_on')??undefined,external_parties:data.get('external_parties')??undefined,external_copy_reference:data.get('external_copy_reference')??undefined,external_kept_copy:data.has('external_kept_copy'),inputs_ready:data.has('inputs_ready'),po_number:data.get('po_number')??undefined,earlier_start_on:data.get('earlier_start_on')||undefined,earlier_start_agreement:data.get('earlier_start_agreement')??undefined,signatures: start.querySelector<HTMLInputElement>('[name=signatures]')!.checked, payment: data.has('payment'), deposit_invoice_id: start.dataset.depositInvoiceId, next_update_on: data.get('next_update_on') });
     });
     syncStart();
     root.querySelectorAll<HTMLFormElement>('[data-software-invoice]').forEach(form=>form.addEventListener('submit',event=>{

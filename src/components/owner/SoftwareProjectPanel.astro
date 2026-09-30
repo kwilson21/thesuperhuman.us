@@ -1,5 +1,7 @@
 ---
 import { projectTerms, projectStates, projectSteps, softwareDate, sharedSoftwareUpdates, milestonePayments, updateKinds } from '~/lib/software-projects';
+import SoftwareAgreementPanel from './SoftwareAgreementPanel.astro';
+import { executedOfferAgreement, offerAgreements } from '~/lib/software-agreements';
 import SoftwareInvoiceLine from './SoftwareInvoiceLine.astro';
 import { listSoftwareInvoices, invoiceAvailable, paidFirstDeposit } from '~/lib/software-invoices';
 import { addBusinessDays } from '~/lib/business-days';
@@ -8,6 +10,8 @@ import type { SoftwareOffer } from '~/lib/software-offers';
 type Props = { requestId: string; requestUpdatedAt: string; project: SoftwareProject | null; sentOffer?: SoftwareOffer; updates: SoftwareUpdate[]; closed: boolean };
 const { requestId, requestUpdatedAt, project, sentOffer, updates, closed } = Astro.props;
 const terms = project?.content_deleted_at ? null : project ? projectTerms(project) : sentOffer ? projectTerms(sentOffer) : null;
+const executed=sentOffer ? await executedOfferAgreement(Astro.locals.runtime.env.MUSIC_DB!,sentOffer.id) : null;
+const websiteSigned=sentOffer&&(await offerAgreements(Astro.locals.runtime.env.MUSIC_DB!,sentOffer.id)).some(d=>d.status==='client_signed'||d.status==='executed');
 const retryCutoff = Date.now() - 60_000;
 const retryReady = (attemptedAt: string | null) => Boolean(attemptedAt && Date.parse(attemptedAt) <= retryCutoff);
 const draft = updates.find(update => update.status === 'draft');
@@ -20,16 +24,22 @@ const unmatched=(await Astro.locals.runtime.env.MUSIC_DB!.prepare('SELECT event_
 const lastDelivery=terms && shared.find(update=>update.kind==='delivery_review' && update.status==='shared' && update.milestone_index===terms.milestones.length-1);
 const canComplete = lastDelivery?.decision==='milestone_accepted' && shared.some(update=>update.kind==='handoff' && update.status==='shared' && update.milestone_index===lastDelivery.milestone_index && update.shared_at!>=lastDelivery.decided_at!);
 ---
+{sentOffer && <SoftwareAgreementPanel requestId={requestId} offerId={sentOffer.id} />}
 {project?.content_deleted_at && <section class="rail-section"><h2>Project</h2><p class="rail-muted">Project content was removed by reviewed retention cleanup.</p></section>}
 {terms && <section class="rail-section software-rail" aria-labelledby="software-project-heading" data-software-project data-endpoint={`/api/owner/requests/${requestId}/project`} data-invoice-endpoint={`/api/owner/requests/${requestId}/invoices`}>
   <h2 id="software-project-heading">{project ? 'Project' : 'Start the project'}</h2>
   {unmatched.length>0 && <p class="rail-muted">Stripe events need reconciliation: {unmatched.map(event=>`${event.event_id} · ${event.event_type} · ${event.status}`).join('; ')}. Check the invoice in Stripe; no payment has been recorded from these events.</p>}
   {!project && terms.paymentMode==='standard' && <SoftwareInvoiceLine offerId={offerId!} milestone={0} kind="deposit" invoices={invoices} available={!deposit} closed={closed} />}
   {!project ? <form data-software-start data-request-updated-at={requestUpdatedAt} data-deposit-invoice-id={deposit?.id}>
+    <input type="hidden" name="signature_source" value={websiteSigned?'website':'external'} />
+    {websiteSigned&&!executed&&<p class="rail-muted">Finish countersigning, prepare the PDF and deliver both complete copies before starting.</p>}
+    {!websiteSigned && <><label>Signed date<input class="studio-input" type="date" name="external_signed_on" required /></label><label>Typed parties<input class="studio-input" name="external_parties" required maxlength="500" /></label><label>Kept copy reference<input class="studio-input" name="external_copy_reference" required maxlength="200" /></label><label><input type="checkbox" name="external_kept_copy" required />I kept the complete signed copy.</label></>}
+    <label>Purchase order number (if required)<input class="studio-input" name="po_number" maxlength="100" /></label><label>Client agreement date for an earlier start<input class="studio-input" type="date" name="earlier_start_on" /></label><label>Dated client agreement for an earlier start (if applicable)<textarea class="studio-textarea" name="earlier_start_agreement" maxlength="500"></textarea></label>
+    <label><input type="checkbox" name="inputs_ready" required />Required client inputs are ready.</label>
     <input type="hidden" name="offer_id" value={sentOffer!.id} />
     <input type="hidden" name="offer_version" value={sentOffer!.version} />
     <p class="rail-muted rail-caption">Record these only after checking them yourself. The client sees them as complete.</p>
-    <label class="confirmation"><input type="checkbox" name="signatures" required disabled={closed} />All signatures are complete (checked in Documenso)</label>
+    <label class="confirmation"><input type="checkbox" name="signatures" required checked={Boolean(executed)} disabled={closed || Boolean(websiteSigned)} />{websiteSigned?'Website signatures and retained copies are complete':'All signatures are complete (signed outside the website)'}</label>
     <label class="confirmation"><input type="checkbox" name="payment" required checked={Boolean(deposit)} disabled={closed} />{terms.paymentMode === 'standard' ? 'First installment received (checked in Stripe or the bank)' : 'Purchase order in place, or the client doesn’t use one'}</label>
     <div class="software-field"><label>Next update to the client<input aria-describedby="project-field-1-hint" class="studio-input" type="date" name="next_update_on" /></label><p id="project-field-1-hint" class="rail-muted rail-caption">Only promise a date you can keep.</p></div>
     <button class="studio-button" disabled type="submit">Confirm start</button>

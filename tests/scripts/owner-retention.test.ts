@@ -228,7 +228,7 @@ it('clears fit notes, offer terms and links with eligible software contact data'
 it('holds software request contact data until project content is deleted, then cleans without breaking the offer FK', async () => {
   const database=fixture(); database.db.exec('PRAGMA foreign_keys=ON');
   database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at) VALUES ('software-project','software','Alex','alex@example.com','Tool','resolved','2020-01-01','2020-01-01','2020-01-01');
-    INSERT INTO software_offers VALUES ('snapshot-offer','software-project',1,'sent','{"outcome":"Private outcome"}','now','now','now','owner');
+    INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at,sent_at,sent_by) VALUES ('snapshot-offer','software-project',1,'sent','{"outcome":"Private outcome"}','now','now','now','owner');
     INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('software-project','snapshot-offer','{"outcome":"Private outcome"}','standard','now','now','now','owner','now','now');
     INSERT INTO software_milestone_payments VALUES ('software-project',0,'now','owner')`);
   let review=await previewOwnerRetention(database,'Local test data',now); await applyOwnerRetention(database,review,'Local test data',now);

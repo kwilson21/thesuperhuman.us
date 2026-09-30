@@ -202,7 +202,7 @@ it('retains active software, cleans all prefix objects one year after completion
   const { sql, database } = fixture();
   for (const [id,completed,revoked] of [['software-active',null,null],['software-complete','2026-12-01',null],['software-closed',null,'2026-12-01'],['software-recent','2027-12-01',null]]) {
     sql.prepare("INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at,resolved_at) VALUES (?,'software','client@example.com','Keep','resolved','2026-01-01','2026-01-01','2026-01-01')").run(id);
-    sql.prepare("INSERT INTO software_offers VALUES (?, ?, 1, 'sent', '{}', '2026-01-01', '2026-01-01', '2026-01-01', 'owner')").run(id+'-offer',id);
+    sql.prepare("INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at,sent_at,sent_by) VALUES (?, ?, 1, 'sent', '{}', '2026-01-01', '2026-01-01', '2026-01-01', 'owner')").run(id+'-offer',id);
     sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,completed_at,revoked_at,created_at,updated_at) VALUES (?,?,'{}','standard','now','now','now','owner',?,?,'2026-01-01','2026-01-01')").run(id,id+'-offer',completed,revoked);
     sql.prepare("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,created_by,created_at,updated_at) VALUES (?,?,'progress','shared',0,'Private title','concept','owner','2026-01-01','2026-01-01')").run(id+'-update',id);
     sql.prepare("INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,created_at) VALUES (?,'client','client','Private message',?,'2026-01-01')").run(id,id+'-update');
@@ -231,7 +231,7 @@ it('retains active software, cleans all prefix objects one year after completion
 it.each(['notification_status', 'notification_attempted_at', 'notification_sent_at'])('refuses software cleanup after %s changes without updated_at changing', async column => {
   const { sql, database } = fixture();
   sql.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES ('software','software','client@example.test','Tool','reviewed','now','now');
-    INSERT INTO software_offers VALUES ('offer','software',1,'sent','{}','now','now','now','owner');
+    INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at,sent_at,sent_by) VALUES ('offer','software',1,'sent','{}','now','now','now','owner');
     INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,completed_at,created_at,updated_at)
       VALUES ('software','offer','{}','standard','now','now','now','owner','2026-01-01','now','now');
     INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,email_client,notification_status,notification_attempted_at,created_by,created_at,updated_at)
@@ -254,7 +254,7 @@ it.each(['notification_status', 'notification_attempted_at', 'notification_sent_
 it.each(['invitation_status', 'invitation_attempted_at', 'invitation_sent_at'])('refuses software cleanup after %s changes without updated_at changing', async column => {
   const { sql, database } = fixture();
   sql.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES ('software','software','client@example.test','Tool','reviewed','now','now');
-    INSERT INTO software_offers VALUES ('offer','software',1,'sent','{}','now','now','now','owner');
+    INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at,sent_at,sent_by) VALUES ('offer','software',1,'sent','{}','now','now','now','owner');
     INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,completed_at,created_at,updated_at)
       VALUES ('software','offer','{}','standard','now','now','now','owner','2026-01-01','now','now');
     INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,email_client,notification_status,notification_attempted_at,created_by,created_at,updated_at)

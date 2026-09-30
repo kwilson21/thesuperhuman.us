@@ -45,6 +45,7 @@ beforeEach(() => {
 });
 afterEach(() => { sql.close(); vi.unstubAllGlobals(); });
 async function call(route: typeof projectPost, body: unknown, owner = true, id = 'software') {
+  if(route===projectPost && (body as {action?:string}).action==='start') body={signature_source:'external',external_signed_on:'2026-09-30',external_parties:'Example Client / Example Contractor',external_kept_copy:true,external_copy_reference:'Owner retained signed copy',inputs_ready:true,...body as object};
   if (route === updatePost) body = { expectedProjectUpdatedAt: sql.prepare('SELECT updated_at FROM software_projects WHERE request_id=?').get(id)?.updated_at ?? 'missing', ...body as object };
   return route({ params: { id }, request: new Request(`https://example.com/api/owner/requests/${id}/project`, { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://example.com' }, body: JSON.stringify(body) }), locals: { owner: owner ? { email: 'owner@example.com' } : undefined, runtime: { env } } } as never);
 }

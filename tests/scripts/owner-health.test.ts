@@ -134,7 +134,7 @@ it('counts eligible software projects alongside audio retention items', async ()
     ['recent', '2026-09-01', null, null], ['active', null, null, null], ['deleted', '2025-09-01', null, '2026-09-01'],
   ]) {
     db.prepare("INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES (?,'software','client@example.test','Tool','reviewed','now','now')").run(id);
-    db.prepare("INSERT INTO software_offers VALUES (?, ?, 1, 'sent', '{}', 'now', 'now', 'now', 'owner')").run(id, id);
+    db.prepare("INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at,sent_at,sent_by) VALUES (?, ?, 1, 'sent', '{}', 'now', 'now', 'now', 'owner')").run(id, id);
     db.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,completed_at,revoked_at,content_deleted_at,created_at,updated_at) VALUES (?,?,'{}','standard','now','now','now','owner',?,?,?,'now','now')").run(id,id,completed,revoked,deleted);
   }
   expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'studio-retention', status: 'attention', summary: '2 studio retention items need review.' }));

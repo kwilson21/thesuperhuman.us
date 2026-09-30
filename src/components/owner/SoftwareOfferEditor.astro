@@ -1,4 +1,5 @@
 ---
+import SoftwareAgreementDetails from './SoftwareAgreementDetails.astro';
 import SoftwareMilestone from './SoftwareMilestone.astro';
 import { paymentSchedules, type SoftwareOffer, type OfferTerms } from '~/lib/software-offers';
 interface Props { requestId: string; email: string; offers: SoftwareOffer[]; revoked: boolean; linkCreatedAt?: string; resolved?: boolean; withdrawn?: boolean; startedVersion?: number }
@@ -22,6 +23,7 @@ const date = (value: string) => new Date(value).toLocaleDateString('en-US', { mo
     <fieldset><legend>Payment mode</legend>{(['standard', 'invoice'] as const).map(mode => <label class="intake-offer"><input type="radio" name="paymentMode" value={mode} checked={(terms?.paymentMode ?? 'standard') === mode} required /><span><strong>{mode === 'standard' ? 'Standard' : 'Invoice terms'}</strong><small>{paymentSchedules[mode]}</small></span></label>)}</fieldset>
     <div class="software-field"><label><input type="checkbox" name="hasRange" aria-describedby="offer-range-hint" checked={Boolean(terms?.projectRange)} /> Whole-project range</label><p id="offer-range-hint" class="rail-muted rail-caption">Non-binding. Shown to the client as an estimate, not a quote.</p></div>
     <div data-range hidden={!terms?.projectRange}><label>Low estimate (USD)<input class="studio-input" type="number" name="rangeLow" placeholder="Low" min="1" step="0.01" value={terms?.projectRange ? terms.projectRange.lowCents / 100 : ''} /></label><label>High estimate (USD)<input class="studio-input" type="number" name="rangeHigh" placeholder="High" min="1" step="0.01" value={terms?.projectRange ? terms.projectRange.highCents / 100 : ''} /></label></div>
+    <SoftwareAgreementDetails requestId={requestId} offer={current} terms={terms} />
     <div class="software-actions"><button type="submit" class="studio-quiet">Save draft</button><a class="studio-quiet" href={`/owner/requests/${encodeURIComponent(requestId)}/offer`} target="_blank" rel="noopener" data-preview-offer hidden={!draft}>Preview</a><button type="button" class="studio-button" data-send-offer disabled={!draft && !(sent && revoked)}>Send offer</button></div>
     <p class="rail-muted rail-caption">Preview before sending. Saving a draft never sends it.</p>
   </form>}

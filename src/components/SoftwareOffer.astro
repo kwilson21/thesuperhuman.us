@@ -2,8 +2,8 @@
 import PersonalName from './PersonalName.astro';
 import { formatUSD, offerTotal, paymentSchedules, type ClientOffer } from '~/lib/software-offers';
 import '~/styles/global.css';
-interface Props { offer?: ClientOffer | null; preview?: boolean; temporarilyUnavailable?: boolean }
-const { offer, preview = false, temporarilyUnavailable = false } = Astro.props;
+interface Props { offer?: ClientOffer | null; preview?: boolean; temporarilyUnavailable?: boolean; signingUrl?: string }
+const { offer, preview = false, temporarilyUnavailable = false, signingUrl } = Astro.props;
 const terms = offer?.terms;
 ---
 <!doctype html><html lang="en"><head>
@@ -49,7 +49,7 @@ const terms = offer?.terms;
           {terms.projectRange && <p>If the project continues: roughly {formatUSD(terms.projectRange.lowCents)} to {formatUSD(terms.projectRange.highCents)} overall. An estimate, not a quote.</p>}
         </section>
         <section><h2 class="text-3xl leading-tight">Where things stand</h2><ul class="offer-status"><li>Agreement · Not sent yet</li><li>Invoice · Not issued</li><li>Start date · Not confirmed</li></ul>
-          <div class="offer-actions"><a class="site-link" href={`mailto:kazon.wilson@thesuperhuman.us?subject=${encodeURIComponent(`Question about offer v${offer.version}`)}`}>Ask a question</a>
+          <div class="offer-actions">{signingUrl && <a class="site-button" href={signingUrl}>Review and sign</a>}<a class="site-link" href={`mailto:kazon.wilson@thesuperhuman.us?subject=${encodeURIComponent(`Question about offer v${offer.version}`)}`}>Ask a question</a>
           <button class="site-button site-button-outline" type="button" data-print-offer>Print or save</button></div>
         </section>
       </aside></div>
