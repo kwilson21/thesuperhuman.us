@@ -16,7 +16,7 @@ function fixture(action = 'fit') {
   const list = element({ children:[row],querySelectorAll:(selector:string) => selector === '[data-milestone]' ? [row] : [] });
   const submit = element();
   const form = element({ querySelector:(selector:string) => selector === '[type="submit"]' ? submit : inputs[selector.match(/name="([^"]+)"/)?.[1] ?? ''],querySelectorAll:(selector:string) => { const input = inputs[selector.match(/name="([^"]+)"/)?.[1] ?? '']; return input ? [input] : []; } });
-  const targets: Record<string, any> = { '[data-offer-form]':form,'[data-milestones]':list,'[data-software-status]':status,'[data-send-offer]':send,'[data-preview-offer]':preview,'[data-add-milestone]':element(),'[data-range]':range,'[data-copy-link]':element(),'[data-revoke-link]':element(),'[data-offer-state]':state,'[data-link-actions]':element(),'[data-link-state]':element(),'[data-client-link]':element({ select:vi.fn() }),'[data-client-link-field]':element() };
+  const targets: Record<string, any> = { '[data-offer-form]':form,'[data-milestones]':list,'[data-software-status]':status,'[data-send-offer]':send,'[data-preview-offer]':preview,'[data-add-milestone]':element(),'[data-range]':range,'[data-copy-link]':element(),'[data-revoke-link]':element({ dataset:{ linkCreatedAt:'displayed-link' } }),'[data-offer-state]':state,'[data-link-actions]':element(),'[data-link-state]':element(),'[data-client-link]':element({ select:vi.fn() }),'[data-client-link-field]':element() };
   const versionState = element({ textContent:'sent' }), versionEntry = element({ querySelector:() => versionState });
   targets['[data-offer-versions]'] = element(); targets['[data-version-list]'] = element({ querySelector:() => versionEntry,querySelectorAll:() => [versionState] });
   const actionStatus = element(), siblingForm = element(), privateNote = element();
@@ -115,7 +115,7 @@ it('keeps revoke working when the resolved editor form is absent', async () => {
   setupSoftwareOffers();
   vi.stubGlobal('fetch',vi.fn(async () => Response.json({ ok:true })));
   await targets['[data-revoke-link]'].emit('click');
-  expect(fetch).toHaveBeenCalledWith(root.dataset.endpoint,expect.objectContaining({ body:JSON.stringify({ action:'revoke' }) }));
+  expect(fetch).toHaveBeenCalledWith(root.dataset.endpoint,expect.objectContaining({ body:JSON.stringify({ action:'revoke', expectedLinkCreatedAt:'displayed-link' }) }));
   expect(location.reload).toHaveBeenCalledOnce();
 });
 
@@ -208,4 +208,12 @@ it('does not prompt on unload after a generic action marks the shared page clean
   handler(event); expect(event.preventDefault).toHaveBeenCalledOnce();
   markRequestPageClean(); event.preventDefault.mockClear();
   handler(event); expect(event.preventDefault).not.toHaveBeenCalled();
+});
+
+it('revokes the link returned by an in-page send', async () => {
+  const { send,targets } = fixture();
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValueOnce(Response.json({ link:'https://example.com/offer/test',linkCreatedAt:'replacement-link',version:1,updatedAt:'new',emailSent:true })).mockResolvedValueOnce(Response.json({ ok:true })));
+  await send.emit('click');
+  await targets['[data-revoke-link]'].emit('click');
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body))).toEqual({ action:'revoke',expectedLinkCreatedAt:'replacement-link' });
 });

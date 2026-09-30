@@ -1,8 +1,8 @@
 ---
 import SoftwareMilestone from './SoftwareMilestone.astro';
 import { paymentSchedules, type SoftwareOffer, type OfferTerms } from '~/lib/software-offers';
-interface Props { requestId: string; email: string; offers: SoftwareOffer[]; revoked: boolean; resolved?: boolean; withdrawn?: boolean; startedVersion?: number }
-const { requestId, email, offers, revoked, resolved = false, withdrawn = false, startedVersion } = Astro.props;
+interface Props { requestId: string; email: string; offers: SoftwareOffer[]; revoked: boolean; linkCreatedAt?: string; resolved?: boolean; withdrawn?: boolean; startedVersion?: number }
+const { requestId, email, offers, revoked, linkCreatedAt, resolved = false, withdrawn = false, startedVersion } = Astro.props;
 const closed = resolved || withdrawn || Boolean(startedVersion);
 const draft = offers.find(offer => offer.status === 'draft'), sent = offers.find(offer => offer.status === 'sent');
 const current = draft ?? sent;
@@ -25,7 +25,7 @@ const date = (value: string) => new Date(value).toLocaleDateString('en-US', { mo
     <div class="software-actions"><button type="submit" class="studio-quiet">Save draft</button><a class="studio-quiet" href={`/owner/requests/${encodeURIComponent(requestId)}/offer`} target="_blank" rel="noopener" data-preview-offer hidden={!draft}>Preview</a><button type="button" class="studio-button" data-send-offer disabled={!draft && !(sent && revoked)}>Send offer</button></div>
     <p class="rail-muted rail-caption">Preview before sending. Saving a draft never sends it.</p>
   </form>}
-  <div class="software-actions" data-link-actions hidden={!sent}><label data-client-link-field hidden>Client link<input class="studio-input" type="text" readonly data-client-link /></label><button class="studio-quiet" type="button" data-copy-link hidden>Copy client link</button><button class="studio-quiet" type="button" data-revoke-link disabled={revoked}>Revoke link</button></div>
+  <div class="software-actions" data-link-actions hidden={!sent}><label data-client-link-field hidden>Client link<input class="studio-input" type="text" readonly data-client-link /></label><button class="studio-quiet" type="button" data-copy-link hidden>Copy client link</button><button class="studio-quiet" type="button" data-revoke-link data-link-created-at={linkCreatedAt} disabled={revoked}>Revoke link</button></div>
   <p data-link-state class="rail-muted rail-caption">{sent ? revoked ? withdrawn ? 'The client link is revoked.' : resolved ? 'The client link is revoked. Reopen this request to make a new offer.' : 'The client link is revoked. Send offer to issue a new link.' : closed ? 'The client link is in your copy of the offer email.' : 'The client link is in your copy of the offer email. To issue a new one, revoke this link and send again.' : ''}</p>
   <p class="studio-status" data-software-status role="status" aria-live="polite"></p>
   </>}

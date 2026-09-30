@@ -88,10 +88,11 @@ it('renders reload guidance, resolved controls, and the reopened editor', async 
   try {
     const offers = (await db.prepare("SELECT * FROM software_offers WHERE request_id='r' ORDER BY version DESC").all()).results;
     const container = await AstroContainer.create();
-    const renderEditor = (resolved:boolean, revoked = false) => container.renderToString(editor, { props:{ requestId:'r', email:'alex@example.com', offers, revoked, resolved } });
+    const renderEditor = (resolved:boolean, revoked = false) => container.renderToString(editor, { props:{ requestId:'r', email:'alex@example.com', offers, revoked, resolved, linkCreatedAt:'displayed-link' } });
     const open = await renderEditor(false);
     expect(open).toContain('The client link is in your copy of the offer email. To issue a new one, revoke this link and send again.');
     expect(open).toContain('data-offer-form');
+    expect(open).toContain('data-link-created-at="displayed-link"');
     expect(open).toContain('aria-describedby="milestone-1-deliverables-hint"');
     const closed = await renderEditor(true);
     expect(closed).toContain('This request is resolved. Reopen it to make a new offer.');
