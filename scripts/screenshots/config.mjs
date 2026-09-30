@@ -336,3 +336,9 @@ export function screenshotSection(manifest, rawBase, sha) {
   lines.push(END);
   return lines.join('\n');
 }
+
+// Allow only the browser's resource message for a scenario's deliberate HTTP failure.
+export function expectedResourceError(message, url, base, responses) {
+  return responses.some(({ path, status }) => url === base + path
+    && new RegExp(`^Failed to load resource: the server responded with a status of ${status} \\([A-Za-z ]*\\)$`).test(message));
+}

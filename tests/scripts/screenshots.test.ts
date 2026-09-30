@@ -3,7 +3,7 @@ import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
-  missingScenarioRoutes, NOT_PAGES, PAGES, parseJsonc, PREVIEW_OVERRIDES, previewWrangler, REDIRECTS, SCENARIO_PAGES,
+  expectedResourceError, missingScenarioRoutes, NOT_PAGES, PAGES, parseJsonc, PREVIEW_OVERRIDES, previewWrangler, REDIRECTS, SCENARIO_PAGES,
   relevantScreenshots, sanitizeManifest, screenshotSection, withScreenshots,
 } from '../../scripts/screenshots/config.mjs';
 
@@ -241,4 +241,14 @@ it('software print styling never forces a receipt before submission', () => {
   const css = readFileSync(new URL('../../src/styles/software-intake.css', import.meta.url), 'utf8');
   expect(css).not.toMatch(/#software-success\s*\{\s*display:block/);
   expect(css).not.toMatch(/@media print[^}]*#software-inquiry/);
+});
+
+it('allows only exact deliberate HTTP resource failures, preserving other console errors', () => {
+  const expected = [{ path: '/api/offer/sample/session', status: 401 }];
+  const message = 'Failed to load resource: the server responded with a status of 401 (Unauthorized)';
+  const base = 'http://127.0.0.1:4321';
+  expect(expectedResourceError(message, base + expected[0].path, base, expected)).toBe(true);
+  expect(expectedResourceError(message, base + '/api/offer/other/session', base, expected)).toBe(false);
+  expect(expectedResourceError(message.replace('401', '500'), base + expected[0].path, base, expected)).toBe(false);
+  expect(expectedResourceError('Unexpected script error', base + expected[0].path, base, expected)).toBe(false);
 });

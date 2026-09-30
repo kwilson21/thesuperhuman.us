@@ -106,7 +106,7 @@ for (const form of document.querySelectorAll<HTMLFormElement>(
       };
     const status = form.querySelector<HTMLElement>('[role="status"]')!;
     try {
-      const r = await fetch(form.action, {
+      const r = await fetch(form.getAttribute('action')!, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(payload),

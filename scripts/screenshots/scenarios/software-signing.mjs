@@ -126,6 +126,7 @@ export default {
     sql(`INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES('screenshot-incomplete-draft',${quote(id)},2,'draft',${quote(JSON.stringify(terms))},${quote(at)},${quote(at)});`);
     await shot('missing-send-field','Missing agreement details prevent sending',`/owner/requests/${id}`,{
       owner:true,
+      expectedResponses: [{ path: `/api/owner/requests/${id}/software`, status: 400 }],
       prepare:async page=>{
         page.once('dialog',dialog=>dialog.accept());
         await page.locator('[data-send-offer]').click();
@@ -139,6 +140,7 @@ export default {
       const challenge='00000000-0000-4000-8000-000000000019';
       sql(`INSERT OR REPLACE INTO software_agreement_challenges(id,purpose,offer_id,link_hash,recipient_email,code_hash,issued_at,expires_at) VALUES(${quote(challenge)},'agreement','screenshot-signing-offer',${quote(hash(token))},'signer@example.com','invalid-hash',${quote(at)},${quote(expires)});`);
       await shot(name,'Invalid or expired code requires fresh verification',`/offer/${token}/sign?challenge=${challenge}`,{
+        expectedResponses: [{ path: `/api/offer/${token}/session`, status: 401 }],
         prepare:async page=>{
           await page.locator('[name=code]').fill('00000000');
           await page.locator('[data-agreement-session] button').click();
@@ -151,6 +153,7 @@ export default {
     });
     await shot('required-choice','Missing party fields and choices prevent review',`/offer/${token}/sign`,{
       cookie,
+      expectedResponses: [{ path: `/api/offer/${token}/review`, status: 409 }],
       prepare:async page=>{
         await page.locator('[data-agreement-flow="review"]').evaluate(form=>form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
         await page.locator('[role=status]').filter({hasText:/./}).waitFor();
