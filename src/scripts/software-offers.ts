@@ -16,7 +16,7 @@ export function setupSoftwareOffers() {
     let parsed: unknown;
     try { parsed = await response.json(); }
     catch { throw new Error(response.status === 401 || response.status === 403 ? 'Your owner session ended. Reload the page to sign in again.' : 'Something went wrong. Nothing was saved. Try again.'); }
-    const result = parsed as { message?: string; errors?: Record<string,string>; version: number; updatedAt: string; sentAt?: string; link: string; emailSent: boolean; uncertain?: boolean; copySent?: boolean };
+    const result = parsed as { message?: string; errors?: Record<string,string>; version: number; updatedAt: string; sentAt?: string; linkCreatedAt: string; link: string; emailSent: boolean; uncertain?: boolean; copySent?: boolean };
     if (!response.ok) {
       if (response.status === 409 && (body as { action?: string }).action === 'draft' && 'updatedAt' in result) {
         const editor = document.querySelector<HTMLElement>('[data-software-editor]');
@@ -91,7 +91,7 @@ export function setupSoftwareOffers() {
   root.querySelector<HTMLButtonElement>('[data-revoke-link]')!.addEventListener('click', async event => {
     if (!confirm('Revoke the client link? Anyone using it will lose access.')) return;
     const button = event.currentTarget as HTMLButtonElement; button.disabled = true; root.setAttribute('inert', ''); root.setAttribute('aria-busy', 'true'); root.dataset.busy = 'true';
-    try { await post(endpoint, { action: 'revoke' }); link = ''; root.dataset.revoked = 'true'; linkInput.value = ''; status.textContent = 'Client link revoked.'; reload(status); }
+    try { await post(endpoint, { action: 'revoke', expectedLinkCreatedAt: button.dataset.linkCreatedAt }); link = ''; root.dataset.revoked = 'true'; linkInput.value = ''; status.textContent = 'Client link revoked.'; reload(status); }
     catch (error) { status.textContent = (error as Error).message; }
     finally { button.disabled = false; root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false'; }
   });
@@ -158,6 +158,7 @@ export function setupSoftwareOffers() {
     requestPage.setAttribute('inert', ''); requestPage.dataset.offerSending = 'true';
     send.disabled = true; root.setAttribute('inert', ''); root.setAttribute('aria-busy', 'true'); root.dataset.busy = 'true';
     try { const result = await post(endpoint, { action: 'send', version, expectedUpdatedAt: saved ? root.dataset.updated : root.dataset.sentUpdated });
+      root.querySelector<HTMLButtonElement>('[data-revoke-link]')!.dataset.linkCreatedAt = result.linkCreatedAt;
       link = result.link; linkInput.value = link; root.querySelector<HTMLElement>('[data-client-link-field]')!.hidden = false;
       status.textContent = result.uncertain ? `Offer v${version} is saved as sent. The email service didn’t confirm delivery. Check Resend before sending the link yourself.` : result.emailSent ? `Offer v${version} sent.${result.copySent ? '' : ' The owner copy didn’t send.'}` : `Offer v${version} is saved as sent, but the email didn’t go out. Copy the link and send it yourself.`;
       root.dataset.sentDate = new Date(result.sentAt ?? new Date().toISOString()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' });

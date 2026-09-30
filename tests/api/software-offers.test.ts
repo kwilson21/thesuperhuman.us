@@ -57,7 +57,7 @@ it('sends a saved version, supersedes it with the next draft and exposes only th
 it('revokes and reissues access without mutating sent terms', async () => {
   const sent = await send(await draft()); const token = sent.link.split('/').pop();
   sql.exec("UPDATE software_offer_links SET created_at='2020-01-01T00:00:00Z'");
-  expect((await call({ action:'revoke' })).status).toBe(200); expect(await getLinkedOffer(db, token)).toBeNull();
+  expect((await call({ action:'revoke', expectedLinkCreatedAt:'2020-01-01T00:00:00Z' })).status).toBe(200); expect(await getLinkedOffer(db, token)).toBeNull();
   const row = sql.prepare("SELECT * FROM software_offers WHERE status='sent'").get();
   const reissued = await send({ version: row.version, updatedAt: row.updated_at });
   expect(sql.prepare("SELECT * FROM software_offers WHERE status='sent'").get()).toEqual(row);
@@ -225,7 +225,7 @@ it.each(['resolved','withdrawn'])('rejects hidden fit/question actions for %s bu
   for (const command of [{ action:'fit',label:'potential-fit',note:'' }, { action:'question',text:'Hello' }]) expect((await call(command)).status).toBe(409);
   expect(fetch).not.toHaveBeenCalled();
   sql.exec("UPDATE software_offer_links SET created_at='2020-01-01T00:00:00Z'");
-  expect((await call({ action:'revoke' })).status).toBe(200);
+  expect((await call({ action:'revoke', expectedLinkCreatedAt:'2020-01-01T00:00:00Z' })).status).toBe(200);
 });
 it('rejects generic actions from a tab predating the fit save', async () => {
   const { POST: requestPost } = await import('~/pages/api/owner/requests/[id]');
@@ -242,7 +242,7 @@ async function withdraw() {
 }
 it.each(['revoke','decline','withdraw'])('refuses %s during the send window and allows it after 20 seconds', async action => {
   const sent = await send(await draft());
-  const close = () => action === 'withdraw' ? withdraw() : call({ action, text:'Thanks.' });
+  const close = () => action === 'withdraw' ? withdraw() : call({ action, text:'Thanks.', expectedLinkCreatedAt:sql.prepare('SELECT created_at FROM software_offer_links').get()?.created_at });
   vi.mocked(fetch).mockClear();
   const response = await close();
   expect(response.status).toBe(409);
@@ -261,9 +261,9 @@ it.each(['revoke','decline','withdraw'])('guards %s inside its batch when a send
     sql.prepare('UPDATE software_offer_links SET created_at=?').run(new Date().toISOString());
     return batch(items);
   };
-  const response = await (action === 'withdraw' ? withdraw() : call({ action, text:'Thanks.' }));
+  const response = await (action === 'withdraw' ? withdraw() : call({ action, text:'Thanks.', expectedLinkCreatedAt:sql.prepare('SELECT created_at FROM software_offer_links').get()?.created_at }));
   expect(response.status).toBe(409);
-  expect(await response.json()).toMatchObject({ message:'An offer is still being sent. Try again in a moment.' });
+  expect(await response.json()).toMatchObject({ message:action === 'revoke' ? 'The client link changed since this page loaded. Reload to see the current link.' : 'An offer is still being sent. Try again in a moment.' });
   expect(sql.prepare('SELECT revoked_at FROM software_offer_links').get()).toEqual({ revoked_at:null });
   expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({ status:'new' });
   expect(sql.prepare("SELECT * FROM owner_request_audit WHERE action IN ('declined','withdrawn','offer-link-revoked')").all()).toEqual([]);
@@ -360,4 +360,17 @@ it('rolls back a send when another send reserves the link after its pre-check', 
   expect(sql.prepare('SELECT token_hash FROM software_offer_links').get()).toEqual({ token_hash:'other-send' });
   expect(sql.prepare("SELECT * FROM owner_request_audit WHERE action='offer-sent'").all()).toEqual([]);
   expect(fetch).not.toHaveBeenCalled();
+});
+
+it('leaves a replacement link live when a stale tab revokes the earlier link', async () => {
+  const first = await send(await draft());
+  expect(first.linkCreatedAt).toBe(sql.prepare('SELECT created_at FROM software_offer_links').get().created_at);
+  sql.exec("UPDATE software_offer_links SET created_at='2020-01-01T00:00:00Z'");
+  const replacement = await send(await draft());
+  sql.exec("UPDATE software_offer_links SET created_at='2021-01-01T00:00:00Z'");
+  const response = await call({ action:'revoke', expectedLinkCreatedAt:first.linkCreatedAt });
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ ok:false, message:'The client link changed since this page loaded. Reload to see the current link.' });
+  expect(await getLinkedOffer(db,replacement.link.split('/').pop())).toMatchObject({ status:'sent' });
+  expect(sql.prepare("SELECT * FROM owner_request_audit WHERE action='offer-link-revoked'").all()).toEqual([]);
 });
