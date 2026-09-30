@@ -1,6 +1,6 @@
 ---
 title: "AI Gives You Speed. Engineering Gives It Direction."
-description: "Why AI-assisted software development benefits from smaller validated steps, tighter feedback loops, and human stewardship."
+description: "Why I give AI smaller tasks, check what it builds, and adjust the next step."
 ---
 
 I've been thinking a lot about the difference between **speed and velocity** when using AI to build software.

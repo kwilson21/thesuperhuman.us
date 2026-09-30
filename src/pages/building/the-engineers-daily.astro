@@ -14,7 +14,7 @@ const latestSrc = latest.file === 'lesson-prototype.png' ? preview.src : asset(l
 const entries = story.stages.map(stage => ({ id:stage.id, day:stage.day, title:stage.title, summary:stage.summary, detail:stage.decision, artifacts:stage.artifacts.map(image => ({ ...image, src:asset(image.file) })) }));
 Astro.response.headers.set('Cache-Control', 'no-store');
 ---
-<ProjectLayout title={story.title} subtitle={story.subtitle} description="Engineering practice alongside Scripture, prayer and reflection. For people who already code." status={story.status} journalHref="#the-engineers-daily-updates-title" ogImage={asset(story.cover)}>
+<ProjectLayout title={story.title} subtitle={story.subtitle} description="I’m designing a daily practice for people who already code: make a small change to an application through a story, then spend time with Scripture, prayer and reflection." status={story.status} journalHref="#the-engineers-daily-updates-title" ogImage={asset(story.cover)}>
   <figure class="project-current">
     <a href={asset(latest.file)} aria-label="Open the current lesson prototype screenshot at full size"><img src={latestSrc} alt={latest.alt} width={latest.width} height={latest.height} fetchpriority="high" /></a>
     <figcaption>{latest.caption}</figcaption>

@@ -6,24 +6,24 @@ import ExperienceRow from '~/components/ExperienceRow.astro';
 import WorkDiagram from '~/components/WorkDiagram.astro';
 import { personJsonLd, experience, lyftBonus, lyftTeams, skuposStages, workingPreference } from '~/data/profile';
 ---
-<BaseLayout jsonLd={personJsonLd} title="Work · Kazon Wilson" description="Software engineering experience from owning an internal system at Skupos to delivering features across distributed systems at Lyft. Explore the work and the progression.">
+<BaseLayout jsonLd={personJsonLd} title="Work · Kazon Wilson" description="See how I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft.">
   <div class="site-shell primary-page work-page">
     <header class="work-intro">
       <p class="page-kicker">Work</p>
-      <h1 class="page-title">Software engineer.<br />Building with AI.</h1>
-      <p class="page-lede">7+ years in production engineering: I built and owned an internal system at Skupos, then owned feature delivery across distributed systems at Lyft. {workingPreference}</p>
+      <h1 class="page-title">Software engineer.<br />I build useful software.</h1>
+      <p class="page-lede">7+ years in production engineering: at Skupos, I built tools that automated transaction-data troubleshooting. At Lyft, I built features across rental services and internal tools, coordinating delivery with other teams. {workingPreference}</p>
       <p class="work-evidence">This site is my current example of building with AI: I directed the design and used AI to build it. <a class="site-link" href="/building/personal-website">Personal website <span aria-hidden="true">→</span></a></p>
       <div class="site-links"><a class="site-link" href="/about#resumes">Request my resume <span aria-hidden="true">→</span></a><a class="site-link" href="/services#software">Hire me for software <span aria-hidden="true">→</span></a></div>
     </header>
     <section id="selected-work" class="site-section">
       <div class="site-section-heading"><h2>Work highlights</h2></div>
       <article id="lyft" class="selected-story">
-        <div><p class="page-kicker">Lyft - Associate Tools team</p><h3>More independence for support.</h3><p class="story-summary">Refactored a bonus tool and added visibility so support could run and monitor the work.</p><p class="capacity-figure">{lyftBonus.before} <span aria-hidden="true">→</span><span class="sr-only">to</span> {lyftBonus.after} rows</p><p class="text-muted text-sm">{lyftBonus.evidence}</p>
+        <div><p class="page-kicker">Lyft - Associate Tools team</p><h3>Support could run and monitor driver-bonus batches.</h3><p class="story-summary">{lyftBonus.description}</p><p class="capacity-figure">{lyftBonus.before} <span aria-hidden="true">→</span><span class="sr-only">to</span> {lyftBonus.after} rows per batch</p><p class="text-muted text-sm">{lyftBonus.evidence}</p>
           <details class="context-disclosure"><summary>Read the context <span aria-hidden="true">+</span></summary><div><p>The customer incident response team used this tool to issue driver bonuses. I rewrote its batch handling and added Grafana observability, making runs visible to the people responsible for them.</p><p>The figures describe rows handled per batch. They are from my career account; they do not measure runtime or a new benchmark.</p></div></details>
         </div><WorkDiagram kind="bonus" />
       </article>
       <article id="skupos" class="selected-story">
-        <div><p class="page-kicker">Skupos</p><h3>From scripts to a system I owned.</h3><p class="story-summary">Built and owned a Flask application that automated retail transaction-data troubleshooting, while keeping Google Sheets as the teams’ shared source of truth.</p>
+        <div><p class="page-kicker">Skupos</p><h3>From scripts to a system I owned.</h3><p class="story-summary">I built a tool that helped data operators troubleshoot retail transactions and automated updates to Google Sheets, keeping them as the teams’ shared source of truth.</p>
           <details class="context-disclosure"><summary>Read the context <span aria-hidden="true">+</span></summary><div>
             <p>I started with Python scripts that automated tobacco scan-data troubleshooting and updates to Google Sheets for data operations and account managers. Those scripts became background tasks managed by a Flask application, scheduled through Huey, with MySQL on AWS. I extended an existing internal React page so data operators could use the tools.</p>
             <p>The application supported transaction-data troubleshooting across 3,000+ retailer locations. The tobacco scan-data automation supported 3–5× store growth without increasing operations headcount.</p>

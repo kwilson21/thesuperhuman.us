@@ -27,7 +27,7 @@ const jsonLd = {
   worksFor: { '@type': 'Organization', name: 'The Superhuman Group LLC' },
 };
 ---
-<BaseLayout title="Kazon Wilson · Software, sound, and things worth exploring" description="Software engineer shaping ideas and building with AI. Discover my projects, engineering work, writing, and continuing practice in sound." jsonLd={jsonLd}>
+<BaseLayout title="Kazon Wilson · Software, sound, and things worth exploring" description="I build software, design websites, and mix and master music. Explore my projects, engineering work and writing." jsonLd={jsonLd}>
   {/* One page, four worlds, following the tagline: the studio (paper), the screen (software, dark),
       a waveform back to paper (sound), then the notebook and the horizon (things worth exploring).
       Motion is layered on by src/scripts/home-worlds.ts; every resting frame is complete without it. */}
@@ -63,7 +63,7 @@ const jsonLd = {
               </div>
               <p class="page-kicker">{kailleraStory.status}</p>
               <h3>Kaillera Next</h3>
-              <p>Super Smash Bros. 64 online with friends, in the browser.</p>
+              <p>{kailleraStory.subtitle}</p>
               <a class="site-link project-link" href="/building/kaillera-next#kaillera-next-updates-title">Development journal <span aria-hidden="true">→</span><span class="sr-only">Kaillera Next</span></a>
             </article>
           </div>
@@ -73,12 +73,12 @@ const jsonLd = {
           <div class="work-preview" data-reveal data-count={lyftBonus.after} data-count-from={lyftBonus.before}>
             <p class="work-company">Lyft</p>
             <div class="work-outcome">
-              <p class="work-figure">{lyftBonus.before} <span aria-hidden="true">→</span><span class="sr-only">to</span> <span class="count-slot"><span class="count-ghost" aria-hidden="true">{lyftBonus.after}</span><span class="count-live" aria-hidden="true" data-count-display>{lyftBonus.after}</span><span class="sr-only">{lyftBonus.after}</span></span> rows</p>
+              <p class="work-figure">{lyftBonus.before} <span aria-hidden="true">→</span><span class="sr-only">to</span> <span class="count-slot"><span class="count-ghost" aria-hidden="true">{lyftBonus.after}</span><span class="count-live" aria-hidden="true" data-count-display>{lyftBonus.after}</span><span class="sr-only">{lyftBonus.after}</span></span> rows per batch</p>
               {cells > 1 && <div class="capacity" aria-hidden="true">
                 <span class="capacity-cells" data-count-cells style={`--cells:${cells}`}>{Array.from({ length: cells }, (_, index) => <i class="cell" style={`--i:${index}`}></i>)}</span>
                 <span class="capacity-key" style={`--cells:${cells}`}><i class="cell"></i><span>= {lyftBonus.before} rows</span></span>
               </div>}
-              <p>More capacity. More independence for support.</p><p class="source-note">{lyftBonus.evidence}</p>
+              <p>{lyftBonus.description}</p><p class="source-note">{lyftBonus.evidence}</p>
             </div>
             <a class="site-link" href="/work#lyft">Explore my work <span aria-hidden="true">→</span></a>
           </div>

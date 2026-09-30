@@ -21,7 +21,7 @@ import graphicsFixes from '~/assets/projects/kaillera-next/graphics-fixes-diagra
 
 export const kailleraStory = {
   title: 'Kaillera Next',
-  subtitle: 'Open a link and play N64 games with friends, nothing to install.',
+  subtitle: 'Open a link and play supported N64 games with friends, nothing to install.',
   description: 'Kaillera introduced me to programming. I set the direction and Claude Code writes the code.',
   status: 'In development · playable demo build',
 };
