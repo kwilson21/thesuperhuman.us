@@ -139,7 +139,7 @@ it('renders review and handoff notices with sign-in links and no project details
 it('queues the correct review and handoff notice subjects using mocked email transport only',async()=>{
   await start();vi.mocked(fetch).mockClear();const token=await session();
   const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',criteria:['Try the preview.'],email_client:true}});
-  expect(response.status).toBe(200);const review=await response.json();
+  expect(response.status).toBe(200);const review=await response.json() as {id:string};
   expect(JSON.parse(vi.mocked(fetch).mock.calls.at(-1)![1]!.body as string).subject).toBe('Your project is ready for review');
   await decide(review.id,{decision:'milestone_accepted',confirm:true},token);
   const handoff=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'handoff',paid_confirmed:true,links:[{label:'Notes',url:'https://example.com/notes'}],email_client:true}});

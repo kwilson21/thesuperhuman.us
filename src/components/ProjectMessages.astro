@@ -1,10 +1,11 @@
 ---
 import type { ProjectMessage } from '~/lib/audio-project-messages';
+import type { SoftwareProjectMessage } from '~/lib/software-project-messages';
 import { safeExternalUrl } from '~/lib/owner-model';
 import '~/styles/studio.css';
 
 type Props = {
-  messages: ProjectMessage[];
+  messages: (ProjectMessage | SoftwareProjectMessage)[];
   endpoint: string;
   reader: 'owner' | 'client';
   closed: boolean;
@@ -33,6 +34,7 @@ function parts(body: string) {
   {messages.length ? <ol class="project-message-list">{messages.map(message =>
     <li class:list={{ mine: message.actor === reader }} data-unread-message={message.actor !== reader && !message.read_at ? message.id : undefined}>
       <div class="project-message-meta"><strong>{message.actor === reader ? 'You' : message.actor === 'owner' ? 'Kazon' : 'Client'}</strong>{message.review_decision && <span class:list={['decision', message.review_decision]}>{message.review_decision === 'approved' ? 'Approved the mix' : message.review_decision === 'stopped' ? 'Stopped the project' : 'Requested changes'}</span>}<time datetime={message.created_at}>{new Date(message.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' })}</time>{message.actor !== reader && !message.read_at && <span class="unread">New</span>}</div>
+      {'decision' in message && message.decision && <span class="decision">{{direction_confirmed:'Direction confirmed',milestone_accepted:'Milestone accepted',changes_requested:'Changes requested'}[message.decision]}</span>}
       <p>{parts(message.body).map(part => part.href ? <a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a> : part.text)}</p>
     </li>
   )}</ol> : <p class="project-messages-empty">No messages yet.</p>}

@@ -37,5 +37,11 @@ export function setupSoftwareProject() {
     root.querySelector('[data-software-revoke]')?.addEventListener('click', () => {
       if (confirm('Close client access and sign the client out?')) void send({ action: 'revoke', confirmed: true });
     });
+    root.querySelectorAll<HTMLFormElement>('[data-software-payment]').forEach(form=>form.addEventListener('submit',event=>{
+      event.preventDefault();void send({action:'payment',milestone_index:Number(form.dataset.milestone),confirmed:new FormData(form).has('confirmed')});
+    }));
+    root.querySelector('[data-software-complete]')?.addEventListener('click',()=>{
+      if(confirm('Mark this project complete after the final milestone handoff?')) void send({action:'complete',confirmed:true});
+    });
   });
 }

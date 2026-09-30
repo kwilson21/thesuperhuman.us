@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
 import { musicRequest } from '~/lib/music-request';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
-import { getSoftwareProject, projectTerms, projectDate, softwareAudit, softwareGuard, openSoftwareGuard, deliverSoftwareNotice, queueSoftwareNotice, softwareAccessRevocation, recordMilestonePayment } from '~/lib/software-projects';
+import { getSoftwareProject, projectTerms, projectDate, softwareAudit, softwareGuard, openSoftwareGuard, deliverSoftwareNotice, queueSoftwareNotice, softwareAccessRevocation, recordMilestonePayment, acceptedDeliveryGuard } from '~/lib/software-projects';
 export const prerender = false;
 const schema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('start'), signatures: z.literal(true), payment: z.literal(true), next_update_on: projectDate }),
@@ -56,7 +56,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       const last = projectTerms(project).milestones.length-1;
       await db.batch([openSoftwareGuard(db,id), softwareGuard(db,"SELECT 1 FROM software_projects WHERE request_id=? AND completed_at IS NULL",[id]),
         ...(command.action==='state' ? [softwareGuard(db,'SELECT 1 FROM software_projects WHERE request_id=? AND updated_at=?',[id,command.expectedUpdatedAt])] : []),
-        softwareGuard(db,"SELECT 1 FROM software_project_updates WHERE request_id=? AND milestone_index=? AND kind='handoff' AND status='shared'",[id,last]),
+        acceptedDeliveryGuard(db,id,last),
+        softwareGuard(db,`SELECT 1 FROM software_project_updates h JOIN software_project_updates u ON u.request_id=h.request_id AND u.milestone_index=h.milestone_index
+          JOIN software_project_messages m ON m.update_id=u.id WHERE h.request_id=? AND h.milestone_index=? AND h.kind='handoff' AND h.status='shared'
+          AND u.kind='delivery_review' AND u.status='shared' AND m.decision='milestone_accepted' AND h.shared_at>=m.created_at`,[id,last]),
         db.prepare("UPDATE software_projects SET state='complete',completed_at=?,updated_at=? WHERE request_id=?").bind(at,at,id),
         softwareAudit(db,id,'completed',actor,at,'Project completed after final milestone handoff')]);
       return json({ok:true});

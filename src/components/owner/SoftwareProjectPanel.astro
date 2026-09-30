@@ -1,11 +1,16 @@
 ---
-import { projectTerms, projectStates, projectSteps, softwareDate } from '~/lib/software-projects';
+import { projectTerms, projectStates, projectSteps, softwareDate, sharedSoftwareUpdates, milestonePayments } from '~/lib/software-projects';
+import { addBusinessDays } from '~/lib/business-days';
 import type { SoftwareProject, SoftwareUpdate } from '~/lib/software-projects';
 import type { SoftwareOffer } from '~/lib/software-offers';
 type Props = { requestId: string; project: SoftwareProject | null; sentOffer?: SoftwareOffer; updates: SoftwareUpdate[]; closed: boolean };
 const { requestId, project, sentOffer, updates, closed } = Astro.props;
 const terms = project?.content_deleted_at ? null : project ? projectTerms(project) : sentOffer ? projectTerms(sentOffer) : null;
 const draft = updates.find(update => update.status === 'draft');
+const shared = project && terms ? await sharedSoftwareUpdates(Astro.locals.runtime.env.MUSIC_DB!,requestId) : [];
+const payments = project && terms ? await milestonePayments(Astro.locals.runtime.env.MUSIC_DB!,requestId) : [];
+const lastDelivery=terms && shared.find(update=>update.kind==='delivery_review' && update.status==='shared' && update.milestone_index===terms.milestones.length-1);
+const canComplete = lastDelivery?.decision==='milestone_accepted' && shared.some(update=>update.kind==='handoff' && update.status==='shared' && update.milestone_index===lastDelivery.milestone_index && update.shared_at!>=lastDelivery.decided_at!);
 ---
 {project?.content_deleted_at && <section class="rail-section"><h2>Project</h2><p class="rail-muted">Project content was removed by reviewed retention cleanup.</p></section>}
 {terms && <section class="rail-section software-rail" aria-labelledby="software-project-heading" data-software-project data-endpoint={`/api/owner/requests/${requestId}/project`}>
@@ -18,8 +23,8 @@ const draft = updates.find(update => update.status === 'draft');
     <button class="studio-button" disabled type="submit">Confirm start</button>
   </form> : <>
     <form data-software-state data-updated-at={project.updated_at}>
-      <fieldset disabled={closed || Boolean(project.revoked_at)}>
-        <label>State<select class="studio-select" name="state">{Object.entries(projectStates).map(([value,label]) => <option value={value} selected={project.state === value}>{label}</option>)}</select></label>
+      <fieldset disabled={closed || Boolean(project.revoked_at) || Boolean(project.completed_at)}>
+        <label>State<select class="studio-select" name="state">{Object.entries(projectStates).filter(([value])=>value!=='complete' || project.state==='complete').map(([value,label]) => <option value={value} selected={project.state === value}>{label}</option>)}</select></label>
         <div class="software-field"><label>Waiting for<input aria-describedby="project-field-2-hint" class="studio-input" name="waiting_for" maxlength="200" value={project.waiting_for} required={project.state === 'waiting_for_input'} /></label><p id="project-field-2-hint" class="rail-muted rail-caption">Name the one thing you need, e.g. Access to the sample export.</p></div>
         <label>Milestone<select class="studio-select" name="milestone_index">{terms.milestones.map((item,index) => <option value={index} selected={index === project.milestone_index}>Milestone {index+1} · {item.name}</option>)}</select></label>
         <label>Step<select class="studio-select" name="step">{projectSteps.map(step => <option value={step} selected={step === project.step}>{step[0].toUpperCase()+step.slice(1)}</option>)}</select></label>
@@ -27,11 +32,20 @@ const draft = updates.find(update => update.status === 'draft');
         <button class="studio-button" type="submit">Save</button>
       </fieldset>
     </form>
+    <h3>Milestones</h3>
+    <ul class="software-update-list">{terms.milestones.map((item,index)=>{
+      const reviews=shared.filter(update=>update.milestone_index===index && update.status==='shared' && update.kind?.endsWith('_review'));
+      const paid=payments.find(payment=>payment.milestone_index===index),handoff=shared.find(update=>update.milestone_index===index && update.status==='shared' && update.kind==='handoff');
+      return <li><strong>Milestone {index+1} · {item.name}</strong>{reviews.map(review=><span>{review.decision==='direction_confirmed' ? 'Direction confirmed' : review.decision==='changes_requested' ? 'Changes requested' : review.decision==='milestone_accepted' ? `Accepted ${softwareDate(review.decided_at!)}` : `Ready for review${review.kind==='delivery_review' ? `, review by ${softwareDate(addBusinessDays(review.shared_at!,review.review_window_days ?? 5))}` : ''}`}</span>)}{paid && <span>Paid in full {softwareDate(paid.paid_recorded_at)}</span>}{handoff && <span>Handoff shared {softwareDate(handoff.shared_at!)}</span>}
+        {!paid && !closed && !project.revoked_at && project.state!=='complete' && <form data-software-payment data-milestone={index}><label class="confirmation"><input type="checkbox" name="confirmed" required />This milestone is paid in full (checked in Stripe or the bank)</label><button class="studio-quiet" type="submit">Record full payment</button></form>}
+      </li>;
+    })}</ul>
+    {canComplete && !closed && !project.revoked_at && !project.completed_at && <button class="studio-button" type="button" data-software-complete>Mark project complete</button>}
     <h3>Updates</h3>
     <ul class="software-update-list">{updates.map(update => <li><strong>{update.title || 'Untitled draft'}</strong><span>{update.kind === 'progress' ? 'Progress' : String(update.kind).replaceAll('_',' ')} · {{ draft: 'Draft', shared: 'Shared', superseded: 'Superseded' }[update.status]}{update.shared_at ? ` · ${softwareDate(update.shared_at)}` : ''}</span>
       {['pending','failed','sending'].includes(update.notification_status) && <><p class="rail-muted">{update.notification_status === 'sending' ? 'Email unconfirmed. Check Resend before retrying.' : update.notification_status === 'failed' ? 'Update email failed.' : 'Update email pending.'}</p><button class="studio-quiet" type="button" data-software-notice={update.id} data-uncertain={update.notification_status === 'sending' ? 'true' : undefined}>{update.notification_status === 'sending' ? 'I checked Resend; retry' : 'Retry notice'}</button></>}
     </li>)}</ul>
-    {!closed && !project.revoked_at && <a href={`/owner/requests/${requestId}/update`}>{draft ? 'Continue draft' : 'New update'} →</a>}
+    {!closed && !project.revoked_at && project.state!=='complete' && <a href={`/owner/requests/${requestId}/update`}>{draft ? 'Continue draft' : 'New update'} →</a>}
     <h3>Client access</h3><p class="rail-state"><span class:list={['state-dot', project.revoked_at ? 'closed' : project.invitation_status]} aria-hidden="true"></span>{project.revoked_at ? 'Access closed. Sign-in and private files are unavailable.' : project.invitation_status === 'sent' ? 'Sign-in link sent' : project.invitation_status === 'sending' ? 'Sign-in email unconfirmed. Check Resend before retrying.' : project.invitation_status === 'failed' ? 'Sign-in email failed. The project is saved.' : 'Sign-in email not sent yet'}</p>
     {!closed && !project.revoked_at && <>{project.invitation_status !== 'sent' && <button class:list={[project.invitation_status === 'sending' ? 'studio-quiet' : 'studio-button']} type="button" data-software-notice="" data-uncertain={project.invitation_status === 'sending' ? 'true' : undefined}>{project.invitation_status === 'sending' ? 'I checked Resend; retry' : project.invitation_status === 'failed' ? 'Retry invitation' : 'Send invitation'}</button>}
       <details class="rail-close"><summary>Close client access</summary><p class="rail-caption">Signs the client out and hides the project immediately.</p><button class="studio-quiet danger" type="button" data-software-revoke>Close client access</button></details>

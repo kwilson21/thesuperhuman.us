@@ -54,6 +54,10 @@ const offers = request.kind === 'software' ? await listSoftwareOffers(db, reques
 const softwareProject = request.kind === 'software' && clientPortalEnabled(Astro.locals.runtime.env) ? await getSoftwareProject(db, request.id) : null;
 const softwareUpdates = softwareProject ? await listSoftwareUpdates(db, request.id) : [];
 const softwareMessages = softwareProject ? await listSoftwareProjectMessages(db, request.id) : [];
+if (softwareProject) {
+  const projectAudit = (await db.prepare('SELECT id,action,actor,note,occurred_at AS occurredAt FROM software_project_audit WHERE request_id=? ORDER BY id DESC').bind(request.id).all<typeof audit[number]>()).results;
+  audit.push(...projectAudit);audit.sort((first,second)=>second.occurredAt.localeCompare(first.occurredAt));
+}
 const fit = request.kind === 'software' ? await db.prepare('SELECT label,note FROM software_fit_reviews WHERE request_id=?').bind(request.id).first<{label:string;note:string}>() : null;
 const offerLink = request.kind === 'software' ? await db.prepare('SELECT revoked_at FROM software_offer_links WHERE request_id=?').bind(request.id).first<{revoked_at:string|null}>() : null;
 const auditLabel = (item: typeof audit[number]) => ({ 'fit-reviewed': 'Fit review saved', 'question-sent': 'Question sent', 'declined': 'Declined', 'offer-draft-saved': 'Offer draft saved', 'offer-sent': item.note || 'Offer sent', 'offer-link-revoked': 'Client link revoked' }[item.action] ?? item.action.replaceAll('-', ' '));

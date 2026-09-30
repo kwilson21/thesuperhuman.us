@@ -5,8 +5,10 @@ import StudioUnavailable from '~/components/StudioUnavailable.astro';
 import SoftwareProjectUpdate from '~/components/SoftwareProjectUpdate.astro';
 import SoftwareStepTrack from '~/components/SoftwareStepTrack.astro';
 import ProjectMessages from '~/components/ProjectMessages.astro';
+import SoftwareReviewResponse from '~/components/SoftwareReviewResponse.astro';
 import { clientPortalEnabled, clientSoftwareProjectForSession, studioSessionFromRequest } from '~/lib/audio-client-access';
-import { projectTerms, sharedSoftwareUpdates, softwareStateSentence, softwareDate } from '~/lib/software-projects';
+import { projectTerms, sharedSoftwareUpdates, softwareStateSentence, softwareDate, milestonePayments, correctionPeriodEnd } from '~/lib/software-projects';
+import { addBusinessDays } from '~/lib/business-days';
 import { listSoftwareProjectMessages } from '~/lib/software-project-messages';
 import '~/styles/studio.css';
 const env = Astro.locals.runtime.env;
@@ -19,7 +21,14 @@ if (!project) Astro.response.status = 404;
 const terms = project ? projectTerms(project) : null;
 const updates = project ? await sharedSoftwareUpdates(env.MUSIC_DB, project.request_id) : [];
 const messages = project ? await listSoftwareProjectMessages(env.MUSIC_DB, project.request_id) : [];
-const latest = updates[0], milestone = terms?.milestones[project?.milestone_index ?? 0];
+const latest = updates.find(update=>update.status==='shared'), milestone = terms?.milestones[latest?.milestone_index ?? project?.milestone_index ?? 0];
+const payments=project ? await milestonePayments(env.MUSIC_DB,project.request_id) : [];
+const delivery=updates.find(update=>update.kind==='delivery_review' && update.status==='shared' && update.milestone_index===(latest?.milestone_index ?? project?.milestone_index));
+const accepted=delivery?.decision==='milestone_accepted' ? delivery : null;
+const firstAcceptance=updates.filter(update=>accepted && update.milestone_index===accepted.milestone_index && update.decision==='milestone_accepted').map(update=>update.decided_at!).sort()[0];
+const handoff=accepted ? updates.find(update=>update.kind==='handoff' && update.status==='shared' && update.milestone_index===accepted.milestone_index && update.shared_at!>=accepted.decided_at!) : null;
+const handoffLinks: {label:string;url:string}[]=JSON.parse(handoff?.links_json ?? '[]');
+const review=latest?.kind?.endsWith('_review') ? latest : accepted;
 const visual = (id: string) => `/api/studio/software/${project!.request_id}/updates/${id}/visual`;
 const conversationClosed = project?.state === 'complete';
 const waiting = (project?.state === 'waiting_for_input' ? project.waiting_for : '');
@@ -27,16 +36,17 @@ const waiting = (project?.state === 'waiting_for_input' ? project.waiting_for : 
 {!project || !terms ? <StudioUnavailable audio={false} backLabel="Back to your projects" /> : <BaseLayout title={`${terms.outcome} · Private project`} description="Your private project." noindex>
   <article class="site-shell software-project">
     <nav class="breadcrumb" aria-label="Breadcrumb"><a href="/studio">Your projects</a> / {terms.outcome}</nav>
-    <header><p class="studio-kicker">Private project</p><h1>{terms.outcome}</h1><p class="summary">{terms.summary}</p></header>
-    <div class="project-band"><div><h2>Milestone {project.milestone_index+1} · {milestone?.name}</h2><p>{softwareStateSentence(project)}</p></div><div>{latest?.shared_at && <p>Last update: {softwareDate(latest.shared_at)}</p>}{project.next_update_on && <p>Next update: {softwareDate(project.next_update_on)}</p>}</div><SoftwareStepTrack step={project.step} /></div>
+    <header><p class="studio-kicker">Private project</p><h1>{latest?.kind==='delivery_review' ? latest.milestone_index===0 ? 'Your first milestone is ready to review.' : `Milestone ${(latest.milestone_index ?? 0)+1} is ready to review.` : terms.outcome}</h1><p class="summary">{terms.summary}{latest?.kind==='delivery_review' && ` · ${latest.artifact_version}`}</p>{latest?.kind==='delivery_review' && <p>Please review by {softwareDate(addBusinessDays(latest.shared_at!,latest.review_window_days ?? 5))}.</p>}</header>
+    <div class="project-band"><div><h2>Milestone {(latest?.milestone_index ?? project.milestone_index)+1} · {milestone?.name}</h2><p>{softwareStateSentence(project)}</p></div><div>{latest?.shared_at && <p>Last update: {softwareDate(latest.shared_at)}</p>}{project.next_update_on && <p>Next update: {softwareDate(project.next_update_on)}</p>}</div><SoftwareStepTrack step={latest?.kind==='delivery_review' ? 'review' : latest?.kind==='direction_review' ? 'direction' : latest?.kind==='handoff' ? 'handoff' : project.step} /></div>
     <div class="project-columns"><div class="project-main">
-      {latest ? <SoftwareProjectUpdate update={latest} visualUrl={latest.has_visual ? visual(latest.id) : undefined} /> : <section><h2>Your first update is on its way.</h2>{project.next_update_on && <p>Next update: {softwareDate(project.next_update_on)}</p>}</section>}
+      {latest ? <SoftwareProjectUpdate update={latest} checks={milestone?.acceptance} visualUrl={latest.has_visual ? visual(latest.id) : undefined} /> : <section><h2>Your first update is on its way.</h2>{project.next_update_on && <p>Next update: {softwareDate(project.next_update_on)}</p>}</section>}
+      {accepted && <section class="handoff-strip"><p class="studio-kicker">After acceptance</p><h2>Milestone accepted{handoff ? ' · Handoff ready' : ''}</h2><p>{accepted.artifact_version} is accepted.</p>{handoff ? <><ul>{handoffLinks.map(link=><li><a class="site-link" href={link.url} target="_blank" rel="noopener noreferrer">{link.label} <span aria-hidden="true">↗</span></a></li>)}</ul><p>{handoff.next_step}</p></> : <p>Handoff follows full payment.</p>}<p>Corrections through {softwareDate(correctionPeriodEnd(firstAcceptance,payments.find(payment=>payment.milestone_index===accepted.milestone_index)?.paid_recorded_at))}.</p></section>}
       <details><summary>What we agreed</summary>{terms.milestones.map(item => <section><h3>{item.name}</h3><h4>What you’ll receive</h4><ol>{item.deliverables.map(line => <li>{line}</li>)}</ol><h4>How we’ll know it’s ready</h4><ul>{item.acceptance.map(line => <li>{line}</li>)}</ul></section>)}{terms.clientInputs && <><h3>What I’ll need from you</h3><p>{terms.clientInputs}</p></>}{terms.exclusions && <><h3>Outside this offer</h3><p>{terms.exclusions}</p></>}</details>
-      {updates.length > 1 && <details><summary>Earlier updates</summary>{updates.slice(1).map(update => <SoftwareProjectUpdate update={update} visualUrl={update.has_visual ? visual(update.id) : undefined} />)}</details>}
-    </div><aside aria-label="Next steps">{waiting && <section><h2>Waiting on you</h2><p>{waiting}</p></section>}{latest?.next_step && <section><h2>Next from me</h2><p>{latest.next_step}</p></section>}{!conversationClosed && <a class="site-link" href="#conversation">Ask a question <span aria-hidden="true">↓</span></a>}</aside></div>
+      {updates.length > 1 && <details id="earlier-versions"><summary>Earlier versions</summary>{updates.filter(update=>update.id!==latest?.id).map(update => <><SoftwareProjectUpdate update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} visualUrl={update.has_visual ? visual(update.id) : undefined} />{update.kind?.endsWith('_review') && <SoftwareReviewResponse update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} milestoneName={terms.milestones[update.milestone_index ?? 0].name} endpoint="" readonly />}</>)}</details>}
+    </div><aside aria-label="Next steps">{review && <SoftwareReviewResponse update={review} checks={terms.milestones[review.milestone_index ?? 0].acceptance} milestoneName={terms.milestones[review.milestone_index ?? 0].name} endpoint={`/api/studio/software/${project.request_id}/reviews/${review.id}`} readonly={conversationClosed} />}{updates.length>1 && <a class="site-link" href="#earlier-versions">See earlier versions</a>}{waiting && <section><h2>Waiting on you</h2><p>{waiting}</p></section>}{latest?.next_step && <section><h2>Next from me</h2><p>{latest.next_step}</p></section>}{!conversationClosed && <a class="site-link" href="#conversation">Ask a question <span aria-hidden="true">↓</span></a>}</aside></div>
     <div id="conversation"><ProjectMessages messages={messages} endpoint={`/api/studio/software/${project.request_id}/messages`} reader="client" closed={conversationClosed} heading="Ask a question" placeholder="Ask about a screen, a step or a date." hint="" /></div>
     <footer class="project-records"><span>Agreement · Complete</span><span>{project.payment_mode === 'standard' ? 'Initial payment · Received' : 'Payment · Invoiced on delivery'}</span><span>Start · Confirmed {softwareDate(project.started_at)}</span></footer>
-  </article><script>import { setupProjectMessages } from '~/scripts/project-messages'; setupProjectMessages();</script>
+  </article><script>import { setupProjectMessages } from '~/scripts/project-messages'; import { setupSoftwareReviews } from '~/scripts/software-review'; setupProjectMessages(); setupSoftwareReviews();</script>
 </BaseLayout>}
 <style>
   .software-project { max-width: 80rem; margin: auto; padding: clamp(3rem,7vw,6rem) 1.5rem; overflow-wrap: anywhere; }
@@ -52,6 +62,8 @@ const waiting = (project?.state === 'waiting_for_input' ? project.waiting_for : 
   .project-band p { font-size: .85rem; color: var(--muted); }
   .project-columns { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1fr); gap: 3rem; align-items: start; }
   .project-main, aside { min-width: 0; }
+  .handoff-strip { border-block: 1px solid var(--rule); padding: 1.5rem 0; margin: 2rem 0; }
+  .handoff-strip ul { list-style: none; padding: 0; }
   aside { border-left: 1px solid var(--rule); padding-left: 2rem; }
   aside section { padding-bottom: 2rem; }
   details { border-top: 1px solid var(--rule); padding: 1.5rem 0; margin-top: 2rem; }
