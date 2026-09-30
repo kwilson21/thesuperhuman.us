@@ -35,7 +35,7 @@ export default {
     sql(`UPDATE software_invoices SET status='paid',status_updated_at=${quote(at)} WHERE id='screenshot-deposit'`);
     await shot('Paid deposit checks first installment before start',`/owner/requests/${id}`,'deposit-paid',{owner:true});
     await shot('Start the project',`/owner/requests/${id}`,'start',{owner:true});
-    await ownerFetch(`/api/owner/requests/${id}/project`,{action:'start',offer_id:sentOffer.id,offer_version:sentOffer.version,expectedRequestUpdatedAt:at,signatures:true,payment:true,deposit_invoice_id:'screenshot-deposit',next_update_on:'2026-10-08'});
+    await ownerFetch(`/api/owner/requests/${id}/project`,{action:'start',signature_source:'external',external_signed_on:'2026-09-30',external_parties:'Sample Client / Sample Contractor',external_kept_copy:true,external_copy_reference:'Fictional signed copy',inputs_ready:true,offer_id:sentOffer.id,offer_version:sentOffer.version,expectedRequestUpdatedAt:at,signatures:true,payment:true,deposit_invoice_id:'screenshot-deposit',next_update_on:'2026-10-08'});
     sql(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,stripe_invoice_id,hosted_invoice_url,status,due_at,created_by,created_at,updated_at)
       VALUES ('screenshot-next-deposit',${quote(id)},${quote(sentOffer.id)},1,'deposit',60000,7,'in_fictional_next_deposit','https://example.com/invoice/next-deposit','open','2026-10-07','owner@example.com',${quote(at)},${quote(at)})`);
     await shot('Owner milestone line with open later deposit',`/owner/requests/${id}`,'milestone-deposit-open',{owner:true});

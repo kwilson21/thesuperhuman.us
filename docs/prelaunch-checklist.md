@@ -97,3 +97,18 @@ Every item receives **PASS**, **FAIL**, **UNVERIFIED**, or **N/A with a reason**
 - [ICO privacy notice guidance](https://ico.org.uk/for-organisations/advice-for-small-organisations/privacy-notices-and-cookies/cookies-and-privacy-notices-in-detail/)
 
 Reference guidance informs checks; it does not establish which jurisdiction applies to a particular site.
+
+## Software agreement signing
+
+- [ ] Record counsel review status for the templates and electronic consent.
+- [ ] Owner verifies the registered-agent business address and contractor config.
+- [ ] Preview seeded templates for one, two and three milestones in both payment modes.
+- [ ] Verify the signing setting defaults off and the outside-site path still works.
+- [ ] Verify scoped email authentication, revocation, stale hashes and MSA reuse confirmation.
+- [ ] Exercise PDF rendering in the actual Workers runtime, including Unicode and attachments.
+- [ ] Verify full text extraction, every document certificate, packet hashes and two retained copies.
+- [ ] Test artifact failure and each recipient's uncertain email/retry separately.
+- [ ] Verify project-page and archive downloads, including closed project and redacted request.
+- [ ] Rehearse restoring agreement database records, templates, fonts and private storage, with hashes.
+- [ ] Verify custom project retention and exclusion of open, held and actively reused agreements.
+- [ ] Review real CI screenshots, keyboard/no-JS behavior and overflow from 320 to 1280 pixels.

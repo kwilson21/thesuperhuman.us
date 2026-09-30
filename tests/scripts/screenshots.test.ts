@@ -38,7 +38,9 @@ describe('screenshot coverage', () => {
     for (const scenario of new Set(Object.values(SCENARIO_PAGES).map(item => item.scenario))) {
       const module = await import(pathToFileURL(`scripts/screenshots/scenarios/${scenario}.mjs`).href);
       const steps = await module.default.run({
-        base: 'http://127.0.0.1:4321', sql: () => '[]', ownerFetch: async () => ({}),
+        base: 'http://127.0.0.1:4321',
+        sql: (query: string) => query.startsWith('SELECT status FROM software_agreement_artifacts') ? '[{"results":[{"status":"ready"}]}]' : '[]',
+        ownerFetch: async (path: string) => path.startsWith('/api/offer/') && path.endsWith('/review') ? {documents:[{id:'00000000-0000-4000-8000-000000000001',kind:'msa',hash:'a'.repeat(64)},{id:'00000000-0000-4000-8000-000000000002',kind:'sow',hash:'b'.repeat(64)}]} : {},
         capture: async ({ file, path }: { file: string; path: string }) => { captured.push({ scenario, path }); return file; },
       });
       expect(steps.length).toBeGreaterThan(0);

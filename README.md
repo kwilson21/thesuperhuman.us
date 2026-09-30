@@ -226,3 +226,17 @@ Apply music migration `0020_software_offers.sql` before deploying code that uses
 Apply music migration `0021_software_projects.sql` after 0020 and before deploying code that uses software projects. This code requires 0021. Deploying it before the migration breaks studio sign-in (audio too) and the owner Today page. It stores project term snapshots, private updates, messages and audit records. Do not edit previously applied migrations.
 
 Apply music migration `0022_software_invoices.sql` after 0021 and before deploying code that uses software invoices. It pins invoice records to requests and immutable offers, including deposits before project start, and preserves existing software audit ids and notes. It has not been applied in production. Signed software invoice events reuse the existing Stripe event de-duplication table; audio tables are unchanged.
+
+### Software agreement signing
+
+Migration 0023 follows software invoices migration 0022. Signing is controlled by
+an owner-only `software_signing_enabled` setting, off by default. Publish private
+MSA and SOW templates and complete verified contractor configuration before
+sending an offer for website signing. Sent offers snapshot configuration and
+pin immutable template versions. Private source templates are excluded from Git;
+a one-shot private seed refuses to overwrite existing versions.
+
+PDF preparation uses `pdf-lib`, `@pdf-lib/fontkit`, and licensed local Inter and
+Newsreader fonts. Agreement PDFs and certificates belong in private storage.
+Signed copy downloads remain available when new website signing is switched off.
+Code completion does not establish deployment or live signing readiness.
