@@ -123,8 +123,9 @@ it('gates handoff on accepted delivery, explicit full payment and safe delivered
   expect(sql.prepare('SELECT count(*) AS n FROM software_milestone_payments').get()).toEqual({n:1});
   expect((await call(projectPost,{action:'payment',milestone_index:0,confirmed:true})).status).toBe(200);
   expect(sql.prepare("SELECT count(*) AS n FROM software_project_audit WHERE action='milestone-paid'").get()).toEqual({n:1});
+  sql.exec("UPDATE software_projects SET next_update_on='2026-10-02',waiting_for='Sample'");
   expect((await call(projectPost,{action:'complete',confirmed:true})).status).toBe(200);
-  expect(sql.prepare('SELECT state,completed_at FROM software_projects').get()).toMatchObject({state:'complete',completed_at:expect.any(String)});
+  expect(sql.prepare('SELECT state,completed_at,next_update_on,waiting_for FROM software_projects').get()).toMatchObject({state:'complete',completed_at:expect.any(String),next_update_on:null,waiting_for:''});
   expect((await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update})).status).toBe(409);
 });
 it('starts corrections at the earlier acceptance or full-payment New York date, across DST',()=>{

@@ -63,7 +63,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
         softwareGuard(db,`SELECT 1 FROM software_project_updates h JOIN software_project_updates u ON u.request_id=h.request_id AND u.milestone_index=h.milestone_index
           JOIN software_project_messages m ON m.update_id=u.id WHERE h.request_id=? AND h.milestone_index=? AND h.kind='handoff' AND h.status='shared'
           AND u.kind='delivery_review' AND u.status='shared' AND m.decision='milestone_accepted' AND h.shared_at>=m.created_at`,[id,last]),
-        db.prepare("UPDATE software_projects SET state='complete',completed_at=?,updated_at=? WHERE request_id=?").bind(at,at,id),
+        db.prepare("UPDATE software_projects SET state='complete',next_update_on=NULL,waiting_for='',completed_at=?,updated_at=? WHERE request_id=?").bind(at,at,id),
         softwareAudit(db,id,'completed',actor,at,'Project completed after final milestone handoff')]);
       return json({ok:true});
     }
