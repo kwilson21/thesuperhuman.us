@@ -97,6 +97,19 @@ export default {
                 path,
                 viewport,
                 ...options,
+                prepare: async page => {
+                  if (options.prepare) await options.prepare(page);
+                  const viewport = page.viewportSize();
+                  try {
+                    for (const width of [320, 390, 768, 1280]) {
+                      await page.setViewportSize({ width, height: viewport.height });
+                      const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+                      if (overflow) throw new Error(`Agreement page overflows at ${width}px: ${path}`);
+                    }
+                  } finally {
+                    await page.setViewportSize(viewport);
+                  }
+                },
               }),
               caption: title,
             },

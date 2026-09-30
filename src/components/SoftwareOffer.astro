@@ -2,6 +2,7 @@
 import PersonalName from './PersonalName.astro';
 import { formatUSD, offerTotal, paymentSchedules, type ClientOffer } from '~/lib/software-offers';
 import '~/styles/global.css';
+import '~/styles/studio.css';
 interface Props { offer?: ClientOffer | null; preview?: boolean; temporarilyUnavailable?: boolean; signingUrl?: string }
 const { offer, preview = false, temporarilyUnavailable = false, signingUrl } = Astro.props;
 const terms = offer?.terms;
@@ -64,14 +65,9 @@ const terms = offer?.terms;
   <script>document.querySelector('[data-print-offer]')?.addEventListener('click', () => window.print());</script>
 <style>
   .offer-shell { max-width: 72rem; padding-block: 2rem; color: var(--ink); overflow-wrap: anywhere; }
-  .offer-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; border-bottom: 1px solid var(--rule); padding-bottom: 1.5rem; }
-  .offer-header .page-kicker { margin: 0; }
-  .offer-header :global(.personal-name) { font-size: 1.5rem; }
   .offer-intro { padding: 2.5rem 0 1.5rem; }
   p { margin: .6rem 0; }
   .offer-meta { color: var(--muted); }
-  .offer-columns { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr); gap: 2.5rem; }
-  .offer-columns aside { padding-left: 2rem; border-left: 1px solid var(--rule); }
   section { margin-bottom: 1.7rem; }
   .offer-milestone { padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
   h2 small { display: block; color: var(--muted); font-size: 1rem; margin-top: .4rem; margin-bottom: 1.2rem; }
