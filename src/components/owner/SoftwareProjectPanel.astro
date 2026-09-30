@@ -24,7 +24,7 @@ const unmatched=(await Astro.locals.runtime.env.MUSIC_DB!.prepare('SELECT event_
 const lastDelivery=terms && shared.find(update=>update.kind==='delivery_review' && update.status==='shared' && update.milestone_index===terms.milestones.length-1);
 const canComplete = lastDelivery?.decision==='milestone_accepted' && shared.some(update=>update.kind==='handoff' && update.status==='shared' && update.milestone_index===lastDelivery.milestone_index && update.shared_at!>=lastDelivery.decided_at!);
 ---
-{sentOffer && <SoftwareAgreementPanel requestId={requestId} offerId={sentOffer.id} />}
+<SoftwareAgreementPanel requestId={requestId} offerId={sentOffer?.id} />
 {project?.content_deleted_at && <section class="rail-section"><h2>Project</h2><p class="rail-muted">Project content was removed by reviewed retention cleanup.</p></section>}
 {terms && <section class="rail-section software-rail" aria-labelledby="software-project-heading" data-software-project data-endpoint={`/api/owner/requests/${requestId}/project`} data-invoice-endpoint={`/api/owner/requests/${requestId}/invoices`}>
   <h2 id="software-project-heading">{project ? 'Project' : 'Start the project'}</h2>

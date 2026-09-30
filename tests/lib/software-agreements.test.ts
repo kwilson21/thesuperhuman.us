@@ -896,3 +896,106 @@ it('attributes owner verification to the Access account rather than the configur
       .get(),
   ).toEqual({ email: contractor.notice_email });
 });
+it('abandons the complete pending signing action atomically and retains the signatures', async () => {
+  const result = await signed(),
+    { POST } = await import('~/pages/api/owner/requests/[id]/agreement');
+  const call = (documents: { id: string; hash: string }[]) =>
+    POST({
+      params: { id: 'r' },
+      request: new Request('https://example.com/api/owner/requests/r/agreement', {
+        method: 'POST',
+        headers: {
+          origin: 'https://example.com',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'abandon',
+          documents,
+          reason: 'Fictional owner cancellation',
+          confirmed: true,
+        }),
+      }),
+      locals: { owner: { email: 'owner@example.com' }, runtime: { env } },
+    } as never);
+  expect((await call([result.documents[0]])).status).toBe(409);
+  expect(
+    sql.prepare("SELECT count(*) n FROM software_agreements WHERE status='client_signed'").get()
+      .n,
+  ).toBe(2);
+  expect((await call(result.documents)).status).toBe(200);
+  expect((await offer())!.status).toBe('superseded');
+  expect(await agreementSession(db, request())).toBeNull();
+  expect(
+    sql.prepare("SELECT count(*) n FROM software_agreements WHERE status='abandoned'").get().n,
+  ).toBe(2);
+  expect(sql.prepare('SELECT count(*) n FROM software_agreement_signatures').get().n).toBe(2);
+  expect(
+    sql
+      .prepare("SELECT DISTINCT reason FROM software_agreement_events WHERE action='abandoned'")
+      .get().reason,
+  ).toBe('owner-abandoned');
+  expect(
+    sql
+      .prepare("SELECT count(*) n FROM software_agreement_events WHERE action='abandoned'")
+      .get().n,
+  ).toBe(2);
+});
+it.each(['executed', 'abandoned'])(
+  'keeps %s evidence under a dated ten-year policy without backdating',
+  async (state) => {
+    const result = await signed();
+    let id = result.documents.find((d) => d.kind === 'sow')!.id;
+    if (state === 'executed')
+      id = await countersignAgreements(
+        db,
+        (await offer())!,
+        result.documents,
+        'Owner',
+        'owner@example.com',
+        request(),
+      );
+    else
+      sql.exec(
+        "UPDATE software_agreements SET status='abandoned',abandoned_at='now' WHERE status='client_signed'",
+      );
+    const { POST } = await import('~/pages/api/owner/requests/[id]/agreement');
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+    const end = (ended_on: string) =>
+      POST({
+        params: { id: 'r' },
+        request: new Request('https://example.com/api/owner/requests/r/agreement', {
+          method: 'POST',
+          headers: {
+            origin: 'https://example.com',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'end',
+            agreement_id: id,
+            ended_on,
+            confirmed: true,
+          }),
+        }),
+        locals: { owner: { email: 'owner@example.com' }, runtime: { env } },
+      } as never);
+    expect((await end('2000-01-01')).status).toBe(409);
+    expect((await end('2099-01-01')).status).toBe(409);
+    expect(
+      sql.prepare('SELECT ended_at FROM software_agreements WHERE id=?').get(id).ended_at,
+    ).toBeNull();
+    expect((await end(today)).status).toBe(200);
+    const row = sql
+      .prepare('SELECT ended_at,retain_until FROM software_agreements WHERE id=?')
+      .get(id);
+    expect(row.ended_at).toBe(today);
+    expect(row.retain_until).toMatch(new RegExp(`^${Number(today.slice(0, 4)) + 10}-`));
+    expect(sql.prepare('SELECT count(*) n FROM software_agreement_signatures').get().n).toBe(
+      state === 'executed' ? 4 : 2,
+    );
+  },
+);
