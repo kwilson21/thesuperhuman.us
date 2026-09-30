@@ -1,10 +1,12 @@
 ---
+export const prerender = false;
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import Footer from '~/components/Footer.astro';
 import BuildingIllustration from '~/components/BuildingIllustration.astro';
 import dailyStory from '~/data/project-stories/the-engineers-daily.json';
 import { tallyStory } from '~/data/project-stories/tally';
 import { kailleraStory } from '~/data/project-stories/kaillera-next';
+import { websiteStory } from '~/data/project-stories/personal-website';
 import { threadlineStory } from '~/data/project-stories/threadline';
 const projects = [
   { kind: 'tally' as const, title: 'Tally', status: tallyStory.status,
@@ -17,7 +19,7 @@ const projects = [
     actions: ['Create a room and invite friends.', 'Play together or watch a game.', 'Use a controller or touch controls.'],
     detail: 'Built on EmulatorJS, with rollback and host-streaming modes.', role: '',
     links: [{ label: 'Explore build', href: 'https://kaillera-next.thesuperhuman.us' }, { label: 'GitHub', href: 'https://github.com/kwilson21/kaillera-next' }, { label: 'Development journal', href: '/building/kaillera-next#kaillera-next-updates-title' }] },
-  { kind: 'website' as const, title: 'Personal website', status: 'Live - evolving',
+  { kind: 'website' as const, title: 'Personal website', status: websiteStory.status,
     description: 'See what I can build for you, hear what I can do for your music, and hire me.',
     actions: ['Explore my software work and hear my mixes.', 'Tell me what you want to build or finish.', 'Start a paid software or audio project.'],
     detail: '', role: 'I direct the design and build with AI.',
