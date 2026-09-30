@@ -3,7 +3,7 @@
 Date: September 29, 2026  
 Repository: `kwilson21/thesuperhuman.us`  
 Pull request: #154  
-Code revision: `6a2f3a46` (this record is committed on top of it)  
+Code revision: `17e5762b` (this record is committed on top of it)  
 Target: production `https://thesuperhuman.us` (the private studio's sign-in and project list, `/studio/software/[id]`, the owner request page's Project rail, `/owner/requests/[id]/update`, the owner Today list, their APIs and visuals routes) and production `MUSIC_DB`  
 Reviewer and deployment authorization: Kazon Wilson approved Stage 5 as described with design studies 06 to 08 ("And yes to stage 5"), the software sign-in and project-list wording, update visuals in the existing private bucket and one-year project-page retention ("1-3 yes"), the agreement-driven start wording ("1. Yes"), and the final screens after the example wording was made plain ("stage 5 looks good to go") and applying 0021 to production ("yes you can apply the database change") (owner, in conversation, 2026-09-29)  
 Scope: starting a project from a sent offer (owner-recorded signatures and first payment step, manual until invoicing and signing are integrated); email-code access for software clients through the existing studio; the client project page (state, step track, updates with visuals and previews, what we agreed, messages); the owner Project rail and update composer with a live client preview; direction and delivery reviews with the client's explicit decisions; milestone payment records; handoff after acceptance and full payment; earlier versions; reminders on the owner Today list; two new client email templates; migration `0021_software_projects.sql`; retention; privacy and owner-operations notes; a screenshot scenario  
@@ -47,7 +47,7 @@ This is a scoped deployment record against the reusable pre-launch checklist.
 
 ## 7. Release and final QA
 
-- **PASS · Required checks.** `npm run check` 0 errors and 0 warnings; `npx vitest run` 112 files and 859 tests; `npm run build` completed; copy and asset checks. CI results are on the pull request.
+- **PASS · Required checks.** `npm run check` 0 errors and 0 warnings; `npx vitest run` 113 files and 874 tests; `npm run build` completed; copy and asset checks. CI results are on the pull request.
 - **PASS · Review.** Independent correctness, security and UI reviews of each pass, re-reviews of every fix pass, and the Codex review bot; every verified finding fixed.
 - **PENDING · Migration and backup.** To be done immediately before the merge, as for 0020: confirm only 0021 is pending, take a full export (stored privately) and restore it into a scratch database with matching counts, record a D1 Time Travel bookmark, apply 0021, verify row counts, the audit id sequence and the unchanged trigger and index definitions, run `PRAGMA foreign_key_check`, and run `owner:health --remote`. This line is updated with the results before merging.
 - **PASS · Rollback.** Code: redeploy `d3a22c78`. Data: the export or the Time Travel bookmark.
