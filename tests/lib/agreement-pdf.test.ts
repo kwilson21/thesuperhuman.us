@@ -105,9 +105,8 @@ it('formats PDF certificate dates in New York without changing source evidence',
   expect(JSON.stringify(certificate)).toBe(original);
 });
 
-// The audited source templates are intentionally private, supplied locally or by CI.
-const templateFile = process.env.AGREEMENT_TEMPLATE_FILE ?? '.private/signing/templates.json';
-it.runIf(existsSync(templateFile))('renders the real v1 agreements and embeds exact signing evidence', async () => {
+const sampleTemplateFile = new URL('../../scripts/screenshots/fixtures/sample-agreement-templates.json', import.meta.url);
+async function checkTemplatePacket(templateFile: string | URL, headings: string[]) {
   const templates = JSON.parse(readFileSync(templateFile, 'utf8'));
   const terms: OfferTerms = { outcome:'Client tracker',summary:'One shared view',milestones:[{name:'Tracker',deliverables:['A shared view'],acceptance:['Add a client'],feeCents:240000}],paymentMode:'standard',clientInputs:'Synthetic sample',exclusions:'Production rollout',timing:'Agreed dates' };
   const details = agreementDetailsSchema.parse({ planned_start:'2026-10-01',planned_end:'2026-10-20',environment:'Browser prototype',operating_responsibilities:'Client',update_rhythm:'Weekly',milestones:[{start:'2026-10-01',target:'2026-10-20',handoff:'Source and notices'}] });
@@ -119,7 +118,7 @@ it.runIf(existsSync(templateFile))('renders the real v1 agreements and embeds ex
   const certificates = docs.map(doc => ({document_id:doc.id,document_sha256:doc.text_sha256,effective_on:'2026-09-30',executed_at:'2026-09-30T13:25:00Z',versions:{template:1,offer:1},signatures:['client','contractor'].map(party=>({party,typed_name:party==='client'?'Example Signer':'Example Owner',title:'Representative',verified_email:party==='client'?'signer@example.com':'owner@example.com',verified_at:'2026-09-30T13:23:00Z',consent_at:'2026-09-30T13:25:00Z',signed_at:'2026-09-30T13:25:00Z',ip_address:'192.0.2.1',user_agent:'Synthetic browser 🧪',consent_text:'Electronic records consent',authority_text:'Authority for '+party,intent_text:'Signature intent for '+party}))}));
   const pdf = await PDFDocument.load(await renderAgreementPacket({} as Env, docs, certificates));
   const text = extract(pdf).replace(/\s+/g,' ');
-  for (const expected of ['1 Parties and scope','14 Signatures','1 Engagement details','9 Exceptions attachments and signatures','Example Client LLC','Client tracker','Signed electronically by Example Signer, Representative, on Sep 30, 2026, 9:25 AM EDT']) expect(text).toContain(expected);
+  for (const expected of [...headings,'Example Client LLC','Client tracker','Signed electronically by Example Signer, Representative, on Sep 30, 2026, 9:25 AM EDT']) expect(text).toContain(expected);
   expect(text).not.toContain('client.legal_name:');
   expect(text).not.toContain('{{');
   const certificateText = text.slice(text.indexOf('Signing certificate'));
@@ -129,4 +128,14 @@ it.runIf(existsSync(templateFile))('renders the real v1 agreements and embeds ex
   const file = names.lookup(1, PDFDict).lookup(PDFName.of('EF'), PDFDict).lookup(PDFName.of('F')) as PDFRawStream;
   expect(inflateSync(file.contents).toString()).toBe(canonicalJson(certificates));
   expect(certificates[0].signatures[0].user_agent).toBe('Synthetic browser 🧪');
+}
+it('renders supplied or fictional agreements and embeds exact signing evidence', async () => {
+  await checkTemplatePacket(process.env.AGREEMENT_TEMPLATE_FILE ?? sampleTemplateFile,
+    process.env.AGREEMENT_TEMPLATE_FILE ? [] : ['Sample Master Services Agreement', 'Sample Statement of Work', '2 Sample review list', '4 Sample signature records']);
+}, 30000);
+
+// Real clauses stay private; this additional local coverage is optional.
+const privateTemplateFile = '.private/signing/templates.json';
+it.runIf(existsSync(privateTemplateFile))('renders the real v1 agreements and embeds exact signing evidence', async () => {
+  await checkTemplatePacket(privateTemplateFile, ['1 Parties and scope', '14 Signatures', '1 Engagement details', '9 Exceptions attachments and signatures']);
 }, 30000);

@@ -44,8 +44,10 @@ export default {
 
 If `prepare` throws, capture saves `_failure-<scenario>-<shot>.png` (full page) and a matching `.txt` with the URL, original error and every status element's text, then rethrows. CI retains these in the separate `screenshot-failures` artifact. They are excluded from the published gallery.
 
-The software-signing scenario uses the audited private v1 template JSON (`msa` and
-`sow` text), supplied at `.private/signing/templates.json` or through
-`AGREEMENT_TEMPLATE_FILE`. It fails if that file is absent; it never substitutes
-a field-list template. CI must provision this file separately. The real-template
-PDF test uses the same path and reports skipped coverage when it is unavailable.
+The software-signing scenario and PDF test default to the committed fictional
+`fixtures/sample-agreement-templates.json` (`msa` and `sow` text). CI needs no
+private templates. The sample includes all supported fields, numbered sections,
+paragraphs and a list to exercise rendering, blank checks and PDF layout.
+Set `AGREEMENT_TEMPLATE_FILE` to explicitly use another template JSON locally.
+The separate real-v1 PDF test runs only when `.private/signing/templates.json`
+exists and is skipped otherwise. Never commit the real agreement clauses.

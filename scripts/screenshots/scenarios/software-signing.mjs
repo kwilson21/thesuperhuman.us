@@ -5,8 +5,8 @@ const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 export default {
   title: 'Software agreement review, signatures and retained copies',
   async run({ capture, sql, ownerFetch, templates }) {
-    // Legal sources remain private. Unit coverage may inject its small fixture.
-    templates ??= JSON.parse(readFileSync(process.env.AGREEMENT_TEMPLATE_FILE ?? '.private/signing/templates.json', 'utf8'));
+    // CI uses fictional prose; local runs may explicitly supply private templates.
+    templates ??= JSON.parse(readFileSync(process.env.AGREEMENT_TEMPLATE_FILE ?? new URL('../fixtures/sample-agreement-templates.json', import.meta.url), 'utf8'));
     const template = kind => templates[kind];
     const id = 'screenshot-signing',
       token = 'g'.repeat(43),
