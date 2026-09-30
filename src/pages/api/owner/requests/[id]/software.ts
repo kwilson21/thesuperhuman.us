@@ -40,7 +40,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   };
   // D1 batches are transactions. This assertion rolls back a stale command before any mutation.
   const guard = (query: string, values: (string | number)[]) => db.prepare(`SELECT CASE WHEN EXISTS(${query}) THEN 1 ELSE json_extract('Offer changed. Reload and try again.','$') END`).bind(...values);
-  const requestGuard = () => guard('SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND status=? AND email=?', [record.id, record.updatedAt, record.status, record.email]);
+  const requestGuard = (updatedAt = record.updatedAt) => guard('SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND status=? AND email=?', [record.id, updatedAt, record.status, record.email]);
   try {
     if (command.action === 'fit') {
       if (command.expectedRequestUpdatedAt !== undefined && command.expectedRequestUpdatedAt !== record.updatedAt) return json({ ok: false, message: 'The request changed or could not be saved. Reload and try again.' }, 409);
@@ -52,18 +52,20 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     if (command.action === 'question' || command.action === 'decline') {
       if (command.action === 'decline' && record.status === 'resolved') return json({ ok: false, message: 'This request is already resolved.' }, 409);
       if (command.action === 'decline' && await offerIsSending(db, record.id)) return json({ ok: false, message: offerSendingMessage }, 409);
+      if (command.action === 'decline' && Date.parse(record.updatedAt) >= Date.parse(now)) now = new Date(Date.parse(record.updatedAt) + 1).toISOString();
       if (command.action === 'decline') await db.batch([
         requestGuard(), offerSendingGuard(db, record.id),
         guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM audio_projects WHERE request_id=?)', [record.id]),
         guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)', [record.id]),
         db.prepare("UPDATE software_offers SET status='withdrawn',updated_at=? WHERE request_id=? AND status IN ('sent','draft')").bind(now, record.id),
         db.prepare('UPDATE software_offer_links SET revoked_at=? WHERE request_id=? AND revoked_at IS NULL').bind(now, record.id),
+        db.prepare('UPDATE owner_requests SET updated_at=? WHERE id=?').bind(now, record.id),
         audit('offer-link-revoked', 'Offer withdrawn and link closed to decline the request'),
       ]);
       const sent = await email(command.action === 'question' ? 'A question about your project brief' : 'About your project brief', `${command.text}\n\nKazon`);
       if (!sent.ok) return json({ ok: false, uncertain: sent.uncertain, message: command.action === 'decline' ? (sent.uncertain ? 'The email service didn’t confirm. The offer is withdrawn and its link is closed. Check Resend before retrying.' : 'The email didn’t send. The offer is withdrawn and its link is closed; nothing else changed. Try again.') : sent.uncertain ? 'The email service didn’t confirm. Check Resend before retrying. Nothing was recorded.' : 'The email didn’t send. Nothing changed. Try again.' }, 502);
       try { await db.batch([
-        requestGuard(),
+        requestGuard(command.action === 'decline' ? now : record.updatedAt),
         guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)', [record.id]),
         ...(command.action === 'decline' ? [offerSendingGuard(db, record.id),
           guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM audio_projects WHERE request_id=?)', [record.id]),
