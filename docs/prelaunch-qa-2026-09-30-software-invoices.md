@@ -5,9 +5,9 @@ Repository: `kwilson21/thesuperhuman.us`
 Pull request: #155  
 Code revision: `8da9998f`  
 Target: production `https://thesuperhuman.us` (private software client Invoices, owner milestone invoice actions, software invoice API and Stripe webhook) and production `MUSIC_DB`  
-Reviewer and deployment authorization: Kazon chose Stripe-hosted invoices for software ('I want stripe invoices', owner, in conversation, 2026-09-29). This job authorizes local polish and a release record only; deployment is pending.  
+Reviewer and deployment authorization: Kazon chose Stripe-hosted invoices for software ("I want stripe invoices", owner, in conversation, 2026-09-29). Applying 0022 to production needs its own authorization, recorded below when given.  
 Scope: explicit owner-created deposit, balance and milestone invoices; ACH with an owner-selected card option; paid-deposit project start; signed webhook payment records; retries, replacements, refunds and retention; client invoice ordering and capitalized labels; nonwrapping owner invoice links; migration `0022_software_invoices.sql`  
-Rollback revision: `76f44f3402347eb90b7c304090abbf379cc9b146` for this polish only. For the full invoice feature, select and verify the deployed pre-invoice revision before release. Migration 0022 is required before deploying invoice code.
+Rollback revision: `f5358b5a` (current `main`). Deploy order matters: this code requires 0022; the migration is additive and the current `main` keeps working with it applied.  
 
 This is a scoped deployment record against the reusable pre-launch checklist. PASS means observed locally unless explicitly attributed to the owner's supplied production record. No build, screenshots, email, Stripe API calls, remote commands or deployment were performed.
 
