@@ -760,3 +760,19 @@ it('records a webhook as unmatched if retention deletes the invoice after lookup
   expect(sql.prepare('SELECT event_id FROM software_stripe_unmatched_events').get()).toEqual({event_id:'evt_deleted'});
   expect(sql.prepare('SELECT count(*) AS n FROM stripe_webhook_events').get()).toEqual({n:0});
 });
+
+it.each(['standard','invoice'])('blocks rejected newest delivery invoices and racing rejection (%s)',async mode=>{
+  if(mode==='invoice') sql.prepare('UPDATE software_offers SET terms_json=?').run(JSON.stringify({...terms,paymentMode:mode}));
+  await start();const review=await shareReview();
+  const input={requestId:'software',offerId:'software-offer',milestone:0,kind:mode==='standard' ? 'balance' as const : 'milestone' as const,allowCard:false,actor:'owner'};
+  const reject=()=>sql.prepare("INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES ('software','client','client','Fix it',?,'changes_requested','now')").run(review.id);
+  const original=db.batch.bind(db);
+  db.batch=async items=>{reject();return original(items);};
+  await expect(invoiceLib.reserveSoftwareInvoice(db,input)).rejects.toThrow();
+  db.batch=original;
+  await expect(invoiceLib.reserveSoftwareInvoice(db,input)).rejects.toThrow('not available');
+  expect(sql.prepare('SELECT count(*) AS n FROM software_invoices').get()).toEqual({n:0});
+  sql.exec("UPDATE software_project_updates SET shared_at='2020-01-01'");
+  await shareReview('delivery_review','Delivery v2');
+  expect((await invoiceLib.reserveSoftwareInvoice(db,input)).kind).toBe(input.kind);
+});

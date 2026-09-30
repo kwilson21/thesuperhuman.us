@@ -115,6 +115,11 @@ export const depositOfferGuard = (db: D1Database, id: string, decline = false) =
    WHERE i.request_id=? AND i.milestone_index=0 AND i.kind='deposit' ${decline ? '' : "AND o.status='sent'"}
    AND i.refunded_at IS NULL AND i.status IN (${decline ? "'creating','open','payment_failed','uncollectible'" : "'creating','open','payment_failed','uncollectible','paid'"}))`, [id]);
 
+const invoiceDeliveryQuery = `SELECT 1 FROM software_project_updates u
+  WHERE u.id=(SELECT id FROM software_project_updates WHERE request_id=? AND milestone_index=?
+    AND kind='delivery_review' AND status='shared' ORDER BY shared_at DESC,id DESC LIMIT 1)
+  AND NOT EXISTS(SELECT 1 FROM software_project_messages WHERE update_id=u.id AND decision='changes_requested')`;
+
 export async function reserveSoftwareInvoice(db: D1Database, input: {
   requestId: string; offerId: string; milestone: number; kind: SoftwareInvoiceKind; allowCard: boolean; actor: string;
   retryId?: string; replaceId?: string;
@@ -128,7 +133,7 @@ export async function reserveSoftwareInvoice(db: D1Database, input: {
     .first<{offer_id:string;milestone_index:number;completed_at:string|null;revoked_at:string|null;content_deleted_at:string|null;updated_at:string}>();
   if (project ? project.offer_id !== offerId || project.revoked_at || project.content_deleted_at : offer.status !== 'sent') throw new Error('Choose the current offer.');
   const terms = projectTerms(offer), agreed = softwareInvoiceTerms(terms,milestone,kind);
-  const delivered = Boolean(await db.prepare("SELECT 1 FROM software_project_updates WHERE request_id=? AND milestone_index=? AND kind='delivery_review' AND status='shared'").bind(id,milestone).first());
+  const delivered = Boolean(await db.prepare(invoiceDeliveryQuery).bind(id,milestone).first());
   const paid = Boolean(await db.prepare('SELECT 1 FROM software_milestone_payments WHERE request_id=? AND milestone_index=?').bind(id,milestone).first());
   const invoices = (await listSoftwareInvoices(db,id,offerId)).filter(row=>row.milestone_index===milestone && row.kind===kind);
   const previous = invoices.find(row=>row.id===(input.retryId ?? input.replaceId));
@@ -140,6 +145,7 @@ export async function reserveSoftwareInvoice(db: D1Database, input: {
     project ? softwareGuard(db,'SELECT 1 FROM software_projects WHERE request_id=? AND updated_at=? AND revoked_at IS NULL AND content_deleted_at IS NULL',[id,project.updated_at])
       : softwareGuard(db,"SELECT 1 FROM software_offers WHERE id=? AND status='sent' AND NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)",[offerId,id]),
     softwareGuard(db,"SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_invoices WHERE request_id=? AND offer_id=? AND milestone_index=? AND kind=? AND status='paid' AND refunded_at IS NULL)",[id,offerId,milestone,kind])];
+  if (kind!=='deposit') guards.push(softwareGuard(db,invoiceDeliveryQuery,[id,milestone]));
   if (kind==='deposit') guards.push(softwareGuard(db,'SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_milestone_deposits WHERE request_id=? AND milestone_index=?)',[id,milestone]));
   if (input.retryId) {
     // Stripe retains idempotency keys for at least 24 hours. Older uncertain attempts need webhook/Stripe reconciliation.
