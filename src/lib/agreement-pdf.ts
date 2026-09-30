@@ -1,18 +1,16 @@
 import { PDFDocument, type PDFFont, type PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
-import interUrl from '~/assets/agreement-fonts/Inter-400.ttf?url';
-import newsreaderUrl from '~/assets/agreement-fonts/Newsreader-400.ttf?url';
+import interBase64 from '~/assets/agreement-fonts/Inter-400.base64?raw';
+import newsreaderBase64 from '~/assets/agreement-fonts/Newsreader-400.base64?raw';
 import type { Agreement } from './software-agreements';
 import { canonicalJson, hashBytes } from './agreement-artifacts';
 import { agreementValues, type AgreementDetails, type ClientAgreement, contractorSchema } from './agreement-fields';
 import type { OfferTerms } from './software-offers';
 import type { AgreementTemplate } from './agreement-templates';
 import { renderAgreement, agreementCertificateText } from './agreement-templates';
-async function fontBytes(env: Env, url: string) {
-  // Static deploy assets only. No external font request or client-controlled URL.
-  const response = await env.ASSETS.fetch(new Request(new URL(url, 'https://assets.invalid')));
-  if (!response.ok) throw new Error('Font asset unavailable.');
-  return response.arrayBuffer();
+function fontBytes(base64: string) {
+  // Raw base64 imports bundle the licensed bytes; no asset binding or filesystem.
+  return Uint8Array.from(atob(base64), char => char.charCodeAt(0));
 }
 function wrap(text: string, font: PDFFont, size: number, width: number) {
   const lines: string[] = [];
@@ -54,8 +52,8 @@ export async function renderAgreementPacket(
 ): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
-  const inter = await pdf.embedFont(await fontBytes(env, interUrl)),
-    heading = await pdf.embedFont(await fontBytes(env, newsreaderUrl));
+  const inter = await pdf.embedFont(fontBytes(interBase64)),
+    heading = await pdf.embedFont(fontBytes(newsreaderBase64));
   const supported = new Set(inter.getCharacterSet());
   const text = (value: string) => {
     for (const char of value)

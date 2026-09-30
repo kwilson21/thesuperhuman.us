@@ -1,15 +1,17 @@
+import { readFileSync } from 'node:fs';
+import interBase64 from '~/assets/agreement-fonts/Inter-400.base64?raw';
+import newsreaderBase64 from '~/assets/agreement-fonts/Newsreader-400.base64?raw';
 import { agreementDetailsSchema, contractorSchema } from '~/lib/agreement-fields';
 import { templateFields, type AgreementTemplate } from '~/lib/agreement-templates';
 import type { OfferTerms } from '~/lib/software-offers';
 import { expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 import { PDFDocument, PDFArray, PDFDict, PDFName, PDFRawStream } from 'pdf-lib';
 import { preflightAgreementPacket, renderAgreementPacket } from '~/lib/agreement-pdf';
 import { hashBytes } from '~/lib/agreement-artifacts';
 import type { Agreement } from '~/lib/software-agreements';
 
-const assets = { fetch: async (request: Request) => new Response(readFileSync(new URL(request.url).pathname.slice(1))) };
+const assets = { fetch: async () => { throw new Error('PDF rendering must not fetch font assets.'); } };
 function document(kind: 'msa' | 'sow', text: string, offer = 'current'): Agreement {
   return { id: kind, kind, offer_id: offer, canonical_text: text, attachment_manifest_json: '[]' } as Agreement;
 }
@@ -84,3 +86,9 @@ it('preflights exact attachment merge inputs and rejects a missing original MSA 
   env.AUDIO = {get:async()=>({arrayBuffer:async()=>new TextEncoder().encode('%PDF-broken')})} as unknown as R2Bucket;
   await expect(preflightAgreementPacket(env,terms,details,contractor,templates,null)).rejects.toThrow('Attachment hash mismatch');
 }, 30000);
+
+it('bundles exactly the licensed source font bytes', () => {
+  for (const [name, encoded] of [['Inter-400', interBase64], ['Newsreader-400', newsreaderBase64]]) {
+    expect(Buffer.from(encoded, 'base64')).toEqual(readFileSync(new URL(`../../src/assets/agreement-fonts/${name}.ttf`, import.meta.url)));
+  }
+});

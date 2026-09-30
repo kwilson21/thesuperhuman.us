@@ -167,7 +167,12 @@ export async function prepareAgreementArtifact(
       db.prepare("INSERT INTO software_agreement_events(id,agreement_id,action,actor,occurred_at) SELECT ?,?,'artifact-ready','system',? WHERE EXISTS(SELECT 1 FROM software_agreement_artifacts WHERE agreement_id=? AND attempt_id=? AND status='ready')")
         .bind(crypto.randomUUID(),id,new Date().toISOString(),id,attempt),
     ]);
-  } catch {
+  } catch (error) {
+    // No error object/stack, document, certificate, request or signer fields.
+    // JSON parser messages can include input excerpts, so do not log those.
+    console.error('Agreement artifact preparation failed:',
+      error instanceof Error ? error.name : 'UnknownError',
+      error instanceof SyntaxError ? 'Invalid JSON.' : error instanceof Error ? error.message : 'Unknown failure.');
     await db
       .prepare(
         "UPDATE software_agreement_artifacts SET status='failed',error_code=? WHERE agreement_id=? AND attempt_id=? AND status='rendering'",

@@ -356,9 +356,16 @@ it('retains signatures after artifact failure and copy provider uncertainty', as
       'owner',
       request(),
     );
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
   await prepareAgreementArtifact(env, id, async () => {
     throw new Error('render failed');
   });
+  expect(log).toHaveBeenLastCalledWith('Agreement artifact preparation failed:', 'Error', 'render failed');
+  await prepareAgreementArtifact(env, id, async () => {
+    throw new SyntaxError('Invalid JSON containing private signer text');
+  });
+  expect(log).toHaveBeenLastCalledWith('Agreement artifact preparation failed:', 'SyntaxError', 'Invalid JSON.');
+  log.mockRestore();
   expect(
     sql.prepare('SELECT status FROM software_agreement_artifacts WHERE agreement_id=?').get(id)
       .status,
@@ -1054,4 +1061,15 @@ it('rejects expired sessions, wrong recipients, studio cookies and archive purpo
   sql.prepare("UPDATE software_agreement_sessions SET recipient_email=?,purpose='archive'").run(original.recipient_email);
   expect(await agreementSession(db,request(),'agreement','o')).toBeNull();
   expect(await agreementSession(db,new Request('https://example.com',{headers:{cookie:`studio_session=${token}`}}),'agreement','o')).toBeNull();
+});
+
+it('prepares a real signed PDF through the API renderer module without font asset access', async () => {
+  const result = await signed();
+  const id = await countersignAgreements(db, (await offer())!, result.documents,
+    'Example Owner', 'owner@example.test', request());
+  const { renderAgreementPacket } = await import('~/lib/agreement-pdf');
+  env.ASSETS = { fetch: async () => { throw new Error('Font asset access is unavailable.'); } } as unknown as Fetcher;
+  await prepareAgreementArtifact(env, id, renderAgreementPacket);
+  expect(sql.prepare('SELECT status,renderer_version FROM software_agreement_artifacts WHERE agreement_id=?').get(id))
+    .toMatchObject({ status: 'ready', renderer_version: 'website-pdf-v1' });
 });
