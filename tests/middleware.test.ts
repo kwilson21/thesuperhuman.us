@@ -180,3 +180,10 @@ it('keeps isolated preview offer paths on their local origin', async () => {
   const response = await onRequest(makeContext('https://preview.example.workers.dev/offer/opaque'),next) as Response;
   expect(response.status).toBe(200); expect(next).toHaveBeenCalledOnce(); expect(response.headers.has('location')).toBe(false);
 });
+
+it.each(['/studio/software/example','/api/studio/software/example/updates/update/visual'])('keeps software route %s private on success and unavailability', async path => {
+  for (const status of [200,404]) {
+    const response=await onRequest(makeContext('https://thesuperhuman.us'+path),async()=>new Response('private',{status})) as Response;
+    expect(response.headers.get('cache-control')).toBe('private, no-store'); expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+  }
+});

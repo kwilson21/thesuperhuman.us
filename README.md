@@ -220,3 +220,7 @@ Turnstile widget.
 ### Software offers migration
 
 Apply music migration `0020_software_offers.sql` before deploying code that uses fit reviews or software offers. Existing pages keep working before this migration; the new offer controls require it. Do not edit previously applied migrations.
+
+### Software projects migration
+
+Apply music migration `0021_software_projects.sql` after 0020 and before deploying code that uses software projects. This code requires 0021. Deploying it before the migration breaks studio sign-in (audio too) and the owner Today page. It stores project term snapshots, private updates, messages and audit records. Do not edit previously applied migrations.

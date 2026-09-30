@@ -1,0 +1,13 @@
+---
+type Props = { checks: string[]; evidence: string[] };
+const { checks, evidence } = Astro.props;
+---
+<section><h3>Agreed checks</h3><ul>{checks.map((check,index)=><li><strong>{check}</strong><span>Demonstrated</span><p data-preview-evidence>{evidence[index]}</p></li>)}</ul></section>
+<style>
+  section { border-top: 1px solid var(--rule); margin-top: 1.5rem; }
+  h3 { font: 400 1.6rem/1.2 Newsreader,Georgia,serif; margin: 1.5rem 0 .5rem; }
+  ul { padding: 0; list-style: none; }
+  li { padding: .8rem 0; border-top: 1px solid var(--rule); font: .9rem/1.6 Inter,sans-serif; }
+  strong { font-weight: 500; } span { display: block; color: var(--muted); font-size: .8rem; }
+  p { font: 1rem/1.6 Inter,sans-serif; white-space: pre-wrap; }
+</style>

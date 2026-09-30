@@ -13,6 +13,7 @@ const requiredSchema = [
   'audio_project_messages', 'audio_project_updates', 'audio_project_files', 'audio_project_uploads',
   'owner_requests_audit_personal_delete', 'audio_project_after_service_request', 'audio_project_close_declined_request',
   'owner_requests_submission_id', 'software_fit_reviews', 'software_offers', 'software_offer_links', 'software_offers_one_draft', 'software_offers_one_sent',
+  'software_projects', 'software_project_updates', 'software_project_updates_one_draft', 'software_project_updates_shared', 'software_project_messages', 'software_project_messages_request', 'software_project_messages_one_decision', 'software_project_audit', 'software_project_audit_request', 'software_milestone_payments',
 ];
 
 function healthyFixture() {
@@ -84,7 +85,7 @@ it('reports attention when the request audit trigger is missing', async () => {
   expect(report.checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
 });
 
-it('detects a database stopped at 0018 and passes schema after 0019', async () => {
+it('detects schemas through 0020 and passes only after 0021', async () => {
   const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
   const db = new DatabaseSync(':memory:');
   const migrations = readdirSync(new URL('../../migrations/music/', import.meta.url)).filter(name => name.endsWith('.sql')).sort();
@@ -98,6 +99,8 @@ it('detects a database stopped at 0018 and passes schema after 0019', async () =
   db.exec('COMMIT');
   expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
   db.exec(readFileSync(new URL('../../migrations/music/0020_software_offers.sql', import.meta.url), 'utf8'));
+  expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
+  db.exec(readFileSync(new URL('../../migrations/music/0021_software_projects.sql', import.meta.url), 'utf8'));
   expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'pass' }));
   db.close();
 });
@@ -117,4 +120,25 @@ it('flags overdue studio cleanup without revealing client details', async () => 
   const report = await ownerHealth(fixture);
   expect(report.checks).toContainEqual(expect.objectContaining({ id: 'studio-retention', status: 'attention' }));
   expect(JSON.stringify(report)).not.toContain('example.com');
+});
+
+it('counts eligible software projects alongside audio retention items', async () => {
+  const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
+  const db = new DatabaseSync(':memory:');
+  db.exec(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8'));
+  const fixture = healthyFixture();
+  const baseQuery = fixture.query;
+  fixture.query = sql => sql.includes('audio_client_codes') ? Promise.resolve(db.prepare(sql).all()) : baseQuery(sql);
+  for (const [id, completed, revoked, deleted] of [
+    ['completed', '2025-09-01', null, null], ['revoked', null, '2025-09-01', null],
+    ['recent', '2026-09-01', null, null], ['active', null, null, null], ['deleted', '2025-09-01', null, '2026-09-01'],
+  ]) {
+    db.prepare("INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES (?,'software','client@example.test','Tool','reviewed','now','now')").run(id);
+    db.prepare("INSERT INTO software_offers VALUES (?, ?, 1, 'sent', '{}', 'now', 'now', 'now', 'owner')").run(id, id);
+    db.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,completed_at,revoked_at,content_deleted_at,created_at,updated_at) VALUES (?,?,'{}','standard','now','now','now','owner',?,?,?,'now','now')").run(id,id,completed,revoked,deleted);
+  }
+  expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'studio-retention', status: 'attention', summary: '2 studio retention items need review.' }));
+  db.exec("UPDATE software_projects SET content_deleted_at='now'");
+  expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'studio-retention', status: 'pass' }));
+  db.close();
 });

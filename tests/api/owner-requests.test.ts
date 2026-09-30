@@ -28,3 +28,19 @@ it('validates actions and bounded private notes', async () => {
   expect((await POST(context(true, { action: 'note', note: 'Listen again before replying.' }))).status).toBe(200);
   expect(sql.prepare('SELECT private_note FROM owner_requests').get()).toEqual({ private_note: 'Listen again before replying.' });
 });
+
+it('refuses reopening a started software request atomically while allowing resolve', async () => {
+  sql.exec("UPDATE owner_requests SET kind='software',status='reviewed'; INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('offer','request-1',1,'sent','{}','now','now'); INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('request-1','offer','{}','invoice','now','now','now','owner','now','now')");
+  const response = await POST(context(true, { action: 'reopen' }));
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ ok:false,message:'This project has started. Use the project controls.' });
+  expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({status:'reviewed'});
+  expect(sql.prepare('SELECT COUNT(*) AS n FROM owner_request_audit').get()).toEqual({n:0});
+  expect((await POST(context(true, { action:'resolve' }))).status).toBe(200);
+});
+
+it('still reopens software requests before a project starts',async()=>{
+  sql.exec("UPDATE owner_requests SET kind='software',status='resolved'");
+  expect((await POST(context(true,{action:'reopen'}))).status).toBe(200);
+  expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({status:'new'});
+});

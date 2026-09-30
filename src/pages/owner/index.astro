@@ -7,6 +7,7 @@ import RequestList from '~/components/owner/RequestList.astro';
 import MetricDefinition from '~/components/owner/MetricDefinition.astro';
 import { clientPortalEnabled, listStudioSignInFailures } from '~/lib/audio-client-access';
 import { listStudioProjectAttention, loadStudioLedger } from '~/lib/owner-reporting';
+import { projectStates } from '~/lib/software-projects';
 import StageTrack from '~/components/StageTrack.astro';
 const db = Astro.locals.runtime.env.MUSIC_DB;
 if (!db) return new Response('Owner reporting is unavailable.', { status: 503 });
@@ -32,14 +33,15 @@ const dueLabel = (days: number) => days > 1 ? `Due in ${days} days` : days === 1
     <ul>{signInFailures.map(item => <li><a href={`/owner/requests/${encodeURIComponent(item.requestId)}`}>{item.clientName || 'Studio client'}: open request →</a></li>)}</ul>
   </section>}
   {studioAttention.length > 0 && <section class="owner-section" aria-labelledby="studio-attention-heading">
-    <p class="owner-kicker">Studio projects</p><h2 id="studio-attention-heading">Songs needing a next step</h2>
+    <p class="owner-kicker">Studio projects</p><h2 id="studio-attention-heading">{studioAttention.some(item => item.kind === 'software') ? 'Projects needing a next step' : 'Songs needing a next step'}</h2>
     <ul class="studio-attention-list">{studioAttention.map(item => <li><a href={`/owner/requests/${encodeURIComponent(item.requestId)}`}>
       <span class="attention-song"><strong>{item.summary || 'Studio project'}</strong>
-        <span class="attention-stage"><StageTrack stage={item.stage} bookingPaid={item.bookingPaid} size="mini" /><span>{stageName(item.stage, item.bookingPaid)}</span></span></span>
+        <span class="attention-stage">{item.kind === 'audio' && <StageTrack stage={item.stage} bookingPaid={item.bookingPaid} size="mini" />}<span>{item.kind === 'software' ? projectStates[item.stage as keyof typeof projectStates] : stageName(item.stage, item.bookingPaid)}</span></span></span>
       <span class="attention-chips">
         {item.unreadMessages > 0 && <span class="studio-pill signal">{item.unreadMessages} unread {item.unreadMessages === 1 ? 'message' : 'messages'}</span>}
         {item.failedNotices > 0 && <span class="studio-pill signal">{item.failedNotices} {item.failedNotices === 1 ? 'email' : 'emails'} to retry</span>}
             {item.uncheckedNotices > 0 && <span class="studio-pill signal">{item.uncheckedNotices} {item.uncheckedNotices === 1 ? 'email' : 'emails'} to check delivery</span>}
+        {item.promisedUpdate && <span class="studio-pill signal">Update promised for {new Date(`${item.promisedUpdate}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}</span>}
         {item.dueInDays !== null && <span class:list={['studio-pill', item.dueInDays < 0 ? 'late' : 'signal']}>{dueLabel(item.dueInDays)}</span>}
       </span>
       <span class="attention-arrow" aria-hidden="true">→</span>

@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { expect, it, vi } from 'vitest';
-import { applyStudioRetention, previewStudioRetention, remoteObjectDeleteArgs, studioStorageIdentity } from '../../scripts/studio-retention.mjs';
+import { applyStudioRetention, studioRetentionCompletion, previewStudioRetention, remoteObjectDeleteArgs, studioStorageIdentity } from '../../scripts/studio-retention.mjs';
 
 const storage = { accountId: null, databaseId: 'local-music', bucket: 'local-audio', jurisdiction: null };
 
@@ -196,4 +196,81 @@ it('cleans a resolved project the client stopped, but keeps a paid booking still
   sql.exec(`INSERT INTO audio_project_messages(request_id,actor,actor_id,body,created_at,review_decision)
     VALUES ('active','client','active-session','I’m stopping the project here.','2027-10-25','stopped')`);
   expect((await previewStudioRetention(database, 'Local test data', storage, now)).counts.projects).toBe(3);
+});
+
+it('retains active software, cleans all prefix objects one year after completion or closure, and keeps audit for two years', async () => {
+  const { sql, database } = fixture();
+  for (const [id,completed,revoked] of [['software-active',null,null],['software-complete','2026-12-01',null],['software-closed',null,'2026-12-01'],['software-recent','2027-12-01',null]]) {
+    sql.prepare("INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at,resolved_at) VALUES (?,'software','client@example.com','Keep','resolved','2026-01-01','2026-01-01','2026-01-01')").run(id);
+    sql.prepare("INSERT INTO software_offers VALUES (?, ?, 1, 'sent', '{}', '2026-01-01', '2026-01-01', '2026-01-01', 'owner')").run(id+'-offer',id);
+    sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,completed_at,revoked_at,created_at,updated_at) VALUES (?,?,'{}','standard','now','now','now','owner',?,?,'2026-01-01','2026-01-01')").run(id,id+'-offer',completed,revoked);
+    sql.prepare("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,created_by,created_at,updated_at) VALUES (?,?,'progress','shared',0,'Private title','concept','owner','2026-01-01','2026-01-01')").run(id+'-update',id);
+    sql.prepare("INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,created_at) VALUES (?,'client','client','Private message',?,'2026-01-01')").run(id,id+'-update');
+    sql.prepare("INSERT INTO software_milestone_payments VALUES (?,0,'2026-01-01','owner')").run(id);
+    sql.prepare("INSERT INTO software_project_audit(request_id,action,actor,occurred_at,note) VALUES (?,'started','owner','2025-01-01',''),(?,'decision-recorded','client','2027-01-01','Accepted on Delivery v1 · milestone 1')").run(id,id);
+  }
+  sql.exec("UPDATE audio_projects SET content_deleted_at='already removed'");
+  const list = async (prefix: string) => [prefix+'update/old-orphan.png', prefix+'update/current.png'];
+  await expect(previewStudioRetention(database,'Local test data',storage,now)).rejects.toThrow('prefix listing');
+  const review = await previewStudioRetention(database,'Local test data',storage,now,list);
+  expect(review.counts).toMatchObject({softwareProjects:2,softwareObjects:4,softwareMessages:2,softwareUpdates:2,softwareAudit:4});
+  expect(JSON.stringify(review)).not.toMatch(/Private title|Private message|client@example|software\//);
+  const deleted: string[]=[];
+  const counts=await applyStudioRetention(database,review,'Local test data',storage,async (key: string)=>{deleted.push(key);},now,list);
+  expect(studioRetentionCompletion(counts)).toBe('Removed 0 audio projects, 2 software projects and 4 stored files. Run owner request retention next.');
+  expect(deleted.filter(key=>key.startsWith('software/'))).toHaveLength(4);
+  expect(sql.prepare('SELECT request_id FROM software_project_updates ORDER BY request_id').all()).toEqual([{request_id:'software-active'},{request_id:'software-recent'}]);
+  expect(sql.prepare('SELECT request_id FROM software_milestone_payments ORDER BY request_id').all()).toEqual([{request_id:'software-active'},{request_id:'software-recent'}]);
+  expect(sql.prepare("SELECT request_id FROM software_projects WHERE content_deleted_at IS NOT NULL ORDER BY request_id").all()).toEqual([{request_id:'software-closed'},{request_id:'software-complete'}]);
+  expect(sql.prepare("SELECT COUNT(*) AS n FROM software_project_audit WHERE occurred_at='2027-01-01'").get()).toEqual({n:4});
+  expect(sql.prepare("SELECT DISTINCT note FROM software_project_audit WHERE action='decision-recorded'").all()).toEqual([{note:'Accepted on Delivery v1 · milestone 1'}]);
+  expect(sql.prepare("SELECT COUNT(*) AS n FROM software_project_audit WHERE action='content-deleted'").get()).toEqual({n:2});
+  expect(sql.prepare('PRAGMA foreign_key_check').all()).toEqual([]); sql.close();
+});
+
+it.each(['notification_status', 'notification_attempted_at', 'notification_sent_at'])('refuses software cleanup after %s changes without updated_at changing', async column => {
+  const { sql, database } = fixture();
+  sql.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES ('software','software','client@example.test','Tool','reviewed','now','now');
+    INSERT INTO software_offers VALUES ('offer','software',1,'sent','{}','now','now','now','owner');
+    INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,completed_at,created_at,updated_at)
+      VALUES ('software','offer','{}','standard','now','now','now','owner','2026-01-01','now','now');
+    INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,email_client,notification_status,notification_attempted_at,created_by,created_at,updated_at)
+      VALUES ('update','software','delivery_review','shared',0,'Review','prototype',1,'failed','2026-01-01','owner','now','now');`);
+  const list = async () => ['software/software/update/visual.png'];
+  const review = await previewStudioRetention(database, 'Local test data', storage, now, list);
+  if (column === 'notification_status') {
+    // Exercise the same retry claim used by the owner endpoint.
+    const { queueSoftwareNotice } = await import('../../src/lib/software-projects');
+    const adapter = { prepare: (query: string) => ({ bind: (...args: unknown[]) => ({ first: async () => sql.prepare(query).get(...args) }) }) } as unknown as D1Database;
+    expect(await queueSoftwareNotice(adapter, 'software', false, 'update')).toBe(true);
+  } else sql.prepare(`UPDATE software_project_updates SET ${column}='2028-01-15'`).run();
+  const deleteObject = vi.fn(async () => {});
+  await expect(applyStudioRetention(database, review, 'Local test data', storage, deleteObject, now, list)).rejects.toThrow('Software retention source changed');
+  expect(deleteObject).not.toHaveBeenCalled();
+  expect(sql.prepare("SELECT revoked_at FROM software_projects WHERE request_id='software'").get()).toEqual({ revoked_at: null });
+  sql.close();
+});
+
+it.each(['invitation_status', 'invitation_attempted_at', 'invitation_sent_at'])('refuses software cleanup after %s changes without updated_at changing', async column => {
+  const { sql, database } = fixture();
+  sql.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES ('software','software','client@example.test','Tool','reviewed','now','now');
+    INSERT INTO software_offers VALUES ('offer','software',1,'sent','{}','now','now','now','owner');
+    INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,completed_at,created_at,updated_at)
+      VALUES ('software','offer','{}','standard','now','now','now','owner','2026-01-01','now','now');
+    INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,email_client,notification_status,notification_attempted_at,created_by,created_at,updated_at)
+      VALUES ('update','software','delivery_review','shared',0,'Review','prototype',1,'failed','2026-01-01','owner','now','now');`);
+  sql.exec("UPDATE software_projects SET invitation_status='failed'");
+  const list = async () => ['software/software/update/visual.png'];
+  const review = await previewStudioRetention(database, 'Local test data', storage, now, list);
+  if (column === 'invitation_status') {
+    // Exercise the same retry claim used by the owner endpoint.
+    const { queueSoftwareNotice } = await import('../../src/lib/software-projects');
+    const adapter = { prepare: (query: string) => ({ bind: (...args: unknown[]) => ({ first: async () => sql.prepare(query).get(...args) }) }) } as unknown as D1Database;
+    expect(await queueSoftwareNotice(adapter, 'software', false)).toBe(true);
+  } else sql.prepare(`UPDATE software_projects SET ${column}='2028-01-15'`).run();
+  const deleteObject = vi.fn(async () => {});
+  await expect(applyStudioRetention(database, review, 'Local test data', storage, deleteObject, now, list)).rejects.toThrow('Software retention source changed');
+  expect(deleteObject).not.toHaveBeenCalled();
+  expect(sql.prepare("SELECT revoked_at FROM software_projects WHERE request_id='software'").get()).toEqual({ revoked_at: null });
+  sql.close();
 });

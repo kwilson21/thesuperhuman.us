@@ -1,0 +1,41 @@
+---
+import { softwareDate } from '~/lib/software-projects';
+import type { ClientSoftwareUpdate } from '~/lib/software-projects';
+type Props = { update: ClientSoftwareUpdate; checks: string[]; milestoneName: string; endpoint: string; readonly?: boolean };
+const {update,checks,milestoneName,endpoint,readonly=false}=Astro.props;
+const direction=update.kind==='direction_review';
+---
+<section class="software-review">
+  <h2>{direction ? 'Your decision' : 'Your review'}</h2>
+  {update.decision ? <>
+    <p>{update.decision==='direction_confirmed' ? `You confirmed this direction on ${softwareDate(update.decided_at!)}.` : update.decision==='milestone_accepted' ? `You accepted ${update.artifact_version} on ${softwareDate(update.decided_at!)}.` : `You asked for changes on ${softwareDate(update.decided_at!)}. I’ll reply here.`}</p>
+    {update.decision==='changes_requested' && <p>{update.decision_body}</p>}
+  </> : readonly ? <p>This update is shown for reference.</p> : <form data-software-review data-endpoint={endpoint} data-version={update.artifact_version} data-milestone={milestoneName} data-direction={String(direction)}>
+    <p>{direction ? 'Does this match how you work?' : `Review ${update.artifact_version} against the agreed checks.`}</p>
+    <button class="studio-button" type="submit" name="decision" formnovalidate value={direction ? 'direction_confirmed' : 'milestone_accepted'}>{direction ? 'Confirm direction' : 'Accept milestone'}</button>
+    <details data-request-changes><summary>Request changes</summary>
+      {!direction && <fieldset><legend>Which agreed checks are unmet?</legend>{checks.map((check,index)=><label class="check-choice"><input type="checkbox" name="criteria" value={index} />{check}</label>)}<p class="hint">Select at least one check.</p></fieldset>}
+      <label>Feedback on this version (required for changes)<textarea class="studio-textarea" name="note" required maxlength="2000" placeholder={direction ? 'What should change, and why?' : 'Tell me what happened and how to see it.'}></textarea></label>
+      <button class="studio-button secondary" type="submit" name="decision" value="changes_requested">Request changes</button>
+    </details>
+    <p>{direction ? 'Confirming the direction approves this approach only. The working milestone is reviewed separately.' : `Acceptance applies to ${update.artifact_version}. No automatic acceptance from silence.`}</p>
+    <p class="studio-status" role="status" aria-live="polite" data-review-status></p>
+  </form>}
+</section>
+<style>
+  .software-review { min-width: 0; overflow-wrap: anywhere; }
+  h2 { font: 400 1.8rem/1.2 Newsreader,Georgia,serif; margin: 0 0 .6rem; }
+  p { font: .95rem/1.6 Inter,sans-serif; white-space: pre-wrap; }
+  form, fieldset, label { display: grid; gap: .8rem; min-width: 0; }
+  legend { font: .95rem/1.5 Inter,sans-serif; margin-bottom: .6rem; }
+  label { font: .9rem/1.5 Inter,sans-serif; }
+  label.check-choice { display: flex; align-items: start; gap: .6rem; }
+  input[type=checkbox] { accent-color: var(--accent); margin-top: .3rem; flex-shrink: 0; }
+  details { border-top: 1px solid var(--rule); padding-top: .8rem; }
+  summary { list-style: none; cursor: pointer; font: .95rem/1.5 Inter,sans-serif; color: var(--ink); border: 1px solid var(--ink); padding: .8rem 1rem; text-align: center; margin-bottom: .8rem; }
+  summary::-webkit-details-marker { display: none; }
+  .hint { color: var(--muted); font-size: .8rem; }
+  .secondary { background: transparent; color: var(--ink); border: 1px solid var(--ink); width: 100%; }
+  .secondary:hover { color: var(--paper); }
+  .studio-button { width: 100%; }
+</style>

@@ -84,10 +84,10 @@ it('shows unread client messages, failed notices, and approaching delivery dates
   });
   const db = { prepare: (query: string) => statement(query) } as unknown as D1Database;
   expect(await listStudioProjectAttention(db, new Date('2026-09-23T12:00:00Z'))).toEqual([
-    { requestId: 'due', summary: 'Due song', unreadMessages: 1, failedNotices: 1, uncheckedNotices: 0, dueSoon: true, stage: 'in_progress', bookingPaid: false, dueInDays: 1 },
-    { requestId: 'late', summary: 'Late song', unreadMessages: 0, failedNotices: 0, uncheckedNotices: 0, dueSoon: true, stage: 'revision_in_progress', bookingPaid: false, dueInDays: -2 },
+    { kind: 'audio', requestId: 'due', summary: 'Due song', unreadMessages: 1, failedNotices: 1, uncheckedNotices: 0, dueSoon: true, stage: 'in_progress', bookingPaid: false, dueInDays: 1 },
+    { kind: 'audio', requestId: 'late', summary: 'Late song', unreadMessages: 0, failedNotices: 0, uncheckedNotices: 0, dueSoon: true, stage: 'revision_in_progress', bookingPaid: false, dueInDays: -2 },
     // A notice still marked sending a day later needs a delivery check; one sent seconds ago does not.
-    { requestId: 'quiet', summary: 'Quiet song', unreadMessages: 0, failedNotices: 0, uncheckedNotices: 1, dueSoon: false, stage: 'in_progress', bookingPaid: false, dueInDays: null },
+    { kind: 'audio', requestId: 'quiet', summary: 'Quiet song', unreadMessages: 0, failedNotices: 0, uncheckedNotices: 1, dueSoon: false, stage: 'in_progress', bookingPaid: false, dueInDays: null },
   ]);
   sql.close();
 });

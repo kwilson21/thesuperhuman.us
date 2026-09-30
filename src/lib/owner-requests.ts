@@ -1,3 +1,4 @@
+import { getSoftwareProject, softwareAccessRevocation, softwareGuard } from './software-projects';
 import { offerSendingGuard, offerIsSending, offerSendingMessage } from './software-offers';
 import {
   ownerRequestFromRow,
@@ -27,6 +28,8 @@ export type RequestCommand = { expectedUpdatedAt?: string } & (
   | { id: string; action: 'note'; actor: string; note: string });
 
 export type OwnerRequestAudit = { id: number; action: string; actor: string; note: string; occurredAt: string };
+
+export const projectStartedMessage = 'This project has started. Use the project controls.';
 
 export class RequestDetailsTooLargeError extends Error {
   constructor() { super('Request details are too large.'); }
@@ -117,9 +120,11 @@ export async function changeOwnerRequest(db: D1Database, command: RequestCommand
   const placeholders = transition.from.map(() => '?').join(',');
   const resolvedAt = transition.to === 'resolved' ? now : null;
   const closingSoftware = current.kind === 'software' && command.action === 'withdraw';
+  const reopeningSoftware = current.kind === 'software' && command.action === 'reopen';
   let results: D1Result[];
   try { results = await db.batch([
     ...(closingSoftware ? [offerSendingGuard(db, command.id)] : []),
+    ...(reopeningSoftware ? [softwareGuard(db, 'SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)', [command.id])] : []),
     db.prepare(`UPDATE owner_requests SET status=?,resolved_at=?,updated_at=?
       WHERE id=? AND updated_at=? AND status IN (${placeholders}) RETURNING ${requestColumns}`)
       .bind(transition.to, resolvedAt, now, command.id, current.updatedAt, ...transition.from),
@@ -127,12 +132,17 @@ export async function changeOwnerRequest(db: D1Database, command: RequestCommand
       SELECT ?,? ,?,'',? WHERE EXISTS
         (SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND status=?)`)
       .bind(command.id, transition.audit, actor, now, command.id, now, transition.to),
+    ...(current.kind === 'software' && command.action === 'withdraw' ? [
+      softwareGuard(db, "SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND status='withdrawn'", [command.id, now]),
+      ...softwareAccessRevocation(db, command.id, actor, now),
+    ] : []),
   ]);
   } catch (error) {
+    if (reopeningSoftware && await getSoftwareProject(db, command.id)) throw new Error(projectStartedMessage);
     if (closingSoftware && await offerIsSending(db, command.id)) throw new Error(offerSendingMessage);
     throw error;
   }
-  const update = results[closingSoftware ? 1 : 0];
+  const update = results[closingSoftware || reopeningSoftware ? 1 : 0];
   const row = update.results[0] as OwnerRequestRow | undefined;
   if (!row) throw new Error('Request changed while it was being updated.');
   return ownerRequestFromRow(row);

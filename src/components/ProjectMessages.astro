@@ -1,15 +1,17 @@
 ---
 import type { ProjectMessage } from '~/lib/audio-project-messages';
+import type { SoftwareProjectMessage } from '~/lib/software-project-messages';
 import { safeExternalUrl } from '~/lib/owner-model';
 import '~/styles/studio.css';
 
 type Props = {
-  messages: ProjectMessage[];
+  messages: (ProjectMessage | SoftwareProjectMessage)[];
   endpoint: string;
   reader: 'owner' | 'client';
   closed: boolean;
+  heading?: string; placeholder?: string; hint?: string;
 };
-const { messages, endpoint, reader, closed } = Astro.props;
+const { messages, endpoint, reader, closed, heading = "Stay in the loop", placeholder = "Write a message…", hint = "Questions, direction, or an updated HTTPS link to your files. Files stay in your Drive, Dropbox, or WeTransfer account." } = Astro.props;
 const unread = messages.some(message => message.actor !== reader && !message.read_at);
 function parts(body: string) {
   const result: { text: string; href?: string }[] = [];
@@ -28,18 +30,19 @@ function parts(body: string) {
 }
 ---
 <section class="project-messages" data-project-messages data-endpoint={endpoint} data-unread={unread ? 'true' : 'false'} aria-labelledby="project-messages-heading">
-  <div class="project-messages-heading"><p class="project-messages-kicker">Conversation</p><h2 id="project-messages-heading">Stay in the loop</h2></div>
+  <div class="project-messages-heading"><p class="project-messages-kicker">Conversation</p><h2 id="project-messages-heading">{heading}</h2></div>
   {messages.length ? <ol class="project-message-list">{messages.map(message =>
     <li class:list={{ mine: message.actor === reader }} data-unread-message={message.actor !== reader && !message.read_at ? message.id : undefined}>
       <div class="project-message-meta"><strong>{message.actor === reader ? 'You' : message.actor === 'owner' ? 'Kazon' : 'Client'}</strong>{message.review_decision && <span class:list={['decision', message.review_decision]}>{message.review_decision === 'approved' ? 'Approved the mix' : message.review_decision === 'stopped' ? 'Stopped the project' : 'Requested changes'}</span>}<time datetime={message.created_at}>{new Date(message.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' })}</time>{message.actor !== reader && !message.read_at && <span class="unread">New</span>}</div>
+      {'decision' in message && message.decision && <span class="decision">{{direction_confirmed:'Direction confirmed',milestone_accepted:'Milestone accepted',changes_requested:'Changes requested'}[message.decision]}</span>}
       <p>{parts(message.body).map(part => part.href ? <a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a> : part.text)}</p>
     </li>
   )}</ol> : <p class="project-messages-empty">No messages yet.</p>}
   {closed ? <p class="project-messages-closed">This conversation is closed. You can still read its history.</p> :
     <form data-project-message-form>
-      <label class="studio-field" for={reader === 'owner' ? 'owner-project-message' : 'client-project-message'}>Your message <small>Questions, direction, or an updated HTTPS link to your files. Files stay in your Drive, Dropbox, or WeTransfer account.</small></label>
+      <label class="studio-field" for={reader === 'owner' ? 'owner-project-message' : 'client-project-message'}>Your message {hint && <small>{hint}</small>}</label>
       <div class="composer">
-        <textarea class="studio-textarea" id={reader === 'owner' ? 'owner-project-message' : 'client-project-message'} name="body" rows="2" maxlength="4000" placeholder="Write a message…" required></textarea>
+        <textarea class="studio-textarea" id={reader === 'owner' ? 'owner-project-message' : 'client-project-message'} name="body" rows="2" maxlength="4000" placeholder={placeholder} required></textarea>
         <button type="submit" class="studio-button">Send</button>
       </div>
       <p class="studio-status" data-project-message-status role="status" aria-live="polite"></p>

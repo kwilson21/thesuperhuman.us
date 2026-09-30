@@ -53,3 +53,29 @@ export const resumeDeliveryEmail = (name: string) => renderEmail({
   link: { label: 'Visit my website', href: site },
   reason: 'You received this because you requested my resume.',
 });
+
+const softwareSignIn = (origin = site) => new URL('/studio/sign-in?for=software', origin).href;
+export const softwareInvitationEmail = (origin?: string) => renderEmail({
+  preheader: 'Your project has started.', kicker: 'Project', heading: 'Your project has started.',
+  paragraphs: ['Your private project page is ready, with each update, what I need from you, and when you’ll hear from me next.'],
+  button: { label: 'Open your project', href: softwareSignIn(origin) }, note: signInNote,
+  reason: 'You received this invitation for your software project.',
+});
+export const softwareUpdateEmail = (origin?: string) => renderEmail({
+  preheader: 'A new update is ready on your project page.', kicker: 'Update', heading: 'You have a new project update.',
+  paragraphs: ['Sign in to see the latest update on your project.'],
+  button: { label: 'Open your project', href: softwareSignIn(origin) }, note: signInNote,
+  reason: 'You received this because your software project has an update.',
+});
+export const softwareReviewEmail = (origin?: string) => renderEmail({
+  preheader: 'Something is ready for your review.', kicker: 'Review', heading: 'Ready for your review.',
+  paragraphs: ['Sign in to review the latest version on your project page.'],
+  button: { label: 'Open your project', href: softwareSignIn(origin) }, note: signInNote,
+  reason: 'You received this because your software project has something to review.',
+});
+export const softwareHandoffEmail = (origin?: string) => renderEmail({
+  preheader: 'Your handoff is ready.', kicker: 'Handoff', heading: 'Your handoff is ready.',
+  paragraphs: ['Sign in to download the delivered files and read the handoff notes.'],
+  button: { label: 'Open your project', href: softwareSignIn(origin) }, note: signInNote,
+  reason: 'You received this because your software project has a handoff.',
+});

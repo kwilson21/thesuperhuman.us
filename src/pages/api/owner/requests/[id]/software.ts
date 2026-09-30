@@ -24,6 +24,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   const command = parsed.data;
   const record = await getOwnerRequest(db, params.id);
   if (!record || record.kind !== 'software') return json({ ok: false }, 404);
+  if (['draft', 'send', 'question', 'decline'].includes(command.action) && await db.prepare('SELECT 1 FROM software_projects WHERE request_id=?').bind(record.id).first()) return json({ ok: false, message: 'This project has started. Use the project messages.' }, 409);
   if ((record.status === 'withdrawn' && command.action !== 'revoke') || !record.email) return json({ ok: false, message: 'This request is closed.' }, 409);
   if (record.status === 'resolved' && ['draft', 'send', 'fit', 'question'].includes(command.action)) return json({ ok: false, message: 'This request is resolved. Reopen it to make a new offer.' }, 409);
   const actor = locals.owner.email;
@@ -51,24 +52,31 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     if (command.action === 'question' || command.action === 'decline') {
       if (command.action === 'decline' && record.status === 'resolved') return json({ ok: false, message: 'This request is already resolved.' }, 409);
       if (command.action === 'decline' && await offerIsSending(db, record.id)) return json({ ok: false, message: offerSendingMessage }, 409);
-      if (command.action === 'decline' && Date.parse(record.updatedAt) >= Date.parse(now)) now = new Date(Date.parse(record.updatedAt) + 1).toISOString();
+      if (Date.parse(record.updatedAt) >= Date.parse(now)) now = new Date(Date.parse(record.updatedAt) + 1).toISOString();
+      if (command.action === 'question') await db.batch([
+        requestGuard(),
+        guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)', [record.id]),
+        db.prepare('UPDATE owner_requests SET updated_at=? WHERE id=?').bind(now, record.id),
+      ]);
       if (command.action === 'decline') await db.batch([
         requestGuard(), offerSendingGuard(db, record.id),
         guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM audio_projects WHERE request_id=?)', [record.id]),
+        guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)', [record.id]),
         db.prepare("UPDATE software_offers SET status='withdrawn',updated_at=? WHERE request_id=? AND status IN ('sent','draft')").bind(now, record.id),
         db.prepare('UPDATE software_offer_links SET revoked_at=? WHERE request_id=? AND revoked_at IS NULL').bind(now, record.id),
         db.prepare('UPDATE owner_requests SET updated_at=? WHERE id=?').bind(now, record.id),
         audit('offer-link-revoked', 'Offer withdrawn and link closed to decline the request'),
       ]);
       const sent = await email(command.action === 'question' ? 'A question about your project brief' : 'About your project brief', `${command.text}\n\nKazon`);
-      if (!sent.ok) return json({ ok: false, uncertain: sent.uncertain, message: command.action === 'decline' ? (sent.uncertain ? 'The email service didn’t confirm. The offer is withdrawn and its link is closed. Check Resend before retrying.' : 'The email didn’t send. The offer is withdrawn and its link is closed; nothing else changed. Try again.') : sent.uncertain ? 'The email service didn’t confirm. Check Resend before retrying. Nothing was recorded.' : 'The email didn’t send. Nothing changed. Try again.' }, 502);
+      if (!sent.ok) return json({ ok: false, uncertain: sent.uncertain, message: command.action === 'decline' ? (sent.uncertain ? 'The email service didn’t confirm. The offer is withdrawn and its link is closed. Check Resend before retrying.' : 'The email didn’t send. The offer is withdrawn and its link is closed; nothing else changed. Try again.') : sent.uncertain ? 'The email service didn’t confirm. Check Resend before retrying. The question was reserved, but delivery was not recorded.' : 'The email didn’t send. The question was reserved. Reload before retrying.' }, 502);
       try { await db.batch([
-        requestGuard(command.action === 'decline' ? now : record.updatedAt),
+        requestGuard(now),
+        guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)', [record.id]),
         ...(command.action === 'decline' ? [offerSendingGuard(db, record.id),
           guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM audio_projects WHERE request_id=?)', [record.id]),
           db.prepare("UPDATE owner_requests SET status='resolved',resolved_at=?,updated_at=? WHERE id=?").bind(now, now, record.id)] : []),
         audit(command.action === 'question' ? 'question-sent' : 'declined'),
-      ]); } catch { if (command.action === 'decline' && await offerIsSending(db, record.id)) return json({ ok: false, message: offerSendingMessage }, 409); return json({ ok: false, message: 'The client email was sent, but the request changed before it could be recorded. Reload before taking another action.' }, 409); }
+      ]); } catch { if (await db.prepare('SELECT 1 FROM software_projects WHERE request_id=?').bind(record.id).first()) return json({ ok: false, message: 'This project has started. Use the project messages.' }, 409); if (command.action === 'decline' && await offerIsSending(db, record.id)) return json({ ok: false, message: offerSendingMessage }, 409); return json({ ok: false, message: 'The client email was sent, but the request changed before it could be recorded. Reload before taking another action.' }, 409); }
       return json({ ok: true, copySent: sent.copySent });
     }
     if (command.action === 'revoke') {
@@ -85,6 +93,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       const version = draft?.version ?? ((offers[0]?.version ?? 0) + 1), id = draft?.id ?? crypto.randomUUID();
       await db.batch([
         requestGuard(),
+        guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)', [record.id]),
         ...(draft ? [guard("SELECT 1 FROM software_offers WHERE id=? AND status='draft' AND updated_at=?", [draft.id, command.expectedUpdatedAt!])] : []),
         draft ? db.prepare("UPDATE software_offers SET terms_json=?,updated_at=? WHERE id=? AND status='draft'").bind(JSON.stringify(terms.value), now, id)
           : db.prepare("INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES (?,?,?,'draft',?,?,?)").bind(id, record.id, version, JSON.stringify(terms.value), now, now),
@@ -105,6 +114,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     catch { return json({ ok: false, message: 'The offer link couldn’t be built. Check SITE_ORIGIN. Nothing was sent.' }, 500); }
     await db.batch([
       requestGuard(), offerSendingGuard(db, record.id),
+      guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)', [record.id]),
       guard('SELECT 1 FROM software_offers WHERE id=? AND status=? AND updated_at=?', [offer.id, offer.status, offer.updated_at]),
       ...(offer.status === 'sent' ? [guard('SELECT 1 FROM software_offer_links WHERE request_id=? AND revoked_at IS NOT NULL', [record.id])] : []),
       ...(draft ? [db.prepare("UPDATE software_offers SET status='superseded' WHERE request_id=? AND status='sent'").bind(record.id),
@@ -122,6 +132,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   } catch {
     if (command.action === 'revoke' && !await db.prepare('SELECT 1 FROM software_offer_links WHERE request_id=? AND created_at=? AND revoked_at IS NULL').bind(record.id, command.expectedLinkCreatedAt).first()) return json({ ok: false, message: 'The client link changed since this page loaded. Reload to see the current link.' }, 409);
     if (['send', 'revoke', 'decline'].includes(command.action) && await offerIsSending(db, record.id)) return json({ ok: false, message: offerSendingMessage }, 409);
+    if (['draft', 'send', 'question', 'decline'].includes(command.action) && await db.prepare('SELECT 1 FROM software_projects WHERE request_id=?').bind(record.id).first()) return json({ ok: false, message: 'This project has started. Use the project messages.' }, 409);
     if (command.action === 'draft') {
       const draft = (await listSoftwareOffers(db, record.id)).find(offer => offer.status === 'draft');
       return json({ ok: false, updatedAt: draft?.updated_at ?? null, message: 'The saved draft changed since this page loaded. Save again to keep what’s on screen, or reload to see the saved version.' }, 409);

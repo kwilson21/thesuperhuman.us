@@ -1,0 +1,104 @@
+---
+export const prerender = false;
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import StudioUnavailable from '~/components/StudioUnavailable.astro';
+import SoftwareProjectUpdate from '~/components/SoftwareProjectUpdate.astro';
+import SoftwareStepTrack from '~/components/SoftwareStepTrack.astro';
+import ProjectMessages from '~/components/ProjectMessages.astro';
+import SoftwareReviewResponse from '~/components/SoftwareReviewResponse.astro';
+import { clientPortalEnabled, clientSoftwareProjectForSession, studioSessionFromRequest } from '~/lib/audio-client-access';
+import { projectTerms, sharedSoftwareUpdates, softwareStateSentence, softwareDate, milestonePayments, correctionPeriodEnd } from '~/lib/software-projects';
+import { addBusinessDays } from '~/lib/business-days';
+import { listSoftwareProjectMessages } from '~/lib/software-project-messages';
+import '~/styles/studio.css';
+const env = Astro.locals.runtime.env;
+if (!clientPortalEnabled(env)) return new Response('Not found', { status: 404 });
+if (!env.MUSIC_DB) return new Response('Studio is temporarily unavailable.', { status: 503 });
+const token = studioSessionFromRequest(Astro.request);
+if (!token) return Astro.redirect('/studio/sign-in?for=software');
+const project = await clientSoftwareProjectForSession(env.MUSIC_DB, token, Astro.params.id!);
+if (!project) Astro.response.status = 404;
+const terms = project ? projectTerms(project) : null;
+const updates = project ? await sharedSoftwareUpdates(env.MUSIC_DB, project.request_id) : [];
+const messages = project ? await listSoftwareProjectMessages(env.MUSIC_DB, project.request_id) : [];
+const latest = updates.find(update=>update.status==='shared'), milestone = terms?.milestones[project?.milestone_index ?? 0];
+const payments=project ? await milestonePayments(env.MUSIC_DB,project.request_id) : [];
+const acceptedDeliveries=updates.filter(update=>update.kind==='delivery_review' && update.status==='shared' && update.decision==='milestone_accepted').sort((a,b)=>(b.milestone_index ?? 0)-(a.milestone_index ?? 0));
+const reviews=updates.filter(update=>update.kind?.endsWith('_review') && update.status==='shared');
+const undecidedReviews=reviews.filter(update=>!update.decision);
+const review=undecidedReviews.find(update=>update.kind==='delivery_review') ?? undecidedReviews[0] ?? reviews.find(update=>update.decision);
+const railReviews=review ? [review,...undecidedReviews.filter(update=>update.id!==review.id)] : [];
+const pendingDelivery=review?.kind==='delivery_review' && !review.decision ? review : null;
+const currentUpdate=review && !review.decision ? review : latest;
+const newerUpdates=currentUpdate && currentUpdate!==latest ? updates.slice(0,updates.indexOf(currentUpdate)).filter(update=>update.status==='shared') : [];
+const earlierVersions=updates.filter(update=>update.kind?.endsWith('_review') && update.status==='superseded' && update.decision);
+const earlierUpdates=updates.filter(update=>update.id!==latest?.id && !newerUpdates.includes(update) && !undecidedReviews.includes(update) && !earlierVersions.includes(update));
+const visual = (id: string) => `/api/studio/software/${project!.request_id}/updates/${id}/visual`;
+const conversationClosed = project?.state === 'complete';
+const waiting = (project?.state === 'waiting_for_input' ? project.waiting_for : '');
+---
+{!project || !terms ? <StudioUnavailable audio={false} backLabel="Back to your projects" /> : <BaseLayout title={`${terms.outcome} · Private project`} description="Your private project." noindex>
+  <article class="site-shell software-project">
+    <nav class="breadcrumb" aria-label="Breadcrumb"><a href="/studio">Your projects</a> / {terms.outcome}</nav>
+    <header><p class="studio-kicker">Private project</p><h1>{pendingDelivery ? pendingDelivery.milestone_index===0 ? 'Your first milestone is ready to review.' : `Milestone ${(pendingDelivery.milestone_index ?? 0)+1} is ready to review.` : terms.outcome}</h1><p class="summary">{terms.summary}{pendingDelivery && ` · ${pendingDelivery.artifact_version}`}</p>{pendingDelivery && <p>Please review by {softwareDate(addBusinessDays(pendingDelivery.shared_at!,pendingDelivery.review_window_days ?? 5))}.</p>}</header>
+    <div class="project-band"><div><h2>Milestone {project.milestone_index+1} · {milestone?.name}</h2><p>{softwareStateSentence(project)}</p></div><div>{latest?.shared_at && <p>Last update: {softwareDate(latest.shared_at)}</p>}{project.next_update_on && <p>Next update: {softwareDate(project.next_update_on)}</p>}</div><SoftwareStepTrack step={project.step} /></div>
+    <div class="project-columns"><div class="project-current">
+      {currentUpdate ? <SoftwareProjectUpdate update={currentUpdate} checks={terms.milestones[currentUpdate.milestone_index ?? 0].acceptance} visualUrl={currentUpdate.has_visual ? visual(currentUpdate.id) : undefined} /> : <section><h2>Your first update is on its way.</h2>{project.next_update_on && <p>Next update: {softwareDate(project.next_update_on)}</p>}</section>}
+      {newerUpdates.length>0 && <section class="latest-updates"><h3>Latest update</h3>{newerUpdates.map(update=><SoftwareProjectUpdate update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} visualUrl={update.has_visual ? visual(update.id) : undefined} />)}</section>}
+    </div><aside aria-label="Next steps">{railReviews.map(review=><section><SoftwareReviewResponse update={review} checks={terms.milestones[review.milestone_index ?? 0].acceptance} milestoneName={terms.milestones[review.milestone_index ?? 0].name} endpoint={`/api/studio/software/${project.request_id}/reviews/${review.id}`} readonly={conversationClosed} /></section>)}{earlierVersions.length>0 && <section><a class="site-link" href="#earlier-versions">See earlier versions</a></section>}{waiting && <section><h2>Waiting on you</h2><p>{waiting}</p></section>}{latest?.next_step && <section><h2>Next from me</h2><p>{latest.next_step}</p></section>}{!conversationClosed && <section><a class="site-link" href="#conversation">Ask a question <span aria-hidden="true">↓</span></a></section>}</aside><div class="project-history">
+      {acceptedDeliveries.map(accepted=>{
+        const firstAcceptance=updates.filter(update=>update.milestone_index===accepted.milestone_index && update.decision==='milestone_accepted').map(update=>update.decided_at!).sort()[0];
+        const handoff=updates.find(update=>update.kind==='handoff' && update.status==='shared' && update.milestone_index===accepted.milestone_index && update.shared_at!>=accepted.decided_at!);
+        const handoffLinks: {label:string;url:string}[]=JSON.parse(handoff?.links_json ?? '[]');
+        return <section class="handoff-strip"><p>Milestone {(accepted.milestone_index ?? 0)+1} · {terms.milestones[accepted.milestone_index ?? 0].name}</p><h2>Milestone accepted{handoff ? ' · Handoff ready' : ''}</h2><p>{accepted.artifact_version} is accepted.</p>{handoff ? <><ul>{handoffLinks.map(link=>{
+        const external = new URL(link.url).origin !== Astro.url.origin;
+        return <li><a class="site-link" href={link.url} target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer' : undefined}>{link.label} <span aria-hidden="true">{external ? '↗' : '→'}</span></a></li>;
+      })}</ul><p>{handoff.next_step}</p></> : <p>Handoff follows full payment.</p>}<p>Corrections through {softwareDate(correctionPeriodEnd(firstAcceptance,payments.find(payment=>payment.milestone_index===accepted.milestone_index)?.paid_recorded_at))}.</p></section>;})}
+      <details><summary>What we agreed</summary>{terms.milestones.map(item => <section><h3>{item.name}</h3><h4>What you’ll receive</h4><ol>{item.deliverables.map(line => <li>{line}</li>)}</ol><h4>How we’ll know it’s ready</h4><ul>{item.acceptance.map(line => <li>{line}</li>)}</ul></section>)}{terms.clientInputs && <><h3>What I’ll need from you</h3><p>{terms.clientInputs}</p></>}{terms.exclusions && <><h3>Outside this offer</h3><p>{terms.exclusions}</p></>}</details>
+      {earlierVersions.length>0 && <details id="earlier-versions"><summary>Earlier versions</summary>{earlierVersions.map(update => <><SoftwareProjectUpdate update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} visualUrl={update.has_visual ? visual(update.id) : undefined} /><SoftwareReviewResponse update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} milestoneName={terms.milestones[update.milestone_index ?? 0].name} endpoint="" readonly /></>)}</details>}
+      {earlierUpdates.length>0 && <details><summary>Earlier updates</summary>{earlierUpdates.map(update=><><SoftwareProjectUpdate update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} visualUrl={update.has_visual ? visual(update.id) : undefined} />{update.status==='shared' && update.kind?.endsWith('_review') && <SoftwareReviewResponse update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} milestoneName={terms.milestones[update.milestone_index ?? 0].name} endpoint={`/api/studio/software/${project.request_id}/reviews/${update.id}`} readonly={conversationClosed} />}</>)}</details>}
+    </div></div>
+    <div id="conversation"><ProjectMessages messages={messages} endpoint={`/api/studio/software/${project.request_id}/messages`} reader="client" closed={conversationClosed} heading="Ask a question" placeholder="Ask about a screen, a step or a date." hint="" /></div>
+    <footer class="project-records"><span>Agreement · Complete</span><span>{project.payment_mode === 'standard' ? 'Initial payment · Received' : 'Payment · Invoiced on delivery'}</span><span>Start · Confirmed {softwareDate(project.started_at)}</span></footer>
+  </article><script>import { setupProjectMessages } from '~/scripts/project-messages'; import { setupSoftwareReviews } from '~/scripts/software-review'; setupProjectMessages(); setupSoftwareReviews();</script>
+</BaseLayout>}
+<style>
+  .software-project { max-width: 80rem; margin: auto; padding: clamp(3rem,7vw,6rem) 1.5rem; overflow-wrap: anywhere; }
+  .breadcrumb { color: var(--muted); font: .85rem/1.5 Inter,sans-serif; margin-bottom: 2rem; }
+  .studio-kicker { color: var(--accent); font: 500 .78rem/1.4 Inter,sans-serif; text-transform: uppercase; letter-spacing: .18em; }
+  h1 { font: 400 clamp(2.8rem,6vw,5rem)/1.02 Newsreader,Georgia,serif; margin: 1rem 0; }
+  h2 { font: 400 1.8rem/1.2 Newsreader,Georgia,serif; margin: 0 0 .6rem; }
+  h3 { font: 400 1.5rem/1.2 Newsreader,Georgia,serif; margin: 1.5rem 0 .5rem; }
+  p, li { font: 1rem/1.6 Inter,sans-serif; white-space: pre-wrap; }
+  .summary { color: var(--muted); max-width: 60ch; }
+  .project-band { display: grid; grid-template-columns: 1.3fr .8fr 1fr; gap: 2rem; align-items: center; border-block: 1px solid var(--rule); padding: 1.5rem 0; margin: 2.5rem 0; }
+  .project-band h2 { font-size: 1.4rem; }
+  .project-band p { font-size: .85rem; color: var(--muted); }
+  .project-columns { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1fr); gap: 3rem; align-items: start; }
+  .project-current, .project-history, aside { min-width: 0; }
+  .project-current, .project-history { grid-column: 1; }
+  .project-current { grid-row: 1; }
+  .latest-updates { border-top: 1px solid var(--rule); margin-top: 1.5rem; padding-top: 1.5rem; }
+  .latest-updates > h3 { font-size: 1.6rem; margin: 0 0 .5rem; }
+  .project-history { grid-row: 2; }
+  .handoff-strip { border-block: 1px solid var(--rule); padding: 1.5rem 0; margin: 2rem 0; }
+  .handoff-strip ul { list-style: none; padding: 0; }
+  aside { grid-column: 2; grid-row: 1 / span 2; border-left: 1px solid var(--rule); padding-left: 2rem; }
+  aside > section { padding-bottom: 1.5rem; }
+  aside > section + section { border-top: 1px solid var(--rule); padding-top: 1.5rem; }
+  details { border-top: 1px solid var(--rule); padding: 1.5rem 0; margin-top: 2rem; }
+  summary { cursor: pointer; font: 400 1.5rem/1.4 Newsreader,Georgia,serif; }
+  details h4 { font: 400 1.25rem/1.25 Newsreader,Georgia,serif; margin: 1rem 0 .5rem; }
+  details ol { list-style-type: decimal-leading-zero; padding-left: 2rem; }
+  details ol li::marker { color: var(--accent); }
+  details li { padding-left: .2rem; margin-bottom: .4rem; }
+  details ul { list-style: none; padding: 0; }
+  .project-records { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; border-top: 1px solid var(--rule); margin-top: 3rem; padding-top: 1.5rem; font: .8rem/1.5 Inter,sans-serif; color: var(--muted); }
+  @media(max-width: 55rem) {
+    .project-band, .project-columns { grid-template-columns: 1fr; }
+    .project-current, .project-history, aside { grid-column: 1; grid-row: auto; }
+    .project-current { order: 1; }
+    aside { order: 2; border-left: 0; border-top: 1px solid var(--rule); padding: 2rem 0 0; }
+    .project-history { order: 3; }
+  }
+</style>

@@ -1,0 +1,90 @@
+---
+export const prerender = false;
+import OwnerLayout from '~/layouts/OwnerLayout.astro';
+import SoftwareAcceptanceChecks from '~/components/SoftwareAcceptanceChecks.astro';
+import SoftwareProjectUpdate from '~/components/SoftwareProjectUpdate.astro';
+import { getOwnerRequest, listOwnerRequests } from '~/lib/owner-requests';
+import { clientPortalEnabled } from '~/lib/audio-client-access';
+import { getSoftwareProject, listSoftwareUpdates, projectTerms, evidenceTypes, updateKinds, sharedSoftwareUpdates } from '~/lib/software-projects';
+import type { ClientSoftwareUpdate } from '~/lib/software-projects';
+import '~/styles/studio.css';
+const env = Astro.locals.runtime.env, db = env.MUSIC_DB;
+if (!Astro.locals.owner) return new Response('Forbidden', { status: 403 });
+if (!clientPortalEnabled(env)) return new Response('Not found', { status: 404 });
+if (!db) return new Response('Owner reporting is unavailable.', { status: 503 });
+const id = Astro.params.id!, request = await getOwnerRequest(db, id), project = await getSoftwareProject(db, id);
+if (!request || request.kind !== 'software' || !project || project.revoked_at || project.content_deleted_at || request.status === 'withdrawn') return new Response('Project not found.', { status: 404 });
+if (project.state === 'complete') return Astro.redirect(`/owner/requests/${id}`);
+const terms = projectTerms(project), draft = (await listSoftwareUpdates(db, id)).find(update => update.status === 'draft');
+const update: ClientSoftwareUpdate = { id: draft?.id ?? '', title: draft?.title ?? '', artifact_version: draft?.artifact_version ?? '', evidence_type: draft?.evidence_type ?? 'concept', visual_alt: draft?.visual_alt ?? '', preview_url: draft?.preview_url ?? '', what_changed: draft?.what_changed ?? '', checks_limitations: draft?.checks_limitations ?? '', next_step: draft?.next_step ?? '', client_request: draft?.client_request ?? '', next_update_on: draft?.next_update_on ?? '', shared_at: null, has_visual: draft?.visual_key ? 1 : 0 };
+const newRequests = await listOwnerRequests(db, { status: 'new' });
+const firstName = request.name.trim().split(/\s+/)[0] || 'the client';
+const shared = await sharedSoftwareUpdates(db,id);
+const accepted = terms.milestones.map((_,index)=>shared.some(item=>item.kind==='delivery_review' && item.milestone_index===index && item.status==='shared' && item.decision==='milestone_accepted'));
+const criteria: string[] = draft ? JSON.parse(draft.criteria_json) : [];
+const links: {label:string;url:string}[] = draft ? JSON.parse(draft.links_json) : [];
+---
+<OwnerLayout title="New project update" current="requests" newRequestCount={newRequests.length} ownerEmail={Astro.locals.owner.email}>
+  <p class="owner-breadcrumb"><a href="/owner/requests">Requests</a> / <a href={`/owner/requests/${id}`}>{terms.outcome}</a> / New update</p>
+  <div class="update-columns" data-software-composer data-endpoint={`/api/owner/requests/${id}/updates`} data-id={draft?.id} data-updated-at={draft?.updated_at} data-project-updated-at={project.updated_at}>
+    <section><header class="owner-page-heading compact"><div><p class="owner-kicker">New update</p><h1>Show what changed.</h1><p>Prepare a useful update for {firstName}.</p><p class="rail-state"><span class="state-dot" aria-hidden="true"></span>Draft · Not shared</p></div></header>
+      <form class="software-update-form" data-update-form>
+        <div class="software-field"><label>Kind<select class="studio-select" name="kind" aria-describedby="update-kind-hint">{Object.entries(updateKinds).map(([value,label])=><option value={value} selected={value===(draft?.kind ?? 'progress')}>{label}</option>)}</select></label><p id="update-kind-hint" class="rail-caption" data-kind-hint></p></div>
+        <label>Milestone<select class="studio-select" name="milestone_index">{terms.milestones.map((item,index) => <option value={index} selected={index === (draft?.milestone_index ?? project.milestone_index)}>Milestone {index+1} · {item.name}</option>)}</select></label>
+        <label>Title<input class="studio-input" name="title" maxlength="120" required placeholder="What the client will notice" value={update.title} /></label>
+        <label>Version<input class="studio-input" name="artifact_version" maxlength="60" placeholder="Prototype v1" value={update.artifact_version} /></label>
+        <div class="software-field"><label>Evidence type<select aria-describedby="update-field-1-hint" class="studio-select" name="evidence_type">{Object.entries(evidenceTypes).map(([value,label]) => <option value={value} selected={update.evidence_type === value}>{label}</option>)}</select></label><p id="update-field-1-hint" class="rail-muted rail-caption">Concept means not implemented. Call something working only if the client can use it.</p></div>
+        <section data-delivery-fields hidden>
+          <h2>Acceptance checks</h2>
+          {terms.milestones.map((item,index)=><fieldset data-criteria-group={index} hidden={index!==(draft?.milestone_index ?? project.milestone_index)} disabled={index!==(draft?.milestone_index ?? project.milestone_index)}>{item.acceptance.map((check,checkIndex)=><label>{check}<textarea class="studio-textarea" name="criteria" maxlength="300" placeholder="Shown in the walkthrough at 1:20, or: Try it in the preview with the sample file">{index===draft?.milestone_index ? criteria[checkIndex] ?? '' : ''}</textarea></label>)}</fieldset>)}
+          <div class="software-field"><label>Review window (Business Days)<input class="studio-input" type="number" name="review_window_days" min="5" max="30" value={draft?.review_window_days ?? 5} aria-describedby="review-window-hint" /></label><p id="review-window-hint" class="rail-caption">At least 5 Business Days. Use more for a large milestone.</p></div>
+        </section>
+        <section data-handoff-fields data-accepted={JSON.stringify(accepted)} hidden>
+          <label class="email-choice"><input type="checkbox" name="paid_confirmed" />This milestone is paid in full (checked in Stripe or the bank)</label>
+          <p class="rail-caption">Rights in this milestone’s work transfer on full payment. Hand off within 5 Business Days of payment.</p>
+          <p class="rail-caption" data-handoff-unavailable hidden>Share an accepted delivery review before handing off this milestone.</p>
+          <h2>Delivered links</h2>
+          <p id="handoff-links-hint" class="rail-caption">Keep the files available for at least 30 days.</p>
+          {Array.from({length:10},(_,index)=><div data-handoff-link hidden={index>=Math.max(1,links.length)}><label>Link {index+1} label<input class="studio-input" name="link_label" maxlength="80" placeholder="Delivered files or handoff notes" value={links[index]?.label ?? ''} /></label><label>HTTPS URL<input class="studio-input" name="link_url" type="url" placeholder="https://…" aria-describedby="handoff-links-hint" value={links[index]?.url ?? ''} /></label></div>)}
+          <button type="button" class="studio-quiet" data-add-link>Add another link</button>
+        </section>
+        <div class="software-field"><label class="drop"><input type="file" name="visual" accept="image/png,image/jpeg,image/webp" aria-describedby="update-visual-hint" /><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4.5h14V14" fill="none" stroke="currentColor" stroke-width="1.5" /></svg><span class="drop-copy"><strong data-visual-name>{update.has_visual ? 'Replace visual' : 'Drop a PNG, JPEG or WebP'}</strong><span>or choose a file · up to 5 MB</span></span></label><p id="update-visual-hint" class="rail-muted rail-caption">Optional PNG, JPEG or WebP, 5 MB or less. Choose a file to replace the visual.</p></div>
+        <label>Image description<input class="studio-input" name="visual_alt" maxlength="300" required={Boolean(update.has_visual)} value={update.visual_alt} /></label>
+        <div class="software-field"><label>Preview link<input aria-describedby="update-field-3-hint" class="studio-input" name="preview_url" type="url" value={update.preview_url} /></label><p id="update-field-3-hint" class="rail-muted rail-caption">Link only to something the client is allowed to open.</p></div>
+        <label><span data-changed-label>What changed</span><textarea class="studio-textarea" name="what_changed" required maxlength="1000">{update.what_changed}</textarea></label>
+        <label><span data-limitations-label>Checks and limitations</span><textarea class="studio-textarea" name="checks_limitations" maxlength="1000">{update.checks_limitations}</textarea></label>
+        <label><span data-next-label>Next step</span><textarea class="studio-textarea" name="next_step" maxlength="300">{update.next_step}</textarea></label>
+        <label>What I need from the client<textarea class="studio-textarea" name="client_request" maxlength="300">{update.client_request}</textarea></label>
+        <label>Next update<input class="studio-input" name="next_update_on" type="date" value={update.next_update_on} /></label>
+        <label class="email-choice"><input type="checkbox" name="email_client" checked={draft ? Boolean(draft.email_client) : Boolean(update.client_request)} />Also email {firstName} about this update</label>
+        <div class="software-actions"><button class="studio-quiet" type="button" data-save-draft>Save draft</button><button class="studio-button" type="submit">Share update</button></div>
+        <p class="rail-caption">Sharing adds this update to the client’s project page.</p>
+        <p class="studio-status" data-composer-status role="status" aria-live="polite"></p>
+      </form>
+    </section>
+    <aside class="client-preview"><p class="owner-kicker">Client preview · Not yet shared</p><SoftwareProjectUpdate update={update} preview visualUrl={update.has_visual ? `/api/owner/requests/${id}/updates/${update.id}/visual` : undefined} />
+      <section data-preview-section="next_step" hidden={!update.next_step}><h3>Next from me</h3><p data-preview-text="next_step">{update.next_step}</p></section>
+      <p data-preview-date hidden={!update.next_update_on}>Next update: <span>{update.next_update_on}</span></p>
+      <p data-preview-review-date hidden></p>
+      <div data-preview-checks hidden>{terms.milestones.map((item,index)=><div data-preview-criteria={index} hidden><SoftwareAcceptanceChecks checks={item.acceptance} evidence={index===draft?.milestone_index ? criteria : []} /></div>)}</div>
+      <section data-preview-handoff hidden><h3>Delivered links</h3><ul>{Array.from({length:10},()=> <li hidden><a target="_blank" rel="noopener noreferrer"></a></li>)}</ul></section>
+      <p class="private-note">Private notes and fit review stay in the request.</p>
+    </aside>
+  </div>
+  <script>import { setupSoftwareComposer } from '~/scripts/software-composer'; setupSoftwareComposer();</script>
+</OwnerLayout>
+<style>
+  .update-columns { display: grid; grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); gap: 3rem; align-items: start; }
+  .owner-page-heading.compact h1 + p { font-size: 1.15rem; color: var(--muted); max-width: 38ch; margin-top: .8rem; }
+  .owner-page-heading.compact .rail-state { font: .9rem/1.5 Inter,sans-serif; }
+  .software-update-form { display: grid; gap: 1rem; }
+  .software-update-form section, .software-update-form fieldset, [data-handoff-link] { display: grid; gap: .8rem; min-width: 0; }
+  .software-update-form label.email-choice { display: flex; align-items: center; gap: .6rem; }
+  input[type=checkbox] { accent-color: var(--accent); }
+  .client-preview { padding: 1.5rem; border: 1px solid var(--rule); min-width: 0; }
+  .client-preview h3 { font: 400 1.6rem/1.3 Newsreader,Georgia,serif; margin: 1.5rem 0 .5rem; }
+  .client-preview p { font: .9rem/1.6 Inter,sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .private-note { border-top: 1px solid var(--rule); padding-top: 1rem; margin-top: 2rem; color: var(--muted); }
+  [hidden] { display: none !important; }
+  @media(max-width: 55rem) { .update-columns { grid-template-columns: 1fr; } }
+</style>

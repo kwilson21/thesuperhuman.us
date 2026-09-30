@@ -1,5 +1,7 @@
 # Owner center operations
 
+Software reviews identify a direction or delivery version; confirming direction does not accept working software. Give evidence for every agreed delivery check and at least 5 Business Days for review. The client explicitly accepts the version or names unmet checks with reproduction notes; silence is never acceptance. Record full milestone payment only after checking Stripe or the bank. Share handoff links only after acceptance and full payment, within 5 Business Days of payment, and keep files available for at least 30 days. The correction period runs for 30 calendar days from the earlier of acceptance or full payment. The Project rail records milestone decisions, payment and handoff; Activity keeps the version-specific audit notes. Mark the project complete after the final milestone handoff.
+
 Use this page when a promotion is active or when the owner center says something needs attention. Routine requests stay in the owner center. Do not copy request details into logs, issues, or email.
 
 ## Start here
@@ -112,3 +114,7 @@ Record the time, affected route, safe symptom, Worker version, database state, a
 ## Software offers
 
 Software requests have a manual, advisory fit review. Questions and declines email the client and send an owner copy; declining resolves the request only after the client email succeeds. Save every offer term as a draft, preview the client projection, then confirm sending separately. Sent versions are immutable; a later draft starts from the latest sent terms and sending it supersedes the previous version. Client access uses a forwardable private link with no sign-in. Revoke it to close access; sending again issues a new link. Only its hash is stored, so copying the raw link is available in the browser session that sent it; otherwise revoke and reissue it. Signing, invoices and start confirmation are not started at this stage. Reviewed owner retention deletes associated fit notes, offers and private links when it clears eligible request contacts.
+
+## Software project pages
+
+Start from a sent offer in the request rail. Check the signatures and first payment (or first invoice in Invoice terms) yourself before recording the start; the client sees those records as complete. The project keeps a snapshot of the sent terms. Save updates as private drafts, inspect the live client preview, then confirm sharing. Sharing adds the update to the project page; the email checkbox is a separate choice. The Today list shows unread messages, notices needing attention and update dates within two days. Retry failed notices from the project rail; check Resend before retrying an unconfirmed send. Closing client access hides the project and signs the client out. No review is accepted from silence. Software content becomes eligible one year after completion or access closure; run the reviewed studio cleanup before owner-request retention.

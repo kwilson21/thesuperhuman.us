@@ -75,14 +75,6 @@ const size = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   h3 { font: 400 1.5rem/1.15 Newsreader,Georgia,serif; }
   .upload { display: grid; gap: 1rem; max-width: 46rem; }
   .upload-heading p, .upload-guidance, .unfinished p { margin: .3rem 0 0; color: var(--studio-muted); font: .85rem/1.5 Inter, sans-serif; }
-  .drop { position: relative; display: flex; align-items: center; justify-content: center; gap: 1rem; min-height: 7rem; padding: 1.5rem; border: 1.5px dashed var(--studio-line); border-radius: 2px; background: var(--studio-field); cursor: pointer; transition: border-color 140ms ease, background 140ms ease; }
-  .drop:hover, .drop.dragging { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 5%, var(--studio-field)); }
-  .drop:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 3px; }
-  .drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-  .drop svg { width: 2rem; height: 2rem; color: var(--ink); }
-  .drop-copy { display: grid; gap: .1rem; }
-  .drop-copy strong { font: 500 1rem/1.35 Inter, sans-serif; overflow-wrap: anywhere; }
-  .drop-copy span { color: var(--studio-muted); font: .78rem/1.4 Inter, sans-serif; }
   .upload-row { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; }
   .upload-row .studio-field { flex: 1 1 14rem; }
   .upload-progress { display: grid; gap: .5rem; }
@@ -102,5 +94,5 @@ const size = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
     .file-size { grid-column: 2; grid-row: 1; align-self: start; }
     .studio-pill { grid-column: 1; grid-row: 3; justify-self: start; }
   }
-  @media (prefers-reduced-motion: reduce) { .drop, .upload-segments :global(span) { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .upload-segments :global(span) { transition: none; } }
 </style>

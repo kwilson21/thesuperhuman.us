@@ -76,7 +76,7 @@ it.each(['question','decline'])('%s sends exact text and owner copy before audit
 it.each(['question','decline'])('%s leaves the request open on client email failure', async action => {
   vi.mocked(fetch).mockResolvedValue(new Response('{}', { status: 503 }));
   const response = await call({ action, text:'Thanks.' }); expect(response.status).toBe(502);
-  expect(await response.json()).toMatchObject({ uncertain:true, message:action === 'decline' ? 'The email service didn’t confirm. The offer is withdrawn and its link is closed. Check Resend before retrying.' : 'The email service didn’t confirm. Check Resend before retrying. Nothing was recorded.' });
+  expect(await response.json()).toMatchObject({ uncertain:true, message:action === 'decline' ? 'The email service didn’t confirm. The offer is withdrawn and its link is closed. Check Resend before retrying.' : 'The email service didn’t confirm. Check Resend before retrying. The question was reserved, but delivery was not recorded.' });
   expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({ status:'new' });
   expect(sql.prepare('SELECT action FROM owner_request_audit').all()).toEqual(action === 'decline' ? [{ action:'offer-link-revoked' }] : []);
 });
@@ -103,11 +103,11 @@ it('does not overwrite a withdrawal while decline email is pending', async () =>
   expect(sql.prepare('SELECT action FROM owner_request_audit').all()).toEqual([{ action:'offer-link-revoked' }]);
 });
 
-it.each(['question','decline'])('%s changes nothing on confirmed rejection', async action => {
+it.each(['question','decline'])('%s leaves the request open on confirmed rejection', async action => {
   vi.mocked(fetch).mockResolvedValue(new Response('{}', { status: 422 }));
   const response = await call({ action, text:'Thanks.' });
   expect(response.status).toBe(502);
-  expect(await response.json()).toMatchObject({ uncertain:false, message:action === 'decline' ? 'The email didn’t send. The offer is withdrawn and its link is closed; nothing else changed. Try again.' : 'The email didn’t send. Nothing changed. Try again.' });
+  expect(await response.json()).toMatchObject({ uncertain:false, message:action === 'decline' ? 'The email didn’t send. The offer is withdrawn and its link is closed; nothing else changed. Try again.' : 'The email didn’t send. The question was reserved. Reload before retrying.' });
   expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({ status:'new' });
   expect(sql.prepare('SELECT action FROM owner_request_audit').all()).toEqual(action === 'decline' ? [{ action:'offer-link-revoked' }] : []);
 });
@@ -234,6 +234,48 @@ it('rejects generic actions from a tab predating the fit save', async () => {
   const action = (expectedUpdatedAt:string) => requestPost({ params:{ id:'software' }, request:new Request('https://thesuperhuman.us/api/owner/requests/software',{ method:'POST',body:JSON.stringify({ action:'note',note:'New note',expectedUpdatedAt }) }), locals:{ owner:{ email:'owner@example.com' },runtime:{ env:{ MUSIC_DB:db } } } } as any);
   expect((await action('now')).status).toBe(409);
   expect((await action(updatedAt)).status).toBe(200);
+});
+
+it('decline batch rolls back when a project starts after its pre-check', async () => {
+  await send(await draft());
+  sql.exec("UPDATE software_offer_links SET created_at='2020-01-01T00:00:00Z'");
+  vi.mocked(fetch).mockClear();
+  const batch = db.batch.bind(db);
+  db.batch = (async (items: D1PreparedStatement[]) => {
+    sql.exec("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) SELECT 'software',id,terms_json,'standard','now','now','now','owner','now','now' FROM software_offers WHERE status='sent'");
+    return batch(items);
+  }) as D1Database['batch'];
+  const before = sql.prepare('SELECT * FROM owner_requests').all();
+  const response = await call({action:'decline',text:'Thanks.'});
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ok:false,message:'This project has started. Use the project messages.'});
+  expect(fetch).not.toHaveBeenCalled();
+  expect(sql.prepare('SELECT * FROM owner_requests').all()).toEqual(before);
+  expect(sql.prepare('SELECT status FROM software_offers').get()).toEqual({status:'sent'});
+  expect(sql.prepare('SELECT revoked_at FROM software_offer_links').get()).toEqual({revoked_at:null});
+  expect(sql.prepare("SELECT action FROM owner_request_audit WHERE action='declined'").all()).toEqual([]);
+  expect(sql.prepare('SELECT request_id FROM software_projects').get()).toEqual({request_id:'software'});
+});
+
+it('draft batch rolls back when a project starts after its pre-check', async () => {
+  await send(await draft());
+  sql.exec("UPDATE software_offer_links SET created_at='2020-01-01T00:00:00Z'");
+  vi.mocked(fetch).mockClear();
+  const batch = db.batch.bind(db);
+  db.batch = (async (items: D1PreparedStatement[]) => {
+    sql.exec("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) SELECT 'software',id,terms_json,'standard','now','now','now','owner','now','now' FROM software_offers WHERE status='sent'");
+    return batch(items);
+  }) as D1Database['batch'];
+  const before = sql.prepare('SELECT * FROM owner_requests').all();
+  const response = await call({action:'draft',terms,expectedUpdatedAt:null});
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ok:false,message:'This project has started. Use the project messages.'});
+  expect(fetch).not.toHaveBeenCalled();
+  expect(sql.prepare('SELECT * FROM owner_requests').all()).toEqual(before);
+  expect(sql.prepare('SELECT status FROM software_offers').get()).toEqual({status:'sent'});
+  expect(sql.prepare('SELECT revoked_at FROM software_offer_links').get()).toEqual({revoked_at:null});
+  expect(sql.prepare("SELECT action FROM owner_request_audit WHERE action='declined'").all()).toEqual([]);
+  expect(sql.prepare('SELECT request_id FROM software_projects').get()).toEqual({request_id:'software'});
 });
 
 async function withdraw() {
