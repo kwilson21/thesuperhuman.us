@@ -109,7 +109,7 @@ export function setupSoftwareComposer() {
         criteria:data.getAll('criteria'),review_window_days:Number(value('review_window_days')),paid_confirmed:data.has('paid_confirmed'),
         links:labels.map((label,index)=>({label:String(label),url:String(urls[index] ?? '')})).filter(link=>link.label || link.url) }; delete (update as Record<string, unknown>).visual;
       async function write(action: 'draft' | 'share') {
-        const response = await fetch(root!.dataset.endpoint!, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, updateId, update, expectedUpdatedAt: root!.dataset.updatedAt || null, confirmed: action === 'share' }) });
+        const response = await fetch(root!.dataset.endpoint!, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, updateId, update, expectedUpdatedAt: root!.dataset.updatedAt || null, expectedProjectUpdatedAt: root!.dataset.projectUpdatedAt, confirmed: action === 'share' }) });
         const result = await response.json() as { id: string; updatedAt: string; error?: string };
         if (!response.ok) throw new Error(result.error ?? 'Could not save the update.');
         root!.dataset.id = result.id; root!.dataset.updatedAt = result.updatedAt;

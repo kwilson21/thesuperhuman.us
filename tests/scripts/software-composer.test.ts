@@ -15,7 +15,7 @@ function fixture(saved=false, savedVisual='') {
   };
   const form={reportValidity:()=>true,elements:{namedItem:(name:string)=>fields[name]},querySelector:(selector:string)=>selector.startsWith('[name=') && !selector.includes(' ') ? fields[selector.slice(6,-1)] : element(selector),querySelectorAll:()=>[],addEventListener:(event:string,handler:(event?:any)=>void)=>handlers.set(`form:${event}`,handler)};
   const preview={querySelector:element,querySelectorAll:()=>[]};
-  const root={dataset:{id:saved ? 'draft' : '',endpoint:'/api/owner/requests/r/updates'},querySelector:(selector:string)=>selector==='[data-update-form]' ? form : selector==='.client-preview' ? preview : element(selector)};
+  const root={dataset:{id:saved ? 'draft' : '',endpoint:'/api/owner/requests/r/updates',projectUpdatedAt:'project-loaded'},querySelector:(selector:string)=>selector==='[data-update-form]' ? form : selector==='.client-preview' ? preview : element(selector)};
   vi.stubGlobal('document',{querySelector:()=>root});setupSoftwareComposer();
   return {fields,elements,fileChange:()=>handlers.get('visual:change')!(),submit:()=>handlers.get('form:submit')!({preventDefault:()=>{}} as never),change:(kind:string)=>{fields.kind.value=kind;handlers.get('kind:change')!();},choose:()=>{handlers.get('email_client:change')!();handlers.get('form:input')!();}};
 }
@@ -37,7 +37,7 @@ it('keeps a browser-generated id through a failed first share and retry',async()
   const send=vi.fn().mockRejectedValueOnce(new Error('Lost response')).mockResolvedValue(Response.json({id,updatedAt:'now'}));vi.stubGlobal('fetch',send);
   const page=fixture();page.submit();await vi.waitFor(()=>expect(send).toHaveBeenCalledTimes(1));
   await new Promise(resolve=>setTimeout(resolve,0));page.submit();await vi.waitFor(()=>expect(send).toHaveBeenCalledTimes(2));
-  for(const [,options] of send.mock.calls) expect(JSON.parse(options.body).updateId).toBe(id);
+  for(const [,options] of send.mock.calls) expect(JSON.parse(options.body)).toMatchObject({updateId:id,expectedProjectUpdatedAt:'project-loaded'});
   expect(uuid).toHaveBeenCalledTimes(1);uuid.mockRestore();
 });
 

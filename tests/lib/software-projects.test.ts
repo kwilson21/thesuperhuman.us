@@ -43,6 +43,7 @@ beforeEach(() => {
 });
 afterEach(() => { sql.close(); vi.unstubAllGlobals(); });
 async function call(route: typeof projectPost, body: unknown, owner = true, id = 'software') {
+  if (route === updatePost) body = { expectedProjectUpdatedAt: sql.prepare('SELECT updated_at FROM software_projects WHERE request_id=?').get(id)?.updated_at ?? 'missing', ...body as object };
   return route({ params: { id }, request: new Request(`https://example.com/api/owner/requests/${id}/project`, { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://example.com' }, body: JSON.stringify(body) }), locals: { owner: owner ? { email: 'owner@example.com' } : undefined, runtime: { env } } } as never);
 }
 const start = () => call(projectPost, { action: 'start', expectedRequestUpdatedAt: 'now', offer_id: 'software-offer', offer_version: 1, signatures: true, payment: true, next_update_on: '2026-10-01' });
@@ -391,9 +392,12 @@ it('reviews a new request atomically when starting and removes it from Today',as
 });
 it('retries a first share with one row and one email, rejecting changed content',async()=>{
   await start();vi.mocked(fetch).mockClear();
-  const body={action:'share',confirmed:true,updateId:crypto.randomUUID(),expectedUpdatedAt:null,update:{...update,email_client:true}};
+  const body={action:'share',confirmed:true,updateId:crypto.randomUUID(),expectedUpdatedAt:null,expectedProjectUpdatedAt:sql.prepare('SELECT updated_at FROM software_projects').get()!.updated_at,update:{...update,email_client:true}};
   const first=await call(updatePost,body);expect(first.status).toBe(200);
   const result=await first.json();
+  const stale = await call(updatePost,{...body,updateId:crypto.randomUUID()});
+  expect(stale.status).toBe(409);
+  expect(await stale.json()).toEqual({ok:false,error:'Another update was saved since this page loaded. Reload to continue.'});
   expect(await (await call(updatePost,body)).json()).toEqual(result);
   expect((await call(updatePost,{...body,update:{...body.update,title:'Changed'}})).status).toBe(409);
   expect(sql.prepare('SELECT count(*) AS n FROM software_project_updates').get()).toEqual({n:1});

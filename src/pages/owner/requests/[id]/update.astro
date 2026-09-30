@@ -26,7 +26,7 @@ const links: {label:string;url:string}[] = draft ? JSON.parse(draft.links_json) 
 ---
 <OwnerLayout title="New project update" current="requests" newRequestCount={newRequests.length} ownerEmail={Astro.locals.owner.email}>
   <p class="owner-breadcrumb"><a href="/owner/requests">Requests</a> / <a href={`/owner/requests/${id}`}>{terms.outcome}</a> / New update</p>
-  <div class="update-columns" data-software-composer data-endpoint={`/api/owner/requests/${id}/updates`} data-id={draft?.id} data-updated-at={draft?.updated_at}>
+  <div class="update-columns" data-software-composer data-endpoint={`/api/owner/requests/${id}/updates`} data-id={draft?.id} data-updated-at={draft?.updated_at} data-project-updated-at={project.updated_at}>
     <section><header class="owner-page-heading compact"><div><p class="owner-kicker">New update</p><h1>Show what changed.</h1><p>Prepare a useful update for {firstName}.</p><p class="rail-state"><span class="state-dot" aria-hidden="true"></span>Draft · Not shared</p></div></header>
       <form class="software-update-form" data-update-form>
         <div class="software-field"><label>Kind<select class="studio-select" name="kind" aria-describedby="update-kind-hint">{Object.entries(updateKinds).map(([value,label])=><option value={value} selected={value===(draft?.kind ?? 'progress')}>{label}</option>)}</select></label><p id="update-kind-hint" class="rail-caption" data-kind-hint></p></div>
