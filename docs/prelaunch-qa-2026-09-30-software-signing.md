@@ -1,29 +1,29 @@
 # Software agreement signing release gate
 
-Date: September 30, 2026  
-Repository: `kwilson21/thesuperhuman.us`  
-Pull request: #158  
-Code revision: `e10bc7364bd55a14d0e0948e526551c3386f5f89`  
-Local continuation branch: `codex/continue-software-signing`  
-Observed remote PR revision: `308d668e0867ba4a1d063ce4a68051cac504095a`  
-Target: production `https://thesuperhuman.us`, private owner and client signing routes, production `MUSIC_DB` and private R2 agreement objects.  
-Authorization: Kazon chose website signing in the recovered conversation and approved the signing decisions. Implementation and local fictional verification are complete. Migration 0023, production merge/deployment and enabling signing are not authorized by this continuation.  
-Scope: Stage 4b signing implementation, recovered Agreements page structure, five verified PR review fixes, attachment-retention race safeguards, and this release record. Real MSA/SOW text and existing signed evidence were not edited.  
-Candidate rollback revision: `2beb02538c597789db8afbcaab4ebc0ff724ce4e`, the observed current GitHub main at verification time. The release operator must confirm the actual deployed revision and save its rollback receipt before production changes.  
+- Date: September 30, 2026
+- Repository: `kwilson21/thesuperhuman.us`
+- Pull request: #158
+- Code revision: `f5335fa` (integrates current main `2beb025` with the independently reviewed safeguards and editor fix)
+- Local continuation branch: `codex/continue-software-signing`
+- Remote PR revision before the authorized update: `308d668e0867ba4a1d063ce4a68051cac504095a`
+- Target: production `https://thesuperhuman.us`, private owner and client signing routes, production `MUSIC_DB` and private R2 agreement objects.
+- Authorization: Kazon explicitly approved updating PR #158 and checking CI on September 30, 2026 ("Yes", directly replying to the request to push reviewed fixes and check CI). This approval excludes production migration, merge and deployment. Earlier signing decisions remain unchanged.
+- Scope: Stage 4b signing implementation, recovered Agreements page structure, five verified PR review fixes, attachment-retention race safeguards, and this release record. Real MSA/SOW text and existing signed evidence were not edited.
+- Candidate rollback revision: `2beb02538c597789db8afbcaab4ebc0ff724ce4e`, the observed current GitHub main at verification time. The release operator must confirm the actual deployed revision and save its rollback receipt before production changes.
 
-PASS means observed locally unless an environment is stated. No production migration, remote branch update, merge, deployment, real signing, external email or payment was performed. This record is not a launch-ready certification.
+PASS means observed locally unless an environment is stated. The approved PR update publishes this reviewed branch for CI. No production migration, merge, manual deployment, real signing, external email or payment is authorized or performed by this task. This record is not a launch-ready certification.
 
 ## Local evidence
 
 - **PASS:** `npm test`: 119 files, 1,045 passed, one private-template test skipped (1,046 total). Includes local R2 upload verification with loopback access.
-- **PASS:** `npm run check`: 419 files, zero errors, zero warnings, 18 existing hints.
+- **PASS:** `npm run check`: 420 files, zero errors, zero warnings, 18 existing hints.
 - **PASS:** `npm run build`, including asset, copy and publicist prebuild gates.
 - **PASS:** The existing software-signing scenario ran against a fresh isolated local Cloudflare preview with public fictional templates: 46 screenshot states. Each state checked overflow at 320, 390, 768 and 1280 pixels. PDF generation and downloads succeeded in the local Cloudflare development runtime.
 - **PASS:** Visually inspected Agreements desktop/phone, signature controls and owner countersignature. The recovered editor commit supplies the standard heading, breadcrumb, active Agreements navigation and normal document scrolling without repeated headers.
 - **PASS:** Independent correctness/security review reran real caller reproductions and found no remaining verified findings. Independent UI/copy review passed, including 23 targeted render/editor tests.
 - **PASS:** `git diff --check`; no dependencies, migrations, legal source text, credentials or unrelated edits in the continuation fix.
-- **UNVERIFIED:** Current-head remote CI and remote screenshots. Existing remote checks passed only at `308d668`, before the local editor and safeguards commits.
-- **UNVERIFIED:** Integration tests after synchronizing the branch with current main `2beb025`. A three-way merge-tree check found no conflicts, but no branch merge was performed.
+- **RELEASE GATE:** Current-head remote CI and screenshots must reach a successful terminal result after the approved push. The final exact-head CI receipt is saved privately and linked in the PR handoff; earlier green checks at `308d668` are insufficient.
+- **PASS:** Current main `2beb025` was merged into the signing continuation at `f5335fa` without conflicts. The full suite, Astro check, build and fresh independent reviews pass on the integrated code. Latest-main Building files match main exactly; signing code and editor remain unchanged from the reviewed fixes.
 
 Local logs, manifest and the bounded scenario runner are retained in `.private/continuation/`; generated images are in `screenshots/`. The private fixture test is skipped intentionally because real agreement text is not copied into this checkout or public CI.
 
@@ -98,7 +98,7 @@ Local logs, manifest and the bounded scenario runner are retained in `.private/c
 | Check | Status and evidence |
 |---|---|
 | 7.1 Required checks | PASS all local checks listed above; one intentional private-template skip. |
-| 7.2 Diff/review | PASS independent reviews and exact continuation diff inspection. Remote review of updated PR head remains pending. |
+| 7.2 Diff/review | PASS independent reviews and exact continuation diff inspection. Fresh independent reviews pass on integrated code; exact remote CI evidence is required after push. |
 | 7.3 Production bindings/schema/headers | UNVERIFIED: no production action performed. |
 | 7.4 Rollback/backup | UNVERIFIED production backup, restore rehearsal and deployed rollback receipt. Candidate revision recorded above. |
 | 7.5 Post-deployment | UNVERIFIED: feature not deployed by this task. |
@@ -151,8 +151,8 @@ A code rollback can redeploy the prior build while leaving these additive databa
 
 ## Remaining release actions
 
-1. Incorporate the recovered editor commit and continuation commits into the PR branch, synchronize with current main, and rerun appropriate checks on that exact integrated head. Local merge-tree comparison with `2beb025` found no conflicts.
-2. Update PR #158 and review its new-head CI/screenshots/review. Existing green checks cover only `308d668`.
+1. **PASS locally:** Recovered editor and continuation commits are integrated with current main `2beb025`; required local checks and independent reviews pass. Preserve history while updating the existing PR branch.
+2. Publish the approved PR #158 update and verify terminal CI/screenshots for its exact new head. Save the private final-head receipt; keep production gates below separate.
 3. Obtain exact production 0023 approval and complete the backup/recovery/apply/verification receipt above.
 4. Obtain/confirm production merge and deployment authorization; merge only with current-head checks and required review satisfied. Verify the deployed revision and scoped journeys.
 5. Keep signing off until the owner reviews templates/consent/configuration and approves enabling it. Real-client signing and PDF delivery remain separate live checks.
