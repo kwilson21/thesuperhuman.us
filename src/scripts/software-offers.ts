@@ -32,12 +32,16 @@ export function setupSoftwareOffers() {
         const scope = milestone ? document.querySelectorAll<HTMLElement>('[data-milestone]')[Number(parts[1])] : form;
         const field = parts.at(-1)!;
         const names: Record<string, string> = { name: 'milestoneName', feeCents: 'fee', label: 'checkpointLabel', cancellationPercent: 'checkpointPercent', lowCents: 'rangeLow', highCents: 'rangeHigh' };
+        if (path.startsWith('agreement.')) {
+          scope?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(`[name="${path}"]`).forEach(input => input.setAttribute('aria-invalid','true'));
+          return `${path.slice(10).replaceAll('_',' ')}: ${message}`;
+        }
         const key = milestone ? parts[2] === 'checkpoint' ? parts[3] : parts[2] : field;
         const labels: Record<string, string> = { outcome: 'Outcome', summary: 'Summary', milestones: 'Milestones', name: 'name', deliverables: 'deliverables', acceptance: 'acceptance examples', feeCents: 'fee', label: 'checkpoint label', cancellationPercent: 'checkpoint percent', clientInputs: 'What you need from them', exclusions: 'Outside this offer', timing: 'Timing', paymentMode: 'Payment mode', lowCents: 'Range low', highCents: 'Range high' };
         scope?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(`[name="${names[key] ?? key}"]`).forEach(input => input.setAttribute('aria-invalid', 'true'));
         return `${milestone ? `Milestone ${Number(parts[1]) + 1} ` : ''}${labels[key] ?? 'Offer'}: ${message}`;
       });
-      throw new Error(result.message ?? (messages.join('\n') || 'Could not save. Try again.'));
+      throw new Error([result.message, messages.join('\n')].filter(Boolean).join('\n') || 'Could not save. Try again.');
     }
     return result;
   };

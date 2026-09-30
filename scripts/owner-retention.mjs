@@ -55,9 +55,11 @@ async function portalRetentionGuard(database, now) {
   const softwareGuard = software.length ? " AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.request_id=owner_requests.id AND p.content_deleted_at IS NULL)" : '';
   const invoices = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_invoices'");
   const invoiceGuard = invoices.length ? ` AND NOT EXISTS(SELECT 1 FROM software_invoices i WHERE i.request_id=owner_requests.id AND i.created_at>=${quote(dayCutoff(now,730))})` : '';
+  const agreements = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_agreements'");
+  const agreementGuard = agreements.length ? ' AND NOT EXISTS(SELECT 1 FROM software_agreements a WHERE a.request_id=owner_requests.id)' : '';
   const softwareCompleted = software.length ? " OR EXISTS(SELECT 1 FROM software_projects p WHERE p.request_id=owner_requests.id AND p.content_deleted_at IS NOT NULL)" : '';
   return {
-    guard: `NOT EXISTS(SELECT 1 FROM audio_projects p WHERE p.request_id=owner_requests.id AND p.content_deleted_at IS NULL)${softwareGuard}${invoiceGuard}`,
+    guard: `NOT EXISTS(SELECT 1 FROM audio_projects p WHERE p.request_id=owner_requests.id AND p.content_deleted_at IS NULL)${softwareGuard}${invoiceGuard}${agreementGuard}`,
     completed: `EXISTS(SELECT 1 FROM audio_projects p WHERE p.request_id=owner_requests.id AND p.content_deleted_at IS NOT NULL)${softwareCompleted}`,
   };
 }

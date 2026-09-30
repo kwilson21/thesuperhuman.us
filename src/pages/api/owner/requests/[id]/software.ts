@@ -133,8 +133,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
         const contractor=contractorSchema.parse(JSON.parse(config.values_json));
         if(offer.reused_msa_id && !await db.prepare("SELECT 1 FROM software_agreements a JOIN software_agreement_clients c ON c.id=a.client_id WHERE a.id=? AND a.kind='msa' AND a.status='executed' AND a.terminated_at IS NULL AND a.archive_closed_at IS NULL AND EXISTS(SELECT 1 FROM software_agreement_artifacts f WHERE f.agreement_id=a.id AND f.status='ready') AND c.recipient_email=?").bind(offer.reused_msa_id,record.email.trim().toLowerCase()).first()) return json({ok:false,message:'The confirmed MSA is unavailable for this recipient.'},409);
         for(const attachment of details.attachments) {if(!await db.prepare('SELECT 1 FROM software_agreement_attachments WHERE request_id=? AND object_key=? AND sha256=? AND bytes=? AND filename=? AND version=? AND document_date=?').bind(record.id,attachment.key,attachment.sha256,attachment.bytes,attachment.filename,attachment.version,attachment.date).first())throw new Error('Attachment ownership mismatch.');const object=await env.AUDIO?.get(attachment.key);if(!object || object.size!==attachment.bytes || await hashBytes(await object.arrayBuffer())!==attachment.sha256) throw new Error('Attachment unavailable.');}
+        const { preflightAgreementPacket } = await import('~/lib/agreement-pdf');
+        await preflightAgreementPacket(env,terms.value,details,contractor,[msa,sow],offer.reused_msa_id??null);
         pin={details:JSON.stringify(details),msa:msa.id,sow:sow.id,contractor:JSON.stringify({...contractor,config_version:config.version}),email:record.email.trim().toLowerCase()};
-      }catch{return json({ok:false,message:'Complete and validate Agreement details before sending.'},400);}
+      }catch(error){return json({ok:false,message:'Complete and validate Agreement details before sending.',...(error instanceof z.ZodError ? {errors:Object.fromEntries(error.issues.map(issue=>[`agreement.${issue.path.join('.')}`,issue.message]))}: {})},400);}
     }
     const signingChangeGuard=softwareGuard(db,"SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_agreements WHERE request_id=? AND status IN ('client_signed','executed'))",[record.id]);
     const token = newOfferToken(), tokenHash = await hashOfferToken(token);

@@ -145,7 +145,6 @@ BEGIN
   INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at)
   VALUES(NEW.id,'personal-data-deleted','retention','',NEW.updated_at);
 END;
-
 DROP TRIGGER IF EXISTS owner_requests_audit_personal_delete;
 CREATE TABLE IF NOT EXISTS owner_request_audit_v2 (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

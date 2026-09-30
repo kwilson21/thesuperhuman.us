@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
-import { agreementRequest, nativeAgreementResponse } from '~/lib/agreement-request';
+import { nativeAgreementRoute, agreementRequest, nativeAgreementResponse } from '~/lib/agreement-request';
 import { agreementJson, signingEnabled } from '~/lib/agreement-access';
 import { countersignAgreements, offerAgreements, signatureIds } from '~/lib/software-agreements';
 import { agreementEvent } from '~/lib/agreement-events';
@@ -55,7 +55,7 @@ const schema = z.discriminatedUnion('action', [
     confirmed: z.literal(true),
   }),
 ]);
-export const POST: APIRoute = async ({ request, locals, params }) => {
+const post: APIRoute = async ({ request, locals, params }) => {
   const db = locals.runtime.env.MUSIC_DB;
   if (!locals.owner) return agreementJson({ ok: false }, 403);
   if (!db || !params.id) return agreementJson({ ok: false }, 503);
@@ -177,17 +177,15 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
         await deliverAgreementCopies(locals.runtime.env, c.agreement_id);
       }
       if (c.action === 'record-alternate-copy')
-        await db
-          .prepare(
-            'UPDATE software_agreement_deliveries SET alternate_delivered_at=?,alternate_method=? WHERE agreement_id=? AND recipient_role=?',
-          )
-          .bind(at, c.method, c.agreement_id, c.role)
-          .run();
+        await db.batch([
+          db.prepare('UPDATE software_agreement_deliveries SET alternate_delivered_at=?,alternate_method=? WHERE agreement_id=? AND recipient_role=?').bind(at,c.method,c.agreement_id,c.role),
+          agreementEvent(db,'copy-delivered',locals.owner!.email,at,c.agreement_id),
+        ]);
       if (c.action === 'hold')
-        await db
-          .prepare('UPDATE software_agreements SET legal_hold=? WHERE id=?')
-          .bind(c.held ? 1 : 0, c.agreement_id)
-          .run();
+        await db.batch([
+          db.prepare('UPDATE software_agreements SET legal_hold=? WHERE id=?').bind(c.held?1:0,c.agreement_id),
+          agreementEvent(db,'hold-changed',locals.owner!.email,at,c.agreement_id),
+        ]);
       if (c.action === 'end') {
         if (!['executed', 'abandoned'].includes(agreement.status)) return agreementJson({ ok: false }, 409);
         const signedDate = agreement.executed_at ?? agreement.client_signed_at;
@@ -221,3 +219,5 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     );
   }
 };
+
+export const POST = nativeAgreementRoute(post, context => `/owner/requests/${context.params.id}`);

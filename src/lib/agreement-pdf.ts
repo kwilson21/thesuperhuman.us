@@ -4,7 +4,10 @@ import interUrl from '~/assets/agreement-fonts/Inter-400.ttf?url';
 import newsreaderUrl from '~/assets/agreement-fonts/Newsreader-400.ttf?url';
 import type { Agreement } from './software-agreements';
 import { canonicalJson, hashBytes } from './agreement-artifacts';
-import { agreementCertificateText } from './agreement-templates';
+import { agreementValues, type AgreementDetails, type ClientAgreement, contractorSchema } from './agreement-fields';
+import type { OfferTerms } from './software-offers';
+import type { AgreementTemplate } from './agreement-templates';
+import { renderAgreement, agreementCertificateText } from './agreement-templates';
 async function fontBytes(env: Env, url: string) {
   // Static deploy assets only. No external font request or client-controlled URL.
   const response = await env.ASSETS.fetch(new Request(new URL(url, 'https://assets.invalid')));
@@ -13,10 +16,18 @@ async function fontBytes(env: Env, url: string) {
 }
 function wrap(text: string, font: PDFFont, size: number, width: number) {
   const lines: string[] = [];
+  const widths = new Map<string, number>();
+  const measure = (value: string) => {
+    const cached = widths.get(value);
+    if (cached !== undefined) return cached;
+    const measured = font.widthOfTextAtSize(value, size);
+    widths.set(value, measured);
+    return measured;
+  };
   for (const paragraph of text.split('\n')) {
     let line = '';
     for (const word of paragraph.split(' ')) {
-      if (font.widthOfTextAtSize(line + (line ? ' ' : '') + word, size) <= width) {
+      if (measure(line + (line ? ' ' : '') + word) <= width) {
         line += (line ? ' ' : '') + word;
         continue;
       }
@@ -25,7 +36,7 @@ function wrap(text: string, font: PDFFont, size: number, width: number) {
         line = '';
       }
       for (const char of word) {
-        if (font.widthOfTextAtSize(line + char, size) > width) {
+        if (measure(line + char) > width) {
           lines.push(line);
           line = '';
         }
@@ -139,4 +150,33 @@ export async function renderAgreementPacket(
     });
   });
   return pdf.save();
+}
+
+/** Validate the actual merge inputs before sending. Reserve space for bounded signer evidence. */
+export async function preflightAgreementPacket(env: Env, terms: OfferTerms, details: AgreementDetails,
+  contractor: ReturnType<typeof contractorSchema.parse>, templates: AgreementTemplate[], reusedMsaId: string | null) {
+  const client: ClientAgreement = {
+    business_engagement: true, legal_name: 'W'.repeat(200), entity_type: 'W'.repeat(200),
+    jurisdiction: 'W'.repeat(100), business_address: 'W'.repeat(1000), notice_email: 'sample@example.test',
+    reviewer_name: 'W'.repeat(200), reviewer_email: 'sample@example.test', approver_name: 'W'.repeat(200),
+    approver_email: 'sample@example.test', signer_name: 'W'.repeat(200), signer_title: 'W'.repeat(200),
+    portfolio: 'deny', naming: false, initials: 'W'.repeat(20),
+  };
+  const documents: Agreement[] = templates.map(template => {
+    const values = agreementValues(terms, details, client, contractor, {
+      effective_on: details.planned_start, msa_version: `${details.planned_start} / template ${templates[0].version}`, sow_number: 'SOW-preflight',
+      offer_version: 1, template_version: template.version,
+    });
+    return { id: 'preflight', kind: template.kind, offer_id: 'preflight',
+      canonical_text: renderAgreement(template.kind, template.text, values),
+      attachment_manifest_json: JSON.stringify(template.kind === 'sow' ? details.attachments : []),
+    } as Agreement;
+  });
+  if (reusedMsaId) {
+    const original = await env.MUSIC_DB!.prepare("SELECT * FROM software_agreements WHERE id=? AND status='executed' AND archive_closed_at IS NULL").bind(reusedMsaId).first<Agreement>();
+    if (!original) throw new Error('Original MSA unavailable.');
+    documents[0] = original;
+  }
+  const packet = await renderAgreementPacket(env, documents, documents.map(() => ({ evidence: Array(16).fill('W'.repeat(1024)).join('\n') })));
+  if (packet.length + 1024 * 1024 > 25 * 1024 * 1024) throw new Error('Complete packet exceeds the copy limit.');
 }

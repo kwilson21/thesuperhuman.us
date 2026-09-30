@@ -251,11 +251,13 @@ export async function completeAgreementCode(
     env.AUDIO_CLIENT_CODE_KEY,
     `${purpose}:${input.challenge_id}:${challenge.offer_id ?? ''}:${challenge.recipient_email}:${input.code}`,
   );
-  if (!charged || hash !== challenge.code_hash)
+  if (!charged || hash !== challenge.code_hash) {
+    await agreementEvent(db,'code-rejected',await hashOfferToken(input.challenge_id),at,null,challenge.offer_id).run();
     return agreementJson(
       { ok: false, error: 'That code is invalid or expired. Request a new one if needed.' },
       401,
     );
+  }
   const session = newOfferToken(),
     sessionHash = await hashOfferToken(session),
     csrf = newOfferToken();

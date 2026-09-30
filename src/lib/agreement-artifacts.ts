@@ -46,7 +46,7 @@ export async function prepareAgreementArtifact(
     at = new Date().toISOString();
   const claimed = await db
     .prepare(
-      "UPDATE software_agreement_artifacts SET status='rendering',attempt_id=?,attempted_at=?,error_code=NULL WHERE agreement_id=? AND status IN ('pending','failed') RETURNING agreement_id",
+      "UPDATE software_agreement_artifacts SET status='rendering',attempt_id=?,attempted_at=?,error_code=NULL WHERE agreement_id=? AND status IN ('pending','failed') AND EXISTS(SELECT 1 FROM software_agreements a WHERE a.id=software_agreement_artifacts.agreement_id AND a.archive_closed_at IS NULL) RETURNING agreement_id",
     )
     .bind(attempt, at, id)
     .first();
@@ -148,8 +148,8 @@ export async function prepareAgreementArtifact(
       (await hashBytes(await certReadback.arrayBuffer())) !== certificateHash
     )
       throw new Error('Readback mismatch.');
-    await db
-      .prepare(
+    await db.batch([
+      db.prepare(
         "UPDATE software_agreement_artifacts SET status='ready',pdf_key=?,pdf_sha256=?,certificate_key=?,certificate_sha256=?,manifest_json=?,bytes=?,renderer_version='website-pdf-v1',ready_at=? WHERE agreement_id=? AND attempt_id=? AND status='rendering'",
       )
       .bind(
@@ -163,7 +163,10 @@ export async function prepareAgreementArtifact(
         id,
         attempt,
       )
-      .run();
+,
+      db.prepare("INSERT INTO software_agreement_events(id,agreement_id,action,actor,occurred_at) SELECT ?,?,'artifact-ready','system',? WHERE EXISTS(SELECT 1 FROM software_agreement_artifacts WHERE agreement_id=? AND attempt_id=? AND status='ready')")
+        .bind(crypto.randomUUID(),id,new Date().toISOString(),id,attempt),
+    ]);
   } catch {
     await db
       .prepare(
@@ -195,7 +198,7 @@ export async function deliverAgreementCopies(env: Env, id: string) {
       at = new Date().toISOString();
     const claim = await db
       .prepare(
-        "UPDATE software_agreement_deliveries SET status='sending',attempt_id=?,attempted_at=? WHERE agreement_id=? AND recipient_role=? AND status='pending' RETURNING email",
+        "UPDATE software_agreement_deliveries SET status='sending',attempt_id=?,attempted_at=? WHERE agreement_id=? AND recipient_role=? AND status='pending' AND EXISTS(SELECT 1 FROM software_agreements a WHERE a.id=software_agreement_deliveries.agreement_id AND a.archive_closed_at IS NULL) RETURNING email",
       )
       .bind(attempt, at, id, role)
       .first<{ email: string }>();
@@ -212,8 +215,7 @@ export async function deliverAgreementCopies(env: Env, id: string) {
       },
     });
     if (!sent.uncertain)
-      await db
-        .prepare(
+      await db.batch([db.prepare(
           "UPDATE software_agreement_deliveries SET status=?,sent_at=? WHERE agreement_id=? AND recipient_role=? AND attempt_id=? AND status='sending'",
         )
         .bind(
@@ -223,7 +225,10 @@ export async function deliverAgreementCopies(env: Env, id: string) {
           role,
           attempt,
         )
-        .run();
+,
+        db.prepare("INSERT INTO software_agreement_events(id,agreement_id,action,actor,occurred_at) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM software_agreement_deliveries WHERE agreement_id=? AND recipient_role=? AND attempt_id=? AND status=?)")
+          .bind(crypto.randomUUID(),id,sent.ok?'copy-delivered':'delivery-failed',role,new Date().toISOString(),id,role,attempt,sent.ok?'sent':'failed'),
+      ]);
   }
 }
 
@@ -255,7 +260,7 @@ export async function deliverAgreementNotifications(env: Env, id: string) {
     const attempt = crypto.randomUUID(),
       at = new Date().toISOString();
     const claim = await env.MUSIC_DB.prepare(
-      "UPDATE software_agreement_notifications SET status='sending',attempt_id=?,attempted_at=? WHERE agreement_id=? AND kind=? AND status='pending' RETURNING email",
+      "UPDATE software_agreement_notifications SET status='sending',attempt_id=?,attempted_at=? WHERE agreement_id=? AND kind=? AND status='pending' AND EXISTS(SELECT 1 FROM software_agreements a WHERE a.id=software_agreement_notifications.agreement_id AND a.archive_closed_at IS NULL) RETURNING email",
     )
       .bind(attempt, at, id, kind)
       .first<{ email: string }>();

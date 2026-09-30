@@ -1,12 +1,12 @@
 import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
 import { agreementSession, agreementJson, signingEnabled } from '~/lib/agreement-access';
-import { agreementRequest, nativeAgreementResponse } from '~/lib/agreement-request';
+import { nativeAgreementRoute, agreementRequest, nativeAgreementResponse } from '~/lib/agreement-request';
 import { getLinkedOffer } from '~/lib/software-offers';
 import { deliverAgreementNotifications } from '~/lib/agreement-artifacts';
 import { signAgreements, offerAgreements } from '~/lib/software-agreements';
 export const prerender = false;
-export const POST: APIRoute = async ({ request, locals, params }) => {
+const post: APIRoute = async ({ request, locals, params }) => {
   const db = locals.runtime.env.MUSIC_DB;
   if (!db) return agreementJson({ ok: false }, 503);
   const body = await agreementRequest(request);
@@ -61,3 +61,5 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     );
   }
 };
+
+export const POST = nativeAgreementRoute(post, context => `/offer/${context.params.token}/sign`);

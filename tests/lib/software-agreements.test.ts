@@ -999,3 +999,59 @@ it.each(['executed', 'abandoned'])(
     );
   },
 );
+it('fences archive cleanup against active work and rejects artifact claims after closure', async () => {
+  const { previewAgreementRetention } = await import('~/lib/agreement-retention');
+  const result = await signed();
+  const id = await countersignAgreements(db,(await offer())!,result.documents,'Owner','owner',request());
+  sql.prepare("UPDATE software_agreements SET ended_at='2000-01-01',retain_until='2010-01-01' WHERE id=?").run(id);
+  sql.prepare("UPDATE software_agreement_artifacts SET status='rendering' WHERE agreement_id=?").run(id);
+  expect((await previewAgreementRetention(db,env.AUDIO,'test')).agreements).toEqual([]);
+  sql.prepare("UPDATE software_agreement_artifacts SET status='failed' WHERE agreement_id=?").run(id);
+  sql.prepare("UPDATE software_agreement_deliveries SET status='sending' WHERE agreement_id=?").run(id);
+  expect((await previewAgreementRetention(db,env.AUDIO,'test')).agreements).toEqual([]);
+  sql.prepare("UPDATE software_agreement_deliveries SET status='pending' WHERE agreement_id=?").run(id);
+  expect((await previewAgreementRetention(db,env.AUDIO,'test')).agreements.map(a=>a.id)).toContain(id);
+  sql.prepare("UPDATE software_agreements SET archive_closed_at='now' WHERE id=?").run(id);
+  const render = vi.fn(async()=>new Uint8Array([1]));
+  await prepareAgreementArtifact(env,id,render);
+  expect(render).not.toHaveBeenCalled();
+  await deliverAgreementCopies(env,id);
+  expect(sql.prepare('SELECT status FROM software_agreement_deliveries WHERE agreement_id=?').all(id).every((d:{status:string})=>d.status==='pending')).toBe(true);
+  expect(()=>sql.prepare('UPDATE software_agreements SET legal_hold=1 WHERE id=?').run(id)).toThrow('Archive cleanup is reserved');
+});
+it('keeps a signed abandoned agreement and its offer out of request retention', async () => {
+  const { previewOwnerRetention } = await import('../../scripts/owner-retention.mjs');
+  await signed();
+  sql.exec("UPDATE software_agreements SET status='abandoned',abandoned_at='2020-01-01'; UPDATE owner_requests SET status='resolved',resolved_at='2020-01-01',updated_at='2020-01-01'");
+  const preview = await previewOwnerRetention({query:async(statement:string)=>sql.prepare(statement).all()},'test');
+  expect(preview.requestContacts).toBe(0);
+  expect(sql.prepare('SELECT COUNT(*) AS n FROM software_agreements').get().n).toBe(2);
+});
+it.each(['resolved','withdrawn'])('rejects signing and new sessions for a %s request', async status => {
+  const reviewed = await review();
+  const session = (await agreementSession(db,request(),'agreement','o'))!;
+  sql.prepare('UPDATE owner_requests SET status=?').run(status);
+  expect(await agreementSession(db,request(),'agreement','o')).toBeNull();
+  await expect(signAgreements(db,(await offer())!,session,reviewed.documents,request())).rejects.toThrow();
+});
+it('charges the final code attempt once under parallel verification and issues one session', async () => {
+  const req = new Request('https://example.com');
+  const issued = await issueAgreementCode(env,req,{turnstileToken:'test'},token);
+  const {challenge_id} = await issued.json() as {challenge_id:string};
+  const payload=JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
+  const code=payload.text.match(/\d{8}/)[0];
+  sql.prepare('UPDATE software_agreement_challenges SET attempts=4 WHERE id=?').run(challenge_id);
+  const attempts = await Promise.all([completeAgreementCode(env,req,{challenge_id,code},token),completeAgreementCode(env,req,{challenge_id,code},token)]);
+  expect(attempts.map(r=>r.status).sort()).toEqual([200,401]);
+  expect(sql.prepare('SELECT attempts FROM software_agreement_challenges WHERE id=?').get(challenge_id).attempts).toBe(5);
+});
+it('rejects expired sessions, wrong recipients, studio cookies and archive purpose for signing', async () => {
+  const original = (await agreementSession(db,request(),'agreement','o'))!;
+  sql.prepare("UPDATE software_agreement_sessions SET expires_at='2000-01-01'").run();
+  expect(await agreementSession(db,request(),'agreement','o')).toBeNull();
+  sql.prepare("UPDATE software_agreement_sessions SET expires_at='2099-01-01',recipient_email='other@example.test'").run();
+  expect(await agreementSession(db,request(),'agreement','o')).toBeNull();
+  sql.prepare("UPDATE software_agreement_sessions SET recipient_email=?,purpose='archive'").run(original.recipient_email);
+  expect(await agreementSession(db,request(),'agreement','o')).toBeNull();
+  expect(await agreementSession(db,new Request('https://example.com',{headers:{cookie:`studio_session=${token}`}}),'agreement','o')).toBeNull();
+});

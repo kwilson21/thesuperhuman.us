@@ -5,7 +5,7 @@ import {
   type RetentionManifest,
 } from '~/lib/agreement-retention';
 import { z } from 'astro/zod';
-import { agreementRequest, nativeAgreementResponse } from '~/lib/agreement-request';
+import { nativeAgreementRoute, agreementRequest, nativeAgreementResponse } from '~/lib/agreement-request';
 import { agreementJson, cleanupAgreementAccess } from '~/lib/agreement-access';
 import { contractorSchema } from '~/lib/agreement-fields';
 import {
@@ -37,7 +37,7 @@ const schema = z.discriminatedUnion('action', [
     expectedCurrentVersion: z.coerce.number().int().min(0),
   }),
 ]);
-export const POST: APIRoute = async ({ request, locals }) => {
+const post: APIRoute = async ({ request, locals }) => {
   const db = locals.runtime.env.MUSIC_DB;
   if (!locals.owner) return agreementJson({ ok: false }, 403);
   if (!db) return agreementJson({ ok: false }, 503);
@@ -134,3 +134,5 @@ export const POST: APIRoute = async ({ request, locals }) => {
     );
   }
 };
+
+export const POST = nativeAgreementRoute(post, context => '/owner/agreements');

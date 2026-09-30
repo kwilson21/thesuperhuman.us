@@ -123,10 +123,38 @@ export default {
       `/owner/requests/${id}`,
       { owner: true },
     );
+    sql(`INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES('screenshot-incomplete-draft',${quote(id)},2,'draft',${quote(JSON.stringify(terms))},${quote(at)},${quote(at)});`);
+    await shot('missing-send-field','Missing agreement details prevent sending',`/owner/requests/${id}`,{
+      owner:true,
+      prepare:async page=>{
+        page.once('dialog',dialog=>dialog.accept());
+        await page.locator('[data-send-offer]').click();
+        await page.locator('[data-software-status]').filter({hasText:'Agreement details'}).waitFor();
+      },
+    });
+    sql("DELETE FROM software_offers WHERE id='screenshot-incomplete-draft'");
     await shot('offer', 'Offer review and signing link', `/offer/${token}`);
     await shot('code', 'Recipient email verification', `/offer/${token}/sign`);
+    for (const [name,expires] of [['invalid-code','2099-01-01'],['expired-code','2000-01-01']]) {
+      const challenge='00000000-0000-4000-8000-000000000019';
+      sql(`INSERT OR REPLACE INTO software_agreement_challenges(id,purpose,offer_id,link_hash,recipient_email,code_hash,issued_at,expires_at) VALUES(${quote(challenge)},'agreement','screenshot-signing-offer',${quote(hash(token))},'signer@example.com','invalid-hash',${quote(at)},${quote(expires)});`);
+      await shot(name,'Invalid or expired code requires fresh verification',`/offer/${token}/sign?challenge=${challenge}`,{
+        prepare:async page=>{
+          await page.locator('[name=code]').fill('00000000');
+          await page.locator('[data-agreement-session] button').click();
+          await page.locator('[role=status]').filter({hasText:'invalid or expired'}).waitFor();
+        },
+      });
+    }
     await shot('party', 'Verified legal party and required choices', `/offer/${token}/sign`, {
       cookie,
+    });
+    await shot('required-choice','Missing party fields and choices prevent review',`/offer/${token}/sign`,{
+      cookie,
+      prepare:async page=>{
+        await page.locator('[data-agreement-flow="review"]').evaluate(form=>form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+        await page.locator('[role=status]').filter({hasText:/./}).waitFor();
+      },
     });
     const reviewed = await ownerFetch(
       `/api/offer/${token}/review`,

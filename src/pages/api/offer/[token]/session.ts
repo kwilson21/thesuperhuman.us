@@ -1,9 +1,9 @@
 import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
 import { completeAgreementCode, agreementJson } from '~/lib/agreement-access';
-import { agreementRequest, nativeAgreementResponse } from '~/lib/agreement-request';
+import { nativeAgreementRoute, agreementRequest, nativeAgreementResponse } from '~/lib/agreement-request';
 export const prerender = false;
-export const POST: APIRoute = async ({ request, locals, params }) => {
+const post: APIRoute = async ({ request, locals, params }) => {
   const body = await agreementRequest(request, 4096);
   if (body instanceof Response) return body;
   const input = z
@@ -24,3 +24,5 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
     );
   }
 };
+
+export const POST = nativeAgreementRoute(post, context => `/offer/${context.params.token}/sign`);

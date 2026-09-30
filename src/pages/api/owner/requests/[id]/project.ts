@@ -1,3 +1,4 @@
+import { agreementEvent } from '~/lib/agreement-events';
 import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
 import { executedOfferAgreement, offerAgreements } from '~/lib/software-agreements';
@@ -54,6 +55,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
           SELECT id,'reviewed',?,'',? FROM owner_requests WHERE id=? AND status='new'`).bind(actor.trim().toLowerCase(),at,id),
         db.prepare("UPDATE owner_requests SET status='reviewed',updated_at=? WHERE id=? AND status='new'").bind(at,id),
         db.prepare('UPDATE software_projects SET agreement_id=?,signature_source=?,external_signature_details_json=?,start_details_json=? WHERE request_id=?').bind(executed?.id??null,command.signature_source,external,JSON.stringify({inputs_ready:true,po_number:command.po_number??null,earlier_start_on:command.earlier_start_on??null,earlier_start_agreement:command.earlier_start_agreement??null,recorded_at:at,recorded_by:actor}),id),
+        ...(command.signature_source==='external'?[agreementEvent(db,'external-signature-recorded',actor,at,null,command.offer_id)]:[]),
         softwareAudit(db, id, 'started', actor, at),
       ]);
       try { await deliverSoftwareNotice(db, id, env); } catch { return json({ ok: true, noticeUnchecked: true }); }
