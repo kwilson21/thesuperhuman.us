@@ -24,7 +24,7 @@ pass [image QA](docs/generated-image-qa.md).
 - **Infrastructure depth:** Docker Swarm, Traefik, Tailscale, Cloudflare, OPNsense, self-hosted everything
 - **Side projects:** Kaillera-next (retro gaming netplay platform), Kova (custom ETL programming language), Frigate NVR, personal home cluster
 - **Audio engineering:** Undergraduate degree in audio production from MTSU, still actively practiced (RME Babyface Pro, Sennheiser HD 650s, UAD Luna + Pro Tools)
-- **Relocating to:** Northern Virginia in 2026
+- **Location:** Use current owner-confirmed evidence. Do not revive a relocation plan from historical guidance.
 - **Contracting style:** Async-first, deliverable-focused, fixed-price engagements, full tool discretion (he chooses the stack)
 
 ## About the Website
@@ -40,6 +40,7 @@ See `README.md` for environment variables, KV bindings, the full resume request 
 
 - **Person and interests first.** Show what Kazon cares about, makes, and contributes. Make professional evidence easy to assess. Present independent work (contracts and projects) as the default and full-time as selective: remote roles with meaningful ownership where building with AI is a normal part of the job. Don't turn every page into a services pitch.
 - **Tone:** Direct, confident, technically specific. No fluff, no buzzwords
+- **Explain actions where understanding matters.** Follow the [copy and resume parity rules](docs/website-content-model.md#copy-explain-the-action-when-visitors-need-to-understand-the-work): explain who does what in introductions, offers and project summaries. Keep useful labels and preserve the purpose of personal or creative writing. Compare shared professional facts with the current approved resume; richer verified website detail is allowed.
 - **Audience:** curious visitors, potential collaborators, recruiters, and hiring managers
 - **Key differentiators:**
   - Lyft pedigree
