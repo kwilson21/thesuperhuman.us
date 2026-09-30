@@ -1,4 +1,7 @@
 import type { OfferTerms } from '~/lib/software-offers';
+const editableSections = () => [...document.querySelectorAll<HTMLElement>('[data-software-action], [data-request-note], [data-software-editor]')];
+export const hasUnsavedRequestChanges = (submitted?: HTMLElement) => editableSections().some(section => section !== submitted && section.dataset.dirty === 'true');
+export const markRequestPageClean = () => editableSections().forEach(section => { section.dataset.dirty = 'false'; });
 export function setupSoftwareOffers() {
   const sessionValue = (key: string, value?: string | null) => {
     try {
@@ -41,8 +44,7 @@ export function setupSoftwareOffers() {
     form.dataset.revision = String(Number(form.dataset.revision ?? 0) + 1);
   }));
   let reloading = false;
-  const hasUnsavedChanges = () => editableForms.some(form => form.dataset.dirty === 'true')
-    || document.querySelector<HTMLElement>('[data-software-editor]')?.dataset.dirty === 'true';
+  const hasUnsavedChanges = () => hasUnsavedRequestChanges();
   const reload = (status: HTMLElement, submitted?: HTMLFormElement) => {
     if (hasUnsavedChanges() && !confirm('You have unsaved changes in another section. Continue and lose them?')) return;
     reloading = true;

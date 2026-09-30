@@ -93,20 +93,52 @@ it('scrolls to the Accept panel on the reloaded page and clears the fragment', (
 it.each(['note','review','resolve','reopen','withdraw'])('confirms dirty offer edits before %s and sends the shared timestamp', async action => {
   let handler!: (event:any) => void;
   const button = { dataset:{ action }, closest:() => null, addEventListener:(_:string,fn:any) => { handler=fn; } };
-  const note = { addEventListener:(_:string,fn:any) => { if(action === 'note') handler=fn; } };
+  const note = { dataset:{ dirty:'true' }, addEventListener:(_:string,fn:any) => { if(action === 'note') handler=fn; } };
   const fetch = vi.fn(async (_url: string, _init: RequestInit) => ({ ok:true }));
   vi.stubGlobal('fetch',fetch); vi.stubGlobal('confirm',vi.fn((message: string) => message === 'Honor this withdrawal and close the request?'));
   vi.stubGlobal('location',{ hash:'',pathname:'/owner/requests/r',search:'',reload:vi.fn() }); vi.stubGlobal('history',{ replaceState:vi.fn() });
   vi.stubGlobal('FormData',class { get() { return 'Note'; } });
   vi.stubGlobal('document',{
     querySelector:(selector:string) => selector === '[data-request-id]' ? { dataset:{ requestId:'r',requestUpdated:'fit-saved' },querySelector:() => ({ dataset:{ dirty:'true' } }) } : selector === '[data-action-status]' ? { textContent:'' } : note,
-    querySelectorAll:() => action === 'note' ? [] : [button],
+    querySelectorAll:(selector:string) => selector === '[data-request-actions] button[data-action]' ? (action === 'note' ? [] : [button]) : [{ dataset:{ dirty:'true' } },note],
   });
   setupOwnerRequestActions();
   handler({ preventDefault:vi.fn(),currentTarget:note });
   await Promise.resolve(); expect(fetch).not.toHaveBeenCalled();
-  expect(confirm).toHaveBeenCalledWith('You have unsaved offer changes. Continue and lose them?');
+  expect(confirm).toHaveBeenCalledWith('You have unsaved changes in another section. Continue and lose them?');
   vi.mocked(confirm).mockReturnValue(true);
   handler({ preventDefault:vi.fn(),currentTarget:note }); await Promise.resolve();
   expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toMatchObject({ action,expectedUpdatedAt:'fit-saved' });
+});
+
+it.each(['offer','fit','question','decline','private-note'])('checks dirty %s before posting and clears all sections before reload', async section => {
+  let click!: () => void;
+  const button = { dataset:{ action:'reopen' },closest:() => null,addEventListener:(_:string,fn:any) => { click = fn; } };
+  const dirty = { dataset:{ dirty:'true',section } };
+  const fetch = vi.fn(async () => ({ ok:true }));
+  const reload = vi.fn(() => { expect(dirty.dataset.dirty).toBe('false'); });
+  vi.stubGlobal('fetch',fetch); vi.stubGlobal('confirm',vi.fn(() => false));
+  vi.stubGlobal('location',{ hash:'',reload });
+  vi.stubGlobal('document',{
+    querySelector:(selector:string) => selector === '[data-request-id]' ? { dataset:{ requestId:'r' } } : selector === '[data-action-status]' ? { textContent:'' } : null,
+    querySelectorAll:(selector:string) => selector === '[data-request-actions] button[data-action]' ? [button] : [dirty],
+  });
+  setupOwnerRequestActions(); click(); expect(fetch).not.toHaveBeenCalled();
+  expect(confirm).toHaveBeenCalledWith('You have unsaved changes in another section. Continue and lose them?');
+  vi.mocked(confirm).mockReturnValue(true); click(); await Promise.resolve();
+  expect(fetch).toHaveBeenCalledOnce(); expect(reload).toHaveBeenCalledOnce();
+});
+
+it.each([true,false])('saves its own private note without a discard prompt (software %s)', async software => {
+  let submit!: (event:any) => void;
+  const note = { dataset:{ dirty:'true' },addEventListener:(_:string,fn:any) => { submit=fn; } };
+  vi.stubGlobal('fetch',vi.fn(async () => ({ ok:true }))); vi.stubGlobal('confirm',vi.fn());
+  vi.stubGlobal('location',{ hash:'',reload:vi.fn() });
+  vi.stubGlobal('FormData',class { get() { return 'Note'; } });
+  vi.stubGlobal('document',{
+    querySelector:(selector:string) => selector === '[data-request-id]' ? { dataset:{ requestId:'r' } } : selector === '[data-action-status]' ? { textContent:'' } : note,
+    querySelectorAll:(selector:string) => selector === '[data-request-actions] button[data-action]' ? [] : software ? [note] : [],
+  });
+  setupOwnerRequestActions(); submit({ preventDefault:vi.fn(),currentTarget:note }); await Promise.resolve();
+  expect(confirm).not.toHaveBeenCalled(); expect(fetch).toHaveBeenCalledOnce(); expect(location.reload).toHaveBeenCalledOnce();
 });

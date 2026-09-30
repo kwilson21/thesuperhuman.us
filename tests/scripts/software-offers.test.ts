@@ -22,7 +22,7 @@ function fixture(action = 'fit') {
   const actionStatus = element(), siblingForm = element(), privateNote = element();
   const actionForm = element({ dataset:{ softwareAction:action, endpoint:'/api/software' }, querySelector:(selector:string) => selector === 'button' ? element() : actionStatus });
   const root = element({ dataset:{ endpoint:'/api/software',updated:'saved',version:'1',sentVersion:'',revoked:'false',email:'alex@example.com' },querySelector:(selector:string) => targets[selector] });
-  vi.stubGlobal('document',{ querySelector:(selector:string) => selector === '[data-offer-form]' ? form : root,querySelectorAll:(selector:string) => selector === '[data-milestone]' ? [row] : selector === '[data-software-action]' ? [actionForm] : selector === '[data-software-action], [data-request-note]' ? [actionForm,siblingForm,privateNote] : [] });
+  vi.stubGlobal('document',{ querySelector:(selector:string) => selector === '[data-offer-form]' ? form : root,querySelectorAll:(selector:string) => selector === '[data-milestone]' ? [row] : selector === '[data-software-action]' ? [actionForm] : selector === '[data-software-action], [data-request-note], [data-software-editor]' ? [actionForm,siblingForm,privateNote,root] : selector === '[data-software-action], [data-request-note]' ? [actionForm,siblingForm,privateNote] : [] });
   vi.stubGlobal('FormData',class { *[Symbol.iterator]() { yield ['text','Thanks.']; } });
   vi.stubGlobal('sessionStorage',{ getItem:() => null,setItem:vi.fn(),removeItem:vi.fn() });
   vi.stubGlobal('location',{ reload:vi.fn() }); vi.stubGlobal('confirm',vi.fn(() => true));
@@ -198,4 +198,14 @@ it('sending retains unsaved sibling forms without reloading', async () => {
   vi.stubGlobal('fetch',vi.fn(async () => Response.json({ link:'https://example.com/offer/test',version:1,updatedAt:'new',emailSent:true })));
   await send.emit('click');
   expect(siblingForm.dataset.dirty).toBe('true'); expect(location.reload).not.toHaveBeenCalled();
+});
+it('does not prompt on unload after a generic action marks the shared page clean', async () => {
+  const { markRequestPageClean } = await import('~/scripts/software-offers');
+  const { form,siblingForm } = fixture();
+  await form.emit('input'); await siblingForm.emit('input');
+  const handler = vi.mocked(window.addEventListener).mock.calls[0][1] as (event:any) => void;
+  const event = { preventDefault:vi.fn() };
+  handler(event); expect(event.preventDefault).toHaveBeenCalledOnce();
+  markRequestPageClean(); event.preventDefault.mockClear();
+  handler(event); expect(event.preventDefault).not.toHaveBeenCalled();
 });
