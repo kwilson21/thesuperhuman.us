@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { prepareAgreedTerms } from '../agreed-terms.mjs';
 import { deflateSync } from 'node:zlib';
 
 // Fictional table-shaped concept, generated here without outside imagery or services.
@@ -59,7 +60,11 @@ export default {
     await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'share',expectedProjectUpdatedAt:draft.projectUpdatedAt,confirmed:true,update,expectedUpdatedAt:visual.updatedAt});
     sql(`UPDATE software_projects SET state='waiting_for_input',waiting_for='A redacted sample export.' WHERE request_id=${quote(id)}`);
     await shot('Shared concept and Waiting on you (project state seeded with SQL)',`/studio/software/${id}`,'shared',{cookie});
-    await shot('Agreed project terms',`/studio/software/${id}`,'agreed',{cookie,prepare:async page=>{ await page.getByText('What we agreed',{exact:true}).click(); }});
+    await shot('Agreed project terms',`/studio/software/${id}`,'agreed',{cookie,prepare:page=>prepareAgreedTerms(page)});
+    for (const [stage,name,title] of [[1,'agreed-milestones','Agreed milestones and timing'],[2,'agreed-cost','Agreed cost and responsibilities'],[3,'agreed-review','Complete externally signed agreement reference']]) {
+      await shot(title,`/studio/software/${id}`,name,{cookie,selector:'[data-terms-reader]',prepare:page=>prepareAgreedTerms(page,stage)});
+    }
+    await shot('All agreed terms together',`/studio/software/${id}`,'agreed-full',{cookie,selector:'[data-terms-reader]',prepare:page=>prepareAgreedTerms(page,3,true)});
     sql(`INSERT INTO software_project_messages(request_id,actor,actor_id,body,created_at) VALUES (${quote(id)},'client',${quote(email)},'Thanks. I will send the sample.',${quote(at)})`);
     await shot('Today with a software project','/owner','today',{owner:true});
     await shot('Software-only project list','/studio','software-index',{cookie});

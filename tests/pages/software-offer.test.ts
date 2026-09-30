@@ -7,7 +7,8 @@ import { build } from 'esbuild';
 import { transform } from '@astrojs/compiler';
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { beforeAll, afterAll, expect, it } from 'vitest';
-import { hashOfferToken } from '~/lib/software-offers';
+import { hashOfferToken, type OfferTerms } from '~/lib/software-offers';
+import { agreementValues, agreementDetailsSchema } from '~/lib/agreement-fields';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 let agreements: any, signPage: any, agreementPanel: any, directory: string, softwarePage: any, composer: any, today: any, page: any, preview: any, editor: any, questions: any, fit: any, panel: any, ownerRequest: any;
 const token = 'a'.repeat(43);
@@ -440,4 +441,46 @@ it('renders Agreements with the owner heading, active navigation and ordered rai
     ]);
     expect(html.match(/data-template-editor/g)).toHaveLength(2);
   } finally { sql.close(); }
+});
+
+
+it('reads immutable agreed fees, dates and complete legal text without enabling new consent', async () => {
+  const {sql,db} = await fixture();
+  const {createHash} = await import('node:crypto');
+  const session='a'.repeat(72), hash='b'.repeat(64);
+  const fixed:OfferTerms={...terms,paymentMode:'standard',clientInputs:'Synthetic access and sample.',exclusions:'Live rollout.',timing:'Dates are conditional on agreed client inputs.',milestones:[{...terms.milestones[0],feeCents:101,checkpoint:{label:'Working view',cancellationPercent:80}}]};
+  const owner=agreementDetailsSchema.parse({planned_start:'2026-10-01',planned_end:'2026-10-20',environment:'Synthetic browser environment',operating_responsibilities:'Client operates the delivered tool.',update_rhythm:'Every Thursday',milestones:[{start:'2026-10-02',target:'2026-10-19',handoff:'Source and notices',checkpoint_criteria:'Status is saved',checkpoint_evidence:'Synthetic preview'}],support:'Agreed support only',expenses_taxes:'No extra expenses'});
+  const values=agreementValues(fixed,owner,{business_engagement:true,legal_name:'Example Client LLC',entity_type:'LLC',jurisdiction:'WY',business_address:'Example business address',notice_email:'alex@example.com',reviewer_name:'Alex',reviewer_email:'alex@example.com',approver_name:'Alex',approver_email:'alex@example.com',signer_name:'Alex',signer_title:'Owner',portfolio:'deny',naming:false,initials:'AE'},{legal_name:'Example Contractor LLC',entity_jurisdiction:'WY',signer_name:'Example Owner',signer_title:'Owner',notice_email:'owner@example.com',business_address:'Registered agent address',registered_agent_confirmed:true},{effective_on:'2026-09-30',msa_version:'2026-09-30 / template 1',sow_number:'SOW-example',offer_version:2,template_version:1});
+  try {
+    sql.prepare("INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES (?,'alex@example.com','now','2099-01-01','now')").run(createHash('sha256').update(session).digest('hex'));
+    sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,next_update_on) VALUES ('r','current',?,'standard','now','now','2026-09-30','PRIVATE OWNER','now','now','2026-11-01')").run(JSON.stringify(fixed));
+    const container=await AstroContainer.create();
+    const render=(cookie=session)=>container.renderToString(softwarePage,{request:new Request('https://thesuperhuman.us/studio/software/r',{headers:{cookie:`studio_session=${cookie}`}}),params:{id:'r'},locals:{runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}} as any});
+    let html=await render();
+    expect(html).toContain('$1.01 fixed fee');expect(html).toContain('50% of each milestone before it starts');
+    expect(html).toContain('signed outside the website');expect(html).toContain('Milestone delivery dates are not recorded');
+    expect(html).not.toContain('Download signed SOW');
+    sql.prepare("INSERT INTO software_agreement_clients VALUES ('party','alex@example.com','Example Client LLC','example','LLC','WY','Example address','alex@example.com','now')").run();
+    for (const kind of ['msa','sow']) {
+      sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES (?,?,1,'Synthetic template',?,'now','PRIVATE TEMPLATE ACTOR')").run(kind,kind,hash);
+      sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,msa_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,executed_at,review_session_hash) VALUES (?,?,'current','r','party',?,?,'executed',?,?,?,'now','2026-09-30','now','PRIVATE SIGNING SESSION')").run(kind,kind,kind,kind==='sow'?'msa':null,kind==='msa'?'Exact MSA: <script>not executable</script> and every cancellation obligation.':'Exact SOW: full material terms and responsibilities.',hash,JSON.stringify(values));
+    }
+    sql.exec("UPDATE software_projects SET agreement_id='sow'; UPDATE software_offers SET terms_json='{}' WHERE id='current'");
+    html=await render();
+    const reader=html.slice(html.indexOf('data-terms-reader'),html.indexOf('Invoices'));
+    expect(html).toContain('Planned Oct 1, 2026 to Oct 20, 2026');expect(html).toContain('Target delivery: Oct 19, 2026');
+    expect(reader).not.toContain('Nov 1, 2026');
+    expect(html).toContain('$0.51 deposit / $0.50 balance');expect(html).toContain('80%, includes prior payments');
+    for (const text of ['Synthetic access and sample.','Live rollout.','Client operates the delivered tool.','Source and notices','Every Thursday','Agreed support only','No extra expenses']) expect(html).toContain(text);
+    expect(html).toContain('Exact MSA: &lt;script&gt;not executable&lt;/script&gt;');expect(html).toContain('Exact SOW: full material terms and responsibilities.');
+    expect(html).toContain('/api/agreements/msa/file');expect(html).toContain('/api/agreements/sow/file');
+    expect(html).toContain('Opening stages or reading terms does not give consent');expect(html).not.toMatch(/name="consent"|data-agreement-flow|PRIVATE TEMPLATE ACTOR|PRIVATE SIGNING SESSION|PRIVATE OWNER/);
+    for (let stage=0;stage<4;stage++) expect(html).toMatch(new RegExp(`id="agreed-stage-${stage}" data-terms-stage(?:="")? aria-labelledby=`));
+    expect(html).toMatch(/data-terms-controls(?:="")? hidden/);
+    const forbidden=await render('b'.repeat(72));expect(forbidden).not.toMatch(/Exact MSA|Exact SOW|Synthetic browser environment/);
+    sql.exec("UPDATE owner_requests SET email='new-recipient@example.com' WHERE id='r'; UPDATE audio_client_sessions SET email='new-recipient@example.com'");
+    html=await render();expect(html).not.toMatch(/Exact MSA|Exact SOW|Synthetic browser environment|Download signed SOW/);expect(html).toContain('retained website agreement is unavailable here');
+    sql.exec("UPDATE owner_requests SET email='alex@example.com' WHERE id='r'; UPDATE audio_client_sessions SET email='alex@example.com'; UPDATE software_agreements SET archive_closed_at='now' WHERE id='sow'");
+    html=await render();expect(html).not.toMatch(/Exact MSA|Exact SOW|Synthetic browser environment/);expect(html).toContain('retained website agreement is unavailable here');expect(html).not.toContain('signed outside the website');
+  } finally {sql.close();}
 });

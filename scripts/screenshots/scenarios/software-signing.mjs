@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { prepareAgreedTerms } from '../agreed-terms.mjs';
 import { readFileSync } from 'node:fs';
 const hash = (text) => createHash('sha256').update(text).digest('hex');
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
@@ -274,6 +275,10 @@ export default {
     await shot('project-copy', 'Project page signed agreement download', `/studio/software/${id}`, {
       cookie: { name: 'studio_session', value: studio },
     });
+    for (const [stage,name,title] of [[0,'guided-outcome','Guided agreed outcome'],[1,'guided-milestones','Guided agreed milestones and actual dates'],[2,'guided-cost','Guided agreed fees and responsibilities'],[3,'guided-review','Guided complete signed agreement review']]) {
+      await shot(name,title,`/studio/software/${id}`,{cookie:{name:'studio_session',value:studio},selector:'[data-terms-reader]',prepare:page=>prepareAgreedTerms(page,stage)});
+    }
+    await shot('guided-full','All agreed terms and complete legal documents',`/studio/software/${id}`,{cookie:{name:'studio_session',value:studio},selector:'[data-terms-reader]',prepare:page=>prepareAgreedTerms(page,3,true)});
     const reuseId = 'screenshot-signing-reuse',
       reuseToken = 'h'.repeat(43),
       reuseSession = 'w'.repeat(43),
