@@ -739,3 +739,24 @@ it('does not reserve a later deposit racing a manual confirmation',async()=>{
   await expect(invoiceLib.reserveSoftwareInvoice(db,{requestId:'software',offerId:'software-offer',milestone:1,kind:'deposit',allowCard:false,actor:'owner'})).rejects.toThrow();
   expect(sql.prepare('SELECT count(*) AS n FROM software_invoices').get()).toEqual({n:0});
 });
+it.each([false,true])('routes a retention-fenced webhook to unmatched, including a lookup race (%s)',async race=>{
+  seedInvoice('void','balance');
+  sql.exec("UPDATE software_invoices SET stripe_invoice_id='in_fenced'");
+  const original=db.batch.bind(db);
+  if(race) db.batch=async items=>{sql.exec("UPDATE software_invoices SET retention_fenced_at='now'");return original(items);};
+  else sql.exec("UPDATE software_invoices SET retention_fenced_at='now'");
+  const result=await invoiceLib.applySoftwareInvoiceEvent(db,{eventId:'evt_fenced',eventType:'invoice.paid',invoiceId:'in_fenced',requestId:'software',localId:'guard-invoice',offerId:'software-offer',milestone:'0',kind:'balance',status:'paid',occurredAt:'2026-09-30T12:00:00Z',total:120000,currency:'usd',customerId:'cus_fenced',hostedUrl:'https://example.com/pay',dueAt:null});
+  if(!race)expect(result).toBe('unmatched');
+  expect(sql.prepare('SELECT status,stripe_customer_id FROM software_invoices').get()).toEqual({status:'void',stripe_customer_id:null});
+  expect(sql.prepare('SELECT event_id FROM software_stripe_unmatched_events').get()).toEqual({event_id:'evt_fenced'});
+  expect(sql.prepare('SELECT count(*) AS n FROM software_project_audit').get()).toEqual({n:0});
+});
+
+it('records a webhook as unmatched if retention deletes the invoice after lookup',async()=>{
+  seedInvoice('void','balance');sql.exec("UPDATE software_invoices SET stripe_invoice_id='in_deleted'");
+  const original=db.batch.bind(db);
+  db.batch=async items=>{sql.exec('DELETE FROM software_invoices');return original(items);};
+  expect(await invoiceLib.applySoftwareInvoiceEvent(db,{eventId:'evt_deleted',eventType:'invoice.paid',invoiceId:'in_deleted',requestId:'software',localId:'guard-invoice',offerId:'software-offer',milestone:'0',kind:'balance',status:'paid',occurredAt:'2026-09-30T12:00:00Z',total:120000,currency:'usd',customerId:null,hostedUrl:null,dueAt:null})).toBe('unmatched');
+  expect(sql.prepare('SELECT event_id FROM software_stripe_unmatched_events').get()).toEqual({event_id:'evt_deleted'});
+  expect(sql.prepare('SELECT count(*) AS n FROM stripe_webhook_events').get()).toEqual({n:0});
+});

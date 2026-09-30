@@ -163,7 +163,7 @@ export async function reserveSoftwareInvoice(db: D1Database, input: {
 export async function recordSoftwareInvoice(db: D1Database, invoice: SoftwareInvoice, result: CreatedStripeInvoice & {dueAt:string|null}) {
   await db.prepare(`UPDATE software_invoices SET stripe_customer_id=?,stripe_invoice_id=?,hosted_invoice_url=?,due_at=COALESCE(?,due_at),
     status=CASE WHEN status='creating' THEN 'open' ELSE status END,creation_started_at=NULL,updated_at=?
-    WHERE id=? AND external_refs_deleted_at IS NULL AND (stripe_invoice_id IS NULL OR stripe_invoice_id=?)`)
+    WHERE id=? AND external_refs_deleted_at IS NULL AND retention_fenced_at IS NULL AND (stripe_invoice_id IS NULL OR stripe_invoice_id=?)`)
     .bind(result.stripeCustomerId,result.invoiceId,result.hostedInvoiceUrl,result.dueAt,new Date().toISOString(),invoice.id,result.invoiceId).run();
   const row=await db.prepare('SELECT * FROM software_invoices WHERE id=?').bind(invoice.id).first<SoftwareInvoice>();
   if (!row || row.stripe_invoice_id!==result.invoiceId) throw new Error('Invoice recovery is pending.');
@@ -181,16 +181,15 @@ export type SoftwareInvoiceEvent = {
 export async function applySoftwareInvoiceEvent(db: D1Database, event: SoftwareInvoiceEvent) {
   const invoice=await db.prepare('SELECT * FROM software_invoices WHERE id=? AND request_id=?').bind(event.localId,event.requestId).first<SoftwareInvoice>();
   const at=new Date().toISOString();
-  if (!invoice || invoice.offer_id!==event.offerId || String(invoice.milestone_index)!==event.milestone || invoice.kind!==event.kind
+  if (!invoice || invoice.retention_fenced_at || invoice.external_refs_deleted_at || invoice.offer_id!==event.offerId || String(invoice.milestone_index)!==event.milestone || invoice.kind!==event.kind
     || (invoice.stripe_invoice_id ? invoice.stripe_invoice_id!==event.invoiceId : invoice.status!=='creating')
     || invoice.amount_cents!==event.total || event.currency!=='usd') {
     await db.prepare(`INSERT OR IGNORE INTO software_stripe_unmatched_events(event_id,event_type,invoice_id,request_id,status,occurred_at,received_at)
       VALUES (?,?,?,?,?,?,?)`).bind(event.eventId,event.eventType,event.invoiceId,event.requestId,event.status,event.occurredAt,at).run();
     return 'unmatched';
   }
-  if (invoice.external_refs_deleted_at) return 'discarded';
   if (await db.prepare('SELECT 1 FROM stripe_webhook_events WHERE id=?').bind(event.eventId).first()) return 'duplicate';
-  const eligible=`id=? AND external_refs_deleted_at IS NULL AND status<>'paid' AND (status_updated_at IS NULL OR status_updated_at<? OR (status_updated_at=? AND ?='paid'))
+  const eligible=`id=? AND external_refs_deleted_at IS NULL AND retention_fenced_at IS NULL AND status<>'paid' AND (status_updated_at IS NULL OR status_updated_at<? OR (status_updated_at=? AND ?='paid'))
     AND NOT EXISTS(SELECT 1 FROM stripe_webhook_events WHERE id=?)`;
   const args=[invoice.id,event.occurredAt,event.occurredAt,event.status,event.eventId];
   await db.batch([
@@ -203,14 +202,17 @@ export async function applySoftwareInvoiceEvent(db: D1Database, event: SoftwareI
     ...(event.status==='paid' && invoice.kind!=='deposit' ? [
       db.prepare(`INSERT INTO software_project_audit(request_id,action,actor,occurred_at,note)
         SELECT i.request_id,'milestone-paid','stripe',?,? FROM software_invoices i JOIN software_projects p ON p.request_id=i.request_id AND p.offer_id=i.offer_id
-        WHERE i.id=? AND i.external_refs_deleted_at IS NULL AND i.status='paid' AND NOT EXISTS(SELECT 1 FROM software_milestone_payments m WHERE m.request_id=i.request_id AND m.milestone_index=i.milestone_index)`)
+        WHERE i.id=? AND i.external_refs_deleted_at IS NULL AND i.retention_fenced_at IS NULL AND i.status='paid' AND NOT EXISTS(SELECT 1 FROM software_milestone_payments m WHERE m.request_id=i.request_id AND m.milestone_index=i.milestone_index)`)
         .bind(event.occurredAt,`Paid in full · milestone ${invoice.milestone_index+1}`,invoice.id),
       db.prepare(`INSERT OR IGNORE INTO software_milestone_payments(request_id,milestone_index,paid_recorded_at,recorded_by)
-        SELECT i.request_id,i.milestone_index,i.status_updated_at,'stripe' FROM software_invoices i JOIN software_projects p ON p.request_id=i.request_id AND p.offer_id=i.offer_id WHERE i.id=? AND i.external_refs_deleted_at IS NULL AND i.status='paid'`)
+        SELECT i.request_id,i.milestone_index,i.status_updated_at,'stripe' FROM software_invoices i JOIN software_projects p ON p.request_id=i.request_id AND p.offer_id=i.offer_id WHERE i.id=? AND i.external_refs_deleted_at IS NULL AND i.retention_fenced_at IS NULL AND i.status='paid'`)
         .bind(invoice.id),
     ] : []),
-    db.prepare('INSERT OR IGNORE INTO stripe_webhook_events(id,event_type,invoice_id,occurred_at,processed_at) VALUES (?,?,?,?,?)').bind(event.eventId,event.eventType,event.invoiceId,event.occurredAt,at),
+    db.prepare(`INSERT OR IGNORE INTO stripe_webhook_events(id,event_type,invoice_id,occurred_at,processed_at) SELECT ?,?,?,?,? FROM software_invoices WHERE id=? AND retention_fenced_at IS NULL AND external_refs_deleted_at IS NULL`).bind(event.eventId,event.eventType,event.invoiceId,event.occurredAt,at,invoice.id),
     db.prepare('DELETE FROM software_stripe_unmatched_events WHERE event_id=?').bind(event.eventId),
+    db.prepare(`INSERT OR IGNORE INTO software_stripe_unmatched_events(event_id,event_type,invoice_id,request_id,status,occurred_at,received_at)
+      SELECT ?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM software_invoices WHERE id=? AND retention_fenced_at IS NULL AND external_refs_deleted_at IS NULL)`)
+      .bind(event.eventId,event.eventType,event.invoiceId,event.requestId,event.status,event.occurredAt,at,invoice.id),
   ]);
-  return 'processed';
+  return await db.prepare('SELECT 1 FROM software_stripe_unmatched_events WHERE event_id=?').bind(event.eventId).first() ? 'unmatched' : 'processed';
 }
