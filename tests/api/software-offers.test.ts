@@ -374,3 +374,28 @@ it('leaves a replacement link live when a stale tab revokes the earlier link', a
   expect(await getLinkedOffer(db,replacement.link.split('/').pop())).toMatchObject({ status:'sent' });
   expect(sql.prepare("SELECT * FROM owner_request_audit WHERE action='offer-link-revoked'").all()).toEqual([]);
 });
+
+it('allows only one overlapping decline to email and record its resolution', async () => {
+  // Both calls load the original parent before either reservation can commit.
+  const batch = db.batch.bind(db);
+  let reached!: () => void, release!: () => void;
+  const waiting = new Promise<void>(resolve => { reached = resolve; });
+  const ready = new Promise<void>(resolve => { release = resolve; });
+  let reservations = 0;
+  db.batch = async items => {
+    if (items.some(item => (item as any).query.includes("UPDATE software_offers SET status='withdrawn'"))) {
+      if (++reservations === 1) { reached(); await ready; } else release();
+    }
+    return batch(items);
+  };
+  const first = call({ action:'decline', text:'Thanks.' });
+  await waiting;
+  const responses = await Promise.all([first, call({ action:'decline', text:'Thanks.' })]);
+  expect(responses.map(response => response.status).sort()).toEqual([200,409]);
+  expect(await responses.find(response => response.status === 409)!.json()).toEqual({ ok:false, message:'The request changed or could not be saved. Reload and try again.' });
+  const deliveries = vi.mocked(fetch).mock.calls.map(([, init]) => JSON.parse(String(init?.body)));
+  expect(deliveries.filter(payload => payload.to[0] === 'alex@example.com')).toHaveLength(1);
+  expect(deliveries.filter(payload => payload.to[0] === 'owner@example.com')).toHaveLength(1);
+  expect(sql.prepare("SELECT * FROM owner_request_audit WHERE action='declined'").all()).toHaveLength(1);
+  expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({ status:'resolved' });
+});
