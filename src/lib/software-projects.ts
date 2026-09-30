@@ -91,6 +91,8 @@ export const acceptedDeliveryGuard = (db: D1Database, id: string, milestone: num
 /** Same atomic assertion as software offers: a stale write rolls back its whole batch. */
 export const softwareGuard = (db: D1Database, query: string, values: (string | number | null)[]) =>
   db.prepare(`SELECT CASE WHEN EXISTS(${query}) THEN 1 ELSE json_extract('Project changed. Reload and try again.','$') END`).bind(...values);
+export const priorMilestonePaymentGuard = (db: D1Database, id: string, milestone: number) => softwareGuard(db,
+  'SELECT 1 WHERE (SELECT count(*) FROM software_milestone_payments WHERE request_id=? AND milestone_index<?)=?', [id,milestone,milestone]);
 export const openSoftwareGuard = (db: D1Database, id: string) => softwareGuard(db, `SELECT 1 FROM software_projects p JOIN owner_requests r ON r.id=p.request_id
   WHERE p.request_id=? AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL AND r.status<>'withdrawn' AND r.email<>''`, [id]);
 

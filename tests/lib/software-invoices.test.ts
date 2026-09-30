@@ -5,7 +5,7 @@ import { createSoftwareInvoiceWithClient, softwareInvoiceTerms, type SoftwareInv
 import type { OfferTerms } from '~/lib/software-offers';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 const terms: OfferTerms = { outcome: 'Shared tracker', summary: 'Client status', milestones: [{ name: 'Tracker', feeCents: 101, deliverables: ['View'], acceptance: ['Add a client'] }], clientInputs: '', exclusions: '', timing: '', paymentMode: 'standard' };
-const invoice: SoftwareInvoice = { id: 'local-invoice', request_id: 'software', milestone_index: 0, kind: 'deposit', amount_cents: 50, days_until_due: 7, allow_card: 0, attempt: 0, stripe_customer_id: null, stripe_invoice_id: null, hosted_invoice_url: null, status: 'creating', status_updated_at: null, created_by: 'owner', created_at: 'now', updated_at: 'now' };
+const invoice: SoftwareInvoice = { id: 'local-invoice', request_id: 'software', offer_id: 'offer', due_at: null, refunded_at: null, creation_started_at: null, external_refs_deleted_at: null, milestone_index: 0, kind: 'deposit', amount_cents: 50, days_until_due: 7, allow_card: 0, attempt: 0, stripe_customer_id: null, stripe_invoice_id: null, hosted_invoice_url: null, status: 'creating', status_updated_at: null, created_by: 'owner', created_at: 'now', updated_at: 'now' };
 function stripe() {
   return { customers: { create: vi.fn(async () => ({ id: 'cus_test' })) }, invoices: {
     create: vi.fn(async () => ({ id: 'in_test' })),
@@ -24,9 +24,9 @@ describe('software invoice amounts and Stripe adapter', () => {
   });
   it('sends exactly one item, using ACH and stable attempt keys', async () => {
     const client = stripe();
-    expect(await createSoftwareInvoiceWithClient(client, { name: 'Example', email: 'example@example.com' }, terms, invoice)).toEqual({ stripeCustomerId: 'cus_test', invoiceId: 'in_test', hostedInvoiceUrl: 'https://invoice.stripe.com/test', status: 'open' });
+    expect(await createSoftwareInvoiceWithClient(client, { name: 'Example', email: 'example@example.com' }, terms, invoice)).toEqual({ stripeCustomerId: 'cus_test', invoiceId: 'in_test', hostedInvoiceUrl: 'https://invoice.stripe.com/test', status: 'open', dueAt: null });
     expect(client.customers.create).toHaveBeenCalledWith(expect.objectContaining({ metadata: { software_request_id: 'software' } }), { idempotencyKey: 'software-request:software:customer' });
-    expect(client.invoices.create).toHaveBeenCalledWith(expect.objectContaining({ collection_method: 'send_invoice', auto_advance: false, days_until_due: 7, payment_settings: { payment_method_types: ['us_bank_account'] }, metadata: { software_request_id: 'software', milestone_index: '0', kind: 'deposit', software_invoice_id: 'local-invoice' } }), { idempotencyKey: 'software-request:software:milestone-0:deposit:attempt-0:invoice' });
+    expect(client.invoices.create).toHaveBeenCalledWith(expect.objectContaining({ collection_method: 'send_invoice', auto_advance: false, days_until_due: 7, payment_settings: { payment_method_types: ['us_bank_account'] }, metadata: { software_request_id: 'software', milestone_index: '0', kind: 'deposit', software_invoice_id: 'local-invoice', software_offer_id: 'offer' } }), { idempotencyKey: 'software-request:software:offer-offer:milestone-0:deposit:attempt-0:invoice' });
     expect(client.invoiceItems.create).toHaveBeenCalledOnce();
     expect(client.invoiceItems.create).toHaveBeenCalledWith(expect.objectContaining({ amount: 50, currency: 'usd', description: 'Milestone 1 · Tracker · 50% deposit' }), expect.anything());
   });
@@ -34,7 +34,7 @@ describe('software invoice amounts and Stripe adapter', () => {
     const client = stripe();
     await createSoftwareInvoiceWithClient(client, { name: '', email: 'example@example.com' }, terms, { ...invoice, allow_card: 1, attempt: 2, stripe_customer_id: 'cus_existing' });
     expect(client.customers.create).not.toHaveBeenCalled();
-    expect(client.invoices.create).toHaveBeenCalledWith(expect.objectContaining({ customer: 'cus_existing', payment_settings: { payment_method_types: ['us_bank_account', 'card'] } }), { idempotencyKey: 'software-request:software:milestone-0:deposit:attempt-2:invoice' });
+    expect(client.invoices.create).toHaveBeenCalledWith(expect.objectContaining({ customer: 'cus_existing', payment_settings: { payment_method_types: ['us_bank_account', 'card'] } }), { idempotencyKey: 'software-request:software:offer-offer:milestone-0:deposit:attempt-2:invoice' });
   });
   it('retries a send failure with identical idempotency keys', async () => {
     const client = stripe(); client.invoices.sendInvoice.mockRejectedValueOnce(new Error('uncertain'));
@@ -65,8 +65,8 @@ it('migration preserves audit ids and notes and constrains active invoice rows',
   expect(db.prepare('SELECT * FROM software_project_audit').all()).toEqual(audit);
   for (const action of ['invoice-created','invoice-status-updated','invoice-replaced']) db.prepare("INSERT INTO software_project_audit(request_id,action,actor,occurred_at) VALUES ('software',?,'owner','later')").run(action);
   expect(db.prepare('SELECT max(id) AS id FROM software_project_audit').get()).toEqual({ id: 45 });
-  const insert = db.prepare(`INSERT INTO software_invoices(id,request_id,milestone_index,kind,amount_cents,days_until_due,allow_card,status,stripe_invoice_id,created_by,created_at,updated_at)
-    VALUES (?,'software',0,'deposit',50,7,0,?,?,'owner','now','now')`);
+  const insert = db.prepare(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,allow_card,status,stripe_invoice_id,created_by,created_at,updated_at)
+    VALUES (?,'software','offer',0,'deposit',50,7,0,?,?,'owner','now','now')`);
   insert.run('first','creating',null);
   for (const status of ['creating','open','payment_failed']) expect(() => insert.run(status,status,null)).toThrow();
   db.exec("UPDATE software_invoices SET status='void' WHERE id='first'");
@@ -78,4 +78,21 @@ it('migration preserves audit ids and notes and constrains active invoice rows',
   db.exec("INSERT INTO stripe_webhook_events VALUES ('software-event','invoice.sent','in_test','now','now')");
   expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   db.close();
+});
+
+it('limits buttons to the agreed mode, before-start deposits, delivered balances and unpaid milestones',async()=>{
+  const {invoiceAvailable}=await import('~/lib/software-invoices');
+  expect(invoiceAvailable(terms,0,'deposit',null,false,false)).toBe(true);
+  expect(invoiceAvailable(terms,0,'balance',null,true,false)).toBe(false);
+  expect(invoiceAvailable(terms,0,'milestone',null,true,false)).toBe(false);
+  const later={...terms,milestones:[...terms.milestones,{...terms.milestones[0],name:'Next'}]};
+  const project={milestone_index:0,completed_at:null};
+  expect(invoiceAvailable(later,1,'deposit',project,false,false)).toBe(true);
+  expect(invoiceAvailable(later,0,'deposit',project,false,false)).toBe(false);
+  expect(invoiceAvailable(later,0,'balance',project,false,false)).toBe(false);
+  expect(invoiceAvailable(later,0,'balance',project,true,false)).toBe(true);
+  expect(invoiceAvailable(later,0,'balance',project,true,true)).toBe(false);
+  expect(invoiceAvailable({...later,paymentMode:'invoice'},0,'milestone',project,true,false)).toBe(true);
+  expect(invoiceAvailable({...later,paymentMode:'invoice'},0,'deposit',project,false,false)).toBe(false);
+  expect(invoiceAvailable(later,0,'balance',{...project,completed_at:'now'},true,false)).toBe(false);
 });

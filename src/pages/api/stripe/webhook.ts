@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { applyStripeInvoiceEvent, getAudioPayment, isKnownInvoiceAttempt, recordUnmatchedStripeEvent, recoverInvoiceFromWebhook, type InvoiceStatus } from '~/lib/audio-payments';
+import { applySoftwareInvoiceEvent } from '~/lib/software-invoices';
 import { verifyStripeWebhook } from '~/lib/stripe-invoicing';
 
 export const prerender = false;
@@ -32,8 +33,22 @@ export const POST: APIRoute = async ({ request, locals }) => {
     hosted_invoice_url?: string | null;
     total?: number | null;
     currency?: string | null;
-    metadata?: { audio_request_id?: string; installment?: string };
+    due_date?: number | null;
+    metadata?: { audio_request_id?: string; installment?: string; software_request_id?: string; software_invoice_id?: string; software_offer_id?: string; milestone_index?: string; kind?: string };
   };
+  if (!invoice.metadata?.audio_request_id && invoice.metadata?.software_request_id && invoice.id) {
+    try {
+      await applySoftwareInvoiceEvent(db, {
+        eventId:event.id,eventType:event.type,invoiceId:invoice.id,requestId:invoice.metadata.software_request_id,
+        localId:invoice.metadata.software_invoice_id ?? '',offerId:invoice.metadata.software_offer_id ?? '',
+        milestone:invoice.metadata.milestone_index ?? '',kind:invoice.metadata.kind ?? '',status,
+        occurredAt:new Date(event.created*1000).toISOString(),total:invoice.total ?? -1,currency:invoice.currency ?? '',
+        customerId:typeof invoice.customer==='string' ? invoice.customer : invoice.customer?.id ?? null,
+        hostedUrl:invoice.hosted_invoice_url ?? null,dueAt:invoice.due_date ? new Date(invoice.due_date*1000).toISOString() : null,
+      });
+      return Response.json({received:true});
+    } catch { return Response.json({received:false},{status:500}); }
+  }
   const requestId = invoice.metadata?.audio_request_id;
   const installment = invoice.metadata?.installment;
   if (!invoice.id || !requestId || !['booking', 'balance'].includes(installment ?? '')) {

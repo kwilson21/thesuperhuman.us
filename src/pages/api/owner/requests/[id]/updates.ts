@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
 import { musicRequest } from '~/lib/music-request';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
-import { updateInput, getSoftwareProject, projectTerms, softwareAudit, softwareGuard, openSoftwareGuard, deliverSoftwareNotice, recordMilestonePayment, acceptedDeliveryGuard } from '~/lib/software-projects';
+import { updateInput, getSoftwareProject, projectTerms, softwareAudit, softwareGuard, openSoftwareGuard, deliverSoftwareNotice, recordMilestonePayment, acceptedDeliveryGuard, priorMilestonePaymentGuard } from '~/lib/software-projects';
 import type { SoftwareUpdate } from '~/lib/software-projects';
 export const prerender = false;
 export const POST: APIRoute = async ({ params, request, locals }) => {
@@ -53,6 +53,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     const status = share ? 'shared' : 'draft', notice = share && value.email_client ? 'pending' : 'not_requested';
     try { await db.batch([openSoftwareGuard(db, id),
       softwareGuard(db,"SELECT 1 FROM software_projects WHERE request_id=? AND state<>'complete'",[id]),
+      ...(share && review && project.payment_mode==='invoice' && value.milestone_index>project.milestone_index ? [priorMilestonePaymentGuard(db,id,value.milestone_index)] : []),
       ...(share && value.kind === 'handoff' ? [acceptedDeliveryGuard(db,id,value.milestone_index), ...recordMilestonePayment(db,id,value.milestone_index,actor,at)] : []),
       ...(share && value.kind !== 'progress' ? [db.prepare("UPDATE software_project_updates SET status='superseded',updated_at=? WHERE request_id=? AND milestone_index=? AND kind=? AND status='shared'").bind(at,id,value.milestone_index,value.kind)] : []),
       softwareGuard(db, "SELECT 1 FROM software_projects WHERE request_id=? AND updated_at=?", [id, command.expectedProjectUpdatedAt]),

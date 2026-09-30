@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { depositOfferBlock, depositOfferGuard } from '~/lib/software-invoices';
 import { z } from 'astro/zod';
 import { getOwnerRequest } from '~/lib/owner-requests';
 import { listSoftwareOffers, validateOfferTerms, hashOfferToken, newOfferToken, offerSendingGuard, offerIsSending, offerSendingMessage } from '~/lib/software-offers';
@@ -50,6 +51,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       return json({ ok: true, updatedAt: now });
     }
     if (command.action === 'question' || command.action === 'decline') {
+      if (command.action === 'decline') { const block=await depositOfferBlock(db,record.id,true); if(block) return json({ok:false,message:'Void the open deposit invoice in Stripe before declining this request.'},409); }
       if (command.action === 'decline' && record.status === 'resolved') return json({ ok: false, message: 'This request is already resolved.' }, 409);
       if (command.action === 'decline' && await offerIsSending(db, record.id)) return json({ ok: false, message: offerSendingMessage }, 409);
       if (Date.parse(record.updatedAt) >= Date.parse(now)) now = new Date(Date.parse(record.updatedAt) + 1).toISOString();
@@ -60,6 +62,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       ]);
       if (command.action === 'decline') await db.batch([
         requestGuard(), offerSendingGuard(db, record.id),
+        depositOfferGuard(db,record.id,true),
         guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM audio_projects WHERE request_id=?)', [record.id]),
         guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)', [record.id]),
         db.prepare("UPDATE software_offers SET status='withdrawn',updated_at=? WHERE request_id=? AND status IN ('sent','draft')").bind(now, record.id),
@@ -108,12 +111,14 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     if (!offer || offer.version !== command.version || offer.updated_at !== command.expectedUpdatedAt) return json({ ok: false, message: 'Save a valid draft before sending.' }, 409);
     const terms = validateOfferTerms(JSON.parse(offer.terms_json));
     if (!terms.ok) return json({ ok: false, errors: terms.errors }, 400);
+    if (draft) { const block=await depositOfferBlock(db,record.id); if(block) return json({ok:false,message:block},409); }
     const token = newOfferToken(), tokenHash = await hashOfferToken(token);
     let link: string;
     try { link = new URL(`/offer/${token}`, env.SITE_ORIGIN ?? 'https://thesuperhuman.us').href; }
     catch { return json({ ok: false, message: 'The offer link couldn’t be built. Check SITE_ORIGIN. Nothing was sent.' }, 500); }
     await db.batch([
       requestGuard(), offerSendingGuard(db, record.id),
+      ...(draft ? [depositOfferGuard(db,record.id)] : []),
       guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)', [record.id]),
       guard('SELECT 1 FROM software_offers WHERE id=? AND status=? AND updated_at=?', [offer.id, offer.status, offer.updated_at]),
       ...(offer.status === 'sent' ? [guard('SELECT 1 FROM software_offer_links WHERE request_id=? AND revoked_at IS NOT NULL', [record.id])] : []),

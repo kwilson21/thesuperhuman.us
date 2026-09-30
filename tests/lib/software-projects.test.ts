@@ -1,3 +1,5 @@
+import * as invoiceLib from '~/lib/software-invoices';
+import { POST as invoicePost } from '~/pages/api/owner/requests/[id]/invoices';
 import { createRequire } from 'node:module';
 import { readFileSync, readdirSync } from 'node:fs';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -487,4 +489,170 @@ it.each(['draft','share'])('rejects stale project versions with an existing draf
   const result=await success.json();
   expect(result).toMatchObject({projectUpdatedAt:sql.prepare('SELECT updated_at FROM software_projects').get()!.updated_at});
   if(action==='share') expect(await (await call(updatePost,{...body,expectedProjectUpdatedAt:'2099-01-01T00:00:00.000Z'})).json()).toEqual(result);
+});
+
+// Software invoices use requests and immutable offers before studio access exists.
+it('reserves a first deposit without a project, recovers it and starts only from its pinned paid offer',async()=>{
+  const {reserveSoftwareInvoice,applySoftwareInvoiceEvent,paidFirstDeposit,listSoftwareInvoices,recordSoftwareInvoice}=await import('~/lib/software-invoices');
+  const input={requestId:'software',offerId:'software-offer',milestone:0,kind:'deposit' as const,allowCard:false,actor:'owner'};
+  const invoice=await reserveSoftwareInvoice(db,input);
+  expect(sql.prepare('SELECT count(*) AS n FROM software_projects').get()).toEqual({n:0});
+  await expect(reserveSoftwareInvoice(db,input)).rejects.toThrow();
+  await expect(reserveSoftwareInvoice(db,{...input,retryId:invoice.id})).rejects.toThrow();
+  sql.prepare('UPDATE software_invoices SET creation_started_at=NULL WHERE id=?').run(invoice.id);
+  expect((await reserveSoftwareInvoice(db,{...input,retryId:invoice.id})).id).toBe(invoice.id);
+  const event={eventId:'evt_paid',eventType:'invoice.paid',invoiceId:'in_deposit',requestId:'software',localId:invoice.id,offerId:'software-offer',milestone:'0',kind:'deposit',status:'paid' as const,occurredAt:'2026-09-30T12:00:00Z',total:120000,currency:'usd',customerId:'cus_private',hostedUrl:'https://example.com/invoice',dueAt:'2026-10-07T12:00:00Z'};
+  expect(await applySoftwareInvoiceEvent(db,event)).toBe('processed');
+  expect(paidFirstDeposit(await listSoftwareInvoices(db,'software'),'software-offer')?.id).toBe(invoice.id);
+  expect(paidFirstDeposit(await listSoftwareInvoices(db,'software'),'other-offer')).toBeUndefined();
+  expect(sql.prepare('SELECT count(*) AS n FROM software_milestone_payments').get()).toEqual({n:0});
+  // A late create response cannot undo a paid webhook.
+  await recordSoftwareInvoice(db,invoice,{stripeCustomerId:'cus_private',invoiceId:'in_deposit',hostedInvoiceUrl:'https://example.com/invoice',status:'open',dueAt:event.dueAt});
+  expect(sql.prepare('SELECT status FROM software_invoices').get().status).toBe('paid');
+  const body={action:'start',expectedRequestUpdatedAt:'now',offer_id:'software-offer',offer_version:1,signatures:true,payment:true,next_update_on:'',deposit_invoice_id:'wrong'};
+  expect((await call(projectPost,body)).status).toBe(409);
+  expect((await call(projectPost,{...body,deposit_invoice_id:invoice.id})).status).toBe(200);
+});
+it('blocks sending new terms for open, failed, creating or paid deposits and blocks declines while open',async()=>{
+  const {reserveSoftwareInvoice}=await import('~/lib/software-invoices');
+  await reserveSoftwareInvoice(db,{requestId:'software',offerId:'software-offer',milestone:0,kind:'deposit',allowCard:false,actor:'owner'});
+  const saved=await call(offerPost,{action:'draft',terms:{...terms,summary:'New terms'},expectedUpdatedAt:null});
+  const value=await saved.json() as {version:number;updatedAt:string};
+  for(const status of ['creating','open','payment_failed','paid']) {
+    sql.prepare('UPDATE software_invoices SET status=?').run(status);
+    const sent=await call(offerPost,{action:'send',version:value.version,expectedUpdatedAt:value.updatedAt});
+    expect(sent.status).toBe(409);
+    expect((await sent.json() as {message:string}).message).toContain(status==='paid' ? 'already paid' : 'Void the open deposit');
+    if(status!=='paid')expect((await call(offerPost,{action:'decline',text:'Cannot take this on.'})).status).toBe(409);
+  }
+  sql.exec("UPDATE software_invoices SET status='void'");
+  expect((await call(offerPost,{action:'send',version:value.version,expectedUpdatedAt:value.updatedAt})).status).toBe(200);
+});
+it('pins later invoices, gates delivery and payment, and records a paid balance exactly once',async()=>{
+  const {reserveSoftwareInvoice,applySoftwareInvoiceEvent,clientSoftwareInvoices}=await import('~/lib/software-invoices');
+  await start();
+  const input={requestId:'software',offerId:'software-offer',milestone:0,kind:'balance' as const,allowCard:true,actor:'owner'};
+  await expect(reserveSoftwareInvoice(db,input)).rejects.toThrow('not available');
+  await shareReview();
+  const invoice=await reserveSoftwareInvoice(db,input);
+  const base={eventId:'evt_balance',eventType:'invoice.paid',invoiceId:'in_balance',requestId:'software',localId:invoice.id,offerId:invoice.offer_id,milestone:'0',kind:'balance',status:'paid' as const,occurredAt:'2026-09-30T12:00:00Z',total:120000,currency:'usd',customerId:'cus_secret',hostedUrl:'https://example.com/pay',dueAt:'2026-10-15T12:00:00Z'};
+  expect(await applySoftwareInvoiceEvent(db,{...base,invoiceId:'wrong',total:1})).toBe('unmatched');
+  expect(await applySoftwareInvoiceEvent(db,base)).toBe('processed');
+  expect(await applySoftwareInvoiceEvent(db,base)).toBe('duplicate');
+  await applySoftwareInvoiceEvent(db,{...base,eventId:'evt_late',status:'payment_failed',eventType:'invoice.payment_failed',occurredAt:'2026-10-01T12:00:00Z'});
+  expect(sql.prepare('SELECT status FROM software_invoices').get().status).toBe('paid');
+  expect(sql.prepare('SELECT count(*) AS n FROM software_milestone_payments').get()).toEqual({n:1});
+  expect(sql.prepare("SELECT count(*) AS n FROM software_project_audit WHERE action='milestone-paid'").get()).toEqual({n:1});
+  const visible=await clientSoftwareInvoices(db,{request_id:'software',offer_id:'software-offer'});
+  expect(visible[0]).toMatchObject({status:'paid',amount_cents:120000,due_at:base.dueAt});
+  expect(JSON.stringify(visible)).not.toMatch(/cus_secret|created_by|stripe_invoice_id|offer_id/);
+  expect(await clientSoftwareInvoices(db,{request_id:'other',offer_id:'software-offer'})).toEqual([]);
+  expect(await clientSoftwareInvoices(db,{request_id:'software',offer_id:'other'})).toEqual([]);
+  await expect(reserveSoftwareInvoice(db,input)).rejects.toThrow();
+});
+it('applies ordered software statuses, rejects conflicting identities and replaces only void invoices',async()=>{
+  const {reserveSoftwareInvoice,applySoftwareInvoiceEvent}=await import('~/lib/software-invoices');
+  const input={requestId:'software',offerId:'software-offer',milestone:0,kind:'deposit' as const,allowCard:false,actor:'owner'};
+  const invoice=await reserveSoftwareInvoice(db,input);
+  const base={eventId:'evt_open',eventType:'invoice.sent',invoiceId:'in_original',requestId:'software',localId:invoice.id,offerId:invoice.offer_id,milestone:'0',kind:'deposit',status:'open' as const,occurredAt:'2026-09-30T12:00:00Z',total:120000,currency:'usd',customerId:null,hostedUrl:'https://example.com/pay',dueAt:null};
+  for(const changed of [{offerId:'other'},{requestId:'other'},{milestone:'1'},{kind:'balance'},{currency:'eur'}])expect(await applySoftwareInvoiceEvent(db,{...base,eventId:JSON.stringify(changed),...changed})).toBe('unmatched');
+  await applySoftwareInvoiceEvent(db,base);
+  await applySoftwareInvoiceEvent(db,{...base,eventId:'evt_failed',status:'payment_failed',occurredAt:'2026-09-30T13:00:00Z'});
+  await applySoftwareInvoiceEvent(db,{...base,eventId:'evt_old',occurredAt:'2026-09-30T11:00:00Z'});
+  expect(sql.prepare('SELECT status FROM software_invoices').get().status).toBe('payment_failed');
+  await expect(reserveSoftwareInvoice(db,{...input,replaceId:invoice.id})).rejects.toThrow('Void');
+  await applySoftwareInvoiceEvent(db,{...base,eventId:'evt_uncollectible',status:'uncollectible',occurredAt:'2026-09-30T14:00:00Z'});
+  await expect(reserveSoftwareInvoice(db,{...input,replaceId:invoice.id})).rejects.toThrow('Void');
+  await applySoftwareInvoiceEvent(db,{...base,eventId:'evt_void',status:'void',occurredAt:'2026-09-30T15:00:00Z'});
+  const replacement=await reserveSoftwareInvoice(db,{...input,replaceId:invoice.id});
+  expect(replacement.attempt).toBe(1);expect(replacement.id).not.toBe(invoice.id);
+  expect(sql.prepare('SELECT count(*) AS n FROM software_projects').get()).toEqual({n:0});
+  expect(sql.prepare("SELECT count(*) AS n FROM software_project_audit WHERE action='invoice-replaced'").get()).toEqual({n:1});
+});
+it('releases offer blocks only after an explicit full pre-start refund record and lets old absent attempts recover',async()=>{
+  const {reserveSoftwareInvoice,depositOfferBlock,paidFirstDeposit,listSoftwareInvoices}=await import('~/lib/software-invoices');
+  const {reconciliationStatements}=await import('../../scripts/stripe-reconciliation.mjs');
+  const input={requestId:'software',offerId:'software-offer',milestone:0,kind:'deposit' as const,allowCard:false,actor:'owner'};
+  const invoice=await reserveSoftwareInvoice(db,input);
+  sql.prepare("UPDATE software_invoices SET status='paid',stripe_invoice_id='in_paid' WHERE id=?").run(invoice.id);
+  expect(await depositOfferBlock(db,'software')).toContain('already paid');
+  for(const statement of reconciliationStatements(['--software-deposit-refunded',invoice.id,'Confirmed']))sql.exec(statement);
+  expect(await depositOfferBlock(db,'software')).toBeNull();
+  expect(paidFirstDeposit(await listSoftwareInvoices(db,'software'),'software-offer')).toBeUndefined();
+  expect(sql.prepare('SELECT status,refunded_at FROM software_invoices').get()).toMatchObject({status:'paid',refunded_at:expect.any(String)});
+  expect((await call(projectPost,{action:'start',expectedRequestUpdatedAt:'now',offer_id:'software-offer',offer_version:1,signatures:true,payment:true,next_update_on:'',deposit_invoice_id:invoice.id})).status).toBe(409);
+  // A separate offer has its own snapshot and new attempt keys.
+  sql.exec("UPDATE software_offers SET status='superseded';INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) SELECT 'offer-2',request_id,2,'sent',terms_json,created_at,updated_at FROM software_offers WHERE id='software-offer'");
+  const old=await reserveSoftwareInvoice(db,{...input,offerId:'offer-2'});
+  sql.prepare("UPDATE software_invoices SET created_at='2020-01-01',creation_started_at=NULL WHERE id=?").run(old.id);
+  await expect(reserveSoftwareInvoice(db,{...input,offerId:'offer-2',retryId:old.id})).rejects.toThrow('reconcile');
+  for(const statement of reconciliationStatements(['--software-no-invoice',old.id,'Confirmed']))sql.exec(statement);
+  const replaced=await reserveSoftwareInvoice(db,{...input,offerId:'offer-2',replaceId:old.id});
+  expect(replaced.attempt).toBe(1);
+});
+it('rolls back invoice reservations when full payment arrives between the read and transaction',async()=>{
+  const {reserveSoftwareInvoice}=await import('~/lib/software-invoices');
+  await start();await shareReview();
+  const original=db.batch.bind(db);
+  db.batch=async items=>{
+    sql.exec("INSERT INTO software_milestone_payments VALUES ('software',0,'now','owner')");
+    return original(items);
+  };
+  await expect(reserveSoftwareInvoice(db,{requestId:'software',offerId:'software-offer',milestone:0,kind:'balance',allowCard:false,actor:'owner'})).rejects.toThrow();
+  expect(sql.prepare('SELECT count(*) AS n FROM software_invoices').get()).toEqual({n:0});
+});
+it('cannot restore invoice references when retention runs between webhook lookup and transaction',async()=>{
+  const {reserveSoftwareInvoice,applySoftwareInvoiceEvent}=await import('~/lib/software-invoices');
+  const invoice=await reserveSoftwareInvoice(db,{requestId:'software',offerId:'software-offer',milestone:0,kind:'deposit',allowCard:false,actor:'owner'});
+  const original=db.batch.bind(db);
+  db.batch=async items=>{
+    sql.exec("UPDATE software_invoices SET external_refs_deleted_at='now',stripe_customer_id=NULL,hosted_invoice_url=NULL");
+    return original(items);
+  };
+  await applySoftwareInvoiceEvent(db,{eventId:'evt_retained',eventType:'invoice.sent',invoiceId:'in_retained',requestId:'software',localId:invoice.id,offerId:invoice.offer_id,milestone:'0',kind:'deposit',status:'open',occurredAt:'2026-09-30T12:00:00Z',total:120000,currency:'usd',customerId:'cus_should_not_restore',hostedUrl:'https://example.com/should-not-restore',dueAt:null});
+  expect(sql.prepare('SELECT stripe_customer_id,hosted_invoice_url FROM software_invoices').get()).toEqual({stripe_customer_id:null,hosted_invoice_url:null});
+});
+it('authorizes invoice creation and preserves a recoverable attempt after provider failure',async()=>{
+  env.STRIPE_PAYMENTS_ENABLED='true';env.STRIPE_SECRET_KEY='test';env.STRIPE_WEBHOOK_SECRET='test';
+  const body={offer_id:'software-offer',milestone_index:0,kind:'deposit',allow_card:true};
+  expect((await call(invoicePost,body,false)).status).toBe(403);
+  expect((await call(invoicePost,{...body,allow_card:'true'})).status).toBe(400);
+  expect(sql.prepare('SELECT count(*) AS n FROM software_invoices').get()).toEqual({n:0});
+  const provider=vi.spyOn(invoiceLib,'createSoftwareInvoice');
+  provider.mockRejectedValueOnce(new Error('Provider uncertain'));
+  provider.mockResolvedValueOnce({stripeCustomerId:'cus_test',invoiceId:'in_test',hostedInvoiceUrl:'https://example.com/pay',dueAt:'2026-10-07T12:00:00Z',status:'open'});
+  try {
+    expect((await call(invoicePost,body)).status).toBe(502);
+    const row=sql.prepare('SELECT * FROM software_invoices').get();
+    expect(row.status).toBe('creating');
+    sql.exec('UPDATE software_invoices SET creation_started_at=NULL');
+    expect((await call(invoicePost,{...body,allow_card:false,retry_id:row.id})).status).toBe(200);
+    expect(provider.mock.calls[0][3]).toMatchObject({id:row.id,allow_card:1,attempt:0});
+    expect(provider.mock.calls[1][3]).toMatchObject({id:row.id,allow_card:1,attempt:0});
+    expect(sql.prepare('SELECT status,due_at FROM software_invoices').get()).toEqual({status:'open',due_at:'2026-10-07T12:00:00Z'});
+    expect(sql.prepare('SELECT count(*) AS n FROM software_invoices').get()).toEqual({n:1});
+  } finally {provider.mockRestore();}
+});
+it('requires prior full payment before advancing an Invoice Terms milestone',async()=>{
+  sql.prepare('UPDATE software_offers SET terms_json=?').run(JSON.stringify({...terms,paymentMode:'invoice',milestones:[terms.milestones[0],{...terms.milestones[0],name:'Second'}]}));
+  await start();
+  const project=sql.prepare('SELECT updated_at FROM software_projects').get();
+  const body={action:'state',state:'building',waiting_for:'',milestone_index:1,step:'build',next_update_on:'',expectedUpdatedAt:project.updated_at};
+  expect((await call(projectPost,body)).status).toBe(409);
+  expect((await call(updatePost,{action:'share',expectedUpdatedAt:null,confirmed:true,update:{...update,kind:'direction_review',milestone_index:1,artifact_version:'Next direction'}})).status).toBe(409);
+  sql.exec("INSERT INTO software_milestone_payments VALUES ('software',0,'now','owner')");
+  expect((await call(projectPost,body)).status).toBe(200);
+});
+it('refuses no-invoice cancellation of recent or actively leased reservations',async()=>{
+  const {reserveSoftwareInvoice}=await import('~/lib/software-invoices');
+  const {reconciliationStatements}=await import('../../scripts/stripe-reconciliation.mjs');
+  const invoice=await reserveSoftwareInvoice(db,{requestId:'software',offerId:'software-offer',milestone:0,kind:'deposit',allowCard:false,actor:'owner'});
+  for(const statement of reconciliationStatements(['--software-no-invoice',invoice.id,'Confirmed']))sql.exec(statement);
+  expect(sql.prepare('SELECT status FROM software_invoices').get().status).toBe('creating');
+  sql.prepare("UPDATE software_invoices SET created_at='2020-01-01' WHERE id=?").run(invoice.id);
+  for(const statement of reconciliationStatements(['--software-no-invoice',invoice.id,'Confirmed']))sql.exec(statement);
+  expect(sql.prepare('SELECT status FROM software_invoices').get().status).toBe('creating');
+  sql.exec('UPDATE software_invoices SET creation_started_at=NULL');
+  for(const statement of reconciliationStatements(['--software-no-invoice',invoice.id,'Confirmed']))sql.exec(statement);
+  expect(sql.prepare('SELECT status FROM software_invoices').get().status).toBe('void');
 });
