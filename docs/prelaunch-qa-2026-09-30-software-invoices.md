@@ -2,8 +2,8 @@
 
 Date: September 30, 2026  
 Repository: `kwilson21/thesuperhuman.us`  
-Pull request: {{PR}}  
-Code revision: `{{HEAD}}`  
+Pull request: #155  
+Code revision: `8da9998f`  
 Target: production `https://thesuperhuman.us` (private software client Invoices, owner milestone invoice actions, software invoice API and Stripe webhook) and production `MUSIC_DB`  
 Reviewer and deployment authorization: Kazon chose Stripe-hosted invoices for software ('I want stripe invoices', owner, in conversation, 2026-09-29). This job authorizes local polish and a release record only; deployment is pending.  
 Scope: explicit owner-created deposit, balance and milestone invoices; ACH with an owner-selected card option; paid-deposit project start; signed webhook payment records; retries, replacements, refunds and retention; client invoice ordering and capitalized labels; nonwrapping owner invoice links; migration `0022_software_invoices.sql`  
