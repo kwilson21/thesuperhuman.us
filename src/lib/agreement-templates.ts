@@ -1,3 +1,5 @@
+import { newYorkTime } from './agreement-artifacts';
+import { softwareDate } from './software-projects';
 import { agreementEvent } from './agreement-events';
 import { hashOfferToken } from './software-offers';
 import { templateFields } from './agreement-template-fields.mjs';
@@ -22,7 +24,13 @@ export const agreementCharacterSupported = (character: string) =>
     ([start, end]) => character.codePointAt(0)! >= start && character.codePointAt(0)! <= end,
   );
 export function agreementCertificateText(json: string) {
-  return [...json]
+  // Format certificate display only. Stored evidence and its canonical hash stay exact.
+  const display = JSON.stringify(JSON.parse(json), (key, value) =>
+    typeof value === 'string' && /(?:_at|_on|date)$/.test(key) && /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)?$/.test(value)
+      ? value.length === 10 ? softwareDate(value) : newYorkTime(value)
+      : value,
+  );
+  return [...display]
     .map((character) =>
       agreementCharacterSupported(character)
         ? character

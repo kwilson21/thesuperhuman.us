@@ -26,13 +26,9 @@ export type AgreementArtifact = {
   bytes: number | null;
   certificate_key: string | null;
 };
-const newYorkTime = (value: unknown) =>
+export const newYorkTime = (value: unknown) =>
   typeof value === 'string'
-    ? new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/New_York',
-        dateStyle: 'long',
-        timeStyle: 'long',
-      }).format(new Date(value))
+    ? new Date(value).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' })
     : null;
 /** Signatures persist first. Artifact retries never create a signature. */
 export async function prepareAgreementArtifact(

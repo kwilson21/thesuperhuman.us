@@ -92,3 +92,15 @@ it('bundles exactly the licensed source font bytes', () => {
     expect(Buffer.from(encoded, 'base64')).toEqual(readFileSync(new URL(`../../src/assets/agreement-fonts/${name}.ttf`, import.meta.url)));
   }
 });
+
+it('formats PDF certificate dates in New York without changing source evidence', async () => {
+  const certificate = { executed_at: '2026-09-30T13:15:43.382Z', effective_on: '2026-09-30', signatures: [{ signed_at: '2026-01-01T02:15:00Z' }] };
+  const original = JSON.stringify(certificate);
+  const pdf = await PDFDocument.load(await renderAgreementPacket({ ASSETS: assets } as unknown as Env, [document('sow', 'Exact retained agreement')], [certificate]));
+  const text = extract(pdf).replace(/\s+/g, " ");
+  expect(text).toContain('Sep 30, 2026, 9:15 AM EDT');
+  expect(text).toContain('Dec 31, 2025, 9:15 PM EST');
+  expect(text).not.toContain('2026-09-30T');
+  expect(text).not.toContain('2026-09-30');
+  expect(JSON.stringify(certificate)).toBe(original);
+});

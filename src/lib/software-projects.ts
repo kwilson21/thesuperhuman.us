@@ -146,3 +146,6 @@ export const milestoneDepositGuard = (db: D1Database, id: string, milestone: num
   `SELECT 1 WHERE EXISTS(SELECT 1 FROM software_milestone_deposits WHERE request_id=? AND milestone_index=?)
     OR EXISTS(SELECT 1 FROM software_invoices i JOIN software_projects p ON p.request_id=i.request_id AND p.offer_id=i.offer_id
       WHERE i.request_id=? AND i.milestone_index=? AND i.kind='deposit' AND i.status='paid' AND i.refunded_at IS NULL)`, [id,milestone,id,milestone]);
+
+// The Start action records today as the service start; match its existing date gate.
+export const requiresEarlierStartAgreement = (plannedStart: string | undefined, startOn: string) => Boolean(plannedStart && startOn < plannedStart);
