@@ -140,3 +140,14 @@ it.each([false,true])('replaces only an earlier delivered version (earlier sent 
     if (earlierSent) expect(html).toContain('replaces v1'); else expect(html).not.toContain('replaces');
   } finally { sql.close(); }
 });
+
+it('returns a private temporary-unavailable 503 without the database', async () => {
+  const response = await render(undefined,token), html = await response.text();
+  expect(response.status).toBe(503);
+  expect(response.headers.get('cache-control')).toBe('private, no-store');
+  expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+  expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+  expect(html).toContain('This offer is temporarily unavailable.');
+  expect(html).toContain('Please try again later.');
+  expect(html).not.toContain('Ask Kazon for a current link');
+});
