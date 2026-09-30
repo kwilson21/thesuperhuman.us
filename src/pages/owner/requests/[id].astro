@@ -51,7 +51,7 @@ const label = (key: string) => key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/
 const detailRows = Object.entries(request.details).filter(([, value]) => value !== '' && value !== null && value !== false && (!Array.isArray(value) || value.length));
 const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') : typeof value === 'object' && value ? Object.entries(value).map(([key, item]) => `${label(key)}: ${String(item)}`).join(' · ') : String(value);
 const offers = request.kind === 'software' ? await listSoftwareOffers(db, request.id) : [];
-const softwareProject = request.kind === 'software' && clientPortalEnabled(Astro.locals.runtime.env) ? await getSoftwareProject(db, request.id) : null;
+const softwareProject = request.kind === 'software' ? await getSoftwareProject(db, request.id) : null;
 const softwareUpdates = softwareProject ? await listSoftwareUpdates(db, request.id) : [];
 const softwareMessages = softwareProject ? await listSoftwareProjectMessages(db, request.id) : [];
 if (softwareProject) {
@@ -116,7 +116,7 @@ const brief = request.kind === 'software' ? softwareBrief(request) : null;
         <form class="rail-note" data-request-note><label class="visually-hidden" for="owner-private-note">Private note</label><textarea class="studio-textarea" id="owner-private-note" name="note" maxlength="1000" rows="3" placeholder="A note for yourself…">{request.privateNote}</textarea><button type="submit" class="studio-quiet">Save note</button></form>
       </section>
       {allowed.length > 0 && <section class="rail-section" aria-labelledby="request-heading"><h2 id="request-heading">Request</h2>
-        <div class="rail-actions" data-request-actions data-open-studio={portalProject && portalProject.stage === 'files_under_review' && !portalProject.revoked_at ? 'true' : undefined}>{allowed.map(action => <button type="button" id={action === 'review' ? 'mark-reviewed' : undefined} data-action={action} class:list={{ danger: action === 'withdraw' }}>{action === 'review' ? 'Mark reviewed' : action === 'resolve' ? 'Mark resolved' : action === 'reopen' ? 'Reopen' : 'Honor withdrawal'}</button>)}</div>
+        <div class="rail-actions" data-request-actions data-open-studio={portalProject && portalProject.stage === 'files_under_review' && !portalProject.revoked_at ? 'true' : undefined}>{allowed.filter(action => action !== 'reopen' || !softwareProject).map(action => <button type="button" id={action === 'review' ? 'mark-reviewed' : undefined} data-action={action} class:list={{ danger: action === 'withdraw' }}>{action === 'review' ? 'Mark reviewed' : action === 'resolve' ? 'Mark resolved' : action === 'reopen' ? 'Reopen' : 'Honor withdrawal'}</button>)}</div>
       </section>}
       {brief && !closed && !softwareProject && <SoftwareQuestions requestId={request.id} />}
       <p class="studio-status" data-action-status aria-live="polite"></p>
