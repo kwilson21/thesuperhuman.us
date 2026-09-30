@@ -21,14 +21,15 @@ export default {
     const token='00000000-0000-4000-8000-000000000005'.repeat(2),cookie={name:'studio_session',value:token};
     const quote=value=>`'${String(value).replaceAll("'","''")}'`;
     const terms={outcome:'Client onboarding tracker',summary:'Client onboarding tool',milestones:[{name:'Client onboarding tracker',deliverables:['A shared status view','Next actions with a named owner'],acceptance:['Add a client.','Update their status.','Identify the next action.','Import the agreed sample CSV.','Read the handoff notes.'],feeCents:240000},{name:'Client follow-up',deliverables:['Follow-up view'],acceptance:['Identify the next follow-up.'],feeCents:120000}],clientInputs:'A redacted sample export.',exclusions:'Live rollout and integrations.',timing:'Agreed before start.',paymentMode:'standard'};
+    const sentOffer={id:'screenshot-project-offer',version:1};
     // Intake, sent offer and session need outside Turnstile/email, so only these are seeded.
     sql(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,created_at,updated_at) VALUES (${quote(id)},'software','workflow','Alex Example',${quote(email)},'Client onboarding tool','{"path":"workflow","company":"Example Studio"}','reviewed',${quote(at)},${quote(at)});
-      INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at,sent_at,sent_by) VALUES ('screenshot-project-offer',${quote(id)},1,'sent',${quote(JSON.stringify(terms))},${quote(at)},${quote(at)},${quote(at)},'owner@example.com');
+      INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at,sent_at,sent_by) VALUES (${quote(sentOffer.id)},${quote(id)},${sentOffer.version},'sent',${quote(JSON.stringify(terms))},${quote(at)},${quote(at)},${quote(at)},'owner@example.com');
       INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES (${quote(createHash('sha256').update(token).digest('hex'))},${quote(email)},${quote(at)},'2099-01-01',${quote(at)})`);
     const steps=[];
     const shot=async(title,path,name,options={})=>{const images=[];for(const viewport of ['desktop','phone']) images.push({file:await capture({file:`software-project-${name}-${viewport}.png`,path,viewport,...options}),caption:`Fictional data: ${title}`});steps.push({title,images});};
     await shot('Start the project',`/owner/requests/${id}`,'start',{owner:true});
-    await ownerFetch(`/api/owner/requests/${id}/project`,{action:'start',signatures:true,payment:true,next_update_on:'2026-10-08'});
+    await ownerFetch(`/api/owner/requests/${id}/project`,{action:'start',offer_id:sentOffer.id,offer_version:sentOffer.version,expectedRequestUpdatedAt:at,signatures:true,payment:true,next_update_on:'2026-10-08'});
     await shot('Project rail after start',`/owner/requests/${id}`,'rail',{owner:true});
     await shot('Before the first shared update',`/studio/software/${id}`,'first',{cookie});
     const update={kind:'progress',milestone_index:0,title:'First look at the tracker layout',artifact_version:'v1',evidence_type:'concept',visual_alt:'Illustrative table layout for client status and next actions.',preview_url:'',what_changed:'A proposed shared view of client status and the next action.',checks_limitations:'Concept only. Not implemented.',next_step:'Build the shared view after your feedback.',client_request:'Send a redacted sample export.',next_update_on:'2026-10-08',email_client:false};
