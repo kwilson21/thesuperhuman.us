@@ -68,7 +68,7 @@ it('migration preserves audit ids and notes and constrains active invoice rows',
   const insert = db.prepare(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,allow_card,status,stripe_invoice_id,created_by,created_at,updated_at)
     VALUES (?,'software','offer',0,'deposit',50,7,0,?,?,'owner','now','now')`);
   insert.run('first','creating',null);
-  for (const status of ['creating','open','payment_failed']) expect(() => insert.run(status,status,null)).toThrow();
+  for (const status of ['creating','open','payment_failed','uncollectible']) expect(() => insert.run(status,status,null)).toThrow();
   db.exec("UPDATE software_invoices SET status='void' WHERE id='first'");
   insert.run('second','open','in_test');
   expect(() => insert.run('duplicate-stripe','void','in_test')).toThrow();
