@@ -197,7 +197,7 @@ export async function reviewAgreements(
           d.text,
           d.hash,
           JSON.stringify(values),
-          JSON.stringify(details.attachments),
+          JSON.stringify(d.kind === 'sow' ? details.attachments : []),
           at,
           effective,
           session.token_hash,

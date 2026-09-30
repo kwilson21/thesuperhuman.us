@@ -114,8 +114,7 @@ export async function issueAgreementCode(
   if (!email) return agreementJson({ ok: false, error: 'Enter a valid email address.' }, 400);
   const ip = request.headers.get('cf-connecting-ip') ?? '0.0.0.0';
   if (
-    !(await takeStudioAllowance(db, `${purpose}-code-ip`, ip, 20, env.AUDIO_CLIENT_CODE_KEY)) ||
-    !(await takeStudioAllowance(db, `${purpose}-code-email`, email, 3, env.AUDIO_CLIENT_CODE_KEY))
+    !(await takeStudioAllowance(db, `${purpose}-code-ip`, ip, 20, env.AUDIO_CLIENT_CODE_KEY))
   )
     return agreementJson(
       { ok: false, error: 'Please wait a few minutes before requesting another code.' },
@@ -123,6 +122,11 @@ export async function issueAgreementCode(
     );
   if (!(await verifyTurnstile(input.turnstileToken, env.TURNSTILE_SECRET_KEY, ip)))
     return agreementJson({ ok: false, error: 'Complete the security check again.' }, 403);
+  if (!(await takeStudioAllowance(db, `${purpose}-code-email`, email, 3, env.AUDIO_CLIENT_CODE_KEY)))
+    return agreementJson(
+      { ok: false, error: 'Please wait a few minutes before requesting another code.' },
+      429,
+    );
   const receipt = {
     ok: true,
     message: 'If an agreement is available, a code is on its way.',

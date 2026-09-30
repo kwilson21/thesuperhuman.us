@@ -22,6 +22,10 @@ const eligible = `a.status IN ('executed','abandoned') AND a.ended_at IS NOT NUL
  AND NOT EXISTS(SELECT 1 FROM software_offers o WHERE o.reused_msa_id=a.id AND (EXISTS(SELECT 1 FROM software_agreements sow WHERE sow.offer_id=o.id) OR (o.status IN ('sent','draft') AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id AND p.content_deleted_at IS NOT NULL))))
  AND NOT EXISTS(SELECT 1 FROM software_agreements s WHERE s.msa_id=a.id)
  AND (a.kind='sow' OR a.terminated_at IS NOT NULL OR NOT EXISTS(SELECT 1 FROM software_agreement_signatures sig WHERE sig.agreement_id=a.id))`;
+// Offers that can still be reviewed pin their uploaded attachments independently of review snapshots.
+const activeOfferAttachment = `SELECT 1 FROM software_offers o,json_each(json_extract(o.agreement_details_json,'$.attachments')) attachment
+ WHERE o.status IN ('draft','sent') AND CASE WHEN attachment.type='object' THEN json_extract(attachment.value,'$.key') END=?
+ AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id)`;
 export async function previewAgreementRetention(
   db: D1Database,
   bucket: R2Bucket,
@@ -40,6 +44,12 @@ export async function previewAgreementRetention(
         }
       >()
   ).results;
+  const retiringIds = JSON.stringify(rows.map(row => row.id));
+  // Assign a shared attachment to its last retiring reference, after the earlier rows are removed.
+  const attachmentOwners = new Map<string, string>();
+  for (const row of rows)
+    for (const attachment of JSON.parse(row.attachment_manifest_json) as { key: string }[])
+      attachmentOwners.set(attachment.key, row.id);
   const agreements: RetentionManifest['agreements'] = [];
   for (const row of rows) {
     const objects: { key: string; sha256: string }[] = [];
@@ -59,11 +69,13 @@ export async function previewAgreementRetention(
     }[]) {
       const shared = await db
         .prepare(
-          "SELECT 1 FROM software_agreements other,json_each(other.attachment_manifest_json) attachment WHERE other.id<>? AND json_extract(attachment.value,'$.key')=?",
+          "SELECT 1 FROM software_agreements other,json_each(other.attachment_manifest_json) attachment WHERE other.id NOT IN (SELECT value FROM json_each(?)) AND json_extract(attachment.value,'$.key')=?",
         )
-        .bind(row.id, attachment.key)
+        .bind(retiringIds, attachment.key)
         .first();
-      if (!shared) objects.push({ key: attachment.key, sha256: attachment.sha256 });
+      const offered = await db.prepare(activeOfferAttachment).bind(attachment.key).first();
+      if (!shared && !offered && attachmentOwners.get(attachment.key) === row.id)
+        objects.push({ key: attachment.key, sha256: attachment.sha256 });
     }
     agreements.push({
       id: row.id,
@@ -102,6 +114,11 @@ export async function applyAgreementRetention(
         `SELECT 1 FROM software_agreements a WHERE a.id=? AND a.text_sha256=? AND ${eligible}`,
         [item.id, item.sha256, now.toISOString()],
       ),
+      ...item.objects.map(object => softwareGuard(db,
+        `SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_agreements other,json_each(other.attachment_manifest_json) attachment WHERE other.id<>? AND json_extract(attachment.value,'$.key')=?)
+         AND NOT EXISTS(${activeOfferAttachment})`,
+        [item.id, object.key, object.key],
+      )),
       db
         .prepare('UPDATE software_agreements SET archive_closed_at=? WHERE id=?')
         .bind(now.toISOString(), item.id),
@@ -137,15 +154,12 @@ export async function applyAgreementRetention(
         .prepare('UPDATE software_offers SET reused_msa_id=NULL WHERE reused_msa_id=?')
         .bind(item.id),
       db.prepare('DELETE FROM software_agreements WHERE id=?').bind(item.id),
+      ...item.objects.map(object => db.prepare(
+        "DELETE FROM software_agreement_attachments WHERE object_key=? AND NOT EXISTS(SELECT 1 FROM software_agreements a,json_each(a.attachment_manifest_json) m WHERE json_extract(m.value,'$.key')=software_agreement_attachments.object_key)",
+      ).bind(object.key)),
+
       agreementEvent(db,'retention-deleted','system',now.toISOString()),
     ]);
-    for (const object of item.objects)
-      await db
-        .prepare(
-          "DELETE FROM software_agreement_attachments WHERE object_key=? AND NOT EXISTS(SELECT 1 FROM software_agreements a,json_each(a.attachment_manifest_json) m WHERE json_extract(m.value,'$.key')=software_agreement_attachments.object_key)",
-        )
-        .bind(object.key)
-        .run();
     await db
       .prepare(
         'DELETE FROM software_agreement_clients WHERE NOT EXISTS(SELECT 1 FROM software_agreements a WHERE a.client_id=software_agreement_clients.id)',

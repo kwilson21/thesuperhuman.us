@@ -3,7 +3,7 @@ import type { APIRoute } from 'astro';
 import { hashBytes } from '~/lib/agreement-artifacts';
 import { signingEnabled } from '~/lib/agreement-access';
 import { currentTemplate } from '~/lib/agreement-templates';
-import { validateAgreementDetails, contractorSchema } from '~/lib/agreement-fields';
+import { validateAgreementDetails, agreementDetailsSchema, contractorSchema } from '~/lib/agreement-fields';
 import { musicRequest } from '~/lib/music-request';
 import { softwareGuard } from '~/lib/software-projects';
 import { depositOfferBlock, depositOfferGuard } from '~/lib/software-invoices';
@@ -48,6 +48,12 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   };
   // D1 batches are transactions. This assertion rolls back a stale command before any mutation.
   const guard = (query: string, values: (string | number)[]) => db.prepare(`SELECT CASE WHEN EXISTS(${query}) THEN 1 ELSE json_extract('Offer changed. Reload and try again.','$') END`).bind(...values);
+  // Attachment acquisition and archive closure serialize in D1 before either side performs R2 work.
+  const attachmentGuards = (details: unknown) => agreementDetailsSchema.innerType().shape.attachments
+    .parse((details as { attachments?: unknown } | null)?.attachments)
+    .map(attachment => guard(`SELECT 1 FROM software_agreement_attachments f WHERE f.request_id=? AND f.object_key=? AND f.sha256=? AND f.bytes=? AND f.filename=? AND f.version=? AND f.document_date=?
+      AND NOT EXISTS(SELECT 1 FROM software_agreements a,json_each(a.attachment_manifest_json) m WHERE a.archive_closed_at IS NOT NULL AND json_extract(m.value,'$.key')=f.object_key)`,
+      [record.id,attachment.key,attachment.sha256,attachment.bytes,attachment.filename,attachment.version,attachment.date]));
   const requestGuard = (updatedAt = record.updatedAt) => guard('SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND status=? AND email=?', [record.id, updatedAt, record.status, record.email]);
   try {
     if (command.action === 'fit') {
@@ -109,7 +115,9 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
         ...(draft ? [guard("SELECT 1 FROM software_offers WHERE id=? AND status='draft' AND updated_at=?", [draft.id, command.expectedUpdatedAt!])] : []),
         draft ? db.prepare("UPDATE software_offers SET terms_json=?,updated_at=? WHERE id=? AND status='draft'").bind(JSON.stringify(terms.value), now, id)
           : db.prepare("INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES (?,?,?,'draft',?,?,?)").bind(id, record.id, version, JSON.stringify(terms.value), now, now),
-        db.prepare('UPDATE software_offers SET agreement_details_json=?,reused_msa_id=? WHERE id=?').bind(command.agreementDetails ? JSON.stringify(command.agreementDetails) : null,command.confirmMsaReuse ? command.reusedMsaId ?? null : null,id),
+        ...(command.agreementDetails != null ? attachmentGuards(command.agreementDetails) : []),
+        ...(command.agreementDetails !== undefined ? [db.prepare('UPDATE software_offers SET agreement_details_json=? WHERE id=?').bind(command.agreementDetails === null ? null : JSON.stringify(command.agreementDetails),id)] : []),
+        ...(command.confirmMsaReuse !== undefined ? [db.prepare('UPDATE software_offers SET reused_msa_id=? WHERE id=?').bind(command.confirmMsaReuse ? command.reusedMsaId ?? null : null,id)] : []),
         audit('offer-draft-saved'),
       ]);
       return json({ ok: true, version, updatedAt: now });
@@ -145,6 +153,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     catch { return json({ ok: false, message: 'The offer link couldn’t be built. Check SITE_ORIGIN. Nothing was sent.' }, 500); }
     await db.batch([
       requestGuard(), offerSendingGuard(db, record.id), signingChangeGuard,
+      ...(pin ? attachmentGuards(JSON.parse(pin.details)) : []),
       ...(draft ? [depositOfferGuard(db,record.id)] : []),
       guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)', [record.id]),
       guard('SELECT 1 FROM software_offers WHERE id=? AND status=? AND updated_at=?', [offer.id, offer.status, offer.updated_at]),

@@ -1077,3 +1077,169 @@ it('prepares a real signed PDF through the API renderer module without font asse
   expect(sql.prepare('SELECT status,renderer_version FROM software_agreement_artifacts WHERE agreement_id=?').get(id))
     .toMatchObject({ status: 'ready', renderer_version: 'website-pdf-v2' });
 });
+
+it('keeps project attachments only on the SOW snapshot used for PDF generation', async () => {
+  const attachment = { filename: 'Sample.pdf', version: '1', date: '2026-10-01', key: 'agreements/attachments/00000000-0000-4000-8000-000000000001.pdf', sha256: 'a'.repeat(64), bytes: 10 };
+  sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='o'").run(JSON.stringify({ ...details, attachments: [attachment] }));
+  await review();
+  const agreements = await offerAgreements(db, 'o');
+  expect(JSON.parse(agreements.find(a => a.kind === 'msa')!.attachment_manifest_json)).toEqual([]);
+  expect(JSON.parse(agreements.find(a => a.kind === 'sow')!.attachment_manifest_json)).toEqual([attachment]);
+});
+
+it.each([false, true])('cleans the last shared attachment reference while preserving a held reference (%s)', async held => {
+  const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
+  await review();
+  const bytes = new Uint8Array([1, 2, 3]), key = 'agreements/attachments/shared.pdf', sha256 = await hashBytes(bytes);
+  bucketData.set(key, bytes);
+  sql.prepare('INSERT INTO software_agreement_attachments VALUES(?,?,?,?,?,?,?,?,?,?)').run('attachment', 'r', 'Sample.pdf', '1', '2026-10-01', key, sha256, bytes.length, 'now', 'owner');
+  // Model historical snapshots that shared the same attachment, independent of MSA linkage.
+  sql.prepare("UPDATE software_agreements SET status='abandoned',msa_id=NULL,ended_at='2000-01-01',retain_until='2000-04-01',attachment_manifest_json=?").run(JSON.stringify([{ key, sha256 }]));
+  const ids = sql.prepare('SELECT id FROM software_agreements ORDER BY id').all().map((row: { id: string }) => row.id);
+  if (held) sql.prepare('UPDATE software_agreements SET legal_hold=1 WHERE id=?').run(ids[1]);
+  const manifest = await previewAgreementRetention(db, env.AUDIO, 'test-storage');
+  expect(manifest.agreements.flatMap(item => item.objects).filter(object => object.key === key)).toHaveLength(held ? 0 : 1);
+  if (!held) expect(manifest.agreements.at(-1)!.objects).toContainEqual({ key, sha256 });
+  await applyAgreementRetention(db, env.AUDIO, 'test-storage', manifest);
+  expect(bucketData.has(key)).toBe(held);
+  expect(Boolean(sql.prepare('SELECT id FROM software_agreement_attachments WHERE object_key=?').get(key))).toBe(held);
+  expect(sql.prepare('SELECT count(*) n FROM software_agreements').get().n).toBe(held ? 1 : 0);
+});
+
+it.each(['agreement', 'archive'] as const)('invalid Turnstile requests preserve the recipient allowance for %s', async purpose => {
+  vi.mocked(fetch).mockResolvedValue(new Response('{"success":false}', { status: 200 }));
+  for (let i = 0; i < 3; i++) {
+    const response = await issueAgreementCode(env, request(), { turnstileToken: 'invalid', email: 'client@example.com' }, purpose === 'agreement' ? token : undefined);
+    expect(response.status).toBe(403);
+  }
+  expect(sql.prepare('SELECT uses FROM audio_client_allowances').all()).toEqual([{ uses: 3 }]);
+  vi.mocked(fetch).mockImplementation(async () => new Response('{"success":true}', { status: 200 }));
+  const response = await issueAgreementCode(env, request(), { turnstileToken: 'valid', email: 'client@example.com' }, purpose === 'agreement' ? token : undefined);
+  expect(response.status).toBe(200);
+  expect(sql.prepare('SELECT uses FROM audio_client_allowances ORDER BY uses').all()).toEqual([{ uses: 1 }, { uses: 4 }]);
+});
+
+it.each([true, false])('external start atomically retires unsigned reviews and signing access when request is current (%s)', async current => {
+  const snapshots = await review();
+  sql.prepare("UPDATE software_offers SET agreement_details_json=NULL WHERE id='o'").run();
+  const { POST } = await import('~/pages/api/owner/requests/[id]/project');
+  const response = await POST({
+    params: { id: 'r' },
+    request: new Request('https://example.com/api/owner/requests/r/project', {
+      method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'start', signature_source: 'external', offer_id: 'o', offer_version: 1, expectedRequestUpdatedAt: current ? 'now' : 'stale', signatures: true, payment: true, inputs_ready: true, external_signed_on: '2026-09-30', external_parties: 'Sample LLC / Example Contractor LLC', external_kept_copy: true, external_copy_reference: 'Synthetic copy', next_update_on: '' }),
+    }),
+    locals: { owner: { email: 'owner@example.com' }, runtime: { env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: 'true' } } },
+  } as never);
+  expect(response.status).toBe(current ? 200 : 409);
+  const rows = sql.prepare('SELECT status,abandoned_at,retain_until FROM software_agreements').all();
+  expect(rows).toHaveLength(snapshots.documents.length);
+  for (const row of rows) {
+    expect(row.status).toBe(current ? 'abandoned' : 'review');
+    expect(Boolean(row.abandoned_at)).toBe(current);
+    expect(Boolean(row.retain_until)).toBe(current);
+  }
+  expect(Boolean(sql.prepare('SELECT revoked_at FROM software_agreement_sessions').get().revoked_at)).toBe(current);
+  expect(Boolean(sql.prepare('SELECT used_at FROM software_agreement_challenges').get().used_at)).toBe(current);
+  expect(Boolean(sql.prepare('SELECT revoked_at FROM software_offer_links').get().revoked_at)).toBe(current);
+  expect(sql.prepare('SELECT count(*) n FROM software_projects').get().n).toBe(current ? 1 : 0);
+});
+
+it('preserves omitted draft agreement details and reuse, and permits explicit clearing', async () => {
+  await review();
+  const msaId = (await offerAgreements(db, 'o')).find(a => a.kind === 'msa')!.id;
+  sql.prepare("UPDATE software_offers SET status='draft',reused_msa_id=? WHERE id='o'").run(msaId);
+  sql.exec('UPDATE software_signing_settings SET software_signing_enabled=0');
+  const { POST } = await import('~/pages/api/owner/requests/[id]/software');
+  const save = async (extra: Record<string, unknown>, expectedUpdatedAt: string) => POST({
+    params: { id: 'r' },
+    request: new Request('https://example.com/api/owner/requests/r/software', { method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json' }, body: JSON.stringify({ action: 'draft', terms: { ...terms, summary: 'Updated offer summary' }, expectedUpdatedAt, ...extra }) }),
+    locals: { owner: { email: 'owner@example.com' }, runtime: { env } },
+  } as never);
+  expect((await save({}, 'now')).status).toBe(200);
+  const preserved = (await offer())!;
+  expect(JSON.parse(preserved.agreement_details_json!)).toEqual(details);
+  expect(preserved.reused_msa_id).toBe(msaId);
+  expect(JSON.parse(preserved.terms_json).summary).toBe('Updated offer summary');
+  expect((await save({ agreementDetails: null, confirmMsaReuse: false }, preserved.updated_at)).status).toBe(200);
+  expect((await offer())!.agreement_details_json).toBeNull();
+  expect((await offer())!.reused_msa_id).toBeNull();
+});
+
+it.each(['draft', 'sent'])('retains attachments pinned to a %s offer after old review snapshots expire', async status => {
+  const { abandonUnsignedAgreementReviews } = await import('~/lib/software-agreements');
+  const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
+  const bytes = new Uint8Array([1, 2, 3]), key = 'agreements/attachments/00000000-0000-4000-8000-000000000002.pdf', sha256 = await hashBytes(bytes);
+  bucketData.set(key, bytes);
+  const attachment = { filename: 'Sample.pdf', version: '1', date: '2026-10-01', key, sha256, bytes: bytes.length };
+  sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='o'").run(JSON.stringify({ ...details, attachments: [attachment] }));
+  await review();
+  await db.batch([abandonUnsignedAgreementReviews(db, 'r', '2000-01-01T00:00:00Z')]);
+  sql.prepare("UPDATE software_offers SET status=? WHERE id='o'").run(status);
+  const manifest = await previewAgreementRetention(db, env.AUDIO, 'test-storage');
+  expect(manifest.agreements).toHaveLength(1);
+  expect(manifest.agreements[0].objects).toEqual([]);
+  await applyAgreementRetention(db, env.AUDIO, 'test-storage', manifest);
+  expect(bucketData.has(key)).toBe(true);
+});
+
+it('refuses a stale attachment delete when a new live offer reference appears during apply', async () => {
+  const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
+  await review();
+  const bytes = new Uint8Array([1, 2, 3]), key = 'agreements/attachments/00000000-0000-4000-8000-000000000003.pdf', sha256 = await hashBytes(bytes);
+  bucketData.set(key, bytes);
+  sql.prepare("UPDATE software_agreements SET status='abandoned',ended_at='2000-01-01',retain_until='2000-04-01',attachment_manifest_json=? WHERE kind='sow'").run(JSON.stringify([{ key, sha256 }]));
+  const manifest = await previewAgreementRetention(db, env.AUDIO, 'test-storage');
+  expect(manifest.agreements[0].objects).toContainEqual({ key, sha256 });
+  const batch = db.batch.bind(db);
+  vi.spyOn(db, 'batch').mockImplementationOnce(async statements => {
+    // The offer pins a new attachment after fresh preview, before reserving archive closure.
+    sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='o'").run(JSON.stringify({ ...details, attachments: [{ filename: 'Sample.pdf', version: '1', date: '2026-10-01', key, sha256, bytes: bytes.length }] }));
+    return batch(statements);
+  });
+  await expect(applyAgreementRetention(db, env.AUDIO, 'test-storage', manifest)).rejects.toThrow();
+  expect(bucketData.has(key)).toBe(true);
+  expect(sql.prepare("SELECT archive_closed_at FROM software_agreements WHERE kind='sow'").get().archive_closed_at).toBeNull();
+});
+
+it.each(['draft-first', 'retention-first'])('serializes attachment acquisition with retention reservation (%s)', async order => {
+  const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
+  const { POST } = await import('~/pages/api/owner/requests/[id]/software');
+  await review();
+  const bytes = new Uint8Array([1, 2, 3]), key = 'agreements/attachments/00000000-0000-4000-8000-000000000004.pdf', sha256 = await hashBytes(bytes);
+  const attachment = { filename: 'Sample.pdf', version: '1', date: '2026-10-01', key, sha256, bytes: bytes.length };
+  bucketData.set(key, bytes);
+  sql.prepare('INSERT INTO software_agreement_attachments VALUES(?,?,?,?,?,?,?,?,?,?)').run('attachment', 'r', attachment.filename, attachment.version, attachment.date, key, sha256, bytes.length, 'now', 'owner');
+  sql.prepare("UPDATE software_agreements SET status='abandoned',ended_at='2000-01-01',retain_until='2000-04-01',attachment_manifest_json=? WHERE kind='sow'").run(JSON.stringify([attachment]));
+  const manifest = await previewAgreementRetention(db, env.AUDIO, 'test-storage');
+  const save = () => POST({ params: { id: 'r' }, request: new Request('https://example.com/api/owner/requests/r/software', {
+    method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'draft', terms, expectedUpdatedAt: null, agreementDetails: { ...details, attachments: [attachment] } }),
+  }), locals: { owner: { email: 'owner@example.com' }, runtime: { env } } } as never);
+  if (order === 'draft-first') {
+    expect((await save()).status).toBe(200);
+    await expect(applyAgreementRetention(db, env.AUDIO, 'test-storage', manifest)).rejects.toThrow('Archive changed');
+    expect(bucketData.has(key)).toBe(true);
+  } else {
+    const batch = db.batch.bind(db);
+    vi.spyOn(db, 'batch').mockImplementationOnce(async statements => {
+      const result = await batch(statements);
+      expect((await save()).status).toBe(409);
+      expect(sql.prepare("SELECT id FROM software_offers WHERE status='draft'").get()).toBeUndefined();
+      return result;
+    });
+    await applyAgreementRetention(db, env.AUDIO, 'test-storage', manifest);
+    expect(bucketData.has(key)).toBe(false);
+    expect(sql.prepare('SELECT id FROM software_agreement_attachments').get()).toBeUndefined();
+  }
+});
+
+it('ignores malformed partial attachment entries in an unrelated draft during retention', async () => {
+  const { previewAgreementRetention } = await import('~/lib/agreement-retention');
+  await review();
+  sql.prepare("UPDATE software_agreements SET status='abandoned',ended_at='2000-01-01',retain_until='2000-04-01',attachment_manifest_json=? WHERE kind='sow'").run(JSON.stringify([{ key: 'agreements/attachments/synthetic.pdf', sha256: 'a'.repeat(64) }]));
+  sql.prepare("UPDATE software_offers SET status='draft',agreement_details_json=? WHERE id='o'").run(JSON.stringify({ attachments: ['incomplete draft'] }));
+  const manifest = await previewAgreementRetention(db, env.AUDIO, 'test-storage');
+  expect(manifest.agreements).toHaveLength(1);
+  expect(manifest.agreements[0].objects).toHaveLength(1);
+});

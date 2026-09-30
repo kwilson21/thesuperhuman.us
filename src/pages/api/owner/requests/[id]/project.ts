@@ -1,7 +1,7 @@
 import { agreementEvent } from '~/lib/agreement-events';
 import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
-import { executedOfferAgreement, offerAgreements } from '~/lib/software-agreements';
+import { abandonUnsignedAgreementReviews, executedOfferAgreement, offerAgreements } from '~/lib/software-agreements';
 import { validProjectDate } from '~/lib/audio-project-updates';
 import { musicRequest } from '~/lib/music-request';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
@@ -48,6 +48,12 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
           WHERE r.id=? AND r.kind='software' AND r.status NOT IN ('withdrawn','resolved') AND r.email<>'' AND o.status='sent' AND o.id=? AND o.version=?
           AND NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=r.id)`, [id, command.offer_id, command.offer_version]),
         ...(command.deposit_invoice_id ? [softwareGuard(db,`SELECT 1 FROM software_invoices WHERE id=? AND request_id=? AND offer_id=? AND milestone_index=0 AND kind='deposit' AND status='paid' AND refunded_at IS NULL`,[command.deposit_invoice_id,id,command.offer_id])] : [manualSoftwarePaymentGuard(db,id,command.offer_id,0,true)]),
+        ...(command.signature_source==='external'?[
+          abandonUnsignedAgreementReviews(db,id,at),
+          db.prepare('UPDATE software_agreement_sessions SET revoked_at=? WHERE offer_id=? AND revoked_at IS NULL').bind(at,command.offer_id),
+          db.prepare('UPDATE software_agreement_challenges SET used_at=? WHERE offer_id=? AND used_at IS NULL').bind(at,command.offer_id),
+          db.prepare('UPDATE software_offer_links SET revoked_at=? WHERE request_id=? AND revoked_at IS NULL').bind(at,id),
+        ]:[]),
         db.prepare(`INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,next_update_on,created_at,updated_at)
           SELECT request_id,id,terms_json,json_extract(terms_json,'$.paymentMode'),?,?,?,?,?,?,? FROM software_offers WHERE request_id=? AND status='sent' AND id=? AND version=?`)
           .bind(executed?.executed_at??`${command.external_signed_on}T12:00:00Z`, at, at, actor, command.next_update_on || null, at, at, id, command.offer_id, command.offer_version),
