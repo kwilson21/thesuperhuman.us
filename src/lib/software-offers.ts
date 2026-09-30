@@ -36,7 +36,7 @@ export const paymentSchedules = {
 } as const;
 export const offerTotal = (terms: Pick<OfferTerms, 'milestones'>) => terms.milestones.reduce((sum, milestone) => sum + milestone.feeCents, 0);
 export const formatUSD = (cents: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: cents % 100 ? 2 : 0 }).format(cents / 100);
-export type SoftwareOffer = { id: string; request_id: string; version: number; status: 'draft' | 'sent' | 'superseded' | 'withdrawn'; terms_json: string; created_at: string; updated_at: string; sent_at: string | null; sent_by: string | null };
+export type SoftwareOffer = { agreement_details_json?: string | null; msa_template_id?: string | null; sow_template_id?: string | null; contractor_snapshot_json?: string | null; recipient_email_snapshot?: string | null; reused_msa_id?: string | null; id: string; request_id: string; version: number; status: 'draft' | 'sent' | 'superseded' | 'withdrawn'; terms_json: string; created_at: string; updated_at: string; sent_at: string | null; sent_by: string | null };
 export async function listSoftwareOffers(db: D1Database, id: string) {
   return (await db.prepare('SELECT * FROM software_offers WHERE request_id=? ORDER BY version DESC').bind(id).all<SoftwareOffer>()).results;
 }

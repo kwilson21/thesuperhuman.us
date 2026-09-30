@@ -23,12 +23,12 @@ export const updateInput = z.object({
   links: z.array(z.object({ label: text(80).refine(value=>Boolean(value), 'Name the link.'), url: text(2000).refine(value => {
     try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password; } catch { return false; }
   }, 'Use an HTTPS link.') })).max(10).default([]),
-  review_window_days: z.number().int().min(5).max(30).default(5),
+  review_window_days: z.number().int().min(5).max(365).default(5),
   paid_confirmed: z.boolean().default(false),
 });
 export type SoftwareUpdateInput = z.infer<typeof updateInput>;
 export type SoftwareProject = {
-  request_id: string; offer_id: string; terms_json: string; payment_mode: 'standard' | 'invoice';
+  agreement_id?:string|null; request_id: string; offer_id: string; terms_json: string; payment_mode: 'standard' | 'invoice';
   state: keyof typeof projectStates; waiting_for: string; milestone_index: number; step: typeof projectSteps[number];
   started_at: string; next_update_on: string | null; invitation_status: string; invitation_attempted_at: string | null;
   revoked_at: string | null; completed_at: string | null; content_deleted_at: string | null; updated_at: string;
@@ -76,11 +76,11 @@ export async function milestonePayments(db: D1Database, id: string) {
   return (await db.prepare('SELECT milestone_index,paid_recorded_at FROM software_milestone_payments WHERE request_id=? ORDER BY milestone_index').bind(id)
     .all<{milestone_index: number; paid_recorded_at: string}>()).results;
 }
-export function correctionPeriodEnd(acceptedAt: string, paidAt?: string) {
+export function correctionPeriodEnd(acceptedAt: string, paidAt?: string, days=30) {
   const start = paidAt && paidAt < acceptedAt ? paidAt : acceptedAt;
   const instant = new Date(start.length===10 ? `${start}T12:00:00Z` : start);
   const date = new Date(instant.toLocaleDateString('en-CA', {timeZone:'America/New_York'}) + 'T12:00:00Z');
-  date.setUTCDate(date.getUTCDate()+30);
+  date.setUTCDate(date.getUTCDate()+days);
   return date.toISOString().slice(0,10);
 }
 export const acceptedDeliveryGuard = (db: D1Database, id: string, milestone: number) => softwareGuard(db,

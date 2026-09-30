@@ -9,6 +9,8 @@ declare namespace App {
 }
 
 interface Env {
+  ASSETS: Fetcher;
+  AGREEMENT_RETENTION_BINDING_ID?: string;
   // Deployment-controlled email origin. Never populated from request headers.
   SITE_ORIGIN?: string;
   MUSIC_DB?: D1Database;
