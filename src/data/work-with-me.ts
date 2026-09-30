@@ -22,19 +22,19 @@ export interface Door {
 export const doors: Door[] = [
   {
     id: 'mixing', title: 'Mixing & mastering',
-    line: 'Two-track vocal mixing from $150, mastering from $75.',
+    line: 'Send your recorded vocals and beat for mixing, or your finished mix for mastering. Vocal mixing from $150, mastering from $75.',
     href: '/audio/start', label: 'Start your song',
     picture: mixing, caption: 'Old News · recorded, mixed and mastered by Kazon',
   },
   {
     id: 'website', title: 'Website design',
-    line: 'Clear structure, visual storytelling and responsive pages.',
+    line: 'I organize what you want to say, design the pages, and build a website that works on phones and computers.',
     href: '/#contact', label: 'Plan your website',
     picture: website, caption: 'This site, redesigned September 2026',
   },
   {
     id: 'software', title: 'Software engineering',
-    line: 'Prototypes, products, internal tools and integrations.',
+    line: 'I build a first version people can try, or a tool that makes a task your team repeats easier.',
     href: '/software/start', label: 'Discuss your project',
     picture: software, caption: 'Tally · a budgeting app, public demo',
   },

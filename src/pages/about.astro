@@ -15,9 +15,9 @@ const entry = await getEntry('pages', 'about');
 if (!entry) throw new Error('About content missing');
 const { Content } = await entry.render();
 const chapters = [
-  { id: 'audio' as const, label: 'Audio', title: 'I started with sound.', text: 'I studied audio production at Middle Tennessee State, with a minor in computer science. Audio is still part of my life.', image: headphones, href: '/audio/', link: 'Explore audio engineering' },
+  { id: 'audio' as const, label: 'Audio', title: 'I started with sound.', text: 'I studied audio production at Middle Tennessee State, with a minor in computer science. I still record, mix and master music.', image: headphones, href: '/audio/', link: 'Explore audio engineering' },
   { id: 'software' as const, label: 'Software', title: 'Finding my way into software.', text: 'I joined Skupos as an intern hoping to become a software engineer. Adding to coworkers’ Python scripts grew into leading the automation work, building an internal application and mentoring other interns.', extra: 'At Lyft, I grew from junior to mid-level engineer, taking on features across Rentals, Associate Tools and Comms Platform.', image: laptop, href: '/work', link: 'See my professional work' },
-  { id: 'play' as const, label: 'Play', title: 'Room for play.', text: 'Retro games, emulation, and experimental tools keep giving me new things to explore.', image: controller, href: '/building', link: 'See what I’m building' },
+  { id: 'play' as const, label: 'Play', title: 'Room for play.', text: 'Retro games, emulation, and experimental tools keep giving me new things to explore. I’m building Kaillera Next so friends can play supported N64 games together in a browser.', image: controller, href: '/building', link: 'See what I’m building' },
   { id: 'whats-next' as const, label: 'What’s next', title: 'Making room for what comes next.', text: 'Product engineering at Sure and data engineering at Axuall and Scotch helped me understand what I enjoy most: shaping an idea, building it and seeing how people use it. I’m pursuing that through my own projects and research in AI-assisted development.', image: notebook, extra: workingPreferenceDetail, href: '/building/the-engineers-daily', link: 'Explore The Engineer’s Daily prototype' },
 ];
 ---
