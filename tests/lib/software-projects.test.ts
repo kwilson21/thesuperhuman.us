@@ -367,7 +367,10 @@ it('keeps newer undecided review state and never moves the milestone backwards',
   expect(sql.prepare('SELECT state,step,milestone_index FROM software_projects').get()).toEqual({state:'building',step:'direction',milestone_index:1});
   sql.exec("UPDATE software_project_messages SET decision=NULL,update_id=NULL WHERE update_id='"+older.id+"'");
   expect((await decide(older.id,{decision:'changes_requested',criteria:[0],note:'Change the delivery.'},token)).status).toBe(200);
-  expect(sql.prepare('SELECT milestone_index FROM software_projects').get()).toEqual({milestone_index:1});
+  expect(sql.prepare('SELECT state,step,milestone_index,waiting_for FROM software_projects').get()).toEqual({state:'building',step:'direction',milestone_index:1,waiting_for:''});
+  expect(sql.prepare('SELECT decision FROM software_project_messages WHERE update_id=?').get(older.id)).toEqual({decision:'changes_requested'});
+  expect(sql.prepare("SELECT count(*) AS n FROM software_project_audit WHERE action='decision-recorded'").get()).toEqual({n:3});
+  expect(sql.prepare("SELECT count(*) AS n FROM software_project_audit WHERE action='state-changed'").get()).toEqual({n:3});
 });
 
 it.each(['failed','pending','sending'])('includes stale %s invitations in Today',async status=>{
