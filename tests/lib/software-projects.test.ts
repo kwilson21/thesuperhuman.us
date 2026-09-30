@@ -460,3 +460,31 @@ it('a start committing before question reservation rejects the question without 
   expect(fetch).not.toHaveBeenCalled();
   expect(sql.prepare("SELECT count(*) AS n FROM owner_request_audit WHERE action='question-sent'").get()).toEqual({n:0});
 });
+
+it.each(['draft','share'])('rejects stale project versions with an existing draft on %s, including transaction races',async action=>{
+  await start(); const saved=await draft();
+  const projectAt=sql.prepare('SELECT updated_at FROM software_projects').get()!.updated_at;
+  const body={action,confirmed:true,updateId:saved.id,update,expectedUpdatedAt:saved.updatedAt,expectedProjectUpdatedAt:projectAt};
+  sql.prepare("UPDATE software_projects SET updated_at='2099-01-01T00:00:00.000Z'").run();
+  const before=sql.prepare('SELECT * FROM software_project_updates').get();
+  const audit=sql.prepare('SELECT count(*) AS n FROM software_project_audit').get();
+  const stale=await call(updatePost,body);
+  expect(stale.status).toBe(409);
+  expect(await stale.json()).toMatchObject({error:'Another update was saved since this page loaded. Reload to continue.'});
+  sql.prepare('UPDATE software_projects SET updated_at=?').run(projectAt);
+  const batch=db.batch.bind(db);
+  const race=vi.spyOn(db,'batch').mockImplementationOnce(async items=>{
+    sql.prepare("UPDATE software_projects SET updated_at='2099-01-01T00:00:00.000Z'").run();
+    return batch(items);
+  });
+  const raced=await call(updatePost,body);expect(raced.status).toBe(409);
+  expect(await raced.json()).toMatchObject({error:'Another update was saved since this page loaded. Reload to continue.'});
+  expect(sql.prepare('SELECT * FROM software_project_updates').get()).toEqual(before);
+  expect(sql.prepare('SELECT count(*) AS n FROM software_project_audit').get()).toEqual(audit);
+  race.mockRestore();
+  const success=await call(updatePost,{...body,expectedProjectUpdatedAt:'2099-01-01T00:00:00.000Z'});
+  expect(success.status).toBe(200);
+  const result=await success.json();
+  expect(result).toMatchObject({projectUpdatedAt:sql.prepare('SELECT updated_at FROM software_projects').get()!.updated_at});
+  if(action==='share') expect(await (await call(updatePost,{...body,expectedProjectUpdatedAt:'2099-01-01T00:00:00.000Z'})).json()).toEqual(result);
+});

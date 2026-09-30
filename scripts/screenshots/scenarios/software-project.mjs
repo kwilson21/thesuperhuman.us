@@ -40,7 +40,7 @@ export default {
       await page.locator('[name=title]').fill('One shared client view.');
       await page.waitForFunction(() => document.querySelector('[data-preview-title]')?.textContent === 'One shared client view.');
     }});
-    await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'share',expectedProjectUpdatedAt:projectAt(),confirmed:true,update,expectedUpdatedAt:visual.updatedAt});
+    await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'share',expectedProjectUpdatedAt:draft.projectUpdatedAt,confirmed:true,update,expectedUpdatedAt:visual.updatedAt});
     sql(`UPDATE software_projects SET state='waiting_for_input',waiting_for='A redacted sample export.' WHERE request_id=${quote(id)}`);
     await shot('Shared concept and Waiting on you (project state seeded with SQL)',`/studio/software/${id}`,'shared',{cookie});
     await shot('Agreed project terms',`/studio/software/${id}`,'agreed',{cookie,prepare:async page=>{ await page.getByText('What we agreed',{exact:true}).click(); }});
@@ -60,7 +60,7 @@ export default {
     const delivery={...update,kind:'delivery_review',artifact_version:'Delivery v1',evidence_type:'working_preview',checks_limitations:'Checked with the fictional sample. Live rollout is outside this milestone.',title:'Client onboarding',client_request:'',review_window_days:5,criteria:terms.milestones[0].acceptance.map((_,index)=>`Try check ${index+1} with the fictional sample in the preview.`),preview_url:'https://example.com/preview',email_client:false};
     const deliveryDraft=await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'draft',expectedProjectUpdatedAt:projectAt(),update:delivery,expectedUpdatedAt:null});
     await shot('Owner composer with every delivery check',`/owner/requests/${id}/update`,'delivery-composer',{owner:true});
-    const review=await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'share',expectedProjectUpdatedAt:projectAt(),confirmed:true,update:delivery,expectedUpdatedAt:deliveryDraft.updatedAt});
+    const review=await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'share',expectedProjectUpdatedAt:deliveryDraft.projectUpdatedAt,confirmed:true,update:delivery,expectedUpdatedAt:deliveryDraft.updatedAt});
     await shot('Delivery review awaiting a decision with all agreed checks',`/studio/software/${id}`,'delivery-review',{cookie});
     await share({kind:'progress',title:'The next update',client_request:''});
     await shot('Progress update with an undecided delivery review',`/studio/software/${id}`,'progress-pending-review',{cookie});

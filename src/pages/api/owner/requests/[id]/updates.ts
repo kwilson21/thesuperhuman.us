@@ -31,12 +31,12 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       if (!command.updateId || command.action !== 'share' || !command.confirmed) return null;
       const row = await db!.prepare("SELECT * FROM software_project_updates WHERE id=? AND request_id=? AND status='shared'").bind(command.updateId,id).first<SoftwareUpdate>();
       return row && columns.every((key,index) => row[key as keyof SoftwareUpdate] === values[index])
-        ? json({ok:true,id:row.id,updatedAt:row.updated_at,shared:true}) : null;
+        ? json({ok:true,id:row.id,updatedAt:row.updated_at,projectUpdatedAt:row.updated_at,shared:true}) : null;
     }
     const retry = await sharedRetry(); if (retry) return retry;
     const draft = await db.prepare("SELECT * FROM software_project_updates WHERE request_id=? AND status='draft'").bind(id).first<SoftwareUpdate>();
     const staleProject = () => json({ ok: false, error: 'Another update was saved since this page loaded. Reload to continue.' }, 409);
-    if (!draft && project.updated_at !== command.expectedProjectUpdatedAt) return staleProject();
+    if (project.updated_at !== command.expectedProjectUpdatedAt) return staleProject();
     if ((draft?.updated_at ?? null) !== command.expectedUpdatedAt) return json({ ok: false, error: 'The draft changed. Reload before saving.' }, 409);
     if (draft?.visual_key && !value.visual_alt) return json({ ok: false, error: 'Describe the visual for the client.' }, 400);
     const share = command.action === 'share';
@@ -55,7 +55,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       softwareGuard(db,"SELECT 1 FROM software_projects WHERE request_id=? AND state<>'complete'",[id]),
       ...(share && value.kind === 'handoff' ? [acceptedDeliveryGuard(db,id,value.milestone_index), ...recordMilestonePayment(db,id,value.milestone_index,actor,at)] : []),
       ...(share && value.kind !== 'progress' ? [db.prepare("UPDATE software_project_updates SET status='superseded',updated_at=? WHERE request_id=? AND milestone_index=? AND kind=? AND status='shared'").bind(at,id,value.milestone_index,value.kind)] : []),
-      ...(!draft ? [softwareGuard(db, "SELECT 1 FROM software_projects WHERE request_id=? AND updated_at=?", [id, command.expectedProjectUpdatedAt])] : []),
+      softwareGuard(db, "SELECT 1 FROM software_projects WHERE request_id=? AND updated_at=?", [id, command.expectedProjectUpdatedAt]),
       ...(draft ? [softwareGuard(db, "SELECT 1 FROM software_project_updates WHERE id=? AND status='draft' AND updated_at=?", [draft.id, command.expectedUpdatedAt!])] : []),
       draft ? db.prepare(`UPDATE software_project_updates SET ${columns.map(key => `${key}=?`).join(',')},status=?,notification_status=?,shared_at=?,shared_by=?,updated_at=? WHERE id=?`)
         .bind(...values, status, notice, share ? at : null, share ? actor : null, at, updateId)
@@ -66,10 +66,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       ...(share && review ? [db.prepare("UPDATE software_projects SET state='ready_for_review',step=?,milestone_index=?,waiting_for='' WHERE request_id=?")
         .bind(value.kind==='direction_review' ? 'direction' : 'review',value.milestone_index,id), softwareAudit(db,id,'state-changed',actor,at)] : []),
       softwareAudit(db, id, share ? 'update-shared' : 'update-draft-saved', actor, at),
-      ...(share && value.kind === 'handoff' ? [softwareAudit(db,id,'handoff-shared',actor,at,`Handoff shared · milestone ${value.milestone_index+1}`)] : [])]); } catch (error) { const retry = await sharedRetry(); if (retry) return retry; if (!draft && (await getSoftwareProject(db!, id!))?.updated_at !== command.expectedProjectUpdatedAt) return staleProject(); throw error; }
+      ...(share && value.kind === 'handoff' ? [softwareAudit(db,id,'handoff-shared',actor,at,`Handoff shared · milestone ${value.milestone_index+1}`)] : [])]); } catch (error) { const retry = await sharedRetry(); if (retry) return retry; if ((await getSoftwareProject(db!, id!))?.updated_at !== command.expectedProjectUpdatedAt) return staleProject(); throw error; }
     if (share && value.email_client) {
-      try { await deliverSoftwareNotice(db, id, env, updateId); } catch { return json({ ok: true, id: updateId, updatedAt: at, shared: true, noticeUnchecked: true }); }
+      try { await deliverSoftwareNotice(db, id, env, updateId); } catch { return json({ ok: true, id: updateId, updatedAt: at, projectUpdatedAt: at, shared: true, noticeUnchecked: true }); }
     }
-    return json({ ok: true, id: updateId, updatedAt: at, shared: share });
+    return json({ ok: true, id: updateId, updatedAt: at, projectUpdatedAt: at, shared: share });
   } catch { return json({ ok: false, error: 'The draft changed or could not be saved. Reload and try again.' }, 409); }
 };

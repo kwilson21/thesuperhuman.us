@@ -34,7 +34,7 @@ it('keeps a browser-generated id through a failed first share and retry',async()
   vi.stubGlobal('FormData',class { getAll(){return [];} has(){return false;} *[Symbol.iterator](){yield ['title','Title'];yield ['what_changed','Changed'];} });
   vi.stubGlobal('location',{assign:vi.fn()});
   const id=crypto.randomUUID(),uuid=vi.spyOn(crypto,'randomUUID').mockReturnValue(id);
-  const send=vi.fn().mockRejectedValueOnce(new Error('Lost response')).mockResolvedValue(Response.json({id,updatedAt:'now'}));vi.stubGlobal('fetch',send);
+  const send=vi.fn().mockRejectedValueOnce(new Error('Lost response')).mockResolvedValue(Response.json({id,updatedAt:'now',projectUpdatedAt:'project-saved'}));vi.stubGlobal('fetch',send);
   const page=fixture();page.submit();await vi.waitFor(()=>expect(send).toHaveBeenCalledTimes(1));
   await new Promise(resolve=>setTimeout(resolve,0));page.submit();await vi.waitFor(()=>expect(send).toHaveBeenCalledTimes(2));
   for(const [,options] of send.mock.calls) expect(JSON.parse(options.body)).toMatchObject({updateId:id,expectedProjectUpdatedAt:'project-loaded'});
@@ -63,7 +63,7 @@ it('restores the saved endpoint after uploading and then rejecting another repla
   vi.stubGlobal('confirm',()=>true);
   vi.stubGlobal('FormData',class { getAll(){return [];} has(){return false;} *[Symbol.iterator](){yield ['title','Title'];} });
   vi.stubGlobal('location',{assign:vi.fn()});
-  vi.stubGlobal('fetch',vi.fn().mockImplementation(async()=>Response.json({id:'draft',updatedAt:'now'})));
+  vi.stubGlobal('fetch',vi.fn().mockImplementation(async()=>Response.json({id:'draft',updatedAt:'now',projectUpdatedAt:'project-saved'})));
   const revoke=vi.spyOn(URL,'revokeObjectURL').mockImplementation(()=>{});
   const create=vi.spyOn(URL,'createObjectURL').mockReturnValueOnce('blob:first').mockReturnValueOnce('blob:second');
   const page=fixture();page.fields.visual_alt.value='A visual';
@@ -76,4 +76,20 @@ it('restores the saved endpoint after uploading and then rejecting another repla
   expect(page.elements.get('[data-preview-figure]').hidden).toBe(false);
   expect(revoke).toHaveBeenCalledWith('blob:first');expect(revoke).toHaveBeenCalledWith('blob:second');
   revoke.mockRestore();create.mockRestore();
+});
+
+it('carries each saved project version through a visual upload and share',async()=>{
+  vi.stubGlobal('confirm',()=>true);
+  vi.stubGlobal('FormData',class { getAll(){return [];} has(){return false;} *[Symbol.iterator](){yield ['title','Title'];} });
+  vi.stubGlobal('location',{assign:vi.fn()});
+  const send=vi.fn().mockResolvedValueOnce(Response.json({id:'draft',updatedAt:'draft-saved',projectUpdatedAt:'project-saved'}))
+    .mockResolvedValueOnce(Response.json({updatedAt:'visual-saved'}))
+    .mockResolvedValueOnce(Response.json({id:'draft',updatedAt:'shared',projectUpdatedAt:'project-shared'}));
+  vi.stubGlobal('fetch',send);
+  const page=fixture();page.fields.visual_alt.value='A visual';
+  Object.defineProperty(page.fields.visual,'value',{set:()=>{page.fields.visual.files=[];},get:()=>''});
+  page.fields.visual.files=[{name:'image.png',size:100,type:'image/png'}];page.submit();
+  await vi.waitFor(()=>expect(location.assign).toHaveBeenCalled());
+  expect(JSON.parse(send.mock.calls[0][1].body)).toMatchObject({action:'draft',expectedProjectUpdatedAt:'project-loaded'});
+  expect(JSON.parse(send.mock.calls[2][1].body)).toMatchObject({action:'share',expectedProjectUpdatedAt:'project-saved',expectedUpdatedAt:'visual-saved'});
 });
