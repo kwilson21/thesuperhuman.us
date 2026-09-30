@@ -378,3 +378,73 @@ links its sections (`#door-website`, `#software`). Audio prices and scope live a
 `/audio/services`. The old `/services.html` address redirects to the hub. Audio
 belongs within the personal site, with its existing hostname retained as an
 alternate entry and main-site canonicals.
+
+## Copy: explain the action when visitors need to understand the work
+
+Current rule, September 30, 2026: when explaining an offer, capability or project,
+prefer concrete actions over category labels. This refines the earlier positioning
+notes; it does not change approved career facts or project history.
+
+Use this especially in Home introductions, service-card descriptions, project
+summaries, work highlights, metadata and instructions for the next step. A visitor
+should understand who does what, what they work on, and the supported result or
+reason. Explain what the visitor sends or does when that helps them act.
+
+For example:
+
+- Instead of “Prototypes, products, internal tools and integrations,” explain:
+  “I build a first version people can try, or a tool that makes a task your team
+  repeats easier.”
+- Instead of “Data ingestion for a healthcare credentialing platform,” explain:
+  “I built pipelines that brought state medical-board data into a healthcare
+  credentialing platform.”
+- For an audio offer, name the input and action: “I clean, balance and shape your
+  recorded vocals over a finished stereo beat.”
+
+Concrete verbs matter more than verb count. “Transform,” “empower” and “reinvent”
+can remain vague. Do not add an outcome, metric, customer, shipped status or
+technical detail merely to make a sentence sound concrete. Preserve truthful
+ownership, collaboration and AI attribution. Explain the public-facing activity
+without publishing private operational recipes.
+
+This is not a ban on nouns. Keep familiar navigation labels, service names, job
+titles, company names and relevant technologies. Personal taglines, essays,
+philosophy, lyrics and credits can serve other purposes. A clear existing sentence
+needs no rewrite. Pair a useful label with an explanation where readers would
+otherwise have to infer what it means; do not make every headline a sales pitch.
+
+Before accepting explanatory copy, read it as a first-time visitor: can you say
+what happens without translating a label or guessing a missing step? Keep only
+supported detail, and check the rendered paragraph and next-step link on phone
+and desktop sizes.
+
+### Keep website and resume facts consistent
+
+Factual parity means compatible claims, not identical wording or length.
+For resume design, use the agreed website fonts and tokens unless the owner
+chooses an explicit exception; do not substitute fonts silently.
+The website may include verified detail and work that a focused resume omits.
+Do not flatten accurate Lyft team/project accounts into resume shorthand or add
+unverified material to fill a gap in either surface.
+
+Before changing shared professional claims, compare the current owner-approved
+resume with `src/data/profile.ts`, Work and About, shared service evidence, and
+relevant project descriptions. Check employers, roles, dates, current versus
+historical locations, qualifications, metric values and units, project scope,
+ownership versus collaboration, AI attribution, and built/tested/available status.
+Keep the original source and the comparison receipt private. Resolve a real
+conflict against owner-confirmed evidence; when current evidence is ambiguous,
+ask rather than invent a correction.
+
+Preserve metric scope: Lyft's 5,000 to 100,000+ figures are rows per batch, not a
+runtime benchmark. Skupos's 3,000+ retailer locations describe the application;
+3–5× growth describes tobacco-scan troubleshooting automation, without increasing
+operations headcount. Do not merge those into a broader claim.
+
+Reuse existing shared content sources when several website surfaces say the same
+thing. Do not create a second career model or claim that a keyword test proves
+factual parity. Record reviewed source versions and intentional differences.
+A locally revised PDF is separate from the resume actually delivered by the
+website: follow the existing approval/storage flow, preserve the previous object,
+and verify remote bytes before reporting a replacement. Never commit resume PDFs
+or private comparison material to this repository.
