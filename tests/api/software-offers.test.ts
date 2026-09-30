@@ -72,10 +72,10 @@ it.each(['question','decline'])('%s sends exact text and owner copy before audit
   expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({ status: action === 'decline' ? 'resolved' : 'new' });
   expect(sql.prepare('SELECT action FROM owner_request_audit').get()).toEqual({ action: action === 'question' ? 'question-sent' : 'declined' });
 });
-it.each(['question','decline'])('%s changes nothing on client email failure', async action => {
+it.each(['question','decline'])('%s leaves the request open on client email failure', async action => {
   vi.mocked(fetch).mockResolvedValue(new Response('{}', { status: 503 }));
   const response = await call({ action, text:'Thanks.' }); expect(response.status).toBe(502);
-  expect(await response.json()).toMatchObject({ uncertain:true, message:'The email service didn’t confirm. Check Resend before retrying. Nothing was recorded.' });
+  expect(await response.json()).toMatchObject({ uncertain:true, message:action === 'decline' ? 'The email service didn’t confirm. The offer is withdrawn and its link is closed. Check Resend before retrying.' : 'The email service didn’t confirm. Check Resend before retrying. Nothing was recorded.' });
   expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({ status:'new' });
   expect(sql.prepare('SELECT * FROM owner_request_audit').all()).toEqual([]);
 });
@@ -106,7 +106,7 @@ it.each(['question','decline'])('%s changes nothing on confirmed rejection', asy
   vi.mocked(fetch).mockResolvedValue(new Response('{}', { status: 422 }));
   const response = await call({ action, text:'Thanks.' });
   expect(response.status).toBe(502);
-  expect(await response.json()).toMatchObject({ uncertain:false, message:'The email didn’t send. Nothing changed. Try again.' });
+  expect(await response.json()).toMatchObject({ uncertain:false, message:action === 'decline' ? 'The email didn’t send. The offer is withdrawn and its link is closed; nothing else changed. Try again.' : 'The email didn’t send. Nothing changed. Try again.' });
   expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({ status:'new' });
   expect(sql.prepare('SELECT * FROM owner_request_audit').all()).toEqual([]);
 });
@@ -279,4 +279,48 @@ it.each(['replaced','revoked','withdrawn','superseded'])('reports a link %s whil
   const response = await call({ action:'send', version:saved.version, expectedUpdatedAt:saved.updatedAt });
   expect(response.status).toBe(409);
   expect(await response.json()).toEqual({ ok:false, message:'The email went out, but the link was closed while it was sending. Send the offer again for a working link.' });
+});
+
+it.each(['confirmed','rejected','uncertain'])('reserves decline before delivery (%s)', async outcome => {
+  await send(await draft());
+  sql.exec("UPDATE software_offer_links SET created_at='2020-01-01T00:00:00Z'");
+  const saved = await draft();
+  let lateSend!: Promise<Response>;
+  vi.mocked(fetch).mockImplementation(async () => {
+    expect(sql.prepare("SELECT status FROM software_offers ORDER BY version").all()).toEqual([{ status:'withdrawn' },{ status:'withdrawn' }]);
+    expect(sql.prepare('SELECT revoked_at FROM software_offer_links').get().revoked_at).not.toBeNull();
+    expect(sql.prepare('SELECT status FROM owner_requests').get().status).toBe('new');
+    lateSend = call({ action:'send', version:saved.version, expectedUpdatedAt:saved.updatedAt });
+    return new Response('{}', { status:outcome === 'confirmed' ? 200 : outcome === 'rejected' ? 422 : 503 });
+  });
+  const response = await call({ action:'decline', text:'Thanks.' });
+  expect((await lateSend).status).toBe(409);
+  expect(response.status).toBe(outcome === 'confirmed' ? 200 : 502);
+  if (outcome !== 'confirmed') expect(await response.json()).toMatchObject({ message:outcome === 'rejected' ? 'The email didn’t send. The offer is withdrawn and its link is closed; nothing else changed. Try again.' : 'The email service didn’t confirm. The offer is withdrawn and its link is closed. Check Resend before retrying.' });
+  expect(sql.prepare('SELECT status FROM owner_requests').get().status).toBe(outcome === 'confirmed' ? 'resolved' : 'new');
+  expect(sql.prepare("SELECT * FROM owner_request_audit WHERE action='declined'").all()).toHaveLength(outcome === 'confirmed' ? 1 : 0);
+});
+
+it('rejects an actual send batch that read the draft before decline reserved it', async () => {
+  const saved = await draft();
+  const batch = db.batch.bind(db);
+  let read!: () => void, release!: () => void;
+  const reached = new Promise<void>(resolve => { read = resolve; });
+  const reserved = new Promise<void>(resolve => { release = resolve; });
+  db.batch = async items => {
+    if ((items[1] as any)?.query.includes('software_offers WHERE id=? AND status=?')) {
+      read(); await reserved;
+    }
+    return batch(items);
+  };
+  const pending = call({ action:'send',version:saved.version,expectedUpdatedAt:saved.updatedAt });
+  await reached;
+  vi.mocked(fetch).mockImplementation(async () => {
+    release();
+    expect((await pending).status).toBe(409);
+    return new Response('{}');
+  });
+  expect((await call({ action:'decline',text:'Thanks.' })).status).toBe(200);
+  expect(sql.prepare("SELECT * FROM owner_request_audit WHERE action='offer-sent'").all()).toEqual([]);
+  expect(fetch).toHaveBeenCalledTimes(2);
 });
