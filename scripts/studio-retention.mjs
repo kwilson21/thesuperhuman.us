@@ -52,7 +52,7 @@ async function softwareSources(database, now) {
   const exists = (await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_projects'")).length;
   const empty = "SELECT '[]' AS snapshot";
   return {
-    softwareProjects: exists ? snapshot({ columns:'request_id,updated_at', from:'software_projects', where:softwareRetentionProjectPredicate(now), order:'request_id',limit:25 }) : empty,
+    softwareProjects: exists ? snapshot({ columns:'request_id,updated_at,invitation_status,invitation_attempted_at,invitation_sent_at', from:'software_projects', where:softwareRetentionProjectPredicate(now), order:'request_id',limit:25 }) : empty,
     softwareAudit: exists ? snapshot({columns:'id,occurred_at',from:'software_project_audit',where:`occurred_at<${quote(cutoff(now,730))}`,order:'id',limit:1000}) : empty,
   };
 }
