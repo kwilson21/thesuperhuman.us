@@ -27,7 +27,7 @@ export function reconciliationStatements(args, now = new Date()) {
   }
   if (['--software-deposit-refunded','--software-no-invoice'].includes(action) && validId(first) && second?.trim()) {
     const refunded=action==='--software-deposit-refunded';
-    const eligible=refunded ? "kind='deposit' AND milestone_index=0 AND status='paid' AND refunded_at IS NULL AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.request_id=software_invoices.request_id)"
+    const eligible=refunded ? "kind='deposit' AND status='paid' AND refunded_at IS NULL AND ((milestone_index=0 AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.request_id=software_invoices.request_id)) OR (milestone_index>0 AND EXISTS(SELECT 1 FROM software_projects p WHERE p.request_id=software_invoices.request_id AND p.offer_id=software_invoices.offer_id AND p.milestone_index<software_invoices.milestone_index)))"
       : `status='creating' AND stripe_invoice_id IS NULL AND created_at<=${quote(new Date(now.getTime()-23*3600_000).toISOString())}
         AND (creation_started_at IS NULL OR creation_started_at<=${quote(new Date(now.getTime()-60_000).toISOString())})`;
     const description=refunded ? 'Owner confirmed full deposit refund in Stripe' : 'Owner confirmed no Stripe invoice exists for this attempt';

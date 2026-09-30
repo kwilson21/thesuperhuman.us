@@ -800,3 +800,18 @@ it('records bank start payment after a voided deposit',async()=>{
   expect(sql.prepare('SELECT first_payment_recorded_at FROM software_projects').get().first_payment_recorded_at).toBeTruthy();
   expect(sql.prepare('SELECT status FROM software_invoices').get()).toEqual({status:'void'});
 });
+it.each([1,2])('refunds exact later deposit %s only before that milestone starts',async milestone=>{
+  const {reconciliationStatements}=await import('../../scripts/stripe-reconciliation.mjs');
+  const {milestoneDepositGuard}=await import('~/lib/software-projects');
+  await start();seedInvoice('paid','deposit',milestone,'refund-target');seedInvoice('paid','deposit',0,'keep-first');
+  await db.batch([milestoneDepositGuard(db,'software',milestone)]);
+  const statements=reconciliationStatements(['--software-deposit-refunded','refund-target','Confirmed']);
+  sql.prepare('UPDATE software_projects SET milestone_index=?').run(milestone);
+  for(const statement of statements)sql.exec(statement);
+  expect(sql.prepare("SELECT refunded_at FROM software_invoices WHERE id='refund-target'").get().refunded_at).toBeNull();
+  sql.exec('UPDATE software_projects SET milestone_index=0');
+  for(const statement of statements)sql.exec(statement);
+  expect(sql.prepare("SELECT refunded_at FROM software_invoices WHERE id='refund-target'").get().refunded_at).toBeTruthy();
+  expect(sql.prepare("SELECT refunded_at FROM software_invoices WHERE id='keep-first'").get().refunded_at).toBeNull();
+  await expect(db.batch([milestoneDepositGuard(db,'software',milestone)])).rejects.toThrow();
+});
