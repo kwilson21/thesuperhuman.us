@@ -11,8 +11,11 @@ export function setupSoftwareOffers() {
     } catch { /* The link remains usable in this page when browser storage is disabled. */ }
     return null;
   };
+  class TransportError extends Error {}
   const post = async (endpoint: string, body: unknown) => {
-    const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    let response: Response;
+    try { response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); }
+    catch { throw new TransportError('The request didn’t finish. Check the activity log or Resend before sending again.'); }
     let parsed: unknown;
     try { parsed = await response.json(); }
     catch { throw new Error(response.status === 401 || response.status === 403 ? 'Your owner session ended. Reload the page to sign in again.' : 'Something went wrong. Nothing was saved. Try again.'); }
@@ -69,7 +72,10 @@ export function setupSoftwareOffers() {
         status.textContent = result.copySent === false ? 'Sent to the client. The owner copy didn’t send.' : action === 'fit' ? 'Fit review saved.' : 'Sent.';
         if (form.dataset.revision === revision) form.dataset.dirty = 'false';
         reload(status, form);
-      } catch (error) { status.textContent = (error as Error).message; }
+      } catch (error) {
+        status.textContent = (error as Error).message;
+        if (error instanceof TransportError && (action === 'question' || action === 'decline')) button.textContent = 'Send again';
+      }
       finally { button.disabled = false; }
     });
   });
@@ -82,6 +88,7 @@ export function setupSoftwareOffers() {
   if (flash) { status.textContent = flash; sessionValue(flashKey, null); }
   let link = '';
   let changed = false;
+  let updateControls = () => {};
   const linkInput = root.querySelector<HTMLInputElement>('[data-client-link]')!;
   linkInput.addEventListener('focus', () => linkInput.select());
   root.querySelector('[data-copy-link]')!.addEventListener('click', async () => {
@@ -91,9 +98,11 @@ export function setupSoftwareOffers() {
   root.querySelector<HTMLButtonElement>('[data-revoke-link]')!.addEventListener('click', async event => {
     if (!confirm('Revoke the client link? Anyone using it will lose access.')) return;
     const button = event.currentTarget as HTMLButtonElement; button.disabled = true; root.setAttribute('inert', ''); root.setAttribute('aria-busy', 'true'); root.dataset.busy = 'true';
-    try { await post(endpoint, { action: 'revoke', expectedLinkCreatedAt: button.dataset.linkCreatedAt }); link = ''; root.dataset.revoked = 'true'; linkInput.value = ''; status.textContent = 'Client link revoked.'; reload(status); }
+    try { await post(endpoint, { action: 'revoke', expectedLinkCreatedAt: button.dataset.linkCreatedAt }); link = ''; root.dataset.revoked = 'true'; linkInput.value = ''; root.querySelector<HTMLElement>('[data-client-link-field]')!.hidden = true;
+      root.querySelector<HTMLElement>('[data-link-state]')!.textContent = 'Client link revoked.'; button.hidden = true;
+      status.textContent = 'Client link revoked.'; updateControls(); reload(status); }
     catch (error) { status.textContent = (error as Error).message; }
-    finally { button.disabled = false; root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false'; }
+    finally { button.disabled = root.dataset.revoked === 'true'; root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false'; }
   });
   if (!root.querySelector('[data-offer-form]')) return;
   const form = root.querySelector<HTMLFormElement>('[data-offer-form]')!, list = root.querySelector<HTMLElement>('[data-milestones]')!;
@@ -111,7 +120,7 @@ export function setupSoftwareOffers() {
     paymentMode: form.querySelector<HTMLInputElement>('[name="paymentMode"]:checked')!.value as OfferTerms['paymentMode'],
     ...(checked(form, 'hasRange') ? { projectRange: { lowCents: amount(get(form, 'rangeLow')), highCents: amount(get(form, 'rangeHigh')) } } : {}),
   });
-  const updateControls = () => {
+  updateControls = () => {
     root.dataset.dirty = String(changed);
     root.querySelector<HTMLButtonElement>('[data-add-milestone]')!.disabled = list.children.length >= 3;
     list.querySelectorAll<HTMLButtonElement>('[data-remove-milestone]').forEach(button => { button.disabled = list.children.length <= 1; });
@@ -140,6 +149,8 @@ export function setupSoftwareOffers() {
   root.querySelector('[data-add-milestone]')!.addEventListener('click', () => {
     if (list.children.length >= 3) return;
     list.appendChild(root.querySelector<HTMLTemplateElement>('[data-milestone-template]')!.content.cloneNode(true)); changed = true; inputRevision++; updateControls();
+    list.lastElementChild!.querySelector<HTMLInputElement>('input')!.focus();
+    status.textContent = `Milestone ${list.children.length} added.`;
   });
   list.addEventListener('click', event => { const button = (event.target as HTMLElement).closest('[data-remove-milestone]'); if (button && list.children.length > 1) { button.closest('[data-milestone]')!.remove(); changed = true; inputRevision++; updateControls(); } });
   form.addEventListener('submit', async event => {
@@ -163,7 +174,7 @@ export function setupSoftwareOffers() {
       status.textContent = result.uncertain ? `Offer v${version} is saved as sent. The email service didn’t confirm delivery. Check Resend before sending the link yourself.` : result.emailSent ? `Offer v${version} sent.${result.copySent ? '' : ' The owner copy didn’t send.'}` : `Offer v${version} is saved as sent, but the email didn’t go out. Copy the link and send it yourself.`;
       root.dataset.sentDate = new Date(result.sentAt ?? new Date().toISOString()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' });
       saved = false; root.dataset.updated = ''; root.dataset.sentVersion = String(version); root.dataset.sentUpdated = result.updatedAt; root.dataset.revoked = 'false';
-      root.querySelector<HTMLElement>('[data-link-actions]')!.hidden = false; root.querySelector<HTMLElement>('[data-copy-link]')!.hidden = false; root.querySelector<HTMLButtonElement>('[data-revoke-link]')!.disabled = false;
+      root.querySelector<HTMLElement>('[data-link-actions]')!.hidden = false; root.querySelector<HTMLElement>('[data-copy-link]')!.hidden = false; root.querySelector<HTMLButtonElement>('[data-revoke-link]')!.disabled = false; root.querySelector<HTMLButtonElement>('[data-revoke-link]')!.hidden = false;
       root.querySelector<HTMLElement>('[data-link-state]')!.textContent = ''; root.querySelector<HTMLElement>('[data-offer-state]')!.textContent = `v${version} sent ${root.dataset.sentDate} · no changes since`; updateControls();
       const versions = root.querySelector<HTMLElement>('[data-offer-versions]')!, versionList = root.querySelector<HTMLElement>('[data-version-list]')!;
       versions.hidden = false;

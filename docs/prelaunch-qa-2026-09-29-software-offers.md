@@ -3,7 +3,7 @@
 Date: September 29, 2026  
 Repository: `kwilson21/thesuperhuman.us`  
 Pull request: [#153](https://github.com/kwilson21/thesuperhuman.us/pull/153)  
-Code revision: `db1fc78e` (this record is committed on top of it)  
+Code revision: `cdbd90ad` (this record is committed on top of it)  
 Target: production `https://thesuperhuman.us` (the owner request page for software requests, `POST /api/owner/requests/[id]/software`, the owner offer preview, `/offer/[token]`) and production `MUSIC_DB`  
 Reviewer and deployment authorization: Kazon Wilson approved the offer terms model (one statement of work covers up to 3 milestones or 90 days, two payment modes, required acceptance examples, optional checkpoints and range), the pricing reminders, and design studies 04 and 05 as direction, and authorized applying migration 0020 and releasing ("go ahead") (owner, in conversation, 2026-09-29)  
 Scope: manual fit review; clarifying question and decline emails; versioned fixed-price offers (draft, sent, superseded, withdrawn) with an exact owner preview; a private, revocable client link per request; the client offer page; migration `0020_software_offers.sql`; owner-operations, README and health-check updates; a screenshot scenario  
@@ -50,7 +50,7 @@ This is a scoped deployment record against the reusable pre-launch checklist.
 
 ## 7. Release and final QA
 
-- **PASS · Required checks.** `npm run check` 0 errors and 0 warnings; `npx vitest run` 108 files and 781 tests; `npm run build` completed. CI results, including the screenshot captures, are on the pull request for this revision.
+- **PASS · Required checks.** `npm run check` 0 errors and 0 warnings; `npx vitest run` 108 files and 785 tests; `npm run build` completed. CI results, including the screenshot captures, are on the pull request for this revision.
 - **PASS · Review.** Independent review passes on correctness and security and on UI, copy and rules, then re-reviews of each fix pass and three rounds of the Codex review bot; every verified finding fixed and answered on the pull request.
 - **PASS · Print.** Measured in Chrome with the site fonts: a one-milestone offer prints on one US Letter page and a typical three-milestone offer on two, with headings kept with their content, links hidden and nothing below 8.5pt. An offer with every field at its maximum prints on four pages, which is accepted.
 - **PASS · Migration and backup.** Before applying, the production ledger showed only 0020 pending, and only the personal-data trigger referenced the audit table. A full export was taken (stored privately, outside the repository) and restored into a scratch database with matching counts, and a D1 Time Travel bookmark was recorded. 0020 applied (12 statements). Afterwards: row counts and the audit id sequence were unchanged, a hash of every audit row was identical, the trigger and index definitions on `owner_requests` and `owner_request_audit` were identical, the new tables and both one-draft/one-sent indexes existed, no temporary table remained, `PRAGMA foreign_key_check` was empty, and the ledger had nothing left to apply. `owner:health --remote` passed every check.

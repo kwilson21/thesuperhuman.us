@@ -12,15 +12,17 @@ function fixture(action = 'fit') {
   };
   const inputs: Record<string, any> = Object.fromEntries(Object.entries({ outcome:'Tracker',summary:'Shared view',clientInputs:'',exclusions:'',timing:'',paymentMode:'standard',hasRange:'',milestoneName:'First',deliverables:'Status view',acceptance:'Add a client',fee:'2400',hasCheckpoint:'' }).map(([name,value]) => [name,element({ value })]));
   const send = element(), preview = element(), status = element(), state = element(), range = element(), checkpoint = element();
-  const row = element({ querySelectorAll:(selector:string) => { const input = inputs[selector.match(/name="([^"]+)"/)?.[1] ?? '']; return input ? [input] : []; }, querySelector:(selector:string) => selector === 'legend' ? element() : selector === '[data-checkpoint]' ? checkpoint : inputs[selector.match(/name="([^"]+)"/)?.[1] ?? ''] });
-  const list = element({ children:[row],querySelectorAll:(selector:string) => selector === '[data-milestone]' ? [row] : [] });
+  const row: any = element({ querySelectorAll:(selector:string) => { const input = inputs[selector.match(/name="([^"]+)"/)?.[1] ?? '']; return input ? [input] : []; }, querySelector:(selector:string) => selector === 'legend' ? element() : selector === '[data-checkpoint]' ? checkpoint : inputs[selector.match(/name="([^"]+)"/)?.[1] ?? ''] });
+  const list: any = element({ children:[row],lastElementChild:row,appendChild:function(child:any) { this.children.push(child); this.lastElementChild = child; },querySelectorAll:function(selector:string) { return selector === '[data-milestone]' ? this.children : []; } });
   const submit = element();
   const form = element({ querySelector:(selector:string) => selector === '[type="submit"]' ? submit : inputs[selector.match(/name="([^"]+)"/)?.[1] ?? ''],querySelectorAll:(selector:string) => { const input = inputs[selector.match(/name="([^"]+)"/)?.[1] ?? '']; return input ? [input] : []; } });
   const targets: Record<string, any> = { '[data-offer-form]':form,'[data-milestones]':list,'[data-software-status]':status,'[data-send-offer]':send,'[data-preview-offer]':preview,'[data-add-milestone]':element(),'[data-range]':range,'[data-copy-link]':element(),'[data-revoke-link]':element({ dataset:{ linkCreatedAt:'displayed-link' } }),'[data-offer-state]':state,'[data-link-actions]':element(),'[data-link-state]':element(),'[data-client-link]':element({ select:vi.fn() }),'[data-client-link-field]':element() };
+  targets['[data-milestone-template]'] = { content:{ cloneNode:() => { const first = element({ focus:vi.fn() }); return element({ first,querySelector:(selector:string) => selector === 'input' ? first : row.querySelector(selector) }); } } };
   const versionState = element({ textContent:'sent' }), versionEntry = element({ querySelector:() => versionState });
   targets['[data-offer-versions]'] = element(); targets['[data-version-list]'] = element({ querySelector:() => versionEntry,querySelectorAll:() => [versionState] });
   const actionStatus = element(), siblingForm = element(), privateNote = element();
-  const actionForm = element({ dataset:{ softwareAction:action, endpoint:'/api/software' }, querySelector:(selector:string) => selector === 'button' ? element() : actionStatus });
+  const actionButton = element({ textContent:'Send' });
+  const actionForm = element({ dataset:{ softwareAction:action, endpoint:'/api/software' }, querySelector:(selector:string) => selector === 'button' ? actionButton : actionStatus });
   const root = element({ dataset:{ endpoint:'/api/software',updated:'saved',version:'1',sentVersion:'',revoked:'false',email:'alex@example.com' },querySelector:(selector:string) => targets[selector] });
   vi.stubGlobal('document',{ querySelector:(selector:string) => selector === '[data-offer-form]' ? form : root,querySelectorAll:(selector:string) => selector === '[data-milestone]' ? [row] : selector === '[data-software-action]' ? [actionForm] : selector === '[data-software-action], [data-request-note], [data-software-editor]' ? [actionForm,siblingForm,privateNote,root] : selector === '[data-software-action], [data-request-note]' ? [actionForm,siblingForm,privateNote] : [] });
   vi.stubGlobal('FormData',class { *[Symbol.iterator]() { yield ['text','Thanks.']; } });
@@ -28,7 +30,7 @@ function fixture(action = 'fit') {
   vi.stubGlobal('location',{ reload:vi.fn() }); vi.stubGlobal('confirm',vi.fn(() => true));
   vi.stubGlobal('window', { addEventListener: vi.fn() });
   setupSoftwareOffers();
-  return { root,form,send,preview,status,inputs,targets,submit,actionForm,actionStatus,siblingForm,privateNote };
+  return { list,actionButton,root,form,send,preview,status,inputs,targets,submit,actionForm,actionStatus,siblingForm,privateNote };
 }
 afterEach(() => vi.unstubAllGlobals());
 it('keeps newer edits unsaved when a draft save finishes', async () => {
@@ -216,4 +218,40 @@ it('revokes the link returned by an in-page send', async () => {
   await send.emit('click');
   await targets['[data-revoke-link]'].emit('click');
   expect(JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body))).toEqual({ action:'revoke',expectedLinkCreatedAt:'replacement-link' });
+});
+
+it('updates revoked controls before a canceled reload and permits reissue', async () => {
+  const { send,root,targets,privateNote } = fixture();
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValueOnce(Response.json({ link:'https://example.com/offer/test',linkCreatedAt:'replacement',version:1,updatedAt:'sent',emailSent:true })).mockResolvedValueOnce(Response.json({ ok:true })));
+  await send.emit('click'); await privateNote.emit('input');
+  vi.mocked(confirm).mockImplementation(message => message !== 'You have unsaved changes in another section. Continue and lose them?');
+  await targets['[data-revoke-link]'].emit('click');
+  expect(location.reload).not.toHaveBeenCalled(); expect(root.dataset.revoked).toBe('true');
+  expect(targets['[data-link-state]'].textContent).toBe('Client link revoked.');
+  expect(targets['[data-client-link]'].value).toBe(''); expect(targets['[data-client-link-field]'].hidden).toBe(true);
+  expect(targets['[data-revoke-link]'].disabled).toBe(true); expect(targets['[data-revoke-link]'].hidden).toBe(true);
+  expect(send.disabled).toBe(false);
+  vi.stubGlobal('fetch',vi.fn(async () => Response.json({ link:'https://example.com/offer/reissued',version:1,updatedAt:'reissued',emailSent:true })));
+  await send.emit('click'); expect(targets['[data-revoke-link]'].hidden).toBe(false); expect(targets['[data-revoke-link]'].disabled).toBe(false);
+});
+it.each(['question','decline'])('requires an explicit retry after a lost %s response', async action => {
+  const { actionForm,actionStatus,actionButton } = fixture(action);
+  await actionForm.emit('input');
+  vi.stubGlobal('fetch',vi.fn().mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValueOnce(Response.json({ ok:true,copySent:true })));
+  await actionForm.emit('submit');
+  expect(actionStatus.textContent).toBe('The request didn’t finish. Check the activity log or Resend before sending again.');
+  expect(actionButton.textContent).toBe('Send again'); expect(actionButton.disabled).toBe(false);
+  expect(actionForm.dataset.dirty).toBe('true'); expect(fetch).toHaveBeenCalledOnce(); expect(location.reload).not.toHaveBeenCalled();
+  await actionForm.emit('submit');
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body)).text).toBe('Thanks.');
+});
+it('focuses and announces each added milestone, including the third', async () => {
+  const { list,targets,status } = fixture();
+  for (const count of [2,3]) {
+    await targets['[data-add-milestone]'].emit('click');
+    expect(list.children).toHaveLength(count); expect(list.lastElementChild.first.focus).toHaveBeenCalledOnce();
+    expect(status.textContent).toBe(`Milestone ${count} added.`);
+  }
+  expect(targets['[data-add-milestone]'].disabled).toBe(true);
 });
