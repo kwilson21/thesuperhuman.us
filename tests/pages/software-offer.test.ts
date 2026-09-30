@@ -9,12 +9,12 @@ import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { beforeAll, afterAll, expect, it } from 'vitest';
 import { hashOfferToken } from '~/lib/software-offers';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
-let directory: string, softwarePage: any, composer: any, today: any, page: any, preview: any, editor: any, questions: any, fit: any;
+let directory: string, softwarePage: any, composer: any, today: any, page: any, preview: any, editor: any, questions: any, fit: any, panel: any, ownerRequest: any;
 const token = 'a'.repeat(43);
 const terms = { outcome:'Current offer',summary:'A shared view.',milestones:[{ name:'Tracker',deliverables:['Status view'],acceptance:['Add a client.'],feeCents:240000 }],clientInputs:'',exclusions:'',timing:'',paymentMode:'standard' };
 beforeAll(async () => {
   directory = await mkdtemp(resolve('.software-render-'));
-  await build({ entryPoints:{ today:'src/pages/owner/index.astro', composer:'src/pages/owner/requests/[id]/update.astro', software:'src/pages/studio/software/[id].astro', client:'src/pages/offer/[token].astro', preview:'src/pages/owner/requests/[id]/offer.astro', editor:'src/components/owner/SoftwareOfferEditor.astro', questions:'src/components/owner/SoftwareQuestions.astro', fit:'src/components/owner/SoftwareFitReview.astro' }, outdir:directory, outExtension:{ '.js':'.mjs' }, bundle:true, format:'esm', platform:'node', packages:'external',
+  await build({ entryPoints:{ panel:'src/components/owner/SoftwareProjectPanel.astro', ownerRequest:'src/pages/owner/requests/[id].astro', today:'src/pages/owner/index.astro', composer:'src/pages/owner/requests/[id]/update.astro', software:'src/pages/studio/software/[id].astro', client:'src/pages/offer/[token].astro', preview:'src/pages/owner/requests/[id]/offer.astro', editor:'src/components/owner/SoftwareOfferEditor.astro', questions:'src/components/owner/SoftwareQuestions.astro', fit:'src/components/owner/SoftwareFitReview.astro' }, outdir:directory, outExtension:{ '.js':'.mjs' }, bundle:true, format:'esm', platform:'node', packages:'external',
     plugins:[{ name:'astro-test-render', setup(builder) {
       builder.onResolve({ filter:/\.css(?:\?|$)|\?astro/ }, () => ({ path:'empty-style',namespace:'empty' }));
       builder.onLoad({ filter:/.*/,namespace:'empty' }, () => ({ contents:'',loader:'js' }));
@@ -23,7 +23,7 @@ beforeAll(async () => {
     } }],
   });
   const { readdir } = await import('node:fs/promises');
-  for (const file of await readdir(directory)) { const compiled = (await import(/* @vite-ignore */ pathToFileURL(resolve(directory,file)).href)).default; if (file.startsWith('today')) today = compiled; else if (file.startsWith('composer')) composer = compiled; else if (file.startsWith('software')) softwarePage = compiled; else if (file.startsWith('client')) page = compiled; else if (file.startsWith('preview')) preview = compiled; else if (file.startsWith('editor')) editor = compiled; else if (file.startsWith('questions')) questions = compiled; else fit = compiled; }
+  for (const file of await readdir(directory)) { const compiled = (await import(/* @vite-ignore */ pathToFileURL(resolve(directory,file)).href)).default; if (file.startsWith('panel')) panel = compiled; else if (file.startsWith('ownerRequest')) ownerRequest = compiled; else if (file.startsWith('today')) today = compiled; else if (file.startsWith('composer')) composer = compiled; else if (file.startsWith('software')) softwarePage = compiled; else if (file.startsWith('client')) page = compiled; else if (file.startsWith('preview')) preview = compiled; else if (file.startsWith('editor')) editor = compiled; else if (file.startsWith('questions')) questions = compiled; else fit = compiled; }
 });
 afterAll(async () => { if (directory) await rm(directory,{ recursive:true,force:true }); });
 async function fixture() {
@@ -189,7 +189,11 @@ it('renders version-specific direction, delivery, acceptance, handoff and earlie
     expect(rail.indexOf('/reviews/delivery')).toBeLessThan(rail.indexOf('/reviews/pending-direction'));
     expect(rail).toContain('Accept milestone');expect(rail).toContain('Confirm direction');
     expect(html.slice(html.indexOf('Earlier updates'))).not.toContain('/reviews/pending-direction');
-    sql.exec("DELETE FROM software_project_updates WHERE id='pending-direction'");
+    sql.exec("DELETE FROM software_project_updates WHERE id='pending-direction'; UPDATE software_projects SET milestone_index=1");
+    html=await renderProject();
+    expect(html.slice(html.indexOf('class="project-band'),html.indexOf('class="project-columns'))).toContain('Milestone 2 · Follow-up');
+    expect(html.slice(html.indexOf('<aside'),html.indexOf('</aside>'))).toContain('Tracker');
+
     sql.exec("INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES ('r','client','PRIVATE TOKEN','Accepted Delivery v1','delivery','milestone_accepted','2026-10-02')");
     html=await renderProject();expect(html).not.toContain('Your first milestone is ready to review.');expect(html).not.toContain('Please review by');expect(html).toContain('You accepted Delivery v1 on Oct 2, 2026.');expect(html).toContain('Handoff follows full payment.');
     sql.exec("INSERT INTO software_milestone_payments VALUES ('r',0,'2026-10-01','PRIVATE OWNER'); INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,links_json,next_step,created_by,created_at,updated_at,shared_at) VALUES ('handoff','r','handoff','shared',0,'Delivered files','handoff','[{\"label\":\"Handoff notes\",\"url\":\"https://example.com/notes\"}]','Anything new is a separate milestone.','PRIVATE AUTHOR','2026-10-03','2026-10-03','2026-10-03')");
@@ -271,4 +275,29 @@ it('returns a private temporary-unavailable 503 without the database', async () 
   expect(html).toContain('This offer is temporarily unavailable.');
   expect(html).toContain('Please try again later.');
   expect(html).not.toContain('Ask Kazon for a current link');
+});
+
+it('hides Reopen for a started request and gates both sending retry controls at one minute', async()=>{
+  const {sql,db}=await fixture();
+  try {
+    sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,invitation_status) VALUES ('r','current',?,'invoice','now','now','now','owner','now','now','sending')").run(JSON.stringify(terms));
+    sql.exec("UPDATE owner_requests SET status='reviewed'");
+    const container=await AstroContainer.create(),locals={owner:{email:'owner@example.com'},runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}};
+    const ownerHTML=await container.renderToString(ownerRequest,{params:{id:'r'},request:new Request('https://thesuperhuman.us/owner/requests/r'),locals:locals as any});
+    expect(ownerHTML).not.toContain('data-action="reopen"');expect(ownerHTML).toContain('data-action="resolve"');
+    const now=Date.now();
+    const clock=Date.now; Date.now=()=>now;
+    try {
+      for(const age of [59_999,60_000]) {
+        const attempted=new Date(now-age).toISOString();
+        sql.prepare('UPDATE software_projects SET invitation_attempted_at=?').run(attempted);
+        const project=sql.prepare('SELECT * FROM software_projects').get();
+        const html=await container.renderToString(panel,{props:{requestId:'r',project,closed:false,updates:[{id:'u',kind:'progress',status:'shared',title:'Update',notification_status:'sending',notification_attempted_at:attempted}]},locals:locals as any});
+        if(age<60_000) {
+          expect(html).not.toContain('data-software-notice');
+          expect(html.match(/Checking delivery. Retry is available after a minute./g)).toHaveLength(2);
+        } else expect(html.match(/I checked Resend; retry/g)).toHaveLength(2);
+      }
+    } finally {Date.now=clock;}
+  } finally {sql.close();}
 });

@@ -21,7 +21,7 @@ if (!project) Astro.response.status = 404;
 const terms = project ? projectTerms(project) : null;
 const updates = project ? await sharedSoftwareUpdates(env.MUSIC_DB, project.request_id) : [];
 const messages = project ? await listSoftwareProjectMessages(env.MUSIC_DB, project.request_id) : [];
-const latest = updates.find(update=>update.status==='shared'), milestone = terms?.milestones[latest?.milestone_index ?? project?.milestone_index ?? 0];
+const latest = updates.find(update=>update.status==='shared'), milestone = terms?.milestones[project?.milestone_index ?? 0];
 const payments=project ? await milestonePayments(env.MUSIC_DB,project.request_id) : [];
 const acceptedDeliveries=updates.filter(update=>update.kind==='delivery_review' && update.status==='shared' && update.decision==='milestone_accepted').sort((a,b)=>(b.milestone_index ?? 0)-(a.milestone_index ?? 0));
 const reviews=updates.filter(update=>update.kind?.endsWith('_review') && update.status==='shared');
@@ -41,7 +41,7 @@ const waiting = (project?.state === 'waiting_for_input' ? project.waiting_for : 
   <article class="site-shell software-project">
     <nav class="breadcrumb" aria-label="Breadcrumb"><a href="/studio">Your projects</a> / {terms.outcome}</nav>
     <header><p class="studio-kicker">Private project</p><h1>{pendingDelivery ? pendingDelivery.milestone_index===0 ? 'Your first milestone is ready to review.' : `Milestone ${(pendingDelivery.milestone_index ?? 0)+1} is ready to review.` : terms.outcome}</h1><p class="summary">{terms.summary}{pendingDelivery && ` · ${pendingDelivery.artifact_version}`}</p>{pendingDelivery && <p>Please review by {softwareDate(addBusinessDays(pendingDelivery.shared_at!,pendingDelivery.review_window_days ?? 5))}.</p>}</header>
-    <div class="project-band"><div><h2>Milestone {(latest?.milestone_index ?? project.milestone_index)+1} · {milestone?.name}</h2><p>{softwareStateSentence(project)}</p></div><div>{latest?.shared_at && <p>Last update: {softwareDate(latest.shared_at)}</p>}{project.next_update_on && <p>Next update: {softwareDate(project.next_update_on)}</p>}</div><SoftwareStepTrack step={project.step} /></div>
+    <div class="project-band"><div><h2>Milestone {project.milestone_index+1} · {milestone?.name}</h2><p>{softwareStateSentence(project)}</p></div><div>{latest?.shared_at && <p>Last update: {softwareDate(latest.shared_at)}</p>}{project.next_update_on && <p>Next update: {softwareDate(project.next_update_on)}</p>}</div><SoftwareStepTrack step={project.step} /></div>
     <div class="project-columns"><div class="project-current">
       {currentUpdate ? <SoftwareProjectUpdate update={currentUpdate} checks={terms.milestones[currentUpdate.milestone_index ?? 0].acceptance} visualUrl={currentUpdate.has_visual ? visual(currentUpdate.id) : undefined} /> : <section><h2>Your first update is on its way.</h2>{project.next_update_on && <p>Next update: {softwareDate(project.next_update_on)}</p>}</section>}
       {newerUpdates.length>0 && <section class="latest-updates"><h3>Latest update</h3>{newerUpdates.map(update=><SoftwareProjectUpdate update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} visualUrl={update.has_visual ? visual(update.id) : undefined} />)}</section>}
