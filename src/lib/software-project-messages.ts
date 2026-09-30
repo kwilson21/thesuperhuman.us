@@ -16,13 +16,14 @@ export async function postSoftwareReviewDecision(db: D1Database, id: string, tok
   const project = await getSoftwareProject(db,id);
   if (!update || !project) return {ok:false,status:409};
   const direction = update.kind === 'direction_review', checks = projectTerms(project).milestones[update.milestone_index].acceptance;
-  if ((input.decision === 'direction_confirmed' && !direction) || (input.decision === 'milestone_accepted' && direction)) return {ok:false,status:400};
+  if ((input.decision === 'direction_confirmed' && !direction) || (input.decision === 'milestone_accepted' && direction)) return {ok:false,status:400,error:"This decision doesn’t apply to this review."};
   const criteria = input.decision === 'changes_requested' ? [...new Set(input.criteria)].sort((first,second)=>first-second) : [];
   if (criteria.some(index=>index >= checks.length) || (!direction && input.decision === 'changes_requested' && !criteria.length))
     return {ok:false,status:400,error:'Choose the agreed checks that are unmet. Tell me what happened and how to see it.'};
   const tokenHash = await hashValue(token), at = now.toISOString();
   const label = input.decision === 'direction_confirmed' ? 'Direction confirmed' : input.decision === 'milestone_accepted' ? 'Accepted' : 'Changes requested';
-  const body = input.decision === 'changes_requested' ? `${criteria.map(index=>`Check ${index+1}: ${checks[index]}`).join('\n')}${criteria.length ? '\n\n' : ''}${input.note}` : `${label} ${update.artifact_version} · milestone ${update.milestone_index+1}`;
+  const version = `${update.artifact_version} for milestone ${update.milestone_index+1}`;
+  const body = input.decision === 'changes_requested' ? `Requested changes to ${version}${criteria.length ? `: ${criteria.map(index=>`check ${index+1} (${checks[index]})`).join(', ')}.` : '.'}\n\n${input.note}` : `${direction ? 'Confirmed' : 'Accepted'} ${version}.`;
   const note = `${label} on ${update.artifact_version} · milestone ${update.milestone_index+1}${criteria.length ? ` · checks ${criteria.map(index=>index+1).join(', ')}` : ''}`;
   await db.batch([
     softwareGuard(db,`SELECT 1 FROM software_projects p JOIN owner_requests r ON r.id=p.request_id JOIN audio_client_sessions s ON s.email=r.email
@@ -34,6 +35,9 @@ export async function postSoftwareReviewDecision(db: D1Database, id: string, tok
       AND NOT EXISTS(SELECT 1 FROM software_project_messages WHERE update_id=u.id AND decision IS NOT NULL)`,[id,tokenHash,at,updateId,update.kind]),
     db.prepare('INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES (?,\'client\',?,?,?,?,?)')
       .bind(id,tokenHash,body,updateId,input.decision,at),
+    db.prepare("UPDATE software_projects SET state='building',step=?,milestone_index=?,waiting_for='',updated_at=? WHERE request_id=?")
+      .bind(input.decision==='milestone_accepted' ? 'handoff' : 'build',update.milestone_index,at,id),
+    softwareAudit(db,id,'state-changed','client',at),
     softwareAudit(db,id,'decision-recorded','client',at,note),
   ]);
   return {ok:true,status:200};

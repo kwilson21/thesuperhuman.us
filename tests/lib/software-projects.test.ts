@@ -65,7 +65,7 @@ it('requires a named review version, evidence for every check and a bounded revi
 });
 it('records one version-specific decision and audit together, without confusing direction and acceptance',async()=>{
   await start(); const token=await session(), direction=await shareReview('direction_review','Direction v1');
-  expect((await decide(direction.id,{decision:'milestone_accepted',confirm:true},token)).status).toBe(400);
+  const mismatch=await decide(direction.id,{decision:'milestone_accepted',confirm:true},token); expect(mismatch.status).toBe(400); expect(((await mismatch.json()) as {error:string}).error).toBe('This decision doesn’t apply to this review.');
   expect((await decide(direction.id,{decision:'direction_confirmed'},token)).status).toBe(200);
   expect((await decide(direction.id,{decision:'direction_confirmed'},token)).status).toBe(409);
   const delivery=await shareReview();
@@ -74,6 +74,7 @@ it('records one version-specific decision and audit together, without confusing 
   expect((await decide(delivery.id,{decision:'milestone_accepted',confirm:true},token)).status).toBe(200);
   expect(sql.prepare("SELECT note FROM software_project_audit WHERE action='decision-recorded' ORDER BY id").all()).toEqual([
     {note:'Direction confirmed on Direction v1 · milestone 1'},{note:'Accepted on Delivery v1 · milestone 1'}]);
+  expect(sql.prepare('SELECT body FROM software_project_messages ORDER BY id').all()).toEqual([{body:'Confirmed Direction v1 for milestone 1.'},{body:'Accepted Delivery v1 for milestone 1.'}]);
   expect(sql.prepare('SELECT decision,read_at FROM software_project_messages ORDER BY id').all()).toEqual([{decision:'direction_confirmed',read_at:null},{decision:'milestone_accepted',read_at:null}]);
 });
 it('requires specific delivery criteria and bounded reproduction notes',async()=>{
@@ -81,7 +82,7 @@ it('requires specific delivery criteria and bounded reproduction notes',async()=
   for(const changed of [{criteria:[]},{criteria:[1]},{criteria:[-1]},{note:''},{note:'x'.repeat(2001)}])
     expect((await decide(review.id,{decision:'changes_requested',criteria:[0],note:'Adding a client fails with the sample.',...changed},token)).status).toBe(400);
   expect((await decide(review.id,{decision:'changes_requested',criteria:[0],note:'Adding a client fails with the sample.'},token)).status).toBe(200);
-  expect(sql.prepare('SELECT body FROM software_project_messages').get().body).toContain('Check 1: Add a client.');
+  expect(sql.prepare('SELECT body FROM software_project_messages').get().body).toBe('Requested changes to Delivery v1 for milestone 1: check 1 (Add a client.).\n\nAdding a client fails with the sample.');
   expect(sql.prepare("SELECT note FROM software_project_audit WHERE action='decision-recorded'").get().note).toContain('checks 1');
 });
 it('supersedes only the same kind and milestone, keeping old versions and decisions private-safe',async()=>{
@@ -108,6 +109,7 @@ it('rolls back the decision when the audit cannot be written',async()=>{
   sql.exec("CREATE TRIGGER fail_decision_audit BEFORE INSERT ON software_project_audit WHEN NEW.action='decision-recorded' BEGIN SELECT RAISE(ABORT,'test'); END");
   expect((await decide(review.id,{decision:'milestone_accepted',confirm:true},token)).status).toBe(409);
   expect(sql.prepare('SELECT count(*) AS n FROM software_project_messages').get()).toEqual({n:0});
+  expect(sql.prepare('SELECT state,step FROM software_projects').get()).toEqual({state:'ready_for_review',step:'review'});
 });
 it('gates handoff on accepted delivery, explicit full payment and safe delivered links; completes only after handoff',async()=>{
   await start();const token=await session();
@@ -322,4 +324,30 @@ it('scopes the client message route to an active own session', async () => {
   sql.exec("UPDATE software_projects SET revoked_at='now' WHERE request_id='software'");
   expect((await send('software')).status).toBe(404);
   expect(sql.prepare('SELECT count(*) AS count FROM software_project_messages').get()).toEqual({count:1});
+});
+
+it('moves review sharing and decisions with state audits in the same batch',async()=>{
+  await start(); const token=await session();
+  const state=()=>sql.prepare('SELECT state,step,waiting_for FROM software_projects').get();
+  sql.exec("UPDATE software_projects SET state='waiting_for_input',waiting_for='Sample'");
+  const direction=await shareReview('direction_review','Direction v1');
+  expect(state()).toEqual({state:'ready_for_review',step:'direction',waiting_for:''});
+  await decide(direction.id,{decision:'direction_confirmed'},token);
+  expect(state()).toEqual({state:'building',step:'build',waiting_for:''});
+  const delivery=await shareReview(); expect(state()).toEqual({state:'ready_for_review',step:'review',waiting_for:''});
+  await decide(delivery.id,{decision:'changes_requested',criteria:[0],note:'Try the sample.'},token);
+  expect(state()).toEqual({state:'building',step:'build',waiting_for:''});
+  const corrected=await shareReview('delivery_review','Delivery v2');
+  await decide(corrected.id,{decision:'milestone_accepted',confirm:true},token);
+  expect(state()).toEqual({state:'building',step:'handoff',waiting_for:''});
+  expect(sql.prepare("SELECT count(*) AS n FROM software_project_audit WHERE action='state-changed'").get()).toEqual({n:6});
+});
+it('rolls back review sharing and decisions if their state audit fails',async()=>{
+  await start(); const token=await session(), review=await shareReview();
+  sql.exec("CREATE TRIGGER fail_state_audit BEFORE INSERT ON software_project_audit WHEN NEW.action='state-changed' BEGIN SELECT RAISE(ABORT,'test'); END");
+  expect((await decide(review.id,{decision:'milestone_accepted',confirm:true},token)).status).toBe(409);
+  expect(sql.prepare('SELECT count(*) AS n FROM software_project_messages').get()).toEqual({n:0});
+  expect((await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'direction_review'}})).status).toBe(409);
+  expect(sql.prepare('SELECT count(*) AS n FROM software_project_updates').get()).toEqual({n:1});
+  expect(sql.prepare('SELECT state,step FROM software_projects').get()).toEqual({state:'ready_for_review',step:'review'});
 });

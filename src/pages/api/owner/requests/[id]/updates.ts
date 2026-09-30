@@ -51,6 +51,8 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
         : db.prepare(`INSERT INTO software_project_updates(id,request_id,${columns.join(',')},status,notification_status,shared_at,shared_by,created_by,created_at,updated_at) VALUES (${Array(columns.length+9).fill('?').join(',')})`)
           .bind(updateId, id, ...values, status, notice, share ? at : null, share ? actor : null, actor, at, at),
       ...(share ? [db.prepare('UPDATE software_projects SET next_update_on=?,updated_at=? WHERE request_id=?').bind(value.next_update_on || null, at, id)] : []),
+      ...(share && review ? [db.prepare("UPDATE software_projects SET state='ready_for_review',step=?,milestone_index=?,waiting_for='' WHERE request_id=?")
+        .bind(value.kind==='direction_review' ? 'direction' : 'review',value.milestone_index,id), softwareAudit(db,id,'state-changed',actor,at)] : []),
       softwareAudit(db, id, share ? 'update-shared' : 'update-draft-saved', actor, at),
       ...(share && value.kind === 'handoff' ? [softwareAudit(db,id,'handoff-shared',actor,at,`Handoff shared · milestone ${value.milestone_index+1}`)] : [])]);
     if (share && value.email_client) {
