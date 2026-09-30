@@ -224,3 +224,5 @@ Apply music migration `0020_software_offers.sql` before deploying code that uses
 ### Software projects migration
 
 Apply music migration `0021_software_projects.sql` after 0020 and before deploying code that uses software projects. This code requires 0021. Deploying it before the migration breaks studio sign-in (audio too) and the owner Today page. It stores project term snapshots, private updates, messages and audit records. Do not edit previously applied migrations.
+
+Apply music migration `0022_software_invoices.sql` after 0021 and before deploying code that uses software invoices. It adds invoice records and preserves existing software audit ids and notes. Signed software invoice events reuse the existing Stripe event de-duplication table; audio tables are unchanged.
