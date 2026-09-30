@@ -1,3 +1,4 @@
+import { depositOfferBlock, depositOfferGuard } from './software-invoices';
 import { getSoftwareProject, softwareAccessRevocation, softwareGuard } from './software-projects';
 import { offerSendingGuard, offerIsSending, offerSendingMessage } from './software-offers';
 import {
@@ -121,9 +122,13 @@ export async function changeOwnerRequest(db: D1Database, command: RequestCommand
   const resolvedAt = transition.to === 'resolved' ? now : null;
   const closingSoftware = current.kind === 'software' && command.action === 'withdraw';
   const reopeningSoftware = current.kind === 'software' && command.action === 'reopen';
+  if (closingSoftware) {
+    const block = await depositOfferBlock(db, command.id, true);
+    if (block) throw new Error(block);
+  }
   let results: D1Result[];
   try { results = await db.batch([
-    ...(closingSoftware ? [offerSendingGuard(db, command.id)] : []),
+    ...(closingSoftware ? [offerSendingGuard(db, command.id), depositOfferGuard(db, command.id, true)] : []),
     ...(reopeningSoftware ? [softwareGuard(db, 'SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)', [command.id])] : []),
     db.prepare(`UPDATE owner_requests SET status=?,resolved_at=?,updated_at=?
       WHERE id=? AND updated_at=? AND status IN (${placeholders}) RETURNING ${requestColumns}`)
@@ -139,10 +144,14 @@ export async function changeOwnerRequest(db: D1Database, command: RequestCommand
   ]);
   } catch (error) {
     if (reopeningSoftware && await getSoftwareProject(db, command.id)) throw new Error(projectStartedMessage);
+    if (closingSoftware) {
+      const block = await depositOfferBlock(db, command.id, true);
+      if (block) throw new Error(block);
+    }
     if (closingSoftware && await offerIsSending(db, command.id)) throw new Error(offerSendingMessage);
     throw error;
   }
-  const update = results[closingSoftware || reopeningSoftware ? 1 : 0];
+  const update = results[closingSoftware ? 2 : reopeningSoftware ? 1 : 0];
   const row = update.results[0] as OwnerRequestRow | undefined;
   if (!row) throw new Error('Request changed while it was being updated.');
   return ownerRequestFromRow(row);

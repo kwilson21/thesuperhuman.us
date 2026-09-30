@@ -783,3 +783,15 @@ it.each([['uncollectible','void'],['void','uncollectible']] as const)('same-seco
   await invoiceLib.applySoftwareInvoiceEvent(db,{...base,eventId:'evt_second',status:second});
   expect(sql.prepare('SELECT status FROM software_invoices').get()).toEqual({status:'void'});
 });
+it.each(['creating','open','payment_failed','uncollectible'])('withdrawal blocks payable %s deposits before and during batch',async status=>{
+  seedInvoice(status);
+  const command={id:'software',action:'withdraw' as const,actor:'owner'};
+  await expect(changeOwnerRequest(db,command)).rejects.toThrow('Void');
+  sql.exec('DELETE FROM software_invoices');const original=db.batch.bind(db);
+  db.batch=async items=>{seedInvoice(status);return original(items);};
+  await expect(changeOwnerRequest(db,command)).rejects.toThrow('Void');
+  expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({status:'new'});
+  expect(sql.prepare('SELECT count(*) AS n FROM owner_request_audit').get()).toEqual({n:0});
+  db.batch=original;sql.exec("UPDATE software_invoices SET status='void'");
+  expect((await changeOwnerRequest(db,command)).status).toBe('withdrawn');
+});
