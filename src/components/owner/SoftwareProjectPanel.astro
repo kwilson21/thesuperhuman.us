@@ -17,7 +17,7 @@ const canComplete = lastDelivery?.decision==='milestone_accepted' && shared.some
   <h2 id="software-project-heading">{project ? 'Project' : 'Start the project'}</h2>
   {!project ? <form data-software-start>
     <p class="rail-muted rail-caption">Record these only after checking them yourself. The client sees them as complete.</p>
-    <label class="confirmation"><input type="checkbox" name="signatures" required disabled={closed} />All signatures are complete (checked in DocuSeal)</label>
+    <label class="confirmation"><input type="checkbox" name="signatures" required disabled={closed} />All signatures are complete (checked in Documenso)</label>
     <label class="confirmation"><input type="checkbox" name="payment" required disabled={closed} />{terms.paymentMode === 'standard' ? 'First installment received (checked in Stripe or the bank)' : 'Purchase order in place, or the client doesn’t use one'}</label>
     <div class="software-field"><label>Next update to the client<input aria-describedby="project-field-1-hint" class="studio-input" type="date" name="next_update_on" /></label><p id="project-field-1-hint" class="rail-muted rail-caption">Only promise a date you can keep.</p></div>
     <button class="studio-button" disabled type="submit">Confirm start</button>
