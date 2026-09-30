@@ -56,7 +56,7 @@ async function softwareSources(database, now) {
     softwareAudit: exists ? snapshot({columns:'id,occurred_at',from:'software_project_audit',where:`occurred_at<${quote(cutoff(now,730))}`,order:'id',limit:1000}) : empty,
   };
 }
-const softwareContentSnapshot = (table, projects) => snapshot({columns:'id,request_id,updated_at',from:table,where:`request_id IN (${ids(projects)})`,order:'request_id,id',limit:5000});
+const softwareContentSnapshot = (table, projects) => snapshot({columns:'id,request_id,updated_at,notification_status,notification_attempted_at,notification_sent_at',from:table,where:`request_id IN (${ids(projects)})`,order:'request_id,id',limit:5000});
 async function softwareValues(database, now, listObjects) {
   const queries = await softwareSources(database,now), values = {};
   for (const [name,query] of Object.entries(queries)) values[name] = await readSource(database,query);

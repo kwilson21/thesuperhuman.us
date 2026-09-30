@@ -225,3 +225,26 @@ it('retains active software, cleans all prefix objects one year after completion
   expect(sql.prepare("SELECT COUNT(*) AS n FROM software_project_audit WHERE action='content-deleted'").get()).toEqual({n:2});
   expect(sql.prepare('PRAGMA foreign_key_check').all()).toEqual([]); sql.close();
 });
+
+it.each(['notification_status', 'notification_attempted_at', 'notification_sent_at'])('refuses software cleanup after %s changes without updated_at changing', async column => {
+  const { sql, database } = fixture();
+  sql.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES ('software','software','client@example.test','Tool','reviewed','now','now');
+    INSERT INTO software_offers VALUES ('offer','software',1,'sent','{}','now','now','now','owner');
+    INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,completed_at,created_at,updated_at)
+      VALUES ('software','offer','{}','standard','now','now','now','owner','2026-01-01','now','now');
+    INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,email_client,notification_status,notification_attempted_at,created_by,created_at,updated_at)
+      VALUES ('update','software','delivery_review','shared',0,'Review','prototype',1,'failed','2026-01-01','owner','now','now');`);
+  const list = async () => ['software/software/update/visual.png'];
+  const review = await previewStudioRetention(database, 'Local test data', storage, now, list);
+  if (column === 'notification_status') {
+    // Exercise the same retry claim used by the owner endpoint.
+    const { queueSoftwareNotice } = await import('../../src/lib/software-projects');
+    const adapter = { prepare: (query: string) => ({ bind: (...args: unknown[]) => ({ first: async () => sql.prepare(query).get(...args) }) }) } as unknown as D1Database;
+    expect(await queueSoftwareNotice(adapter, 'software', false, 'update')).toBe(true);
+  } else sql.prepare(`UPDATE software_project_updates SET ${column}='2028-01-15'`).run();
+  const deleteObject = vi.fn(async () => {});
+  await expect(applyStudioRetention(database, review, 'Local test data', storage, deleteObject, now, list)).rejects.toThrow('Software retention source changed');
+  expect(deleteObject).not.toHaveBeenCalled();
+  expect(sql.prepare("SELECT revoked_at FROM software_projects WHERE request_id='software'").get()).toEqual({ revoked_at: null });
+  sql.close();
+});
