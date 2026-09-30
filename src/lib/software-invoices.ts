@@ -12,6 +12,9 @@ export type SoftwareInvoice = {
   status_updated_at: string | null; created_by: string; created_at: string; updated_at: string;
 };
 
+export const softwareInvoiceKindLabels = { deposit: 'Deposit', balance: 'Balance', milestone: 'Milestone' };
+export const softwareInvoiceStatusLabels = { creating: 'Creating', open: 'Open', paid: 'Paid', payment_failed: 'Payment failed', void: 'Void', uncollectible: 'Uncollectible' };
+
 export function softwareInvoiceTerms(terms: OfferTerms, milestone: number, kind: SoftwareInvoiceKind) {
   const item = terms.milestones[milestone];
   if (!['deposit', 'balance', 'milestone'].includes(kind) || !Number.isInteger(milestone) || milestone < 0 || !item
@@ -80,7 +83,7 @@ export type ClientSoftwareInvoice = Pick<SoftwareInvoice, 'milestone_index' | 'k
 // Call only after the existing session-to-project authorization; bind both project identities.
 export async function clientSoftwareInvoices(db: D1Database, project: { request_id: string; offer_id: string }) {
   return (await db.prepare(`SELECT milestone_index,kind,amount_cents,status,due_at,status_updated_at,hosted_invoice_url,refunded_at
-    FROM software_invoices WHERE request_id=? AND offer_id=? AND external_refs_deleted_at IS NULL ORDER BY milestone_index,created_at,id`)
+    FROM software_invoices WHERE request_id=? AND offer_id=? AND external_refs_deleted_at IS NULL ORDER BY milestone_index,CASE kind WHEN 'deposit' THEN 0 WHEN 'balance' THEN 1 ELSE 2 END,created_at,id`)
     .bind(project.request_id,project.offer_id).all<ClientSoftwareInvoice>()).results;
 }
 export function invoiceAvailable(terms: OfferTerms, milestone: number, kind: SoftwareInvoiceKind,
