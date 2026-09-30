@@ -385,3 +385,13 @@ it('reviews a new request atomically when starting and removes it from Today',as
   expect(sql.prepare('SELECT status,reviewed_at,updated_at FROM owner_requests').get()).toMatchObject({status:'reviewed',reviewed_at:expect.any(String)});
   expect(sql.prepare('SELECT action,actor FROM owner_request_audit').all()).toEqual([{action:'reviewed',actor:'owner@example.com'}]);
 });
+it('retries a first share with one row and one email, rejecting changed content',async()=>{
+  await start();vi.mocked(fetch).mockClear();
+  const body={action:'share',confirmed:true,updateId:crypto.randomUUID(),expectedUpdatedAt:null,update:{...update,email_client:true}};
+  const first=await call(updatePost,body);expect(first.status).toBe(200);
+  const result=await first.json();
+  expect(await (await call(updatePost,body)).json()).toEqual(result);
+  expect((await call(updatePost,{...body,update:{...body.update,title:'Changed'}})).status).toBe(409);
+  expect(sql.prepare('SELECT count(*) AS n FROM software_project_updates').get()).toEqual({n:1});
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
