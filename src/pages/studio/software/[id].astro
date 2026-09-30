@@ -25,10 +25,12 @@ const latest = updates.find(update=>update.status==='shared'), milestone = terms
 const payments=project ? await milestonePayments(env.MUSIC_DB,project.request_id) : [];
 const acceptedDeliveries=updates.filter(update=>update.kind==='delivery_review' && update.status==='shared' && update.decision==='milestone_accepted').sort((a,b)=>(b.milestone_index ?? 0)-(a.milestone_index ?? 0));
 const reviews=updates.filter(update=>update.kind?.endsWith('_review') && update.status==='shared');
-const review=reviews.find(update=>!update.decision) ?? reviews.find(update=>update.decision);
+const undecidedReviews=reviews.filter(update=>!update.decision);
+const review=undecidedReviews.find(update=>update.kind==='delivery_review') ?? undecidedReviews[0] ?? reviews.find(update=>update.decision);
+const railReviews=review ? [review,...undecidedReviews.filter(update=>update.id!==review.id)] : [];
 const pendingDelivery=review?.kind==='delivery_review' && !review.decision ? review : null;
 const earlierVersions=updates.filter(update=>update.kind?.endsWith('_review') && update.status==='superseded' && update.decision);
-const earlierUpdates=updates.filter(update=>update.id!==latest?.id && !(update.id===review?.id && !review.decision) && !earlierVersions.includes(update));
+const earlierUpdates=updates.filter(update=>update.id!==latest?.id && !undecidedReviews.includes(update) && !earlierVersions.includes(update));
 const visual = (id: string) => `/api/studio/software/${project!.request_id}/updates/${id}/visual`;
 const conversationClosed = project?.state === 'complete';
 const waiting = (project?.state === 'waiting_for_input' ? project.waiting_for : '');
@@ -41,7 +43,7 @@ const waiting = (project?.state === 'waiting_for_input' ? project.waiting_for : 
     <div class="project-columns"><div class="project-current">
       {latest ? <SoftwareProjectUpdate update={latest} checks={milestone?.acceptance} visualUrl={latest.has_visual ? visual(latest.id) : undefined} /> : <section><h2>Your first update is on its way.</h2>{project.next_update_on && <p>Next update: {softwareDate(project.next_update_on)}</p>}</section>}
       {review && !review.decision && review.id!==latest?.id && <SoftwareProjectUpdate update={review} checks={terms.milestones[review.milestone_index ?? 0].acceptance} visualUrl={review.has_visual ? visual(review.id) : undefined} />}
-    </div><aside aria-label="Next steps">{review && <SoftwareReviewResponse update={review} checks={terms.milestones[review.milestone_index ?? 0].acceptance} milestoneName={terms.milestones[review.milestone_index ?? 0].name} endpoint={`/api/studio/software/${project.request_id}/reviews/${review.id}`} readonly={conversationClosed} />}{earlierVersions.length>0 && <section><a class="site-link" href="#earlier-versions">See earlier versions</a></section>}{waiting && <section><h2>Waiting on you</h2><p>{waiting}</p></section>}{latest?.next_step && <section><h2>Next from me</h2><p>{latest.next_step}</p></section>}{!conversationClosed && <section><a class="site-link" href="#conversation">Ask a question <span aria-hidden="true">↓</span></a></section>}</aside><div class="project-history">
+    </div><aside aria-label="Next steps">{railReviews.map(review=><section><SoftwareReviewResponse update={review} checks={terms.milestones[review.milestone_index ?? 0].acceptance} milestoneName={terms.milestones[review.milestone_index ?? 0].name} endpoint={`/api/studio/software/${project.request_id}/reviews/${review.id}`} readonly={conversationClosed} /></section>)}{earlierVersions.length>0 && <section><a class="site-link" href="#earlier-versions">See earlier versions</a></section>}{waiting && <section><h2>Waiting on you</h2><p>{waiting}</p></section>}{latest?.next_step && <section><h2>Next from me</h2><p>{latest.next_step}</p></section>}{!conversationClosed && <section><a class="site-link" href="#conversation">Ask a question <span aria-hidden="true">↓</span></a></section>}</aside><div class="project-history">
       {acceptedDeliveries.map(accepted=>{
         const firstAcceptance=updates.filter(update=>update.milestone_index===accepted.milestone_index && update.decision==='milestone_accepted').map(update=>update.decided_at!).sort()[0];
         const handoff=updates.find(update=>update.kind==='handoff' && update.status==='shared' && update.milestone_index===accepted.milestone_index && update.shared_at!>=accepted.decided_at!);

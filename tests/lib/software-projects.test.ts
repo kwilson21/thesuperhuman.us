@@ -351,3 +351,21 @@ it('rolls back review sharing and decisions if their state audit fails',async()=
   expect(sql.prepare('SELECT count(*) AS n FROM software_project_updates').get()).toEqual({n:1});
   expect(sql.prepare('SELECT state,step FROM software_projects').get()).toEqual({state:'ready_for_review',step:'review'});
 });
+
+it('keeps newer undecided review state and never moves the milestone backwards',async()=>{
+  await start(); const token=await session(), older=await shareReview();
+  const multiTerms={...terms,milestones:[...terms.milestones,{...terms.milestones[0],name:'Follow-up'}]};
+  sql.prepare('UPDATE software_projects SET terms_json=?').run(JSON.stringify(multiTerms));
+  sql.exec("UPDATE software_project_updates SET shared_at='2020-01-01' WHERE id='"+older.id+"'");
+  const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'direction_review',milestone_index:1,artifact_version:'Direction v2'}});
+  expect(response.status).toBe(200);
+  const newer=await response.json() as {id:string};
+  const before=sql.prepare('SELECT state,step,milestone_index,waiting_for FROM software_projects').get();
+  expect((await decide(older.id,{decision:'milestone_accepted',confirm:true},token)).status).toBe(200);
+  expect(sql.prepare('SELECT state,step,milestone_index,waiting_for FROM software_projects').get()).toEqual(before);
+  expect((await decide(newer.id,{decision:'changes_requested',note:'Change the direction.'},token)).status).toBe(200);
+  expect(sql.prepare('SELECT state,step,milestone_index FROM software_projects').get()).toEqual({state:'building',step:'direction',milestone_index:1});
+  sql.exec("UPDATE software_project_messages SET decision=NULL,update_id=NULL WHERE update_id='"+older.id+"'");
+  expect((await decide(older.id,{decision:'changes_requested',criteria:[0],note:'Change the delivery.'},token)).status).toBe(200);
+  expect(sql.prepare('SELECT milestone_index FROM software_projects').get()).toEqual({milestone_index:1});
+});

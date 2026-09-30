@@ -179,6 +179,16 @@ it('renders version-specific direction, delivery, acceptance, handoff and earlie
     html=await renderProject();expect(html).toContain('Your first milestone is ready to review.');expect(html).toContain('Please review by Oct 8, 2026.');expect(html).toContain('Try adding the fictional client.');expect(html).toContain('Demonstrated');expect(html).toContain('Accept milestone');expect(html).toContain('name="criteria"');expect(html).toContain('No automatic acceptance from silence.');
     sql.exec("INSERT INTO software_project_updates(id,request_id,status,kind,milestone_index,title,evidence_type,created_by,created_at,updated_at,shared_at) VALUES ('progress','r','shared','progress',0,'Progress after review','concept','owner','2026-10-02','2026-10-02','2026-10-02')");
     html=await renderProject();expect(html).toContain('data-software-review');expect(html).toContain('/reviews/delivery');expect(html).toContain('Try adding the fictional client.');expect(html).not.toContain('This update is shown for reference.');expect(html).not.toContain('Earlier versions');expect(html.indexOf('Your review')).toBeLessThan(html.indexOf('What we agreed'));
+    const multiTerms={...terms,milestones:[...terms.milestones,{...terms.milestones[0],name:'Follow-up'}]};
+    sql.prepare('UPDATE software_projects SET terms_json=?').run(JSON.stringify(multiTerms));
+    sql.exec("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,created_by,created_at,updated_at,shared_at) VALUES ('pending-direction','r','direction_review','shared',1,'Next direction','Direction v2','concept','owner','2026-10-03','2026-10-03','2026-10-03')");
+    html=await renderProject();
+    expect(html).toContain('Your first milestone is ready to review.');expect(html).toContain('Please review by Oct 8, 2026.');
+    const rail=html.slice(html.indexOf('<aside'),html.indexOf('</aside>'));
+    expect(rail.indexOf('/reviews/delivery')).toBeLessThan(rail.indexOf('/reviews/pending-direction'));
+    expect(rail).toContain('Accept milestone');expect(rail).toContain('Confirm direction');
+    expect(html.slice(html.indexOf('Earlier updates'))).not.toContain('/reviews/pending-direction');
+    sql.exec("DELETE FROM software_project_updates WHERE id='pending-direction'");
     sql.exec("INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES ('r','client','PRIVATE TOKEN','Accepted Delivery v1','delivery','milestone_accepted','2026-10-02')");
     html=await renderProject();expect(html).not.toContain('Your first milestone is ready to review.');expect(html).not.toContain('Please review by');expect(html).toContain('You accepted Delivery v1 on Oct 2, 2026.');expect(html).toContain('Handoff follows full payment.');
     sql.exec("INSERT INTO software_milestone_payments VALUES ('r',0,'2026-10-01','PRIVATE OWNER'); INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,links_json,next_step,created_by,created_at,updated_at,shared_at) VALUES ('handoff','r','handoff','shared',0,'Delivered files','handoff','[{\"label\":\"Handoff notes\",\"url\":\"https://example.com/notes\"}]','Anything new is a separate milestone.','PRIVATE AUTHOR','2026-10-03','2026-10-03','2026-10-03')");
