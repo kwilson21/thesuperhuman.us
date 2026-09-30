@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { setupSoftwareComposer } from '~/scripts/software-composer';
 
 // Exercise the actual composer render and kind-change handlers without a browser service.
-function fixture(saved=false, savedVisual='') {
+function fixture(saved=false, savedVisual='', paymentBlocked='[false]') {
   const handlers=new Map<string,(event?:any)=>void>();
   const fields: Record<string,any> = {};
   for (const name of ['what_changed','kind','milestone_index','artifact_version','review_window_days','checks_limitations','next_step','client_request','evidence_type','title','preview_url','next_update_on','email_client','visual_alt','visual','paid_confirmed']) {
@@ -10,7 +10,7 @@ function fixture(saved=false, savedVisual='') {
   }
   const elements=new Map<string,any>();
   const element=(selector:string)=>{
-    if (!elements.has(selector)) elements.set(selector,{hidden:false,textContent:'',addEventListener:vi.fn(),dataset:{accepted:'[true]'},classList:{toggle:vi.fn()},getAttribute:()=>selector==='[data-preview-image]' ? savedVisual : null,removeAttribute:vi.fn()});
+    if (!elements.has(selector)) elements.set(selector,{hidden:false,textContent:'',addEventListener:vi.fn(),dataset:{accepted:'[true]',paymentBlocked},classList:{toggle:vi.fn()},getAttribute:()=>selector==='[data-preview-image]' ? savedVisual : null,removeAttribute:vi.fn()});
     return elements.get(selector);
   };
   const form={reportValidity:()=>true,elements:{namedItem:(name:string)=>fields[name]},querySelector:(selector:string)=>selector.startsWith('[name=') && !selector.includes(' ') ? fields[selector.slice(6,-1)] : element(selector),querySelectorAll:()=>[],addEventListener:(event:string,handler:(event?:any)=>void)=>handlers.set(`form:${event}`,handler)};
@@ -92,4 +92,16 @@ it('carries each saved project version through a visual upload and share',async(
   await vi.waitFor(()=>expect(location.assign).toHaveBeenCalled());
   expect(JSON.parse(send.mock.calls[0][1].body)).toMatchObject({action:'draft',expectedProjectUpdatedAt:'project-loaded'});
   expect(JSON.parse(send.mock.calls[2][1].body)).toMatchObject({action:'share',expectedProjectUpdatedAt:'project-saved',expectedUpdatedAt:'visual-saved'});
+});
+
+it('hides manual handoff payment and blocks sharing while the selected installment is payable',()=>{
+  const send=vi.fn();vi.stubGlobal('fetch',send);
+  const page=fixture(false,'','[true,false]');page.change('handoff');
+  expect(page.elements.get('[data-handoff-payment]').hidden).toBe(true);
+  expect(page.elements.get('[data-payment-reminder]').hidden).toBe(false);
+  expect(page.fields.paid_confirmed.disabled).toBe(true);page.submit();expect(send).not.toHaveBeenCalled();
+  page.fields.milestone_index.value='1';page.choose();
+  expect(page.elements.get('[data-handoff-payment]').hidden).toBe(false);
+  expect(page.fields.paid_confirmed.disabled).toBe(false);
+  expect(page.fields.paid_confirmed.required).toBe(true);
 });

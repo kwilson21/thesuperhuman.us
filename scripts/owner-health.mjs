@@ -10,7 +10,7 @@ import { studioRetentionProjectPredicate, softwareRetentionProjectPredicate } fr
 const requiredConfiguration = ['MUSIC_DB', 'AUDIO', 'OWNER_ACCESS_TEAM_DOMAIN', 'OWNER_ACCESS_AUD', 'OWNER_EMAIL'];
 const requiredSchema = ['owner_campaigns', 'owner_requests', 'owner_request_audit', 'music_playback_events', 'music_playback_daily', 'music_playback_geography_daily', 'owner_retention_runs', 'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts', 'stripe_unmatched_events',
   'audio_projects', 'audio_client_codes', 'audio_client_sessions', 'audio_client_access_audit', 'audio_project_messages', 'audio_project_updates', 'audio_project_files', 'audio_project_uploads', 'owner_requests_audit_personal_delete', 'audio_project_after_service_request', 'audio_project_close_declined_request', 'owner_requests_submission_id', 'software_fit_reviews', 'software_offers', 'software_offer_links', 'software_offers_one_draft', 'software_offers_one_sent',
-  'software_projects', 'software_project_updates', 'software_project_updates_one_draft', 'software_project_updates_shared', 'software_project_messages', 'software_project_messages_request', 'software_project_messages_one_decision', 'software_project_audit', 'software_project_audit_request', 'software_milestone_payments'];
+  'software_projects', 'software_project_updates', 'software_project_updates_one_draft', 'software_project_updates_shared', 'software_project_messages', 'software_project_messages_request', 'software_project_messages_one_decision', 'software_project_audit', 'software_project_audit_request', 'software_milestone_payments', 'software_invoices', 'software_invoices_one_active', 'software_invoices_request', 'software_stripe_unmatched_events', 'software_milestone_deposits'];
 const attention = (id, summary, next) => ({ id, status: 'attention', summary, next });
 const pass = (id, summary) => ({ id, status: 'pass', summary, next: '' });
 
@@ -58,7 +58,7 @@ export async function ownerHealth({ now = new Date(), configuredNames, query, me
   }
 
   try {
-    const rows = await query('SELECT COUNT(*) AS total FROM stripe_unmatched_events WHERE resolved_at IS NULL');
+    const rows = await query('SELECT (SELECT COUNT(*) FROM stripe_unmatched_events WHERE resolved_at IS NULL) + (SELECT COUNT(*) FROM software_stripe_unmatched_events WHERE resolved_at IS NULL) AS total');
     const total = Number(rows[0]?.total);
     if (!Number.isFinite(total)) throw new Error('invalid summary');
     checks.push(total > 0
@@ -86,15 +86,19 @@ export async function ownerHealth({ now = new Date(), configuredNames, query, me
       +(SELECT COUNT(*) FROM audio_client_sessions WHERE expires_at<'${old}' OR revoked_at<'${old}' OR last_seen_at<'${old}')
       +(SELECT COUNT(*) FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
         WHERE ${studioRetentionProjectPredicate(now)})
-      +(SELECT COUNT(*) FROM software_projects WHERE ${softwareRetentionProjectPredicate(now)}) AS total`);
+      +(SELECT COUNT(*) FROM software_projects WHERE ${softwareRetentionProjectPredicate(now)}) AS total,
+      (SELECT COUNT(*) FROM software_projects p WHERE p.content_deleted_at IS NULL
+        AND (p.completed_at<='${new Date(now.getTime()-365*86400000).toISOString()}' OR p.revoked_at<='${new Date(now.getTime()-365*86400000).toISOString()}')
+        AND EXISTS(SELECT 1 FROM software_invoices i WHERE i.request_id=p.request_id AND i.status IN ('creating','open','payment_failed','uncollectible'))) AS blocked`);
     const total = Number(rows[0]?.total);
     if (!Number.isFinite(total)) throw new Error('invalid summary');
-    checks.push(total > 0
+    const blocked = Number(rows[0]?.blocked ?? 0);
+    checks.push(blocked > 0 ? attention('studio-retention', `${blocked} software project${blocked === 1 ? '' : 's'} awaiting invoice reconciliation before retention.`, 'Reconcile or void payable invoices in Stripe before cleanup.') : total > 0
       ? attention('studio-retention', `${total} studio retention item${total === 1 ? '' : 's'} need review.`,
         'Preview studio retention, resolve pending uploads or payments, then apply the exact reviewed manifest.')
       : pass('studio-retention', 'No overdue studio retention items were found.'));
   } catch {
-    checks.push(attention('studio-retention', 'Studio retention could not be checked.', 'Confirm migrations 0014 and 0021 and the music database, then run the studio retention preview.'));
+    checks.push(attention('studio-retention', 'Studio retention could not be checked.', 'Confirm migrations 0014 and 0022 and the music database, then run the studio retention preview.'));
   }
 
   return { status: checks.every(check => check.status === 'pass') ? 'healthy' : 'attention', checkedAt: now.toISOString(), checks };

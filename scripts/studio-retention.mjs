@@ -46,7 +46,7 @@ export function studioRetentionProjectPredicate(now) {
 
 export function softwareRetentionProjectPredicate(now) {
   const days=`COALESCE((SELECT json_extract(a.values_json,'$.owner.project_retention_days') FROM software_agreements a WHERE a.id=software_projects.agreement_id AND a.status='executed'),365)`;
-  return `content_deleted_at IS NULL AND ((completed_at IS NOT NULL AND julianday(completed_at)+${days}<=julianday(${quote(now.toISOString())}))
+  return `content_deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM software_invoices i WHERE i.request_id=software_projects.request_id AND i.status IN ('creating','open','payment_failed','uncollectible')) AND ((completed_at IS NOT NULL AND julianday(completed_at)+${days}<=julianday(${quote(now.toISOString())}))
     OR (revoked_at IS NOT NULL AND julianday(revoked_at)+${days}<=julianday(${quote(now.toISOString())})))`;
 }
 async function softwareSources(database, now) {
@@ -70,11 +70,12 @@ async function softwareValues(database, now, listObjects) {
     queries.softwareUpdates = softwareContentSnapshot('software_project_updates',projects);
     queries.softwareMessages = snapshot({columns:'id,request_id,created_at,read_at',from:'software_project_messages',where:`request_id IN (${ids(projects)})`,order:'request_id,id',limit:5000});
     queries.softwarePayments = snapshot({columns:'request_id,milestone_index,paid_recorded_at,recorded_by',from:'software_milestone_payments',where:`request_id IN (${ids(projects)})`,order:'request_id,milestone_index',limit:5000});
-    for (const name of ['softwareUpdates','softwareMessages','softwarePayments']) {
+    queries.softwareDeposits = snapshot({columns:'request_id,milestone_index,paid_recorded_at,recorded_by',from:'software_milestone_deposits',where:`request_id IN (${ids(projects)})`,order:'request_id,milestone_index',limit:5000});
+    for (const name of ['softwareUpdates','softwareMessages','softwarePayments','softwareDeposits']) {
       values[name] = await readSource(database,queries[name]);
       if (values[name].length===5000) throw new Error('Software content batch reached its limit. Reduce project batch size.');
     }
-  } else { values.softwareUpdates=[]; values.softwareMessages=[]; values.softwarePayments=[]; }
+  } else { values.softwareUpdates=[]; values.softwareMessages=[]; values.softwarePayments=[]; values.softwareDeposits=[]; }
   values.softwareObjects=[];
   for (const [id] of projects) {
     const keys = await listObjects(`software/${id}/`);
@@ -210,6 +211,7 @@ export async function applyStudioRetention(database, review, environment, storag
   const softwareStatements = software.values.softwareProjects.length ? [
     `DELETE FROM software_project_messages WHERE request_id IN (${softwareIds})`,
     `DELETE FROM software_project_updates WHERE request_id IN (${softwareIds})`,
+    `DELETE FROM software_milestone_deposits WHERE request_id IN (${softwareIds})`,
     `DELETE FROM software_milestone_payments WHERE request_id IN (${softwareIds})`,
     `UPDATE software_offers SET terms_json='{}',sent_by=NULL WHERE request_id IN (${softwareIds})`,
     `UPDATE software_projects SET terms_json='{}',waiting_for='',started_by='',content_deleted_at=${quote(now.toISOString())} WHERE request_id IN (${softwareIds})`,
@@ -221,7 +223,8 @@ export async function applyStudioRetention(database, review, environment, storag
     `DELETE FROM software_invoices WHERE id IN (${ids(software.values.softwareInvoicesOld)})`);
   if (software.values.softwareAudit.length) softwareStatements.push(`DELETE FROM software_project_audit WHERE id IN (${ids(software.values.softwareAudit)})`);
   const statements = [
-    ...Object.entries(software.queries).map(([name,query])=>guard(query,software.values[name])),
+    ...Object.entries(software.queries).filter(([name])=>!['softwareProjects','softwareInvoiceRefs','softwareInvoicesOld'].includes(name)).map(([name,query])=>guard(query,software.values[name])),
+    ...(software.values.softwareProjects.length ? [guard(snapshot({columns:'request_id,updated_at,invitation_status,invitation_attempted_at,invitation_sent_at',from:'software_projects',where:`request_id IN (${softwareIds})`,order:'request_id',limit:25}),software.values.softwareProjects)] : []),
     ...softwareStatements,
     ...Object.entries(queries).map(([name, query]) => guard(query, values[name])),
     guard(fileSnapshot(values.projects), values.files),
@@ -251,8 +254,9 @@ export async function applyStudioRetention(database, review, environment, storag
         WHERE request_id IN (${projectIds}) AND content_deleted_at IS NULL`,
     ]);
   }
-  if (software.values.softwareProjects.length) await database.batch([
+  if (software.values.softwareProjects.length || software.values.softwareInvoiceRefs.length || software.values.softwareInvoicesOld.length) await database.batch([
     ...Object.entries(software.queries).map(([name,query])=>guard(query,software.values[name])),
+    `UPDATE software_invoices SET retention_fenced_at=COALESCE(retention_fenced_at,${quote(now.toISOString())}) WHERE request_id IN (${softwareIds}) OR id IN (${ids([...software.values.softwareInvoiceRefs,...software.values.softwareInvoicesOld])})`,
     `UPDATE software_projects SET revoked_at=COALESCE(revoked_at,${quote(now.toISOString())}) WHERE request_id IN (${softwareIds})`,
   ]);
   for (const [key] of software.values.softwareObjects) await deleteObject(key);

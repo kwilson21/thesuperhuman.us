@@ -284,7 +284,13 @@ it('hides Reopen for a started request and gates both sending retry controls at 
     sql.exec("UPDATE owner_requests SET status='reviewed'");
     const container=await AstroContainer.create(),locals={owner:{email:'owner@example.com'},runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}};
     const ownerHTML=await container.renderToString(ownerRequest,{params:{id:'r'},request:new Request('https://thesuperhuman.us/owner/requests/r'),locals:locals as any});
-    expect(ownerHTML).not.toContain('data-action="reopen"');expect(ownerHTML).toContain('data-action="resolve"');
+    expect(ownerHTML).not.toContain('data-action="reopen"');expect(ownerHTML).not.toContain('data-action="resolve"');
+    for (const column of ['completed_at','revoked_at']) {
+      sql.exec(`UPDATE software_projects SET ${column}='now'`);
+      const closedHTML=await container.renderToString(ownerRequest,{params:{id:'r'},request:new Request('https://thesuperhuman.us/owner/requests/r'),locals:locals as any});
+      expect(closedHTML).toContain('data-action="resolve"');
+      sql.exec(`UPDATE software_projects SET ${column}=NULL`);
+    }
     const now=Date.now();
     const clock=Date.now; Date.now=()=>now;
     try {
@@ -332,14 +338,22 @@ it('renders only the client project invoices with private payment links and pres
     const renderProject=()=>container.renderToString(softwarePage,{request:new Request('https://thesuperhuman.us/studio/software/r',{headers:{cookie:`studio_session=${session}`}}),params:{id:'r'},locals:{runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}} as any});
     let html=await renderProject();expect(html).toContain('Invoices');expect(html).toContain('Pay invoice ↗');expect(html).toContain('$1,200.00');expect(html).toContain('Due Oct 15, 2026');expect(html).toContain('Initial payment · Received');
     expect(html).not.toMatch(/PRIVATE|old-secret|1,111.11/);
+    for (const status of ['open','payment_failed','uncollectible','paid','void']) {
+      sql.prepare("UPDATE software_invoices SET status=? WHERE id='current-balance'").run(status);
+      html=await renderProject();
+      expect(html.includes('Pay invoice ↗')).toBe(['open','payment_failed','uncollectible'].includes(status));
+    }
+    sql.exec("UPDATE software_invoices SET status='open' WHERE id='current-balance'");
     sql.exec(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,created_by,created_at,updated_at)
       VALUES ('current-deposit','r','current',0,'deposit',120000,7,'payment_failed','https://example.com/deposit','owner','2026-09-30','2026-09-30')`);
-    html=await renderProject();expect(html).toContain('Initial payment · Invoice sent');
+    html=await renderProject();expect(html).toContain('Initial payment · Received');
     expect(html).toContain('Deposit · $1,200.00 · Payment failed');
+    sql.exec("UPDATE software_invoices SET status='void' WHERE id='current-deposit'");
+    html=await renderProject();expect(html).toContain('Initial payment · Received');expect(html).toContain('Deposit · $1,200.00 · Void');
     expect(html.indexOf('Deposit · $1,200.00')).toBeLessThan(html.indexOf('Balance · $1,200.00'));
     sql.exec("UPDATE software_invoices SET status='paid',status_updated_at='2026-10-01' WHERE id='current-deposit'");
     html=await renderProject();expect(html).toContain('Initial payment · Received');expect(html).toContain('Deposit · $1,200.00 · Paid Oct 1, 2026');
     sql.exec("UPDATE software_invoices SET status='void' WHERE id='current-deposit'");
-    html=await renderProject();expect(html).toContain('Initial payment · Not issued');
+    html=await renderProject();expect(html).toContain('Initial payment · Received');
   } finally {sql.close();}
 });

@@ -3,7 +3,7 @@
 Date: September 30, 2026  
 Repository: `kwilson21/thesuperhuman.us`  
 Pull request: #155  
-Code revision: `8da9998f`  
+Code revision: `e5481ba5`  
 Target: production `https://thesuperhuman.us` (private software client Invoices, owner milestone invoice actions, software invoice API and Stripe webhook) and production `MUSIC_DB`  
 Reviewer and deployment authorization: Kazon chose Stripe-hosted invoices for software ("I want stripe invoices", owner, in conversation, 2026-09-29). Applying 0022 to production needs its own authorization, recorded below when given.  
 Scope: explicit owner-created deposit, balance and milestone invoices; ACH with an owner-selected card option; paid-deposit project start; signed webhook payment records; retries, replacements, refunds and retention; client invoice ordering and capitalized labels; nonwrapping owner invoice links; migration `0022_software_invoices.sql`  
@@ -78,7 +78,7 @@ This is a scoped deployment record against the reusable pre-launch checklist. PA
 
 - **UNVERIFIED · Cloudflare Access (checklist 8.1).** Owner identity and target Access policy unverified; owner pages behind Cloudflare Access require authenticated production review.
 - **UNVERIFIED · Owner headers (checklist 8.2).** Production private/no-store and noindex headers unchecked.
-- **PENDING · Migration and backup (checklist 8.3).** Before applying, reconcile the production schema and migration ledger and confirm only the expected migration is pending. Take a full export (stored privately, outside the repository), restore into a scratch database with matching counts, and record a D1 Time Travel bookmark. Apply `0022_software_invoices.sql`. Afterwards: verify row counts and audit id sequence, hash every pre-existing audit row, compare pre-existing table, index and trigger definitions, confirm new objects, run `PRAGMA foreign_key_check`, confirm the ledger has nothing left to apply, and run `owner:health` against the target environment. Local migration tests preserve audit ids and notes and enforce invoice constraints; production procedure is not performed.
+- **PASS · Migration and backup.** Kazon authorized applying 0022 to production ("2. Yes", owner, in conversation, 2026-09-30). Before applying, the production ledger showed only 0022 pending and only its own table and index referenced `software_project_audit` (0 rows). A full export was taken (stored privately, outside the repository) and restored into a scratch database with matching counts, and a D1 Time Travel bookmark was recorded. 0022 applied on September 30, 2026 (11 statements). Afterwards: row counts and the audit id sequence were unchanged, a hash of every request audit row was identical, the only changed definition was the intended `software_project_audit` rebuild, the new invoice, deposit and unmatched-event tables and indexes existed, `PRAGMA foreign_key_check` was empty, and the ledger had nothing left to apply. `owner:health --remote` passed every check.
 - **UNVERIFIED · Persistence and urgent notices (checklist 8.4).** Local transaction tests pass; target storage failure and authorized urgent-email receipt pending.
 - **N/A · Traffic summary (checklist 8.5).** No changes to traffic summary.
 - **N/A · Playback and campaigns (checklist 8.6).** No changes to playback measurement.
