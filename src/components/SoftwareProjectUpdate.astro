@@ -1,4 +1,5 @@
 ---
+import SoftwareAcceptanceChecks from './SoftwareAcceptanceChecks.astro';
 import { evidenceTypes } from '~/lib/software-projects';
 import type { ClientSoftwareUpdate } from '~/lib/software-projects';
 type Props = { update: ClientSoftwareUpdate; visualUrl?: string; preview?: boolean; checks?: string[] };
@@ -14,7 +15,7 @@ const evidence: string[] = JSON.parse(update.criteria_json ?? '[]');
   </figure>
   <p hidden={!update.preview_url} data-preview-link-row><a href={update.preview_url || undefined} data-preview-link target="_blank" rel="noopener noreferrer">Open preview ↗</a></p>
   {(['what_changed','checks_limitations','client_request'] as const).map((key, index) => <section data-preview-section={key} hidden={!update[key]}><h3>{index === 0 ? 'What changed' : index === 1 ? 'Checks and limitations' : 'What I need from you'}</h3><p data-preview-text={key}>{update[key]}</p></section>)}
-  {update.kind==='delivery_review' && checks.length>0 && <section><h3>Agreed checks</h3><ul class="agreed-checks">{checks.map((check,index)=><li><strong>{check}</strong><span>Demonstrated</span><p>{evidence[index]}</p></li>)}</ul></section>}
+  {update.kind==='delivery_review' && checks.length>0 && <SoftwareAcceptanceChecks checks={checks} evidence={evidence} />}
 </article>
 <style>
   .software-update { min-width: 0; overflow-wrap: anywhere; }
@@ -26,8 +27,5 @@ const evidence: string[] = JSON.parse(update.criteria_json ?? '[]');
   img { display: block; width: 100%; height: auto; border: 1px solid var(--rule); }
   figcaption { font: .8rem/1.5 Inter,sans-serif; color: var(--muted); margin-top: .4rem; }
   section { border-top: 1px solid var(--rule); margin-top: 1.5rem; }
-  .agreed-checks { padding: 0; list-style: none; }
-  .agreed-checks li { padding: .8rem 0; border-top: 1px solid var(--rule); font: .9rem/1.6 Inter,sans-serif; }
-  .agreed-checks strong { font-weight: 500; } .agreed-checks span { display: block; color: var(--muted); font-size: .8rem; }
   [hidden] { display: none !important; }
 </style>

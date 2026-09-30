@@ -1,6 +1,7 @@
 ---
 export const prerender = false;
 import OwnerLayout from '~/layouts/OwnerLayout.astro';
+import SoftwareAcceptanceChecks from '~/components/SoftwareAcceptanceChecks.astro';
 import SoftwareProjectUpdate from '~/components/SoftwareProjectUpdate.astro';
 import { getOwnerRequest, listOwnerRequests } from '~/lib/owner-requests';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
@@ -65,7 +66,7 @@ const links: {label:string;url:string}[] = draft ? JSON.parse(draft.links_json) 
       <section data-preview-section="next_step" hidden={!update.next_step}><h3>Next from me</h3><p data-preview-text="next_step">{update.next_step}</p></section>
       <p data-preview-date hidden={!update.next_update_on}>Next update: <span>{update.next_update_on}</span></p>
       <p data-preview-review-date hidden></p>
-      <section data-preview-checks hidden><h3>Agreed checks</h3><ol>{terms.milestones.map((item,index)=><li data-preview-criteria={index} hidden>{item.acceptance.map(check=><section><strong>{check}</strong><p data-preview-evidence></p></section>)}</li>)}</ol></section>
+      <div data-preview-checks hidden>{terms.milestones.map((item,index)=><div data-preview-criteria={index} hidden><SoftwareAcceptanceChecks checks={item.acceptance} evidence={index===draft?.milestone_index ? criteria : []} /></div>)}</div>
       <section data-preview-handoff hidden><h3>Delivered links</h3><ul>{Array.from({length:10},()=> <li hidden><a target="_blank" rel="noopener noreferrer"></a></li>)}</ul></section>
       <p class="private-note">Private notes and fit review stay in the request.</p>
     </aside>
