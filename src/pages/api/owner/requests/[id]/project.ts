@@ -34,7 +34,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
           .bind(at, at, at, actor, command.next_update_on || null, at, at, id),
         db.prepare(`INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at)
           SELECT id,'reviewed',?,'',? FROM owner_requests WHERE id=? AND status='new'`).bind(actor.trim().toLowerCase(),at,id),
-        db.prepare("UPDATE owner_requests SET status='reviewed',reviewed_at=?,updated_at=? WHERE id=? AND status='new'").bind(at,at,id),
+        db.prepare("UPDATE owner_requests SET status='reviewed',updated_at=? WHERE id=? AND status='new'").bind(at,id),
         softwareAudit(db, id, 'started', actor, at),
       ]);
       try { await deliverSoftwareNotice(db, id, env); } catch { return json({ ok: true, noticeUnchecked: true }); }

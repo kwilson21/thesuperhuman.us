@@ -142,9 +142,3 @@ it('counts eligible software projects alongside audio retention items', async ()
   expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'studio-retention', status: 'pass' }));
   db.close();
 });
-
-it('reports a missing reviewed timestamp column as unhealthy request storage',async()=>{
-  const fixture=healthyFixture(),query=fixture.query;
-  fixture.query=async sql=>{if(sql.includes('COUNT(reviewed_at)')) throw new Error('missing column');return query(sql);};
-  expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({id:'request-storage',status:'attention'}));
-});

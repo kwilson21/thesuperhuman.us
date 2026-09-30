@@ -280,7 +280,7 @@ it('migration preserves every earlier row and enforces checks, draft uniqueness,
   database.exec("INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES ('a','service','a@example.com','Keep','new','now','now'),('s','software','s@example.com','Keep','new','now','now'); INSERT INTO software_offers VALUES ('o','s',1,'sent','{}','now','now','now','owner'); INSERT INTO owner_request_audit(request_id,action,actor,occurred_at) VALUES ('s','created','owner','now')");
   const tables=['owner_requests','owner_request_audit','audio_projects','audio_project_audit','software_offers']; const before=tables.map(table=>database.prepare(`SELECT * FROM ${table}`).all());
   database.exec('BEGIN');database.exec(readFileSync(new URL('../../migrations/music/0021_software_projects.sql',import.meta.url),'utf8'));database.exec('COMMIT');
-  expect(tables.map(table=>database.prepare(`SELECT * FROM ${table}`).all())).toEqual(before.map((rows,index)=>index===0 ? rows.map((row: Record<string, unknown>)=>({...row,reviewed_at:null})) : rows));
+  expect(tables.map(table=>database.prepare(`SELECT * FROM ${table}`).all())).toEqual(before);
   database.exec("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('s','o','{}','standard','now','now','now','owner','now','now')");
   for(const [column,value] of [['state','unknown'],['step','unknown'],['payment_mode','unknown'],['invitation_status','unknown'],['milestone_index',3],['waiting_for','x'.repeat(201)]]) expect(()=>database.prepare(`UPDATE software_projects SET ${column}=?`).run(value)).toThrow();
   const insert=database.prepare("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,created_by,created_at,updated_at) VALUES (?,'s',?,?,0,'Title',?,'owner','now','now')"); insert.run('d','progress','draft','concept'); expect(()=>insert.run('d2','progress','draft','concept')).toThrow();
@@ -382,7 +382,7 @@ it('reviews a new request atomically when starting and removes it from Today',as
   expect((await loadStudioLedger(db,new Date())).attention.newRequests).toBe(1);
   await start();
   expect((await loadStudioLedger(db,new Date())).attention.newRequests).toBe(0);
-  expect(sql.prepare('SELECT status,reviewed_at,updated_at FROM owner_requests').get()).toMatchObject({status:'reviewed',reviewed_at:expect.any(String)});
+  expect(sql.prepare('SELECT status,updated_at FROM owner_requests').get()).toMatchObject({status:'reviewed',updated_at:expect.any(String)});
   expect(sql.prepare('SELECT action,actor FROM owner_request_audit').all()).toEqual([{action:'reviewed',actor:'owner@example.com'}]);
 });
 it('retries a first share with one row and one email, rejecting changed content',async()=>{

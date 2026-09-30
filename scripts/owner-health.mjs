@@ -50,7 +50,7 @@ export async function ownerHealth({ now = new Date(), configuredNames, query, me
     : pass('release-media', `All ${media.length} public Old News media checks passed.`));
 
   try {
-    const rows = await query("SELECT COUNT(*) AS total,COUNT(reviewed_at) AS reviewed FROM owner_requests WHERE status='new'");
+    const rows = await query("SELECT COUNT(*) AS total FROM owner_requests WHERE status='new'");
     if (rows.length !== 1 || !Number.isFinite(Number(rows[0].total))) throw new Error('invalid summary');
     checks.push(pass('request-storage', 'The bounded owner request summary query passed.'));
   } catch {
