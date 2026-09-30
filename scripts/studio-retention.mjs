@@ -50,9 +50,12 @@ export function softwareRetentionProjectPredicate(now) {
 }
 async function softwareSources(database, now) {
   const exists = (await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_projects'")).length;
+  const invoices=(await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_invoices'")).length;
   const empty = "SELECT '[]' AS snapshot";
   return {
     softwareProjects: exists ? snapshot({ columns:'request_id,updated_at,invitation_status,invitation_attempted_at,invitation_sent_at', from:'software_projects', where:softwareRetentionProjectPredicate(now), order:'request_id',limit:25 }) : empty,
+    softwareInvoiceRefs: invoices ? snapshot({columns:'id,request_id,updated_at',from:'software_invoices',where:`external_refs_deleted_at IS NULL AND request_id IN (SELECT request_id FROM software_projects WHERE ${softwareRetentionProjectPredicate(now)} OR content_deleted_at IS NOT NULL)`,order:'id',limit:1000}) : empty,
+    softwareInvoicesOld: invoices ? snapshot({columns:'id,request_id,updated_at',from:'software_invoices',where:`created_at<${quote(cutoff(now,730))} AND EXISTS(SELECT 1 FROM software_projects p WHERE p.request_id=software_invoices.request_id AND p.content_deleted_at IS NOT NULL)`,order:'id',limit:1000}) : empty,
     softwareAudit: exists ? snapshot({columns:'id,occurred_at',from:'software_project_audit',where:`occurred_at<${quote(cutoff(now,730))}`,order:'id',limit:1000}) : empty,
   };
 }
@@ -207,9 +210,14 @@ export async function applyStudioRetention(database, review, environment, storag
     `DELETE FROM software_project_messages WHERE request_id IN (${softwareIds})`,
     `DELETE FROM software_project_updates WHERE request_id IN (${softwareIds})`,
     `DELETE FROM software_milestone_payments WHERE request_id IN (${softwareIds})`,
-    `UPDATE software_projects SET content_deleted_at=${quote(now.toISOString())} WHERE request_id IN (${softwareIds})`,
+    `UPDATE software_offers SET terms_json='{}',sent_by=NULL WHERE request_id IN (${softwareIds})`,
+    `UPDATE software_projects SET terms_json='{}',waiting_for='',started_by='',content_deleted_at=${quote(now.toISOString())} WHERE request_id IN (${softwareIds})`,
     `INSERT INTO software_project_audit(request_id,action,actor,occurred_at) SELECT request_id,'content-deleted','retention',${quote(now.toISOString())} FROM software_projects WHERE request_id IN (${softwareIds})`,
   ] : [];
+  if (software.values.softwareInvoiceRefs.length) softwareStatements.push(`UPDATE software_invoices SET stripe_customer_id=NULL,hosted_invoice_url=NULL,created_by='',creation_started_at=NULL,external_refs_deleted_at=${quote(now.toISOString())} WHERE id IN (${ids(software.values.softwareInvoiceRefs)})`);
+  if (software.values.softwareInvoicesOld.length) softwareStatements.push(
+    `DELETE FROM stripe_webhook_events WHERE invoice_id IN (SELECT stripe_invoice_id FROM software_invoices WHERE id IN (${ids(software.values.softwareInvoicesOld)}))`,
+    `DELETE FROM software_invoices WHERE id IN (${ids(software.values.softwareInvoicesOld)})`);
   if (software.values.softwareAudit.length) softwareStatements.push(`DELETE FROM software_project_audit WHERE id IN (${ids(software.values.softwareAudit)})`);
   const statements = [
     ...Object.entries(software.queries).map(([name,query])=>guard(query,software.values[name])),

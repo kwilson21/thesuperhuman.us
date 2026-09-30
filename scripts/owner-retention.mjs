@@ -46,16 +46,18 @@ async function paymentRetentionGuard(database) {
     AND NOT (${finishedPaymentTerms('payment')}))`;
 }
 
-async function portalRetentionGuard(database) {
+async function portalRetentionGuard(database, now) {
   const tables = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='audio_projects'");
   if (!tables.length) return { guard: '1', completed: '0' };
   const columns = new Set((await database.query('PRAGMA table_info(audio_projects)')).map(row => String(row.name)));
   if (!columns.has('content_deleted_at')) throw new Error('Studio retention migration 0014 is required before owner retention can run.');
   const software = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_projects'");
   const softwareGuard = software.length ? " AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.request_id=owner_requests.id AND p.content_deleted_at IS NULL)" : '';
+  const invoices = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_invoices'");
+  const invoiceGuard = invoices.length ? ` AND NOT EXISTS(SELECT 1 FROM software_invoices i WHERE i.request_id=owner_requests.id AND i.created_at>=${quote(dayCutoff(now,730))})` : '';
   const softwareCompleted = software.length ? " OR EXISTS(SELECT 1 FROM software_projects p WHERE p.request_id=owner_requests.id AND p.content_deleted_at IS NOT NULL)" : '';
   return {
-    guard: `NOT EXISTS(SELECT 1 FROM audio_projects p WHERE p.request_id=owner_requests.id AND p.content_deleted_at IS NULL)${softwareGuard}`,
+    guard: `NOT EXISTS(SELECT 1 FROM audio_projects p WHERE p.request_id=owner_requests.id AND p.content_deleted_at IS NULL)${softwareGuard}${invoiceGuard}`,
     completed: `EXISTS(SELECT 1 FROM audio_projects p WHERE p.request_id=owner_requests.id AND p.content_deleted_at IS NOT NULL)${softwareCompleted}`,
   };
 }
@@ -63,7 +65,7 @@ async function portalRetentionGuard(database) {
 export async function previewOwnerRetention(database, environment, now = new Date()) {
   const cutoff = dayCutoff(now, 90);
   const paymentGuard = await paymentRetentionGuard(database);
-  const portal = await portalRetentionGuard(database);
+  const portal = await portalRetentionGuard(database, now);
   const [{ snapshot: requests }] = await database.query(requestSnapshot(now, '1', paymentGuard, portal.guard, portal.completed));
   const [{ snapshot: playback }] = await database.query(playbackSnapshot(cutoff));
   const playbackRows = JSON.parse(playback); const selection = idsSelection(playbackRows);
@@ -101,7 +103,7 @@ async function verifyTriggers(database) {
 export async function applyOwnerRetention(database, review, environment, now = new Date()) {
   validateReview(review, environment, now);
   const paymentGuard = await paymentRetentionGuard(database);
-  const portal = await portalRetentionGuard(database);
+  const portal = await portalRetentionGuard(database, now);
   const [{ snapshot: requests }] = await database.query(requestSnapshot(now, '1', paymentGuard, portal.guard, portal.completed));
   const [{ snapshot: playback }] = await database.query(playbackSnapshot(review.playbackCutoff));
   if (hash(requests) !== review.requestSourceHash || hash(playback) !== review.playbackSourceHash) throw new Error('Eligible owner data changed or this review was already applied. Generate and review a fresh preview.');
@@ -135,6 +137,11 @@ export async function applyOwnerRetention(database, review, environment, now = n
   const projectsTable = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_projects'");
   const softwareCleanup = softwareTables.length ? ['software_offer_links','software_fit_reviews'].map(table =>
     `DELETE FROM ${table} WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`) : [];
+  const invoiceTable = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_invoices'");
+  if(invoiceTable.length) softwareCleanup.push(
+    `DELETE FROM stripe_webhook_events WHERE invoice_id IN (SELECT stripe_invoice_id FROM software_invoices WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection}))`,
+    `DELETE FROM software_stripe_unmatched_events WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`,
+    `DELETE FROM software_invoices WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection}) AND created_at<${quote(dayCutoff(now,730))}`);
   if (softwareTables.length) softwareCleanup.push(projectsTable.length
     ? `DELETE FROM software_offers WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection}) AND id NOT IN (SELECT offer_id FROM software_projects)`
     : `DELETE FROM software_offers WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`);
