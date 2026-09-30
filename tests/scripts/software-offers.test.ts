@@ -1,18 +1,19 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import { setupOwnerRequestActions } from '~/scripts/owner-request-actions';
 import { setupSoftwareOffers } from '~/scripts/software-offers';
 
 // Small DOM stand-in for the two async editor races; actual routes render in page tests.
 function fixture(action = 'fit') {
   const element = (extra: Record<string, any> = {}) => {
     const events: Record<string, Function> = {};
-    return { dataset:{} as Record<string,string>,disabled:false,hidden:false,textContent:'',value:'',checked:false,
+    return { dataset:{} as Record<string,string>,disabled:false,hidden:false,textContent:'',value:'',checked:false,focus:vi.fn(),
       addEventListener:(name:string, handler:Function) => { events[name] = handler; },
       emit:async function(name:string, target?:any) { return events[name]?.({ preventDefault:vi.fn(), target, currentTarget:this }); },
       querySelector:() => null,querySelectorAll:() => [],setAttribute:vi.fn(),removeAttribute:vi.fn(),...extra };
   };
   const inputs: Record<string, any> = Object.fromEntries(Object.entries({ outcome:'Tracker',summary:'Shared view',clientInputs:'',exclusions:'',timing:'',paymentMode:'standard',hasRange:'',milestoneName:'First',deliverables:'Status view',acceptance:'Add a client',fee:'2400',hasCheckpoint:'' }).map(([name,value]) => [name,element({ value })]));
   const send = element(), preview = element(), status = element(), state = element(), range = element(), checkpoint = element();
-  const row: any = element({ querySelectorAll:(selector:string) => { const input = inputs[selector.match(/name="([^"]+)"/)?.[1] ?? '']; return input ? [input] : []; }, querySelector:(selector:string) => selector === 'legend' ? element() : selector === '[data-checkpoint]' ? checkpoint : inputs[selector.match(/name="([^"]+)"/)?.[1] ?? ''] });
+  const row: any = element({ querySelectorAll:(selector:string) => { const input = inputs[selector.match(/name="([^"]+)"/)?.[1] ?? '']; return input ? [input] : []; }, querySelector:(selector:string) => selector === 'input' ? inputs.milestoneName : selector === 'legend' ? element() : selector === '[data-checkpoint]' ? checkpoint : inputs[selector.match(/name="([^"]+)"/)?.[1] ?? ''] });
   const list: any = element({ children:[row],lastElementChild:row,appendChild:function(child:any) { this.children.push(child); this.lastElementChild = child; },querySelectorAll:function(selector:string) { return selector === '[data-milestone]' ? this.children : []; } });
   const submit = element();
   const form = element({ querySelector:(selector:string) => selector === '[type="submit"]' ? submit : inputs[selector.match(/name="([^"]+)"/)?.[1] ?? ''],querySelectorAll:(selector:string) => { const input = inputs[selector.match(/name="([^"]+)"/)?.[1] ?? '']; return input ? [input] : []; } });
@@ -23,14 +24,15 @@ function fixture(action = 'fit') {
   const actionStatus = element(), siblingForm = element(), privateNote = element();
   const actionButton = element({ textContent:'Send' });
   const actionForm = element({ dataset:{ softwareAction:action, endpoint:'/api/software' }, querySelector:(selector:string) => selector === 'button' ? actionButton : actionStatus });
-  const root = element({ dataset:{ endpoint:'/api/software',updated:'saved',version:'1',sentVersion:'',revoked:'false',email:'alex@example.com' },querySelector:(selector:string) => targets[selector] });
-  vi.stubGlobal('document',{ querySelector:(selector:string) => selector === '[data-offer-form]' ? form : root,querySelectorAll:(selector:string) => selector === '[data-milestone]' ? [row] : selector === '[data-software-action]' ? [actionForm] : selector === '[data-software-action], [data-request-note], [data-software-editor]' ? [actionForm,siblingForm,privateNote,root] : selector === '[data-software-action], [data-request-note]' ? [actionForm,siblingForm,privateNote] : [] });
+  const requestActions = [element({ dataset:{ action:'resolve' },closest:() => null }), element({ dataset:{ action:'withdraw' },closest:() => null })];
+  const root = element({ dataset:{ requestId:'software', endpoint:'/api/software',updated:'saved',version:'1',sentVersion:'',revoked:'false',email:'alex@example.com' },querySelector:(selector:string) => targets[selector] });
+  vi.stubGlobal('document',{ querySelector:(selector:string) => selector === '[data-offer-form]' ? form : root,querySelectorAll:(selector:string) => selector === '[data-request-actions] button[data-action]' ? requestActions : selector === '[data-milestone]' ? [row] : selector === '[data-software-action]' ? [actionForm] : selector === '[data-software-action], [data-request-note], [data-software-editor]' ? [actionForm,siblingForm,privateNote,root] : selector === '[data-software-action], [data-request-note]' ? [actionForm,siblingForm,privateNote] : [] });
   vi.stubGlobal('FormData',class { *[Symbol.iterator]() { yield ['text','Thanks.']; } });
   vi.stubGlobal('sessionStorage',{ getItem:() => null,setItem:vi.fn(),removeItem:vi.fn() });
   vi.stubGlobal('location',{ reload:vi.fn() }); vi.stubGlobal('confirm',vi.fn(() => true));
   vi.stubGlobal('window', { addEventListener: vi.fn() });
   setupSoftwareOffers();
-  return { list,actionButton,root,form,send,preview,status,inputs,targets,submit,actionForm,actionStatus,siblingForm,privateNote };
+  return { requestActions,list,actionButton,root,form,send,preview,status,inputs,targets,submit,actionForm,actionStatus,siblingForm,privateNote };
 }
 afterEach(() => vi.unstubAllGlobals());
 it('keeps newer edits unsaved when a draft save finishes', async () => {
@@ -254,4 +256,36 @@ it('focuses and announces each added milestone, including the third', async () =
     expect(status.textContent).toBe(`Milestone ${count} added.`);
   }
   expect(targets['[data-add-milestone]'].disabled).toBe(true);
+});
+
+it.each(['question','decline'])('refuses Resolve and Withdraw while %s is pending and restores the page', async action => {
+  const { root,actionForm,requestActions } = fixture(action);
+  setupOwnerRequestActions();
+  let finish!: (value:Response) => void;
+  vi.stubGlobal('fetch',vi.fn(() => new Promise<Response>(resolve => { finish = resolve; })));
+  const pending = actionForm.emit('submit');
+  expect(root.dataset.offerSending).toBe('true'); expect(root.dataset.busy).toBe('true');
+  expect(root.setAttribute).toHaveBeenCalledWith('inert','');
+  expect(root.setAttribute).toHaveBeenCalledWith('aria-busy','true');
+  for (const button of requestActions) await button.emit('click');
+  expect(fetch).toHaveBeenCalledOnce();
+  finish(Response.json({ message:'Failed' },{ status:502 })); await pending;
+  expect(root.dataset.offerSending).toBe('false'); expect(root.dataset.busy).toBe('false');
+  expect(root.removeAttribute).toHaveBeenCalledWith('inert'); expect(root.removeAttribute).toHaveBeenCalledWith('aria-busy');
+});
+it.each([0,1,2])('focuses the next milestone or previous one after removing row %s', async index => {
+  const { list,targets,status } = fixture();
+  await targets['[data-add-milestone]'].emit('click'); await targets['[data-add-milestone]'].emit('click');
+  const rows = [...list.children];
+  rows.forEach((row, position) => {
+    row.nextElementSibling = rows[position + 1] ?? null;
+    row.previousElementSibling = rows[position - 1] ?? null;
+    row.remove = () => { list.children.splice(list.children.indexOf(row),1); };
+  });
+  const neighbor = rows[index + 1] ?? rows[index - 1];
+  const input = neighbor.querySelector('input'); input.focus.mockClear();
+  const button = { closest:() => rows[index] };
+  await list.emit('click',{ closest:() => button });
+  expect(list.children).toHaveLength(2); expect(input.focus).toHaveBeenCalledOnce();
+  expect(status.textContent).toBe('Milestone removed.');
 });

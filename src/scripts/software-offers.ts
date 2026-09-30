@@ -46,6 +46,12 @@ export function setupSoftwareOffers() {
     form.dataset.dirty = 'true';
     form.dataset.revision = String(Number(form.dataset.revision ?? 0) + 1);
   }));
+  const setSending = (page: HTMLElement, sending: boolean) => {
+    if (sending) page.setAttribute('inert', ''); else page.removeAttribute('inert');
+    if (sending) page.setAttribute('aria-busy', 'true'); else page.removeAttribute('aria-busy');
+    page.dataset.offerSending = String(sending);
+    page.dataset.busy = String(sending);
+  };
   let reloading = false;
   const hasUnsavedChanges = () => hasUnsavedRequestChanges();
   const reload = (status: HTMLElement, submitted?: HTMLFormElement) => {
@@ -66,6 +72,8 @@ export function setupSoftwareOffers() {
       if (action === 'decline' && !confirm('Send this message and decline the inquiry?')) return;
       const button = form.querySelector<HTMLButtonElement>('button')!; button.disabled = true;
       const revision = form.dataset.revision;
+      const sendingPage = action === 'question' || action === 'decline' ? requestPage ?? form : null;
+      if (sendingPage) setSending(sendingPage, true);
       try {
         const result = await post(form.dataset.endpoint!, { action, ...Object.fromEntries(data), expectedRequestUpdatedAt: requestPage?.dataset.requestUpdated });
         if (action === 'fit' && requestPage) requestPage.dataset.requestUpdated = result.updatedAt;
@@ -76,7 +84,7 @@ export function setupSoftwareOffers() {
         status.textContent = (error as Error).message;
         if (error instanceof TransportError && (action === 'question' || action === 'decline')) button.textContent = 'Send again';
       }
-      finally { button.disabled = false; }
+      finally { button.disabled = false; if (sendingPage) setSending(sendingPage, false); }
     });
   });
   const root = document.querySelector<HTMLElement>('[data-software-editor]');
@@ -152,7 +160,15 @@ export function setupSoftwareOffers() {
     list.lastElementChild!.querySelector<HTMLInputElement>('input')!.focus();
     status.textContent = `Milestone ${list.children.length} added.`;
   });
-  list.addEventListener('click', event => { const button = (event.target as HTMLElement).closest('[data-remove-milestone]'); if (button && list.children.length > 1) { button.closest('[data-milestone]')!.remove(); changed = true; inputRevision++; updateControls(); } });
+  list.addEventListener('click', event => {
+    const button = (event.target as HTMLElement).closest('[data-remove-milestone]');
+    if (!button || list.children.length <= 1) return;
+    const row = button.closest('[data-milestone]')!;
+    const neighbor = row.nextElementSibling ?? row.previousElementSibling;
+    row.remove(); changed = true; inputRevision++; updateControls();
+    (neighbor?.querySelector<HTMLInputElement>('input') ?? root.querySelector<HTMLButtonElement>('[data-add-milestone]'))!.focus();
+    status.textContent = 'Milestone removed.';
+  });
   form.addEventListener('submit', async event => {
     event.preventDefault(); const button = form.querySelector<HTMLButtonElement>('[type="submit"]')!; button.disabled = true;
     const revision = inputRevision;
@@ -166,7 +182,7 @@ export function setupSoftwareOffers() {
     const version = Number(saved ? root.dataset.version : root.dataset.sentVersion);
     if (!confirm(`Send offer v${version} to ${root.dataset.email}?`)) return;
     const requestPage = document.querySelector<HTMLElement>('[data-request-id]') ?? root;
-    requestPage.setAttribute('inert', ''); requestPage.dataset.offerSending = 'true';
+    setSending(requestPage, true);
     send.disabled = true; root.setAttribute('inert', ''); root.setAttribute('aria-busy', 'true'); root.dataset.busy = 'true';
     try { const result = await post(endpoint, { action: 'send', version, expectedUpdatedAt: saved ? root.dataset.updated : root.dataset.sentUpdated });
       root.querySelector<HTMLButtonElement>('[data-revoke-link]')!.dataset.linkCreatedAt = result.linkCreatedAt;
@@ -189,7 +205,7 @@ export function setupSoftwareOffers() {
       entry.querySelector<HTMLElement>('[data-version-status]')!.textContent = 'sent';
       root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false';
     } catch (error) { status.textContent = (error as Error).message; root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false'; updateControls(); }
-    finally { requestPage.removeAttribute('inert'); requestPage.dataset.offerSending = 'false'; }
+    finally { setSending(requestPage, false); }
   });
   updateControls();
 }
