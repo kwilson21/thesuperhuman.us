@@ -1,0 +1,65 @@
+---
+interface Props { kind: 'tally' | 'kaillera' | 'website'; }
+const { kind } = Astro.props;
+const bars = [8, 14, 23, 17, 29, 11, 25, 34, 19, 26, 13, 30, 21, 10, 28, 36, 17, 25, 12, 31, 22, 14, 27, 18];
+---
+<figure class="building-illustration" data-reveal>
+  <div class:list={['drawing', kind]} aria-hidden="true">
+    {kind === 'tally' && <div class="panels budget-panels">
+      <div class="panel-step"><p class="panel-label">Transactions</p><div class="panel transactions"><p><span>◦</span> Coffee</p><p><span>◦</span> Groceries</p><p><span>◦</span> Transit</p><p><span>◦</span> Restaurant</p><p class="ellipsis">…</p></div></div>
+      <span class="flow-arrow">→</span>
+      <div class="panel-step"><p class="panel-label">Categories</p><div class="panel categories"><p><span class="category-dot food"></span> Food</p><p><span class="category-dot home"></span> Home</p><p><span class="category-dot transport"></span> Transport</p><p><span class="category-dot shopping"></span> Shopping</p></div></div>
+      <span class="flow-arrow">→</span>
+      <div class="panel-step"><p class="panel-label">Monthly budget</p><div class="panel budgets"><p>Food</p><div class="budget-track"><span style="--amount: 72%; --color: var(--accent)"></span></div><p>Home</p><div class="budget-track"><span style="--amount: 40%; --color: #7c9297"></span></div><p>Transport</p><div class="budget-track"><span style="--amount: 57%; --color: #82927b"></span></div><p>Shopping</p><div class="budget-track"><span style="--amount: 32%; --color: #b6a48d"></span></div></div></div>
+    </div>}
+    {kind === 'kaillera' && <div class="room-scene">
+      <svg class="connections" viewBox="0 0 540 320" preserveAspectRatio="none" fill="none"><path class="room-lines" d="M270 82 L70 207 M270 82 L470 207 M270 150 L270 270"/><path class="peer-line" d="M139 227 H401"/><path class="peer-heads" d="m147 221 -8 6 8 6 m246 -12 8 6 -8 6"/></svg>
+      <div class="room panel-step"><p class="panel-label">Game room</p><div class="browser room-browser"><div class="browser-bar">•••</div><div class="room-members"><p><span class="member"></span> Player 1</p><p><span class="member"></span> Player 2</p><p><span class="member spectator-dot"></span> Spectator</p><div class="invite">Invite friends</div></div></div></div>
+      {[{name:'Player 1',className:'player-one'},{name:'Player 2',className:'player-two'},{name:'Spectator',className:'spectator'}].map(({name,className}) => <div class:list={['participant','panel-step',className]}><div class="browser"><div class="browser-bar">•••</div><svg viewBox="0 0 100 55" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="38" cy="17" r="8"/><path d="M23 44v-4c0-17 30-17 30 0v4"/>{name !== 'Spectator' && <><path d="M68 21h13l5 17c1 4-2 5-5 2l-5-4-5 4c-3 3-6 2-5-2z"/><path d="M69 28h7m-3-3v6"/><circle cx="80" cy="29" r="1"/></>}</svg></div><p class="panel-label">{name}</p>{name === 'Spectator' && <p class="watch-only">Watch only</p>}</div>)}
+    </div>}
+    {kind === 'website' && <div class="panels website-panels">
+      <div class="panel-step panel web-panel"><p class="panel-label">Explore the work</p><div class="work-timeline"><div><i></i><span></span><span></span></div><div><i></i><span></span><span></span></div><div><i></i><span></span><span></span></div><div><i></i><span></span></div></div></div>
+      <div class="panel-step panel web-panel"><p class="panel-label">Compare the sound</p><div class="sound"><p>Before</p><svg viewBox="0 0 100 48" class="wave before-wave">{bars.map((height,i)=><line x1={3+i*4} x2={3+i*4} y1={24-height/2} y2={24+height/2} />)}</svg><p>After</p><svg viewBox="0 0 100 48" class="wave after-wave">{bars.map((height,i)=><line x1={3+i*4} x2={3+i*4} y1={24-height/2-2} y2={24+height/2+2} />)}</svg></div></div>
+      <div class="panel-step panel web-panel"><p class="panel-label">Start a conversation</p><div class="inquiry"><div>Your name</div><div>What do you want to make?</div><span>Send a message</span></div></div>
+    </div>}
+  </div>
+  <figcaption>Illustration</figcaption>
+</figure>
+<style>
+  .building-illustration { min-width: 0; margin: 0; }
+  .drawing { color: var(--ink); }
+  .panels { display: grid; align-items: start; gap: .65rem; }
+  .budget-panels { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr); align-items: center; }
+  .panel-step { min-width: 0; }
+  .panel-label { font-size: .875rem; line-height: 1.2; text-align: center; margin-bottom: .8rem; }
+  .panel { border: 1px solid #cbc5ba; border-radius: 3px; background: var(--paper); }
+  .transactions, .categories, .budgets { min-height: 190px; padding: .9rem .65rem; font-size: .75rem; line-height: 1.35; }
+  .transactions p, .categories p { display: flex; align-items: center; gap: .45rem; padding-bottom: 1rem; }
+  .transactions p span { color: var(--muted); font-size: 1.25rem; line-height: .75; }
+  .transactions .ellipsis { font-size: 1.1rem; margin-left: 1rem; padding-bottom: 0; }
+  .category-dot { flex-shrink: 0; width: .6rem; height: .6rem; border-radius: 50%; background: var(--accent); }.home { background: #7c9297; }.transport { background: #82927b; }.shopping { background: #b6a48d; }
+  .flow-arrow { color: var(--accent); font-size: 1.4rem; padding-top: 1.6rem; }
+  .budgets p { margin-bottom: .3rem; }.budget-track { height: .45rem; background: var(--rule); border-radius: 2px; margin-bottom: 1rem; overflow: hidden; }.budget-track span { display: block; height: 100%; width: var(--amount); background: var(--color); transform-origin: left; }
+  .room-scene { position: relative; height: 340px; }
+  .connections { position: absolute; width: 100%; height: 100%; inset: 0; stroke-width: 1.4; }
+  .room-lines { stroke: var(--muted); stroke-dasharray: 5 6; }.peer-line, .peer-heads { stroke: var(--accent); }
+  .room { position: absolute; top: 0; left: 32%; width: 36%; }.room .panel-label { margin-bottom: .5rem; }
+  .browser { border: 1.5px solid var(--ink); border-radius: 3px; background: var(--paper); overflow: hidden; }.browser-bar { border-bottom: 1px solid var(--rule); height: 1.1rem; line-height: .7; letter-spacing: .2rem; padding-left: .35rem; font-size: .8rem; }
+  .room-members { padding: .65rem .75rem; font-size: .75rem; }.room-members p { display: flex; align-items: center; gap: .6rem; margin-bottom: .45rem; }.member { width: .55rem; height: .55rem; border: 1px solid var(--ink); border-radius: 50%; background: var(--ink); }.spectator-dot { background: var(--paper); }
+  .invite { border: 1px solid var(--accent); border-radius: 3px; padding: .3rem; text-align: center; margin-top: .65rem; }
+  .participant { position: absolute; width: 25%; top: 62%; }.participant svg { display: block; width: 100%; height: 65px; }.participant .panel-label { margin-top: .55rem; margin-bottom: 0; }.player-one { left: 0; }.player-two { right: 0; }.spectator { width: 22%; left: 39%; top: auto; bottom: 0; }.spectator svg { height: 50px; transform: translateX(11%); }.watch-only { text-align: center; font-size: .75rem; color: var(--muted); }
+  .website-panels { grid-template-columns: repeat(3,minmax(0,1fr)); gap: .65rem; }.web-panel { min-height: 225px; }.web-panel > .panel-label { border-bottom: 1px solid var(--rule); padding: .7rem .35rem; margin-bottom: 0; }
+  .work-timeline { padding: 1rem .7rem; }.work-timeline > div { position: relative; margin-left: .3rem; padding: .1rem 0 1.45rem .8rem; border-left: 1px solid #cbc5ba; }.work-timeline > div:last-child { padding-bottom: 0; }.work-timeline i { position: absolute; width: .45rem; height: .45rem; left: -.25rem; top: .2rem; border: 1px solid var(--accent); border-radius: 50%; background: var(--paper); }.work-timeline span { display: block; height: 3px; background: #cbc5ba; margin-bottom: .45rem; }.work-timeline span:last-child { width: 70%; }
+  .sound { padding: .7rem .55rem; }.sound p { font-size: .75rem; }.wave { width: 100%; height: 57px; stroke-width: 1.4; stroke-linecap: round; }.before-wave { stroke: #aaa399; }.after-wave { stroke: var(--accent); }
+  .inquiry { padding: .8rem .6rem; font-size: .7rem; color: var(--muted); }.inquiry > div { border: 1px solid #cbc5ba; border-radius: 2px; padding: .45rem; margin-bottom: .6rem; }.inquiry > div:nth-child(2) { min-height: 76px; }.inquiry > span { display: block; padding: .45rem .1rem; background: var(--accent); color: var(--paper); text-align: center; border-radius: 2px; }
+  figcaption { color: var(--muted); font-size: .75rem; font-style: italic; margin-top: .8rem; }
+  @media (max-width: 400px) { .panels { gap: .35rem; }.panel-label { font-size: .75rem; }.transactions, .categories, .budgets { padding: .65rem .4rem; font-size: .65rem; min-height: 175px; }.transactions p, .categories p { gap: .25rem; }.flow-arrow { font-size: 1rem; }.room-scene { height: 310px; }.room { left: 29%; width: 42%; }.room-members { padding: .55rem; font-size: .7rem; }.web-panel { min-height: 205px; }.inquiry { padding: .6rem .35rem; font-size: .625rem; }.sound { padding: .6rem .4rem; }.work-timeline { padding: .85rem .5rem; } }
+  @media screen and (prefers-reduced-motion: no-preference) {
+    :global(.motion) .building-illustration .panel-step { transition: opacity 700ms ease, transform 700ms cubic-bezier(.2,.7,.2,1); }
+    :global(.motion) .building-illustration:not(.is-in) .panel-step { opacity: 0; transform: translateY(12px); }
+    :global(.motion) .building-illustration .panel-step:nth-of-type(2) { transition-delay: 180ms; }
+    :global(.motion) .building-illustration .panel-step:nth-of-type(3) { transition-delay: 360ms; }
+    :global(.motion) .building-illustration .budget-track span { transition: transform 900ms cubic-bezier(.2,.7,.2,1) 300ms; }
+    :global(.motion) .building-illustration:not(.is-in) .budget-track span { transform: scaleX(0); }
+  }
+</style>
