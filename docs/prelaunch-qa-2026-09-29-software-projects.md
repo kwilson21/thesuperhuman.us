@@ -2,7 +2,7 @@
 
 Date: September 29, 2026  
 Repository: `kwilson21/thesuperhuman.us`  
-Pull request: {{PR}}  
+Pull request: #154  
 Code revision: `6a2f3a46` (this record is committed on top of it)  
 Target: production `https://thesuperhuman.us` (the private studio's sign-in and project list, `/studio/software/[id]`, the owner request page's Project rail, `/owner/requests/[id]/update`, the owner Today list, their APIs and visuals routes) and production `MUSIC_DB`  
 Reviewer and deployment authorization: Kazon Wilson approved Stage 5 as described with design studies 06 to 08 ("And yes to stage 5"), the software sign-in and project-list wording, update visuals in the existing private bucket and one-year project-page retention ("1-3 yes"), the agreement-driven start wording ("1. Yes"), and the final screens after the example wording was made plain ("stage 5 looks good to go") and applying 0021 to production ("yes you can apply the database change") (owner, in conversation, 2026-09-29)  
