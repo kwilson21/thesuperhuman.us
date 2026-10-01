@@ -2,7 +2,7 @@ import { agreementEvent } from '~/lib/agreement-events';
 import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
 import { abandonUnsignedAgreementReviews, executedOfferAgreement, offerAgreements } from '~/lib/software-agreements';
-import { validProjectDate } from '~/lib/audio-project-updates';
+import { projectToday, validProjectDate } from '~/lib/audio-project-updates';
 import { musicRequest } from '~/lib/music-request';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
 import { getSoftwareProject, projectTerms, projectDate, softwareAudit, softwareGuard, openSoftwareGuard, deliverSoftwareNotice, queueSoftwareNotice, softwareAccessRevocation, recordMilestonePayment, acceptedDeliveryGuard, priorMilestonePaymentGuard, milestoneDepositGuard } from '~/lib/software-projects';
@@ -34,10 +34,11 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       const executed=command.signature_source==='website'?await executedOfferAgreement(db,command.offer_id):null;
       if(command.signature_source==='website'&&!executed)return json({ok:false,error:'Both signatures, the PDF and both delivered copies are required.'},409);
       if(command.signature_source==='external'&&(!command.signatures||!command.external_signed_on||!validProjectDate(command.external_signed_on)||!command.external_parties||!command.external_kept_copy||!command.external_copy_reference))return json({ok:false,error:'Record the signed date, parties and complete kept copy.'},400);
+      const today=projectToday();
+      if(command.signature_source==='external'&&command.external_signed_on! > today)return json({ok:false,error:'The outside-site signed date cannot be in the future.'},400);
       const offerDetails=await db.prepare('SELECT agreement_details_json FROM software_offers WHERE id=?').bind(command.offer_id).first<{agreement_details_json:string|null}>();
       const details=offerDetails?.agreement_details_json?JSON.parse(offerDetails.agreement_details_json):null;
       if(details?.po_requirement==='before_start'&&!command.po_number)return json({ok:false,error:'Record the required purchase order before starting.'},400);
-      const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
       if(details?.planned_start>today&&(!command.earlier_start_agreement||!command.earlier_start_on||!validProjectDate(command.earlier_start_on)||command.earlier_start_on>today))return json({ok:false,error:'Wait for the planned start or record the dated client agreement to start earlier.'},409);
       const external=command.signature_source==='external'?JSON.stringify({signed_on:command.external_signed_on,parties:command.external_parties,kept_copy:true,copy_reference:command.external_copy_reference}):null;
       await db.batch([

@@ -1,5 +1,6 @@
 import { agreementSession, agreementHeaders } from './agreement-access';
 import { studioSessionFromRequest, clientSoftwareProjectForSession } from './audio-client-access';
+import { hashBytes } from './agreement-artifacts';
 import type { AgreementArtifact } from './agreement-artifacts';
 export async function agreementDownload(env: Env, request: Request, id: string, owner = false) {
   const db = env.MUSIC_DB;
@@ -76,7 +77,13 @@ export async function agreementDownload(env: Env, request: Request, id: string, 
       status: 503,
       headers: agreementHeaders,
     });
-  return new Response(object.body, {
+  const bytes = await object.arrayBuffer();
+  if (!artifact.pdf_sha256 || (await hashBytes(bytes)) !== artifact.pdf_sha256)
+    return new Response('Signed copy failed its integrity check. Contact Kazon.', {
+      status: 503,
+      headers: agreementHeaders,
+    });
+  return new Response(bytes, {
     headers: {
       ...agreementHeaders,
       'content-type': 'application/pdf',

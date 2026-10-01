@@ -83,6 +83,12 @@ export const PUT: APIRoute = async ({ locals, request, params, url }) => {
       },
     });
   } catch {
+    try {
+      const saved = await db.prepare('SELECT 1 FROM software_agreement_attachments WHERE id=?').bind(id).first();
+      if (!saved) await env.AUDIO.delete(key);
+    } catch {
+      // Preserve an object if the write outcome cannot be established.
+    }
     return agreementJson({ ok: false, error: 'The attachment could not be saved.' }, 503);
   }
 };

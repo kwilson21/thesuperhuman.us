@@ -58,6 +58,12 @@ export type ClientSoftwareUpdate = Pick<SoftwareUpdate, 'id' | 'title' | 'artifa
   has_visual: number; kind?: SoftwareUpdate['kind']; milestone_index?: number; status?: SoftwareUpdate['status'];
   criteria_json?: string; delivered_deliverables_json?: string; links_json?: string; review_window_days?: number; decision?: SoftwareDecision | null; decided_at?: string | null; decision_body?: string | null;
 };
+/** Older review rows predate saved scope snapshots; treat them as full scope. */
+export function deliveredScope(update: Pick<ClientSoftwareUpdate, 'delivered_deliverables_json'>, planned: string[]) {
+  let saved: string[] = [];
+  try { const parsed = JSON.parse(update.delivered_deliverables_json ?? '[]'); if (Array.isArray(parsed)) saved = parsed.filter((item): item is string => typeof item === 'string'); } catch { /* legacy/corrupt snapshots fall back to the agreed scope */ }
+  return saved.length ? saved.filter(item=>planned.includes(item)) : planned;
+}
 export async function sharedSoftwareUpdates(db: D1Database, id: string) {
   return (await db.prepare(`SELECT u.id,u.title,u.artifact_version,u.evidence_type,u.visual_alt,u.preview_url,u.what_changed,u.checks_limitations,
     u.next_step,u.client_request,u.next_update_on,u.shared_at,u.visual_key IS NOT NULL AS has_visual,

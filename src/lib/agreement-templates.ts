@@ -18,6 +18,19 @@ const optionalFields = [
 ];
 export type AgreementKind = keyof typeof templateFields;
 const bytes = (s: string) => new TextEncoder().encode(s).length;
+export function sampleAgreementValues(kind: AgreementKind, text: string) {
+  const values: Record<string, Record<string, string> | unknown> = {};
+  const addSample = (field: string) => {
+    const [namespace, key] = field.split('.');
+    values[namespace] ??= {};
+    const group = values[namespace] as Record<string, string>;
+    group[key] ??= `Sample ${key.replaceAll('_', ' ')}`;
+  };
+  for (const field of templateFields[kind]) addSample(field);
+  for (const match of text.matchAll(/{{([a-z_]+\.[a-z_0-9]+)}}/g)) addSample(match[1]);
+  if (kind === 'sow') values.milestones = [values.milestone];
+  return values;
+}
 export const agreementCharacterSupported = (character: string) =>
   ['\n', '\r', '\t'].includes(character) ||
   coverage.ranges.some(

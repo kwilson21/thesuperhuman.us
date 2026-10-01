@@ -85,7 +85,7 @@ export default {
       if(await checkHeadings.count()!==1) throw new Error('Owner preview should show one active copy of the agreed checks.');
       const included=await page.locator('[data-preview-delivered-items]').innerText();
       if(!included.includes('A shared status view') || included.includes('Next actions with a named owner')) throw new Error('Owner preview must distinguish selected deliverables from the full milestone scope.');
-      if(!await page.getByText('Acceptance still covers the complete agreed milestone and all of its checks.',{exact:true}).isVisible()) throw new Error('Owner preview must retain full-milestone acceptance context.');
+      if(!await page.getByText('Acceptance is for the complete milestone. If any planned deliverable remains, the client cannot accept this version as complete.',{exact:true}).isVisible()) throw new Error('Owner preview must explain the full-milestone acceptance boundary.');
       const evidence=page.locator('[data-criteria-group="0"] textarea');
       if(await evidence.count()!==5 || !(await evidence.evaluateAll(fields=>fields.every(field=>field.required)))) throw new Error('Every agreed check needs required evidence.');
       const referenceFields=page.locator('[data-delivery-reference] input');

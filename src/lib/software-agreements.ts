@@ -78,6 +78,7 @@ export async function reviewAgreements(
   const existing = await offerAgreements(db, offer.id);
   if (existing.some((a) => a.status !== 'review'))
     throw new Error('A signature is already saved. These documents cannot change.');
+  const replacedClientIds = [...new Set(existing.map((agreement) => agreement.client_id))];
   const at = new Date().toISOString(),
     effective = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'America/New_York',
@@ -203,6 +204,11 @@ export async function reviewAgreements(
           session.token_hash,
         ),
     ),
+    ...(replacedClientIds.length ? [db
+      .prepare(`DELETE FROM software_agreement_clients WHERE id IN (${replacedClientIds.map(() => '?').join(',')})
+        AND NOT EXISTS(SELECT 1 FROM software_agreements WHERE client_id=software_agreement_clients.id)
+        AND NOT EXISTS(SELECT 1 FROM software_agreement_notices WHERE client_id=software_agreement_clients.id)`)
+      .bind(...replacedClientIds)] : []),
     agreementEvent(db, 'reviewed', session.token_hash, at, null, offer.id),
   ]);
   return {

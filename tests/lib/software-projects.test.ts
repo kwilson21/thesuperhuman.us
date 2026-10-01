@@ -84,6 +84,18 @@ it('snapshots selected deliverables but blocks acceptance until the full milesto
   expect((await decide(revised.id,{decision:'milestone_accepted',confirm:true},token)).status).toBe(200);
   expect(sql.prepare("SELECT decision FROM software_project_messages WHERE update_id=?").get(revised.id)).toEqual({decision:'milestone_accepted'});
 });
+it('lets clients report a missing planned deliverable even when every included check passes',async()=>{
+  await start();const token=await session();
+  const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v1',criteria:['Try adding a client in the preview.'],delivered_deliverables:['Status view']}});
+  expect(response.status).toBe(200);const {id}=await response.json() as {id:string};
+  expect((await decide(id,{decision:'changes_requested',missing_deliverables:[1],note:'The sample import is not included yet.'},token)).status).toBe(200);
+  expect(sql.prepare('SELECT body FROM software_project_messages WHERE update_id=?').get(id).body).toBe('Requested changes to Delivery v1 for milestone 1: missing #2: Sample import\n\nThe sample import is not included yet.');
+});
+it('treats legacy reviews without a scope snapshot as the full agreed milestone',async()=>{
+  await start();const token=await session(),review=await shareReview();
+  sql.prepare("UPDATE software_project_updates SET delivered_deliverables_json='[]' WHERE id=?").run(review.id);
+  expect((await decide(review.id,{decision:'milestone_accepted',confirm:true},token)).status).toBe(200);
+});
 it('rejects delivery selections outside the agreed scope, duplicates and empty shared selections',async()=>{
   await start();
   for(const delivered_deliverables of [['Not in the contract'],['Status view','Status view'],[]]){
@@ -130,8 +142,15 @@ it('requires specific delivery criteria and bounded reproduction notes',async()=
   for(const changed of [{criteria:[]},{criteria:[1]},{criteria:[-1]},{note:''},{note:'x'.repeat(2001)}])
     expect((await decide(review.id,{decision:'changes_requested',criteria:[0],note:'Adding a client fails with the sample.',...changed},token)).status).toBe(400);
   expect((await decide(review.id,{decision:'changes_requested',criteria:[0],note:'Adding a client fails with the sample.'},token)).status).toBe(200);
-  expect(sql.prepare('SELECT body FROM software_project_messages').get().body).toBe('Requested changes to Delivery v1 for milestone 1: check 1 (Add a client.).\n\nAdding a client fails with the sample.');
+  expect(sql.prepare('SELECT body FROM software_project_messages').get().body).toBe('Requested changes to Delivery v1 for milestone 1: check #1: Add a client.\n\nAdding a client fails with the sample.');
   expect(sql.prepare("SELECT note FROM software_project_audit WHERE action='decision-recorded'").get().note).toContain('checks 1');
+});
+it('keeps client note text out of the machine-readable change header',async()=>{
+  await start();const token=await session(),review=await shareReview();
+  expect((await decide(review.id,{decision:'changes_requested',criteria:[0],note:'The note mentions (Add a different planned check.) but does not mark it unmet.'},token)).status).toBe(200);
+  const body=sql.prepare('SELECT body FROM software_project_messages WHERE update_id=?').get(review.id).body as string;
+  expect(body.split('\n',1)[0]).toBe('Requested changes to Delivery v1 for milestone 1: check #1: Add a client.');
+  expect(body).toContain('The note mentions (Add a different planned check.)');
 });
 it('snapshots delivery references with the versioned review while rejecting unsafe links',async()=>{
   await start();

@@ -11,8 +11,8 @@ import { contractorSchema } from '~/lib/agreement-fields';
 import {
   publishTemplate,
   renderAgreement,
+  sampleAgreementValues,
   validateTemplate,
-  templateFields,
 } from '~/lib/agreement-templates';
 export const prerender = false;
 const schema = z.discriminatedUnion('action', [
@@ -102,14 +102,7 @@ const post: APIRoute = async ({ request, locals }) => {
     }
     validateTemplate(c.kind, c.text);
     if (c.action === 'preview') {
-      const values: Record<string, Record<string, string> | unknown> = {};
-      for (const field of templateFields[c.kind]) {
-        const [ns, key] = field.split('.');
-        values[ns] ??= {};
-        (values[ns] as Record<string, string>)[key] = `Sample ${key.replaceAll('_', ' ')}`;
-      }
-      values.milestones = [values.milestone];
-      return agreementJson({ ok: true, text: renderAgreement(c.kind, c.text, values) });
+      return agreementJson({ ok: true, text: renderAgreement(c.kind, c.text, sampleAgreementValues(c.kind, c.text)) });
     }
     if (!c.confirmed)
       return agreementJson(

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import {
   validateTemplate,
   renderAgreement,
+  sampleAgreementValues,
   templateFields,
   publishTemplate,
 } from '~/lib/agreement-templates';
@@ -32,6 +33,7 @@ import {
 } from '~/lib/agreement-artifacts';
 import { agreementDownload } from '~/lib/agreement-download';
 import { hashOfferToken, type SoftwareOffer } from '~/lib/software-offers';
+import { projectToday } from '~/lib/audio-project-updates';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database, env: Env;
 const token = 'x'.repeat(43),
@@ -218,6 +220,38 @@ async function signed() {
   await signAgreements(db, (await offer())!, session, result.documents, request());
   return result;
 }
+it('removes an unused former client identity when replacing an unsigned review', async () => {
+  await review();
+  const former = sql.prepare('SELECT id FROM software_agreement_clients').get().id as string;
+  await reviewAgreements(db, (await offer())!, (await agreementSession(db, request(), 'agreement', 'o'))!, {
+    ...client,
+    legal_name: 'Updated Sample LLC',
+  });
+  expect(sql.prepare('SELECT id FROM software_agreement_clients WHERE id=?').get(former)).toBeUndefined();
+  const current = sql.prepare('SELECT client_id FROM software_agreements WHERE offer_id=?').get('o').client_id;
+  expect(sql.prepare('SELECT legal_name FROM software_agreement_clients WHERE id=?').get(current)).toEqual({ legal_name: 'Updated Sample LLC' });
+});
+it('removes a just-uploaded PDF when its database row cannot be saved', async () => {
+  const { PDFDocument } = await import('pdf-lib');
+  const pdf = await PDFDocument.create(); pdf.addPage();
+  const bytes = await pdf.save();
+  const batch = vi.spyOn(db, 'batch').mockRejectedValue(new Error('database unavailable'));
+  try {
+    const { PUT } = await import('~/pages/api/owner/requests/[id]/agreement-attachments');
+    const response = await PUT({
+      params: { id: 'r' },
+      url: new URL('https://example.com/api/owner/requests/r/agreement-attachments?filename=Sample.pdf&version=v1&date=2026-10-01'),
+      request: new Request('https://example.com/api/owner/requests/r/agreement-attachments', {
+        method: 'PUT', headers: { origin: 'https://example.com', 'content-type': 'application/pdf' }, body: bytes as BodyInit,
+      }),
+      locals: { owner: { email: 'owner@example.com' }, runtime: { env } },
+    } as never);
+    expect(response.status).toBe(503);
+    expect(env.AUDIO!.put).toHaveBeenCalledOnce();
+    expect(env.AUDIO!.delete).toHaveBeenCalledOnce();
+    expect(bucketData.size).toBe(0);
+  } finally { batch.mockRestore(); }
+});
 it.each(['msa', 'sow'] as const)(
   'rejects incomplete %s templates, HTML, blanks, unknown fields and nesting',
   (kind) => {
@@ -232,6 +266,12 @@ it.each(['msa', 'sow'] as const)(
     expect(validateTemplate(kind, synthetic(kind))).toBe(synthetic(kind));
   },
 );
+it('fills optional SOW fields in template samples', () => {
+  const text = `${synthetic('sow')}\nSummary: {{sow.summary}}\nTiming: {{sow.timing}}`;
+  const rendered = renderAgreement('sow', text, sampleAgreementValues('sow', text));
+  expect(rendered).toContain('Summary: Sample summary');
+  expect(rendered).toContain('Timing: Sample timing');
+});
 it('enforces dates, milestone counts, invoice duration and owner default semantics', () => {
   expect(validateAgreementDetails(details, terms as never).review_business_days).toBe(5);
   for (const value of [
@@ -474,6 +514,16 @@ it('keeps archive access independent of closed projects and the signing switch',
     id,
   );
   expect(response.status).toBe(200);
+});
+it('refuses to serve a retained signed PDF whose bytes no longer match its digest', async () => {
+  const result = await signed();
+  const id = await countersignAgreements(db, (await offer())!, result.documents, 'Owner', 'owner@example.com', request());
+  await prepareAgreementArtifact(env, id, async () => new TextEncoder().encode('%PDF-original'));
+  const artifact = sql.prepare('SELECT pdf_key FROM software_agreement_artifacts WHERE agreement_id=?').get(id) as { pdf_key: string };
+  bucketData.set(artifact.pdf_key, new TextEncoder().encode('%PDF-changed'));
+  const response = await agreementDownload(env, request(), id, true);
+  expect(response.status).toBe(503);
+  expect(await response.text()).toMatch(/integrity check/i);
 });
 it('runs private source templates through one, two and three milestones in both payment modes when supplied', async () => {
   const path = process.env.AGREEMENT_PRIVATE_TEMPLATES;
@@ -1143,6 +1193,26 @@ it.each([true, false])('external start atomically retires unsigned reviews and s
   expect(Boolean(sql.prepare('SELECT used_at FROM software_agreement_challenges').get().used_at)).toBe(current);
   expect(Boolean(sql.prepare('SELECT revoked_at FROM software_offer_links').get().revoked_at)).toBe(current);
   expect(sql.prepare('SELECT count(*) n FROM software_projects').get().n).toBe(current ? 1 : 0);
+});
+
+it('rejects an outside-site signature dated after today without starting the project', async () => {
+  await review();
+  sql.prepare("UPDATE software_offers SET agreement_details_json=NULL WHERE id='o'").run();
+  const tomorrow = new Date(`${projectToday()}T12:00:00Z`);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  const { POST } = await import('~/pages/api/owner/requests/[id]/project');
+  const response = await POST({
+    params: { id: 'r' },
+    request: new Request('https://example.com/api/owner/requests/r/project', {
+      method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'start', signature_source: 'external', offer_id: 'o', offer_version: 1, expectedRequestUpdatedAt: 'now', signatures: true, payment: true, inputs_ready: true, external_signed_on: tomorrow.toISOString().slice(0, 10), external_parties: 'Sample LLC / Example Contractor LLC', external_kept_copy: true, external_copy_reference: 'Synthetic copy', next_update_on: '' }),
+    }),
+    locals: { owner: { email: 'owner@example.com' }, runtime: { env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: 'true' } } },
+  } as never);
+  expect(response.status).toBe(400);
+  expect(((await response.json()) as { error: string }).error).toMatch(/cannot be in the future/i);
+  expect(sql.prepare('SELECT count(*) AS n FROM software_projects').get()).toEqual({ n: 0 });
+  expect(sql.prepare("SELECT count(*) AS n FROM software_agreements WHERE status<>'review'").get()).toEqual({ n: 0 });
 });
 
 it('preserves omitted draft agreement details and reuse, and permits explicit clearing', async () => {

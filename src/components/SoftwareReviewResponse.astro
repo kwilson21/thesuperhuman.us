@@ -1,8 +1,8 @@
 ---
 import { softwareDate } from '~/lib/software-projects';
 import type { ClientSoftwareUpdate } from '~/lib/software-projects';
-type Props = { update: ClientSoftwareUpdate; checks: string[]; milestoneName: string; endpoint: string; readonly?: boolean; canAccept?: boolean };
-const {update,checks,milestoneName,endpoint,readonly=false,canAccept=true}=Astro.props;
+type Props = { update: ClientSoftwareUpdate; checks: string[]; missingDeliverables?: {label:string;index:number}[]; milestoneName: string; endpoint: string; readonly?: boolean; canAccept?: boolean };
+const {update,checks,missingDeliverables=[],milestoneName,endpoint,readonly=false,canAccept=true}=Astro.props;
 const direction=update.kind==='direction_review';
 ---
 <section class="software-review">
@@ -14,7 +14,8 @@ const direction=update.kind==='direction_review';
     <p>{direction ? 'Does this match how you work?' : `Review ${update.artifact_version} against the agreed checks.`}</p>
     <button class="studio-button" type="submit" name="decision" formnovalidate value={direction ? 'direction_confirmed' : 'milestone_accepted'} disabled={!direction && !canAccept}>{direction ? 'Confirm direction' : 'Accept milestone'}</button>
     <details data-request-changes><summary>Request changes</summary>
-      {!direction && <fieldset><legend>Which agreed checks are unmet?</legend>{checks.map((check,index)=><label class="check-choice"><input type="checkbox" name="criteria" value={index} />{check}</label>)}<p class="hint">Select at least one check.</p></fieldset>}
+      {!direction && <fieldset><legend>Which agreed checks are unmet?</legend>{checks.map((check,index)=><label class="check-choice"><input type="checkbox" name="criteria" value={index} />{check}</label>)}<p class="hint">Select an unmet check or a missing deliverable below.</p></fieldset>}
+      {!direction && missingDeliverables.length>0 && <fieldset><legend>Is any planned deliverable missing from this version?</legend>{missingDeliverables.map(item=><label class="check-choice"><input type="checkbox" name="missing_deliverables" value={item.index} />{item.label}</label>)}<p class="hint">You can report a missing item even when every included check passes.</p></fieldset>}
       <label>Feedback on this version (required for changes)<textarea class="studio-textarea" name="note" required maxlength="2000" placeholder={direction ? 'What should change, and why?' : 'Tell me what happened and how to see it.'}></textarea></label>
       <button class="studio-button secondary" type="submit" name="decision" value="changes_requested">Request changes</button>
     </details>
