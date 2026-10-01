@@ -16,7 +16,7 @@ export function setupSoftwareComposer() {
     const heading=root!.querySelector<HTMLElement>('[data-composer-heading]');
     const intro=root!.querySelector<HTMLElement>('[data-composer-intro]');
     if(heading) heading.textContent=delivery ? 'Prepare a delivery review.' : handoff ? 'Prepare the project handoff.' : kind==='direction_review' ? 'Prepare a direction review.' : 'Prepare an update.';
-    if(intro) intro.textContent=delivery ? 'Share the named version, complete agreed milestone scope, and evidence for every check.' : handoff ? 'Share delivered links after confirming the milestone is paid in full.' : kind==='direction_review' ? 'Ask the client to confirm this approach before the working milestone is reviewed.' : 'Prepare a useful update for the client.';
+    if(intro) intro.textContent=delivery ? 'Select what this version includes, then add evidence for every check in the full agreed milestone.' : handoff ? 'Share delivered links after confirming the milestone is paid in full.' : kind==='direction_review' ? 'Ask the client to confirm this approach before the working milestone is reviewed.' : 'Prepare a useful update for the client.';
     const field = (name:string) => form.elements.namedItem(name) as HTMLInputElement;
     form.querySelector<HTMLElement>('[data-kind-hint]')!.textContent = kind === 'direction_review' ? 'Ask the client to confirm a design direction. It doesn’t accept working software.' : delivery ? 'Share a named version with evidence for every acceptance check. The client accepts it or names what’s unmet.' : handoff ? 'Share the delivered files after the milestone is paid in full.' : 'Share progress and the next step.';
     field('artifact_version').required = kind.endsWith('_review');
@@ -27,7 +27,12 @@ export function setupSoftwareComposer() {
       scopePreview.hidden=!delivery;
       scopePreview.querySelectorAll<HTMLElement>('[data-preview-scope-milestone]').forEach(group=>group.hidden=group.dataset.previewScopeMilestone!==milestone);
     }
-    form.querySelectorAll<HTMLElement>('[data-scope-milestone]').forEach(group=>group.hidden=group.dataset.scopeMilestone!==milestone);
+    form.querySelectorAll<HTMLFieldSetElement>('[data-scope-milestone]').forEach(group=>{group.hidden=group.dataset.scopeMilestone!==milestone;group.disabled=!delivery || group.hidden;});
+    preview.querySelectorAll<HTMLElement>('[data-preview-included]').forEach(section=>section.hidden=!delivery);
+    const selectedItems=[...form.querySelectorAll<HTMLInputElement>(`[data-scope-milestone="${milestone}"] [name=delivered_deliverables]:checked`)].map(input=>input.value);
+    const includedList=preview.querySelector<HTMLElement>('[data-preview-delivered-items]');
+    if(includedList) includedList.replaceChildren(...selectedItems.map(item=>{const li=document.createElement('li');li.textContent=item;return li;}));
+    form.querySelectorAll<HTMLElement>('[data-full-scope-milestone]').forEach(group=>group.hidden=group.dataset.fullScopeMilestone!==milestone);
     form.querySelectorAll<HTMLFieldSetElement>('[data-criteria-group]').forEach(group=>{
       group.hidden = group.dataset.criteriaGroup !== milestone; group.disabled = !delivery || group.hidden;
       group.querySelectorAll<HTMLTextAreaElement>('textarea').forEach(input=>input.required=delivery && !group.hidden);
@@ -62,7 +67,7 @@ export function setupSoftwareComposer() {
     form.querySelector('[data-next-label]')!.textContent = handoff ? 'Support boundary' : 'Next step';
     const reviewDate = preview.querySelector<HTMLElement>('[data-preview-review-date]')!;
     const days = Number(value('review_window_days'));
-    reviewDate.hidden = !delivery || !Number.isInteger(days) || days < 5 || days > 30;
+    reviewDate.hidden = !delivery || !Number.isInteger(days) || days < 5 || days > 365;
     reviewDate.textContent = reviewDate.hidden ? '' : `Please review by ${softwareDate(addBusinessDays(new Date().toISOString(),days))}.`;
     preview.querySelector<HTMLElement>('[data-preview-checks]')!.hidden = !delivery;
     const evidenceFields = form.querySelectorAll<HTMLTextAreaElement>(`[data-criteria-group="${milestone}"] textarea`);
@@ -120,6 +125,15 @@ export function setupSoftwareComposer() {
     const next=form.querySelector<HTMLElement>('[data-delivery-reference][hidden]');
     if(next){next.hidden=false;next.querySelector<HTMLInputElement>('input')?.focus();render();}
   });
+  form.querySelectorAll<HTMLButtonElement>('[data-reuse-reference]').forEach(button=>button.addEventListener('click',()=>{
+    const row=form.querySelector<HTMLElement>('[data-delivery-reference]:not([hidden]) input[name=link_label]:placeholder-shown')?.closest<HTMLElement>('[data-delivery-reference]')
+      ?? form.querySelector<HTMLElement>('[data-delivery-reference][hidden]');
+    if(!row) return;
+    row.hidden=false;
+    const inputs=row.querySelectorAll<HTMLInputElement>('input');
+    inputs[0].value=button.dataset.label ?? ''; inputs[1].value=button.dataset.url ?? '';
+    render(); inputs[0].focus();
+  }));
   const drop = file.closest<HTMLElement>('.drop');
   drop?.addEventListener('dragover', event => { event.preventDefault(); drop.classList.add('dragging'); });
   drop?.addEventListener('dragleave', () => drop.classList.remove('dragging'));
@@ -143,6 +157,10 @@ export function setupSoftwareComposer() {
   });
   async function save(share: boolean) {
     if (busy || (share && !form.reportValidity())) return;
+    if (share && value('kind')==='delivery_review' && !form.querySelector('[name=delivered_deliverables]:checked')) {
+      status.textContent='Select at least one agreed deliverable included in this version.';
+      form.querySelector<HTMLInputElement>('[name=delivered_deliverables]')?.focus(); return;
+    }
     if (share && value('kind')==='handoff' && (form.elements.namedItem('paid_confirmed') as HTMLInputElement).disabled) {
       status.textContent = form.querySelector<HTMLElement>('[data-payment-reminder]')!.textContent; return;
     }
@@ -153,7 +171,7 @@ export function setupSoftwareComposer() {
       const data = new FormData(form);
       const labels = data.getAll('link_label'), urls = data.getAll('link_url');
       const update = { ...Object.fromEntries(data), milestone_index: Number(value('milestone_index')), email_client: email.checked,
-        criteria:data.getAll('criteria'),review_window_days:Number(value('review_window_days')),paid_confirmed:data.has('paid_confirmed'),
+        criteria:data.getAll('criteria'),delivered_deliverables:data.getAll('delivered_deliverables'),review_window_days:Number(value('review_window_days')),paid_confirmed:data.has('paid_confirmed'),
         links:labels.map((label,index)=>({label:String(label),url:String(urls[index] ?? '')})).filter(link=>link.label || link.url) }; delete (update as Record<string, unknown>).visual;
       async function write(action: 'draft' | 'share') {
         const response = await fetch(root!.dataset.endpoint!, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, updateId, update, expectedUpdatedAt: root!.dataset.updatedAt || null, expectedProjectUpdatedAt: root!.dataset.projectUpdatedAt, confirmed: action === 'share' }) });

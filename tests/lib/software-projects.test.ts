@@ -12,7 +12,7 @@ import { POST as updatePost } from '~/pages/api/owner/requests/[id]/updates';
 import { GET as ownerVisual, PUT as uploadVisual } from '~/pages/api/owner/requests/[id]/updates/[updateId]/visual';
 import { GET as clientVisual } from '~/pages/api/studio/software/[id]/updates/[updateId]/visual';
 import { clientSoftwareProjectForSession, clientSoftwareProjectsForSession, clientProjectForSession, clientProjectsForSession, issueClientCode, completeClientCode, discardUndeliveredCode } from '~/lib/audio-client-access';
-import { sharedSoftwareUpdates, queueSoftwareNotice, deliverSoftwareNotice } from '~/lib/software-projects';
+import { sharedSoftwareUpdates, listSoftwareUpdates, queueSoftwareNotice, deliverSoftwareNotice } from '~/lib/software-projects';
 import { softwareInvitationEmail, softwareUpdateEmail } from '~/lib/client-emails';
 import { loadStudioLedger, listStudioProjectAttention } from '~/lib/owner-reporting';
 import { postClientSoftwareProjectMessage } from '~/lib/software-project-messages';
@@ -51,7 +51,7 @@ async function call(route: typeof projectPost, body: unknown, owner = true, id =
   return route({ params: { id }, request: new Request(`https://example.com/api/owner/requests/${id}/project`, { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://example.com' }, body: JSON.stringify(body) }), locals: { owner: owner ? { email: 'owner@example.com' } : undefined, runtime: { env } } } as never);
 }
 const start = () => call(projectPost, { action: 'start', expectedRequestUpdatedAt: 'now', offer_id: 'software-offer', offer_version: 1, signatures: true, payment: true, next_update_on: '2026-10-01' });
-const update = { kind: 'progress', milestone_index: 0, title: 'Shared view', artifact_version: 'v1', evidence_type: 'concept', visual_alt: 'A fictional tracker.', preview_url: 'https://preview.example.com/tool', what_changed: 'Client status is visible.', checks_limitations: 'Sample only.', next_step: 'Build the shared view.', client_request: 'Send the sample.', next_update_on: '2026-10-02', email_client: false };
+const update = { kind: 'progress', milestone_index: 0, title: 'Shared view', artifact_version: 'v1', evidence_type: 'concept', visual_alt: 'A fictional tracker.', preview_url: 'https://preview.example.com/tool', what_changed: 'Client status is visible.', checks_limitations: 'Sample only.', next_step: 'Build the shared view.', client_request: 'Send the sample.', next_update_on: '2026-10-02', email_client: false, delivered_deliverables:['Status view'] };
 async function draft() { const response = await call(updatePost, { action: 'draft', update, expectedUpdatedAt: null }); expect(response.status).toBe(200); return response.json() as Promise<{ id: string; updatedAt: string }>; }
 async function session(email = 'alex@example.com') { const code = await issueClientCode(db, email, secret); return (await completeClientCode(db, email, code!, secret))!; }
 async function shareReview(kind='delivery_review', artifact_version='Delivery v1') {
@@ -67,6 +67,45 @@ it('requires a named review version, evidence for every check and a bounded revi
     expect((await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',criteria:['Try it'],...changed}})).status).toBe(400);
   }
   expect(sql.prepare('SELECT count(*) AS n FROM software_project_updates').get()).toEqual({n:0});
+});
+it('snapshots selected planned deliverables while client acceptance remains a full-milestone decision',async()=>{
+  await start();
+  const selected=['Status view'];
+  const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v1',criteria:['Try adding a client in the preview.'],delivered_deliverables:selected}});
+  expect(response.status).toBe(200);const {id}=await response.json() as {id:string};
+  const row=sql.prepare('SELECT delivered_deliverables_json FROM software_project_updates WHERE id=?').get(id);
+  expect(row).toEqual({delivered_deliverables_json:JSON.stringify(selected)});
+  expect((await sharedSoftwareUpdates(db,'software'))[0]).toMatchObject({delivered_deliverables_json:JSON.stringify(selected)});
+  const token=await session();
+  expect((await decide(id,{decision:'milestone_accepted',confirm:true},token)).status).toBe(200);
+  expect(sql.prepare("SELECT decision FROM software_project_messages WHERE update_id=?").get(id)).toEqual({decision:'milestone_accepted'});
+});
+it('rejects delivery selections outside the agreed scope, duplicates and empty shared selections',async()=>{
+  await start();
+  for(const delivered_deliverables of [['Not in the contract'],['Status view','Status view'],[]]){
+    const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',criteria:['Evidence'],delivered_deliverables}});
+    expect(response.status).toBe(400);
+  }
+  expect(sql.prepare('SELECT count(*) AS n FROM software_project_updates').get()).toEqual({n:0});
+});
+it('stores a longer executed-agreement review window in the additive field',async()=>{
+  await start();
+  sql.exec("INSERT INTO software_agreement_clients VALUES ('test-client','alex@example.com','Example Client','example','LLC','WY','Example address','alex@example.com','now'); INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES ('test-template','sow',1,'Synthetic template',lower(hex(zeroblob(32))),'now','test')");
+  sql.prepare("INSERT INTO software_agreements(id,kind,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES ('test-agreement','sow','software','test-client','test-template','executed','Synthetic terms',? ,?,'now','2026-09-30','test-session')").run('a'.repeat(64),JSON.stringify({owner:{review_business_days:45}}));
+  sql.exec("UPDATE software_projects SET agreement_id='test-agreement' WHERE request_id='software'");
+  const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v1',criteria:['Try the preview.'],review_window_days:5}});
+  expect(response.status).toBe(200);
+  expect(sql.prepare('SELECT review_window_days,review_window_days_extended FROM software_project_updates').get()).toEqual({review_window_days:null,review_window_days_extended:45});
+  expect((await sharedSoftwareUpdates(db,'software'))[0].review_window_days).toBe(45);
+});
+it('lets the owner save an unfinished reference in a private draft and requires it to be safe before sharing',async()=>{
+  await start();
+  const reference={label:'Release notes',url:''};
+  const saved=await call(updatePost,{action:'draft',expectedUpdatedAt:null,update:{...update,kind:'delivery_review',links:[reference]}});
+  expect(saved.status).toBe(200);const draftInfo=await saved.json() as {id:string;updatedAt:string};
+  expect(sql.prepare('SELECT links_json,status FROM software_project_updates WHERE id=?').get(draftInfo.id)).toEqual({links_json:JSON.stringify([reference]),status:'draft'});
+  const shared=await call(updatePost,{action:'share',updateId:draftInfo.id,expectedUpdatedAt:draftInfo.updatedAt,confirmed:true,update:{...update,kind:'delivery_review',artifact_version:'Delivery v1',criteria:['Try the preview.'],links:[reference]}});
+  expect(shared.status).toBe(400);expect(((await shared.json()) as {error:string}).error).toContain('Finish each reference');
 });
 it('records one version-specific decision and audit together, without confusing direction and acceptance',async()=>{
   await start(); const token=await session(), direction=await shareReview('direction_review','Direction v1');
@@ -177,6 +216,9 @@ it('enforces the new payment, review-window and factual audit-note schema limits
   sql.exec("INSERT INTO software_milestone_payments VALUES ('software',0,'now','owner')");
   expect(()=>sql.exec("INSERT INTO software_milestone_payments VALUES ('software',0,'later','owner')")).toThrow();
   expect(()=>sql.prepare("INSERT INTO software_project_audit(request_id,action,actor,occurred_at,note) VALUES ('software','milestone-paid','owner','now',?)").run('x'.repeat(201))).toThrow();
+  sql.prepare("UPDATE software_project_updates SET review_window_days=NULL,review_window_days_extended=45 WHERE request_id='software'").run();
+  expect((await listSoftwareUpdates(db,'software'))[0].review_window_days).toBe(45);
+  for(const value of [30,366]) expect(()=>sql.prepare("UPDATE software_project_updates SET review_window_days_extended=? WHERE request_id='software'").run(value)).toThrow();
 });
 it('does not complete a redelivered milestone using an earlier version’s handoff',async()=>{
   await start();const token=await session(),review=await shareReview();

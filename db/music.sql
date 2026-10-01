@@ -739,3 +739,10 @@ ALTER TABLE software_projects ADD COLUMN start_details_json TEXT;
 CREATE TABLE software_agreement_notices (id TEXT PRIMARY KEY, agreement_id TEXT NOT NULL REFERENCES software_agreements(id), client_id TEXT NOT NULL REFERENCES software_agreement_clients(id), business_address TEXT NOT NULL, notice_email TEXT NOT NULL, recorded_at TEXT NOT NULL, UNIQUE(agreement_id));
 CREATE TRIGGER software_agreement_notices_immutable BEFORE UPDATE ON software_agreement_notices BEGIN SELECT RAISE(ABORT,'Immutable notice'); END;
 CREATE TABLE software_agreement_notifications (agreement_id TEXT NOT NULL REFERENCES software_agreements(id), kind TEXT NOT NULL CHECK(kind IN ('signature-receipt','countersign-notice')), email TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','sending','sent','failed')), attempt_id TEXT, attempted_at TEXT, sent_at TEXT, PRIMARY KEY(agreement_id,kind));
+-- Snapshot the planned items included in each delivery and preserve the full
+-- milestone acceptance model. Long review periods from executed agreements
+-- live in a separate additive column so the original 5–30-day constraint
+-- remains unchanged for older databases and rows.
+ALTER TABLE software_project_updates ADD COLUMN delivered_deliverables_json TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE software_project_updates ADD COLUMN review_window_days_extended INTEGER
+  CHECK(review_window_days_extended IS NULL OR review_window_days_extended BETWEEN 31 AND 365);

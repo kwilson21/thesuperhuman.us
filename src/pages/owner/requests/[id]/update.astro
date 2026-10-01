@@ -16,8 +16,15 @@ if (!db) return new Response('Owner reporting is unavailable.', { status: 503 })
 const id = Astro.params.id!, request = await getOwnerRequest(db, id), project = await getSoftwareProject(db, id);
 if (!request || request.kind !== 'software' || !project || project.revoked_at || project.content_deleted_at || request.status === 'withdrawn') return new Response('Project not found.', { status: 404 });
 if (project.state === 'complete') return Astro.redirect(`/owner/requests/${id}`);
-const terms = projectTerms(project), draft = (await listSoftwareUpdates(db, id)).find(update => update.status === 'draft');
+const terms = projectTerms(project), history = await listSoftwareUpdates(db,id), draft = history.find(update => update.status === 'draft');
+const agreementValues = project.agreement_id ? await db.prepare("SELECT values_json FROM software_agreements WHERE id=? AND status='executed'").bind(project.agreement_id).first<{values_json:string}>() : null;
+const agreedReviewDays = agreementValues ? Number(JSON.parse(agreementValues.values_json).owner?.review_business_days) : null;
 const links: {label:string;url:string}[] = draft ? JSON.parse(draft.links_json) : [];
+const savedReferences = [...new Map(history.filter(item=>item.status!=='draft').flatMap(item=>{
+  try { return (JSON.parse(item.links_json) as {label:string;url:string}[]).filter(reference=>{
+    try { const url=new URL(reference.url); return url.protocol==='https:' && !url.username && !url.password && Boolean(reference.label.trim()); } catch { return false; }
+  }); } catch { return []; }
+}).map(reference=>[reference.url,reference])).values()].slice(0,8);
 const update: ClientSoftwareUpdate = { id: draft?.id ?? '', title: draft?.title ?? '', artifact_version: draft?.artifact_version ?? '', evidence_type: draft?.evidence_type ?? 'concept', visual_alt: draft?.visual_alt ?? '', preview_url: draft?.preview_url ?? '', what_changed: draft?.what_changed ?? '', checks_limitations: draft?.checks_limitations ?? '', next_step: draft?.next_step ?? '', client_request: draft?.client_request ?? '', next_update_on: draft?.next_update_on ?? '', shared_at: null, has_visual: draft?.visual_key ? 1 : 0, kind: draft?.kind ?? 'progress', links_json: JSON.stringify(links) };
 const invoices = await listSoftwareInvoices(db,id,project.offer_id);
 const paymentBlocked = terms.milestones.map((_,index)=>payableSoftwareInvoice(invoices,index,['balance','milestone']));
@@ -26,6 +33,9 @@ const firstName = request.name.trim().split(/\s+/)[0] || 'the client';
 const shared = await sharedSoftwareUpdates(db,id);
 const accepted = terms.milestones.map((_,index)=>shared.some(item=>item.kind==='delivery_review' && item.milestone_index===index && item.status==='shared' && item.decision==='milestone_accepted'));
 const criteria: string[] = draft ? JSON.parse(draft.criteria_json) : [];
+const initialMilestone = draft?.milestone_index ?? project.milestone_index;
+const initialDeliverables: string[] = draft ? JSON.parse(draft.delivered_deliverables_json ?? '[]') : [];
+update.delivered_deliverables_json = JSON.stringify(initialDeliverables);
 ---
 <OwnerLayout title="New project update" current="requests" newRequestCount={newRequests.length} ownerEmail={Astro.locals.owner.email}>
   <p class="owner-breadcrumb"><a href="/owner/requests">Requests</a> / <a href={`/owner/requests/${id}`}>{terms.outcome}</a> / New update</p>
@@ -40,19 +50,22 @@ const criteria: string[] = draft ? JSON.parse(draft.criteria_json) : [];
         <section class="delivery-card" data-delivery-fields hidden aria-labelledby="delivery-evidence-heading">
           <p class="delivery-step">Delivery details</p>
           <h2 id="delivery-evidence-heading">Keep the agreed milestone in view</h2>
-          <p class="delivery-intro">A delivery review covers the complete milestone. Add evidence for each agreed check; the client can accept this exact version or identify checks that need changes.</p>
-          <div class="delivery-scope" data-delivery-scope>{terms.milestones.map((item,index)=><section data-scope-milestone={index} hidden={index!==(draft?.milestone_index ?? project.milestone_index)}><h3>Agreed deliverables · Milestone {index+1}</h3><ul>{item.deliverables.map(deliverable=><li>{deliverable}</li>)}</ul></section>)}</div>
+          <p class="delivery-intro">Choose the agreed items included in this version. The client’s acceptance still covers the complete milestone and every agreed check.</p>
+          <div class="delivery-scope" data-delivery-scope>{terms.milestones.map((item,index)=><fieldset data-scope-milestone={index} hidden={index!==initialMilestone} disabled={index!==initialMilestone}><legend>Included in this delivery · Milestone {index+1}</legend>{item.deliverables.map(deliverable=><label class="deliverable-choice"><input type="checkbox" name="delivered_deliverables" value={deliverable} checked={initialDeliverables.includes(deliverable)} />{deliverable}</label>)}</fieldset>)}</div>
+          <p class="delivery-access">Full milestone acceptance remains in effect for the full agreed scope:</p>
+          <div class="delivery-scope full-scope" data-full-scope>{terms.milestones.map((item,index)=><section data-full-scope-milestone={index} hidden={index!==initialMilestone}><h3>Full agreed scope · Milestone {index+1}</h3><ul>{item.deliverables.map(deliverable=><li>{deliverable}</li>)}</ul></section>)}</div>
           <fieldset class="delivery-checks">
           <legend>Evidence for every acceptance check</legend>
           {terms.milestones.map((item,index)=><fieldset data-criteria-group={index} hidden={index!==(draft?.milestone_index ?? project.milestone_index)} disabled={index!==(draft?.milestone_index ?? project.milestone_index)}><legend class="visually-hidden">Evidence for milestone {index+1}</legend>{item.acceptance.map((check,checkIndex)=><label>{check}<textarea class="studio-textarea" name="criteria" maxlength="300" placeholder="Describe where the client can verify this check." aria-label={`Evidence for check ${checkIndex+1}: ${check}`}>{index===draft?.milestone_index ? criteria[checkIndex] ?? '' : ''}</textarea></label>)}</fieldset>)}
           </fieldset>
           <div class="delivery-references" data-delivery-references>
-            <div><h3>Supporting links</h3><p class="rail-caption">Add HTTPS links to a repository, commit, release, or shared artifact. The site checks the URL format only; it cannot verify the client’s access.</p></div>
+            <div><h3>Supporting links</h3><p class="rail-caption">Add a saved file link, GitHub repository, commit or release, or ChatGPT/Claude shared artifact. The site checks HTTPS format only; it cannot verify the client’s access.</p></div>
             {Array.from({length:5},(_,index)=><div class="delivery-reference" data-delivery-reference hidden={index>=Math.max(1,links.length)}><label>Reference label<input class="studio-input" name="link_label" maxlength="80" placeholder="Repository, commit, release, or artifact" value={links[index]?.label ?? ''} /></label><label>HTTPS link<input class="studio-input" name="link_url" type="url" maxlength="2000" pattern="https://.+" title="Use an HTTPS link." placeholder="https://…" value={links[index]?.url ?? ''} /></label></div>)}
             <button type="button" class="studio-quiet" data-add-delivery-link>Add a supporting link</button>
+            <div class="saved-reference-picker"><h4>Reuse a saved project link</h4>{savedReferences.length ? <div>{savedReferences.map(reference=><button type="button" class="saved-reference" data-reuse-reference data-label={reference.label} data-url={reference.url}><span>{reference.label}</span><small>{new URL(reference.url).hostname} · saved on this project</small></button>)}</div> : <p class="rail-caption">Links from earlier delivery reviews or handoffs will appear here.</p>}</div>
           </div>
           <p class="delivery-access" role="note">Access status: link format is checked, client permissions are not. Private shared artifacts do not become accessible automatically.</p>
-          <div class="software-field"><label>Review window (Business Days)<input class="studio-input" type="number" name="review_window_days" min="5" max="30" value={draft?.review_window_days ?? 5} aria-describedby="review-window-hint" /></label><p id="review-window-hint" class="rail-caption">At least 5 Business Days. Use more for a large milestone.</p></div>
+          <div class="software-field"><label>Review window (Business Days)<input class="studio-input" type="number" name="review_window_days" min="5" max={agreedReviewDays ? 365 : 30} value={draft?.review_window_days ?? agreedReviewDays ?? 5} readonly={Boolean(agreedReviewDays)} aria-describedby="review-window-hint" /></label><p id="review-window-hint" class="rail-caption">{agreedReviewDays ? 'Set by the executed agreement.' : 'Choose 5–30 Business Days. Larger windows are set in the executed agreement.'}</p></div>
         </section>
         <section data-handoff-fields data-accepted={JSON.stringify(accepted)} data-payment-blocked={JSON.stringify(paymentBlocked)} hidden>
           <p class="rail-caption" data-payment-reminder hidden>{manualPaymentReminder}</p>
@@ -79,7 +92,8 @@ const criteria: string[] = draft ? JSON.parse(draft.criteria_json) : [];
       </form>
     </section>
     <aside class="client-preview"><p class="owner-kicker">Client preview · Not yet shared</p><SoftwareProjectUpdate update={update} preview checks={terms.milestones[draft?.milestone_index ?? project.milestone_index].acceptance} visualUrl={update.has_visual ? `/api/owner/requests/${id}/updates/${update.id}/visual` : undefined} />
-      <div data-preview-scope hidden>{terms.milestones.map((item,index)=><section data-preview-scope-milestone={index} hidden><h3>Agreed deliverables · Milestone {index+1}</h3><ul>{item.deliverables.map(deliverable=><li>{deliverable}</li>)}</ul></section>)}</div>
+      <section class="delivery-included-preview" data-preview-included hidden><h3>Included in this delivery</h3><ul data-preview-delivered-items></ul><p>Acceptance still covers the complete agreed milestone and all of its checks.</p></section>
+      <div data-preview-scope hidden>{terms.milestones.map((item,index)=><section data-preview-scope-milestone={index} hidden><h3>Full agreed scope · Milestone {index+1}</h3><ul>{item.deliverables.map(deliverable=><li>{deliverable}</li>)}</ul></section>)}</div>
       <section data-preview-section="next_step" hidden={!update.next_step}><h3>Next from me</h3><p data-preview-text="next_step">{update.next_step}</p></section>
       <p data-preview-date hidden={!update.next_update_on}>Next update: <span>{update.next_update_on}</span></p>
       <p data-preview-review-date hidden></p>
@@ -107,6 +121,20 @@ const criteria: string[] = draft ? JSON.parse(draft.criteria_json) : [];
   .delivery-scope { padding: .9rem 1rem; border: 1px solid var(--studio-line); border-radius: .25rem; background: var(--studio-soft); }
   .delivery-scope h3, .delivery-references h3 { margin: 0 0 .5rem; font: 500 .82rem/1.4 Inter,sans-serif; }
   .delivery-scope ul { display: grid; gap: .35rem; margin: 0; padding-left: 1.25rem; color: var(--ink); font: .86rem/1.5 Inter,sans-serif; }
+  .delivery-scope fieldset { border: 0; padding: 0; margin: 0; }
+  .delivery-scope fieldset legend { margin-bottom: .55rem; font: 500 .82rem/1.4 Inter,sans-serif; }
+  .delivery-scope .deliverable-choice { display: flex; align-items: flex-start; gap: .6rem; margin: .45rem 0; color: var(--ink); font: .86rem/1.5 Inter,sans-serif; }
+  .delivery-scope .deliverable-choice input { margin: .2rem 0 0; flex: none; }
+  .full-scope { margin-top: 0; padding-top: .25rem; border: 0; background: transparent; }
+  .delivery-included-preview { border-top: 1px solid var(--rule); margin-top: 1.5rem; padding-top: 1rem; }
+  .delivery-included-preview h3 { font: 400 1.35rem/1.25 Newsreader,Georgia,serif; margin: 0 0 .5rem; }
+  .delivery-included-preview ul { display: grid; gap: .35rem; margin: 0; padding-left: 1.2rem; font: .9rem/1.55 Inter,sans-serif; }
+  .delivery-included-preview p { color: var(--studio-muted); font-size: .78rem; }
+  .saved-reference-picker { display: grid; gap: .5rem; padding: .8rem; background: var(--studio-soft); border-radius: .25rem; }
+  .saved-reference-picker h4 { margin: 0; font: 500 .78rem/1.4 Inter,sans-serif; }
+  .saved-reference-picker > div { display: flex; flex-wrap: wrap; gap: .45rem; }
+  .saved-reference { display: grid; gap: .1rem; text-align: left; padding: .45rem .6rem; border: 1px solid var(--studio-line); background: white; color: var(--ink); border-radius: .25rem; cursor: pointer; }
+  .saved-reference small { color: var(--studio-muted); font-size: .68rem; }
   .delivery-checks { display: grid; gap: .9rem; min-width: 0; margin: 0; padding: 1rem; border: 1px solid var(--studio-line); border-radius: .25rem; }
   .delivery-checks legend { padding: 0 .35rem; font: 500 .86rem/1.5 Inter,sans-serif; }
   .delivery-checks [data-criteria-group] { padding: 0; border: 0; }

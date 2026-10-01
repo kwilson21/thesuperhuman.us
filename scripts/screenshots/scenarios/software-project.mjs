@@ -78,11 +78,14 @@ export default {
     await shot('Direction review awaiting a decision',`/studio/software/${id}`,'direction-review',{cookie});
     await decide(direction,{decision:'direction_confirmed'});
     await shot('Direction confirmed',`/studio/software/${id}`,'direction-confirmed',{cookie});
-    const delivery={...update,kind:'delivery_review',artifact_version:'Delivery v1',evidence_type:'working_preview',checks_limitations:'Checked with the fictional sample. Live rollout is outside this milestone.',title:'Client onboarding',client_request:'',review_window_days:5,criteria:terms.milestones[0].acceptance.map((_,index)=>`Try check ${index+1} with the fictional sample in the preview.`),links:[{label:'Fictional release notes',url:'https://example.com/releases/delivery-v1'}],preview_url:'https://example.com/preview',email_client:false};
+    const delivery={...update,kind:'delivery_review',artifact_version:'Delivery v1',evidence_type:'working_preview',checks_limitations:'Checked with the fictional sample. Live rollout is outside this milestone.',title:'Client onboarding',client_request:'',review_window_days:5,delivered_deliverables:['A shared status view'],criteria:terms.milestones[0].acceptance.map((_,index)=>`Try check ${index+1} with the fictional sample in the preview.`),links:[{label:'Fictional release notes',url:'https://example.com/releases/delivery-v1'}],preview_url:'https://example.com/preview',email_client:false};
     const deliveryDraft=await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'draft',expectedProjectUpdatedAt:projectAt(),update:delivery,expectedUpdatedAt:null});
     await shot('Owner composer with every delivery check',`/owner/requests/${id}/update`,'delivery-composer',{owner:true,prepare:async page=>{
       const checkHeadings=page.locator('.client-preview').getByRole('heading',{name:'Agreed checks',exact:true});
       if(await checkHeadings.count()!==1) throw new Error('Owner preview should show one active copy of the agreed checks.');
+      const included=await page.locator('[data-preview-delivered-items]').innerText();
+      if(!included.includes('A shared status view') || included.includes('Next actions with a named owner')) throw new Error('Owner preview must distinguish selected deliverables from the full milestone scope.');
+      if(!await page.getByText('Acceptance still covers the complete agreed milestone and all of its checks.',{exact:true}).isVisible()) throw new Error('Owner preview must retain full-milestone acceptance context.');
       const evidence=page.locator('[data-criteria-group="0"] textarea');
       if(await evidence.count()!==5 || !(await evidence.evaluateAll(fields=>fields.every(field=>field.required)))) throw new Error('Every agreed check needs required evidence.');
       await page.locator('[name=title]').focus();await page.keyboard.press('Tab');
@@ -94,7 +97,11 @@ export default {
       VALUES ('screenshot-balance',${quote(id)},${quote(sentOffer.id)},0,'balance',120000,15,'in_fictional_balance','https://example.com/invoice/balance','open','2026-10-15','owner@example.com',${quote(at)},${quote(at)})`);
     await shot('Open balance after delivery',`/owner/requests/${id}`,'balance-open',{owner:true});
     await shot('Client invoices and payment strip',`/studio/software/${id}`,'invoices',{cookie,prepare:async page=>{await page.getByText('Invoices',{exact:true}).click();}});
-    await shot('Delivery review awaiting a decision with all agreed checks',`/studio/software/${id}`,'delivery-review',{cookie});
+    await shot('Delivery review awaiting a decision with selected items and full milestone scope',`/studio/software/${id}`,'delivery-review',{cookie,prepare:async page=>{
+      if(!await page.getByRole('heading',{name:'Included in this delivery'}).isVisible()) throw new Error('Client review should name what is included in this delivery.');
+      if(!await page.getByRole('heading',{name:'Full agreed scope · Milestone 1'}).isVisible()) throw new Error('Client review should keep the complete acceptance scope visible.');
+      if(!await page.locator('[data-preview-delivery-scope]').getByText('Next actions with a named owner',{exact:true}).isVisible()) throw new Error('Client should still see planned scope beyond this delivery.');
+    }});
     await share({kind:'progress',title:'The next update',client_request:''});
     await shot('Progress update with an undecided delivery review',`/studio/software/${id}`,'progress-pending-review',{cookie});
     await shot('Delivery change request form open',`/studio/software/${id}`,'changes-open',{cookie,prepare:async page=>{await page.locator('[data-request-changes] summary').click();await page.locator('[name=criteria]').first().check();await page.locator('[name=note]').fill('Adding the fictional sample client does not save.');}});

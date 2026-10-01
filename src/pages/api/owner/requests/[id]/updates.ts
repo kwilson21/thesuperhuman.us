@@ -27,9 +27,9 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     else if(value.review_window_days>30)return json({ok:false,error:'Use up to 30 business days.'},400);
     if (project.state === 'complete') return json({ ok: false, error: 'This project is complete.' }, 409);
     if (value.milestone_index >= projectTerms(project).milestones.length) return json({ ok: false, error: 'Choose a milestone from this project.' }, 400);
-    const columns = ['kind','milestone_index','title','artifact_version','evidence_type','visual_alt','preview_url','what_changed','checks_limitations','next_step','client_request','next_update_on','email_client','criteria_json','links_json','review_window_days'];
+    const columns = ['kind','milestone_index','title','artifact_version','evidence_type','visual_alt','preview_url','what_changed','checks_limitations','next_step','client_request','next_update_on','email_client','criteria_json','delivered_deliverables_json','links_json','review_window_days','review_window_days_extended'];
     const review = value.kind.endsWith('_review');
-    const stored = { ...value, evidence_type: value.kind === 'handoff' ? 'handoff' : value.evidence_type, email_client: Number(value.email_client), criteria_json: JSON.stringify(value.criteria), links_json: JSON.stringify(value.links), review_window_days: review ? value.review_window_days : null };
+    const stored = { ...value, evidence_type: value.kind === 'handoff' ? 'handoff' : value.evidence_type, email_client: Number(value.email_client), criteria_json: JSON.stringify(value.criteria), delivered_deliverables_json: JSON.stringify(value.delivered_deliverables), links_json: JSON.stringify(value.links), review_window_days: review && value.review_window_days <= 30 ? value.review_window_days : null, review_window_days_extended: review && value.review_window_days > 30 ? value.review_window_days : null };
     const values = columns.map(key => (key === 'next_update_on' || key === 'preview_url') ? stored[key] || null : stored[key as keyof typeof stored]);
     async function sharedRetry() {
       if (!command.updateId || command.action !== 'share' || !command.confirmed) return null;
@@ -46,7 +46,16 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     const share = command.action === 'share';
     if (share && (!command.confirmed || !value.title || !value.what_changed)) return json({ ok: false, error: 'Add a title and what changed, then confirm sharing.' }, 400);
     if (share && review && !value.artifact_version) return json({ ok: false, error: 'Name the version before sharing.' }, 400);
+    if (share && value.links.some(reference=>{
+      if (!reference.label.trim()) return true;
+      try { const url=new URL(reference.url); return url.protocol!=='https:' || Boolean(url.username || url.password); } catch { return true; }
+    })) return json({ ok: false, error: 'Finish each reference with a label and an HTTPS link, or remove the unfinished row before sharing.' }, 400);
     const checks = projectTerms(project).milestones[value.milestone_index].acceptance;
+    const agreedDeliverables = projectTerms(project).milestones[value.milestone_index].deliverables;
+    if (value.delivered_deliverables.some((item,index)=>!agreedDeliverables.includes(item) || value.delivered_deliverables.indexOf(item)!==index))
+      return json({ ok: false, error: 'Choose deliverables from the agreed milestone.' }, 400);
+    if (share && value.kind === 'delivery_review' && !value.delivered_deliverables.length)
+      return json({ ok: false, error: 'Choose at least one agreed deliverable included in this delivery.' }, 400);
     if (share && value.kind === 'delivery_review' && (value.criteria.length !== checks.length || value.criteria.some(evidence => !evidence)))
       return json({ ok: false, error: 'Add evidence for every acceptance check before sharing.' }, 400);
     if (share && value.kind === 'handoff' && (!value.paid_confirmed || !value.links.length || !value.next_step || !value.checks_limitations))

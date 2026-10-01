@@ -20,9 +20,10 @@ export const updateInput = z.object({
   what_changed: text(1000), checks_limitations: text(1000), next_step: text(300), client_request: text(300),
   next_update_on: projectDate, email_client: z.boolean(),
   criteria: z.array(text(300)).max(20).default([]),
-  links: z.array(z.object({ label: text(80).refine(value=>Boolean(value), 'Name the link.'), url: text(2000).refine(value => {
-    try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password; } catch { return false; }
-  }, 'Use an HTTPS link.') })).max(10).default([]),
+  delivered_deliverables: z.array(text(300)).max(20).default([]),
+  // Drafts may contain an unfinished reference; the share action enforces a
+  // complete, safe HTTPS target before exposing any link to the client.
+  links: z.array(z.object({ label: text(80), url: text(2000) })).max(10).default([]),
   review_window_days: z.number().int().min(5).max(365).default(5),
   paid_confirmed: z.boolean().default(false),
 });
@@ -33,8 +34,8 @@ export type SoftwareProject = {
   started_at: string; next_update_on: string | null; invitation_status: string; invitation_attempted_at: string | null;
   revoked_at: string | null; completed_at: string | null; content_deleted_at: string | null; updated_at: string;
 };
-export type SoftwareUpdate = Omit<SoftwareUpdateInput, 'email_client' | 'criteria' | 'links' | 'paid_confirmed'> & {
-  criteria_json: string; links_json: string;
+export type SoftwareUpdate = Omit<SoftwareUpdateInput, 'email_client' | 'criteria' | 'delivered_deliverables' | 'links' | 'paid_confirmed'> & {
+  criteria_json: string; delivered_deliverables_json: string; links_json: string; review_window_days_extended?: number | null;
   id: string; request_id: string; status: 'draft' | 'shared' | 'superseded'; visual_key: string | null;
   visual_media_type: string | null; shared_at: string | null; updated_at: string; notification_status: string;
   notification_attempted_at: string | null; email_client: number;
@@ -48,18 +49,19 @@ export async function getSoftwareProject(db: D1Database, id: string) {
   return db.prepare('SELECT * FROM software_projects WHERE request_id=?').bind(id).first<SoftwareProject>();
 }
 export async function listSoftwareUpdates(db: D1Database, id: string) {
-  return (await db.prepare('SELECT * FROM software_project_updates WHERE request_id=? ORDER BY created_at DESC,id DESC').bind(id).all<SoftwareUpdate>()).results;
+  const updates = (await db.prepare('SELECT * FROM software_project_updates WHERE request_id=? ORDER BY created_at DESC,id DESC').bind(id).all<SoftwareUpdate>()).results;
+  return updates.map(update => ({ ...update, review_window_days: update.review_window_days_extended ?? update.review_window_days ?? 5 }));
 }
 // Client queries never select drafts, storage keys, notification internals or owner identities.
 export type SoftwareDecision = 'direction_confirmed' | 'milestone_accepted' | 'changes_requested';
 export type ClientSoftwareUpdate = Pick<SoftwareUpdate, 'id' | 'title' | 'artifact_version' | 'evidence_type' | 'visual_alt' | 'preview_url' | 'what_changed' | 'checks_limitations' | 'next_step' | 'client_request' | 'next_update_on' | 'shared_at'> & {
   has_visual: number; kind?: SoftwareUpdate['kind']; milestone_index?: number; status?: SoftwareUpdate['status'];
-  criteria_json?: string; links_json?: string; review_window_days?: number; decision?: SoftwareDecision | null; decided_at?: string | null; decision_body?: string | null;
+  criteria_json?: string; delivered_deliverables_json?: string; links_json?: string; review_window_days?: number; decision?: SoftwareDecision | null; decided_at?: string | null; decision_body?: string | null;
 };
 export async function sharedSoftwareUpdates(db: D1Database, id: string) {
   return (await db.prepare(`SELECT u.id,u.title,u.artifact_version,u.evidence_type,u.visual_alt,u.preview_url,u.what_changed,u.checks_limitations,
     u.next_step,u.client_request,u.next_update_on,u.shared_at,u.visual_key IS NOT NULL AS has_visual,
-    u.kind,u.milestone_index,u.status,u.criteria_json,u.links_json,u.review_window_days,
+    u.kind,u.milestone_index,u.status,u.criteria_json,u.delivered_deliverables_json,u.links_json,COALESCE(u.review_window_days_extended,u.review_window_days) AS review_window_days,
     m.decision,m.created_at AS decided_at,m.body AS decision_body
     FROM software_project_updates u LEFT JOIN software_project_messages m ON m.update_id=u.id AND m.decision IS NOT NULL
     WHERE u.request_id=? AND u.status IN ('shared','superseded') ORDER BY u.shared_at DESC,u.id DESC`).bind(id).all<ClientSoftwareUpdate>()).results;
