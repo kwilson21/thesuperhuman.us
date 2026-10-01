@@ -64,6 +64,25 @@ export function deliveredScope(update: Pick<ClientSoftwareUpdate, 'delivered_del
   try { const parsed = JSON.parse(update.delivered_deliverables_json ?? '[]'); if (Array.isArray(parsed)) saved = parsed.filter((item): item is string => typeof item === 'string'); } catch { /* legacy/corrupt snapshots fall back to the agreed scope */ }
   return saved.length ? saved.filter(item=>planned.includes(item)) : planned;
 }
+export function softwareRevisionTargets(body: string | null | undefined, checks: string[], planned: string[]) {
+  const header = body?.split('\n',1)[0] ?? '';
+  const summary = header.match(/\. Checks reported unmet: \[([0-9, ]*)\]\. Deliverables unavailable: \[([0-9, ]*)\]\.$/);
+  const indexes = (value: string | undefined, length: number) => [...new Set((value?.match(/\d+/g) ?? []).map(number=>Number(number)-1))].filter(index=>index>=0 && index<length);
+  if (summary) return { checks: indexes(summary[1],checks.length), deliverables: indexes(summary[2],planned.length) };
+  // Read historical summaries, but only from the generated header. The free-text note
+  // is on the next paragraph and cannot accidentally clear evidence.
+  return {
+    checks: [...new Set([
+      ...Array.from(header.matchAll(/check #(\d+):/g),match=>Number(match[1])-1),
+      ...checks.map((check,index)=>header.includes(`check ${index+1} (${check})`) ? index : -1),
+    ])].filter(index=>index>=0 && index<checks.length),
+    deliverables: Array.from(header.matchAll(/missing #(\d+):/g),match=>Number(match[1])-1).filter(index=>index>=0 && index<planned.length),
+  };
+}
+export function clearUnmetRevisionEvidence(evidence: string[], unmetChecks: number[]) {
+  const unmet = new Set(unmetChecks);
+  return evidence.map((value,index)=>unmet.has(index) ? '' : value);
+}
 export async function sharedSoftwareUpdates(db: D1Database, id: string) {
   return (await db.prepare(`SELECT u.id,u.title,u.artifact_version,u.evidence_type,u.visual_alt,u.preview_url,u.what_changed,u.checks_limitations,
     u.next_step,u.client_request,u.next_update_on,u.shared_at,u.visual_key IS NOT NULL AS has_visual,

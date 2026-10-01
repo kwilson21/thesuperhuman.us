@@ -12,7 +12,7 @@ import { POST as updatePost } from '~/pages/api/owner/requests/[id]/updates';
 import { GET as ownerVisual, PUT as uploadVisual } from '~/pages/api/owner/requests/[id]/updates/[updateId]/visual';
 import { GET as clientVisual } from '~/pages/api/studio/software/[id]/updates/[updateId]/visual';
 import { clientSoftwareProjectForSession, clientSoftwareProjectsForSession, clientProjectForSession, clientProjectsForSession, issueClientCode, completeClientCode, discardUndeliveredCode } from '~/lib/audio-client-access';
-import { sharedSoftwareUpdates, listSoftwareUpdates, queueSoftwareNotice, deliverSoftwareNotice } from '~/lib/software-projects';
+import { clearUnmetRevisionEvidence, sharedSoftwareUpdates, listSoftwareUpdates, queueSoftwareNotice, deliverSoftwareNotice, softwareRevisionTargets } from '~/lib/software-projects';
 import { softwareInvitationEmail, softwareUpdateEmail } from '~/lib/client-emails';
 import { loadStudioLedger, listStudioProjectAttention } from '~/lib/owner-reporting';
 import { postClientSoftwareProjectMessage } from '~/lib/software-project-messages';
@@ -52,6 +52,13 @@ async function call(route: typeof projectPost, body: unknown, owner = true, id =
 }
 const start = () => call(projectPost, { action: 'start', expectedRequestUpdatedAt: 'now', offer_id: 'software-offer', offer_version: 1, signatures: true, payment: true, next_update_on: '2026-10-01' });
 const update = { kind: 'progress', milestone_index: 0, title: 'Shared view', artifact_version: 'v1', evidence_type: 'concept', visual_alt: 'A fictional tracker.', preview_url: 'https://preview.example.com/tool', what_changed: 'Client status is visible.', checks_limitations: 'Sample only.', next_step: 'Build the shared view.', client_request: 'Send the sample.', next_update_on: '2026-10-02', email_client: false, delivered_deliverables:['Status view','Sample import'] };
+it('parses revision selections from stable indices, never from labels or client notes',()=>{
+  const checks=['Add a client.','Label says check #1: but remains a different check.'],planned=['Status view','Label says missing #1: but remains a different item.'];
+  const body='Requested changes to Delivery v1. Checks reported unmet: [2]. Deliverables unavailable: [1].\n\nNote says check #1: and missing #2: as ordinary text.';
+  expect(softwareRevisionTargets(body,checks,planned)).toEqual({checks:[1],deliverables:[0]});
+  expect(softwareRevisionTargets('Requested changes to Delivery v1 for milestone 1: check 1 (Add a client.), check 2 (Label says check #1: but remains a different check.)\n\nNote',checks,planned).checks).toEqual([0,1]);
+  expect(clearUnmetRevisionEvidence(['stale evidence','keep this'],[0])).toEqual(['','keep this']);
+});
 async function draft() { const response = await call(updatePost, { action: 'draft', update, expectedUpdatedAt: null }); expect(response.status).toBe(200); return response.json() as Promise<{ id: string; updatedAt: string }>; }
 async function session(email = 'alex@example.com') { const code = await issueClientCode(db, email, secret); return (await completeClientCode(db, email, code!, secret))!; }
 async function shareReview(kind='delivery_review', artifact_version='Delivery v1') {
@@ -89,7 +96,7 @@ it('lets clients report a missing planned deliverable even when every included c
   const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v1',criteria:['Try adding a client in the preview.'],delivered_deliverables:['Status view']}});
   expect(response.status).toBe(200);const {id}=await response.json() as {id:string};
   expect((await decide(id,{decision:'changes_requested',missing_deliverables:[1],note:'The sample import is not included yet.'},token)).status).toBe(200);
-  expect(sql.prepare('SELECT body FROM software_project_messages WHERE update_id=?').get(id).body).toBe('Requested changes to Delivery v1 for milestone 1: missing #2: Sample import\n\nThe sample import is not included yet.');
+  expect(sql.prepare('SELECT body FROM software_project_messages WHERE update_id=?').get(id).body).toBe('Requested changes to Delivery v1 for milestone 1. Checks reported unmet: []. Deliverables unavailable: [2].\n\nThe sample import is not included yet.');
 });
 it('treats legacy reviews without a scope snapshot as the full agreed milestone',async()=>{
   await start();const token=await session(),review=await shareReview();
@@ -142,14 +149,14 @@ it('requires specific delivery criteria and bounded reproduction notes',async()=
   for(const changed of [{criteria:[]},{criteria:[1]},{criteria:[-1]},{note:''},{note:'x'.repeat(2001)}])
     expect((await decide(review.id,{decision:'changes_requested',criteria:[0],note:'Adding a client fails with the sample.',...changed},token)).status).toBe(400);
   expect((await decide(review.id,{decision:'changes_requested',criteria:[0],note:'Adding a client fails with the sample.'},token)).status).toBe(200);
-  expect(sql.prepare('SELECT body FROM software_project_messages').get().body).toBe('Requested changes to Delivery v1 for milestone 1: check #1: Add a client.\n\nAdding a client fails with the sample.');
+  expect(sql.prepare('SELECT body FROM software_project_messages').get().body).toBe('Requested changes to Delivery v1 for milestone 1. Checks reported unmet: [1]. Deliverables unavailable: [].\n\nAdding a client fails with the sample.');
   expect(sql.prepare("SELECT note FROM software_project_audit WHERE action='decision-recorded'").get().note).toContain('checks 1');
 });
 it('keeps client note text out of the machine-readable change header',async()=>{
   await start();const token=await session(),review=await shareReview();
   expect((await decide(review.id,{decision:'changes_requested',criteria:[0],note:'The note mentions (Add a different planned check.) but does not mark it unmet.'},token)).status).toBe(200);
   const body=sql.prepare('SELECT body FROM software_project_messages WHERE update_id=?').get(review.id).body as string;
-  expect(body.split('\n',1)[0]).toBe('Requested changes to Delivery v1 for milestone 1: check #1: Add a client.');
+  expect(body.split('\n',1)[0]).toBe('Requested changes to Delivery v1 for milestone 1. Checks reported unmet: [1]. Deliverables unavailable: [].');
   expect(body).toContain('The note mentions (Add a different planned check.)');
 });
 it('snapshots delivery references with the versioned review while rejecting unsafe links',async()=>{

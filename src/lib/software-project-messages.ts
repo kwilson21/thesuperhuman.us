@@ -28,10 +28,7 @@ export async function postSoftwareReviewDecision(db: D1Database, id: string, tok
   const tokenHash = await hashValue(token), at = now.toISOString();
   const label = input.decision === 'direction_confirmed' ? 'Direction confirmed' : input.decision === 'milestone_accepted' ? 'Accepted' : 'Changes requested';
   const version = `${update.artifact_version} for milestone ${update.milestone_index+1}`;
-  const body = input.decision === 'changes_requested' ? `Requested changes to ${version}: ${[
-    ...criteria.map(index=>`check #${index+1}: ${checks[index]}`),
-    ...missing.map(index=>`missing #${index+1}: ${milestone.deliverables[index]}`),
-  ].join('; ') || 'none'}\n\n${input.note}` : `${direction ? 'Confirmed' : 'Accepted'} ${version}.`;
+  const body = input.decision === 'changes_requested' ? `Requested changes to ${version}. Checks reported unmet: [${criteria.map(index=>index+1).join(', ')}]. Deliverables unavailable: [${missing.map(index=>index+1).join(', ')}].\n\n${input.note}` : `${direction ? 'Confirmed' : 'Accepted'} ${version}.`;
   const note = `${label} on ${update.artifact_version} · milestone ${update.milestone_index+1}${criteria.length ? ` · checks ${criteria.map(index=>index+1).join(', ')}` : ''}${missing.length ? ` · missing deliverables ${missing.map(index=>index+1).join(', ')}` : ''}`;
   await db.batch([
     softwareGuard(db,`SELECT 1 FROM software_projects p JOIN owner_requests r ON r.id=p.request_id JOIN audio_client_sessions s ON s.email=r.email
