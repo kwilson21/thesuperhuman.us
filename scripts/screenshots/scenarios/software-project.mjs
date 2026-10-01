@@ -78,9 +78,17 @@ export default {
     await shot('Direction review awaiting a decision',`/studio/software/${id}`,'direction-review',{cookie});
     await decide(direction,{decision:'direction_confirmed'});
     await shot('Direction confirmed',`/studio/software/${id}`,'direction-confirmed',{cookie});
-    const delivery={...update,kind:'delivery_review',artifact_version:'Delivery v1',evidence_type:'working_preview',checks_limitations:'Checked with the fictional sample. Live rollout is outside this milestone.',title:'Client onboarding',client_request:'',review_window_days:5,criteria:terms.milestones[0].acceptance.map((_,index)=>`Try check ${index+1} with the fictional sample in the preview.`),preview_url:'https://example.com/preview',email_client:false};
+    const delivery={...update,kind:'delivery_review',artifact_version:'Delivery v1',evidence_type:'working_preview',checks_limitations:'Checked with the fictional sample. Live rollout is outside this milestone.',title:'Client onboarding',client_request:'',review_window_days:5,criteria:terms.milestones[0].acceptance.map((_,index)=>`Try check ${index+1} with the fictional sample in the preview.`),links:[{label:'Fictional release notes',url:'https://example.com/releases/delivery-v1'}],preview_url:'https://example.com/preview',email_client:false};
     const deliveryDraft=await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'draft',expectedProjectUpdatedAt:projectAt(),update:delivery,expectedUpdatedAt:null});
-    await shot('Owner composer with every delivery check',`/owner/requests/${id}/update`,'delivery-composer',{owner:true});
+    await shot('Owner composer with every delivery check',`/owner/requests/${id}/update`,'delivery-composer',{owner:true,prepare:async page=>{
+      const checkHeadings=page.locator('.client-preview').getByRole('heading',{name:'Agreed checks',exact:true});
+      if(await checkHeadings.count()!==1) throw new Error('Owner preview should show one active copy of the agreed checks.');
+      const evidence=page.locator('[data-criteria-group="0"] textarea');
+      if(await evidence.count()!==5 || !(await evidence.evaluateAll(fields=>fields.every(field=>field.required)))) throw new Error('Every agreed check needs required evidence.');
+      await page.locator('[name=title]').focus();await page.keyboard.press('Tab');
+      if(!(await page.locator('[name=artifact_version]').evaluate(field=>document.activeElement===field))) throw new Error('Keyboard Tab should move from title to version.');
+      await page.locator('[name=artifact_version]').evaluate(field=>field.blur());
+    }});
     const review=await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'share',expectedProjectUpdatedAt:deliveryDraft.projectUpdatedAt,confirmed:true,update:delivery,expectedUpdatedAt:deliveryDraft.updatedAt});
     sql(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,stripe_invoice_id,hosted_invoice_url,status,due_at,created_by,created_at,updated_at)
       VALUES ('screenshot-balance',${quote(id)},${quote(sentOffer.id)},0,'balance',120000,15,'in_fictional_balance','https://example.com/invoice/balance','open','2026-10-15','owner@example.com',${quote(at)},${quote(at)})`);

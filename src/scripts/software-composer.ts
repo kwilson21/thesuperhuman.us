@@ -13,11 +13,21 @@ export function setupSoftwareComposer() {
   const text = (selector: string, content: string) => { const element = preview.querySelector(selector); if (element) element.textContent = content; };
   function render() {
     const kind = value('kind'), milestone = value('milestone_index'), delivery = kind === 'delivery_review', handoff = kind === 'handoff';
+    const heading=root!.querySelector<HTMLElement>('[data-composer-heading]');
+    const intro=root!.querySelector<HTMLElement>('[data-composer-intro]');
+    if(heading) heading.textContent=delivery ? 'Prepare a delivery review.' : handoff ? 'Prepare the project handoff.' : kind==='direction_review' ? 'Prepare a direction review.' : 'Prepare an update.';
+    if(intro) intro.textContent=delivery ? 'Share the named version, complete agreed milestone scope, and evidence for every check.' : handoff ? 'Share delivered links after confirming the milestone is paid in full.' : kind==='direction_review' ? 'Ask the client to confirm this approach before the working milestone is reviewed.' : 'Prepare a useful update for the client.';
     const field = (name:string) => form.elements.namedItem(name) as HTMLInputElement;
     form.querySelector<HTMLElement>('[data-kind-hint]')!.textContent = kind === 'direction_review' ? 'Ask the client to confirm a design direction. It doesn’t accept working software.' : delivery ? 'Share a named version with evidence for every acceptance check. The client accepts it or names what’s unmet.' : handoff ? 'Share the delivered files after the milestone is paid in full.' : 'Share progress and the next step.';
     field('artifact_version').required = kind.endsWith('_review');
     field('artifact_version').placeholder = kind === 'direction_review' ? 'Direction v1' : delivery ? 'Delivery v1' : 'Prototype v1';
     form.querySelector<HTMLElement>('[data-delivery-fields]')!.hidden = !delivery;
+    const scopePreview=preview.querySelector<HTMLElement>('[data-preview-scope]');
+    if(scopePreview){
+      scopePreview.hidden=!delivery;
+      scopePreview.querySelectorAll<HTMLElement>('[data-preview-scope-milestone]').forEach(group=>group.hidden=group.dataset.previewScopeMilestone!==milestone);
+    }
+    form.querySelectorAll<HTMLElement>('[data-scope-milestone]').forEach(group=>group.hidden=group.dataset.scopeMilestone!==milestone);
     form.querySelectorAll<HTMLFieldSetElement>('[data-criteria-group]').forEach(group=>{
       group.hidden = group.dataset.criteriaGroup !== milestone; group.disabled = !delivery || group.hidden;
       group.querySelectorAll<HTMLTextAreaElement>('textarea').forEach(input=>input.required=delivery && !group.hidden);
@@ -33,10 +43,18 @@ export function setupSoftwareComposer() {
     form.querySelector<HTMLElement>('[data-payment-reminder]')!.hidden = !paymentBlocked;
     field('paid_confirmed').disabled = paymentBlocked;
     field('paid_confirmed').required = handoff && !paymentBlocked;
-    form.querySelectorAll<HTMLInputElement>('[name=link_label],[name=link_url]').forEach(input=>{
+    form.querySelectorAll<HTMLInputElement>('[data-handoff-link] [name=link_label],[data-handoff-link] [name=link_url]').forEach(input=>{
       input.disabled = !handoff || input.closest<HTMLElement>('[data-handoff-link]')!.hidden;
       input.required = handoff && !input.disabled;
     });
+    form.querySelectorAll<HTMLInputElement>('[data-delivery-reference] [name=link_label],[data-delivery-reference] [name=link_url]').forEach(input=>{
+      const row=input.closest<HTMLElement>('[data-delivery-reference]')!;
+      input.disabled=!delivery || row.hidden;
+      const rowInputs=row.querySelectorAll<HTMLInputElement>('input');
+      input.required=delivery && !row.hidden && [...rowInputs].some(rowInput=>Boolean(rowInput.value.trim()));
+    });
+    const addDeliveryLink=form.querySelector<HTMLButtonElement>('[data-add-delivery-link]');
+    if(addDeliveryLink) addDeliveryLink.disabled=!delivery || !form.querySelector<HTMLElement>('[data-delivery-reference][hidden]');
     field('checks_limitations').required = handoff; field('next_step').required = handoff;
     field('next_step').placeholder = handoff ? 'Corrections within the correction period. Anything new is a separate milestone.' : '';
     form.querySelector('[data-changed-label]')!.textContent = handoff ? 'What’s delivered' : 'What changed';
@@ -60,6 +78,23 @@ export function setupSoftwareComposer() {
       row.hidden=linkRows[index].hidden || !href;const anchor=row.querySelector('a')!;anchor.textContent=label;
       if(href) anchor.href=href;else anchor.removeAttribute('href');
     });
+    const deliveryReferences=[...form.querySelectorAll<HTMLElement>('[data-delivery-reference]')]
+      .filter(row=>!row.hidden)
+      .map(row=>({label:row.querySelector<HTMLInputElement>('[name=link_label]')!.value.trim(),url:row.querySelector<HTMLInputElement>('[name=link_url]')!.value.trim()}))
+      .filter(reference=>reference.label && reference.url);
+    const deliveryLinks=preview.querySelector<HTMLElement>('[data-preview-delivery-links]');
+    const deliveryLinkList=preview.querySelector<HTMLElement>('[data-preview-delivery-link-list]');
+    if(deliveryLinks && deliveryLinkList){
+      deliveryLinks.hidden=!delivery || !deliveryReferences.length;
+      const scope=preview.querySelector<HTMLElement>('[data-preview-scope]');
+      if(scope) scope.hidden=!delivery;
+      deliveryLinkList.replaceChildren(...deliveryReferences.flatMap(reference=>{
+        let href=''; try { const url=new URL(reference.url); if(url.protocol==='https:' && !url.username && !url.password) href=url.href; } catch { /* Ignore until a valid HTTPS link is entered. */ }
+        if(!href) return [];
+        const item=document.createElement('li'),anchor=document.createElement('a');
+        anchor.textContent=reference.label;anchor.href=href;anchor.target='_blank';anchor.rel='noopener noreferrer';item.appendChild(anchor);return [item];
+      }));
+    }
     const evidence = value('evidence_type') as keyof typeof evidenceTypes;
     text('[data-preview-kicker]', [handoff ? 'Handoff' : evidenceTypes[evidence], value('artifact_version'), !handoff && evidence === 'concept' ? 'Not implemented' : ''].filter(Boolean).join(' · '));
     text('[data-preview-title]', value('title') || 'Untitled update'); preview.querySelector('[data-preview-title]')?.classList.toggle('rail-muted', !value('title')); text('[data-preview-caption]', evidence === 'concept' ? 'Illustrative concept' : value('artifact_version'));
@@ -70,6 +105,7 @@ export function setupSoftwareComposer() {
     let href = ''; try { const url = new URL(value('preview_url')); if (url.protocol === 'https:' && !url.username && !url.password) href = url.href; } catch { /* No preview until the URL is valid. */ }
     const link = preview.querySelector<HTMLAnchorElement>('[data-preview-link]')!; if (href) link.href = href; else link.removeAttribute('href');
     preview.querySelector<HTMLElement>('[data-preview-link-row]')!.hidden = !href;
+    const linkAccessNote=preview.querySelector<HTMLElement>('[data-preview-access-note]');if(linkAccessNote)linkAccessNote.hidden=!href;
     const date = preview.querySelector<HTMLElement>('[data-preview-date]')!; date.hidden = !value('next_update_on'); text('[data-preview-date] span', value('next_update_on') ? softwareDate(value('next_update_on')) : '');
     if (!emailChosen) email.checked = kind !== 'progress' || Boolean(value('client_request').trim());
     alt.required = hasVisual || Boolean(file.files?.length);
@@ -79,6 +115,10 @@ export function setupSoftwareComposer() {
   form.querySelector('[data-add-link]')?.addEventListener('click',()=>{
     const next = form.querySelector<HTMLElement>('[data-handoff-link][hidden]'); if (next) next.hidden=false;
     form.querySelector<HTMLButtonElement>('[data-add-link]')!.disabled = !form.querySelector('[data-handoff-link][hidden]'); render();
+  });
+  form.querySelector('[data-add-delivery-link]')?.addEventListener('click',()=>{
+    const next=form.querySelector<HTMLElement>('[data-delivery-reference][hidden]');
+    if(next){next.hidden=false;next.querySelector<HTMLInputElement>('input')?.focus();render();}
   });
   const drop = file.closest<HTMLElement>('.drop');
   drop?.addEventListener('dragover', event => { event.preventDefault(); drop.classList.add('dragging'); });

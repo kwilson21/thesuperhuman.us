@@ -178,14 +178,14 @@ it('renders version-specific direction, delivery, acceptance, handoff and earlie
     sql.exec("INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES ('r','client','PRIVATE TOKEN','Direction confirmed','direction','direction_confirmed','2026-09-30')");
     html=await renderProject();expect(html).toContain('You confirmed this direction on Sep 30, 2026.');expect(html).not.toContain('data-software-review');
     sql.exec("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,criteria_json,created_by,created_at,updated_at,shared_at,review_window_days) VALUES ('delivery','r','delivery_review','shared',0,'Working tracker','Delivery v1','working_preview','[\"Try adding the fictional client.\"]','PRIVATE AUTHOR','2026-10-01','2026-10-01','2026-10-01',5)");
-    html=await renderProject();expect(html).toContain('Your first milestone is ready to review.');expect(html).toContain('Please review by Oct 8, 2026.');expect(html).toContain('Try adding the fictional client.');expect(html).toContain('Demonstrated');expect(html).toContain('Accept milestone');expect(html).toContain('name="criteria"');expect(html).toContain('No automatic acceptance from silence.');
+    html=await renderProject();expect(html).toContain('Your first milestone is ready to review.');expect(html).toContain('Please review within 5 business days, by Oct 8, 2026.');expect(html).toContain('Try adding the fictional client.');expect(html).toContain('Demonstrated');expect(html).toContain('Accept milestone');expect(html).toContain('name="criteria"');expect(html).toContain('No automatic acceptance from silence.');
     sql.exec("INSERT INTO software_project_updates(id,request_id,status,kind,milestone_index,title,evidence_type,created_by,created_at,updated_at,shared_at) VALUES ('progress','r','shared','progress',0,'Progress after review','concept','owner','2026-10-02','2026-10-02','2026-10-02')");
     html=await renderProject();expect(html).toContain('data-software-review');expect(html).toContain('/reviews/delivery');expect(html).toContain('Try adding the fictional client.');expect(html).not.toContain('This update is shown for reference.');expect(html).not.toContain('Earlier versions');expect(html.indexOf('Your review')).toBeLessThan(html.indexOf('What we agreed'));
     const multiTerms={...terms,milestones:[...terms.milestones,{...terms.milestones[0],name:'Follow-up'}]};
     sql.prepare('UPDATE software_projects SET terms_json=?').run(JSON.stringify(multiTerms));
     sql.exec("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,created_by,created_at,updated_at,shared_at) VALUES ('pending-direction','r','direction_review','shared',1,'Next direction','Direction v2','concept','owner','2026-10-03','2026-10-03','2026-10-03')");
     html=await renderProject();
-    expect(html).toContain('Your first milestone is ready to review.');expect(html).toContain('Please review by Oct 8, 2026.');
+    expect(html).toContain('Your first milestone is ready to review.');expect(html).toContain('Please review within 5 business days, by Oct 8, 2026.');
     const rail=html.slice(html.indexOf('<aside'),html.indexOf('</aside>'));
     expect(rail.indexOf('/reviews/delivery')).toBeLessThan(rail.indexOf('/reviews/pending-direction'));
     expect(rail).toContain('Accept milestone');expect(rail).toContain('Confirm direction');
@@ -215,7 +215,7 @@ it('renders version-specific direction, delivery, acceptance, handoff and earlie
     html=await renderProject();expect(html).toContain('Corrections through Nov 1, 2026.');expect(html).not.toContain('Handoff ready');
     for(const secret of ['PRIVATE OWNER','PRIVATE AUTHOR','PRIVATE TOKEN','PRIVATE NOTE','PRIVATE FIT REVIEW','240000']) expect(html).not.toContain(secret);
     const ownerHTML=await container.renderToString(composer,{request:new Request('https://thesuperhuman.us/owner/requests/r/update'),params:{id:'r'},locals:{owner:{email:'owner@example.com'},runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}} as any});
-    expect(ownerHTML).toContain('Delivery review');expect(ownerHTML).toContain('Acceptance checks');expect(ownerHTML).toContain('At least 5 Business Days.');expect(ownerHTML).toContain('This milestone is paid in full');expect(ownerHTML).toContain('Keep the files available for at least 30 days.');
+    expect(ownerHTML).toContain('Delivery review');expect(ownerHTML).toContain('Evidence for every acceptance check');expect(ownerHTML).toContain('At least 5 Business Days.');expect(ownerHTML).toContain('This milestone is paid in full');expect(ownerHTML).toContain('Keep the files available for at least 30 days.');
   } finally {sql.close();}
 });
 

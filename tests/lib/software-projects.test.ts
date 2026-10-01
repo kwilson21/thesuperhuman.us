@@ -90,6 +90,15 @@ it('requires specific delivery criteria and bounded reproduction notes',async()=
   expect(sql.prepare('SELECT body FROM software_project_messages').get().body).toBe('Requested changes to Delivery v1 for milestone 1: check 1 (Add a client.).\n\nAdding a client fails with the sample.');
   expect(sql.prepare("SELECT note FROM software_project_audit WHERE action='decision-recorded'").get().note).toContain('checks 1');
 });
+it('snapshots delivery references with the versioned review while rejecting unsafe links',async()=>{
+  await start();
+  const links=[{label:'Repository · example only',url:'https://example.com/repository'},{label:'Shared artifact · access not verified',url:'https://example.com/artifact'}];
+  const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v3',criteria:['Try adding a client in the preview.'],links}});
+  expect(response.status).toBe(200);
+  const shared=await sharedSoftwareUpdates(db,'software');
+  expect(shared[0]).toMatchObject({artifact_version:'Delivery v3',links_json:JSON.stringify(links),criteria_json:JSON.stringify(['Try adding a client in the preview.'])});
+  expect((await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v4',criteria:['Try it.'],links:[{label:'Unsafe',url:'javascript:alert(1)'}]}})).status).toBe(400);
+});
 it('supersedes only the same kind and milestone, keeping old versions and decisions private-safe',async()=>{
   await start();const token=await session(),first=await shareReview();
   await decide(first.id,{decision:'changes_requested',criteria:[0],note:'Try the sample.'},token);
