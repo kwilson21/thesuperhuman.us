@@ -126,8 +126,12 @@ export function setupSoftwareComposer() {
     if(next){next.hidden=false;next.querySelector<HTMLInputElement>('input')?.focus();render();}
   });
   form.querySelectorAll<HTMLButtonElement>('[data-reuse-reference]').forEach(button=>button.addEventListener('click',()=>{
-    const row=form.querySelector<HTMLElement>('[data-delivery-reference]:not([hidden]) input[name=link_label]:placeholder-shown')?.closest<HTMLElement>('[data-delivery-reference]')
-      ?? form.querySelector<HTMLElement>('[data-delivery-reference][hidden]');
+    const rows=Array.from(form.querySelectorAll<HTMLElement>('[data-delivery-reference]'));
+    const row=rows.find(candidate=>{
+      if(candidate.hidden)return false;
+      const inputs=candidate.querySelectorAll<HTMLInputElement>('input');
+      return !inputs[0]?.value.trim() && !inputs[1]?.value.trim();
+    }) ?? rows.find(candidate=>candidate.hidden);
     if(!row) return;
     row.hidden=false;
     const inputs=row.querySelectorAll<HTMLInputElement>('input');

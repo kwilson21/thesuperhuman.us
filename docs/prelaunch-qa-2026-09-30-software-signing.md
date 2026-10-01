@@ -23,7 +23,7 @@ PASS means observed locally unless an environment is stated. The approved PR upd
 - **PASS:** Independent UI checks verify native no-JavaScript reading, actual Chromium print output, and long-title/200% text readability. Verified contrast and sticky/focus issues were corrected. The summary becomes static when enlarged text needs the viewport. Signed documents remain unchanged.
 - **PASS:** Fresh independent correctness/security and UI/copy reviews. No new dependency, database schema, owner-editor redesign or signing-flow changes.
 - **PASS baseline CI:** PR head `268fe3c` passed Validate, Screenshots and Workers Builds. The guided continuation’s exact-head CI and downloaded screenshot receipt are recorded after its approved push; prior-head success is not evidence for a later commit.
-- **PENDING production:** Migration 0023, merging, deployment, enabling signing and actual client signing remain outside this approval. The scoped implementation and PR checks do not certify production readiness.
+- **PENDING production:** Migrations 0023 and 0024, merging, deployment, enabling signing and actual client signing remain outside this approval. Apply 0024 after 0023 and before deploying code that reads delivery selections or extended review windows. The scoped implementation and PR checks do not certify production readiness.
 
 ## Signing baseline local evidence
 
@@ -122,7 +122,7 @@ Local logs, manifest and the bounded scenario runner are retained in `.private/c
 |---|---|
 | 8.1 Access identity | PASS local signed-JWT/session tests. UNVERIFIED production owner Access policy. |
 | 8.2 Owner headers | PASS local private/no-store/noindex behavior; UNVERIFIED edge responses. |
-| 8.3 Migration/backup | PENDING production 0023 authorization and the procedure below. Local 0001 through 0023 application and schema tests pass. |
+| 8.3 Migration/backup | PENDING production 0023 and 0024 authorization and the procedure below. Local 0001 through 0024 application and schema tests pass. |
 | 8.4 Persistence/alerts | PASS local transactional writes and failure cases. UNVERIFIED live urgent notice receipt. |
 | 8.5 Traffic fallback | N/A: no traffic-summary changes. |
 | 8.6 Playback/campaigns | N/A: no measurement changes. |
@@ -153,11 +153,16 @@ Local logs, manifest and the bounded scenario runner are retained in `.private/c
 | Retention/open/held/reuse | PASS local exact-manifest tests, final-reference deletion and active-offer pinning. |
 | CI screenshots/keyboard/no-JS/widths | PASS local 46-state widths and visual review. UNVERIFIED updated remote CI screenshots and comprehensive manual keyboard/no-JS checks. |
 
-## Migration 0023 and deployment boundary
+## Migrations 0023–0024 and deployment boundary
 
-**PENDING:** Apply `0023_software_signing.sql` to production only after exact authorization. Reconcile the migration ledger and current schema; export the database, record a recovery bookmark and restore-test the export; apply the approved migration; verify existing counts, new objects, foreign keys, ledger and owner health; save a private receipt before any production merge.
+**PENDING:** Apply `0023_software_signing.sql`, then `0024_software_delivery_selection_and_review_windows.sql`, to production only after exact authorization. Apply both before deploying code that reads the corresponding columns. Reconcile the migration ledger and current schema; export the database, record a recovery bookmark and restore-test the export; apply the approved migrations in order; verify existing counts, new objects, foreign keys, ledger and owner health; save a private receipt before any production merge.
 
 The migration adds private agreement/settings/template/signature/access/artifact/delivery/retention tables, columns on existing software offers and projects, indexes and immutable-evidence triggers. It initializes website signing off. It does not drop/rebuild existing tables or rewrite existing client rows. The feature code depends on this schema.
+
+Migration 0024 adds `delivered_deliverables_json` and the nullable
+`review_window_days_extended` column to software project updates. It is additive,
+preserves the existing 5–30-day column constraint, and must follow migration
+0023 before deploying owner or client project pages that select the new fields.
 
 A code rollback can redeploy the prior build while leaving these additive database objects in place. Removing the schema after clients sign would delete legal evidence and requires separate recovery planning; an entire database restore can also discard newer unrelated writes. Disabling signing prevents new signing but does not erase stored evidence. No down migration or automatic schema reversal is claimed.
 
@@ -165,7 +170,7 @@ A code rollback can redeploy the prior build while leaving these additive databa
 
 1. **PASS locally:** Recovered editor and continuation commits are integrated with current main `2beb025`; required local checks and independent reviews pass. Preserve history while updating the existing PR branch.
 2. The initial signing update was pushed and passed all triggered checks at `268fe3c`. Publish the approved guided-terms continuation to PR #158 and verify terminal CI/screenshots for its exact new head. Save the private final-head receipt; keep production gates below separate.
-3. Obtain exact production 0023 approval and complete the backup/recovery/apply/verification receipt above.
+3. Obtain exact production approval for migrations 0023 and 0024, then complete the backup/recovery/apply/verification receipt above in order.
 4. Obtain/confirm production merge and deployment authorization; merge only with current-head checks and required review satisfied. Verify the deployed revision and scoped journeys.
 5. Keep signing off until the owner reviews templates/consent/configuration and approves enabling it. Real-client signing and PDF delivery remain separate live checks.
 

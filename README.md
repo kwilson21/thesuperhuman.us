@@ -240,3 +240,14 @@ PDF preparation uses `pdf-lib`, `@pdf-lib/fontkit`, and licensed local Inter and
 Newsreader fonts. Agreement PDFs and certificates belong in private storage.
 Signed copy downloads remain available when new website signing is switched off.
 Code completion does not establish deployment or live signing readiness.
+
+### Software delivery review updates
+
+Apply music migration `0024_software_delivery_selection_and_review_windows.sql`
+after `0023_software_signing.sql` and before deploying code that reads delivery
+selections or the extended review-window field. It snapshots the planned items
+included in each shared delivery while acceptance remains tied to the complete
+agreed milestone. It also stores executed-agreement review windows longer than
+30 business days without changing the earlier column constraint. Both
+migrations remain pending production approval; do not deploy this code before
+the required schema is applied.
