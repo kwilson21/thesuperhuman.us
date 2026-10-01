@@ -38,7 +38,7 @@ See `README.md` for environment variables, KV bindings, the full resume request 
 
 ## Positioning & Brand Voice
 
-- **Person and interests first.** Show what Kazon cares about, makes, and contributes. Make professional evidence easy to assess. Present independent work (contracts and projects) as the default and full-time as selective: remote roles with meaningful ownership where building with AI is a normal part of the job. Don't turn every page into a services pitch.
+- **Person and interests first.** Show what Kazon cares about, makes, and contributes. Make professional evidence easy to assess. Present independent work (contracts and projects) as the default and full-time as selective: roles with meaningful ownership where building with AI is a normal part of the job, either fully remote or in person in San Francisco or Washington, D.C. Don't turn every page into a services pitch.
 - **Tone:** Direct, confident, technically specific. No fluff, no buzzwords
 - **Audience:** curious visitors, potential collaborators, recruiters, and hiring managers
 - **Key differentiators:**
