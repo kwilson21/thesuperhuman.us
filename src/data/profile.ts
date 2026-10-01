@@ -1,6 +1,6 @@
 // Curated from the owner's career account. Update professional facts here.
 export const workingPreference = 'I work independently, through contracts and projects, and I’m selective about full-time roles.';
-export const workingPreferenceDetail = 'I work independently, through contracts and projects. I’ll consider full-time roles where I’d own a system end to end, work fully remotely, and build with AI as a normal part of the job. If that isn’t your role, a contract is probably the better fit, and I’m glad to talk about that too.';
+export const workingPreferenceDetail = 'I work independently, through contracts and projects. I’ll consider fully remote full-time roles and in-person opportunities in San Francisco or Washington, D.C., especially where I’d own a system end to end and build with AI as a normal part of the job. If that isn’t your role, a contract is probably the better fit, and I’m glad to talk about that too.';
 export const lyftBonus = { before: '5,000', after: '100,000+', evidence: 'Owner-reported batch capacity', description: 'I changed Lyft’s driver-bonus tool so support could run and monitor larger batches without handing the work to on-call engineers.' };
 // Team scope clarified by the owner on September 10, 2026. Rentals projects come
 // from the existing career account. Quiet hours was completed after the July 2026
