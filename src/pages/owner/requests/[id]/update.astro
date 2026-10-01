@@ -17,46 +17,65 @@ const id = Astro.params.id!, request = await getOwnerRequest(db, id), project = 
 if (!request || request.kind !== 'software' || !project || project.revoked_at || project.content_deleted_at || request.status === 'withdrawn') return new Response('Project not found.', { status: 404 });
 if (project.state === 'complete') return Astro.redirect(`/owner/requests/${id}`);
 const terms = projectTerms(project), history = await listSoftwareUpdates(db,id), draft = history.find(update => update.status === 'draft');
+const shared = await sharedSoftwareUpdates(db,id);
+const latestDelivery = shared.find(item => item.kind==='delivery_review' && item.status==='shared' && item.milestone_index===project.milestone_index);
+const requestedId = Astro.url.searchParams.get('respond');
+const revisionCandidate = latestDelivery?.decision==='changes_requested' ? latestDelivery : null;
+const revisionSource = revisionCandidate && (!requestedId || requestedId===revisionCandidate.id) && (!draft || (draft.kind==='delivery_review' && draft.milestone_index===revisionCandidate.milestone_index)) ? revisionCandidate : null;
+const staleRevision = Boolean(requestedId && !revisionSource);
+const seed = draft ?? revisionSource;
+const revisionChecks = revisionSource ? terms.milestones[revisionSource.milestone_index ?? project.milestone_index].acceptance : [];
+const unmetRevisionChecks = revisionSource ? revisionChecks.filter(check => revisionSource.decision_body?.includes(`(${check})`)) : [];
+const revisionEvidence = revisionSource ? JSON.parse(revisionSource.criteria_json ?? '[]') as string[] : [];
+const unmetRevisionIndexes = revisionChecks.map((check,index)=>unmetRevisionChecks.includes(check)?index:-1).filter(index=>index>=0);
 const agreementValues = project.agreement_id ? await db.prepare("SELECT values_json FROM software_agreements WHERE id=? AND status='executed'").bind(project.agreement_id).first<{values_json:string}>() : null;
 const agreedReviewDays = agreementValues ? Number(JSON.parse(agreementValues.values_json).owner?.review_business_days) : null;
-const links: {label:string;url:string}[] = draft ? JSON.parse(draft.links_json) : [];
+const links: {label:string;url:string}[] = seed ? JSON.parse(seed.links_json ?? '[]') : [];
 const savedReferences = [...new Map(history.filter(item=>item.status!=='draft').flatMap(item=>{
   try { return (JSON.parse(item.links_json) as {label:string;url:string}[]).filter(reference=>{
     try { const url=new URL(reference.url); return url.protocol==='https:' && !url.username && !url.password && Boolean(reference.label.trim()); } catch { return false; }
   }); } catch { return []; }
 }).map(reference=>[reference.url,reference])).values()].slice(0,8);
-const update: ClientSoftwareUpdate = { id: draft?.id ?? '', title: draft?.title ?? '', artifact_version: draft?.artifact_version ?? '', evidence_type: draft?.evidence_type ?? 'concept', visual_alt: draft?.visual_alt ?? '', preview_url: draft?.preview_url ?? '', what_changed: draft?.what_changed ?? '', checks_limitations: draft?.checks_limitations ?? '', next_step: draft?.next_step ?? '', client_request: draft?.client_request ?? '', next_update_on: draft?.next_update_on ?? '', shared_at: null, has_visual: draft?.visual_key ? 1 : 0, kind: draft?.kind ?? 'progress', links_json: JSON.stringify(links) };
+const update: ClientSoftwareUpdate = { id: draft?.id ?? '', title: seed?.title ?? '', artifact_version: draft?.artifact_version ?? '', evidence_type: seed?.evidence_type ?? 'concept', visual_alt: seed?.visual_alt ?? '', preview_url: seed?.preview_url ?? '', what_changed: draft?.what_changed ?? '', checks_limitations: seed?.checks_limitations ?? '', next_step: seed?.next_step ?? '', client_request: draft?.client_request ?? '', next_update_on: seed?.next_update_on ?? '', shared_at: null, has_visual: draft?.visual_key ? 1 : 0, kind: seed?.kind ?? 'progress', links_json: JSON.stringify(links) };
 const invoices = await listSoftwareInvoices(db,id,project.offer_id);
 const paymentBlocked = terms.milestones.map((_,index)=>payableSoftwareInvoice(invoices,index,['balance','milestone']));
 const newRequests = await listOwnerRequests(db, { status: 'new' });
 const firstName = request.name.trim().split(/\s+/)[0] || 'the client';
-const shared = await sharedSoftwareUpdates(db,id);
 const accepted = terms.milestones.map((_,index)=>shared.some(item=>item.kind==='delivery_review' && item.milestone_index===index && item.status==='shared' && item.decision==='milestone_accepted'));
-const criteria: string[] = draft ? JSON.parse(draft.criteria_json) : [];
-const initialMilestone = draft?.milestone_index ?? project.milestone_index;
-const initialDeliverables: string[] = draft ? JSON.parse(draft.delivered_deliverables_json ?? '[]') : [];
+const criteria: string[] = draft ? JSON.parse(draft.criteria_json) : revisionSource ? revisionEvidence.map((value,index)=>unmetRevisionIndexes.includes(index)?'':value) : [];
+const initialMilestone = seed?.milestone_index ?? project.milestone_index;
+const initialDeliverables: string[] = seed ? JSON.parse(seed.delivered_deliverables_json ?? '[]') : [];
 update.delivered_deliverables_json = JSON.stringify(initialDeliverables);
 ---
-<OwnerLayout title="New project update" current="requests" newRequestCount={newRequests.length} ownerEmail={Astro.locals.owner.email}>
-  <p class="owner-breadcrumb"><a href="/owner/requests">Requests</a> / <a href={`/owner/requests/${id}`}>{terms.outcome}</a> / New update</p>
-  <div class="update-columns" data-software-composer data-endpoint={`/api/owner/requests/${id}/updates`} data-id={draft?.id} data-updated-at={draft?.updated_at} data-project-updated-at={project.updated_at}>
-    <section><header class="owner-page-heading compact"><div><p class="owner-kicker">New update</p><h1 data-composer-heading>Prepare an update.</h1><p data-composer-intro>Prepare a useful update for {firstName}.</p><p class="rail-state"><span class="state-dot" aria-hidden="true"></span>Draft · Not shared</p></div></header>
+<OwnerLayout title={revisionSource ? "Respond to requested changes" : "New project update"} current="requests" newRequestCount={newRequests.length} ownerEmail={Astro.locals.owner.email}>
+  <p class="owner-breadcrumb"><a href="/owner/requests">Requests</a> / <a href={`/owner/requests/${id}`}>{terms.outcome}</a> / {revisionSource ? 'Respond to requested changes' : 'New update'}</p>
+  <div class="update-columns" data-software-composer data-endpoint={`/api/owner/requests/${id}/updates`} data-id={draft?.id} data-updated-at={draft?.updated_at} data-revision-source={revisionSource?.id} data-project-updated-at={project.updated_at}>
+    <section><header class="owner-page-heading compact"><div><p class="owner-kicker">{revisionSource ? "Client requested changes" : "New update"}</p><h1 data-composer-heading>{revisionSource ? "Revise this delivery." : "Prepare an update."}</h1><p data-composer-intro>{revisionSource ? `Update ${revisionSource.artifact_version} for ${firstName}.` : `Prepare a useful update for ${firstName}.`}</p><p class="rail-state"><span class="state-dot" aria-hidden="true"></span>Draft · Not shared</p></div></header>
+      {staleRevision && <p class="revision-alert" role="status">That revision request is no longer the latest review. Check the project history and open the current request.</p>}
+      {revisionSource && <section class="revision-context" aria-labelledby="revision-context-heading" data-revision-context>
+        <p class="delivery-step">Revision brief</p><h2 id="revision-context-heading">Respond to {firstName}’s feedback</h2>
+        <p><strong>Previous version:</strong> {revisionSource.artifact_version} · {revisionSource.title}</p>
+        <h3>Checks they marked unmet</h3><ul>{unmetRevisionChecks.map(check=><li>{check}</li>)}</ul>
+        <blockquote>{revisionSource.decision_body?.split('\n\n').slice(1).join('\n\n') || revisionSource.decision_body}</blockquote>
+        {revisionSource.has_visual && <figure class="revision-visual"><img src={`/api/owner/requests/${id}/updates/${revisionSource.id}/visual`} alt={revisionSource.visual_alt} /><figcaption>Visual from {revisionSource.artifact_version}</figcaption></figure>}
+        <p>Prior check evidence is copied for reference. The unmet checks start blank. Review and update evidence for every check before sharing a new version.</p>
+      </section>}
       <form class="software-update-form" data-update-form>
-        <div class="software-field"><label>Kind<select class="studio-select" name="kind" aria-describedby="update-kind-hint">{Object.entries(updateKinds).map(([value,label])=><option value={value} selected={value===(draft?.kind ?? 'progress')}>{label}</option>)}</select></label><p id="update-kind-hint" class="rail-caption" data-kind-hint></p></div>
-        <label>Milestone<select class="studio-select" name="milestone_index">{terms.milestones.map((item,index) => <option value={index} selected={index === (draft?.milestone_index ?? project.milestone_index)}>Milestone {index+1} · {item.name}</option>)}</select></label>
+        <div class="software-field"><label>Kind<select class="studio-select" name="kind" aria-describedby="update-kind-hint">{Object.entries(updateKinds).map(([value,label])=><option value={value} selected={value===(seed?.kind ?? 'progress')}>{label}</option>)}</select></label><p id="update-kind-hint" class="rail-caption" data-kind-hint></p></div>
+        <label>Milestone<select class="studio-select" name="milestone_index">{terms.milestones.map((item,index) => <option value={index} selected={index === (seed?.milestone_index ?? project.milestone_index)}>Milestone {index+1} · {item.name}</option>)}</select></label>
         <label>Title<input class="studio-input" name="title" maxlength="120" required placeholder="What the client will notice" value={update.title} /></label>
-        <label>Version<input class="studio-input" name="artifact_version" maxlength="60" placeholder="Prototype v1" value={update.artifact_version} /></label>
+        <label>Version<input class="studio-input" name="artifact_version" maxlength="60" required={Boolean(revisionSource)} placeholder={revisionSource ? `Choose a new version after ${revisionSource.artifact_version}` : "Prototype v1"} value={update.artifact_version} /><small class="rail-caption">{revisionSource ? `Name the revised version. The previous version was ${revisionSource.artifact_version}.` : "Use a name the client can refer to in feedback."}</small></label>
         <div class="software-field"><label>Evidence type<select aria-describedby="update-field-1-hint" class="studio-select" name="evidence_type">{Object.entries(evidenceTypes).map(([value,label]) => <option value={value} selected={update.evidence_type === value}>{label}</option>)}</select></label><p id="update-field-1-hint" class="rail-muted rail-caption">Concept means not implemented. Call something working only if the client can use it.</p></div>
         <section class="delivery-card" data-delivery-fields hidden aria-labelledby="delivery-evidence-heading">
           <p class="delivery-step">Delivery details</p>
           <h2 id="delivery-evidence-heading">Keep the agreed milestone in view</h2>
-          <p class="delivery-intro">Choose the agreed items included in this version. The client’s acceptance still covers the complete milestone and every agreed check.</p>
+          <p class="delivery-intro">Choose the agreed items included in this version. For a delivery review, the client can accept only after every agreed deliverable and check is complete. If this version is a subset, they can request changes but cannot accept the milestone yet.</p>
           <div class="delivery-scope" data-delivery-scope>{terms.milestones.map((item,index)=><fieldset data-scope-milestone={index} hidden={index!==initialMilestone} disabled={index!==initialMilestone}><legend>Included in this delivery · Milestone {index+1}</legend>{item.deliverables.map(deliverable=><label class="deliverable-choice"><input type="checkbox" name="delivered_deliverables" value={deliverable} checked={initialDeliverables.includes(deliverable)} />{deliverable}</label>)}</fieldset>)}</div>
-          <p class="delivery-access">Full milestone acceptance remains in effect for the full agreed scope:</p>
+          <p class="delivery-access" data-delivery-acceptance-boundary>Acceptance is for the complete milestone. If any planned deliverable remains, the client cannot accept this version as complete.</p>
           <div class="delivery-scope full-scope" data-full-scope>{terms.milestones.map((item,index)=><section data-full-scope-milestone={index} hidden={index!==initialMilestone}><h3>Full agreed scope · Milestone {index+1}</h3><ul>{item.deliverables.map(deliverable=><li>{deliverable}</li>)}</ul></section>)}</div>
           <fieldset class="delivery-checks">
           <legend>Evidence for every acceptance check</legend>
-          {terms.milestones.map((item,index)=><fieldset data-criteria-group={index} hidden={index!==(draft?.milestone_index ?? project.milestone_index)} disabled={index!==(draft?.milestone_index ?? project.milestone_index)}><legend class="visually-hidden">Evidence for milestone {index+1}</legend>{item.acceptance.map((check,checkIndex)=><label>{check}<textarea class="studio-textarea" name="criteria" maxlength="300" placeholder="Describe where the client can verify this check." aria-label={`Evidence for check ${checkIndex+1}: ${check}`}>{index===draft?.milestone_index ? criteria[checkIndex] ?? '' : ''}</textarea></label>)}</fieldset>)}
+          {terms.milestones.map((item,index)=><fieldset data-criteria-group={index} hidden={index!==(seed?.milestone_index ?? project.milestone_index)} disabled={index!==(seed?.milestone_index ?? project.milestone_index)}><legend class="visually-hidden">Evidence for milestone {index+1}</legend>{item.acceptance.map((check,checkIndex)=><label>{check}<textarea class="studio-textarea" name="criteria" maxlength="300" placeholder="Describe where the client can verify this check." aria-label={`Evidence for check ${checkIndex+1}: ${check}`}>{index===initialMilestone ? criteria[checkIndex] ?? '' : ''}</textarea></label>)}</fieldset>)}
           </fieldset>
           <div class="delivery-references" data-delivery-references>
             <div><h3>Supporting links</h3><p class="rail-caption">Add a saved file link, GitHub repository, commit or release, or ChatGPT/Claude shared artifact. The site checks HTTPS format only; it cannot verify the client’s access.</p></div>
@@ -65,7 +84,7 @@ update.delivered_deliverables_json = JSON.stringify(initialDeliverables);
             <div class="saved-reference-picker"><h4>Reuse a saved project link</h4>{savedReferences.length ? <div>{savedReferences.map(reference=><button type="button" class="saved-reference" data-reuse-reference data-label={reference.label} data-url={reference.url}><span>{reference.label}</span><small>{new URL(reference.url).hostname} · saved on this project</small></button>)}</div> : <p class="rail-caption">Links from earlier delivery reviews or handoffs will appear here.</p>}</div>
           </div>
           <p class="delivery-access" role="note">Access status: link format is checked, client permissions are not. Private shared artifacts do not become accessible automatically.</p>
-          <div class="software-field"><label>Review window (Business Days)<input class="studio-input" type="number" name="review_window_days" min="5" max={agreedReviewDays ? 365 : 30} value={draft?.review_window_days ?? agreedReviewDays ?? 5} readonly={Boolean(agreedReviewDays)} aria-describedby="review-window-hint" /></label><p id="review-window-hint" class="rail-caption">{agreedReviewDays ? 'Set by the executed agreement.' : 'Choose 5–30 Business Days. Larger windows are set in the executed agreement.'}</p></div>
+          <div class="software-field"><label>Review window (Business Days)<input class="studio-input" type="number" name="review_window_days" min="5" max={agreedReviewDays ? 365 : 30} value={seed?.review_window_days ?? agreedReviewDays ?? 5} readonly={Boolean(agreedReviewDays)} aria-describedby="review-window-hint" /></label><p id="review-window-hint" class="rail-caption">{agreedReviewDays ? 'Set by the executed agreement.' : 'Choose 5–30 Business Days. Larger windows are set in the executed agreement.'}</p></div>
         </section>
         <section data-handoff-fields data-accepted={JSON.stringify(accepted)} data-payment-blocked={JSON.stringify(paymentBlocked)} hidden>
           <p class="rail-caption" data-payment-reminder hidden>{manualPaymentReminder}</p>
@@ -91,13 +110,13 @@ update.delivered_deliverables_json = JSON.stringify(initialDeliverables);
         <p class="studio-status" data-composer-status role="status" aria-live="polite"></p>
       </form>
     </section>
-    <aside class="client-preview"><p class="owner-kicker">Client preview · Not yet shared</p><SoftwareProjectUpdate update={update} preview checks={terms.milestones[draft?.milestone_index ?? project.milestone_index].acceptance} visualUrl={update.has_visual ? `/api/owner/requests/${id}/updates/${update.id}/visual` : undefined} />
-      <section class="delivery-included-preview" data-preview-included hidden><h3>Included in this delivery</h3><ul data-preview-delivered-items></ul><p>Acceptance still covers the complete agreed milestone and all of its checks.</p></section>
+    <aside class="client-preview"><p class="owner-kicker">Client preview · Not yet shared</p><SoftwareProjectUpdate update={update} preview checks={terms.milestones[initialMilestone].acceptance} visualUrl={update.has_visual ? `/api/owner/requests/${id}/updates/${update.id}/visual` : undefined} />
+      <section class="delivery-included-preview" data-preview-included hidden><h3>Included in this delivery</h3><ul data-preview-delivered-items></ul><p data-preview-acceptance-boundary>Acceptance applies to the full agreed scope. The client can accept only when every item and check is complete.</p></section>
       <div data-preview-scope hidden>{terms.milestones.map((item,index)=><section data-preview-scope-milestone={index} hidden><h3>Full agreed scope · Milestone {index+1}</h3><ul>{item.deliverables.map(deliverable=><li>{deliverable}</li>)}</ul></section>)}</div>
       <section data-preview-section="next_step" hidden={!update.next_step}><h3>Next from me</h3><p data-preview-text="next_step">{update.next_step}</p></section>
       <p data-preview-date hidden={!update.next_update_on}>Next update: <span>{update.next_update_on}</span></p>
       <p data-preview-review-date hidden></p>
-      <div data-preview-checks hidden>{terms.milestones.map((item,index)=><div data-preview-criteria={index} hidden><SoftwareAcceptanceChecks checks={item.acceptance} evidence={index===draft?.milestone_index ? criteria : []} /></div>)}</div>
+      <div data-preview-checks hidden>{terms.milestones.map((item,index)=><div data-preview-criteria={index} hidden><SoftwareAcceptanceChecks checks={item.acceptance} evidence={index===initialMilestone ? criteria : []} /></div>)}</div>
       <section data-preview-handoff hidden><h3>Delivered links</h3><ul>{Array.from({length:10},()=> <li hidden><a target="_blank" rel="noopener noreferrer"></a></li>)}</ul></section>
       <p class="private-note">Private notes and fit review stay in the request.</p>
     </aside>
@@ -105,6 +124,16 @@ update.delivered_deliverables_json = JSON.stringify(initialDeliverables);
   <script>import { setupSoftwareComposer } from '~/scripts/software-composer'; setupSoftwareComposer();</script>
 </OwnerLayout>
 <style>
+  .revision-context { display: grid; gap: .6rem; margin: 0 0 1.5rem; padding: 1rem 1.15rem; border-left: 3px solid var(--accent); background: var(--studio-soft); }
+  .revision-context h2 { margin: 0; font: 400 1.6rem/1.2 Newsreader,Georgia,serif; }
+  .revision-context h3 { margin: .4rem 0 0; font: 500 .9rem/1.4 Inter,sans-serif; }
+  .revision-context p, .revision-context li, .revision-context blockquote { margin: 0; font: .88rem/1.55 Inter,sans-serif; white-space: pre-wrap; }
+  .revision-context ul { margin: 0; padding-left: 1.2rem; }
+  .revision-context blockquote { padding-left: .8rem; border-left: 1px solid var(--studio-line); }
+  .revision-visual { margin: .5rem 0 0; }
+  .revision-visual img { display: block; max-width: 100%; height: auto; border: 1px solid var(--studio-line); }
+  .revision-visual figcaption { font: .75rem/1.5 Inter,sans-serif; color: var(--studio-muted); }
+  .revision-alert { padding: .8rem 1rem; border: 1px solid var(--accent); border-radius: .25rem; font: .9rem/1.5 Inter,sans-serif; }
   .update-columns { display: grid; grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); gap: 3rem; align-items: start; }
   .owner-page-heading.compact h1 + p { font-size: 1.15rem; color: var(--muted); max-width: 38ch; margin-top: .8rem; }
   .owner-page-heading.compact .rail-state { font: .9rem/1.5 Inter,sans-serif; }

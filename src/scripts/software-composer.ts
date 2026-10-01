@@ -16,9 +16,9 @@ export function setupSoftwareComposer() {
     const heading=root!.querySelector<HTMLElement>('[data-composer-heading]');
     const intro=root!.querySelector<HTMLElement>('[data-composer-intro]');
     if(heading) heading.textContent=delivery ? 'Prepare a delivery review.' : handoff ? 'Prepare the project handoff.' : kind==='direction_review' ? 'Prepare a direction review.' : 'Prepare an update.';
-    if(intro) intro.textContent=delivery ? 'Select what this version includes, then add evidence for every check in the full agreed milestone.' : handoff ? 'Share delivered links after confirming the milestone is paid in full.' : kind==='direction_review' ? 'Ask the client to confirm this approach before the working milestone is reviewed.' : 'Prepare a useful update for the client.';
+    if(intro) intro.textContent=delivery ? 'Select what this version includes, then add evidence for every full-milestone check. The client accepts only when every agreed deliverable and check is complete.' : handoff ? 'Share delivered links after confirming the milestone is paid in full.' : kind==='direction_review' ? 'Ask the client to confirm this approach before the working milestone is reviewed.' : 'Prepare a useful update for the client.';
     const field = (name:string) => form.elements.namedItem(name) as HTMLInputElement;
-    form.querySelector<HTMLElement>('[data-kind-hint]')!.textContent = kind === 'direction_review' ? 'Ask the client to confirm a design direction. It doesn’t accept working software.' : delivery ? 'Share a named version with evidence for every acceptance check. The client accepts it or names what’s unmet.' : handoff ? 'Share the delivered files after the milestone is paid in full.' : 'Share progress and the next step.';
+    form.querySelector<HTMLElement>('[data-kind-hint]')!.textContent = kind === 'direction_review' ? 'Ask the client to confirm a design direction. It doesn’t accept working software.' : delivery ? 'The client can accept only after every agreed deliverable and check is complete. A partial version can receive change requests, but cannot be accepted as the full milestone.' : handoff ? 'Share the delivered files after the milestone is paid in full.' : 'Share progress and the next step.';
     field('artifact_version').required = kind.endsWith('_review');
     field('artifact_version').placeholder = kind === 'direction_review' ? 'Direction v1' : delivery ? 'Delivery v1' : 'Prototype v1';
     form.querySelector<HTMLElement>('[data-delivery-fields]')!.hidden = !delivery;
@@ -30,6 +30,12 @@ export function setupSoftwareComposer() {
     form.querySelectorAll<HTMLFieldSetElement>('[data-scope-milestone]').forEach(group=>{group.hidden=group.dataset.scopeMilestone!==milestone;group.disabled=!delivery || group.hidden;});
     preview.querySelectorAll<HTMLElement>('[data-preview-included]').forEach(section=>section.hidden=!delivery);
     const selectedItems=[...form.querySelectorAll<HTMLInputElement>(`[data-scope-milestone="${milestone}"] [name=delivered_deliverables]:checked`)].map(input=>input.value);
+    const plannedItems=[...form.querySelectorAll<HTMLInputElement>(`[data-scope-milestone="${milestone}"] [name=delivered_deliverables]`)].map(input=>input.value);
+    const completeScope=plannedItems.length>0 && plannedItems.every(item=>selectedItems.includes(item));
+    const boundary=form.querySelector<HTMLElement>('[data-delivery-acceptance-boundary]');
+    const acceptanceBoundary=completeScope ? 'This version includes every agreed deliverable. The client may accept the full milestone if every check is complete.' : 'This version includes a subset. The client can request changes, but cannot accept the full milestone until every agreed deliverable is included and every check is complete.';
+    if(boundary) boundary.textContent=acceptanceBoundary;
+    const previewBoundary=preview.querySelector<HTMLElement>('[data-preview-acceptance-boundary]');if(previewBoundary)previewBoundary.textContent=acceptanceBoundary;
     const includedList=preview.querySelector<HTMLElement>('[data-preview-delivered-items]');
     if(includedList) includedList.replaceChildren(...selectedItems.map(item=>{const li=document.createElement('li');li.textContent=item;return li;}));
     form.querySelectorAll<HTMLElement>('[data-full-scope-milestone]').forEach(group=>group.hidden=group.dataset.fullScopeMilestone!==milestone);

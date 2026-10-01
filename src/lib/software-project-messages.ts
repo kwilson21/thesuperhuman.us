@@ -15,8 +15,11 @@ export async function postSoftwareReviewDecision(db: D1Database, id: string, tok
   const update = await db.prepare("SELECT * FROM software_project_updates WHERE request_id=? AND id=? AND status='shared' AND kind IN ('direction_review','delivery_review')").bind(id,updateId).first<SoftwareUpdate>();
   const project = await getSoftwareProject(db,id);
   if (!update || !project) return {ok:false,status:409};
-  const direction = update.kind === 'direction_review', checks = projectTerms(project).milestones[update.milestone_index].acceptance;
+  const direction = update.kind === 'direction_review', milestone = projectTerms(project).milestones[update.milestone_index], checks = milestone.acceptance;
+  const delivered = JSON.parse(update.delivered_deliverables_json ?? '[]') as string[];
   if ((input.decision === 'direction_confirmed' && !direction) || (input.decision === 'milestone_accepted' && direction)) return {ok:false,status:400,error:"This decision doesn’t apply to this review."};
+  if (input.decision === 'milestone_accepted' && milestone.deliverables.some(item=>!delivered.includes(item)))
+    return {ok:false,status:400,error:'This version includes only part of the milestone. The client can accept after every agreed deliverable is included in a review.'};
   const criteria = input.decision === 'changes_requested' ? [...new Set(input.criteria)].sort((first,second)=>first-second) : [];
   if (criteria.some(index=>index >= checks.length) || (!direction && input.decision === 'changes_requested' && !criteria.length))
     return {ok:false,status:400,error:'Choose the agreed checks that are unmet. Tell me what happened and how to see it.'};

@@ -21,7 +21,7 @@ import { correctionPeriodEnd } from '~/lib/software-projects';
 import { softwareReviewEmail, softwareHandoffEmail } from '~/lib/client-emails';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database, env: Env;
-const terms = { outcome: 'Onboarding tool', summary: 'One shared view.', milestones: [{ name: 'Tracker', deliverables: ['Status view'], acceptance: ['Add a client.'], feeCents: 240000 }], clientInputs: 'Sample', exclusions: 'Live rollout', timing: '', paymentMode: 'standard' };
+const terms = { outcome: 'Onboarding tool', summary: 'One shared view.', milestones: [{ name: 'Tracker', deliverables: ['Status view','Sample import'], acceptance: ['Add a client.'], feeCents: 240000 }], clientInputs: 'Sample', exclusions: 'Live rollout', timing: '', paymentMode: 'standard' };
 const termsJson = JSON.stringify(terms, null, 2), secret = 'studio-code-key-for-tests-32-characters';
 const visualBytes = new Uint8Array([137,80,78,71,13,10,26,10,0]);
 const bucket = { put: vi.fn(), get: vi.fn(), delete: vi.fn() };
@@ -51,7 +51,7 @@ async function call(route: typeof projectPost, body: unknown, owner = true, id =
   return route({ params: { id }, request: new Request(`https://example.com/api/owner/requests/${id}/project`, { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://example.com' }, body: JSON.stringify(body) }), locals: { owner: owner ? { email: 'owner@example.com' } : undefined, runtime: { env } } } as never);
 }
 const start = () => call(projectPost, { action: 'start', expectedRequestUpdatedAt: 'now', offer_id: 'software-offer', offer_version: 1, signatures: true, payment: true, next_update_on: '2026-10-01' });
-const update = { kind: 'progress', milestone_index: 0, title: 'Shared view', artifact_version: 'v1', evidence_type: 'concept', visual_alt: 'A fictional tracker.', preview_url: 'https://preview.example.com/tool', what_changed: 'Client status is visible.', checks_limitations: 'Sample only.', next_step: 'Build the shared view.', client_request: 'Send the sample.', next_update_on: '2026-10-02', email_client: false, delivered_deliverables:['Status view'] };
+const update = { kind: 'progress', milestone_index: 0, title: 'Shared view', artifact_version: 'v1', evidence_type: 'concept', visual_alt: 'A fictional tracker.', preview_url: 'https://preview.example.com/tool', what_changed: 'Client status is visible.', checks_limitations: 'Sample only.', next_step: 'Build the shared view.', client_request: 'Send the sample.', next_update_on: '2026-10-02', email_client: false, delivered_deliverables:['Status view','Sample import'] };
 async function draft() { const response = await call(updatePost, { action: 'draft', update, expectedUpdatedAt: null }); expect(response.status).toBe(200); return response.json() as Promise<{ id: string; updatedAt: string }>; }
 async function session(email = 'alex@example.com') { const code = await issueClientCode(db, email, secret); return (await completeClientCode(db, email, code!, secret))!; }
 async function shareReview(kind='delivery_review', artifact_version='Delivery v1') {
@@ -68,7 +68,7 @@ it('requires a named review version, evidence for every check and a bounded revi
   }
   expect(sql.prepare('SELECT count(*) AS n FROM software_project_updates').get()).toEqual({n:0});
 });
-it('snapshots selected planned deliverables while client acceptance remains a full-milestone decision',async()=>{
+it('snapshots selected deliverables but blocks acceptance until the full milestone is included',async()=>{
   await start();
   const selected=['Status view'];
   const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v1',criteria:['Try adding a client in the preview.'],delivered_deliverables:selected}});
@@ -77,8 +77,12 @@ it('snapshots selected planned deliverables while client acceptance remains a fu
   expect(row).toEqual({delivered_deliverables_json:JSON.stringify(selected)});
   expect((await sharedSoftwareUpdates(db,'software'))[0]).toMatchObject({delivered_deliverables_json:JSON.stringify(selected)});
   const token=await session();
-  expect((await decide(id,{decision:'milestone_accepted',confirm:true},token)).status).toBe(200);
-  expect(sql.prepare("SELECT decision FROM software_project_messages WHERE update_id=?").get(id)).toEqual({decision:'milestone_accepted'});
+  const partial=await decide(id,{decision:'milestone_accepted',confirm:true},token);
+  expect(partial.status).toBe(400); expect(((await partial.json()) as {error:string}).error).toMatch(/only part of the milestone/i);
+  const full=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v2',criteria:['Try adding a client in the preview.'],delivered_deliverables:['Status view','Sample import']}});
+  expect(full.status).toBe(200);const revised=await full.json() as {id:string};
+  expect((await decide(revised.id,{decision:'milestone_accepted',confirm:true},token)).status).toBe(200);
+  expect(sql.prepare("SELECT decision FROM software_project_messages WHERE update_id=?").get(revised.id)).toEqual({decision:'milestone_accepted'});
 });
 it('rejects delivery selections outside the agreed scope, duplicates and empty shared selections',async()=>{
   await start();

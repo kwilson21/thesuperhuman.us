@@ -1,8 +1,8 @@
 ---
 import { softwareDate } from '~/lib/software-projects';
 import type { ClientSoftwareUpdate } from '~/lib/software-projects';
-type Props = { update: ClientSoftwareUpdate; checks: string[]; milestoneName: string; endpoint: string; readonly?: boolean };
-const {update,checks,milestoneName,endpoint,readonly=false}=Astro.props;
+type Props = { update: ClientSoftwareUpdate; checks: string[]; milestoneName: string; endpoint: string; readonly?: boolean; canAccept?: boolean };
+const {update,checks,milestoneName,endpoint,readonly=false,canAccept=true}=Astro.props;
 const direction=update.kind==='direction_review';
 ---
 <section class="software-review">
@@ -12,13 +12,13 @@ const direction=update.kind==='direction_review';
     {update.decision==='changes_requested' && <p>{update.decision_body}</p>}
   </> : readonly ? <p>This update is shown for reference.</p> : <form data-software-review data-endpoint={endpoint} data-version={update.artifact_version} data-milestone={milestoneName} data-direction={String(direction)}>
     <p>{direction ? 'Does this match how you work?' : `Review ${update.artifact_version} against the agreed checks.`}</p>
-    <button class="studio-button" type="submit" name="decision" formnovalidate value={direction ? 'direction_confirmed' : 'milestone_accepted'}>{direction ? 'Confirm direction' : 'Accept milestone'}</button>
+    <button class="studio-button" type="submit" name="decision" formnovalidate value={direction ? 'direction_confirmed' : 'milestone_accepted'} disabled={!direction && !canAccept}>{direction ? 'Confirm direction' : 'Accept milestone'}</button>
     <details data-request-changes><summary>Request changes</summary>
       {!direction && <fieldset><legend>Which agreed checks are unmet?</legend>{checks.map((check,index)=><label class="check-choice"><input type="checkbox" name="criteria" value={index} />{check}</label>)}<p class="hint">Select at least one check.</p></fieldset>}
       <label>Feedback on this version (required for changes)<textarea class="studio-textarea" name="note" required maxlength="2000" placeholder={direction ? 'What should change, and why?' : 'Tell me what happened and how to see it.'}></textarea></label>
       <button class="studio-button secondary" type="submit" name="decision" value="changes_requested">Request changes</button>
     </details>
-    <p>{direction ? 'Confirming the direction approves this approach only. The working milestone is reviewed separately.' : `Acceptance applies to ${update.artifact_version}. No automatic acceptance from silence.`}</p>
+    <p>{direction ? 'Confirming the direction approves this approach only. The working milestone is reviewed separately.' : !canAccept ? 'This version contains only part of the planned work. Acceptance unlocks after a review includes every agreed deliverable; request changes if anything remains incomplete.' : `Acceptance applies to the complete agreed milestone, including every item in the full scope. No automatic acceptance from silence.`}</p>
     <p class="studio-status" role="status" aria-live="polite" data-review-status></p>
   </form>}
 </section>

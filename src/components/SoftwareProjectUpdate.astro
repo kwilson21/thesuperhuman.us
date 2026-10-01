@@ -7,6 +7,7 @@ const { update, visualUrl, preview = false, checks=[], deliverables=[] } = Astro
 const evidence: string[] = JSON.parse(update.criteria_json ?? '[]');
 const selectedDeliverables: string[] = JSON.parse(update.delivered_deliverables_json ?? '[]');
 const includedDeliverables = selectedDeliverables.length ? selectedDeliverables : deliverables;
+const partialDelivery = update.kind==='delivery_review' && deliverables.some(item=>!includedDeliverables.includes(item));
 const references: {label:string;url:string}[] = JSON.parse(update.links_json ?? '[]');
 const deliveryReferences = update.kind === 'delivery_review' ? references.filter(reference => {
   try { const url = new URL(reference.url); return url.protocol === 'https:' && !url.username && !url.password && Boolean(reference.label.trim()); }
@@ -25,7 +26,7 @@ const deliveryReferences = update.kind === 'delivery_review' ? references.filter
   {!preview && update.kind==='delivery_review' && deliverables.length>0 && <section class="delivery-included" aria-labelledby={`delivery-included-${update.id}`}>
     <h3 id={`delivery-included-${update.id}`}>Included in this delivery</h3>
     <ul>{includedDeliverables.map(deliverable=><li>{deliverable}</li>)}</ul>
-    <p>Acceptance still covers the complete agreed milestone and every check below.</p>
+    <p>{partialDelivery ? 'This version includes only the items listed above. Acceptance covers every item in the full scope below and every agreed check. Request changes if any part is still incomplete.' : 'This version includes every agreed deliverable. Accepting confirms the full milestone and every agreed check.'}</p>
   </section>}
   {!preview && update.kind==='delivery_review' && deliverables.length>0 && <section class="delivery-scope" data-preview-delivery-scope aria-labelledby={`delivery-scope-${update.id}`}>
     <h3 id={`delivery-scope-${update.id}`}>Full agreed scope · Milestone {(update.milestone_index ?? 0)+1}</h3>
