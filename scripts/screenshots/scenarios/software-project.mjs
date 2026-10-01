@@ -114,7 +114,7 @@ export default {
     await shot('Progress update with an undecided delivery review',`/studio/software/${id}`,'progress-pending-review',{cookie});
     await shot('Delivery change request form open',`/studio/software/${id}`,'changes-open',{cookie,prepare:async page=>{await page.locator('[data-request-changes] summary').click();await page.locator('[name=criteria]').first().check();await page.locator('[name=note]').fill('Adding the fictional sample client does not save.');}});
     await decide(review,{decision:'changes_requested',criteria:[0],note:'Adding the fictional sample client does not save.'});
-    const corrected=await share({...delivery,artifact_version:'Delivery v2'});
+    const corrected=await share({...delivery,artifact_version:'Delivery v2',delivered_deliverables:terms.milestones[0].deliverables});
     await shot('Redelivery invoice replacement prompt',`/owner/requests/${id}`,'redelivery-invoice',{owner:true});
     await decide(corrected,{decision:'milestone_accepted',confirm:true});
     await shot('Accepted delivery before full-payment handoff',`/studio/software/${id}`,'accepted',{cookie});
