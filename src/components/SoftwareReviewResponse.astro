@@ -1,15 +1,16 @@
 ---
-import { softwareDate } from '~/lib/software-projects';
+import { softwareDate, softwareRevisionHistoryBody } from '~/lib/software-projects';
 import type { ClientSoftwareUpdate } from '~/lib/software-projects';
-type Props = { update: ClientSoftwareUpdate; checks: string[]; missingDeliverables?: {label:string;index:number;included:boolean}[]; milestoneName: string; endpoint: string; readonly?: boolean; canAccept?: boolean };
-const {update,checks,missingDeliverables=[],milestoneName,endpoint,readonly=false,canAccept=true}=Astro.props;
+type Props = { update: ClientSoftwareUpdate; checks: string[]; deliverables?: string[]; missingDeliverables?: {label:string;index:number;included:boolean}[]; milestoneName: string; endpoint: string; readonly?: boolean; canAccept?: boolean };
+const {update,checks,deliverables=[],missingDeliverables=[],milestoneName,endpoint,readonly=false,canAccept=true}=Astro.props;
 const direction=update.kind==='direction_review';
+const decisionBody=softwareRevisionHistoryBody(update.decision_body,checks,deliverables);
 ---
 <section class="software-review">
   <h2>{direction ? 'Your decision' : 'Your review'}</h2>
   {update.decision ? <>
     <p>{update.decision==='direction_confirmed' ? `You confirmed this direction on ${softwareDate(update.decided_at!)}.` : update.decision==='milestone_accepted' ? `You accepted ${update.artifact_version} on ${softwareDate(update.decided_at!)}.` : `You asked for changes on ${softwareDate(update.decided_at!)}. I’ll reply here.`}</p>
-    {update.decision==='changes_requested' && <p>{update.decision_body}</p>}
+    {update.decision==='changes_requested' && <p>{decisionBody}</p>}
   </> : readonly ? <p>This update is shown for reference.</p> : <form data-software-review data-endpoint={endpoint} data-version={update.artifact_version} data-milestone={milestoneName} data-direction={String(direction)}>
     <p>{direction ? 'Does this match how you work?' : `Review ${update.artifact_version} against the agreed checks.`}</p>
     <button class="studio-button" type="submit" name="decision" formnovalidate value={direction ? 'direction_confirmed' : 'milestone_accepted'} disabled={!direction && !canAccept}>{direction ? 'Confirm direction' : 'Accept milestone'}</button>

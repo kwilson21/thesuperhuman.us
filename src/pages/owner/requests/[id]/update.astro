@@ -5,7 +5,7 @@ import SoftwareAcceptanceChecks from '~/components/SoftwareAcceptanceChecks.astr
 import SoftwareProjectUpdate from '~/components/SoftwareProjectUpdate.astro';
 import { getOwnerRequest, listOwnerRequests } from '~/lib/owner-requests';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
-import { clearUnmetRevisionEvidence, deliveredScope, getSoftwareProject, listSoftwareUpdates, projectTerms, evidenceTypes, softwareRevisionTargets, updateKinds, sharedSoftwareUpdates } from '~/lib/software-projects';
+import { clearUnmetRevisionEvidence, deliveredScope, getSoftwareProject, listSoftwareUpdates, projectTerms, evidenceTypes, softwareRevisionTargets, softwareRevisionHistoryBody, updateKinds, sharedSoftwareUpdates } from '~/lib/software-projects';
 import { listSoftwareInvoices, payableSoftwareInvoice, manualPaymentReminder } from '~/lib/software-invoices';
 import type { ClientSoftwareUpdate } from '~/lib/software-projects';
 import '~/styles/studio.css';
@@ -18,10 +18,11 @@ if (!request || request.kind !== 'software' || !project || project.revoked_at ||
 if (project.state === 'complete') return Astro.redirect(`/owner/requests/${id}`);
 const terms = projectTerms(project), history = await listSoftwareUpdates(db,id), draft = history.find(update => update.status === 'draft');
 const shared = await sharedSoftwareUpdates(db,id);
-const latestDelivery = shared.find(item => item.kind==='delivery_review' && item.status==='shared' && item.milestone_index===project.milestone_index);
 const requestedId = Astro.url.searchParams.get('respond');
-const revisionCandidate = latestDelivery?.decision==='changes_requested' ? latestDelivery : null;
-const revisionSource = revisionCandidate && (!requestedId || requestedId===revisionCandidate.id) && (!draft || (draft.kind==='delivery_review' && draft.milestone_index===revisionCandidate.milestone_index)) ? revisionCandidate : null;
+const latestDelivery = shared.find(item => item.kind==='delivery_review' && item.status==='shared' && item.milestone_index===project.milestone_index);
+const requestedDelivery = requestedId ? shared.find(item => item.id===requestedId && item.kind==='delivery_review' && item.status==='shared' && item.decision==='changes_requested') : null;
+const revisionCandidate = requestedId ? requestedDelivery : latestDelivery?.decision==='changes_requested' ? latestDelivery : null;
+const revisionSource = revisionCandidate && (!draft || (draft.kind==='delivery_review' && draft.milestone_index===revisionCandidate.milestone_index)) ? revisionCandidate : null;
 const staleRevision = Boolean(requestedId && !revisionSource);
 const seed = draft ?? revisionSource;
 const revisionChecks = revisionSource ? terms.milestones[revisionSource.milestone_index ?? project.milestone_index].acceptance : [];
@@ -46,7 +47,7 @@ const newRequests = await listOwnerRequests(db, { status: 'new' });
 const firstName = request.name.trim().split(/\s+/)[0] || 'the client';
 const accepted = terms.milestones.map((_,index)=>shared.some(item=>item.kind==='delivery_review' && item.milestone_index===index && item.status==='shared' && item.decision==='milestone_accepted'));
 const savedCriteria: string[] = draft ? JSON.parse(draft.criteria_json) : revisionEvidence;
-const criteria = revisionSource ? clearUnmetRevisionEvidence(savedCriteria,unmetRevisionIndexes) : draft ? savedCriteria : [];
+const criteria = draft ? savedCriteria : revisionSource ? clearUnmetRevisionEvidence(savedCriteria,unmetRevisionIndexes) : [];
 const initialMilestone = seed?.milestone_index ?? project.milestone_index;
 const initialDeliverables: string[] = seed ? deliveredScope(seed, terms.milestones[seed.milestone_index ?? project.milestone_index].deliverables) : [];
 update.delivered_deliverables_json = JSON.stringify(initialDeliverables);
@@ -60,7 +61,7 @@ update.delivered_deliverables_json = JSON.stringify(initialDeliverables);
         <p class="delivery-step">Revision brief</p><h2 id="revision-context-heading">Respond to {firstName}’s feedback</h2>
         <p><strong>Previous version:</strong> {revisionSource.artifact_version} · {revisionSource.title}</p>
         <h3>Checks the client reported as unmet</h3><ul>{unmetRevisionChecks.map(check=><li>{check}</li>)}</ul>{missingRevisionIndexes.length>0 && <><h3>Deliverables the client couldn’t find or access</h3><ul>{missingRevisionIndexes.map(index=><li>{revisionDeliverables[index]}</li>)}</ul></>}
-        <blockquote>{revisionSource.decision_body?.split('\n\n').slice(1).join('\n\n') || revisionSource.decision_body}</blockquote>
+        <blockquote>{softwareRevisionHistoryBody(revisionSource.decision_body,revisionChecks,revisionDeliverables).split('\n\n').slice(1).join('\n\n') || revisionSource.decision_body}</blockquote>
         {revisionSource.has_visual && <figure class="revision-visual"><img src={`/api/owner/requests/${id}/updates/${revisionSource.id}/visual`} alt={revisionSource.visual_alt} /><figcaption>Visual from {revisionSource.artifact_version}</figcaption></figure>}
         <p>Prior check evidence is copied for reference. The unmet checks start blank. Review and update evidence for every check before sharing a new version.</p>
       </section>}

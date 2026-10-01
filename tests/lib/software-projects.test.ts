@@ -12,7 +12,7 @@ import { POST as updatePost } from '~/pages/api/owner/requests/[id]/updates';
 import { GET as ownerVisual, PUT as uploadVisual } from '~/pages/api/owner/requests/[id]/updates/[updateId]/visual';
 import { GET as clientVisual } from '~/pages/api/studio/software/[id]/updates/[updateId]/visual';
 import { clientSoftwareProjectForSession, clientSoftwareProjectsForSession, clientProjectForSession, clientProjectsForSession, issueClientCode, completeClientCode, discardUndeliveredCode } from '~/lib/audio-client-access';
-import { clearUnmetRevisionEvidence, sharedSoftwareUpdates, listSoftwareUpdates, queueSoftwareNotice, deliverSoftwareNotice, softwareRevisionTargets } from '~/lib/software-projects';
+import { clearUnmetRevisionEvidence, sharedSoftwareUpdates, listSoftwareUpdates, queueSoftwareNotice, deliverSoftwareNotice, softwareRevisionTargets, softwareRevisionHistoryBody } from '~/lib/software-projects';
 import { softwareInvitationEmail, softwareUpdateEmail } from '~/lib/client-emails';
 import { loadStudioLedger, listStudioProjectAttention } from '~/lib/owner-reporting';
 import { postClientSoftwareProjectMessage } from '~/lib/software-project-messages';
@@ -57,6 +57,7 @@ it('parses revision selections from stable indices, never from labels or client 
   const body='Requested changes to Delivery v1. Checks reported unmet: [2]. Deliverables unavailable: [1].\n\nNote says check #1: and missing #2: as ordinary text.';
   expect(softwareRevisionTargets(body,checks,planned)).toEqual({checks:[1],deliverables:[0]});
   expect(softwareRevisionTargets('Requested changes to Delivery v1 for milestone 1: check 1 (Add a client.), check 2 (Label says check #1: but remains a different check.)\n\nNote',checks,planned).checks).toEqual([0,1]);
+  expect(softwareRevisionHistoryBody(body,checks,planned)).toBe('Requested changes to Delivery v1. Checks reported unmet: [2]. Deliverables unavailable: [1].\n\nUnmet checks:\n2. Label says check #1: but remains a different check.\n\nUnavailable deliverables:\n1. Status view\n\nClient note:\nNote says check #1: and missing #2: as ordinary text.');
   expect(clearUnmetRevisionEvidence(['stale evidence','keep this'],[0])).toEqual(['','keep this']);
 });
 async function draft() { const response = await call(updatePost, { action: 'draft', update, expectedUpdatedAt: null }); expect(response.status).toBe(200); return response.json() as Promise<{ id: string; updatedAt: string }>; }
@@ -158,6 +159,18 @@ it('keeps client note text out of the machine-readable change header',async()=>{
   const body=sql.prepare('SELECT body FROM software_project_messages WHERE update_id=?').get(review.id).body as string;
   expect(body.split('\n',1)[0]).toBe('Requested changes to Delivery v1 for milestone 1. Checks reported unmet: [1]. Deliverables unavailable: [].');
   expect(body).toContain('The note mentions (Add a different planned check.)');
+});
+it('saves revised check evidence so the revision draft can be reopened without loss',async()=>{
+  await start();const token=await session(),review=await shareReview();
+  expect((await decide(review.id,{decision:'changes_requested',criteria:[0],note:'The client form needs a correction.'},token)).status).toBe(200);
+  const firstEvidence=['Fixed the sample client form.','Confirmed export remains available.'];
+  const first=await call(updatePost,{action:'draft',expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v2',title:'Revised tracker',criteria:firstEvidence,delivered_deliverables:['Status view']}});
+  expect(first.status).toBe(200);const saved=await first.json() as {id:string;updatedAt:string};
+  expect(sql.prepare('SELECT criteria_json FROM software_project_updates WHERE id=?').get(saved.id)).toEqual({criteria_json:JSON.stringify(firstEvidence)});
+  const reopenedEvidence=['Fixed the sample client form with clearer validation.','Confirmed export remains available.'];
+  const reopened=await call(updatePost,{action:'draft',updateId:saved.id,expectedUpdatedAt:saved.updatedAt,update:{...update,kind:'delivery_review',artifact_version:'Delivery v2',title:'Revised tracker',criteria:reopenedEvidence,delivered_deliverables:['Status view']}});
+  expect(reopened.status).toBe(200);
+  expect(sql.prepare('SELECT criteria_json FROM software_project_updates WHERE id=?').get(saved.id)).toEqual({criteria_json:JSON.stringify(reopenedEvidence)});
 });
 it('snapshots delivery references with the versioned review while rejecting unsafe links',async()=>{
   await start();

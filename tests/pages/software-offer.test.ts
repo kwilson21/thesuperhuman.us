@@ -243,6 +243,32 @@ it('renders the pending review before newer updates in a separate latest section
   } finally {sql.close();}
 });
 
+it('reopens an earlier milestone revision with its saved evidence intact', async () => {
+  const {sql,db}=await fixture(), container=await AstroContainer.create();
+  try {
+    const multiTerms={...terms,milestones:[
+      {...terms.milestones[0],name:'First milestone',deliverables:['First view'],acceptance:['Add a client.','Export the sample.']},
+      {...terms.milestones[0],name:'Second milestone',deliverables:['Second view'],acceptance:['Open settings.']},
+    ]};
+    sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,state,step,milestone_index) VALUES ('r','current',?,'standard','now','now','2026-09-29','owner','now','2026-10-10','building','build',1)").run(JSON.stringify(multiTerms));
+    sql.prepare("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,criteria_json,delivered_deliverables_json,created_by,created_at,updated_at,shared_at) VALUES ('old-review','r','delivery_review','shared',0,'First delivery','Delivery v1','working_preview',?,?, 'owner','2026-10-01','2026-10-01','2026-10-01')")
+      .run(JSON.stringify(['Old evidence 1','Old evidence 2']),JSON.stringify(['First view']));
+    sql.prepare("INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES ('r','client','token','Requested changes to Delivery v1 for milestone 1. Checks reported unmet: [1]. Deliverables unavailable: [].\n\nChecks reported unmet: 1. Add a client.\n\nPlease fix the client form.','old-review','changes_requested','2026-10-02')").run();
+    sql.prepare("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,what_changed,criteria_json,delivered_deliverables_json,links_json,created_by,created_at,updated_at) VALUES ('revision-draft','r','delivery_review','draft',0,'Revised first view','Delivery v2','working_preview','I fixed the form.',?,?, '[]','owner','2026-10-03','2026-10-04')")
+      .run(JSON.stringify(['Saved new evidence','Saved second check']),JSON.stringify(['First view']));
+    const html=await container.renderToString(composer,{request:new Request('https://thesuperhuman.us/owner/requests/r/update?respond=old-review'),params:{id:'r'},locals:{owner:{email:'owner@example.com'},runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}} as any});
+    expect(html).toContain('Respond to requested changes');expect(html).toContain('Please fix the client form.');
+    expect(html).toContain('Saved new evidence');expect(html).toContain('Saved second check');
+    expect(html).not.toContain('That revision request is no longer the latest review.');
+    expect(html).toContain('value="0" selected');expect(html).toContain('Milestone 1 · First milestone');
+    const project=await db.prepare("SELECT * FROM software_projects WHERE request_id='r'").first();
+    const updates=(await db.prepare("SELECT * FROM software_project_updates WHERE request_id='r'").all()).results;
+    const ownerPanel=await container.renderToString(panel,{props:{requestId:'r',requestUpdatedAt:'now',project,updates,closed:false},locals:{runtime:{env:{MUSIC_DB:db}}} as any});
+    expect(ownerPanel).toContain('/owner/requests/r/update?respond=old-review');
+    expect(ownerPanel).toContain('Continue revision draft');
+  } finally {sql.close();}
+});
+
 it('keeps update requests separate from Waiting on you and renders the Today software row', async () => {
   const {sql,db} = await fixture();
   try {

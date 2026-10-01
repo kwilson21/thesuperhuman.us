@@ -242,6 +242,36 @@ it('holds software request contact data until project content is deleted, then c
   expect(database.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
 });
 
+it('previews two-year software brief cleanup after project content cleanup and preserves the signed record', async () => {
+  const database=fixture();
+  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,city_region,summary,details_json,status,private_note,created_at,updated_at,resolved_at)
+    VALUES ('signed-software','software','Client Name','client@example.com','Example City','Private brief','{"scope":"private"}','resolved','Private note','2020-01-01','2020-01-01','2020-01-01');
+    INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('offer-signed','signed-software',1,'sent','{"scope":"contract"}','2024-01-01','2024-01-01');
+    INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES ('template','sow',1,'Template','${'c'.repeat(64)}','2024-01-01','owner');
+    INSERT INTO software_agreement_clients(id,recipient_email,legal_name,legal_name_key,entity_type,jurisdiction,business_address,notice_email,created_at)
+    VALUES ('client','client@example.com','Client LLC','client llc','LLC','Example','1 Example Way','client@example.com','2024-01-01');
+    INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,ended_at,retain_until,review_session_hash)
+    VALUES ('agreement-signed','sow','offer-signed','signed-software','client','template','executed','Signed agreement text','${'a'.repeat(64)}','{}','2024-01-01','2024-01-01','2024-01-01','2034-01-01','session');
+    INSERT INTO software_projects(request_id,offer_id,agreement_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,completed_at,content_deleted_at)
+    VALUES ('signed-software','offer-signed','agreement-signed','{"scope":"contract"}','standard','2024-01-01','2024-01-01','2024-01-01','owner','2024-01-01','2024-01-01','2024-01-01','2025-01-01');
+    INSERT INTO software_agreement_signatures(id,agreement_id,party,typed_name,title,consent_text,authority_text,consent_version,consent_at,signed_at,document_sha256,verified_email,verified_at,intent_text,document_list_json,receipt_id,ip_address,user_agent)
+    VALUES ('signature-signed','agreement-signed','client','Client Name','Director','Consent','Authority','v1','2024-01-01','2024-01-01','${'b'.repeat(64)}','client@example.com','2024-01-01','Intent','[]','receipt','192.0.2.10','Synthetic browser');`);
+  const preview=await previewOwnerRetention(database,'Local test data',now);
+  expect(preview.softwareIntakeContacts).toBe(1);
+  expect(JSON.stringify(preview)).not.toContain('client@example.com');
+  expect(JSON.stringify(preview)).not.toContain('Private brief');
+  const batch=database.batch.bind(database); let scrubStatement='';
+  database.batch=async statements=>{scrubStatement=statements.find(statement=>statement.startsWith("UPDATE owner_requests SET name=''")&&statement.includes("'signed-software'"))??'';return batch(statements);};
+  await applyOwnerRetention(database,preview,'Local test data',now);
+  expect(scrubStatement).toContain("WHERE id IN ('signed-software')");
+  expect(database.db.prepare("SELECT name,email,city_region,summary,details_json,private_note FROM owner_requests WHERE id='signed-software'").get())
+    .toEqual({name:'',email:'',city_region:'',summary:'',details_json:'{}',private_note:''});
+  expect(database.db.prepare("SELECT canonical_text,status,retain_until FROM software_agreements WHERE id='agreement-signed'").get())
+    .toEqual({canonical_text:'Signed agreement text',status:'executed',retain_until:'2034-01-01'});
+  expect(database.db.prepare("SELECT typed_name,verified_email,ip_address FROM software_agreement_signatures WHERE id='signature-signed'").get())
+    .toEqual({typed_name:'Client Name',verified_email:'client@example.com',ip_address:'192.0.2.10'});
+});
+
 it('holds withdrawn software contact until revoked project content is deleted', async () => {
   const database = fixture();
   database.db.exec("INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,contact_delete_after) VALUES ('software-held','software','Client','client@example.com','Tool','withdrawn','2026-01-01','2026-01-02','2026-01-03'); INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('held-offer','software-held',1,'sent','{}','now','now'); INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,state,step,milestone_index,waiting_for,started_at,started_by,updated_at,revoked_at,signatures_recorded_at,first_payment_recorded_at,created_at) VALUES ('software-held','held-offer','{}','standard','preparing','direction',0,'','now','owner','now','2026-01-02','now','now','now');");

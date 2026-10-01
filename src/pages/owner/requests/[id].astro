@@ -2,8 +2,8 @@
 export const prerender = false;
 import SoftwareProjectPanel from '~/components/owner/SoftwareProjectPanel.astro';
 import SoftwareAgreementPanel from '~/components/owner/SoftwareAgreementPanel.astro';
-import { getSoftwareProject, listSoftwareUpdates } from '~/lib/software-projects';
-import { listSoftwareProjectMessages } from '~/lib/software-project-messages';
+import { getSoftwareProject, listSoftwareUpdates, projectTerms } from '~/lib/software-projects';
+import { listSoftwareProjectMessages, readableSoftwareProjectMessages } from '~/lib/software-project-messages';
 import SoftwareOfferEditor from '~/components/owner/SoftwareOfferEditor.astro';
 import SoftwareFitReview from '~/components/owner/SoftwareFitReview.astro';
 import SoftwareQuestions from '~/components/owner/SoftwareQuestions.astro';
@@ -54,7 +54,8 @@ const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') 
 const offers = request.kind === 'software' ? await listSoftwareOffers(db, request.id) : [];
 const softwareProject = request.kind === 'software' ? await getSoftwareProject(db, request.id) : null;
 const softwareUpdates = softwareProject ? await listSoftwareUpdates(db, request.id) : [];
-const softwareMessages = softwareProject ? await listSoftwareProjectMessages(db, request.id) : [];
+const softwareMessageRows = softwareProject ? await listSoftwareProjectMessages(db, request.id) : [];
+const softwareMessages = softwareProject ? readableSoftwareProjectMessages(softwareMessageRows, softwareUpdates, projectTerms(softwareProject)) : [];
 if (softwareProject) {
   const projectAudit = (await db.prepare('SELECT id,action,actor,note,occurred_at AS occurredAt FROM software_project_audit WHERE request_id=? ORDER BY id DESC').bind(request.id).all<typeof audit[number]>()).results;
   audit.push(...projectAudit);audit.sort((first,second)=>second.occurredAt.localeCompare(first.occurredAt));

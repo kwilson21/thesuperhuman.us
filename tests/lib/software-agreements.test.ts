@@ -1313,3 +1313,34 @@ it('ignores malformed partial attachment entries in an unrelated draft during re
   expect(manifest.agreements).toHaveLength(1);
   expect(manifest.agreements[0].objects).toHaveLength(1);
 });
+
+it('previews and removes only 30-day-old unattached uploads while preserving referenced and recent files', async () => {
+  const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
+  await review();
+  const now = new Date('2026-10-01T12:00:00Z');
+  const addAttachment = async (id: string, key: string, createdAt: string) => {
+    const bytes = new Uint8Array([1, 2, id.charCodeAt(0)]), sha256 = await hashBytes(bytes);
+    bucketData.set(key, bytes);
+    sql.prepare('INSERT INTO software_agreement_attachments VALUES(?,?,?,?,?,?,?,?,?,?)')
+      .run(id, 'r', `${id}.pdf`, '1', '2026-09-01', key, sha256, bytes.length, createdAt, 'owner');
+    return { bytes, sha256 };
+  };
+  await addAttachment('orphan', 'agreements/attachments/orphan.pdf', '2026-08-01T00:00:00Z');
+  await addAttachment('recent', 'agreements/attachments/recent.pdf', '2026-09-15T00:00:00Z');
+  const offered = await addAttachment('offered', 'agreements/attachments/offered.pdf', '2026-08-01T00:00:00Z');
+  const manifested = await addAttachment('manifested', 'agreements/attachments/manifested.pdf', '2026-08-01T00:00:00Z');
+  sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='o'")
+    .run(JSON.stringify({ ...details, attachments: [{ key: 'agreements/attachments/offered.pdf', sha256: offered.sha256, bytes: offered.bytes.length, filename: 'offered.pdf', version: '1', date: '2026-09-01' }] }));
+  sql.prepare("UPDATE software_agreements SET attachment_manifest_json=? WHERE kind='sow'")
+    .run(JSON.stringify([{ key: 'agreements/attachments/manifested.pdf', sha256: manifested.sha256 }]));
+  const manifest = await previewAgreementRetention(db, env.AUDIO, 'test-storage', now);
+  expect(manifest.unattached_attachments.map(item => item.id)).toEqual(['orphan']);
+  expect(JSON.stringify(manifest)).not.toContain('Example');
+  await applyAgreementRetention(db, env.AUDIO, 'test-storage', manifest, now);
+  expect(bucketData.has('agreements/attachments/orphan.pdf')).toBe(false);
+  expect(sql.prepare("SELECT id FROM software_agreement_attachments WHERE id='orphan'").get()).toBeUndefined();
+  for (const id of ['recent', 'offered', 'manifested'])
+    expect(sql.prepare('SELECT id FROM software_agreement_attachments WHERE id=?').get(id)).toBeTruthy();
+  for (const key of ['recent', 'offered', 'manifested'])
+    expect(bucketData.has(`agreements/attachments/${key}.pdf`)).toBe(true);
+});

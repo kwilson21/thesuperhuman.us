@@ -79,6 +79,18 @@ export function softwareRevisionTargets(body: string | null | undefined, checks:
     deliverables: Array.from(header.matchAll(/missing #(\d+):/g),match=>Number(match[1])-1).filter(index=>index>=0 && index<planned.length),
   };
 }
+export function softwareRevisionHistoryBody(body: string | null | undefined, checks: string[], planned: string[]) {
+  if (!body) return '';
+  const separator=body.indexOf('\n\n'), header=separator<0 ? body : body.slice(0,separator);
+  if (!header.startsWith('Requested changes to ')) return body;
+  const targets=softwareRevisionTargets(header,checks,planned);
+  const note=separator<0 ? '' : body.slice(separator+2);
+  const sections=[header];
+  if(targets.checks.length) sections.push(`Unmet checks:\n${targets.checks.map(index=>`${index+1}. ${checks[index]}`).join('\n')}`);
+  if(targets.deliverables.length) sections.push(`Unavailable deliverables:\n${targets.deliverables.map(index=>`${index+1}. ${planned[index]}`).join('\n')}`);
+  if(note) sections.push(`Client note:\n${note}`);
+  return sections.join('\n\n');
+}
 export function clearUnmetRevisionEvidence(evidence: string[], unmetChecks: number[]) {
   const unmet = new Set(unmetChecks);
   return evidence.map((value,index)=>unmet.has(index) ? '' : value);

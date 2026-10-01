@@ -64,7 +64,7 @@ const canComplete = lastDelivery?.decision==='milestone_accepted' && shared.some
     <ul class="software-update-list">{terms.milestones.map((item,index)=>{
       const reviews=shared.filter(update=>update.milestone_index===index && update.status==='shared' && update.kind?.endsWith('_review')).reverse();
       const requestedRevision=reviews.find(update=>update.kind==='delivery_review' && update.decision==='changes_requested');
-      const currentRevision=requestedRevision && requestedRevision.milestone_index===project.milestone_index ? requestedRevision : undefined;
+      const currentRevision=requestedRevision;
       const canOpenRevision=Boolean(currentRevision && (!draft || (draft.kind==='delivery_review' && draft.milestone_index===index)));
       const depositBlocked=payableSoftwareInvoice(invoices,index,['deposit']);
       const manualDeposit=deposits.find(payment=>payment.milestone_index===index);

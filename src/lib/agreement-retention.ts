@@ -12,6 +12,7 @@ export type RetentionManifest = {
     row_hash: string;
     objects: { key: string; sha256: string }[];
   }[];
+  unattached_attachments: { id: string; key: string; sha256: string; created_at: string }[];
 };
 // A referenced record stays retained. Later owner reviews can include it once every dependent record is retired.
 const eligible = `a.status IN ('executed','abandoned') AND a.ended_at IS NOT NULL AND a.retain_until IS NOT NULL AND a.retain_until<=? AND a.legal_hold=0
@@ -23,8 +24,8 @@ const eligible = `a.status IN ('executed','abandoned') AND a.ended_at IS NOT NUL
  AND NOT EXISTS(SELECT 1 FROM software_agreements s WHERE s.msa_id=a.id)
  AND (a.kind='sow' OR a.terminated_at IS NOT NULL OR NOT EXISTS(SELECT 1 FROM software_agreement_signatures sig WHERE sig.agreement_id=a.id))`;
 // Offers that can still be reviewed pin their uploaded attachments independently of review snapshots.
-const activeOfferAttachment = `SELECT 1 FROM software_offers o,json_each(json_extract(o.agreement_details_json,'$.attachments')) attachment
- WHERE o.status IN ('draft','sent') AND CASE WHEN attachment.type='object' THEN json_extract(attachment.value,'$.key') END=?
+const activeOfferAttachment = (keyExpression = '?') => `SELECT 1 FROM software_offers o,json_each(json_extract(o.agreement_details_json,'$.attachments')) attachment
+ WHERE o.status IN ('draft','sent') AND CASE WHEN json_valid(attachment.value) THEN json_extract(attachment.value,'$.key') END=${keyExpression}
  AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id)`;
 export async function previewAgreementRetention(
   db: D1Database,
@@ -73,7 +74,7 @@ export async function previewAgreementRetention(
         )
         .bind(retiringIds, attachment.key)
         .first();
-      const offered = await db.prepare(activeOfferAttachment).bind(attachment.key).first();
+      const offered = await db.prepare(activeOfferAttachment()).bind(attachment.key).first();
       if (!shared && !offered && attachmentOwners.get(attachment.key) === row.id)
         objects.push({ key: attachment.key, sha256: attachment.sha256 });
     }
@@ -84,7 +85,14 @@ export async function previewAgreementRetention(
       objects: objects.sort((a, b) => a.key.localeCompare(b.key)),
     });
   }
-  return { version: 1, created_at: now.toISOString(), binding, agreements };
+  const unattached_attachments = (await db.prepare(`SELECT attachment.id,attachment.object_key AS key,attachment.sha256,attachment.created_at
+    FROM software_agreement_attachments attachment
+    WHERE attachment.created_at<=?
+      AND NOT EXISTS(SELECT 1 FROM software_agreements agreement,json_each(agreement.attachment_manifest_json) item
+        WHERE json_extract(item.value,'$.key')=attachment.object_key)
+      AND NOT EXISTS(${activeOfferAttachment('attachment.object_key')})
+    ORDER BY attachment.id LIMIT 100`).bind(new Date(now.getTime()-30*86400000).toISOString()).all<RetentionManifest['unattached_attachments'][number]>()).results;
+  return { version: 1, created_at: now.toISOString(), binding, agreements, unattached_attachments };
 }
 export async function applyAgreementRetention(
   db: D1Database,
@@ -100,11 +108,11 @@ export async function applyAgreementRetention(
     !Number.isFinite(age) ||
     age < 0 ||
     age > 86400000 ||
-    manifest.agreements.length > 20
+    manifest.agreements.length > 20 || !Array.isArray(manifest.unattached_attachments) || manifest.unattached_attachments.length > 100
   )
     throw new Error('Review is stale or belongs to different storage.');
   const fresh = await previewAgreementRetention(db, bucket, binding, now);
-  if (canonicalJson(fresh.agreements) !== canonicalJson(manifest.agreements))
+  if (canonicalJson(fresh.agreements) !== canonicalJson(manifest.agreements) || canonicalJson(fresh.unattached_attachments) !== canonicalJson(manifest.unattached_attachments))
     throw new Error('Archive changed. Preview again.');
   const manifestHash = await hashOfferToken(canonicalJson(manifest));
   for (const item of manifest.agreements) {
@@ -116,7 +124,7 @@ export async function applyAgreementRetention(
       ),
       ...item.objects.map(object => softwareGuard(db,
         `SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_agreements other,json_each(other.attachment_manifest_json) attachment WHERE other.id<>? AND json_extract(attachment.value,'$.key')=?)
-         AND NOT EXISTS(${activeOfferAttachment})`,
+         AND NOT EXISTS(${activeOfferAttachment()})`,
         [item.id, object.key, object.key],
       )),
       db
@@ -165,5 +173,25 @@ export async function applyAgreementRetention(
         'DELETE FROM software_agreement_clients WHERE NOT EXISTS(SELECT 1 FROM software_agreements a WHERE a.client_id=software_agreement_clients.id)',
       )
       .run();
+  }
+  for (const attachment of manifest.unattached_attachments) {
+    await db.batch([softwareGuard(db, `SELECT 1 FROM software_agreement_attachments attachment
+      WHERE attachment.id=? AND attachment.object_key=? AND attachment.sha256=? AND attachment.created_at=? AND attachment.created_at<=?
+        AND NOT EXISTS(SELECT 1 FROM software_agreements agreement,json_each(agreement.attachment_manifest_json) item
+          WHERE json_extract(item.value,'$.key')=attachment.object_key)
+        AND NOT EXISTS(${activeOfferAttachment()})`,
+      [attachment.id,attachment.key,attachment.sha256,attachment.created_at,new Date(now.getTime()-30*86400000).toISOString(),attachment.key])]);
+    const stored=await bucket.get(attachment.key);
+    if (stored && (await hashBytes(await stored.arrayBuffer()))!==attachment.sha256) throw new Error('Unattached PDF changed.');
+    if (stored) await bucket.delete(attachment.key);
+    await db.batch([
+      softwareGuard(db, `SELECT 1 FROM software_agreement_attachments attachment
+        WHERE attachment.id=? AND attachment.object_key=? AND attachment.sha256=? AND attachment.created_at=?
+          AND NOT EXISTS(SELECT 1 FROM software_agreements agreement,json_each(agreement.attachment_manifest_json) item
+            WHERE json_extract(item.value,'$.key')=attachment.object_key)
+          AND NOT EXISTS(${activeOfferAttachment()})`,
+        [attachment.id,attachment.key,attachment.sha256,attachment.created_at,attachment.key]),
+      db.prepare('DELETE FROM software_agreement_attachments WHERE id=? AND object_key=? AND sha256=?').bind(attachment.id,attachment.key,attachment.sha256),
+    ]);
   }
 }
