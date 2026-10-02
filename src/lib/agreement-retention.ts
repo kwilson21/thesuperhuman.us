@@ -175,23 +175,22 @@ export async function applyAgreementRetention(
       .run();
   }
   for (const attachment of manifest.unattached_attachments) {
+    const cutoff = new Date(now.getTime()-30*86400000).toISOString();
+    const stored=await bucket.get(attachment.key);
+    if (stored && (await hashBytes(await stored.arrayBuffer()))!==attachment.sha256) throw new Error('Unattached PDF changed.');
+    // Deleting the metadata row in the same transaction as the final reference check reserves
+    // the object: offer saves require this row, so they cannot attach it after this point.
     await db.batch([softwareGuard(db, `SELECT 1 FROM software_agreement_attachments attachment
       WHERE attachment.id=? AND attachment.object_key=? AND attachment.sha256=? AND attachment.created_at=? AND attachment.created_at<=?
         AND NOT EXISTS(SELECT 1 FROM software_agreements agreement,json_each(agreement.attachment_manifest_json) item
           WHERE json_extract(item.value,'$.key')=attachment.object_key)
         AND NOT EXISTS(${activeOfferAttachment()})`,
-      [attachment.id,attachment.key,attachment.sha256,attachment.created_at,new Date(now.getTime()-30*86400000).toISOString(),attachment.key])]);
-    const stored=await bucket.get(attachment.key);
-    if (stored && (await hashBytes(await stored.arrayBuffer()))!==attachment.sha256) throw new Error('Unattached PDF changed.');
+      [attachment.id,attachment.key,attachment.sha256,attachment.created_at,cutoff,attachment.key]),
+      db.prepare(`DELETE FROM software_agreement_attachments WHERE id=? AND object_key=? AND sha256=? AND created_at=? AND created_at<=?
+        AND NOT EXISTS(SELECT 1 FROM software_agreements agreement,json_each(agreement.attachment_manifest_json) item
+          WHERE json_extract(item.value,'$.key')=software_agreement_attachments.object_key)
+        AND NOT EXISTS(${activeOfferAttachment()})`)
+        .bind(attachment.id,attachment.key,attachment.sha256,attachment.created_at,cutoff,attachment.key)]);
     if (stored) await bucket.delete(attachment.key);
-    await db.batch([
-      softwareGuard(db, `SELECT 1 FROM software_agreement_attachments attachment
-        WHERE attachment.id=? AND attachment.object_key=? AND attachment.sha256=? AND attachment.created_at=?
-          AND NOT EXISTS(SELECT 1 FROM software_agreements agreement,json_each(agreement.attachment_manifest_json) item
-            WHERE json_extract(item.value,'$.key')=attachment.object_key)
-          AND NOT EXISTS(${activeOfferAttachment()})`,
-        [attachment.id,attachment.key,attachment.sha256,attachment.created_at,attachment.key]),
-      db.prepare('DELETE FROM software_agreement_attachments WHERE id=? AND object_key=? AND sha256=?').bind(attachment.id,attachment.key,attachment.sha256),
-    ]);
   }
 }

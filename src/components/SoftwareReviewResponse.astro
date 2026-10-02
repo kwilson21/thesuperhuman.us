@@ -1,7 +1,7 @@
 ---
 import { softwareDate, softwareRevisionHistoryBody } from '~/lib/software-projects';
 import type { ClientSoftwareUpdate } from '~/lib/software-projects';
-type Props = { update: ClientSoftwareUpdate; checks: string[]; deliverables?: string[]; missingDeliverables?: {label:string;index:number;included:boolean}[]; milestoneName: string; endpoint: string; readonly?: boolean; canAccept?: boolean };
+type Props = { update: ClientSoftwareUpdate; checks: string[]; deliverables?: string[]; missingDeliverables?: {label:string;index:number}[]; milestoneName: string; endpoint: string; readonly?: boolean; canAccept?: boolean };
 const {update,checks,deliverables=[],missingDeliverables=[],milestoneName,endpoint,readonly=false,canAccept=true}=Astro.props;
 const direction=update.kind==='direction_review';
 const decisionBody=softwareRevisionHistoryBody(update.decision_body,checks,deliverables);
@@ -16,11 +16,11 @@ const decisionBody=softwareRevisionHistoryBody(update.decision_body,checks,deliv
     <button class="studio-button" type="submit" name="decision" formnovalidate value={direction ? 'direction_confirmed' : 'milestone_accepted'} disabled={!direction && !canAccept}>{direction ? 'Confirm direction' : 'Accept milestone'}</button>
     <details data-request-changes><summary>Request changes</summary>
       {!direction && <fieldset><legend>Which agreed checks are unmet?</legend>{checks.map((check,index)=><label class="check-choice"><input type="checkbox" name="criteria" value={index} />{check}</label>)}<p class="hint">Select an unmet check or a missing deliverable below.</p></fieldset>}
-      {!direction && missingDeliverables.length>0 && <fieldset><legend>What can’t you find or access in this review?</legend><p class="hint">The note beside each item shows whether it was listed as included or still planned.</p>{missingDeliverables.map(item=><label class="check-choice"><input type="checkbox" name="missing_deliverables" value={item.index} /><span>{item.label}<small>{item.included ? 'Listed as included' : 'Still planned'}</small></span></label>)}</fieldset>}
+      {!direction && missingDeliverables.length>0 && <fieldset><legend>Which planned deliverables are not included yet?</legend><p class="hint">These items were in the agreement but are not listed in this delivery. You can request them without marking a passing check as failed.</p>{missingDeliverables.map(item=><label class="check-choice"><input type="checkbox" name="missing_deliverables" value={item.index} />{item.label}</label>)}</fieldset>}
       <label>Feedback on this version (required for changes)<textarea class="studio-textarea" name="note" required maxlength="2000" placeholder={direction ? 'What should change, and why?' : 'Tell me what happened and how to see it.'}></textarea></label>
       <button class="studio-button secondary" type="submit" name="decision" value="changes_requested">Request changes</button>
     </details>
-    <p>{direction ? 'Confirming the direction approves this approach only. The working milestone is reviewed separately.' : !canAccept ? 'This version contains only part of the planned work. Acceptance unlocks after a review includes every agreed deliverable; request changes if anything remains incomplete.' : `Acceptance applies to the complete agreed milestone, including every item in the full scope. No automatic acceptance from silence.`}</p>
+    <p>{direction ? 'Confirming the direction approves this approach only. The working milestone is reviewed separately.' : !canAccept ? 'You can review this partial delivery, but acceptance is for the complete milestone. Select any agreed deliverables that are not here and request them below; you do not need to mark an unrelated check as failed.' : `Acceptance applies to the complete agreed milestone, including every item in the full scope. No automatic acceptance from silence.`}</p>
     <p class="studio-status" role="status" aria-live="polite" data-review-status></p>
   </form>}
 </section>

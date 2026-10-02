@@ -64,6 +64,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     if (draft && command.updateId && command.updateId !== draft.id) return json({ok:false,error:'The draft changed. Reload before saving.'},409);
     const at = new Date(Math.max(Date.now(), Date.parse(project.updated_at) + 1, draft ? Date.parse(draft.updated_at) + 1 : 0)).toISOString();
     const status = share ? 'shared' : 'draft', notice = share && value.email_client ? 'pending' : 'not_requested';
+    const advancesProjectReview = share && review && value.milestone_index >= project.milestone_index;
     try { await db.batch([openSoftwareGuard(db, id),
       softwareGuard(db,"SELECT 1 FROM software_projects WHERE request_id=? AND state<>'complete'",[id]),
       ...(share && review && project.payment_mode==='standard' && value.milestone_index>project.milestone_index ? [milestoneDepositGuard(db,id,value.milestone_index)] : []),
@@ -76,9 +77,9 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
         .bind(...values, status, notice, share ? at : null, share ? actor : null, at, updateId)
         : db.prepare(`INSERT INTO software_project_updates(id,request_id,${columns.join(',')},status,notification_status,shared_at,shared_by,created_by,created_at,updated_at) VALUES (${Array(columns.length+9).fill('?').join(',')})`)
           .bind(updateId, id, ...values, status, notice, share ? at : null, share ? actor : null, actor, at, at),
-      share ? db.prepare('UPDATE software_projects SET next_update_on=?,updated_at=? WHERE request_id=?').bind(value.next_update_on || null, at, id)
+      share && value.milestone_index >= project.milestone_index ? db.prepare('UPDATE software_projects SET next_update_on=?,updated_at=? WHERE request_id=?').bind(value.next_update_on || null, at, id)
         : db.prepare('UPDATE software_projects SET updated_at=? WHERE request_id=?').bind(at, id),
-      ...(share && review ? [db.prepare("UPDATE software_projects SET state='ready_for_review',step=?,milestone_index=?,waiting_for='' WHERE request_id=?")
+      ...(advancesProjectReview ? [db.prepare("UPDATE software_projects SET state='ready_for_review',step=?,milestone_index=?,waiting_for='' WHERE request_id=?")
         .bind(value.kind==='direction_review' ? 'direction' : 'review',value.milestone_index,id), softwareAudit(db,id,'state-changed',actor,at)] : []),
       softwareAudit(db, id, share ? 'update-shared' : 'update-draft-saved', actor, at),
       ...(share && value.kind === 'handoff' ? [softwareAudit(db,id,'handoff-shared',actor,at,`Handoff shared · milestone ${value.milestone_index+1}`)] : [])]); } catch (error) { const retry = await sharedRetry(); if (retry) return retry; if ((await getSoftwareProject(db!, id!))?.updated_at !== command.expectedProjectUpdatedAt) return staleProject(); throw error; }

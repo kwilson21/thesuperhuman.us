@@ -1344,3 +1344,22 @@ it('previews and removes only 30-day-old unattached uploads while preserving ref
   for (const key of ['recent', 'offered', 'manifested'])
     expect(bucketData.has(`agreements/attachments/${key}.pdf`)).toBe(true);
 });
+
+it('reserves an orphan attachment before storage deletion so a concurrent offer cannot lose it', async () => {
+  const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
+  await review();
+  const now = new Date('2026-10-01T12:00:00Z'), key = 'agreements/attachments/race.pdf';
+  const bytes = new Uint8Array([4, 5, 6]), sha256 = await hashBytes(bytes);
+  bucketData.set(key, bytes);
+  sql.prepare('INSERT INTO software_agreement_attachments VALUES(?,?,?,?,?,?,?,?,?,?)')
+    .run('race-attachment', 'r', 'race.pdf', '1', '2026-09-01', key, sha256, bytes.length, '2026-08-01T00:00:00Z', 'owner');
+  const manifest = await previewAgreementRetention(db, env.AUDIO, 'test-storage', now), batch = db.batch.bind(db);
+  vi.spyOn(db, 'batch').mockImplementationOnce(async statements => {
+    sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='o'")
+      .run(JSON.stringify({ ...details, attachments: [{ key, sha256, bytes: bytes.length, filename: 'race.pdf', version: '1', date: '2026-09-01' }] }));
+    return batch(statements);
+  });
+  await expect(applyAgreementRetention(db, env.AUDIO, 'test-storage', manifest, now)).rejects.toThrow();
+  expect(bucketData.has(key)).toBe(true);
+  expect(sql.prepare("SELECT id FROM software_agreement_attachments WHERE id='race-attachment'").get()).toBeTruthy();
+});

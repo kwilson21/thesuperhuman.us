@@ -99,6 +99,15 @@ it('lets clients report a missing planned deliverable even when every included c
   expect((await decide(id,{decision:'changes_requested',missing_deliverables:[1],note:'The sample import is not included yet.'},token)).status).toBe(200);
   expect(sql.prepare('SELECT body FROM software_project_messages WHERE update_id=?').get(id).body).toBe('Requested changes to Delivery v1 for milestone 1. Checks reported unmet: []. Deliverables unavailable: [2].\n\nThe sample import is not included yet.');
 });
+it('keeps project progress on a later milestone when sharing an earlier revision',async()=>{
+  const laterTerms={...terms,milestones:[terms.milestones[0],{...terms.milestones[0],name:'Launch'}]};
+  sql.prepare('UPDATE software_offers SET terms_json=?').run(JSON.stringify(laterTerms));
+  await start();
+  sql.prepare("UPDATE software_projects SET state='building',step='build',milestone_index=1,next_update_on='2026-10-10',updated_at='2026-10-01T12:00:00Z'").run();
+  const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',milestone_index:0,artifact_version:'Delivery v2',criteria:['Fixed the sample.'],delivered_deliverables:['Status view','Sample import']}});
+  expect(response.status).toBe(200);
+  expect(sql.prepare('SELECT state,step,milestone_index,next_update_on FROM software_projects').get()).toEqual({state:'building',step:'build',milestone_index:1,next_update_on:'2026-10-10'});
+});
 it('treats legacy reviews without a scope snapshot as the full agreed milestone',async()=>{
   await start();const token=await session(),review=await shareReview();
   sql.prepare("UPDATE software_project_updates SET delivered_deliverables_json='[]' WHERE id=?").run(review.id);
