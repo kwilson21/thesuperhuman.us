@@ -13,6 +13,7 @@ export type RetentionManifest = {
     objects: { key: string; sha256: string }[];
   }[];
   unattached_attachments: { id: string; key: string; sha256: string; created_at: string }[];
+  orphan_attachments: { key: string; sha256: string; uploaded_at: string }[];
 };
 // A referenced record stays retained. Later owner reviews can include it once every dependent record is retired.
 const eligible = `a.status IN ('executed','abandoned') AND a.ended_at IS NOT NULL AND a.retain_until IS NOT NULL AND a.retain_until<=? AND a.legal_hold=0
@@ -92,7 +93,37 @@ export async function previewAgreementRetention(
         WHERE json_extract(item.value,'$.key')=attachment.object_key)
       AND NOT EXISTS(${activeOfferAttachment('attachment.object_key')})
     ORDER BY attachment.id LIMIT 100`).bind(new Date(now.getTime()-30*86400000).toISOString()).all<RetentionManifest['unattached_attachments'][number]>()).results;
-  return { version: 1, created_at: now.toISOString(), binding, agreements, unattached_attachments };
+  // A process can stop after the metadata reservation commits but before the R2
+  // delete starts. Keep those old, unindexed private objects visible for a later
+  // owner-reviewed pass. Keys referenced by any live metadata, agreement or offer
+  // are excluded here and checked again immediately before deletion.
+  const orphan_attachments: RetentionManifest['orphan_attachments'] = [];
+  const orphanCutoff = new Date(now.getTime() - 30 * 86400000);
+  let attachmentCursor: string | undefined;
+  do {
+    const listed = await bucket.list({ prefix: 'agreements/attachments/', cursor: attachmentCursor });
+    for (const object of listed.objects) {
+      if (orphan_attachments.length >= 100) break;
+      const uploaded = object.uploaded;
+      if (!(uploaded instanceof Date) || uploaded > orphanCutoff) continue;
+      const referenced = await db.prepare(`SELECT 1 WHERE
+        EXISTS(SELECT 1 FROM software_agreement_attachments WHERE object_key=?)
+        OR EXISTS(SELECT 1 FROM software_agreements agreement,json_each(agreement.attachment_manifest_json) item
+          WHERE json_extract(item.value,'$.key')=?)
+        OR EXISTS(${activeOfferAttachment()})`).bind(object.key, object.key, object.key).first();
+      if (referenced) continue;
+      const stored = await bucket.get(object.key);
+      if (!stored) continue;
+      orphan_attachments.push({
+        key: object.key,
+        sha256: await hashBytes(await stored.arrayBuffer()),
+        uploaded_at: uploaded.toISOString(),
+      });
+    }
+    attachmentCursor = listed.truncated && orphan_attachments.length < 100 ? listed.cursor : undefined;
+  } while (attachmentCursor);
+  orphan_attachments.sort((a, b) => a.key.localeCompare(b.key));
+  return { version: 1, created_at: now.toISOString(), binding, agreements, unattached_attachments, orphan_attachments };
 }
 export async function applyAgreementRetention(
   db: D1Database,
@@ -108,11 +139,11 @@ export async function applyAgreementRetention(
     !Number.isFinite(age) ||
     age < 0 ||
     age > 86400000 ||
-    manifest.agreements.length > 20 || !Array.isArray(manifest.unattached_attachments) || manifest.unattached_attachments.length > 100
+    manifest.agreements.length > 20 || !Array.isArray(manifest.unattached_attachments) || manifest.unattached_attachments.length > 100 || (manifest.orphan_attachments !== undefined && (!Array.isArray(manifest.orphan_attachments) || manifest.orphan_attachments.length > 100))
   )
     throw new Error('Review is stale or belongs to different storage.');
   const fresh = await previewAgreementRetention(db, bucket, binding, now);
-  if (canonicalJson(fresh.agreements) !== canonicalJson(manifest.agreements) || canonicalJson(fresh.unattached_attachments) !== canonicalJson(manifest.unattached_attachments))
+  if (canonicalJson(fresh.agreements) !== canonicalJson(manifest.agreements) || canonicalJson(fresh.unattached_attachments) !== canonicalJson(manifest.unattached_attachments) || canonicalJson(fresh.orphan_attachments) !== canonicalJson(manifest.orphan_attachments ?? []))
     throw new Error('Archive changed. Preview again.');
   const manifestHash = await hashOfferToken(canonicalJson(manifest));
   for (const item of manifest.agreements) {
@@ -213,5 +244,22 @@ export async function applyAgreementRetention(
         throw error;
       }
     }
+  }
+  for (const orphan of manifest.orphan_attachments ?? []) {
+    const uploadedAt = Date.parse(orphan.uploaded_at);
+    if (!Number.isFinite(uploadedAt) || uploadedAt > now.getTime() - 30 * 86400000 || !orphan.key.startsWith('agreements/attachments/'))
+      throw new Error('Archive changed. Preview again.');
+    const stored = await bucket.get(orphan.key);
+    if (!stored || (await hashBytes(await stored.arrayBuffer())) !== orphan.sha256)
+      throw new Error('Orphan attachment changed.');
+    // If the process stops here, the next preview can rediscover this R2 object.
+    // Offer saves require metadata; manifests, metadata and offers are checked again
+    // immediately before deletion.
+    await db.batch([softwareGuard(db, `SELECT 1 WHERE
+      NOT EXISTS(SELECT 1 FROM software_agreement_attachments WHERE object_key=?)
+      AND NOT EXISTS(SELECT 1 FROM software_agreements agreement,json_each(agreement.attachment_manifest_json) item
+        WHERE json_extract(item.value,'$.key')=?)
+      AND NOT EXISTS(${activeOfferAttachment()})`, [orphan.key, orphan.key, orphan.key])]);
+    await bucket.delete(orphan.key);
   }
 }

@@ -97,6 +97,7 @@ const synthetic = (kind: 'msa' | 'sow') =>
       '\n{{/milestones}}'
     : '');
 const bucketData = new Map<string, Uint8Array>();
+const bucketUploaded = new Map<string, Date>();
 function adapter(database: InstanceType<typeof DatabaseSync>) {
   const statement = (query: string, args: unknown[] = []) => ({
     query,
@@ -131,6 +132,7 @@ beforeEach(async () => {
   sql.exec(readFileSync('db/music.sql', 'utf8'));
   db = adapter(sql);
   bucketData.clear();
+  bucketUploaded.clear();
   sql.exec(
     "UPDATE software_signing_settings SET software_signing_enabled=1; INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at) VALUES('r','software','Example','client@example.com','Tool','reviewed','now','now');",
   );
@@ -161,14 +163,18 @@ beforeEach(async () => {
     )
     .run(await hashOfferToken(token), await hashOfferToken(token));
   const bucket = {
-    put: vi.fn(async (k: string, v: string | Uint8Array) =>
-      bucketData.set(k, typeof v === 'string' ? new TextEncoder().encode(v) : v),
-    ),
+    put: vi.fn(async (k: string, v: string | Uint8Array) => {
+      bucketUploaded.set(k, new Date());
+      return bucketData.set(k, typeof v === 'string' ? new TextEncoder().encode(v) : v);
+    }),
     list: vi.fn(async ({ prefix }: { prefix: string }) => ({
-      objects: [...bucketData.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key })),
+      objects: [...bucketData.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key, uploaded: bucketUploaded.get(key) ?? new Date(0) })),
       truncated: false,
     })),
-    delete: vi.fn(async (k: string) => bucketData.delete(k)),
+    delete: vi.fn(async (k: string) => {
+      bucketUploaded.delete(k);
+      return bucketData.delete(k);
+    }),
     get: vi.fn(async (k: string) => {
       const b = bucketData.get(k);
       return b
@@ -1329,12 +1335,25 @@ it('previews and removes only 30-day-old unattached uploads while preserving ref
   await addAttachment('recent', 'agreements/attachments/recent.pdf', '2026-09-15T00:00:00Z');
   const offered = await addAttachment('offered', 'agreements/attachments/offered.pdf', '2026-08-01T00:00:00Z');
   const manifested = await addAttachment('manifested', 'agreements/attachments/manifested.pdf', '2026-08-01T00:00:00Z');
+  const offeredUnindexed = 'agreements/attachments/offered-without-metadata.pdf';
+  const manifestedUnindexed = 'agreements/attachments/manifested-without-metadata.pdf';
+  bucketData.set(offeredUnindexed, new Uint8Array([3, 4, 5]));
+  bucketData.set(manifestedUnindexed, new Uint8Array([6, 7, 8]));
+  bucketUploaded.set(offeredUnindexed, new Date('2026-08-01T00:00:00Z'));
+  bucketUploaded.set(manifestedUnindexed, new Date('2026-08-01T00:00:00Z'));
   sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='o'")
-    .run(JSON.stringify({ ...details, attachments: [{ key: 'agreements/attachments/offered.pdf', sha256: offered.sha256, bytes: offered.bytes.length, filename: 'offered.pdf', version: '1', date: '2026-09-01' }] }));
+    .run(JSON.stringify({ ...details, attachments: [
+      { key: 'agreements/attachments/offered.pdf', sha256: offered.sha256, bytes: offered.bytes.length, filename: 'offered.pdf', version: '1', date: '2026-09-01' },
+      { key: offeredUnindexed, sha256: 'c'.repeat(64), bytes: 3, filename: 'offered-without-metadata.pdf', version: '1', date: '2026-09-01' },
+    ] }));
   sql.prepare("UPDATE software_agreements SET attachment_manifest_json=? WHERE kind='sow'")
-    .run(JSON.stringify([{ key: 'agreements/attachments/manifested.pdf', sha256: manifested.sha256 }]));
+    .run(JSON.stringify([
+      { key: 'agreements/attachments/manifested.pdf', sha256: manifested.sha256 },
+      { key: manifestedUnindexed, sha256: 'd'.repeat(64) },
+    ]));
   const manifest = await previewAgreementRetention(db, env.AUDIO, 'test-storage', now);
   expect(manifest.unattached_attachments.map(item => item.id)).toEqual(['orphan']);
+  expect(manifest.orphan_attachments).toEqual([]);
   expect(JSON.stringify(manifest)).not.toContain('Example');
   await applyAgreementRetention(db, env.AUDIO, 'test-storage', manifest, now);
   expect(bucketData.has('agreements/attachments/orphan.pdf')).toBe(false);
@@ -1343,6 +1362,8 @@ it('previews and removes only 30-day-old unattached uploads while preserving ref
     expect(sql.prepare('SELECT id FROM software_agreement_attachments WHERE id=?').get(id)).toBeTruthy();
   for (const key of ['recent', 'offered', 'manifested'])
     expect(bucketData.has(`agreements/attachments/${key}.pdf`)).toBe(true);
+  expect(bucketData.has(offeredUnindexed)).toBe(true);
+  expect(bucketData.has(manifestedUnindexed)).toBe(true);
 });
 
 it('reserves an orphan attachment before storage deletion so a concurrent offer cannot lose it', async () => {
@@ -1362,6 +1383,30 @@ it('reserves an orphan attachment before storage deletion so a concurrent offer 
   await expect(applyAgreementRetention(db, env.AUDIO, 'test-storage', manifest, now)).rejects.toThrow();
   expect(bucketData.has(key)).toBe(true);
   expect(sql.prepare("SELECT id FROM software_agreement_attachments WHERE id='race-attachment'").get()).toBeTruthy();
+});
+
+it('recovers an old private object after interruption between metadata removal and R2 deletion', async () => {
+  const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
+  await review();
+  const now = new Date('2026-10-01T12:00:00Z'), key = 'agreements/attachments/interrupted.pdf';
+  const bytes = new Uint8Array([8, 6, 7]), sha256 = await hashBytes(bytes);
+  bucketData.set(key, bytes);
+  bucketUploaded.set(key, new Date('2026-08-01T00:00:00Z'));
+  sql.prepare('INSERT INTO software_agreement_attachments VALUES(?,?,?,?,?,?,?,?,?,?)')
+    .run('interrupted-attachment', 'r', 'interrupted.pdf', '1', '2026-09-01', key, sha256, bytes.length, '2026-08-01T00:00:00Z', 'owner');
+  const reviewed = await previewAgreementRetention(db, env.AUDIO, 'test-storage', now), batch = db.batch.bind(db);
+  vi.spyOn(db, 'batch').mockImplementationOnce(async statements => {
+    await batch(statements);
+    throw new Error('Simulated interruption after metadata committed.');
+  });
+  await expect(applyAgreementRetention(db, env.AUDIO, 'test-storage', reviewed, now)).rejects.toThrow('Simulated interruption');
+  expect(sql.prepare("SELECT id FROM software_agreement_attachments WHERE id='interrupted-attachment'").get()).toBeUndefined();
+  expect(bucketData.has(key)).toBe(true);
+
+  const recovered = await previewAgreementRetention(db, env.AUDIO, 'test-storage', now);
+  expect(recovered.orphan_attachments).toEqual([{ key, sha256, uploaded_at: '2026-08-01T00:00:00.000Z' }]);
+  await applyAgreementRetention(db, env.AUDIO, 'test-storage', recovered, now);
+  expect(bucketData.has(key)).toBe(false);
 });
 
 it('restores retry metadata when private storage refuses orphan deletion', async () => {

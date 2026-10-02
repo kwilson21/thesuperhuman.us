@@ -64,21 +64,52 @@ export function deliveredScope(update: Pick<ClientSoftwareUpdate, 'delivered_del
   try { const parsed = JSON.parse(update.delivered_deliverables_json ?? '[]'); if (Array.isArray(parsed)) saved = parsed.filter((item): item is string => typeof item === 'string'); } catch { /* legacy/corrupt snapshots fall back to the agreed scope */ }
   return saved.length ? saved.filter(item=>planned.includes(item)) : planned;
 }
+function parseLegacyRevisionTargets(header: string, checks: string[], planned: string[]) {
+  const prefix = header.match(/^Requested changes to .* for milestone \d+: /);
+  if (!prefix) return null;
+  const text = header.slice(prefix[0].length);
+  const parses: { checks: number[]; deliverables: number[] }[] = [];
+  const visit = (position: number, phase: 'checks' | 'deliverables', lastIndex: number, selectedChecks: number[], selectedDeliverables: number[]) => {
+    if (parses.length > 1) return;
+    if (position === text.length) {
+      parses.push({ checks: selectedChecks, deliverables: selectedDeliverables });
+      return;
+    }
+    const marker = /^(check|missing) #(\d+): /.exec(text.slice(position));
+    if (!marker) return;
+    const kind = marker[1] === 'check' ? 'checks' : 'deliverables';
+    if (kind === 'checks' && phase !== 'checks') return;
+    const index = Number(marker[2]) - 1;
+    const labels = kind === 'checks' ? checks : planned;
+    const priorIndex = kind === 'checks' ? (phase === 'checks' ? lastIndex : -1) : (phase === 'deliverables' ? lastIndex : -1);
+    if (index < 0 || index >= labels.length || index <= priorIndex) return;
+    const label = labels[index];
+    const labelStart = position + marker[0].length;
+    if (!text.startsWith(label, labelStart)) return;
+    const next = labelStart + label.length;
+    const nextPhase = kind === 'checks' ? 'checks' : 'deliverables';
+    const nextChecks = kind === 'checks' ? [...selectedChecks, index] : selectedChecks;
+    const nextDeliverables = kind === 'deliverables' ? [...selectedDeliverables, index] : selectedDeliverables;
+    if (next === text.length) {
+      visit(next, nextPhase, index, nextChecks, nextDeliverables);
+      return;
+    }
+    if (text.startsWith('; ', next))
+      visit(next + 2, nextPhase, index, nextChecks, nextDeliverables);
+  };
+  visit(0, 'checks', -1, [], []);
+  return parses.length === 1 ? parses[0] : null;
+}
 export function softwareRevisionTargets(body: string | null | undefined, checks: string[], planned: string[]) {
   const header = body?.split('\n',1)[0] ?? '';
   const summary = header.match(/\. Checks reported unmet: \[([0-9, ]*)\]\. Deliverables unavailable: \[([0-9, ]*)\]\.(?: Included but inaccessible: \[([0-9, ]*)\]\.)?$/);
   const indexes = (value: string | undefined, length: number) => [...new Set((value?.match(/\d+/g) ?? []).map(number=>Number(number)-1))].filter(index=>index>=0 && index<length);
   if (summary) return { checks: indexes(summary[1],checks.length), deliverables: indexes(summary[2],planned.length), inaccessibleDeliverables: indexes(summary[3],planned.length) };
-  // Read historical summaries, but only from the generated header. The free-text note
-  // is on the next paragraph and cannot accidentally clear evidence.
-  return {
-    checks: [...new Set([
-      ...Array.from(header.matchAll(/check #(\d+):/g),match=>Number(match[1])-1),
-      ...checks.map((check,index)=>header.includes(`check ${index+1} (${check})`) ? index : -1),
-    ])].filter(index=>index>=0 && index<checks.length),
-    deliverables: Array.from(header.matchAll(/missing #(\d+):/g),match=>Number(match[1])-1).filter(index=>index>=0 && index<planned.length),
-    inaccessibleDeliverables: [],
-  };
+  // Older saved headers included labels. Match complete generated tokens and fail
+  // closed if parsing is ambiguous; marker-like text inside a label must not select
+  // another check or deliverable.
+  const legacy = parseLegacyRevisionTargets(header, checks, planned);
+  return legacy ? { ...legacy, inaccessibleDeliverables: [] } : { checks: [], deliverables: [], inaccessibleDeliverables: [] };
 }
 export function softwareRevisionHistoryBody(body: string | null | undefined, checks: string[], planned: string[]) {
   if (!body) return '';
