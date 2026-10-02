@@ -40,7 +40,7 @@ it('places compact playback beside the waveform and seeking on a separate track'
   expect(component).toContain('::-webkit-slider-runnable-track');
   expect(component).not.toContain('compact-waveform-progress');
   expect(component).not.toContain('compact-waveform-playhead');
-  expect(component).toContain('.comparison-player--compact .compact-waveform-stage,.comparison-player--compact .compact-choice-row{display:none}');
+  expect(component).toContain('.comparison-player--compact:not([data-initialized="true"]) .compact-waveform-stage,.comparison-player--compact:not([data-initialized="true"]) .compact-choice-row{display:none}');
   expect(component).toContain('.comparison-player--compact[data-initialized="true"]:not([data-audio-fallback="true"]) .comparison-lanes{display:none}');
   expect(component).toContain('.comparison-player--compact[data-initialized="true"]:not([data-audio-fallback="true"]) .compact-waveform-stage{display:grid}');
   expect(script.indexOf('media.forEach(audio => { audio.pause(); audio.controls = false; audio.hidden = true; });')).toBeLessThan(script.indexOf("root.dataset.initialized = 'true';"));
