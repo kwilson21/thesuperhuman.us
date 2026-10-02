@@ -1,8 +1,9 @@
 ---
 export const prerender = false;
 import SoftwareProjectPanel from '~/components/owner/SoftwareProjectPanel.astro';
-import { getSoftwareProject, listSoftwareUpdates } from '~/lib/software-projects';
-import { listSoftwareProjectMessages } from '~/lib/software-project-messages';
+import SoftwareAgreementPanel from '~/components/owner/SoftwareAgreementPanel.astro';
+import { getSoftwareProject, listSoftwareUpdates, projectTerms } from '~/lib/software-projects';
+import { listSoftwareProjectMessages, readableSoftwareProjectMessages } from '~/lib/software-project-messages';
 import SoftwareOfferEditor from '~/components/owner/SoftwareOfferEditor.astro';
 import SoftwareFitReview from '~/components/owner/SoftwareFitReview.astro';
 import SoftwareQuestions from '~/components/owner/SoftwareQuestions.astro';
@@ -53,7 +54,8 @@ const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') 
 const offers = request.kind === 'software' ? await listSoftwareOffers(db, request.id) : [];
 const softwareProject = request.kind === 'software' ? await getSoftwareProject(db, request.id) : null;
 const softwareUpdates = softwareProject ? await listSoftwareUpdates(db, request.id) : [];
-const softwareMessages = softwareProject ? await listSoftwareProjectMessages(db, request.id) : [];
+const softwareMessageRows = softwareProject ? await listSoftwareProjectMessages(db, request.id) : [];
+const softwareMessages = softwareProject ? readableSoftwareProjectMessages(softwareMessageRows, softwareUpdates, projectTerms(softwareProject)) : [];
 if (softwareProject) {
   const projectAudit = (await db.prepare('SELECT id,action,actor,note,occurred_at AS occurredAt FROM software_project_audit WHERE request_id=? ORDER BY id DESC').bind(request.id).all<typeof audit[number]>()).results;
   audit.push(...projectAudit);audit.sort((first,second)=>second.occurredAt.localeCompare(first.occurredAt));
@@ -67,6 +69,7 @@ const brief = request.kind === 'software' ? softwareBrief(request) : null;
 <OwnerLayout title={request.summary} current="requests" newRequestCount={newRequests.length} ownerEmail={Astro.locals.owner?.email ?? ''}>
   <p class="owner-breadcrumb"><a href="/owner/requests">Requests</a> <span aria-hidden="true">/</span> {request.summary}</p>
   <header class="owner-page-heading compact"><div><p class="owner-kicker">{request.kind} · {request.status}</p><h1>{request.summary}</h1><p>Received {new Date(request.createdAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</p></div></header>
+  {request.kind === 'software' && clientPortalEnabled(Astro.locals.runtime.env) && <SoftwareAgreementPanel requestId={request.id} offerId={offers.find(offer => offer.status === 'sent')?.id} />}
   {portalProject && <nav class="request-jump" aria-label="Sections on this page"><a href="#request-work">Work</a><a href="#project-files-heading">Files</a><a href="#project-messages-heading">Conversation</a><a href="#request-client">Client</a></nav>}
   <div class:list={['request-layout', { portal: portalProject }]} data-request-id={request.id} data-request-updated={request.updatedAt}>
     <div class="request-main" id="request-work">
@@ -132,7 +135,7 @@ const brief = request.kind === 'software' ? softwareBrief(request) : null;
     .request-main { min-width: 0; }
     .owner-page-heading h1, .owner-breadcrumb { overflow-wrap: anywhere; }
     .portal-stage { padding: .5rem 0 2.5rem; }
-    .request-rail { display: grid; border-left: 1px solid var(--rule); padding-left: clamp(1.5rem, 3vw, 2.5rem); }
+    .request-rail { min-width: 0; display: grid; border-left: 1px solid var(--rule); padding-left: clamp(1.5rem, 3vw, 2.5rem); }
     .rail-name { font: 400 1.2rem/1.3 Newsreader, Georgia, serif !important; }
     .rail-links { display: flex; flex-wrap: wrap; gap: .4rem 1rem; }
     .rail-list { display: grid; grid-template-columns: minmax(5.5rem, auto) minmax(0, 1fr); gap: .35rem 1rem; margin: .2rem 0 0; font: .86rem/1.45 Inter, sans-serif; }

@@ -1,5 +1,6 @@
 ---
-import { projectTerms, projectStates, projectSteps, softwareDate, sharedSoftwareUpdates, milestonePayments, updateKinds } from '~/lib/software-projects';
+import { requiresEarlierStartAgreement, projectTerms, projectStates, projectSteps, softwareDate, sharedSoftwareUpdates, milestonePayments, updateKinds } from '~/lib/software-projects';
+import { executedOfferAgreement, offerAgreements } from '~/lib/software-agreements';
 import SoftwareInvoiceLine from './SoftwareInvoiceLine.astro';
 import { listSoftwareInvoices, invoiceAvailable, paidFirstDeposit, payableSoftwareInvoice, manualPaymentReminder } from '~/lib/software-invoices';
 import { addBusinessDays } from '~/lib/business-days';
@@ -8,10 +9,17 @@ import type { SoftwareOffer } from '~/lib/software-offers';
 type Props = { requestId: string; requestUpdatedAt: string; project: SoftwareProject | null; sentOffer?: SoftwareOffer; updates: SoftwareUpdate[]; closed: boolean };
 const { requestId, requestUpdatedAt, project, sentOffer, updates, closed } = Astro.props;
 const terms = project?.content_deleted_at ? null : project ? projectTerms(project) : sentOffer ? projectTerms(sentOffer) : null;
+const executed=sentOffer ? await executedOfferAgreement(Astro.locals.runtime.env.MUSIC_DB!,sentOffer.id) : null;
+const websiteSigned=sentOffer&&(await offerAgreements(Astro.locals.runtime.env.MUSIC_DB!,sentOffer.id)).some(d=>d.status==='client_signed'||d.status==='executed');
+const startDetails = sentOffer?.agreement_details_json ? JSON.parse(sentOffer.agreement_details_json) : null;
+const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const retryCutoff = Date.now() - 60_000;
 const retryReady = (attemptedAt: string | null) => Boolean(attemptedAt && Date.parse(attemptedAt) <= retryCutoff);
 const draft = updates.find(update => update.status === 'draft');
 const shared = project && terms ? await sharedSoftwareUpdates(Astro.locals.runtime.env.MUSIC_DB!,requestId) : [];
+const pendingRevision = project ? shared.find(update=>update.kind==='delivery_review' && update.status==='shared' && update.milestone_index===project.milestone_index && update.decision==='changes_requested') : undefined;
+const revisionDraft = Boolean(pendingRevision && draft && draft.kind==='delivery_review' && draft.milestone_index===pendingRevision.milestone_index);
+const canRespondToRevision = Boolean(pendingRevision && (!draft || revisionDraft));
 const payments = project && terms ? await milestonePayments(Astro.locals.runtime.env.MUSIC_DB!,requestId) : [];
 const deposits=project && terms ? (await Astro.locals.runtime.env.MUSIC_DB!.prepare('SELECT milestone_index,paid_recorded_at FROM software_milestone_deposits WHERE request_id=?').bind(requestId).all<{milestone_index:number;paid_recorded_at:string}>()).results : [];
 const offerId=project?.offer_id ?? sentOffer?.id;
@@ -28,10 +36,15 @@ const canComplete = lastDelivery?.decision==='milestone_accepted' && shared.some
   {unmatched.length>0 && <p class="rail-muted">Stripe events need reconciliation: {unmatched.map(event=>`${event.event_id} · ${event.event_type} · ${event.status}`).join('; ')}. Check the invoice in Stripe; no payment has been recorded from these events.</p>}
   {!project && terms.paymentMode==='standard' && <SoftwareInvoiceLine offerId={offerId!} milestone={0} kind="deposit" invoices={invoices} available={!deposit} closed={closed} />}
   {!project ? <form data-software-start data-request-updated-at={requestUpdatedAt} data-deposit-invoice-id={deposit?.id}>
+    <input type="hidden" name="signature_source" value={websiteSigned?'website':'external'} />
+    {websiteSigned&&!executed&&<p class="rail-muted">Finish countersigning, prepare the PDF and deliver both complete copies before starting.</p>}
+    {!websiteSigned && <details><summary>Signed outside the website</summary><div class="external-signing-fields"><label>Signed date<input class="studio-input" type="date" name="external_signed_on" required /></label><label>Typed parties<input class="studio-input" name="external_parties" required maxlength="500" /></label><label>Kept copy reference<input class="studio-input" name="external_copy_reference" required maxlength="200" /></label><label class="confirmation"><input type="checkbox" name="external_kept_copy" required />I kept the complete signed copy.</label></div></details>}
+    {startDetails?.po_requirement==='before_start' && <label>Purchase order number<input class="studio-input" name="po_number" maxlength="100" required /></label>}{requiresEarlierStartAgreement(startDetails?.planned_start, today) && <><label>Client agreement date for an earlier start<input class="studio-input" type="date" name="earlier_start_on" /></label><label>Dated client agreement for an earlier start (if applicable)<textarea class="studio-textarea" name="earlier_start_agreement" maxlength="500"></textarea></label></>}
+    <label class="confirmation"><input type="checkbox" name="inputs_ready" required />Required client inputs are ready.</label>
     <input type="hidden" name="offer_id" value={sentOffer!.id} />
     <input type="hidden" name="offer_version" value={sentOffer!.version} />
     <p class="rail-muted rail-caption">Record these only after checking them yourself. The client sees them as complete.</p>
-    <label class="confirmation"><input type="checkbox" name="signatures" required disabled={closed} />All signatures are complete (checked in Documenso)</label>
+    <label class="confirmation"><input type="checkbox" name="signatures" required checked={Boolean(executed)} disabled={closed || Boolean(websiteSigned)} />{websiteSigned?'Website signatures and retained copies are complete':'All signatures are complete (signed outside the website)'}</label>
     {terms.paymentMode==='standard' && depositBlocked && <p class="rail-muted">{manualPaymentReminder}</p>}
     <label class="confirmation" hidden={terms.paymentMode==='standard' && depositBlocked}><input type="checkbox" name="payment" required checked={Boolean(deposit)} disabled={closed} />{terms.paymentMode === 'standard' ? 'First installment received (checked in Stripe or the bank)' : 'Purchase order in place, or the client doesn’t use one'}</label>
     <div class="software-field"><label>Next update to the client<input aria-describedby="project-field-1-hint" class="studio-input" type="date" name="next_update_on" /></label><p id="project-field-1-hint" class="rail-muted rail-caption">Only promise a date you can keep.</p></div>
@@ -50,13 +63,16 @@ const canComplete = lastDelivery?.decision==='milestone_accepted' && shared.some
     <h3>Milestones</h3>
     <ul class="software-update-list">{terms.milestones.map((item,index)=>{
       const reviews=shared.filter(update=>update.milestone_index===index && update.status==='shared' && update.kind?.endsWith('_review')).reverse();
+      const requestedRevision=reviews.find(update=>update.kind==='delivery_review' && update.decision==='changes_requested');
+      const currentRevision=requestedRevision;
+      const canOpenRevision=Boolean(currentRevision && (!draft || (draft.kind==='delivery_review' && draft.milestone_index===index)));
       const depositBlocked=payableSoftwareInvoice(invoices,index,['deposit']);
       const manualDeposit=deposits.find(payment=>payment.milestone_index===index);
       const depositPaid=Boolean(manualDeposit) || invoices.some(invoice=>invoice.milestone_index===index && invoice.kind==='deposit' && invoice.status==='paid' && !invoice.refunded_at);
       const delivery=shared.find(update=>update.kind==='delivery_review' && update.status==='shared' && update.milestone_index===index);
       const paymentBlocked=payableSoftwareInvoice(invoices,index,['balance','milestone']);
       const paid=payments.find(payment=>payment.milestone_index===index),handoff=shared.find(update=>update.milestone_index===index && update.status==='shared' && update.kind==='handoff');
-      return <li><strong>Milestone {index+1} · {item.name}</strong>{reviews.map(review=><span>{review.decision==='direction_confirmed' ? 'Direction confirmed' : review.decision==='changes_requested' ? 'Changes requested' : review.decision==='milestone_accepted' ? `Accepted ${softwareDate(review.decided_at!)}` : `Ready for review${review.kind==='delivery_review' ? `, review by ${softwareDate(addBusinessDays(review.shared_at!,review.review_window_days ?? 5))}` : ''}`}</span>)}{manualDeposit && <span>Deposit recorded {softwareDate(manualDeposit.paid_recorded_at)}</span>}{paid && <span>Paid in full {softwareDate(paid.paid_recorded_at)}</span>}{handoff && <span>Handoff shared {softwareDate(handoff.shared_at!)}</span>}
+      return <li><strong>Milestone {index+1} · {item.name}</strong>{reviews.map(review=><span>{review.decision==='direction_confirmed' ? 'Direction confirmed' : review.decision==='changes_requested' ? 'Changes requested' : review.decision==='milestone_accepted' ? `Accepted ${softwareDate(review.decided_at!)}` : `Ready for review${review.kind==='delivery_review' ? `, review by ${softwareDate(addBusinessDays(review.shared_at!,review.review_window_days ?? 5))}` : ''}`}</span>)}{currentRevision && canOpenRevision && <a class="revision-action" href={`/owner/requests/${requestId}/update?respond=${currentRevision.id}`}>{draft ? 'Continue revision draft' : 'Respond to requested changes'} →</a>}{currentRevision && draft && !canOpenRevision && <span>Finish the existing draft before responding to this request.</span>}{manualDeposit && <span>Deposit recorded {softwareDate(manualDeposit.paid_recorded_at)}</span>}{paid && <span>Paid in full {softwareDate(paid.paid_recorded_at)}</span>}{handoff && <span>Handoff shared {softwareDate(handoff.shared_at!)}</span>}
         {(terms.paymentMode==='standard' ? ['deposit','balance'] as const : ['milestone'] as const).map(kind=><SoftwareInvoiceLine offerId={offerId!} milestone={index} kind={kind} invoices={invoices}
           available={(kind!=='deposit' || !depositPaid) && invoiceAvailable(terms,index,kind,project,Boolean(delivery && delivery.decision!=='changes_requested'),Boolean(paid))}
           closed={closed || Boolean(project.revoked_at) || Boolean(project.completed_at)}
@@ -71,7 +87,7 @@ const canComplete = lastDelivery?.decision==='milestone_accepted' && shared.some
     <ul class="software-update-list">{updates.map(update => <li><strong>{update.title || 'Untitled draft'}</strong><span>{updateKinds[update.kind]} · {{ draft: 'Draft', shared: 'Shared', superseded: 'Superseded' }[update.status]}{update.shared_at ? ` · ${softwareDate(update.shared_at)}` : ''}</span>
       {update.status === 'shared' && ['pending','failed','sending'].includes(update.notification_status) && <><p class="rail-muted">{update.notification_status === 'sending' ? retryReady(update.notification_attempted_at) ? 'Email unconfirmed. Check Resend before retrying.' : 'Checking delivery. Retry is available after a minute.' : update.notification_status === 'failed' ? 'Update email failed.' : 'Update email pending.'}</p>{(update.notification_status !== 'sending' || retryReady(update.notification_attempted_at)) && <button class="studio-quiet" type="button" data-software-notice={update.id} data-uncertain={update.notification_status === 'sending' ? 'true' : undefined}>{update.notification_status === 'sending' ? 'I checked Resend; retry' : 'Retry notice'}</button>}</>}
     </li>)}</ul>
-    {!closed && !project.revoked_at && project.state!=='complete' && <a href={`/owner/requests/${requestId}/update`}>{draft ? 'Continue draft' : 'New update'} →</a>}
+    {!closed && !project.revoked_at && project.state!=='complete' && <a href={`/owner/requests/${requestId}/update${canRespondToRevision ? `?respond=${pendingRevision!.id}` : ''}`}>{canRespondToRevision ? revisionDraft ? 'Continue revision draft' : 'Respond to requested changes' : draft ? 'Continue draft' : 'New update'} →</a>}
     <h3>Client access</h3><p class="rail-state"><span class:list={['state-dot', project.revoked_at ? 'closed' : project.invitation_status]} aria-hidden="true"></span>{project.revoked_at ? 'Access closed. Sign-in and private files are unavailable.' : project.invitation_status === 'sent' ? 'Sign-in link sent' : project.invitation_status === 'sending' ? retryReady(project.invitation_attempted_at) ? 'Sign-in email unconfirmed. Check Resend before retrying.' : 'Checking delivery. Retry is available after a minute.' : project.invitation_status === 'failed' ? 'Sign-in email failed. The project is saved.' : 'Sign-in email not sent yet'}</p>
     {!closed && !project.revoked_at && <>{project.invitation_status !== 'sent' && (project.invitation_status !== 'sending' || retryReady(project.invitation_attempted_at)) && <button class:list={[project.invitation_status === 'sending' ? 'studio-quiet' : 'studio-button']} type="button" data-software-notice="" data-uncertain={project.invitation_status === 'sending' ? 'true' : undefined}>{project.invitation_status === 'sending' ? 'I checked Resend; retry' : project.invitation_status === 'failed' ? 'Retry invitation' : 'Send invitation'}</button>}
       <details class="rail-close"><summary>Close client access</summary><p class="rail-caption">Signs the client out and hides the project immediately.</p><button class="studio-quiet danger" type="button" data-software-revoke>Close client access</button></details>
@@ -80,9 +96,11 @@ const canComplete = lastDelivery?.decision==='milestone_accepted' && shared.some
   <p class="studio-status" data-software-status role="status" aria-live="polite"></p>
 </section>}
 <style>
+  .external-signing-fields { display: grid; gap: .8rem; margin-top: 1rem; }
   fieldset { display: grid; gap: .8rem; }
   h3 { font: 400 1.2rem/1.3 Newsreader,Georgia,serif; margin-top: 1rem; }
   .software-update-list { list-style: none; padding: 0; }
+  .revision-action { display: inline-block; margin-top: .3rem; font: 500 .85rem/1.5 Inter,sans-serif; }
   li { display: grid; gap: .4rem; border-top: 1px solid var(--rule); padding: .8rem 0; overflow-wrap: anywhere; }
   li strong { font: 500 .9rem/1.5 Inter,sans-serif; } li span { font: .75rem/1.5 Inter,sans-serif; color: var(--muted); }
   summary { cursor: pointer; margin-top: .8rem; }

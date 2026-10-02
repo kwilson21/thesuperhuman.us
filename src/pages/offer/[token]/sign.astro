@@ -1,0 +1,71 @@
+---
+import { softwareDate } from "~/lib/software-projects";
+export const prerender = false;
+import AgreementLayout from '~/layouts/AgreementLayout.astro';
+import { getLinkedOffer } from '~/lib/software-offers';
+import { agreementSession, signingEnabled } from '~/lib/agreement-access';
+import { offerAgreements } from '~/lib/software-agreements';
+import { consentText, authorityText, intentText } from '~/lib/agreement-fields';
+const env = Astro.locals.runtime.env,
+  db = env.MUSIC_DB,
+  token = Astro.params.token!;
+const enabled = db && (await signingEnabled(db)),
+  offer = enabled ? await getLinkedOffer(db!, token) : null;
+const session = offer ? await agreementSession(db!, Astro.request, 'agreement', offer.id) : null;
+const docs = session ? await offerAgreements(db!, offer!.id) : [];
+const sow = docs.find((a) => a.kind === 'sow'),
+  signed = sow && sow.status !== 'review';
+const preview =
+  Astro.url.searchParams.has('review') && sow?.review_session_hash === session?.token_hash;
+const reused =
+  offer?.reused_msa_id && session
+    ? await db!
+        .prepare('SELECT canonical_text,id FROM software_agreements WHERE id=?')
+        .bind(offer.reused_msa_id)
+        .first<{ canonical_text: string; id: string }>()
+    : null;
+const artifact =
+  sow?.status === 'executed'
+    ? await db!
+        .prepare('SELECT status FROM software_agreement_artifacts WHERE agreement_id=?')
+        .bind(sow.id)
+        .first<{ status: string }>()
+    : null;
+const details = sow ? JSON.parse(sow.values_json) : null;
+const action = docs.length === 2 ? 'Sign MSA and SOW' : 'Sign SOW';
+const recipient = offer?.recipient_email_snapshot ?? '';
+const masked = recipient.replace(/^(.)([^@]*)(@.*)$/, '$1***$3');
+if (!offer?.msa_template_id) Astro.response.status = 404;
+---
+<AgreementLayout title="Review and sign" step={!session ? 1 : signed || preview ? 3 : 2}>
+ {!offer?.msa_template_id?<><h1 class="page-title">Signing is unavailable.</h1><p class="page-lede">Contact Kazon to arrange signing outside the website.</p></>:!session?<>
+ <h1 class="page-title">Verify your email.</h1><p class="page-lede">A code goes to {masked}, the recipient of this offer. Forwarding the offer does not give someone else signing access.</p>
+ <form class="agreement-form" method="post" action={`/api/offer/${token}/code`} data-agreement-code><div class="cf-turnstile" data-sitekey={env.PUBLIC_TURNSTILE_SITE_KEY??import.meta.env.PUBLIC_TURNSTILE_SITE_KEY} data-size="compact"></div><input type="hidden" name="turnstileToken" /><button class="studio-button">Send a code</button></form>
+ <form class="agreement-form" method="post" action={`/api/offer/${token}/session`} data-agreement-session><input type="hidden" name="challenge_id" value={Astro.url.searchParams.get('challenge')??''} /><label>Eight-digit code<input class="studio-input" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{8}" maxlength="8" required /></label><button class="studio-button">Verify email</button></form><p class="agreement-status" role="status" aria-live="polite"></p>
+ <noscript><p>Email verification needs JavaScript for the security check. Contact Kazon for paper or outside-site signing.</p></noscript>
+ <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+ </>:signed?<><h1 class="page-title">{sow.status==='executed'?'Signed by both parties.':'Your signature is saved.'}</h1><p class="page-lede">{sow.status==='executed'?'Your signed copy will be emailed as an attachment. You can also download it from your project page or agreement archive.':'Waiting for Kazon to countersign. The project has not started yet.'}</p>{artifact?.status==='ready'?<a href={`/api/agreements/${sow.id}/file`}>Download signed agreement</a>:sow.status==='executed'&&<p>Signed copy preparation needs attention. Your signatures are saved.</p>}<p><a href="/agreements">Agreement archive</a></p></>:preview?<>
+ <h1 class="page-title">Review your exact agreement.</h1><p class="page-lede">Read the complete documents before signing. If you change a detail, review a fresh preview.</p><p>The signing certificate records your verified email, IP address and browser. <a href="/privacy">Read the privacy notice</a>.</p>
+ <div class="offer-columns"><div>
+ {reused&&<section class="agreement-section"><h2>Your existing MSA</h2><a href={`/api/agreements/${reused.id}/file`}>Download executed MSA</a><pre class="agreement-text">{reused.canonical_text}</pre></section>}
+ {docs.map(d=><section class="agreement-section" id={`review-${d.kind}`} data-agreement-document={d.kind}><h2>{d.kind.toUpperCase()}</h2><p class="agreement-meta">Effective {softwareDate(d.effective_on)} · SHA-256 {d.text_sha256}</p><a href={`/api/offer/${token}/review?document=${d.id}`}>Download exact review text</a><pre class="agreement-text">{d.canonical_text}</pre></section>)}
+ {(JSON.parse(offer.agreement_details_json!).attachments??[]).map((a:{filename:string;key:string})=><p><a href={`/api/agreements/attachments/${a.key.split('/').pop()!.replace('.pdf','')}`}>Review attachment: {a.filename}</a></p>)}
+ <a href={`/offer/${token}/sign`}>Edit details and review again</a>
+ <h2>Confirm your choices and signature.</h2><form class="agreement-form" method="post" action={`/api/offer/${token}/sign`} data-agreement-flow="sign"><input type="hidden" name="csrf_nonce" value={session.csrf_nonce} /><input type="hidden" name="documents" value={JSON.stringify(docs.map(d=>({id:d.id,hash:d.text_sha256})))} />
+ <p>Signed agreements, signatures and certificates are retained for 10 years after the agreement ends, longer for active MSA reuse or a legal hold. Contact Kazon for paper or outside-site signing, or if you cannot read or retain these documents.</p>
+ <p>Portfolio · {details.choices.portfolio}. Client naming · {details.choices.naming}. Payment · {details.system.payment}.</p><p>Signing as {details.client.signer_name}, {details.client.signer_title}. Verified email: {recipient}.</p>
+ <label class="confirmation"><input type="checkbox" name="consent" value="true" required />{consentText}</label><label class="confirmation"><input type="checkbox" name="authority" value="true" required />{authorityText(details.client.legal_name)}</label><label class="confirmation"><input type="checkbox" name="intent" value="true" required />{intentText(action)}</label><button class="studio-button">{action}</button></form></div><aside class="agreement-aside"><h2>What you’re signing</h2>{docs.map(d=><section class="agreement-section"><p>{d.kind.toUpperCase()} · Effective {softwareDate(d.effective_on)}</p><a href={`#review-${d.kind}`}>Read the complete {d.kind.toUpperCase()}</a></section>)}{reused&&<p>Your existing executed MSA remains in place.</p>}<p class="agreement-hint">A browser, email access and a PDF reader are needed. You can ask Kazon to arrange signing outside the website.</p><p class="agreement-hint">Signed copies are kept separately from the project page.</p></aside></div>
+ </>:<>
+ <h1 class="page-title">Your agreement details.</h1><p class="page-lede">Use the legal party and the person authorized to sign. These details will be included in the agreement.</p><div class="offer-columns"><div>
+ <form class="agreement-form" method="post" action={`/api/offer/${token}/review`} data-agreement-flow="review"><input type="hidden" name="csrf_nonce" value={session.csrf_nonce} />
+ {([['legal_name','Client legal name',200],['entity_type','Entity type',200],['jurisdiction','State or jurisdiction',100],['business_address','Business mailing address',1000],['notice_email','Notice email',320],['signer_name','Signer full legal name',200],['signer_title','Signer title',200],['reviewer_name','Client reviewer name',200],['reviewer_email','Client reviewer email',320],['approver_name','Scope and spending approver name',200],['approver_email','Scope and spending approver email',320]] as const).map(([name,label,max])=><label>{label}<input class="studio-input" name={name} type={name.includes('email')?'email':'text'} maxlength={max} required value={details?.client[name]??''} /></label>)}
+ <h2>Confirm your choices.</h2><label class="confirmation"><input type="checkbox" name="business_engagement" value="true" required />This is a business engagement. These interim agreements are not for consumer engagements.</label>
+ <fieldset><legend>Portfolio choice</legend><p class="agreement-hint">Choose explicitly. Naming your business is a separate choice, off by default.</p><label class="confirmation"><input type="radio" name="portfolio" value="allow" required />Allow</label><label class="confirmation"><input type="radio" name="portfolio" value="deny" required />Do not allow</label><label class="confirmation"><input type="checkbox" name="naming" value="true" />Yes, allow naming the client (only with Allow)</label></fieldset><p class="agreement-hint">Allow permits reviewed descriptions and visuals with confidential information removed. Client logos are excluded.</p>
+ <label>Initials confirming choices<input class="studio-input" name="initials" maxlength="20" required /></label><button class="studio-button">Review exact agreement</button></form></div><aside class="agreement-aside"><h2>Before you sign</h2><p>Confirm your details and choices, then review the complete MSA and statement of work before signing.</p><p class="agreement-hint">Business mailing address only. Notice email does not change the verified recipient. Changed mailing or notice details are recorded as a separate dated notice when you sign, without changing an earlier MSA.</p><p class="agreement-hint">For later work with the same legal party, your executed MSA can be reused. Each new SOW still needs both signatures.</p></aside></div>
+ </>}
+ {session && <><details data-reauth hidden><summary>Verify your email again</summary><p>Keep this page open while you obtain a fresh code. Review a fresh preview before signing.</p><form class="agreement-form" method="post" action={`/api/offer/${token}/code`} data-agreement-code><div class="cf-turnstile" data-sitekey={env.PUBLIC_TURNSTILE_SITE_KEY??import.meta.env.PUBLIC_TURNSTILE_SITE_KEY} data-size="compact"></div><button class="studio-button">Send a fresh code</button></form><form class="agreement-form" method="post" action={`/api/offer/${token}/session`} data-agreement-refresh><input type="hidden" name="challenge_id" value={Astro.url.searchParams.get('challenge')??''} /><label>Eight-digit code<input class="studio-input" name="code" pattern="[0-9]{8}" inputmode="numeric" autocomplete="one-time-code" required /></label><button class="studio-button">Verify email again</button></form>{preview&&<input type="hidden" data-reviewed-client value={JSON.stringify(details.client)} />}</details><p class="agreement-status" role="status" aria-live="polite" tabindex="-1"></p><script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script></>}
+</AgreementLayout>
+<script>
+import { setupAgreementAccess } from '~/scripts/agreement-access';
+setupAgreementAccess();
+</script>

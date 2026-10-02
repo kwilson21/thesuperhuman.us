@@ -2,9 +2,17 @@
 import SoftwareAcceptanceChecks from './SoftwareAcceptanceChecks.astro';
 import { evidenceTypes } from '~/lib/software-projects';
 import type { ClientSoftwareUpdate } from '~/lib/software-projects';
-type Props = { update: ClientSoftwareUpdate; visualUrl?: string; preview?: boolean; checks?: string[] };
-const { update, visualUrl, preview = false, checks=[] } = Astro.props;
+type Props = { update: ClientSoftwareUpdate; visualUrl?: string; preview?: boolean; checks?: string[]; deliverables?: string[] };
+const { update, visualUrl, preview = false, checks=[], deliverables=[] } = Astro.props;
 const evidence: string[] = JSON.parse(update.criteria_json ?? '[]');
+const selectedDeliverables: string[] = JSON.parse(update.delivered_deliverables_json ?? '[]');
+const includedDeliverables = selectedDeliverables.length ? selectedDeliverables : deliverables;
+const partialDelivery = update.kind==='delivery_review' && deliverables.some(item=>!includedDeliverables.includes(item));
+const references: {label:string;url:string}[] = JSON.parse(update.links_json ?? '[]');
+const deliveryReferences = update.kind === 'delivery_review' ? references.filter(reference => {
+  try { const url = new URL(reference.url); return url.protocol === 'https:' && !url.username && !url.password && Boolean(reference.label.trim()); }
+  catch { return false; }
+}) : [];
 ---
 <article class="software-update" data-software-update>
   <p class="studio-kicker" data-preview-kicker>{[evidenceTypes[update.evidence_type], update.artifact_version, update.evidence_type === 'concept' ? 'Not implemented' : ''].filter(Boolean).join(' · ')}</p>
@@ -14,8 +22,22 @@ const evidence: string[] = JSON.parse(update.criteria_json ?? '[]');
     <figcaption data-preview-caption>{update.evidence_type === 'concept' ? 'Illustrative concept' : update.artifact_version}</figcaption>
   </figure>
   <p hidden={!update.preview_url} data-preview-link-row><a href={update.preview_url || undefined} data-preview-link target="_blank" rel="noopener noreferrer">Open preview ↗</a></p>
+  <p class="delivery-preview-links access-note" hidden={!update.preview_url} data-preview-access-note>Client access to this preview link is not verified by the site.</p>
+  {!preview && update.kind==='delivery_review' && deliverables.length>0 && <section class="delivery-included" aria-labelledby={`delivery-included-${update.id}`}>
+    <h3 id={`delivery-included-${update.id}`}>Included in this delivery</h3>
+    <ul>{includedDeliverables.map(deliverable=><li>{deliverable}</li>)}</ul>
+    <p>{partialDelivery ? 'This version includes only the items listed above. Acceptance covers every item in the full scope below and every agreed check. Request changes if any part is still incomplete.' : 'This version includes every agreed deliverable. Accepting confirms the full milestone and every agreed check.'}</p>
+  </section>}
+  {!preview && update.kind==='delivery_review' && deliverables.length>0 && <section class="delivery-scope" data-preview-delivery-scope aria-labelledby={`delivery-scope-${update.id}`}>
+    <h3 id={`delivery-scope-${update.id}`}>Full agreed scope · Milestone {(update.milestone_index ?? 0)+1}</h3>
+    <ul>{deliverables.map(deliverable=><li>{deliverable}</li>)}</ul>
+  </section>}
+  {(update.kind==='delivery_review' || preview) && <section class="delivery-preview-links" data-preview-delivery-links hidden={preview ? update.kind!=='delivery_review' || deliveryReferences.length===0 : deliveryReferences.length===0}>
+    <h3>Supporting links</h3><ul data-preview-delivery-link-list>{deliveryReferences.map(reference=><li><a href={reference.url} target="_blank" rel="noopener noreferrer">{reference.label}</a></li>)}</ul>
+    <p class="access-note">The owner provided these HTTPS links. The site does not verify that each recipient can open them.</p>
+  </section>}
   {(['what_changed','checks_limitations','client_request'] as const).map((key, index) => <section data-preview-section={key} hidden={!update[key]}><h3>{index === 0 ? 'What changed' : index === 1 ? 'Checks and limitations' : 'What I need from you'}</h3><p data-preview-text={key}>{update[key]}</p></section>)}
-  {update.kind==='delivery_review' && checks.length>0 && <SoftwareAcceptanceChecks checks={checks} evidence={evidence} />}
+  {!preview && update.kind==='delivery_review' && checks.length>0 && <SoftwareAcceptanceChecks checks={checks} evidence={evidence} />}
 </article>
 <style>
   .software-update { min-width: 0; overflow-wrap: anywhere; }
@@ -27,5 +49,15 @@ const evidence: string[] = JSON.parse(update.criteria_json ?? '[]');
   img { display: block; width: 100%; height: auto; border: 1px solid var(--rule); }
   figcaption { font: .8rem/1.5 Inter,sans-serif; color: var(--muted); margin-top: .4rem; }
   section { border-top: 1px solid var(--rule); margin-top: 1.5rem; }
+  .delivery-preview-links h3 { font: 400 1.35rem/1.25 Newsreader,Georgia,serif; margin: 0 0 .5rem; }
+  .delivery-preview-links ul { display: grid; gap: .45rem; padding-left: 1.1rem; font: .9rem/1.5 Inter,sans-serif; }
+  .delivery-preview-links .access-note, .access-note { color: var(--muted); font-size: .78rem; }
+  .delivery-scope { border-top: 1px solid var(--rule); margin-top: 1.5rem; padding-top: 1rem; }
+  .delivery-scope h3 { font: 400 1.35rem/1.25 Newsreader,Georgia,serif; margin: 0 0 .5rem; }
+  .delivery-scope ul { display: grid; gap: .35rem; margin: 0; padding-left: 1.2rem; font: .9rem/1.55 Inter,sans-serif; }
+  .delivery-included { border-top: 1px solid var(--rule); margin-top: 1.5rem; padding-top: 1rem; }
+  .delivery-included h3 { font: 400 1.35rem/1.25 Newsreader,Georgia,serif; margin: 0 0 .5rem; }
+  .delivery-included ul { display: grid; gap: .35rem; margin: 0; padding-left: 1.2rem; font: .9rem/1.55 Inter,sans-serif; }
+  .delivery-included p { color: var(--muted); font-size: .82rem; }
   [hidden] { display: none !important; }
 </style>

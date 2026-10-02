@@ -1,9 +1,17 @@
+import { templateFields } from '../../src/lib/agreement-template-fields.mjs';
+const signingTemplates = Object.fromEntries(['msa', 'sow'].map(kind => [kind, templateFields[kind as keyof typeof templateFields].filter(field => !field.startsWith('milestone.')).map(field => `${field}: {{${field}}}`).join('\n') + (kind === 'sow' ? '\n{{#milestones}}\n' + templateFields.sow.filter(field => field.startsWith('milestone.')).map(field => `${field}: {{${field}}}`).join('\n') + '\n{{/milestones}}' : '')]));
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
+import { prepareWithDiagnostics } from '../../scripts/screenshots/prepare.mjs';
+import { POST as sendOffer } from '../../src/pages/api/owner/requests/[id]/software';
+import { contractorSchema } from '../../src/lib/agreement-fields';
 import {
-  missingScenarioRoutes, NOT_PAGES, PAGES, parseJsonc, PREVIEW_OVERRIDES, previewWrangler, REDIRECTS, SCENARIO_PAGES,
+  expectedResourceError, missingScenarioRoutes, NOT_PAGES, PAGES, parseJsonc, PREVIEW_OVERRIDES, previewWrangler, REDIRECTS, SCENARIO_PAGES,
   relevantScreenshots, sanitizeManifest, screenshotSection, withScreenshots,
 } from '../../scripts/screenshots/config.mjs';
 
@@ -19,6 +27,72 @@ function routeFor(file: string): string {
   const route = file.replace(/^src\/pages/, '').replace(/\.astro$/, '').replace(/\/index$/, '');
   return route || '/';
 }
+
+it('saves full-page prepare failure diagnostics and rethrows the original error', async () => {
+  const out = await mkdtemp(join(tmpdir(), 'screenshot-failure-'));
+  const error = new Error('Agreement message did not appear');
+  const page = {
+    url: () => 'http://localhost/owner/requests/example',
+    locator: (selector: string) => {
+      expect(selector).toBe('[role=status]');
+      return { allTextContents: async () => ['', 'Complete and validate Agreement details before sending.'] };
+    },
+    screenshot: async (options: { path: string; fullPage: boolean }) => {
+      expect(options.fullPage).toBe(true);
+      await writeFile(options.path, 'failure image');
+    },
+  };
+  try {
+    await expect(prepareWithDiagnostics(page, async () => { throw error; }, out, 'software-signing', 'software-signing-missing-send-field-phone.png')).rejects.toBe(error);
+    const name = '_failure-software-signing-missing-send-field-phone';
+    expect(await readFile(join(out, `${name}.png`), 'utf8')).toBe('failure image');
+    expect(await readFile(join(out, `${name}.txt`), 'utf8')).toBe(`URL: ${page.url()}\nError: ${error.message}\nStatuses:\n1: \n2: Complete and validate Agreement details before sending.\n`);
+    expect(sanitizeManifest({ scenarios: [{ steps: [{ images: [{ file: `${name}.png` }] }] }] }, [`${name}.png`]).scenarios).toEqual([]);
+  } finally {
+    await rm(out, { recursive: true, force: true });
+  }
+});
+
+it('seeds a completed send so missing details reach the real agreement validation', async () => {
+  const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
+  const sql = new DatabaseSync(':memory:');
+  sql.exec(readFileSync('db/music.sql', 'utf8'));
+  const stop = new Error('fixture ready');
+  const statement = (query: string, args: any[] = []): any => ({
+    bind: (...values: any[]) => statement(query, values),
+    first: async () => sql.prepare(query).get(...args) ?? null,
+    all: async () => ({ results: sql.prepare(query).all(...args) }),
+  });
+  try {
+    const scenario = await import('../../scripts/screenshots/scenarios/software-signing.mjs');
+    await expect(scenario.default.run({
+      templates: signingTemplates,
+      sql: (query: string) => sql.exec(query),
+      ownerFetch: async () => { throw new Error('No API setup is needed before this shot.'); },
+      capture: async ({ file }: { file: string }) => { if (file.includes('missing-send-field')) throw stop; return file; },
+    })).rejects.toBe(stop);
+    const config = JSON.parse(sql.prepare('SELECT values_json FROM software_contractor_config').get().values_json);
+    expect(contractorSchema.safeParse(config).success).toBe(true);
+    const draft = sql.prepare("SELECT updated_at FROM software_offers WHERE status='draft'").get();
+    const send = () => sendOffer({
+      params: { id: 'screenshot-signing' },
+      request: new Request('https://example.com/api/owner/requests/screenshot-signing/software', {
+        method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'send', version: 2, expectedUpdatedAt: draft.updated_at }),
+      }),
+      locals: { owner: { email: 'owner@example.com' }, runtime: { env: { MUSIC_DB: { prepare: statement } } } },
+    } as any) as Promise<Response>;
+    const response = await send();
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ message: 'Complete and validate Agreement details before sending.' });
+    sql.prepare('UPDATE software_offer_links SET created_at=?').run(new Date().toISOString());
+    const sending = await send();
+    expect(sending.status).toBe(409);
+    expect(await sending.json()).toMatchObject({ message: 'An offer is still being sent. Try again in a moment.' });
+  } finally {
+    sql.close();
+  }
+});
 
 describe('screenshot coverage', () => {
   it('captures every page file or says why not', () => {
@@ -38,7 +112,10 @@ describe('screenshot coverage', () => {
     for (const scenario of new Set(Object.values(SCENARIO_PAGES).map(item => item.scenario))) {
       const module = await import(pathToFileURL(`scripts/screenshots/scenarios/${scenario}.mjs`).href);
       const steps = await module.default.run({
-        base: 'http://127.0.0.1:4321', sql: () => '[]', ownerFetch: async () => ({}),
+        templates: signingTemplates,
+        base: 'http://127.0.0.1:4321',
+        sql: (query: string) => query.startsWith('SELECT status FROM software_agreement_artifacts') ? '[{"results":[{"status":"ready"}]}]' : '[]',
+        ownerFetch: async (path: string) => path.startsWith('/api/offer/') && path.endsWith('/review') ? {documents:[{id:'00000000-0000-4000-8000-000000000001',kind:'msa',hash:'a'.repeat(64)},{id:'00000000-0000-4000-8000-000000000002',kind:'sow',hash:'b'.repeat(64)}]} : {},
         capture: async ({ file, path }: { file: string; path: string }) => { captured.push({ scenario, path }); return file; },
       });
       expect(steps.length).toBeGreaterThan(0);
@@ -239,4 +316,14 @@ it('software print styling never forces a receipt before submission', () => {
   const css = readFileSync(new URL('../../src/styles/software-intake.css', import.meta.url), 'utf8');
   expect(css).not.toMatch(/#software-success\s*\{\s*display:block/);
   expect(css).not.toMatch(/@media print[^}]*#software-inquiry/);
+});
+
+it('allows only exact deliberate HTTP resource failures, preserving other console errors', () => {
+  const expected = [{ path: '/api/offer/sample/session', status: 401 }];
+  const message = 'Failed to load resource: the server responded with a status of 401 (Unauthorized)';
+  const base = 'http://127.0.0.1:4321';
+  expect(expectedResourceError(message, base + expected[0].path, base, expected)).toBe(true);
+  expect(expectedResourceError(message, base + '/api/offer/other/session', base, expected)).toBe(false);
+  expect(expectedResourceError(message.replace('401', '500'), base + expected[0].path, base, expected)).toBe(false);
+  expect(expectedResourceError('Unexpected script error', base + expected[0].path, base, expected)).toBe(false);
 });

@@ -45,8 +45,9 @@ export function studioRetentionProjectPredicate(now) {
 
 
 export function softwareRetentionProjectPredicate(now) {
-  return `content_deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM software_invoices i WHERE i.request_id=software_projects.request_id AND i.status IN ('creating','open','payment_failed','uncollectible')) AND ((completed_at IS NOT NULL AND completed_at<=${quote(cutoff(now,365))})
-    OR (revoked_at IS NOT NULL AND revoked_at<=${quote(cutoff(now,365))}))`;
+  const days=`COALESCE((SELECT json_extract(a.values_json,'$.owner.project_retention_days') FROM software_agreements a WHERE a.id=software_projects.agreement_id AND a.status='executed'),365)`;
+  return `content_deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM software_invoices i WHERE i.request_id=software_projects.request_id AND i.status IN ('creating','open','payment_failed','uncollectible')) AND ((completed_at IS NOT NULL AND julianday(completed_at)+${days}<=julianday(${quote(now.toISOString())}))
+    OR (revoked_at IS NOT NULL AND julianday(revoked_at)+${days}<=julianday(${quote(now.toISOString())})))`;
 }
 async function softwareSources(database, now) {
   const exists = (await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_projects'")).length;

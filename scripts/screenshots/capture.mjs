@@ -9,7 +9,8 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { chromium } from 'playwright';
-import { ACCESS_AUDIENCE, ACCESS_ISSUER, missingScenarioRoutes, OUT, OWNER_EMAIL, PAGES, REDIRECTS, SCENARIO_PAGES, VIEWPORTS } from './config.mjs';
+import { prepareWithDiagnostics } from './prepare.mjs';
+import { ACCESS_AUDIENCE, ACCESS_ISSUER, expectedResourceError, missingScenarioRoutes, OUT, OWNER_EMAIL, PAGES, REDIRECTS, SCENARIO_PAGES, VIEWPORTS } from './config.mjs';
 
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:4321';
 
@@ -32,7 +33,7 @@ const errors = [];
 const captured = [];
 
 /** Saves one PNG. Pass `owner` for owner pages, `cookie` for a studio session, `selector` for one section. */
-async function capture({ file, path, viewport = 'desktop', owner = false, cookie, selector, status = 200, prepare }) {
+async function capture({ file, path, viewport = 'desktop', owner = false, cookie, selector, status = 200, prepare, expectedResponses = [] }) {
   const size = VIEWPORTS.find(item => item.name === viewport);
   const context = await browser.newContext({ viewport: { width: size.width, height: size.height }, reducedMotion: 'reduce' });
   // Access adds this header at the edge, so only our own origin sees it. Fonts and other hosts reject it.
@@ -42,12 +43,11 @@ async function capture({ file, path, viewport = 'desktop', owner = false, cookie
   const page = await context.newPage();
   const where = `${path} (${viewport})`;
   page.on('console', message => {
-    // The browser logs an intentional non-200 document, such as the 404 page, as a failed resource.
-    // Ignore exactly that message, for the expected status and the page itself, whatever reason
-    // phrase the server sends. Any other error on the page still fails.
-    const ownStatus = status !== 200 && message.location().url === BASE + path
-      && new RegExp(`^Failed to load resource: the server responded with a status of ${status} \\([A-Za-z ]*\\)$`).test(message.text());
-    if (message.type() === 'error' && !ownStatus) errors.push(`${where}: ${message.text()}`);
+    // Deliberate document/API failures still log a browser resource error.
+    // Match only their exact endpoint, status and resource message.
+    const expected = expectedResourceError(message.text(), message.location().url, BASE,
+      [...expectedResponses, ...(status !== 200 ? [{ path, status }] : [])]);
+    if (message.type() === 'error' && !expected) errors.push(`${where}: ${message.text()}`);
   });
   page.on('pageerror', error => errors.push(`${where}: ${error.message}`));
   const response = await page.goto(BASE + path, { waitUntil: 'load', timeout: 90_000 });
@@ -56,7 +56,7 @@ async function capture({ file, path, viewport = 'desktop', owner = false, cookie
   // Turnstile keeps requesting in the background, so network idle is a best effort, not a requirement.
   await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
   await page.evaluate(() => document.fonts.ready);
-  if (prepare) await prepare(page);
+  if (prepare) await prepareWithDiagnostics(page, prepare, OUT, currentScenario, file);
   const target = selector ? page.locator(selector).first() : page;
   await target.screenshot({ path: `${OUT}/${file}`, ...(selector ? {} : { fullPage: true }), animations: 'disabled' });
   await context.close();

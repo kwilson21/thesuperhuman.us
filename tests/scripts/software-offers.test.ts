@@ -289,3 +289,11 @@ it.each([0,1,2])('focuses the next milestone or previous one after removing row 
   expect(list.children).toHaveLength(2); expect(input.focus).toHaveBeenCalledOnce();
   expect(status.textContent).toBe('Milestone removed.');
 });
+it('marks and names the full agreement field path returned by send validation', async () => {
+  const { inputs,form,status }=fixture();
+  inputs['agreement.environment']={value:'',setAttribute:vi.fn()};
+  vi.stubGlobal('fetch',vi.fn(async()=>Response.json({message:'Complete Agreement details.',errors:{'agreement.environment':'Required'}},{status:400})));
+  await form.emit('submit');
+  expect(inputs['agreement.environment'].setAttribute).toHaveBeenCalledWith('aria-invalid','true');
+  expect(status.textContent).toContain('environment: Required');
+});

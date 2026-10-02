@@ -45,6 +45,9 @@ export const REDIRECTS = {
 
 /** Pages that need seeded data. The coverage test checks the named scenario captures the route. */
 export const SCENARIO_PAGES = {
+  'src/pages/agreements.astro': {scenario:'software-signing',route:'/agreements'},
+  'src/pages/owner/agreements.astro': {scenario:'software-signing',route:'/owner/agreements'},
+  'src/pages/offer/[token]/sign.astro': {scenario:'software-signing',route:'/offer/'},
   'src/pages/studio/software/[id].astro': { scenario: 'software-project', route: '/studio/software/' },
   'src/pages/owner/requests/[id]/update.astro': { scenario: 'software-project', route: '/owner/requests/screenshot-software-project/update' },
   'src/pages/offer/[token].astro': { scenario: 'software-offer', route: '/offer/' },
@@ -332,4 +335,10 @@ export function screenshotSection(manifest, rawBase, sha) {
   if (!manifest.pages.length && !manifest.scenarios.length) lines.push('_No captured page matched the changed files._');
   lines.push(END);
   return lines.join('\n');
+}
+
+// Allow only the browser's resource message for a scenario's deliberate HTTP failure.
+export function expectedResourceError(message, url, base, responses) {
+  return responses.some(({ path, status }) => url === base + path
+    && new RegExp(`^Failed to load resource: the server responded with a status of ${status} \\([A-Za-z ]*\\)$`).test(message));
 }

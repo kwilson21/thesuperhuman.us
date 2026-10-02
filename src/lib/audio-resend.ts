@@ -5,13 +5,14 @@ import { softwareLabels, softwarePaths, softwareQuestions } from './software-inq
 
 const ENDPOINT = 'https://api.resend.com/emails';
 
-export async function sendAudioMessage({ payload, apiKey }: { payload: { from: string; to: string[]; subject: string; text: string; html?: string; reply_to?: string }; apiKey: string }): Promise<{ ok: boolean; uncertain?: boolean }> {
+export async function sendAudioMessage({ payload, apiKey, idempotencyKey }: { payload: { from: string; to: string[]; subject: string; text: string; html?: string; reply_to?: string; attachments?: { filename: string; content: string }[] }; apiKey: string; idempotencyKey?: string }): Promise<{ ok: boolean; uncertain?: boolean }> {
   try {
     const res = await fetch(ENDPOINT, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
+        ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
       },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(10_000),

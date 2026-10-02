@@ -20,21 +20,22 @@ export const updateInput = z.object({
   what_changed: text(1000), checks_limitations: text(1000), next_step: text(300), client_request: text(300),
   next_update_on: projectDate, email_client: z.boolean(),
   criteria: z.array(text(300)).max(20).default([]),
-  links: z.array(z.object({ label: text(80).refine(value=>Boolean(value), 'Name the link.'), url: text(2000).refine(value => {
-    try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password; } catch { return false; }
-  }, 'Use an HTTPS link.') })).max(10).default([]),
-  review_window_days: z.number().int().min(5).max(30).default(5),
+  delivered_deliverables: z.array(text(300)).max(20).default([]),
+  // Drafts may contain an unfinished reference; the share action enforces a
+  // complete, safe HTTPS target before exposing any link to the client.
+  links: z.array(z.object({ label: text(80), url: text(2000) })).max(10).default([]),
+  review_window_days: z.number().int().min(5).max(365).default(5),
   paid_confirmed: z.boolean().default(false),
 });
 export type SoftwareUpdateInput = z.infer<typeof updateInput>;
 export type SoftwareProject = {
-  request_id: string; offer_id: string; terms_json: string; payment_mode: 'standard' | 'invoice';
+  agreement_id?:string|null; request_id: string; offer_id: string; terms_json: string; payment_mode: 'standard' | 'invoice';
   state: keyof typeof projectStates; waiting_for: string; milestone_index: number; step: typeof projectSteps[number];
   started_at: string; next_update_on: string | null; invitation_status: string; invitation_attempted_at: string | null;
   revoked_at: string | null; completed_at: string | null; content_deleted_at: string | null; updated_at: string;
 };
-export type SoftwareUpdate = Omit<SoftwareUpdateInput, 'email_client' | 'criteria' | 'links' | 'paid_confirmed'> & {
-  criteria_json: string; links_json: string;
+export type SoftwareUpdate = Omit<SoftwareUpdateInput, 'email_client' | 'criteria' | 'delivered_deliverables' | 'links' | 'paid_confirmed'> & {
+  criteria_json: string; delivered_deliverables_json: string; links_json: string; review_window_days_extended?: number | null;
   id: string; request_id: string; status: 'draft' | 'shared' | 'superseded'; visual_key: string | null;
   visual_media_type: string | null; shared_at: string | null; updated_at: string; notification_status: string;
   notification_attempted_at: string | null; email_client: number;
@@ -48,18 +49,93 @@ export async function getSoftwareProject(db: D1Database, id: string) {
   return db.prepare('SELECT * FROM software_projects WHERE request_id=?').bind(id).first<SoftwareProject>();
 }
 export async function listSoftwareUpdates(db: D1Database, id: string) {
-  return (await db.prepare('SELECT * FROM software_project_updates WHERE request_id=? ORDER BY created_at DESC,id DESC').bind(id).all<SoftwareUpdate>()).results;
+  const updates = (await db.prepare('SELECT * FROM software_project_updates WHERE request_id=? ORDER BY created_at DESC,id DESC').bind(id).all<SoftwareUpdate>()).results;
+  return updates.map(update => ({ ...update, review_window_days: update.review_window_days_extended ?? update.review_window_days ?? 5 }));
 }
 // Client queries never select drafts, storage keys, notification internals or owner identities.
 export type SoftwareDecision = 'direction_confirmed' | 'milestone_accepted' | 'changes_requested';
 export type ClientSoftwareUpdate = Pick<SoftwareUpdate, 'id' | 'title' | 'artifact_version' | 'evidence_type' | 'visual_alt' | 'preview_url' | 'what_changed' | 'checks_limitations' | 'next_step' | 'client_request' | 'next_update_on' | 'shared_at'> & {
   has_visual: number; kind?: SoftwareUpdate['kind']; milestone_index?: number; status?: SoftwareUpdate['status'];
-  criteria_json?: string; links_json?: string; review_window_days?: number; decision?: SoftwareDecision | null; decided_at?: string | null; decision_body?: string | null;
+  criteria_json?: string; delivered_deliverables_json?: string; links_json?: string; review_window_days?: number; decision?: SoftwareDecision | null; decided_at?: string | null; decision_body?: string | null;
 };
+/** Older review rows predate saved scope snapshots; treat them as full scope. */
+export function deliveredScope(update: Pick<ClientSoftwareUpdate, 'delivered_deliverables_json'>, planned: string[]) {
+  let saved: string[] = [];
+  try { const parsed = JSON.parse(update.delivered_deliverables_json ?? '[]'); if (Array.isArray(parsed)) saved = parsed.filter((item): item is string => typeof item === 'string'); } catch { /* legacy/corrupt snapshots fall back to the agreed scope */ }
+  return saved.length ? saved.filter(item=>planned.includes(item)) : planned;
+}
+function parseLegacyRevisionTargets(header: string, checks: string[], planned: string[]) {
+  const prefix = header.match(/^Requested changes to .* for milestone \d+: /);
+  if (!prefix) return null;
+  const text = header.slice(prefix[0].length);
+  const parses: { checks: number[]; deliverables: number[] }[] = [];
+  const visit = (position: number, phase: 'checks' | 'deliverables', selectedChecks: number[], selectedDeliverables: number[]) => {
+    if (parses.length > 1) return;
+    if (position === text.length) {
+      parses.push({ checks: selectedChecks, deliverables: selectedDeliverables });
+      return;
+    }
+    const marker = /^(check|missing) #?(\d+)(?:: | \()/.exec(text.slice(position));
+    if (!marker) return;
+    const kind = marker[1] === 'check' ? 'checks' : 'deliverables';
+    if (kind === 'checks' && phase !== 'checks') return;
+    const index = Number(marker[2]) - 1;
+    const labels = kind === 'checks' ? checks : planned;
+    const selected = kind === 'checks' ? selectedChecks : selectedDeliverables;
+    if (index < 0 || index >= labels.length || selected.includes(index)) return;
+    const label = labels[index];
+    const labelStart = position + marker[0].length;
+    if (!text.startsWith(label, labelStart)) return;
+    const parenthetical = marker[0].endsWith('(');
+    const labelEnd = labelStart + label.length;
+    if (parenthetical && text[labelEnd] !== ')') return;
+    const next = labelEnd + (parenthetical ? 1 : 0);
+    const nextPhase = kind === 'checks' ? 'checks' : 'deliverables';
+    const nextChecks = kind === 'checks' ? [...selectedChecks, index] : selectedChecks;
+    const nextDeliverables = kind === 'deliverables' ? [...selectedDeliverables, index] : selectedDeliverables;
+    if (next === text.length) {
+      visit(next, nextPhase, nextChecks, nextDeliverables);
+      return;
+    }
+    const separators = parenthetical ? [', ', '; '] : ['; '];
+    for (const separator of separators)
+      if (text.startsWith(separator, next)) visit(next + separator.length, nextPhase, nextChecks, nextDeliverables);
+  };
+  visit(0, 'checks', [], []);
+  return parses.length === 1 ? parses[0] : null;
+}
+export function softwareRevisionTargets(body: string | null | undefined, checks: string[], planned: string[]) {
+  const header = body?.split('\n',1)[0] ?? '';
+  const summary = header.match(/\. Checks reported unmet: \[([0-9, ]*)\]\. Deliverables unavailable: \[([0-9, ]*)\]\.(?: Included but inaccessible: \[([0-9, ]*)\]\.)?$/);
+  const indexes = (value: string | undefined, length: number) => [...new Set((value?.match(/\d+/g) ?? []).map(number=>Number(number)-1))].filter(index=>index>=0 && index<length);
+  if (summary) return { checks: indexes(summary[1],checks.length), deliverables: indexes(summary[2],planned.length), inaccessibleDeliverables: indexes(summary[3],planned.length) };
+  // Older saved headers included labels. Match complete generated tokens and fail
+  // closed if parsing is ambiguous; marker-like text inside a label must not select
+  // another check or deliverable.
+  const legacy = parseLegacyRevisionTargets(header, checks, planned);
+  return legacy ? { ...legacy, inaccessibleDeliverables: [] } : { checks: [], deliverables: [], inaccessibleDeliverables: [] };
+}
+export function softwareRevisionHistoryBody(body: string | null | undefined, checks: string[], planned: string[]) {
+  if (!body) return '';
+  const separator=body.indexOf('\n\n'), header=separator<0 ? body : body.slice(0,separator);
+  if (!header.startsWith('Requested changes to ')) return body;
+  const targets=softwareRevisionTargets(header,checks,planned);
+  const note=separator<0 ? '' : body.slice(separator+2);
+  const sections=[header];
+  if(targets.checks.length) sections.push(`Unmet checks:\n${targets.checks.map(index=>`${index+1}. ${checks[index]}`).join('\n')}`);
+  if(targets.deliverables.length) sections.push(`Unavailable deliverables:\n${targets.deliverables.map(index=>`${index+1}. ${planned[index]}`).join('\n')}`);
+  if(targets.inaccessibleDeliverables.length) sections.push(`Included deliverables the client could not open or find:\n${targets.inaccessibleDeliverables.map(index=>`${index+1}. ${planned[index]}`).join('\n')}`);
+  if(note) sections.push(`Client note:\n${note}`);
+  return sections.join('\n\n');
+}
+export function clearUnmetRevisionEvidence(evidence: string[], unmetChecks: number[]) {
+  const unmet = new Set(unmetChecks);
+  return evidence.map((value,index)=>unmet.has(index) ? '' : value);
+}
 export async function sharedSoftwareUpdates(db: D1Database, id: string) {
   return (await db.prepare(`SELECT u.id,u.title,u.artifact_version,u.evidence_type,u.visual_alt,u.preview_url,u.what_changed,u.checks_limitations,
     u.next_step,u.client_request,u.next_update_on,u.shared_at,u.visual_key IS NOT NULL AS has_visual,
-    u.kind,u.milestone_index,u.status,u.criteria_json,u.links_json,u.review_window_days,
+    u.kind,u.milestone_index,u.status,u.criteria_json,u.delivered_deliverables_json,u.links_json,COALESCE(u.review_window_days_extended,u.review_window_days) AS review_window_days,
     m.decision,m.created_at AS decided_at,m.body AS decision_body
     FROM software_project_updates u LEFT JOIN software_project_messages m ON m.update_id=u.id AND m.decision IS NOT NULL
     WHERE u.request_id=? AND u.status IN ('shared','superseded') ORDER BY u.shared_at DESC,u.id DESC`).bind(id).all<ClientSoftwareUpdate>()).results;
@@ -76,11 +152,11 @@ export async function milestonePayments(db: D1Database, id: string) {
   return (await db.prepare('SELECT milestone_index,paid_recorded_at FROM software_milestone_payments WHERE request_id=? ORDER BY milestone_index').bind(id)
     .all<{milestone_index: number; paid_recorded_at: string}>()).results;
 }
-export function correctionPeriodEnd(acceptedAt: string, paidAt?: string) {
+export function correctionPeriodEnd(acceptedAt: string, paidAt?: string, days=30) {
   const start = paidAt && paidAt < acceptedAt ? paidAt : acceptedAt;
   const instant = new Date(start.length===10 ? `${start}T12:00:00Z` : start);
   const date = new Date(instant.toLocaleDateString('en-CA', {timeZone:'America/New_York'}) + 'T12:00:00Z');
-  date.setUTCDate(date.getUTCDate()+30);
+  date.setUTCDate(date.getUTCDate()+days);
   return date.toISOString().slice(0,10);
 }
 export const acceptedDeliveryGuard = (db: D1Database, id: string, milestone: number) => softwareGuard(db,
@@ -146,3 +222,6 @@ export const milestoneDepositGuard = (db: D1Database, id: string, milestone: num
   `SELECT 1 WHERE EXISTS(SELECT 1 FROM software_milestone_deposits WHERE request_id=? AND milestone_index=?)
     OR EXISTS(SELECT 1 FROM software_invoices i JOIN software_projects p ON p.request_id=i.request_id AND p.offer_id=i.offer_id
       WHERE i.request_id=? AND i.milestone_index=? AND i.kind='deposit' AND i.status='paid' AND i.refunded_at IS NULL)`, [id,milestone,id,milestone]);
+
+// The Start action records today as the service start; match its existing date gate.
+export const requiresEarlierStartAgreement = (plannedStart: string | undefined, startOn: string) => Boolean(plannedStart && startOn < plannedStart);

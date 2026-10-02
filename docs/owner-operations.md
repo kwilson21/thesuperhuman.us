@@ -130,3 +130,32 @@ For failed, uncollectible or corrected delivery invoices, void the original in S
 The client’s private project page lists only its pinned offer’s invoices and payment links. One-year studio cleanup removes customer ids, hosted URLs and owner identities. Accounting fields and invoice ids remain for two years. Owner request retention skips requests with invoice rows younger than two years, including requests that never started. Eligible older invoice rows are removed before request contacts are cleared; the existing request and audit retention conventions remain in place.
 
 After checking a full pre-start deposit refund in Stripe, record it with `npm run owner:stripe:reconcile -- --software-deposit-refunded LOCAL_INVOICE_ID Confirmed`. This is an owner assertion, not an automatic refund or provider verification. Partial refunds do not release new terms. The paid accounting status remains; the refund date releases the offer block and removes the received confirmation. If no Stripe invoice exists for an old uncertain attempt, explicitly record that check with `--software-no-invoice LOCAL_INVOICE_ID Confirmed`, then use Replace invoice. Resolve reviewed unmatched software events with `--resolve-software-event EVENT_ID Confirmed`; replay the original signed invoice event when it should recover a known reservation. Do not put personal data in reconciliation notes.
+
+## Software agreements
+
+Website signing starts off. The Agreements page controls the setting, private
+contractor configuration, immutable MSA and SOW template versions, field reference
+and sample preview. Review templates and consent with counsel when possible.
+Publish a new version to change a template; sent offers keep their pinned version.
+Private legal source files and filled agreements do not belong in Git.
+
+Complete Agreement details before sending an offer. Defaults are folded under
+Using the SOW defaults. Reuse an executed MSA only after confirming the same legal
+party. The offer recipient verifies their email, supplies party information and
+required choices, reviews the exact filled documents, then signs. Review their
+saved documents before countersigning. Both parties sign the same document hash.
+
+Signed copy preparation and each party's email delivery have separate statuses.
+Retry preparation without collecting another signature. Check Resend before
+retrying an unconfirmed email. Complete PDF attachments and authenticated archive
+or project downloads provide retained copies. Provider acceptance does not prove
+inbox receipt. The project cannot start until both signatures, PDF and both copies
+are ready, or alternate copy delivery is recorded. Outside-site signing requires
+the signed date, parties and a reference to a kept complete copy. Payment,
+required purchase order, inputs and the agreed start date still apply.
+
+Signed agreement evidence is retained separately from project messages and images.
+Record an explicit agreement end date before calculating the ten-year retention
+period. Keep open agreements, active reused MSAs and records under legal hold.
+Project access closure does not erase signatures or restore access through the
+agreement archive. Never delete agreement objects through project cleanup.

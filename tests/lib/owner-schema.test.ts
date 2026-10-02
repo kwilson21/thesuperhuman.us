@@ -134,11 +134,13 @@ describe('owner insights schema', () => {
     const peaks = readFileSync(new URL('../../migrations/music/0016_audio_project_file_peaks.sql', import.meta.url), 'utf8');
     const milestones = readFileSync(new URL('../../migrations/music/0017_audio_project_update_milestones.sql', import.meta.url), 'utf8');
     const decisions = readFileSync(new URL('../../migrations/music/0018_audio_project_review_decisions.sql', import.meta.url), 'utf8');
+    const softwareSigning = readFileSync(new URL('../../migrations/music/0023_software_signing.sql', import.meta.url), 'utf8');
+    const deliverySelection = readFileSync(new URL('../../migrations/music/0024_software_delivery_selection_and_review_windows.sql', import.meta.url), 'utf8');
     const softwareInvoices = readFileSync(new URL('../../migrations/music/0022_software_invoices.sql', import.meta.url), 'utf8');
     const softwareProjects = readFileSync(new URL('../../migrations/music/0021_software_projects.sql', import.meta.url), 'utf8');
     const offers = readFileSync(new URL('../../migrations/music/0020_software_offers.sql', import.meta.url), 'utf8');
     const software = readFileSync(new URL('../../migrations/music/0019_software_requests.sql', import.meta.url), 'utf8');
-    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(`${baseline.trim()}\n${retention.trim()}\n${payments.trim()}\n${reconciliation.trim()}\n${projects.trim()}\n${clientAccess.trim()}\n${messages.trim()}\n${updates.trim()}\n${invitations.trim()}\n${files.trim()}\n${uploads.trim()}\n${publication.trim()}\n${revocation.trim()}\n${studioRetention.trim()}\n${declined.trim()}\n${peaks.trim()}\n${milestones.trim()}\n${decisions.trim()}\n${software.trim()}\n${offers.trim()}\n${softwareProjects.trim()}\n${softwareInvoices.trim()}\n`);
+    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(`${baseline.trim()}\n${retention.trim()}\n${payments.trim()}\n${reconciliation.trim()}\n${projects.trim()}\n${clientAccess.trim()}\n${messages.trim()}\n${updates.trim()}\n${invitations.trim()}\n${files.trim()}\n${uploads.trim()}\n${publication.trim()}\n${revocation.trim()}\n${studioRetention.trim()}\n${declined.trim()}\n${peaks.trim()}\n${milestones.trim()}\n${decisions.trim()}\n${software.trim()}\n${offers.trim()}\n${softwareProjects.trim()}\n${softwareInvoices.trim()}\n${softwareSigning.trim()}\n${deliverySelection.trim()}\n`);
     const db = apply('../../db/music.sql');
     const expected = [
       'music_event_daily', 'music_events', 'music_interest', 'music_playback_daily',
