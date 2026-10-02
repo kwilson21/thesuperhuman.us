@@ -14,3 +14,16 @@ it('keeps each comparison playhead within its waveform and reveals both markers'
 it('keeps the compact A/B selector from stretching across the mobile controls grid', () => {
   expect(component).toContain('.comparison-switch{display:flex;justify-self:start;width:max-content;');
 });
+
+it('supports a compact homepage variant while keeping the same synchronized, accessible player controls', () => {
+  const home = readFileSync(new URL('../../src/pages/index.astro', import.meta.url), 'utf8');
+
+  expect(component).toContain("compact?: boolean");
+  expect(component).toContain("comparison-player--compact");
+  expect(component).toContain("aria-label={labels[0]}");
+  expect(component).toContain("aria-label={labels[1]}");
+  expect(home).toContain("example.id === 'old-news-mastering'");
+  expect(home).toContain("<ComparisonPlayer example={oldNewsExample} recording={oldNewsRecording} compact />");
+  expect(home).toContain("setupComparisonPlayers();");
+  expect(home).toContain("Start your song");
+});

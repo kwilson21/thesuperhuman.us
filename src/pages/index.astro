@@ -7,6 +7,7 @@ import Hero from '~/components/Hero.astro';
 import Footer from '~/components/Footer.astro';
 import ContactForm from '~/components/ContactForm.astro';
 import WorkWithMe from '~/components/WorkWithMe.astro';
+import ComparisonPlayer from '~/components/audio/ComparisonPlayer.astro';
 import CodeField from '~/components/home/CodeField.astro';
 import SignalEdge from '~/components/home/SignalEdge.astro';
 import notebook from '~/assets/site/notebook-v1.webp';
@@ -15,6 +16,12 @@ import kailleraLanding from '~/assets/projects/kaillera-next/landing-2026-09-26.
 import { tallyStory } from '~/data/project-stories/tally';
 import { kailleraStory } from '~/data/project-stories/kaillera-next';
 import { capacityCells, parseFigure } from '~/lib/home-motion';
+import { loadMusicCatalog } from '~/lib/music-content';
+import { audioPath } from '~/lib/host-routing';
+const musicCatalog = await loadMusicCatalog();
+const oldNewsExample = musicCatalog.examples.find(example => example.id === 'old-news-mastering');
+const oldNewsRecording = oldNewsExample && musicCatalog.recordings.find(recording => recording.id === oldNewsExample.recordingId);
+const host = Astro.request.headers.get('host') ?? Astro.url.host;
 const essay = await getEntry('pages', 'ai-gives-you-speed');
 if (!essay) throw new Error('AI essay content missing');
 const before = parseFigure(lyftBonus.before);
@@ -36,17 +43,29 @@ const jsonLd = {
     <div class="site-shell">
       <section class="site-section" aria-labelledby="work-title">
         <div class="site-section-heading" data-reveal><h2 id="work-title">Work highlights</h2></div>
-        <div class="work-preview" data-reveal data-count={lyftBonus.after} data-count-from={lyftBonus.before}>
-          <p class="work-company">Lyft</p>
-          <div class="work-outcome">
-            <p class="work-figure">{lyftBonus.before} <span aria-hidden="true">→</span><span class="sr-only">to</span> <span class="count-slot"><span class="count-ghost" aria-hidden="true">{lyftBonus.after}</span><span class="count-live" aria-hidden="true" data-count-display>{lyftBonus.after}</span><span class="sr-only">{lyftBonus.after}</span></span> rows per batch</p>
-            {cells > 1 && <div class="capacity" aria-hidden="true">
-              <span class="capacity-cells" data-count-cells style={`--cells:${cells}`}>{Array.from({ length: cells }, (_, index) => <i class="cell" style={`--i:${index}`}></i>)}</span>
-              <span class="capacity-key" style={`--cells:${cells}`}><i class="cell"></i><span>= {lyftBonus.before} rows</span></span>
-            </div>}
-            <p>{lyftBonus.description}</p><p class="source-note">{lyftBonus.evidence}</p>
+        <div class="work-proof-grid">
+          <div class="work-preview" data-reveal data-count={lyftBonus.after} data-count-from={lyftBonus.before}>
+            <p class="work-company">Lyft</p>
+            <div class="work-outcome">
+              <p class="work-figure">{lyftBonus.before} <span aria-hidden="true">→</span><span class="sr-only">to</span> <span class="count-slot"><span class="count-ghost" aria-hidden="true">{lyftBonus.after}</span><span class="count-live" aria-hidden="true" data-count-display>{lyftBonus.after}</span><span class="sr-only">{lyftBonus.after}</span></span> rows per batch</p>
+              {cells > 1 && <div class="capacity" aria-hidden="true">
+                <span class="capacity-cells" data-count-cells style={`--cells:${cells}`}>{Array.from({ length: cells }, (_, index) => <i class="cell" style={`--i:${index}`}></i>)}</span>
+                <span class="capacity-key" style={`--cells:${cells}`}><i class="cell"></i><span>= {lyftBonus.before} rows</span></span>
+              </div>}
+              <p>{lyftBonus.description}</p><p class="source-note">{lyftBonus.evidence}</p>
+            </div>
+            <a class="site-link" href="/work#lyft">Explore my work <span aria-hidden="true">→</span></a>
           </div>
-          <a class="site-link" href="/work#lyft">Explore my work <span aria-hidden="true">→</span></a>
+          {oldNewsExample && oldNewsRecording && <article class="music-proof-preview" data-reveal aria-labelledby="music-proof-title">
+            <p class="work-company">Old News</p>
+            <h3 id="music-proof-title">Vocal mix → final master</h3>
+            <ComparisonPlayer example={oldNewsExample} recording={oldNewsRecording} compact />
+            <a class="site-button music-proof-cta" href={audioPath(host, '/start')}>Start your song</a>
+            <details class="music-proof-more"><summary>Credits and full comparison</summary>
+              <p>Vocals recorded, mixed and mastered by Kazon. Beat produced and instrumental mixed by Lexi Banks.</p>
+              <a class="site-link" href={audioPath(host, '/portfolio')}>Full comparison <span aria-hidden="true">→</span></a>
+            </details>
+          </article>}
         </div>
       </section>
       <section class="hire-section" aria-labelledby="hire-title" data-reveal>
@@ -110,6 +129,9 @@ const jsonLd = {
 </BaseLayout>
 <script>
   import '~/scripts/home-worlds';
+  import '~/scripts/audio-player-coordinator';
+  import { setupComparisonPlayers } from '~/scripts/comparison-player';
+  setupComparisonPlayers();
   const contact = document.getElementById('contact')!;
   const message = contact.querySelector<HTMLDetailsElement>('.contact-disclosure')!;
   function revealContact() {
@@ -159,12 +181,20 @@ const jsonLd = {
   /* The picture stays a plain image; this link (with the visible arrow) is the card's only tab stop. */
   .project-link::after { content: ''; position: absolute; inset: 0; }
 
-  .work-preview { display: flex; align-items: center; gap: 2rem; }
-  .work-company { font-size: 3rem; letter-spacing: -.04em; margin: 0; padding-right: 2.5rem; border-right: 1px solid var(--rule); }
+  .work-proof-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.75rem; }
+  .work-preview { display: block; }
+  .work-company { font-size: 2rem; letter-spacing: -.04em; line-height: 1.1; margin: 0 0 .65rem; }
   .work-outcome { flex: 1; }
   .work-outcome p { margin: 0; }
   .work-outcome .work-figure { font-size: clamp(1.5rem, 2.6vw, 2.2rem); letter-spacing: -.04em; line-height: 1.2; margin-bottom: .35rem; }
   .work-outcome .source-note { color: var(--muted); font-size: .85rem; margin-top: .4rem; }
+  .music-proof-preview { min-width: 0; border-top: 1px solid var(--rule); padding-top: 1.35rem; }
+  .music-proof-preview > h3 { font-size: 1.1rem; line-height: 1.3; margin: -.25rem 0 .65rem; }
+  .music-proof-cta { display: inline-flex; width: fit-content; margin-top: .85rem; }
+  .music-proof-more { margin-top: .65rem; color: var(--muted); font-size: .85rem; }
+  .music-proof-more summary { width: fit-content; cursor: pointer; padding-block: .35rem; }
+  .music-proof-more p { margin-block: .5rem; line-height: 1.5; }
+  .music-proof-more .site-link { font-size: .85rem; }
   /* The counting figure is drawn over a hidden copy of its final text, so nothing shifts. */
   .count-slot { position: relative; display: inline-block; font-variant-numeric: tabular-nums; }
   .count-ghost { visibility: hidden; }
@@ -225,7 +255,7 @@ const jsonLd = {
     .project-card { display: block; }
     .site-section-heading { gap: 1rem; }
     .site-section-heading .heading-link { font-size: .85rem; }
-    .work-preview { display: block; }
+    .work-proof-grid { gap: 1.5rem; }
     .work-company { border: 0; font-size: 3rem; padding: 0; margin: 0 0 .65rem; }
     .work-outcome { margin-bottom: 1.2rem; }
     .work-outcome .work-figure { font-size: clamp(1.65rem, 6vw, 2.1rem); }
