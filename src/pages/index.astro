@@ -34,6 +34,21 @@ const jsonLd = {
   <div class="home-page">
     <Hero />
     <div class="site-shell">
+      <section class="site-section" aria-labelledby="work-title">
+        <div class="site-section-heading" data-reveal><h2 id="work-title">Work highlights</h2></div>
+        <div class="work-preview" data-reveal data-count={lyftBonus.after} data-count-from={lyftBonus.before}>
+          <p class="work-company">Lyft</p>
+          <div class="work-outcome">
+            <p class="work-figure">{lyftBonus.before} <span aria-hidden="true">→</span><span class="sr-only">to</span> <span class="count-slot"><span class="count-ghost" aria-hidden="true">{lyftBonus.after}</span><span class="count-live" aria-hidden="true" data-count-display>{lyftBonus.after}</span><span class="sr-only">{lyftBonus.after}</span></span> rows per batch</p>
+            {cells > 1 && <div class="capacity" aria-hidden="true">
+              <span class="capacity-cells" data-count-cells style={`--cells:${cells}`}>{Array.from({ length: cells }, (_, index) => <i class="cell" style={`--i:${index}`}></i>)}</span>
+              <span class="capacity-key" style={`--cells:${cells}`}><i class="cell"></i><span>= {lyftBonus.before} rows</span></span>
+            </div>}
+            <p>{lyftBonus.description}</p><p class="source-note">{lyftBonus.evidence}</p>
+          </div>
+          <a class="site-link" href="/work#lyft">Explore my work <span aria-hidden="true">→</span></a>
+        </div>
+      </section>
       <section class="hire-section" aria-labelledby="hire-title" data-reveal>
         <div class="site-section-heading"><h2 id="hire-title">Work with me</h2></div>
         <WorkWithMe />
@@ -66,21 +81,6 @@ const jsonLd = {
               <p>{kailleraStory.subtitle}</p>
               <a class="site-link project-link" href="/building/kaillera-next#kaillera-next-updates-title">Development journal <span aria-hidden="true">→</span><span class="sr-only">Kaillera Next</span></a>
             </article>
-          </div>
-        </section>
-        <section class="site-section" aria-labelledby="work-title">
-          <div class="site-section-heading" data-reveal><h2 id="work-title">Work highlights</h2></div>
-          <div class="work-preview" data-reveal data-count={lyftBonus.after} data-count-from={lyftBonus.before}>
-            <p class="work-company">Lyft</p>
-            <div class="work-outcome">
-              <p class="work-figure">{lyftBonus.before} <span aria-hidden="true">→</span><span class="sr-only">to</span> <span class="count-slot"><span class="count-ghost" aria-hidden="true">{lyftBonus.after}</span><span class="count-live" aria-hidden="true" data-count-display>{lyftBonus.after}</span><span class="sr-only">{lyftBonus.after}</span></span> rows per batch</p>
-              {cells > 1 && <div class="capacity" aria-hidden="true">
-                <span class="capacity-cells" data-count-cells style={`--cells:${cells}`}>{Array.from({ length: cells }, (_, index) => <i class="cell" style={`--i:${index}`}></i>)}</span>
-                <span class="capacity-key" style={`--cells:${cells}`}><i class="cell"></i><span>= {lyftBonus.before} rows</span></span>
-              </div>}
-              <p>{lyftBonus.description}</p><p class="source-note">{lyftBonus.evidence}</p>
-            </div>
-            <a class="site-link" href="/work#lyft">Explore my work <span aria-hidden="true">→</span></a>
           </div>
         </section>
       </div>
