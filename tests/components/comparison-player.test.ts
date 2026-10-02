@@ -25,7 +25,8 @@ it('supports a compact homepage variant while keeping the same synchronized, acc
   expect(home).toContain("example.id === 'old-news-mastering'");
   expect(home).toContain("<ComparisonPlayer example={oldNewsExample} recording={oldNewsRecording} compact />");
   expect(home).toContain("setupComparisonPlayers();");
-  expect(home).toContain("Start your song");
+  expect(home).not.toContain("Start your song");
+  expect(home).toContain("<WorkWithMe />");
 });
 
 it('places compact playback beside the waveform and seeking on a separate track', () => {
