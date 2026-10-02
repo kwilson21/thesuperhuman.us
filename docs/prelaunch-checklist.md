@@ -12,6 +12,7 @@ Every item receives **PASS**, **FAIL**, **UNVERIFIED**, or **N/A with a reason**
 
 - [ ] Confirm the correct project, branch, local changes, site instructions, audience and deployment authorization.
 - [ ] Preserve approved design and truthful claims; remove placeholders and verify ownership/rights for media.
+- [ ] For explanatory copy, apply the [action-led copy rule](website-content-model.md#copy-explain-the-action-when-visitors-need-to-understand-the-work). For professional-claim or resume changes, record a private website/resume comparison of facts, metric scope, attribution and status, including intentional differences and the actual stored PDF version. N/A is appropriate when neither changes.
 - [ ] The first screen explains who/what the site is for and offers a useful next step. Verify the CTA works at narrow and desktop sizes. A sticky CTA is optional, justified by the actual journey.
 - [ ] Navigation, footer, contact route and important external links work. Never invent an address or expose a home address.
 
