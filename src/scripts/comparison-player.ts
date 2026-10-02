@@ -34,7 +34,6 @@ export function setupComparisonPlayers() {
   }
   document.querySelectorAll<HTMLElement>('[data-comparison]').forEach(root => {
     if (root.dataset.initialized) return;
-    root.dataset.initialized = 'true';
     const media = [...root.querySelectorAll<HTMLAudioElement>('audio')];
     const play = root.querySelector<HTMLButtonElement>('[data-comparison-play]')!;
     const seek = root.querySelector<HTMLInputElement>('[data-comparison-seek]')!;
@@ -135,11 +134,12 @@ export function setupComparisonPlayers() {
     match?.addEventListener('change', applyVolume);
     root.addEventListener('music-pause', pause);
     window.addEventListener('pagehide', pause);
-    media.forEach(audio => { audio.pause(); audio.controls = false; audio.hidden = true; });
     const standardControls = root.querySelector<HTMLElement>('.comparison-controls');
     if (standardControls) standardControls.hidden = false;
     root.querySelectorAll<HTMLElement>('.comparison-playhead').forEach(playhead => playhead.hidden = false);
     updateCompactWaveform();
     render();
+    media.forEach(audio => { audio.pause(); audio.controls = false; audio.hidden = true; });
+    root.dataset.initialized = 'true';
   });
 }
