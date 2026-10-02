@@ -10,6 +10,7 @@ export const softwareDecisionInput = z.discriminatedUnion('decision', [
   z.object({decision:z.literal('milestone_accepted'),confirm:z.literal(true)}),
   z.object({decision:z.literal('changes_requested'),criteria:z.array(z.number().int().min(0).max(19)).max(20).default([]),
     missing_deliverables:z.array(z.number().int().min(0).max(19)).max(20).default([]),
+    inaccessible_deliverables:z.array(z.number().int().min(0).max(19)).max(20).default([]),
     note:z.string().trim().min(1).max(2000).refine(value => !/[\x00-\x08\x0b\x0c\x0e-\x1f]|\p{Cs}/u.test(value))}),
 ]);
 export async function postSoftwareReviewDecision(db: D1Database, id: string, token: string, updateId: string, input: z.infer<typeof softwareDecisionInput>, now = new Date()) {
@@ -23,13 +24,16 @@ export async function postSoftwareReviewDecision(db: D1Database, id: string, tok
     return {ok:false,status:400,error:'This version includes only part of the milestone. The client can accept after every agreed deliverable is included in a review.'};
   const criteria = input.decision === 'changes_requested' ? [...new Set(input.criteria)].sort((first,second)=>first-second) : [];
   const missing = input.decision === 'changes_requested' ? [...new Set(input.missing_deliverables)].sort((first,second)=>first-second) : [];
-  if (criteria.some(index=>index >= checks.length) || missing.some(index=>index >= milestone.deliverables.length) || (!direction && input.decision === 'changes_requested' && !criteria.length && !missing.length))
-    return {ok:false,status:400,error:'Choose an unmet check or a deliverable that is missing. Tell me what happened.'};
+  const inaccessible = input.decision === 'changes_requested' ? [...new Set(input.inaccessible_deliverables)].sort((first,second)=>first-second) : [];
+  if (criteria.some(index=>index >= checks.length) || missing.some(index=>index >= milestone.deliverables.length || delivered.includes(milestone.deliverables[index])) ||
+    inaccessible.some(index=>index >= milestone.deliverables.length || !delivered.includes(milestone.deliverables[index])) ||
+    (!direction && input.decision === 'changes_requested' && !criteria.length && !missing.length && !inaccessible.length))
+    return {ok:false,status:400,error:'Choose an unmet check, an omitted deliverable, or an included deliverable you cannot access. Tell me what happened.'};
   const tokenHash = await hashValue(token), at = now.toISOString();
   const label = input.decision === 'direction_confirmed' ? 'Direction confirmed' : input.decision === 'milestone_accepted' ? 'Accepted' : 'Changes requested';
   const version = `${update.artifact_version} for milestone ${update.milestone_index+1}`;
-  const body = input.decision === 'changes_requested' ? `Requested changes to ${version}. Checks reported unmet: [${criteria.map(index=>index+1).join(', ')}]. Deliverables unavailable: [${missing.map(index=>index+1).join(', ')}].\n\n${input.note}` : `${direction ? 'Confirmed' : 'Accepted'} ${version}.`;
-  const note = `${label} on ${update.artifact_version} · milestone ${update.milestone_index+1}${criteria.length ? ` · checks ${criteria.map(index=>index+1).join(', ')}` : ''}${missing.length ? ` · missing deliverables ${missing.map(index=>index+1).join(', ')}` : ''}`;
+  const body = input.decision === 'changes_requested' ? `Requested changes to ${version}. Checks reported unmet: [${criteria.map(index=>index+1).join(', ')}]. Deliverables unavailable: [${missing.map(index=>index+1).join(', ')}]. Included but inaccessible: [${inaccessible.map(index=>index+1).join(', ')}].\n\n${input.note}` : `${direction ? 'Confirmed' : 'Accepted'} ${version}.`;
+  const note = `${label} on ${update.artifact_version} · milestone ${update.milestone_index+1}${criteria.length ? ` · checks ${criteria.map(index=>index+1).join(', ')}` : ''}${missing.length ? ` · missing deliverables ${missing.map(index=>index+1).join(', ')}` : ''}${inaccessible.length ? ` · inaccessible deliverables ${inaccessible.map(index=>index+1).join(', ')}` : ''}`;
   await db.batch([
     softwareGuard(db,`SELECT 1 FROM software_projects p JOIN owner_requests r ON r.id=p.request_id JOIN audio_client_sessions s ON s.email=r.email
       JOIN software_project_updates u ON u.request_id=p.request_id

@@ -27,10 +27,11 @@ const staleRevision = Boolean(requestedId && !revisionSource);
 const seed = draft ?? revisionSource;
 const revisionChecks = revisionSource ? terms.milestones[revisionSource.milestone_index ?? project.milestone_index].acceptance : [];
 const revisionDeliverables = revisionSource ? terms.milestones[revisionSource.milestone_index ?? project.milestone_index].deliverables : [];
-const revisionTargets = revisionSource ? softwareRevisionTargets(revisionSource.decision_body,revisionChecks,revisionDeliverables) : {checks:[],deliverables:[]};
+const revisionTargets = revisionSource ? softwareRevisionTargets(revisionSource.decision_body,revisionChecks,revisionDeliverables) : {checks:[],deliverables:[],inaccessibleDeliverables:[]};
 const unmetRevisionIndexes = revisionTargets.checks;
 const unmetRevisionChecks = unmetRevisionIndexes.map(index=>revisionChecks[index]);
 const missingRevisionIndexes = revisionTargets.deliverables;
+const inaccessibleRevisionIndexes = revisionTargets.inaccessibleDeliverables;
 const revisionEvidence = revisionSource ? JSON.parse(revisionSource.criteria_json ?? '[]') as string[] : [];
 const agreementValues = project.agreement_id ? await db.prepare("SELECT values_json FROM software_agreements WHERE id=? AND status='executed'").bind(project.agreement_id).first<{values_json:string}>() : null;
 const agreedReviewDays = agreementValues ? Number(JSON.parse(agreementValues.values_json).owner?.review_business_days) : null;
@@ -60,7 +61,7 @@ update.delivered_deliverables_json = JSON.stringify(initialDeliverables);
       {revisionSource && <section class="revision-context" aria-labelledby="revision-context-heading" data-revision-context>
         <p class="delivery-step">Revision brief</p><h2 id="revision-context-heading">Respond to {firstName}’s feedback</h2>
         <p><strong>Previous version:</strong> {revisionSource.artifact_version} · {revisionSource.title}</p>
-        <h3>Checks the client reported as unmet</h3><ul>{unmetRevisionChecks.map(check=><li>{check}</li>)}</ul>{missingRevisionIndexes.length>0 && <><h3>Deliverables the client couldn’t find or access</h3><ul>{missingRevisionIndexes.map(index=><li>{revisionDeliverables[index]}</li>)}</ul></>}
+        {unmetRevisionChecks.length>0 && <><h3>Checks the client reported as unmet</h3><ul>{unmetRevisionChecks.map(check=><li>{check}</li>)}</ul></>}{missingRevisionIndexes.length>0 && <><h3>Planned deliverables not included in this version</h3><ul>{missingRevisionIndexes.map(index=><li>{revisionDeliverables[index]}</li>)}</ul></>}{inaccessibleRevisionIndexes.length>0 && <><h3>Included deliverables the client couldn’t open or find</h3><ul>{inaccessibleRevisionIndexes.map(index=><li>{revisionDeliverables[index]}</li>)}</ul></>}
         <blockquote>{softwareRevisionHistoryBody(revisionSource.decision_body,revisionChecks,revisionDeliverables).split('\n\n').slice(1).join('\n\n') || revisionSource.decision_body}</blockquote>
         {revisionSource.has_visual && <figure class="revision-visual"><img src={`/api/owner/requests/${id}/updates/${revisionSource.id}/visual`} alt={revisionSource.visual_alt} /><figcaption>Visual from {revisionSource.artifact_version}</figcaption></figure>}
         <p>Prior check evidence is copied for reference. The unmet checks start blank. Review and update evidence for every check before sharing a new version.</p>

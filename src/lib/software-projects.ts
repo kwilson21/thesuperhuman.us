@@ -66,9 +66,9 @@ export function deliveredScope(update: Pick<ClientSoftwareUpdate, 'delivered_del
 }
 export function softwareRevisionTargets(body: string | null | undefined, checks: string[], planned: string[]) {
   const header = body?.split('\n',1)[0] ?? '';
-  const summary = header.match(/\. Checks reported unmet: \[([0-9, ]*)\]\. Deliverables unavailable: \[([0-9, ]*)\]\.$/);
+  const summary = header.match(/\. Checks reported unmet: \[([0-9, ]*)\]\. Deliverables unavailable: \[([0-9, ]*)\]\.(?: Included but inaccessible: \[([0-9, ]*)\]\.)?$/);
   const indexes = (value: string | undefined, length: number) => [...new Set((value?.match(/\d+/g) ?? []).map(number=>Number(number)-1))].filter(index=>index>=0 && index<length);
-  if (summary) return { checks: indexes(summary[1],checks.length), deliverables: indexes(summary[2],planned.length) };
+  if (summary) return { checks: indexes(summary[1],checks.length), deliverables: indexes(summary[2],planned.length), inaccessibleDeliverables: indexes(summary[3],planned.length) };
   // Read historical summaries, but only from the generated header. The free-text note
   // is on the next paragraph and cannot accidentally clear evidence.
   return {
@@ -77,6 +77,7 @@ export function softwareRevisionTargets(body: string | null | undefined, checks:
       ...checks.map((check,index)=>header.includes(`check ${index+1} (${check})`) ? index : -1),
     ])].filter(index=>index>=0 && index<checks.length),
     deliverables: Array.from(header.matchAll(/missing #(\d+):/g),match=>Number(match[1])-1).filter(index=>index>=0 && index<planned.length),
+    inaccessibleDeliverables: [],
   };
 }
 export function softwareRevisionHistoryBody(body: string | null | undefined, checks: string[], planned: string[]) {
@@ -88,6 +89,7 @@ export function softwareRevisionHistoryBody(body: string | null | undefined, che
   const sections=[header];
   if(targets.checks.length) sections.push(`Unmet checks:\n${targets.checks.map(index=>`${index+1}. ${checks[index]}`).join('\n')}`);
   if(targets.deliverables.length) sections.push(`Unavailable deliverables:\n${targets.deliverables.map(index=>`${index+1}. ${planned[index]}`).join('\n')}`);
+  if(targets.inaccessibleDeliverables.length) sections.push(`Included deliverables the client could not open or find:\n${targets.inaccessibleDeliverables.map(index=>`${index+1}. ${planned[index]}`).join('\n')}`);
   if(note) sections.push(`Client note:\n${note}`);
   return sections.join('\n\n');
 }

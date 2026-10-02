@@ -1363,3 +1363,22 @@ it('reserves an orphan attachment before storage deletion so a concurrent offer 
   expect(bucketData.has(key)).toBe(true);
   expect(sql.prepare("SELECT id FROM software_agreement_attachments WHERE id='race-attachment'").get()).toBeTruthy();
 });
+
+it('restores retry metadata when private storage refuses orphan deletion', async () => {
+  const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
+  await review();
+  const now = new Date('2026-10-01T12:00:00Z'), key = 'agreements/attachments/retry.pdf';
+  const bytes = new Uint8Array([7, 8, 9]), sha256 = await hashBytes(bytes);
+  bucketData.set(key, bytes);
+  sql.prepare('INSERT INTO software_agreement_attachments VALUES(?,?,?,?,?,?,?,?,?,?)')
+    .run('retry-attachment', 'r', 'retry.pdf', '1', '2026-09-01', key, sha256, bytes.length, '2026-08-01T00:00:00Z', 'owner');
+  const manifest = await previewAgreementRetention(db, env.AUDIO, 'test-storage', now);
+  vi.spyOn(env.AUDIO, 'delete').mockRejectedValueOnce(new Error('Storage is temporarily unavailable.'));
+  await expect(applyAgreementRetention(db, env.AUDIO, 'test-storage', manifest, now)).rejects.toThrow('Storage is temporarily unavailable.');
+  expect(bucketData.has(key)).toBe(true);
+  expect(sql.prepare("SELECT id,object_key,sha256 FROM software_agreement_attachments WHERE id='retry-attachment'").get()).toEqual({id:'retry-attachment',object_key:key,sha256});
+  const retry = await previewAgreementRetention(db, env.AUDIO, 'test-storage', now);
+  await applyAgreementRetention(db, env.AUDIO, 'test-storage', retry, now);
+  expect(bucketData.has(key)).toBe(false);
+  expect(sql.prepare("SELECT id FROM software_agreement_attachments WHERE id='retry-attachment'").get()).toBeUndefined();
+});

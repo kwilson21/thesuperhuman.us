@@ -176,6 +176,13 @@ export async function applyAgreementRetention(
   }
   for (const attachment of manifest.unattached_attachments) {
     const cutoff = new Date(now.getTime()-30*86400000).toISOString();
+    const metadata = await db.prepare(`SELECT id,request_id,filename,version,document_date,object_key,sha256,bytes,created_at,created_by
+      FROM software_agreement_attachments WHERE id=? AND object_key=? AND sha256=? AND created_at=?`)
+      .bind(attachment.id,attachment.key,attachment.sha256,attachment.created_at).first<{
+        id:string; request_id:string; filename:string; version:string; document_date:string; object_key:string;
+        sha256:string; bytes:number; created_at:string; created_by:string;
+      }>();
+    if (!metadata) throw new Error('Archive changed. Preview again.');
     const stored=await bucket.get(attachment.key);
     if (stored && (await hashBytes(await stored.arrayBuffer()))!==attachment.sha256) throw new Error('Unattached PDF changed.');
     // Deleting the metadata row in the same transaction as the final reference check reserves
@@ -191,6 +198,20 @@ export async function applyAgreementRetention(
           WHERE json_extract(item.value,'$.key')=software_agreement_attachments.object_key)
         AND NOT EXISTS(${activeOfferAttachment()})`)
         .bind(attachment.id,attachment.key,attachment.sha256,attachment.created_at,cutoff,attachment.key)]);
-    if (stored) await bucket.delete(attachment.key);
+    if (stored) {
+      try {
+        await bucket.delete(attachment.key);
+      } catch (error) {
+        // Keep a retryable metadata record if storage refuses deletion. A stale
+        // record for an already-removed object is safe: the next reviewed pass
+        // can reserve and clear it after confirming it is still unreferenced.
+        await db.prepare(`INSERT OR IGNORE INTO software_agreement_attachments
+          (id,request_id,filename,version,document_date,object_key,sha256,bytes,created_at,created_by)
+          VALUES (?,?,?,?,?,?,?,?,?,?)`)
+          .bind(metadata.id,metadata.request_id,metadata.filename,metadata.version,metadata.document_date,metadata.object_key,metadata.sha256,metadata.bytes,metadata.created_at,metadata.created_by)
+          .run();
+        throw error;
+      }
+    }
   }
 }
