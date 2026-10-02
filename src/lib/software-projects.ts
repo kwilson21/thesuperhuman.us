@@ -69,7 +69,7 @@ function parseLegacyRevisionTargets(header: string, checks: string[], planned: s
   if (!prefix) return null;
   const text = header.slice(prefix[0].length);
   const parses: { checks: number[]; deliverables: number[] }[] = [];
-  const visit = (position: number, phase: 'checks' | 'deliverables', lastIndex: number, selectedChecks: number[], selectedDeliverables: number[]) => {
+  const visit = (position: number, phase: 'checks' | 'deliverables', selectedChecks: number[], selectedDeliverables: number[]) => {
     if (parses.length > 1) return;
     if (position === text.length) {
       parses.push({ checks: selectedChecks, deliverables: selectedDeliverables });
@@ -81,8 +81,8 @@ function parseLegacyRevisionTargets(header: string, checks: string[], planned: s
     if (kind === 'checks' && phase !== 'checks') return;
     const index = Number(marker[2]) - 1;
     const labels = kind === 'checks' ? checks : planned;
-    const priorIndex = kind === 'checks' ? (phase === 'checks' ? lastIndex : -1) : (phase === 'deliverables' ? lastIndex : -1);
-    if (index < 0 || index >= labels.length || index <= priorIndex) return;
+    const selected = kind === 'checks' ? selectedChecks : selectedDeliverables;
+    if (index < 0 || index >= labels.length || selected.includes(index)) return;
     const label = labels[index];
     const labelStart = position + marker[0].length;
     if (!text.startsWith(label, labelStart)) return;
@@ -91,13 +91,13 @@ function parseLegacyRevisionTargets(header: string, checks: string[], planned: s
     const nextChecks = kind === 'checks' ? [...selectedChecks, index] : selectedChecks;
     const nextDeliverables = kind === 'deliverables' ? [...selectedDeliverables, index] : selectedDeliverables;
     if (next === text.length) {
-      visit(next, nextPhase, index, nextChecks, nextDeliverables);
+      visit(next, nextPhase, nextChecks, nextDeliverables);
       return;
     }
     if (text.startsWith('; ', next))
-      visit(next + 2, nextPhase, index, nextChecks, nextDeliverables);
+      visit(next + 2, nextPhase, nextChecks, nextDeliverables);
   };
-  visit(0, 'checks', -1, [], []);
+  visit(0, 'checks', [], []);
   return parses.length === 1 ? parses[0] : null;
 }
 export function softwareRevisionTargets(body: string | null | undefined, checks: string[], planned: string[]) {
