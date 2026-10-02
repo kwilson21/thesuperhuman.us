@@ -27,3 +27,19 @@ it('supports a compact homepage variant while keeping the same synchronized, acc
   expect(home).toContain("setupComparisonPlayers();");
   expect(home).toContain("Start your song");
 });
+
+it('places compact playback beside the waveform and seeking on a separate track', () => {
+  expect(component).toContain('data-compact-waveform');
+  expect(component).toContain('data-waveform-before=');
+  expect(component).toContain('data-waveform-after=');
+  expect(component).toContain('data-compact-wave-line');
+  expect(component).toContain('class="compact-waveform-seek"');
+  expect(component).toContain('compact-waveform-play" data-comparison-play');
+  expect(component).toContain('<div class="compact-waveform-stage">\n      <button class="round-play compact-waveform-play"');
+  expect(component).toContain('<div class="compact-waveform-column">');
+  expect(component).toContain('::-webkit-slider-runnable-track');
+  expect(component).not.toContain('compact-waveform-progress');
+  expect(component).not.toContain('compact-waveform-playhead');
+  expect(component).toContain('.comparison-player--compact .comparison-lanes{display:none}');
+  expect(component).toContain('.comparison-player--compact .comparison-switch span{display:inline}');
+});
