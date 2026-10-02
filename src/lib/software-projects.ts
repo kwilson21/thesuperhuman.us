@@ -75,7 +75,7 @@ function parseLegacyRevisionTargets(header: string, checks: string[], planned: s
       parses.push({ checks: selectedChecks, deliverables: selectedDeliverables });
       return;
     }
-    const marker = /^(check|missing) #(\d+): /.exec(text.slice(position));
+    const marker = /^(check|missing) #?(\d+)(?:: | \()/.exec(text.slice(position));
     if (!marker) return;
     const kind = marker[1] === 'check' ? 'checks' : 'deliverables';
     if (kind === 'checks' && phase !== 'checks') return;
@@ -86,7 +86,10 @@ function parseLegacyRevisionTargets(header: string, checks: string[], planned: s
     const label = labels[index];
     const labelStart = position + marker[0].length;
     if (!text.startsWith(label, labelStart)) return;
-    const next = labelStart + label.length;
+    const parenthetical = marker[0].endsWith('(');
+    const labelEnd = labelStart + label.length;
+    if (parenthetical && text[labelEnd] !== ')') return;
+    const next = labelEnd + (parenthetical ? 1 : 0);
     const nextPhase = kind === 'checks' ? 'checks' : 'deliverables';
     const nextChecks = kind === 'checks' ? [...selectedChecks, index] : selectedChecks;
     const nextDeliverables = kind === 'deliverables' ? [...selectedDeliverables, index] : selectedDeliverables;
@@ -94,8 +97,9 @@ function parseLegacyRevisionTargets(header: string, checks: string[], planned: s
       visit(next, nextPhase, nextChecks, nextDeliverables);
       return;
     }
-    if (text.startsWith('; ', next))
-      visit(next + 2, nextPhase, nextChecks, nextDeliverables);
+    const separators = parenthetical ? [', ', '; '] : ['; '];
+    for (const separator of separators)
+      if (text.startsWith(separator, next)) visit(next + separator.length, nextPhase, nextChecks, nextDeliverables);
   };
   visit(0, 'checks', [], []);
   return parses.length === 1 ? parses[0] : null;
