@@ -105,14 +105,13 @@ const routes = [...new Set([...staticRoutes, '/music/old-news'])].sort();
         return selection.toString().replace(/\s+/g, ' ').trim();
       });
     assert.equal(selectedName, 'Kazon Wilson');
-    const firstName = page.locator('[data-personal-name="first"]').first();
-    const selectedFirstName = await firstName.evaluate(element => {
-      const selection = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(element);
-      selection.removeAllRanges();
-      selection.addRange(range);
-      return selection.toString();
+    const selectedFirstName = await displayName.evaluate(element => {
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(element.firstChild);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return selection.toString();
     });
     assert.equal(selectedFirstName, 'Kazon');
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+C' : 'Control+C');
