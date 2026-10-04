@@ -2,7 +2,10 @@ const assert = require('node:assert/strict');
 const { readdirSync } = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const { chromium } = require(path.join(process.env.PW_SKILL_DIR, 'node_modules/playwright'));
+const playwrightPath = process.env.PW_SKILL_DIR
+  ? path.join(process.env.PW_SKILL_DIR, 'node_modules/playwright')
+  : 'playwright';
+const { chromium } = require(playwrightPath);
 
 const targetUrl = process.env.TARGET_URL || 'http://127.0.0.1:4321';
 const artifactDir = process.env.PW_ARTIFACT_DIR || '/tmp';
@@ -69,6 +72,12 @@ const routes = [...new Set([...staticRoutes, '/music/old-news'])].sort();
 
     await page.goto(pathToFileURL(path.resolve('scripts/og.html')).href, { waitUntil: 'domcontentloaded' });
     await page.evaluate(() => document.fonts.ready);
+    assert.match(
+      await page.locator('body').evaluate(element => getComputedStyle(element).fontFamily),
+      /Libron/,
+      'default social card does not use Libron for its serif text',
+    );
+    assert.equal(await page.evaluate(() => document.fonts.check('400 34px Libron')), true);
     const socialName = page.locator('h1');
     assert.match(
       await socialName.evaluate(element => getComputedStyle(element).fontFamily),

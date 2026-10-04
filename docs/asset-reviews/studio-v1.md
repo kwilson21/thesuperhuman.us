@@ -55,6 +55,18 @@ proportions, and edge crops remain intact. No new generated objects, private
 information, or product claims were introduced. Outcome: ready for production
 asset use; deployment remains separate.
 
+## Derived social card, October 4 Libron typography update
+
+Regenerated `public/og-image.png` from `scripts/og.html` after changing its serif
+text to Libron v0.25 and using the Libron-derived Kazon Name Display font
+(1200 × 630, 325,477 bytes; SHA-256
+`f0306639b5a38dda12f1923b7934fbe5d04dac6dd7fcadf7d4dc2378b080272b`). The card
+was rendered in Chrome with both local fonts loaded, then inspected at native
+size. The name mark remains centered over the lowercase `z`; the Libron lede,
+wordmark, studio artwork, masks, proportions and edge crops are legible and
+intact. No copy, imagery, generated objects or product claims changed. Outcome:
+ready for production asset use; deployment remains separate.
+
 ## Animated layer, September 27
 
 `src/components/home/StudioLife.astro` draws an inline SVG over the unchanged

@@ -53,6 +53,10 @@ jobs:
           MUSIC_PREVIEW_CONFIG=.screenshots/wrangler.json npx astro dev --port 4321 --host 127.0.0.1 > astro.log 2>&1 &
           for i in $(seq 1 90); do curl -fsS -o /dev/null http://127.0.0.1:4321/ && break; sleep 2; done
       - run: npm run screenshots
+      - name: Check personal name typography and copy behavior
+        env:
+          PW_ARTIFACT_DIR: screenshots
+        run: node tests/browser/personal-name.cjs
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: screenshots
