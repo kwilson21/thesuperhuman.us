@@ -60,7 +60,7 @@ const videoId = `video-${first.id}`;
     <section class="music-details music-section" aria-label="Lyrics and credits">
       {tracks.map((track, index) => <div>
         {tracks.length > 1 && <h2>{track.title}</h2>}
-        {track.lyrics && <details id={index === 0 ? 'lyrics' : `lyrics-${track.id}`}><summary>Lyrics <span aria-hidden="true">+</span></summary><div class="song-lyrics">{track.lyrics}</div></details>}
+        {track.lyrics && <details id={index === 0 ? 'lyrics' : `lyrics-${track.id}`}><summary>Lyrics <span aria-hidden="true">+</span></summary><div class="song-lyrics"><PersonalNameText text={track.lyrics} /></div></details>}
         <details id={index === 0 ? 'credits' : `credits-${track.id}`}><summary>Credits <span aria-hidden="true">+</span></summary><dl>{track.credits.map(credit => <div><dt>{credit.role}</dt><dd><PersonalNameText text={credit.name} /></dd></div>)}</dl></details>
       </div>)}
       <p class="music-note">Free streaming preview. Downloads and purchases aren’t available yet. Playback starts and 30 seconds of listening help me understand interest in the release.</p>
