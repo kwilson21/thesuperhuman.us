@@ -32,6 +32,9 @@ def test_font(path: Path, expected_family: str) -> None:
     assert REQUIRED_CHARACTERS <= {chr(codepoint) for codepoint in cmap}
     assert cmap[ord("z")] == "z"
     assert font["name"].getDebugName(1) == expected_family
+    assert "Libron (c) 2026 Nico Verbruggen" in font["name"].getDebugName(0)
+    assert "SIL Open Font License, Version 1.1" in font["name"].getDebugName(13)
+    assert expected_family != "Libron"
 
     x_height = font["OS/2"].sxHeight
     contours = contour_bounds(font, "z")

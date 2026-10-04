@@ -1,3 +1,35 @@
+@font-face {
+  font-family: 'Libron';
+  src: url('/fonts/libron-v0.25/Libron-Regular.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Libron';
+  src: url('/fonts/libron-v0.25/Libron-Italic.woff2') format('woff2');
+  font-display: swap;
+  font-style: italic;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Libron';
+  src: url('/fonts/libron-v0.25/Libron-Bold.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+
+@font-face {
+  font-family: 'Libron';
+  src: url('/fonts/libron-v0.25/Libron-BoldItalic.woff2') format('woff2');
+  font-display: swap;
+  font-style: italic;
+  font-weight: 700;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -68,14 +100,14 @@
 
 @layer components {
   .personal-name {
-    font-family: 'Kazon Name Text', 'Newsreader', Georgia, serif;
+    font-family: 'Kazon Name Text', 'Libron', Georgia, serif;
     font-style: normal;
     font-synthesis: none;
     font-weight: 400;
   }
 
   .personal-name--display {
-    font-family: 'Kazon Name Display', 'Newsreader', Georgia, serif;
+    font-family: 'Kazon Name Display', 'Libron', Georgia, serif;
   }
 
   .personal-name--inherit {

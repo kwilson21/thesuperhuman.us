@@ -17,7 +17,8 @@ function htmlPage(title: string, body: string): string {
 <title>${title}</title>
 <style>
   :root { --paper: #FBF8F2; --ink: #0E0E0E; --muted: #4A4A4A; --rule: #E8E3DA; --accent: #AE5534; }
-  body { background: var(--paper); color: var(--ink); font-family: 'Newsreader', Georgia, serif; margin: 0; padding: 6rem 1.5rem; }
+  @font-face { font-family: 'Libron'; src: url('/fonts/libron-v0.25/Libron-Regular.woff2') format('woff2'); font-display: swap; font-style: normal; font-weight: 400; }
+  body { background: var(--paper); color: var(--ink); font-family: 'Libron', Georgia, serif; margin: 0; padding: 6rem 1.5rem; }
   main { max-width: 36rem; margin: 0 auto; }
   h1 { font-size: 2rem; line-height: 1.15; letter-spacing: -0.015em; font-weight: 400; margin: 0 0 1.25rem; }
   p { font-size: 1.0625rem; line-height: 1.65; color: var(--ink); }
