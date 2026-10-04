@@ -11,7 +11,7 @@ export default {
         accent: 'var(--accent)',
       },
       fontFamily: {
-        serif: ['Newsreader', 'Iowan Old Style', 'Georgia', 'serif'],
+        serif: ['Libron', 'Iowan Old Style', 'Georgia', 'serif'],
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
         mono: ['JetBrains Mono', 'SF Mono', 'Menlo', 'monospace'],
       },
