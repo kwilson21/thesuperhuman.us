@@ -7,6 +7,7 @@ import Hero from '~/components/Hero.astro';
 import Footer from '~/components/Footer.astro';
 import ContactForm from '~/components/ContactForm.astro';
 import WorkWithMe from '~/components/WorkWithMe.astro';
+import PersonalNameText from '~/components/PersonalNameText.astro';
 import ComparisonPlayer from '~/components/audio/ComparisonPlayer.astro';
 import CodeField from '~/components/home/CodeField.astro';
 import SignalEdge from '~/components/home/SignalEdge.astro';
@@ -61,7 +62,7 @@ const jsonLd = {
             <h3 id="music-proof-title">Vocal mix → final master</h3>
             <ComparisonPlayer example={oldNewsExample} recording={oldNewsRecording} compact />
             <details class="music-proof-more"><summary>Credits and full comparison</summary>
-              <p>Vocals recorded, mixed and mastered by Kazon. Beat produced and instrumental mixed by Lexi Banks.</p>
+              <p><PersonalNameText text="Vocals recorded, mixed and mastered by Kazon. Beat produced and instrumental mixed by Lexi Banks." /></p>
               <a class="site-link" href={audioPath(host, '/portfolio')}>Full comparison <span aria-hidden="true">→</span></a>
             </details>
           </article>}
