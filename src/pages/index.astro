@@ -173,10 +173,12 @@ const jsonLd = {
   .project-card { display: grid; grid-template-rows: subgrid; grid-row: span 5; position: relative; }
   /* Each project glows like a screen in the dark and leans toward a fine pointer. */
   .project-art { display: block; margin-bottom: 1.2rem; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; background: var(--well); aspect-ratio: 3 / 2; box-shadow: 0 28px 70px -34px color-mix(in srgb, var(--accent) 45%, transparent), 0 14px 30px -18px #000c; transform: perspective(1100px) rotateX(calc(var(--rx, 0) * 3deg)) rotateY(calc(var(--ry, 0) * 4deg)); transition: transform 500ms cubic-bezier(.2, .7, .2, 1), box-shadow 500ms ease; }
-  .project-card:hover .project-art, .project-card:focus-within .project-art { box-shadow: 0 34px 90px -30px color-mix(in srgb, var(--accent) 65%, transparent), 0 18px 36px -18px #000e; }
+  @media (hover: hover) and (pointer: fine) {
+    .project-card:hover .project-art, .project-card:focus-within .project-art { box-shadow: 0 34px 90px -30px color-mix(in srgb, var(--accent) 65%, transparent), 0 18px 36px -18px #000e; }
+  }
   .project-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
   .project-card h3 { font-size: clamp(1.7rem, 2.6vw, 2.3rem); letter-spacing: -.035em; line-height: 1.1; margin: 0 0 .4rem; }
-  .project-card p:not(.page-kicker) { font-size: 1.125rem; color: var(--muted); line-height: 1.45; margin: 0 0 1rem; }
+  .project-card p:not(.page-kicker) { font-size: 1.125rem; color: var(--muted); line-height: 1.45; max-width: 65ch; margin: 0 0 1rem; text-wrap: pretty; }
   .project-link { justify-self: start; align-self: start; }
   /* The picture stays a plain image; this link (with the visible arrow) is the card's only tab stop. */
   .project-link::after { content: ''; position: absolute; inset: 0; }
@@ -185,14 +187,14 @@ const jsonLd = {
   .work-preview { display: block; }
   .work-company { font-size: 2rem; letter-spacing: -.04em; line-height: 1.1; margin: 0 0 .65rem; }
   .work-outcome { flex: 1; }
-  .work-outcome p { margin: 0; }
+  .work-outcome p { max-width: 65ch; margin: 0; text-wrap: pretty; }
   .work-outcome .work-figure { font-size: clamp(1.5rem, 2.6vw, 2.2rem); letter-spacing: -.04em; line-height: 1.2; margin-bottom: .35rem; }
-  .work-outcome .source-note { color: var(--muted); font-size: .85rem; margin-top: .4rem; }
+  .work-outcome .source-note { color: var(--muted); font-size: .85rem; max-width: 65ch; margin-top: .4rem; }
   .music-proof-preview { min-width: 0; border-top: 1px solid var(--rule); padding-top: 1.35rem; }
   .music-proof-preview > h3 { font-size: 1.1rem; line-height: 1.3; margin: -.25rem 0 .65rem; }
   .music-proof-more { margin-top: .65rem; color: var(--muted); font-size: .85rem; }
-  .music-proof-more summary { width: fit-content; cursor: pointer; padding-block: .35rem; }
-  .music-proof-more p { margin-block: .5rem; line-height: 1.5; }
+  .music-proof-more summary { width: fit-content; min-height: 44px; line-height: 44px; margin-inline: -.4rem; padding-inline: .4rem; cursor: pointer; }
+  .music-proof-more p { max-width: 65ch; margin-block: .5rem; line-height: 1.5; text-wrap: pretty; }
   .music-proof-more .site-link { font-size: .85rem; }
   /* The counting figure is drawn over a hidden copy of its final text, so nothing shifts. */
   .count-slot { position: relative; display: inline-block; font-variant-numeric: tabular-nums; }
@@ -208,7 +210,7 @@ const jsonLd = {
 
   .editorial-pair { display: grid; grid-template-columns: 1.4fr 1fr; gap: 3rem; align-items: center; }
   .editorial-art :global(img) { display: block; width: 100%; height: auto; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent); mask-composite: intersect; transform: translateY(calc((.5 - var(--p, .5)) * 36px)); }
-  .editorial-copy h3 { font-size: clamp(2rem, 3.4vw, 2.9rem); line-height: 1.08; letter-spacing: -.04em; margin: 0; }
+  .editorial-copy h3 { max-width: 24ch; font-size: clamp(2rem, 3.4vw, 2.9rem); line-height: 1.08; letter-spacing: -.04em; margin: 0; text-wrap: balance; }
   .pen-stroke { display: block; width: min(15rem, 80%); height: 14px; margin: .9rem 0 1.6rem; overflow: visible; }
   /* No non-scaling-stroke here: with it, Chromium dashes in screen space and pathLength no longer lines up. */
   .pen-stroke path { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; }
@@ -221,10 +223,10 @@ const jsonLd = {
   .horizon-sun { position: absolute; bottom: 0; left: 74%; width: 84px; height: 84px; margin-left: -42px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 72%, var(--paper)); box-shadow: 0 0 50px 14px color-mix(in srgb, var(--accent) 14%, transparent); transform: translateY(calc((1 - var(--p, 1)) * 100% + 30%)); }
 
   .contact-intro { display: flex; justify-content: space-between; gap: 2rem; align-items: center; }
-  .contact-intro h2 { font-size: clamp(2rem, 3.5vw, 2.7rem); line-height: 1.07; letter-spacing: -.035em; margin: 0 0 .7rem; }
-  .contact-intro p { font-size: 1.1rem; color: var(--muted); margin: 0; }
+  .contact-intro h2 { max-width: 24ch; font-size: clamp(2rem, 3.5vw, 2.7rem); line-height: 1.07; letter-spacing: -.035em; margin: 0 0 .7rem; text-wrap: balance; }
+  .contact-intro p { max-width: 65ch; font-size: 1.1rem; color: var(--muted); margin: 0; text-wrap: pretty; }
   .contact-disclosure { margin-top: 1.25rem; color: var(--muted); }
-  .contact-disclosure summary { width: fit-content; cursor: pointer; font-size: .95rem; padding: .4rem 0; }
+  .contact-disclosure summary { width: fit-content; min-height: 44px; line-height: 44px; margin-inline: -.4rem; padding-inline: .4rem; cursor: pointer; font-size: .95rem; }
   .contact-form-content { padding-block: 2rem; color: var(--ink); }
 
   /* Home's own reveals; the shared ones (fade up, heading rule drawing in) are in global.css. */
