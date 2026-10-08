@@ -87,8 +87,16 @@
     padding-bottom: 1px;
   }
 
-  a:hover {
-    color: var(--accent);
+  @media (hover: hover) and (pointer: fine) {
+    a:hover { color: var(--accent); }
+  }
+
+  :is(a, button, summary, input[type='range']) {
+    -webkit-tap-highlight-color: color-mix(in srgb, var(--accent) 20%, transparent);
+  }
+
+  :is(a, button, summary, input[type='range']):active {
+    opacity: .78;
   }
 
   *:focus-visible {
@@ -173,15 +181,30 @@
   .site-section-heading h2 { flex-shrink: 1; min-width: 0; font-size: clamp(1.75rem, 3vw, 2.25rem); line-height: 1.2; letter-spacing: -.035em; margin: 0; }
   .site-section-heading::after { content: ''; height: 1px; flex: 1; background: var(--rule); }
   .site-links { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.75rem; }
-  .site-link { display: inline-flex; align-items: baseline; gap: .65rem; padding-bottom: .2rem; border-bottom: 1px solid var(--accent); line-height: 1.45; }
+  .site-link { display: inline-flex; align-items: baseline; gap: .65rem; padding: .35rem 0; border-bottom: 1px solid var(--accent); line-height: 1.45; }
   .site-link span { color: var(--accent); transition: transform 160ms ease; }
-  .site-link:is(:hover, :focus-visible) span { transform: translateX(3px); }
+  @media (hover: hover) and (pointer: fine) {
+    .site-link:hover span { transform: translateX(3px); }
+  }
   .site-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .55rem 1.35rem; background: var(--accent); color: var(--paper); border: 1px solid var(--accent); border-radius: 3px; line-height: 1.4; }
-  .site-button:hover { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+  @media (hover: hover) and (pointer: fine) {
+    .site-button:hover { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+  }
   .site-button-outline { background: transparent; color: var(--ink); }
   @media (prefers-reduced-motion: reduce) {
     .site-link span { transition: none; }
-    .site-link:is(:hover, :focus-visible) span { transform: none; }
+    .site-link span { transform: none; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    @view-transition { navigation: auto; }
+    ::view-transition-old(root), ::view-transition-new(root) {
+      animation-duration: 180ms;
+      animation-timing-function: ease-out;
+    }
+    ::view-transition-old(root) { animation-name: page-fade-out; }
+    ::view-transition-new(root) { animation-name: page-fade-in; }
+    @keyframes page-fade-out { to { opacity: 0; } }
+    @keyframes page-fade-in { from { opacity: 0; } }
   }
   /* Motion layer (src/scripts/scroll-scenes.ts adds .motion only when motion is welcome):
      [data-reveal] blocks rise in once, and a section heading's rule draws in with them. */
