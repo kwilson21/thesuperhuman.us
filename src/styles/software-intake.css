@@ -4,7 +4,7 @@
 .software-intake .intake-review{min-width:0}.software-intake .intake-review dl{grid-template-columns:minmax(0,min(13rem,40%)) minmax(0,1fr)}
 .software-intake #software-success .intake-review{margin:1.5rem 0}
 .software-intake .intake-service-detail .cf-turnstile{margin-top:.75rem}
-.software-intake #software-success [data-print]{margin-top:1rem}
+.software-intake #software-success ol{padding-left:1.5rem;margin:1.5rem 0}.software-intake #software-success li{padding-left:.5rem;margin:.75rem 0}
 .software-intake .intake-muted{font-size:.8rem;margin-top:.75rem}
 .software-intake [data-choose-path],.software-intake [data-questions]>:first-child,.software-intake [data-questions]>:first-child .intake-field{margin-top:0}
 .software-intake .intake-field input,.software-intake .intake-field select{min-height:44px}
