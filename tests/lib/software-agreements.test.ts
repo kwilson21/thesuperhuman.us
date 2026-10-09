@@ -1143,6 +1143,28 @@ it('keeps project attachments only on the SOW snapshot used for PDF generation',
   expect(JSON.parse(agreements.find(a => a.kind === 'sow')!.attachment_manifest_json)).toEqual([attachment]);
 });
 
+it('reuses an MSA across two offers without importing the first SOW attachments', async () => {
+  const attachment = (name: string) => ({ filename: `${name}.pdf`, version: '1', date: '2026-10-01', key: `agreements/attachments/${crypto.randomUUID()}.pdf`, sha256: 'a'.repeat(64), bytes: 10 });
+  const first = attachment('first'), second = attachment('second');
+  sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='o'").run(JSON.stringify({ ...details, attachments: [first] }));
+  const result = await signed();
+  await countersignAgreements(db, (await offer())!, result.documents, 'Owner', 'owner@example.com', request());
+  const msa = (await offerAgreements(db, 'o')).find(a => a.kind === 'msa')!;
+  await prepareAgreementArtifact(env, msa.id, async () => new TextEncoder().encode('%PDF-synthetic'));
+  sql.prepare("UPDATE software_offers SET status='superseded' WHERE id='o'").run();
+  const columns = sql.prepare('PRAGMA table_info(software_offers)').all().map((row: { name: string }) => row.name);
+  const replacements: Record<string, string> = { id: "'o2'", version: '2', status: "'sent'", reused_msa_id: '?', agreement_details_json: '?' };
+  sql.prepare(`INSERT INTO software_offers(${columns.join(',')}) SELECT ${columns.map((name: string) => replacements[name] ?? name).join(',')} FROM software_offers WHERE id='o'`)
+    .run(...columns.filter((name: string) => replacements[name] === '?').map((name: string) => name === 'reused_msa_id' ? msa.id : JSON.stringify({ ...details, attachments: [second] })));
+  sql.exec("UPDATE software_agreement_sessions SET offer_id='o2'; UPDATE software_agreement_challenges SET offer_id='o2'");
+  const reviewed = await reviewAgreements(db, (await db.prepare("SELECT * FROM software_offers WHERE id='o2'").first<SoftwareOffer>())!, (await agreementSession(db, request(), 'agreement', 'o2'))!, client);
+  expect(reviewed.reused_msa?.id).toBe(msa.id);
+  expect(reviewed.documents.map(document => document.kind)).toEqual(['sow']);
+  expect(JSON.parse(msa.attachment_manifest_json)).toEqual([]);
+  expect(JSON.parse((await offerAgreements(db, 'o')).find(a => a.kind === 'sow')!.attachment_manifest_json)).toEqual([first]);
+  expect(JSON.parse((await offerAgreements(db, 'o2'))[0].attachment_manifest_json)).toEqual([second]);
+});
+
 it.each([false, true])('cleans the last shared attachment reference while preserving a held reference (%s)', async held => {
   const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
   await review();
