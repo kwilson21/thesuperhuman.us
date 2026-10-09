@@ -59,7 +59,7 @@ export default {
     }});
     await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'share',expectedProjectUpdatedAt:draft.projectUpdatedAt,confirmed:true,update,expectedUpdatedAt:visual.updatedAt});
     sql(`UPDATE software_projects SET state='waiting_for_input',waiting_for='A redacted sample export.' WHERE request_id=${quote(id)}`);
-    await shot('Shared concept and Waiting on you (project state seeded with SQL)',`/studio/software/${id}`,'shared',{cookie});
+    await shot('Latest work with a request for input',`/studio/software/${id}`,'shared',{cookie});
     await shot('Agreed project terms',`/studio/software/${id}`,'agreed',{cookie,prepare:page=>prepareAgreedTerms(page)});
     for (const [stage,name,title] of [[1,'agreed-milestones','Agreed milestones and timing'],[2,'agreed-cost','Agreed cost and responsibilities'],[3,'agreed-review','Complete externally signed agreement reference']]) {
       await shot(title,`/studio/software/${id}`,name,{cookie,selector:'[data-terms-reader]',prepare:page=>prepareAgreedTerms(page,stage)});
@@ -78,7 +78,7 @@ export default {
     await shot('Direction review awaiting a decision',`/studio/software/${id}`,'direction-review',{cookie});
     await decide(direction,{decision:'direction_confirmed'});
     await shot('Direction confirmed',`/studio/software/${id}`,'direction-confirmed',{cookie});
-    const delivery={...update,kind:'delivery_review',artifact_version:'Delivery v1',evidence_type:'working_preview',checks_limitations:'Checked with the fictional sample. Live rollout is outside this milestone.',title:'Client onboarding',client_request:'',review_window_days:5,delivered_deliverables:['A shared status view'],criteria:terms.milestones[0].acceptance.map((_,index)=>`Try check ${index+1} with the fictional sample in the preview.`),links:[{label:'Fictional release notes',url:'https://example.com/releases/delivery-v1'}],preview_url:'https://example.com/preview',email_client:false};
+    const delivery={...update,kind:'delivery_review',artifact_version:'Delivery v1',evidence_type:'working_preview',checks_limitations:'Checked with the fictional sample. Live rollout is outside this milestone.',title:'Client onboarding',client_request:'',review_window_days:5,delivered_deliverables:['A shared status view'],criteria:terms.milestones[0].acceptance.map(check=>`${check} Checked with the fictional sample in the preview.`),links:[{label:'Fictional release notes',url:'https://example.com/releases/delivery-v1'}],preview_url:'https://example.com/preview',email_client:false};
     const deliveryDraft=await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'draft',expectedProjectUpdatedAt:projectAt(),update:{...delivery,links:[{label:'',url:'https://draft.example.com/unlabeled'}]},expectedUpdatedAt:null});
     await shot('Owner composer with every delivery check',`/owner/requests/${id}/update`,'delivery-composer',{owner:true,prepare:async page=>{
       const checkHeadings=page.locator('.client-preview').getByRole('heading',{name:'Agreed checks',exact:true});
@@ -100,22 +100,28 @@ export default {
       if(!(await page.locator('[name=artifact_version]').evaluate(field=>document.activeElement===field))) throw new Error('Keyboard Tab should move from title to version.');
       await page.locator('[name=artifact_version]').evaluate(field=>field.blur());
     }});
-    const review=await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'share',expectedProjectUpdatedAt:deliveryDraft.projectUpdatedAt,confirmed:true,update:delivery,expectedUpdatedAt:deliveryDraft.updatedAt});
+    const deliveryVisual=await ownerFetch(`/api/owner/requests/${id}/updates/${deliveryDraft.id}/visual`,conceptPng(),'PUT',{'content-type':'image/png','if-unmodified-since':deliveryDraft.updatedAt});
+    const review=await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'share',expectedProjectUpdatedAt:deliveryDraft.projectUpdatedAt,confirmed:true,update:delivery,expectedUpdatedAt:deliveryVisual.updatedAt});
     sql(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,stripe_invoice_id,hosted_invoice_url,status,due_at,created_by,created_at,updated_at)
       VALUES ('screenshot-balance',${quote(id)},${quote(sentOffer.id)},0,'balance',120000,15,'in_fictional_balance','https://example.com/invoice/balance','open','2026-10-15','owner@example.com',${quote(at)},${quote(at)})`);
     await shot('Open balance after delivery',`/owner/requests/${id}`,'balance-open',{owner:true});
     await shot('Client invoices and payment strip',`/studio/software/${id}`,'invoices',{cookie,prepare:async page=>{await page.getByText('Invoices',{exact:true}).click();}});
     await shot('Delivery review awaiting a decision with selected items and full milestone scope',`/studio/software/${id}`,'delivery-review',{cookie,prepare:async page=>{
+      await page.getByRole('link',{name:"See what's included",exact:true}).click();
       if(!await page.getByRole('heading',{name:'Included in this delivery'}).isVisible()) throw new Error('Client review should name what is included in this delivery.');
       if(!await page.getByRole('heading',{name:'Full agreed scope · Milestone 1'}).isVisible()) throw new Error('Client review should keep the complete acceptance scope visible.');
       if(!await page.locator('[data-preview-delivery-scope]').getByText('Next actions with a named owner',{exact:true}).isVisible()) throw new Error('Client should still see planned scope beyond this delivery.');
     }});
     await share({kind:'progress',title:'The next update',client_request:''});
     await shot('Progress update with an undecided delivery review',`/studio/software/${id}`,'progress-pending-review',{cookie});
-    await shot('Delivery change request form open',`/studio/software/${id}`,'changes-open',{cookie,prepare:async page=>{await page.locator('[data-request-changes] summary').click();await page.locator('[name=criteria]').first().check();await page.locator('[name=note]').fill('Adding the fictional sample client does not save.');}});
+    await shot('Delivery change request form open',`/studio/software/${id}`,'changes-open',{cookie,prepare:async page=>{await page.locator('[data-review-mark="not-yet"]').first().click();await page.locator('[data-request-changes] summary').click();if(!await page.locator('[name=criteria]').first().isChecked()) throw new Error('Not yet must pre-tick the matching agreed check.');await page.locator('[name=note]').fill('Adding the fictional sample client does not save.');}});
     await decide(review,{decision:'changes_requested',criteria:[0],note:'Adding the fictional sample client does not save.'});
     const corrected=await share({...delivery,artifact_version:'Delivery v2',delivered_deliverables:terms.milestones[0].deliverables});
     await shot('Redelivery invoice replacement prompt',`/owner/requests/${id}`,'redelivery-invoice',{owner:true});
+    await shot('Complete version ready to try',`/studio/software/${id}`,'delivery-complete',{cookie,prepare:async page=>{await page.locator('[data-review-mark="works"]').first().click();}});
+    sql(`UPDATE software_projects SET payment_mode='invoice' WHERE request_id=${quote(id)}`);
+    await shot('Invoice Terms review',`/studio/software/${id}`,'delivery-invoice-terms',{cookie});
+    sql(`UPDATE software_projects SET payment_mode='standard' WHERE request_id=${quote(id)}`);
     await decide(corrected,{decision:'milestone_accepted',confirm:true});
     await shot('Accepted delivery before full-payment handoff',`/studio/software/${id}`,'accepted',{cookie});
     sql(`UPDATE software_invoices SET status='paid',status_updated_at=${quote(at)} WHERE id='screenshot-balance'`);

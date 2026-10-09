@@ -327,3 +327,12 @@ it('allows only exact deliberate HTTP resource failures, preserving other consol
   expect(expectedResourceError(message.replace('401', '500'), base + expected[0].path, base, expected)).toBe(false);
   expect(expectedResourceError('Unexpected script error', base + expected[0].path, base, expected)).toBe(false);
 });
+
+it('captures the work-first project states at desktop and phone sizes',async()=>{
+  const scenario=await import('../../scripts/screenshots/scenarios/software-project.mjs');
+  const files:string[]=[];
+  await scenario.default.run({sql:()=> '[]',ownerFetch:async()=>({}),capture:async({file}:{file:string})=>{files.push(file);return file;}});
+  for(const state of ['first','shared','direction-review','delivery-review','changes-open','delivery-complete','delivery-invoice-terms','accepted','handoff','earlier-versions']) {
+    for(const viewport of ['desktop','phone']) expect(files).toContain(`software-project-${state}-${viewport}.png`);
+  }
+});
