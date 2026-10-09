@@ -12,10 +12,10 @@ import { POST as updatePost } from '~/pages/api/owner/requests/[id]/updates';
 import { GET as ownerVisual, PUT as uploadVisual } from '~/pages/api/owner/requests/[id]/updates/[updateId]/visual';
 import { GET as clientVisual } from '~/pages/api/studio/software/[id]/updates/[updateId]/visual';
 import { clientSoftwareProjectForSession, clientSoftwareProjectsForSession, clientProjectForSession, clientProjectsForSession, issueClientCode, completeClientCode, discardUndeliveredCode } from '~/lib/audio-client-access';
-import { clearUnmetRevisionEvidence, sharedSoftwareUpdates, listSoftwareUpdates, queueSoftwareNotice, deliverSoftwareNotice, softwareRevisionTargets, softwareRevisionHistoryBody } from '~/lib/software-projects';
+import { clearUnmetRevisionEvidence, sharedSoftwareUpdates, listSoftwareUpdates, queueSoftwareNotice, deliverSoftwareNotice, softwareRevisionTargets, softwareRevisionHistoryBody, softwareClientRevisionBody, softwareVersionLabel } from '~/lib/software-projects';
 import { softwareInvitationEmail, softwareUpdateEmail } from '~/lib/client-emails';
 import { loadStudioLedger, listStudioProjectAttention } from '~/lib/owner-reporting';
-import { postClientSoftwareProjectMessage } from '~/lib/software-project-messages';
+import { postClientSoftwareProjectMessage, readableSoftwareProjectMessages } from '~/lib/software-project-messages';
 import { POST as reviewPost } from '~/pages/api/studio/software/[id]/reviews/[updateId]';
 import { correctionPeriodEnd } from '~/lib/software-projects';
 import { softwareReviewEmail, softwareHandoffEmail } from '~/lib/client-emails';
@@ -959,4 +959,20 @@ it.each(['completed_at','revoked_at'])('allows resolving a software project with
 });
 it('allows resolving a software request without a project',async()=>{
   expect((await call(requestPost,{action:'resolve'})).status).toBe(200);
+});
+
+it('shows client revision events as sentences while preserving stored target parsing and the note',()=>{
+  const body='Requested changes to Delivery v2. Checks reported unmet: [1]. Deliverables unavailable: [2]. Included but inaccessible: [1].\n\nThe sample form failed.';
+  const text=softwareClientRevisionBody(body,['Add a client'],['Status view','Sample import']);
+  expect(text).toBe('You marked "Add a client" as not working yet.\n\nYou reported "Sample import" as not included yet.\n\nYou could not open or find "Status view".\n\nThe sample form failed.');
+  expect(text).not.toContain('Checks reported unmet:');expect(softwareRevisionTargets(body,['Add a client'],['Status view','Sample import']).checks).toEqual([0]);
+  expect(softwareVersionLabel({artifact_version:'Delivery v2',kind:'delivery_review'})).toBe('Version 2');
+  expect(softwareVersionLabel({artifact_version:'Direction v1',kind:'direction_review'})).toBe('First sketch');
+  expect(softwareVersionLabel({artifact_version:'Direction v3',kind:'direction_review'})).toBe('Sketch 3');
+  expect(softwareVersionLabel({artifact_version:'Release candidate',kind:'delivery_review'})).toBe('Release candidate');
+  const messages=[{body,decision:'changes_requested',update_id:'v2'}] as any;
+  const updates=[{id:'v2',milestone_index:0,artifact_version:'Delivery v2',kind:'delivery_review'}];
+  const terms={milestones:[{acceptance:['Add a client'],deliverables:['Status view','Sample import']}]} as any;
+  expect(readableSoftwareProjectMessages(messages,updates,terms)[0].body).toContain('Checks reported unmet: [1]');
+  expect(readableSoftwareProjectMessages(messages,updates,terms,'client')[0].body).toBe(`You asked for changes to version 2.\n\n${text}`);
 });

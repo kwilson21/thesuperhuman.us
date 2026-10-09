@@ -2,7 +2,7 @@
 type Props = { checks: string[]; evidence: string[] };
 const { checks, evidence } = Astro.props;
 ---
-<section><h3>Agreed checks</h3><ul>{checks.map((check,index)=><li><strong>{check}</strong><span>Demonstrated</span><p data-preview-evidence>{evidence[index]}</p></li>)}</ul></section>
+<section><h3>Agreed checks</h3><ul>{checks.map((check,index)=><li><strong>{check}</strong><p data-preview-evidence>{evidence[index]}</p></li>)}</ul></section>
 <style>
   section { border-top: 1px solid var(--rule); margin-top: 1.5rem; }
   h3 { font: 400 1.6rem/1.2 Libron,Georgia,serif; margin: 1.5rem 0 .5rem; }
