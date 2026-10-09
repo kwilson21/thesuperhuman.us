@@ -6,6 +6,7 @@ import type { Agreement } from './software-agreements';
 import { canonicalJson, hashBytes, newYorkTime } from './agreement-artifacts';
 import {
   agreementValues,
+  agreementVersionLabel,
   type AgreementDetails,
   type ClientAgreement,
   contractorSchema,
@@ -159,7 +160,7 @@ export async function renderAgreementPacket(
     for (const line of agreementText.split('\n'))
       add(line, line === title || /^\d+ [A-Z]|^Milestone \d+$/.test(line));
     for (const p of pdf.getPages().slice(start))
-      p.drawText(`${title} · Template v${versions.template ?? '1'}`, {
+      p.drawText(`${title} · ${versions.version_label ?? agreementVersionLabel}`, {
         x: 48,
         y: 755,
         font: inter,
@@ -224,6 +225,7 @@ export async function renderAgreementPacket(
         ['Verified email', 'verified_email'],
         ['Verification method', 'verification_method'],
         ['Verified at (New York)', 'verified_at'],
+        ['Consent version', 'consent_version'],
         ['Consent at (New York)', 'consent_at'],
         ['Signed at (New York)', 'signed_at'],
         ['IP address', 'ip_address'],
@@ -250,16 +252,13 @@ export async function renderAgreementPacket(
         d.kind === 'msa' ? 'Master Services Agreement' : 'Statement of Work',
       );
       row(
-        'Template version',
-        (c.versions as Record<string, unknown> | undefined)?.template ?? '1',
+        'Agreement version',
+        (c.versions as Record<string, unknown> | undefined)?.version_label ??
+          agreementVersionLabel,
       );
       row(
         'Offer version',
         (c.versions as Record<string, unknown> | undefined)?.offer,
-      );
-      row(
-        'Source revision',
-        (c.versions as Record<string, unknown> | undefined)?.version_label,
       );
       row('SHA-256', d.text_sha256 ?? c.document_sha256);
     }
