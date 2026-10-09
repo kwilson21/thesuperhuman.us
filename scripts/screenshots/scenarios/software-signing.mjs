@@ -150,7 +150,7 @@ export default {
       const file=await capture({file:`software-signing-link-open-${viewport}.png`,path:`/offer/${token}/verify?key=${linkKey}`,viewport,prepare:async page=>{if(new URL(page.url()).searchParams.has('key'))throw new Error('One-time token remained in the URL.');}});
       steps.push({title:`Email link opens the agreement, ${viewport}`,images:[{file,caption:'Verified recipient reaches the signing page with the one-time token removed.'}]});
     }
-    sql(`INSERT INTO software_agreement_drafts VALUES('screenshot-signing-offer','signer@example.com','{}',${quote(at)});`);
+    sql(`INSERT OR REPLACE INTO software_agreement_drafts VALUES('screenshot-signing-offer','signer@example.com','{}',${quote(at)});`);
     await shot('empty', 'One signing page with empty details', `/offer/${token}/sign`, {cookie});
     sql(`DELETE FROM software_agreement_drafts WHERE offer_id='screenshot-signing-offer'; UPDATE owner_requests SET details_json='{"company":"Example Client LLC"}' WHERE id=${quote(id)};`);
     await shot('brief-prefill','Name and legal business name from the brief',`/offer/${token}/sign`,{cookie});

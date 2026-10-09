@@ -20,6 +20,7 @@ const request=offer ? await getOwnerRequest(db!,offer.request_id) : null;
 const reused=offer?.reused_msa_id && session ? await db!.prepare('SELECT canonical_text,values_json,id FROM software_agreements WHERE id=?').bind(offer.reused_msa_id).first<{canonical_text:string;values_json:string;id:string}>() : null;
 const previous=reused ? JSON.parse(reused.values_json).client : undefined;
 const draft=session && request ? await loadAgreementDraft(db!,offer!.id,session.recipient_email) ?? prefillAgreementDraft(request,previous) : null;
+const sameAsPrevious=Boolean(previous && draft && previous.legal_name===draft.legal_name && previous.entity_type===draft.entity_type && previous.jurisdiction===(draft.state==='Outside the US'?draft.country:draft.state) && previous.business_address===draft.business_address);
 const artifact=sow?.status==='executed' ? await db!.prepare('SELECT status FROM software_agreement_artifacts WHERE agreement_id=?').bind(sow.id).first<{status:string}>() : null;
 const invoice=sow?.status==='executed' ? await db!.prepare("SELECT hosted_invoice_url FROM software_invoices WHERE offer_id=? AND kind='deposit' AND status='open' AND hosted_invoice_url IS NOT NULL ORDER BY milestone_index LIMIT 1").bind(offer!.id).first<{hosted_invoice_url:string}>() : null;
 const recipient=offer?.recipient_email_snapshot ?? '';
@@ -53,8 +54,8 @@ if(!offer?.msa_template_id) Astro.response.status=404;
       {(JSON.parse(offer.agreement_details_json!).attachments??[]).map((a:{key:string;filename:string})=><p><a href={`/api/agreements/attachments/${a.key.split('/').pop()!.replace('.pdf','')}`}>Review attachment: {a.filename}</a></p>)}
 </section>
       <p class="agreement-meta">{agreementVersionLabel}</p><section class="agreement-section"><h2>Your details</h2><p class="agreement-hint">Filled in from your brief. Change anything that's off.</p>
-      {previous && <p data-returning-summary>Same as last time: {previous.legal_name}, {previous.entity_type}, {previous.jurisdiction}, {previous.business_address}. <button type="button" class="studio-quiet" data-edit-details>Edit</button></p>}
-      <div class="signing-fields" data-business-details hidden={Boolean(previous)}>
+      {sameAsPrevious && <p data-returning-summary>Same as last time: {previous.legal_name}, {previous.entity_type}, {previous.jurisdiction}, {previous.business_address}. <button type="button" class="studio-quiet" data-edit-details>Edit</button></p>}
+      <div class="signing-fields" data-business-details hidden={sameAsPrevious}>
       <label>Legal business name<input class="studio-input" name="legal_name" id="legal_name" value={draft.legal_name} maxlength="200" required aria-describedby="error-legal_name" /><span id="error-legal_name" data-field-error="legal_name"></span></label>
       {!previous && <label>Your title<input class="studio-input" name="signer_title" id="signer_title" value={draft.signer_title} placeholder="e.g. Owner, Operations Lead" maxlength="200" required aria-describedby="error-signer_title" /><span id="error-signer_title" data-field-error="signer_title"></span></label>}
       <label>Business type<select class="studio-select" name="entity_type" id="entity_type" required aria-describedby="error-entity_type"><option value="">Choose</option>{businessTypes.map(v=><option value={v} selected={v===draft.entity_type}>{v}</option>)}</select><span id="error-entity_type" data-field-error="entity_type"></span></label>

@@ -327,3 +327,18 @@ it('allows only exact deliberate HTTP resource failures, preserving other consol
   expect(expectedResourceError(message.replace('401', '500'), base + expected[0].path, base, expected)).toBe(false);
   expect(expectedResourceError('Unexpected script error', base + expected[0].path, base, expected)).toBe(false);
 });
+
+it('can seed empty details after link-landing captures have autosaved a draft',async()=>{
+ const {DatabaseSync}=createRequire(import.meta.url)('node:sqlite');
+ const sql=new DatabaseSync(':memory:');sql.exec(readFileSync('db/music.sql','utf8'));
+ const stop=new Error('draft collision passed');
+ const scenario=await import('../../scripts/screenshots/scenarios/software-signing.mjs');
+ try {
+  await expect(scenario.default.run({templates:signingTemplates,sql:(query:string)=>sql.exec(query),
+   capture:async({file}:{file:string})=>{
+    if(file.includes('link-open'))sql.exec("INSERT OR REPLACE INTO software_agreement_drafts VALUES('screenshot-signing-offer','signer@example.com','{}','now')");
+    return file;
+   },ownerFetch:async()=>{throw stop;},
+  })).rejects.toBe(stop);
+ } finally {sql.close();}
+});
