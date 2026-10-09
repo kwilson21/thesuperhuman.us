@@ -4,14 +4,9 @@ import ProjectTimeline from '~/components/ProjectTimeline.astro';
 import { tallyStory, tallyMilestones } from '~/data/project-stories/tally';
 ---
 <ProjectLayout title={tallyStory.title} subtitle={tallyStory.subtitle} description={tallyStory.description} status={tallyStory.status} journalHref="#tally-updates-title">
-  <nav class="tally-highlights" aria-label="Featured Tally stories">
-    <a class="site-link" href="#tally-demo-environment">A safe public demo <span aria-hidden="true">→</span></a>
-    <a class="site-link" href="#tally-design-system-catalog">A repeatable design review <span aria-hidden="true">→</span></a>
-  </nav>
-  <ProjectTimeline id="tally-updates" title="Development journal" entries={tallyMilestones} selectedId="tally-demo-environment" />
+  <ProjectTimeline id="tally-updates" title="Development journal" entries={tallyMilestones} selectedId="tally-home-screen" />
   <p class="source-link"><a class="site-link" href="https://github.com/kwilson21/tally">Tally on GitHub <span aria-hidden="true">↗</span></a></p>
 </ProjectLayout>
 <style>
-  .tally-highlights { display: flex; flex-wrap: wrap; gap: .75rem 1.5rem; margin: -1rem 0 2rem; }
   .source-link { margin-top: 2rem; }
 </style>

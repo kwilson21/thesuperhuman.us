@@ -85,16 +85,6 @@ const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('e
       choose(index);
       panels[index].scrollIntoView({ block: 'start' });
     }
-    // A repeated click on the active fragment emits no hashchange. It still needs to
-    // restore the linked panel if the milestone picker selected something else meanwhile.
-    document.addEventListener('click', event => {
-      if (!(event.target instanceof Element)) return;
-      const link = event.target.closest<HTMLAnchorElement>('a[href^="#"]');
-      if (!link || link.hash !== location.hash) return;
-      if (!panels.some(panel => '#' + panel.id === link.hash)) return;
-      event.preventDefault();
-      followHash();
-    });
     window.addEventListener('hashchange', followHash);
     controls.hidden = false; render();
     if (panels.some(panel => '#' + panel.id === location.hash)) followHash();
