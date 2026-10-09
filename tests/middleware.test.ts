@@ -187,3 +187,8 @@ it.each(['/studio/software/example','/api/studio/software/example/updates/update
     expect(response.headers.get('cache-control')).toBe('private, no-store'); expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
   }
 });
+
+it('keeps archive one-time link landing private and uncacheable',async()=>{
+ const response=await onRequest(makeContext('https://thesuperhuman.us/agreements/verify?key=synthetic'),async()=>new Response('expired')) as Response;
+ expect(response.headers.get('cache-control')).toBe('private, no-store');expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+});

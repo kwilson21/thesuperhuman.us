@@ -60,10 +60,12 @@ it('selects resolved software contact details after 90 days but keeps newer deta
   database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at) VALUES
     ('old-software','software','Old Client','old@example.com','Tool','resolved','2026-01-01T00:00:00Z','2026-01-02T00:00:00Z','2026-01-02T00:00:00Z'),
     ('new-software','software','New Client','new@example.com','Tool','resolved','2026-09-01T00:00:00Z','2026-09-02T00:00:00Z','2026-09-02T00:00:00Z');`);
+  database.db.exec("PRAGMA foreign_keys=ON; INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES('old-draft-offer','old-software',1,'withdrawn','{}','2026-01-01','2026-01-01'); INSERT INTO software_agreement_drafts VALUES('old-draft-offer','old@example.com','{\"legal_name\":\"Private draft\"}','2026-01-01');");
   const review = await previewOwnerRetention(database, 'Local test data', now);
   expect(review.requestContacts).toBe(2);
   await applyOwnerRetention(database, review, 'Local test data', now);
   expect((await database.query("SELECT email FROM owner_requests WHERE id='old-software'"))[0]).toEqual({ email: '' });
+  expect((await database.query('SELECT count(*) n FROM software_agreement_drafts'))[0]).toEqual({n:0});
   expect((await database.query("SELECT email FROM owner_requests WHERE id='new-software'"))[0]).toEqual({ email: 'new@example.com' });
 });
 
@@ -254,8 +256,8 @@ it('previews two-year software brief cleanup after project content cleanup and p
     VALUES ('agreement-signed','sow','offer-signed','signed-software','client','template','executed','Signed agreement text','${'a'.repeat(64)}','{}','2024-01-01','2024-01-01','2024-01-01','2034-01-01','session');
     INSERT INTO software_projects(request_id,offer_id,agreement_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,completed_at,content_deleted_at)
     VALUES ('signed-software','offer-signed','agreement-signed','{"scope":"contract"}','standard','2024-01-01','2024-01-01','2024-01-01','owner','2024-01-01','2024-01-01','2024-01-01','2025-01-01');
-    INSERT INTO software_agreement_signatures(id,agreement_id,party,typed_name,title,consent_text,authority_text,consent_version,consent_at,signed_at,document_sha256,verified_email,verified_at,intent_text,document_list_json,receipt_id,ip_address,user_agent)
-    VALUES ('signature-signed','agreement-signed','client','Client Name','Director','Consent','Authority','v1','2024-01-01','2024-01-01','${'b'.repeat(64)}','client@example.com','2024-01-01','Intent','[]','receipt','192.0.2.10','Synthetic browser');`);
+    INSERT INTO software_agreement_signatures(id,agreement_id,party,typed_name,title,consent_text,consent_version,consent_at,signed_at,document_sha256,verified_email,verified_at,verification_method,intent_text,document_list_json,receipt_id,ip_address,user_agent)
+    VALUES ('signature-signed','agreement-signed','client','Client Name','Director','Consent','v1','2024-01-01','2024-01-01','${'b'.repeat(64)}','client@example.com','2024-01-01','verified by one-time email link','Intent','[]','receipt','192.0.2.10','Synthetic browser');`);
   const preview=await previewOwnerRetention(database,'Local test data',now);
   expect(preview.softwareIntakeContacts).toBe(1);
   expect(JSON.stringify(preview)).not.toContain('client@example.com');
