@@ -18,6 +18,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     const saved = await getOwnerRequest(env.MUSIC_DB, params.id);
     if (!saved || saved.kind !== 'software') return Response.json({ ok: false }, { status: 404 });
     const status = await deliverSoftwareBriefCopy(env.MUSIC_DB, saved, env, true, parsed.data.confirmedNotSent);
+    if (status === 'failed') return Response.json({ ok: false, error: 'The brief copy could not be sent. Please try again.' }, { status: 503 });
     return status ? Response.json({ ok: true }) : Response.json({ ok: false, error: 'This brief copy cannot be sent again here.' }, { status: 409 });
   } catch {
     return Response.json({ ok: false, error: 'The brief copy could not be sent. Please try again.' }, { status: 503 });
