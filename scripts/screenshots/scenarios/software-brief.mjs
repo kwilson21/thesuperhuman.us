@@ -8,40 +8,54 @@ export default {
       'new','','2026-09-29T12:00:00.000Z','2026-09-29T12:00:00.000Z','00000000-0000-4000-8000-000000000001')`);
     const steps = [];
     for (const viewport of ['desktop', 'phone']) {
-      if (viewport === 'desktop') steps.push({ title: `Client chooses a starting point, ${viewport}`, images: [{ file: await capture({ file: 'software-brief-no-path-desktop.png', path: '/software/start', viewport }), caption: 'No starting point selected' }] });
-      steps.push({ title: `Client project, ${viewport}`, images: [{ file: await capture({ file: `software-brief-project-${viewport}.png`, path: '/software/start?path=workflow', viewport }), caption: 'Fictional project step' }] });
-      steps.push({ title: `Client idea, ${viewport}`, images: [{ file: await capture({ file: `software-brief-idea-${viewport}.png`, path: '/software/start?path=idea', viewport }), caption: 'Fictional idea questions' }] });
-      const fill = async page => {
-        await page.locator('[name=today]').fill('We track client onboarding in several spreadsheets.\nUpdates arrive by email and are easy to miss.');
-        await page.locator('[name=audience]').fill('The fictional client team');
-        await page.locator('[name=firstResult]').fill('A shared view of next steps that the client team can check each morning.');
+      const prepare = async (page, target, path = 'workflow', suggestion = false) => {
+        await page.route('**/api/software/brief/suggest', route => route.fulfill({ json: { suggestion: ' in a shared spreadsheet' } }));
+        // Captures always begin from a fresh fictional draft.
+        await page.evaluate(() => { localStorage.removeItem('software-brief-draft'); localStorage.removeItem('software-suggestions'); });
+        await page.reload();
+        if (target === 0) return;
+        await page.locator(`[name=path][value=${path}]`).check();
+        if (target === 1) {
+          if (suggestion) {
+            await page.locator('[data-step="1"] textarea').fill('We track new clients');
+            await page.locator('[data-step="1"] [data-accept]').waitFor({ state: 'visible' });
+            if (await page.locator('[data-step="1"] textarea').inputValue() !== 'We track new clients') throw new Error('Suggestion was inserted without acceptance');
+          }
+          return;
+        }
+        await page.locator('[data-step="1"] textarea').fill(path === 'workflow' ? 'We track client onboarding in spreadsheets. Updates arrive by email.' : 'A simple way for clients to book lessons.');
         await page.locator('[data-next]').click();
-      };
-      steps.push({ title: `Client details, ${viewport}`, images: [{ file: await capture({ file: `software-brief-details-${viewport}.png`, path: '/software/start?path=workflow', viewport, prepare: fill }), caption: 'Fictional details step' }] });
-      const review = async page => {
-        await fill(page);
+        if (target === 2) return;
+        await page.locator('[data-step="2"] [data-skip]').click();
+        if (target === 3) return;
+        await page.locator('[data-next]').click();
+        if (target === 4) return;
+        await page.locator('[data-step="4"] [data-skip]').click();
+        if (target === 5) return;
         await page.locator('[name=name]').fill('Alex Example');
         await page.locator('[name=email]').fill('alex@example.com');
-        await page.locator('[name=timing]').selectOption('quarter');
-        await page.locator('[name=budgetStatus]').selectOption('exploring');
-        await page.locator('[name=approver]').selectOption('other');
-        await page.locator('[name=approverRole]').fill('Project sponsor');
         await page.locator('[data-next]').click();
-        await page.locator('[name=cf-turnstile-response]').waitFor({ state: 'attached', timeout: 30_000 });
-        await page.waitForFunction(() => !!document.querySelector('[name=cf-turnstile-response]')?.value, { timeout: 30_000 });
-        await page.locator('[data-step="2"]:visible').waitFor();
-        await page.waitForTimeout(1_500);
+        await page.locator('[data-step="6"]:visible').waitFor();
+        const summary = await page.locator('[data-review]').innerText();
+        if (/First result|First version|Budget|Company/.test(summary)) throw new Error('Unanswered optional fields appeared in summary');
       };
-      steps.push({ title: `Client review, ${viewport}`, images: [{ file: await capture({ file: `software-brief-review-${viewport}.png`, path: '/software/start?path=workflow', viewport, prepare: review }), caption: 'Fictional review step' }] });
+      for (let question = 0; question < 7; question++) {
+        steps.push({ title: `Brief question ${question + 1}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-question-${question + 1}-${viewport}.png`, path: '/software/start', viewport, prepare: page => prepare(page, question) }), caption: 'Fictional brief, one question at a time' }] });
+      }
+      for (const question of [1, 2]) steps.push({ title: `Idea question ${question + 1}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-idea-${question + 1}-${viewport}.png`, path: '/software/start', viewport, prepare: page => prepare(page, question, 'idea') }), caption: 'Fictional idea brief' }] });
+      steps.push({ title: `Autocomplete, ${viewport}`, images: [{ file: await capture({ file: `software-brief-suggestion-${viewport}.png`, path: '/software/start', viewport, prepare: page => prepare(page, 1, 'workflow', true) }), caption: viewport === 'phone' ? 'Mocked suggestion with an explicit accept button' : 'Mocked decorative ghost text' }] });
       for (const clientCopyStatus of ['sent', 'uncertain', 'failed']) {
-        steps.push({ title: `Client receipt ${clientCopyStatus}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-receipt-${clientCopyStatus}-${viewport}.png`, path: '/software/start?path=workflow', viewport, prepare: async page => {
+        steps.push({ title: `Client receipt ${clientCopyStatus}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-receipt-${clientCopyStatus}-${viewport}.png`, path: '/software/start', viewport, prepare: async page => {
           await page.route('**/api/software-inquiry', async route => {
             const input = route.request().postDataJSON();
             await route.fulfill({ json: { ok: true, brief: { name: input.name, email: input.email }, clientCopyStatus } });
           });
-          await review(page);
+          await prepare(page, 6);
+          await page.locator('[name=cf-turnstile-response]').waitFor({ state: 'attached', timeout: 30_000 });
+          await page.waitForFunction(() => !!document.querySelector('[name=cf-turnstile-response]')?.value, { timeout: 30_000 });
           await page.locator('[type=submit]').click();
           await page.locator('#software-success:visible').waitFor({ timeout: 30_000 });
+          if (await page.evaluate(() => localStorage.getItem('software-brief-draft'))) throw new Error('Sent draft was not cleared');
         } }), caption: 'Fictional receipt with mocked delivery; no email call' }] });
       }
     }

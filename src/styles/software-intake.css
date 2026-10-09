@@ -15,3 +15,13 @@
 .software-intake [data-form-status][data-nudge]:not(:empty){color:var(--muted)}
 @media(max-width:700px){.software-intake .software-step-help{margin-bottom:1.5rem}.software-intake .intake-review dl{grid-template-columns:minmax(0,1fr)}.software-intake .intake-review dt{border-bottom:0;padding-bottom:.15rem}.software-intake .intake-review dd{padding-top:0}}
 @media print{.site-header,.compact-footer,.skip-link,.intake-return,.intake-progress,.intake-contact,[data-print]{display:none!important}.software-intake{padding:0!important}}
+.software-intake form{max-width:var(--content-width, 42rem)}
+.software-intake .brief-dots{gap:.75rem;margin:1rem 0 2rem}.software-intake .brief-dots .step-number{width:.65rem;height:.65rem;font-size:0}.software-intake .brief-dots li::after{display:none}
+.software-intake .brief-answer{position:relative}
+.software-intake .brief-answer textarea,.software-intake .brief-ghost{font:inherit;line-height:1.6;padding:.75rem;white-space:pre-wrap;overflow-wrap:break-word;letter-spacing:normal}
+.software-intake .brief-answer textarea{position:relative;background:transparent}
+.software-intake .brief-ghost{position:absolute;inset:0;overflow:hidden;pointer-events:none;border:1px solid transparent;color:var(--muted)}
+.software-intake [data-ghost-prefix]{visibility:hidden}
+.software-intake [data-accept],.software-intake [data-suggestions-toggle],.software-intake [data-skip],.software-intake [data-review] button{min-height:44px;text-decoration:underline;text-underline-offset:.2em}
+.software-intake [data-accept]{color:var(--muted);text-align:left}
+@media(max-width:700px),(pointer:coarse){.software-intake .brief-ghost{visibility:hidden}}
