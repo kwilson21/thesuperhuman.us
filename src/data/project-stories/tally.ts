@@ -33,18 +33,25 @@ const artifact = (image: ImageMetadata, title: string, caption: string, kind: st
 // review note (same ID), changed only for formatting. Captures use demo data.
 export const tallyDecisionHighlights = [
   {
-    entry: 'tally-demo-environment',
-    problem: 'I wanted to try each change on my phone or laptop without running anything locally. The demo resets every night, and the reset erases every table.',
-    decision: 'Tally’s demo is the same code deployed a second time, with its own database, a single public address and only fictional data. At my request, the reset also checks for bank credentials, which the real app always has, and refuses to run if it finds any.',
-    protects: 'Every night it resets to that fictional household. A test pins those safety settings. Deploying stays a step I run myself.',
-    credit: 'Claude Code built the setup and a test that pins those safety settings.',
+    entry: 'tally-jev-categorization',
+    headline: 'AI suggestions, with people in control',
+    decision: 'Jev suggests categories, and Workers AI suggests merchant names. Tally only applies a category at 80% confidence or higher, never over a person’s or rule’s choice, and shows the suggestion so a person can change it.',
+    relevance: 'Less sorting by hand, with every suggestion visible and editable.',
+    credit: 'Claude Code built the category suggestion flow.',
   },
   {
     entry: 'tally-design-system-catalog',
-    problem: 'The money input had drifted from my design, and there was nowhere to see and approve a component on its own.',
-    decision: 'Tally now has a catalog at /design-system, in the demo and development only. It renders the app’s real components with sample data, so it can’t show a copy that has drifted. I wrote a design brief, and each built screen was audited against it. I decided six proposals by seeing each beside today’s version.',
-    protects: 'Tests fail on colors, radii or shadows outside the design tokens, and each proposal ships in its own PR, so undoing one is a single revert.',
+    headline: 'Design reviewed on real components',
+    decision: 'I chose a catalog of Tally’s actual components and compared each design proposal beside the current version.',
+    relevance: 'Tests catch design-token drift, and each proposal has its own reversible PR.',
     credit: 'Claude Code built the catalog and its tests.',
+  },
+  {
+    entry: 'tally-demo-environment',
+    headline: 'A public demo kept apart from real data',
+    decision: 'I chose a separate demo deployment, database, and fictional household. At my request, its nightly reset refuses to run if it finds bank credentials.',
+    relevance: 'People can try Tally without running it locally, while the reset guard protects the real app.',
+    credit: 'Claude Code built the setup and a test that pins those safety settings.',
   },
 ] as const;
 

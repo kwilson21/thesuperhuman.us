@@ -8,24 +8,20 @@ const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('e
 <ProjectLayout title={tallyStory.title} subtitle={tallyStory.subtitle} description={tallyStory.description} status={tallyStory.status} journalHref="#tally-updates-title">
   <ProjectTimeline id="tally-updates" title="Development journal" entries={tallyMilestones} selectedId="tally-home-screen">
     <div slot="highlights" class="decision-highlights">
-      <p class="page-kicker">Two decisions I made</p>
+      <p class="page-kicker">Three decisions I made</p>
       {highlightedEntries.map(({ decision, entry }) => {
         const artifact = entry.artifacts?.[0];
         return <article class="decision-highlight">
           <div class="decision-copy">
-            <h3>{entry.title}</h3>
+            <h3>{decision.headline}</h3>
             <div class="decision-steps">
-              <div class="decision-step">
-                <span>Problem</span>
-                <p>{decision.problem}</p>
-              </div>
               <div class="decision-step decision-step-primary">
-                <span>My decision</span>
+                <span>Decision</span>
                 <p>{decision.decision}</p>
               </div>
               <div class="decision-step">
-                <span>What it protects</span>
-                <p>{decision.protects}</p>
+                <span>Why it matters</span>
+                <p>{decision.relevance}</p>
               </div>
             </div>
             <p class="decision-credit">{decision.credit} From the journal: <cite>{entry.title}</cite> · <time datetime={entry.day}>{date(entry.day)}</time></p>
