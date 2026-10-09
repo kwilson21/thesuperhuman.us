@@ -13,7 +13,7 @@ let db: D1Database;
 let kv: { get: ReturnType<typeof vi.fn>; put: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
 let stored: Map<string, string>;
 function context(input: unknown = base, options: { origin?: string; type?: string; db?: D1Database | null; token?: string | null; rate?: typeof kv | null } = {}) {
-  return { request: new Request('https://thesuperhuman.us/api/software-inquiry', { method: 'POST', headers: { origin: options.origin ?? 'https://thesuperhuman.us', 'content-type': options.type ?? 'application/json' }, body: typeof input === 'string' ? input : JSON.stringify(input) }), locals: { runtime: { env: { MUSIC_DB: options.db === undefined ? db : options.db, TURNSTILE_SECRET_KEY: options.token === undefined ? 'test' : options.token, RATE_LIMIT: options.rate === undefined ? kv : options.rate, RESEND_API_KEY: 'test', CONTACT_FROM_EMAIL: 'from@example.com', CONTACT_TO_EMAIL: 'owner@example.com' } } } } as any;
+  return { request: new Request('https://thesuperhuman.us/api/software-inquiry', { method: 'POST', headers: { origin: options.origin ?? 'https://thesuperhuman.us', 'content-type': options.type ?? 'application/json' }, body: typeof input === 'string' ? input : JSON.stringify(input) }), locals: { runtime: { env: { MUSIC_DB: options.db === undefined ? db : options.db, TURNSTILE_SECRET_KEY: options.token === undefined ? 'test' : options.token, RATE_LIMIT: options.rate === undefined ? kv : options.rate, RESEND_API_KEY: 'test', CONTACT_FROM_EMAIL: 'from@example.com', CONTACT_TO_EMAIL: 'inbox@example.com', OWNER_EMAIL: 'owner@example.com' } } } } as any;
 }
 beforeEach(() => {
   sql = new DatabaseSync(':memory:'); sql.exec(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8'));
@@ -106,7 +106,7 @@ it('deduplicates after rate limit, rejects another email without leaking the bri
   expect(JSON.stringify(await conflict.json())).not.toContain('First line');
   expect((await POST(context({ ...base, submissionId: '00000000-0000-4000-8000-000000000002' }))).status).toBe(429);
   expect(sql.prepare('SELECT COUNT(*) AS n FROM owner_requests').get()).toEqual({ n: 1 });
-  expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(1);
+  expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(2);
 });
 
 it('re-reads a unique-index race and returns only a matching stored brief', async () => {
@@ -264,4 +264,34 @@ it('treats an oversized saved detail as a field error without an urgent alert', 
   expect((await response.json() as { errors: Record<string, string> }).errors).toEqual({ _form: 'Keep the brief shorter and try again.' });
   expect(kv.delete).toHaveBeenCalledWith('rl:software:0.0.0.0');
   expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(0);
+});
+
+
+it('emails only answered fields to the client with the saved title and owner Reply-To', async () => {
+  const response = await POST(context({ ...base, name: 'Alex Example', today: '<script>first</script>\nSecond line' }));
+  expect(await response.json()).toMatchObject({ ok: true, clientCopyStatus: 'sent' });
+  const emails = vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com')).map(([, init]) => JSON.parse(init!.body as string));
+  const copy = emails.find(email => email.to[0] === 'alex@example.com');
+  expect(copy).toMatchObject({ from: 'from@example.com', subject: 'Your brief: One place to see next steps.', reply_to: 'owner@example.com' });
+  expect(copy.text).toContain('Hi Alex,');
+  expect(copy.text).toContain("I'll read it myself and reply within two business days with a fixed-price first milestone, or a question or two.");
+  expect(copy.text).toContain('What happens today?\n<script>first</script>\nSecond line');
+  expect(copy.text).not.toMatch(/Not provided|Why this timing|Budget amount|Their role/);
+  expect(copy.html).toContain('&lt;script&gt;first&lt;/script&gt;');
+  expect(copy.html).not.toContain('<script>first');
+  expect(JSON.parse(sql.prepare('SELECT details_json FROM owner_requests').get().details_json).clientCopyStatus).toBe('sent');
+});
+
+it.each([['rejected', 'failed'], ['timeout', 'uncertain']] as const)('keeps the saved brief after a client copy %s', async (outcome, status) => {
+  vi.mocked(fetch).mockImplementation(async (url, init) => {
+    if (String(url).includes('siteverify')) return { ok: true, json: async () => ({ success: true }) } as Response;
+    if (JSON.parse(init!.body as string).to[0] === 'alex@example.com') {
+      if (outcome === 'timeout') throw new Error('timeout');
+      return new Response('', { status: 422 });
+    }
+    return new Response('', { status: 200 });
+  });
+  expect(await (await POST(context())).json()).toMatchObject({ ok: true, clientCopyStatus: status });
+  expect(JSON.parse(sql.prepare('SELECT details_json FROM owner_requests').get().details_json).clientCopyStatus).toBe(status);
+  expect(await (await POST(context())).json()).toMatchObject({ ok: true, clientCopyStatus: status });
 });
