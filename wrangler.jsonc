@@ -4,6 +4,7 @@
   "main": "./dist/_worker.js/index.js",
   "compatibility_date": "2026-05-14",
   "compatibility_flags": ["nodejs_compat"],
+  "ai": { "binding": "AI" },
   "assets": {
     "binding": "ASSETS",
     "directory": "./dist"
@@ -15,6 +16,7 @@
   // sender Resend uses. The Resend API key + Turnstile secret stay in
   // dashboard-managed encrypted secrets.
   "vars": {
+    "SOFTWARE_SUGGESTIONS_ENABLED": "true",
     "CONTACT_TO_EMAIL": "kazon.wilson@thesuperhuman.us",
     // Resend sends from the verified subdomain notifs.thesuperhuman.us;
     // the apex thesuperhuman.us is NOT a Resend sending domain.
