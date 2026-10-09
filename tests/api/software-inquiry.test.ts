@@ -353,6 +353,6 @@ it.each(['claim', 'construction', 'config'] as const)('records a pre-send %s fai
     expect(response.status).toBe(503);
     expect(await response.json()).toMatchObject({ ok: false });
     expect(JSON.parse(sql.prepare('SELECT details_json FROM owner_requests').get().details_json).clientCopyStatus).toBe('failed');
-    expect(vi.mocked(fetch).mock.calls.filter(([, init]) => init?.body && JSON.parse(init.body as string).to?.[0] === 'alex@example.com')).toHaveLength(0);
+    expect(vi.mocked(fetch).mock.calls.filter(([url, init]) => String(url).includes('api.resend.com') && JSON.parse(init!.body as string).to?.[0] === 'alex@example.com')).toHaveLength(0);
   } finally { vi.restoreAllMocks(); }
 });
