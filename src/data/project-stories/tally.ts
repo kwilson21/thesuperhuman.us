@@ -20,7 +20,7 @@ import formFeedback from '~/assets/projects/tally/form-feedback-annotated.webp';
 export const tallyStory = {
   title: 'Tally',
   subtitle: 'Review your transactions, set monthly budgets and see how much remains to spend.',
-  description: 'I shape Tally’s product design, architecture, and development practices. AI coding agents implement the software; I focus on decisions that need human judgment and safeguards that make future changes easier to review and safer to evolve.',
+  description: 'I shape Tally’s product design and architecture. AI coding agents implement the software. I focus on decisions that could cause problems later, and on keeping development sustainable and repeatable.',
   status: 'In development · public demo',
 };
 
