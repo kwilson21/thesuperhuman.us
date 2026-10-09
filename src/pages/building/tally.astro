@@ -1,12 +1,69 @@
 ---
 import ProjectLayout from '~/layouts/ProjectLayout.astro';
 import ProjectTimeline from '~/components/ProjectTimeline.astro';
-import { tallyStory, tallyMilestones } from '~/data/project-stories/tally';
+import { tallyStory, tallyMilestones, tallyDecisionHighlights } from '~/data/project-stories/tally';
+const highlightedEntries = tallyDecisionHighlights.map(decision => ({ decision, entry: tallyMilestones.find(entry => entry.id === decision.entry)! }));
+const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 ---
 <ProjectLayout title={tallyStory.title} subtitle={tallyStory.subtitle} description={tallyStory.description} status={tallyStory.status} journalHref="#tally-updates-title">
-  <ProjectTimeline id="tally-updates" title="Development journal" entries={tallyMilestones} selectedId="tally-home-screen" />
+  <ProjectTimeline id="tally-updates" title="Development journal" entries={tallyMilestones} selectedId="tally-home-screen">
+    <div slot="highlights" class="decision-highlights">
+      <p class="page-kicker">Two decisions I made</p>
+      {highlightedEntries.map(({ decision, entry }) => {
+        const artifact = entry.artifacts?.[0];
+        return <article class="decision-highlight">
+          <div class="decision-copy">
+            <h3>{entry.title}</h3>
+            <div class="decision-steps">
+              <div class="decision-step">
+                <span>Problem</span>
+                <p>{decision.problem}</p>
+              </div>
+              <div class="decision-step decision-step-primary">
+                <span>My decision</span>
+                <p>{decision.decision}</p>
+              </div>
+              <div class="decision-step">
+                <span>What it protects</span>
+                <p>{decision.protects}</p>
+              </div>
+            </div>
+            <p class="decision-credit">{decision.credit} From the journal: <cite>{entry.title}</cite> · <time datetime={entry.day}>{date(entry.day)}</time></p>
+          </div>
+          {artifact && <figure class="decision-evidence">
+            <a href={artifact.src} aria-label={`Open ${artifact.title} at full size`}>
+              <img src={artifact.src} alt={artifact.alt} width={artifact.width} height={artifact.height} loading="lazy" />
+            </a>
+            <figcaption><span class="meta">{artifact.kind}</span><h4>{artifact.title}</h4><p>{artifact.caption}</p></figcaption>
+          </figure>}
+        </article>;
+      })}
+    </div>
+  </ProjectTimeline>
   <p class="source-link"><a class="site-link" href="https://github.com/kwilson21/tally">Tally on GitHub <span aria-hidden="true">↗</span></a></p>
 </ProjectLayout>
 <style>
   .source-link { margin-top: 2rem; }
+  .decision-highlights { margin: 0 0 2rem; }
+  .decision-highlights > .page-kicker { color: var(--accent); margin: 0 0 1.5rem; }
+  .decision-highlight { display: grid; gap: 1.5rem; padding: 0 0 2rem; margin: 0 0 2rem; border-bottom: 1px solid var(--rule); }
+  .decision-highlight:last-child { margin-bottom: 0; }
+  .decision-copy h3 { font-size: clamp(1.65rem, 3vw, 2.1rem); line-height: 1.2; margin: 0 0 1.25rem; max-width: 24ch; }
+  .decision-steps { display: grid; }
+  .decision-step { position: relative; border-left: 1px solid var(--rule); padding: 0 0 1.25rem 1.25rem; }
+  .decision-step::before { content: ''; position: absolute; width: 8px; height: 8px; border: 1px solid var(--muted); border-radius: 50%; background: var(--paper); left: -5px; top: .4rem; }
+  .decision-step span { display: block; color: var(--muted); font: .68rem/1.5 'JetBrains Mono', monospace; letter-spacing: .06em; text-transform: uppercase; }
+  .decision-step p { max-width: 58ch; color: var(--muted); font-size: .98rem; line-height: 1.6; margin: .25rem 0 0; }
+  .decision-step-primary::before { background: var(--accent); border-color: var(--accent); }
+  .decision-step-primary p { color: var(--ink); font-size: 1.08rem; }
+  .decision-step:last-child { padding-bottom: 0; border-left-color: transparent; }
+  .decision-credit { color: var(--muted); font-size: .78rem; line-height: 1.6; margin: 1.25rem 0 0; max-width: 60ch; }
+  .decision-credit cite { font-style: normal; }
+  .decision-evidence img { display: block; width: 100%; height: auto; }
+  .decision-evidence figcaption { margin-top: .75rem; color: var(--muted); font-size: .8rem; line-height: 1.6; }
+  .decision-evidence h4 { color: var(--ink); font-size: 1.1rem; margin: .25rem 0; }
+  .decision-evidence figcaption p { margin: .25rem 0 0; }
+  @media (min-width: 801px) {
+    .decision-highlight { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); column-gap: clamp(2rem, 5vw, 4rem); align-items: start; }
+  }
 </style>
