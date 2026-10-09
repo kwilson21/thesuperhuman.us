@@ -2,7 +2,10 @@ const assert = require('node:assert/strict');
 const { readdirSync } = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const { chromium } = require(path.join(process.env.PW_SKILL_DIR, 'node_modules/playwright'));
+const playwrightPath = process.env.PW_SKILL_DIR
+  ? path.join(process.env.PW_SKILL_DIR, 'node_modules/playwright')
+  : 'playwright';
+const { chromium } = require(playwrightPath);
 
 const targetUrl = process.env.TARGET_URL || 'http://127.0.0.1:4321';
 const artifactDir = process.env.PW_ARTIFACT_DIR || '/tmp';
@@ -20,6 +23,9 @@ const routes = [...new Set([...staticRoutes, '/music/old-news'])].sort();
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], {
+      origin: new URL(targetUrl).origin,
+    });
     for (const route of routes) {
       const response = await page.goto(new URL(route, targetUrl).href, { waitUntil: 'domcontentloaded' });
       if (route !== '/404') assert.ok(response && response.status() < 400, `${route} did not load successfully`);
@@ -66,6 +72,12 @@ const routes = [...new Set([...staticRoutes, '/music/old-news'])].sort();
 
     await page.goto(pathToFileURL(path.resolve('scripts/og.html')).href, { waitUntil: 'domcontentloaded' });
     await page.evaluate(() => document.fonts.ready);
+    assert.match(
+      await page.locator('body').evaluate(element => getComputedStyle(element).fontFamily),
+      /Libron/,
+      'default social card does not use Libron for its serif text',
+    );
+    assert.equal(await page.evaluate(() => document.fonts.check('400 34px Libron')), true);
     const socialName = page.locator('h1');
     assert.match(
       await socialName.evaluate(element => getComputedStyle(element).fontFamily),
@@ -77,23 +89,36 @@ const routes = [...new Set([...staticRoutes, '/music/old-news'])].sort();
     await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
     await page.locator('h1').first().waitFor();
     await page.evaluate(() => document.fonts.ready);
+    assert.equal(await page.evaluate(() => document.fonts.check('400 16px Libron')), true);
+    assert.equal(await page.evaluate(() => document.fonts.check('400 96px "Kazon Name Display"')), true);
+    assert.equal(await page.getByRole('heading', { name: 'Kazon Wilson', exact: true }).count(), 1);
     const displayName = page.locator('[data-personal-name][data-name-style="display"]').first();
     await displayName.waitFor();
     const family = await displayName.evaluate(element => getComputedStyle(element).fontFamily);
     assert.match(family, /Kazon Name Display/);
-    assert.equal(
-      await displayName.evaluate(element => {
+    const selectedName = await displayName.evaluate(element => {
         const selection = window.getSelection();
         const range = document.createRange();
         range.selectNodeContents(element);
         selection.removeAllRanges();
         selection.addRange(range);
-        const selected = selection.toString().replace(/\s+/g, ' ').trim();
+        return selection.toString().replace(/\s+/g, ' ').trim();
+      });
+    assert.equal(selectedName, 'Kazon Wilson');
+    const selectedFirstName = await displayName.evaluate(element => {
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(element.firstChild);
         selection.removeAllRanges();
-        return selected;
-      }),
-      'Kazon Wilson',
-    );
+        selection.addRange(range);
+        return selection.toString();
+    });
+    assert.equal(selectedFirstName, 'Kazon');
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+C' : 'Control+C');
+    const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
+    assert.equal(clipboardText, 'Kazon');
+    assert.equal(clipboardText.includes('\u0304'), false);
+    await page.evaluate(() => window.getSelection()?.removeAllRanges());
     assert.equal(await displayName.textContent(), 'Kazon Wilson');
     assert.equal((await displayName.textContent()).includes('\u0304'), false);
     await displayName.screenshot({ path: path.join(artifactDir, 'personal-name-display.png') });
@@ -112,6 +137,8 @@ const routes = [...new Set([...staticRoutes, '/music/old-news'])].sort();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
     await page.locator('h1').first().waitFor();
+    await page.evaluate(() => document.fonts.ready);
+    assert.equal(await page.evaluate(() => document.fonts.check('400 96px "Kazon Name Display"')), true);
     await page.screenshot({ path: path.join(artifactDir, 'personal-name-mobile.png'), fullPage: true });
   } finally {
     await browser.close();

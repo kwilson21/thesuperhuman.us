@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the two scoped fonts used for Kazon's visible name treatment."""
+"""Build font-native Libron variants for Kazon's visible name treatment."""
 
 from __future__ import annotations
 
@@ -13,22 +13,24 @@ from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import TTFont
 
 
-SOURCE_COMMIT = "cfcb4f7af0e52c25e8df2a2431814c8e5fe2e155"
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE_PATH = ROOT / "public/fonts/libron-v0.25/Libron-Regular.woff2"
+SOURCE_SHA256 = "b25eda95d6b81c4977217314a088f446448a07126738511e8930a8d3372a5253"
 FONT_CASES = (
     {
-        "source": "fonts/static/ttf/Newsreader16pt-Regular.ttf",
-        "sha256": "0636887c9f72f77ce188f0b31029be58e65adae5a47e6d2887ad5020c2c75036",
         "family": "Kazon Name Text",
         "output": "kazon-name-text.woff2",
+        "mark_scale_y": 0.3609,
     },
     {
-        "source": "fonts/static/ttf/Newsreader72pt-Regular.ttf",
-        "sha256": "fda3ed5d7dc98387a94eed6a9f1384c9d5929ff1ad6d4851e223ffe119fe95c0",
         "family": "Kazon Name Display",
         "output": "kazon-name-display.woff2",
+        "mark_scale_y": 0.2556,
     },
 )
 NAME_CHARACTERS = "Kazon Wils"
+MARK_SCALE_X = 0.5256
+MARK_GAP = 96
 
 
 def sha256(path: Path) -> str:
@@ -39,22 +41,23 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def add_mark(font: TTFont) -> None:
+def add_mark(font: TTFont, scale_y: float) -> None:
     glyph_set = font.getGlyphSet()
     z_glyph = font["glyf"]["z"]
     dash_glyph = font["glyf"]["endash"]
     z_center = (z_glyph.xMin + z_glyph.xMax) / 2
     dash_center = (dash_glyph.xMin + dash_glyph.xMax) / 2
-    scale = 0.5
-    gap = 96
-    translate_x = z_center - dash_center * scale
-    translate_y = z_glyph.yMax + gap - dash_glyph.yMin * scale
+    # Libron's en dash is thicker than the former Newsreader source. Keep the
+    # same centered, font-native construction while matching the existing
+    # text and display mark thicknesses.
+    translate_x = z_center - dash_center * MARK_SCALE_X
+    translate_y = z_glyph.yMax + MARK_GAP - dash_glyph.yMin * scale_y
 
     pen = TTGlyphPen(glyph_set)
     glyph_set["z"].draw(pen)
     transformed_pen = TransformPen(
         pen,
-        (scale, 0, 0, scale, translate_x, translate_y),
+        (MARK_SCALE_X, 0, 0, scale_y, translate_x, translate_y),
     )
     glyph_set["endash"].draw(transformed_pen)
     font["glyf"]["z"] = pen.glyph()
@@ -65,7 +68,7 @@ def rename_font(font: TTFont, family: str) -> None:
     replacements = {
         1: family,
         2: "Regular",
-        3: f"{family} Regular {SOURCE_COMMIT[:12]}",
+        3: f"{family} Regular {SOURCE_SHA256[:12]}",
         4: family,
         6: postscript_name,
         16: family,
@@ -87,18 +90,17 @@ def subset_for_name(font: TTFont) -> None:
     subsetter.subset(font)
 
 
-def build(source_root: Path, output_root: Path) -> None:
+def build(output_root: Path) -> None:
     output_root.mkdir(parents=True, exist_ok=True)
-    for case in FONT_CASES:
-        source_path = source_root / case["source"]
-        actual_hash = sha256(source_path)
-        if actual_hash != case["sha256"]:
-            raise SystemExit(
-                f"Unexpected source font hash for {source_path}: {actual_hash}"
-            )
+    actual_hash = sha256(SOURCE_PATH)
+    if actual_hash != SOURCE_SHA256:
+        raise SystemExit(
+            f"Unexpected Libron v0.25 source font hash for {SOURCE_PATH}: {actual_hash}"
+        )
 
-        font = TTFont(source_path, recalcBBoxes=True, recalcTimestamp=False)
-        add_mark(font)
+    for case in FONT_CASES:
+        font = TTFont(SOURCE_PATH, recalcBBoxes=True, recalcTimestamp=False)
+        add_mark(font, case["mark_scale_y"])
         rename_font(font, case["family"])
         subset_for_name(font)
         font.flavor = "woff2"
@@ -108,17 +110,12 @@ def build(source_root: Path, output_root: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "source_root",
-        type=Path,
-        help=f"Newsreader source checkout at commit {SOURCE_COMMIT}",
-    )
-    parser.add_argument(
         "--output-root",
         type=Path,
-        default=Path("public/fonts"),
+        default=ROOT / "public/fonts",
     )
     args = parser.parse_args()
-    build(args.source_root, args.output_root)
+    build(args.output_root)
 
 
 if __name__ == "__main__":

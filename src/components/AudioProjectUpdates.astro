@@ -109,7 +109,7 @@ const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month
   .owner .project-update-actions { order: -1; margin: 0 0 2.75rem; }
   .project-updates-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1.5rem; margin-bottom: 2rem; }
   .project-updates-kicker { margin: 0; color: var(--accent); font: 500 .78rem/1.4 Inter, sans-serif; letter-spacing: .18em; text-transform: uppercase; }
-  h2 { margin: 0; font: 400 clamp(2rem, 4vw, 3rem)/1.1 Newsreader, Georgia, serif; }
+  h2 { margin: 0; font: 400 clamp(2rem, 4vw, 3rem)/1.1 Libron, Georgia, serif; }
   .timeline { position: relative; list-style: none; margin: 0; padding: 0; max-width: 46rem; }
   /* The spine: one continuous line through every node. */
   .timeline::before { content: ''; position: absolute; top: .55rem; bottom: .9rem; left: .5rem; width: 1.5px; background: var(--studio-done); }
@@ -127,7 +127,7 @@ const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month
   .timeline-node.next { background: var(--paper); border: 1.5px dashed var(--studio-line); }
   .timeline-entry { display: grid; gap: .45rem; min-width: 0; }
   .timeline-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem .9rem; margin: 0; font: .8rem/1.4 Inter, sans-serif; color: var(--studio-muted); }
-  .timeline-meta strong { color: var(--ink); font: 400 1.2rem/1.25 Newsreader, Georgia, serif; }
+  .timeline-meta strong { color: var(--ink); font: 400 1.2rem/1.25 Libron, Georgia, serif; }
   .timeline-next .timeline-meta strong { color: var(--studio-muted); }
   .timeline-body { margin: 0; font: 1rem/1.6 Inter, sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; }
   .timeline-date { display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem .6rem; margin: 0; font: .88rem/1.5 Inter, sans-serif; color: var(--studio-muted); }
@@ -146,7 +146,7 @@ const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month
   .next-step.waiting { border-left-color: var(--studio-line); background: color-mix(in srgb, var(--studio-field) 60%, var(--paper)); }
   .next-step-kicker { margin: 0; color: var(--accent); font: 500 .72rem/1.4 Inter, sans-serif; letter-spacing: .18em; text-transform: uppercase; }
   .next-step.waiting .next-step-kicker { color: var(--studio-muted); }
-  .next-step-title { margin: 0; font: 400 1.5rem/1.15 Newsreader, Georgia, serif; }
+  .next-step-title { margin: 0; font: 400 1.5rem/1.15 Libron, Georgia, serif; }
   .next-step-detail { margin: 0; max-width: 40rem; font: .92rem/1.55 Inter, sans-serif; color: var(--studio-muted); }
   .next-step-link { justify-self: start; margin-top: .35rem; padding: .5rem .9rem; border: 1px solid var(--ink); border-radius: 2px; color: var(--ink); font: 500 .88rem/1.4 Inter, sans-serif; text-decoration: none; }
   .next-step-link:hover { background: var(--ink); color: var(--paper); }
@@ -156,6 +156,6 @@ const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month
   @keyframes next-step-pulse { from { outline-offset: 12px; outline-color: transparent; } to { outline-offset: 4px; } }
   @media (prefers-reduced-motion: reduce) { :global(.next-step-target) { animation: none; } }
   .panel { display: grid; align-content: start; gap: .9rem; padding: 1.4rem; border: 1px solid var(--rule); border-radius: 2px; background: color-mix(in srgb, var(--studio-field) 60%, var(--paper)); }
-  h3 { margin: 0; font: 400 1.5rem/1.15 Newsreader, Georgia, serif; }
+  h3 { margin: 0; font: 400 1.5rem/1.15 Libron, Georgia, serif; }
   .panel > p:not(.studio-status) { margin: -.4rem 0 0; color: var(--studio-muted); font: .85rem/1.5 Inter, sans-serif; }
 </style>
