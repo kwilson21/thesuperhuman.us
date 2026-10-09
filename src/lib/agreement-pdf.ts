@@ -222,6 +222,7 @@ export async function renderAgreementPacket(
         ['Typed name', 'typed_name'],
         ['Title', 'title'],
         ['Verified email', 'verified_email'],
+        ['Verification method', 'verification_method'],
         ['Verified at (New York)', 'verified_at'],
         ['Consent at (New York)', 'consent_at'],
         ['Signed at (New York)', 'signed_at'],
@@ -234,8 +235,8 @@ export async function renderAgreementPacket(
           key.endsWith('_at') ? newYorkTime(signer[key]) : signer[key],
         );
     }
-    add('Electronic consent, authority and intent', true);
-    for (const key of ['consent_text', 'authority_text', 'intent_text'])
+    add('Electronic consent and intent', true);
+    for (const key of ['consent_text', 'intent_text'])
       for (const statement of new Set(
         signatures.map((s) => s[key]).filter(Boolean),
       ))
@@ -258,7 +259,7 @@ export async function renderAgreementPacket(
       );
       row(
         'Source revision',
-        (c.versions as Record<string, unknown> | undefined)?.source_revision,
+        (c.versions as Record<string, unknown> | undefined)?.version_label,
       );
       row('SHA-256', d.text_sha256 ?? c.document_sha256);
     }
@@ -313,11 +314,11 @@ export async function renderAgreementPacket(
 export async function preflightAgreementPacket(env: Env, terms: OfferTerms, details: AgreementDetails,
   contractor: ReturnType<typeof contractorSchema.parse>, templates: AgreementTemplate[], reusedMsaId: string | null) {
   const client: ClientAgreement = {
-    business_engagement: true, legal_name: 'W'.repeat(200), entity_type: 'W'.repeat(200),
+    legal_name: 'W'.repeat(200), entity_type: 'W'.repeat(200),
     jurisdiction: 'W'.repeat(100), business_address: 'W'.repeat(1000), notice_email: 'sample@example.test',
     reviewer_name: 'W'.repeat(200), reviewer_email: 'sample@example.test', approver_name: 'W'.repeat(200),
     approver_email: 'sample@example.test', signer_name: 'W'.repeat(200), signer_title: 'W'.repeat(200),
-    portfolio: 'deny', naming: false, initials: 'W'.repeat(20),
+    portfolio: 'deny', naming: false,
   };
   const documents: Agreement[] = templates.map(template => {
     const values = agreementValues(terms, details, client, contractor, {

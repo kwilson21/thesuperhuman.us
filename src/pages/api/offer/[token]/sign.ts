@@ -19,22 +19,20 @@ const post: APIRoute = async ({ request, locals, params }) => {
         .min(1)
         .max(2),
       consent: z.literal(true),
-      authority: z.literal(true),
-      intent: z.literal(true),
     })
     .safeParse(body);
   const offer = params.token ? await getLinkedOffer(db, params.token) : null,
     session = offer ? await agreementSession(db, request, 'agreement', offer.id) : null;
   if (!(await signingEnabled(db)) || !session)
     return agreementJson(
-      { ok: false, error: 'Request a fresh code, then review the agreement again.' },
+      { ok: false, error: 'Open a fresh email link to keep going. Your saved details will be here.' },
       401,
     );
   if (!input.success)
     return agreementJson(
       {
         ok: false,
-        error: 'Confirm consent, authority and intent after reviewing the exact documents.',
+        error: 'Agree to sign electronically after reviewing the agreement.',
       },
       400,
     );

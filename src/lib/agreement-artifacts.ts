@@ -81,12 +81,13 @@ export async function prepareAgreementArtifact(
           offer: JSON.parse(d.values_json).sow?.version,
           contractor_config: JSON.parse(d.values_json).contractor.config_version,
           source_revision: JSON.parse(d.values_json).msa?.source_revision,
+          version_label: JSON.parse(d.values_json).msa?.version_label,
         },
         attachments: JSON.parse(d.attachment_manifest_json),
         signatures: (
           await db
             .prepare(
-              'SELECT party,typed_name,title,consent_text,authority_text,consent_version,consent_at,signed_at,document_sha256,owner_subject,verified_email,verified_at,intent_text,document_list_json,receipt_id,ip_address,user_agent FROM software_agreement_signatures WHERE agreement_id=? ORDER BY party',
+              'SELECT party,typed_name,title,consent_text,consent_version,consent_at,signed_at,document_sha256,owner_subject,verified_email,verified_at,verification_method,intent_text,document_list_json,receipt_id,ip_address,user_agent FROM software_agreement_signatures WHERE agreement_id=? ORDER BY party',
             )
             .bind(d.id)
             .all()

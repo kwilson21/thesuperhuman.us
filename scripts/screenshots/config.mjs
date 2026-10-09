@@ -47,6 +47,8 @@ export const REDIRECTS = {
 export const SCENARIO_PAGES = {
   'src/pages/agreements.astro': {scenario:'software-signing',route:'/agreements'},
   'src/pages/owner/agreements.astro': {scenario:'software-signing',route:'/owner/agreements'},
+  'src/pages/offer/[token]/verify.astro': {scenario:'software-signing',route:'/offer/'},
+  'src/pages/agreements/verify.astro': {scenario:'software-signing',route:'/agreements/verify'},
   'src/pages/offer/[token]/sign.astro': {scenario:'software-signing',route:'/offer/'},
   'src/pages/studio/software/[id].astro': { scenario: 'software-project', route: '/studio/software/' },
   'src/pages/owner/requests/[id]/update.astro': { scenario: 'software-project', route: '/owner/requests/screenshot-software-project/update' },

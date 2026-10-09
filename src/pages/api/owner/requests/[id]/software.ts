@@ -98,7 +98,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       return json({ ok: true, copySent: sent.copySent });
     }
     if (command.action === 'revoke') {
-      await db.batch([requestGuard(), abandonUnsignedAgreementReviews(db,record.id,now),db.prepare('UPDATE software_agreement_sessions SET revoked_at=? WHERE offer_id IN (SELECT id FROM software_offers WHERE request_id=?)').bind(now,record.id),db.prepare('UPDATE software_agreement_challenges SET used_at=? WHERE offer_id IN (SELECT id FROM software_offers WHERE request_id=?)').bind(now,record.id), offerSendingGuard(db, record.id), guard('SELECT 1 FROM software_offer_links WHERE request_id=? AND created_at=? AND revoked_at IS NULL', [record.id, command.expectedLinkCreatedAt]),
+      await db.batch([requestGuard(), abandonUnsignedAgreementReviews(db,record.id,now),db.prepare('UPDATE software_agreement_sessions SET revoked_at=? WHERE offer_id IN (SELECT id FROM software_offers WHERE request_id=?)').bind(now,record.id),db.prepare('UPDATE software_agreement_links SET used_at=? WHERE offer_id IN (SELECT id FROM software_offers WHERE request_id=?)').bind(now,record.id), offerSendingGuard(db, record.id), guard('SELECT 1 FROM software_offer_links WHERE request_id=? AND created_at=? AND revoked_at IS NULL', [record.id, command.expectedLinkCreatedAt]),
         db.prepare('UPDATE software_offer_links SET revoked_at=? WHERE request_id=? AND created_at=? AND revoked_at IS NULL').bind(now, record.id, command.expectedLinkCreatedAt), audit('offer-link-revoked')]);
       return json({ ok: true });
     }
@@ -165,7 +165,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       ...(pin ? [db.prepare('UPDATE software_offers SET agreement_details_json=?,msa_template_id=?,sow_template_id=?,contractor_snapshot_json=?,recipient_email_snapshot=? WHERE id=?').bind(pin.details,pin.msa,pin.sow,pin.contractor,pin.email,offer.id)] : []),
       abandonUnsignedAgreementReviews(db,record.id,now),
       db.prepare('UPDATE software_agreement_sessions SET revoked_at=? WHERE offer_id IN (SELECT id FROM software_offers WHERE request_id=?) AND revoked_at IS NULL').bind(now,record.id),
-      db.prepare('UPDATE software_agreement_challenges SET used_at=? WHERE offer_id IN (SELECT id FROM software_offers WHERE request_id=?) AND used_at IS NULL').bind(now,record.id),
+      db.prepare('UPDATE software_agreement_links SET used_at=? WHERE offer_id IN (SELECT id FROM software_offers WHERE request_id=?) AND used_at IS NULL').bind(now,record.id),
       audit('offer-sent', `Offer v${offer.version} sent`),
     ]);
     const sent = await email(`Your project offer: ${terms.value.outcome}`, `Hi ${record.name.trim().split(/\s+/)[0] || 'there'},\n\nHere’s the offer for ${terms.value.outcome}: ${link}\n\nThe link is private to you. You can forward it to whoever approves the budget. Reply to this email with any questions.\n\nKazon`);

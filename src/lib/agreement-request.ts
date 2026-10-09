@@ -30,11 +30,7 @@ export async function agreementRequest(request: Request, max = 16384) {
     const fields = Object.fromEntries(new URLSearchParams(new TextDecoder().decode(bytes)));
     if (fields['cf-turnstile-response']) fields.turnstileToken = fields['cf-turnstile-response'];
     for (const key of [
-      'business_engagement',
       'consent',
-      'authority',
-      'intent',
-      'naming',
       'confirmed',
       'confirmedNotSent',
       'confirmedStale',
@@ -66,7 +62,7 @@ export async function agreementRequest(request: Request, max = 16384) {
       const { csrf_nonce, ...values } = fields;
       return {
         csrf_nonce,
-        values: { ...values, naming: (values as Record<string, unknown>).naming === true },
+        values,
       };
     }
     if (fields.action === 'hold')

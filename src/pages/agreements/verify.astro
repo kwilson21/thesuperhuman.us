@@ -1,0 +1,9 @@
+---
+export const prerender = false;
+import AgreementLayout from '~/layouts/AgreementLayout.astro';
+import { completeAgreementLink } from '~/lib/agreement-access';
+const response = await completeAgreementLink(Astro.locals.runtime.env, Astro.request, Astro.url.searchParams.get('key') ?? '', undefined);
+if (response.status === 303) return response;
+Astro.response.status = response.status;
+---
+<AgreementLayout title="This link has expired"><h1 class="page-title">This link has expired.</h1><p><a class="studio-button" href={'/agreements'}>Send a new link</a></p></AgreementLayout>

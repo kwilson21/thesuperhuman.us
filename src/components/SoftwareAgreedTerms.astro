@@ -2,12 +2,13 @@
 import type { OfferTerms } from '~/lib/software-offers';
 import { formatUSD, offerTotal, paymentSchedules } from '~/lib/software-offers';
 import type { Agreement } from '~/lib/software-agreements';
-import type { agreementValues } from '~/lib/agreement-fields';
+import type { AgreementDetails, agreementValues } from '~/lib/agreement-fields';
 import { softwareDate } from '~/lib/software-projects';
 type Document = Pick<Agreement, 'id' | 'kind' | 'canonical_text' | 'effective_on' | 'text_sha256'>;
-interface Props { terms: OfferTerms; values?: ReturnType<typeof agreementValues> | null; documents: Document[]; websiteSigned: boolean; conversationOpen: boolean; }
+interface Props { terms: OfferTerms; values?: ReturnType<typeof agreementValues> | null; documents: Document[]; websiteSigned: boolean; conversationOpen: boolean; signing?: boolean; agreementDetails?: AgreementDetails; }
 const { terms, values, documents, websiteSigned, conversationOpen } = Astro.props;
-const details = values?.owner;
+const signing = Astro.props.signing ?? false;
+const details = values?.owner ?? Astro.props.agreementDetails;
 const packet = documents.find(document => document.kind === 'sow');
 const stages = ['What you get', 'Milestones & timing', 'Cost & responsibilities', 'Review agreed terms'];
 const workingTerms = details ? [
@@ -18,11 +19,11 @@ const workingTerms = details ? [
   ['Recurring charges', details.recurring_charges], ['Visual approvals', details.visual_approvals],
   ['AI permission', details.ai_permission], ['Sensitive-data addenda', details.sensitive_addenda],
   ['Support', details.support], ['MSA changes', details.msa_changes],
-  ['Data retention', values!.details.data_retention], ['Handoff access', values!.details.handoff_access],
+  ['Data retention', values?.details?.data_retention ?? details.data_retention], ['Handoff access', values?.details?.handoff_access ?? details.handoff_access],
 ] : [];
 ---
 <details class="agreed-terms" data-agreed-terms>
-  <summary>What we agreed</summary>
+  <summary>{signing?'Read the full agreement and statement of work':'What we agreed'}</summary>
   <div class="terms-reader" data-terms-reader>
     <header class="terms-summary" aria-label="Agreed project summary">
       <div><strong>{terms.outcome}</strong><span>{terms.milestones.length} {terms.milestones.length === 1 ? 'milestone' : 'milestones'} · {formatUSD(offerTotal(terms))} fixed fee</span></div>
@@ -49,7 +50,7 @@ const workingTerms = details ? [
         return <article class="terms-card terms-milestone"><h3>{index + 1} · {milestone.name}</h3><p class="terms-fee">{formatUSD(milestone.feeCents)} fixed fee</p>
           {dates ? <p>Planned start: {softwareDate(dates.start)}<br />Target delivery: {softwareDate(dates.target)}</p> : <p>Milestone delivery dates are not recorded on this page. Refer to your complete signed agreement.</p>}
           <details class="terms-disclosure"><summary>How we’ll know it’s ready · {milestone.acceptance.length} {milestone.acceptance.length === 1 ? 'check' : 'checks'}</summary><ul>{milestone.acceptance.map(line => <li>{line}</li>)}</ul></details>
-          {dates && <details class="terms-disclosure"><summary>Handoff{milestone.checkpoint ? ' and cancellation checkpoint' : ''}</summary><p>{dates.handoff}</p>{milestone.checkpoint && <><h4>{milestone.checkpoint.label}</h4><p>{values!.milestones[index].checkpoint}</p></>}</details>}
+          {dates && <details class="terms-disclosure"><summary>Handoff{milestone.checkpoint ? ' and cancellation checkpoint' : ''}</summary><p>{dates.handoff}</p>{milestone.checkpoint && <><h4>{milestone.checkpoint.label}</h4><p>{values?.milestones?.[index].checkpoint ?? `${dates.checkpoint_criteria}. ${dates.checkpoint_evidence}`}</p></>}</details>}
           {!dates && milestone.checkpoint && <p>Cancellation checkpoint: {milestone.checkpoint.label} · {milestone.checkpoint.cancellationPercent}% cumulative cancellation amount, including prior payments. Refer to the signed agreement for criteria and evidence.</p>}
         </article>;
       })}
@@ -65,12 +66,12 @@ const workingTerms = details ? [
         {details && <><article class="terms-card"><h3>Delivery environment</h3><p>{details.environment}</p></article><article class="terms-card"><h3>Operating responsibilities</h3><p>{details.operating_responsibilities}</p></article></>}
         {terms.exclusions && <article class="terms-card"><h3>Outside this offer</h3><p>{terms.exclusions}</p></article>}
       </div>
-      {details && <details class="terms-disclosure"><summary>Additional working terms</summary><dl class="terms-working">{workingTerms.map(([label, value]) => <div><dt>{label}</dt><dd>{value || 'None'}</dd></div>)}{terms.paymentMode === 'invoice' && <div><dt>First milestone duration</dt><dd>{values!.details.invoice_first_duration}</dd></div>}</dl></details>}
+      {details && <details class="terms-disclosure"><summary>Additional working terms</summary><dl class="terms-working">{workingTerms.map(([label, value]) => <div><dt>{label}</dt><dd>{value || 'None'}</dd></div>)}{terms.paymentMode === 'invoice' && <div><dt>First milestone duration</dt><dd>{values?.details?.invoice_first_duration ?? details.invoice_first_duration}</dd></div>}</dl></details>}
     </section>
     <section id="agreed-stage-3" data-terms-stage aria-labelledby="agreed-review">
       <p class="terms-kicker">04 · The complete record</p><h2 id="agreed-review" tabindex="-1">Review agreed terms</h2>
-      <p>This project’s agreement is already recorded. Opening stages or reading terms does not give consent, sign anything, or change what you agreed.</p>
-      {documents.length ? <>
+      <p>{signing?'Review the complete filled documents before signing. Reading terms does not sign anything.':'This project’s agreement is already recorded. Opening stages or reading terms does not give consent, sign anything, or change what you agreed.'}</p>
+      {signing ? <><p class="agreement-hint" data-review-hint>Complete your details and portfolio choice to see the exact filled documents. You can download and keep a complete copy.</p><div data-reviewed-documents>{documents.map(d=><section class="agreement-section"><h3>{d.kind.toUpperCase()}</h3><pre class="agreement-text">{d.canonical_text}</pre></section>)}</div></> : documents.length ? <>
         <p>Read the complete signed documents for all obligations, change and cancellation terms. This overview does not replace them.</p>
         {packet && <p><a class="site-link" data-terms-packet href={`/api/agreements/${packet.id}/file`}>Download complete signed agreement packet</a></p>}
         {documents.map(document => <div class="terms-document"><h3>{document.kind.toUpperCase()} · Effective {softwareDate(document.effective_on)}</h3><details class="terms-disclosure"><summary>Read complete {document.kind.toUpperCase()} text</summary><p class="terms-hash">SHA-256 {document.text_sha256}</p><pre class="terms-legal">{document.canonical_text}</pre></details></div>)}
