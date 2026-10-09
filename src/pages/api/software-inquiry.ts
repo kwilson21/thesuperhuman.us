@@ -1,6 +1,6 @@
-import { softwareBriefEmail } from '~/lib/client-emails';
+import { deliverSoftwareBriefCopy } from '~/lib/software-brief-copy';
 import type { APIRoute } from 'astro';
-import { sendAudioMessage, sendSoftwareRequestNotice } from '~/lib/audio-resend';
+import { sendSoftwareRequestNotice } from '~/lib/audio-resend';
 import { musicRequest } from '~/lib/music-request';
 import { sendUrgentOwnerAlert } from '~/lib/owner-alerts';
 import { getOwnerRequest, RequestDetailsTooLargeError, saveOwnerRequest } from '~/lib/owner-requests';
@@ -57,21 +57,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       await sendUrgentOwnerAlert(env, { category: 'request-storage', route: '/api/software-inquiry', requestId: crypto.randomUUID(), code: 'd1-write-failed', occurredAt: new Date().toISOString() });
       return Response.json({ ok: false, error: preserved }, { status: 503 });
     }
-    let clientCopyStatus = 'uncertain';
-    try {
-      // Reserve before sending so interrupted delivery is never retried automatically.
-      await env.MUSIC_DB.batch([env.MUSIC_DB.prepare("UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus','uncertain') WHERE id=?").bind(saved.id)]);
-      const copy = env.RESEND_API_KEY && env.CONTACT_FROM_EMAIL && env.OWNER_EMAIL
-        ? await sendAudioMessage({ apiKey: env.RESEND_API_KEY, payload: {
-          from: env.CONTACT_FROM_EMAIL, to: [saved.email], reply_to: env.OWNER_EMAIL,
-          subject: `Your brief: ${saved.summary || 'your project'}`, ...softwareBriefEmail(saved.name, softwareBrief(saved)),
-        } }) : { ok: false };
-      clientCopyStatus = copy.ok ? 'sent' : copy.uncertain ? 'uncertain' : 'failed';
-      await env.MUSIC_DB.batch([env.MUSIC_DB.prepare("UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus',?) WHERE id=?").bind(clientCopyStatus, saved.id)]);
-    } catch {
-      clientCopyStatus = 'uncertain';
-      console.error('Client brief copy state is uncertain.');
-    }
+    const clientCopyStatus = await deliverSoftwareBriefCopy(env.MUSIC_DB, saved, env);
     const notice = sendSoftwareRequestNotice({ requestId: saved.id, path: input.path, name: input.name, email: input.email, brief: softwareBrief(saved),
       origin: env.SITE_ORIGIN, apiKey: env.RESEND_API_KEY, from: env.CONTACT_FROM_EMAIL, to: env.CONTACT_TO_EMAIL })
       .catch(() => console.error('Owner notification email state is uncertain.'));

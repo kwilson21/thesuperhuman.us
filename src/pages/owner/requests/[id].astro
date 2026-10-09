@@ -89,7 +89,12 @@ const brief = request.kind === 'software' ? softwareBrief(request) : null;
     </div>
     <aside class="request-rail" id="request-client" aria-label="Request details">
       {request.kind === 'software' && clientPortalEnabled(Astro.locals.runtime.env) && <SoftwareProjectPanel requestId={request.id} requestUpdatedAt={request.updatedAt} project={softwareProject} sentOffer={offers.find(offer => offer.status === 'sent')} updates={softwareUpdates} closed={request.status === 'withdrawn' || (!softwareProject && request.status === 'resolved')} />}
-      {brief && <p class="rail-muted">Client copy: {request.details.clientCopyStatus === 'sent' ? 'sent' : request.details.clientCopyStatus === 'failed' ? "didn't send" : request.details.clientCopyStatus === 'uncertain' ? 'uncertain' : 'not recorded'}</p>}
+      {brief && <div data-brief-copy data-endpoint={`/api/owner/requests/${encodeURIComponent(request.id)}/brief-copy`}>
+        <p class="rail-muted">Client copy: {request.details.clientCopyStatus === 'sent' ? 'sent' : request.details.clientCopyStatus === 'failed' ? "didn't send" : request.details.clientCopyStatus === 'uncertain' ? 'uncertain. Check Resend before retrying.' : 'not recorded'}</p>
+        {!closed && request.details.clientCopyStatus === 'failed' && <button type="button" class="studio-button" data-send-project-invitation>Retry brief copy</button>}
+        {!closed && request.details.clientCopyStatus === 'uncertain' && typeof request.details.clientCopyAttemptedAt === 'string' && Date.now() - Date.parse(request.details.clientCopyAttemptedAt) > 60_000 && <button type="button" class="studio-quiet" data-send-project-invitation data-confirmed-not-sent="true">I checked Resend; retry</button>}
+        <p class="studio-status" data-invitation-status role="status" aria-live="polite"></p>
+      </div>}
       {brief && <SoftwareFitReview requestId={request.id} fit={fit} closed={closed} />}
       <section class="rail-section" aria-labelledby="contact-heading"><h2 id="contact-heading">Client</h2>
         <p class="rail-name">{request.name || 'Name not supplied'}</p>
@@ -126,7 +131,7 @@ const brief = request.kind === 'software' ? softwareBrief(request) : null;
       </details>
     </aside>
   </div>
-  <script>import { setupSoftwareOffers } from '~/scripts/software-offers'; setupSoftwareOffers(); import { setupOwnerRequestActions } from '~/scripts/owner-request-actions'; import { setupOwnerPaymentActions } from '~/scripts/owner-payment-actions'; import { setupProjectMessages } from '~/scripts/project-messages'; import { setupProjectUpdates } from '~/scripts/project-updates'; import { setupProjectInvitation } from '~/scripts/project-invitation'; import { setupOwnerProjectFiles } from '~/scripts/owner-project-files'; setupOwnerRequestActions(); setupOwnerPaymentActions(); setupProjectMessages(); setupProjectUpdates(); setupProjectInvitation(); setupOwnerProjectFiles(); import { setupNextStep } from '~/scripts/next-step'; setupNextStep();</script>
+  <script>import { setupSoftwareOffers } from '~/scripts/software-offers'; setupSoftwareOffers(); import { setupOwnerRequestActions } from '~/scripts/owner-request-actions'; import { setupOwnerPaymentActions } from '~/scripts/owner-payment-actions'; import { setupProjectMessages } from '~/scripts/project-messages'; import { setupProjectUpdates } from '~/scripts/project-updates'; import { setupProjectInvitation } from '~/scripts/project-invitation'; import { setupOwnerProjectFiles } from '~/scripts/owner-project-files'; setupOwnerRequestActions(); setupOwnerPaymentActions(); setupProjectMessages(); setupProjectUpdates(); setupProjectInvitation(); setupProjectInvitation('[data-brief-copy]'); setupOwnerProjectFiles(); import { setupNextStep } from '~/scripts/next-step'; setupNextStep();</script>
   <style>
     .request-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem); gap: clamp(2.5rem, 5vw, 4.5rem); align-items: start; }
     .request-layout:not(.portal) { grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem); }

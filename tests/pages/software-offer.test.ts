@@ -4,17 +4,20 @@ import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
+import { parse, serialize } from 'parse5';
+import { vi } from 'vitest';
 import { transform } from '@astrojs/compiler';
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { beforeAll, afterAll, expect, it } from 'vitest';
 import { hashOfferToken } from '~/lib/software-offers';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
+let start: any;
 let directory: string, softwarePage: any, composer: any, today: any, page: any, preview: any, editor: any, questions: any, fit: any, panel: any, ownerRequest: any;
 const token = 'a'.repeat(43);
 const terms = { outcome:'Current offer',summary:'A shared view.',milestones:[{ name:'Tracker',deliverables:['Status view'],acceptance:['Add a client.'],feeCents:240000 }],clientInputs:'',exclusions:'',timing:'',paymentMode:'standard' };
 beforeAll(async () => {
   directory = await mkdtemp(resolve('.software-render-'));
-  await build({ entryPoints:{ panel:'src/components/owner/SoftwareProjectPanel.astro', ownerRequest:'src/pages/owner/requests/[id].astro', today:'src/pages/owner/index.astro', composer:'src/pages/owner/requests/[id]/update.astro', software:'src/pages/studio/software/[id].astro', client:'src/pages/offer/[token].astro', preview:'src/pages/owner/requests/[id]/offer.astro', editor:'src/components/owner/SoftwareOfferEditor.astro', questions:'src/components/owner/SoftwareQuestions.astro', fit:'src/components/owner/SoftwareFitReview.astro' }, outdir:directory, outExtension:{ '.js':'.mjs' }, bundle:true, format:'esm', platform:'node', packages:'external',
+  await build({ entryPoints:{ start:'src/pages/software/start.astro', panel:'src/components/owner/SoftwareProjectPanel.astro', ownerRequest:'src/pages/owner/requests/[id].astro', today:'src/pages/owner/index.astro', composer:'src/pages/owner/requests/[id]/update.astro', software:'src/pages/studio/software/[id].astro', client:'src/pages/offer/[token].astro', preview:'src/pages/owner/requests/[id]/offer.astro', editor:'src/components/owner/SoftwareOfferEditor.astro', questions:'src/components/owner/SoftwareQuestions.astro', fit:'src/components/owner/SoftwareFitReview.astro' }, outdir:directory, outExtension:{ '.js':'.mjs' }, bundle:true, format:'esm', platform:'node', packages:'external',
     plugins:[{ name:'astro-test-render', setup(builder) {
       builder.onResolve({ filter:/\.css(?:\?|$)|\?astro/ }, () => ({ path:'empty-style',namespace:'empty' }));
       builder.onLoad({ filter:/.*/,namespace:'empty' }, () => ({ contents:'',loader:'js' }));
@@ -23,7 +26,7 @@ beforeAll(async () => {
     } }],
   });
   const { readdir } = await import('node:fs/promises');
-  for (const file of await readdir(directory)) { const compiled = (await import(/* @vite-ignore */ pathToFileURL(resolve(directory,file)).href)).default; if (file.startsWith('panel')) panel = compiled; else if (file.startsWith('ownerRequest')) ownerRequest = compiled; else if (file.startsWith('today')) today = compiled; else if (file.startsWith('composer')) composer = compiled; else if (file.startsWith('software')) softwarePage = compiled; else if (file.startsWith('client')) page = compiled; else if (file.startsWith('preview')) preview = compiled; else if (file.startsWith('editor')) editor = compiled; else if (file.startsWith('questions')) questions = compiled; else fit = compiled; }
+  for (const file of await readdir(directory)) { const compiled = (await import(/* @vite-ignore */ pathToFileURL(resolve(directory,file)).href)).default; if (file.startsWith('start')) start = compiled; else if (file.startsWith('panel')) panel = compiled; else if (file.startsWith('ownerRequest')) ownerRequest = compiled; else if (file.startsWith('today')) today = compiled; else if (file.startsWith('composer')) composer = compiled; else if (file.startsWith('software')) softwarePage = compiled; else if (file.startsWith('client')) page = compiled; else if (file.startsWith('preview')) preview = compiled; else if (file.startsWith('editor')) editor = compiled; else if (file.startsWith('questions')) questions = compiled; else fit = compiled; }
 });
 afterAll(async () => { if (directory) await rm(directory,{ recursive:true,force:true }); });
 async function fixture() {
@@ -356,4 +359,57 @@ it('renders only the client project invoices with private payment links and pres
     sql.exec("UPDATE software_invoices SET status='void' WHERE id='current-deposit'");
     html=await renderProject();expect(html).toContain('Initial payment · Received');
   } finally {sql.close();}
+});
+
+it('renders the approved receipt and keeps booking reassurance only on the send step', async () => {
+  const container = await AstroContainer.create();
+  const html = await container.renderToString(start, { request:new Request('https://thesuperhuman.us/software/start'), locals:{runtime:{env:{PUBLIC_TURNSTILE_SITE_KEY:'test',MUSIC_DB:{},TURNSTILE_SECRET_KEY:'test',RATE_LIMIT:{}}}} as any });
+  for (const copy of ['Software brief · sent','Your brief is in.','I reply with a fixed-price first milestone, or a question or two.','If it looks right, you sign the agreement online. It takes about two minutes.','Work starts, and you follow it on your own private project page.']) expect(html).toContain(copy);
+  expect(html).not.toMatch(/data-print|Print or save|Not provided/);
+  expect(html.match(/No booking or payment at this stage\./g)).toHaveLength(1);
+});
+
+it('renders each owner brief outcome and gates uncertain retry at one minute', async () => {
+  const {sql,db} = await fixture();
+  const container = await AstroContainer.create();
+  try {
+    for (const [status,age,button] of [['sent',120000,false],['failed',0,true],['uncertain',0,false],['uncertain',120000,true]] as const) {
+      sql.prepare("UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus',?,'$.clientCopyAttemptedAt',?)").run(status,new Date(Date.now()-age).toISOString());
+      const html = await container.renderToString(ownerRequest,{params:{id:'r'},request:new Request('https://thesuperhuman.us/owner/requests/r'),locals:{owner:{email:'owner@example.com'},runtime:{env:{MUSIC_DB:db}}} as any});
+      expect(html).toContain(`Client copy: ${status === 'failed' ? "didn&#39;t send" : status}`);
+      expect(html.includes('data-send-project-invitation')).toBe(button);
+      expect(html.includes('data-confirmed-not-sent="true"')).toBe(status === 'uncertain' && button);
+    }
+  } finally {sql.close();}
+});
+
+it('renders all three personalized receipt outcomes into the rendered page', async () => {
+  const container = await AstroContainer.create();
+  const html = await container.renderToString(start,{request:new Request('https://thesuperhuman.us/software/start'),locals:{runtime:{env:{}}} as any});
+  const dom = parse(html);
+  const find = (node: any, attribute: string): any => node.attrs?.some((attr: any) => attr.name === attribute) ? node : node.childNodes?.map((child: any) => find(child,attribute)).find(Boolean);
+  const document = {querySelector: (selector: string) => {
+    if (selector === '#software-inquiry') return null;
+    const node = find(dom,selector.slice(1,-1));
+    return {
+      set textContent(value: string) { node.childNodes = [{nodeName:'#text',value,parentNode:node}]; },
+      set hidden(value: boolean) { node.attrs = node.attrs.filter((attr: any) => attr.name !== 'hidden'); if (value) node.attrs.push({name:'hidden',value:''}); },
+    };
+  }};
+  vi.stubGlobal('document',document);
+  try {
+    const {renderSoftwareReceipt} = await import('~/scripts/software-inquiry');
+    for (const [status,line,note] of [
+      ['sent','A copy is on its way to alex@example.com.',"It has everything you wrote, so you don't need to save this page."],
+      ['uncertain','Your copy should arrive shortly.',"If it doesn't, your brief is still saved and I'll still reply."],
+      ['failed',"I couldn't send your copy just now, but your brief is saved and I'll still reply.",null],
+    ]) {
+      renderSoftwareReceipt({brief:{name:'Alex Example',email:'alex@example.com'},clientCopyStatus:status});
+      expect(serialize(find(dom,'data-receipt-thanks'))).toBe("Thanks, Alex. I'll read it myself and reply within two business days.");
+      expect(serialize(find(dom,'data-copy-status'))).toBe(line);
+      const renderedNote = find(dom,'data-copy-note');
+      expect(renderedNote.attrs.some((attr: any) => attr.name === 'hidden')).toBe(note === null);
+      if (note) expect(serialize(renderedNote)).toBe(note);
+    }
+  } finally {vi.unstubAllGlobals();}
 });

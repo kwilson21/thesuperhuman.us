@@ -1,6 +1,21 @@
 import { approverLabels, budgetLabels, softwareDetailKeys, softwareLabels, softwarePaths, softwareQuestions, timingLabels, validateSoftwareInquiry } from '../lib/software-inquiry';
 import { setupFormSubmission } from './form-submission';
 
+export function renderSoftwareReceipt(result: Record<string, unknown>) {
+  const brief = result.brief && typeof result.brief === 'object' && !Array.isArray(result.brief) ? result.brief as Record<string, string> : {};
+  const firstName = brief.name?.trim().split(/\s+/)[0] || 'there';
+  document.querySelector<HTMLElement>('[data-receipt-thanks]')!.textContent = `Thanks, ${firstName}. I'll read it myself and reply within two business days.`;
+  const sent = result.clientCopyStatus === 'sent';
+  const uncertain = result.clientCopyStatus !== 'failed' && !sent;
+  document.querySelector<HTMLElement>('[data-copy-status]')!.textContent = sent
+    ? `A copy is on its way to ${brief.email}.`
+    : uncertain ? 'Your copy should arrive shortly.'
+    : "I couldn't send your copy just now, but your brief is saved and I'll still reply.";
+  const note = document.querySelector<HTMLElement>('[data-copy-note]')!;
+  note.hidden = !sent && !uncertain;
+  note.textContent = uncertain ? "If it doesn't, your brief is still saved and I'll still reply." : "It has everything you wrote, so you don't need to save this page.";
+}
+
 const form = document.querySelector<HTMLFormElement>('#software-inquiry');
 if (form) {
   const steps = [...form.querySelectorAll<HTMLElement>('[data-step]')];
@@ -109,16 +124,7 @@ if (form) {
   setupFormSubmission({
     form, endpoint: '/api/software-inquiry', success: document.getElementById('software-success')!,
     payload: data => ({ ...payload(data), submissionId }),
-    onSuccess: result => {
-      const brief = result.brief && typeof result.brief === 'object' && !Array.isArray(result.brief) ? result.brief as Record<string, string> : {};
-      const firstName = brief.name?.trim().split(/\s+/)[0] || 'there';
-      document.querySelector<HTMLElement>('[data-receipt-thanks]')!.textContent = `Thanks, ${firstName}. I'll read it myself and reply within two business days.`;
-      const sent = result.clientCopyStatus === 'sent';
-      document.querySelector<HTMLElement>('[data-copy-status]')!.textContent = sent
-        ? `A copy is on its way to ${brief.email}.`
-        : "I couldn't send your copy just now, but your brief is saved and I'll still reply.";
-      document.querySelector<HTMLElement>('[data-copy-note]')!.hidden = !sent;
-    },
+    onSuccess: renderSoftwareReceipt,
     onConflict: () => { submissionId = crypto.randomUUID(); },
   });
   const observer = new MutationObserver(records => {

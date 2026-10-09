@@ -83,15 +83,13 @@ it('keeps a joined emoji intact at the summary cutoff', () => {
   if (parsed.ok) expect(softwareRequest(parsed.value).summary).toBe(`${'a'.repeat(116)}👩‍💻…`);
 });
 
-it('orders workflow questions in the saved brief and uses idea labels on the owner page', () => {
+it('orders workflow questions in the saved brief', () => {
   const parsed = validateSoftwareInquiry(base);
   expect(parsed.ok).toBe(true);
   if (parsed.ok) {
     const request = softwareRequest(parsed.value);
     expect(Object.keys(softwareBrief(request as any)).slice(0, 4)).toEqual(['path', 'today', 'audience', 'firstResult']);
   }
-  const ownerPage = readFileSync(new URL('../../src/pages/owner/requests/[id].astro', import.meta.url), 'utf8');
-  expect(ownerPage).toContain('softwareLabels[key as keyof typeof softwareLabels]');
 });
 
 it('deduplicates after rate limit, rejects another email without leaking the brief, and limits new IDs', async () => {
@@ -294,4 +292,39 @@ it.each([['rejected', 'failed'], ['timeout', 'uncertain']] as const)('keeps the 
   expect(await (await POST(context())).json()).toMatchObject({ ok: true, clientCopyStatus: status });
   expect(JSON.parse(sql.prepare('SELECT details_json FROM owner_requests').get().details_json).clientCopyStatus).toBe(status);
   expect(await (await POST(context())).json()).toMatchObject({ ok: true, clientCopyStatus: status });
+});
+
+it('retries a failed brief copy once and blocks sent, closed and unconfirmed retries', async () => {
+  const { POST: retry } = await import('~/pages/api/owner/requests/[id]/brief-copy');
+  await POST(context());
+  const requestId = sql.prepare('SELECT id FROM owner_requests').get().id;
+  const retryContext = (confirmedNotSent = false, owner = true) => ({ ...context(), params: { id: requestId }, request: new Request('https://thesuperhuman.us/api/owner/requests/r/brief-copy', { method:'POST', headers:{ origin:'https://thesuperhuman.us','content-type':'application/json' }, body:JSON.stringify({ action:'send', confirmedNotSent }) }), locals:{ ...context().locals, owner:owner ? {email:'owner@example.com'} : null } } as any);
+  const set = (status: string, age: number) => sql.prepare("UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus',?,'$.clientCopyAttemptedAt',?)").run(status,new Date(Date.now()-age).toISOString());
+  expect((await retry(retryContext(false,false))).status).toBe(403);
+  set('failed',0);
+  expect((await retry(retryContext())).status).toBe(200);
+  expect((await retry(retryContext())).status).toBe(409);
+  set('uncertain',120_000);
+  expect((await retry(retryContext())).status).toBe(409);
+  set('uncertain',0);
+  expect((await retry(retryContext(true))).status).toBe(409);
+  set('uncertain',120_000);
+  expect((await retry(retryContext(true))).status).toBe(200);
+  set('failed',120_000);
+  sql.exec("UPDATE owner_requests SET status='withdrawn'");
+  expect((await retry(retryContext())).status).toBe(409);
+});
+
+it('keeps delivery uncertain after sending when the final status write fails', async () => {
+  const batch = db.batch.bind(db);
+  vi.spyOn(db,'batch').mockImplementation(async (statements: any[]) => {
+    if (statements.some(item => item.query.includes("'$.clientCopyStatus',?"))) throw new Error('status write failed');
+    return batch(statements);
+  });
+  expect(await (await POST(context())).json()).toMatchObject({ok:true,clientCopyStatus:'uncertain'});
+  const details = JSON.parse(sql.prepare('SELECT details_json FROM owner_requests').get().details_json);
+  expect(details.clientCopyStatus).toBe('uncertain');
+  expect(details.clientCopyAttemptedAt).toBeTruthy();
+  expect(await (await POST(context())).json()).toMatchObject({ok:true,clientCopyStatus:'uncertain'});
+  expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(2);
 });
