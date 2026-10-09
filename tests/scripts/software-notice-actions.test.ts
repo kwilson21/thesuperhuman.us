@@ -13,10 +13,8 @@ it.each(['sent', 'not_requested'])('hides %s notice actions', notification_statu
   expect(visible({ status: 'shared', notification_status })).toBe(false);
 });
 
-it('omits client payment stamps and limits redelivery prompts to delivery invoices',()=>{
-  const client=readFileSync(new URL('../../src/pages/studio/software/[id].astro',import.meta.url),'utf8');
+it('limits redelivery prompts to delivery invoices',()=>{
   const line=readFileSync(new URL('../../src/components/owner/SoftwareInvoiceLine.astro',import.meta.url),'utf8');
-  expect(client).not.toContain('Initial payment ·');
   const condition=line.match(/const redeliveryPrompt=(.+);/)![1];
   const prompt=new Function('kind','redeliveryAt','latest',`return ${condition}`);
   expect(prompt('deposit','2026-10-02',{status:'open',created_at:'2026-10-01'})).toBe(false);

@@ -25,6 +25,7 @@ const deliveryReferences = update.kind === 'delivery_review' ? references.filter
       {deliveryReferences.length>0 && <><h3>Supporting links</h3><ul>{deliveryReferences.map(link=><li><a href={link.url} target="_blank" rel="noopener noreferrer">{link.label}</a></li>)}</ul></>}
       {update.checks_limitations && <><h3>Not included yet</h3><p>{update.checks_limitations}</p></>}
     </details>}
+    {update.kind!=='delivery_review' && update.checks_limitations && <section><h3>Not included yet</h3><p>{update.checks_limitations}</p></section>}
   </> : <>
   <p class="studio-kicker" data-preview-kicker>{(preview ? [evidenceTypes[update.evidence_type], update.artifact_version, update.evidence_type === 'concept' ? 'Not implemented' : ''] : [softwareVersionLabel(update)]).filter(Boolean).join(' · ')}</p>
   <h2 data-preview-title class:list={{"rail-muted": !update.title}}>{update.title || 'Untitled update'}</h2>
