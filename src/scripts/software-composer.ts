@@ -12,7 +12,14 @@ export function setupSoftwareComposer() {
   const value = (key: string) => (form.elements.namedItem(key) as HTMLInputElement).value;
   const text = (selector: string, content: string) => { const element = preview.querySelector(selector); if (element) element.textContent = content; };
   function render() {
-    const kind = value('kind'), milestone = value('milestone_index'), delivery = kind === 'delivery_review', handoff = kind === 'handoff';
+    const kind = value('kind'), delivery = kind === 'delivery_review', handoff = kind === 'handoff';
+    const milestoneSelect=form.elements.namedItem('milestone_index') as HTMLInputElement;
+    const currentMilestone=Number(milestoneSelect.dataset.currentMilestone);
+    form.querySelectorAll<HTMLOptionElement>('[name=milestone_index] option').forEach(option=>{
+      option.disabled=option.hidden=kind==='progress' && Number(option.value)!==currentMilestone;
+    });
+    milestoneSelect.setCustomValidity(kind==='progress' && Number(milestoneSelect.value)!==currentMilestone ? 'Choose a milestone that has started.' : '');
+    const milestone=value('milestone_index');
     const heading=root!.querySelector<HTMLElement>('[data-composer-heading]');
     const intro=root!.querySelector<HTMLElement>('[data-composer-intro]');
     if(heading) heading.textContent=delivery ? 'Prepare a delivery review.' : handoff ? 'Prepare the project handoff.' : kind==='direction_review' ? 'Prepare a direction review.' : 'Prepare an update.';
@@ -166,7 +173,10 @@ export function setupSoftwareComposer() {
     preview.querySelector<HTMLElement>('[data-preview-figure]')!.hidden = false; render();
   });
   async function save(share: boolean) {
-    if (busy || (share && !form.reportValidity())) return;
+    if (busy) return;
+    const milestoneSelect=form.elements.namedItem('milestone_index') as HTMLInputElement;
+    if (value('kind')==='progress' && Number(milestoneSelect.value)!==Number(milestoneSelect.dataset.currentMilestone)) { milestoneSelect.reportValidity(); return; }
+    if (share && !form.reportValidity()) return;
     if (share && value('kind')==='delivery_review' && !form.querySelector('[name=delivered_deliverables]:checked')) {
       status.textContent='Select at least one agreed deliverable included in this version.';
       form.querySelector<HTMLInputElement>('[name=delivered_deliverables]')?.focus(); return;

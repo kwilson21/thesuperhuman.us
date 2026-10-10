@@ -41,6 +41,14 @@ export type SoftwareUpdate = Omit<SoftwareUpdateInput, 'email_client' | 'criteri
   notification_attempted_at: string | null; email_client: number;
 };
 export const projectTerms = (project: { terms_json: string }) => offerTermsSchema.parse(JSON.parse(project.terms_json));
+export function softwareVersionNumber(update: { artifact_version: string }) {
+  return update.artifact_version.match(/^(?:Delivery|Direction) v(\d+)$/i)?.[1] ?? null;
+}
+export function softwareVersionLabel(update: { artifact_version: string; kind?: string }) {
+  const number=softwareVersionNumber(update);
+  if(!number) return update.artifact_version || 'Latest update';
+  return /^Direction /i.test(update.artifact_version) ? `Sketch ${number}` : `Version ${number}`;
+}
 export function softwareStateSentence(project: { state: string; waiting_for: string }) {
   return ({ preparing: 'Getting set up.', building: 'In progress.', waiting_for_input: `Waiting on you: ${project.waiting_for}`, ready_for_review: 'Ready for your review.', complete: 'Complete.' }[project.state] ?? 'Getting set up.');
 }
@@ -133,6 +141,18 @@ export function softwareRevisionHistoryBody(body: string | null | undefined, che
   if(targets.inaccessibleDeliverables.length) sections.push(`Included deliverables the client could not open or find:\n${targets.inaccessibleDeliverables.map(index=>`${index+1}. ${planned[index]}`).join('\n')}`);
   if(note) sections.push(`Client note:\n${note}`);
   return sections.join('\n\n');
+}
+export function softwareClientRevisionBody(body: string | null | undefined, checks: string[], planned: string[]) {
+  if(!body) return '';
+  if(!body.startsWith('Requested changes to ')) return body;
+  const targets=softwareRevisionTargets(body,checks,planned);
+  const separator=body.indexOf('\n\n');
+  return [
+    ...targets.checks.map(index=>`You marked "${checks[index]}" as not working yet.`),
+    ...targets.deliverables.map(index=>`You reported "${planned[index]}" as not included yet.`),
+    ...targets.inaccessibleDeliverables.map(index=>`You could not open or find "${planned[index]}".`),
+    ...(separator<0 ? [] : [body.slice(separator+2)]),
+  ].join('\n\n');
 }
 export function clearUnmetRevisionEvidence(evidence: string[], unmetChecks: number[]) {
   const unmet = new Set(unmetChecks);

@@ -3,15 +3,15 @@ export const prerender = false;
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import StudioUnavailable from '~/components/StudioUnavailable.astro';
 import SoftwareProjectUpdate from '~/components/SoftwareProjectUpdate.astro';
-import SoftwareStepTrack from '~/components/SoftwareStepTrack.astro';
 import SoftwareAgreedTerms from '~/components/SoftwareAgreedTerms.astro';
 import type { Agreement } from '~/lib/software-agreements';
 import { validateAgreementDetails, type agreementValues } from '~/lib/agreement-fields';
 import ProjectMessages from '~/components/ProjectMessages.astro';
 import SoftwareReviewResponse from '~/components/SoftwareReviewResponse.astro';
 import { clientPortalEnabled, clientSoftwareProjectForSession, studioSessionFromRequest } from '~/lib/audio-client-access';
-import { deliveredIndexes, projectTerms, projectAgreementDetails, sharedSoftwareUpdates, softwareStateSentence, softwareDate, milestonePayments, correctionPeriodEnd } from '~/lib/software-projects';
-import { clientSoftwareInvoices, softwareInvoiceKindLabels, softwareInvoiceStatusLabels } from '~/lib/software-invoices';
+import { deliveredIndexes, projectTerms, projectAgreementDetails, sharedSoftwareUpdates, softwareStateSentence, softwareDate, milestonePayments, correctionPeriodEnd, softwareVersionLabel, softwareVersionNumber } from '~/lib/software-projects';
+import { clientSoftwareInvoices, softwareInvoiceKindLabels, softwareInvoiceStatusLabels, softwareInvoiceTerms } from '~/lib/software-invoices';
+import { formatUSD } from '~/lib/software-offers';
 import { addBusinessDays } from '~/lib/business-days';
 import { listSoftwareProjectMessages, readableSoftwareProjectMessages } from '~/lib/software-project-messages';
 import '~/styles/studio.css';
@@ -25,26 +25,45 @@ if (!project) Astro.response.status = 404;
 const terms = project ? projectTerms(project) : null;
 const updates = project ? await sharedSoftwareUpdates(env.MUSIC_DB, project.request_id) : [];
 const messageRows = project ? await listSoftwareProjectMessages(env.MUSIC_DB, project.request_id) : [];
-const messages = project && terms ? readableSoftwareProjectMessages(messageRows, updates, terms) : [];
-const latest = updates.find(update=>update.status==='shared'), milestone = terms?.milestones[project?.milestone_index ?? 0];
+const messages = project && terms ? readableSoftwareProjectMessages(messageRows, updates, terms, 'client') : [];
+const currentMilestone=project?.milestone_index ?? 0;
+const milestoneUpdates=updates.filter(update=>update.milestone_index===currentMilestone);
+const latest = milestoneUpdates.find(update=>update.status==='shared');
 const invoices=project ? await clientSoftwareInvoices(env.MUSIC_DB,project) : [];
 const payments=project ? await milestonePayments(env.MUSIC_DB,project.request_id) : [];
 const acceptedDeliveries=updates.filter(update=>update.kind==='delivery_review' && update.status==='shared' && update.decision==='milestone_accepted').sort((a,b)=>(b.milestone_index ?? 0)-(a.milestone_index ?? 0));
 const reviews=updates.filter(update=>update.kind?.endsWith('_review') && update.status==='shared');
 const undecidedReviews=reviews.filter(update=>!update.decision);
-const review=undecidedReviews.find(update=>update.kind==='delivery_review') ?? undecidedReviews[0] ?? reviews.find(update=>update.decision);
-const railReviews=review ? [review,...undecidedReviews.filter(update=>update.id!==review.id)] : [];
-const pendingDelivery=review?.kind==='delivery_review' && !review.decision ? review : null;
-const currentUpdate=review && !review.decision ? review : latest;
-const newerUpdates=currentUpdate && currentUpdate!==latest ? updates.slice(0,updates.indexOf(currentUpdate)).filter(update=>update.status==='shared') : [];
-const earlierVersions=updates.filter(update=>update.kind?.endsWith('_review') && update.status==='superseded' && update.decision);
-const earlierUpdates=updates.filter(update=>update.id!==latest?.id && !newerUpdates.includes(update) && !undecidedReviews.includes(update) && !earlierVersions.includes(update));
+const review=undecidedReviews.find(update=>update.milestone_index===currentMilestone && update.kind==='delivery_review') ?? undecidedReviews.find(update=>update.milestone_index===currentMilestone);
+const railReviews=undecidedReviews.slice().reverse();
+const accepted=acceptedDeliveries.find(update=>update.milestone_index===currentMilestone);
+const handoffs=updates.filter((update,index)=>update.kind==='handoff' && update.status==='shared'
+  && updates.findIndex(item=>item.kind==='handoff' && item.status==='shared' && item.milestone_index===update.milestone_index)===index
+  && updates.some(accepted=>accepted.kind==='delivery_review' && accepted.decision==='milestone_accepted' && accepted.milestone_index===update.milestone_index)
+  && !updates.some(accepted=>accepted.kind==='delivery_review' && accepted.decision==='milestone_accepted' && accepted.milestone_index===update.milestone_index && accepted.decided_at!>update.shared_at!));
+const handoff=handoffs.find(update=>update.milestone_index===currentMilestone);
+const currentUpdate=latest?.kind==='progress' && (!review || latest.shared_at!>review.shared_at!) ? latest : accepted && review?.kind==='direction_review' ? latest : review ?? latest;
+const decidedReview=currentUpdate?.kind?.endsWith('_review') && currentUpdate.decision ? currentUpdate : accepted;
+const currentReview=review?.id===currentUpdate?.id && !accepted ? review : undefined;
+const balanceFor=(milestone:number)=>invoices.find(invoice=>invoice.milestone_index===milestone && invoice.kind!=='deposit' && !invoice.refunded_at && ['open','payment_failed','uncollectible'].includes(invoice.status) && invoice.hosted_invoice_url);
+const balance=accepted && balanceFor(currentMilestone);
+const handedOff=Boolean(handoff);
+const today = new Date().toLocaleDateString('en-CA', {timeZone:'America/New_York'});
+const showNextUpdate = project?.next_update_on && project.next_update_on >= today && !(handedOff && currentUpdate?.id===handoff?.id);
+const paid=payments.some(payment=>payment.milestone_index===currentMilestone);
+const acceptedPaid=accepted && !handedOff && paid;
+const acceptedWaiting=accepted && !paid;
+const otherAccepted=acceptedDeliveries.filter((update,index)=>update.milestone_index!==currentMilestone && acceptedDeliveries.findIndex(item=>item.milestone_index===update.milestone_index)===index && !handoffs.some(handoff=>handoff.milestone_index===update.milestone_index)).sort((a,b)=>(a.milestone_index ?? 0)-(b.milestone_index ?? 0));
+const earlierVersions=updates.filter(update=>update.kind?.endsWith('_review') && update.id!==currentUpdate?.id && !undecidedReviews.includes(update) && update.id!==decidedReview?.id && !otherAccepted.includes(update));
+const earlierUpdates=updates.filter(update=>update.id!==currentUpdate?.id && !earlierVersions.includes(update) && !railReviews.includes(update) && update.id!==decidedReview?.id && !handoffs.includes(update) && !otherAccepted.includes(update));
+const timeline=updates.filter(update=>update.milestone_index===currentMilestone && update.kind?.endsWith('_review')).slice().reverse();
+const note=currentUpdate?.what_changed ?? '';
 const visual = (id: string) => `/api/studio/software/${project!.request_id}/updates/${id}/visual`;
 const conversationClosed = project?.state === 'complete';
-const waiting = (project?.state === 'waiting_for_input' ? project.waiting_for : '');
 const agreementRecord=project ? await env.MUSIC_DB.prepare("SELECT p.agreement_id AS website_agreement_id,a.id,a.archive_closed_at,a.kind,a.msa_id,a.client_id,a.canonical_text,a.effective_on,a.text_sha256,a.values_json FROM software_projects p JOIN owner_requests r ON r.id=p.request_id LEFT JOIN software_agreements a ON a.id=p.agreement_id AND a.status='executed' AND EXISTS(SELECT 1 FROM software_agreement_clients c WHERE c.id=a.client_id AND c.recipient_email=r.email) WHERE p.request_id=?").bind(Astro.params.id).first<Pick<Agreement,'id'|'kind'|'msa_id'|'client_id'|'canonical_text'|'effective_on'|'text_sha256'|'values_json'> & {archive_closed_at:string|null;website_agreement_id:string|null}>() : null;
 const agreementSnapshot = agreementRecord?.id ? JSON.parse(agreementRecord.values_json) as ReturnType<typeof agreementValues> : null;
-const agreementDetails = project ? await projectAgreementDetails(env.MUSIC_DB,project) : null;
+const agreementDetails = project ? await projectAgreementDetails(env.MUSIC_DB,{...project,agreement_id:agreementRecord?.website_agreement_id}) : null;
+const correctionDeadline = (milestone: number | null | undefined) => softwareDate(correctionPeriodEnd(updates.filter(update=>update.milestone_index===milestone && update.decision==='milestone_accepted').map(update=>update.decided_at!).sort()[0],payments.find(payment=>payment.milestone_index===milestone)?.paid_recorded_at,Number(agreementDetails?.correction_calendar_days ?? 30)));
 let externalAgreementDetails;
 if (!agreementRecord?.website_agreement_id && agreementDetails && terms) {
   try { externalAgreementDetails=validateAgreementDetails(agreementDetails,terms); } catch { /* Older external projects may lack the full snapshot. */ }
@@ -55,29 +74,52 @@ const agreementDocuments = [masterAgreement, agreementRecord?.id && !agreementRe
 {!project || !terms ? <StudioUnavailable audio={false} backLabel="Back to your projects" /> : <BaseLayout title={`${terms.outcome} · Private project`} description="Your private project." noindex>
   <article class="site-shell software-project">
     <nav class="breadcrumb" aria-label="Breadcrumb"><a href="/studio">Your projects</a> / {terms.outcome}</nav>
-    <header><p class="studio-kicker">Private project</p>{agreementRecord?.id && !agreementRecord.archive_closed_at && <p><a href={`/api/agreements/${agreementRecord.id}/file`}>Download signed agreement</a></p>}
-    <h1>{pendingDelivery ? pendingDelivery.milestone_index===0 ? 'Your first milestone is ready to review.' : `Milestone ${(pendingDelivery.milestone_index ?? 0)+1} is ready to review.` : terms.outcome}</h1><p class="summary">{terms.summary}{pendingDelivery && ` · ${pendingDelivery.artifact_version}`}</p>{pendingDelivery && <p>Please review within {pendingDelivery.review_window_days ?? 5} business days, by {softwareDate(addBusinessDays(pendingDelivery.shared_at!,pendingDelivery.review_window_days ?? 5))}.</p>}</header>
-    <div class="project-band"><div><h2>Milestone {project.milestone_index+1} · {milestone?.name}</h2><p>{softwareStateSentence(project)}</p></div><div>{latest?.shared_at && <p>Last update: {softwareDate(latest.shared_at)}</p>}{project.next_update_on && <p>Next update: {softwareDate(project.next_update_on)}</p>}</div><SoftwareStepTrack step={project.step} /></div>
-    <div class="project-columns"><div class="project-current">
-      {currentUpdate ? <SoftwareProjectUpdate update={currentUpdate} checks={terms.milestones[currentUpdate.milestone_index ?? 0].acceptance} deliverables={terms.milestones[currentUpdate.milestone_index ?? 0].deliverables} visualUrl={currentUpdate.has_visual ? visual(currentUpdate.id) : undefined} /> : <section><h2>Your first update is on its way.</h2>{project.next_update_on && <p>Next update: {softwareDate(project.next_update_on)}</p>}</section>}
-      {newerUpdates.length>0 && <section class="latest-updates"><h3>Latest update</h3>{newerUpdates.map(update=><SoftwareProjectUpdate update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} deliverables={terms.milestones[update.milestone_index ?? 0].deliverables} visualUrl={update.has_visual ? visual(update.id) : undefined} />)}</section>}
-    </div><aside aria-label="Next steps">{railReviews.map(review=>{const planned=terms.milestones[review.milestone_index ?? 0].deliverables,delivered=deliveredIndexes(review,planned);return <section><SoftwareReviewResponse update={review} checks={terms.milestones[review.milestone_index ?? 0].acceptance} deliverables={planned} missingDeliverables={planned.flatMap((label,index)=>delivered.includes(index)?[]:[{label,index}])} inaccessibleDeliverables={planned.flatMap((label,index)=>delivered.includes(index)?[{label,index}]:[])} milestoneName={terms.milestones[review.milestone_index ?? 0].name} endpoint={`/api/studio/software/${project.request_id}/reviews/${review.id}`} readonly={conversationClosed} canAccept={review.kind!=='delivery_review' || planned.every((_,index)=>delivered.includes(index))} /></section>})}{earlierVersions.length>0 && <section><a class="site-link" href="#earlier-versions">See earlier versions</a></section>}{waiting && <section><h2>Waiting on you</h2><p>{waiting}</p></section>}{latest?.next_step && <section><h2>Next from me</h2><p>{latest.next_step}</p></section>}{!conversationClosed && <section><a class="site-link" href="#conversation">Ask a question <span aria-hidden="true">↓</span></a></section>}</aside><div class="project-history">
-      {acceptedDeliveries.map(accepted=>{
-        const firstAcceptance=updates.filter(update=>update.milestone_index===accepted.milestone_index && update.decision==='milestone_accepted').map(update=>update.decided_at!).sort()[0];
-        const handoff=updates.find(update=>update.kind==='handoff' && update.status==='shared' && update.milestone_index===accepted.milestone_index && update.shared_at!>=accepted.decided_at!);
-        const handoffLinks: {label:string;url:string}[]=JSON.parse(handoff?.links_json ?? '[]');
-        return <section class="handoff-strip"><p>Milestone {(accepted.milestone_index ?? 0)+1} · {terms.milestones[accepted.milestone_index ?? 0].name}</p><h2>Milestone accepted{handoff ? ' · Handoff ready' : ''}</h2><p>{accepted.artifact_version} is accepted.</p>{handoff ? <><ul>{handoffLinks.map(link=>{
-        const external = new URL(link.url).origin !== Astro.url.origin;
-        return <li><a class="site-link" href={link.url} target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer' : undefined}>{link.label} <span aria-hidden="true">{external ? '↗' : '→'}</span></a></li>;
-      })}</ul><p>{handoff.next_step}</p></> : <p>Handoff follows full payment.</p>}<p>Corrections through {softwareDate(correctionPeriodEnd(firstAcceptance,payments.find(payment=>payment.milestone_index===accepted.milestone_index)?.paid_recorded_at,agreementDetails?.correction_calendar_days?Number(agreementDetails.correction_calendar_days):30))}.</p></section>;})}
+    <header>{agreementRecord?.id && !agreementRecord.archive_closed_at && <p><a href={`/api/agreements/${agreementRecord.id}/file`}>Download signed agreement</a></p>}<p class="studio-kicker">{terms.outcome} · milestone {currentMilestone+1}</p>
+      <h1>{currentReview ? currentReview.kind==='delivery_review' ? `${softwareVersionLabel(currentReview)} is ready to try.` : softwareVersionNumber(currentReview)==='1' ? "Here's the first sketch." : `${softwareVersionLabel(currentReview)}.` : !currentUpdate ? `Milestone ${currentMilestone+1} is starting.` : currentUpdate.kind==='handoff' && handedOff ? "It's yours." : acceptedPaid ? 'Paid. Your files are on the way.' : acceptedWaiting ? `${softwareVersionLabel(accepted!)} is accepted.` : terms.outcome}</h1>
+      <p class="summary">{currentReview ? note : acceptedPaid ? "I'll share the files and handoff notes here soon." : currentUpdate?.kind==='handoff' && handedOff ? '' : acceptedWaiting ? 'Thanks. The last step is the balance.' : note || terms.summary}{currentReview && ` Please ${currentReview.kind==='direction_review' ? 'look it over' : 'try it'} by ${softwareDate(addBusinessDays(currentReview.shared_at!,currentReview.review_window_days ?? 5))}.`}</p>
+      {!acceptedWaiting && !acceptedPaid && currentUpdate?.client_request && <p class="summary">I need from you: {currentUpdate.client_request}</p>}
+      {project.state==='waiting_for_input' && project.waiting_for && project.waiting_for!==currentUpdate?.client_request && <p>{project.waiting_for}</p>}
+      {!review && !acceptedWaiting && !acceptedPaid && !handedOff && currentUpdate && !currentUpdate.client_request && project.state!=='waiting_for_input' && <p>{softwareStateSentence(project)}</p>}
+      {showNextUpdate && project.next_update_on && <p>Next update: {softwareDate(project.next_update_on)}</p>}
+    </header>
+    <div class:list={["project-columns", {"without-actions": railReviews.length===0}]}><div class="project-current">
+      {currentUpdate && currentUpdate.kind!=='handoff' ? <SoftwareProjectUpdate workFirst hideChecks={Boolean(currentReview && !conversationClosed)} showExplanation={Boolean(acceptedWaiting || acceptedPaid)} projectName={terms.outcome} update={currentUpdate} checks={terms.milestones[currentMilestone].acceptance} deliverables={terms.milestones[currentMilestone].deliverables} visualUrl={currentUpdate.has_visual ? visual(currentUpdate.id) : undefined} /> : !currentUpdate && <section><h2>Your first update is on its way.</h2></section>}
+      {otherAccepted.map(update=>{
+        const milestone=update.milestone_index ?? 0,paid=payments.some(payment=>payment.milestone_index===milestone),balance=balanceFor(milestone);
+        return <section class="handoff-strip">
+          <h2>Milestone {milestone+1}</h2>
+          <details id={`version-${update.id}`}><summary>See the delivered version</summary><SoftwareProjectUpdate update={update} checks={terms.milestones[milestone].acceptance} deliverables={terms.milestones[milestone].deliverables} visualUrl={update.has_visual ? visual(update.id) : undefined} /></details>
+          <SoftwareReviewResponse update={update} checks={terms.milestones[milestone].acceptance} deliverables={terms.milestones[milestone].deliverables} milestoneName={terms.milestones[milestone].name} endpoint="" readonly />
+          {paid ? <p>Paid. Your files are on the way.</p> : <>
+            {balance && <a class="studio-button" href={balance.hosted_invoice_url!} target="_blank" rel="noopener noreferrer">Pay {formatUSD(balance.amount_cents)} ↗</a>}
+            <p>{balance ? "Your files unlock as soon as it's paid." : 'Handoff follows full payment.'}</p>
+          </>}
+          <p>Corrections are covered through {correctionDeadline(milestone)}.</p>
+        </section>;
+      })}
+      {handoffs.map(handoff=><section class="handoff-strip"><h2>Your files · Milestone {(handoff.milestone_index ?? 0)+1}</h2>{(handoff.has_visual || handoff.preview_url) ? <SoftwareProjectUpdate workFirst hideTitle projectName={terms.outcome} update={{...handoff,next_step: '',checks_limitations: ''}} visualUrl={handoff.has_visual ? visual(handoff.id) : undefined} /> : null}<ul>{JSON.parse(handoff.links_json ?? '[]').map((link:{label:string;url:string})=>{
+        const external=new URL(link.url).origin!==Astro.url.origin;
+        return <li><a class="studio-button" href={link.url} target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer' : undefined}>{link.label} <span aria-hidden="true">{external ? '↗' : '→'}</span></a></li>;
+      })}</ul>{handoff.client_request && <p>I need from you: {handoff.client_request}</p>}{handoff.what_changed && <p>{handoff.what_changed}</p>}{handoff.checks_limitations && <><h3>Not included</h3><p>{handoff.checks_limitations}</p></>}{handoff.next_step && <><h3>Support after handoff</h3><p>{handoff.next_step}</p></>}{(handoff.milestone_index!==currentMilestone || !accepted) && <p>Corrections are covered through {correctionDeadline(handoff.milestone_index)}.</p>}</section>)}
+      {decidedReview && decidedReview.id!==currentUpdate?.id && <details id={`version-${decidedReview.id}`}><summary>See the delivered version</summary><SoftwareProjectUpdate update={decidedReview} checks={terms.milestones[currentMilestone].acceptance} deliverables={terms.milestones[currentMilestone].deliverables} visualUrl={decidedReview.has_visual ? visual(decidedReview.id) : undefined} /></details>}
+      {decidedReview && <SoftwareReviewResponse update={decidedReview} checks={terms.milestones[currentMilestone].acceptance} deliverables={terms.milestones[currentMilestone].deliverables} milestoneName={terms.milestones[currentMilestone].name} endpoint="" readonly />}
+      {accepted && <p>Corrections are covered through {correctionDeadline(currentMilestone)}.</p>}
+      {acceptedWaiting && <section>{balance && <a class="studio-button" href={balance.hosted_invoice_url!} target="_blank" rel="noopener noreferrer">Pay {formatUSD(balance.amount_cents)} ↗</a>}<p>{balance ? "Your files unlock as soon as it's paid." : 'Handoff follows full payment.'}</p></section>}
+    </div>{railReviews.length>0 && <aside aria-label="Next steps">{railReviews.map(review=>{const planned=terms.milestones[review.milestone_index ?? 0].deliverables,delivered=deliveredIndexes(review,planned);return <section id={`review-${review.id}`} >{review.id!==currentUpdate?.id && <><h2>{softwareVersionLabel(review)} · milestone {(review.milestone_index ?? 0)+1}</h2><p>{review.what_changed} Please {review.kind==='direction_review' ? 'look it over' : 'try it'} by {softwareDate(addBusinessDays(review.shared_at!,review.review_window_days ?? 5))}.</p><SoftwareProjectUpdate workFirst hideChecks={!conversationClosed} projectName={terms.outcome} update={review} checks={terms.milestones[review.milestone_index ?? 0].acceptance} deliverables={planned} visualUrl={review.has_visual ? visual(review.id) : undefined} /></>}{review.client_request && <p>I need from you: {review.client_request}</p>}<SoftwareReviewResponse update={review} checks={terms.milestones[review.milestone_index ?? 0].acceptance} deliverables={planned} missingDeliverables={planned.flatMap((label,index)=>delivered.includes(index)?[]:[{label,index}])} inaccessibleDeliverables={planned.flatMap((label,index)=>delivered.includes(index)?[{label,index}]:[])} milestoneName={terms.milestones[review.milestone_index ?? 0].name} endpoint={`/api/studio/software/${project.request_id}/reviews/${review.id}`} paymentLine={review.kind==='delivery_review' && !payments.some(payment=>payment.milestone_index===review.milestone_index) ? project.payment_mode==='standard' ? `The ${formatUSD(softwareInvoiceTerms({...terms,paymentMode:project.payment_mode},review.milestone_index ?? 0,'balance').amountCents)} balance is invoiced on delivery and due within ${softwareInvoiceTerms({...terms,paymentMode:project.payment_mode},review.milestone_index ?? 0,'balance').daysUntilDue} days. The files are yours after you accept and it's paid.` : `This milestone is invoiced on delivery and due within ${softwareInvoiceTerms({...terms,paymentMode:project.payment_mode},review.milestone_index ?? 0,'milestone').daysUntilDue} days. The files are yours after you accept and it's paid.` : undefined} invoice={invoices.find(invoice=>invoice.milestone_index===review.milestone_index && invoice.kind===(project.payment_mode==='standard' ? 'balance' : 'milestone') && !invoice.refunded_at && invoice.status!=='void')} readonly={conversationClosed} canAccept={review.kind!=='delivery_review' || planned.every((_,index)=>delivered.includes(index))} /></section>})}</aside>}<div class="project-history">
+      <section class="project-timeline" aria-label="Project history"><h2>So far</h2><ol>{timeline.map(update=><><li aria-current={update.id===currentUpdate?.id ? 'step' : undefined}>{update.id===currentUpdate?.id ? <strong>{softwareVersionLabel(update)}</strong> : <a class="site-link" data-open-details href={undecidedReviews.includes(update) ? `#review-${update.id}` : `#version-${update.id}`}>{softwareVersionLabel(update)}</a>}<span>{update.id===currentUpdate?.id && currentReview ? `Now · ${softwareDate(update.shared_at!)}` : softwareDate(update.shared_at!)}</span></li>{update.decision==='changes_requested' && <li><strong>Your notes</strong><span>{softwareDate(update.decided_at!)}</span></li>}</>)}<li><strong>Yours</strong><span>{handedOff ? softwareDate(handoff!.shared_at!) : !accepted ? 'After you accept' : !paid ? 'After payment' : 'Handoff coming'}</span></li></ol></section>
       <SoftwareAgreedTerms terms={terms} agreementDetails={externalAgreementDetails} values={agreementRecord?.archive_closed_at ? null : agreementSnapshot} documents={agreementDocuments} websiteSigned={Boolean(agreementRecord?.website_agreement_id)} conversationOpen={!conversationClosed} />
       {invoices.length>0 && <details><summary>Invoices</summary><ul>{invoices.map(invoice=><li>Milestone {invoice.milestone_index+1} · {softwareInvoiceKindLabels[invoice.kind]} · {(invoice.amount_cents/100).toLocaleString('en-US',{style:'currency',currency:'USD'})} · {invoice.refunded_at ? `Refunded ${softwareDate(invoice.refunded_at)}` : softwareInvoiceStatusLabels[invoice.status]}{!invoice.refunded_at && invoice.status==='paid' && invoice.status_updated_at ? ` ${softwareDate(invoice.status_updated_at)}` : invoice.due_at ? ` · Due ${softwareDate(invoice.due_at)}` : ''}{['open','payment_failed','uncollectible'].includes(invoice.status) && invoice.hosted_invoice_url && <> · <a class="site-link" href={invoice.hosted_invoice_url} target="_blank" rel="noopener noreferrer">Pay invoice ↗</a></>}</li>)}</ul></details>}
-      {earlierVersions.length>0 && <details id="earlier-versions"><summary>Earlier versions</summary>{earlierVersions.map(update => <><SoftwareProjectUpdate update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} deliverables={terms.milestones[update.milestone_index ?? 0].deliverables} visualUrl={update.has_visual ? visual(update.id) : undefined} /><SoftwareReviewResponse update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} deliverables={terms.milestones[update.milestone_index ?? 0].deliverables} milestoneName={terms.milestones[update.milestone_index ?? 0].name} endpoint="" readonly canAccept={true} /></>)}</details>}
-      {earlierUpdates.length>0 && <details><summary>Earlier updates</summary>{earlierUpdates.map(update=><><SoftwareProjectUpdate update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} deliverables={terms.milestones[update.milestone_index ?? 0].deliverables} visualUrl={update.has_visual ? visual(update.id) : undefined} />{update.status==='shared' && update.kind?.endsWith('_review') && <SoftwareReviewResponse update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} deliverables={terms.milestones[update.milestone_index ?? 0].deliverables} milestoneName={terms.milestones[update.milestone_index ?? 0].name} endpoint={`/api/studio/software/${project.request_id}/reviews/${update.id}`} readonly={conversationClosed} />}</>)}</details>}
+      {earlierVersions.length>0 && <details id="earlier-versions"><summary>Earlier versions</summary>{earlierVersions.map(update => <section id={`version-${update.id}`}><h3>{softwareVersionLabel(update)}</h3><SoftwareProjectUpdate update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} deliverables={terms.milestones[update.milestone_index ?? 0].deliverables} visualUrl={update.has_visual ? visual(update.id) : undefined} /><SoftwareReviewResponse update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} deliverables={terms.milestones[update.milestone_index ?? 0].deliverables} milestoneName={terms.milestones[update.milestone_index ?? 0].name} endpoint="" readonly canAccept={true} /></section>)}</details>}
+      {earlierUpdates.length>0 && <details><summary>Earlier updates</summary>{earlierUpdates.map(update=><section id={update.kind?.endsWith('_review') ? undecidedReviews.includes(update) ? `review-${update.id}` : `version-${update.id}` : undefined}><SoftwareProjectUpdate update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} deliverables={terms.milestones[update.milestone_index ?? 0].deliverables} visualUrl={update.has_visual ? visual(update.id) : undefined} />{update.status==='shared' && update.kind?.endsWith('_review') && <SoftwareReviewResponse update={update} checks={terms.milestones[update.milestone_index ?? 0].acceptance} deliverables={terms.milestones[update.milestone_index ?? 0].deliverables} missingDeliverables={terms.milestones[update.milestone_index ?? 0].deliverables.flatMap((label,index)=>deliveredIndexes(update,terms.milestones[update.milestone_index ?? 0].deliverables).includes(index)?[]:[{label,index}])} inaccessibleDeliverables={terms.milestones[update.milestone_index ?? 0].deliverables.flatMap((label,index)=>deliveredIndexes(update,terms.milestones[update.milestone_index ?? 0].deliverables).includes(index)?[{label,index}]:[])} milestoneName={terms.milestones[update.milestone_index ?? 0].name} endpoint={`/api/studio/software/${project.request_id}/reviews/${update.id}`} readonly={conversationClosed || railReviews.includes(update)} canAccept={update.kind!=='delivery_review' || terms.milestones[update.milestone_index ?? 0].deliverables.every((_,index)=>deliveredIndexes(update,terms.milestones[update.milestone_index ?? 0].deliverables).includes(index))} />}</section>)}</details>}
     </div></div>
     <div id="conversation"><ProjectMessages messages={messages} endpoint={`/api/studio/software/${project.request_id}/messages`} reader="client" closed={conversationClosed} heading="Ask a question" placeholder="Ask about a screen, a step or a date." hint="" /></div>
-    <footer class="project-records"><span>Agreement · Complete</span><span>{project.payment_mode === 'standard' ? `Initial payment · ${project.first_payment_recorded_at ? 'Received' : 'Not recorded'}` : 'Payment · Invoiced on delivery'}</span><span>Start · Confirmed {softwareDate(project.started_at)}</span></footer>
-  </article><script>import { setupProjectMessages } from '~/scripts/project-messages'; import { setupSoftwareReviews } from '~/scripts/software-review'; setupProjectMessages(); setupSoftwareReviews();</script>
+
+  </article><script>import { setupProjectMessages } from '~/scripts/project-messages'; import { setupSoftwareReviews } from '~/scripts/software-review'; setupProjectMessages(); setupSoftwareReviews();
+    document.querySelectorAll<HTMLAnchorElement>('[data-open-details]').forEach(link=>link.addEventListener('click',()=>{
+      const target=document.getElementById(link.hash.slice(1));
+      const details=target?.closest('details');if(details) details.open=true;
+    }));
+  </script>
 </BaseLayout>}
 <style>
   .software-project { max-width: 80rem; margin: auto; padding: clamp(3rem,7vw,6rem) 1.5rem; overflow-wrap: anywhere; }
@@ -88,15 +130,11 @@ const agreementDocuments = [masterAgreement, agreementRecord?.id && !agreementRe
   h3 { font: 400 1.5rem/1.2 Libron,Georgia,serif; margin: 1.5rem 0 .5rem; }
   p, li { font: 1rem/1.6 Inter,sans-serif; white-space: pre-wrap; }
   .summary { color: var(--muted); max-width: 60ch; }
-  .project-band { display: grid; grid-template-columns: 1.3fr .8fr 1fr; gap: 2rem; align-items: center; border-block: 1px solid var(--rule); padding: 1.5rem 0; margin: 2.5rem 0; }
-  .project-band h2 { font-size: 1.4rem; }
-  .project-band p { font-size: .85rem; color: var(--muted); }
   .project-columns { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1fr); gap: 3rem; align-items: start; }
   .project-current, .project-history, aside { min-width: 0; }
   .project-current, .project-history { grid-column: 1; }
   .project-current { grid-row: 1; }
-  .latest-updates { border-top: 1px solid var(--rule); margin-top: 1.5rem; padding-top: 1.5rem; }
-  .latest-updates > h3 { font-size: 1.6rem; margin: 0 0 .5rem; }
+  .project-current > :global(.software-update) + :global(.software-review) { margin-top: 1.5rem; }
   .project-history { grid-row: 2; }
   .handoff-strip { border-block: 1px solid var(--rule); padding: 1.5rem 0; margin: 2rem 0; }
   .handoff-strip ul { list-style: none; padding: 0; }
@@ -110,9 +148,17 @@ const agreementDocuments = [masterAgreement, agreementRecord?.id && !agreementRe
   details ol li::marker { color: var(--accent); }
   details li { padding-left: .2rem; margin-bottom: .4rem; }
   details ul { list-style: none; padding: 0; }
-  .project-records { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; border-top: 1px solid var(--rule); margin-top: 3rem; padding-top: 1.5rem; font: .8rem/1.5 Inter,sans-serif; color: var(--muted); }
+  .project-columns.without-actions { grid-template-columns: minmax(0,1fr); }
+  .project-columns { margin-top: 2rem; }
+  .project-timeline ol { display: grid; gap: 1.5rem; list-style: none; padding: 1rem 0; }
+  .project-timeline li { display: grid; grid-template-columns: .8rem minmax(0,1fr); column-gap: .6rem; row-gap: .4rem; font: .85rem/1.5 Inter,sans-serif; }
+  .project-timeline li::before { content: '●'; grid-column: 1; grid-row: 1; color: var(--studio-done); }
+  .project-timeline li[aria-current=step]::before { color: var(--accent); }
+  .project-timeline :is(a,strong,span) { grid-column: 2; }
+  .project-timeline a { border: 0; }
+  .project-timeline span { color: var(--muted); }
   @media(max-width: 55rem) {
-    .project-band, .project-columns { grid-template-columns: 1fr; }
+    .project-columns { grid-template-columns: 1fr; }
     .project-current, .project-history, aside { grid-column: 1; grid-row: auto; }
     .project-current { order: 1; }
     aside { order: 2; border-left: 0; border-top: 1px solid var(--rule); padding: 2rem 0 0; }
