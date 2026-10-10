@@ -378,3 +378,15 @@ it.each(['start_details_json','external_signature_details_json'])('reviews and c
  await applyStudioRetention(database,await previewStudioRetention(database,'Local test data',storage,now,list),'Local test data',storage,async()=>{},now,list);
  expect(sql.prepare(`SELECT ${column} FROM software_projects`).get()[column]).toBeNull();sql.close();
 });
+
+it('revokes retained offer links and signing sessions without affecting other requests',async()=>{
+ const {sql,database}=fixture();retainedSoftware(sql,'paid');
+ sql.exec("INSERT INTO software_offer_links VALUES('software','retired','now',NULL),('active','active','now',NULL); INSERT INTO software_agreement_links VALUES('link','agreement','offer','retired','client@example.com','token','now','later',NULL); INSERT INTO software_agreement_sessions VALUES('session','agreement','offer','retired','client@example.com','link','now','later',NULL,'csrf')");
+ const list=async()=>[];
+ await applyStudioRetention(database,await previewStudioRetention(database,'Local test data',storage,now,list),'Local test data',storage,async()=>{},now,list);
+ expect(sql.prepare("SELECT revoked_at FROM software_offer_links WHERE request_id='software'").get()).toEqual({revoked_at:now.toISOString()});
+ expect(sql.prepare("SELECT revoked_at FROM software_offer_links WHERE request_id='active'").get()).toEqual({revoked_at:null});
+ expect(sql.prepare("SELECT revoked_at FROM software_agreement_sessions").get()).toEqual({revoked_at:now.toISOString()});
+ expect(sql.prepare("SELECT used_at FROM software_agreement_links").get()).toEqual({used_at:now.toISOString()});
+ sql.close();
+});

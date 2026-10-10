@@ -70,6 +70,17 @@ it('renders unknown, revoked and no-sent links as identical private 404s', async
   } finally { sql.close(); }
 });
 
+it.each(['{}', '{"outcome":"Invalid"}', 'null', 'broken JSON'])('renders invalid terms %s as the existing unavailable state', async termsJSON => {
+  const { sql,db } = await fixture();
+  try {
+    const unknown = await render(db,'b'.repeat(43));
+    sql.prepare("UPDATE software_offers SET terms_json=? WHERE status='sent'").run(termsJSON);
+    const response = await render(db,token);
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe(await unknown.text());
+  } finally { sql.close(); }
+});
+
 it('protects owner previews and selects draft or exact sent version without private fields', async () => {
   const { sql,db } = await fixture();
   const container = await AstroContainer.create();

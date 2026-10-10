@@ -49,12 +49,16 @@ export async function listSoftwareOffers(db: D1Database, id: string) {
 }
 // Explicit allowlist: client rendering never receives the owner record or audit data.
 export function clientOffer(request: OwnerRequest, offer: SoftwareOffer, offers: SoftwareOffer[] = []) {
+  let input: unknown;
+  try { input = JSON.parse(offer.terms_json); } catch { return null; }
+  const terms = offerTermsSchema.safeParse(input);
+  if (!terms.success) return null;
   return { name: request.name, company: typeof request.details.company === 'string' ? request.details.company : '',
     path: softwarePaths[request.serviceId === 'idea' ? 'idea' : 'workflow'], version: offer.version,
     replacesVersion: offers.filter(previous => previous.version < offer.version && previous.sent_at && ['sent', 'superseded'].includes(previous.status)).sort((a, b) => b.version - a.version)[0]?.version,
-    terms: offerTermsSchema.parse(JSON.parse(offer.terms_json)) };
+    terms: terms.data };
 }
-export type ClientOffer = ReturnType<typeof clientOffer>;
+export type ClientOffer = NonNullable<ReturnType<typeof clientOffer>>;
 export async function hashOfferToken(token: string) {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))), byte => byte.toString(16).padStart(2, '0')).join('');
 }
