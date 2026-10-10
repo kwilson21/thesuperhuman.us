@@ -105,7 +105,7 @@ describe('owner insights schema', () => {
     const packageJson = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
       devDependencies?: Record<string, string>;
     };
-    expect(packageJson.devDependencies?.wrangler).toBe('4.90.0');
+    expect(packageJson.devDependencies?.wrangler).toBe('4.146.0');
   });
 
   it('keeps publication and music migrations in database-specific directories', () => {
