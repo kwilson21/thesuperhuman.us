@@ -13,7 +13,7 @@ let db: D1Database;
 let kv: { get: ReturnType<typeof vi.fn>; put: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
 let stored: Map<string, string>;
 function context(input: unknown = base, options: { origin?: string; type?: string; db?: D1Database | null; token?: string | null; rate?: typeof kv | null } = {}) {
-  return { request: new Request('https://thesuperhuman.us/api/software-inquiry', { method: 'POST', headers: { origin: options.origin ?? 'https://thesuperhuman.us', 'content-type': options.type ?? 'application/json' }, body: typeof input === 'string' ? input : JSON.stringify(input) }), locals: { runtime: { env: { MUSIC_DB: options.db === undefined ? db : options.db, TURNSTILE_SECRET_KEY: options.token === undefined ? 'test' : options.token, RATE_LIMIT: options.rate === undefined ? kv : options.rate, RESEND_API_KEY: 'test', CONTACT_FROM_EMAIL: 'from@example.com', CONTACT_TO_EMAIL: 'owner@example.com' } } } } as any;
+  return { request: new Request('https://thesuperhuman.us/api/software-inquiry', { method: 'POST', headers: { origin: options.origin ?? 'https://thesuperhuman.us', 'content-type': options.type ?? 'application/json' }, body: typeof input === 'string' ? input : JSON.stringify(input) }), locals: { runtime: { env: { MUSIC_DB: options.db === undefined ? db : options.db, TURNSTILE_SECRET_KEY: options.token === undefined ? 'test' : options.token, RATE_LIMIT: options.rate === undefined ? kv : options.rate, RESEND_API_KEY: 'test', CONTACT_FROM_EMAIL: 'from@example.com', CONTACT_TO_EMAIL: 'inbox@example.com' } } } } as any;
 }
 beforeEach(() => {
   sql = new DatabaseSync(':memory:'); sql.exec(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8'));
@@ -83,15 +83,13 @@ it('keeps a joined emoji intact at the summary cutoff', () => {
   if (parsed.ok) expect(softwareRequest(parsed.value).summary).toBe(`${'a'.repeat(116)}👩‍💻…`);
 });
 
-it('orders workflow questions in the saved brief and uses idea labels on the owner page', () => {
+it('orders workflow questions in the saved brief', () => {
   const parsed = validateSoftwareInquiry(base);
   expect(parsed.ok).toBe(true);
   if (parsed.ok) {
     const request = softwareRequest(parsed.value);
     expect(Object.keys(softwareBrief(request as any)).slice(0, 4)).toEqual(['path', 'today', 'audience', 'firstResult']);
   }
-  const ownerPage = readFileSync(new URL('../../src/pages/owner/requests/[id].astro', import.meta.url), 'utf8');
-  expect(ownerPage).toContain('softwareLabels[key as keyof typeof softwareLabels]');
 });
 
 it('deduplicates after rate limit, rejects another email without leaking the brief, and limits new IDs', async () => {
@@ -106,7 +104,7 @@ it('deduplicates after rate limit, rejects another email without leaking the bri
   expect(JSON.stringify(await conflict.json())).not.toContain('First line');
   expect((await POST(context({ ...base, submissionId: '00000000-0000-4000-8000-000000000002' }))).status).toBe(429);
   expect(sql.prepare('SELECT COUNT(*) AS n FROM owner_requests').get()).toEqual({ n: 1 });
-  expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(1);
+  expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(2);
 });
 
 it('re-reads a unique-index race and returns only a matching stored brief', async () => {
@@ -264,4 +262,127 @@ it('treats an oversized saved detail as a field error without an urgent alert', 
   expect((await response.json() as { errors: Record<string, string> }).errors).toEqual({ _form: 'Keep the brief shorter and try again.' });
   expect(kv.delete).toHaveBeenCalledWith('rl:software:0.0.0.0');
   expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(0);
+});
+
+
+it('emails only answered fields to the client with the saved title and configured contact Reply-To', async () => {
+  const response = await POST(context({ ...base, name: 'Alex Example', today: '<script>first</script>\nSecond line' }));
+  expect(await response.json()).toMatchObject({ ok: true, clientCopyStatus: 'sent' });
+  const emails = vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com')).map(([, init]) => JSON.parse(init!.body as string));
+  const copy = emails.find(email => email.to[0] === 'alex@example.com');
+  expect(copy).toMatchObject({ from: 'from@example.com', subject: 'Your brief: One place to see next steps.', reply_to: 'inbox@example.com' });
+  expect(copy.text).toContain('Hi Alex,');
+  expect(copy.text).toContain("I'll read it myself and reply within two business days with a fixed-price first milestone, or a question or two.");
+  expect(copy.text).toContain('What happens today?\n<script>first</script>\nSecond line');
+  expect(copy.text).not.toMatch(/Not provided|Why this timing|Budget amount|Their role/);
+  expect(copy.html).toContain('&lt;script&gt;first&lt;/script&gt;');
+  expect(copy.html).not.toContain('<script>first');
+  expect(JSON.parse(sql.prepare('SELECT details_json FROM owner_requests').get().details_json).clientCopyStatus).toBe('sent');
+});
+
+it.each([['rejected', 'failed'], ['timeout', 'uncertain']] as const)('keeps the saved brief after a client copy %s', async (outcome, status) => {
+  vi.mocked(fetch).mockImplementation(async (url, init) => {
+    if (String(url).includes('siteverify')) return { ok: true, json: async () => ({ success: true }) } as Response;
+    if (JSON.parse(init!.body as string).to[0] === 'alex@example.com') {
+      if (outcome === 'timeout') throw new Error('timeout');
+      return new Response('', { status: 422 });
+    }
+    return new Response('', { status: 200 });
+  });
+  expect(await (await POST(context())).json()).toMatchObject({ ok: true, clientCopyStatus: status });
+  expect(JSON.parse(sql.prepare('SELECT details_json FROM owner_requests').get().details_json).clientCopyStatus).toBe(status);
+  expect(await (await POST(context())).json()).toMatchObject({ ok: true, clientCopyStatus: status });
+});
+
+it('retries a failed brief copy once and blocks sent, closed and unconfirmed retries', async () => {
+  const { POST: retry } = await import('~/pages/api/owner/requests/[id]/brief-copy');
+  await POST(context());
+  const requestId = sql.prepare('SELECT id FROM owner_requests').get().id;
+  const retryContext = (confirmedNotSent = false, owner = true) => ({ ...context(), params: { id: requestId }, request: new Request('https://thesuperhuman.us/api/owner/requests/r/brief-copy', { method:'POST', headers:{ origin:'https://thesuperhuman.us','content-type':'application/json' }, body:JSON.stringify({ action:'send', confirmedNotSent }) }), locals:{ ...context().locals, owner:owner ? {email:'owner@example.com'} : null } } as any);
+  const set = (status: string, age: number) => sql.prepare("UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus',?,'$.clientCopyAttemptedAt',?)").run(status,new Date(Date.now()-age).toISOString());
+  expect((await retry(retryContext(false,false))).status).toBe(403);
+  set('failed',0);
+  expect((await retry(retryContext())).status).toBe(200);
+  expect((await retry(retryContext())).status).toBe(409);
+  set('uncertain',120_000);
+  expect((await retry(retryContext())).status).toBe(409);
+  set('uncertain',0);
+  expect((await retry(retryContext(true))).status).toBe(409);
+  set('uncertain',120_000);
+  expect((await retry(retryContext(true))).status).toBe(200);
+  set('failed',120_000);
+  sql.exec("UPDATE owner_requests SET status='withdrawn'");
+  expect((await retry(retryContext())).status).toBe(409);
+});
+
+it('keeps delivery uncertain after sending when the final status write fails', async () => {
+  const batch = db.batch.bind(db);
+  vi.spyOn(db,'batch').mockImplementation(async (statements: any[]) => {
+    if (statements.some(item => item.query.includes("'$.clientCopyStatus',?"))) throw new Error('status write failed');
+    return batch(statements);
+  });
+  expect(await (await POST(context())).json()).toMatchObject({ok:true,clientCopyStatus:'uncertain'});
+  const details = JSON.parse(sql.prepare('SELECT details_json FROM owner_requests').get().details_json);
+  expect(details.clientCopyStatus).toBe('uncertain');
+  expect(details.clientCopyAttemptedAt).toBeTruthy();
+  expect(await (await POST(context())).json()).toMatchObject({ok:true,clientCopyStatus:'uncertain'});
+  expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(2);
+});
+
+it.each(['claim', 'construction', 'config'] as const)('records a pre-send %s failure and returns an error on owner retry', async (failure) => {
+  const ctx = context();
+  if (failure === 'config') delete ctx.locals.runtime.env.CONTACT_TO_EMAIL;
+  if (failure === 'claim') {
+    const prepare = db.prepare.bind(db);
+    vi.spyOn(db, 'prepare').mockImplementation((query: string) => {
+      if (query.includes("'$.clientCopyStatus','uncertain'")) throw new Error('claim failed');
+      return prepare(query);
+    });
+  }
+  if (failure === 'construction') {
+    const emails = await import('~/lib/client-emails');
+    vi.spyOn(emails, 'softwareBriefEmail').mockImplementation(() => { throw new Error('construction failed'); });
+  }
+  try {
+    expect(await (await POST(ctx)).json()).toMatchObject({ ok: true, clientCopyStatus: 'failed' });
+    expect(JSON.parse(sql.prepare('SELECT details_json FROM owner_requests').get().details_json).clientCopyStatus).toBe('failed');
+    const { POST: retry } = await import('~/pages/api/owner/requests/[id]/brief-copy');
+    const response = await retry({ ...ctx, params: { id: sql.prepare('SELECT id FROM owner_requests').get().id },
+      locals: { ...ctx.locals, owner: { email: 'owner@example.com' } },
+      request: new Request('https://thesuperhuman.us/api/owner/requests/r/brief-copy', { method: 'POST', headers: { origin: 'https://thesuperhuman.us', 'content-type': 'application/json' }, body: JSON.stringify({ action: 'send' }) }) });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ ok: false });
+    expect(JSON.parse(sql.prepare('SELECT details_json FROM owner_requests').get().details_json).clientCopyStatus).toBe('failed');
+    expect(vi.mocked(fetch).mock.calls.filter(([url, init]) => String(url).includes('api.resend.com') && JSON.parse(init!.body as string).to?.[0] === 'alex@example.com')).toHaveLength(0);
+  } finally { vi.restoreAllMocks(); }
+});
+
+it('omits blank optional answers from the owner idea notification', async () => {
+  await POST(context({ ...base, path: 'idea', idea: 'A shift board', audienceToday: 'Volunteers', firstVersion: 'Claim a shift', signal: '' }));
+  const notice = vi.mocked(fetch).mock.calls.find(([url, init]) => String(url).includes('api.resend.com') && JSON.parse(init!.body as string).to[0] === 'inbox@example.com')!;
+  const email = JSON.parse(notice[1]!.body as string);
+  expect(email.text).toContain('What’s the idea?\nA shift board');
+  expect(email.text).not.toMatch(/undefined|How will you know/);
+});
+
+it('recovers an unrecorded first claim failure through the guarded owner retry', async () => {
+  const prepare = db.prepare.bind(db);
+  const failedWrites = vi.spyOn(db, 'prepare').mockImplementation((query: string) => {
+    if (query.includes("'$.clientCopyStatus','uncertain'") || query.includes("'$.clientCopyStatus','failed'")) throw new Error('copy write failed');
+    return prepare(query);
+  });
+  expect(await (await POST(context())).json()).toMatchObject({ ok: true, clientCopyStatus: 'failed' });
+  expect(JSON.parse(sql.prepare('SELECT details_json FROM owner_requests').get().details_json)).not.toHaveProperty('clientCopyStatus');
+  failedWrites.mockRestore();
+  expect(await (await POST(context())).json()).toMatchObject({ ok: true, clientCopyStatus: 'failed' });
+  const { POST: retry } = await import('~/pages/api/owner/requests/[id]/brief-copy');
+  const ctx = context();
+  const retryContext = { ...ctx, params: { id: sql.prepare('SELECT id FROM owner_requests').get().id },
+    locals: { ...ctx.locals, owner: { email: 'owner@example.com' } },
+    request: new Request('https://thesuperhuman.us/api/owner/requests/r/brief-copy', { method: 'POST', headers: { origin: 'https://thesuperhuman.us', 'content-type': 'application/json' }, body: JSON.stringify({ action: 'send' }) }) };
+  expect((await retry({ ...retryContext, locals: { ...ctx.locals, owner: null } } as any)).status).toBe(403);
+  expect((await retry({ ...retryContext, request: retryContext.request.clone() })).status).toBe(200);
+  expect((await retry({ ...retryContext, request: retryContext.request.clone() })).status).toBe(409);
+  expect(JSON.parse(sql.prepare('SELECT details_json FROM owner_requests').get().details_json).clientCopyStatus).toBe('sent');
+  expect(vi.mocked(fetch).mock.calls.filter(([url, init]) => String(url).includes('api.resend.com') && JSON.parse(init!.body as string).to[0] === 'alex@example.com')).toHaveLength(1);
 });

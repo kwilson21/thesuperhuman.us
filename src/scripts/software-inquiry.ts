@@ -1,6 +1,23 @@
 import { approverLabels, budgetLabels, softwareDetailKeys, softwareLabels, softwarePaths, softwareQuestions, timingLabels, validateSoftwareInquiry } from '../lib/software-inquiry';
 import { setupFormSubmission } from './form-submission';
 
+export function renderSoftwareReceipt(result: Record<string, unknown>) {
+  const brief = result.brief && typeof result.brief === 'object' && !Array.isArray(result.brief) ? result.brief as Record<string, string> : {};
+  const firstName = brief.name?.trim().split(/\s+/)[0] || 'there';
+  document.querySelector<HTMLElement>('[data-receipt-thanks]')!.textContent = `Thanks, ${firstName}. I'll read it myself and reply within two business days.`;
+  document.querySelector<HTMLElement>('[data-intake-progress]')!.hidden = true;
+  const sent = result.clientCopyStatus === 'sent';
+  const uncertain = result.clientCopyStatus === 'uncertain';
+  document.querySelector<HTMLElement>('[data-copy-status]')!.textContent = sent
+    ? `A copy is on its way to ${brief.email}.`
+    : uncertain ? 'Your copy should arrive shortly.'
+    : "I couldn't send your copy just now, but your brief is saved and I'll still reply.";
+  document.querySelector<HTMLElement>('[data-copy-icon]')!.hidden = !sent && !uncertain;
+  const note = document.querySelector<HTMLElement>('[data-copy-note]')!;
+  note.hidden = !sent && !uncertain;
+  note.textContent = uncertain ? "If it doesn't, your brief is still saved and I'll still reply." : "It has everything you wrote, so you don't need to save this page.";
+}
+
 const form = document.querySelector<HTMLFormElement>('#software-inquiry');
 if (form) {
   const steps = [...form.querySelectorAll<HTMLElement>('[data-step]')];
@@ -31,7 +48,8 @@ if (form) {
       if (selected && key === 'approverRole' && values.approver !== approverLabels.other) continue;
       const dt = document.createElement('dt'), dd = document.createElement('dd');
       dt.textContent = softwareLabels[key as keyof typeof softwareLabels];
-      dd.textContent = values[key] || 'Not provided';
+      if (!values[key]) continue;
+      dd.textContent = values[key];
       list.appendChild(dt); list.appendChild(dd);
     }
   }
@@ -39,6 +57,7 @@ if (form) {
     step = index;
     steps.forEach((section, i) => section.hidden = i !== index);
     document.querySelectorAll('.intake-progress li').forEach((item, i) => i === index ? item.setAttribute('aria-current', 'step') : item.removeAttribute('aria-current'));
+    form!.querySelector<HTMLElement>('[data-send-reassurance]')!.hidden = index !== 2;
     next.hidden = index === 2; submit.hidden = index !== 2; back.hidden = index === 0;
     next.textContent = index === 1 ? 'Review brief' : 'Continue';
     if (index === 2) renderRows(form!.querySelector('[data-review]')!, labelled(payload(new FormData(form!))));
@@ -107,10 +126,7 @@ if (form) {
   setupFormSubmission({
     form, endpoint: '/api/software-inquiry', success: document.getElementById('software-success')!,
     payload: data => ({ ...payload(data), submissionId }),
-    onSuccess: result => {
-      const brief = result.brief && typeof result.brief === 'object' && !Array.isArray(result.brief) ? result.brief as Record<string, string> : {};
-      renderRows(document.querySelector('[data-receipt]')!, brief, brief.path === softwarePaths.idea ? 'idea' : brief.path === softwarePaths.workflow ? 'workflow' : null);
-    },
+    onSuccess: renderSoftwareReceipt,
     onConflict: () => { submissionId = crypto.randomUUID(); },
   });
   const observer = new MutationObserver(records => {
@@ -119,6 +135,5 @@ if (form) {
     if (errorStep >= 0) { showStep(errorStep, false); target!.focus(); }
   });
   observer.observe(form, { attributes: true, subtree: true, attributeFilter: ['aria-invalid'] });
-  document.querySelector<HTMLButtonElement>('[data-print]')?.addEventListener('click', () => window.print());
   approverRole(); selectedQuestions(); showStep(0, false);
 }

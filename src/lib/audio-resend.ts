@@ -95,7 +95,7 @@ export async function sendSoftwareRequestNotice(args: {
     payload: {
       from: args.from, to: [args.to], reply_to: args.email,
       subject: `Software request from ${args.name}: ${softwarePaths[args.path]}`,
-      text: `A software project brief is ready for review.\n\n${softwareQuestions[args.path].map(key => `${softwareLabels[key]}\n${args.brief[key]}`).join('\n\n')}\n\n${new URL(`/owner/requests/${args.requestId}`, args.origin ?? 'https://thesuperhuman.us').href}`,
+      text: `A software project brief is ready for review.\n\n${softwareQuestions[args.path].filter(key => args.brief[key]?.trim()).map(key => `${softwareLabels[key]}\n${args.brief[key]}`).join('\n\n')}\n\n${new URL(`/owner/requests/${args.requestId}`, args.origin ?? 'https://thesuperhuman.us').href}`,
     },
   });
 }

@@ -1,3 +1,4 @@
+import { deliverSoftwareBriefCopy } from '~/lib/software-brief-copy';
 import type { APIRoute } from 'astro';
 import { sendSoftwareRequestNotice } from '~/lib/audio-resend';
 import { musicRequest } from '~/lib/music-request';
@@ -36,7 +37,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       return Response.json({ ok: false, error: preserved }, { status: 503 });
     }
     if (prior) return prior.email.toLowerCase() === input.email.toLowerCase()
-      ? Response.json({ ok: true, brief: softwareBrief(prior) })
+      ? Response.json({ ok: true, brief: softwareBrief(prior), clientCopyStatus: prior.details.clientCopyStatus ?? 'failed' })
       : Response.json({ ok: false, error: preserved }, { status: 409 });
     const limit = await checkRateLimit(env.RATE_LIMIT, ip, 'rl:software:');
     if (!limit.allowed) return Response.json({ ok: false, error: 'Please wait a few minutes before sending again. Your details are still here.' }, { status: 429 });
@@ -46,7 +47,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     } catch (error) {
       const raced = await existing(env.MUSIC_DB, input.submissionId).catch(() => null);
       if (raced) return raced.email.toLowerCase() === input.email.toLowerCase()
-        ? Response.json({ ok: true, brief: softwareBrief(raced) })
+        ? Response.json({ ok: true, brief: softwareBrief(raced), clientCopyStatus: raced.details.clientCopyStatus ?? 'failed' })
         : Response.json({ ok: false, error: preserved }, { status: 409 });
       if (error instanceof RequestDetailsTooLargeError) {
         await env.RATE_LIMIT.delete(`rl:software:${ip}`);
@@ -56,12 +57,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
       await sendUrgentOwnerAlert(env, { category: 'request-storage', route: '/api/software-inquiry', requestId: crypto.randomUUID(), code: 'd1-write-failed', occurredAt: new Date().toISOString() });
       return Response.json({ ok: false, error: preserved }, { status: 503 });
     }
+    const clientCopyStatus = await deliverSoftwareBriefCopy(env.MUSIC_DB, saved, env);
     const notice = sendSoftwareRequestNotice({ requestId: saved.id, path: input.path, name: input.name, email: input.email, brief: softwareBrief(saved),
       origin: env.SITE_ORIGIN, apiKey: env.RESEND_API_KEY, from: env.CONTACT_FROM_EMAIL, to: env.CONTACT_TO_EMAIL })
       .catch(() => console.error('Owner notification email state is uncertain.'));
     if (locals.runtime?.ctx) locals.runtime.ctx.waitUntil(notice);
     else await notice;
-    return Response.json({ ok: true, brief: softwareBrief(saved) });
+    return Response.json({ ok: true, brief: softwareBrief(saved), clientCopyStatus });
   } catch {
     return Response.json({ ok: false, error: 'Sending is temporarily unavailable. Your details are still here. Please try again later.' }, { status: 503 });
   }
