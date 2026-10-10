@@ -402,6 +402,12 @@ it('countersigns identical hashes atomically and blocks start until artifact and
   expect(await executedOfferAgreement(db, 'o')).toMatchObject({ id });
   expect(vi.mocked(fetch).mock.calls).toHaveLength(2);
   expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body)).attachments).toHaveLength(1);
+  for (const [index, party] of ['client', 'contractor'].entries()) {
+    const signature = sql.prepare('SELECT receipt_id FROM software_agreement_signatures WHERE agreement_id=? AND party=?').get(id, party);
+    const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[index][1]?.body));
+    expect(payload.text).toContain(`Receipt: ${signature.receipt_id}`);
+    expect(payload.text).not.toContain(`Receipt: ${id}\n`);
+  }
   const ownerCopy = await agreementDownload(env, request(), id, true);
   expect(ownerCopy.status).toBe(200);
   expect((await agreementDownload(env, new Request('https://example.com'), id)).status).toBe(401);

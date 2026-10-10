@@ -371,6 +371,7 @@ describe('screenshot preview config', () => {
     expect(preview.compatibility_date).toBe(wrangler.compatibility_date);
     expect(preview.compatibility_flags).toEqual(wrangler.compatibility_flags);
     expect(preview.vars).toEqual({ ...wrangler.vars, ...PREVIEW_OVERRIDES });
+    expect(preview.vars.SITE_ORIGIN).toBe("http://127.0.0.1:4321");
     const bindings = (items: { binding: string }[] = []) => items.map(item => item.binding);
     expect(bindings(preview.d1_databases)).toEqual(bindings(wrangler.d1_databases));
     expect(bindings(preview.kv_namespaces)).toEqual(bindings(wrangler.kv_namespaces));

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { siteOrigin } from '../src/lib/site-origin.mjs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
@@ -19,8 +20,13 @@ export function wranglerSecretListArguments() {
   return ['node_modules/wrangler/bin/wrangler.js', 'secret', 'list', '--format', 'json'];
 }
 
-export async function ownerHealth({ now = new Date(), configuredNames, query, media, head }) {
+export async function ownerHealth({ now = new Date(), configuredNames, query, media, head, siteOrigin: configuredOrigin = /** @type {string | undefined} */ (undefined) }) {
   const checks = [];
+  try {
+    checks.push(pass('signing-origin', `Effective signing origin: ${siteOrigin(configuredOrigin)}.`));
+  } catch {
+    checks.push(attention('signing-origin', 'The signing origin is invalid.', 'Set SITE_ORIGIN to the canonical website origin.'));
+  }
   const missingConfiguration = requiredConfiguration.filter(name => !configuredNames.has(name));
   checks.push(missingConfiguration.length
     ? attention('configuration', `Missing required configuration: ${missingConfiguration.join(', ')}.`, 'Configure the named owner access or storage setting, then run health again.')
@@ -137,6 +143,7 @@ async function main() {
   try {
     const report = await ownerHealth({
       configuredNames,
+      siteOrigin: process.env.SITE_ORIGIN ?? config.vars?.SITE_ORIGIN,
       query: sql => database.query(sql),
       media,
       head: async url => {

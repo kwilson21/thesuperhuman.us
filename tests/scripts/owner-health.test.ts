@@ -178,3 +178,10 @@ it('names the missing agreement retention identity',async()=>{
   const report=await ownerHealth(fixture);
   expect(JSON.stringify(report)).toContain('AGREEMENT_RETENTION_BINDING_ID');
 });
+
+it('reports the default and overridden effective signing origin', async () => {
+  for (const siteOrigin of [undefined, 'https://preview.example.com']) {
+    const report = await ownerHealth({ ...healthyFixture(), siteOrigin });
+    expect(report.checks).toContainEqual(expect.objectContaining({ id: 'signing-origin', status: 'pass', summary: expect.stringContaining(siteOrigin ?? 'https://thesuperhuman.us') }));
+  }
+});
