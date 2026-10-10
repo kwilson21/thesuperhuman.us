@@ -385,6 +385,18 @@ function signatureInsert(
       ua,
     );
 }
+// Failed means this uncertain notice is obsolete, not confirmed undelivered.
+export function closeObsoleteAgreementNotifications(
+  db: D1Database, agreementId: string, state: 'executed' | 'abandoned', actor: string, at: string,
+) {
+  return [
+    db.prepare(
+      "INSERT INTO software_agreement_events(id,agreement_id,action,actor,occurred_at,reason) SELECT ?,?,'delivery-failed',?,?,? WHERE EXISTS(SELECT 1 FROM software_agreement_notifications WHERE agreement_id=? AND status='sending')",
+    ).bind(crypto.randomUUID(), agreementId, actor, at, `obsolete-signing-notice:${state}`, agreementId),
+    db.prepare("UPDATE software_agreement_notifications SET status='failed' WHERE agreement_id=? AND status='sending'").bind(agreementId),
+  ];
+}
+
 export async function countersignAgreements(
   db: D1Database,
   offer: SoftwareOffer,
@@ -437,6 +449,7 @@ export async function countersignAgreements(
         request,
       ),
       agreementEvent(db, 'countersigned', actor, at, a.id, offer.id),
+      ...closeObsoleteAgreementNotifications(db, a.id, 'executed', actor, at),
       db
         .prepare("UPDATE software_agreements SET status='executed',executed_at=? WHERE id=?")
         .bind(at, a.id),

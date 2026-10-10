@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
 import { nativeAgreementRoute, agreementRequest, nativeAgreementResponse } from '~/lib/agreement-request';
 import { agreementJson, signingEnabled } from '~/lib/agreement-access';
-import { countersignAgreements, offerAgreements, signatureIds } from '~/lib/software-agreements';
+import { countersignAgreements, offerAgreements, signatureIds, closeObsoleteAgreementNotifications } from '~/lib/software-agreements';
 import { agreementEvent } from '~/lib/agreement-events';
 import { cleanText } from '~/lib/agreement-fields';
 import {
@@ -119,6 +119,7 @@ const post: APIRoute = async ({ request, locals, params }) => {
           softwareGuard(db, "SELECT 1 FROM software_agreements WHERE id=? AND request_id=? AND offer_id=? AND text_sha256=? AND status='client_signed'", [d.id, params.id!, offer.id, d.hash]),
           db.prepare("UPDATE software_agreements SET status='abandoned',abandoned_at=?,abandoned_reason=? WHERE id=?").bind(at, c.reason, d.id),
           agreementEvent(db, 'abandoned', locals.owner!.email, at, d.id, offer.id, 'owner-abandoned'),
+          ...closeObsoleteAgreementNotifications(db, d.id, 'abandoned', locals.owner!.email, at),
         ]),
         db.prepare("UPDATE software_offers SET status='superseded',updated_at=? WHERE id=? AND status='sent'").bind(at, offer.id),
         db.prepare('UPDATE software_offer_links SET revoked_at=? WHERE request_id=? AND revoked_at IS NULL').bind(at, params.id),
