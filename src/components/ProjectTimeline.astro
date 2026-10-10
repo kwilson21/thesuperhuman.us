@@ -10,11 +10,13 @@ interface Props {
   lead?: string;
 }
 const { id, title, entries, selectedId, unavailable = false, bounded = false, storyHref, archiveHref, lead } = Astro.props;
+const hasHighlights = Astro.slots.has('highlights');
 const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 ---
 <section class="project-timeline" data-timeline data-selected-id={selectedId} aria-labelledby={`${id}-title`}>
   <div class="site-section-heading"><h2 id={`${id}-title`}>{title}</h2></div>
   {lead && <p class="timeline-lead">{lead}</p>}
+  {hasHighlights && <div class="timeline-highlights"><slot name="highlights" /></div>}
   {entries.length ? <>
     <div data-controls hidden>
       <p class="timeline-hint">Choose a milestone to explore the work.</p>
@@ -108,6 +110,7 @@ const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('e
   @media(min-width: 801px) {
     .project-timeline:has(> [data-controls]:not([hidden])) { display: grid; grid-template-columns: 230px minmax(0, 1fr); column-gap: 2.5rem; }
     .project-timeline > .site-section-heading, .project-timeline > .timeline-lead { grid-column: 1 / -1; }
+    .project-timeline > .timeline-highlights { grid-column: 1 / -1; }
     .milestone-strip { flex-direction: column; overflow: visible; gap: 0; padding: 0 0 1rem; }
     .milestone-strip button { position: relative; flex: none; padding: .9rem 1rem .9rem 1.3rem; border: 0; border-left: 1px solid var(--rule); border-radius: 0; }
     .milestone-strip button::before { content: ''; position: absolute; width: 9px; height: 9px; border: 1px solid var(--muted); background: var(--paper); border-radius: 50%; left: -5px; top: 1.25rem; }
