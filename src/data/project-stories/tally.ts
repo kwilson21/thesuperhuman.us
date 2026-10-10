@@ -179,7 +179,7 @@ export const tallyMilestones: Milestone[] = [
   {
     id: 'tally-merchant-names', day: '2026-10-06',
     title: 'Names for bank text, chosen by a person',
-    summary: 'Some bank text comes without a clean store name. Plaid’s merchant name comes first. When Plaid sends none, Workers AI suggests up to three names, and a person picks one, types their own, or turns the suggestions down. A name a person turns down is never suggested again. Merchant-name suggestions are optional, with their own switch in Settings. Implemented and tested locally.',
+    summary: 'Some bank text comes without a clean store name. Plaid’s merchant name comes first. When Plaid sends none, Workers AI suggests up to three names. A suggestion can appear provisionally in the list, dashed, but it becomes the saved name only when a person accepts it. A suggestion a person turns down isn’t offered again for that merchant record. Merchant-name suggestions are optional, with their own switch in Settings. Implemented and tested locally.',
     artifacts: [artifact(merchantNameSuggestion, 'Tally · Names for bank text, chosen by a person', 'A suggested store name, shown dashed until a person chooses it. From a local demo run on fictional data.', 'Screen capture, demo data')],
   },
 ];
