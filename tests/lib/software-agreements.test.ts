@@ -1900,3 +1900,27 @@ it('redirects a successful native retention apply to the owner agreements page',
   expect(response.status).toBe(303);
   expect(response.headers.get('location')).toBe('/owner/agreements');
 });
+
+it.each([503,'timeout'])('retires earlier links on uncertain send %s',async failure=>{
+ sql.exec('DELETE FROM software_agreement_sessions');
+ vi.stubGlobal('fetch',vi.fn(async(url:string)=>{
+  if(url.includes('turnstile')) return Response.json({success:true});
+  if(failure==='timeout') throw new Error('timeout');
+  return Response.json({message:'Unavailable'},{status:503});
+ }));
+ expect((await issueAgreementLink(env,request(),{turnstileToken:'test'},token)).status).toBe(200);
+ expect(sql.prepare("SELECT used_at FROM software_agreement_links WHERE id='challenge'").get().used_at).not.toBeNull();
+ expect(sql.prepare("SELECT count(*) n FROM software_agreement_links WHERE id<>'challenge' AND used_at IS NULL").get().n).toBe(1);
+});
+
+it('reviews retained external signing evidence and clears it with the last agreement',async()=>{
+ const {previewAgreementRetention,applyAgreementRetention}=await import('~/lib/agreement-retention');
+ await review();
+ sql.exec("UPDATE software_offers SET status='superseded'; UPDATE software_agreements SET msa_id=NULL,status='abandoned',ended_at='2000-01-01',retain_until='2010-01-01',terminated_at='2000-01-01'; INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,content_deleted_at,external_signature_details_json) VALUES('r','o','{}','standard','now','now','now','','now','now','removed','{\"parties\":\"Client\",\"copy_reference\":\"Copy\"}')");
+ const manifest=await previewAgreementRetention(db,env.AUDIO,'test-storage');
+ expect(manifest.agreements[0].project_evidence[0].external_signature_details_json).toContain('Copy');
+ sql.exec("UPDATE software_projects SET external_signature_details_json='{}'");
+ await expect(applyAgreementRetention(db,env.AUDIO,'test-storage',manifest)).rejects.toThrow('Archive changed');
+ await applyAgreementRetention(db,env.AUDIO,'test-storage',await previewAgreementRetention(db,env.AUDIO,'test-storage'));
+ expect(sql.prepare('SELECT external_signature_details_json FROM software_projects').get().external_signature_details_json).toBeNull();
+});

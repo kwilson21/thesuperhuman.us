@@ -96,3 +96,34 @@ it('limits buttons to the agreed mode, before-start deposits, delivered balances
   expect(invoiceAvailable({...later,paymentMode:'invoice'},0,'deposit',project,false,false)).toBe(false);
   expect(invoiceAvailable(later,0,'balance',{...project,completed_at:'now'},true,false)).toBe(false);
 });
+
+it('requires full delivered scope for invoice availability',async()=>{
+ const {invoiceDelivered}=await import('~/lib/software-invoices');
+ const planned=['One','Two'];
+ for(const scope of ['[0]','[1]','null','broken']) expect(invoiceDelivered({delivered_deliverables_json:scope,decision:null},planned)).toBe(false);
+ for(const scope of ['[0,1]','["One","Two"]','[]']) expect(invoiceDelivered({delivered_deliverables_json:scope,decision:null},planned)).toBe(true);
+ expect(invoiceDelivered({delivered_deliverables_json:'[0,1]',decision:'changes_requested'},planned)).toBe(false);
+ expect(invoiceDelivered(undefined,planned)).toBe(false);
+});
+
+it('blocks partial latest delivery and scope changes during invoice reservation',async()=>{
+ const {reserveSoftwareInvoice}=await import('~/lib/software-invoices');
+ const sql=new DatabaseSync(':memory:');sql.exec(readFileSync('db/music.sql','utf8'));
+ const statement=(query:string,args:unknown[]=[])=>({query,args,bind:(...values:unknown[])=>statement(query,values),first:async()=>sql.prepare(query).get(...args)??null,all:async()=>({results:sql.prepare(query).all(...args)})});
+ let race=false;
+ const db={prepare:statement,batch:async(items:ReturnType<typeof statement>[])=>{
+  if(race) sql.exec("UPDATE software_project_updates SET delivered_deliverables_json='[0]' WHERE id='latest'");
+  sql.exec('BEGIN');try{for(const item of items) sql.prepare(item.query).all(...item.args);sql.exec('COMMIT');}catch(error){sql.exec('ROLLBACK');throw error;}
+ }} as unknown as D1Database;
+ sql.exec("INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES('r','software','client@example.com','Tool','reviewed','now','now')");
+ const fullTerms={...terms,milestones:[{...terms.milestones[0],deliverables:['One','Two']}]};
+ sql.prepare("INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES('o','r',1,'sent',?,'now','now')").run(JSON.stringify(fullTerms));
+ sql.exec("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) SELECT 'r','o',terms_json,'standard','now','now','now','owner','now','now' FROM software_offers; INSERT INTO software_project_updates(id,request_id,milestone_index,kind,status,title,evidence_type,created_by,created_at,updated_at,shared_at,delivered_deliverables_json) VALUES('older','r',0,'delivery_review','shared','Full','prototype','owner','now','now','2026-01-01','[0,1]'),('latest','r',0,'delivery_review','shared','Partial','prototype','owner','now','now','2026-01-02','[0]')");
+ const input={requestId:'r',offerId:'o',milestone:0,kind:'balance' as const,allowCard:false,actor:'owner'};
+ await expect(reserveSoftwareInvoice(db,input)).rejects.toThrow('not available');
+ sql.exec("UPDATE software_project_updates SET delivered_deliverables_json='[0,1]' WHERE id='latest'");race=true;
+ await expect(reserveSoftwareInvoice(db,input)).rejects.toThrow();
+ expect(sql.prepare('SELECT count(*) n FROM software_invoices').get().n).toBe(0);
+ race=false;sql.exec("UPDATE software_project_updates SET delivered_deliverables_json='[0,1]' WHERE id='latest'");
+ expect((await reserveSoftwareInvoice(db,input)).kind).toBe('balance');sql.close();
+});

@@ -367,3 +367,14 @@ it('preserves handoff access beyond a shorter project retention period',()=>{
     expect(eligible(new Date('2028-03-01T12:00:00Z'))).toEqual([{request_id:'external'}]);
   } finally {sql.close();}
 });
+
+it.each(['start_details_json','external_signature_details_json'])('reviews and clears project-start %s',async column=>{
+ const {sql,database}=fixture();retainedSoftware(sql,'paid');
+ sql.prepare(`UPDATE software_projects SET ${column}=?`).run('{"recorded_by":"owner","parties":"Client","po_number":"PO","earlier_start_agreement":"Agreed","copy_reference":"Copy"}');
+ const list=async()=>[];
+ const review=await previewStudioRetention(database,'Local test data',storage,now,list);
+ sql.prepare(`UPDATE software_projects SET ${column}=?`).run('{"recorded_by":"changed"}');
+ await expect(applyStudioRetention(database,review,'Local test data',storage,async()=>{},now,list)).rejects.toThrow('changed');
+ await applyStudioRetention(database,await previewStudioRetention(database,'Local test data',storage,now,list),'Local test data',storage,async()=>{},now,list);
+ expect(sql.prepare(`SELECT ${column} FROM software_projects`).get()[column]).toBeNull();sql.close();
+});

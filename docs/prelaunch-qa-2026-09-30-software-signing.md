@@ -177,3 +177,5 @@ A code rollback can redeploy the prior build while leaving these additive databa
 ### Complete signed-copy access
 
 The guided reader links to the current SOW’s complete signed packet, which includes its linked MSA and signing certificates. Both immutable legal texts and hashes remain available inline. Individual reused-MSA download authorization follows the older project request and may expire when that portal closes; using the current project packet preserves existing authorization boundaries without changing backend access. A render regression covers an MSA from an earlier request.
+
+Release health sequence: run `npm run owner:health -- --remote` before merge (target schema and configuration). Run `npm run owner:health -- --remote --post-deploy` after deployment (also checks the live `/agreements/verify` bare-visit 401). Both remain UNVERIFIED in this continuation; no remote command or deployment was authorized.

@@ -159,3 +159,5 @@ Record an explicit agreement end date before calculating the ten-year retention
 period. Keep open agreements, active reused MSAs and records under legal hold.
 Project access closure does not erase signatures or restore access through the
 agreement archive. Never delete agreement objects through project cleanup.
+
+Signing release health: run `npm run owner:health -- --remote` before merge to check the target schema and configuration. After deployment, run `npm run owner:health -- --remote --post-deploy` to also verify that `/agreements/verify` returns the expected bare-visit 401.
