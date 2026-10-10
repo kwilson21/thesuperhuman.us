@@ -409,7 +409,7 @@ it('captures the work-first project states at desktop and phone sizes',async()=>
   const scenario=await import('../../scripts/screenshots/scenarios/software-project.mjs');
   const files:string[]=[];
   await scenario.default.run({sql:()=> '[]',ownerFetch:async()=>({}),capture:async({file}:{file:string})=>{files.push(file);return file;}});
-  for(const state of ['first','shared','direction-review','delivery-review','changes-open','delivery-complete','delivery-invoice-terms','accepted','paid-handoff-pending','handoff','earlier-versions','progress-after-handoff','next-milestone-starting']) {
+  for(const state of ['first','shared','direction-review','delivery-review','progress-pending-review','changes-open','delivery-complete','delivery-invoice-terms','accepted','earlier-accepted','paid-handoff-pending','earlier-paid-handoff-pending','handoff','earlier-versions','progress-after-handoff','next-milestone-starting']) {
     for(const viewport of ['desktop','phone']) expect(files).toContain(`software-project-${state}-${viewport}.png`);
   }
 });

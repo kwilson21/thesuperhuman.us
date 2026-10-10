@@ -7,8 +7,10 @@ const version=softwareVersionLabel(update);
 const direction=update.kind==='direction_review';
 const evidence: string[] = JSON.parse(update.criteria_json ?? '[]');
 const checkEvidence = checks.map((check,index) => {
-  const text = evidence[index]?.trim() ?? '';
-  return text.startsWith(check) ? text.slice(check.length).trim() : text;
+  const text = evidence[index] ?? '';
+  if (!text.startsWith(check)) return text;
+  const remainder=text.slice(check.length);
+  return remainder.startsWith(': ') ? remainder.slice(2).trim() : /[.!?]$/.test(check) && /^\s/.test(remainder) ? remainder.trim() : text;
 });
 const decisionBody=softwareClientRevisionBody(update.decision_body,checks,deliverables);
 ---

@@ -47,6 +47,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     if ((draft?.updated_at ?? null) !== command.expectedUpdatedAt) return json({ ok: false, error: 'The draft changed. Reload before saving.' }, 409);
     if (draft?.visual_key && !value.visual_alt) return json({ ok: false, error: 'Describe the visual for the client.' }, 400);
     const share = command.action === 'share';
+    if (share && value.kind==='progress' && value.milestone_index>project.milestone_index) return json({ok:false,error:`Start milestone ${value.milestone_index+1} first.`},400);
     if (share && (!command.confirmed || !value.title || !value.what_changed)) return json({ ok: false, error: 'Add a title and what changed, then confirm sharing.' }, 400);
     if (share && review && !value.artifact_version) return json({ ok: false, error: 'Name the version before sharing.' }, 400);
     if (share && value.links.some(reference=>{

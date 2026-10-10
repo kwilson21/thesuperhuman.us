@@ -185,7 +185,7 @@ it('renders version-specific direction, delivery, acceptance, handoff and earlie
     sql.prepare('UPDATE software_projects SET terms_json=?').run(JSON.stringify(multiTerms));
     sql.exec("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,created_by,created_at,updated_at,shared_at) VALUES ('pending-direction','r','direction_review','shared',1,'Next direction','Direction v2','concept','owner','2026-10-03','2026-10-03','2026-10-03')");
     html=await renderProject();
-    expect(html).toContain('Version 1 is ready to try.');expect(html).toContain('Please try it by Oct 8, 2026.');
+    expect(html).toContain('Progress after review');expect(html).not.toContain('Version 1 is ready to try.');expect(html).toContain('Please try it by Oct 8, 2026.');
     const rail=html.slice(html.indexOf('<aside'),html.indexOf('</aside>'));
     expect(rail.indexOf('/reviews/delivery')).toBeLessThan(rail.indexOf('/reviews/pending-direction'));
     expect(rail).toContain('Accept version 1');expect(rail).toContain('Confirm this direction');
@@ -208,7 +208,7 @@ it('renders version-specific direction, delivery, acceptance, handoff and earlie
     sql.exec('UPDATE software_projects SET milestone_index=0');
 
     sql.exec("INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES ('r','client','PRIVATE TOKEN','Accepted Delivery v1','delivery','milestone_accepted','2026-10-02')");
-    html=await renderProject();expect(html).not.toContain('Version 1 is ready to try.');expect(html).not.toContain('Please review by');expect(html).toContain('You accepted version 1.');expect(html).toContain('Handoff follows full payment.');
+    html=await renderProject();expect(html).not.toContain('Version 1 is ready to try.');expect(html).not.toContain('Please review by');expect(html).toContain('You accepted version 1 of milestone 1.');expect(html).toContain('Handoff follows full payment.');
     sql.exec("INSERT INTO software_milestone_payments VALUES ('r',0,'2026-10-01','PRIVATE OWNER'); INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,links_json,next_step,created_by,created_at,updated_at,shared_at) VALUES ('handoff','r','handoff','shared',0,'Delivered files','handoff','[{\"label\":\"Handoff notes\",\"url\":\"https://example.com/notes\"}]','Anything new is a separate milestone.','PRIVATE AUTHOR','2026-10-03','2026-10-03','2026-10-03')");
     html=await renderProject();expect(html).toContain('Handoff notes');expect(html).toContain('Corrections are covered through Oct 31, 2026.');expect(html).toContain('Earlier updates');expect(html).not.toContain('After acceptance');
     sql.prepare("UPDATE software_project_updates SET links_json=? WHERE id='handoff'").run(JSON.stringify([{label:'Project files',url:'https://thesuperhuman.us/studio/files'},{label:'External files',url:'https://example.com/files'}]));
@@ -232,7 +232,7 @@ it('renders version-specific direction, delivery, acceptance, handoff and earlie
   } finally {sql.close();}
 });
 
-it('keeps pending work first and newer progress in closed history', async () => {
+it('keeps newer progress first and pending review actions in the rail', async () => {
   const {sql,db} = await fixture();
   try {
     sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('r','current',?,'standard','now','now','2026-09-29','owner','now','now')").run(JSON.stringify(terms));
@@ -242,9 +242,9 @@ it('keeps pending work first and newer progress in closed history', async () => 
     const container = await AstroContainer.create();
     const renderProject = () => container.renderToString(softwarePage,{request:new Request('https://thesuperhuman.us/studio/software/r',{headers:{cookie:`studio_session=${session}`}}),params:{id:'r'},locals:{runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}} as any});
     let html = await renderProject();
-    expect(html).toContain('Version 1 is ready to try.');
+    expect(html).not.toContain('Version 1 is ready to try.');
     const current = html.slice(html.indexOf('class="project-current'),html.indexOf('<aside'));
-    expect(current).toContain('Current offer');expect(current).not.toContain('Newer concept');expect(current).not.toContain('Newest concept');expect(html).toContain('Earlier updates');
+    expect(current).toContain('Current offer');expect(current).not.toContain('Newer concept');expect(current).toContain('Newest concept');expect(html).toContain('Earlier updates');
     expect(html.match(/Newer concept/g)).toHaveLength(1);
     expect(html.match(/Newest concept/g)).toHaveLength(1);
     sql.exec("INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES ('r','client','client','Accepted','delivery','milestone_accepted','2026-10-02')");
@@ -847,5 +847,117 @@ it('keeps payment and acceptance terms with each rail review and decisions with 
       expect(current.match(/Your decision/g)).toHaveLength(1);
       expect(current).not.toContain('After you accept');
     }
+  } finally {sql.close();}
+});
+
+async function reviewStateFixture() {
+  const fixtureData=await fixture(),{sql,db}=fixtureData,container=await AstroContainer.create();
+  const scope=structuredClone({...terms,milestones:[terms.milestones[0],{...terms.milestones[0],name:'Follow-up'}]});
+  sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES('r','current',?,'standard','now','now','now','owner','now','now')").run(JSON.stringify(scope));
+  const session='a'.repeat(72);
+  sql.prepare("INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES(?,'alex@example.com','now','2099-01-01','now')").run(await hashOfferToken(session));
+  const render=()=>container.renderToString(softwarePage,{params:{id:'r'},request:new Request('https://thesuperhuman.us/studio/software/r',{headers:{cookie:`studio_session=${session}`}}),locals:{runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}}} as any);
+  const add=(id:string,kind:string,milestone=0,date='2026-10-01')=>sql.prepare("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,criteria_json,delivered_deliverables_json,what_changed,created_by,created_at,updated_at,shared_at) VALUES(?,'r',?,'shared',?,?,?,'working_preview','[\"Unique evidence for this check.\"]','[0]',?,'owner',?,?,?)").run(id,kind,milestone,`${id} work`,kind==='direction_review'?'Direction v1':'Delivery v1',`${id} explanation`,date,date,date);
+  const decision=(id:string,value='milestone_accepted')=>sql.prepare("INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES('r','client','token','Decision',?,?,'2026-10-02')").run(id,value);
+  return {...fixtureData,scope,container,render,add,decision};
+}
+it.each([false,true])('keeps earlier accepted milestones under current work, paid=%s',async paid=>{
+  const {sql,render,add,decision}=await reviewStateFixture();
+  try {
+    add('accepted','delivery_review');decision('accepted');add('current','progress',1,'2026-10-04');
+    sql.exec("UPDATE software_projects SET milestone_index=1; INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,created_by,created_at,updated_at) VALUES('balance','r','current',0,'balance',120000,15,'open','https://example.com/pay','owner','now','now')");
+    if(paid)sql.exec("INSERT INTO software_milestone_payments VALUES('r',0,'2026-10-03','owner'); UPDATE software_invoices SET status='paid'");
+    let html=await render(),current=html.slice(html.indexOf('class="project-current'),html.indexOf('class="project-history'));
+    expect(current).toMatch(/<h2[^>]*>Milestone 1<\/h2>/);
+    expect(current).toContain('You accepted Version 1 on Oct 2, 2026.');
+    expect(current).toContain(paid?'Paid. Your files are on the way.':'Pay $1,200 ↗');
+    expect(current.match(/Corrections are covered through Nov 1, 2026\./g)).toHaveLength(1);
+    expect(current.indexOf('current work')).toBeLessThan(current.indexOf('Milestone 1'));
+    add('handoff','handoff',0,'2026-10-05');
+    html=await render();current=html.slice(html.indexOf('class="project-current'),html.indexOf('class="project-history'));
+    expect(current).toContain('Your files · Milestone 1');expect(current).not.toMatch(/<h2[^>]*>Milestone 1<\/h2>/);
+  } finally {sql.close();}
+});
+it.each([false,true])('derives acceptance from delivery despite an undecided direction, paid=%s',async paid=>{
+  const {sql,render,add,decision}=await reviewStateFixture();
+  try {
+    add('direction','direction_review');add('accepted','delivery_review',0,'2026-10-02');decision('accepted');
+    sql.exec("INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,created_by,created_at,updated_at) VALUES('balance','r','current',0,'balance',120000,15,'open','https://example.com/pay','owner','now','now')");
+    if(paid)sql.exec("INSERT INTO software_milestone_payments VALUES('r',0,'2026-10-03','owner'); UPDATE software_invoices SET status='paid'");
+    const html=await render(),current=html.slice(html.indexOf('class="project-current'),html.indexOf('<aside'));
+    expect(html.slice(0,html.indexOf('class="project-columns'))).toContain(paid?'Paid. Your files are on the way.':'Version 1 is accepted.');
+    expect(current).toContain('You accepted Version 1 on Oct 2, 2026.');expect(current).toContain('Corrections are covered through Nov 1, 2026.');
+    if(!paid)expect(current).toContain('Pay $1,200 ↗');
+    expect(html.slice(html.indexOf('<aside'))).toContain('Confirm this direction');
+  } finally {sql.close();}
+});
+it.each(['delivery_review','direction_review'])('shows newer progress above pending %s actions without a handoff',async kind=>{
+  const {sql,render,add}=await reviewStateFixture();
+  try {
+    add('pending',kind);add('newer','progress',0,'2026-10-03');
+    const html=await render(),top=html.slice(0,html.indexOf('<aside'));
+    expect(top).toContain('newer explanation');expect(top).toContain('newer work');expect(top).not.toContain('pending work');
+    expect(html.slice(html.indexOf('<aside'))).toContain(kind==='delivery_review'?'Accept version 1':'Confirm this direction');
+  } finally {sql.close();}
+});
+it.each(['active','complete','superseded'])('keeps evidence unless editable form displays it: %s',async state=>{
+  const {sql,render,add}=await reviewStateFixture();
+  try {
+    add('review','delivery_review');
+    if(state==='complete')sql.exec("UPDATE software_projects SET state='complete'");
+    if(state==='superseded')sql.exec("UPDATE software_project_updates SET status='superseded'");
+    const html=await render();
+    expect(html).toContain('Unique evidence for this check.');
+    expect(html.includes('Agreed checks')).toBe(state!=='active');
+    expect(html.includes('data-software-review')).toBe(state==='active');
+  } finally {sql.close();}
+});
+it.each([
+  ['Save','Saved records persist','Saved records persist'],
+  ['Save','Save records persist','Save records persist'],
+  ['Save','Save: Records persist','Records persist'],
+  ['Save.','Save. Records persist','Records persist'],
+  ['Save!','Save!\nRecords persist','Records persist'],
+  ['Save?','Save? Records persist','Records persist'],
+  ['Save.','Save.records persist','Save.records persist'],
+  ['Save.',' Save. Records persist',' Save. Records persist'],
+])('trims evidence only at a clear boundary: %s / %s',async(check,evidence,expected)=>{
+  const {sql,render,add,scope}=await reviewStateFixture();
+  try {
+    scope.milestones[0].acceptance=[check];sql.prepare('UPDATE software_projects SET terms_json=?').run(JSON.stringify(scope));
+    add('review','delivery_review');sql.prepare('UPDATE software_project_updates SET criteria_json=?').run(JSON.stringify([evidence]));
+    const html=await render();expect(html).toMatch(new RegExp(`<p class="hint[^\"]*">${expected.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}<\\/p>`));
+  } finally {sql.close();}
+});
+it.each(['direction_confirmed','milestone_accepted','changes_requested'])('names the milestone in client decision messages: %s',async value=>{
+  const {sql,render,add,decision}=await reviewStateFixture();
+  try {
+    add('review',value==='direction_confirmed'?'direction_review':'delivery_review',1);decision('review',value);
+    const html=await render();
+    expect(html).toContain(value==='direction_confirmed'?'You confirmed the direction for milestone 2.':value==='milestone_accepted'?'You accepted version 1 of milestone 2.':'You asked for changes to version 1 of milestone 2.');
+  } finally {sql.close();}
+});
+it('renders future milestone choices unavailable for progress but available for review drafts',async()=>{
+  const {sql,db,container}=await reviewStateFixture();
+  try {
+    const render=()=>container.renderToString(composer,{params:{id:'r'},request:new Request('https://thesuperhuman.us/owner/requests/r/update'),locals:{owner:{email:'owner@example.com'},runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}}} as any);
+    let html=await render();expect(html).toMatch(/<option value="1"[^>]*disabled[^>]*hidden/);
+    sql.exec("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,created_by,created_at,updated_at) VALUES('draft-review','r','direction_review','draft',1,'Sketch','concept','owner','now','now')");
+    html=await render();expect(html).toMatch(/<option value="1" selected[^>]*>Milestone 2/);
+  } finally {sql.close();}
+});
+it('keeps every earlier acceptance visible until its own handoff',async()=>{
+  const {sql,render,add,decision,scope}=await reviewStateFixture();
+  try {
+    scope.milestones.push({...scope.milestones[0],name:'Final stage'});
+    sql.prepare('UPDATE software_projects SET milestone_index=2,terms_json=?').run(JSON.stringify(scope));
+    for(const milestone of [0,1]){add(`accepted-${milestone}`,'delivery_review',milestone);decision(`accepted-${milestone}`);}
+    const html=await render(),current=html.slice(html.indexOf('class="project-current'),html.indexOf('class="project-history'));
+    for(const milestone of [1,2])expect(current).toMatch(new RegExp(`<h2[^>]*>Milestone ${milestone}<\\/h2>`));
+    expect(current.match(/You accepted Version 1 on Oct 2, 2026\./g)).toHaveLength(2);
+    expect(current.match(/Corrections are covered through Nov 1, 2026\./g)).toHaveLength(2);
+    add('handoff','handoff',0,'2026-10-03');
+    const updated=await render(),updatedCurrent=updated.slice(updated.indexOf('class="project-current'),updated.indexOf('class="project-history'));
+    expect(updatedCurrent).toContain('Your files · Milestone 1');expect(updatedCurrent).not.toMatch(/<h2[^>]*>Milestone 1<\/h2>/);expect(updatedCurrent).toMatch(/<h2[^>]*>Milestone 2<\/h2>/);
   } finally {sql.close();}
 });

@@ -12,7 +12,14 @@ export function setupSoftwareComposer() {
   const value = (key: string) => (form.elements.namedItem(key) as HTMLInputElement).value;
   const text = (selector: string, content: string) => { const element = preview.querySelector(selector); if (element) element.textContent = content; };
   function render() {
-    const kind = value('kind'), milestone = value('milestone_index'), delivery = kind === 'delivery_review', handoff = kind === 'handoff';
+    const kind = value('kind'), delivery = kind === 'delivery_review', handoff = kind === 'handoff';
+    const milestoneSelect=form.elements.namedItem('milestone_index') as HTMLInputElement;
+    const currentMilestone=Number(milestoneSelect.dataset.currentMilestone);
+    form.querySelectorAll<HTMLOptionElement>('[name=milestone_index] option').forEach(option=>{
+      option.disabled=option.hidden=kind==='progress' && Number(option.value)>currentMilestone;
+    });
+    if(kind==='progress' && Number(milestoneSelect.value)>currentMilestone) milestoneSelect.value=String(currentMilestone);
+    const milestone=value('milestone_index');
     const heading=root!.querySelector<HTMLElement>('[data-composer-heading]');
     const intro=root!.querySelector<HTMLElement>('[data-composer-intro]');
     if(heading) heading.textContent=delivery ? 'Prepare a delivery review.' : handoff ? 'Prepare the project handoff.' : kind==='direction_review' ? 'Prepare a direction review.' : 'Prepare an update.';

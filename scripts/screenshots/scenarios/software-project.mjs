@@ -115,7 +115,7 @@ export default {
       if(!await page.locator('[data-preview-delivery-scope]').getByText('Next actions with a named owner',{exact:true}).isVisible()) throw new Error('Client should still see planned scope beyond this delivery.');
     }});
     await share({kind:'progress',title:'The next update',client_request:''});
-    await shot('Progress update with an undecided delivery review',`/studio/software/${id}`,'progress-pending-review',{cookie});
+    await shot('Progress update with an undecided delivery review',`/studio/software/${id}`,'progress-pending-review',{cookie,prepare:async page=>{if(!await page.locator('.project-current').getByRole('heading',{name:'The next update',exact:true}).isVisible()) throw new Error('Newer progress must lead while review actions remain available.');if(!await page.locator('aside[aria-label="Next steps"] button[value=milestone_accepted]').isVisible()) throw new Error('Pending delivery must remain actionable.');}});
     await shot('Delivery change request form open',`/studio/software/${id}`,'changes-open',{cookie,prepare:async page=>{const mark=page.locator('[data-review-mark="not-yet"]').first();if(await mark.getAttribute('aria-pressed')!=='true') await mark.click();await page.locator('[data-request-changes] summary').click();await page.waitForFunction(()=>document.querySelector('[data-request-changes] input[name=criteria]')?.checked);const check=page.locator('[name=criteria]').first();if(!await check.isChecked()) throw new Error('Not yet must pre-tick the matching agreed check.');await page.locator('[data-review-mark="works"]').first().click();if(await check.isChecked()) throw new Error('Works must clear a helper-ticked check.');await mark.click();if(!await check.isChecked()) throw new Error('Not yet must re-tick an untouched check.');await check.uncheck();await page.locator('[data-request-changes] summary').click();await page.locator('[data-request-changes] summary').click();if(await check.isChecked()) throw new Error('Reopening changes must preserve a manual untick.');await check.check();await page.locator('[name=note]').fill('Adding the fictional sample client does not save.');}});
     await decide(review,{decision:'changes_requested',criteria:[0],note:'Adding the fictional sample client does not save.'});
     const corrected=await share({...delivery,artifact_version:'Delivery v2',delivered_deliverables:terms.milestones[0].deliverables});
@@ -125,9 +125,15 @@ export default {
     await shot('Invoice Terms review',`/studio/software/${id}`,'delivery-invoice-terms',{cookie});
     sql(`UPDATE software_projects SET payment_mode='standard' WHERE request_id=${quote(id)}`);
     await decide(corrected,{decision:'milestone_accepted',confirm:true});
+    sql(`UPDATE software_projects SET milestone_index=1 WHERE request_id=${quote(id)}`);
+    await shot('Earlier accepted milestone awaiting payment',`/studio/software/${id}`,'earlier-accepted',{cookie});
+    sql(`UPDATE software_projects SET milestone_index=0 WHERE request_id=${quote(id)}`);
     await shot('Accepted delivery before full-payment handoff',`/studio/software/${id}`,'accepted',{cookie});
     sql(`UPDATE software_invoices SET status='paid',status_updated_at=${quote(at)} WHERE id='screenshot-balance'`);
     sql(`INSERT INTO software_milestone_payments(request_id,milestone_index,paid_recorded_at,recorded_by) VALUES (${quote(id)},0,${quote(at)},'owner@example.com')`);
+    sql(`UPDATE software_projects SET milestone_index=1 WHERE request_id=${quote(id)}`);
+    await shot('Earlier accepted milestone awaiting handoff',`/studio/software/${id}`,'earlier-paid-handoff-pending',{cookie});
+    sql(`UPDATE software_projects SET milestone_index=0 WHERE request_id=${quote(id)}`);
     await shot('Paid delivery awaiting handoff',`/studio/software/${id}`,'paid-handoff-pending',{cookie});
     await share({kind:'handoff',artifact_version:'Delivery v2',title:'Your handoff is ready.',what_changed:'Delivered files and operating notes.',checks_limitations:'Fictional sample only. Live rollout is outside scope.',next_step:'Corrections within the correction period. Anything new is a separate milestone.',paid_confirmed:true,links:[{label:'Download handoff notes',url:'https://example.com/notes'},{label:'View delivered files',url:'https://example.com/files'}],client_request:''});
     await shot('Accepted milestone with handoff ready',`/studio/software/${id}`,'handoff',{cookie,prepare:async page=>{

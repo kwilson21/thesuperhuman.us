@@ -2,8 +2,8 @@
 import SoftwareAcceptanceChecks from './SoftwareAcceptanceChecks.astro';
 import { evidenceTypes, deliveredScope, deliveredIndexes, softwareVersionNumber, softwareVersionLabel, softwareDate } from '~/lib/software-projects';
 import type { ClientSoftwareUpdate } from '~/lib/software-projects';
-type Props = { update: ClientSoftwareUpdate; visualUrl?: string; preview?: boolean; checks?: string[]; deliverables?: string[]; workFirst?: boolean; showExplanation?: boolean; hideTitle?: boolean; projectName?: string };
-const { update, visualUrl, preview = false, checks=[], deliverables=[], workFirst=false, showExplanation=false, hideTitle=false, projectName=update.title } = Astro.props;
+type Props = { update: ClientSoftwareUpdate; visualUrl?: string; preview?: boolean; checks?: string[]; deliverables?: string[]; workFirst?: boolean; showExplanation?: boolean; hideTitle?: boolean; hideChecks?: boolean; projectName?: string };
+const { update, visualUrl, preview = false, checks=[], deliverables=[], workFirst=false, showExplanation=false, hideTitle=false, hideChecks=false, projectName=update.title } = Astro.props;
 const historyLabel=update.artifact_version ? softwareVersionLabel(update) : 'Update';
 const evidence: string[] = JSON.parse(update.criteria_json ?? '[]');
 const includedDeliverables = deliveredScope(update,deliverables);
@@ -25,7 +25,7 @@ const deliveryReferences = update.kind === 'delivery_review' ? references.filter
     {update.preview_url && <p><a class="studio-button" href={update.preview_url} target="_blank" rel="noopener noreferrer">Open {softwareVersionNumber(update) ? softwareVersionLabel(update).toLowerCase() : update.artifact_version || 'work'} ↗</a></p>}
     {partialDelivery && <p>This version doesn't include everything we agreed yet.</p>}
     {update.kind==='delivery_review' && <details id={`included-${update.id}`}><summary>See what's included</summary><h3>Included in this delivery</h3><ul>{includedDeliverables.map(item=><li>{item}</li>)}</ul><section data-preview-delivery-scope><h3>Full agreed scope · Milestone {(update.milestone_index ?? 0)+1}</h3><ul>{deliverables.map(item=><li>{item}</li>)}</ul></section>
-      {update.decision && checks.length>0 && <SoftwareAcceptanceChecks checks={checks} evidence={evidence} />}
+      {!hideChecks && checks.length>0 && <SoftwareAcceptanceChecks checks={checks} evidence={evidence} />}
       {deliveryReferences.length>0 && <><h3>Supporting links</h3><ul>{deliveryReferences.map(link=><li><a href={link.url} target="_blank" rel="noopener noreferrer">{link.label}</a></li>)}</ul></>}
       {update.checks_limitations && <><h3>Not included yet</h3><p>{update.checks_limitations}</p></>}
     </details>}
@@ -60,7 +60,7 @@ const deliveryReferences = update.kind === 'delivery_review' ? references.filter
   </section>}
   {(['what_changed','checks_limitations','client_request'] as const).map((key, index) => <section data-preview-section={key} hidden={!update[key]}><h3>{index === 0 ? 'What changed' : index === 1 ? preview ? 'Checks and limitations' : update.kind==='handoff' ? 'Not included' : 'Not included yet' : 'What I need from you'}</h3><p data-preview-text={key}>{update[key]}</p></section>)}
   {!preview && update.next_step && <section><h3>{update.kind==='handoff' ? 'Support after handoff' : 'Next from me'}</h3><p>{update.next_step}</p></section>}
-  {!preview && update.kind==='delivery_review' && update.decision && checks.length>0 && <SoftwareAcceptanceChecks checks={checks} evidence={evidence} />}
+  {!preview && update.kind==='delivery_review' && !hideChecks && checks.length>0 && <SoftwareAcceptanceChecks checks={checks} evidence={evidence} />}
   </>}
 </article>
 <style>
