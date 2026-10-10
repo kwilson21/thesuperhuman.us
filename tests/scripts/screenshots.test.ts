@@ -251,6 +251,13 @@ it('mocks the silent suggestion pass without replacing receipt verification', as
     await scenario.default.run({ sql() {}, capture: async ({ file, prepare }: any) => {
       if (file !== 'software-brief-suggestion-phone.png') return file;
       await prepare({
+        on: () => {},
+        addInitScript: async (fn: () => unknown) => {
+          fn();
+          // The real script assigns its API after the init script, and may replace it.
+          (window as any).turnstile = { render, remove };
+          (window as any).turnstile = { render, remove };
+        },
         route: async (path: string, handler: any) => { routes.set(path, handler); },
         evaluate: async (fn: () => unknown) => fn(), reload: async () => {}, waitForFunction: async (fn: () => unknown) => expect(fn()).toBe(true),
         locator: () => ({ check: async () => {}, fill: async () => {}, waitFor: async () => {}, inputValue: async () => 'We track new clients' }),
@@ -268,4 +275,30 @@ it('mocks the silent suggestion pass without replacing receipt verification', as
       return file;
     } });
   } finally { vi.unstubAllGlobals(); }
+});
+
+it('prints autocomplete diagnostics and rethrows the original capture failure', async () => {
+  const scenario = await import('../../scripts/screenshots/scenarios/software-brief.mjs');
+  const failure = new Error('accept chip hidden'), log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const request = { url: () => 'http://127.0.0.1:4321/api/software/brief/pass', method: () => 'POST' };
+  try {
+    await expect(scenario.default.run({ sql() {}, capture: async ({ file, prepare }: any) => {
+      if (file !== 'software-brief-suggestion-phone.png') return file;
+      await prepare({
+        route: async () => {}, addInitScript: async () => {}, reload: async () => {}, waitForFunction: async () => {},
+        on: (event: string, handler: any) => {
+          if (event === 'console') handler({ type: () => 'warning', text: () => 'test message' });
+          if (event === 'request') handler(request);
+          if (event === 'response') handler({ request: () => request, status: () => 200 });
+        },
+        evaluate: async () => ({ enabled: true, passState: 'token', lastError: null }),
+        locator: () => ({ check: async () => {}, fill: async () => {}, waitFor: async () => { throw failure; } }),
+      });
+      return file;
+    } })).rejects.toBe(failure);
+    const diagnostic = JSON.parse(log.mock.calls[0][1]);
+    expect(diagnostic.console).toEqual(['warning: test message']);
+    expect(diagnostic.requests).toEqual([{ method: 'POST', path: '/api/software/brief/pass', status: 200 }]);
+    expect(diagnostic.autocomplete).toEqual({ enabled: true, passState: 'pass response 200 (mock ok)', lastError: null });
+  } finally { log.mockRestore(); }
 });

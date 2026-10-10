@@ -11,26 +11,71 @@ export default {
       const prepare = async (page, target, path = 'workflow', suggestion = false) => {
         await page.route('**/api/software/brief/pass', route => route.fulfill({ json: { ok: true } }));
         await page.route('**/api/software/brief/suggest', route => route.fulfill({ json: { suggestion: ' in a shared spreadsheet' } }));
-        // Captures always begin from a fresh fictional draft.
-        await page.evaluate(() => { localStorage.removeItem('software-brief-draft'); localStorage.removeItem('software-suggestions'); });
+        const messages = [], requests = [];
+        const endpoint = request => /\/api\/software\/brief\/(pass|suggest)$/.test(new URL(request.url()).pathname);
+        page.on('console', message => messages.push(`${message.type()}: ${message.text()}`));
+        page.on('pageerror', error => messages.push(`pageerror: ${error.message}`));
+        page.on('request', request => {
+          if (endpoint(request)) requests.push({ request, method: request.method(), path: new URL(request.url()).pathname, status: 'pending' });
+        });
+        page.on('response', response => {
+          const item = requests.find(item => item.request === response.request());
+          if (item) item.status = response.status();
+        });
+        page.on('requestfailed', request => {
+          const item = requests.find(item => item.request === request);
+          if (item) item.status = request.failure()?.errorText ?? 'failed';
+        });
+        // Install before page scripts; wrap every API assignment, including later initialization.
+        await page.addInitScript(() => {
+          localStorage.removeItem('software-brief-draft'); localStorage.removeItem('software-suggestions');
+          window.screenshotAutocomplete = { passState: 'idle', lastError: null };
+          let api;
+          Object.defineProperty(window, 'turnstile', {
+            configurable: true,
+            get: () => api,
+            set: value => {
+              api = new Proxy(value, { get(target, key) {
+                if (key === 'render') return (container, options) => {
+                  if (options['response-field'] !== false) return target.render(container, options);
+                  window.screenshotAutocomplete.passState = 'token';
+                  queueMicrotask(() => Promise.resolve(options.callback('screenshot-suggestion-token')).catch(error => {
+                    window.screenshotAutocomplete.lastError = String(error);
+                  }));
+                  return 'screenshot-suggestion-widget';
+                };
+                if (key === 'remove') return id => { if (id !== 'screenshot-suggestion-widget') target.remove(id); };
+                return typeof target[key] === 'function' ? target[key].bind(target) : target[key];
+              } });
+            },
+          });
+        });
         await page.reload();
         if (target === 0) return;
         await page.waitForFunction(() => !!window.turnstile);
-        // Mock only the silent suggestion widget; receipt verification uses the preview test keys.
-        await page.evaluate(() => {
-          const api = window.turnstile, render = api.render.bind(api), remove = api.remove.bind(api);
-          api.render = (container, options) => {
-            if (options['response-field'] !== false) return render(container, options);
-            queueMicrotask(() => options.callback('screenshot-suggestion-token'));
-            return 'screenshot-suggestion-widget';
-          };
-          api.remove = id => { if (id !== 'screenshot-suggestion-widget') remove(id); };
-        });
         await page.locator(`[name=path][value=${path}]`).check();
         if (target === 1) {
           if (suggestion) {
             await page.locator('[data-step="1"] textarea').fill('We track new clients');
-            await page.locator('[data-step="1"] [data-accept]').waitFor({ state: 'visible' });
+            try {
+              await page.locator('[data-step="1"] [data-accept]').waitFor({ state: 'visible' });
+            } catch (error) {
+              const state = await page.evaluate(() => {
+                const form = document.querySelector('#software-inquiry'), box = form.querySelector('[data-step="1"] textarea');
+                return { ...window.screenshotAutocomplete,
+                  enabled: form.querySelector('[data-step="1"] [data-suggestions-toggle]')?.textContent === 'Turn off',
+                  sitekeyPresent: !!form.dataset.suggestionSitekey, available: form.dataset.available,
+                  turnstilePresent: !!window.turnstile, words: box.value.trim().split(/\s+/).length,
+                  cursorAtEnd: box.selectionStart === box.value.length && box.selectionEnd === box.value.length,
+                  stepHidden: box.closest('[data-step]').hidden,
+                };
+              }).catch(error => ({ lastError: String(error) }));
+              const endpoints = requests.map(({ request, ...item }) => item);
+              const pass = endpoints.filter(item => item.path.endsWith('/pass')).at(-1);
+              if (pass) state.passState = pass.status === 200 ? 'pass response 200 (mock ok)' : `pass ${pass.status}`;
+              console.error('Software brief autocomplete failure:', JSON.stringify({ console: messages, requests: endpoints, autocomplete: state }, null, 2));
+              throw error;
+            }
             if (await page.locator('[data-step="1"] textarea').inputValue() !== 'We track new clients') throw new Error('Suggestion was inserted without acceptance');
           }
           return;
