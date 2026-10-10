@@ -27,7 +27,7 @@ October 10, 2026, owner statements supplied in this task:
 - Production migrations 0023/0024: "3 yes" (owner, in conversation).
 - Deployment: "proceed with fixing reviews until we are ready to merge everything then merge" and "keep going until everything is merged".
 
-These approvals supersede the older spec's production-authorization exclusions. This bounded job prepares the branch and record. Production execution receipts remain pending; approval is not evidence of execution. Signing stays off until its separate template, consent and configuration gates are satisfied.
+These approvals supersede the older spec's production-authorization exclusions. This bounded job prepares the branch and record. Production migration receipts are recorded below from the supplied operator summary; approval alone is not evidence of execution. Signing stays off until its separate template, consent and configuration gates are satisfied.
 
 ## Current implementation and review fixes
 
@@ -59,7 +59,7 @@ The rows below map every check in `docs/prelaunch-checklist.md`. PASS source/tes
 
 | Check | Status and evidence |
 |---|---|
-| 1.1 Project, instructions and authority | PASS locally: exact conversation, repository, PR and code recovered; owner production authorization recorded; execution remains pending. |
+| 1.1 Project, instructions and authority | PASS locally: exact conversation, repository, PR and code recovered; owner production authorization and supplied migration execution evidence recorded below. |
 | 1.2 Approved design and claims | PASS: existing owner presentation reused; fictional agreement fixtures only; legal text unchanged. |
 | 1.3 First screen and CTA | PASS automated CTA/render tests. UNVERIFIED current-head manual desktop/phone CTA checks. |
 | 1.4 Navigation and links | PASS for local signing routes and download states. UNVERIFIED for production links and delivery. |
@@ -138,7 +138,7 @@ The rows below map every check in `docs/prelaunch-checklist.md`. PASS source/tes
 |---|---|
 | 8.1 Access identity | PASS local signed-JWT/session tests. UNVERIFIED production owner Access policy. |
 | 8.2 Owner headers | PASS local private/no-store/noindex behavior; UNVERIFIED edge responses. |
-| 8.3 Migration/backup | UNVERIFIED production 0023/0024 execution and backup receipt; authorization is recorded below. PASS local schema tests through 0025. |
+| 8.3 Migration/backup | PASS supplied production 0023/0024 execution and backup evidence recorded below. PASS local schema tests through 0025. |
 | 8.4 Persistence/alerts | PASS local transactional writes and failure cases. UNVERIFIED live urgent notice receipt. |
 | 8.5 Traffic fallback | N/A: no traffic-summary changes. |
 | 8.6 Playback/campaigns | N/A: no measurement changes. |
@@ -150,7 +150,7 @@ The rows below map every check in `docs/prelaunch-checklist.md`. PASS source/tes
 | 8.12 Webhook/invoice safeguards | PASS existing local suite; UNVERIFIED live lifecycle. No payment action performed. |
 | 8.13 Credential projection | PASS source/render tests; no credentials or private legal text copied to public output. |
 | 8.14 Recovery | UNVERIFIED actual database/R2/template recovery and prior deployment rollback. |
-| 8.15 Target health | UNVERIFIED: no remote health command in this continuation. |
+| 8.15 Target health | PASS supplied pre-merge remote health: 8/8 checks. UNVERIFIED post-deploy health; the owner runs it after merge. |
 
 ## Software agreement signing checks
 
@@ -169,9 +169,13 @@ The rows below map every check in `docs/prelaunch-checklist.md`. PASS source/tes
 | Retention/open/held/reuse | PASS local exact-manifest tests, final-reference deletion and active-offer pinning. |
 | CI screenshots/keyboard/no-JS/widths | PASS 30 screenshot-harness tests and retained signing scenarios. UNVERIFIED current-head CI images, manual keyboard/no-JS and width checks. Earlier captures do not certify the reworked flow. |
 
-## Production migrations 0023 and 0024: pending
+## Production migrations 0023 and 0024: applied
 
-Owner/operator receipt to fill: backup/export and recovery bookmark, current ledger/schema reconciliation, migration execution timestamps, counts/foreign keys/new objects and ledger verification, pre-merge owner health, and recovery evidence. Status: UNVERIFIED execution. Production authorization is "3 yes" on October 10, 2026. Migration 0025 is already applied in production according to the supplied handoff; no independent remote verification was performed here.
+**PASS · Migration and backup, supplied operator record.** Kazon authorized applying 0023 and 0024 to production ("3 yes", owner, in conversation, October 10, 2026). The supplied operator summary records read-only checks at approximately 09:05 America/New_York from the signing worktree at `a5dcea23`. Only `0023_software_signing.sql` and `0024_software_delivery_selection_and_review_windows.sql` were pending; 0025 was already applied. A full export was taken privately (160,994 bytes, mode 600) and restored into scratch SQLite with matching request, audit, audio-project, offer and software-project counts and four triggers; scratch was deleted. This documentation job read only the summary, not the export.
+
+Before and after counts were identical: 3 requests, 6 audit rows, 1 audio project, 0 offers, 0 software projects, 0 project updates, 1 audio payment and 0 suggestion budget rows. The audit sequence was 6 before migration; the audit hash was `dd461df916feaa70` both before and after. On October 10, 2026, remote migration apply completed 0023 (39 commands), then 0024 (3 commands); the summary does not supply exact completion times. Of 70 pre-existing definitions, only the three expected altered tables changed: `software_offers`, `software_projects` and `software_project_updates`, each with added columns. There were 26 new objects (signing tables, triggers and indexes); total schema objects went from 110 to 156. `software_signing_enabled = 0` was stored, keeping website signing off. `PRAGMA foreign_key_check` was empty, the ledger was clean ("No migrations to apply"), and `npm run owner:health -- --remote` passed 8/8 checks, including the listed migration columns and signing origin `https://thesuperhuman.us`.
+
+The pre-migration D1 Time Travel bookmark `0000004e-00000002-00005100-6b80a5655c9775ec0adf38c01db5aa75` is the database rollback point. A full agreement/storage recovery rehearsal remains UNVERIFIED. These results are attributed to the supplied operator summary, not independent remote checks by this documentation job. After merge, the owner runs `npm run owner:health -- --remote --post-deploy` and records the deployed revision and live verification. Website signing stays off until the owner enables it after the separate template, consent and configuration gates are satisfied.
 
 Deploy order:
 
@@ -179,9 +183,9 @@ Deploy order:
 2. Apply `0023_software_signing.sql`, then `0024_software_delivery_selection_and_review_windows.sql` before merging PR #158 to main. Both are additive; current main keeps working with them. 0023 initializes website signing off. 0024 adds delivery selections and extended review windows without changing the existing 5-to-30-day constraint.
 3. Run `npm run owner:health -- --remote` before merge. It requires signing objects, all 11 columns added by 0023, both 0024 columns, `brief_suggestion_budget`, configuration and retention binding identity, but does not check the undeployed signing landing.
 4. Complete exact-head review, green CI and CI screenshot inspection, resolve all applicable release gates or record an explicit owner-accepted exception, then merge under the recorded deployment authorization.
-5. Run `npm run owner:health -- --remote --post-deploy` after deployment, including the bare `/agreements/verify` 401 check. Save the deployed revision and verify the live journeys, headers, indexing, delivery and monitoring.
+5. The owner runs `npm run owner:health -- --remote --post-deploy` after merge and deployment, including the bare `/agreements/verify` 401 check. Save the deployed revision and verify the live journeys, headers, indexing, delivery and monitoring.
 
-Rollback: preserve `5137d3d17b88c5c34c642869613bb757650e89cf`, current origin/main at this job. A code rollback leaves additive schema in place. Do not drop signed evidence or restore the whole database over newer writes without separate recovery planning. Disabling signing prevents new signing and preserves existing evidence. Actual rollback rehearsal, backup and remote health remain UNVERIFIED.
+Rollback: preserve `5137d3d17b88c5c34c642869613bb757650e89cf`, current origin/main at this job. A code rollback leaves additive schema in place. Do not drop signed evidence or restore the whole database over newer writes without separate recovery planning. Disabling signing prevents new signing and preserves existing evidence. Backup and pre-merge remote health are recorded above; actual rollback rehearsal and post-deploy health remain UNVERIFIED.
 
 ## Independent merge review
 
@@ -190,7 +194,7 @@ PASS: independent correctness/security and UI/copy agents reviewed all 12 confli
 ## Remaining release work
 
 - Rerun the full suite with loopback access; complete build and exact-head CI/review/screenshot receipts.
-- Fill the production migration section and both health receipts in the order above.
+- Record the owner's post-deploy health receipt; supplied migration and pre-merge health evidence is recorded above.
 - Complete manual accessibility, cross-browser/device, no-JS, actual Workers PDF, authorized inbox delivery, monitoring and recovery checks.
 - Verify counsel/template status and owner contractor/address configuration before enabling signing. No owner understanding or legal suitability is certified by this record.
 - Save post-deployment/live verification separately. No real email, payment, signing, migration or deployment was performed by this job.
