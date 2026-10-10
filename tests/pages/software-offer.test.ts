@@ -379,10 +379,11 @@ it('renders each owner brief outcome and gates uncertain retry at one minute', a
   const {sql,db} = await fixture();
   const container = await AstroContainer.create();
   try {
-    for (const [status,age,button] of [['sent',120000,false],['failed',0,true],['uncertain',0,false],['uncertain',120000,true]] as const) {
-      sql.prepare("UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus',?,'$.clientCopyAttemptedAt',?)").run(status,new Date(Date.now()-age).toISOString());
+    for (const [status,age,button] of [[null,0,true],['sent',120000,false],['failed',0,true],['uncertain',0,false],['uncertain',120000,true]] as const) {
+      if (status === null) sql.exec("UPDATE owner_requests SET details_json=json_remove(details_json,'$.clientCopyStatus','$.clientCopyAttemptedAt')");
+      else sql.prepare("UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus',?,'$.clientCopyAttemptedAt',?)").run(status,new Date(Date.now()-age).toISOString());
       const html = await container.renderToString(ownerRequest,{params:{id:'r'},request:new Request('https://thesuperhuman.us/owner/requests/r'),locals:{owner:{email:'owner@example.com'},runtime:{env:{MUSIC_DB:db}}} as any});
-      expect(html).toContain(`Client copy: ${status === 'failed' ? "didn&#39;t send" : status}`);
+      expect(html).toContain(`Client copy: ${status == null || status === 'failed' ? "didn&#39;t send" : status}`);
       expect(html.includes('data-send-project-invitation')).toBe(button);
       expect(html.includes('data-confirmed-not-sent="true"')).toBe(status === 'uncertain' && button);
     }
@@ -408,6 +409,7 @@ it('renders all three personalized receipt outcomes into the rendered page', asy
     for (const [status,line,note] of [
       ['sent','A copy is on its way to alex@example.com.',"It has everything you wrote, so you don't need to save this page."],
       ['uncertain','Your copy should arrive shortly.',"If it doesn't, your brief is still saved and I'll still reply."],
+      [undefined,"I couldn't send your copy just now, but your brief is saved and I'll still reply.",null],
       ['failed',"I couldn't send your copy just now, but your brief is saved and I'll still reply.",null],
     ]) {
       renderSoftwareReceipt({brief:{name:'Alex Example',email:'alex@example.com'},clientCopyStatus:status});

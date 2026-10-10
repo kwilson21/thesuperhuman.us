@@ -356,3 +356,33 @@ it.each(['claim', 'construction', 'config'] as const)('records a pre-send %s fai
     expect(vi.mocked(fetch).mock.calls.filter(([url, init]) => String(url).includes('api.resend.com') && JSON.parse(init!.body as string).to?.[0] === 'alex@example.com')).toHaveLength(0);
   } finally { vi.restoreAllMocks(); }
 });
+
+it('omits blank optional answers from the owner idea notification', async () => {
+  await POST(context({ ...base, path: 'idea', idea: 'A shift board', audienceToday: 'Volunteers', firstVersion: 'Claim a shift', signal: '' }));
+  const notice = vi.mocked(fetch).mock.calls.find(([url, init]) => String(url).includes('api.resend.com') && JSON.parse(init!.body as string).to[0] === 'inbox@example.com')!;
+  const email = JSON.parse(notice[1]!.body as string);
+  expect(email.text).toContain('What’s the idea?\nA shift board');
+  expect(email.text).not.toMatch(/undefined|How will you know/);
+});
+
+it('recovers an unrecorded first claim failure through the guarded owner retry', async () => {
+  const prepare = db.prepare.bind(db);
+  const failedWrites = vi.spyOn(db, 'prepare').mockImplementation((query: string) => {
+    if (query.includes("'$.clientCopyStatus','uncertain'") || query.includes("'$.clientCopyStatus','failed'")) throw new Error('copy write failed');
+    return prepare(query);
+  });
+  expect(await (await POST(context())).json()).toMatchObject({ ok: true, clientCopyStatus: 'failed' });
+  expect(JSON.parse(sql.prepare('SELECT details_json FROM owner_requests').get().details_json)).not.toHaveProperty('clientCopyStatus');
+  failedWrites.mockRestore();
+  expect(await (await POST(context())).json()).toMatchObject({ ok: true, clientCopyStatus: 'failed' });
+  const { POST: retry } = await import('~/pages/api/owner/requests/[id]/brief-copy');
+  const ctx = context();
+  const retryContext = { ...ctx, params: { id: sql.prepare('SELECT id FROM owner_requests').get().id },
+    locals: { ...ctx.locals, owner: { email: 'owner@example.com' } },
+    request: new Request('https://thesuperhuman.us/api/owner/requests/r/brief-copy', { method: 'POST', headers: { origin: 'https://thesuperhuman.us', 'content-type': 'application/json' }, body: JSON.stringify({ action: 'send' }) }) };
+  expect((await retry({ ...retryContext, locals: { ...ctx.locals, owner: null } } as any)).status).toBe(403);
+  expect((await retry({ ...retryContext, request: retryContext.request.clone() })).status).toBe(200);
+  expect((await retry({ ...retryContext, request: retryContext.request.clone() })).status).toBe(409);
+  expect(JSON.parse(sql.prepare('SELECT details_json FROM owner_requests').get().details_json).clientCopyStatus).toBe('sent');
+  expect(vi.mocked(fetch).mock.calls.filter(([url, init]) => String(url).includes('api.resend.com') && JSON.parse(init!.body as string).to[0] === 'alex@example.com')).toHaveLength(1);
+});

@@ -33,8 +33,8 @@ export default {
         await page.waitForTimeout(1_500);
       };
       steps.push({ title: `Client review, ${viewport}`, images: [{ file: await capture({ file: `software-brief-review-${viewport}.png`, path: '/software/start?path=workflow', viewport, prepare: review }), caption: 'Fictional review step' }] });
-      for (const clientCopyStatus of ['sent', 'uncertain', 'failed']) {
-        steps.push({ title: `Client receipt ${clientCopyStatus}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-receipt-${clientCopyStatus}-${viewport}.png`, path: '/software/start?path=workflow', viewport, prepare: async page => {
+      for (const clientCopyStatus of ['sent', 'uncertain', 'failed', undefined]) {
+        steps.push({ title: `Client receipt ${clientCopyStatus ?? 'unattempted'}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-receipt-${clientCopyStatus ?? 'unattempted'}-${viewport}.png`, path: '/software/start?path=workflow', viewport, prepare: async page => {
           await page.route('**/api/software-inquiry', async route => {
             const input = route.request().postDataJSON();
             await route.fulfill({ json: { ok: true, brief: { name: input.name, email: input.email }, clientCopyStatus } });
@@ -47,8 +47,8 @@ export default {
     }
     const images = [];
     for (const viewport of ['desktop', 'phone']) {
-      for (const status of ['sent', 'failed', 'uncertain']) {
-        sql(`UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus','${status}','$.clientCopyAttemptedAt','2026-09-29T12:00:00.000Z') WHERE id='screenshot-software'`);
+      for (const status of ['sent', 'failed', 'uncertain', 'unattempted']) {
+        sql(status === 'unattempted' ? `UPDATE owner_requests SET details_json=json_remove(details_json,'$.clientCopyStatus','$.clientCopyAttemptedAt') WHERE id='screenshot-software'` : `UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus','${status}','$.clientCopyAttemptedAt','2026-09-29T12:00:00.000Z') WHERE id='screenshot-software'`);
         images.push({ file: await capture({ file: `software-brief-owner-${status}-${viewport}.png`, path: '/owner/requests/screenshot-software', viewport, owner: true }), caption: `Fictional software brief ${status}, ${viewport}` });
       }
       images.push({ file: await capture({ file: `software-brief-list-${viewport}.png`, path: '/owner/requests?kind=software', viewport, owner: true }), caption: `Software request list, ${viewport}` });

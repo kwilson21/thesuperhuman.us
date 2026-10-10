@@ -6,7 +6,7 @@ export function renderSoftwareReceipt(result: Record<string, unknown>) {
   const firstName = brief.name?.trim().split(/\s+/)[0] || 'there';
   document.querySelector<HTMLElement>('[data-receipt-thanks]')!.textContent = `Thanks, ${firstName}. I'll read it myself and reply within two business days.`;
   const sent = result.clientCopyStatus === 'sent';
-  const uncertain = result.clientCopyStatus !== 'failed' && !sent;
+  const uncertain = result.clientCopyStatus === 'uncertain';
   document.querySelector<HTMLElement>('[data-copy-status]')!.textContent = sent
     ? `A copy is on its way to ${brief.email}.`
     : uncertain ? 'Your copy should arrive shortly.'

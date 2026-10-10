@@ -12,7 +12,7 @@ export async function deliverSoftwareBriefCopy(db: D1Database, request: OwnerReq
     const claimed = await db.prepare(`UPDATE owner_requests SET details_json=json_set(details_json,
       '$.clientCopyStatus','uncertain','$.clientCopyAttemptedAt',?)
       WHERE id=? AND kind='software' AND status NOT IN ('resolved','withdrawn') AND email<>'' AND
-      (${retry ? `(json_extract(details_json,'$.clientCopyStatus')='failed' OR
+      (${retry ? `(json_extract(details_json,'$.clientCopyStatus') IS NULL OR json_extract(details_json,'$.clientCopyStatus')='failed' OR
         (json_extract(details_json,'$.clientCopyStatus')='uncertain' AND ?=1 AND
         json_extract(details_json,'$.clientCopyAttemptedAt')<=?))` : "json_extract(details_json,'$.clientCopyStatus') IS NULL"}) RETURNING id`)
       .bind(at, request.id, ...(retry ? [confirmedNotSent ? 1 : 0, new Date(Date.parse(at) - 60_000).toISOString()] : []))
