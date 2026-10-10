@@ -26,7 +26,7 @@ it('supports a compact homepage variant while keeping the same synchronized, acc
   expect(home).toContain("<ComparisonPlayer example={oldNewsExample} recording={oldNewsRecording} compact />");
   expect(home).toContain("setupComparisonPlayers();");
   expect(home).not.toContain("Start your song");
-  expect(home).toContain("<WorkWithMe />");
+  expect(home).toContain("<WorkWithMe overrides={{ software: { href: '/software/start?path=idea', label: 'Start a software project' } }} />");
 });
 
 it('places compact playback beside the waveform and seeking on a separate track', () => {

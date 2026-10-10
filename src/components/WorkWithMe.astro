@@ -1,17 +1,24 @@
 ---
 import PersonalNameText from '~/components/PersonalNameText.astro';
 import { doors } from '~/data/work-with-me';
-interface Props { headingLevel?: 'h2' | 'h3'; }
-const { headingLevel = 'h3' } = Astro.props;
+interface Props {
+  headingLevel?: 'h2' | 'h3';
+  overrides?: Partial<Record<(typeof doors)[number]['id'], Partial<Pick<(typeof doors)[number], 'href' | 'label'>>>>;
+}
+const { headingLevel = 'h3', overrides = {} } = Astro.props;
 ---
 <div class="doors">
-  {doors.map(door => <article class="door" id={`door-${door.id}`}>
-    <a class="door-art" href={door.href} tabindex="-1" aria-hidden="true"><img src={door.picture.src} width={door.picture.width} height={door.picture.height} alt="" loading="lazy" /></a>
+  {doors.map(door => {
+    const href = overrides[door.id]?.href ?? door.href;
+    const label = overrides[door.id]?.label ?? door.label;
+    return <article class="door" id={`door-${door.id}`}>
+    <a class="door-art" href={href} tabindex="-1" aria-hidden="true"><img src={door.picture.src} width={door.picture.width} height={door.picture.height} alt="" loading="lazy" /></a>
     <p class="door-caption"><PersonalNameText text={door.caption} /></p>
     {headingLevel === 'h2' ? <h2 class="door-title">{door.title}</h2> : <h3 class="door-title">{door.title}</h3>}
     <p class="door-line">{door.line}</p>
-    <a class="door-button site-button" href={door.href}>{door.label}</a>
-  </article>)}
+    <a class="door-button site-button" href={href}>{label}</a>
+  </article>;
+  })}
 </div>
 <style>
   /* Subgrid keeps the captions, titles, lines and buttons on shared rows, so the three doors line up whatever wraps. */
