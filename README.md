@@ -121,6 +121,8 @@ BACKUP_DIR="$(mktemp -d /secure/private/resume-backups/resume.XXXXXX)"
 
 # Preserve the bytes currently served before overwriting the canonical key.
 npx wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.before.pdf"
+# Wrangler may exit successfully when a key is missing; require a PDF backup.
+test "$(head -c 5 "$BACKUP_DIR/pdf-general.before.pdf")" = "%PDF-"
 shasum -a 256 "$BACKUP_DIR/pdf-general.before.pdf"
 
 # Upload the candidate, download the stored bytes, and require an exact match.
