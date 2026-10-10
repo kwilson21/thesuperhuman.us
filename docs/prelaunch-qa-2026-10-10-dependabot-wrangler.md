@@ -6,6 +6,7 @@ Pull request: [#164](https://github.com/kwilson21/thesuperhuman.us/pull/164)
 Branch: `codex/deps-164-wrangler`
 Starting head: `8a5d42b6c26867cb155ef4fa0cc18471a73649f5`
 Merged-main revision: `8b2252c4e59b904ba8cf07f4492dda0d51189235` (caller-supplied origin/main snapshot). No merge or rebase performed in this task.
+Current branch verification: the rebased stack base is `e9341580c9f57b86387b738bb3b284547b8e9d5f`, the dependency commit is `0527d43916bcb68532dd64c7335fb07c405fc914`, and the original record commit is `c18c3122`. The starting head and dependency hash in the earlier run evidence below describe the pre-rebase history, not the current two-commit chain.
 This record's commit: the record-only commit following the dependency commit, identifiable with `git log -1 -- docs/prelaunch-qa-2026-10-10-dependabot-wrangler.md`. The final handoff supplies its hash.
 Target: production `https://thesuperhuman.us`
 Reviewer: Codex (gpt-6.1-sol), local evidence collection for owner Kazon Wilson. This record does not certify independent current-head review.
@@ -27,7 +28,7 @@ The caller prepared package.json, package-lock.json and node_modules with a succ
 
 Tests first: npm run check initially failed at src/lib/publication/oauth.ts:63 with ts(2345). Astro's nested v4 ExecutionContext was missing v5 exports and abort. App.Locals now refines the existing Runtime runtime.ctx to ExecutionContext with an intersection in src/env.d.ts. The real Worker context is passed through unchanged; no any, fabricated methods or runtime wrapper was added. Fetcher, Ai, RateLimit, D1Database, KVNamespace and R2Bucket needed no changes. Final check: 441 files, 0 errors, 0 warnings, 17 hints.
 
-The first npm test also found the existing exact-pin test expecting 4.90.0. Its expectation now matches 4.146.0. Installed Wrangler migration discovery still sorts numeric prefixes before applying unapplied migrations. No new behavior requires a new test.
+The first npm test also found the existing exact-pin test expecting 4.90.0. Its expectation now matches 4.146.0. Installed Wrangler migration discovery still sorts numeric prefixes before applying unapplied migrations. This is source inspection, not applied-order evidence. Fresh independent verification attempted local migration application with telemetry disabled and throwaway state; it failed before application with `Error: listen EPERM: operation not permitted 127.0.0.1`. Applied order, including the 0009 to 0010 boundary, remains UNVERIFIED and must be observed in a permitted local environment. The pin edit alone does not verify migration order.
 
 ### Wrangler compatibility findings
 
