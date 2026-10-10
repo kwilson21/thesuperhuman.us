@@ -14,29 +14,30 @@ export const POST: APIRoute = async ({ request, locals }) => {
   try {
     const env = locals.runtime?.env;
     // Local previews never call Workers AI, even when a proxy binding exists.
-    if (!env?.AI || !env.RATE_LIMIT || !env.BRIEF_SUGGEST_RATE_LIMIT || !env.BRIEF_SUGGEST_SITE_LIMIT || !env.TURNSTILE_SECRET_KEY || env.SOFTWARE_SUGGESTIONS_ENABLED !== 'true' || ['localhost', '127.0.0.1', '[::1]'].includes(new URL(request.url).hostname)) return empty();
+    if (!env?.AI || !env.MUSIC_DB || !env.BRIEF_SUGGEST_RATE_LIMIT || !env.BRIEF_SUGGEST_SITE_LIMIT || !env.TURNSTILE_SECRET_KEY || env.SOFTWARE_SUGGESTIONS_ENABLED !== 'true' || ['localhost', '127.0.0.1', '[::1]'].includes(new URL(request.url).hostname)) return empty();
     const parsed = schema.safeParse(await musicRequest(request, 16000));
     if (!parsed.success || parsed.data.text.trim().split(/\s+/).length < 3) return empty();
     const content = JSON.stringify(parsed.data);
     if (content.length > 2000) return empty();
-    const day = Math.floor(Date.now() / 86400000);
+    const now = Date.now();
+    const day = new Date(now).toISOString().slice(0, 10);
+    const previousDay = new Date(now - 86400000).toISOString().slice(0, 10);
     const ip = request.headers.get('cf-connecting-ip');
     if (!ip) return empty();
     const pass = request.headers.get('cookie')?.split(';').map(part => part.trim()).find(part => part.startsWith(`${suggestionPassCookie}=`))?.slice(suggestionPassCookie.length + 1);
     if (!await validSuggestionPass(pass, env.TURNSTILE_SECRET_KEY, ip)) return Response.json({ suggestion: '', passRequired: true }, { headers: { 'cache-control': 'no-store' } });
-    const hash = await suggestionVisitorHash(ip);
+    const hash = await suggestionVisitorHash(ip, now);
     if (!(await env.BRIEF_SUGGEST_RATE_LIMIT.limit({ key: hash })).success || !(await env.BRIEF_SUGGEST_SITE_LIMIT.limit({ key: 'site' })).success) return empty();
-    // Daily KV counts are approximate under concurrency; the per-minute bindings are the abuse limits.
-    // shortcut: daily caps are best-effort cost guards, use atomic storage if strict daily caps become necessary.
-    for (const [key, max, ttl] of [
-      [`visitor-day:${day}:${hash}`, 300, 86400],
-      [`site-day:${day}`, 10000, 86400],
-    ] as const) {
-      try {
-        const count = Number(await env.RATE_LIMIT.get(`rl:brief-suggest:${key}`) ?? 0);
-        if (Number.isFinite(count) && count >= max) return empty();
-        if (Number.isFinite(count)) await env.RATE_LIMIT.put(`rl:brief-suggest:${key}`, String(count + 1), { expirationTtl: ttl });
-      } catch { /* KV reads and writes are best effort, including same-key write contention. */ }
+    // Bound opportunistic cleanup to one batch per eligible request.
+    const cleanup = await env.MUSIC_DB.prepare(`DELETE FROM brief_suggestion_budget WHERE rowid IN (
+      SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000
+    )`).bind(previousDay).run();
+    if (!cleanup.success) return empty();
+    for (const [scope, cap] of [[hash, 300], ['site', 10000]] as const) {
+      const reserved = await env.MUSIC_DB.prepare(`INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)
+        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count`)
+        .bind(day, scope, cap).first<{ count: number }>();
+      if (!reserved) return empty();
     }
     const result = await Promise.race([
       env.AI.run('@cf/meta/llama-3.2-1b-instruct', { messages: [

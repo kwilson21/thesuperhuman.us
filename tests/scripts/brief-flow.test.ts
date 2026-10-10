@@ -114,7 +114,7 @@ it('keeps writing with unavailable browser storage', async () => {
   await setup(); vi.stubGlobal('localStorage', { getItem: () => { throw new Error(); }, setItem: () => { throw new Error(); } }); choose('path', 'workflow'); fill('today', 'We track clients'); click('[data-next]'); expect(current()).toBe(2);
 });
 it('discloses browser drafts and Workers AI accurately, with reassurance only at send', () => {
-  const privacy = readFileSync('src/pages/privacy.astro', 'utf8'); expect(privacy).toContain("isn't used to train models without your explicit consent"); expect(privacy).toContain('You can turn suggestions off'); expect(privacy).toContain('in your browser'); expect(privacy).toContain('strictly necessary security cookie that expires after 30 minutes'); expect(privacy).toContain('Updated October 10, 2026');
+  const privacy = readFileSync('src/pages/privacy.astro', 'utf8'); expect(privacy).toContain("isn't used to train models without your explicit consent"); expect(privacy).toContain('You can turn suggestions off'); expect(privacy).toContain('in your browser'); expect(privacy).toContain('strictly necessary security cookie that expires after 30 minutes'); expect(privacy).toContain('Updated October 10, 2026'); expect(privacy).toContain('kept for up to two days'); expect(privacy).not.toContain('approximate counter');
   expect(readFileSync('src/pages/software/start.astro', 'utf8').match(/No booking or payment at this stage\./g)).toHaveLength(1);
 });
 

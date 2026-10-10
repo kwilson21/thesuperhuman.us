@@ -447,5 +447,5 @@ it('renders the AI disclosure beside both answer boxes and the dated retention n
   }
   const notice = await container.renderToString(privacy, { request:new Request('https://thesuperhuman.us/privacy') });
   expect(notice).toContain('Updated October 10, 2026'); expect(notice).toContain('id="software-briefs"');
-  expect(notice).toContain('an approximate counter derived from your IP address, kept for up to one day');
+  expect(notice).toContain('a counter derived from your IP address, kept for up to two days');
 });
