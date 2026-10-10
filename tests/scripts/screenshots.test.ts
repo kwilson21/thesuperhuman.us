@@ -12,7 +12,7 @@ import { prepareWithDiagnostics } from '../../scripts/screenshots/prepare.mjs';
 import { POST as sendOffer } from '../../src/pages/api/owner/requests/[id]/software';
 import { contractorSchema } from '../../src/lib/agreement-fields';
 import {
-  expectedResourceError, missingScenarioRoutes, NOT_PAGES, PAGES, parseJsonc, PREVIEW_OVERRIDES, previewWrangler, REDIRECTS, SCENARIO_PAGES,
+  BARE_LINK_LANDINGS, expectedResourceError, missingScenarioRoutes, NOT_PAGES, PAGES, parseJsonc, PREVIEW_OVERRIDES, previewWrangler, REDIRECTS, SCENARIO_PAGES,
   relevantScreenshots, sanitizeManifest, screenshotSection, withScreenshots,
 } from '../../scripts/screenshots/config.mjs';
 
@@ -161,9 +161,14 @@ describe('screenshot coverage', () => {
         return file;
       },
     });
-    for (const route of ['/agreements/verify', `/offer/${'g'.repeat(43)}/verify`]) {
+    expect(BARE_LINK_LANDINGS.map(({ path, status }) => ({ path, status }))).toEqual([
+      { path: '/agreements/verify', status: 401 },
+      { path: `/offer/${'g'.repeat(43)}/verify`, status: 401 },
+    ]);
+    for (const { path: route, status } of BARE_LINK_LANDINGS) {
       const visits = landings.filter(visit => new URL(visit.path, 'http://localhost').pathname === route);
       expect(visits.filter(visit => !visit.path.includes('?'))).toHaveLength(2);
+      expect(visits.filter(visit => !visit.path.includes('?')).every(visit => visit.status === status)).toBe(true);
       expect(visits.filter(visit => visit.path.includes('?') && visit.status === 401)).toHaveLength(2);
       expect(visits.filter(visit => visit.status === 200)).toHaveLength(2);
     }

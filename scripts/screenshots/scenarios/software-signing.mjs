@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { prepareAgreedTerms } from '../agreed-terms.mjs';
+import { BARE_LINK_LANDINGS } from '../config.mjs';
 import { readFileSync } from 'node:fs';
 const hash = (text) => createHash('sha256').update(text).digest('hex');
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
@@ -140,10 +141,11 @@ export default {
       },
     });
     sql("DELETE FROM software_offers WHERE id='screenshot-incomplete-draft'");
-    await shot('archive-expired-link','Expired archive email link','/agreements/verify',{status:401});
+    for (const { name, path, status } of BARE_LINK_LANDINGS) {
+      await shot(name, 'Expired one-time link landing', path, { status });
+    }
     await shot('offer', 'Offer review and signing link', `/offer/${token}`);
     await shot('check-email', 'Check your email and resend', `/offer/${token}/sign?email=sent`);
-    await shot('link-landing', 'Expired one-time link landing', `/offer/${token}/verify`, {status:401});
     async function captureLinks(purpose) {
       const archive = purpose === 'archive';
       const route = archive ? '/agreements/verify' : `/offer/${token}/verify`;

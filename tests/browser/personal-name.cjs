@@ -20,15 +20,20 @@ const staticRoutes = readdirSync(pageRoot, { recursive: true })
 const routes = [...new Set([...staticRoutes, '/music/old-news'])].sort();
 
 (async () => {
+  const { BARE_LINK_LANDINGS } = await import('../../scripts/screenshots/config.mjs');
+  const landingStatuses = new Map(BARE_LINK_LANDINGS.map(({ path, status }) => [path, status]));
+  const allRoutes = [...new Set([...routes, ...landingStatuses.keys()])].sort();
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], {
       origin: new URL(targetUrl).origin,
     });
-    for (const route of routes) {
+    for (const route of allRoutes) {
       const response = await page.goto(new URL(route, targetUrl).href, { waitUntil: 'domcontentloaded' });
-      if (route !== '/404') assert.ok(response && response.status() < 400, `${route} did not load successfully`);
+      if (landingStatuses.has(route)) {
+        assert.equal(response?.status(), landingStatuses.get(route), `${route} must refuse a bare one-time link`);
+      } else if (route !== '/404') assert.ok(response && response.status() < 400, `${route} did not load successfully`);
       await page.locator('h1').first().waitFor();
       const uncovered = await page.evaluate(() => {
         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
