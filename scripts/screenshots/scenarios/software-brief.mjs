@@ -121,6 +121,20 @@ export default {
       }
       for (const question of [1, 2]) steps.push({ title: `Idea question ${question + 1}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-idea-${question + 1}-${viewport}.png`, path: '/software/start', viewport, prepare: page => prepare(page, question, 'idea') }), caption: 'Fictional idea brief' }] });
       steps.push({ title: `Autocomplete, ${viewport}`, images: [{ file: await capture({ file: `software-brief-suggestion-${viewport}.png`, path: '/software/start', viewport, prepare: page => prepare(page, 1, 'workflow', true) }), caption: viewport === 'phone' ? 'Ghost text inside the box with Tap to accept' : 'Ghost text inside the box with Tab to accept' }] });
+      for (const state of ['sending', 'send-failed']) {
+        steps.push({ title: `Brief ${state}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-${state}-${viewport}.png`, path: '/software/start', viewport, prepare: async page => {
+          await page.route('**/api/software-inquiry', route => state === 'sending' ? new Promise(() => {}) : route.fulfill({ status: 503, json: { ok: false, error: 'Try again.' } }));
+          await prepare(page, 6, 'workflow', false, async () => {
+            await page.waitForFunction(() => !!document.querySelector('[name=cf-turnstile-response]')?.value);
+            await page.locator('[type=submit]').click();
+            await page.waitForFunction(state => document.querySelector('[data-form-status]')?.textContent === (state === 'sending' ? 'Sending…' : 'Try again.'), state);
+            const locked = await page.locator('[data-back]').isDisabled();
+            if (locked !== (state === 'sending')) throw new Error('Back did not follow delivery state');
+            const controlsMatch = await page.locator('#software-inquiry input, #software-inquiry textarea, [data-review] button').evaluateAll((controls, state) => controls.every(control => control.disabled === (state === 'sending')), state);
+            if (!controlsMatch) throw new Error('Editing did not follow delivery state');
+          });
+        } }), caption: 'Fictional brief with mocked delivery' }] });
+      }
       for (const clientCopyStatus of ['sent', 'uncertain', 'failed', undefined]) {
         steps.push({ title: `Client receipt ${clientCopyStatus ?? 'unattempted'}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-receipt-${clientCopyStatus ?? 'unattempted'}-${viewport}.png`, path: '/software/start', viewport, prepare: async page => {
           await page.route('**/api/software-inquiry', async route => {

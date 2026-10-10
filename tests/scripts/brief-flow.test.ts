@@ -48,6 +48,7 @@ async function setup(requestedPath?: string) {
     return form.nodes[selector] ?? null;
   };
   form.querySelectorAll = (selector: string) => {
+    if (selector === 'input, textarea, button') return [...controls, form.nodes['[data-back]'], form.nodes['[data-next]'], form.nodes['[type=submit]'], ...skips, ...form.nodes['[data-review]'].children.flatMap(node => node.children).filter(node => node.type === 'button')];
     if (selector === '[data-step]') return steps;
     if (selector === '[data-answer]') return steps.slice(1, 3).map(node => node.nodes['[data-answer]']);
     if (selector === '[data-skip]') return skips;
@@ -384,4 +385,39 @@ it.each(['flexible', 'asap'])('clears a rejected date immediately when timing ch
   expect(error.textContent).toBe(''); expect(error.hidden).toBe(true);
   expect(date.getAttribute('aria-invalid')).toBeNull(); expect(form.nodes['[data-form-status]'].textContent).toBe('');
   choose('timing', 'date'); expect(error.hidden).toBe(true);
+});
+
+it.each(['success', 'server failure', 'network failure'])('locks editing during delivery and restores controls after %s', async outcome => {
+  choose('path', 'workflow'); fill('today', 'We track clients'); click('[data-next]');
+  fire(steps[2].nodes['[data-skip]'], 'click'); click('[data-next]');
+  fire(steps[4].nodes['[data-skip]'], 'click'); fill('name', 'Alex'); fill('email', 'alex@example.com'); click('[data-next]');
+  form.dataset.available = 'true'; form.nodes['[type=submit]'].disabled = false;
+  const edits = form.nodes['[data-review]'].children.flatMap(node => node.children).filter(node => node.type === 'button');
+  const company = controls.find(node => node.name === 'company')!; company.disabled = true;
+  let resolve!: (response: Response) => void, reject!: (error: Error) => void;
+  vi.mocked(fetch).mockImplementationOnce(() => new Promise((done, fail) => { resolve = done; reject = fail; }));
+  const draft = store.get('software-brief-draft');
+  fire(form, 'submit');
+  expect(form.nodes['[data-back]'].disabled).toBe(true);
+  expect(edits.length).toBeGreaterThan(0); expect(edits.every(node => node.disabled)).toBe(true);
+  expect(controls.every(node => node.disabled)).toBe(true);
+  expect(form.nodes['[type=submit]'].disabled).toBe(true);
+  expect(form.nodes['[type=submit]'].textContent).toBe('Sending…');
+  expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string).today).toBe('We track clients');
+  expect(store.get('software-brief-draft')).toBe(draft);
+  vi.stubGlobal('document', { querySelector: () => new Node(), querySelectorAll: () => [] });
+  if (outcome === 'network failure') reject(new Error('offline'));
+  else resolve(Response.json(outcome === 'success' ? { ok: true, brief: { name: 'Alex', email: 'alex@example.com' } } : { ok: false, error: 'Try again.' }, { status: outcome === 'success' ? 200 : 503 }));
+  await vi.waitFor(() => expect(form.getAttribute('aria-busy')).toBeNull());
+  expect(form.nodes['[data-back]'].disabled).toBe(false);
+  expect(edits.every(node => !node.disabled)).toBe(true);
+  expect(controls.filter(node => node !== company).every(node => !node.disabled)).toBe(true);
+  expect(company.disabled).toBe(true);
+  if (outcome === 'success') { expect(form.hidden).toBe(true); expect(store.has('software-brief-draft')).toBe(false); }
+  else {
+    expect(form.hidden).toBe(false); expect(store.get('software-brief-draft')).toBe(draft);
+    fire(edits[0], 'click'); expect(current()).toBe(0);
+    click('[data-next]'); fill('today', 'Corrected answer');
+    expect(JSON.parse(store.get('software-brief-draft')!).answers.today).toBe('Corrected answer');
+  }
 });

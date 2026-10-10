@@ -160,8 +160,20 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
   form.addEventListener('submit', event => {
     if (noticeSentDraft()) { event.preventDefault(); event.stopImmediatePropagation(); save(); return; }
     if (step !== 6) { event.preventDefault(); event.stopImmediatePropagation(); continueStep(); } });
+  const disabledControls = new Map<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement, boolean>();
   setupFormSubmission({ form, endpoint: '/api/software-inquiry', success: document.getElementById('software-success')!,
     payload: () => ({ ...payload(), submissionId }),
+    onSendingChange: sending => {
+      if (sending) {
+        form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement>('input, textarea, button').forEach(control => {
+          if (control === submit) return;
+          disabledControls.set(control, control.disabled); control.disabled = true;
+        });
+      } else {
+        disabledControls.forEach((disabled, control) => { control.disabled = disabled; });
+        disabledControls.clear();
+      }
+    },
     onSuccess: result => {
       suggestions.clear();
       try {
