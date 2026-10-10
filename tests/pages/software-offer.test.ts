@@ -213,7 +213,7 @@ it('renders version-specific direction, delivery, acceptance, handoff and earlie
     expect(html).toContain('Follow-up notes');expect(html).toContain('Corrections are covered through Nov 5, 2026.');expect(strips).toContain('Project files');
     sql.exec("DELETE FROM software_project_messages WHERE update_id='second-delivery'; DELETE FROM software_project_updates WHERE id IN ('second-delivery','second-handoff')");
     sql.exec("DELETE FROM software_milestone_payments; UPDATE software_projects SET milestone_index=0; UPDATE software_project_updates SET status='superseded' WHERE id='delivery'; INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,created_by,created_at,updated_at,shared_at,review_window_days) VALUES ('delivery2','r','delivery_review','shared',0,'Corrected tracker','Delivery v2','working_preview','owner','2026-10-10','2026-10-10','2026-10-10',5); INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES ('r','client','token','Accepted Delivery v2','delivery2','milestone_accepted','2026-10-12')");
-    html=await renderProject();expect(html).toContain('Version 2 is accepted.');expect(html).not.toContain("It&#39;s yours.");expect(html).toContain('Your files · Milestone 1');expect(html).toContain('Project files');expect(html).toContain('Anything new is a separate milestone.');expect(html.match(/Corrections are covered through Nov 1, 2026\./g)).toHaveLength(1);
+    html=await renderProject();expect(html).toContain('Version 2 is accepted.');expect(html).not.toContain("It&#39;s yours.");expect(html).not.toContain('Your files · Milestone 1');expect(html.slice(html.indexOf('Earlier updates'))).toContain('Project files');expect(html.slice(html.indexOf('Earlier updates'))).toContain('Oct 3, 2026');expect(html).toContain('Anything new is a separate milestone.');expect(html).not.toContain('Corrections are covered through');
     for(const secret of ['PRIVATE OWNER','PRIVATE AUTHOR','PRIVATE TOKEN','PRIVATE NOTE','PRIVATE FIT REVIEW','240000']) expect(html).not.toContain(secret);
     sql.exec("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,links_json,created_by,created_at,updated_at,shared_at) VALUES ('progress-link','r','progress','shared',0,'Prior progress','concept','[{\"label\":\"Prior progress reference\",\"url\":\"https://example.com/progress\"}]','owner','2026-10-14','2026-10-14','2026-10-14')");
     const ownerHTML=await container.renderToString(composer,{request:new Request('https://thesuperhuman.us/owner/requests/r/update'),params:{id:'r'},locals:{owner:{email:'owner@example.com'},runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}} as any});
@@ -561,6 +561,13 @@ it('puts the named review work first through partial, complete, accepted and han
     html=await render();expect(html).toMatch(/<strong[^>]*>Yours<\/strong><span[^>]*>After payment<\/span>/);expect(html).not.toMatch(/value="milestone_accepted" disabled/);expect(html).toContain('After you accept, the $2,400 milestone invoice comes next, due in 30 days.');
     sql.exec(`UPDATE software_project_updates SET kind='direction_review',artifact_version='Direction v1',evidence_type='concept'`);
     html=await render();expect(html).toMatch(/<h3[^>]*>Not included yet<\/h3><p[^>]*>Sample import is not included\.<\/p>/);expect(html).toContain("Here&#39;s the first sketch.");expect(html).toContain('Please look it over by Oct 8, 2026.');expect(html).toContain('Confirm this direction');expect(html).not.toContain('data-review-mark');expect(html).not.toContain('name="criteria"');
+    for (const kind of ['direction_review','delivery_review','progress']) {
+      for (const evidence of ['concept','prototype','working_preview']) {
+        sql.prepare('UPDATE software_project_updates SET kind=?,evidence_type=? WHERE id=\'v2\'').run(kind,evidence);
+        html=await render();expect(html.includes('Sketch, not built yet')).toBe(evidence==='concept');
+      }
+    }
+    sql.exec("UPDATE software_project_updates SET kind='direction_review',evidence_type='concept' WHERE id='v2'");
     sql.exec(`UPDATE software_project_updates SET artifact_version='Direction v2'`);html=await render();expect(html).toContain('Sketch 2.');expect(html).toContain('Open sketch 2 ↗');expect(html).toContain('I need from you: Send a sample.');expect(html).toContain('Next from me: Build the import.');
     sql.exec(`UPDATE software_project_updates SET artifact_version='Client Sketch V2 beta'`);html=await render();expect(html).toContain('Client Sketch V2 beta.');expect(html).toContain('Open Client Sketch V2 beta ↗');expect(html).toContain('data-version="Client Sketch V2 beta"');
     sql.exec(`UPDATE software_project_updates SET kind='delivery_review',artifact_version='Release V2 beta'`);html=await render();expect(html).toContain('Release V2 beta is ready to try.');expect(html).toContain('Accept Release V2 beta');expect(html).toContain('Open Release V2 beta ↗');expect(html).toMatch(/<strong[^>]*>Release V2 beta<\/strong>/);
@@ -595,6 +602,19 @@ it('puts the named review work first through partial, complete, accepted and han
     html=await render();expect(html).toContain('Version 3 is ready to try.');expect(html).toContain('Your files');expect(html).toMatch(/<strong[^>]*>Yours<\/strong><span[^>]*>Oct 3, 2026<\/span>/);
     expect(html.match(/data-endpoint="[^"]*reviews\/sketch"/g)).toHaveLength(1);
     sql.exec(`UPDATE software_project_updates SET delivered_deliverables_json='["Status view"]' WHERE id='new-delivery'`);
+    sql.exec("UPDATE software_project_updates SET client_request='Try the corrected import.' WHERE id='new-delivery'; UPDATE software_project_updates SET client_request='Save the files.' WHERE id='handoff'");
+    html=await render();
+    expect(html.slice(html.indexOf('Your files'),html.indexOf('class="project-history'))).toContain('I need from you: Save the files.');
+    sql.exec("UPDATE software_project_updates SET client_request='Review the sketch.' WHERE id='sketch'");
+    html=await render();expect(html.slice(html.indexOf('id="review-sketch"'))).toContain('I need from you: Review the sketch.');
+    sql.exec("UPDATE software_project_updates SET status='superseded' WHERE id='sketch'; INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES ('r','client','token','Accepted corrected delivery','new-delivery','milestone_accepted','2026-10-08'); DELETE FROM software_milestone_payments; UPDATE software_invoices SET status='open'");
+    html=await render();expect(html.slice(html.indexOf('Earlier versions'))).toMatch(/<p class="access-note[^"]*">Sketch, not built yet<\/p>/);expect(html).toContain('Pay $2,400 ↗');expect(html).not.toContain('Your files ·');expect(html).toMatch(/<strong[^>]*>Yours<\/strong><span[^>]*>After payment<\/span>/);
+    expect(html.slice(html.indexOf('Earlier updates'))).toContain('Oct 3, 2026');
+    sql.exec("INSERT INTO software_milestone_payments VALUES ('r',0,'2026-10-08','owner'); UPDATE software_invoices SET status='paid'");
+    html=await render();expect(html).toContain('Paid. Your files are on the way.');expect(html).not.toContain('Your files ·');expect(html).toMatch(/<strong[^>]*>Yours<\/strong><span[^>]*>Handoff coming<\/span>/);
+    sql.exec("UPDATE software_project_updates SET shared_at='2026-10-09' WHERE id='handoff'; UPDATE software_project_updates SET artifact_version='' WHERE id='later'");
+    html=await render();expect(html).toContain('Your files ·');expect(html.slice(html.indexOf('Earlier updates'))).toMatch(/Update · Oct 6, 2026/);expect(html.slice(html.indexOf('Earlier updates'))).not.toContain('Latest update');
+    sql.exec("DELETE FROM software_project_messages WHERE update_id='new-delivery'; UPDATE software_project_updates SET status='shared' WHERE id='sketch'");
     sql.exec(`UPDATE software_projects SET milestone_index=1,next_update_on='2026-10-10'`);
     sql.prepare('UPDATE software_projects SET terms_json=?').run(JSON.stringify({...scope,milestones:[...scope.milestones,{...scope.milestones[0],name:'Follow-up'}]}));
     html=await render();expect(html).toContain('Milestone 2 is starting.');expect(html).toContain('Next update: Oct 10, 2026');expect(html).not.toContain('Sketch 3.');expect(html).toContain('Your files');expect(html).toContain('https://example.com/notes');expect(html.match(/Corrections are covered through Nov 1, 2026\./g)).toHaveLength(1);
