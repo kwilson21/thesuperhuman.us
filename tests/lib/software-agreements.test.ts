@@ -1538,3 +1538,25 @@ it('maps unfamiliar draft validation issues to a generic message on the field', 
   expect(resolveClientDetails({ signer_title: 123 }, 'client@example.com')).toEqual({ ok: false, errors: { signer_title: 'Check this field.' } });
   expect(resolveClientDetails({ legal_name: 'x'.repeat(201) }, 'client@example.com')).toEqual({ ok: false, errors: { legal_name: 'Check this field.' } });
 });
+
+it('renders cumulative checkpoint payments and invoice-identical odd-cent installments', async () => {
+  const { agreementValues, agreementDetailsSchema } = await import('~/lib/agreement-fields');
+  const { softwareInvoiceTerms } = await import('~/lib/software-invoices');
+  const purchased = {...terms, paymentMode:'standard' as const, milestones:[terms.milestones[0],{...terms.milestones[0],feeCents:303,checkpoint:{label:'Preview',cancellationPercent:75}}]};
+  const values = agreementValues(purchased,agreementDetailsSchema.parse({...details,milestones:[details.milestones[0],{...details.milestones[0],start:'2026-10-20',checkpoint_criteria:'View',checkpoint_evidence:'Preview'}]}),clientAgreementSchema.parse(client),contractorSchema.parse(contractor),{effective_on:'2026-10-01',msa_version:'2026-10-01 / template 1',sow_number:'SOW-test',offer_version:1,template_version:1});
+  expect(values.milestones[1].checkpoint_cumulative_amount).toBe('$3.28 (includes prior payments)');
+  expect(values.milestones[1].checkpoint).toContain('cumulative cancellation amount $3.28');
+  expect(values.system.amount1).toBe('$0.50 deposit / $0.51 balance');
+  expect(values.milestones[0].deposit).toBe('$0.50');
+  expect(values.milestones[0].balance).toBe('$0.51');
+  expect(softwareInvoiceTerms(purchased,0,'deposit').amountCents).toBe(50);
+  const rendered=renderAgreement('sow',synthetic('sow'),values);
+  expect(rendered).toContain('milestone.checkpoint_cumulative_amount: $3.28 (includes prior payments)');
+  expect(rendered).toContain('milestone.deposit: $0.50');
+  expect(rendered).toContain('milestone.balance: $0.51');
+});
+it.each(['data_retention','handoff_access'])('requires a complete day count in custom %s prose', field => {
+  const input = {...details,project_retention_days:30,handoff_access_days:30,data_retention:'Keep for 30 days.',handoff_access:'Keep for 30 days.',[field]:'Keep access for 130 days.'};
+  expect(()=>validateAgreementDetails(input,terms as any)).toThrow('State the agreed');
+  expect(()=>validateAgreementDetails({...input,[field]:'Keep access for 30 days.'},terms as any)).not.toThrow();
+});

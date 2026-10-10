@@ -506,7 +506,7 @@ it('reads immutable agreed fees, dates and complete legal text without enabling 
     const reader=html.slice(html.indexOf('data-terms-reader'),html.indexOf('Invoices'));
     expect(html).toContain('Planned Oct 1, 2026 to Oct 20, 2026');expect(html).toContain('Target delivery: Oct 19, 2026');
     expect(reader).not.toContain('Nov 1, 2026');
-    expect(html).toContain('$0.51 deposit / $0.50 balance');expect(html).toContain('80%, includes prior payments');
+    expect(html).toContain('$0.50 deposit / $0.51 balance');expect(html).toContain('80%, includes prior payments');
     for (const text of ['Synthetic access and sample.','Live rollout.','Client operates the delivered tool.','Source and notices','Every Thursday','Agreed support only','No extra expenses']) expect(html).toContain(text);
     expect(html).toContain('Exact MSA: &lt;script&gt;not executable&lt;/script&gt;');expect(html).toContain('Exact SOW: full material terms and responsibilities.');
     // Reused MSA belongs to an older request. Download the current SOW packet,

@@ -146,3 +146,13 @@ const privateTemplateFile = '.private/signing/templates.json';
 it.runIf(existsSync(privateTemplateFile))('renders the real v1 agreements and embeds exact signing evidence', async () => {
   await checkTemplatePacket(privateTemplateFile, ['1 Parties and scope', '14 Signatures', '1 Engagement details', '9 Exceptions attachments and signatures']);
 }, 30000);
+
+it('preserves heading characters absent from Newsreader using Inter', async () => {
+  const { default: fontkit } = await import('@pdf-lib/fontkit');
+  const heading = fontkit.create(Buffer.from(newsreaderBase64,'base64'));
+  const inter = fontkit.create(Buffer.from(interBase64,'base64'));
+  const character = String.fromCodePoint(inter.characterSet.find((point:number)=>point>1024 && !heading.characterSet.includes(point))!);
+  const text = '1 Client '+character;
+  const pdf = await PDFDocument.load(await renderAgreementPacket({} as Env,[document('sow',text)],[{}]));
+  expect(extract(pdf)).toContain('Client '+character);
+});
