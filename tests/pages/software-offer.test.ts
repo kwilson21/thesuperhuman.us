@@ -434,7 +434,10 @@ it('renders one signing page, returning details, waiting and both-signed actions
     sql.exec("UPDATE software_agreements SET status='executed'");
     html = await render();
     expect(html).toContain('Signed by both of you.');
-    expect(html).toContain('Open your project page');
+    expect(html).not.toContain('Open your project page');
+    expect(html).toContain("I'll email you the link to your project page when work starts.");
+    sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('r','current',?,'standard','now','now','now','owner','now','now')").run(JSON.stringify(terms));
+    html=await render();expect(html).toContain('Open your project page');
     sql.exec("INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,created_by,created_at,updated_at) VALUES('signing-deposit','r','current',0,'deposit',120000,7,'open','https://example.com/deposit','owner','now','now')");
     html=await render();expect(html).toContain('Pay the deposit ↗');expect(html).toContain('https://example.com/deposit');
   } finally { sql.close(); }
@@ -521,6 +524,30 @@ it('reads immutable agreed fees, dates and complete legal text without enabling 
     html=await render();expect(html).not.toMatch(/Exact MSA|Exact SOW|Synthetic browser environment|Download complete signed agreement packet/);expect(html).toContain('retained website agreement is unavailable here');
     sql.exec("UPDATE owner_requests SET email='alex@example.com' WHERE id='r'; UPDATE audio_client_sessions SET email='alex@example.com'; UPDATE software_agreements SET archive_closed_at='now' WHERE id='sow'");
     html=await render();expect(html).not.toMatch(/Exact MSA|Exact SOW|Synthetic browser environment/);expect(html).toContain('retained website agreement is unavailable here');expect(html).not.toContain('signed outside the website');
+  } finally {sql.close();}
+});
+
+it('masks the recipient on every unauthenticated email receipt', async () => {
+  const {sql,db}=await fixture();
+  try {
+    sql.prepare("INSERT INTO software_agreement_templates VALUES('msa','msa',1,'Template',?,1,'now','owner')").run('a'.repeat(64));
+    sql.exec("UPDATE software_signing_settings SET software_signing_enabled=1; UPDATE software_offers SET msa_template_id='msa',recipient_email_snapshot='alex@example.com' WHERE id='current'");
+    const container=await AstroContainer.create();
+    const html=await container.renderToString(signPage,{params:{token},request:new Request(`https://thesuperhuman.us/offer/${token}/sign?email=sent`),locals:{runtime:{env:{MUSIC_DB:db}}}} as any);
+    expect(html).toContain('I sent a link to a•••@example.com.');
+    expect(html).not.toContain('alex@example.com');
+  } finally {sql.close();}
+});
+
+it('renders a quiet Remove control beside each unsent attachment',async()=>{
+  const {sql,db}=await fixture();
+  try {
+    sql.exec('UPDATE software_signing_settings SET software_signing_enabled=1');
+    const attachment={filename:'Draft.pdf',version:'1',date:'2026-10-01',key:'agreements/attachments/draft.pdf'};
+    sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE status='draft'").run(JSON.stringify({attachments:[attachment]}));
+    const offers=(await db.prepare('SELECT * FROM software_offers').all()).results;
+    const html=await (await AstroContainer.create()).renderToString(editor,{props:{requestId:'r',email:'alex@example.com',offers},locals:{runtime:{env:{MUSIC_DB:db}}}} as any);
+    expect(html).toMatch(/Draft.pdf[\s\S]*class="studio-quiet"[^>]*data-remove-attachment[^>]*>Remove<\/button>/);
   } finally {sql.close();}
 });
 

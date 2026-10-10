@@ -27,6 +27,14 @@ export function abandonUnsignedAgreementReviews(db: D1Database, requestId: strin
     )
     .bind(at, at, new Date(Date.parse(at) + 90 * 86400000).toISOString(), requestId);
 }
+export function retireRequestSigning(db: D1Database, requestId: string, at: string) {
+  return [
+    abandonUnsignedAgreementReviews(db,requestId,at),
+    db.prepare('DELETE FROM software_agreement_drafts WHERE offer_id IN (SELECT id FROM software_offers WHERE request_id=?)').bind(requestId),
+    db.prepare('UPDATE software_agreement_sessions SET revoked_at=? WHERE offer_id IN (SELECT id FROM software_offers WHERE request_id=?) AND revoked_at IS NULL').bind(at,requestId),
+    db.prepare('UPDATE software_agreement_links SET used_at=? WHERE offer_id IN (SELECT id FROM software_offers WHERE request_id=?) AND used_at IS NULL').bind(at,requestId),
+  ];
+}
 export type Agreement = {
   id: string;
   kind: 'msa' | 'sow';

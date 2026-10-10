@@ -5,7 +5,7 @@ import {validateAgreementDetails} from '~/lib/agreement-fields';
 import AgreementLayout from '~/layouts/AgreementLayout.astro';
 import { getLinkedOffer, offerTermsSchema, formatUSD, offerTotal } from '~/lib/software-offers';
 import { getOwnerRequest } from '~/lib/owner-requests';
-import { agreementSession, signingEnabled } from '~/lib/agreement-access';
+import { agreementSession, signingEnabled, maskedAgreementEmail } from '~/lib/agreement-access';
 import { offerAgreements } from '~/lib/software-agreements';
 import { consentText, intentText, agreementVersionLabel } from '~/lib/agreement-fields';
 import { businessTypes, states, loadAgreementDraft, prefillAgreementDraft } from '~/lib/agreement-draft';
@@ -23,7 +23,8 @@ const draft=session && request ? await loadAgreementDraft(db!,offer!.id,session.
 const sameAsPrevious=Boolean(previous && draft && previous.legal_name===draft.legal_name && previous.entity_type===draft.entity_type && previous.jurisdiction===(draft.state==='Outside the US'?draft.country:draft.state) && previous.business_address===draft.business_address);
 const artifact=sow?.status==='executed' ? await db!.prepare('SELECT status FROM software_agreement_artifacts WHERE agreement_id=?').bind(sow.id).first<{status:string}>() : null;
 const invoice=sow?.status==='executed' ? await db!.prepare("SELECT hosted_invoice_url FROM software_invoices WHERE offer_id=? AND kind='deposit' AND status='open' AND hosted_invoice_url IS NOT NULL ORDER BY milestone_index LIMIT 1").bind(offer!.id).first<{hosted_invoice_url:string}>() : null;
-const recipient=offer?.recipient_email_snapshot ?? '';
+const recipient=offer?.recipient_email_snapshot ? (session ? offer.recipient_email_snapshot : maskedAgreementEmail(offer.recipient_email_snapshot)) : '';
+const project=sow?.status==='executed' ? await db!.prepare('SELECT 1 FROM software_projects WHERE offer_id=?').bind(offer!.id).first() : null;
 const readyDocs=docs.filter(d=>d.status==='review' && d.review_session_hash===session?.token_hash);
 if(!offer?.msa_template_id) Astro.response.status=404;
 ---
@@ -39,7 +40,7 @@ if(!offer?.msa_template_id) Astro.response.status=404;
   <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </> : signed ? <>
   <h1 class="page-title">{sow.status==='executed'?'Signed by both of you.':'Signed. Over to Kazon.'}</h1>
-  {sow.status==='executed'? <><p class="page-lede">Your signed copy will arrive by email.</p><a class="studio-button" href={invoice?.hosted_invoice_url ?? `/studio/software/${offer.request_id}`}>{invoice?'Pay the deposit ↗':'Open your project page'}</a>{artifact?.status==='ready' ? <p><a href={`/api/agreements/${sow.id}/file`}>Download the signed PDF</a></p> : <p>Your signed PDF is being prepared. Your signatures are saved.</p>}</> : <><p class="page-lede">Kazon countersigns next. You'll get the signed PDF by email as soon as he does.</p><ol class="signing-progress"><li>You signed ✓</li><li>Kazon countersigns</li><li>{terms!.paymentMode==='standard'?'Deposit invoice':'Your project starts'}</li></ol></>}
+  {sow.status==='executed'? <><p class="page-lede">Your signed copy will arrive by email.</p><>{invoice || project ? <a class="studio-button" href={invoice?.hosted_invoice_url ?? `/studio/software/${offer.request_id}`}>{invoice?'Pay the deposit ↗':'Open your project page'}</a> : <p>I'll email you the link to your project page when work starts.</p>}</>{artifact?.status==='ready' ? <p><a href={`/api/agreements/${sow.id}/file`}>Download the signed PDF</a></p> : <p>Your signed PDF is being prepared. Your signatures are saved.</p>}</> : <><p class="page-lede">Kazon countersigns next. You'll get the signed PDF by email as soon as he does.</p><ol class="signing-progress"><li>You signed ✓</li><li>Kazon countersigns</li><li>{terms!.paymentMode==='standard'?'Deposit invoice':'Your project starts'}</li></ol></>}
 </> : draft && terms && <>
   <p class="page-kicker">{terms.outcome}{draft.legal_name && ` · ${draft.legal_name}`}</p>
   <h1 class="page-title">Ready to sign.</h1><p class="page-lede">Here's what we agreed. Check your details, make one choice, and sign. It takes about two minutes.</p>

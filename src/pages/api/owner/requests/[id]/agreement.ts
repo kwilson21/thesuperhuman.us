@@ -53,6 +53,10 @@ const schema = z.discriminatedUnion('action', [
     confirmed: z.literal(true),
   }),
 ]);
+const depositBlockMessage = 'Void or refund the deposit invoice first.';
+const openMsaMessage = 'An open offer uses this agreement. Withdraw that offer first.';
+const depositUse = "SELECT 1 FROM software_invoices WHERE offer_id=? AND milestone_index=0 AND kind='deposit' AND (status IN ('creating','open','payment_failed','uncollectible') OR (status='paid' AND refunded_at IS NULL))";
+const msaUse = "SELECT 1 FROM software_offers o JOIN owner_requests r ON r.id=o.request_id WHERE o.reused_msa_id=? AND o.status IN ('draft','sent') AND r.status NOT IN ('resolved','withdrawn') AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id)";
 const post: APIRoute = async ({ request, locals, params }) => {
   const db = locals.runtime.env.MUSIC_DB;
   if (!locals.owner) return agreementJson({ ok: false }, 403);
@@ -108,7 +112,9 @@ const post: APIRoute = async ({ request, locals, params }) => {
       const pending = (await offerAgreements(db, offer.id)).filter(d => d.status === 'client_signed');
       if (!pending.length || signatureIds(pending.map(d => ({ id: d.id, hash: d.text_sha256 }))) !== signatureIds(c.documents))
         return agreementJson({ ok: false, error: 'Review the complete pending signing action.' }, 409);
+      if (await db.prepare(depositUse).bind(offer.id).first()) return agreementJson({ok:false,error:depositBlockMessage},409);
       await db.batch([
+        softwareGuard(db,`SELECT 1 WHERE NOT EXISTS(${depositUse})`,[offer.id]),
         ...c.documents.flatMap(d => [
           softwareGuard(db, "SELECT 1 FROM software_agreements WHERE id=? AND request_id=? AND offer_id=? AND text_sha256=? AND status='client_signed'", [d.id, params.id!, offer.id, d.hash]),
           db.prepare("UPDATE software_agreements SET status='abandoned',abandoned_at=?,abandoned_reason=? WHERE id=?").bind(at, c.reason, d.id),
@@ -118,6 +124,7 @@ const post: APIRoute = async ({ request, locals, params }) => {
         db.prepare('UPDATE software_offer_links SET revoked_at=? WHERE request_id=? AND revoked_at IS NULL').bind(at, params.id),
         db.prepare('UPDATE software_agreement_sessions SET revoked_at=? WHERE offer_id=? AND revoked_at IS NULL').bind(at, offer.id),
         db.prepare('UPDATE software_agreement_links SET used_at=? WHERE offer_id=? AND used_at IS NULL').bind(at, offer.id),
+        db.prepare('DELETE FROM software_agreement_drafts WHERE offer_id=?').bind(offer.id),
       ]);
     } else {
       const agreement = await db
@@ -194,12 +201,14 @@ const post: APIRoute = async ({ request, locals, params }) => {
         const end = new Date(`${c.ended_on}T12:00:00Z`);
         if (end.toISOString().slice(0, 10) !== c.ended_on) throw new Error('Invalid date.');
         end.setUTCFullYear(end.getUTCFullYear() + 10);
-        await db
-          .prepare(
+        if (agreement.kind==='msa' && await db.prepare(msaUse).bind(c.agreement_id).first()) return agreementJson({ok:false,error:openMsaMessage},409);
+        await db.batch([
+          ...(agreement.kind==='msa' ? [softwareGuard(db,`SELECT 1 WHERE NOT EXISTS(${msaUse})`,[c.agreement_id])] : []),
+          db.prepare(
             "UPDATE software_agreements SET ended_at=?,retain_until=?,terminated_at=CASE WHEN kind='msa' THEN ? ELSE terminated_at END WHERE id=? AND status IN ('executed','abandoned')",
           )
-          .bind(c.ended_on, end.toISOString(), c.ended_on, c.agreement_id)
-          .run();
+          .bind(c.ended_on, end.toISOString(), c.ended_on, c.agreement_id),
+        ]);
       }
     }
     return nativeAgreementResponse(
@@ -208,6 +217,8 @@ const post: APIRoute = async ({ request, locals, params }) => {
       `/owner/requests/${params.id}`,
     );
   } catch {
+    if (c.action==='abandon' && offer && await db.prepare(depositUse).bind(offer.id).first()) return agreementJson({ok:false,error:depositBlockMessage},409);
+    if (c.action==='end' && await db.prepare(msaUse).bind(c.agreement_id).first()) return agreementJson({ok:false,error:openMsaMessage},409);
     return agreementJson(
       {
         ok: false,

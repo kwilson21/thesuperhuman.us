@@ -6,11 +6,12 @@ import {
 } from "./software-offers";
 import {
   normalizeClientEmail,
-  takeStudioAllowance,
+  reserveStudioAllowance,
 } from "./audio-client-access";
 import { sendAudioMessage } from "./audio-resend";
 import { escapeHtml } from "./email-template";
 import { verifyTurnstile } from "./turnstile";
+export const maskedAgreementEmail = (email: string) => `${[...email][0]}•••@${email.split('@')[1]}`;
 export const agreementHeaders = {
   "cache-control": "private, no-store",
   "x-robots-tag": "noindex, nofollow",
@@ -135,30 +136,19 @@ export async function issueAgreementLink(
       { ok: false, error: "Complete the security check again." },
       403,
     );
+  const allowances: Awaited<ReturnType<typeof reserveStudioAllowance>>[] = [];
   for (const [scope, value, limit] of [
     [`${purpose}-link-ip`, ip, 20],
     [`${purpose}-link-email`, email, 3],
-  ] as const)
-    if (
-      !(await takeStudioAllowance(
-        db,
-        scope,
-        value,
-        limit,
-        env.AUDIO_CLIENT_CODE_KEY,
-      ))
-    )
-      return agreementJson(
-        {
-          ok: false,
-          error: "Please wait a few minutes before requesting another link.",
-        },
-        429,
-      );
+  ] as const) {
+    const allowance = await reserveStudioAllowance(db,scope,value,limit,env.AUDIO_CLIENT_CODE_KEY);
+    allowances.push(allowance);
+    if (!allowance.allowed) return agreementJson({ok:false,error:'Please wait a few minutes before requesting another link.'},429);
+  }
   const receipt = {
     ok: true,
     message: token
-      ? `I sent a link to ${email}. Tap it on any device to open your agreement.`
+      ? `I sent a link to ${(await agreementSession(db,request,"agreement",offer!.id)) ? email : maskedAgreementEmail(email)}. Tap it on any device to open your agreement.`
       : "If an agreement is available, a link is on its way.",
   };
   if (
@@ -254,11 +244,17 @@ export async function issueAgreementLink(
       html: `<p>${escapeHtml(greeting)}</p><p>${escapeHtml(intro)}</p><p><a href="${escapeHtml(url.href)}">Review and sign</a></p><p>${escapeHtml(expiry)}</p><p>Kazon</p>`,
     },
   });
-  if (!sent.ok && !sent.uncertain)
-    await db
-      .prepare("UPDATE software_agreement_links SET used_at=? WHERE id=?")
-      .bind(at.toISOString(), id)
-      .run();
+  if (!sent.ok && !sent.uncertain) {
+    if (token) {
+      await db.batch([
+        db.prepare('DELETE FROM software_agreement_sessions WHERE link_id=?').bind(id),
+        db.prepare('DELETE FROM software_agreement_links WHERE id=?').bind(id),
+        ...allowances.flatMap(allowance=>[db.prepare('DELETE FROM audio_client_allowances WHERE key=? AND window_start=? AND uses=1').bind(allowance.key,allowance.windowStart),db.prepare('UPDATE audio_client_allowances SET uses=uses-1 WHERE key=? AND window_start=? AND uses>1').bind(allowance.key,allowance.windowStart)]),
+      ]);
+      return agreementJson({ok:false,error:"That email didn't go through. Please try again."},502);
+    }
+    await db.prepare('UPDATE software_agreement_links SET used_at=? WHERE id=?').bind(at.toISOString(),id).run();
+  }
   return agreementJson(receipt);
 }
 export const liveSigningGuard = (

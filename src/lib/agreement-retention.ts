@@ -99,9 +99,8 @@ export async function previewAgreementRetention(
   // are excluded here and checked again immediately before deletion.
   const orphan_attachments: RetentionManifest['orphan_attachments'] = [];
   const orphanCutoff = new Date(now.getTime() - 30 * 86400000);
-  let attachmentCursor: string | undefined;
-  do {
-    const listed = await bucket.list({ prefix: 'agreements/attachments/', cursor: attachmentCursor });
+  {
+    const listed = await bucket.list({ prefix: 'agreements/attachments/', limit: 100 });
     for (const object of listed.objects) {
       if (orphan_attachments.length >= 100) break;
       const uploaded = object.uploaded;
@@ -120,8 +119,8 @@ export async function previewAgreementRetention(
         uploaded_at: uploaded.toISOString(),
       });
     }
-    attachmentCursor = listed.truncated && orphan_attachments.length < 100 ? listed.cursor : undefined;
-  } while (attachmentCursor);
+    // shortcut: inspect one bounded page per preview; add a persisted cursor if the archive needs complete orphan discovery.
+  }
   orphan_attachments.sort((a, b) => a.key.localeCompare(b.key));
   return { version: 1, created_at: now.toISOString(), binding, agreements, unattached_attachments, orphan_attachments };
 }

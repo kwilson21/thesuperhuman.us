@@ -65,7 +65,7 @@ export async function getLinkedOffer(db: D1Database, token: string) {
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
   return db.prepare(`SELECT o.* FROM software_offers o JOIN software_offer_links l ON l.request_id=o.request_id
     JOIN owner_requests r ON r.id=o.request_id WHERE l.token_hash=? AND l.revoked_at IS NULL AND o.status='sent'
-    AND r.kind='software' AND r.status<>'withdrawn' AND r.email<>''`).bind(await hashOfferToken(token)).first<SoftwareOffer>();
+    AND r.kind='software' AND r.status NOT IN ('withdrawn','resolved') AND r.email<>''`).bind(await hashOfferToken(token)).first<SoftwareOffer>();
 }
 
 export const offerSendingMessage = 'An offer is still being sent. Try again in a moment.';

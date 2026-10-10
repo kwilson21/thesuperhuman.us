@@ -19,7 +19,7 @@ export function setupSoftwareOffers() {
     let parsed: unknown;
     try { parsed = await response.json(); }
     catch { throw new Error(response.status === 401 || response.status === 403 ? 'Your owner session ended. Reload the page to sign in again.' : 'Something went wrong. Nothing was saved. Try again.'); }
-    const result = parsed as { message?: string; errors?: Record<string,string>; version: number; updatedAt: string; sentAt?: string; linkCreatedAt: string; link: string; emailSent: boolean; uncertain?: boolean; copySent?: boolean };
+    const result = parsed as { message?: string; errors?: Record<string,string>; version: number; updatedAt: string; sentAt?: string; linkCreatedAt: string; link: string; emailSent: boolean; uncertain?: boolean; copySent?: boolean; attachmentCleanupPending?: boolean };
     if (!response.ok) {
       if (response.status === 409 && (body as { action?: string }).action === 'draft' && 'updatedAt' in result) {
         const editor = document.querySelector<HTMLElement>('[data-software-editor]');
@@ -179,9 +179,11 @@ export function setupSoftwareOffers() {
   form.addEventListener('submit', async event => {
     event.preventDefault(); const button = form.querySelector<HTMLButtonElement>('[type="submit"]')!; button.disabled = true;
     const revision = inputRevision;
-    try { const result = await post(endpoint, { action: 'draft', terms: terms(), ...agreementDetails(form), expectedUpdatedAt: root.dataset.updated || null });
+    const removedAttachmentKeys:string[]=JSON.parse(attachmentBlock?.dataset.removedKeys ?? '[]');
+    try { const result = await post(endpoint, { action: 'draft', terms: terms(), ...agreementDetails(form), removedAttachmentKeys, expectedUpdatedAt: root.dataset.updated || null });
+      if (attachmentBlock && !result.attachmentCleanupPending) attachmentBlock.dataset.removedKeys=JSON.stringify((JSON.parse(attachmentBlock.dataset.removedKeys??'[]') as string[]).filter(key=>!removedAttachmentKeys.includes(key)));
       root.dataset.updated = result.updatedAt; root.dataset.version = String(result.version); saved = true; changed = inputRevision !== revision;
-      root.querySelector<HTMLElement>('[data-offer-state]')!.textContent = root.dataset.sentVersion ? `v${root.dataset.sentVersion} sent ${root.dataset.sentDate} · Draft v${result.version} in progress` : `Draft v${result.version} · Not sent`; status.textContent = changed ? 'Draft saved. Your newer edits still need saving.' : 'Draft saved. Nothing has been sent.'; updateControls();
+      root.querySelector<HTMLElement>('[data-offer-state]')!.textContent = root.dataset.sentVersion ? `v${root.dataset.sentVersion} sent ${root.dataset.sentDate} · Draft v${result.version} in progress` : `Draft v${result.version} · Not sent`; status.textContent = result.attachmentCleanupPending ? 'Draft saved. Save again to retry attachment cleanup.' : changed ? 'Draft saved. Your newer edits still need saving.' : 'Draft saved. Nothing has been sent.'; updateControls();
     } catch (error) { status.textContent = (error as Error).message; } finally { button.disabled = false; }
   });
   send.addEventListener('click', async () => {
@@ -232,11 +234,20 @@ function agreementDetails(form:HTMLFormElement) {
  return {agreementDetails:details,reusedMsaId:new FormData(form).get('reusedMsaId')||null,confirmMsaReuse:new FormData(form).has('confirmMsaReuse')};
 }
 
-function setupAgreementAttachments(block:HTMLElement) {block.querySelector('[data-upload-attachment]')!.addEventListener('click',async()=>{
+export function setupAgreementAttachments(block:HTMLElement) {
+ block.addEventListener('click',event=>{
+   const button=(event.target as HTMLElement).closest<HTMLButtonElement>('[data-remove-attachment]');
+   if(!button)return;
+   const field=block.querySelector<HTMLInputElement>('[name="agreement.attachments"]')!;
+   field.value=JSON.stringify(JSON.parse(field.value).filter((attachment:{key:string})=>attachment.key!==button.dataset.removeAttachment));
+   block.dataset.removedKeys=JSON.stringify([...new Set([...JSON.parse(block.dataset.removedKeys??'[]'),button.dataset.removeAttachment])]);
+   button.closest('li')!.remove();field.dispatchEvent(new Event('input',{bubbles:true}));
+ });
+ block.querySelector('[data-upload-attachment]')!.addEventListener('click',async()=>{
  const file=block.querySelector<HTMLInputElement>('[data-attachment-file]')!.files?.[0],version=block.querySelector<HTMLInputElement>('[data-attachment-version]')!.value,date=block.querySelector<HTMLInputElement>('[data-attachment-date]')!.value;
  const field=block.querySelector<HTMLInputElement>('[name="agreement.attachments"]')!,attachments=JSON.parse(field.value),status=block.closest('[data-software-editor]')!.querySelector<HTMLElement>('[data-software-status]')!;
  if(!file||!version||!date||attachments.length>=5){status.textContent='Choose a PDF, version and date. Up to five attachments.';return;}
- try{const query=new URLSearchParams({filename:file.name,version,date}),response=await fetch(`${block.dataset.uploadEndpoint}?${query}`,{method:'PUT',headers:{'content-type':'application/pdf'},body:file}),result=await response.json() as {error:string;attachment:{filename:string;version:string;date:string}};if(!response.ok)throw new Error(result.error);attachments.push(result.attachment);field.value=JSON.stringify(attachments);field.dispatchEvent(new Event('input',{bubbles:true}));const item=document.createElement('li');item.textContent=`${result.attachment.filename} · ${version} · ${date}`;block.querySelector('[data-attachment-list]')!.appendChild(item);status.textContent='Attachment saved. Save the offer draft to include it.';}catch(e){status.textContent=(e as Error).message;}
+ try{const query=new URLSearchParams({filename:file.name,version,date}),response=await fetch(`${block.dataset.uploadEndpoint}?${query}`,{method:'PUT',headers:{'content-type':'application/pdf'},body:file}),result=await response.json() as {error:string;attachment:{filename:string;version:string;date:string;key:string}};if(!response.ok)throw new Error(result.error);attachments.push(result.attachment);field.value=JSON.stringify(attachments);field.dispatchEvent(new Event('input',{bubbles:true}));const item=document.createElement('li');item.textContent=`${result.attachment.filename} · ${version} · ${date} `;const remove=document.createElement('button');remove.type='button';remove.className='studio-quiet';remove.dataset.removeAttachment=result.attachment.key;remove.textContent='Remove';item.appendChild(remove);block.querySelector('[data-attachment-list]')!.appendChild(item);status.textContent='Attachment saved. Save the offer draft to include it.';}catch(e){status.textContent=(e as Error).message;}
 });
 
 }

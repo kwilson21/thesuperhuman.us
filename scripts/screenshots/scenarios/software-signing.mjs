@@ -1,3 +1,4 @@
+import { PDFDocument } from 'pdf-lib';
 import { createHash } from 'node:crypto';
 import { prepareAgreedTerms } from '../agreed-terms.mjs';
 import { BARE_LINK_LANDINGS } from '../config.mjs';
@@ -128,6 +129,26 @@ export default {
       { owner: true },
     );
     sql(`INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES('screenshot-incomplete-draft',${quote(id)},2,'draft',${quote(JSON.stringify(terms))},${quote(at)},${quote(at)});`);
+    const attachmentPdf=await PDFDocument.create();attachmentPdf.addPage();
+    const attachmentBytes=Buffer.from(await attachmentPdf.save());
+    for (const remove of [false,true]) {
+      await shot(remove?'attachment-removed':'attachment-remove-control',remove?'Removed draft attachment ready to save':'Draft attachment with Remove control',`/owner/requests/${id}`,{
+        owner:true,
+        prepare:async page=>{
+          const editor=page.locator('[data-software-editor]'),block=editor.locator('[data-agreement-attachments]');
+          await block.locator('[data-attachment-file]').setInputFiles({name:'Fictional reference.pdf',mimeType:'application/pdf',buffer:attachmentBytes});
+          await block.locator('[data-attachment-version]').fill('1');
+          await block.locator('[data-attachment-date]').fill('2026-10-01');
+          await block.locator('[data-upload-attachment]').click();
+          await editor.locator('[data-software-status]').filter({hasText:'Attachment saved.'}).waitFor();
+          if(remove){
+            for(const button of await block.locator('[data-remove-attachment]').all())await button.click();
+          }
+          await editor.locator('[type=submit]').click();
+          await editor.locator('[data-software-status]').filter({hasText:'Draft saved.'}).waitFor();
+        },
+      });
+    }
     await shot('missing-send-field','Missing agreement details prevent sending',`/owner/requests/${id}`,{
       owner:true,
       expectedResponses: [{ path: `/api/owner/requests/${id}/software`, status: 400 }],
@@ -145,7 +166,19 @@ export default {
       await shot(name, 'Expired one-time link landing', path, { status });
     }
     await shot('offer', 'Offer review and signing link', `/offer/${token}`);
-    await shot('check-email', 'Check your email and resend', `/offer/${token}/sign?email=sent`);
+    await shot('check-email', 'Check your email and resend', `/offer/${token}/sign?email=sent`,{prepare:async page=>{
+      const receipt=await page.locator('.page-lede').innerText();
+      if(!receipt.includes('s•••@example.com') || receipt.includes('signer@example.com'))throw new Error('Unauthenticated receipt must mask the recipient.');
+    }});
+    await shot('email-rejected','Definite link email rejection allows retry',`/offer/${token}/sign`,{
+      expectedResponses:[{path:`/api/offer/${token}/link`,status:502}],
+      prepare:async page=>{
+        await page.route(`**/api/offer/${token}/link`,route=>route.fulfill({status:502,contentType:'application/json',body:JSON.stringify({ok:false,error:"That email didn't go through. Please try again."})}));
+        await page.locator('[data-agreement-link] button').click();
+        await page.locator('[role=status]').filter({hasText:"That email didn't go through. Please try again."}).waitFor();
+        if(await page.locator('[data-agreement-link] button').isDisabled())throw new Error('Definite rejection must permit immediate retry.');
+      },
+    });
     async function captureLinks(purpose) {
       const archive = purpose === 'archive';
       const route = archive ? '/agreements/verify' : `/offer/${token}/verify`;
@@ -229,7 +262,10 @@ export default {
       'executed',
       'Both signatures saved and copy preparation status',
       `/offer/${token}/sign`,
-      { cookie },
+      { cookie,prepare:async page=>{
+        if(await page.getByRole('link',{name:'Open your project page'}).count())throw new Error('Project link must wait for project creation.');
+        await page.getByText("I'll email you the link to your project page when work starts.").waitFor();
+      } },
     );
     sql(
       `UPDATE software_agreement_artifacts SET status='failed',error_code='storage' WHERE agreement_id=${quote(sow.id)};UPDATE software_agreement_deliveries SET status='failed' WHERE agreement_id=${quote(sow.id)};`,

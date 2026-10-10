@@ -1560,3 +1560,121 @@ it.each(['data_retention','handoff_access'])('requires a complete day count in c
   expect(()=>validateAgreementDetails(input,terms as any)).toThrow('State the agreed');
   expect(()=>validateAgreementDetails({...input,[field]:'Keep access for 30 days.'},terms as any)).not.toThrow();
 });
+
+it('masks link receipts and refunds definite token-scoped email rejection without cooldown', async () => {
+  sql.exec('DELETE FROM software_agreement_sessions');
+  vi.stubGlobal('fetch',vi.fn(async (url:string)=>url.includes('turnstile') ? Response.json({success:true}) : Response.json({message:'Rejected'},{status:422})));
+  for(let i=0;i<4;i++) {
+    const response=await issueAgreementLink(env,request(),{turnstileToken:'test'},token);
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({error:"That email didn't go through. Please try again."});
+    expect(sql.prepare('SELECT COALESCE(sum(uses),0) n FROM audio_client_allowances').get().n).toBe(0);
+    expect(sql.prepare("SELECT count(*) n FROM software_agreement_links WHERE id<>'challenge'").get().n).toBe(0);
+  }
+  vi.stubGlobal('fetch',vi.fn(async()=>Response.json({success:true})));
+  const response=await issueAgreementLink(env,request(),{turnstileToken:'test'},token);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({message:'I sent a link to c•••@example.com. Tap it on any device to open your agreement.'});
+});
+it('keeps definite archive send rejection generic', async () => {
+  await signed();
+  sql.exec("UPDATE software_agreements SET status='executed'");
+  vi.stubGlobal('fetch',vi.fn(async (url:string)=>url.includes('turnstile') ? Response.json({success:true}) : Response.json({message:'Rejected'},{status:422})));
+  const response=await issueAgreementLink(env,request(),{turnstileToken:'test',email:'client@example.com'});
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({message:'If an agreement is available, a link is on its way.'});
+});
+it('verifies the attachment bytes against the offer hash before client download', async () => {
+  const {GET}=await import('~/pages/api/agreements/attachments/[id]');
+  const id=crypto.randomUUID(),key=`agreements/attachments/${id}.pdf`,bytes=new TextEncoder().encode('%PDF-original'),sha=await hashBytes(bytes);
+  sql.prepare('INSERT INTO software_agreement_attachments VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,'r','File.pdf','1','2026-10-01',key,sha,bytes.length,'now','owner');
+  sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='o'").run(JSON.stringify({...details,attachments:[{key,sha256:sha}]}));
+  bucketData.set(key,bytes);
+  const call=()=>GET({locals:{runtime:{env}},request:request(),params:{id}} as never);
+  expect(new Uint8Array(await (await call()).arrayBuffer())).toEqual(bytes);
+  bucketData.set(key,new TextEncoder().encode('%PDF-altered'));
+  const refused=await call();expect(refused.status).toBe(503);
+  expect(await refused.text()).toBe("This file couldn't be verified, so I've held it back. Please let me know before you sign.");
+});
+
+it.each(['resolve','withdraw'])('retires unsigned signing atomically when request is closed (%s)',async action=>{
+  const {changeOwnerRequest}=await import('~/lib/owner-requests');
+  sql.exec("UPDATE software_offer_links SET created_at='2000-01-01'");
+  const current=await offer();await reviewAgreements(db,current!, (await agreementSession(db,request()))!,client);
+  sql.prepare("INSERT INTO software_agreement_drafts VALUES('o','client@example.com',?,'now')").run(JSON.stringify({legal_name:'Private'}));
+  await changeOwnerRequest(db,{id:'r',action:action as 'resolve'|'withdraw',actor:'owner@example.com'});
+  expect(sql.prepare("SELECT count(*) n FROM software_agreements WHERE status='review'").get().n).toBe(0);
+  expect(sql.prepare('SELECT count(*) n FROM software_agreement_drafts').get().n).toBe(0);
+  expect(sql.prepare('SELECT count(*) n FROM software_agreement_sessions WHERE revoked_at IS NULL').get().n).toBe(0);
+  expect(sql.prepare('SELECT count(*) n FROM software_agreement_links WHERE used_at IS NULL').get().n).toBe(0);
+});
+it.each(['revoke','replace'])('deletes signing drafts when an offer stops being signable (%s)',async action=>{
+  const {POST}=await import('~/pages/api/owner/requests/[id]/software');
+  sql.exec("UPDATE software_offer_links SET created_at='2000-01-01'");
+  sql.prepare("INSERT INTO software_agreement_drafts VALUES('o','client@example.com',?,'now')").run(JSON.stringify({legal_name:'Private'}));
+  if(action==='replace'){
+    sql.prepare("INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES('draft','r',2,'draft',?,'now','now')").run(JSON.stringify(terms));
+    sql.exec('UPDATE software_signing_settings SET software_signing_enabled=0');
+  }
+  const body=action==='revoke'?{action:'revoke',expectedLinkCreatedAt:'2000-01-01'}:{action:'send',version:2,expectedUpdatedAt:'now'};
+  const response=await POST({params:{id:'r'},request:new Request('https://example.com/api/owner/requests/r/software',{method:'POST',headers:{origin:'https://example.com','content-type':'application/json'},body:JSON.stringify(body)}),locals:{owner:{email:'owner@example.com'},runtime:{env}}} as never);
+  expect(response.status).toBe(200);
+  expect(sql.prepare('SELECT count(*) n FROM software_agreement_drafts').get().n).toBe(0);
+});
+it.each(['creating','open','payment_failed','uncollectible','paid'])('blocks pending signing abandonment with an unrefunded %s deposit',async status=>{
+  const result=await signed();const {POST}=await import('~/pages/api/owner/requests/[id]/agreement');
+  sql.prepare("INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,created_by,created_at,updated_at) VALUES('deposit','r','o',0,'deposit',50,7,?,'owner','now','now')").run(status);
+  const call=()=>POST({params:{id:'r'},request:new Request('https://example.com/api/owner/requests/r/agreement',{method:'POST',headers:{origin:'https://example.com','content-type':'application/json'},body:JSON.stringify({action:'abandon',documents:result.documents,reason:'Cancelled',confirmed:true})}),locals:{owner:{email:'owner@example.com'},runtime:{env}}} as never);
+  const response=await call();expect(response.status).toBe(409);expect(await response.json()).toMatchObject({error:'Void or refund the deposit invoice first.'});
+  expect((await offer())!.status).toBe('sent');expect((await offerAgreements(db,'o')).every(a=>a.status==='client_signed')).toBe(true);
+  sql.exec(status==='paid' ? "UPDATE software_invoices SET refunded_at='now'" : "UPDATE software_invoices SET status='void'");expect((await call()).status).toBe(200);
+});
+it.each(['draft','sent'])('refuses MSA termination while a live %s offer reuses it',async status=>{
+  const result=await signed();await countersignAgreements(db,(await offer())!,result.documents,'Example Owner','owner@example.com',request());
+  const msa=(await offerAgreements(db,'o')).find(a=>a.kind==='msa')!;
+  sql.exec("INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES('r2','software','client@example.com','Tool','reviewed','now','now')");
+  sql.prepare("INSERT INTO software_offers(id,request_id,version,status,terms_json,reused_msa_id,created_at,updated_at) VALUES('reuse','r2',1,?,'{}',?,'now','now')").run(status,msa.id);
+  const {POST}=await import('~/pages/api/owner/requests/[id]/agreement');
+  const call=()=>POST({params:{id:'r'},request:new Request('https://example.com/api/owner/requests/r/agreement',{method:'POST',headers:{origin:'https://example.com','content-type':'application/json'},body:JSON.stringify({action:'end',agreement_id:msa.id,ended_on:projectToday(),confirmed:true})}),locals:{owner:{email:'owner@example.com'},runtime:{env}}} as never);
+  const response=await call();expect(response.status).toBe(409);expect(await response.json()).toMatchObject({error:'An open offer uses this agreement. Withdraw that offer first.'});
+  expect(sql.prepare('SELECT terminated_at FROM software_agreements WHERE id=?').get(msa.id).terminated_at).toBeNull();
+  sql.exec("UPDATE software_offers SET status='withdrawn' WHERE id='reuse'");expect((await call()).status).toBe(200);
+});
+it('bounds the attachment scan even when the archive has nothing eligible',async()=>{
+  const {previewAgreementRetention}=await import('~/lib/agreement-retention');
+  const list=vi.fn(async()=>{if(list.mock.calls.length>1)throw new Error('Unbounded scan');return {objects:[],truncated:true,cursor:'next'};});env.AUDIO.list=list as any;
+  await previewAgreementRetention(db,env.AUDIO,'local');expect(list).toHaveBeenCalledTimes(1);
+  expect(list).toHaveBeenCalledWith(expect.objectContaining({prefix:'agreements/attachments/',limit:100}));
+});
+
+it.each([false,true])('removes draft attachments and preserves objects referenced by sent offers (%s)',async sentReference=>{
+  const {POST}=await import('~/pages/api/owner/requests/[id]/software');
+  const id=crypto.randomUUID(),key=`agreements/attachments/${id}.pdf`,bytes=new TextEncoder().encode('%PDF-attachment'),sha=await hashBytes(bytes);
+  const attachment={key,sha256:sha,filename:'File.pdf',version:'1',date:'2026-10-01',bytes:bytes.length};
+  bucketData.set(key,bytes);
+  sql.prepare('INSERT INTO software_agreement_attachments VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,'r','File.pdf','1','2026-10-01',key,sha,bytes.length,'now','owner');
+  if(sentReference)sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='o'").run(JSON.stringify({...details,attachments:[attachment]}));
+  sql.prepare("INSERT INTO software_offers(id,request_id,version,status,terms_json,agreement_details_json,created_at,updated_at) VALUES('draft','r',2,'draft',?,?,'now','now')").run(JSON.stringify(terms),JSON.stringify({...details,attachments:[attachment]}));
+  const response=await POST({params:{id:'r'},request:new Request('https://example.com/api/owner/requests/r/software',{method:'POST',headers:{origin:'https://example.com','content-type':'application/json'},body:JSON.stringify({action:'draft',terms,agreementDetails:{...details,attachments:[]},removedAttachmentKeys:[key],expectedUpdatedAt:'now'})}),locals:{owner:{email:'owner@example.com'},runtime:{env}}} as never);
+  expect(response.status).toBe(200);
+  expect(JSON.parse(sql.prepare("SELECT agreement_details_json FROM software_offers WHERE id='draft'").get().agreement_details_json).attachments).toEqual([]);
+  expect(bucketData.has(key)).toBe(sentReference);
+});
+
+it('saves a valid empty manifest after more than five cumulative attachment removals',async()=>{
+  const {POST}=await import('~/pages/api/owner/requests/[id]/software');
+  const response=await POST({params:{id:'r'},request:new Request('https://example.com/api/owner/requests/r/software',{method:'POST',headers:{origin:'https://example.com','content-type':'application/json'},body:JSON.stringify({action:'draft',terms,agreementDetails:{...details,attachments:[]},removedAttachmentKeys:Array.from({length:6},()=>`agreements/attachments/${crypto.randomUUID()}.pdf`),expectedUpdatedAt:null})}),locals:{owner:{email:'owner@example.com'},runtime:{env}}} as never);
+  expect(response.status).toBe(200);
+});
+
+it('rechecks a newly live deposit inside the abandonment transaction',async()=>{
+  const result=await signed(),{POST}=await import('~/pages/api/owner/requests/[id]/agreement');
+  const batch=db.batch.bind(db);
+  db.batch=async statements=>{
+    sql.exec("INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,created_by,created_at,updated_at) VALUES('racing-deposit','r','o',0,'deposit',50,7,'open','owner','now','now')");
+    return batch(statements);
+  };
+  const response=await POST({params:{id:'r'},request:new Request('https://example.com/api/owner/requests/r/agreement',{method:'POST',headers:{origin:'https://example.com','content-type':'application/json'},body:JSON.stringify({action:'abandon',documents:result.documents,reason:'Cancelled',confirmed:true})}),locals:{owner:{email:'owner@example.com'},runtime:{env}}} as never);
+  expect(response.status).toBe(409);expect(await response.json()).toMatchObject({error:'Void or refund the deposit invoice first.'});
+  expect((await offer())!.status).toBe('sent');expect((await offerAgreements(db,'o')).every(a=>a.status==='client_signed')).toBe(true);
+});
