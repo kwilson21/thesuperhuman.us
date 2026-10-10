@@ -4,6 +4,11 @@
   "main": "./dist/_worker.js/index.js",
   "compatibility_date": "2026-05-14",
   "compatibility_flags": ["nodejs_compat"],
+  "ai": { "binding": "AI" },
+  "ratelimits": [
+    { "name": "BRIEF_SUGGEST_RATE_LIMIT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
+    { "name": "BRIEF_SUGGEST_SITE_LIMIT", "namespace_id": "1002", "simple": { "limit": 120, "period": 60 } }
+  ],
   "assets": {
     "binding": "ASSETS",
     "directory": "./dist"
@@ -17,6 +22,8 @@
   "vars": {
     // Retention manifests are scoped to this AUDIO bucket. Update with its binding.
     "AGREEMENT_RETENTION_BINDING_ID": "AUDIO:superhuman-audio",
+
+    "SOFTWARE_SUGGESTIONS_ENABLED": "true",
     "CONTACT_TO_EMAIL": "kazon.wilson@thesuperhuman.us",
     // Resend sends from the verified subdomain notifs.thesuperhuman.us;
     // the apex thesuperhuman.us is NOT a Resend sending domain.

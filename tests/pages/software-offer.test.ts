@@ -11,13 +11,13 @@ import { beforeAll, afterAll, expect, it, vi } from 'vitest';
 import { hashOfferToken, type OfferTerms } from '~/lib/software-offers';
 import { agreementValues, agreementDetailsSchema } from '~/lib/agreement-fields';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
-let start: any;
+let start: any, privacy: any;
 let linkLanding: any, archiveLanding: any, agreements: any, signPage: any, agreementPanel: any, directory: string, softwarePage: any, composer: any, today: any, page: any, preview: any, editor: any, questions: any, fit: any, panel: any, ownerRequest: any;
 const token = 'a'.repeat(43);
 const terms = { outcome:'Current offer',summary:'A shared view.',milestones:[{ name:'Tracker',deliverables:['Status view'],acceptance:['Add a client.'],feeCents:240000 }],clientInputs:'',exclusions:'',timing:'',paymentMode:'standard' };
 beforeAll(async () => {
   directory = await mkdtemp(resolve('.software-render-'));
-  await build({ entryPoints:{ start:'src/pages/software/start.astro', linkLanding:'src/pages/offer/[token]/verify.astro', archiveLanding:'src/pages/agreements/verify.astro', agreements:'src/pages/owner/agreements.astro', signPage:'src/pages/offer/[token]/sign.astro', agreementPanel:'src/components/owner/SoftwareAgreementPanel.astro', panel:'src/components/owner/SoftwareProjectPanel.astro', ownerRequest:'src/pages/owner/requests/[id].astro', today:'src/pages/owner/index.astro', composer:'src/pages/owner/requests/[id]/update.astro', software:'src/pages/studio/software/[id].astro', client:'src/pages/offer/[token].astro', preview:'src/pages/owner/requests/[id]/offer.astro', editor:'src/components/owner/SoftwareOfferEditor.astro', questions:'src/components/owner/SoftwareQuestions.astro', fit:'src/components/owner/SoftwareFitReview.astro' }, outdir:directory, outExtension:{ '.js':'.mjs' }, bundle:true, format:'esm', platform:'node', packages:'external',
+  await build({ entryPoints:{ privacy:'src/pages/privacy.astro', start:'src/pages/software/start.astro', linkLanding:'src/pages/offer/[token]/verify.astro', archiveLanding:'src/pages/agreements/verify.astro', agreements:'src/pages/owner/agreements.astro', signPage:'src/pages/offer/[token]/sign.astro', agreementPanel:'src/components/owner/SoftwareAgreementPanel.astro', panel:'src/components/owner/SoftwareProjectPanel.astro', ownerRequest:'src/pages/owner/requests/[id].astro', today:'src/pages/owner/index.astro', composer:'src/pages/owner/requests/[id]/update.astro', software:'src/pages/studio/software/[id].astro', client:'src/pages/offer/[token].astro', preview:'src/pages/owner/requests/[id]/offer.astro', editor:'src/components/owner/SoftwareOfferEditor.astro', questions:'src/components/owner/SoftwareQuestions.astro', fit:'src/components/owner/SoftwareFitReview.astro' }, outdir:directory, outExtension:{ '.js':'.mjs' }, bundle:true, format:'esm', platform:'node', packages:'external',
     plugins:[{ name:'astro-test-render', setup(builder) {
       builder.onResolve({ filter:/\.css(?:\?|$)|\?astro/ }, () => ({ path:'empty-style',namespace:'empty' }));
       builder.onLoad({ filter:/.*/,namespace:'empty' }, () => ({ contents:'',loader:'js' }));
@@ -26,7 +26,7 @@ beforeAll(async () => {
     } }],
   });
   const { readdir } = await import('node:fs/promises');
-  for (const file of await readdir(directory)) { const compiled = (await import(/* @vite-ignore */ pathToFileURL(resolve(directory,file)).href)).default; if (file.startsWith('start')) start = compiled; else if (file.startsWith('linkLanding')) linkLanding = compiled; else if (file.startsWith('archiveLanding')) archiveLanding = compiled; else if (file.startsWith('agreements')) agreements = compiled; else if (file.startsWith('signPage')) signPage = compiled; else if (file.startsWith('agreementPanel')) agreementPanel = compiled; else if (file.startsWith('panel')) panel = compiled; else if (file.startsWith('ownerRequest')) ownerRequest = compiled; else if (file.startsWith('today')) today = compiled; else if (file.startsWith('composer')) composer = compiled; else if (file.startsWith('software')) softwarePage = compiled; else if (file.startsWith('client')) page = compiled; else if (file.startsWith('preview')) preview = compiled; else if (file.startsWith('editor')) editor = compiled; else if (file.startsWith('questions')) questions = compiled; else fit = compiled; }
+  for (const file of await readdir(directory)) { const compiled = (await import(/* @vite-ignore */ pathToFileURL(resolve(directory,file)).href)).default; if (file.startsWith('privacy')) privacy = compiled; else if (file.startsWith('start')) start = compiled; else if (file.startsWith('linkLanding')) linkLanding = compiled; else if (file.startsWith('archiveLanding')) archiveLanding = compiled; else if (file.startsWith('agreements')) agreements = compiled; else if (file.startsWith('signPage')) signPage = compiled; else if (file.startsWith('agreementPanel')) agreementPanel = compiled; else if (file.startsWith('panel')) panel = compiled; else if (file.startsWith('ownerRequest')) ownerRequest = compiled; else if (file.startsWith('today')) today = compiled; else if (file.startsWith('composer')) composer = compiled; else if (file.startsWith('software')) softwarePage = compiled; else if (file.startsWith('client')) page = compiled; else if (file.startsWith('preview')) preview = compiled; else if (file.startsWith('editor')) editor = compiled; else if (file.startsWith('questions')) questions = compiled; else fit = compiled; }
 });
 afterAll(async () => { if (directory) await rm(directory,{ recursive:true,force:true }); });
 async function fixture() {
@@ -1100,4 +1100,36 @@ it('renders all four personalized receipt outcomes into the rendered page', asyn
       if (note) expect(serialize(renderedNote)).toBe(note);
     }
   } finally {vi.unstubAllGlobals();}
+});
+
+it('renders the AI disclosure beside both answer boxes and the dated retention notice', async () => {
+  const container = await AstroContainer.create();
+  const html = await container.renderToString(start, { request:new Request('https://thesuperhuman.us/software/start'), locals:{runtime:{env:{}}} as any });
+  const document = parse(html);
+  const sections: any[] = [];
+  function visit(node: any) { if (node.tagName === 'section' && node.attrs?.some((attr: any) => attr.name === 'data-step' && ['1','2'].includes(attr.value))) sections.push(node); for (const child of node.childNodes ?? []) visit(child); }
+  visit(document); expect(sections).toHaveLength(2);
+  for (const section of sections) {
+    const output = serialize(section);
+    expect(output).toContain("Suggestions come from Cloudflare's AI, which sees only what you type in the answer boxes.");
+    expect(output).toContain('Please leave out passwords, access details and real customer data.');
+    expect(output).not.toContain('Leave out passwords and customer data.');
+    expect(output).toContain('href="/privacy#software-briefs"'); expect(output).toContain('Suggestions are off.'); expect(output).toContain('Turn off');
+  }
+  const notice = await container.renderToString(privacy, { request:new Request('https://thesuperhuman.us/privacy') });
+  expect(notice).toContain('Updated October 10, 2026'); expect(notice).toContain('id="software-briefs"');
+  expect(notice).toContain('a counter derived from your IP address, kept for up to two days');
+});
+
+it('shows the countersign requirement beside both disabled closing actions', async () => {
+  const {sql,db}=await fixture();
+  try {
+    sql.prepare("INSERT INTO software_agreement_templates VALUES ('msa','msa',1,'Template',?,1,'now','owner')").run('a'.repeat(64));
+    sql.exec("INSERT INTO software_agreement_clients VALUES ('client','alex@example.com','Example LLC','example llc','LLC','Wyoming','Business address','notice@example.com','now')");
+    sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES('sow','sow','current','r','client','msa','client_signed','Exact',?,'{}','now','2026-09-30','session')").run('a'.repeat(64));
+    const container=await AstroContainer.create();
+    const html=await container.renderToString(ownerRequest,{params:{id:'r'},request:new Request('https://thesuperhuman.us/owner/requests/r'),locals:{owner:{email:'owner@example.com'},runtime:{env:{MUSIC_DB:db}}}} as any);
+    expect(html).toContain('Countersign or abandon the signed agreement first.');
+    for(const action of ['resolve','withdraw']) expect(html).toMatch(new RegExp(`data-action="${action}"[^>]*disabled`));
+  } finally {sql.close();}
 });

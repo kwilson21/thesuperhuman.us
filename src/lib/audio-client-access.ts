@@ -18,7 +18,7 @@ export async function hashValue(value: string): Promise<string> {
   return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function keyedHash(secret: string, message: string): Promise<string> {
+export async function keyedHash(secret: string, message: string): Promise<string> {
   if (secret.length < 32) throw new Error('Studio code key is not configured.');
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const bytes = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message)));

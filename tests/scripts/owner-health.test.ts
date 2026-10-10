@@ -6,7 +6,7 @@ import * as ownerHealthModule from '../../scripts/owner-health.mjs';
 const { ownerHealth } = ownerHealthModule;
 
 const requiredSchema = [
-  'owner_campaigns', 'owner_requests', 'owner_request_audit',
+  'brief_suggestion_budget', 'owner_campaigns', 'owner_requests', 'owner_request_audit',
   'music_playback_events', 'music_playback_daily', 'music_playback_geography_daily', 'owner_retention_runs',
   'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts', 'stripe_unmatched_events',
   'audio_projects', 'audio_client_codes', 'audio_client_sessions', 'audio_client_access_audit',
@@ -21,7 +21,14 @@ function healthyFixture() {
     now: new Date('2026-09-19T12:00:00Z'),
     configuredNames: new Set(['MUSIC_DB', 'AUDIO', 'AGREEMENT_RETENTION_BINDING_ID', 'OWNER_ACCESS_TEAM_DOMAIN', 'OWNER_ACCESS_AUD', 'OWNER_EMAIL']),
     query: async (sql: string) => {
-      if (sql.includes('pragma_table_info')) return [{name:'delivered_deliverables_json'},{name:'review_window_days_extended'}];
+      if (sql.includes('pragma_table_info')) {
+        const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
+        const db = new DatabaseSync(':memory:');
+        try {
+          db.exec(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8'));
+          return db.prepare(sql).all() as { name: string }[];
+        } finally { db.close(); }
+      }
       if (sql.includes('sqlite_master')) return requiredSchema.map(name => ({ name }));
       if (sql.includes('owner_retention_runs')) return [{ completed_at: '2026-09-18T12:00:00Z' }];
       if (sql.includes('stripe_unmatched_events')) return [{ total: 0 }];
@@ -86,7 +93,7 @@ it('reports attention when the request audit trigger is missing', async () => {
   expect(report.checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
 });
 
-it('detects schemas through 0023 and passes only after 0024', async () => {
+it('detects incomplete schemas and passes only after 0025', async () => {
   const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
   const db = new DatabaseSync(':memory:');
   const migrations = readdirSync(new URL('../../migrations/music/', import.meta.url)).filter(name => name.endsWith('.sql')).sort();
@@ -108,6 +115,8 @@ it('detects schemas through 0023 and passes only after 0024', async () => {
   db.exec(readFileSync(new URL('../../migrations/music/0023_software_signing.sql', import.meta.url), 'utf8'));
   expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
   db.exec(readFileSync(new URL('../../migrations/music/0024_software_delivery_selection_and_review_windows.sql', import.meta.url), 'utf8'));
+  expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
+  db.exec(readFileSync(new URL('../../migrations/music/0025_brief_suggestion_budget.sql', import.meta.url), 'utf8'));
   expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'pass' }));
   db.close();
 });
@@ -197,4 +206,32 @@ it('does not check the live signing route before deployment',async()=>{
  const verify=async()=>{throw new Error('must not call');};
  const report=await ownerHealth({...healthyFixture(),remote:true,verify});
  expect(report.checks.some(c=>c.id==='signing-route')).toBe(false);
+});
+
+it('requires the brief suggestion budget schema', async () => {
+  const fixture = healthyFixture();
+  const query = fixture.query;
+  fixture.query = sql => sql.includes('sqlite_master')
+    ? Promise.resolve(requiredSchema.filter(name => name !== 'brief_suggestion_budget').map(name => ({ name })))
+    : query(sql);
+  const result = await ownerHealth(fixture);
+  expect(JSON.stringify(result)).toContain('missing');
+});
+
+it('rejects a complete schema with a missing migration 0023 recipient snapshot column', async () => {
+  const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
+  const db = new DatabaseSync(':memory:');
+  try {
+    db.exec(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8'));
+    const fixture = healthyFixture();
+    const baseQuery = fixture.query;
+    fixture.query = sql => (sql.includes('sqlite_master') || sql.includes('pragma_table_info'))
+      ? Promise.resolve(db.prepare(sql).all() as { name: string }[]) : baseQuery(sql);
+    expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'pass' }));
+    db.exec('ALTER TABLE software_offers DROP COLUMN recipient_email_snapshot');
+    expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({
+      id: 'schema', status: 'attention',
+      summary: expect.stringContaining('software_offers.recipient_email_snapshot (migration 0023)'),
+    }));
+  } finally { db.close(); }
 });

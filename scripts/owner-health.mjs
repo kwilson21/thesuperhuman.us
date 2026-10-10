@@ -10,7 +10,7 @@ import { parseJsonc } from './screenshots/config.mjs';
 import { studioRetentionProjectPredicate, softwareRetentionProjectPredicate } from './studio-retention.mjs';
 
 const requiredConfiguration = ['MUSIC_DB', 'AUDIO', 'AGREEMENT_RETENTION_BINDING_ID', 'OWNER_ACCESS_TEAM_DOMAIN', 'OWNER_ACCESS_AUD', 'OWNER_EMAIL'];
-const requiredSchema = ['owner_campaigns', 'owner_requests', 'owner_request_audit', 'music_playback_events', 'music_playback_daily', 'music_playback_geography_daily', 'owner_retention_runs', 'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts', 'stripe_unmatched_events',
+const requiredSchema = ['brief_suggestion_budget', 'owner_campaigns', 'owner_requests', 'owner_request_audit', 'music_playback_events', 'music_playback_daily', 'music_playback_geography_daily', 'owner_retention_runs', 'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts', 'stripe_unmatched_events',
   'audio_projects', 'audio_client_codes', 'audio_client_sessions', 'audio_client_access_audit', 'audio_project_messages', 'audio_project_updates', 'audio_project_files', 'audio_project_uploads', 'owner_requests_audit_personal_delete', 'audio_project_after_service_request', 'audio_project_close_declined_request', 'owner_requests_submission_id', 'software_fit_reviews', 'software_offers', 'software_offer_links', 'software_offers_one_draft', 'software_offers_one_sent',
   'software_projects', 'software_project_updates', 'software_project_updates_one_draft', 'software_project_updates_shared', 'software_project_messages', 'software_project_messages_request', 'software_project_messages_one_decision', 'software_project_audit', 'software_project_audit_request', 'software_milestone_payments', 'software_invoices', 'software_invoices_one_active', 'software_invoices_request', 'software_stripe_unmatched_events', 'software_milestone_deposits', 'software_signing_settings', 'software_contractor_config', 'software_agreement_templates', 'software_agreement_clients', 'software_agreements', 'software_agreements_sow_offer', 'software_agreements_pending_msa', 'software_agreement_signatures', 'software_agreement_links', 'software_agreement_links_scope', 'software_agreement_drafts', 'software_agreement_sessions', 'software_agreement_artifacts', 'software_agreement_deliveries', 'software_agreement_events', 'software_agreement_templates_immutable', 'software_contractor_config_immutable', 'software_agreement_signatures_immutable', 'software_agreements_signed_immutable', 'software_agreement_attachments', 'software_agreement_clients_immutable', 'software_agreement_retention_receipts', 'software_agreement_cleanup_lock', 'software_agreement_notices', 'software_agreement_notices_immutable', 'software_agreement_notifications'];
 const attention = (id, summary, next) => ({ id, status: 'attention', summary, next });
@@ -48,14 +48,21 @@ export async function ownerHealth({ now = new Date(), configuredNames, query, me
   }
   if (availableSchema.size) {
     const missing = requiredSchema.filter(name => !availableSchema.has(name));
-    try {
-      const columns = new Set((await query("SELECT name FROM pragma_table_info('software_project_updates')")).map(row=>row.name));
-      for (const column of ['delivered_deliverables_json','review_window_days_extended'])
-        if (!columns.has(column)) missing.push(`software_project_updates.${column} (migration 0024)`);
-    } catch { missing.push('software_project_updates columns (migration 0024)'); }
+    for (const [table, migration, requiredColumns] of [
+      ['software_offers', '0023', ['agreement_details_json', 'msa_template_id', 'sow_template_id', 'contractor_snapshot_json', 'recipient_email_snapshot', 'reused_msa_id']],
+      ['software_projects', '0023', ['agreement_id', 'signature_source', 'external_signature_details_json', 'start_details_json']],
+      ['software_agreements', '0023', ['archive_closed_at']],
+      ['software_project_updates', '0024', ['delivered_deliverables_json', 'review_window_days_extended']],
+    ]) {
+      try {
+        const columns = new Set((await query(`SELECT name FROM pragma_table_info('${table}')`)).map(row => row.name));
+        for (const column of requiredColumns)
+          if (!columns.has(column)) missing.push(`${table}.${column} (migration ${migration})`);
+      } catch { missing.push(`${table} columns (migration ${migration})`); }
+    }
     checks.push(missing.length
       ? attention('schema', `Required owner schema is missing: ${missing.join(', ')}.`, 'Reconcile the database migration ledger before applying any migration.')
-      : pass('schema', 'Required owner data objects are present.'));
+      : pass('schema', 'Required owner data objects and listed migration columns are present.'));
   }
 
   let mediaFailures = 0;

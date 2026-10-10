@@ -47,6 +47,7 @@ const projectFiles = portalProject ? (await db.prepare(`SELECT id,version,displa
 const pendingUploads = portalProject ? (await db.prepare(`SELECT id,display_name,state,created_at FROM audio_project_uploads
   WHERE request_id=? ORDER BY created_at DESC`).bind(request.id).all<
   { id: string; display_name: string; state: 'pending' | 'discarding'; created_at: string }>()).results : [];
+const pendingSignature = request.kind === 'software' && Boolean(await db.prepare("SELECT 1 FROM software_agreements WHERE request_id=? AND status='client_signed'").bind(request.id).first());
 const allowed = request.status === 'new' ? ['review', 'resolve', 'withdraw'] : request.status === 'reviewed' ? ['resolve', 'reopen', 'withdraw'] : request.status === 'resolved' ? ['reopen', 'withdraw'] : [];
 const label = (key: string) => key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, character => character.toUpperCase());
 const detailRows = Object.entries(request.details).filter(([, value]) => value !== '' && value !== null && value !== false && (!Array.isArray(value) || value.length));
@@ -126,7 +127,8 @@ const brief = request.kind === 'software' ? softwareBrief(request) : null;
         <form class="rail-note" data-request-note><label class="visually-hidden" for="owner-private-note">Private note</label><textarea class="studio-textarea" id="owner-private-note" name="note" maxlength="1000" rows="3" placeholder="A note for yourself…">{request.privateNote}</textarea><button type="submit" class="studio-quiet">Save note</button></form>
       </section>
       {allowed.length > 0 && <section class="rail-section" aria-labelledby="request-heading"><h2 id="request-heading">Request</h2>
-        <div class="rail-actions" data-request-actions data-open-studio={portalProject && portalProject.stage === 'files_under_review' && !portalProject.revoked_at ? 'true' : undefined}>{allowed.filter(action => (action !== 'reopen' || !softwareProject) && (action !== 'resolve' || !softwareProject || softwareProject.completed_at !== null || softwareProject.revoked_at !== null)).map(action => <button type="button" id={action === 'review' ? 'mark-reviewed' : undefined} data-action={action} class:list={{ danger: action === 'withdraw' }}>{action === 'review' ? 'Mark reviewed' : action === 'resolve' ? 'Mark resolved' : action === 'reopen' ? 'Reopen' : 'Honor withdrawal'}</button>)}</div>
+        <div class="rail-actions" data-request-actions data-open-studio={portalProject && portalProject.stage === 'files_under_review' && !portalProject.revoked_at ? 'true' : undefined}>{allowed.filter(action => (action !== 'reopen' || !softwareProject) && (action !== 'resolve' || !softwareProject || softwareProject.completed_at !== null || softwareProject.revoked_at !== null)).map(action => <button type="button" id={action === 'review' ? 'mark-reviewed' : undefined} data-action={action} disabled={pendingSignature && (action === 'resolve' || action === 'withdraw')} class:list={{ danger: action === 'withdraw' }}>{action === 'review' ? 'Mark reviewed' : action === 'resolve' ? 'Mark resolved' : action === 'reopen' ? 'Reopen' : 'Honor withdrawal'}</button>)}</div>
+        {pendingSignature && <p class="rail-muted">Countersign or abandon the signed agreement first.</p>}
       </section>}
       {brief && !closed && !softwareProject && <SoftwareQuestions requestId={request.id} />}
       <p class="studio-status" data-action-status aria-live="polite"></p>

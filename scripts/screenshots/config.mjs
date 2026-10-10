@@ -96,6 +96,8 @@ const PAGE_NAMES_BY_FILE = {
   'src/styles/global.css': SHARED_SITE_PAGES,
   'src/styles/audio-intake.css': ['audio-start', 'software-start', 'services'],
   'src/styles/software-intake.css': ['software-start'],
+  'src/scripts/brief-autocomplete.ts': ['software-start'],
+  'src/pages/api/software/brief/suggest.ts': ['software-start'],
   'src/scripts/software-inquiry.ts': ['software-start'],
   'src/lib/software-inquiry.ts': ['software-start', 'services'],
   'src/styles/music.css': MUSIC_CATALOG_PAGES,
@@ -154,6 +156,8 @@ const SCENARIO_NAMES_BY_FILE = {
   'src/components/owner/OwnerProjectFiles.astro': ['studio-client'],
   'src/styles/owner.css': ['owner-details', 'software-brief', 'software-offer', 'software-project'],
   'src/lib/software-inquiry.ts': ['software-brief', 'services-print'],
+  'src/scripts/brief-autocomplete.ts': ['software-brief'],
+  'src/pages/api/software/brief/suggest.ts': ['software-brief'],
   'src/scripts/software-inquiry.ts': ['software-brief'],
   'src/pages/api/software-inquiry.ts': ['software-brief'],
   'src/styles/software-intake.css': ['software-brief'],
@@ -347,8 +351,8 @@ export function screenshotSection(manifest, rawBase, sha) {
   return lines.join('\n');
 }
 
-// Allow only the browser's resource message for a scenario's deliberate HTTP failure.
-export function expectedResourceError(message, url, base, responses) {
-  return responses.some(({ path, status }) => url === base + path
-    && new RegExp(`^Failed to load resource: the server responded with a status of ${status} \\([A-Za-z ]*\\)$`).test(message));
+/** Chromium's failed-resource console message must match both the URL and status. */
+export function expectedResourceError(message, resources) {
+  return resources.some(({ url, status }) => status !== 200 && message.location().url === url
+    && new RegExp(`^Failed to load resource: the server responded with a status of ${status} \\([A-Za-z ]*\\)$`).test(message.text()));
 }

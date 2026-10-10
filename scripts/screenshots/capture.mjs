@@ -33,7 +33,7 @@ const errors = [];
 const captured = [];
 
 /** Saves one PNG. Pass `owner` for owner pages, `cookie` for a studio session, `selector` for one section. */
-async function capture({ file, path, viewport = 'desktop', owner = false, cookie, selector, status = 200, prepare, expectedResponses = [] }) {
+async function capture({ file, path, viewport = 'desktop', owner = false, cookie, selector, status = 200, prepare, expectedResponses = [], expectedResourceErrors = [] }) {
   const size = VIEWPORTS.find(item => item.name === viewport);
   const context = await browser.newContext({ viewport: { width: size.width, height: size.height }, reducedMotion: 'reduce' });
   // Access adds this header at the edge, so only our own origin sees it. Fonts and other hosts reject it.
@@ -43,10 +43,7 @@ async function capture({ file, path, viewport = 'desktop', owner = false, cookie
   const page = await context.newPage();
   const where = `${path} (${viewport})`;
   page.on('console', message => {
-    // Deliberate document/API failures still log a browser resource error.
-    // Match only their exact endpoint, status and resource message.
-    const expected = expectedResourceError(message.text(), message.location().url, BASE,
-      [...expectedResponses, ...(status !== 200 ? [{ path, status }] : [])]);
+    const expected = expectedResourceError(message, [{ url: BASE + path, status }, ...expectedResourceErrors, ...expectedResponses.map(({ path, status }) => ({ url: BASE + path, status }))]);
     if (message.type() === 'error' && !expected) errors.push(`${where}: ${message.text()}`);
   });
   page.on('pageerror', error => errors.push(`${where}: ${error.message}`));

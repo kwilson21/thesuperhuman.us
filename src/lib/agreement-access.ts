@@ -6,6 +6,7 @@ import {
   newOfferToken,
 } from "./software-offers";
 import {
+  keyedHash,
   normalizeClientEmail,
   reserveStudioAllowance,
 } from "./audio-client-access";
@@ -162,7 +163,7 @@ export async function issueAgreementLink(
   };
   if (!token) {
     const at=new Date();
-    const cooldownKey=await hashOfferToken(`archive-link-cooldown:${email}`);
+    const cooldownKey=await keyedHash(env.AUDIO_CLIENT_CODE_KEY, `archive-link-cooldown:${email}`);
     const reserved=await db.prepare(`INSERT INTO audio_client_allowances(key,window_start,uses) VALUES(?,?,1)
       ON CONFLICT(key) DO UPDATE SET window_start=excluded.window_start,uses=1
       WHERE window_start<=? RETURNING key`).bind(cooldownKey,at.toISOString(),new Date(at.getTime()-30000).toISOString()).first();

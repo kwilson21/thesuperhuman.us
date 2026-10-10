@@ -1,51 +1,69 @@
 # Software agreement signing release gate
 
-- Date: September 30, 2026
-- Repository: `kwilson21/thesuperhuman.us`
-- Pull request: #158
-- Code revisions: signing baseline `f5335fa`; guided agreed-terms update `9916a9f592882a9d2be2e8854376f839c558caa7`. Both include current main `2beb025`.
-- Local continuation branch: `codex/guided-agreement-terms`
-- Initial remote PR revision before the authorized signing update: `308d668e0867ba4a1d063ce4a68051cac504095a`
-- Target: production `https://thesuperhuman.us`, private owner and client signing routes, production `MUSIC_DB` and private R2 agreement objects.
-- Authorization: Kazon explicitly approved updating PR #158 and checking CI on September 30, 2026 ("Yes", directly replying to the request to push reviewed fixes and check CI). This approval excludes production migration, merge and deployment. Earlier signing decisions remain unchanged.
-- Scope: Stage 4b signing implementation, recovered Agreements page structure, five verified PR review fixes, attachment-retention race safeguards, the approved guided client agreed-terms presentation, and this release record. Real MSA/SOW text and existing signed evidence were not edited.
-- Candidate rollback revision: `2beb02538c597789db8afbcaab4ebc0ff724ce4e`, the observed current GitHub main at verification time. The release operator must confirm the actual deployed revision and save its rollback receipt before production changes.
+- Updated: October 10, 2026. Jewls (Codex), local integration and release-record preparation.
+- Repository: `kwilson21/thesuperhuman.us`, PR #158, branch `codex/software-signing`.
+- Integrated main and rollback revision: `5137d3d17b88c5c34c642869613bb757650e89cf` (PR #172). Confirm the actual deployed revision and preserve its deployment receipt before release.
+- Signing revision before integration: `c6035bbf`. Merge revision: `5cbc4bc7fe55925bf3888b2ba5815c842183bd94`; the subsequent record-only commit is identifiable in Git history.
+- Target: production `https://thesuperhuman.us`, private owner/client signing routes, MUSIC_DB and private agreement storage.
+- Scope: one-page signing rework, one-time email-link landing, returning-client SOW wording, retained legal evidence, all implemented signing review fixes, and integration with main's brief conversation, AI suggestions, Turnstile pass and D1 daily caps.
 
-PASS means observed locally unless an environment is stated. The approved PR update publishes this reviewed branch for CI. No production migration, merge, manual deployment, real signing, external email or payment is authorized or performed by this task. This record is not a launch-ready certification.
+PASS needs observed evidence and is local unless stated otherwise. Historical captures and earlier CI passes do not certify this revision. This task neither applies production migrations nor merges PR #158 to main. Implemented, verified locally, deployed and verified live remain separate states. The full local suite has a sandbox-caused failure; this record does not certify launch readiness.
 
-## Guided agreed-terms continuation
+## Owner decisions and authorization
 
-- **PASS:** The approved four-stage preview is implemented only inside the existing client project “What we agreed” panel: what you get, milestones/timing, cost/responsibilities, and review agreed terms. This page shows an already recorded agreement, so navigation has no consent, signature or acceptance action.
-- **PASS:** Frozen project fees, scope and payment mode; executed agreement dates, duties, handoff, working conditions and recorded payment amounts replace the prototype’s omissions. Complete immutable MSA/SOW text and signed downloads remain available. External agreements identify details/copies not stored here and direct the client to the kept complete signed copy.
-- **PASS:** Inline legal records obey recipient identity and archive-closure guards. Transfer-email, privacy, exact legal text, odd-cent recorded amounts and external/closed records have regression coverage. Signing APIs, agreement generation, legal wording and signed evidence were not edited.
-- **PASS:** Full suite: 119 files, 1,046 tests passed, one intentional private-template skip. Astro: 423 files, zero errors/warnings, 18 existing hints. Build and asset/copy/publicist prebuild gates pass.
-- **PASS:** Local fictional scenarios: 35 software-project and 56 software-signing states. Fresh browser checks cover all four stages and full review at 320, 390, 768 and 1280 pixels for external and website-signed projects. Keyboard/back navigation, focus visibility, long titles, full expansion, no reading mutations, no overflow, exact displayed legal SHA-256 hashes and signed PDF downloads pass.
-- **PASS:** Independent UI checks verify native no-JavaScript reading, actual Chromium print output, and long-title/200% text readability. Verified contrast and sticky/focus issues were corrected. The summary becomes static when enlarged text needs the viewport. Signed documents remain unchanged.
-- **PASS:** Fresh independent correctness/security and UI/copy reviews. No new dependency, database schema, owner-editor redesign or signing-flow changes.
-- **PASS baseline CI:** PR head `268fe3c` passed Validate, Screenshots and Workers Builds. The guided continuation’s exact-head CI and downloaded screenshot receipt are recorded after its approved push; prior-head success is not evidence for a later commit.
-- **PENDING production:** Migrations 0023 and 0024, merging, deployment, enabling signing and actual client signing remain outside this approval. Apply 0024 after 0023 and before deploying code that reads delivery selections or extended review windows. The scoped implementation and PR checks do not certify production readiness.
+October 9, 2026, source: owner statements recorded in spec S:
 
-## Signing baseline local evidence
+- S5: "3. A", one-time email link.
+- S1: "4. A", one page, mostly filled in.
+- S2/S3: "5. A", one required portfolio question, no initials or business tick, no client-visible interim label.
+- S4: "6. A", name as signature and one consent tick.
+- Copy: "wording OK".
 
-- **PASS:** `npm test`: 119 files, 1,045 passed, one private-template test skipped (1,046 total). Includes local R2 upload verification with loopback access.
-- **PASS:** `npm run check`: 420 files, zero errors, zero warnings, 18 existing hints.
-- **PASS:** `npm run build`, including asset, copy and publicist prebuild gates.
-- **PASS:** The existing software-signing scenario ran against a fresh isolated local Cloudflare preview with public fictional templates: 46 screenshot states. Each state checked overflow at 320, 390, 768 and 1280 pixels. PDF generation and downloads succeeded in the local Cloudflare development runtime.
-- **PASS:** Visually inspected Agreements desktop/phone, signature controls and owner countersignature. The recovered editor commit supplies the standard heading, breadcrumb, active Agreements navigation and normal document scrolling without repeated headers.
-- **PASS:** Independent correctness/security review reran real caller reproductions and found no remaining verified findings. Independent UI/copy review passed, including 23 targeted render/editor tests.
-- **PASS:** `git diff --check`; no dependencies, migrations, legal source text, credentials or unrelated edits in the continuation fix.
-- **RELEASE GATE:** Current-head remote CI and screenshots must reach a successful terminal result after the approved push. The final exact-head CI receipt is saved privately and linked in the PR handoff; earlier green checks at `308d668` are insufficient.
-- **PASS:** Current main `2beb025` was merged into the signing continuation at `f5335fa` without conflicts. The full suite, Astro check, build and fresh independent reviews pass on the integrated code. Latest-main Building files match main exactly; signing code and editor remain unchanged from the reviewed fixes.
+October 10, 2026, owner statements supplied in this task:
 
-Local logs, manifest and the bounded scenario runner are retained in `.private/continuation/`; generated images are in `screenshots/`. The private fixture test is skipped intentionally because real agreement text is not copied into this checkout or public CI.
+- S6: "1. A". Opening the emailed link shows `Your agreement is ready.`; only `Continue to sign` consumes it.
+- S7: "2. A". Two document links and intent referring to the documents linked above.
+- Returning clients: "Let's pick the option that confuses the client the least". SOW-only signing wording and `Your signed agreement from {date} still applies.`
+- Production migrations 0023/0024: "3 yes" (owner, in conversation).
+- Deployment: "proceed with fixing reviews until we are ready to merge everything then merge" and "keep going until everything is merged".
+
+These approvals supersede the older spec's production-authorization exclusions. This bounded job prepares the branch and record. Production migration receipts are recorded below from the supplied operator summary; approval alone is not evidence of execution. Signing stays off until its separate template, consent and configuration gates are satisfied.
+
+## Current implementation and review fixes
+
+PASS automated coverage in `tests/lib/software-agreements.test.ts`, `tests/pages/software-offer.test.ts`, the signing API tests and related retention/packet suites: one-time link single use/expiry, explicit landing consumption, two-hour session and saved draft, brief prefill, contact fallbacks, portfolio mapping, one consent tick, verbatim consent/intent and document hashes, validation, SOW-only reuse, waiting/signed pages and owner countersignature. Internal source revision identifiers remain separate from client version labels.
+
+The branch includes fixes for Turnstile before recipient email allowance, preserving signing details while disabled, retiring unsigned reviews before external start, canonical access and stored statements, reused MSA pinning, agreed retention/review periods, recipient signature receipts, link retry verification, serialized attachment uploads, preserving existing links until replacement delivery succeeds, artifact and recipient delivery retry, invoice/retention reconciliation, owner health, and signed-copy archive access during project cleanup. Evidence: branch history through `c6035bbf`, including `d59123f3`, `878e9ced`, `aea6d083`, `4d6574ea`, `87092edf`, `b9faf139`, `cfca816d` and `c6035bbf`, with corresponding regression tests. These are implementation/test claims, not delivery or legal approval claims.
+
+Main integration retains migrations 0023/0024 before 0025, the listed required schema objects, all 11 columns added by 0023, and both columns added by 0024, post-deploy-only signing-route health, AI and rate-limit bindings, retention binding identity, preview SITE_ORIGIN, both screenshot flows, and both privacy disclosures. Local owner-health regression coverage loads the complete schema, drops `software_offers.recipient_email_snapshot`, and requires schema attention instead of PASS. This checks the listed deployment requirements, not every column in every table. No new dependency or legal template source was added.
+
+## Checks run October 10, 2026
+
+After the test typing fix on parent revision `e122e50d`, reran `npm run check` (exit 0: 440 files, zero errors, zero warnings, 17 hints), `npx vitest run tests/lib/software-agreements.test.ts` (exit 0: 140 tests pass), and `npm run copy:check` (exit 0: no banned patterns). The archive cooldown assertion now uses the existing fixture secret supplied to `AUDIO_CLIENT_CODE_KEY`; production hashing is unchanged. Other checks below retain their earlier results and were not rerun for this test-only fix.
+
+| Check | Status and evidence |
+|---|---|
+| `npx vitest run tests/scripts/screenshots.test.ts` | PASS: 30 tests. |
+| `npx vitest run` | FAIL: 124 files pass, one fails; 1,325 tests pass, one local R2 upload test times out. Sandbox denies `listen 127.0.0.1` with EPERM, producing one unhandled error; Wrangler's default log path is also denied. Requires rerun where local listeners are permitted. No assertion was removed or bypassed. |
+| `npm run check` | PASS: 440 files, zero errors, zero warnings, 17 hints, including main's deprecated keyboard keyCode hint. |
+| `npm run copy:check` | PASS: no banned patterns. |
+| `npm run assets:check` | PASS: 36 production assets match review records. |
+| Migration concatenation | PASS: byte comparison of `db/music.sql` against all sorted `migrations/music/*.sql`, including 0022, 0023, 0024 and 0025. |
+| JSONC | PASS: existing preview/JSONC regression tests retain and parse both sets of bindings. |
+| `git diff --check` | PASS resolved-file and record diff. Integrated main has eight existing Markdown hard-break trailing-space warnings in its brief release record; preserved unchanged. |
+| Build and visual screenshots | UNVERIFIED: not run, per spec S; CI captures require current-head review. |
+
+## Applicable Definition of Done
+
+The rows below map every check in `docs/prelaunch-checklist.md`. PASS source/test rows describe automated evidence in the current suite. Previous release manual observations are historical only; any unverified production or manual check remains a release gate.
 
 ## 1. Purpose and content
 
 | Check | Status and evidence |
 |---|---|
-| 1.1 Project, instructions and authority | PASS locally: exact conversation, repository, PR and code recovered; production authorization pending. |
+| 1.1 Project, instructions and authority | PASS locally: exact conversation, repository, PR and code recovered; owner production authorization and supplied migration execution evidence recorded below. |
 | 1.2 Approved design and claims | PASS: existing owner presentation reused; fictional agreement fixtures only; legal text unchanged. |
-| 1.3 First screen and CTA | PASS locally: owner editor, offer signing and project states captured at desktop/phone and narrow widths. |
+| 1.3 First screen and CTA | PASS automated CTA/render tests. UNVERIFIED current-head manual desktop/phone CTA checks. |
 | 1.4 Navigation and links | PASS for local signing routes and download states. UNVERIFIED for production links and delivery. |
 
 ## 2. Search and sharing
@@ -56,7 +74,7 @@ Local logs, manifest and the bounded scenario runner are retained in `.private/c
 | 2.2 Canonical URLs | N/A: no indexable canonical route changes in continuation. |
 | 2.3 Open Graph | N/A: no sharing content changes. |
 | 2.4 Icons | N/A: no icon changes. |
-| 2.5 Robots and sitemap | PASS locally: private-route tests and built sitemap; UNVERIFIED target headers and sitemap. |
+| 2.5 Robots and sitemap | PASS locally: private-route tests; UNVERIFIED current built sitemap, UNVERIFIED target headers and sitemap. |
 | 2.6 Preview indexing/access | PASS local authorization and private headers tests; UNVERIFIED actual edge policy and target preview indexing. |
 | 2.7 Structured data | N/A: no structured-data change. |
 
@@ -69,7 +87,7 @@ Local logs, manifest and the bounded scenario runner are retained in `.private/c
 | 3.3 Keyboard/focus | UNVERIFIED comprehensive manual keyboard and focus restoration. |
 | 3.4 Input guidance/status | PASS source/render tests and fictional interaction/error states; UNVERIFIED manual screen-reader announcements. |
 | 3.5 Contrast/zoom/motion | UNVERIFIED automated accessibility scan, contrast measurement and 200 percent text zoom. Reduced-motion captures alone are not proof. |
-| 3.6 Widths/long content | PASS: 46 states, overflow checked at 320/390/768/1280; long editor preview inspected. |
+| 3.6 Widths/long content | UNVERIFIED current-head visual captures at 320/390/768/1280; signing scenario coverage is present and harness tests pass. |
 | 3.7 Other browser/device | UNVERIFIED: capture used Chromium; another browser and real mobile device remain pending. |
 
 ## 4. Performance and resilience
@@ -77,7 +95,7 @@ Local logs, manifest and the bounded scenario runner are retained in `.private/c
 | Check | Status and evidence |
 |---|---|
 | 4.1 Images | N/A: no new product images. |
-| 4.2 Dependencies/assets | PASS local build and existing bundled fonts; UNVERIFIED deployed compression, caching and loading. |
+| 4.2 Dependencies/assets | PASS asset manifest check and existing bundled fonts; UNVERIFIED current build, UNVERIFIED deployed compression, caching and loading. |
 | 4.3 Performance measures | UNVERIFIED mobile lab and field metrics. |
 | 4.4 Retry/duplicates | PASS local signature, artifact, delivery, stale-state and transaction regression tests. |
 | 4.5 External resources | PASS mocked failure tests; UNVERIFIED real Turnstile and email availability. |
@@ -92,7 +110,7 @@ Local logs, manifest and the bounded scenario runner are retained in `.private/c
 | 5.3 No JavaScript | PASS native route and editor tests; UNVERIFIED complete manual no-JavaScript journey and unavailable challenge behavior. |
 | 5.4 Delivery | UNVERIFIED production PDF attachment delivery and inbox receipt; mocked provider responses are not delivery evidence. |
 | 5.5 Permissions/approval | PASS local scopes, download controls, signing-off defaults and external-start retirement rollback tests. |
-| 5.6 Confirmation | PASS local inline statuses and separate review/signing stages captured. |
+| 5.6 Confirmation | PASS automated confirmation/render tests; UNVERIFIED current-head visual capture. |
 
 ## 6. Privacy, legal and measurement
 
@@ -109,12 +127,12 @@ Local logs, manifest and the bounded scenario runner are retained in `.private/c
 
 | Check | Status and evidence |
 |---|---|
-| 7.1 Required checks | PASS all local checks listed above; one intentional private-template skip. |
-| 7.2 Diff/review | PASS independent reviews and exact continuation diff inspection. Fresh independent reviews pass on integrated code; exact remote CI evidence is required after push. |
+| 7.1 Required checks | FAIL full suite due to sandbox-blocked local R2 listener; 1,325 tests pass. PASS Astro, screenshot harness, copy, assets and migration concatenation. UNVERIFIED build, deliberately not run under spec S. |
+| 7.2 Diff/review | PASS local merge resolution inspection and independent merge reviews recorded below. UNVERIFIED current-head remote review, CI and screenshot receipt. |
 | 7.3 Production bindings/schema/headers | UNVERIFIED: no production action performed. |
 | 7.4 Rollback/backup | UNVERIFIED production backup, restore rehearsal and deployed rollback receipt. Candidate revision recorded above. |
 | 7.5 Post-deployment | UNVERIFIED: feature not deployed by this task. |
-| 7.6 Receipt | PASS: local release record, journal checkpoint, logs and screenshot manifest retained. |
+| 7.6 Receipt | PASS local release record and check logs. UNVERIFIED current-head screenshot receipt; private journal checkpoint attempted separately. |
 
 ## 8. Private owner center
 
@@ -122,19 +140,19 @@ Local logs, manifest and the bounded scenario runner are retained in `.private/c
 |---|---|
 | 8.1 Access identity | PASS local signed-JWT/session tests. UNVERIFIED production owner Access policy. |
 | 8.2 Owner headers | PASS local private/no-store/noindex behavior; UNVERIFIED edge responses. |
-| 8.3 Migration/backup | PENDING production 0023 and 0024 authorization and the procedure below. Local 0001 through 0024 application and schema tests pass. |
+| 8.3 Migration/backup | PASS supplied production 0023/0024 execution and backup evidence recorded below. PASS local schema tests through 0025. |
 | 8.4 Persistence/alerts | PASS local transactional writes and failure cases. UNVERIFIED live urgent notice receipt. |
 | 8.5 Traffic fallback | N/A: no traffic-summary changes. |
 | 8.6 Playback/campaigns | N/A: no measurement changes. |
 | 8.7 Retention manifest | PASS synthetic exact-manifest tests, held/live-offer references and concurrent acquisition fences. UNVERIFIED production reviewed manifest use. |
 | 8.8 Studio activation | UNVERIFIED target activation, inbox, mobile/keyboard and upload interruption. Existing studio access is reused. |
 | 8.9 Payments off/manual path | PASS local external-start tests; omitted agreement fields survive draft edits while signing is disabled. UNVERIFIED actual target payment setting. |
-| 8.10 R2 cleanup | PASS local R2 upload test and synthetic agreement retention failure/guard tests. UNVERIFIED deployed agreement cleanup/restore exercise. |
+| 8.10 R2 cleanup | FAIL sandbox-blocked local R2 upload test. PASS synthetic agreement retention failure/guard tests. UNVERIFIED deployed agreement cleanup/restore exercise. |
 | 8.11 Stripe activation | N/A to signing continuation; existing invoice activation gate remains unchanged. |
 | 8.12 Webhook/invoice safeguards | PASS existing local suite; UNVERIFIED live lifecycle. No payment action performed. |
 | 8.13 Credential projection | PASS source/render tests; no credentials or private legal text copied to public output. |
 | 8.14 Recovery | UNVERIFIED actual database/R2/template recovery and prior deployment rollback. |
-| 8.15 Target health | UNVERIFIED: no remote health command in this continuation. |
+| 8.15 Target health | PASS supplied pre-merge remote health: 8/8 checks. UNVERIFIED post-deploy health; the owner runs it after merge. |
 
 ## Software agreement signing checks
 
@@ -142,40 +160,49 @@ Local logs, manifest and the bounded scenario runner are retained in `.private/c
 |---|---|
 | Counsel review | UNVERIFIED final template and electronic-consent review. |
 | Address/configuration | UNVERIFIED owner verification before enabling. |
-| One/two/three milestones, both modes | PASS automated template/field/packet cases; scenario visually exercises one milestone with standard terms. |
+| One/two/three milestones, both modes | PASS automated template/field/packet cases; UNVERIFIED current-head visual template previews. |
 | Defaults/manual path | PASS signing defaults off and external signatures remain available; unsigned reviews are atomically abandoned and access revoked on external start. |
 | Authentication/revocation/reuse | PASS relevant local regression tests. |
-| Workers PDF/Unicode/attachments | PASS PDF tests and local Cloudflare development runtime. UNVERIFIED actual deployed Workers runtime. |
+| Workers PDF/Unicode/attachments | PASS automated PDF tests. UNVERIFIED current-head actual Cloudflare runtime exercise. UNVERIFIED actual deployed Workers runtime. |
 | Text/certificates/hashes/copies | PASS synthetic packet and hash tests. UNVERIFIED real-template fixture in this checkout and real two-party inbox receipt. |
 | Artifact/email retries | PASS separate local failure/uncertain-recipient tests. |
-| Project/archive downloads | PASS local automated and scenario states. |
+| Project/archive downloads | PASS local automated tests; UNVERIFIED current-head captured scenario states. |
 | Restore rehearsal | UNVERIFIED target agreement records/templates/fonts/storage restore with hashes. |
 | Retention/open/held/reuse | PASS local exact-manifest tests, final-reference deletion and active-offer pinning. |
-| CI screenshots/keyboard/no-JS/widths | PASS local 46-state widths and visual review. UNVERIFIED updated remote CI screenshots and comprehensive manual keyboard/no-JS checks. |
+| CI screenshots/keyboard/no-JS/widths | PASS 30 screenshot-harness tests and retained signing scenarios. UNVERIFIED current-head CI images, manual keyboard/no-JS and width checks. Earlier captures do not certify the reworked flow. |
 
-## Migrations 0023–0024 and deployment boundary
+## Production migrations 0023 and 0024: applied
 
-**PENDING:** Apply `0023_software_signing.sql`, then `0024_software_delivery_selection_and_review_windows.sql`, to production only after exact authorization. Apply both before deploying code that reads the corresponding columns. Reconcile the migration ledger and current schema; export the database, record a recovery bookmark and restore-test the export; apply the approved migrations in order; verify existing counts, new objects, foreign keys, ledger and owner health; save a private receipt before any production merge.
+**PASS · Migration and backup, supplied operator record.** Kazon authorized applying 0023 and 0024 to production ("3 yes", owner, in conversation, October 10, 2026). The supplied operator summary records read-only checks at approximately 09:05 America/New_York from the signing worktree at `a5dcea23`. Only `0023_software_signing.sql` and `0024_software_delivery_selection_and_review_windows.sql` were pending; 0025 was already applied. A full export was taken privately (160,994 bytes, mode 600) and restored into scratch SQLite with matching request, audit, audio-project, offer and software-project counts and four triggers; scratch was deleted. This documentation job read only the summary, not the export.
 
-The migration adds private agreement/settings/template/signature/access/artifact/delivery/retention tables, columns on existing software offers and projects, indexes and immutable-evidence triggers. It initializes website signing off. It does not drop/rebuild existing tables or rewrite existing client rows. The feature code depends on this schema.
+Before and after counts were identical: 3 requests, 6 audit rows, 1 audio project, 0 offers, 0 software projects, 0 project updates, 1 audio payment and 0 suggestion budget rows. The audit sequence was 6 before migration; the audit hash was `dd461df916feaa70` both before and after. On October 10, 2026, remote migration apply completed 0023 (39 commands), then 0024 (3 commands); the summary does not supply exact completion times. Of 70 pre-existing definitions, only the three expected altered tables changed: `software_offers`, `software_projects` and `software_project_updates`, each with added columns. There were 26 new objects (signing tables, triggers and indexes); total schema objects went from 110 to 156. `software_signing_enabled = 0` was stored, keeping website signing off. `PRAGMA foreign_key_check` was empty, the ledger was clean ("No migrations to apply"), and `npm run owner:health -- --remote` passed 8/8 checks, including the listed migration columns and signing origin `https://thesuperhuman.us`.
 
-Migration 0024 adds `delivered_deliverables_json` and the nullable
-`review_window_days_extended` column to software project updates. It is additive,
-preserves the existing 5–30-day column constraint, and must follow migration
-0023 before deploying owner or client project pages that select the new fields.
+The pre-migration D1 Time Travel bookmark `0000004e-00000002-00005100-6b80a5655c9775ec0adf38c01db5aa75` is the database rollback point. A full agreement/storage recovery rehearsal remains UNVERIFIED. These results are attributed to the supplied operator summary, not independent remote checks by this documentation job. After merge, the owner runs `npm run owner:health -- --remote --post-deploy` and records the deployed revision and live verification. Website signing stays off until the owner enables it after the separate template, consent and configuration gates are satisfied.
 
-A code rollback can redeploy the prior build while leaving these additive database objects in place. Removing the schema after clients sign would delete legal evidence and requires separate recovery planning; an entire database restore can also discard newer unrelated writes. Disabling signing prevents new signing but does not erase stored evidence. No down migration or automatic schema reversal is claimed.
+Deploy order:
 
-## Remaining release actions
+1. Reconcile production MUSIC_DB and its migration ledger. Preserve database backup and recovery evidence.
+2. Apply `0023_software_signing.sql`, then `0024_software_delivery_selection_and_review_windows.sql` before merging PR #158 to main. Both are additive; current main keeps working with them. 0023 initializes website signing off. 0024 adds delivery selections and extended review windows without changing the existing 5-to-30-day constraint.
+3. Run `npm run owner:health -- --remote` before merge. It requires signing objects, all 11 columns added by 0023, both 0024 columns, `brief_suggestion_budget`, configuration and retention binding identity, but does not check the undeployed signing landing.
+4. Complete exact-head review, green CI and CI screenshot inspection, resolve all applicable release gates or record an explicit owner-accepted exception, then merge under the recorded deployment authorization.
+5. The owner runs `npm run owner:health -- --remote --post-deploy` after merge and deployment, including the bare `/agreements/verify` 401 check. Save the deployed revision and verify the live journeys, headers, indexing, delivery and monitoring.
 
-1. **PASS locally:** Recovered editor and continuation commits are integrated with current main `2beb025`; required local checks and independent reviews pass. Preserve history while updating the existing PR branch.
-2. The initial signing update was pushed and passed all triggered checks at `268fe3c`. Publish the approved guided-terms continuation to PR #158 and verify terminal CI/screenshots for its exact new head. Save the private final-head receipt; keep production gates below separate.
-3. Obtain exact production approval for migrations 0023 and 0024, then complete the backup/recovery/apply/verification receipt above in order.
-4. Obtain/confirm production merge and deployment authorization; merge only with current-head checks and required review satisfied. Verify the deployed revision and scoped journeys.
-5. Keep signing off until the owner reviews templates/consent/configuration and approves enabling it. Real-client signing and PDF delivery remain separate live checks.
+Rollback: preserve `5137d3d17b88c5c34c642869613bb757650e89cf`, current origin/main at this job. A code rollback leaves additive schema in place. Do not drop signed evidence or restore the whole database over newer writes without separate recovery planning. Disabling signing prevents new signing and preserves existing evidence. Backup and pre-merge remote health are recorded above; actual rollback rehearsal and post-deploy health remain UNVERIFIED.
 
-### Complete signed-copy access
+## Independent merge review
 
-The guided reader links to the current SOW’s complete signed packet, which includes its linked MSA and signing certificates. Both immutable legal texts and hashes remain available inline. Individual reused-MSA download authorization follows the older project request and may expire when that portal closes; using the current project packet preserves existing authorization boundaries without changing backend access. A render regression covers an MSA from an earlier request.
+PASS: independent correctness/security and UI/copy agents reviewed all 12 conflict resolutions and their callers. Both reported no verified findings. These reviews cover the integration diff, not a new review of the entire PR #158 head or rendered screenshots.
 
-Release health sequence: run `npm run owner:health -- --remote` before merge (target schema and configuration). Run `npm run owner:health -- --remote --post-deploy` after deployment (also checks the live `/agreements/verify` bare-visit 401). Both remain UNVERIFIED in this continuation; no remote command or deployment was authorized.
+## Remaining release work
+
+- Rerun the full suite with loopback access; complete build and exact-head CI/review/screenshot receipts.
+- Record the owner's post-deploy health receipt; supplied migration and pre-merge health evidence is recorded above.
+- Complete manual accessibility, cross-browser/device, no-JS, actual Workers PDF, authorized inbox delivery, monitoring and recovery checks.
+- Verify counsel/template status and owner contractor/address configuration before enabling signing. No owner understanding or legal suitability is certified by this record.
+- Save post-deployment/live verification separately. No real email, payment, signing, migration or deployment was performed by this job.
+
+## Signing lifecycle follow-up, October 10, 2026
+
+Local regression coverage now refuses request resolution and withdrawal while a client signature awaits countersignature, displays the required owner guidance, removes external offer events with retained project content, sends executed copies without stale waiting notices on retry, and uses secret-keyed archive cooldown identities pruned by the existing allowance lifecycle. No schema or migration change.
+
+PASS: focused signing, studio retention and rendered owner tests; copy check; Astro check (0 errors, 0 warnings); screenshot harness (30 tests). The full suite was run; local R2 upload remains blocked by sandbox loopback permission (EPERM). After correcting the rendered fixture, all 124 other suites pass (1,324 tests) with only the R2 upload file excluded. CI captures and exact-head review remain UNVERIFIED. No build, real email, remote command, push or deployment in this follow-up.
