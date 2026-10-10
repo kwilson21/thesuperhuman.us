@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 vi.mock('~/scripts/brief-suggestion-pass', () => ({ setupSuggestionPass: () => async () => true }));
 class Node extends EventTarget {
   dataset: Record<string, string> = {}; attrs: Record<string, string> = {}; hidden = false; disabled = false;
-  name = ''; value = ''; checked = false; type = ''; required = false; maxLength = -1; textContent = ''; placeholder = ''; scrollTop = 0;
+  name = ''; value = ''; checked = false; type = ''; required = false; maxLength = -1; textContent = ''; placeholder = ''; scrollTop = 0; style = { height: '' }; offsetHeight = 200; clientHeight = 198; scrollHeight = 198;
   selectionStart = 0; selectionEnd = 0; children: Node[] = []; parentElement!: Node; section!: Node; nodes: Record<string, Node> = {};
   focus = vi.fn();
   getAttribute(key: string) { return key === 'name' ? this.name : this.attrs[key] ?? null; }
@@ -321,8 +321,20 @@ it('clears remapped question errors and invalid markers when switching paths', (
   expect(steps[1].nodes['[data-form-error]'].textContent).toBe('');
   expect(steps[1].nodes['[data-answer]'].getAttribute('aria-invalid')).toBeNull();
 });
-it('reserves the same scrollbar gutter for the textarea and ghost mirror', () => {
+it('grows the answer to fit typed text and the tappable suggestion without scrolling', async () => {
+  choose('path', 'workflow'); const box = fill('today', 'We track new clients');
+  const overlay = steps[1].nodes['[data-ghost-prefix]'].parentElement;
+  box.scrollHeight = 300; overlay.scrollHeight = 360;
+  await vi.advanceTimersByTimeAsync(400);
+  expect(box.style.height).toBe('362px');
+  fire(box, 'keydown', { key: 'x' });
+  expect(box.style.height).toBe('362px');
   const css = readFileSync('src/styles/software-intake.css', 'utf8');
-  expect(css).toMatch(/textarea,\.software-intake \.brief-ghost\{[^}]*scrollbar-gutter:stable/);
-  expect(css).toMatch(/\.software-intake \.brief-ghost\{[^}]*overflow:auto/);
+  expect(css).toMatch(/brief-answer textarea\{[^}]*overflow:hidden/);
+  expect(css).not.toContain('scrollbar-gutter');
+});
+it.each(['idea', 'workflow'])('refresh of the same explicit %s path restores the saved step', async requested => {
+  choose('path', requested); fill(requested === 'idea' ? 'idea' : 'today', 'A saved answer');
+  click('[data-next]'); click('[data-next]');
+  await setup(requested); expect(current()).toBe(3);
 });

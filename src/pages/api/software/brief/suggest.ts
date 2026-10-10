@@ -26,7 +26,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (!ip) return empty();
     const pass = request.headers.get('cookie')?.split(';').map(part => part.trim()).find(part => part.startsWith(`${suggestionPassCookie}=`))?.slice(suggestionPassCookie.length + 1);
     if (!await validSuggestionPass(pass, env.TURNSTILE_SECRET_KEY, ip)) return Response.json({ suggestion: '', passRequired: true }, { headers: { 'cache-control': 'no-store' } });
-    const hash = await suggestionVisitorHash(ip, now);
+    const hash = await suggestionVisitorHash(env.TURNSTILE_SECRET_KEY, ip, now);
     if (!(await env.BRIEF_SUGGEST_RATE_LIMIT.limit({ key: hash })).success || !(await env.BRIEF_SUGGEST_SITE_LIMIT.limit({ key: 'site' })).success) return empty();
     const site = await env.MUSIC_DB.prepare('SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?').bind(day, 'site').first<{ count: number }>();
     if (site && site.count >= 10000) return empty();

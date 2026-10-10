@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { POST } from '~/pages/api/software/brief/pass';
-import { createSuggestionPass, validSuggestionPass } from '~/lib/brief-suggestion-pass';
+import { createSuggestionPass, validSuggestionPass, suggestionVisitorHash } from '~/lib/brief-suggestion-pass';
 const secret = 'existing-turnstile-secret-for-tests';
 const context = (token: unknown = 'token', overrides = {}) => ({
   request: new Request('https://example.com/api/software/brief/pass', { method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json', 'cf-connecting-ip': 'test' }, body: JSON.stringify({ token }) }),
@@ -35,4 +35,15 @@ it('keeps an IP-bound pass valid across midnight UTC until its signed expiry', a
   expect(await validSuggestionPass(pass.slice(0, -1) + (pass.endsWith('a') ? 'b' : 'a'), secret, 'test')).toBe(false);
   vi.setSystemTime(new Date('2026-10-11T00:20:00Z'));
   expect(await validSuggestionPass(pass, secret, 'test')).toBe(false);
+});
+
+it('keys visitor identities with a labelled HMAC over the IP and UTC day', async () => {
+  const { createHmac } = await import('node:crypto');
+  const now = Date.parse('2026-10-10T23:50:00Z');
+  const expected = createHmac('sha256', secret).update(`brief-suggestion-visitor:v1:${Math.floor(now / 86400000)}:test`).digest('hex');
+  expect(await suggestionVisitorHash(secret, 'test', now)).toBe(expected);
+  expect(await suggestionVisitorHash('other-secret', 'test', now)).not.toBe(expected);
+  expect(await suggestionVisitorHash(secret, 'other-ip', now)).not.toBe(expected);
+  expect(await suggestionVisitorHash(secret, 'test', now + 86400000)).not.toBe(expected);
+  expect((await createSuggestionPass(secret, 'test', now)).split('.')[1]).toBe(expected);
 });

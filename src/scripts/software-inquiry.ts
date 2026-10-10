@@ -31,7 +31,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
   const answers: Record<string, string> = {};
   let sentElsewhere = false;
   const sentNotice = 'This brief was already sent from another tab. Your changes here will be sent as a new brief.';
-  let step = 0, submissionId = crypto.randomUUID();
+  let step = requestedPath === 'idea' || requestedPath === 'workflow' ? 1 : 0, submissionId = crypto.randomUUID();
   const path = () => new FormData(form).get('path') === 'idea' ? 'idea' : 'workflow';
   const fields = () => ['path', path() === 'idea' ? 'idea' : 'today', path() === 'idea' ? 'firstVersion' : 'firstResult', 'timing', 'timingDate', 'budgetNote', 'name', 'email', 'company'];
   const payload = (trim = true) => Object.fromEntries(fields().map(key => [key, trim ? String(new FormData(form).get(key) ?? '').trim() : String(new FormData(form).get(key) ?? '')]));
@@ -79,11 +79,10 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
         const control = form.elements.namedItem(key);
         if ((control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) && typeof saved.answers[key] === 'string') control.value = saved.answers[key].slice(0, control.maxLength > 0 ? control.maxLength : 200);
       }
-      if (Number.isInteger(saved.step) && saved.step >= 0 && saved.step <= 6) step = saved.step;
+      if ((!requestedPath || requestedPath === saved.answers.path) && Number.isInteger(saved.step) && saved.step >= 0 && saved.step <= 6) step = saved.step;
       if (typeof saved.submissionId === 'string' && /^[a-f0-9-]{36}$/i.test(saved.submissionId)) submissionId = saved.submissionId;
     }
   } catch { /* Ignore unavailable storage and invalid drafts. */ }
-  if (requestedPath === 'idea' || requestedPath === 'workflow') step = 1;
   configureQuestions();
   const suggestions = setupBriefAutocomplete(form, () => step === 2 ? { path: path(), [path() === 'idea' ? 'idea' : 'today']: payload()[path() === 'idea' ? 'idea' : 'today'] } : { path: path() });
   function renderSummary() {

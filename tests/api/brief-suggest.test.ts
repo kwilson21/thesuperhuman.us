@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
-import { createSuggestionPass } from '~/lib/brief-suggestion-pass';
+import { createSuggestionPass, suggestionVisitorHash } from '~/lib/brief-suggestion-pass';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
@@ -217,4 +217,11 @@ it('never writes the site row for a capped visitor', async () => {
   await POST(context());
   expect(database.prepare.mock.calls.filter(([sql]: [string]) => sql.startsWith('INSERT'))).toHaveLength(1);
   expect(db.prepare("SELECT count FROM brief_suggestion_budget WHERE scope='site'").get().count).toBe(1);
+});
+
+it('uses the keyed visitor identity for both the limiter and persisted daily budget', async () => {
+  await POST(context());
+  const key = await suggestionVisitorHash(secret, 'test');
+  expect(limiter.limit).toHaveBeenCalledWith({ key });
+  expect(db.prepare('SELECT scope FROM brief_suggestion_budget WHERE scope != ?').get('site').scope).toBe(key);
 });

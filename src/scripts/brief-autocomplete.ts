@@ -1,7 +1,8 @@
 import { setupSuggestionPass } from './brief-suggestion-pass';
 export function setupBriefAutocomplete(form: HTMLFormElement, earlier: () => Record<string, string>) {
   const startPass = setupSuggestionPass(form);
-  const start = () => { if (enabled) void startPass(); };
+  const resizeAnswers: (() => void)[] = [];
+  const start = () => { resizeAnswers.forEach(resize => resize()); if (enabled) void startPass(); };
   let unavailable = false;
   let inputType = 'keyboard';
   const updateHints = () => form.querySelectorAll<HTMLElement>('[data-accept-hint]').forEach(hint => hint.textContent = inputType === 'touch' ? 'Tap to accept' : 'Tab to accept');
@@ -52,9 +53,15 @@ export function setupBriefAutocomplete(form: HTMLFormElement, earlier: () => Rec
     });
     box.addEventListener('select', () => { if (!atEnd()) clear(); });
     box.addEventListener('click', () => { if (!atEnd()) clear(); });
-    box.addEventListener('scroll', () => { overlay.scrollTop = box.scrollTop; });
+    const resize = () => {
+      if (section.hidden) return;
+      const border = box.offsetHeight - box.clientHeight;
+      box.style.height = `${Math.max(box.offsetHeight, box.scrollHeight + border, overlay.scrollHeight + border)}px`;
+    };
+    resizeAnswers.push(resize);
+    window.addEventListener('resize', resize);
     box.addEventListener('input', event => {
-      clear();
+      clear(); resize();
       if (!enabled || unavailable || (event as InputEvent).isComposing || !atEnd() || box.value.trim().split(/\s+/).length < 3) return;
       const text = box.value, current = generation;
       timer = setTimeout(async () => {
@@ -86,7 +93,7 @@ export function setupBriefAutocomplete(form: HTMLFormElement, earlier: () => Rec
           control.dataset.suggestion = suggestion; control.textContent = `Add suggestion: ${suggestion.trim()}`;
           updateHints(); hint.hidden = false;
           control.setAttribute('aria-label', `Add suggestion: ${suggestion.trim()}`); control.hidden = false;
-          overlay.scrollTop = box.scrollTop;
+          resize();
         } catch { /* Suggestions never interrupt writing. */ }
         finally { if (renewedRetry === requestController) renewedRetry = undefined; }
       }, 400);
