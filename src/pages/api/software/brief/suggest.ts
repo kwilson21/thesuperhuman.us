@@ -14,18 +14,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
   try {
     const env = locals.runtime?.env;
     // Local previews never call Workers AI, even when a proxy binding exists.
-    if (!env?.AI || !env.RATE_LIMIT || env.SOFTWARE_SUGGESTIONS_ENABLED !== 'true' || ['localhost', '127.0.0.1', '[::1]'].includes(new URL(request.url).hostname)) return empty();
+    if (!env?.AI || !env.RATE_LIMIT || !env.BRIEF_SUGGEST_RATE_LIMIT || env.SOFTWARE_SUGGESTIONS_ENABLED !== 'true' || ['localhost', '127.0.0.1', '[::1]'].includes(new URL(request.url).hostname)) return empty();
     const parsed = schema.safeParse(await musicRequest(request, 16000));
     if (!parsed.success || parsed.data.text.trim().split(/\s+/).length < 3) return empty();
     const content = JSON.stringify(parsed.data);
     if (content.length > 2000) return empty();
-    const now = Date.now(), minute = Math.floor(now / 60000), day = Math.floor(now / 86400000);
+    const day = Math.floor(Date.now() / 86400000);
     const ip = request.headers.get('cf-connecting-ip');
     if (!ip) return empty();
     const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${day}:${ip}`))), byte => byte.toString(16).padStart(2, '0')).join('');
-    // shortcut: KV quotas are best-effort under concurrency, use atomic storage if strict caps become necessary.
+    if (!(await env.BRIEF_SUGGEST_RATE_LIMIT.limit({ key: hash })).success) return empty();
+    // Daily KV counts are approximate under concurrency; the per-minute binding is the abuse limit.
+    // shortcut: daily caps are best-effort cost guards, use atomic storage if strict daily caps become necessary.
     for (const [key, max, ttl] of [
-      [`visitor-minute:${minute}:${hash}`, 30, 60],
       [`visitor-day:${day}:${hash}`, 300, 86400],
       [`site-day:${day}`, 10000, 86400],
     ] as const) {

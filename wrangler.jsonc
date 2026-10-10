@@ -5,6 +5,9 @@
   "compatibility_date": "2026-05-14",
   "compatibility_flags": ["nodejs_compat"],
   "ai": { "binding": "AI" },
+  "ratelimits": [
+    { "name": "BRIEF_SUGGEST_RATE_LIMIT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } }
+  ],
   "assets": {
     "binding": "ASSETS",
     "directory": "./dist"

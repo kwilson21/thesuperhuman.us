@@ -1,12 +1,22 @@
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { POST } from '~/pages/api/software/brief/suggest';
 let values: Map<string, string>, kv: { get: ReturnType<typeof vi.fn>; put: ReturnType<typeof vi.fn> }, run: ReturnType<typeof vi.fn>;
+let limiter: { limit: ReturnType<typeof vi.fn> };
 const input = { question: 'What happens today?', text: 'We track new clients', earlier: { path: 'workflow' } };
 function context(body: unknown = input, env: Record<string, unknown> = {}) {
-  return { request: new Request('https://example.com/api/software/brief/suggest', { method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json', 'cf-connecting-ip': 'test' }, body: JSON.stringify(body) }), locals: { runtime: { env: { AI: { run }, RATE_LIMIT: kv, SOFTWARE_SUGGESTIONS_ENABLED: 'true', ...env } } } } as any;
+  return { request: new Request('https://example.com/api/software/brief/suggest', { method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json', 'cf-connecting-ip': 'test' }, body: JSON.stringify(body) }), locals: { runtime: { env: { AI: { run }, RATE_LIMIT: kv, BRIEF_SUGGEST_RATE_LIMIT: limiter, SOFTWARE_SUGGESTIONS_ENABLED: 'true', ...env } } } } as any;
 }
 beforeEach(() => {
   values = new Map();
+  const counts = new Map<string, { start: number; count: number }>();
+  limiter = { limit: vi.fn(async ({ key }: { key: string }) => {
+    let window = counts.get(key);
+    if (!window || Date.now() - window.start >= 60000) {
+      window = { start: Date.now(), count: 0 };
+      counts.set(key, window);
+    }
+    return { success: ++window.count <= 30 };
+  }) };
   kv = {
     get: vi.fn(async (key: string) => values.get(key) ?? null),
     put: vi.fn(async (key: string, value: string, _options: { expirationTtl: number }) => { values.set(key, value); }),
@@ -27,7 +37,7 @@ it.each([
   expect(await (await POST(context(body))).json()).toEqual({ suggestion: '' });
   expect(run).not.toHaveBeenCalled();
 });
-it.each([{ AI: undefined }, { RATE_LIMIT: undefined }, { SOFTWARE_SUGGESTIONS_ENABLED: 'false' }])('silently disables unavailable suggestions', async env => {
+it.each([{ AI: undefined }, { RATE_LIMIT: undefined }, { BRIEF_SUGGEST_RATE_LIMIT: undefined }, { SOFTWARE_SUGGESTIONS_ENABLED: 'false' }])('silently disables unavailable suggestions', async env => {
   expect(await (await POST(context(input, env))).json()).toEqual({ suggestion: '' });
   expect(run).not.toHaveBeenCalled();
 });
@@ -54,9 +64,9 @@ it('returns no suggestion on error, empty model output or timeout', async () => 
   expect(await (await response).json()).toEqual({ suggestion: '' });
 });
 
-it('recovers at the next minute and uses separate minute and daily TTLs', async () => {
+it('recovers after sixty seconds and keeps daily KV TTLs', async () => {
   for (let i = 0; i < 40; i++) await POST(context());
-  expect(kv.put.mock.calls.slice(0, 3).map(call => call[2].expirationTtl)).toEqual([60, 86400, 86400]);
+  expect(kv.put.mock.calls.slice(0, 2).map(call => call[2].expirationTtl)).toEqual([86400, 86400]);
   expect(run).toHaveBeenCalledTimes(30);
   vi.useFakeTimers(); vi.setSystemTime(Date.now() + 60001);
   await POST(context()); expect(run).toHaveBeenCalledTimes(31);
@@ -72,4 +82,22 @@ it('never invokes AI on local previews or cross-origin requests', async () => {
   expect(await (await POST(local)).json()).toEqual({ suggestion: '' });
   const crossOrigin = context(); crossOrigin.request = new Request(crossOrigin.request, { headers: { origin: 'https://other.example', 'content-type': 'application/json' } });
   expect(await (await POST(crossOrigin)).json()).toEqual({ suggestion: '' }); expect(run).not.toHaveBeenCalled();
+});
+
+it('caps a concurrent burst before invoking AI or daily KV counters', async () => {
+  const responses = await Promise.all(Array.from({ length: 31 }, () => POST(context())));
+  const bodies = await Promise.all(responses.map(response => response.json()));
+  expect(bodies.filter(body => (body as { suggestion: string }).suggestion)).toHaveLength(30);
+  expect(run).toHaveBeenCalledTimes(30);
+  expect(limiter.limit).toHaveBeenCalledTimes(31);
+  expect(new Set(limiter.limit.mock.calls.map(([options]) => options.key)).size).toBe(1);
+  expect(kv.put).toHaveBeenCalledTimes(60);
+});
+it('fails closed when the minute binding or daily KV throws', async () => {
+  limiter.limit.mockRejectedValueOnce(new Error('unavailable'));
+  expect(await (await POST(context())).json()).toEqual({ suggestion: '' });
+  expect(kv.get).not.toHaveBeenCalled();
+  kv.put.mockRejectedValueOnce(new Error('write limit'));
+  expect(await (await POST(context())).json()).toEqual({ suggestion: '' });
+  expect(run).not.toHaveBeenCalled();
 });
