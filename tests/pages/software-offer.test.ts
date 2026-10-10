@@ -773,8 +773,10 @@ it('renders legacy reissue guidance and removes signing actions after a project 
     const done=await (await render(db,token)).text();
     expect(done).toContain('Signed by both of you.');expect(done).toContain('Open your project page');expect(done).not.toContain('Review and sign');
     sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='current'").run(JSON.stringify({review_business_days:12,correction_calendar_days:60,handoff_access_days:90}));
+    sql.exec("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,created_by,created_at,updated_at,review_window_days) VALUES('old-draft','r','progress','draft',0,'Draft','concept','owner','now','now',5)");
     const ownerHTML=await container.renderToString(composer,{request:new Request('https://thesuperhuman.us/owner/requests/r/update'),params:{id:'r'},locals:{owner:{email:'owner@example.com'},runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}} as any});
     expect(ownerHTML).toContain('Keep these files available for 90 days.');
+    expect(ownerHTML).toMatch(/name="review_window_days"[^>]*value="12"/);
   } finally {sql.close();}
 });
 it.each(['client_signed','executed'])('renders a %s offer without another signing action',async status=>{

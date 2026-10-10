@@ -160,7 +160,11 @@ beforeEach(async () => {
     )
     .run(await hashOfferToken(token), await hashOfferToken(token));
   const bucket = {
-    put: vi.fn(async (k: string, v: string | Uint8Array) => {
+    put: vi.fn(async (k: string, v: string | Uint8Array, options?: {onlyIf?: {etagMatches?: string; etagDoesNotMatch?: string}}) => {
+      const current=bucketData.get(k);
+      const etag=current ? await hashBytes(current) : null;
+      if (options?.onlyIf?.etagMatches && options.onlyIf.etagMatches!==etag) return null;
+      if (options?.onlyIf?.etagDoesNotMatch==='*' && current) return null;
       bucketUploaded.set(k, new Date());
       return bucketData.set(k, typeof v === 'string' ? new TextEncoder().encode(v) : v);
     }),
@@ -184,6 +188,7 @@ beforeEach(async () => {
       return b
         ? {
             size: b.length,
+            etag: await hashBytes(b),
             body: b,
             arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength),
           }
@@ -688,7 +693,7 @@ it('deletes only the reviewed retired packet, closes archive access and keeps a 
     sql.prepare('SELECT agreement_id FROM software_agreement_retention_receipts').get(),
   ).toEqual({ agreement_id: id });
 });
-it('allows expired SOW cleanup after project content cleanup and clears only its tombstone reference', async () => {
+it('retains an expired SOW while a project tombstone still references its offer', async () => {
   const { previewAgreementRetention, applyAgreementRetention } =
     await import('~/lib/agreement-retention');
   const result = await signed(),
@@ -711,11 +716,11 @@ it('allows expired SOW cleanup after project content cleanup and clears only its
     )
     .run(id);
   const manifest = await previewAgreementRetention(db, env.AUDIO, 'test-storage');
-  expect(manifest.agreements.map((a) => a.id)).toContain(id);
+  expect(manifest.agreements.map((a) => a.id)).not.toContain(id);
   await applyAgreementRetention(db, env.AUDIO, 'test-storage', manifest);
   expect(
     sql.prepare("SELECT agreement_id FROM software_projects WHERE request_id='r'").get(),
-  ).toEqual({ agreement_id: null });
+  ).toEqual({ agreement_id: id });
 });
 it('records business authority in the single explicit consent statement', () => {
   expect(clientAgreementSchema.safeParse(client).success).toBe(true);
@@ -1788,4 +1793,60 @@ it('applies the same archive cooldown to known and unknown emails without storin
   expect(results[0]).toEqual(results[1]);expect(results[1][2]).toBe(429);
   expect(JSON.stringify(sql.prepare('SELECT * FROM audio_client_allowances').all())).not.toContain('unknown@example.com');
   expect(JSON.stringify((fetch as any).mock.calls)).not.toContain('unknown@example.com');
+});
+
+it('retains review agreements and pinned terms while any project references the offer', async () => {
+  const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
+  await signed();
+  sql.exec("UPDATE software_agreements SET status='abandoned',ended_at='2000-01-01',retain_until='2010-01-01',terminated_at='2000-01-01'; INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES('r','o','{}','standard','now','now','now','owner','now','now')");
+  const original=sql.prepare("SELECT * FROM software_offers WHERE id='o'").get();
+  const manifest=await previewAgreementRetention(db,env.AUDIO,'test-storage');
+  expect(manifest.agreements).toEqual([]);
+  await applyAgreementRetention(db,env.AUDIO,'test-storage',manifest);
+  expect(sql.prepare("SELECT * FROM software_offers WHERE id='o'").get()).toEqual(original);
+});
+it('leaves a newer saved attachment cursor alone when applying an old preview', async () => {
+  const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
+  const old=await previewAgreementRetention(db,env.AUDIO,'test-storage');
+  const marker='agreements/retention/attachment-cursor.json';
+  const newer=JSON.stringify({version:1,cursor:'after:newer'});
+  bucketData.set(marker,new TextEncoder().encode(newer));
+  await applyAgreementRetention(db,env.AUDIO,'test-storage',old);
+  expect(new TextDecoder().decode(bucketData.get(marker))).toBe(newer);
+});
+it('emails the client signature receipt rather than the agreement ID', async () => {
+  const { deliverAgreementNotifications } = await import('~/lib/agreement-artifacts');
+  await signed();
+  const signature=sql.prepare("SELECT agreement_id,receipt_id FROM software_agreement_signatures WHERE party='client' AND agreement_id IN (SELECT id FROM software_agreements WHERE kind='sow')").get();
+  vi.stubGlobal('fetch',vi.fn(async()=>Response.json({id:'message'})));
+  await deliverAgreementNotifications(env,signature.agreement_id);
+  const payload=vi.mocked(fetch).mock.calls.map(([,init])=>JSON.parse(String(init?.body))).find(p=>p.subject==='Your signature is saved');
+  expect(payload.text).toContain(`Receipt: ${signature.receipt_id}`);
+  expect(payload.text).not.toContain(`Receipt: ${signature.agreement_id}`);
+});
+
+it.each([false,true])('conditionally advances the attachment cursor if storage changes during apply (existing marker: %s)', async exists => {
+  const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
+  const marker='agreements/retention/attachment-cursor.json';
+  const old=await previewAgreementRetention(db,env.AUDIO,'test-storage');
+  if (!exists) bucketData.delete(marker);
+  const newer=JSON.stringify({version:1,cursor:'after:newer'});
+  const put=vi.mocked(env.AUDIO.put).getMockImplementation()!;
+  vi.mocked(env.AUDIO.put).mockImplementationOnce(async (...args:any[])=>{
+    bucketData.set(marker,new TextEncoder().encode(newer));
+    return (put as any)(...args);
+  });
+  await applyAgreementRetention(db,env.AUDIO,'test-storage',old);
+  expect(new TextDecoder().decode(bucketData.get(marker))).toBe(newer);
+});
+
+it('retains a reused MSA and its pinned offer reference for a project tombstone', async () => {
+  const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
+  await review();
+  sql.exec("UPDATE software_offers SET status='superseded' WHERE id='o'; UPDATE software_agreements SET msa_id=NULL,legal_hold=1 WHERE kind='sow'; UPDATE software_agreements SET status='abandoned',ended_at='2000-01-01',retain_until='2010-01-01',terminated_at='2000-01-01'; INSERT INTO software_offers(id,request_id,version,status,terms_json,reused_msa_id,created_at,updated_at) SELECT 'reused','r',2,'sent','{}',id,'now','now' FROM software_agreements WHERE kind='msa'; INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,content_deleted_at) VALUES('r','reused','{}','standard','now','now','now','owner','now','now','now')");
+  const original=sql.prepare("SELECT reused_msa_id FROM software_offers WHERE id='reused'").get();
+  const manifest=await previewAgreementRetention(db,env.AUDIO,'test-storage');
+  expect(manifest.agreements).toEqual([]);
+  await applyAgreementRetention(db,env.AUDIO,'test-storage',manifest);
+  expect(sql.prepare("SELECT reused_msa_id FROM software_offers WHERE id='reused'").get()).toEqual(original);
 });

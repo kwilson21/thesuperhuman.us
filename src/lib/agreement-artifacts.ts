@@ -253,10 +253,10 @@ export async function recoverAgreementRendering(
 export async function deliverAgreementNotifications(env: Env, id: string) {
   if (!env.MUSIC_DB || !env.RESEND_API_KEY || !env.CONTACT_FROM_EMAIL) return;
   const agreement = await env.MUSIC_DB.prepare(
-    'SELECT request_id FROM software_agreements WHERE id=?',
+    "SELECT request_id,(SELECT receipt_id FROM software_agreement_signatures WHERE agreement_id=software_agreements.id AND party='client') AS receipt_id FROM software_agreements WHERE id=?",
   )
     .bind(id)
-    .first<{ request_id: string }>();
+    .first<{ request_id: string; receipt_id: string }>();
   if (!agreement) return;
   for (const kind of ['signature-receipt', 'countersign-notice']) {
     const attempt = crypto.randomUUID(),
@@ -279,7 +279,7 @@ export async function deliverAgreementNotifications(env: Env, id: string) {
             : 'Agreement ready for countersignature',
         text:
           kind === 'signature-receipt'
-            ? `Your signature is saved. Waiting for Kazon to countersign. The project has not started. Receipt: ${id}`
+            ? `Your signature is saved. Waiting for Kazon to countersign. The project has not started. Receipt: ${agreement.receipt_id}`
             : `A client signature is saved. Review the exact agreement before countersigning: ${new URL(`/owner/requests/${agreement.request_id}`, env.SITE_ORIGIN ?? 'https://thesuperhuman.us').href}`,
       },
     });

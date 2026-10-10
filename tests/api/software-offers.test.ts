@@ -451,3 +451,14 @@ it('reissues a pre-signing offer in its original external mode',async()=>{
   expect(sql.prepare('SELECT msa_template_id FROM software_offers').get().msa_template_id).toBeNull();
   expect(JSON.stringify((fetch as any).mock.calls)).toContain('sign outside the website');
 });
+
+it.each([0,1])('reissue email follows the current signing switch (%s)',async enabled=>{
+  const first=await send(await draft());
+  sql.exec("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES('msa','msa',1,'Synthetic',lower(hex(zeroblob(32))),'now','owner'); UPDATE software_offers SET msa_template_id='msa'; UPDATE software_offer_links SET created_at='2020-01-01'");
+  sql.prepare('UPDATE software_signing_settings SET software_signing_enabled=?').run(enabled);
+  expect((await call({action:'revoke',expectedLinkCreatedAt:'2020-01-01'})).status).toBe(200);
+  vi.mocked(fetch).mockClear();
+  await send(first);
+  const payload=JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
+  expect(payload.text).toContain(enabled?'Review and sign on the website.':'We will arrange for you to sign outside the website.');
+});
