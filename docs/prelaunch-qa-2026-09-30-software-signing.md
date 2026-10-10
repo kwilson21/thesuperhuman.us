@@ -35,7 +35,7 @@ PASS automated coverage in `tests/lib/software-agreements.test.ts`, `tests/pages
 
 The branch includes fixes for Turnstile before recipient email allowance, preserving signing details while disabled, retiring unsigned reviews before external start, canonical access and stored statements, reused MSA pinning, agreed retention/review periods, recipient signature receipts, link retry verification, serialized attachment uploads, preserving existing links until replacement delivery succeeds, artifact and recipient delivery retry, invoice/retention reconciliation, owner health, and signed-copy archive access during project cleanup. Evidence: branch history through `c6035bbf`, including `d59123f3`, `878e9ced`, `aea6d083`, `4d6574ea`, `87092edf`, `b9faf139`, `cfca816d` and `c6035bbf`, with corresponding regression tests. These are implementation/test claims, not delivery or legal approval claims.
 
-Main integration retains migrations 0023/0024 before 0025, the complete required schema and extended columns, post-deploy-only signing-route health, AI and rate-limit bindings, retention binding identity, preview SITE_ORIGIN, both screenshot flows, and both privacy disclosures. No new dependency or legal template source was added.
+Main integration retains migrations 0023/0024 before 0025, the listed required schema objects, all 11 columns added by 0023, and both columns added by 0024, post-deploy-only signing-route health, AI and rate-limit bindings, retention binding identity, preview SITE_ORIGIN, both screenshot flows, and both privacy disclosures. Local owner-health regression coverage loads the complete schema, drops `software_offers.recipient_email_snapshot`, and requires schema attention instead of PASS. This checks the listed deployment requirements, not every column in every table. No new dependency or legal template source was added.
 
 ## Checks run October 10, 2026
 
@@ -177,7 +177,7 @@ Deploy order:
 
 1. Reconcile production MUSIC_DB and its migration ledger. Preserve database backup and recovery evidence.
 2. Apply `0023_software_signing.sql`, then `0024_software_delivery_selection_and_review_windows.sql` before merging PR #158 to main. Both are additive; current main keeps working with them. 0023 initializes website signing off. 0024 adds delivery selections and extended review windows without changing the existing 5-to-30-day constraint.
-3. Run `npm run owner:health -- --remote` before merge. It requires signing objects, 0024 columns, `brief_suggestion_budget`, configuration and retention binding identity, but does not check the undeployed signing landing.
+3. Run `npm run owner:health -- --remote` before merge. It requires signing objects, all 11 columns added by 0023, both 0024 columns, `brief_suggestion_budget`, configuration and retention binding identity, but does not check the undeployed signing landing.
 4. Complete exact-head review, green CI and CI screenshot inspection, resolve all applicable release gates or record an explicit owner-accepted exception, then merge under the recorded deployment authorization.
 5. Run `npm run owner:health -- --remote --post-deploy` after deployment, including the bare `/agreements/verify` 401 check. Save the deployed revision and verify the live journeys, headers, indexing, delivery and monitoring.
 

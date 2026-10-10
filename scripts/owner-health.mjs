@@ -48,14 +48,21 @@ export async function ownerHealth({ now = new Date(), configuredNames, query, me
   }
   if (availableSchema.size) {
     const missing = requiredSchema.filter(name => !availableSchema.has(name));
-    try {
-      const columns = new Set((await query("SELECT name FROM pragma_table_info('software_project_updates')")).map(row=>row.name));
-      for (const column of ['delivered_deliverables_json','review_window_days_extended'])
-        if (!columns.has(column)) missing.push(`software_project_updates.${column} (migration 0024)`);
-    } catch { missing.push('software_project_updates columns (migration 0024)'); }
+    for (const [table, migration, requiredColumns] of [
+      ['software_offers', '0023', ['agreement_details_json', 'msa_template_id', 'sow_template_id', 'contractor_snapshot_json', 'recipient_email_snapshot', 'reused_msa_id']],
+      ['software_projects', '0023', ['agreement_id', 'signature_source', 'external_signature_details_json', 'start_details_json']],
+      ['software_agreements', '0023', ['archive_closed_at']],
+      ['software_project_updates', '0024', ['delivered_deliverables_json', 'review_window_days_extended']],
+    ]) {
+      try {
+        const columns = new Set((await query(`SELECT name FROM pragma_table_info('${table}')`)).map(row => row.name));
+        for (const column of requiredColumns)
+          if (!columns.has(column)) missing.push(`${table}.${column} (migration ${migration})`);
+      } catch { missing.push(`${table} columns (migration ${migration})`); }
+    }
     checks.push(missing.length
       ? attention('schema', `Required owner schema is missing: ${missing.join(', ')}.`, 'Reconcile the database migration ledger before applying any migration.')
-      : pass('schema', 'Required owner data objects are present.'));
+      : pass('schema', 'Required owner data objects and listed migration columns are present.'));
   }
 
   let mediaFailures = 0;

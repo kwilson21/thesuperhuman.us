@@ -21,7 +21,14 @@ function healthyFixture() {
     now: new Date('2026-09-19T12:00:00Z'),
     configuredNames: new Set(['MUSIC_DB', 'AUDIO', 'AGREEMENT_RETENTION_BINDING_ID', 'OWNER_ACCESS_TEAM_DOMAIN', 'OWNER_ACCESS_AUD', 'OWNER_EMAIL']),
     query: async (sql: string) => {
-      if (sql.includes('pragma_table_info')) return [{name:'delivered_deliverables_json'},{name:'review_window_days_extended'}];
+      if (sql.includes('pragma_table_info')) {
+        const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
+        const db = new DatabaseSync(':memory:');
+        try {
+          db.exec(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8'));
+          return db.prepare(sql).all() as { name: string }[];
+        } finally { db.close(); }
+      }
       if (sql.includes('sqlite_master')) return requiredSchema.map(name => ({ name }));
       if (sql.includes('owner_retention_runs')) return [{ completed_at: '2026-09-18T12:00:00Z' }];
       if (sql.includes('stripe_unmatched_events')) return [{ total: 0 }];
@@ -209,4 +216,22 @@ it('requires the brief suggestion budget schema', async () => {
     : query(sql);
   const result = await ownerHealth(fixture);
   expect(JSON.stringify(result)).toContain('missing');
+});
+
+it('rejects a complete schema with a missing migration 0023 recipient snapshot column', async () => {
+  const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
+  const db = new DatabaseSync(':memory:');
+  try {
+    db.exec(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8'));
+    const fixture = healthyFixture();
+    const baseQuery = fixture.query;
+    fixture.query = sql => (sql.includes('sqlite_master') || sql.includes('pragma_table_info'))
+      ? Promise.resolve(db.prepare(sql).all() as { name: string }[]) : baseQuery(sql);
+    expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'pass' }));
+    db.exec('ALTER TABLE software_offers DROP COLUMN recipient_email_snapshot');
+    expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({
+      id: 'schema', status: 'attention',
+      summary: expect.stringContaining('software_offers.recipient_email_snapshot (migration 0023)'),
+    }));
+  } finally { db.close(); }
 });
