@@ -10,7 +10,7 @@ import type { agreementValues } from '~/lib/agreement-fields';
 import ProjectMessages from '~/components/ProjectMessages.astro';
 import SoftwareReviewResponse from '~/components/SoftwareReviewResponse.astro';
 import { clientPortalEnabled, clientSoftwareProjectForSession, studioSessionFromRequest } from '~/lib/audio-client-access';
-import { deliveredIndexes, projectTerms, sharedSoftwareUpdates, softwareStateSentence, softwareDate, milestonePayments, correctionPeriodEnd } from '~/lib/software-projects';
+import { deliveredIndexes, projectTerms, projectAgreementDetails, sharedSoftwareUpdates, softwareStateSentence, softwareDate, milestonePayments, correctionPeriodEnd } from '~/lib/software-projects';
 import { clientSoftwareInvoices, softwareInvoiceKindLabels, softwareInvoiceStatusLabels } from '~/lib/software-invoices';
 import { addBusinessDays } from '~/lib/business-days';
 import { listSoftwareProjectMessages, readableSoftwareProjectMessages } from '~/lib/software-project-messages';
@@ -44,7 +44,7 @@ const conversationClosed = project?.state === 'complete';
 const waiting = (project?.state === 'waiting_for_input' ? project.waiting_for : '');
 const agreementRecord=project ? await env.MUSIC_DB.prepare("SELECT p.agreement_id AS website_agreement_id,a.id,a.archive_closed_at,a.kind,a.msa_id,a.client_id,a.canonical_text,a.effective_on,a.text_sha256,a.values_json FROM software_projects p JOIN owner_requests r ON r.id=p.request_id LEFT JOIN software_agreements a ON a.id=p.agreement_id AND a.status='executed' AND EXISTS(SELECT 1 FROM software_agreement_clients c WHERE c.id=a.client_id AND c.recipient_email=r.email) WHERE p.request_id=?").bind(Astro.params.id).first<Pick<Agreement,'id'|'kind'|'msa_id'|'client_id'|'canonical_text'|'effective_on'|'text_sha256'|'values_json'> & {archive_closed_at:string|null;website_agreement_id:string|null}>() : null;
 const agreementSnapshot = agreementRecord?.id ? JSON.parse(agreementRecord.values_json) as ReturnType<typeof agreementValues> : null;
-const agreementDetails = agreementSnapshot?.owner;
+const agreementDetails = project ? await projectAgreementDetails(env.MUSIC_DB,project) : null;
 const masterAgreement = agreementRecord?.msa_id && !agreementRecord.archive_closed_at ? await env.MUSIC_DB.prepare("SELECT id,kind,canonical_text,effective_on,text_sha256 FROM software_agreements WHERE id=? AND client_id=? AND kind='msa' AND status='executed' AND archive_closed_at IS NULL").bind(agreementRecord.msa_id,agreementRecord.client_id).first<Pick<Agreement,'id'|'kind'|'canonical_text'|'effective_on'|'text_sha256'>>() : null;
 const agreementDocuments = [masterAgreement, agreementRecord?.id && !agreementRecord.archive_closed_at ? agreementRecord : null].filter((document): document is NonNullable<typeof document> => Boolean(document));
 ---

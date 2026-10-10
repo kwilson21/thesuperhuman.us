@@ -151,6 +151,14 @@ export async function issueAgreementLink(
       ? `I sent a link to ${(await agreementSession(db,request,"agreement",offer!.id)) ? email : maskedAgreementEmail(email)}. Tap it on any device to open your agreement.`
       : "If an agreement is available, a link is on its way.",
   };
+  if (!token) {
+    const at=new Date();
+    const cooldownKey=await hashOfferToken(`archive-link-cooldown:${email}`);
+    const reserved=await db.prepare(`INSERT INTO audio_client_allowances(key,window_start,uses) VALUES(?,?,1)
+      ON CONFLICT(key) DO UPDATE SET window_start=excluded.window_start,uses=1
+      WHERE window_start<=? RETURNING key`).bind(cooldownKey,at.toISOString(),new Date(at.getTime()-30000).toISOString()).first();
+    if(!reserved)return agreementJson({ok:false,error:'Wait at least 30 seconds before requesting another link.'},429);
+  }
   if (
     !offer &&
     !(await db

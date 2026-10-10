@@ -245,6 +245,7 @@ export const PREVIEW_OVERRIDES = {
   OWNER_ACCESS_AUD: ACCESS_AUDIENCE,
   OWNER_EMAIL,
   // Production keeps this secret; the preview needs some key to issue studio codes.
+  AGREEMENT_RETENTION_BINDING_ID: 'AUDIO:screenshots-audio',
   AUDIO_CLIENT_CODE_KEY: 'screenshots-only-code-key-0123456789abcdef',
   // Gated pages stay reviewable in PRs before launch.
   AUDIO_CLIENT_PORTAL_ENABLED: 'true',

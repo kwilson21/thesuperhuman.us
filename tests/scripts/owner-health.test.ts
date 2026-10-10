@@ -19,7 +19,7 @@ const requiredSchema = [
 function healthyFixture() {
   return {
     now: new Date('2026-09-19T12:00:00Z'),
-    configuredNames: new Set(['MUSIC_DB', 'AUDIO', 'OWNER_ACCESS_TEAM_DOMAIN', 'OWNER_ACCESS_AUD', 'OWNER_EMAIL']),
+    configuredNames: new Set(['MUSIC_DB', 'AUDIO', 'AGREEMENT_RETENTION_BINDING_ID', 'OWNER_ACCESS_TEAM_DOMAIN', 'OWNER_ACCESS_AUD', 'OWNER_EMAIL']),
     query: async (sql: string) => {
       if (sql.includes('pragma_table_info')) return [{name:'delivered_deliverables_json'},{name:'review_window_days_extended'}];
       if (sql.includes('sqlite_master')) return requiredSchema.map(name => ({ name }));
@@ -171,4 +171,10 @@ it.each(['creating','open','payment_failed','uncollectible'])('health reports %s
   const fixture=healthyFixture(),base=fixture.query;
   fixture.query=sql=>sql.includes('audio_client_codes') ? Promise.resolve(db.prepare(sql).all()) : base(sql);
   expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({id:'studio-retention',status:'attention',summary:'1 software project awaiting invoice reconciliation before retention.'}));db.close();
+});
+
+it('names the missing agreement retention identity',async()=>{
+  const fixture=healthyFixture();fixture.configuredNames.delete('AGREEMENT_RETENTION_BINDING_ID');
+  const report=await ownerHealth(fixture);
+  expect(JSON.stringify(report)).toContain('AGREEMENT_RETENTION_BINDING_ID');
 });

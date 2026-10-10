@@ -28,6 +28,7 @@ const date = (value: string) => new Date(value).toLocaleDateString('en-US', { mo
     <p class="rail-muted rail-caption">Preview before sending. Saving a draft never sends it.</p>
   </form>}
   <div class="software-actions" data-link-actions hidden={!sent}><label data-client-link-field hidden>Client link<input class="studio-input" type="text" readonly data-client-link /></label><button class="studio-quiet" type="button" data-copy-link hidden>Copy client link</button><button class="studio-quiet" type="button" data-revoke-link data-link-created-at={linkCreatedAt} disabled={revoked}>Revoke link</button></div>
+  {sent && !sent.msa_template_id && <p class="rail-muted rail-caption">Sent before website signing. The client will sign outside the website. For website signing, create a new draft.</p>}
   <p data-link-state class="rail-muted rail-caption">{sent ? revoked ? withdrawn ? 'The client link is revoked.' : resolved ? 'The client link is revoked. Reopen this request to make a new offer.' : 'The client link is revoked. Send offer to issue a new link.' : closed ? 'The client link is in your copy of the offer email.' : 'The client link is in your copy of the offer email. To issue a new one, revoke this link and send again.' : ''}</p>
   <p class="studio-status" data-software-status role="status" aria-live="polite"></p>
   </>}

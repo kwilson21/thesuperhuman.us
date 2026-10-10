@@ -331,6 +331,7 @@ export default {
     sql(
       `INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES(${quote(hash(studio))},'signer@example.com',${quote(at)},'2099-01-01',${quote(at)});`,
     );
+    await shot('offer-complete', 'Completed offer opens the project without signing again', `/offer/${token}`);
     await shot('project-copy', 'Project page signed agreement download', `/studio/software/${id}`, {
       cookie: { name: 'studio_session', value: studio },
     });

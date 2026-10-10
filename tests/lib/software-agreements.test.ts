@@ -1185,7 +1185,7 @@ it.each(['agreement', 'archive'] as const)('invalid Turnstile requests preserve 
   vi.mocked(fetch).mockImplementation(async () => new Response('{"success":true}', { status: 200 }));
   const response = await issueAgreementLink(env, request(), { turnstileToken: 'valid', email: 'client@example.com' }, purpose === 'agreement' ? token : undefined);
   expect(response.status).toBe(200);
-  expect(sql.prepare('SELECT uses FROM audio_client_allowances ORDER BY uses').all()).toEqual([{ uses: 1 }, { uses: 1 }]);
+  expect(sql.prepare('SELECT uses FROM audio_client_allowances ORDER BY uses').all()).toEqual(Array.from({length:purpose==='archive'?3:2},()=>({uses:1})));
 });
 
 it.each([true, false])('external start atomically retires unsigned reviews and signing access when request is current (%s)', async current => {
@@ -1774,4 +1774,18 @@ it('clears offer snapshots only when its last retained agreement is deleted', as
   sql.exec("UPDATE software_agreements SET status='abandoned',ended_at='2000-01-01',retain_until='2010-01-01',terminated_at='2000-01-01'");
   await applyAgreementRetention(db,env.AUDIO,'test-storage',await previewAgreementRetention(db,env.AUDIO,'test-storage'));
   expect(snapshot()).toEqual({recipient_email_snapshot:null,agreement_details_json:null});
+});
+
+it('applies the same archive cooldown to known and unknown emails without storing unknown addresses',async()=>{
+  await signed();sql.exec("UPDATE software_agreements SET status='executed'");
+  vi.stubGlobal('fetch',vi.fn(async()=>Response.json({success:true})));
+  const results=[];
+  for(const email of ['client@example.com','unknown@example.com']) {
+    const first=await issueAgreementLink(env,request(),{turnstileToken:'test',email});
+    const second=await issueAgreementLink(env,request(),{turnstileToken:'test',email});
+    results.push([first.status,await first.json(),second.status,await second.json()]);
+  }
+  expect(results[0]).toEqual(results[1]);expect(results[1][2]).toBe(429);
+  expect(JSON.stringify(sql.prepare('SELECT * FROM audio_client_allowances').all())).not.toContain('unknown@example.com');
+  expect(JSON.stringify((fetch as any).mock.calls)).not.toContain('unknown@example.com');
 });

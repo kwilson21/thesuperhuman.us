@@ -5,9 +5,10 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { openMusicDatabase } from './music-analytics.mjs';
 import { renderMusicReport } from './music-report-view.mjs';
+import { parseJsonc } from './screenshots/config.mjs';
 import { studioRetentionProjectPredicate, softwareRetentionProjectPredicate } from './studio-retention.mjs';
 
-const requiredConfiguration = ['MUSIC_DB', 'AUDIO', 'OWNER_ACCESS_TEAM_DOMAIN', 'OWNER_ACCESS_AUD', 'OWNER_EMAIL'];
+const requiredConfiguration = ['MUSIC_DB', 'AUDIO', 'AGREEMENT_RETENTION_BINDING_ID', 'OWNER_ACCESS_TEAM_DOMAIN', 'OWNER_ACCESS_AUD', 'OWNER_EMAIL'];
 const requiredSchema = ['owner_campaigns', 'owner_requests', 'owner_request_audit', 'music_playback_events', 'music_playback_daily', 'music_playback_geography_daily', 'owner_retention_runs', 'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts', 'stripe_unmatched_events',
   'audio_projects', 'audio_client_codes', 'audio_client_sessions', 'audio_client_access_audit', 'audio_project_messages', 'audio_project_updates', 'audio_project_files', 'audio_project_uploads', 'owner_requests_audit_personal_delete', 'audio_project_after_service_request', 'audio_project_close_declined_request', 'owner_requests_submission_id', 'software_fit_reviews', 'software_offers', 'software_offer_links', 'software_offers_one_draft', 'software_offers_one_sent',
   'software_projects', 'software_project_updates', 'software_project_updates_one_draft', 'software_project_updates_shared', 'software_project_messages', 'software_project_messages_request', 'software_project_messages_one_decision', 'software_project_audit', 'software_project_audit_request', 'software_milestone_payments', 'software_invoices', 'software_invoices_one_active', 'software_invoices_request', 'software_stripe_unmatched_events', 'software_milestone_deposits', 'software_signing_settings', 'software_contractor_config', 'software_agreement_templates', 'software_agreement_clients', 'software_agreements', 'software_agreements_sow_offer', 'software_agreements_pending_msa', 'software_agreement_signatures', 'software_agreement_links', 'software_agreement_links_scope', 'software_agreement_drafts', 'software_agreement_sessions', 'software_agreement_artifacts', 'software_agreement_deliveries', 'software_agreement_events', 'software_agreement_templates_immutable', 'software_contractor_config_immutable', 'software_agreement_signatures_immutable', 'software_agreements_signed_immutable', 'software_agreement_attachments', 'software_agreement_clients_immutable', 'software_agreement_retention_receipts', 'software_agreement_cleanup_lock', 'software_agreement_notices', 'software_agreement_notices_immutable', 'software_agreement_notifications'];
@@ -22,7 +23,7 @@ export async function ownerHealth({ now = new Date(), configuredNames, query, me
   const checks = [];
   const missingConfiguration = requiredConfiguration.filter(name => !configuredNames.has(name));
   checks.push(missingConfiguration.length
-    ? attention('configuration', `Missing ${missingConfiguration.length} required configuration name${missingConfiguration.length === 1 ? '' : 's'}.`, 'Configure the named owner access or storage setting, then run health again.')
+    ? attention('configuration', `Missing required configuration: ${missingConfiguration.join(', ')}.`, 'Configure the named owner access or storage setting, then run health again.')
     : pass('configuration', 'Required owner access and storage configuration names are present.'));
 
   let availableSchema = new Set();
@@ -116,6 +117,8 @@ async function main() {
   const recording = JSON.parse(await readFile(new URL('../src/content/recordings/old-news-recording.json', import.meta.url), 'utf8'));
   const baseUrl = process.env.OWNER_HEALTH_BASE_URL || 'https://thesuperhuman.us';
   const configuredNames = new Set(['MUSIC_DB', 'AUDIO', ...requiredConfiguration.filter(name => process.env[name])]);
+  const config=parseJsonc(await readFile(new URL('../wrangler.jsonc',import.meta.url),'utf8'));
+  for(const [name,value] of Object.entries(config.vars ?? {})) if(value) configuredNames.add(name);
   if (remote) {
     const secretList = spawnSync(process.execPath, wranglerSecretListArguments(), {
       encoding: 'utf8',

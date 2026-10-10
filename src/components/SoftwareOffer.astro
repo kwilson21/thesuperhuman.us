@@ -3,8 +3,8 @@ import PersonalName from './PersonalName.astro';
 import { formatUSD, offerTotal, paymentSchedules, type ClientOffer } from '~/lib/software-offers';
 import '~/styles/global.css';
 import '~/styles/studio.css';
-interface Props { offer?: ClientOffer | null; preview?: boolean; temporarilyUnavailable?: boolean; signingUrl?: string; turnstileSiteKey?: string }
-const { offer, preview = false, temporarilyUnavailable = false, signingUrl, turnstileSiteKey } = Astro.props;
+interface Props { signed?: boolean; waiting?: boolean; projectUrl?:string; offer?: ClientOffer | null; preview?: boolean; temporarilyUnavailable?: boolean; signingUrl?: string; turnstileSiteKey?: string }
+const { signed=false, waiting=false, projectUrl, offer, preview = false, temporarilyUnavailable = false, signingUrl, turnstileSiteKey } = Astro.props;
 const terms = offer?.terms;
 ---
 <!doctype html><html lang="en"><head>
@@ -50,12 +50,13 @@ const terms = offer?.terms;
           {terms.projectRange && <p>If the project continues: roughly {formatUSD(terms.projectRange.lowCents)} to {formatUSD(terms.projectRange.highCents)} overall. An estimate, not a quote.</p>}
         </section>
         <section><h2 class="text-3xl leading-tight">Where things stand</h2><ul class="offer-status"><li>Invoice · Not issued</li><li>Start date · Not confirmed</li></ul>
-          <div class="offer-actions">{signingUrl && <form method="post" action={signingUrl.replace('/offer/','/api/offer/').replace('/sign','/link')} data-agreement-link data-after-link={`${signingUrl}?email=sent`}><div class="cf-turnstile" data-sitekey={turnstileSiteKey} data-size="compact"></div><button class="site-button">Review and sign</button><p role="status" aria-live="polite"></p></form>}<a class="site-link" href={`mailto:kazon.wilson@thesuperhuman.us?subject=${encodeURIComponent(`Question about offer v${offer.version}`)}`}>Ask a question</a>
+          {signed && <p>Signed by both of you.</p>}{waiting && <p>Signed. Over to Kazon.</p>}
+          <div class="offer-actions">{projectUrl && <a class="site-button" href={projectUrl}>Open your project page</a>}{signingUrl && <form method="post" action={signingUrl.replace('/offer/','/api/offer/').replace('/sign','/link')} data-agreement-link data-after-link={`${signingUrl}?email=sent`}><div class="cf-turnstile" data-sitekey={turnstileSiteKey} data-size="compact"></div><button class="site-button">Review and sign</button><p role="status" aria-live="polite"></p></form>}<a class="site-link" href={`mailto:kazon.wilson@thesuperhuman.us?subject=${encodeURIComponent(`Question about offer v${offer.version}`)}`}>Ask a question</a>
           <button class="site-button site-button-outline" type="button" data-print-offer>Print or save</button></div>
         </section>
       </aside></div>
       <section class="offer-beginning"><h2 class="text-3xl leading-tight">A clear beginning.</h2><ol>
-        <li><h3 class="text-xl leading-tight">Review and sign</h3><p>Confirm the scope and terms.</p></li>
+        <li><h3 class="text-xl leading-tight">{signed ? 'Signed by both of you.' : waiting ? 'Kazon countersigns' : signingUrl ? 'Review and sign' : 'Sign outside the website'}</h3><p>Confirm the scope and terms.</p></li>
         <li><h3 class="text-xl leading-tight">{terms.paymentMode === 'standard' ? 'Initial invoice' : 'Purchase order'}</h3><p>{terms.paymentMode === 'standard' ? 'Pay the agreed first installment.' : 'If you use one, it’s in place before work starts.'}</p></li>
         <li><h3 class="text-xl leading-tight">Confirm the start</h3><p>We agree when work begins.</p></li>
       </ol></section>
