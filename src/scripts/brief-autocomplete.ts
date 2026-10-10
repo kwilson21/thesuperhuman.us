@@ -55,6 +55,7 @@ export function setupBriefAutocomplete(form: HTMLFormElement, earlier: () => Rec
     box.addEventListener('click', () => { if (!atEnd()) clear(); });
     const resize = () => {
       if (section.hidden) return;
+      box.style.height = '';
       const border = box.offsetHeight - box.clientHeight;
       box.style.height = `${Math.max(box.offsetHeight, box.scrollHeight + border, overlay.scrollHeight + border)}px`;
     };

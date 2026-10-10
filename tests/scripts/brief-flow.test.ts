@@ -338,3 +338,37 @@ it.each(['idea', 'workflow'])('refresh of the same explicit %s path restores the
   click('[data-next]'); click('[data-next]');
   await setup(requested); expect(current()).toBe(3);
 });
+
+function modelAnswerHeight(box: Node) {
+  Object.defineProperty(box, 'offsetHeight', { get: () => parseFloat(box.style.height) || 200 });
+  Object.defineProperty(box, 'clientHeight', { get: () => box.offsetHeight - 2 });
+  Object.defineProperty(box, 'scrollHeight', { get: () => Math.max(box.clientHeight, box.value.length > 100 ? 300 : 100) });
+}
+it('shrinks a grown answer after deletion while keeping the six-row minimum', () => {
+  choose('path', 'workflow'); const box = steps[1].nodes['[data-answer]'];
+  modelAnswerHeight(box);
+  fill('today', 'Long answer '.repeat(20)); expect(box.style.height).toBe('302px');
+  fill('today', 'Short'); expect(box.style.height).toBe('200px');
+  fill('today', ''); expect(box.style.height).toBe('200px');
+  expect(readFileSync('src/pages/software/start.astro', 'utf8')).toContain('rows="6" data-answer');
+});
+it('shrinks the reused answer box when switching to a shorter answer', () => {
+  choose('path', 'workflow'); const box = steps[1].nodes['[data-answer]'];
+  modelAnswerHeight(box);
+  fill('today', 'Long answer '.repeat(20)); expect(box.style.height).toBe('302px');
+  click('[data-back]'); choose('path', 'idea'); fill('idea', 'Short');
+  click('[data-back]'); choose('path', 'workflow'); expect(box.style.height).toBe('302px');
+  click('[data-back]'); choose('path', 'idea');
+  expect(box.value).toBe('Short'); expect(box.style.height).toBe('200px');
+});
+it('fits the full suggestion after a grown answer shrinks', async () => {
+  choose('path', 'workflow'); const box = steps[1].nodes['[data-answer]'];
+  modelAnswerHeight(box);
+  fill('today', 'Long answer '.repeat(20)); expect(box.style.height).toBe('302px');
+  fill('today', 'We track new clients'); expect(box.style.height).toBe('200px');
+  steps[1].nodes['[data-ghost-prefix]'].parentElement.scrollHeight = 260;
+  await vi.advanceTimersByTimeAsync(400);
+  expect(box.style.height).toBe('262px');
+  expect(steps[1].nodes['[data-ghost-text]'].textContent).toBe(' in a spreadsheet');
+  expect(steps[1].nodes['[data-accept]'].hidden).toBe(false);
+});
