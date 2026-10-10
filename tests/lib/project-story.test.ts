@@ -232,7 +232,7 @@ describe('Tally decision highlight sources', () => {
  it('pairs the merchant-name entry with its demo capture and supported copy', () => {
   const merchant = tallyMilestones.find(milestone => milestone.id === 'tally-merchant-names');
   expect(merchant?.day).toBe('2026-10-06');
-  expect(merchant?.summary).toBe("I kept to one rule: the app helps and doesn't decide. Some bank text comes without a clean store name, so Plaid’s merchant name comes first. When Plaid sends none, Workers AI suggests up to three names, and a person picks one, types their own, or turns the suggestions down. A name a person turns down is never suggested again. Merchant-name suggestions are optional, with their own switch in Settings. Implemented with unit tests.");
+  expect(merchant?.summary).toBe("Some bank text comes without a clean store name. Plaid’s merchant name comes first. When Plaid sends none, Workers AI suggests up to three names, and a person picks one, types their own, or turns the suggestions down. A name a person turns down is never suggested again. Merchant-name suggestions are optional, with their own switch in Settings. Implemented and tested locally.");
   expect(merchant?.artifacts).toHaveLength(1);
   expect(merchant?.artifacts?.[0].kind).toBe('Screen capture, demo data');
   expect(tallyDecisionHighlights[0].relevance).toBe('You can change the category or reject the suggested name.');
