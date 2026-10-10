@@ -138,6 +138,30 @@ Audio notes become optional so empty prose is not required to publish a recordin
   JetBrains Mono. Until a matching derivative exists, render the plain name in
   the surrounding typeface instead of inserting a differently styled glyph.
 
+- Migrate the site from Astro 5 to Astro 7 with the matching Cloudflare adapter
+  and Tailwind setup. This is proposed maintenance and is not scheduled. It
+  requires a migration, not just a dependency bump. Dependabot's grouped PR #138
+  is only a placeholder and cannot install as it stands. The migration is intended
+  to prepare the site for later framework, adapter and toolchain updates.
+  Plan and verify:
+  - Replace `Astro.locals.runtime` access to env, cf, caches and context with the
+    adapter's current APIs across pages, API routes, middleware, libraries and
+    tests (about 85 files).
+  - Move local development and test setup to the Workers runtime, then re-verify
+    local flows and screenshot scenarios. Current Vitest tests run in Node.
+  - The Astro Tailwind integration has no Astro 7 release. The owner must choose
+    between keeping Tailwind 3 through PostCSS and moving to Tailwind 4, with a
+    page-by-page visual comparison.
+  - Review the Worker entrypoint in `wrangler.jsonc` and image service defaults
+    in the adapter options.
+  - Re-check the sitemap integration and Astro checker pairing.
+
+  Deliver reviewable steps, each following the website deployment gate in
+  `AGENTS.md`: release record, CI, Codex and Greptile review, and production
+  health check. No database migration is expected. UI changes need screenshots.
+  TypeScript 7 stays deferred until the Astro checker supports it and can follow
+  this work.
+
 ## Implementation sequence
 
 1. **Foundations and Home prototype.** Reuse the current palette and type; build
