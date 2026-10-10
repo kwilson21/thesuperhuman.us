@@ -32,3 +32,33 @@ it('never shows an interactive challenge or requests a pass afterward', async ()
 it('disables suggestions without a configured widget', async () => {
   expect(await setupSuggestionPass({ dataset: {} } as any)()).toBe(false);
 });
+
+it('shares one renewal check and can renew again after a later expiry', async () => {
+  const { start, render } = setup();
+  expect(await start()).toBe(true);
+  expect(await Promise.all([start(true), start(true)])).toEqual([true, true]);
+  expect(render).toHaveBeenCalledTimes(2);
+  expect(await start(true)).toBe(true);
+  expect(render).toHaveBeenCalledTimes(3);
+});
+it('keeps a failed renewal disabled for the page view', async () => {
+  const { start, render } = setup();
+  expect(await start()).toBe(true);
+  vi.mocked(fetch).mockRejectedValueOnce(new Error('unavailable'));
+  expect(await start(true)).toBe(false);
+  expect(await start(true)).toBe(false);
+  expect(await start()).toBe(false);
+  expect(render).toHaveBeenCalledTimes(2);
+});
+
+it('keeps renewal silent when the new check requires interaction', async () => {
+  const { start, render, container } = setup();
+  expect(await start()).toBe(true);
+  render.mockImplementationOnce((_container, options) => {
+    queueMicrotask(() => options['before-interactive-callback']());
+    return 'renewal-widget';
+  });
+  expect(await start(true)).toBe(false); expect(await start(true)).toBe(false);
+  expect(fetch).toHaveBeenCalledTimes(1); expect(render).toHaveBeenCalledTimes(2);
+  expect(container.style).toMatchObject({ visibility: 'hidden' });
+});

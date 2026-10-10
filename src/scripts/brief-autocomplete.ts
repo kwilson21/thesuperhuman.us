@@ -2,6 +2,7 @@ import { setupSuggestionPass } from './brief-suggestion-pass';
 export function setupBriefAutocomplete(form: HTMLFormElement, earlier: () => Record<string, string>) {
   const startPass = setupSuggestionPass(form);
   const start = () => { if (enabled) void startPass(); };
+  let unavailable = false;
   let enabled = true, generation = 0, timer: ReturnType<typeof setTimeout> | undefined;
   let controller: AbortController | undefined;
   try { enabled = localStorage.getItem('software-suggestions') !== 'off'; } catch { /* Storage is optional. */ }
@@ -43,16 +44,28 @@ export function setupBriefAutocomplete(form: HTMLFormElement, earlier: () => Rec
     box.addEventListener('scroll', () => { overlay.scrollTop = box.scrollTop; });
     box.addEventListener('input', event => {
       clear();
-      if (!enabled || (event as InputEvent).isComposing || !atEnd() || box.value.trim().split(/\s+/).length < 3) return;
+      if (!enabled || unavailable || (event as InputEvent).isComposing || !atEnd() || box.value.trim().split(/\s+/).length < 3) return;
       const text = box.value, current = generation;
       timer = setTimeout(async () => {
-        controller = new AbortController();
+        const requestController = new AbortController();
+        controller = requestController;
         try {
           if (!await startPass() || generation !== current || !enabled || section.hidden) return;
           const payload = { question: section.querySelector('h1')!.textContent, text, earlier: earlier() };
           if (JSON.stringify(payload).length > 2000) return;
-          const response = await fetch('/api/software/brief/suggest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(2000)]) });
-          const result = await response.json() as { suggestion?: unknown };
+          const suggest = () => fetch('/api/software/brief/suggest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), signal: AbortSignal.any([requestController.signal, AbortSignal.timeout(2000)]) });
+          let response = await suggest();
+          let result = await response.json() as { suggestion?: unknown; passRequired?: boolean };
+          if (generation !== current || !enabled || section.hidden) return;
+          if (result.passRequired === true) {
+            unavailable = true;
+            if (!await startPass(true)) return;
+            if (generation !== current || !enabled || section.hidden) { unavailable = false; return; }
+            response = await suggest();
+            result = await response.json() as typeof result;
+            if (!response.ok || result.passRequired === true) return;
+            unavailable = false;
+          }
           if (!response.ok || generation !== current || !enabled || section.hidden || box.value !== text || !atEnd() || typeof result.suggestion !== 'string' || !result.suggestion.trim()) return;
           // The endpoint is bounded too; never let a malformed response overfill an answer.
           const suggestion = result.suggestion.slice(0, 100);

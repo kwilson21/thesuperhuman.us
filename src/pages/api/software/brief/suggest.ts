@@ -23,7 +23,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const ip = request.headers.get('cf-connecting-ip');
     if (!ip) return empty();
     const pass = request.headers.get('cookie')?.split(';').map(part => part.trim()).find(part => part.startsWith(`${suggestionPassCookie}=`))?.slice(suggestionPassCookie.length + 1);
-    if (!await validSuggestionPass(pass, env.TURNSTILE_SECRET_KEY, ip)) return empty();
+    if (!await validSuggestionPass(pass, env.TURNSTILE_SECRET_KEY, ip)) return Response.json({ suggestion: '', passRequired: true }, { headers: { 'cache-control': 'no-store' } });
     const hash = await suggestionVisitorHash(ip);
     if (!(await env.BRIEF_SUGGEST_RATE_LIMIT.limit({ key: hash })).success || !(await env.BRIEF_SUGGEST_SITE_LIMIT.limit({ key: 'site' })).success) return empty();
     // Daily KV counts are approximate under concurrency; the per-minute bindings are the abuse limits.

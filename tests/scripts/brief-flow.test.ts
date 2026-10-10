@@ -213,3 +213,31 @@ it('offers no suggestion when the silent pass requires interaction', async () =>
   expect(fetch).not.toHaveBeenCalled(); expect(steps[1].nodes['[data-accept]'].hidden).toBe(true);
   mock.mockRestore();
 });
+
+
+it('renews an expired pass once and retries the current suggestion', async () => {
+  const pass = vi.fn(async (_renew = false) => true);
+  const mock = vi.spyOn(await import('~/scripts/brief-suggestion-pass'), 'setupSuggestionPass').mockReturnValue(pass);
+  await setup(); vi.useFakeTimers(); choose('path', 'workflow');
+  vi.mocked(fetch).mockResolvedValueOnce(Response.json({ suggestion: '', passRequired: true }));
+  fill('today', 'We track new clients'); await vi.advanceTimersByTimeAsync(400);
+  expect(pass.mock.calls.filter(args => args[0] === true)).toHaveLength(1);
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(steps[1].nodes['[data-accept]'].hidden).toBe(false);
+  mock.mockRestore();
+});
+it.each(['check fails', 'retry still expired', 'retry throws'])('stays silent for the page after renewal: %s', async failure => {
+  const pass = vi.fn(async (renew = false) => !renew || failure !== 'check fails');
+  const mock = vi.spyOn(await import('~/scripts/brief-suggestion-pass'), 'setupSuggestionPass').mockReturnValue(pass);
+  await setup(); vi.useFakeTimers(); choose('path', 'workflow');
+  vi.mocked(fetch).mockImplementation(async () => Response.json({ suggestion: '', passRequired: true }));
+  if (failure === 'retry throws') vi.mocked(fetch).mockResolvedValueOnce(Response.json({ suggestion: '', passRequired: true })).mockRejectedValueOnce(new Error('unavailable'));
+  fill('today', 'We track new clients'); await vi.advanceTimersByTimeAsync(400);
+  const calls = vi.mocked(fetch).mock.calls.length;
+  fill('today', 'We track other clients'); await vi.advanceTimersByTimeAsync(400);
+  expect(fetch).toHaveBeenCalledTimes(calls);
+  expect(pass.mock.calls.filter(args => args[0] === true)).toHaveLength(1);
+  expect(steps[1].nodes['[data-accept]'].hidden).toBe(true);
+  expect(form.nodes['[data-form-status]'].textContent).toBe('');
+  mock.mockRestore();
+});

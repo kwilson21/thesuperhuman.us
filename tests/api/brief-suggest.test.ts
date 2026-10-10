@@ -117,7 +117,7 @@ it('continues concurrent suggestions when daily writes contend', async () => {
 
 it.each(['missing', 'expired', 'tampered', 'other-ip'])('rejects a %s pass before AI and counters', async kind => {
   cookie = kind === 'missing' ? '' : `__Secure-brief-suggestion-pass=${await createSuggestionPass(secret, kind === 'other-ip' ? 'other' : 'test', kind === 'expired' ? Date.now() - 1800001 : Date.now())}${kind === 'tampered' ? 'a' : ''}`;
-  expect(await (await POST(context())).json()).toEqual({ suggestion: '' });
+  expect(await (await POST(context())).json()).toEqual({ suggestion: '', passRequired: true });
   expect(run).not.toHaveBeenCalled(); expect(kv.get).not.toHaveBeenCalled();
 });
 it('rejects a missing or exhausted site ceiling', async () => {
