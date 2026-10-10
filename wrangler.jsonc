@@ -20,6 +20,9 @@
   // sender Resend uses. The Resend API key + Turnstile secret stay in
   // dashboard-managed encrypted secrets.
   "vars": {
+    // Retention manifests are scoped to this AUDIO bucket. Update with its binding.
+    "AGREEMENT_RETENTION_BINDING_ID": "AUDIO:superhuman-audio",
+
     "SOFTWARE_SUGGESTIONS_ENABLED": "true",
     "CONTACT_TO_EMAIL": "kazon.wilson@thesuperhuman.us",
     // Resend sends from the verified subdomain notifs.thesuperhuman.us;

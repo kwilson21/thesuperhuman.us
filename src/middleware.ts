@@ -1,3 +1,4 @@
+import { canonicalAgreementRequest, agreementHeaders } from '~/lib/agreement-access';
 import { defineMiddleware } from 'astro:middleware';
 import { mainSitePath, rewritePathForHost } from '~/lib/host-routing';
 import { verifyOwnerAccess } from '~/lib/owner-access';
@@ -22,7 +23,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const studioPage = url.pathname === '/studio' || url.pathname.startsWith('/studio/');
   const studioApi = url.pathname === '/api/studio' || url.pathname.startsWith('/api/studio/');
   const offerPage = url.pathname.startsWith('/offer/');
-  const studioBoundary = studioPage || studioApi || offerPage;
+  const agreementBoundary = url.pathname === '/agreements' || url.pathname.startsWith('/agreements/') || url.pathname.startsWith('/api/agreements/') || url.pathname.startsWith('/api/offer/');
+  if (!context.isPrerendered && (url.pathname.startsWith('/api/agreements/') || url.pathname.startsWith('/api/offer/'))
+    && !canonicalAgreementRequest(context.locals.runtime.env, request))
+    return new Response(null, { status: 404, headers: agreementHeaders });
+  const studioBoundary = studioPage || studioApi || offerPage || agreementBoundary;
   if (context.isPrerendered && ownerPage) throw new Error('Owner routes must be server-rendered.');
   if (context.isPrerendered && studioPage) throw new Error('Studio routes must be server-rendered.');
   if (!context.isPrerendered && ownerBoundary) {
@@ -66,6 +71,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   if (url.hostname.endsWith('.workers.dev')) response.headers.set('x-robots-tag', 'noindex, nofollow');
   if (ownerBoundary) return withOwnerHeaders(response);
   if (studioBoundary) {
+    response.headers.set('referrer-policy', 'no-referrer');
     for (const [name, value] of Object.entries(studioPrivateHeaders)) response.headers.set(name, value);
   }
   return response;

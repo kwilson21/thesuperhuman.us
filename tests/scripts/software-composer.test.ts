@@ -10,7 +10,7 @@ function fixture(saved=false, savedVisual='', paymentBlocked='[false]') {
   }
   const elements=new Map<string,any>();
   const element=(selector:string)=>{
-    if (!elements.has(selector)) elements.set(selector,{hidden:false,textContent:'',addEventListener:vi.fn(),dataset:{accepted:'[true]',paymentBlocked},classList:{toggle:vi.fn()},getAttribute:()=>selector==='[data-preview-image]' ? savedVisual : null,removeAttribute:vi.fn()});
+    if (!elements.has(selector)) elements.set(selector,{hidden:false,textContent:'',addEventListener:vi.fn(),replaceChildren:vi.fn(),querySelectorAll:()=>[],dataset:{accepted:'[true]',paymentBlocked},classList:{toggle:vi.fn()},getAttribute:()=>selector==='[data-preview-image]' ? savedVisual : null,removeAttribute:vi.fn()});
     return elements.get(selector);
   };
   const form={reportValidity:()=>true,elements:{namedItem:(name:string)=>fields[name]},querySelector:(selector:string)=>selector.startsWith('[name=') && !selector.includes(' ') ? fields[selector.slice(6,-1)] : element(selector),querySelectorAll:()=>[],addEventListener:(event:string,handler:(event?:any)=>void)=>handlers.set(`form:${event}`,handler)};

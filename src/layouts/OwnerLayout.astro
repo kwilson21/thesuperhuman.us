@@ -1,13 +1,15 @@
 ---
 import '~/styles/global.css';
 import '~/styles/owner.css';
+import '~/styles/studio.css';
 import PersonalName from '~/components/PersonalName.astro';
-interface Props { title: string; current: 'today' | 'requests' | 'campaigns'; newRequestCount: number; ownerEmail: string }
+interface Props { title: string; current: 'today' | 'requests' | 'campaigns' | 'agreements'; newRequestCount: number; ownerEmail: string }
 const { title, current, newRequestCount, ownerEmail } = Astro.props;
 const links = [
   { id: 'today', href: '/owner', label: 'Today' },
   { id: 'requests', href: '/owner/requests', label: 'Requests' },
   { id: 'campaigns', href: '/owner/campaigns', label: 'Campaigns' },
+  { id: 'agreements', href: '/owner/agreements', label: 'Agreements' },
 ] as const;
 ---
 <!doctype html>

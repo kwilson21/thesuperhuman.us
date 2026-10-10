@@ -2,8 +2,9 @@
 import PersonalName from './PersonalName.astro';
 import { formatUSD, offerTotal, paymentSchedules, type ClientOffer } from '~/lib/software-offers';
 import '~/styles/global.css';
-interface Props { offer?: ClientOffer | null; preview?: boolean; temporarilyUnavailable?: boolean }
-const { offer, preview = false, temporarilyUnavailable = false } = Astro.props;
+import '~/styles/studio.css';
+interface Props { signed?: boolean; waiting?: boolean; projectUrl?:string; offer?: ClientOffer | null; preview?: boolean; temporarilyUnavailable?: boolean; signingUrl?: string; turnstileSiteKey?: string }
+const { signed=false, waiting=false, projectUrl, offer, preview = false, temporarilyUnavailable = false, signingUrl, turnstileSiteKey } = Astro.props;
 const terms = offer?.terms;
 ---
 <!doctype html><html lang="en"><head>
@@ -48,30 +49,27 @@ const terms = offer?.terms;
           {terms.milestones.filter(milestone => milestone.checkpoint).map(milestone => <p>{milestone.name}: if stopped after {milestone.checkpoint!.label}, {milestone.checkpoint!.cancellationPercent}% of this milestone is due.</p>)}
           {terms.projectRange && <p>If the project continues: roughly {formatUSD(terms.projectRange.lowCents)} to {formatUSD(terms.projectRange.highCents)} overall. An estimate, not a quote.</p>}
         </section>
-        <section><h2 class="text-3xl leading-tight">Where things stand</h2><ul class="offer-status"><li>Agreement · Not sent yet</li><li>Invoice · Not issued</li><li>Start date · Not confirmed</li></ul>
-          <div class="offer-actions"><a class="site-link" href={`mailto:kazon.wilson@thesuperhuman.us?subject=${encodeURIComponent(`Question about offer v${offer.version}`)}`}>Ask a question</a>
+        <section><h2 class="text-3xl leading-tight">Where things stand</h2><ul class="offer-status"><li>Invoice · Not issued</li><li>Start date · Not confirmed</li></ul>
+          {signed && <p>Signed by both of you.</p>}{waiting && <p>Signed. Over to Kazon.</p>}
+          <div class="offer-actions">{projectUrl && <a class="site-button" href={projectUrl}>Open your project page</a>}{signingUrl && <form method="post" action={signingUrl.replace('/offer/','/api/offer/').replace('/sign','/link')} data-agreement-link data-after-link={`${signingUrl}?email=sent`}><div class="cf-turnstile" data-sitekey={turnstileSiteKey} data-size="compact"></div><button class="site-button">Review and sign</button><p role="status" aria-live="polite"></p></form>}<a class="site-link" href={`mailto:kazon.wilson@thesuperhuman.us?subject=${encodeURIComponent(`Question about offer v${offer.version}`)}`}>Ask a question</a>
           <button class="site-button site-button-outline" type="button" data-print-offer>Print or save</button></div>
         </section>
       </aside></div>
       <section class="offer-beginning"><h2 class="text-3xl leading-tight">A clear beginning.</h2><ol>
-        <li><h3 class="text-xl leading-tight">Review and sign</h3><p>Confirm the scope and terms.</p></li>
+        <li><h3 class="text-xl leading-tight">{signed ? 'Signed by both of you.' : waiting ? 'Kazon countersigns' : signingUrl ? 'Review and sign' : 'Sign outside the website'}</h3><p>Confirm the scope and terms.</p></li>
         <li><h3 class="text-xl leading-tight">{terms.paymentMode === 'standard' ? 'Initial invoice' : 'Purchase order'}</h3><p>{terms.paymentMode === 'standard' ? 'Pay the agreed first installment.' : 'If you use one, it’s in place before work starts.'}</p></li>
         <li><h3 class="text-xl leading-tight">Confirm the start</h3><p>We agree when work begins.</p></li>
       </ol></section>
       <footer class="sheet-footnote"><span><PersonalName variant="full" /> · The Superhuman Group LLC<span class="offer-privacy"> · <a class="site-link" href="/privacy">Privacy</a></span></span></footer>
     </> : <section class="offer-unavailable"><h1 class="page-title">{temporarilyUnavailable ? 'This offer is temporarily unavailable.' : 'This offer isn’t available.'}</h1>{temporarilyUnavailable ? <p>Please try again later.</p> : <p>Ask Kazon for a current link: <a class="site-link" href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>.</p>}</section>}
   </main>
-  <script>document.querySelector('[data-print-offer]')?.addEventListener('click', () => window.print());</script>
+  {signingUrl && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>}
+  <script>import {setupAgreementAccess} from '~/scripts/agreement-access'; setupAgreementAccess(); document.querySelector('[data-print-offer]')?.addEventListener('click', () => window.print());</script>
 <style>
   .offer-shell { max-width: 72rem; padding-block: 2rem; color: var(--ink); overflow-wrap: anywhere; }
-  .offer-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; border-bottom: 1px solid var(--rule); padding-bottom: 1.5rem; }
-  .offer-header .page-kicker { margin: 0; }
-  .offer-header :global(.personal-name) { font-size: 1.5rem; }
   .offer-intro { padding: 2.5rem 0 1.5rem; }
   p { margin: .6rem 0; }
   .offer-meta { color: var(--muted); }
-  .offer-columns { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr); gap: 2.5rem; }
-  .offer-columns aside { padding-left: 2rem; border-left: 1px solid var(--rule); }
   section { margin-bottom: 1.7rem; }
   .offer-milestone { padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
   h2 small { display: block; color: var(--muted); font-size: 1rem; margin-top: .4rem; margin-bottom: 1.2rem; }

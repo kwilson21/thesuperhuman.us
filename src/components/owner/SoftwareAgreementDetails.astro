@@ -1,0 +1,46 @@
+---
+import { softwareDate } from "~/lib/software-projects";
+import { signingEnabled } from '~/lib/agreement-access';
+import type { SoftwareOffer, OfferTerms } from '~/lib/software-offers';
+interface Props {
+  requestId: string;
+  offer: SoftwareOffer | null | undefined;
+  terms: OfferTerms | null;
+}
+const { requestId, offer, terms } = Astro.props,
+  db = Astro.locals.runtime?.env.MUSIC_DB,
+  enabled = db ? await signingEnabled(db) : false;
+const details = offer?.agreement_details_json ? JSON.parse(offer.agreement_details_json) : {};
+const candidates =
+  db && offer?.request_id
+    ? (
+        await db
+          .prepare(
+            "SELECT a.id,c.legal_name,c.entity_type,c.jurisdiction,a.effective_on FROM software_agreements a JOIN software_agreement_clients c ON c.id=a.client_id JOIN owner_requests r ON r.email=c.recipient_email WHERE r.id=? AND a.kind='msa' AND a.status='executed' AND a.terminated_at IS NULL",
+          )
+          .bind(offer.request_id)
+          .all<{
+            id: string;
+            legal_name: string;
+            entity_type: string;
+            jurisdiction: string;
+            effective_on: string;
+          }>()
+      ).results
+    : [];
+---
+{enabled&&<fieldset data-agreement-details><legend>Agreement details</legend><p class="rail-muted">Required before sending. Dates and deliverables must match the work you can promise.</p>
+ {(['planned_start','planned_end'] as const).map(name=><label>{name==='planned_start'?'Planned start':'Planned end'}<input class="studio-input" type="date" name={`agreement.${name}`} value={details[name]??''} /></label>)}
+ {([['environment','Deliverable type and environment'],['operating_responsibilities','Client operating responsibilities'],['update_rhythm','Update rhythm']] as const).map(([name,label])=><label>{label}<textarea class="studio-textarea" name={`agreement.${name}`} rows="3" maxlength={name==='update_rhythm'?500:4000}>{details[name]??''}</textarea></label>)}
+ <label>Project channel<input class="studio-input" name="agreement.update_channel" value={details.update_channel??'Private project page and email'} maxlength="500" /></label>
+ <div data-agreement-milestones>{(terms?.milestones??[undefined]).map((milestone,index)=><fieldset data-agreement-milestone={index}><legend>Milestone {index+1} agreement details</legend>{(['start','target'] as const).map(name=><label>{name==='start'?'Start':'Target delivery'}<input class="studio-input" type="date" name={`agreement.milestones.${index}.${name}`} value={details.milestones?.[index]?.[name]??''} /></label>)}{([['handoff','Handoff inventory'],['checkpoint_criteria','Checkpoint completion criteria'],['checkpoint_evidence','Checkpoint evidence']] as const).map(([name,label])=><label>{label}<textarea class="studio-textarea" name={`agreement.milestones.${index}.${name}`} maxlength="4000">{details.milestones?.[index]?.[name]??(name==='handoff'?'':'None')}</textarea></label>)}</fieldset>)}</div>
+ <label>Invoice Terms first-milestone duration (calendar days)<input class="studio-input" type="number" name="agreement.invoice_first_duration" min="1" max="90" value={details.invoice_first_duration??''} /></label>
+ <details><summary>Using the SOW defaults · Edit</summary><p class="rail-muted">Only change a default when the offer requires it.</p>{(['visual_approvals','expenses_taxes','recurring_charges','ai_permission','sensitive_addenda','support','msa_changes'] as const).map(name=><label>{name.replaceAll('_',' ')}<textarea class="studio-textarea" name={`agreement.${name}`} maxlength="4000">{details[name]??'None'}</textarea></label>)}
+ <label>Review window (business days)<input class="studio-input" type="number" name="agreement.review_business_days" min="5" max="365" value={details.review_business_days??5} /></label><label class="confirmation"><input type="checkbox" name="agreement.longer_review_confirmed" checked={details.longer_review_confirmed} />I reviewed a window longer than 30 business days.</label>
+ <label>Correction period (calendar days)<input class="studio-input" type="number" name="agreement.correction_calendar_days" min="30" max="365" value={details.correction_calendar_days??30} /></label>
+ <label>Purchase order<select class="studio-select" name="agreement.po_requirement"><option value="not_required" selected={details.po_requirement!=='before_start'}>Not required</option><option value="before_start" selected={details.po_requirement==='before_start'}>PO number before start</option></select></label>
+ <label>Project page retention (days)<input class="studio-input" type="number" name="agreement.project_retention_days" min="1" max="3650" value={details.project_retention_days??365} /></label><label>Data return or retention<textarea class="studio-textarea" name="agreement.data_retention" maxlength="4000">{details.data_retention??'MSA default, including one year for the private project page'}</textarea></label>
+ <label>Handoff access (days)<input class="studio-input" type="number" name="agreement.handoff_access_days" min="30" max="3650" value={details.handoff_access_days??30} /></label><label>Handoff and download access<textarea class="studio-textarea" name="agreement.handoff_access" maxlength="4000">{details.handoff_access??'MSA default'}</textarea></label></details>
+ <fieldset data-agreement-attachments data-upload-endpoint={`/api/owner/requests/${requestId}/agreement-attachments`}><legend>Attachments</legend><input type="hidden" name="agreement.attachments" value={JSON.stringify(details.attachments??[])} /><label>PDF<input type="file" accept="application/pdf" data-attachment-file /></label><label>Version<input class="studio-input" data-attachment-version maxlength="80" /></label><label>Document date<input class="studio-input" type="date" data-attachment-date /></label><button class="studio-quiet" type="button" data-upload-attachment>Upload exact PDF</button><p class="rail-muted">Up to five PDFs, 10 MiB each. Changing an attachment requires a new offer.</p><ul data-attachment-list>{(details.attachments??[]).map((a:{filename:string;version:string;date:string;key:string})=><li>{a.filename} · {a.version} · {softwareDate(a.date)} <button type="button" class="studio-quiet" data-remove-attachment={a.key}>Remove</button></li>)}</ul></fieldset>
+ {candidates.length>0&&<><label>Existing MSA<select class="studio-select" name="reusedMsaId"><option value="">New MSA</option>{candidates.map(a=><option value={a.id} selected={offer?.reused_msa_id===a.id}>{a.legal_name} · {a.entity_type} · {a.jurisdiction} · {softwareDate(a.effective_on)}</option>)}</select></label><label class="confirmation"><input type="checkbox" name="confirmMsaReuse" checked={Boolean(offer?.reused_msa_id)} />I confirm this is the same legal party and authorize MSA reuse.</label></>}
+ </fieldset>}

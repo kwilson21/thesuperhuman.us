@@ -12,16 +12,16 @@ import { POST as updatePost } from '~/pages/api/owner/requests/[id]/updates';
 import { GET as ownerVisual, PUT as uploadVisual } from '~/pages/api/owner/requests/[id]/updates/[updateId]/visual';
 import { GET as clientVisual } from '~/pages/api/studio/software/[id]/updates/[updateId]/visual';
 import { clientSoftwareProjectForSession, clientSoftwareProjectsForSession, clientProjectForSession, clientProjectsForSession, issueClientCode, completeClientCode, discardUndeliveredCode } from '~/lib/audio-client-access';
-import { sharedSoftwareUpdates, queueSoftwareNotice, deliverSoftwareNotice } from '~/lib/software-projects';
+import { clearUnmetRevisionEvidence, sharedSoftwareUpdates, listSoftwareUpdates, queueSoftwareNotice, deliverSoftwareNotice, softwareRevisionTargets, softwareRevisionHistoryBody } from '~/lib/software-projects';
 import { softwareInvitationEmail, softwareUpdateEmail } from '~/lib/client-emails';
 import { loadStudioLedger, listStudioProjectAttention } from '~/lib/owner-reporting';
 import { postClientSoftwareProjectMessage } from '~/lib/software-project-messages';
 import { POST as reviewPost } from '~/pages/api/studio/software/[id]/reviews/[updateId]';
-import { correctionPeriodEnd } from '~/lib/software-projects';
+import { correctionPeriodEnd, projectAgreementDetails, getSoftwareProject } from '~/lib/software-projects';
 import { softwareReviewEmail, softwareHandoffEmail } from '~/lib/client-emails';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database, env: Env;
-const terms = { outcome: 'Onboarding tool', summary: 'One shared view.', milestones: [{ name: 'Tracker', deliverables: ['Status view'], acceptance: ['Add a client.'], feeCents: 240000 }], clientInputs: 'Sample', exclusions: 'Live rollout', timing: '', paymentMode: 'standard' };
+const terms = { outcome: 'Onboarding tool', summary: 'One shared view.', milestones: [{ name: 'Tracker', deliverables: ['Status view','Sample import'], acceptance: ['Add a client.'], feeCents: 240000 }], clientInputs: 'Sample', exclusions: 'Live rollout', timing: '', paymentMode: 'standard' };
 const termsJson = JSON.stringify(terms, null, 2), secret = 'studio-code-key-for-tests-32-characters';
 const visualBytes = new Uint8Array([137,80,78,71,13,10,26,10,0]);
 const bucket = { put: vi.fn(), get: vi.fn(), delete: vi.fn() };
@@ -46,11 +46,24 @@ beforeEach(() => {
 });
 afterEach(() => { sql.close(); vi.unstubAllGlobals(); });
 async function call(route: typeof projectPost, body: unknown, owner = true, id = 'software') {
+  if(route===projectPost && (body as {action?:string}).action==='start') body={signature_source:'external',external_signed_on:'2026-09-30',external_parties:'Example Client / Example Contractor',external_kept_copy:true,external_copy_reference:'Owner retained signed copy',inputs_ready:true,...body as object};
   if (route === updatePost) body = { expectedProjectUpdatedAt: sql.prepare('SELECT updated_at FROM software_projects WHERE request_id=?').get(id)?.updated_at ?? 'missing', ...body as object };
   return route({ params: { id }, request: new Request(`https://example.com/api/owner/requests/${id}/project`, { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://example.com' }, body: JSON.stringify(body) }), locals: { owner: owner ? { email: 'owner@example.com' } : undefined, runtime: { env } } } as never);
 }
 const start = () => call(projectPost, { action: 'start', expectedRequestUpdatedAt: 'now', offer_id: 'software-offer', offer_version: 1, signatures: true, payment: true, next_update_on: '2026-10-01' });
-const update = { kind: 'progress', milestone_index: 0, title: 'Shared view', artifact_version: 'v1', evidence_type: 'concept', visual_alt: 'A fictional tracker.', preview_url: 'https://preview.example.com/tool', what_changed: 'Client status is visible.', checks_limitations: 'Sample only.', next_step: 'Build the shared view.', client_request: 'Send the sample.', next_update_on: '2026-10-02', email_client: false };
+const update = { kind: 'progress', milestone_index: 0, title: 'Shared view', artifact_version: 'v1', evidence_type: 'concept', visual_alt: 'A fictional tracker.', preview_url: 'https://preview.example.com/tool', what_changed: 'Client status is visible.', checks_limitations: 'Sample only.', next_step: 'Build the shared view.', client_request: 'Send the sample.', next_update_on: '2026-10-02', email_client: false, delivered_deliverables:['Status view','Sample import'] };
+it('parses revision selections from stable indices, never from labels or client notes',()=>{
+  const checks=['Add a client.','Label says check #1: but remains a different check.'],planned=['Status view','Label says missing #1: but remains a different item.'];
+  const body='Requested changes to Delivery v1. Checks reported unmet: [2]. Deliverables unavailable: [1]. Included but inaccessible: [2].\n\nNote says check #1: and missing #2: as ordinary text.';
+  expect(softwareRevisionTargets(body,checks,planned)).toEqual({checks:[1],deliverables:[0],inaccessibleDeliverables:[1]});
+  expect(softwareRevisionTargets('Requested changes to Delivery v1. Checks reported unmet: []. Deliverables unavailable: [1].',checks,planned).inaccessibleDeliverables).toEqual([]);
+  expect(softwareRevisionTargets(`Requested changes to Delivery v1 for milestone 1: check #2: ${checks[1]}; missing #2: ${planned[1]}\n\nNote`,checks,planned)).toEqual({checks:[1],deliverables:[1],inaccessibleDeliverables:[]});
+  expect(softwareRevisionTargets('Requested changes to Delivery v1 for milestone 1: check #1: Add a client.; check #2: Label says check #1: but remains a different check.; missing #2: Label says missing #1: but remains a different item.',checks,planned)).toEqual({checks:[0,1],deliverables:[1],inaccessibleDeliverables:[]});
+  expect(softwareRevisionTargets('Requested changes to Delivery v1 for milestone 1: check #2: Label says check #1: but remains a different check.; check #1: Add a client.; missing #2: Label says missing #1: but remains a different item.',checks,planned)).toEqual({checks:[1,0],deliverables:[1],inaccessibleDeliverables:[]});
+  expect(softwareRevisionTargets('Requested changes to Delivery v1 for milestone 1: check 1 (Add a client.), check 2 (Label says check #1: but remains a different check.), missing 2 (Label says missing #1: but remains a different item.)',checks,planned)).toEqual({checks:[0,1],deliverables:[1],inaccessibleDeliverables:[]});
+  expect(softwareRevisionHistoryBody(body,checks,planned)).toBe('Requested changes to Delivery v1. Checks reported unmet: [2]. Deliverables unavailable: [1]. Included but inaccessible: [2].\n\nUnmet checks:\n2. Label says check #1: but remains a different check.\n\nUnavailable deliverables:\n1. Status view\n\nIncluded deliverables the client could not open or find:\n2. Label says missing #1: but remains a different item.\n\nClient note:\nNote says check #1: and missing #2: as ordinary text.');
+  expect(clearUnmetRevisionEvidence(['stale evidence','keep this'],[0])).toEqual(['','keep this']);
+});
 async function draft() { const response = await call(updatePost, { action: 'draft', update, expectedUpdatedAt: null }); expect(response.status).toBe(200); return response.json() as Promise<{ id: string; updatedAt: string }>; }
 async function session(email = 'alex@example.com') { const code = await issueClientCode(db, email, secret); return (await completeClientCode(db, email, code!, secret))!; }
 async function shareReview(kind='delivery_review', artifact_version='Delivery v1') {
@@ -66,6 +79,85 @@ it('requires a named review version, evidence for every check and a bounded revi
     expect((await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',criteria:['Try it'],...changed}})).status).toBe(400);
   }
   expect(sql.prepare('SELECT count(*) AS n FROM software_project_updates').get()).toEqual({n:0});
+});
+it('snapshots selected deliverables but blocks acceptance until the full milestone is included',async()=>{
+  await start();
+  const selected=['Status view'];
+  const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v1',criteria:['Try adding a client in the preview.'],delivered_deliverables:selected}});
+  expect(response.status).toBe(200);const {id}=await response.json() as {id:string};
+  const row=sql.prepare('SELECT delivered_deliverables_json FROM software_project_updates WHERE id=?').get(id);
+  expect(row).toEqual({delivered_deliverables_json:JSON.stringify(selected.map(item=>terms.milestones[0].deliverables.indexOf(item)))});
+  expect((await sharedSoftwareUpdates(db,'software'))[0]).toMatchObject({delivered_deliverables_json:JSON.stringify(selected.map(item=>terms.milestones[0].deliverables.indexOf(item)))});
+  const token=await session();
+  const partial=await decide(id,{decision:'milestone_accepted',confirm:true},token);
+  expect(partial.status).toBe(400); expect(((await partial.json()) as {error:string}).error).toMatch(/only part of the milestone/i);
+  const full=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v2',criteria:['Try adding a client in the preview.'],delivered_deliverables:['Status view','Sample import']}});
+  expect(full.status).toBe(200);const revised=await full.json() as {id:string};
+  expect((await decide(revised.id,{decision:'milestone_accepted',confirm:true},token)).status).toBe(200);
+  expect(sql.prepare("SELECT decision FROM software_project_messages WHERE update_id=?").get(revised.id)).toEqual({decision:'milestone_accepted'});
+});
+it('lets clients report a missing planned deliverable even when every included check passes',async()=>{
+  await start();const token=await session();
+  const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v1',criteria:['Try adding a client in the preview.'],delivered_deliverables:['Status view']}});
+  expect(response.status).toBe(200);const {id}=await response.json() as {id:string};
+  expect((await decide(id,{decision:'changes_requested',missing_deliverables:[1],note:'The sample import is not included yet.'},token)).status).toBe(200);
+  expect(sql.prepare('SELECT body FROM software_project_messages WHERE update_id=?').get(id).body).toBe('Requested changes to Delivery v1 for milestone 1. Checks reported unmet: []. Deliverables unavailable: [2]. Included but inaccessible: [].\n\nThe sample import is not included yet.');
+});
+it('lets clients report an included deliverable they cannot open without misclassifying it as omitted',async()=>{
+  await start();const token=await session();
+  const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v1',criteria:['Try adding a client in the preview.'],delivered_deliverables:['Status view']}});
+  expect(response.status).toBe(200);const {id}=await response.json() as {id:string};
+  expect((await decide(id,{decision:'changes_requested',inaccessible_deliverables:[0],note:'The included status view opens to an error.'},token)).status).toBe(200);
+  expect(sql.prepare('SELECT body FROM software_project_messages WHERE update_id=?').get(id).body).toBe('Requested changes to Delivery v1 for milestone 1. Checks reported unmet: []. Deliverables unavailable: []. Included but inaccessible: [1].\n\nThe included status view opens to an error.');
+  expect(softwareRevisionHistoryBody(sql.prepare('SELECT body FROM software_project_messages WHERE update_id=?').get(id).body,terms.milestones[0].acceptance,terms.milestones[0].deliverables)).toContain('Included deliverables the client could not open or find:\n1. Status view');
+});
+it('rejects mismatching omitted and inaccessible delivery selections',async()=>{
+  await start();const token=await session();
+  const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v1',criteria:['Try adding a client in the preview.'],delivered_deliverables:['Status view']}});
+  expect(response.status).toBe(200);const {id}=await response.json() as {id:string};
+  expect((await decide(id,{decision:'changes_requested',missing_deliverables:[0],note:'This one was delivered.'},token)).status).toBe(400);
+  expect((await decide(id,{decision:'changes_requested',inaccessible_deliverables:[1],note:'This one is not included.'},token)).status).toBe(400);
+});
+it('keeps project progress on a later milestone when sharing an earlier revision',async()=>{
+  const laterTerms={...terms,milestones:[terms.milestones[0],{...terms.milestones[0],name:'Launch'}]};
+  sql.prepare('UPDATE software_offers SET terms_json=?').run(JSON.stringify(laterTerms));
+  await start();
+  sql.prepare("UPDATE software_projects SET state='building',step='build',milestone_index=1,next_update_on='2026-10-10',updated_at='2026-10-01T12:00:00Z'").run();
+  const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',milestone_index:0,artifact_version:'Delivery v2',criteria:['Fixed the sample.'],delivered_deliverables:['Status view','Sample import']}});
+  expect(response.status).toBe(200);
+  expect(sql.prepare('SELECT state,step,milestone_index,next_update_on FROM software_projects').get()).toEqual({state:'building',step:'build',milestone_index:1,next_update_on:'2026-10-10'});
+});
+it('treats legacy reviews without a scope snapshot as the full agreed milestone',async()=>{
+  await start();const token=await session(),review=await shareReview();
+  sql.prepare("UPDATE software_project_updates SET delivered_deliverables_json='[]' WHERE id=?").run(review.id);
+  expect((await decide(review.id,{decision:'milestone_accepted',confirm:true},token)).status).toBe(200);
+});
+it('rejects delivery selections outside the agreed scope, duplicates and empty shared selections',async()=>{
+  await start();
+  for(const delivered_deliverables of [['Not in the contract'],['Status view','Status view'],[]]){
+    const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',criteria:['Evidence'],delivered_deliverables}});
+    expect(response.status).toBe(400);
+  }
+  expect(sql.prepare('SELECT count(*) AS n FROM software_project_updates').get()).toEqual({n:0});
+});
+it('stores a longer executed-agreement review window in the additive field',async()=>{
+  await start();
+  sql.exec("INSERT INTO software_agreement_clients VALUES ('test-client','alex@example.com','Example Client','example','LLC','WY','Example address','alex@example.com','now'); INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES ('test-template','sow',1,'Synthetic template',lower(hex(zeroblob(32))),'now','test')");
+  sql.prepare("INSERT INTO software_agreements(id,kind,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES ('test-agreement','sow','software','test-client','test-template','executed','Synthetic terms',? ,?,'now','2026-09-30','test-session')").run('a'.repeat(64),JSON.stringify({owner:{review_business_days:45}}));
+  sql.exec("UPDATE software_projects SET agreement_id='test-agreement' WHERE request_id='software'");
+  const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v1',criteria:['Try the preview.'],review_window_days:5}});
+  expect(response.status).toBe(200);
+  expect(sql.prepare('SELECT review_window_days,review_window_days_extended FROM software_project_updates').get()).toEqual({review_window_days:null,review_window_days_extended:45});
+  expect((await sharedSoftwareUpdates(db,'software'))[0].review_window_days).toBe(45);
+});
+it('lets the owner save an unfinished reference in a private draft and requires it to be safe before sharing',async()=>{
+  await start();
+  const reference={label:'Release notes',url:''};
+  const saved=await call(updatePost,{action:'draft',expectedUpdatedAt:null,update:{...update,kind:'delivery_review',links:[reference]}});
+  expect(saved.status).toBe(200);const draftInfo=await saved.json() as {id:string;updatedAt:string};
+  expect(sql.prepare('SELECT links_json,status FROM software_project_updates WHERE id=?').get(draftInfo.id)).toEqual({links_json:JSON.stringify([reference]),status:'draft'});
+  const shared=await call(updatePost,{action:'share',updateId:draftInfo.id,expectedUpdatedAt:draftInfo.updatedAt,confirmed:true,update:{...update,kind:'delivery_review',artifact_version:'Delivery v1',criteria:['Try the preview.'],links:[reference]}});
+  expect(shared.status).toBe(400);expect(((await shared.json()) as {error:string}).error).toContain('Finish each reference');
 });
 it('records one version-specific decision and audit together, without confusing direction and acceptance',async()=>{
   await start(); const token=await session(), direction=await shareReview('direction_review','Direction v1');
@@ -86,8 +178,36 @@ it('requires specific delivery criteria and bounded reproduction notes',async()=
   for(const changed of [{criteria:[]},{criteria:[1]},{criteria:[-1]},{note:''},{note:'x'.repeat(2001)}])
     expect((await decide(review.id,{decision:'changes_requested',criteria:[0],note:'Adding a client fails with the sample.',...changed},token)).status).toBe(400);
   expect((await decide(review.id,{decision:'changes_requested',criteria:[0],note:'Adding a client fails with the sample.'},token)).status).toBe(200);
-  expect(sql.prepare('SELECT body FROM software_project_messages').get().body).toBe('Requested changes to Delivery v1 for milestone 1: check 1 (Add a client.).\n\nAdding a client fails with the sample.');
+  expect(sql.prepare('SELECT body FROM software_project_messages').get().body).toBe('Requested changes to Delivery v1 for milestone 1. Checks reported unmet: [1]. Deliverables unavailable: []. Included but inaccessible: [].\n\nAdding a client fails with the sample.');
   expect(sql.prepare("SELECT note FROM software_project_audit WHERE action='decision-recorded'").get().note).toContain('checks 1');
+});
+it('keeps client note text out of the machine-readable change header',async()=>{
+  await start();const token=await session(),review=await shareReview();
+  expect((await decide(review.id,{decision:'changes_requested',criteria:[0],note:'The note mentions (Add a different planned check.) but does not mark it unmet.'},token)).status).toBe(200);
+  const body=sql.prepare('SELECT body FROM software_project_messages WHERE update_id=?').get(review.id).body as string;
+  expect(body.split('\n',1)[0]).toBe('Requested changes to Delivery v1 for milestone 1. Checks reported unmet: [1]. Deliverables unavailable: []. Included but inaccessible: [].');
+  expect(body).toContain('The note mentions (Add a different planned check.)');
+});
+it('saves revised check evidence so the revision draft can be reopened without loss',async()=>{
+  await start();const token=await session(),review=await shareReview();
+  expect((await decide(review.id,{decision:'changes_requested',criteria:[0],note:'The client form needs a correction.'},token)).status).toBe(200);
+  const firstEvidence=['Fixed the sample client form.','Confirmed export remains available.'];
+  const first=await call(updatePost,{action:'draft',expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v2',title:'Revised tracker',criteria:firstEvidence,delivered_deliverables:['Status view']}});
+  expect(first.status).toBe(200);const saved=await first.json() as {id:string;updatedAt:string};
+  expect(sql.prepare('SELECT criteria_json FROM software_project_updates WHERE id=?').get(saved.id)).toEqual({criteria_json:JSON.stringify(firstEvidence)});
+  const reopenedEvidence=['Fixed the sample client form with clearer validation.','Confirmed export remains available.'];
+  const reopened=await call(updatePost,{action:'draft',updateId:saved.id,expectedUpdatedAt:saved.updatedAt,update:{...update,kind:'delivery_review',artifact_version:'Delivery v2',title:'Revised tracker',criteria:reopenedEvidence,delivered_deliverables:['Status view']}});
+  expect(reopened.status).toBe(200);
+  expect(sql.prepare('SELECT criteria_json FROM software_project_updates WHERE id=?').get(saved.id)).toEqual({criteria_json:JSON.stringify(reopenedEvidence)});
+});
+it('snapshots delivery references with the versioned review while rejecting unsafe links',async()=>{
+  await start();
+  const links=[{label:'Repository · example only',url:'https://example.com/repository'},{label:'Shared artifact · access not verified',url:'https://example.com/artifact'}];
+  const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v3',criteria:['Try adding a client in the preview.'],links}});
+  expect(response.status).toBe(200);
+  const shared=await sharedSoftwareUpdates(db,'software');
+  expect(shared[0]).toMatchObject({artifact_version:'Delivery v3',links_json:JSON.stringify(links),criteria_json:JSON.stringify(['Try adding a client in the preview.'])});
+  expect((await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v4',criteria:['Try it.'],links:[{label:'Unsafe',url:'javascript:alert(1)'}]}})).status).toBe(400);
 });
 it('supersedes only the same kind and milestone, keeping old versions and decisions private-safe',async()=>{
   await start();const token=await session(),first=await shareReview();
@@ -167,6 +287,9 @@ it('enforces the new payment, review-window and factual audit-note schema limits
   sql.exec("INSERT INTO software_milestone_payments VALUES ('software',0,'now','owner')");
   expect(()=>sql.exec("INSERT INTO software_milestone_payments VALUES ('software',0,'later','owner')")).toThrow();
   expect(()=>sql.prepare("INSERT INTO software_project_audit(request_id,action,actor,occurred_at,note) VALUES ('software','milestone-paid','owner','now',?)").run('x'.repeat(201))).toThrow();
+  sql.prepare("UPDATE software_project_updates SET review_window_days=NULL,review_window_days_extended=45 WHERE request_id='software'").run();
+  expect((await listSoftwareUpdates(db,'software'))[0].review_window_days).toBe(45);
+  for(const value of [30,366]) expect(()=>sql.prepare("UPDATE software_project_updates SET review_window_days_extended=? WHERE request_id='software'").run(value)).toThrow();
 });
 it('does not complete a redelivered milestone using an earlier version’s handoff',async()=>{
   await start();const token=await session(),review=await shareReview();
@@ -836,4 +959,32 @@ it.each(['completed_at','revoked_at'])('allows resolving a software project with
 });
 it('allows resolving a software request without a project',async()=>{
   expect((await call(requestPost,{action:'resolve'})).status).toBe(200);
+});
+
+it('stores stable deliverable indexes and cannot accept one repeated label as two selections',async()=>{
+  await start();
+  const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',criteria:['Evidence'],delivered_deliverables:[0]}});
+  expect(response.status).toBe(200);const {id}=await response.json() as {id:string};
+  expect(sql.prepare('SELECT delivered_deliverables_json FROM software_project_updates WHERE id=?').get(id).delivered_deliverables_json).toBe('[0]');
+  // Legacy offers can contain duplicate labels, but a saved index still covers only one item.
+  sql.prepare("UPDATE software_projects SET terms_json=? WHERE request_id='software'").run(JSON.stringify({...terms,milestones:[{...terms.milestones[0],deliverables:['Status view','Status view']}]}));
+  const rejected=await decide(id,{decision:'milestone_accepted',confirm:true},await session());
+  expect(rejected.status).toBe(400);
+});
+
+it('uses the external sent offer review window instead of submitted days',async()=>{
+  await start();
+  sql.prepare("UPDATE software_offers SET sent_at='2026-09-30',agreement_details_json=? WHERE id=(SELECT offer_id FROM software_projects WHERE request_id='software')").run(JSON.stringify({review_business_days:45}));
+  const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v1',criteria:['Try the preview.'],review_window_days:5}});
+  expect(response.status).toBe(200);
+  expect((await sharedSoftwareUpdates(db,'software'))[0].review_window_days).toBe(45);
+});
+
+it('reads external correction and handoff periods from the linked sent offer',async()=>{
+  await start();
+  sql.prepare("UPDATE software_offers SET sent_at='2026-09-30',agreement_details_json=? WHERE id=(SELECT offer_id FROM software_projects WHERE request_id='software')").run(JSON.stringify({correction_calendar_days:60,handoff_access_days:90}));
+  const project=await getSoftwareProject(db,'software');
+  const agreed=await projectAgreementDetails(db,project!);
+  expect(agreed).toEqual({correction_calendar_days:60,handoff_access_days:90});
+  expect(correctionPeriodEnd('2026-10-01',undefined,Number(agreed!.correction_calendar_days))).toBe('2026-11-30');
 });

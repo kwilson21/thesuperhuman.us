@@ -11,7 +11,7 @@ function makeContext(url: string, hostHeader?: string) {
   return {
     url: u,
     request: new Request(url, { headers }),
-    locals: { runtime: { env: {} } },
+    locals: { runtime: { env: { SITE_ORIGIN: "https://thesuperhuman.us" } } },
     rewrite: vi.fn(async (target: string | URL) => {
       const rewritten = typeof target === 'string' ? new URL(target, u) : target;
       return new Response('rewritten:' + rewritten.pathname, { status: 200 });
@@ -185,5 +185,30 @@ it.each(['/studio/software/example','/api/studio/software/example/updates/update
   for (const status of [200,404]) {
     const response=await onRequest(makeContext('https://thesuperhuman.us'+path),async()=>new Response('private',{status})) as Response;
     expect(response.headers.get('cache-control')).toBe('private, no-store'); expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+  }
+});
+
+it('keeps archive one-time link landing private and uncacheable',async()=>{
+ const response=await onRequest(makeContext('https://thesuperhuman.us/agreements/verify?key=synthetic'),async()=>new Response('expired')) as Response;
+ expect(response.headers.get('cache-control')).toBe('private, no-store');expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+});
+
+it.each(['/api/agreements/link','/api/agreements/packet/file','/api/offer/token/link','/api/offer/token/sign'])('refuses noncanonical hosts before agreement handlers for %s',async path=>{
+  for (const [origin,host] of [['https://preview.example',undefined],['https://thesuperhuman.us','foreign.example']] as const) {
+    const ctx=makeContext(origin+path,host),next=vi.fn();
+    expect(((await onRequest(ctx,next)) as Response).status).toBe(404);
+    expect(next).not.toHaveBeenCalled();
+  }
+});
+
+it.each(['/api/offer/token/link', '/api/agreements/link'])('uses the effective canonical origin for %s', async path => {
+  for (const origin of [undefined, 'http://127.0.0.1:4321']) {
+    for (const host of ['https://thesuperhuman.us', 'http://127.0.0.1:4321', 'https://foreign.example']) {
+      const ctx = makeContext(host + path);
+      ctx.locals.runtime.env.SITE_ORIGIN = origin;
+      const next = vi.fn(async () => new Response('next'));
+      const response = await onRequest(ctx, next) as Response;
+      expect(response.status).toBe(host === (origin ?? 'https://thesuperhuman.us') ? 200 : 404);
+    }
   }
 });

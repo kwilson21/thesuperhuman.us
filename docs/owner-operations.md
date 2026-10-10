@@ -131,6 +131,37 @@ The client’s private project page lists only its pinned offer’s invoices and
 
 After checking a full pre-start deposit refund in Stripe, record it with `npm run owner:stripe:reconcile -- --software-deposit-refunded LOCAL_INVOICE_ID Confirmed`. This is an owner assertion, not an automatic refund or provider verification. Partial refunds do not release new terms. The paid accounting status remains; the refund date releases the offer block and removes the received confirmation. If no Stripe invoice exists for an old uncertain attempt, explicitly record that check with `--software-no-invoice LOCAL_INVOICE_ID Confirmed`, then use Replace invoice. Resolve reviewed unmatched software events with `--resolve-software-event EVENT_ID Confirmed`; replay the original signed invoice event when it should recover a known reservation. Do not put personal data in reconciliation notes.
 
+## Software agreements
+
+Website signing starts off. The Agreements page controls the setting, private
+contractor configuration, immutable MSA and SOW template versions, field reference
+and sample preview. Review templates and consent with counsel when possible.
+Publish a new version to change a template; sent offers keep their pinned version.
+Private legal source files and filled agreements do not belong in Git.
+
+Complete Agreement details before sending an offer. Defaults are folded under
+Using the SOW defaults. Reuse an executed MSA only after confirming the same legal
+party. The offer recipient verifies their email, supplies party information and
+required choices, reviews the exact filled documents, then signs. Review their
+saved documents before countersigning. Both parties sign the same document hash.
+
+Signed copy preparation and each party's email delivery have separate statuses.
+Retry preparation without collecting another signature. Check Resend before
+retrying an unconfirmed email. Complete PDF attachments and authenticated archive
+or project downloads provide retained copies. Provider acceptance does not prove
+inbox receipt. The project cannot start until both signatures, PDF and both copies
+are ready, or alternate copy delivery is recorded. Outside-site signing requires
+the signed date, parties and a reference to a kept complete copy. Payment,
+required purchase order, inputs and the agreed start date still apply.
+
+Signed agreement evidence is retained separately from project messages and images.
+Record an explicit agreement end date before calculating the ten-year retention
+period. Keep open agreements, active reused MSAs and records under legal hold.
+Project access closure does not erase signatures or restore access through the
+agreement archive. Never delete agreement objects through project cleanup.
+
+Signing release health: run `npm run owner:health -- --remote` before merge to check the target schema and configuration. After deployment, run `npm run owner:health -- --remote --post-deploy` to also verify that `/agreements/verify` returns the expected bare-visit 401.
+
 Software brief suggestions require the `BRIEF_SUGGEST_RATE_LIMIT` Workers Rate Limiting binding (30 calls per visitor per 60 seconds). A second binding, `BRIEF_SUGGEST_SITE_LIMIT`, allows 120 calls per 60 seconds with one fixed site key. These per-minute bindings are the abuse limits; the visitor binding is keyed by the existing daily visitor IP hash. Suggestions also require a silently verified Turnstile pass, valid for 30 minutes and bound to that daily hash. The HttpOnly, Secure, SameSite=Strict pass cookie is HMAC-signed with the existing `TURNSTILE_SECRET_KEY` using a separate suggestion-pass label. Missing secrets disable suggestions. Interactive challenges silently disable suggestions. Cloudflare applies its counters per location, rather than as a globally exact quota. Missing bindings disable suggestions, including in local and CI environments. D1 enforces hard UTC daily caps of 300 reservations per visitor and 10,000 site-wide in `brief_suggestion_budget`. Atomic increments reserve the visitor budget first, then the site budget before calling AI. Exhausted budgets or D1 budget reservation failures silently disable suggestions. Reservations count attempts, including AI failures and visitor reservations blocked by the site cap. No KV daily counters are used. Apply migration `0025_brief_suggestion_budget.sql` only after owner authorization. Before it is applied, suggestions fail closed.
 
 The first site budget reservation of each UTC day starts background cleanup of at most 1,000 rows older than the previous UTC day without delaying the suggestion. Cleanup failures are ignored; later reservations and capped requests do not run cleanup. Current and previous UTC days are retained; expired rows can remain longer during inactivity or a cleanup backlog. Read today's counters with `SELECT scope, count FROM brief_suggestion_budget WHERE day = date('now');`. The `site` row is the site-wide total; other scopes are daily visitor hashes. Do not export those hashes publicly.

@@ -9,6 +9,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { chromium } from 'playwright';
+import { prepareWithDiagnostics } from './prepare.mjs';
 import { ACCESS_AUDIENCE, ACCESS_ISSUER, expectedResourceError, missingScenarioRoutes, OUT, OWNER_EMAIL, PAGES, REDIRECTS, SCENARIO_PAGES, VIEWPORTS } from './config.mjs';
 
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:4321';
@@ -32,7 +33,7 @@ const errors = [];
 const captured = [];
 
 /** Saves one PNG. Pass `owner` for owner pages, `cookie` for a studio session, `selector` for one section. */
-async function capture({ file, path, viewport = 'desktop', owner = false, cookie, selector, status = 200, expectedResourceErrors = [], prepare }) {
+async function capture({ file, path, viewport = 'desktop', owner = false, cookie, selector, status = 200, prepare, expectedResponses = [], expectedResourceErrors = [] }) {
   const size = VIEWPORTS.find(item => item.name === viewport);
   const context = await browser.newContext({ viewport: { width: size.width, height: size.height }, reducedMotion: 'reduce' });
   // Access adds this header at the edge, so only our own origin sees it. Fonts and other hosts reject it.
@@ -42,7 +43,7 @@ async function capture({ file, path, viewport = 'desktop', owner = false, cookie
   const page = await context.newPage();
   const where = `${path} (${viewport})`;
   page.on('console', message => {
-    const expected = expectedResourceError(message, [{ url: BASE + path, status }, ...expectedResourceErrors]);
+    const expected = expectedResourceError(message, [{ url: BASE + path, status }, ...expectedResourceErrors, ...expectedResponses.map(({ path, status }) => ({ url: BASE + path, status }))]);
     if (message.type() === 'error' && !expected) errors.push(`${where}: ${message.text()}`);
   });
   page.on('pageerror', error => errors.push(`${where}: ${error.message}`));
@@ -52,7 +53,7 @@ async function capture({ file, path, viewport = 'desktop', owner = false, cookie
   // Turnstile keeps requesting in the background, so network idle is a best effort, not a requirement.
   await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
   await page.evaluate(() => document.fonts.ready);
-  if (prepare) await prepare(page);
+  if (prepare) await prepareWithDiagnostics(page, prepare, OUT, currentScenario, file);
   const target = selector ? page.locator(selector).first() : page;
   await target.screenshot({ path: `${OUT}/${file}`, ...(selector ? {} : { fullPage: true }), animations: 'disabled' });
   await context.close();

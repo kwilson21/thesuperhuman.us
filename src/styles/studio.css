@@ -129,3 +129,35 @@
 @media (prefers-reduced-motion: reduce) {
   .studio-input, .studio-select, .studio-textarea, .studio-button, .studio-toggle input, .studio-toggle input::after { transition: none; }
 }
+
+/* Offer and agreement sheets share the same private page structure. */
+.offer-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; border-bottom: 1px solid var(--rule); padding-bottom: 1.5rem; }
+.offer-header .page-kicker { margin: 0; }
+.offer-header .personal-name { font-size: 1.5rem; }
+.offer-columns { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr); gap: 2.5rem; }
+.offer-columns > * { min-width: 0; }
+.offer-columns aside { padding-left: 2rem; border-left: 1px solid var(--rule); }
+label.confirmation { display: flex; align-items: start; gap: .6rem; font: 400 .88rem/1.5 Inter, sans-serif; }
+label.confirmation input { flex: none; width: auto; min-height: 0; margin: .3rem 0 0; accent-color: var(--accent); }
+.agreement-page { font-family: Newsreader, Georgia, serif; }
+.agreement-shell { max-width: 72rem; padding-inline: clamp(1.5rem, 4.375vw, 3.5rem); padding-block: 2rem; overflow-wrap: anywhere; }
+.agreement-kicker { margin-top: 2.5rem; margin-bottom: 1rem; }
+.agreement-page .page-lede { margin: 1.5rem 0 2.5rem; }
+.agreement-page h2 { font-size: 1.5rem; line-height: 1.2; margin-bottom: 1rem; }
+.agreement-form { display: grid; gap: 1.2rem; min-width: 0; margin-block: 1.5rem; }
+.agreement-page .page-title + .agreement-form { margin-top: 2.5rem; }
+.agreement-form label:not(.confirmation) { display: grid; gap: .4rem; font: 500 .82rem/1.4 Inter, sans-serif; }
+.agreement-form input, .agreement-form textarea { max-width: 100%; min-width: 0; }
+.agreement-form fieldset { display: grid; gap: 1rem; min-width: 0; border-top: 1px solid var(--rule); padding-top: 1.5rem; }
+.agreement-form legend { font: 500 .88rem/1.5 Inter, sans-serif; }
+.agreement-text { white-space: pre-wrap; overflow-wrap: anywhere; font: 400 1rem/1.7 Inter, sans-serif; border-top: 1px solid var(--rule); padding-top: 1.5rem; max-width: 100%; }
+.agreement-section { margin: 2rem 0; min-width: 0; }
+.agreement-meta, .agreement-hint { overflow-wrap: anywhere; font: 400 .85rem/1.5 Inter, sans-serif; color: var(--studio-muted); }
+.agreement-status { margin: 1rem 0; overflow-wrap: anywhere; font: 400 .85rem/1.5 Inter, sans-serif; }
+.agreement-aside p { margin: .8rem 0; }
+.agreement-aside a { display: inline-block; font: 500 .82rem/1.5 Inter, sans-serif; }
+@media (max-width: 700px) {
+  .offer-columns { grid-template-columns: 1fr; gap: 1rem; }
+  .offer-columns aside { padding-left: 0; border-left: 0; border-top: 1px solid var(--rule); padding-top: 1.5rem; }
+  .offer-header { align-items: start; flex-wrap: wrap; }
+}

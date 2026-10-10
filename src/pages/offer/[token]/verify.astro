@@ -1,0 +1,22 @@
+---
+export const prerender = false;
+import AgreementLayout from '~/layouts/AgreementLayout.astro';
+import { completeAgreementLink } from '~/lib/agreement-access';
+const key = Astro.request.method === 'POST' ? String((await Astro.request.formData()).get('key') ?? '') : Astro.url.searchParams.get('key') ?? '';
+const response = await completeAgreementLink(Astro.locals.runtime.env, Astro.request, key, Astro.params.token);
+if (response.status === 303) return response;
+Astro.response.status = response.status;
+Astro.response.headers.set('Referrer-Policy', 'no-referrer');
+Astro.response.headers.set('Cache-Control', 'no-store');
+const valid = response.status === 200;
+import { getLinkedOffer } from '~/lib/software-offers';
+const offer = valid ? await getLinkedOffer(Astro.locals.runtime.env.MUSIC_DB!, Astro.params.token!) : null;
+---
+<AgreementLayout title={valid ? "Your agreement is ready" : "This link has expired"}>
+{valid ? <>
+<p class="page-kicker">{offer && JSON.parse(offer.terms_json).outcome}</p>
+<h1 class="page-title">Your agreement is ready.</h1>
+<form class="agreement-form" method="post" action={Astro.url.pathname}><input type="hidden" name="key" value={key} /><button class="studio-button">Continue to sign</button></form>
+<p class="agreement-hint">This link works once.</p>
+</> : <><h1 class="page-title">This link has expired.</h1><p class="page-lede">Links work once and last an hour.</p><p class="agreement-form"><a class="studio-button" href={`/offer/${Astro.params.token}/sign`}>Send a new link</a></p></>}
+</AgreementLayout>

@@ -1,24 +1,27 @@
 ---
-import { softwareDate } from '~/lib/software-projects';
+import { softwareDate, softwareRevisionHistoryBody } from '~/lib/software-projects';
 import type { ClientSoftwareUpdate } from '~/lib/software-projects';
-type Props = { update: ClientSoftwareUpdate; checks: string[]; milestoneName: string; endpoint: string; readonly?: boolean };
-const {update,checks,milestoneName,endpoint,readonly=false}=Astro.props;
+type Props = { update: ClientSoftwareUpdate; checks: string[]; deliverables?: string[]; missingDeliverables?: {label:string;index:number}[]; inaccessibleDeliverables?: {label:string;index:number}[]; milestoneName: string; endpoint: string; readonly?: boolean; canAccept?: boolean };
+const {update,checks,deliverables=[],missingDeliverables=[],inaccessibleDeliverables=[],milestoneName,endpoint,readonly=false,canAccept=true}=Astro.props;
 const direction=update.kind==='direction_review';
+const decisionBody=softwareRevisionHistoryBody(update.decision_body,checks,deliverables);
 ---
 <section class="software-review">
   <h2>{direction ? 'Your decision' : 'Your review'}</h2>
   {update.decision ? <>
     <p>{update.decision==='direction_confirmed' ? `You confirmed this direction on ${softwareDate(update.decided_at!)}.` : update.decision==='milestone_accepted' ? `You accepted ${update.artifact_version} on ${softwareDate(update.decided_at!)}.` : `You asked for changes on ${softwareDate(update.decided_at!)}. I’ll reply here.`}</p>
-    {update.decision==='changes_requested' && <p>{update.decision_body}</p>}
+    {update.decision==='changes_requested' && <p>{decisionBody}</p>}
   </> : readonly ? <p>This update is shown for reference.</p> : <form data-software-review data-endpoint={endpoint} data-version={update.artifact_version} data-milestone={milestoneName} data-direction={String(direction)}>
     <p>{direction ? 'Does this match how you work?' : `Review ${update.artifact_version} against the agreed checks.`}</p>
-    <button class="studio-button" type="submit" name="decision" formnovalidate value={direction ? 'direction_confirmed' : 'milestone_accepted'}>{direction ? 'Confirm direction' : 'Accept milestone'}</button>
+    <button class="studio-button" type="submit" name="decision" formnovalidate value={direction ? 'direction_confirmed' : 'milestone_accepted'} disabled={!direction && !canAccept}>{direction ? 'Confirm direction' : 'Accept milestone'}</button>
     <details data-request-changes><summary>Request changes</summary>
-      {!direction && <fieldset><legend>Which agreed checks are unmet?</legend>{checks.map((check,index)=><label class="check-choice"><input type="checkbox" name="criteria" value={index} />{check}</label>)}<p class="hint">Select at least one check.</p></fieldset>}
+      {!direction && <fieldset><legend>Which agreed checks are unmet?</legend>{checks.map((check,index)=><label class="check-choice"><input type="checkbox" name="criteria" value={index} />{check}</label>)}<p class="hint">Select a check that does not pass, or choose a deliverable below.</p></fieldset>}
+      {!direction && missingDeliverables.length>0 && <fieldset><legend>Which planned deliverables are not included yet?</legend><p class="hint">These items were in the agreement but are not listed in this delivery. You can request them without marking a passing check as failed.</p>{missingDeliverables.map(item=><label class="check-choice"><input type="checkbox" name="missing_deliverables" value={item.index} />{item.label}</label>)}</fieldset>}
+      {!direction && inaccessibleDeliverables.length>0 && <fieldset><legend>Which included deliverables can’t you open or find?</legend><p class="hint">Choose an item listed as included if you can’t access it. This is separate from a check that does not pass.</p>{inaccessibleDeliverables.map(item=><label class="check-choice"><input type="checkbox" name="inaccessible_deliverables" value={item.index} />{item.label}</label>)}</fieldset>}
       <label>Feedback on this version (required for changes)<textarea class="studio-textarea" name="note" required maxlength="2000" placeholder={direction ? 'What should change, and why?' : 'Tell me what happened and how to see it.'}></textarea></label>
       <button class="studio-button secondary" type="submit" name="decision" value="changes_requested">Request changes</button>
     </details>
-    <p>{direction ? 'Confirming the direction approves this approach only. The working milestone is reviewed separately.' : `Acceptance applies to ${update.artifact_version}. No automatic acceptance from silence.`}</p>
+    <p>{direction ? 'Confirming the direction approves this approach only. The working milestone is reviewed separately.' : !canAccept ? 'You can review this partial delivery, but acceptance is for the complete milestone. Select any agreed deliverables that are not here and request them below; you do not need to mark an unrelated check as failed.' : `Acceptance applies to the complete agreed milestone, including every item in the full scope. No automatic acceptance from silence.`}</p>
     <p class="studio-status" role="status" aria-live="polite" data-review-status></p>
   </form>}
 </section>
@@ -30,6 +33,8 @@ const direction=update.kind==='direction_review';
   legend { font: .95rem/1.5 Inter,sans-serif; margin-bottom: .6rem; }
   label { font: .9rem/1.5 Inter,sans-serif; }
   label.check-choice { display: flex; align-items: start; gap: .6rem; }
+  label.check-choice span { display: grid; gap: .1rem; }
+  label.check-choice small { color: var(--muted); font: .78rem/1.4 Inter,sans-serif; }
   input[type=checkbox] { accent-color: var(--accent); margin-top: .3rem; flex-shrink: 0; }
   details { border-top: 1px solid var(--rule); padding-top: .8rem; }
   summary { list-style: none; cursor: pointer; font: .95rem/1.5 Inter,sans-serif; color: var(--ink); border: 1px solid var(--ink); padding: .8rem 1rem; text-align: center; margin-bottom: .8rem; }

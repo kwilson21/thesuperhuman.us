@@ -17,7 +17,7 @@ beforeEach(() => {
 });
 afterEach(() => { sql.close(); vi.unstubAllGlobals(); });
 async function call(body: unknown, owner = true, origin?: string) {
-  return POST({ params: { id: 'software' }, request: new Request('https://thesuperhuman.us/api/owner/requests/software/software', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }), locals: { owner: owner ? { email: 'owner@example.com' } : undefined, runtime: { env: { MUSIC_DB: db, SITE_ORIGIN: origin, RESEND_API_KEY: 'fake', CONTACT_FROM_EMAIL: 'sender@example.com', OWNER_EMAIL: 'owner@example.com' } } } } as any);
+  return POST({ params: { id: 'software' }, request: new Request('https://thesuperhuman.us/api/owner/requests/software/software', { method: 'POST', headers: { 'content-type': 'application/json', origin:'https://thesuperhuman.us' }, body: JSON.stringify(body) }), locals: { owner: owner ? { email: 'owner@example.com' } : undefined, runtime: { env: { MUSIC_DB: db, SITE_ORIGIN: origin, RESEND_API_KEY: 'fake', CONTACT_FROM_EMAIL: 'sender@example.com', OWNER_EMAIL: 'owner@example.com' } } } } as any);
 }
 async function draft(expectedUpdatedAt: string | null = null) { const response = await call({ action: 'draft', terms, expectedUpdatedAt }); expect(response.status).toBe(200); return response.json() as Promise<any>; }
 async function send(value: any) { const response = await call({ action: 'send', version: value.version, expectedUpdatedAt: value.updatedAt }); expect(response.status).toBe(200); return response.json() as Promise<any>; }
@@ -124,11 +124,11 @@ it('uses the isolated site origin for the client link and email', async () => {
   expect(result.link).toMatch(/^https:\/\/preview.example.workers.dev\/offer\//);
   expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body)).text).toContain(result.link);
 });
-it('decline withdraws live and draft offers and revokes access, but ordinary resolution keeps access', async () => {
+it('decline withdraws live and draft offers and revokes access, and ordinary resolution retires access', async () => {
   const sent = await send(await draft()), token = sent.link.split('/').pop();
   await draft();
   sql.exec("UPDATE owner_requests SET status='resolved'");
-  expect(await getLinkedOffer(db,token)).toMatchObject({ status:'sent' });
+  expect(await getLinkedOffer(db,token)).toBeNull();
   sql.exec("UPDATE owner_requests SET status='reviewed'; UPDATE software_offer_links SET created_at='2020-01-01T00:00:00Z'");
   expect((await call({ action:'decline', text:'Thanks.' })).status).toBe(200);
   expect(await getLinkedOffer(db,token)).toBeNull();
@@ -440,4 +440,25 @@ it('allows only one overlapping decline to email and record its resolution', asy
   expect(deliveries.filter(payload => payload.to[0] === 'owner@example.com')).toHaveLength(1);
   expect(sql.prepare("SELECT * FROM owner_request_audit WHERE action='declined'").all()).toHaveLength(1);
   expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({ status:'resolved' });
+});
+
+it('reissues a pre-signing offer in its original external mode',async()=>{
+  const first=await send(await draft());
+  sql.exec("UPDATE software_signing_settings SET software_signing_enabled=1");
+  sql.exec("UPDATE software_offer_links SET created_at='2020-01-01'");
+  expect((await call({action:'revoke',expectedLinkCreatedAt:'2020-01-01'})).status).toBe(200);
+  await send(first);
+  expect(sql.prepare('SELECT msa_template_id FROM software_offers').get().msa_template_id).toBeNull();
+  expect(JSON.stringify((fetch as any).mock.calls)).toContain('sign outside the website');
+});
+
+it.each([0,1])('reissue email follows the current signing switch (%s)',async enabled=>{
+  const first=await send(await draft());
+  sql.exec("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES('msa','msa',1,'Synthetic',lower(hex(zeroblob(32))),'now','owner'); UPDATE software_offers SET msa_template_id='msa'; UPDATE software_offer_links SET created_at='2020-01-01'");
+  sql.prepare('UPDATE software_signing_settings SET software_signing_enabled=?').run(enabled);
+  expect((await call({action:'revoke',expectedLinkCreatedAt:'2020-01-01'})).status).toBe(200);
+  vi.mocked(fetch).mockClear();
+  await send(first);
+  const payload=JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
+  expect(payload.text).toContain(enabled?'Review and sign on the website.':'We will arrange for you to sign outside the website.');
 });

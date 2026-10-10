@@ -1,0 +1,130 @@
+---
+import { softwareDate } from "~/lib/software-projects";
+import { currentSigningNotification, newYorkTime } from "~/lib/agreement-artifacts";
+import { offerAgreements } from '~/lib/software-agreements';
+import { consentText, intentText } from '~/lib/agreement-fields';
+interface Props {
+  requestId: string;
+  offerId?: string;
+}
+const { requestId, offerId } = Astro.props,
+  db = Astro.locals.runtime.env.MUSIC_DB!;
+const docs = offerId ? await offerAgreements(db, offerId) : [],
+  sow = docs.find((d) => d.kind === 'sow'),
+  pending = docs.filter((d) => d.status === 'client_signed');
+const artifact = sow
+  ? await db
+      .prepare('SELECT status,attempt_id FROM software_agreement_artifacts WHERE agreement_id=?')
+      .bind(sow.id)
+      .first<{ status: string; attempt_id: string | null }>()
+  : null;
+const deliveries = sow
+  ? (
+      await db
+        .prepare(
+          'SELECT recipient_role,status,alternate_delivered_at FROM software_agreement_deliveries WHERE agreement_id=?',
+        )
+        .bind(sow.id)
+        .all<{ recipient_role: string; status: string; alternate_delivered_at: string | null }>()
+    ).results
+  : [];
+const notifications = sow
+  ? (
+      await db
+        .prepare(`SELECT kind,status,${currentSigningNotification} AS retryable FROM software_agreement_notifications WHERE agreement_id=?`)
+        .bind(sow.id)
+        .all<{ kind: string; status: string; retryable: number }>()
+    ).results
+  : [];
+const retryCount = notifications.filter(n => n.retryable && n.status !== 'sent').length +
+  (sow?.status === 'executed' ? deliveries.filter(d => d.status !== 'sent' && !d.alternate_delivered_at).length : 0);
+const values = sow ? JSON.parse(sow.values_json) : null,
+  endpoint = `/api/owner/requests/${requestId}/agreement`;
+const signatures = (
+  await db
+    .prepare(
+      "SELECT s.agreement_id,s.typed_name,s.title,s.verified_email,s.signed_at FROM software_agreement_signatures s JOIN software_agreements a ON a.id=s.agreement_id WHERE a.request_id=? AND s.party='client'",
+    )
+    .bind(requestId)
+    .all<{
+      agreement_id: string;
+      typed_name: string;
+      title: string;
+      verified_email: string;
+      signed_at: string;
+    }>()
+).results;
+const abandoned = (
+  await db
+    .prepare(
+      "SELECT a.id,a.kind,a.canonical_text,a.abandoned_reason,a.legal_hold,EXISTS(SELECT 1 FROM software_agreement_signatures s WHERE s.agreement_id=a.id) AS has_signature FROM software_agreements a WHERE a.request_id=? AND a.status='abandoned' ORDER BY a.kind",
+    )
+    .bind(requestId)
+    .all<{
+      id: string;
+      kind: string;
+      canonical_text: string;
+      abandoned_reason: string;
+      legal_hold: number;
+      has_signature: number;
+    }>()
+).results;
+---
+{sow&&<section class="rail-section wide owner-agreement"><h2 class:list={{"page-title":pending.length>0}}>{pending.length>0?'Countersign the agreement.':'Agreement'}</h2><p>{sow.status==='client_signed'?'Client signature saved. Review before countersigning.':sow.status==='executed'?artifact?.status==='ready'?'Signed copy ready.':'Signed by both parties. Copy preparation needs attention.':'Client is reviewing.'}</p>
+ <div class:list={{"countersign-columns":pending.length>0}}><div>
+ {pending.length>0&&<div class="agreement-summary"><h3>Client’s signed choices</h3><p>Portfolio · {values.client.portfolio==='allow'?'Allow':'Do not allow'}</p><p>Client naming · {values.client.naming?'Yes':'No'}</p><p>Payment · {values.system.payment}</p><p>Attachments · {values.system.attachments}</p>{signatures.filter(s=>s.agreement_id===sow.id).map(s=><p>Client signature recorded: {s.typed_name}, {s.title}. Signed {newYorkTime(s.signed_at)}.</p>)}{docs.map(d=><a class="studio-quiet" data-agreement-review-link href={`#owner-review-${d.id}`}>Review filled {d.kind.toUpperCase()}</a>)}</div>}
+ {docs.map(d=><details id={`owner-review-${d.id}`}><summary>{d.kind.toUpperCase()} · {softwareDate(d.effective_on)}</summary><p class="rail-muted">SHA-256 {d.text_sha256}</p>{signatures.filter(s=>s.agreement_id===d.id).map(s=><p>Client signature recorded: {s.typed_name}, {s.title}. Verified email: {s.verified_email}. Signed {newYorkTime(s.signed_at)}.</p>)}<pre>{d.canonical_text}</pre></details>)}
+ {notifications.map(n=><p>{n.kind==='signature-receipt'?'Client signature receipt':'Owner countersign notice'}: {n.status}</p>)}
+ {retryCount>0&&<form method="post" action={endpoint}><input type="hidden" name="action" value="retry-copy" /><input type="hidden" name="agreement_id" value={sow.id} /><label class="confirmation"><input type="checkbox" name="confirmedNotSent" value="true" />I checked Resend and confirmed any unconfirmed agreement email was not sent.</label><button class="studio-quiet">Retry agreement email</button></form>}
+ </div><div>
+ {pending.length>0&&<><h3>Agreement</h3><p>Waiting for your countersignature.</p><form method="post" action={endpoint}><input type="hidden" name="action" value="countersign" /><input type="hidden" name="documents" value={JSON.stringify(pending.map(d=>({id:d.id,hash:d.text_sha256})))} /><p class="owner-signature">{values.contractor.signer_name}</p><details><summary>Edit full legal name</summary><label>Full legal name<input class="studio-input" name="typed_name" value={values.contractor.signer_name} required maxlength="200" /></label></details><p>The signing certificate records your verified email, IP address and browser. Keep a complete copy. Signed agreements and signature evidence remain archived for 10 years after the agreement ends, longer for active reuse or legal hold.</p><label class="confirmation"><input type="checkbox" name="consent" value="true" required />{consentText(values.contractor.legal_name,true)}</label><button class="studio-button">Countersign as {values.contractor.signer_name}</button><p>{intentText(true, !pending.some(d=>d.kind==='msa'))}</p></form><details><summary>Abandon pending countersignature</summary><form method="post" action={endpoint}><input type="hidden" name="action" value="abandon" /><input type="hidden" name="documents" value={JSON.stringify(pending.map(d=>({id:d.id,hash:d.text_sha256})))} /><label>Reason<textarea class="studio-textarea" name="reason" required maxlength="1000"></textarea></label><label class="confirmation"><input type="checkbox" name="confirmed" value="true" required />Retain the client signature and require a new offer.</label><button class="studio-quiet">Abandon</button></form></details></>}
+ {sow.status==='executed'&&<><form method="post" action={endpoint}><input type="hidden" name="action" value="retry-artifact" /><input type="hidden" name="agreement_id" value={sow.id} />{artifact?.status==='rendering'&&<><input type="hidden" name="expectedAttempt" value={artifact.attempt_id} /><label class="confirmation"><input type="checkbox" name="confirmedStale" value="true" required />I checked the interrupted preparation attempt and confirmed it is safe to recover.</label></>}<button class="studio-quiet">Prepare or retry signed copy</button></form>{artifact?.status==='ready'&&<a href={`/api/owner/agreements/${sow.id}/file`}>Download signed agreement</a>}{deliveries.map(d=><p>{d.recipient_role} copy: {d.alternate_delivered_at?'Alternate delivery recorded':d.status}</p>)}</>}
+{sow.status==='executed'&&<details><summary>Copy delivery and retention</summary><form method="post" action={endpoint}><input type="hidden" name="action" value="record-alternate-copy" /><input type="hidden" name="agreement_id" value={sow.id} /><label>Party<select class="studio-select" name="role"><option value="client">Client</option><option value="contractor">Contractor</option></select></label><label>Delivery method and reference<input class="studio-input" name="method" required maxlength="200" /></label><label class="confirmation"><input type="checkbox" name="confirmed" value="true" required />I delivered the complete signed copy to this party.</label><button class="studio-quiet">Record alternate delivery</button></form>{docs.map(d=><><form method="post" action={endpoint}><input type="hidden" name="action" value="hold" /><input type="hidden" name="agreement_id" value={d.id} /><label class="confirmation"><input type="checkbox" name="held" value="true" checked={Boolean((d as typeof d & {legal_hold:number}).legal_hold)} />Keep {d.kind.toUpperCase()} under legal hold</label><button class="studio-quiet">Save legal hold</button></form><form method="post" action={endpoint}><input type="hidden" name="action" value="end" /><input type="hidden" name="agreement_id" value={d.id} /><label>Explicit {d.kind.toUpperCase()} end date<input class="studio-input" type="date" name="ended_on" required /></label><label class="confirmation"><input type="checkbox" name="confirmed" value="true" required />The agreement ended on this date. For an MSA, this also ends future reuse.</label><button class="studio-quiet">Record agreement end</button></form></>)}</details>}
+</div></div></section>}
+{abandoned.length>0&&<section class="rail-section wide"><h2>Retained signing history</h2>{abandoned.map(d=><details><summary>{d.kind.toUpperCase()} · Abandoned</summary><p>{d.has_signature?'The client signature is retained. This signing action was abandoned.':'Unsigned preview retired. Reviewed cleanup becomes available after 90 days.'}</p><p>{d.abandoned_reason}</p>{signatures.filter(s=>s.agreement_id===d.id).map(s=><p>Client signature recorded: {s.typed_name}, {s.title}. Verified email: {s.verified_email}. Signed {newYorkTime(s.signed_at)}.</p>)}<pre>{d.canonical_text}</pre>{Boolean(d.has_signature)&&<><form method="post" action={endpoint}><input type="hidden" name="action" value="hold" /><input type="hidden" name="agreement_id" value={d.id} /><label class="confirmation"><input type="checkbox" name="held" value="true" checked={Boolean(d.legal_hold)} />Keep this record under legal hold</label><button class="studio-quiet">Save legal hold</button></form><form method="post" action={endpoint}><input type="hidden" name="action" value="end" /><input type="hidden" name="agreement_id" value={d.id} /><label>Explicit end date<input class="studio-input" type="date" name="ended_on" required /></label><label class="confirmation"><input type="checkbox" name="confirmed" value="true" required />The signing action ended on this date. Retain the signature evidence for ten years.</label><button class="studio-quiet">Record end date</button></form></>}</details>)}</section>}
+<style>
+ .owner-signature {font:italic 2.5rem/1.3 Newsreader,Georgia,serif;border-bottom:1px solid var(--ink);margin-block:1rem;}
+ .owner-agreement > .page-title { font-size: clamp(3.25rem, 6.5vw, 5.4rem); margin-bottom: 1.5rem; }
+ .countersign-columns { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: clamp(2rem, 7vw, 6rem); margin-top: 2rem; }
+ .countersign-columns > div { min-width: 0; }
+ h3 { font: 400 1.5rem/1.3 Newsreader, Georgia, serif; }
+ @media(max-width:700px) { .countersign-columns { grid-template-columns: 1fr; } }
+ .agreement-summary { display: grid; gap: 1rem; margin: 1.5rem 0; }
+ .agreement-summary a { justify-self: start; }
+form {
+  display: grid;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+label:not(.confirmation) {
+  display: grid;
+  gap: 0.4rem;
+}
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+p {
+  overflow-wrap: anywhere;
+}
+details {
+  margin: 1rem 0;
+}
+</style>
+
+<script>
+  document.querySelectorAll<HTMLAnchorElement>('[data-agreement-review-link]').forEach(link => {
+    link.addEventListener('click', () => {
+      const review = document.getElementById(link.hash.slice(1));
+      if (review instanceof HTMLDetailsElement) review.open = true;
+    });
+  });
+</script>
+
+<script>
+for(const form of document.querySelectorAll<HTMLFormElement>('form:has([name="action"][value="countersign"])')) {
+ const input=form.querySelector<HTMLInputElement>('[name="typed_name"]')!;
+ input.addEventListener('input',()=>{form.querySelector<HTMLElement>('.owner-signature')!.textContent=input.value;form.querySelector<HTMLButtonElement>('.studio-button')!.textContent=`Countersign as ${input.value}`;});
+}
+</script>

@@ -45,15 +45,17 @@ export function studioRetentionProjectPredicate(now) {
 
 
 export function softwareRetentionProjectPredicate(now) {
-  return `content_deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM software_invoices i WHERE i.request_id=software_projects.request_id AND i.status IN ('creating','open','payment_failed','uncollectible')) AND ((completed_at IS NOT NULL AND completed_at<=${quote(cutoff(now,365))})
-    OR (revoked_at IS NOT NULL AND revoked_at<=${quote(cutoff(now,365))}))`;
+  const days=`COALESCE((SELECT json_extract(a.values_json,'$.owner.project_retention_days') FROM software_agreements a WHERE a.id=software_projects.agreement_id AND a.status='executed'),(SELECT json_extract(o.agreement_details_json,'$.project_retention_days') FROM software_offers o WHERE o.id=software_projects.offer_id AND o.sent_at IS NOT NULL),365)`;
+  const handoffDays=`COALESCE((SELECT json_extract(a.values_json,'$.owner.handoff_access_days') FROM software_agreements a WHERE a.id=software_projects.agreement_id AND a.status='executed'),(SELECT json_extract(o.agreement_details_json,'$.handoff_access_days') FROM software_offers o WHERE o.id=software_projects.offer_id AND o.sent_at IS NOT NULL),30)`;
+  return `content_deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM software_project_updates h WHERE h.request_id=software_projects.request_id AND h.kind='handoff' AND h.status='shared' AND julianday(h.shared_at)+${handoffDays}>julianday(${quote(now.toISOString())})) AND NOT EXISTS(SELECT 1 FROM software_invoices i WHERE i.request_id=software_projects.request_id AND i.status IN ('creating','open','payment_failed','uncollectible')) AND ((completed_at IS NOT NULL AND julianday(completed_at)+${days}<=julianday(${quote(now.toISOString())}))
+    OR (revoked_at IS NOT NULL AND julianday(revoked_at)+${days}<=julianday(${quote(now.toISOString())})))`;
 }
 async function softwareSources(database, now) {
   const exists = (await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_projects'")).length;
   const invoices=(await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_invoices'")).length;
   const empty = "SELECT '[]' AS snapshot";
   return {
-    softwareProjects: exists ? snapshot({ columns:'request_id,updated_at,invitation_status,invitation_attempted_at,invitation_sent_at', from:'software_projects', where:softwareRetentionProjectPredicate(now), order:'request_id',limit:25 }) : empty,
+    softwareProjects: exists ? snapshot({ columns:'request_id,updated_at,invitation_status,invitation_attempted_at,invitation_sent_at,start_details_json,external_signature_details_json', from:'software_projects', where:softwareRetentionProjectPredicate(now), order:'request_id',limit:25 }) : empty,
     softwareInvoiceRefs: invoices ? snapshot({columns:'id,request_id,updated_at',from:'software_invoices',where:`external_refs_deleted_at IS NULL AND request_id IN (SELECT request_id FROM software_projects WHERE ${softwareRetentionProjectPredicate(now)} OR content_deleted_at IS NOT NULL)`,order:'id',limit:1000}) : empty,
     softwareInvoicesOld: invoices ? snapshot({columns:'id,request_id,updated_at',from:'software_invoices',where:`created_at<${quote(cutoff(now,730))} AND EXISTS(SELECT 1 FROM software_projects p WHERE p.request_id=software_invoices.request_id AND p.content_deleted_at IS NOT NULL)`,order:'id',limit:1000}) : empty,
     softwareAudit: exists ? snapshot({columns:'id,occurred_at',from:'software_project_audit',where:`occurred_at<${quote(cutoff(now,730))}`,order:'id',limit:1000}) : empty,
@@ -208,12 +210,16 @@ export async function applyStudioRetention(database, review, environment, storag
   const fileIds = ids(objectRows);
   const softwareIds=ids(software.values.softwareProjects);
   const softwareStatements = software.values.softwareProjects.length ? [
+    `UPDATE software_offer_links SET revoked_at=${quote(now.toISOString())} WHERE request_id IN (${softwareIds}) AND revoked_at IS NULL`,
+    `UPDATE software_agreement_sessions SET revoked_at=${quote(now.toISOString())} WHERE purpose='agreement' AND offer_id IN (SELECT id FROM software_offers WHERE request_id IN (${softwareIds})) AND revoked_at IS NULL`,
+    `UPDATE software_agreement_links SET used_at=${quote(now.toISOString())} WHERE purpose='agreement' AND offer_id IN (SELECT id FROM software_offers WHERE request_id IN (${softwareIds})) AND used_at IS NULL`,
+    `DELETE FROM software_agreement_events WHERE offer_id IN (SELECT p.offer_id FROM software_projects p WHERE p.request_id IN (${softwareIds}) AND p.signature_source='external') AND agreement_id IS NULL`,
     `DELETE FROM software_project_messages WHERE request_id IN (${softwareIds})`,
     `DELETE FROM software_project_updates WHERE request_id IN (${softwareIds})`,
     `DELETE FROM software_milestone_deposits WHERE request_id IN (${softwareIds})`,
     `DELETE FROM software_milestone_payments WHERE request_id IN (${softwareIds})`,
-    `UPDATE software_offers SET terms_json='{}',sent_by=NULL WHERE request_id IN (${softwareIds})`,
-    `UPDATE software_projects SET terms_json='{}',waiting_for='',started_by='',content_deleted_at=${quote(now.toISOString())} WHERE request_id IN (${softwareIds})`,
+    `UPDATE software_offers SET terms_json='{}',sent_by=NULL,recipient_email_snapshot=CASE WHEN EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_offers.id) THEN recipient_email_snapshot ELSE NULL END,agreement_details_json=CASE WHEN EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_offers.id) THEN agreement_details_json ELSE NULL END WHERE request_id IN (${softwareIds})`,
+    `UPDATE software_projects SET terms_json='{}',waiting_for='',started_by='',start_details_json=NULL,external_signature_details_json=CASE WHEN EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_projects.offer_id) THEN external_signature_details_json ELSE NULL END,content_deleted_at=${quote(now.toISOString())} WHERE request_id IN (${softwareIds})`,
     `INSERT INTO software_project_audit(request_id,action,actor,occurred_at) SELECT request_id,'content-deleted','retention',${quote(now.toISOString())} FROM software_projects WHERE request_id IN (${softwareIds})`,
   ] : [];
   if (software.values.softwareInvoiceRefs.length) softwareStatements.push(`UPDATE software_invoices SET stripe_customer_id=NULL,hosted_invoice_url=NULL,created_by='',creation_started_at=NULL,external_refs_deleted_at=${quote(now.toISOString())} WHERE id IN (${ids(software.values.softwareInvoiceRefs)})`);
@@ -223,7 +229,7 @@ export async function applyStudioRetention(database, review, environment, storag
   if (software.values.softwareAudit.length) softwareStatements.push(`DELETE FROM software_project_audit WHERE id IN (${ids(software.values.softwareAudit)})`);
   const statements = [
     ...Object.entries(software.queries).filter(([name])=>!['softwareProjects','softwareInvoiceRefs','softwareInvoicesOld'].includes(name)).map(([name,query])=>guard(query,software.values[name])),
-    ...(software.values.softwareProjects.length ? [guard(snapshot({columns:'request_id,updated_at,invitation_status,invitation_attempted_at,invitation_sent_at',from:'software_projects',where:`request_id IN (${softwareIds})`,order:'request_id',limit:25}),software.values.softwareProjects)] : []),
+    ...(software.values.softwareProjects.length ? [guard(snapshot({columns:'request_id,updated_at,invitation_status,invitation_attempted_at,invitation_sent_at,start_details_json,external_signature_details_json',from:'software_projects',where:`request_id IN (${softwareIds})`,order:'request_id',limit:25}),software.values.softwareProjects)] : []),
     ...softwareStatements,
     ...Object.entries(queries).map(([name, query]) => guard(query, values[name])),
     guard(fileSnapshot(values.projects), values.files),

@@ -9,6 +9,9 @@ declare namespace App {
 }
 
 interface Env {
+  ASSETS: Fetcher;
+  AGREEMENT_RETENTION_BINDING_ID?: string;
+
   AI?: Ai;
   BRIEF_SUGGEST_RATE_LIMIT?: RateLimit;
   BRIEF_SUGGEST_SITE_LIMIT?: RateLimit;

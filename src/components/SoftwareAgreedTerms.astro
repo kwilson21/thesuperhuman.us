@@ -1,0 +1,133 @@
+---
+import type { OfferTerms } from '~/lib/software-offers';
+import { formatUSD, offerTotal, paymentSchedules } from '~/lib/software-offers';
+import type { Agreement } from '~/lib/software-agreements';
+import type { AgreementDetails, agreementValues } from '~/lib/agreement-fields';
+import { softwareDate } from '~/lib/software-projects';
+type Document = Pick<Agreement, 'id' | 'kind' | 'canonical_text' | 'effective_on' | 'text_sha256'>;
+interface Props { terms: OfferTerms; values?: ReturnType<typeof agreementValues> | null; documents: Document[]; websiteSigned: boolean; conversationOpen: boolean; signing?: boolean; agreementDetails?: AgreementDetails; }
+const { terms, values, documents, websiteSigned, conversationOpen } = Astro.props;
+const signing = Astro.props.signing ?? false;
+const details = values?.owner ?? Astro.props.agreementDetails;
+const packet = documents.find(document => document.kind === 'sow');
+const stages = ['What you get', 'Milestones & timing', 'Cost & responsibilities', 'Review agreed terms'];
+const workingTerms = details ? [
+  ['Update channel', details.update_channel], ['Update rhythm', details.update_rhythm],
+  ['Review period', `${details.review_business_days} business days`],
+  ['Correction period', `${details.correction_calendar_days} calendar days`],
+  ['Purchase order', details.po_requirement], ['Expenses and taxes', details.expenses_taxes],
+  ['Recurring charges', details.recurring_charges], ['Visual approvals', details.visual_approvals],
+  ['AI permission', details.ai_permission], ['Sensitive-data addenda', details.sensitive_addenda],
+  ['Support', details.support], ['MSA changes', details.msa_changes],
+  ['Data retention', values?.details?.data_retention ?? details.data_retention], ['Handoff access', values?.details?.handoff_access ?? details.handoff_access],
+] : [];
+---
+<details class="agreed-terms" data-agreed-terms>
+  <summary>What we agreed</summary>
+  <div class="terms-reader" data-terms-reader>
+    <header class="terms-summary" aria-label="Agreed project summary">
+      <div><strong>{terms.outcome}</strong><span>{terms.milestones.length} {terms.milestones.length === 1 ? 'milestone' : 'milestones'} · {formatUSD(offerTotal(terms))} fixed fee</span></div>
+      <p>{details ? `Planned ${softwareDate(details.planned_start)} to ${softwareDate(details.planned_end)}` : terms.timing || 'Delivery dates are not recorded on this page.'}</p>
+    </header>
+    <div class="terms-toolbar" data-terms-controls hidden>
+      <p data-terms-progress aria-live="polite">Reading stage 1 of 4</p>
+      <button type="button" class="terms-link" data-terms-full>Review all terms</button>
+    </div>
+    <nav aria-label="Agreed terms reading stages" class="terms-stages" data-terms-controls hidden>
+      {stages.map((stage, index) => <button type="button" data-terms-stage-button={index} aria-controls={`agreed-stage-${index}`}><span aria-hidden="true">{index + 1} · </span>{stage}</button>)}
+    </nav>
+    <h2 tabindex="-1" data-terms-full-heading hidden>All agreed terms</h2>
+    <section id="agreed-stage-0" data-terms-stage aria-labelledby="agreed-outcome">
+      <p class="terms-kicker">01 · The outcome</p><h2 id="agreed-outcome" tabindex="-1">What you get</h2>
+      <p class="terms-lead">{terms.summary}</p>
+      <div class="terms-cards">{terms.milestones.map((milestone, index) => <article class="terms-card"><p class="terms-kicker">Milestone {index + 1}</p><h3>{milestone.name}</h3><ol>{milestone.deliverables.map(line => <li>{line}</li>)}</ol></article>)}</div>
+    </section>
+    <section id="agreed-stage-1" data-terms-stage aria-labelledby="agreed-milestones">
+      <p class="terms-kicker">02 · The commitments</p><h2 id="agreed-milestones" tabindex="-1">Milestones & timing</h2>
+      <p>{terms.timing || 'See the complete agreement for timing conditions.'}</p>
+      {terms.milestones.map((milestone, index) => {
+        const dates = details?.milestones[index];
+        return <article class="terms-card terms-milestone"><h3>{index + 1} · {milestone.name}</h3><p class="terms-fee">{formatUSD(milestone.feeCents)} fixed fee</p>
+          {dates ? <p>Planned start: {softwareDate(dates.start)}<br />Target delivery: {softwareDate(dates.target)}</p> : <p>Milestone delivery dates are not recorded on this page. Refer to your complete signed agreement.</p>}
+          <details class="terms-disclosure"><summary>How we’ll know it’s ready · {milestone.acceptance.length} {milestone.acceptance.length === 1 ? 'check' : 'checks'}</summary><ul>{milestone.acceptance.map(line => <li>{line}</li>)}</ul></details>
+          {dates && <details class="terms-disclosure"><summary>Handoff{milestone.checkpoint ? ' and cancellation checkpoint' : ''}</summary><p>{dates.handoff}</p>{milestone.checkpoint && <><h4>{milestone.checkpoint.label}</h4><p>{values?.milestones?.[index].checkpoint ?? `${dates.checkpoint_criteria}. ${dates.checkpoint_evidence}`}</p></>}</details>}
+          {!dates && milestone.checkpoint && <p>Cancellation checkpoint: {milestone.checkpoint.label} · {milestone.checkpoint.cancellationPercent}% cumulative cancellation amount, including prior payments. Refer to the signed agreement for criteria and evidence.</p>}
+        </article>;
+      })}
+      <p class="terms-note">Planned delivery dates and conditions are agreed terms. Project update dates appear separately above.</p>
+    </section>
+    <section id="agreed-stage-2" data-terms-stage aria-labelledby="agreed-cost">
+      <p class="terms-kicker">03 · Money and responsibilities</p><h2 id="agreed-cost" tabindex="-1">Cost & responsibilities</h2>
+      <div class="terms-cost"><h3>Fixed project fee</h3><p class="terms-total">{formatUSD(offerTotal(terms))}</p><p>{paymentSchedules[terms.paymentMode]}</p></div>
+      <dl class="terms-payment">{terms.milestones.map((milestone, index) => <div><dt>{milestone.name}</dt><dd>{formatUSD(milestone.feeCents)}{values && <span>{values.system[`amount${index + 1}` as 'amount1' | 'amount2' | 'amount3']}</span>}</dd></div>)}</dl>
+      {terms.projectRange && <p>Non-binding project estimate: {formatUSD(terms.projectRange.lowCents)} to {formatUSD(terms.projectRange.highCents)}. The fixed offer fee above covers these milestones.</p>}
+      <div class="terms-cards">
+        {terms.clientInputs && <article class="terms-card"><h3>What I’ll need from you</h3><p>{terms.clientInputs}</p></article>}
+        {details && <><article class="terms-card"><h3>Delivery environment</h3><p>{details.environment}</p></article><article class="terms-card"><h3>Operating responsibilities</h3><p>{details.operating_responsibilities}</p></article></>}
+        {terms.exclusions && <article class="terms-card"><h3>Outside this offer</h3><p>{terms.exclusions}</p></article>}
+      </div>
+      {details && <details class="terms-disclosure"><summary>Additional working terms</summary><dl class="terms-working">{workingTerms.map(([label, value]) => <div><dt>{label}</dt><dd>{value || 'None'}</dd></div>)}{terms.paymentMode === 'invoice' && <div><dt>First milestone duration</dt><dd>{values?.details?.invoice_first_duration ?? details.invoice_first_duration}</dd></div>}</dl></details>}
+    </section>
+    <section id="agreed-stage-3" data-terms-stage aria-labelledby="agreed-review">
+      <p class="terms-kicker">04 · The complete record</p><h2 id="agreed-review" tabindex="-1">Review agreed terms</h2>
+      <p>{signing?'Review the complete filled documents before signing. Reading terms does not sign anything.':'This project’s agreement is already recorded. Opening stages or reading terms does not give consent, sign anything, or change what you agreed.'}</p>
+      {signing ? <><p class="agreement-hint" data-review-hint>Complete your details and portfolio choice to see the exact filled documents. You can download and keep a complete copy.</p><div data-reviewed-documents>{documents.map(d=><section id={`review-${d.kind}`} class="agreement-section"><h3>{d.kind.toUpperCase()}</h3><pre class="agreement-text">{d.canonical_text}</pre></section>)}</div></> : documents.length ? <>
+        <p>Read the complete signed documents for all obligations, change and cancellation terms. This overview does not replace them.</p>
+        {packet && <p><a class="site-link" data-terms-packet href={`/api/agreements/${packet.id}/file`}>Download complete signed agreement packet</a></p>}
+        {documents.map(document => <div class="terms-document"><h3>{document.kind.toUpperCase()} · Effective {softwareDate(document.effective_on)}</h3><details class="terms-disclosure"><summary>Read complete {document.kind.toUpperCase()} text</summary><p class="terms-hash">SHA-256 {document.text_sha256}</p><pre class="terms-legal">{document.canonical_text}</pre></details></div>)}
+        {details?.attachments.length ? <><h3>Included attachments</h3><p>The complete signed agreement packet includes the attached documents.</p><ul>{details.attachments.map(attachment => <li>{attachment.filename} · {attachment.version} · {softwareDate(attachment.date)}<span class="terms-hash">SHA-256 {attachment.sha256}</span></li>)}</ul></> : null}
+      </> : websiteSigned ? <p>The retained website agreement is unavailable here. <a class="site-link" href="mailto:kazon.wilson@thesuperhuman.us">Ask Kazon about your retained signed copy</a>.</p> : <p>The agreement was signed outside the website. Its complete legal text and any dates or responsibilities not recorded here remain in the kept signed copy. <a class="site-link" href="mailto:kazon.wilson@thesuperhuman.us">Ask Kazon for your complete signed copy</a>.</p>}
+      {conversationOpen && <p><a class="site-link" href="#conversation">Ask about an agreed term</a></p>}
+    </section>
+    <div class="terms-navigation" data-terms-controls hidden><button type="button" class="studio-button studio-button-outline" data-terms-back>← Back</button><button type="button" class="studio-button" data-terms-next>Continue →</button></div>
+  </div>
+</details>
+<script>import { setupAgreedTerms } from '~/scripts/agreed-terms'; setupAgreedTerms();</script>
+<style>
+  [hidden] { display: none !important; }
+  .agreed-terms { border-top: 1px solid var(--rule); padding: 1.5rem 0; margin-top: 2rem; overflow-wrap: anywhere; }
+  .agreed-terms > summary { cursor: pointer; font: 400 1.5rem/1.4 Newsreader,Georgia,serif; }
+  .terms-reader { margin-top: 1.2rem; }
+  .terms-summary { position: static; top: 0; z-index: 2; background: var(--studio-field); border: 1px solid var(--rule); border-radius: 4px; padding: .8rem 1rem; }
+  .terms-reader[data-terms-ready='true'] .terms-summary { position: static; }
+  .terms-reader[data-terms-ready='true'] .terms-summary { position: sticky; }
+  .terms-summary strong, .terms-summary span { display: block; }
+  .terms-summary strong { font: 500 .95rem/1.4 Inter,sans-serif; }
+  .terms-summary span,.terms-summary p { font: .8rem/1.5 Inter,sans-serif; color: var(--studio-muted); margin: .3rem 0 0; }
+  .terms-toolbar,.terms-navigation { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .7rem; align-items: center; margin: 1rem 0; }
+  .terms-toolbar p,.terms-note { font: .8rem/1.5 Inter,sans-serif; color: var(--studio-muted); }
+  .terms-link { font: 500 .85rem/1.4 Inter,sans-serif; color: var(--accent); text-decoration: underline; text-underline-offset: .2rem; min-height: 44px; }
+  .terms-stages { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: .5rem; margin-bottom: 1.5rem; }
+  .terms-stages button { text-align: left; border-top: 3px solid var(--rule); padding: .6rem 0; min-height: 44px; color: var(--studio-muted); font: .8rem/1.4 Inter,sans-serif; }
+  .terms-stages [aria-current='step'] { color: var(--accent); border-color: var(--accent); font-weight: 600; }
+  h2 { font: 400 clamp(2rem,4vw,2.8rem)/1.1 Newsreader,Georgia,serif; margin: .4rem 0 1rem; scroll-margin-top: 9rem; }
+  h3 { font: 400 1.45rem/1.3 Newsreader,Georgia,serif; margin: 0 0 .7rem; }
+  h4 { font: 500 1rem/1.4 Inter,sans-serif; }
+  p,li,dt,dd { font: .95rem/1.6 Inter,sans-serif; white-space: pre-wrap; }
+  p { margin: .65rem 0; }
+  .terms-kicker { color: var(--accent); font: 500 .72rem/1.4 Inter,sans-serif; letter-spacing: .1em; text-transform: uppercase; }
+  .terms-lead { color: var(--studio-muted); margin-bottom: 1.4rem; }
+  .terms-cards { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; }
+  .terms-card { min-width: 0; border: 1px solid var(--rule); border-radius: 4px; background: var(--studio-field); padding: 1rem; }
+  .terms-milestone { margin-top: 1rem; }
+  ol,ul { padding-left: 1.3rem; }
+  li { margin-bottom: .4rem; }
+  ol li::marker { color: var(--accent); }
+  .terms-fee { color: var(--accent); }
+  .terms-disclosure { border-top: 1px solid var(--rule); padding-top: .8rem; margin: 1rem 0 0; }
+  .terms-disclosure summary { cursor: pointer; font: 500 .9rem/1.5 Inter,sans-serif; padding-block: .4rem; }
+  .terms-cost { background: var(--ink); color: var(--paper); padding: 1.4rem; border-radius: 4px; }
+  .terms-cost h3 { color: inherit; }
+  .terms-total { font: 400 2.8rem/1.1 Newsreader,Georgia,serif; }
+  .terms-payment { margin: 1rem 0 1.5rem; }
+  .terms-payment > div,.terms-working > div { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 1rem; border-bottom: 1px solid var(--rule); padding: .7rem 0; }
+  dt { font-weight: 500; }
+  dd { margin: 0; }
+  dd span,.terms-hash { display: block; font: .8rem/1.5 Inter,sans-serif; color: var(--studio-muted); overflow-wrap: anywhere; }
+  .terms-document { margin: 1.5rem 0; }
+  .terms-legal { white-space: pre-wrap; overflow-wrap: anywhere; font: .95rem/1.65 Inter,sans-serif; margin: 1rem 0; }
+  button:focus-visible,summary:focus-visible,a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .terms-navigation button { min-height: 44px; }
+  @media(max-width: 40rem) { .terms-cards { grid-template-columns: 1fr; } .terms-stages { grid-template-columns: repeat(2,minmax(0,1fr)); } .terms-payment > div,.terms-working > div { grid-template-columns: 1fr; gap: .3rem; } }
+  @media print { .terms-cost { background: transparent; color: var(--ink); } .agreed-terms::details-content,.terms-disclosure::details-content { content-visibility: visible; } .terms-reader [data-terms-stage][hidden] { display: block !important; } .terms-summary { position: static !important; } .terms-toolbar,.terms-stages,.terms-navigation { display: none !important; } }
+</style>

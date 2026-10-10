@@ -289,3 +289,24 @@ it.each([0,1,2])('focuses the next milestone or previous one after removing row 
   expect(list.children).toHaveLength(2); expect(input.focus).toHaveBeenCalledOnce();
   expect(status.textContent).toBe('Milestone removed.');
 });
+it('marks and names the full agreement field path returned by send validation', async () => {
+  const { inputs,form,status }=fixture();
+  inputs['agreement.environment']={value:'',setAttribute:vi.fn()};
+  vi.stubGlobal('fetch',vi.fn(async()=>Response.json({message:'Complete Agreement details.',errors:{'agreement.environment':'Required'}},{status:400})));
+  await form.emit('submit');
+  expect(inputs['agreement.environment'].setAttribute).toHaveBeenCalledWith('aria-invalid','true');
+  expect(status.textContent).toContain('environment: Required');
+});
+
+it('drops a removed attachment from the manifest and queues its key for draft cleanup',async()=>{
+  const {setupAgreementAttachments}=await import('~/scripts/software-offers');
+  let remove!:Function;
+  const field={value:JSON.stringify([{key:'first',filename:'One.pdf'},{key:'second',filename:'Two.pdf'}]),dispatchEvent:vi.fn()};
+  const row={remove:vi.fn()},button={dataset:{removeAttachment:'first'},closest:()=>row};
+  const block={dataset:{} as Record<string,string>,addEventListener:(_name:string,fn:Function)=>remove=fn,querySelector:(selector:string)=>selector.includes('agreement.attachments')?field:{addEventListener:vi.fn()}};
+  setupAgreementAttachments(block as never);
+  remove({target:{closest:()=>button}});
+  expect(JSON.parse(field.value)).toEqual([{key:'second',filename:'Two.pdf'}]);
+  expect(JSON.parse(block.dataset.removedKeys)).toEqual(['first']);
+  expect(row.remove).toHaveBeenCalled();expect(field.dispatchEvent).toHaveBeenCalled();
+});

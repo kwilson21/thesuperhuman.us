@@ -31,7 +31,7 @@ describe('software offer terms', () => {
   });
   it('projects only client identity, version, path and validated terms', () => {
     const projection = clientOffer({ name: 'Alex', privateNote: 'SECRET', email: 'private@example.com', details: { company: 'Example', fit: 'SECRET' }, serviceId: 'workflow' } as any, { version: 2, terms_json: JSON.stringify({ ...terms, privateNote: 'SECRET' }), sent_by: 'private@example.com', status: 'sent' } as any);
-    expect(Object.keys(projection)).toEqual(['name','company','path','version','replacesVersion','terms']);
+    expect(Object.keys(projection!)).toEqual(['name','company','path','version','replacesVersion','terms']);
     expect(JSON.stringify(projection)).not.toMatch(/SECRET|private@example|sent_by|status/);
   });
   it('generates opaque tokens and stores only an irreversible digest', async () => { const token = newOfferToken(); expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/); expect(await hashOfferToken(token)).toMatch(/^[0-9a-f]{64}$/); });
@@ -42,3 +42,8 @@ it('allows a whole-project estimate above an individual milestone ceiling', () =
 });
 
 it.each([undefined, 'unknown'])('labels missing or unknown payment mode %s', paymentMode => { expect(errors({ ...terms, paymentMode }).paymentMode).toBe('Choose a payment mode.'); });
+
+it('rejects repeated deliverable lines after case and whitespace normalization',()=>{
+  const value={...terms,milestones:[{...terms.milestones[0],deliverables:['Status view',' STATUS   VIEW ']}]};
+  expect(validateOfferTerms(value)).toMatchObject({ok:false,errors:{'milestones.0.deliverables':'Each deliverable needs to be different.'}});
+});

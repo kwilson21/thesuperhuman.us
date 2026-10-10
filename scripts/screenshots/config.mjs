@@ -37,6 +37,12 @@ export const NOT_PAGES = {
   'src/pages/music/[slug].astro': 'Captured through music-old-news.',
 };
 
+/** Bare one-time links must refuse access, including a seeded offer with no email key. */
+export const BARE_LINK_LANDINGS = [
+  { name: 'archive-expired-link', path: '/agreements/verify', status: 401 },
+  { name: 'link-landing', path: `/offer/${'g'.repeat(43)}/verify`, status: 401 },
+];
+
 /** Page files that only redirect. Capture checks each one answers with this status and location. */
 export const REDIRECTS = {
   'src/pages/services.html.astro': { from: '/services.html', to: '/services', status: 301 },
@@ -45,6 +51,11 @@ export const REDIRECTS = {
 
 /** Pages that need seeded data. The coverage test checks the named scenario captures the route. */
 export const SCENARIO_PAGES = {
+  'src/pages/agreements.astro': {scenario:'software-signing',route:'/agreements'},
+  'src/pages/owner/agreements.astro': {scenario:'software-signing',route:'/owner/agreements'},
+  'src/pages/offer/[token]/verify.astro': {scenario:'software-signing',route:'/offer/'},
+  'src/pages/agreements/verify.astro': {scenario:'software-signing',route:'/agreements/verify'},
+  'src/pages/offer/[token]/sign.astro': {scenario:'software-signing',route:'/offer/'},
   'src/pages/studio/software/[id].astro': { scenario: 'software-project', route: '/studio/software/' },
   'src/pages/owner/requests/[id]/update.astro': { scenario: 'software-project', route: '/owner/requests/screenshot-software-project/update' },
   'src/pages/offer/[token].astro': { scenario: 'software-offer', route: '/offer/' },
@@ -230,6 +241,7 @@ export const ACCESS_AUDIENCE = 'screenshots';
  * so a feature flag flipped there shows up in the screenshots.
  */
 export const PREVIEW_OVERRIDES = {
+  SITE_ORIGIN: 'http://127.0.0.1:4321',
   // Turnstile's always-pass test keys: the production site key rejects localhost.
   PUBLIC_TURNSTILE_SITE_KEY: '1x00000000000000000000AA',
   TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA',
@@ -238,6 +250,7 @@ export const PREVIEW_OVERRIDES = {
   OWNER_ACCESS_AUD: ACCESS_AUDIENCE,
   OWNER_EMAIL,
   // Production keeps this secret; the preview needs some key to issue studio codes.
+  AGREEMENT_RETENTION_BINDING_ID: 'AUDIO:screenshots-audio',
   AUDIO_CLIENT_CODE_KEY: 'screenshots-only-code-key-0123456789abcdef',
   // Gated pages stay reviewable in PRs before launch.
   AUDIO_CLIENT_PORTAL_ENABLED: 'true',

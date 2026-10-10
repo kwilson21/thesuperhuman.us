@@ -1,10 +1,19 @@
+import { createHash } from 'node:crypto';
+import { templateFields } from '../../src/lib/agreement-template-fields.mjs';
+const signingTemplates = Object.fromEntries(['msa', 'sow'].map(kind => [kind, templateFields[kind as keyof typeof templateFields].filter(field => !field.startsWith('milestone.')).map(field => `${field}: {{${field}}}`).join('\n') + (kind === 'sow' ? '\n{{#milestones}}\n' + templateFields.sow.filter(field => field.startsWith('milestone.')).map(field => `${field}: {{${field}}}`).join('\n') + '\n{{/milestones}}' : '')]));
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
+import { prepareWithDiagnostics } from '../../scripts/screenshots/prepare.mjs';
+import { POST as sendOffer } from '../../src/pages/api/owner/requests/[id]/software';
+import { contractorSchema } from '../../src/lib/agreement-fields';
 import {
-  expectedResourceError, missingScenarioRoutes, NOT_PAGES, PAGES, parseJsonc, PREVIEW_OVERRIDES, previewWrangler, REDIRECTS, SCENARIO_PAGES,
+  BARE_LINK_LANDINGS, expectedResourceError, missingScenarioRoutes, NOT_PAGES, PAGES, parseJsonc, PREVIEW_OVERRIDES, previewWrangler, REDIRECTS, SCENARIO_PAGES,
   relevantScreenshots, sanitizeManifest, screenshotSection, withScreenshots,
 } from '../../scripts/screenshots/config.mjs';
 
@@ -20,6 +29,99 @@ function routeFor(file: string): string {
   const route = file.replace(/^src\/pages/, '').replace(/\.astro$/, '').replace(/\/index$/, '');
   return route || '/';
 }
+
+it('saves full-page prepare failure diagnostics and rethrows the original error', async () => {
+  const out = await mkdtemp(join(tmpdir(), 'screenshot-failure-'));
+  const error = new Error('Agreement message did not appear');
+  const page = {
+    url: () => 'http://localhost/owner/requests/example',
+    locator: (selector: string) => {
+      expect(selector).toBe('[role=status]');
+      return { allTextContents: async () => ['', 'Complete and validate Agreement details before sending.'] };
+    },
+    screenshot: async (options: { path: string; fullPage: boolean }) => {
+      expect(options.fullPage).toBe(true);
+      await writeFile(options.path, 'failure image');
+    },
+  };
+  try {
+    await expect(prepareWithDiagnostics(page, async () => { throw error; }, out, 'software-signing', 'software-signing-missing-send-field-phone.png')).rejects.toBe(error);
+    const name = '_failure-software-signing-missing-send-field-phone';
+    expect(await readFile(join(out, `${name}.png`), 'utf8')).toBe('failure image');
+    expect(await readFile(join(out, `${name}.txt`), 'utf8')).toBe(`URL: ${page.url()}\nError: ${error.message}\nStatuses:\n1: \n2: Complete and validate Agreement details before sending.\n`);
+    expect(sanitizeManifest({ scenarios: [{ steps: [{ images: [{ file: `${name}.png` }] }] }] }, [`${name}.png`]).scenarios).toEqual([]);
+  } finally {
+    await rm(out, { recursive: true, force: true });
+  }
+});
+
+it('seeds a completed send so missing details reach the real agreement validation', async () => {
+  const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
+  const sql = new DatabaseSync(':memory:');
+  sql.exec(readFileSync('db/music.sql', 'utf8'));
+  const stop = new Error('fixture ready');
+  const statement = (query: string, args: any[] = []): any => ({
+    bind: (...values: any[]) => statement(query, values),
+    first: async () => sql.prepare(query).get(...args) ?? null,
+    all: async () => ({ results: sql.prepare(query).all(...args) }),
+  });
+  try {
+    const scenario = await import('../../scripts/screenshots/scenarios/software-signing.mjs');
+    await expect(scenario.default.run({
+      templates: signingTemplates,
+      sql: (query: string) => sql.exec(query),
+      ownerFetch: async () => { throw new Error('No API setup is needed before this shot.'); },
+      capture: async ({ file }: { file: string }) => { if (file.includes('missing-send-field')) throw stop; return file; },
+    })).rejects.toBe(stop);
+    const config = JSON.parse(sql.prepare('SELECT values_json FROM software_contractor_config').get().values_json);
+    expect(contractorSchema.safeParse(config).success).toBe(true);
+    const draft = sql.prepare("SELECT updated_at FROM software_offers WHERE status='draft'").get();
+    const send = () => sendOffer({
+      params: { id: 'screenshot-signing' },
+      request: new Request('https://example.com/api/owner/requests/screenshot-signing/software', {
+        method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'send', version: 2, expectedUpdatedAt: draft.updated_at }),
+      }),
+      locals: { owner: { email: 'owner@example.com' }, runtime: { env: { MUSIC_DB: { prepare: statement } } } },
+    } as any) as Promise<Response>;
+    const response = await send();
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ message: 'Complete and validate Agreement details before sending.' });
+    sql.prepare('UPDATE software_offer_links SET created_at=?').run(new Date().toISOString());
+    const sending = await send();
+    expect(sending.status).toBe(409);
+    expect(await sending.json()).toMatchObject({ message: 'An offer is still being sent. Try again in a moment.' });
+  } finally {
+    sql.close();
+  }
+});
+
+it('prepares attachment captures with visible Remove controls and a shrinking list', async () => {
+  const scenario = await import('../../scripts/screenshots/scenarios/software-signing.mjs');
+  let captures=0;
+  await scenario.default.run({
+    templates: signingTemplates,
+    sql: () => '[{"results":[{"status":"ready"}]}]',
+    ownerFetch: async () => ({documents:[{id:'msa',kind:'msa',hash:'a'.repeat(64)},{id:'sow',kind:'sow',hash:'b'.repeat(64)}]}),
+    capture: async ({file,prepare}: any) => {
+      if (!file.includes('attachment-remove-control') && !file.includes('attachment-removed')) return file;
+      // Earlier desktop/phone captures can leave multiple saved uploads in the draft.
+      let remaining=3;
+      const remove={
+        count:async()=>remaining,
+        first:()=>({waitFor:async()=>expect(remaining).toBeGreaterThan(0),click:async()=>{expect(remaining).toBeGreaterThan(0);remaining--;}}),
+        all:async()=>Array.from({length:remaining},(_,index)=>({click:async()=>{expect(index).toBeLessThan(remaining);remaining--;}})),
+      };
+      const locator:any={locator:(selector:string)=>selector==='[data-remove-attachment]'?remove:locator,
+        setInputFiles:async()=>{},fill:async()=>{},click:async()=>{},filter:()=>locator,waitFor:async()=>{}};
+      await prepare({locator:()=>locator,viewportSize:()=>({width:1280,height:800}),setViewportSize:async()=>{},evaluate:async()=>false});
+      expect(remaining).toBe(file.includes('attachment-removed')?0:3);
+      captures++;
+      return file;
+    },
+  });
+  expect(captures).toBe(4);
+});
 
 describe('screenshot coverage', () => {
   it('captures every page file or says why not', () => {
@@ -39,12 +141,64 @@ describe('screenshot coverage', () => {
     for (const scenario of new Set(Object.values(SCENARIO_PAGES).map(item => item.scenario))) {
       const module = await import(pathToFileURL(`scripts/screenshots/scenarios/${scenario}.mjs`).href);
       const steps = await module.default.run({
-        base: 'http://127.0.0.1:4321', sql: () => '[]', ownerFetch: async () => ({}),
+        templates: signingTemplates,
+        base: 'http://127.0.0.1:4321',
+        sql: (query: string) => query.startsWith('SELECT status FROM software_agreement_artifacts') ? '[{"results":[{"status":"ready"}]}]' : '[]',
+        ownerFetch: async (path: string) => path.startsWith('/api/offer/') && path.endsWith('/review') ? {documents:[{id:'00000000-0000-4000-8000-000000000001',kind:'msa',hash:'a'.repeat(64)},{id:'00000000-0000-4000-8000-000000000002',kind:'sow',hash:'b'.repeat(64)}]} : {},
         capture: async ({ file, path }: { file: string; path: string }) => { captured.push({ scenario, path }); return file; },
       });
       expect(steps.length).toBeGreaterThan(0);
     }
     expect(missingScenarioRoutes(SCENARIO_PAGES, captured)).toEqual([]);
+  });
+
+  it('captures bare, expired and valid one-time landings with their document statuses and destinations', async () => {
+    const scenario = await import('../../scripts/screenshots/scenarios/software-signing.mjs');
+    const landings: { path: string; status: number }[] = [];
+    const seeds: string[] = [];
+    const documents = [{ id: 'msa', kind: 'msa', hash: 'a'.repeat(64) }, { id: 'sow', kind: 'sow', hash: 'b'.repeat(64) }];
+    await scenario.default.run({
+      templates: signingTemplates,
+      sql: (query: string) => {
+        seeds.push(query);
+        return query.startsWith('SELECT status FROM software_agreement_artifacts') ? '[{"results":[{"status":"ready"}]}]' : '[]';
+      },
+      ownerFetch: async () => ({ documents }),
+      capture: async ({ file, path, status = 200, prepare }: any) => {
+        const url = new URL(path, 'http://localhost');
+        if (!url.pathname.endsWith('/verify')) return file;
+        landings.push({ path, status });
+        if (url.searchParams.has('key')) {
+          const expired = file.includes('expired');
+          expect(status).toBe(expired ? 401 : 200);
+          const key = url.searchParams.get('key')!;
+          const seed = seeds.find(query => query.includes(createHash('sha256').update(key).digest('hex')));
+          expect(seed).toContain(expired ? '2000-01-01' : '2099-01-01');
+          const page = {
+            url: () => url.href,
+            getByText: (text: string) => { expect(text).toBe(expired?'Links work once and last an hour.':'This link works once.'); return {isVisible:async()=>true}; },
+            getByRole: (role: string, options: any) => {
+              expect(options.exact).toBe(true);
+              expect(options.name).toBe(expired ? 'This link has expired.' : role==='button' ? (url.pathname.startsWith('/offer/')?'Continue to sign':'Continue') : url.pathname.startsWith('/offer/')?'Your agreement is ready.':'Your documents are ready.');
+              return { waitFor: async () => {} };
+            },
+          };
+          await prepare(page);
+        } else expect(status).toBe(401);
+        return file;
+      },
+    });
+    expect(BARE_LINK_LANDINGS.map(({ path, status }) => ({ path, status }))).toEqual([
+      { path: '/agreements/verify', status: 401 },
+      { path: `/offer/${'g'.repeat(43)}/verify`, status: 401 },
+    ]);
+    for (const { path: route, status } of BARE_LINK_LANDINGS) {
+      const visits = landings.filter(visit => new URL(visit.path, 'http://localhost').pathname === route);
+      expect(visits.filter(visit => !visit.path.includes('?'))).toHaveLength(2);
+      expect(visits.filter(visit => !visit.path.includes('?')).every(visit => visit.status === status)).toBe(true);
+      expect(visits.filter(visit => visit.path.includes('?') && visit.status === 401)).toHaveLength(2);
+      expect(visits.filter(visit => visit.status === 200)).toHaveLength(2);
+    }
   });
 
   it('reports a seeded page whose scenario never captured it', () => {
@@ -218,6 +372,7 @@ describe('screenshot preview config', () => {
     expect(preview.compatibility_date).toBe(wrangler.compatibility_date);
     expect(preview.compatibility_flags).toEqual(wrangler.compatibility_flags);
     expect(preview.vars).toEqual({ ...wrangler.vars, ...PREVIEW_OVERRIDES });
+    expect(preview.vars.SITE_ORIGIN).toBe("http://127.0.0.1:4321");
     const bindings = (items: { binding: string }[] = []) => items.map(item => item.binding);
     expect(bindings(preview.d1_databases)).toEqual(bindings(wrangler.d1_databases));
     expect(bindings(preview.kv_namespaces)).toEqual(bindings(wrangler.kv_namespaces));
@@ -240,6 +395,21 @@ it('software print styling never forces a receipt before submission', () => {
   const css = readFileSync(new URL('../../src/styles/software-intake.css', import.meta.url), 'utf8');
   expect(css).not.toMatch(/#software-success\s*\{\s*display:block/);
   expect(css).not.toMatch(/@media print[^}]*#software-inquiry/);
+});
+
+it('can seed empty details after link-landing captures have autosaved a draft',async()=>{
+ const {DatabaseSync}=createRequire(import.meta.url)('node:sqlite');
+ const sql=new DatabaseSync(':memory:');sql.exec(readFileSync('db/music.sql','utf8'));
+ const stop=new Error('draft collision passed');
+ const scenario=await import('../../scripts/screenshots/scenarios/software-signing.mjs');
+ try {
+  await expect(scenario.default.run({templates:signingTemplates,sql:(query:string)=>sql.exec(query),
+   capture:async({file}:{file:string})=>{
+    if(file.includes('link-open'))sql.exec("INSERT OR REPLACE INTO software_agreement_drafts VALUES('screenshot-signing-offer','signer@example.com','{}','now')");
+    return file;
+   },ownerFetch:async()=>{throw stop;},
+  })).rejects.toBe(stop);
+ } finally {sql.close();}
 });
 
 it('serves a scenario-local Turnstile API for silent and receipt widgets', async () => {

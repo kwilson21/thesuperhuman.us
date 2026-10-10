@@ -27,7 +27,14 @@ export const offerTermsSchema = z.object({
 export type OfferTerms = z.infer<typeof offerTermsSchema>;
 export function validateOfferTerms(input: unknown) {
   const result = offerTermsSchema.safeParse(input, { errorMap: issue => ({ message: issue.path[0] === 'paymentMode' ? 'Choose a payment mode.' : 'This answer is required.' }) });
-  if (result.success) return { ok: true as const, value: result.data };
+  if (result.success) {
+    const errors: Record<string,string> = {};
+    result.data.milestones.forEach((milestone,index)=>{
+      const normalized=milestone.deliverables.map(line=>line.normalize('NFC').replace(/\s+/g,' ').trim().toLowerCase());
+      if(new Set(normalized).size!==normalized.length) errors[`milestones.${index}.deliverables`]='Each deliverable needs to be different.';
+    });
+    return Object.keys(errors).length ? {ok:false as const,errors} : {ok:true as const,value:result.data};
+  }
   return { ok: false as const, errors: Object.fromEntries(result.error.issues.map(issue => [issue.path.join('.'), issue.message])) };
 }
 export const paymentSchedules = {
@@ -36,18 +43,22 @@ export const paymentSchedules = {
 } as const;
 export const offerTotal = (terms: Pick<OfferTerms, 'milestones'>) => terms.milestones.reduce((sum, milestone) => sum + milestone.feeCents, 0);
 export const formatUSD = (cents: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: cents % 100 ? 2 : 0 }).format(cents / 100);
-export type SoftwareOffer = { id: string; request_id: string; version: number; status: 'draft' | 'sent' | 'superseded' | 'withdrawn'; terms_json: string; created_at: string; updated_at: string; sent_at: string | null; sent_by: string | null };
+export type SoftwareOffer = { agreement_details_json?: string | null; msa_template_id?: string | null; sow_template_id?: string | null; contractor_snapshot_json?: string | null; recipient_email_snapshot?: string | null; reused_msa_id?: string | null; id: string; request_id: string; version: number; status: 'draft' | 'sent' | 'superseded' | 'withdrawn'; terms_json: string; created_at: string; updated_at: string; sent_at: string | null; sent_by: string | null };
 export async function listSoftwareOffers(db: D1Database, id: string) {
   return (await db.prepare('SELECT * FROM software_offers WHERE request_id=? ORDER BY version DESC').bind(id).all<SoftwareOffer>()).results;
 }
 // Explicit allowlist: client rendering never receives the owner record or audit data.
 export function clientOffer(request: OwnerRequest, offer: SoftwareOffer, offers: SoftwareOffer[] = []) {
+  let input: unknown;
+  try { input = JSON.parse(offer.terms_json); } catch { return null; }
+  const terms = offerTermsSchema.safeParse(input);
+  if (!terms.success) return null;
   return { name: request.name, company: typeof request.details.company === 'string' ? request.details.company : '',
     path: softwarePaths[request.serviceId === 'idea' ? 'idea' : 'workflow'], version: offer.version,
     replacesVersion: offers.filter(previous => previous.version < offer.version && previous.sent_at && ['sent', 'superseded'].includes(previous.status)).sort((a, b) => b.version - a.version)[0]?.version,
-    terms: offerTermsSchema.parse(JSON.parse(offer.terms_json)) };
+    terms: terms.data };
 }
-export type ClientOffer = ReturnType<typeof clientOffer>;
+export type ClientOffer = NonNullable<ReturnType<typeof clientOffer>>;
 export async function hashOfferToken(token: string) {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))), byte => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -58,7 +69,7 @@ export async function getLinkedOffer(db: D1Database, token: string) {
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
   return db.prepare(`SELECT o.* FROM software_offers o JOIN software_offer_links l ON l.request_id=o.request_id
     JOIN owner_requests r ON r.id=o.request_id WHERE l.token_hash=? AND l.revoked_at IS NULL AND o.status='sent'
-    AND r.kind='software' AND r.status<>'withdrawn' AND r.email<>''`).bind(await hashOfferToken(token)).first<SoftwareOffer>();
+    AND r.kind='software' AND r.status NOT IN ('withdrawn','resolved') AND r.email<>''`).bind(await hashOfferToken(token)).first<SoftwareOffer>();
 }
 
 export const offerSendingMessage = 'An offer is still being sent. Try again in a moment.';

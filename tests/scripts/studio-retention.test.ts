@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { expect, it, vi } from 'vitest';
-import { applyStudioRetention, studioRetentionCompletion, previewStudioRetention, remoteObjectDeleteArgs, studioStorageIdentity } from '../../scripts/studio-retention.mjs';
+import { applyStudioRetention, studioRetentionCompletion, previewStudioRetention, remoteObjectDeleteArgs, studioStorageIdentity, softwareRetentionProjectPredicate } from '../../scripts/studio-retention.mjs';
 
 const storage = { accountId: null, databaseId: 'local-music', bucket: 'local-audio', jurisdiction: null };
 
@@ -202,7 +202,7 @@ it('retains active software, cleans all prefix objects one year after completion
   const { sql, database } = fixture();
   for (const [id,completed,revoked] of [['software-active',null,null],['software-complete','2026-12-01',null],['software-closed',null,'2026-12-01'],['software-recent','2027-12-01',null]]) {
     sql.prepare("INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at,resolved_at) VALUES (?,'software','client@example.com','Keep','resolved','2026-01-01','2026-01-01','2026-01-01')").run(id);
-    sql.prepare("INSERT INTO software_offers VALUES (?, ?, 1, 'sent', '{}', '2026-01-01', '2026-01-01', '2026-01-01', 'owner')").run(id+'-offer',id);
+    sql.prepare("INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at,sent_at,sent_by) VALUES (?, ?, 1, 'sent', '{}', '2026-01-01', '2026-01-01', '2026-01-01', 'owner')").run(id+'-offer',id);
     sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,completed_at,revoked_at,created_at,updated_at) VALUES (?,?,'{}','standard','now','now','now','owner',?,?,'2026-01-01','2026-01-01')").run(id,id+'-offer',completed,revoked);
     sql.prepare("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,created_by,created_at,updated_at) VALUES (?,?,'progress','shared',0,'Private title','concept','owner','2026-01-01','2026-01-01')").run(id+'-update',id);
     sql.prepare("INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,created_at) VALUES (?,'client','client','Private message',?,'2026-01-01')").run(id,id+'-update');
@@ -231,7 +231,7 @@ it('retains active software, cleans all prefix objects one year after completion
 it.each(['notification_status', 'notification_attempted_at', 'notification_sent_at'])('refuses software cleanup after %s changes without updated_at changing', async column => {
   const { sql, database } = fixture();
   sql.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES ('software','software','client@example.test','Tool','reviewed','now','now');
-    INSERT INTO software_offers VALUES ('offer','software',1,'sent','{}','now','now','now','owner');
+    INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at,sent_at,sent_by) VALUES ('offer','software',1,'sent','{}','now','now','now','owner');
     INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,completed_at,created_at,updated_at)
       VALUES ('software','offer','{}','standard','now','now','now','owner','2026-01-01','now','now');
     INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,email_client,notification_status,notification_attempted_at,created_by,created_at,updated_at)
@@ -254,7 +254,7 @@ it.each(['notification_status', 'notification_attempted_at', 'notification_sent_
 it.each(['invitation_status', 'invitation_attempted_at', 'invitation_sent_at'])('refuses software cleanup after %s changes without updated_at changing', async column => {
   const { sql, database } = fixture();
   sql.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES ('software','software','client@example.test','Tool','reviewed','now','now');
-    INSERT INTO software_offers VALUES ('offer','software',1,'sent','{}','now','now','now','owner');
+    INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at,sent_at,sent_by) VALUES ('offer','software',1,'sent','{}','now','now','now','owner');
     INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,completed_at,created_at,updated_at)
       VALUES ('software','offer','{}','standard','now','now','now','owner','2026-01-01','now','now');
     INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,email_client,notification_status,notification_attempted_at,created_by,created_at,updated_at)
@@ -341,4 +341,54 @@ it('rejects an invoice becoming payable in the fencing batch before deleting any
   await expect(applyStudioRetention(database,review,'Local test data',storage,deleted,now,list)).rejects.toThrow();
   expect(deleted).not.toHaveBeenCalled();
   expect(sql.prepare('SELECT retention_fenced_at FROM software_invoices').get()).toEqual({retention_fenced_at:null});sql.close();
+});
+
+it('uses the sent offer retention period for externally signed projects and clears unused snapshots',async()=>{
+  const {sql,database}=fixture();
+  sql.exec("UPDATE audio_projects SET content_deleted_at='removed'; INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES('external','software','client@example.com','Tool','resolved','2020-01-01','2020-01-01')");
+  sql.prepare("INSERT INTO software_offers(id,request_id,version,status,terms_json,agreement_details_json,recipient_email_snapshot,created_at,updated_at,sent_at) VALUES('offer','external',1,'sent','{}',?,'client@example.com','2020-01-01','2020-01-01','2020-01-01')").run(JSON.stringify({project_retention_days:730}));
+  sql.exec("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,completed_at,signature_source) VALUES('external','offer','{}','standard','now','now','now','owner','now','now','2026-12-01','external')");
+  sql.exec("INSERT INTO software_agreement_events(id,offer_id,action,actor,occurred_at) VALUES('external-event','offer','external-signature-recorded','owner','now')");
+  const list=async()=>[];
+  expect((await previewStudioRetention(database,'Local test data',storage,now,list)).counts).toMatchObject({softwareProjects:0});
+  sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='offer'").run(JSON.stringify({project_retention_days:30}));
+  const review=await previewStudioRetention(database,'Local test data',storage,now,list);
+  expect(review.counts).toMatchObject({softwareProjects:1});
+  await applyStudioRetention(database,review,'Local test data',storage,async()=>{},now,list);
+  expect(sql.prepare("SELECT recipient_email_snapshot,agreement_details_json FROM software_offers WHERE id='offer'").get()).toEqual({recipient_email_snapshot:null,agreement_details_json:null});
+  expect(sql.prepare("SELECT * FROM software_agreement_events WHERE id='external-event'").get()).toBeUndefined();
+  sql.close();
+});
+
+it('preserves handoff access beyond a shorter project retention period',()=>{
+  const {sql}=fixture();
+  try {
+    sql.exec("INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES('external','software','client@example.com','Tool','resolved','now','now'); INSERT INTO software_offers(id,request_id,version,status,terms_json,agreement_details_json,created_at,updated_at,sent_at) VALUES('offer','external',1,'sent','{}','{\"project_retention_days\":30,\"handoff_access_days\":90}','now','now','now'); INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,completed_at) VALUES('external','offer','{}','standard','now','now','now','owner','now','now','2027-12-01'); INSERT INTO software_project_updates(id,request_id,milestone_index,kind,status,title,evidence_type,created_by,created_at,updated_at,shared_at) VALUES('handoff','external',0,'handoff','shared','Files','handoff','owner','now','now','2027-12-01')");
+    const eligible=(date:Date)=>sql.prepare(`SELECT request_id FROM software_projects WHERE ${softwareRetentionProjectPredicate(date)}`).all();
+    expect(eligible(now)).toEqual([]);
+    expect(eligible(new Date('2028-03-01T12:00:00Z'))).toEqual([{request_id:'external'}]);
+  } finally {sql.close();}
+});
+
+it.each(['start_details_json','external_signature_details_json'])('reviews and clears project-start %s',async column=>{
+ const {sql,database}=fixture();retainedSoftware(sql,'paid');
+ sql.prepare(`UPDATE software_projects SET ${column}=?`).run('{"recorded_by":"owner","parties":"Client","po_number":"PO","earlier_start_agreement":"Agreed","copy_reference":"Copy"}');
+ const list=async()=>[];
+ const review=await previewStudioRetention(database,'Local test data',storage,now,list);
+ sql.prepare(`UPDATE software_projects SET ${column}=?`).run('{"recorded_by":"changed"}');
+ await expect(applyStudioRetention(database,review,'Local test data',storage,async()=>{},now,list)).rejects.toThrow('changed');
+ await applyStudioRetention(database,await previewStudioRetention(database,'Local test data',storage,now,list),'Local test data',storage,async()=>{},now,list);
+ expect(sql.prepare(`SELECT ${column} FROM software_projects`).get()[column]).toBeNull();sql.close();
+});
+
+it('revokes retained offer links and signing sessions without affecting other requests',async()=>{
+ const {sql,database}=fixture();retainedSoftware(sql,'paid');
+ sql.exec("INSERT INTO software_offer_links VALUES('software','retired','now',NULL),('active','active','now',NULL); INSERT INTO software_agreement_links VALUES('link','agreement','offer','retired','client@example.com','token','now','later',NULL); INSERT INTO software_agreement_sessions VALUES('session','agreement','offer','retired','client@example.com','link','now','later',NULL,'csrf')");
+ const list=async()=>[];
+ await applyStudioRetention(database,await previewStudioRetention(database,'Local test data',storage,now,list),'Local test data',storage,async()=>{},now,list);
+ expect(sql.prepare("SELECT revoked_at FROM software_offer_links WHERE request_id='software'").get()).toEqual({revoked_at:now.toISOString()});
+ expect(sql.prepare("SELECT revoked_at FROM software_offer_links WHERE request_id='active'").get()).toEqual({revoked_at:null});
+ expect(sql.prepare("SELECT revoked_at FROM software_agreement_sessions").get()).toEqual({revoked_at:now.toISOString()});
+ expect(sql.prepare("SELECT used_at FROM software_agreement_links").get()).toEqual({used_at:now.toISOString()});
+ sql.close();
 });

@@ -18,7 +18,7 @@ export async function hashValue(value: string): Promise<string> {
   return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function keyedHash(secret: string, message: string): Promise<string> {
+export async function keyedHash(secret: string, message: string): Promise<string> {
   if (secret.length < 32) throw new Error('Studio code key is not configured.');
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const bytes = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message)));
@@ -117,15 +117,20 @@ const allowanceWindowMs = 5 * 60 * 1000;
  * (an email address or IP). Subjects are stored only as keyed hashes, and stale windows are
  * pruned in the same transaction.
  */
-export async function takeStudioAllowance(db: D1Database, scope: string, subject: string, limit: number,
-  secret: string, now = new Date()): Promise<boolean> {
+export async function reserveStudioAllowance(db: D1Database, scope: string, subject: string, limit: number,
+  secret: string, now = new Date()) {
   const key = await keyedHash(secret, `${scope}:${subject}`);
   const [, counted] = await db.batch([
     db.prepare('DELETE FROM audio_client_allowances WHERE window_start<=?').bind(new Date(now.getTime() - allowanceWindowMs).toISOString()),
     db.prepare(`INSERT INTO audio_client_allowances(key,window_start,uses) VALUES(?,?,1)
-      ON CONFLICT(key) DO UPDATE SET uses=uses+1 RETURNING uses`).bind(key, now.toISOString()),
+      ON CONFLICT(key) DO UPDATE SET uses=uses+1 RETURNING uses,window_start`).bind(key, now.toISOString()),
   ]);
-  return Number((counted.results[0] as { uses: number } | undefined)?.uses ?? Infinity) <= limit;
+  const row = counted.results[0] as { uses: number; window_start: string } | undefined;
+  return { key, windowStart: row?.window_start ?? '', allowed: Number(row?.uses ?? Infinity) <= limit };
+}
+export async function takeStudioAllowance(db: D1Database, scope: string, subject: string, limit: number,
+  secret: string, now = new Date()): Promise<boolean> {
+  return (await reserveStudioAllowance(db,scope,subject,limit,secret,now)).allowed;
 }
 
 export async function clientProjectForSession(db: D1Database, token: string, projectId: string, now = new Date()) {

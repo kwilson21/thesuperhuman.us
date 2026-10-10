@@ -19,7 +19,7 @@ export function setupSoftwareOffers() {
     let parsed: unknown;
     try { parsed = await response.json(); }
     catch { throw new Error(response.status === 401 || response.status === 403 ? 'Your owner session ended. Reload the page to sign in again.' : 'Something went wrong. Nothing was saved. Try again.'); }
-    const result = parsed as { message?: string; errors?: Record<string,string>; version: number; updatedAt: string; sentAt?: string; linkCreatedAt: string; link: string; emailSent: boolean; uncertain?: boolean; copySent?: boolean };
+    const result = parsed as { message?: string; errors?: Record<string,string>; version: number; updatedAt: string; sentAt?: string; linkCreatedAt: string; link: string; emailSent: boolean; uncertain?: boolean; copySent?: boolean; attachmentCleanupPending?: boolean };
     if (!response.ok) {
       if (response.status === 409 && (body as { action?: string }).action === 'draft' && 'updatedAt' in result) {
         const editor = document.querySelector<HTMLElement>('[data-software-editor]');
@@ -32,12 +32,16 @@ export function setupSoftwareOffers() {
         const scope = milestone ? document.querySelectorAll<HTMLElement>('[data-milestone]')[Number(parts[1])] : form;
         const field = parts.at(-1)!;
         const names: Record<string, string> = { name: 'milestoneName', feeCents: 'fee', label: 'checkpointLabel', cancellationPercent: 'checkpointPercent', lowCents: 'rangeLow', highCents: 'rangeHigh' };
+        if (path.startsWith('agreement.')) {
+          scope?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(`[name="${path}"]`).forEach(input => input.setAttribute('aria-invalid','true'));
+          return `${path.slice(10).replaceAll('_',' ')}: ${message}`;
+        }
         const key = milestone ? parts[2] === 'checkpoint' ? parts[3] : parts[2] : field;
         const labels: Record<string, string> = { outcome: 'Outcome', summary: 'Summary', milestones: 'Milestones', name: 'name', deliverables: 'deliverables', acceptance: 'acceptance examples', feeCents: 'fee', label: 'checkpoint label', cancellationPercent: 'checkpoint percent', clientInputs: 'What you need from them', exclusions: 'Outside this offer', timing: 'Timing', paymentMode: 'Payment mode', lowCents: 'Range low', highCents: 'Range high' };
         scope?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(`[name="${names[key] ?? key}"]`).forEach(input => input.setAttribute('aria-invalid', 'true'));
         return `${milestone ? `Milestone ${Number(parts[1]) + 1} ` : ''}${labels[key] ?? 'Offer'}: ${message}`;
       });
-      throw new Error(result.message ?? (messages.join('\n') || 'Could not save. Try again.'));
+      throw new Error([result.message, messages.join('\n')].filter(Boolean).join('\n') || 'Could not save. Try again.');
     }
     return result;
   };
@@ -114,6 +118,7 @@ export function setupSoftwareOffers() {
   });
   if (!root.querySelector('[data-offer-form]')) return;
   const form = root.querySelector<HTMLFormElement>('[data-offer-form]')!, list = root.querySelector<HTMLElement>('[data-milestones]')!;
+  const attachmentBlock=form.querySelector<HTMLElement>('[data-agreement-attachments]');if(attachmentBlock)setupAgreementAttachments(attachmentBlock);
   const send = root.querySelector<HTMLButtonElement>('[data-send-offer]')!, preview = root.querySelector<HTMLAnchorElement>('[data-preview-offer]')!;
   let saved = Boolean(root.dataset.updated), inputRevision = 0;
   const get = (element: HTMLElement, name: string) => element.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${name}"]`)!.value.trim();
@@ -156,7 +161,8 @@ export function setupSoftwareOffers() {
   form.addEventListener('change', updateControls);
   root.querySelector('[data-add-milestone]')!.addEventListener('click', () => {
     if (list.children.length >= 3) return;
-    list.appendChild(root.querySelector<HTMLTemplateElement>('[data-milestone-template]')!.content.cloneNode(true)); changed = true; inputRevision++; updateControls();
+    list.appendChild(root.querySelector<HTMLTemplateElement>('[data-milestone-template]')!.content.cloneNode(true));
+    const agreementRows=form.querySelector('[data-agreement-milestones]');if(agreementRows){const row=agreementRows.firstElementChild!.cloneNode(true) as HTMLElement;const index=agreementRows.children.length;row.dataset.agreementMilestone=String(index);row.querySelector('legend')!.textContent=`Milestone ${index+1} agreement details`;row.querySelectorAll<HTMLInputElement|HTMLTextAreaElement>('[name]').forEach(input=>{input.name=input.name.replace(/milestones\.\d+\./,`milestones.${index}.`);input.value=input.name.endsWith('handoff')||input.type==='date'?'':'None';});agreementRows.appendChild(row);} changed = true; inputRevision++; updateControls();
     list.lastElementChild!.querySelector<HTMLInputElement>('input')!.focus();
     status.textContent = `Milestone ${list.children.length} added.`;
   });
@@ -165,6 +171,7 @@ export function setupSoftwareOffers() {
     if (!button || list.children.length <= 1) return;
     const row = button.closest('[data-milestone]')!;
     const neighbor = row.nextElementSibling ?? row.previousElementSibling;
+    const index=Array.from(list.children).indexOf(row);const agreementRows=form.querySelector('[data-agreement-milestones]');agreementRows?.children[index]?.remove();agreementRows?.querySelectorAll<HTMLElement>('[data-agreement-milestone]').forEach((item,i)=>{item.querySelector('legend')!.textContent=`Milestone ${i+1} agreement details`;item.querySelectorAll<HTMLInputElement|HTMLTextAreaElement>('[name]').forEach(input=>input.name=input.name.replace(/milestones\.\d+\./,`milestones.${i}.`));});
     row.remove(); changed = true; inputRevision++; updateControls();
     (neighbor?.querySelector<HTMLInputElement>('input') ?? root.querySelector<HTMLButtonElement>('[data-add-milestone]'))!.focus();
     status.textContent = 'Milestone removed.';
@@ -172,9 +179,11 @@ export function setupSoftwareOffers() {
   form.addEventListener('submit', async event => {
     event.preventDefault(); const button = form.querySelector<HTMLButtonElement>('[type="submit"]')!; button.disabled = true;
     const revision = inputRevision;
-    try { const result = await post(endpoint, { action: 'draft', terms: terms(), expectedUpdatedAt: root.dataset.updated || null });
+    const removedAttachmentKeys:string[]=JSON.parse(attachmentBlock?.dataset.removedKeys ?? '[]');
+    try { const result = await post(endpoint, { action: 'draft', terms: terms(), ...agreementDetails(form), removedAttachmentKeys, expectedUpdatedAt: root.dataset.updated || null });
+      if (attachmentBlock && !result.attachmentCleanupPending) attachmentBlock.dataset.removedKeys=JSON.stringify((JSON.parse(attachmentBlock.dataset.removedKeys??'[]') as string[]).filter(key=>!removedAttachmentKeys.includes(key)));
       root.dataset.updated = result.updatedAt; root.dataset.version = String(result.version); saved = true; changed = inputRevision !== revision;
-      root.querySelector<HTMLElement>('[data-offer-state]')!.textContent = root.dataset.sentVersion ? `v${root.dataset.sentVersion} sent ${root.dataset.sentDate} · Draft v${result.version} in progress` : `Draft v${result.version} · Not sent`; status.textContent = changed ? 'Draft saved. Your newer edits still need saving.' : 'Draft saved. Nothing has been sent.'; updateControls();
+      root.querySelector<HTMLElement>('[data-offer-state]')!.textContent = root.dataset.sentVersion ? `v${root.dataset.sentVersion} sent ${root.dataset.sentDate} · Draft v${result.version} in progress` : `Draft v${result.version} · Not sent`; status.textContent = result.attachmentCleanupPending ? 'Draft saved. Save again to retry attachment cleanup.' : changed ? 'Draft saved. Your newer edits still need saving.' : 'Draft saved. Nothing has been sent.'; updateControls();
     } catch (error) { status.textContent = (error as Error).message; } finally { button.disabled = false; }
   });
   send.addEventListener('click', async () => {
@@ -208,4 +217,40 @@ export function setupSoftwareOffers() {
     finally { setSending(requestPage, false); }
   });
   updateControls();
+}
+
+function agreementDetails(form:HTMLFormElement) {
+ if(!form.querySelector('[data-agreement-details]'))return {};
+ const details:Record<string,unknown>={milestones:[]};
+ for(const [key,value] of new FormData(form)) {
+  if(!key.startsWith('agreement.'))continue;
+  const parts=key.slice(10).split('.');
+  if(parts[0]==='milestones') {const milestones=details.milestones as Record<string,unknown>[];const i=Number(parts[1]);milestones[i]??={};milestones[i][parts[2]]=String(value);}
+  else if(parts[0]==='attachments')details.attachments=JSON.parse(String(value));
+  else if(['invoice_first_duration','review_business_days','correction_calendar_days','project_retention_days','handoff_access_days'].includes(parts[0]))details[parts[0]]=value===''?null:Number(value);
+  else details[parts[0]]=String(value);
+ }
+ details.longer_review_confirmed=new FormData(form).has('agreement.longer_review_confirmed');
+ return {agreementDetails:details,reusedMsaId:new FormData(form).get('reusedMsaId')||null,confirmMsaReuse:new FormData(form).has('confirmMsaReuse')};
+}
+
+export function setupAgreementAttachments(block:HTMLElement) {
+ block.addEventListener('click',event=>{
+   const button=(event.target as HTMLElement).closest<HTMLButtonElement>('[data-remove-attachment]');
+   if(!button)return;
+   const field=block.querySelector<HTMLInputElement>('[name="agreement.attachments"]')!;
+   field.value=JSON.stringify(JSON.parse(field.value).filter((attachment:{key:string})=>attachment.key!==button.dataset.removeAttachment));
+   block.dataset.removedKeys=JSON.stringify([...new Set([...JSON.parse(block.dataset.removedKeys??'[]'),button.dataset.removeAttachment])]);
+   button.closest('li')!.remove();field.dispatchEvent(new Event('input',{bubbles:true}));
+ });
+ const upload=block.querySelector<HTMLButtonElement>('[data-upload-attachment]')!;
+ upload.addEventListener('click',async()=>{
+ if(upload.disabled)return;
+ const file=block.querySelector<HTMLInputElement>('[data-attachment-file]')!.files?.[0],version=block.querySelector<HTMLInputElement>('[data-attachment-version]')!.value,date=block.querySelector<HTMLInputElement>('[data-attachment-date]')!.value;
+ const field=block.querySelector<HTMLInputElement>('[name="agreement.attachments"]')!,attachments=JSON.parse(field.value),status=block.closest('[data-software-editor]')!.querySelector<HTMLElement>('[data-software-status]')!;
+ if(!file||!version||!date||attachments.length>=5){status.textContent='Choose a PDF, version and date. Up to five attachments.';return;}
+ upload.disabled=true;
+ try{const query=new URLSearchParams({filename:file.name,version,date}),response=await fetch(`${block.dataset.uploadEndpoint}?${query}`,{method:'PUT',headers:{'content-type':'application/pdf'},body:file}),result=await response.json() as {error:string;attachment:{filename:string;version:string;date:string;key:string}};if(!response.ok)throw new Error(result.error);field.value=JSON.stringify([...JSON.parse(field.value),result.attachment]);field.dispatchEvent(new Event('input',{bubbles:true}));const item=document.createElement('li');item.textContent=`${result.attachment.filename} · ${version} · ${date} `;const remove=document.createElement('button');remove.type='button';remove.className='studio-quiet';remove.dataset.removeAttachment=result.attachment.key;remove.textContent='Remove';item.appendChild(remove);block.querySelector('[data-attachment-list]')!.appendChild(item);status.textContent='Attachment saved. Save the offer draft to include it.';}catch(e){status.textContent=(e as Error).message;}finally{upload.disabled=false;}
+});
+
 }
