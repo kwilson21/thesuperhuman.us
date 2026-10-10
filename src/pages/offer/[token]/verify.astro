@@ -16,7 +16,7 @@ const offer = valid ? await getLinkedOffer(Astro.locals.runtime.env.MUSIC_DB!, A
 {valid ? <>
 <p class="page-kicker">{offer && JSON.parse(offer.terms_json).outcome}</p>
 <h1 class="page-title">Your agreement is ready.</h1>
-<form method="post" action={Astro.url.pathname}><input type="hidden" name="key" value={key} /><button class="studio-button">Continue to sign</button></form>
+<form class="agreement-form" method="post" action={Astro.url.pathname}><input type="hidden" name="key" value={key} /><button class="studio-button">Continue to sign</button></form>
 <p class="agreement-hint">This link works once.</p>
-</> : <><h1 class="page-title">This link has expired.</h1><p><a class="studio-button" href={`/offer/${Astro.params.token}/sign`}>Send a new link</a></p></>}
+</> : <><h1 class="page-title">This link has expired.</h1><p class="page-lede">Links work once and last an hour.</p><p class="agreement-form"><a class="studio-button" href={`/offer/${Astro.params.token}/sign`}>Send a new link</a></p></>}
 </AgreementLayout>

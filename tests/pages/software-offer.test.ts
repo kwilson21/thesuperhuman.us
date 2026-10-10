@@ -401,7 +401,18 @@ it('renders one signing page, returning details, waiting and both-signed actions
     const render = (query = '') => container.renderToString(signPage, { params: { token }, request: new Request(`https://thesuperhuman.us/offer/${token}/sign${query}`, { headers: { cookie: `agreement_session=${session}` } }), locals: { runtime: { env: { MUSIC_DB: db } } } as any });
     let html = await render();
     expect(html).toContain('Ready to sign.');expect(html).toContain('value="Example LLC"');
-    expect(html).toContain('Read the agreement');expect(html).toContain('Read the statement of work');
+    expect(html).toMatch(/<p[^>]*><a[^>]*data-document-link="msa"[^>]*>Read the agreement<\/a><\/p>/);
+    expect(html).toMatch(/<p[^>]*><a[^>]*data-document-link="sow"[^>]*>Read the statement of work<\/a><\/p>/);
+    expect(html).toContain('1 milestone ·');expect(html).not.toContain('1 milestones');
+    expect(html).toMatch(/Agreement version v2026-09-30<\/p>\s*<\/section>/);
+    sql.prepare("UPDATE software_offers SET terms_json=? WHERE id='current'").run(JSON.stringify({...terms,milestones:[terms.milestones[0],terms.milestones[0]]}));
+    const originalDetails=sql.prepare("SELECT agreement_details_json FROM software_offers WHERE id='current'").get().agreement_details_json;
+    const multiDetails=JSON.parse(originalDetails);
+    multiDetails.milestones=[{...multiDetails.milestones[0],target:'2026-10-10'},{...multiDetails.milestones[0],start:'2026-10-11'}];
+    sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='current'").run(JSON.stringify(multiDetails));
+    expect(await render()).toContain('2 milestones ·');
+    sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='current'").run(originalDetails);
+    sql.prepare("UPDATE software_offers SET terms_json=? WHERE id='current'").run(JSON.stringify(terms));
     expect(html).toContain('Signing applies your name above as your electronic signature on the agreement and statement of work linked above.');
     expect(html).not.toContain('Step 2 of 3');expect(html).not.toContain('Before you sign');
     expect(html.match(/type="checkbox"/g)).toHaveLength(1);expect(html.match(/type="radio"/g)).toHaveLength(3);
@@ -410,7 +421,7 @@ it('renders one signing page, returning details, waiting and both-signed actions
     sql.exec("UPDATE software_offers SET reused_msa_id='reused' WHERE id='current'");
     html=await render();expect(html).toContain('Your signed agreement from Sep 30, 2026 still applies.');expect(html).toContain('Read it');expect(html).not.toContain('Read the agreement');expect(html).not.toContain('Read the full agreement and statement of work');expect(html).toContain('Signing applies your name above as your electronic signature on the statement of work linked above.');expect(html).toContain('Same as last time: Example LLC, LLC, Wyoming, Business address.');expect(html).toMatch(/data-business-details[^>]*hidden/);
     sql.prepare("INSERT INTO software_agreement_drafts VALUES('current','alex@example.com',?,'now')").run(JSON.stringify({legal_name:'Example LLC',signer_name:'Alex',entity_type:'LLC',state:'Wyoming',business_address:'Updated business address'}));
-    html=await render();expect(html).not.toContain('Same as last time');expect(html).toContain('Updated business address');expect(html).not.toMatch(/data-business-details[^>]*hidden/);
+    html=await render();expect(html).toMatch(/name="country"[^>]*value="United States"/);expect(html).not.toMatch(/data-country[^>]*hidden/);expect(html).not.toContain('Same as last time');expect(html).toContain('Updated business address');expect(html).not.toMatch(/data-business-details[^>]*hidden/);
     sql.exec("DELETE FROM software_agreement_drafts WHERE offer_id='current'");
     sql.exec("UPDATE software_offers SET reused_msa_id=NULL WHERE id='current'");
     const values = { client: { signer_name: 'Example Signer', signer_title: 'Owner', legal_name: 'Example LLC', portfolio: 'deny', naming: false }, contractor: { signer_name: 'Example Contractor', legal_name: 'Example Contractor LLC' }, system: { payment: 'Standard' }, choices: { portfolio: 'Do not allow', naming: 'No' } };
@@ -538,6 +549,7 @@ it('masks the recipient on every unauthenticated email receipt', async () => {
     const html=await container.renderToString(signPage,{params:{token},request:new Request(`https://thesuperhuman.us/offer/${token}/sign?email=sent`),locals:{runtime:{env:{MUSIC_DB:db}}}} as any);
     expect(html).toContain('I sent a link to a•••@example.com.');
     expect(html).not.toContain('alex@example.com');
+    expect(html).toContain('data-appearance="interaction-only"');
   } finally {sql.close();}
 });
 
@@ -581,9 +593,13 @@ it('renders scanner-safe agreement and archive landings with exact copy', async(
       expect(response.status).toBe(200);expect(response.headers.get('referrer-policy')).toBe('no-referrer');expect(response.headers.get('cache-control')).toBe('no-store');
       expect(html).toContain(archive?'Your documents are ready.':'Your agreement is ready.');
       expect(html).toContain(archive?'>Continue</button>':'>Continue to sign</button>');expect(html).toContain('This link works once.');expect(html).toContain('method="post"');
+      expect(html).toMatch(/<form class="agreement-form"/);
       if(!archive)expect(html).toContain('Current offer');
       expect(sql.prepare('SELECT used_at FROM software_agreement_links WHERE id=?').get(archive?'archive':'agreement').used_at).toBeNull();
       sql.exec('DELETE FROM software_agreement_links');
+      const expired=await container.renderToString(archive?archiveLanding:linkLanding,{params:{token},request:new Request(`https://thesuperhuman.us/${archive?'agreements':`offer/${token}`}/verify?key=${key}`),locals:{runtime:{env:{MUSIC_DB:db}}}} as any);
+      expect(expired).toMatch(/class="page-lede"[^>]*>Links work once and last an hour\.<\/p>/);
+      expect(expired).toMatch(/class="agreement-form"/);
     }
   } finally {sql.close();}
 });

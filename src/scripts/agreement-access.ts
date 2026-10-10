@@ -1,5 +1,5 @@
 import { consentText } from "~/lib/agreement-fields";
-import { resolveClientDetails } from "~/lib/agreement-draft";
+import { resolveClientDetails, states } from "~/lib/agreement-draft";
 export function setupAgreementAccess() {
   for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-document-link], a[href="#executed-agreement"]')) {
     link.addEventListener('click', (event) => {
@@ -63,7 +63,8 @@ export function setupAgreementAccess() {
     timer: ReturnType<typeof setTimeout>,
     queue = Promise.resolve(),
     reviewedRevision = -1,
-    showErrors = false;
+    showErrors = false,
+    previousState = "";
   const values = () =>
     Object.fromEntries(
       [...new FormData(root)].filter(
@@ -156,8 +157,12 @@ export function setupAgreementAccess() {
     root.querySelector<HTMLElement>("[data-consent-text]")!.textContent =
       consentText(String(data.legal_name));
     signButton.textContent = `Sign as ${data.signer_name}`;
-    root.querySelector<HTMLElement>("[data-country]")!.hidden =
-      data.state !== "Outside the US";
+    const country = root.querySelector<HTMLInputElement>('[name="country"]')!;
+    if (states.includes(previousState) && previousState !== "Outside the US" && data.state === "Outside the US" && country.value === "United States")
+      country.value = "";
+    if (!country.value.trim() && states.includes(data.state) && data.state !== "Outside the US")
+      country.value = "United States";
+    previousState = data.state;
   }
   async function saveAndReview(
     expected: number,
@@ -205,7 +210,7 @@ export function setupAgreementAccess() {
     );
     reviewedRevision = expected;
     if (showErrors) errors({});
-    status.textContent = "Details saved. Your agreement is ready to review.";
+    status.textContent = "Details saved.";
   }
   function enqueue() {
     const expected = revision,

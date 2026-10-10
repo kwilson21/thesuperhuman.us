@@ -169,6 +169,7 @@ export default {
     }
     await shot('offer', 'Offer review and signing link', `/offer/${token}`);
     await shot('check-email', 'Check your email and resend', `/offer/${token}/sign?email=sent`,{prepare:async page=>{
+      if(await page.locator('.cf-turnstile').getAttribute('data-appearance')!=='interaction-only')throw new Error('Post-send security check must appear only for interaction.');
       const receipt=await page.locator('.page-lede').innerText();
       if(!receipt.includes('s•••@example.com') || receipt.includes('signer@example.com'))throw new Error('Unauthenticated receipt must mask the recipient.');
     }});
@@ -197,7 +198,10 @@ export default {
             viewport,
             status: expired ? 401 : 200,
             prepare: async page => {
-              if (expired) await page.getByRole('heading', { name: 'This link has expired.', exact: true }).waitFor();
+              if (expired) {
+                await page.getByRole('heading', { name: 'This link has expired.', exact: true }).waitFor();
+                if(!await page.getByText('Links work once and last an hour.',{exact:true}).isVisible())throw new Error('Missing link expiry copy.');
+              }
               else {
                 await page.getByRole('heading', {name:title,exact:true}).waitFor();
                 await page.getByRole('button', {name:archive?'Continue':'Continue to sign',exact:true}).waitFor();
@@ -233,7 +237,11 @@ export default {
     let sow = reviewed.documents?.find((d) => d.kind === 'sow'),
       msa = reviewed.documents?.find((d) => d.kind === 'msa');
     if (!sow || !msa) throw new Error('Agreement review did not return both exact snapshots.');
-    await shot('prefilled', 'One page with saved details and a required portfolio choice', `/offer/${token}/sign`, {cookie,prepare:async page=>{await page.locator('[role=status]').filter({hasText:'ready to review'}).waitFor();}});
+    await shot('prefilled', 'One page with saved details and a required portfolio choice', `/offer/${token}/sign`, {cookie,prepare:async page=>{
+      await page.locator('[role=status]').filter({hasText:'Details saved.'}).waitFor();
+      if(await page.locator('[name=country]').inputValue()!=='United States')throw new Error('US state must prefill an empty country.');
+      if(!await page.locator('.signing-card').getByText('Agreement version v2026-09-30',{exact:true}).isVisible())throw new Error('Version must stay inside the summary card.');
+    }});
     await shot('signature', 'Name signature and one consent checkbox', `/offer/${token}/sign`, {cookie,selector:'[data-signing-page] aside'});
     // Browser captures refresh review snapshots. Fetch the current immutable manifest before signing.
     const currentReview = await ownerFetch(`/api/offer/${token}/review`,{csrf_nonce:'screenshot-csrf',values:client},'POST',{cookie:`agreement_session=${session}`});
