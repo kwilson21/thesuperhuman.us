@@ -497,8 +497,9 @@ it('keeps manual signing closed and shows start exceptions only when required', 
     expect(html).not.toContain('name="earlier_start_on"');
     html = await render({ po_requirement: 'before_start', planned_start: '2099-01-01' });
     expect(html).toContain('name="po_number"');
-    expect(html).toContain('name="earlier_start_on"');
-    expect(html).toContain('name="earlier_start_agreement"');
+    expect(html).toMatch(/<label[^>]*>Client agreement date for an earlier start<input[^>]*name="earlier_start_on"[^>]*required/);
+    expect(html).toMatch(/<label[^>]*>Client agreement for an earlier start<textarea[^>]*name="earlier_start_agreement"[^>]*required/);
+    expect(html).not.toContain('if applicable');
   } finally { sql.close(); }
 });
 
