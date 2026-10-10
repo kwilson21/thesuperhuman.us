@@ -348,6 +348,7 @@ it('uses the sent offer retention period for externally signed projects and clea
   sql.exec("UPDATE audio_projects SET content_deleted_at='removed'; INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES('external','software','client@example.com','Tool','resolved','2020-01-01','2020-01-01')");
   sql.prepare("INSERT INTO software_offers(id,request_id,version,status,terms_json,agreement_details_json,recipient_email_snapshot,created_at,updated_at,sent_at) VALUES('offer','external',1,'sent','{}',?,'client@example.com','2020-01-01','2020-01-01','2020-01-01')").run(JSON.stringify({project_retention_days:730}));
   sql.exec("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,completed_at,signature_source) VALUES('external','offer','{}','standard','now','now','now','owner','now','now','2026-12-01','external')");
+  sql.exec("INSERT INTO software_agreement_events(id,offer_id,action,actor,occurred_at) VALUES('external-event','offer','external-signature-recorded','owner','now')");
   const list=async()=>[];
   expect((await previewStudioRetention(database,'Local test data',storage,now,list)).counts).toMatchObject({softwareProjects:0});
   sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='offer'").run(JSON.stringify({project_retention_days:30}));
@@ -355,6 +356,7 @@ it('uses the sent offer retention period for externally signed projects and clea
   expect(review.counts).toMatchObject({softwareProjects:1});
   await applyStudioRetention(database,review,'Local test data',storage,async()=>{},now,list);
   expect(sql.prepare("SELECT recipient_email_snapshot,agreement_details_json FROM software_offers WHERE id='offer'").get()).toEqual({recipient_email_snapshot:null,agreement_details_json:null});
+  expect(sql.prepare("SELECT * FROM software_agreement_events WHERE id='external-event'").get()).toBeUndefined();
   sql.close();
 });
 

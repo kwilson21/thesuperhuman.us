@@ -1816,7 +1816,15 @@ it('applies the same archive cooldown to known and unknown emails without storin
   }
   expect(results[0]).toEqual(results[1]);expect(results[1][2]).toBe(429);
   expect(JSON.stringify(sql.prepare('SELECT * FROM audio_client_allowances').all())).not.toContain('unknown@example.com');
+  expect(sql.prepare('SELECT key FROM audio_client_allowances WHERE key=?').get(await hashOfferToken('archive-link-cooldown:unknown@example.com'))).toBeUndefined();
   expect(JSON.stringify((fetch as any).mock.calls)).not.toContain('unknown@example.com');
+  const {keyedHash}=await import('~/lib/audio-client-access');
+  const key=await keyedHash(env.AUDIO_CLIENT_CODE_KEY,'archive-link-cooldown:unknown@example.com');
+  expect(sql.prepare('SELECT key FROM audio_client_allowances WHERE key=?').get(key)).toBeDefined();
+  expect(await keyedHash('different-secret-key-that-is-32-characters','archive-link-cooldown:unknown@example.com')).not.toBe(key);
+  sql.prepare('UPDATE audio_client_allowances SET window_start=? WHERE key=?').run('2000-01-01',key);
+  await issueAgreementLink(env,request(),{turnstileToken:'test',email:'another@example.com'});
+  expect(sql.prepare('SELECT key FROM audio_client_allowances WHERE key=?').get(key)).toBeUndefined();
 });
 
 it('retains review agreements and pinned terms while any project references the offer', async () => {
@@ -1938,4 +1946,34 @@ it('reviews retained external signing evidence and clears it with the last agree
  await expect(applyAgreementRetention(db,env.AUDIO,'test-storage',manifest)).rejects.toThrow('Archive changed');
  await applyAgreementRetention(db,env.AUDIO,'test-storage',await previewAgreementRetention(db,env.AUDIO,'test-storage'));
  expect(sql.prepare('SELECT external_signature_details_json FROM software_projects').get().external_signature_details_json).toBeNull();
+});
+
+it.each(['resolve','withdraw'] as const)('refuses closing a client-signed request (%s)',async action=>{
+  const {changeOwnerRequest}=await import('~/lib/owner-requests');
+  await signed();
+  await expect(changeOwnerRequest(db,{id:'r',action,actor:'owner@example.com'})).rejects.toThrow('Countersign or abandon the signed agreement first.');
+  expect(sql.prepare("SELECT status FROM owner_requests WHERE id='r'").get().status).not.toMatch(/resolved|withdrawn/);
+  expect((await offerAgreements(db,'o')).every(a=>a.status==='client_signed')).toBe(true);
+});
+it.each(['executed','abandoned'])('does not send waiting notices for %s agreements',async status=>{
+  const {deliverAgreementNotifications}=await import('~/lib/agreement-artifacts');
+  await signed();sql.prepare('UPDATE software_agreements SET status=?').run(status);
+  vi.stubGlobal('fetch',vi.fn(async()=>Response.json({id:'message'})));
+  for(const a of await offerAgreements(db,'o')) await deliverAgreementNotifications(env,a.id);
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it('retries an executed copy instead of the failed waiting receipt',async()=>{
+  const {POST}=await import('~/pages/api/owner/requests/[id]/agreement');
+  const result=await signed();
+  const id=await countersignAgreements(db,(await offer())!,result.documents,'Owner','owner@example.com',request());
+  await prepareAgreementArtifact(env,id,async()=>new TextEncoder().encode('%PDF-retry'));
+  sql.exec("UPDATE software_agreement_notifications SET status='failed'; UPDATE software_agreement_deliveries SET status='failed'");
+  vi.stubGlobal('fetch',vi.fn(async()=>Response.json({id:'message'})));
+  const response=await POST({params:{id:'r'},locals:{owner:{email:'owner@example.com'},runtime:{env}},request:new Request('https://example.com/api/owner/requests/r/agreement',{method:'POST',headers:{origin:'https://example.com','content-type':'application/json'},body:JSON.stringify({action:'retry-copy',agreement_id:id})})} as never);
+  expect(response.status).toBe(200);
+  const payloads=vi.mocked(fetch).mock.calls.map(([,init])=>JSON.parse(String(init?.body)));
+  expect(payloads.length).toBeGreaterThan(0);
+  expect(JSON.stringify(payloads)).not.toContain('Waiting for Kazon');
+  expect(sql.prepare("SELECT status FROM software_agreement_deliveries WHERE agreement_id=? AND recipient_role='client'").get(id).status).toBe('sent');
 });

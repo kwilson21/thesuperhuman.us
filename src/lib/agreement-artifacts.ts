@@ -204,7 +204,7 @@ export async function deliverAgreementCopies(env: Env, id: string) {
       at = new Date().toISOString();
     const claim = await db
       .prepare(
-        "UPDATE software_agreement_deliveries SET status='sending',attempt_id=?,attempted_at=? WHERE agreement_id=? AND recipient_role=? AND status='pending' AND EXISTS(SELECT 1 FROM software_agreements a WHERE a.id=software_agreement_deliveries.agreement_id AND a.archive_closed_at IS NULL) RETURNING email",
+        "UPDATE software_agreement_deliveries SET status='sending',attempt_id=?,attempted_at=? WHERE agreement_id=? AND recipient_role=? AND status='pending' AND EXISTS(SELECT 1 FROM software_agreements a WHERE a.id=software_agreement_deliveries.agreement_id AND a.archive_closed_at IS NULL AND a.status='executed') RETURNING email",
       )
       .bind(attempt, at, id, role)
       .first<{ email: string }>();
@@ -266,7 +266,7 @@ export async function deliverAgreementNotifications(env: Env, id: string) {
     const attempt = crypto.randomUUID(),
       at = new Date().toISOString();
     const claim = await env.MUSIC_DB.prepare(
-      "UPDATE software_agreement_notifications SET status='sending',attempt_id=?,attempted_at=? WHERE agreement_id=? AND kind=? AND status='pending' AND EXISTS(SELECT 1 FROM software_agreements a WHERE a.id=software_agreement_notifications.agreement_id AND a.archive_closed_at IS NULL) RETURNING email",
+      "UPDATE software_agreement_notifications SET status='sending',attempt_id=?,attempted_at=? WHERE agreement_id=? AND kind=? AND status='pending' AND EXISTS(SELECT 1 FROM software_agreements a WHERE a.id=software_agreement_notifications.agreement_id AND a.archive_closed_at IS NULL AND a.status='client_signed' AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.request_id=a.request_id)) RETURNING email",
     )
       .bind(attempt, at, id, kind)
       .first<{ email: string }>();

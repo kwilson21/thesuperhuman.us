@@ -31,6 +31,7 @@ export type RequestCommand = { expectedUpdatedAt?: string } & (
 
 export type OwnerRequestAudit = { id: number; action: string; actor: string; note: string; occurredAt: string };
 
+export const signedAgreementPendingMessage = 'Countersign or abandon the signed agreement first.';
 export const projectIncompleteMessage = 'Mark the project complete first.';
 
 export const projectStartedMessage = 'This project has started. Use the project controls.';
@@ -130,8 +131,11 @@ export async function changeOwnerRequest(db: D1Database, command: RequestCommand
     const block = await depositOfferBlock(db, command.id, true);
     if (block) throw new Error(block);
   }
+  const awaitingCountersign = () => db.prepare("SELECT 1 FROM software_agreements WHERE request_id=? AND status='client_signed'").bind(command.id).first();
+  if ((closingSoftware || resolvingSoftware) && await awaitingCountersign()) throw new Error(signedAgreementPendingMessage);
   let results: D1Result[];
   try { results = await db.batch([
+    ...(closingSoftware || resolvingSoftware ? [softwareGuard(db, "SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_agreements WHERE request_id=? AND status='client_signed')", [command.id])] : []),
     ...(closingSoftware ? [offerSendingGuard(db, command.id), depositOfferGuard(db, command.id, true)] : []),
     ...(resolvingSoftware ? [softwareGuard(db, 'SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=? AND completed_at IS NULL AND revoked_at IS NULL)', [command.id])] : []),
     ...(reopeningSoftware ? [softwareGuard(db, 'SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)', [command.id])] : []),
@@ -153,6 +157,7 @@ export async function changeOwnerRequest(db: D1Database, command: RequestCommand
     ] : []),
   ]);
   } catch (error) {
+    if ((closingSoftware || resolvingSoftware) && await awaitingCountersign()) throw new Error(signedAgreementPendingMessage);
     if (resolvingSoftware) {
       const project = await getSoftwareProject(db, command.id);
       if (project && project.completed_at === null && project.revoked_at === null) throw new Error(projectIncompleteMessage);
@@ -165,7 +170,7 @@ export async function changeOwnerRequest(db: D1Database, command: RequestCommand
     if (closingSoftware && await offerIsSending(db, command.id)) throw new Error(offerSendingMessage);
     throw error;
   }
-  const update = results[closingSoftware ? 2 : reopeningSoftware || resolvingSoftware ? 1 : 0];
+  const update = results[closingSoftware ? 3 : resolvingSoftware ? 2 : reopeningSoftware ? 1 : 0];
   const row = update.results[0] as OwnerRequestRow | undefined;
   if (!row) throw new Error('Request changed while it was being updated.');
   return ownerRequestFromRow(row);

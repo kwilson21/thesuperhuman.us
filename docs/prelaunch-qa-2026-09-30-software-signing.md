@@ -198,3 +198,9 @@ PASS: independent correctness/security and UI/copy agents reviewed all 12 confli
 - Complete manual accessibility, cross-browser/device, no-JS, actual Workers PDF, authorized inbox delivery, monitoring and recovery checks.
 - Verify counsel/template status and owner contractor/address configuration before enabling signing. No owner understanding or legal suitability is certified by this record.
 - Save post-deployment/live verification separately. No real email, payment, signing, migration or deployment was performed by this job.
+
+## Signing lifecycle follow-up, October 10, 2026
+
+Local regression coverage now refuses request resolution and withdrawal while a client signature awaits countersignature, displays the required owner guidance, removes external offer events with retained project content, sends executed copies without stale waiting notices on retry, and uses secret-keyed archive cooldown identities pruned by the existing allowance lifecycle. No schema or migration change.
+
+PASS: focused signing, studio retention and rendered owner tests; copy check; Astro check (0 errors, 0 warnings); screenshot harness (30 tests). The full suite was run; local R2 upload remains blocked by sandbox loopback permission (EPERM). After correcting the rendered fixture, all 124 other suites pass (1,324 tests) with only the R2 upload file excluded. CI captures and exact-head review remain UNVERIFIED. No build, real email, remote command, push or deployment in this follow-up.

@@ -749,3 +749,16 @@ it('renders the AI disclosure beside both answer boxes and the dated retention n
   expect(notice).toContain('Updated October 10, 2026'); expect(notice).toContain('id="software-briefs"');
   expect(notice).toContain('a counter derived from your IP address, kept for up to two days');
 });
+
+it('shows the countersign requirement beside both disabled closing actions', async () => {
+  const {sql,db}=await fixture();
+  try {
+    sql.prepare("INSERT INTO software_agreement_templates VALUES ('msa','msa',1,'Template',?,1,'now','owner')").run('a'.repeat(64));
+    sql.exec("INSERT INTO software_agreement_clients VALUES ('client','alex@example.com','Example LLC','example llc','LLC','Wyoming','Business address','notice@example.com','now')");
+    sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES('sow','sow','current','r','client','msa','client_signed','Exact',?,'{}','now','2026-09-30','session')").run('a'.repeat(64));
+    const container=await AstroContainer.create();
+    const html=await container.renderToString(ownerRequest,{params:{id:'r'},request:new Request('https://thesuperhuman.us/owner/requests/r'),locals:{owner:{email:'owner@example.com'},runtime:{env:{MUSIC_DB:db}}}} as any);
+    expect(html).toContain('Countersign or abandon the signed agreement first.');
+    for(const action of ['resolve','withdraw']) expect(html).toMatch(new RegExp(`data-action="${action}"[^>]*disabled`));
+  } finally {sql.close();}
+});
