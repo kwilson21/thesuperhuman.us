@@ -8,7 +8,7 @@ import { getOwnerRequest } from '~/lib/owner-requests';
 import { agreementSession, signingEnabled, maskedAgreementEmail } from '~/lib/agreement-access';
 import { offerAgreements } from '~/lib/software-agreements';
 import { consentText, intentText, agreementVersionLabel } from '~/lib/agreement-fields';
-import { businessTypes, states, loadAgreementDraft, prefillAgreementDraft } from '~/lib/agreement-draft';
+import { businessTypes, states, resolveClientDetails, loadAgreementDraft, prefillAgreementDraft } from '~/lib/agreement-draft';
 import { softwareDate } from '~/lib/software-projects';
 const env=Astro.locals.runtime.env, db=env.MUSIC_DB, token=Astro.params.token!;
 const offer=db && await signingEnabled(db) ? await getLinkedOffer(db,token) : null;
@@ -25,6 +25,9 @@ const artifact=sow?.status==='executed' ? await db!.prepare('SELECT status FROM 
 const invoice=sow?.status==='executed' ? await db!.prepare("SELECT hosted_invoice_url FROM software_invoices WHERE offer_id=? AND kind='deposit' AND status='open' AND hosted_invoice_url IS NOT NULL ORDER BY milestone_index LIMIT 1").bind(offer!.id).first<{hosted_invoice_url:string}>() : null;
 const recipient=offer?.recipient_email_snapshot ? (session ? offer.recipient_email_snapshot : maskedAgreementEmail(offer.recipient_email_snapshot)) : '';
 const project=sow?.status==='executed' ? await db!.prepare('SELECT 1 FROM software_projects WHERE offer_id=?').bind(offer!.id).first() : null;
+const resolvedDraft=draft && session ? resolveClientDetails(draft,session.recipient_email) : null;
+const reviewedClient=sow ? JSON.parse(sow.values_json).client : null;
+const draftMatchesReview=resolvedDraft?.ok && reviewedClient && Object.entries(resolvedDraft.client).every(([key,value])=>reviewedClient[key]===value);
 const readyDocs=docs.filter(d=>d.status==='review' && d.review_session_hash===session?.token_hash);
 if(!offer?.msa_template_id) Astro.response.status=404;
 ---
@@ -47,7 +50,7 @@ if(!offer?.msa_template_id) Astro.response.status=404;
   <div data-signing-errors role="alert" tabindex="-1" hidden></div>
   <form class="agreement-form" data-signing-page data-token={token} data-email={recipient} method="post" action={`/api/offer/${token}/review`} novalidate>
     <input type="hidden" name="csrf_nonce" value={session.csrf_nonce} />
-    <input type="hidden" name="documents" value={JSON.stringify(readyDocs.map(d=>({id:d.id,hash:d.text_sha256})))} />
+    <input type="hidden" name="documents" value={JSON.stringify(draftMatchesReview ? readyDocs.map(d=>({id:d.id,hash:d.text_sha256})) : [])} />
     <div class="offer-columns"><div>
       <section class="signing-card"><h2>What you're getting</h2><p>{terms.summary}</p><p class="agreement-meta">{terms.milestones.length} {terms.milestones.length===1?'milestone':'milestones'} · {formatUSD(offerTotal(terms))} fixed · {terms.paymentMode==='standard'?'50% deposit before each milestone':'Invoices on delivery, due within 30 days'} · done by {softwareDate(JSON.parse(offer.agreement_details_json!).planned_end)}</p>
       {reused && <p>Your signed agreement from {softwareDate(reused.effective_on)} still applies. <a href="#executed-agreement">Read it</a></p>}
@@ -75,7 +78,7 @@ if(!offer?.msa_template_id) Astro.response.status=404;
       {([['private','Keep it private'],['anonymous','Show the work without naming you'],['named','Show the work and name you']] as const).map(([value,label])=><label class="confirmation"><input type="radio" name="portfolio_choice" value={value} checked={draft.portfolio_choice===value} required />{label}</label>)}<span id="error-portfolio_choice" data-field-error="portfolio_choice"></span></fieldset>
     </div><aside><h2>Your signature</h2><p class="signing-name" data-signature-name>{draft.signer_name}</p><p class="agreement-meta"><span data-signature-details>{draft.signer_name} · {draft.signer_title}, {draft.legal_name}</span> · <button type="button" class="studio-quiet" data-edit-name>Edit</button></p>
       <label data-name-field hidden>Full legal name<input class="studio-input" name="signer_name" id="signer_name" value={draft.signer_name} maxlength="200" required aria-describedby="error-signer_name" /><span id="error-signer_name" data-field-error="signer_name"></span></label>
-      <label class="confirmation"><input type="checkbox" name="consent" id="consent" value="true" required aria-describedby="error-consent" /><span data-consent-text>{consentText(draft.legal_name)}</span></label><span id="error-consent" data-field-error="consent"></span>
+      <label class="confirmation"><input type="checkbox" name="consent" id="consent" value="true" required aria-describedby="error-consent consent-updated" /><span data-consent-text>{consentText(draft.legal_name)}</span></label><span id="consent-updated" data-consent-updated hidden>The documents were updated. Please tick the box again.</span><span id="error-consent" data-field-error="consent"></span>
       <button class="studio-button" type="submit" data-sign-button>Sign as {draft.signer_name}</button><p class="agreement-hint">{intentText(false, Boolean(reused))}</p><p class="agreement-hint">Next, Kazon countersigns. You'll get the signed PDF by email as soon as he does.</p>
       <p class="agreement-hint">The certificate records your verified email, time, IP address and browser. <a href="/privacy">Privacy notice</a>.</p>
       <p class="agreement-status" role="status" aria-live="polite" tabindex="-1"></p><a data-fresh-link href={`/offer/${token}/sign`} hidden>Send a new link</a>

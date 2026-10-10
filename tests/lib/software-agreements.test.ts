@@ -202,6 +202,7 @@ beforeEach(async () => {
     CONTACT_FROM_EMAIL: 'sender@example.com',
     AUDIO_CLIENT_CODE_KEY: secret,
     TURNSTILE_SECRET_KEY: 'fake',
+    SITE_ORIGIN: 'https://example.com',
   } as unknown as Env;
   vi.stubGlobal(
     'fetch',
@@ -693,7 +694,7 @@ it('deletes only the reviewed retired packet, closes archive access and keeps a 
     sql.prepare('SELECT agreement_id FROM software_agreement_retention_receipts').get(),
   ).toEqual({ agreement_id: id });
 });
-it('retains an expired SOW while a project tombstone still references its offer', async () => {
+it('expires an ended SOW once its project content has been deleted', async () => {
   const { previewAgreementRetention, applyAgreementRetention } =
     await import('~/lib/agreement-retention');
   const result = await signed(),
@@ -716,11 +717,11 @@ it('retains an expired SOW while a project tombstone still references its offer'
     )
     .run(id);
   const manifest = await previewAgreementRetention(db, env.AUDIO, 'test-storage');
-  expect(manifest.agreements.map((a) => a.id)).not.toContain(id);
+  expect(manifest.agreements.map((a) => a.id)).toContain(id);
   await applyAgreementRetention(db, env.AUDIO, 'test-storage', manifest);
   expect(
     sql.prepare("SELECT agreement_id FROM software_projects WHERE request_id='r'").get(),
-  ).toEqual({ agreement_id: id });
+  ).toEqual({ agreement_id: null });
 });
 it('records business authority in the single explicit consent statement', () => {
   expect(clientAgreementSchema.safeParse(client).success).toBe(true);
@@ -1840,13 +1841,32 @@ it.each([false,true])('conditionally advances the attachment cursor if storage c
   expect(new TextDecoder().decode(bucketData.get(marker))).toBe(newer);
 });
 
-it('retains a reused MSA and its pinned offer reference for a project tombstone', async () => {
+it('expires a reused MSA once its project content is deleted', async () => {
   const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
   await review();
   sql.exec("UPDATE software_offers SET status='superseded' WHERE id='o'; UPDATE software_agreements SET msa_id=NULL,legal_hold=1 WHERE kind='sow'; UPDATE software_agreements SET status='abandoned',ended_at='2000-01-01',retain_until='2010-01-01',terminated_at='2000-01-01'; INSERT INTO software_offers(id,request_id,version,status,terms_json,reused_msa_id,created_at,updated_at) SELECT 'reused','r',2,'sent','{}',id,'now','now' FROM software_agreements WHERE kind='msa'; INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,content_deleted_at) VALUES('r','reused','{}','standard','now','now','now','owner','now','now','now')");
   const original=sql.prepare("SELECT reused_msa_id FROM software_offers WHERE id='reused'").get();
   const manifest=await previewAgreementRetention(db,env.AUDIO,'test-storage');
-  expect(manifest.agreements).toEqual([]);
+  expect(manifest.agreements.map(a=>a.id)).toContain(original.reused_msa_id);
   await applyAgreementRetention(db,env.AUDIO,'test-storage',manifest);
-  expect(sql.prepare("SELECT reused_msa_id FROM software_offers WHERE id='reused'").get()).toEqual(original);
+  expect(sql.prepare("SELECT reused_msa_id FROM software_offers WHERE id='reused'").get()).toEqual({reused_msa_id:null});
+});
+
+it.each(['agreement','archive'])('rejects noncanonical %s link requests without using allowances or links',async purpose=>{
+  const foreign=new Request('https://foreign.example/api/agreements/link',{method:'POST'});
+  const before=sql.prepare('SELECT count(*) n FROM audio_client_allowances').get().n;
+  expect((await issueAgreementLink(env,foreign,{email:'client@example.com',turnstileToken:'valid'},purpose==='agreement'?token:undefined)).status).toBe(404);
+  expect((await completeAgreementLink(env,foreign,token,purpose==='agreement'?token:undefined)).status).toBe(404);
+  expect(sql.prepare('SELECT count(*) n FROM audio_client_allowances').get().n).toBe(before);
+  expect(sql.prepare("SELECT used_at FROM software_agreement_links WHERE id='challenge'").get().used_at).toBeNull();
+  expect(fetch).not.toHaveBeenCalled();
+});
+it('emails archive access with signed-document copy and the canonical link',async()=>{
+  const result=await signed();await countersignAgreements(db,(await offer())!,result.documents,'Owner','owner',request());
+  await issueAgreementLink(env,request(),{email:'client@example.com',turnstileToken:'valid'});
+  const payload=JSON.parse(String(vi.mocked(fetch).mock.calls.at(-1)![1]?.body));
+  expect(payload.subject).toBe('Your signed documents');
+  expect(payload.text).toContain('Tap below to open your signed agreement documents.');
+  expect(payload.html).toContain('Open your documents</a>');
+  expect(payload.html).toContain('https://example.com/agreements/verify?key=');
 });

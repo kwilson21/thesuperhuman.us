@@ -62,7 +62,7 @@ export function setupAgreementAccess() {
   let revision = 0,
     timer: ReturnType<typeof setTimeout>,
     queue = Promise.resolve(),
-    reviewedRevision = -1,
+    reviewedRevision = Boolean(documentInput.value && documentInput.value !== "[]") ? 0 : -1,
     showErrors = false,
     previousState = "";
   const values = () =>
@@ -179,6 +179,11 @@ export function setupAgreementAccess() {
       values: data,
     });
     if (expected !== revision) return;
+    const documents = JSON.stringify(result.documents.map(d => ({ id: d.id, hash: d.hash })));
+    if (documents !== documentInput.value) {
+      root.querySelector<HTMLInputElement>('[name="consent"]')!.checked = false;
+      root.querySelector<HTMLElement>('[data-consent-updated]')!.hidden = false;
+    }
     const holder = root.querySelector<HTMLElement>(
       "[data-reviewed-documents]",
     )!;
@@ -216,7 +221,7 @@ export function setupAgreementAccess() {
     const expected = revision,
       data = values();
     queue = queue
-      .then(() => saveAndReview(expected, data))
+      .then(() => reviewedRevision === expected ? undefined : saveAndReview(expected, data))
       .catch((error) => {
         status.textContent = (error as Error).message;
       });
@@ -235,7 +240,10 @@ export function setupAgreementAccess() {
   // Consent changes do not edit the documents or clear the checkbox itself.
   root
     .querySelector<HTMLInputElement>('[name="consent"]')!
-    .addEventListener("input", (event) => event.stopPropagation());
+    .addEventListener("input", (event) => {
+      event.stopPropagation();
+      root.querySelector<HTMLElement>('[data-consent-updated]')!.hidden = true;
+    });
   for (const [button, target] of [
     ["[data-other-contact]", "[data-other-contacts]"],
     ["[data-edit-details]", "[data-business-details]"],
@@ -252,6 +260,7 @@ export function setupAgreementAccess() {
       if (!root.querySelector<HTMLDetailsElement>("[data-agreed-terms]")!.open)
         return;
       showErrors = true;
+      if (reviewedRevision === revision) return;
       clearTimeout(timer);
       enqueue();
     });
@@ -288,5 +297,5 @@ export function setupAgreementAccess() {
     }
   });
   updateSignature();
-  enqueue();
+  if (reviewedRevision !== revision) enqueue();
 }

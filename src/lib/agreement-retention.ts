@@ -24,8 +24,8 @@ const eligible = `a.status IN ('executed','abandoned') AND a.ended_at IS NOT NUL
  AND NOT EXISTS(SELECT 1 FROM software_agreement_deliveries d WHERE d.agreement_id=a.id AND d.status='sending')
  AND NOT EXISTS(SELECT 1 FROM software_agreement_notifications n WHERE n.agreement_id=a.id AND n.status='sending')
  AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.agreement_id=a.id AND p.content_deleted_at IS NULL)
- AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=a.offer_id)
- AND NOT EXISTS(SELECT 1 FROM software_offers o WHERE o.reused_msa_id=a.id AND (EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id) OR EXISTS(SELECT 1 FROM software_agreements sow WHERE sow.offer_id=o.id) OR (o.status IN ('sent','draft') AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id AND p.content_deleted_at IS NOT NULL))))
+ AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=a.offer_id AND p.content_deleted_at IS NULL)
+ AND NOT EXISTS(SELECT 1 FROM software_offers o WHERE o.reused_msa_id=a.id AND (EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id AND p.content_deleted_at IS NULL) OR EXISTS(SELECT 1 FROM software_agreements sow WHERE sow.offer_id=o.id) OR (o.status IN ('sent','draft') AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id AND p.content_deleted_at IS NOT NULL))))
  AND NOT EXISTS(SELECT 1 FROM software_agreements s WHERE s.msa_id=a.id)
  AND (a.kind='sow' OR a.terminated_at IS NOT NULL OR NOT EXISTS(SELECT 1 FROM software_agreement_signatures sig WHERE sig.agreement_id=a.id))`;
 // Offers that can still be reviewed pin their uploaded attachments independently of review snapshots.
@@ -219,11 +219,11 @@ export async function applyAgreementRetention(
         )
         .bind(item.id),
       db
-        .prepare('UPDATE software_offers SET reused_msa_id=NULL WHERE reused_msa_id=? AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=software_offers.id)')
+        .prepare('UPDATE software_offers SET reused_msa_id=NULL WHERE reused_msa_id=? AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=software_offers.id AND p.content_deleted_at IS NULL)')
         .bind(item.id),
       db.prepare(`UPDATE software_offers SET recipient_email_snapshot=NULL,agreement_details_json=NULL
         WHERE id=(SELECT offer_id FROM software_agreements WHERE id=?)
-          AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=software_offers.id)
+          AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=software_offers.id AND p.content_deleted_at IS NULL)
           AND NOT EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_offers.id AND a.id<>?)`).bind(item.id,item.id),
       db.prepare('DELETE FROM software_agreements WHERE id=?').bind(item.id),
       ...item.objects.map(object => db.prepare(
