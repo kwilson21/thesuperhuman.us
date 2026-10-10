@@ -5,7 +5,7 @@ import {feedChange, publicationMilestones, journalMilestones, latestJournalMiles
 import type {Milestone} from '../../src/lib/project-story';
 import type {ProjectFeed, PublicEntry} from '../../src/lib/publication/read';
 import {websiteMilestones, websiteStory} from '../../src/data/project-stories/personal-website';
-import {tallyStory} from '../../src/data/project-stories/tally';
+import {tallyStory, tallyMilestones, tallyDecisionHighlights} from '../../src/data/project-stories/tally';
 import {kailleraStory} from '../../src/data/project-stories/kaillera-next';
 import {threadlineStory} from '../../src/data/project-stories/threadline';
 import dailyStory from '../../src/data/project-stories/the-engineers-daily.json';
@@ -210,5 +210,29 @@ describe('journal default selection', () => {
   expect(journalSelection(undefined, newestFirst, 'older', undefined)).toBe('older');
   expect(journalSelection(undefined, newestFirst, undefined, 'explicit')).toBe('explicit');
   expect(journalSelection(undefined, newestFirst, undefined, undefined)).toBeUndefined();
+ });
+});
+
+
+describe('Tally decision highlight sources', () => {
+ it('cites both AI entries in order and keeps every source resolvable', () => {
+  expect(tallyDecisionHighlights.map(highlight => highlight.entries.map(source => source.entry))).toEqual([
+   ['tally-jev-categorization', 'tally-merchant-names'],
+   ['tally-design-system-catalog'],
+   ['tally-demo-environment'],
+  ]);
+  for (const highlight of tallyDecisionHighlights) {
+   expect(highlight).not.toHaveProperty('credit');
+   for (const source of highlight.entries) {
+    expect(source).not.toHaveProperty('id');
+    expect(tallyMilestones.filter(milestone => milestone.id === source.entry)).toHaveLength(1);
+   }
+  }
+ });
+ it('adds the merchant-name entry after earlier milestones without an image', () => {
+  const merchant = tallyMilestones.find(milestone => milestone.id === 'tally-merchant-names');
+  expect(merchant?.day).toBe('2026-10-06');
+  expect(merchant?.artifacts).toBeUndefined();
+  expect(tallyMilestones.at(-1)).toBe(merchant);
  });
 });

@@ -33,25 +33,22 @@ const artifact = (image: ImageMetadata, title: string, caption: string, kind: st
 // review note (same ID), changed only for formatting. Captures use demo data.
 export const tallyDecisionHighlights = [
   {
-    entry: 'tally-jev-categorization',
+    entries: [{ entry: 'tally-jev-categorization' }, { entry: 'tally-merchant-names' }],
     headline: 'AI suggestions, with people in control',
-    decision: 'Jev suggests categories, and Workers AI suggests merchant names. Tally only applies a category at 80% confidence or higher, never over a person’s or rule’s choice, and shows the suggestion so a person can change it.',
-    relevance: 'Less sorting by hand, with every suggestion visible and editable.',
-    credit: 'Claude Code built the category suggestion flow.',
+    decision: 'Jev suggests categories, and Workers AI suggests names for bank text with no clean name. A person has the final say on both.',
+    relevance: 'Every suggestion stays visible and editable.',
   },
   {
-    entry: 'tally-design-system-catalog',
+    entries: [{ entry: 'tally-design-system-catalog' }],
     headline: 'Design reviewed on real components',
-    decision: 'I chose a catalog of Tally’s actual components and compared each design proposal beside the current version.',
+    decision: 'A catalog renders Tally’s real components with sample data. I wrote the design brief and decided six proposals beside today’s version.',
     relevance: 'Tests catch design-token drift, and each proposal has its own reversible PR.',
-    credit: 'Claude Code built the catalog and its tests.',
   },
   {
-    entry: 'tally-demo-environment',
+    entries: [{ entry: 'tally-demo-environment' }],
     headline: 'A public demo kept apart from real data',
-    decision: 'I chose a separate demo deployment, database, and fictional household. At my request, its nightly reset refuses to run if it finds bank credentials.',
+    decision: 'The demo runs the same code with its own database and only fictional data. At my request, its nightly reset refuses to run if it finds bank credentials.',
     relevance: 'People can try Tally without running it locally, while the reset guard protects the real app.',
-    credit: 'Claude Code built the setup and a test that pins those safety settings.',
   },
 ] as const;
 
@@ -177,5 +174,10 @@ export const tallyMilestones: Milestone[] = [
     title: 'Saving, and a shake: form feedback in Tally',
     summary: 'A design review of Tally found that its forms gave no sign a save was under way, nothing stopped a second tap from sending it twice, and an error didn’t draw the eye to the field. Now Save shows a ring and "Saving…" while it works and can’t be pressed again, and a field that comes back with an error shakes once, unless the device asks for reduced motion. Without JavaScript the forms still post normally. Codex built the shared Button and TextInput components and the busy state. I chose that Save stays full colour while saving, and Claude Code fixed two sheets where it still dimmed. Built and tested on demo data.',
     artifacts: [artifact(formFeedback, 'Tally · Form feedback', 'The catalog’s busy Save, disabled Save and a field with an error, on demo data from PR #105, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-merchant-names', day: '2026-10-06',
+    title: 'Names for bank text, chosen by a person',
+    summary: 'Tally’s rule is that the app helps and doesn’t decide. Some bank text comes without a clean store name, so Plaid’s merchant name comes first. When Plaid sends none, Workers AI suggests up to three names, and a person picks one, types their own, or turns the suggestions down. A name a person turns down is never suggested again. Each AI feature has its own switch in Settings. Built and tested.',
   },
 ];
