@@ -1,7 +1,7 @@
 // Fictional client journey and owner readback at both widths.
 export default {
   title: 'Software brief journey',
-  async run({ capture, sql }) {
+  async run({ base, capture, sql }) {
     sql(`INSERT OR IGNORE INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,private_note,created_at,updated_at,submission_id)
       VALUES ('screenshot-software','software','workflow','Alex Example','alex@example.com','One place to see what each client needs next.',
       '{"path":"workflow","today":"We track onboarding in spreadsheets.\\nWe chase updates by email.","audience":"Our client team","firstResult":"One place to see what each client needs next.","company":"Example Studio","timing":"flexible","timingReason":"","budgetStatus":"exploring","budgetNote":"","approver":"self","approverRole":"","clientCopyStatus":"sent"}',
@@ -122,7 +122,7 @@ export default {
       for (const question of [1, 2]) steps.push({ title: `Idea question ${question + 1}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-idea-${question + 1}-${viewport}.png`, path: '/software/start', viewport, prepare: page => prepare(page, question, 'idea') }), caption: 'Fictional idea brief' }] });
       steps.push({ title: `Autocomplete, ${viewport}`, images: [{ file: await capture({ file: `software-brief-suggestion-${viewport}.png`, path: '/software/start', viewport, prepare: page => prepare(page, 1, 'workflow', true) }), caption: viewport === 'phone' ? 'Ghost text inside the box with Tap to accept' : 'Ghost text inside the box with Tab to accept' }] });
       for (const state of ['sending', 'send-failed']) {
-        steps.push({ title: `Brief ${state}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-${state}-${viewport}.png`, path: '/software/start', viewport, prepare: async page => {
+        steps.push({ title: `Brief ${state}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-${state}-${viewport}.png`, path: '/software/start', viewport, expectedResourceErrors: state === 'send-failed' ? [{ url: new URL('/api/software-inquiry', base).href, status: 503 }] : [], prepare: async page => {
           await page.route('**/api/software-inquiry', route => state === 'sending' ? new Promise(() => {}) : route.fulfill({ status: 503, json: { ok: false, error: 'Try again.' } }));
           await prepare(page, 6, 'workflow', false, async () => {
             await page.waitForFunction(() => !!document.querySelector('[name=cf-turnstile-response]')?.value);

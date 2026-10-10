@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  missingScenarioRoutes, NOT_PAGES, PAGES, parseJsonc, PREVIEW_OVERRIDES, previewWrangler, REDIRECTS, SCENARIO_PAGES,
+  expectedResourceError, missingScenarioRoutes, NOT_PAGES, PAGES, parseJsonc, PREVIEW_OVERRIDES, previewWrangler, REDIRECTS, SCENARIO_PAGES,
   relevantScreenshots, sanitizeManifest, screenshotSection, withScreenshots,
 } from '../../scripts/screenshots/config.mjs';
 
@@ -251,7 +251,7 @@ it('serves a scenario-local Turnstile API for silent and receipt widgets', async
     createElement: () => ({ remove: vi.fn() }), querySelectorAll: () => [receipt],
     currentScript: { src: 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=loaded' },
   };
-  await scenario.default.run({ sql() {}, capture: async ({ file, prepare }: any) => {
+  await scenario.default.run({ base: 'http://127.0.0.1:4321', sql() {}, capture: async ({ file, prepare }: any) => {
     if (file !== 'software-brief-suggestion-phone.png') return file;
     await prepare({
       on() {}, route: async (path: string, handler: any) => { routes.set(path, handler); },
@@ -289,7 +289,7 @@ it.each(['reload', 'API wait', 'ghost wait'])('prints %s failure diagnostics and
   const failure = new Error('ghost text hidden'), log = vi.spyOn(console, 'error').mockImplementation(() => {});
   const request = { url: () => 'http://127.0.0.1:4321/api/software/brief/pass', method: () => 'POST' };
   try {
-    await expect(scenario.default.run({ sql() {}, capture: async ({ file, prepare }: any) => {
+    await expect(scenario.default.run({ base: 'http://127.0.0.1:4321', sql() {}, capture: async ({ file, prepare }: any) => {
       if (file !== 'software-brief-suggestion-phone.png') return file;
       await prepare({
         route: async () => {}, addInitScript: async () => {}, reload: async () => { if (stage === 'reload') throw failure; }, waitForFunction: async () => { if (stage === 'API wait') throw failure; },
@@ -313,7 +313,7 @@ it.each(['reload', 'API wait', 'ghost wait'])('prints %s failure diagnostics and
 it.each(['desktop', 'phone'])('captures the ghost text with the %s input hint', async viewport => {
   const scenario = await import('../../scripts/screenshots/scenarios/software-brief.mjs');
   const dispatchEvent = vi.fn(), waits: string[] = [];
-  await scenario.default.run({ sql() {}, capture: async ({ file, prepare }: any) => {
+  await scenario.default.run({ base: 'http://127.0.0.1:4321', sql() {}, capture: async ({ file, prepare }: any) => {
     if (file !== `software-brief-suggestion-${viewport}.png`) return file;
     await prepare({
       on() {}, route: async () => {}, addInitScript: async () => {}, reload: async () => {}, waitForFunction: async () => {},
@@ -323,4 +323,34 @@ it.each(['desktop', 'phone'])('captures the ghost text with the %s input hint', 
   } });
   expect(dispatchEvent).toHaveBeenCalledWith('pointerdown', { pointerType: viewport === 'phone' ? 'touch' : 'mouse' });
   expect(waits).toEqual(['[data-step="1"] [data-ghost-text]']);
+});
+
+
+it('allows only the exact declared failed resource URL and status', () => {
+  const url = 'http://127.0.0.1:4321/api/software-inquiry';
+  const message = (resource: string, text: string) => ({ location: () => ({ url: resource }), text: () => text });
+  const failed = (status: number) => `Failed to load resource: the server responded with a status of ${status} (Service Unavailable)`;
+  const allowed = [{ url, status: 503 }];
+  expect(expectedResourceError(message(url, failed(503)), allowed)).toBe(true);
+  expect(expectedResourceError(message(url, failed(503)), [])).toBe(false);
+  for (const resource of [url + '?other=1', url + '/other', 'https://other.example/api/software-inquiry']) {
+    expect(expectedResourceError(message(resource, failed(503)), allowed)).toBe(false);
+  }
+  expect(expectedResourceError(message(url, failed(500)), allowed)).toBe(false);
+  expect(expectedResourceError(message(url, 'Unexpected application error'), allowed)).toBe(false);
+  expect(expectedResourceError(message(url, failed(503) + ' extra'), allowed)).toBe(false);
+  expect(expectedResourceError(message(url, failed(200)), [{ url, status: 200 }])).toBe(false);
+});
+
+it('declares the mocked 503 only for send-failed captures at both widths', async () => {
+  const scenario = await import('../../scripts/screenshots/scenarios/software-brief.mjs');
+  const allowances: string[] = [];
+  await scenario.default.run({ base: 'http://127.0.0.1:4321', sql() {}, capture: async ({ file, expectedResourceErrors = [] }: any) => {
+    if (expectedResourceErrors.length) {
+      allowances.push(file);
+      expect(expectedResourceErrors).toEqual([{ url: 'http://127.0.0.1:4321/api/software-inquiry', status: 503 }]);
+    }
+    return file;
+  } });
+  expect(allowances).toEqual(['software-brief-send-failed-desktop.png', 'software-brief-send-failed-phone.png']);
 });

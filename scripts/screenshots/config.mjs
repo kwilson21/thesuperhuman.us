@@ -337,3 +337,9 @@ export function screenshotSection(manifest, rawBase, sha) {
   lines.push(END);
   return lines.join('\n');
 }
+
+/** Chromium's failed-resource console message must match both the URL and status. */
+export function expectedResourceError(message, resources) {
+  return resources.some(({ url, status }) => status !== 200 && message.location().url === url
+    && new RegExp(`^Failed to load resource: the server responded with a status of ${status} \\([A-Za-z ]*\\)$`).test(message.text()));
+}
