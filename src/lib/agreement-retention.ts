@@ -13,8 +13,10 @@ export type RetentionManifest = {
     objects: { key: string; sha256: string }[];
   }[];
   unattached_attachments: { id: string; key: string; sha256: string; created_at: string }[];
+  orphan_scan_cursor?: string | null;
   orphan_attachments: { key: string; sha256: string; uploaded_at: string }[];
 };
+const orphanCursorKey = 'agreements/retention/attachment-cursor.json';
 // A referenced record stays retained. Later owner reviews can include it once every dependent record is retired.
 const eligible = `a.status IN ('executed','abandoned') AND a.ended_at IS NOT NULL AND a.retain_until IS NOT NULL AND a.retain_until<=? AND a.legal_hold=0
  AND NOT EXISTS(SELECT 1 FROM software_agreement_artifacts f WHERE f.agreement_id=a.id AND f.status='rendering')
@@ -33,6 +35,7 @@ export async function previewAgreementRetention(
   bucket: R2Bucket,
   binding: string,
   now = new Date(),
+  scan?: { cursor: string | null },
 ): Promise<RetentionManifest> {
   const rows = (
     await db
@@ -99,8 +102,29 @@ export async function previewAgreementRetention(
   // are excluded here and checked again immediately before deletion.
   const orphan_attachments: RetentionManifest['orphan_attachments'] = [];
   const orphanCutoff = new Date(now.getTime() - 30 * 86400000);
+  let orphanScanCursor = scan?.cursor ?? null;
+  if (!scan) {
+    const marker = await bucket.get(orphanCursorKey);
+    if (marker) {
+      try {
+        const saved = JSON.parse(new TextDecoder().decode(await marker.arrayBuffer()));
+        if (saved.version === 1 && typeof saved.cursor === 'string' && saved.cursor.length > 0 && saved.cursor.length <= 4096)
+          orphanScanCursor = saved.cursor;
+      } catch {
+        // An unreadable marker restarts the bounded scan.
+      }
+    }
+  }
   {
-    const listed = await bucket.list({ prefix: 'agreements/attachments/', limit: 100 });
+    let listed: R2Objects;
+    try {
+      listed = await bucket.list({ prefix: 'agreements/attachments/', limit: 100, cursor: orphanScanCursor ?? undefined });
+    } catch (error) {
+      if (!orphanScanCursor || scan) throw error;
+      // R2 can reject a damaged or expired opaque cursor. Restart at the first page.
+      orphanScanCursor = null;
+      listed = await bucket.list({ prefix: 'agreements/attachments/', limit: 100 });
+    }
     for (const object of listed.objects) {
       if (orphan_attachments.length >= 100) break;
       const uploaded = object.uploaded;
@@ -119,10 +143,10 @@ export async function previewAgreementRetention(
         uploaded_at: uploaded.toISOString(),
       });
     }
-    // shortcut: inspect one bounded page per preview; add a persisted cursor if the archive needs complete orphan discovery.
+    if (!scan) await bucket.put(orphanCursorKey, JSON.stringify({ version: 1, cursor: listed.truncated ? listed.cursor : null }));
   }
   orphan_attachments.sort((a, b) => a.key.localeCompare(b.key));
-  return { version: 1, created_at: now.toISOString(), binding, agreements, unattached_attachments, orphan_attachments };
+  return { version: 1, created_at: now.toISOString(), binding, agreements, unattached_attachments, orphan_attachments, orphan_scan_cursor: orphanScanCursor };
 }
 export async function applyAgreementRetention(
   db: D1Database,
@@ -133,6 +157,7 @@ export async function applyAgreementRetention(
 ) {
   const age = now.getTime() - Date.parse(manifest.created_at);
   if (
+    (manifest.orphan_scan_cursor != null && (typeof manifest.orphan_scan_cursor !== 'string' || manifest.orphan_scan_cursor.length === 0 || manifest.orphan_scan_cursor.length > 4096)) ||
     manifest.version !== 1 ||
     manifest.binding !== binding ||
     !Number.isFinite(age) ||
@@ -141,7 +166,7 @@ export async function applyAgreementRetention(
     manifest.agreements.length > 20 || !Array.isArray(manifest.unattached_attachments) || manifest.unattached_attachments.length > 100 || (manifest.orphan_attachments !== undefined && (!Array.isArray(manifest.orphan_attachments) || manifest.orphan_attachments.length > 100))
   )
     throw new Error('Review is stale or belongs to different storage.');
-  const fresh = await previewAgreementRetention(db, bucket, binding, now);
+  const fresh = await previewAgreementRetention(db, bucket, binding, now, { cursor: manifest.orphan_scan_cursor ?? null });
   if (canonicalJson(fresh.agreements) !== canonicalJson(manifest.agreements) || canonicalJson(fresh.unattached_attachments) !== canonicalJson(manifest.unattached_attachments) || canonicalJson(fresh.orphan_attachments) !== canonicalJson(manifest.orphan_attachments ?? []))
     throw new Error('Archive changed. Preview again.');
   const manifestHash = await hashOfferToken(canonicalJson(manifest));

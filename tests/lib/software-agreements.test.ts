@@ -164,10 +164,17 @@ beforeEach(async () => {
       bucketUploaded.set(k, new Date());
       return bucketData.set(k, typeof v === 'string' ? new TextEncoder().encode(v) : v);
     }),
-    list: vi.fn(async ({ prefix }: { prefix: string }) => ({
-      objects: [...bucketData.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key, uploaded: bucketUploaded.get(key) ?? new Date(0) })),
-      truncated: false,
-    })),
+    list: vi.fn(async ({ prefix, cursor, limit = 1000 }: { prefix: string; cursor?: string; limit?: number }) => {
+      const keys = [...bucketData.keys()].filter(k => k.startsWith(prefix)).sort();
+      if (cursor && !cursor.startsWith('after:')) throw new Error('Invalid cursor');
+      const remaining = keys.filter(key => !cursor || key > cursor.slice(6));
+      const page = remaining.slice(0, limit);
+      return {
+        objects: page.map(key => ({ key, uploaded: bucketUploaded.get(key) ?? new Date(0) })),
+        truncated: remaining.length > limit,
+        cursor: remaining.length > limit ? `after:${page.at(-1)}` : undefined,
+      };
+    }),
     delete: vi.fn(async (k: string) => {
       bucketUploaded.delete(k);
       return bucketData.delete(k);
@@ -1706,4 +1713,39 @@ it.each(['agreement','archive'])('GET leaves %s links reusable until POST, which
   expect(response.status).toBe(303);expect(response.headers.get('location')).toBe(purpose==='agreement'?`/offer/${token}/sign`:'/agreements');
   expect(sql.prepare('SELECT count(*) n FROM software_agreement_sessions').get().n).toBe(sessions+1);
   for(const method of ['GET','POST'])expect((await completeAgreementLink(env,new Request('https://example.com',{method}),key,offerToken)).status).toBe(401);
+});
+
+
+it('covers later orphan pages, wraps, and applies the reviewed page after another preview', async () => {
+  const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
+  const now = new Date('2026-10-01T12:00:00Z');
+  for (let i = 0; i < 101; i++) {
+    const key = `agreements/attachments/kept-${String(i).padStart(3, '0')}.pdf`;
+    bucketData.set(key, new Uint8Array([1]));
+    bucketUploaded.set(key, now);
+  }
+  const key = 'agreements/attachments/z-orphan.pdf';
+  bucketData.set(key, new Uint8Array([2]));
+  const first = await previewAgreementRetention(db, env.AUDIO, 'test-storage', now);
+  expect(first.orphan_scan_cursor).toBeNull();
+  expect(first.orphan_attachments).toEqual([]);
+  const second = await previewAgreementRetention(db, env.AUDIO, 'test-storage', now);
+  expect(second.orphan_attachments.map(item => item.key)).toEqual([key]);
+  const wrapped = await previewAgreementRetention(db, env.AUDIO, 'test-storage', now);
+  expect(wrapped.orphan_scan_cursor).toBeNull();
+  expect(wrapped.orphan_attachments).toEqual([]);
+  await applyAgreementRetention(db, env.AUDIO, 'test-storage', second, now);
+  expect(bucketData.has(key)).toBe(false);
+  const next = await previewAgreementRetention(db, env.AUDIO, 'test-storage', now);
+  expect(next.orphan_scan_cursor).toBe(second.orphan_scan_cursor);
+});
+
+it.each(['not json', JSON.stringify({ version: 1, cursor: 42 }), JSON.stringify({ version: 1, cursor: 'damaged' })])('restarts a corrupted orphan cursor (%s)', async marker => {
+  const { previewAgreementRetention } = await import('~/lib/agreement-retention');
+  bucketData.set('agreements/retention/attachment-cursor.json', new TextEncoder().encode(marker));
+  const key = 'agreements/attachments/orphan.pdf';
+  bucketData.set(key, new Uint8Array([2]));
+  const manifest = await previewAgreementRetention(db, env.AUDIO, 'test-storage');
+  expect(manifest.orphan_scan_cursor).toBeNull();
+  expect(manifest.orphan_attachments.map(item => item.key)).toEqual([key]);
 });
