@@ -118,7 +118,7 @@ it('caps a concurrent burst before invoking AI or daily counters', async () => {
   expect(new Set(limiter.limit.mock.calls.map(([options]) => options.key)).size).toBe(1);
 
 });
-it.each([1, 2, 3])('fails closed when D1 statement %s fails', async failedStatement => {
+it.each([1, 2])('fails closed when D1 reservation %s fails', async failedStatement => {
   const prepare = database.prepare.getMockImplementation();
   let count = 0;
   database.prepare.mockImplementation((sql: string) => {
@@ -128,10 +128,38 @@ it.each([1, 2, 3])('fails closed when D1 statement %s fails', async failedStatem
   expect(await (await POST(context())).json()).toEqual({ suggestion: '' });
   expect(run).not.toHaveBeenCalled();
 });
-it('fails closed when cleanup returns an unsuccessful D1 result', async () => {
-  database.prepare.mockReturnValueOnce({ bind: () => ({ run: async () => ({ success: false }) }) });
-  expect(await (await POST(context())).json()).toEqual({ suggestion: '' });
-  expect(run).not.toHaveBeenCalled();
+it('cleans once per UTC day after the first site reservation, never on capped requests', async () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-10T12:00:00Z'));
+  cookie = `__Secure-brief-suggestion-pass=${await createSuggestionPass(secret, 'test')}`;
+  const cleanupCalls = () => database.prepare.mock.calls.filter(([sql]: [string]) => sql.startsWith('DELETE'));
+  await Promise.all([POST(context()), POST(context())]);
+  expect(cleanupCalls()).toHaveLength(1);
+  expect(database.prepare.mock.calls.slice(0, 2).every(([sql]: [string]) => sql.startsWith('INSERT'))).toBe(true);
+  db.prepare("UPDATE brief_suggestion_budget SET count=10000 WHERE scope='site'").run();
+  await POST(context());
+  db.prepare("UPDATE brief_suggestion_budget SET count=300 WHERE scope!='site'").run();
+  await POST(context());
+  expect(cleanupCalls()).toHaveLength(1);
+  vi.setSystemTime(new Date('2026-10-11T12:00:00Z'));
+  cookie = `__Secure-brief-suggestion-pass=${await createSuggestionPass(secret, 'test')}`;
+  await POST(context()); await POST(context());
+  expect(cleanupCalls()).toHaveLength(2);
+});
+it.each(['pending', 'rejected', 'unsuccessful', 'throws'])('does not delay or suppress suggestions when cleanup is %s', async failure => {
+  const prepare = database.prepare.getMockImplementation();
+  let finish!: () => void;
+  const pending = new Promise(resolve => { finish = () => resolve({ success: true }); });
+  database.prepare.mockImplementation((sql: string) => {
+    if (!sql.startsWith('DELETE')) return prepare(sql);
+    if (failure === 'throws') throw new Error('unavailable');
+    return { bind: () => ({ run: () => failure === 'pending' ? pending : failure === 'rejected' ? Promise.reject(new Error('unavailable')) : Promise.resolve({ success: false }) }) };
+  });
+  const ctx = context();
+  const waitUntil = vi.fn(); ctx.locals.runtime.ctx = { waitUntil };
+  expect(await (await POST(ctx)).json()).toEqual({ suggestion: ' in a shared spreadsheet' });
+  expect(waitUntil).toHaveBeenCalledOnce();
+  finish();
+  await expect(waitUntil.mock.calls[0][0]).resolves.toBeUndefined();
 });
 it('fails closed when the minute binding throws', async () => {
   limiter.limit.mockRejectedValueOnce(new Error('unavailable'));

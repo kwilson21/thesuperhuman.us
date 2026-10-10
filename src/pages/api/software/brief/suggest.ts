@@ -28,16 +28,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (!await validSuggestionPass(pass, env.TURNSTILE_SECRET_KEY, ip)) return Response.json({ suggestion: '', passRequired: true }, { headers: { 'cache-control': 'no-store' } });
     const hash = await suggestionVisitorHash(ip, now);
     if (!(await env.BRIEF_SUGGEST_RATE_LIMIT.limit({ key: hash })).success || !(await env.BRIEF_SUGGEST_SITE_LIMIT.limit({ key: 'site' })).success) return empty();
-    // Bound opportunistic cleanup to one batch per eligible request.
-    const cleanup = await env.MUSIC_DB.prepare(`DELETE FROM brief_suggestion_budget WHERE rowid IN (
-      SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000
-    )`).bind(previousDay).run();
-    if (!cleanup.success) return empty();
     for (const [scope, cap] of [[hash, 300], ['site', 10000]] as const) {
       const reserved = await env.MUSIC_DB.prepare(`INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)
         ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count`)
         .bind(day, scope, cap).first<{ count: number }>();
       if (!reserved) return empty();
+      if (scope === 'site' && reserved.count === 1) {
+        const db = env.MUSIC_DB;
+        const cleanup = Promise.resolve().then(() => db.prepare(`DELETE FROM brief_suggestion_budget WHERE rowid IN (
+          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000
+        )`).bind(previousDay).run()).then(() => {}).catch(() => {});
+        locals.runtime?.ctx?.waitUntil(cleanup);
+      }
     }
     const result = await Promise.race([
       env.AI.run('@cf/meta/llama-3.2-1b-instruct', { messages: [
