@@ -35,7 +35,7 @@ const acceptedDeliveries=updates.filter(update=>update.kind==='delivery_review' 
 const reviews=updates.filter(update=>update.kind?.endsWith('_review') && update.status==='shared');
 const undecidedReviews=reviews.filter(update=>!update.decision);
 const review=undecidedReviews.find(update=>update.milestone_index===currentMilestone && update.kind==='delivery_review') ?? undecidedReviews.find(update=>update.milestone_index===currentMilestone);
-const railReviews=review ? [review,...undecidedReviews.filter(update=>update.id!==review.id)] : [];
+const railReviews=undecidedReviews.slice().reverse();
 const accepted=acceptedDeliveries.find(update=>update.milestone_index===currentMilestone);
 const handoffs=updates.filter((update,index)=>update.kind==='handoff' && update.status==='shared'
   && updates.findIndex(item=>item.kind==='handoff' && item.status==='shared' && item.milestone_index===update.milestone_index)===index

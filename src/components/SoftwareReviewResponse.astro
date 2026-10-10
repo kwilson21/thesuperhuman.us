@@ -8,7 +8,7 @@ const direction=update.kind==='direction_review';
 const decisionBody=softwareClientRevisionBody(update.decision_body,checks,deliverables);
 ---
 <section class="software-review">
-  <h2>{direction ? 'Does this match how you work?' : 'Try these'}</h2>
+  <h2>{update.decision ? 'Your decision' : direction ? 'Does this match how you work?' : 'Try these'}</h2>
   {update.decision ? <>
     <p>{update.decision==='direction_confirmed' ? `You confirmed this direction on ${softwareDate(update.decided_at!)}.` : update.decision==='milestone_accepted' ? `You accepted ${version} on ${softwareDate(update.decided_at!)}.` : `You asked for changes on ${softwareDate(update.decided_at!)}. I’ll reply here.`}</p>
     {update.decision==='changes_requested' && <p>{decisionBody}</p>}
