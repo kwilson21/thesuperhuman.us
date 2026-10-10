@@ -5,8 +5,8 @@ Repository: `kwilson21/thesuperhuman.us`
 Pull request: [#170](https://github.com/kwilson21/thesuperhuman.us/pull/170)  
 Code revision: `f9b582d470713ac10e0809c8494ff603878d013c` (this record is committed on top of it)  
 Target: production `https://thesuperhuman.us` (`/software/start`, `POST /api/software-inquiry`, owner request detail and `POST /api/owner/requests/[id]/brief-copy`), existing Resend delivery and production `MUSIC_DB`  
-Reviewer and deployment authorization: Kazon Wilson. B2 decisions: "2. A" / "3. A" on the decision images (owner, in conversation, 2026-10-09). These decisions are recorded as supplied by the owner; this documentation job does not authorize deployment.  
-Look approval: pending  
+Reviewer and deployment authorization: Kazon Wilson. B2 decisions: "2. A" / "3. A" on the decision images (owner, in conversation, 2026-10-09). The owner approved the look with "sure" (in conversation, 2026-10-10), authorizing deployment by merging PR #170 to `main`, subject to the remaining review, CI and deployment gates below. Merging to `main` deploys production.  
+Look approval: "sure" (owner, in conversation, 2026-10-10), after reviewing the CI screenshots at f9b582d4 beside decision image B2 option A.  
 Scope: the client's emailed brief copy; personalized receipt with delivery copy card and next steps; owner copy status and guarded retry; answered fields only; screenshot coverage for sent, failed, uncertain and unattempted states  
 Rollback revision: `ec7fdd592226f8f7f0e46469f6694f7eb289fe25` (current local `origin/main` HEAD at inspection). No migration in this PR. Delivery status and attempt time use the existing request `details_json`; no schema or data migration is required.
 
@@ -16,8 +16,8 @@ Evidence: inspected the branch diff against `origin/main` and the private B2 imp
 
 ## 1. Purpose and content
 
-- **PASS · Scope and instructions (checklist 1.1).** Confirmed branch `codex/brief-emailed-copy` and code revision above; read repository guidance and prior release records. Docs only; no deployment authorized.
-- **PASS · Approved wording (checklist 1.2).** Receipt and email retain "within two business days" and the fixed-price next step. Rendered tests cover the three next steps, removal of Print or save and Not provided, and booking reassurance once on the send step. Copy check passed. No media added. Final look approval remains pending.
+- **PASS · Scope and instructions (checklist 1.1).** Confirmed branch `codex/brief-emailed-copy` and code revision above; read repository guidance and prior release records. Docs only; owner deployment authorization is recorded above, subject to the remaining gates.
+- **PASS · Approved wording (checklist 1.2).** Receipt and email retain "within two business days" and the fixed-price next step. Rendered tests cover the three next steps, removal of Print or save and Not provided, and booking reassurance once on the send step. Copy check passed. No media added. Owner look approval is recorded above.
 - **PASS · Receipt next step (checklist 1.3).** CI screenshots show personalized thanks, a copy card before the numbered steps, and Back to Software at desktop and phone widths in all four states. CTA interaction and the earlier form journey were not re-exercised locally.
 - **UNVERIFIED · Navigation and external links (checklist 1.4).** Navigation, footer and escape links are visible in receipt captures; destination behavior was not exercised.
 
@@ -75,7 +75,7 @@ Evidence: inspected the branch diff against `origin/main` and the private B2 imp
 - **UNVERIFIED · Production configuration (checklist 7.3).** No target bindings, sender configuration, secrets, HTTPS, routing, caching or headers verified. No migration in this PR.
 - **UNVERIFIED · Rollback and backup (checklist 7.4).** Exact local `origin/main` rollback revision recorded above. No migration backup required by this PR. Previous-version redeployment and review/authorization gates remain unchecked. Rollback cannot recall an email already sent.
 - **UNVERIFIED · Post-deployment production (checklist 7.5).** Not deployed in this job. Verify the deployed revision, brief submission, recipient copy and reply routing, owner status/retry and supported-host behavior after authorized deployment.
-- **PASS · Local receipt (checklist 7.6).** This record separates implementation, local checks and CI screenshot review from deployment and live verification. Reopen after material changes or look approval.
+- **PASS · Local receipt (checklist 7.6).** This record separates implementation, local checks and CI screenshot review from deployment and live verification. Owner look approval is recorded above; reopen after material changes.
 
 ## 8. Private owner center
 
@@ -95,4 +95,4 @@ Evidence: inspected the branch diff against `origin/main` and the private B2 imp
 - **UNVERIFIED · Recovery procedures (checklist 8.14).** No previous-version or data-recovery exercise performed; local copy-retry checks do not establish target recovery.
 - **UNVERIFIED · Target health (checklist 8.15).** No remote `owner:health` run. Target health remains a deployment gate.
 
-Remaining work: owner look approval; current-head independent review and green required CI; target delivery and reply verification; applicable accessibility, responsive, configuration, privacy, recovery and health checks above; deployment authorization followed by live verification. This record does not claim launch readiness.
+Remaining work: current-head independent review and green required CI; target delivery and reply verification; applicable accessibility, responsive, configuration, privacy, recovery and health checks above; authorized deployment after the remaining gates, followed by live verification. This record does not claim launch readiness.
