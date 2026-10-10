@@ -11,7 +11,7 @@ function makeContext(url: string, hostHeader?: string) {
   return {
     url: u,
     request: new Request(url, { headers }),
-    locals: { runtime: { env: {} } },
+    locals: { runtime: { env: { SITE_ORIGIN: "https://thesuperhuman.us" } } },
     rewrite: vi.fn(async (target: string | URL) => {
       const rewritten = typeof target === 'string' ? new URL(target, u) : target;
       return new Response('rewritten:' + rewritten.pathname, { status: 200 });
@@ -191,4 +191,12 @@ it.each(['/studio/software/example','/api/studio/software/example/updates/update
 it('keeps archive one-time link landing private and uncacheable',async()=>{
  const response=await onRequest(makeContext('https://thesuperhuman.us/agreements/verify?key=synthetic'),async()=>new Response('expired')) as Response;
  expect(response.headers.get('cache-control')).toBe('private, no-store');expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+});
+
+it.each(['/api/agreements/link','/api/agreements/packet/file','/api/offer/token/link','/api/offer/token/sign'])('refuses noncanonical hosts before agreement handlers for %s',async path=>{
+  for (const [origin,host] of [['https://preview.example',undefined],['https://thesuperhuman.us','foreign.example']] as const) {
+    const ctx=makeContext(origin+path,host),next=vi.fn();
+    expect(((await onRequest(ctx,next)) as Response).status).toBe(404);
+    expect(next).not.toHaveBeenCalled();
+  }
 });

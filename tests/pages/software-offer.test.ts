@@ -428,7 +428,9 @@ it('renders one signing page, returning details, waiting and both-signed actions
     sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES ('sow','sow','current','r','client','msa','review','Exact SOW',?,?,'now','2026-09-30',?)").run('a'.repeat(64), JSON.stringify(values), sessionHash);
     html = await render('?review=1');
     expect(html).toContain('Ready to sign.');expect(html).toContain('Exact SOW');
+    expect(html).toMatch(/id="consent-updated"[^>]*hidden[^>]*>The documents were updated. Please tick the box again./);
     expect(html).not.toContain('SHA-256');expect(html.match(/type="checkbox"/g)).toHaveLength(1);
+    expect(html).toMatch(/name="documents"[^>]*value="\[\]"/);
     sql.exec("UPDATE software_agreements SET status='client_signed'");
     html = await render();
     expect(html).toContain('Signed. Over to Kazon.');
@@ -512,6 +514,11 @@ it('reads immutable agreed fees, dates and complete legal text without enabling 
     expect(html).toContain('$1.01 fixed fee');expect(html).toContain('50% of each milestone before it starts');
     expect(html).toContain('signed outside the website');expect(html).toContain('Milestone delivery dates are not recorded');
     expect(html).not.toContain('Download complete signed agreement packet');
+    sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='current'").run(JSON.stringify(owner));
+    html=await render();
+    for (const text of ['Planned Oct 1, 2026 to Oct 20, 2026','Target delivery: Oct 19, 2026','Synthetic browser environment','Client operates the delivered tool.','Source and notices','Status is saved. Synthetic preview','5 business days','30 calendar days']) expect(html).toContain(text);
+    expect(html).toContain('signed outside the website');
+    expect(html).not.toContain('Download complete signed agreement packet');
     sql.prepare("INSERT INTO software_agreement_clients VALUES ('party','alex@example.com','Example Client LLC','example','LLC','WY','Example address','alex@example.com','now')").run();
     for (const kind of ['msa','sow']) {
       sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES (?,?,1,'Synthetic template',?,'now','PRIVATE TEMPLATE ACTOR')").run(kind,kind,hash);
@@ -588,7 +595,7 @@ it('renders scanner-safe agreement and archive landings with exact copy', async(
     const container=await AstroContainer.create();
     for(const archive of [false,true]) {
       sql.prepare("INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES(?,?,?,?,?,?,?,?)").run(archive?'archive':'agreement',archive?'archive':'agreement',archive?null:'current',archive?null:await hashOfferToken(token),'alex@example.com',await hashOfferToken(key),'now','2099-01-01');
-      const response=await container.renderToResponse(archive?archiveLanding:linkLanding,{params:{token},request:new Request(`https://thesuperhuman.us/${archive?'agreements':`offer/${token}`}/verify?key=${key}`),locals:{runtime:{env:{MUSIC_DB:db}}}} as any);
+      const response=await container.renderToResponse(archive?archiveLanding:linkLanding,{params:{token},request:new Request(`https://thesuperhuman.us/${archive?'agreements':`offer/${token}`}/verify?key=${key}`),locals:{runtime:{env:{MUSIC_DB:db,SITE_ORIGIN:"https://thesuperhuman.us"}}}} as any);
       const html=await response.text();
       expect(response.status).toBe(200);expect(response.headers.get('referrer-policy')).toBe('no-referrer');expect(response.headers.get('cache-control')).toBe('no-store');
       expect(html).toContain(archive?'Your documents are ready.':'Your agreement is ready.');
@@ -597,7 +604,7 @@ it('renders scanner-safe agreement and archive landings with exact copy', async(
       if(!archive)expect(html).toContain('Current offer');
       expect(sql.prepare('SELECT used_at FROM software_agreement_links WHERE id=?').get(archive?'archive':'agreement').used_at).toBeNull();
       sql.exec('DELETE FROM software_agreement_links');
-      const expired=await container.renderToString(archive?archiveLanding:linkLanding,{params:{token},request:new Request(`https://thesuperhuman.us/${archive?'agreements':`offer/${token}`}/verify?key=${key}`),locals:{runtime:{env:{MUSIC_DB:db}}}} as any);
+      const expired=await container.renderToString(archive?archiveLanding:linkLanding,{params:{token},request:new Request(`https://thesuperhuman.us/${archive?'agreements':`offer/${token}`}/verify?key=${key}`),locals:{runtime:{env:{MUSIC_DB:db,SITE_ORIGIN:"https://thesuperhuman.us"}}}} as any);
       expect(expired).toMatch(/class="page-lede"[^>]*>Links work once and last an hour\.<\/p>/);
       expect(expired).toMatch(/class="agreement-form"/);
     }

@@ -19,6 +19,13 @@ export const agreementHeaders = {
 };
 export const agreementJson = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: agreementHeaders });
+export function canonicalAgreementRequest(env: Env, request: Request) {
+  try {
+    const canonical = new URL(env.SITE_ORIGIN!);
+    const url = new URL(request.url);
+    return url.origin === canonical.origin && (!request.headers.has('host') || request.headers.get('host')?.toLowerCase() === canonical.host);
+  } catch { return false; }
+}
 export async function cleanupAgreementAccess(db: D1Database) {
   const before = new Date(Date.now() - 30 * 86400000).toISOString();
   // Successful verification evidence lives in immutable signatures, independently of these short-lived rows.
@@ -98,6 +105,7 @@ export async function issueAgreementLink(
   input: { turnstileToken: string; email?: string },
   token?: string,
 ) {
+  if (!canonicalAgreementRequest(env, request)) return agreementJson({ ok: false }, 404);
   const db = env.MUSIC_DB,
     purpose = token ? "agreement" : "archive";
   if (
@@ -226,7 +234,7 @@ export async function issueAgreementLink(
   }
   const url = new URL(
     token ? `/offer/${token}/verify` : "/agreements/verify",
-    request.url,
+    env.SITE_ORIGIN!,
   );
   url.searchParams.set("key", key);
   const brief = offer
@@ -234,12 +242,13 @@ export async function issueAgreementLink(
         .prepare("SELECT name FROM owner_requests WHERE id=?")
         .bind(offer.request_id)
         .first<{ name: string }>()
-    : null;
+    : await db.prepare("SELECT sig.typed_name AS name FROM software_agreement_signatures sig JOIN software_agreements a ON a.id=sig.agreement_id JOIN software_agreement_clients c ON c.id=a.client_id WHERE c.recipient_email=? AND sig.party='client' AND a.status='executed' ORDER BY sig.signed_at DESC LIMIT 1").bind(email).first<{ name: string }>();
   const project = offer
     ? JSON.parse(offer.terms_json).outcome
     : "your retained agreements";
   const greeting = `Hi ${brief?.name?.trim().split(/\s+/)[0] || "there"},`;
-  const intro = `Tap below to review and sign the agreement for ${project}.`;
+  const intro = token ? `Tap below to review and sign the agreement for ${project}.` : "Tap below to open your signed agreement documents.";
+  const action = token ? "Review and sign" : "Open your documents";
   const expiry =
     "This link works once and expires in an hour. If you didn't ask for it, you can ignore this email.";
   const sent = await sendAudioMessage({
@@ -247,9 +256,9 @@ export async function issueAgreementLink(
     payload: {
       from: env.CONTACT_FROM_EMAIL,
       to: [email],
-      subject: "Open your agreement",
-      text: `${greeting}\n\n${intro}\n\nReview and sign: ${url.href}\n\n${expiry}\n\nKazon`,
-      html: `<p>${escapeHtml(greeting)}</p><p>${escapeHtml(intro)}</p><p><a href="${escapeHtml(url.href)}">Review and sign</a></p><p>${escapeHtml(expiry)}</p><p>Kazon</p>`,
+      subject: token ? "Open your agreement" : "Your signed documents",
+      text: `${greeting}\n\n${intro}\n\n${action}: ${url.href}\n\n${expiry}\n\nKazon`,
+      html: `<p>${escapeHtml(greeting)}</p><p>${escapeHtml(intro)}</p><p><a href="${escapeHtml(url.href)}">${action}</a></p><p>${escapeHtml(expiry)}</p><p>Kazon</p>`,
     },
   });
   if (!sent.ok && !sent.uncertain) {
@@ -282,6 +291,7 @@ export async function completeAgreementLink(
   key: string,
   token?: string,
 ) {
+  if (!canonicalAgreementRequest(env, request)) return agreementJson({ ok: false }, 404);
   const db = env.MUSIC_DB,
     purpose = token ? "agreement" : "archive";
   const expired = () =>

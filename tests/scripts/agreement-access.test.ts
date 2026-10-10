@@ -58,6 +58,7 @@ function fixture() {
     "[data-agreed-terms]",
     "[data-reviewed-documents]",
     "[data-review-hint]",
+    "[data-consent-updated]",
   ])
     elements[selector] = node();
   Object.defineProperty(elements['[name="country"]'], 'value', {get:()=>values.country,set:(value:string)=>{values.country=value;}});
@@ -170,4 +171,35 @@ it.each(['United States','Canada'])('clears only the US default when switching o
   await form.emit('input');
   expect(values.country).toBe(country==='United States'?'':country);
   await vi.runAllTimersAsync();
+});
+
+it('opening reviewed terms preserves the documents and consent',async()=>{
+  const {values,elements}=fixture();
+  Object.assign(values,{entity_type:'LLC',state:'Wyoming',business_address:'Example business address',portfolio_choice:'private'});
+  vi.mocked(fetch).mockImplementation(async()=>Response.json({documents:[{id:'sow',kind:'sow',hash:'a'.repeat(64),text:'Exact SOW'}]}));
+  setupAgreementAccess();await new Promise(resolve=>setTimeout(resolve,0));
+  const calls=vi.mocked(fetch).mock.calls.length;
+  elements['[name="consent"]'].checked=true;
+  Object.assign(elements['[data-agreed-terms]'],{open:true});
+  await elements['[data-agreed-terms]'].emit('toggle');
+  await new Promise(resolve=>setTimeout(resolve,0));
+  expect(fetch).toHaveBeenCalledTimes(calls);
+  expect(elements['[name="consent"]'].checked).toBe(true);
+});
+it('refreshing documents clears consent and explains why beside the checkbox',async()=>{
+  const {values,elements}=fixture();
+  Object.assign(values,{entity_type:'LLC',state:'Wyoming',business_address:'Example business address',portfolio_choice:'private'});
+  vi.mocked(fetch).mockImplementation(async()=>Response.json({documents:[{id:'sow',kind:'sow',hash:'b'.repeat(64),text:'Changed SOW'}]}));
+  setupAgreementAccess();
+  elements['[name="consent"]'].checked=true;
+  await new Promise(resolve=>setTimeout(resolve,0));
+  expect(elements['[name="consent"]'].checked).toBe(false);
+  expect(elements['[data-consent-updated]'].hidden).toBe(false);
+});
+
+it('keeps the matching review already rendered on page load',async()=>{
+  const {elements}=fixture();
+  elements['[name="documents"]'].value=JSON.stringify([{id:'sow',hash:'a'.repeat(64)}]);
+  setupAgreementAccess();await new Promise(resolve=>setTimeout(resolve,0));
+  expect(fetch).not.toHaveBeenCalled();
 });

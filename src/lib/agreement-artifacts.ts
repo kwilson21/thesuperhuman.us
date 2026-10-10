@@ -212,7 +212,7 @@ export async function deliverAgreementCopies(env: Env, id: string) {
         from: env.CONTACT_FROM_EMAIL,
         to: [claim.email],
         subject: 'Your signed agreement',
-        text: `Both signatures are saved. A complete signed PDF is attached. Keep this copy. Your agreement archive: ${new URL('/agreements', env.SITE_ORIGIN ?? 'https://thesuperhuman.us').href}\nReceipt: ${id}\nEmail acceptance is not proof of inbox receipt.`,
+        text: `Both signatures are saved. A complete signed PDF is attached. Keep this copy. Your agreement archive: ${new URL('/agreements', env.SITE_ORIGIN!).href}\nReceipt: ${id}\nEmail acceptance is not proof of inbox receipt.`,
         attachments: [{ filename: 'signed-agreement.pdf', content: base64(bytes) }],
       },
     });
@@ -280,7 +280,7 @@ export async function deliverAgreementNotifications(env: Env, id: string) {
         text:
           kind === 'signature-receipt'
             ? `Your signature is saved. Waiting for Kazon to countersign. The project has not started. Receipt: ${agreement.receipt_id}`
-            : `A client signature is saved. Review the exact agreement before countersigning: ${new URL(`/owner/requests/${agreement.request_id}`, env.SITE_ORIGIN ?? 'https://thesuperhuman.us').href}`,
+            : `A client signature is saved. Review the exact agreement before countersigning: ${new URL(`/owner/requests/${agreement.request_id}`, env.SITE_ORIGIN!).href}`,
       },
     });
     if (!sent.uncertain)
