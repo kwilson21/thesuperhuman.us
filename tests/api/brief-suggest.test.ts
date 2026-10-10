@@ -118,7 +118,7 @@ it('caps a concurrent burst before invoking AI or daily counters', async () => {
   expect(new Set(limiter.limit.mock.calls.map(([options]) => options.key)).size).toBe(1);
 
 });
-it.each([1, 2])('fails closed when D1 reservation %s fails', async failedStatement => {
+it.each([1, 2, 3])('fails closed when D1 budget statement %s fails', async failedStatement => {
   const prepare = database.prepare.getMockImplementation();
   let count = 0;
   database.prepare.mockImplementation((sql: string) => {
@@ -134,7 +134,7 @@ it('cleans once per UTC day after the first site reservation, never on capped re
   const cleanupCalls = () => database.prepare.mock.calls.filter(([sql]: [string]) => sql.startsWith('DELETE'));
   await Promise.all([POST(context()), POST(context())]);
   expect(cleanupCalls()).toHaveLength(1);
-  expect(database.prepare.mock.calls.slice(0, 2).every(([sql]: [string]) => sql.startsWith('INSERT'))).toBe(true);
+  expect(database.prepare.mock.calls[0][0]).toMatch(/^SELECT/);
   db.prepare("UPDATE brief_suggestion_budget SET count=10000 WHERE scope='site'").run();
   await POST(context());
   db.prepare("UPDATE brief_suggestion_budget SET count=300 WHERE scope!='site'").run();
@@ -195,4 +195,26 @@ it('enforces the fixed site ceiling across different visitor passes', async () =
 it('fails closed when the site limiter throws', async () => {
   siteLimiter.limit.mockRejectedValueOnce(new Error('unavailable'));
   await POST(context()); expect(run).not.toHaveBeenCalled(); expect(database.prepare).not.toHaveBeenCalled();
+});
+
+it.each([10000, 10001])('makes no writes once the site count is %s, including for new visitors', async count => {
+  const day = new Date().toISOString().slice(0, 10);
+  db.prepare('INSERT INTO brief_suggestion_budget VALUES (?, ?, ?)').run(day, 'site', count);
+  for (const ip of ['test', 'new-visitor']) {
+    cookie = `__Secure-brief-suggestion-pass=${await createSuggestionPass(secret, ip)}`;
+    const ctx = context();
+    ctx.request = new Request(ctx.request, { headers: { origin: 'https://example.com', 'content-type': 'application/json', 'cf-connecting-ip': ip, cookie } });
+    expect(await (await POST(ctx)).json()).toEqual({ suggestion: '' });
+  }
+  expect(database.prepare.mock.calls.every(([sql]: [string]) => sql.startsWith('SELECT'))).toBe(true);
+  expect(db.prepare('SELECT * FROM brief_suggestion_budget').all()).toHaveLength(1);
+  expect(run).not.toHaveBeenCalled();
+});
+it('never writes the site row for a capped visitor', async () => {
+  await POST(context());
+  db.prepare("UPDATE brief_suggestion_budget SET count=300 WHERE scope!='site'").run();
+  database.prepare.mockClear();
+  await POST(context());
+  expect(database.prepare.mock.calls.filter(([sql]: [string]) => sql.startsWith('INSERT'))).toHaveLength(1);
+  expect(db.prepare("SELECT count FROM brief_suggestion_budget WHERE scope='site'").get().count).toBe(1);
 });

@@ -28,6 +28,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (!await validSuggestionPass(pass, env.TURNSTILE_SECRET_KEY, ip)) return Response.json({ suggestion: '', passRequired: true }, { headers: { 'cache-control': 'no-store' } });
     const hash = await suggestionVisitorHash(ip, now);
     if (!(await env.BRIEF_SUGGEST_RATE_LIMIT.limit({ key: hash })).success || !(await env.BRIEF_SUGGEST_SITE_LIMIT.limit({ key: 'site' })).success) return empty();
+    const site = await env.MUSIC_DB.prepare('SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?').bind(day, 'site').first<{ count: number }>();
+    if (site && site.count >= 10000) return empty();
     for (const [scope, cap] of [[hash, 300], ['site', 10000]] as const) {
       const reserved = await env.MUSIC_DB.prepare(`INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)
         ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count`)

@@ -1,12 +1,12 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { POST } from '~/pages/api/software/brief/pass';
-import { validSuggestionPass } from '~/lib/brief-suggestion-pass';
+import { createSuggestionPass, validSuggestionPass } from '~/lib/brief-suggestion-pass';
 const secret = 'existing-turnstile-secret-for-tests';
 const context = (token: unknown = 'token', overrides = {}) => ({
   request: new Request('https://example.com/api/software/brief/pass', { method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json', 'cf-connecting-ip': 'test' }, body: JSON.stringify({ token }) }),
   locals: { runtime: { env: { TURNSTILE_SECRET_KEY: secret, SOFTWARE_SUGGESTIONS_ENABLED: 'true', ...overrides } } },
 }) as any;
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 it('verifies once and issues a thirty-minute secure, IP-bound pass', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => Response.json({ success: true })));
   const response = await POST(context());
@@ -24,4 +24,15 @@ it('rejects invalid payloads and cross-origin issuance', async () => {
   await POST(context(''));
   const ctx = context(); ctx.request = new Request(ctx.request, { headers: { origin: 'https://other.example' } }); await POST(ctx);
   expect(fetch).not.toHaveBeenCalled();
+});
+
+it('keeps an IP-bound pass valid across midnight UTC until its signed expiry', async () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-10T23:50:00Z'));
+  const pass = await createSuggestionPass(secret, 'test');
+  vi.setSystemTime(new Date('2026-10-11T00:05:00Z'));
+  expect(await validSuggestionPass(pass, secret, 'test')).toBe(true);
+  expect(await validSuggestionPass(pass, secret, 'other')).toBe(false);
+  expect(await validSuggestionPass(pass.slice(0, -1) + (pass.endsWith('a') ? 'b' : 'a'), secret, 'test')).toBe(false);
+  vi.setSystemTime(new Date('2026-10-11T00:20:00Z'));
+  expect(await validSuggestionPass(pass, secret, 'test')).toBe(false);
 });

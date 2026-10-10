@@ -15,7 +15,7 @@ export async function validSuggestionPass(value: string | undefined, secret: str
   if (!value || !/^\d+\.[a-f0-9]{64}\.[a-f0-9]{64}$/.test(value)) return false;
   const [expires, hash, signature] = value.split('.');
   const now = Date.now();
-  if (Number(expires) <= now || Number(expires) > now + lifetime || hash !== await suggestionVisitorHash(ip, now)) return false;
+  if (Number(expires) <= now || Number(expires) > now + lifetime || hash !== await suggestionVisitorHash(ip, Number(expires) - lifetime)) return false;
   const bytes = Uint8Array.from(signature.match(/../g)!, hex => parseInt(hex, 16));
   return crypto.subtle.verify('HMAC', await passKey(secret), bytes, message(`${expires}.${hash}`));
 }
