@@ -8,9 +8,7 @@ export default {
       'new','','2026-09-29T12:00:00.000Z','2026-09-29T12:00:00.000Z','00000000-0000-4000-8000-000000000001')`);
     const steps = [];
     for (const viewport of ['desktop', 'phone']) {
-      const prepare = async (page, target, path = 'workflow', suggestion = false) => {
-        await page.route('**/api/software/brief/pass', route => route.fulfill({ json: { ok: true } }));
-        await page.route('**/api/software/brief/suggest', route => route.fulfill({ json: { suggestion: ' in a shared spreadsheet' } }));
+      const prepare = async (page, target, path = 'workflow', suggestion = false, after = async () => {}) => {
         const messages = [], requests = [];
         const endpoint = request => /\/api\/software\/brief\/(pass|suggest)$/.test(new URL(request.url()).pathname);
         page.on('console', message => messages.push(`${message.type()}: ${message.text()}`));
@@ -26,75 +24,96 @@ export default {
           const item = requests.find(item => item.request === request);
           if (item) item.status = request.failure()?.errorText ?? 'failed';
         });
-        // Install before page scripts; wrap every API assignment, including later initialization.
-        await page.addInitScript(() => {
-          localStorage.removeItem('software-brief-draft'); localStorage.removeItem('software-suggestions');
-          window.screenshotAutocomplete = { passState: 'idle', lastError: null };
-          let api;
-          Object.defineProperty(window, 'turnstile', {
-            configurable: true,
-            get: () => api,
-            set: value => {
-              api = new Proxy(value, { get(target, key) {
-                if (key === 'render') return (container, options) => {
-                  if (options['response-field'] !== false) return target.render(container, options);
-                  window.screenshotAutocomplete.passState = 'token';
-                  queueMicrotask(() => Promise.resolve(options.callback('screenshot-suggestion-token')).catch(error => {
-                    window.screenshotAutocomplete.lastError = String(error);
-                  }));
-                  return 'screenshot-suggestion-widget';
-                };
-                if (key === 'remove') return id => { if (id !== 'screenshot-suggestion-widget') target.remove(id); };
-                return typeof target[key] === 'function' ? target[key].bind(target) : target[key];
-              } });
-            },
+        try {
+          await page.route('**/api/software/brief/pass', route => route.fulfill({ json: { ok: true } }));
+          await page.route('**/api/software/brief/suggest', route => route.fulfill({ json: { suggestion: ' in a shared spreadsheet' } }));
+          // Serve only this page's script; other scenarios keep the real test widget.
+          await page.route('https://challenges.cloudflare.com/turnstile/**', route => route.fulfill({
+            contentType: 'application/javascript',
+            body: `(${(() => {
+              const token = 'XXXX.DUMMY.TOKEN.XXXX', widgets = new Map();
+              let nextId = 0;
+              const complete = id => {
+                const widget = widgets.get(id);
+                if (!widget) return;
+                if (widget.input) widget.input.value = token;
+                widget.options.callback?.(token);
+              };
+              window.turnstile = {
+                render(container, options = {}) {
+                  if (typeof container === 'string') container = document.querySelector(container);
+                  const id = 'screenshot-widget-' + ++nextId;
+                  let input;
+                  if (options['response-field'] !== false) {
+                    input = document.createElement('input');
+                    input.type = 'hidden'; input.name = options['response-field-name'] ?? 'cf-turnstile-response';
+                    container.appendChild(input);
+                  }
+                  widgets.set(id, { options, input });
+                  queueMicrotask(() => complete(id));
+                  return id;
+                },
+                reset(id) { for (const key of id ? [id] : widgets.keys()) queueMicrotask(() => complete(key)); },
+                remove(id) { widgets.get(id)?.input?.remove(); widgets.delete(id); },
+                getResponse(id) { return widgets.has(id ?? widgets.keys().next().value) ? token : ''; },
+                execute(id) { queueMicrotask(() => complete(id)); },
+                ready(callback) { queueMicrotask(callback); },
+              };
+              document.querySelectorAll('.cf-turnstile').forEach(container => window.turnstile.render(container));
+              const onload = new URL(document.currentScript.src).searchParams.get('onload');
+              if (onload) window[onload]?.();
+            }).toString()})();`,
+          }));
+          await page.addInitScript(() => {
+            localStorage.removeItem('software-brief-draft'); localStorage.removeItem('software-suggestions');
           });
-        });
-        await page.reload();
-        if (target === 0) return;
-        await page.waitForFunction(() => !!window.turnstile);
-        await page.locator(`[name=path][value=${path}]`).check();
-        if (target === 1) {
-          if (suggestion) {
-            await page.locator('[data-step="1"] textarea').fill('We track new clients');
-            try {
+          await page.reload();
+          if (target === 0) return;
+          await page.waitForFunction(() => !!window.turnstile);
+          await page.locator(`[name=path][value=${path}]`).check();
+          if (target === 1) {
+            if (suggestion) {
+              await page.locator('[data-step="1"] textarea').fill('We track new clients');
               await page.locator('[data-step="1"] [data-accept]').waitFor({ state: 'visible' });
-            } catch (error) {
-              const state = await page.evaluate(() => {
-                const form = document.querySelector('#software-inquiry'), box = form.querySelector('[data-step="1"] textarea');
-                return { ...window.screenshotAutocomplete,
-                  enabled: form.querySelector('[data-step="1"] [data-suggestions-toggle]')?.textContent === 'Turn off',
-                  sitekeyPresent: !!form.dataset.suggestionSitekey, available: form.dataset.available,
-                  turnstilePresent: !!window.turnstile, words: box.value.trim().split(/\s+/).length,
-                  cursorAtEnd: box.selectionStart === box.value.length && box.selectionEnd === box.value.length,
-                  stepHidden: box.closest('[data-step]').hidden,
-                };
-              }).catch(error => ({ lastError: String(error) }));
-              const endpoints = requests.map(({ request, ...item }) => item);
-              const pass = endpoints.filter(item => item.path.endsWith('/pass')).at(-1);
-              if (pass) state.passState = pass.status === 200 ? 'pass response 200 (mock ok)' : `pass ${pass.status}`;
-              console.error('Software brief autocomplete failure:', JSON.stringify({ console: messages, requests: endpoints, autocomplete: state }, null, 2));
-              throw error;
+              if (await page.locator('[data-step="1"] textarea').inputValue() !== 'We track new clients') throw new Error('Suggestion was inserted without acceptance');
             }
-            if (await page.locator('[data-step="1"] textarea').inputValue() !== 'We track new clients') throw new Error('Suggestion was inserted without acceptance');
+            return;
           }
-          return;
+          await page.locator('[data-step="1"] textarea').fill(path === 'workflow' ? 'We track client onboarding in spreadsheets. Updates arrive by email.' : 'A simple way for clients to book lessons.');
+          await page.locator('[data-next]').click();
+          if (target === 2) return;
+          await page.locator('[data-step="2"] [data-skip]').click();
+          if (target === 3) return;
+          await page.locator('[data-next]').click();
+          if (target === 4) return;
+          await page.locator('[data-step="4"] [data-skip]').click();
+          if (target === 5) return;
+          await page.locator('[name=name]').fill('Alex Example');
+          await page.locator('[name=email]').fill('alex@example.com');
+          await page.locator('[data-next]').click();
+          await page.locator('[data-step="6"]:visible').waitFor();
+          const summary = await page.locator('[data-review]').innerText();
+          if (/First result|First version|Budget|Company/.test(summary)) throw new Error('Unanswered optional fields appeared in summary');
+          await after();
+        } catch (error) {
+          const state = await page.evaluate(() => {
+            const form = document.querySelector('#software-inquiry'), box = form?.querySelector('[data-step="1"] textarea');
+            return {
+              enabled: form?.querySelector('[data-step="1"] [data-suggestions-toggle]')?.textContent === 'Turn off',
+              sitekeyPresent: !!form?.dataset.suggestionSitekey, available: form?.dataset.available,
+              turnstilePresent: !!window.turnstile, words: box?.value.trim().split(/\s+/).length,
+              cursorAtEnd: !!box && box.selectionStart === box.value.length && box.selectionEnd === box.value.length,
+              stepHidden: box?.closest('[data-step]').hidden,
+              url: location.href, visibleStep: form?.querySelector('[data-step]:not([hidden])')?.dataset.step,
+            };
+          }).catch(error => ({ lastError: String(error) }));
+          const endpoints = requests.map(({ request, ...item }) => item);
+          const pass = endpoints.filter(item => item.path.endsWith('/pass')).at(-1);
+          state.lastError ??= messages.filter(message => message.startsWith('pageerror:') || message.startsWith('error:')).at(-1) ?? null;
+          state.passState = pass ? `pass ${pass.status}` : 'no pass request';
+          console.error('Software brief prepare failure:', JSON.stringify({ console: messages, requests: endpoints, autocomplete: state }, null, 2));
+          throw error;
         }
-        await page.locator('[data-step="1"] textarea').fill(path === 'workflow' ? 'We track client onboarding in spreadsheets. Updates arrive by email.' : 'A simple way for clients to book lessons.');
-        await page.locator('[data-next]').click();
-        if (target === 2) return;
-        await page.locator('[data-step="2"] [data-skip]').click();
-        if (target === 3) return;
-        await page.locator('[data-next]').click();
-        if (target === 4) return;
-        await page.locator('[data-step="4"] [data-skip]').click();
-        if (target === 5) return;
-        await page.locator('[name=name]').fill('Alex Example');
-        await page.locator('[name=email]').fill('alex@example.com');
-        await page.locator('[data-next]').click();
-        await page.locator('[data-step="6"]:visible').waitFor();
-        const summary = await page.locator('[data-review]').innerText();
-        if (/First result|First version|Budget|Company/.test(summary)) throw new Error('Unanswered optional fields appeared in summary');
       };
       for (let question = 0; question < 7; question++) {
         steps.push({ title: `Brief question ${question + 1}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-question-${question + 1}-${viewport}.png`, path: '/software/start', viewport, prepare: page => prepare(page, question) }), caption: 'Fictional brief, one question at a time' }] });
@@ -107,14 +126,15 @@ export default {
             const input = route.request().postDataJSON();
             await route.fulfill({ json: { ok: true, brief: { name: input.name, email: input.email }, clientCopyStatus } });
           });
-          await prepare(page, 6);
-          await page.locator('[name=cf-turnstile-response]').waitFor({ state: 'attached', timeout: 30_000 });
-          await page.waitForFunction(() => !!document.querySelector('[name=cf-turnstile-response]')?.value, { timeout: 30_000 });
-          await page.locator('[type=submit]').click();
-          await page.locator('#software-success:visible').waitFor({ timeout: 30_000 });
-          if (await page.evaluate(() => localStorage.getItem('software-brief-draft'))) throw new Error('Sent draft was not cleared');
-          await page.locator('[data-intake-progress]').waitFor({ state: 'hidden' });
-          await page.locator('[data-copy-card]:visible').waitFor();
+          await prepare(page, 6, 'workflow', false, async () => {
+            await page.locator('[name=cf-turnstile-response]').waitFor({ state: 'attached', timeout: 30_000 });
+            await page.waitForFunction(() => !!document.querySelector('[name=cf-turnstile-response]')?.value, null, { timeout: 30_000 });
+            await page.locator('[type=submit]').click();
+            await page.locator('#software-success:visible').waitFor({ timeout: 30_000 });
+            if (await page.evaluate(() => localStorage.getItem('software-brief-draft'))) throw new Error('Sent draft was not cleared');
+            await page.locator('[data-intake-progress]').waitFor({ state: 'hidden' });
+            await page.locator('[data-copy-card]:visible').waitFor();
+          });
         } }), caption: 'Fictional receipt with mocked delivery; no email call' }] });
       }
     }

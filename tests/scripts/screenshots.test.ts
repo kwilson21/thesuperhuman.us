@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 import {
   missingScenarioRoutes, NOT_PAGES, PAGES, parseJsonc, PREVIEW_OVERRIDES, previewWrangler, REDIRECTS, SCENARIO_PAGES,
@@ -241,43 +242,49 @@ it('software print styling never forces a receipt before submission', () => {
   expect(css).not.toMatch(/@media print[^}]*#software-inquiry/);
 });
 
-it('mocks the silent suggestion pass without replacing receipt verification', async () => {
+it('serves a scenario-local Turnstile API for silent and receipt widgets', async () => {
   const scenario = await import('../../scripts/screenshots/scenarios/software-brief.mjs');
-  const render = vi.fn(() => 'receipt-widget'), remove = vi.fn(), callback = vi.fn();
-  const routes = new Map<string, any>();
-  vi.stubGlobal('window', { turnstile: { render, remove } });
-  vi.stubGlobal('localStorage', { removeItem() {} });
-  try {
-    await scenario.default.run({ sql() {}, capture: async ({ file, prepare }: any) => {
-      if (file !== 'software-brief-suggestion-phone.png') return file;
-      await prepare({
-        on: () => {},
-        addInitScript: async (fn: () => unknown) => {
-          fn();
-          // The real script assigns its API after the init script, and may replace it.
-          (window as any).turnstile = { render, remove };
-          (window as any).turnstile = { render, remove };
-        },
-        route: async (path: string, handler: any) => { routes.set(path, handler); },
-        evaluate: async (fn: () => unknown) => fn(), reload: async () => {}, waitForFunction: async (fn: () => unknown) => expect(fn()).toBe(true),
-        locator: () => ({ check: async () => {}, fill: async () => {}, waitFor: async () => {}, inputValue: async () => 'We track new clients' }),
-      });
-      const api = (window as any).turnstile;
-      const id = api.render({}, { 'response-field': false, callback });
-      await Promise.resolve();
-      expect(callback).toHaveBeenCalledWith('screenshot-suggestion-token');
-      api.remove(id); expect(remove).not.toHaveBeenCalled();
-      expect(api.render({}, {})).toBe('receipt-widget');
-      api.remove('receipt-widget'); expect(remove).toHaveBeenCalledWith('receipt-widget');
-      const fulfill = vi.fn();
-      await routes.get('**/api/software/brief/pass')({ fulfill });
-      expect(fulfill).toHaveBeenCalledWith({ json: { ok: true } });
-      return file;
-    } });
-  } finally { vi.unstubAllGlobals(); }
+  const routes = new Map<string, any>(), callback = vi.fn(), onload = vi.fn();
+  const inputs: any[] = [], receipt = { appendChild: (input: any) => inputs.push(input) };
+  const window: any = { loaded: onload };
+  const document = {
+    createElement: () => ({ remove: vi.fn() }), querySelectorAll: () => [receipt],
+    currentScript: { src: 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=loaded' },
+  };
+  await scenario.default.run({ sql() {}, capture: async ({ file, prepare }: any) => {
+    if (file !== 'software-brief-suggestion-phone.png') return file;
+    await prepare({
+      on() {}, route: async (path: string, handler: any) => { routes.set(path, handler); },
+      addInitScript: async () => {}, reload: async () => {
+        await routes.get('https://challenges.cloudflare.com/turnstile/**')({ fulfill: ({ body, contentType }: any) => {
+          expect(contentType).toBe('application/javascript');
+          runInNewContext(body, { window, document, URL, queueMicrotask });
+        } });
+      },
+      waitForFunction: async () => expect(window.turnstile).toBeTruthy(),
+      locator: () => ({ check: async () => {}, fill: async () => {}, waitFor: async () => {}, inputValue: async () => 'We track new clients' }),
+    });
+    const api = window.turnstile;
+    expect(onload).toHaveBeenCalledOnce();
+    expect(inputs[0]).toMatchObject({ name: 'cf-turnstile-response', value: 'XXXX.DUMMY.TOKEN.XXXX' });
+    const id = api.render({}, { 'response-field': false, callback });
+    await Promise.resolve();
+    expect(callback).toHaveBeenCalledWith('XXXX.DUMMY.TOKEN.XXXX');
+    expect(inputs).toHaveLength(1);
+    expect(api.getResponse(id)).toBe('XXXX.DUMMY.TOKEN.XXXX');
+    api.reset(id); api.execute(id); api.ready(callback);
+    await Promise.resolve();
+    expect(callback).toHaveBeenCalledTimes(4);
+    api.remove(id); expect(api.getResponse(id)).toBe('');
+    api.remove('screenshot-widget-1'); expect(inputs[0].remove).toHaveBeenCalledOnce();
+    const fulfill = vi.fn();
+    await routes.get('**/api/software/brief/pass')({ fulfill });
+    expect(fulfill).toHaveBeenCalledWith({ json: { ok: true } });
+    return file;
+  } });
 });
 
-it('prints autocomplete diagnostics and rethrows the original capture failure', async () => {
+it.each(['reload', 'API wait', 'chip wait'])('prints %s failure diagnostics and rethrows the original capture failure', async (stage) => {
   const scenario = await import('../../scripts/screenshots/scenarios/software-brief.mjs');
   const failure = new Error('accept chip hidden'), log = vi.spyOn(console, 'error').mockImplementation(() => {});
   const request = { url: () => 'http://127.0.0.1:4321/api/software/brief/pass', method: () => 'POST' };
@@ -285,7 +292,7 @@ it('prints autocomplete diagnostics and rethrows the original capture failure', 
     await expect(scenario.default.run({ sql() {}, capture: async ({ file, prepare }: any) => {
       if (file !== 'software-brief-suggestion-phone.png') return file;
       await prepare({
-        route: async () => {}, addInitScript: async () => {}, reload: async () => {}, waitForFunction: async () => {},
+        route: async () => {}, addInitScript: async () => {}, reload: async () => { if (stage === 'reload') throw failure; }, waitForFunction: async () => { if (stage === 'API wait') throw failure; },
         on: (event: string, handler: any) => {
           if (event === 'console') handler({ type: () => 'warning', text: () => 'test message' });
           if (event === 'request') handler(request);
@@ -299,6 +306,6 @@ it('prints autocomplete diagnostics and rethrows the original capture failure', 
     const diagnostic = JSON.parse(log.mock.calls[0][1]);
     expect(diagnostic.console).toEqual(['warning: test message']);
     expect(diagnostic.requests).toEqual([{ method: 'POST', path: '/api/software/brief/pass', status: 200 }]);
-    expect(diagnostic.autocomplete).toEqual({ enabled: true, passState: 'pass response 200 (mock ok)', lastError: null });
+    expect(diagnostic.autocomplete).toEqual({ enabled: true, passState: 'pass 200', lastError: null });
   } finally { log.mockRestore(); }
 });
