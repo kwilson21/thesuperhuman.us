@@ -9,6 +9,7 @@ export default {
     const steps = [];
     for (const viewport of ['desktop', 'phone']) {
       const prepare = async (page, target, path = 'workflow', suggestion = false) => {
+        await page.route('**/api/software/brief/pass', route => route.fulfill({ json: { ok: true } }));
         await page.route('**/api/software/brief/suggest', route => route.fulfill({ json: { suggestion: ' in a shared spreadsheet' } }));
         // Captures always begin from a fresh fictional draft.
         await page.evaluate(() => { localStorage.removeItem('software-brief-draft'); localStorage.removeItem('software-suggestions'); });

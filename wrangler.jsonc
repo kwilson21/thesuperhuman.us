@@ -6,7 +6,8 @@
   "compatibility_flags": ["nodejs_compat"],
   "ai": { "binding": "AI" },
   "ratelimits": [
-    { "name": "BRIEF_SUGGEST_RATE_LIMIT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } }
+    { "name": "BRIEF_SUGGEST_RATE_LIMIT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
+    { "name": "BRIEF_SUGGEST_SITE_LIMIT", "namespace_id": "1002", "simple": { "limit": 120, "period": 60 } }
   ],
   "assets": {
     "binding": "ASSETS",

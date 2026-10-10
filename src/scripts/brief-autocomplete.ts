@@ -1,4 +1,7 @@
+import { setupSuggestionPass } from './brief-suggestion-pass';
 export function setupBriefAutocomplete(form: HTMLFormElement, earlier: () => Record<string, string>) {
+  const startPass = setupSuggestionPass(form);
+  const start = () => { if (enabled) void startPass(); };
   let enabled = true, generation = 0, timer: ReturnType<typeof setTimeout> | undefined;
   let controller: AbortController | undefined;
   try { enabled = localStorage.getItem('software-suggestions') !== 'off'; } catch { /* Storage is optional. */ }
@@ -14,7 +17,7 @@ export function setupBriefAutocomplete(form: HTMLFormElement, earlier: () => Rec
     form.querySelectorAll<HTMLButtonElement>('[data-accept]').forEach(button => { button.hidden = true; button.dataset.suggestion = ''; });
   };
   toggles.forEach(button => button.addEventListener('click', () => {
-    enabled = !enabled; clear(); updateToggles();
+    enabled = !enabled; clear(); updateToggles(); if (enabled && form.querySelector('[data-step="1"]:not([hidden]), [data-step="2"]:not([hidden])')) start();
     try { localStorage.setItem('software-suggestions', enabled ? 'on' : 'off'); } catch { /* Storage is optional. */ }
   }));
   form.querySelectorAll<HTMLTextAreaElement>('[data-answer]').forEach(box => {
@@ -45,6 +48,7 @@ export function setupBriefAutocomplete(form: HTMLFormElement, earlier: () => Rec
       timer = setTimeout(async () => {
         controller = new AbortController();
         try {
+          if (!await startPass() || generation !== current || !enabled || section.hidden) return;
           const payload = { question: section.querySelector('h1')!.textContent, text, earlier: earlier() };
           if (JSON.stringify(payload).length > 2000) return;
           const response = await fetch('/api/software/brief/suggest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(2000)]) });
@@ -62,5 +66,5 @@ export function setupBriefAutocomplete(form: HTMLFormElement, earlier: () => Rec
     });
   });
   updateToggles();
-  return clear;
+  return { clear, start };
 }

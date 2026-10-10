@@ -1,12 +1,18 @@
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+import { createSuggestionPass } from '~/lib/brief-suggestion-pass';
 import { POST } from '~/pages/api/software/brief/suggest';
 let values: Map<string, string>, kv: { get: ReturnType<typeof vi.fn>; put: ReturnType<typeof vi.fn> }, run: ReturnType<typeof vi.fn>;
+let cookie: string;
+const secret = 'existing-turnstile-secret-for-tests';
+let siteLimiter: { limit: ReturnType<typeof vi.fn> };
 let limiter: { limit: ReturnType<typeof vi.fn> };
 const input = { question: 'What happens today?', text: 'We track new clients', earlier: { path: 'workflow' } };
 function context(body: unknown = input, env: Record<string, unknown> = {}) {
-  return { request: new Request('https://example.com/api/software/brief/suggest', { method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json', 'cf-connecting-ip': 'test' }, body: JSON.stringify(body) }), locals: { runtime: { env: { AI: { run }, RATE_LIMIT: kv, BRIEF_SUGGEST_RATE_LIMIT: limiter, SOFTWARE_SUGGESTIONS_ENABLED: 'true', ...env } } } } as any;
+  return { request: new Request('https://example.com/api/software/brief/suggest', { method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json', 'cf-connecting-ip': 'test', cookie }, body: JSON.stringify(body) }), locals: { runtime: { env: { AI: { run }, RATE_LIMIT: kv, BRIEF_SUGGEST_RATE_LIMIT: limiter, BRIEF_SUGGEST_SITE_LIMIT: siteLimiter, TURNSTILE_SECRET_KEY: secret, SOFTWARE_SUGGESTIONS_ENABLED: 'true', ...env } } } } as any;
 }
-beforeEach(() => {
+beforeEach(async () => {
+  cookie = `__Secure-brief-suggestion-pass=${await createSuggestionPass(secret, 'test')}`;
+  siteLimiter = { limit: vi.fn(async () => ({ success: true })) };
   values = new Map();
   const counts = new Map<string, { start: number; count: number }>();
   limiter = { limit: vi.fn(async ({ key }: { key: string }) => {
@@ -107,4 +113,34 @@ it('continues concurrent suggestions when daily writes contend', async () => {
   kv.put.mockRejectedValue(new Error('one write per second'));
   const responses = await Promise.all(Array.from({ length: 5 }, () => POST(context())));
   for (const response of responses) expect(await response.json()).toEqual({ suggestion: ' in a shared spreadsheet' });
+});
+
+it.each(['missing', 'expired', 'tampered', 'other-ip'])('rejects a %s pass before AI and counters', async kind => {
+  cookie = kind === 'missing' ? '' : `__Secure-brief-suggestion-pass=${await createSuggestionPass(secret, kind === 'other-ip' ? 'other' : 'test', kind === 'expired' ? Date.now() - 1800001 : Date.now())}${kind === 'tampered' ? 'a' : ''}`;
+  expect(await (await POST(context())).json()).toEqual({ suggestion: '' });
+  expect(run).not.toHaveBeenCalled(); expect(kv.get).not.toHaveBeenCalled();
+});
+it('rejects a missing or exhausted site ceiling', async () => {
+  await POST(context(input, { BRIEF_SUGGEST_SITE_LIMIT: undefined }));
+  siteLimiter.limit.mockResolvedValue({ success: false });
+  await POST(context());
+  expect(run).not.toHaveBeenCalled(); expect(kv.get).not.toHaveBeenCalled();
+  expect(siteLimiter.limit).toHaveBeenCalledWith({ key: 'site' });
+});
+
+it('enforces the fixed site ceiling across different visitor passes', async () => {
+  let count = 0;
+  siteLimiter.limit.mockImplementation(async () => ({ success: ++count <= 120 }));
+  for (let i = 0; i < 121; i++) {
+    const ip = `visitor-${i}`;
+    cookie = `__Secure-brief-suggestion-pass=${await createSuggestionPass(secret, ip)}`;
+    const ctx = context(); ctx.request = new Request(ctx.request, { headers: { origin: 'https://example.com', 'content-type': 'application/json', 'cf-connecting-ip': ip, cookie } });
+    await POST(ctx);
+  }
+  expect(run).toHaveBeenCalledTimes(120);
+  expect(new Set(siteLimiter.limit.mock.calls.map(([options]) => options.key))).toEqual(new Set(['site']));
+});
+it('fails closed when the site limiter throws', async () => {
+  siteLimiter.limit.mockRejectedValueOnce(new Error('unavailable'));
+  await POST(context()); expect(run).not.toHaveBeenCalled(); expect(kv.get).not.toHaveBeenCalled();
 });

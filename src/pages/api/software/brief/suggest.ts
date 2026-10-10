@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
 import { musicRequest } from '~/lib/music-request';
+import { suggestionPassCookie, suggestionVisitorHash, validSuggestionPass } from '~/lib/brief-suggestion-pass';
 export const prerender = false;
 const schema = z.object({
   question: z.enum(['What happens today?', "What's the idea?", 'Have a first result in mind?', 'Have a first version in mind?']),
@@ -13,7 +14,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   try {
     const env = locals.runtime?.env;
     // Local previews never call Workers AI, even when a proxy binding exists.
-    if (!env?.AI || !env.RATE_LIMIT || !env.BRIEF_SUGGEST_RATE_LIMIT || env.SOFTWARE_SUGGESTIONS_ENABLED !== 'true' || ['localhost', '127.0.0.1', '[::1]'].includes(new URL(request.url).hostname)) return empty();
+    if (!env?.AI || !env.RATE_LIMIT || !env.BRIEF_SUGGEST_RATE_LIMIT || !env.BRIEF_SUGGEST_SITE_LIMIT || !env.TURNSTILE_SECRET_KEY || env.SOFTWARE_SUGGESTIONS_ENABLED !== 'true' || ['localhost', '127.0.0.1', '[::1]'].includes(new URL(request.url).hostname)) return empty();
     const parsed = schema.safeParse(await musicRequest(request, 16000));
     if (!parsed.success || parsed.data.text.trim().split(/\s+/).length < 3) return empty();
     const content = JSON.stringify(parsed.data);
@@ -21,9 +22,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const day = Math.floor(Date.now() / 86400000);
     const ip = request.headers.get('cf-connecting-ip');
     if (!ip) return empty();
-    const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${day}:${ip}`))), byte => byte.toString(16).padStart(2, '0')).join('');
-    if (!(await env.BRIEF_SUGGEST_RATE_LIMIT.limit({ key: hash })).success) return empty();
-    // Daily KV counts are approximate under concurrency; the per-minute binding is the abuse limit.
+    const pass = request.headers.get('cookie')?.split(';').map(part => part.trim()).find(part => part.startsWith(`${suggestionPassCookie}=`))?.slice(suggestionPassCookie.length + 1);
+    if (!await validSuggestionPass(pass, env.TURNSTILE_SECRET_KEY, ip)) return empty();
+    const hash = await suggestionVisitorHash(ip);
+    if (!(await env.BRIEF_SUGGEST_RATE_LIMIT.limit({ key: hash })).success || !(await env.BRIEF_SUGGEST_SITE_LIMIT.limit({ key: 'site' })).success) return empty();
+    // Daily KV counts are approximate under concurrency; the per-minute bindings are the abuse limits.
     // shortcut: daily caps are best-effort cost guards, use atomic storage if strict daily caps become necessary.
     for (const [key, max, ttl] of [
       [`visitor-day:${day}:${hash}`, 300, 86400],

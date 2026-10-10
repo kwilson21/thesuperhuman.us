@@ -81,7 +81,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
     }
   } catch { /* Ignore unavailable storage and invalid drafts. */ }
   configureQuestions();
-  const clearSuggestion = setupBriefAutocomplete(form, () => step === 2 ? { path: path(), [path() === 'idea' ? 'idea' : 'today']: payload()[path() === 'idea' ? 'idea' : 'today'] } : { path: path() });
+  const suggestions = setupBriefAutocomplete(form, () => step === 2 ? { path: path(), [path() === 'idea' ? 'idea' : 'today']: payload()[path() === 'idea' ? 'idea' : 'today'] } : { path: path() });
   function renderSummary() {
     const list = form.querySelector<HTMLDListElement>('[data-review]')!;
     list.replaceChildren();
@@ -97,8 +97,9 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
     }
   }
   function showStep(index: number, focus = true) {
-    clearSuggestion(); step = index;
+    suggestions.clear(); step = index;
     steps.forEach((section, i) => section.hidden = i !== index);
+    if (index === 1 || index === 2) suggestions.start();
     document.querySelectorAll('.intake-progress li').forEach((item, i) => i === index ? item.setAttribute('aria-current', 'step') : item.removeAttribute('aria-current'));
     form.querySelector<HTMLElement>('[data-send-reassurance]')!.hidden = index !== 6;
     next.hidden = index === 6; submit.hidden = index !== 6; back.hidden = index === 0;
@@ -153,7 +154,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
   setupFormSubmission({ form, endpoint: '/api/software-inquiry', success: document.getElementById('software-success')!,
     payload: () => ({ ...payload(), submissionId }),
     onSuccess: result => {
-      clearSuggestion();
+      suggestions.clear();
       try {
         localStorage.setItem(sentKey, submissionId);
         const saved = JSON.parse(localStorage.getItem(storageKey) ?? 'null');

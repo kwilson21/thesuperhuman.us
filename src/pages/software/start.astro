@@ -18,7 +18,7 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
     <p class="intake-return"><a class="site-link" href={href('/services#software')}>Back to Software <span aria-hidden="true">←</span></a></p>
     <p class="intake-muted">Software brief</p>
     <ol data-intake-progress class="intake-progress brief-dots" aria-label="Your progress">{Array.from({ length: 7 }, (_, i) => <li aria-current={i === 0 ? 'step' : undefined}><span class="step-number"><span class="sr-only">Question {i + 1} of 7</span></span></li>)}</ol>
-    <form id="software-inquiry" data-available={available} novalidate>
+    <form id="software-inquiry" data-available={available} data-suggestion-sitekey={siteKey} novalidate>
       <noscript><p>Please enable JavaScript to use this form, or email <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>.</p></noscript>
       <section data-step="0">
         <h1 tabindex="-1">What are you working on?</h1>

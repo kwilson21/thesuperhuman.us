@@ -1,5 +1,6 @@
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
+vi.mock('~/scripts/brief-suggestion-pass', () => ({ setupSuggestionPass: () => async () => true }));
 class Node extends EventTarget {
   dataset: Record<string, string> = {}; attrs: Record<string, string> = {}; hidden = false; disabled = false;
   name = ''; value = ''; checked = false; type = ''; required = false; maxLength = -1; textContent = ''; placeholder = ''; scrollTop = 0;
@@ -112,7 +113,7 @@ it('keeps writing with unavailable browser storage', async () => {
   await setup(); vi.stubGlobal('localStorage', { getItem: () => { throw new Error(); }, setItem: () => { throw new Error(); } }); choose('path', 'workflow'); fill('today', 'We track clients'); click('[data-next]'); expect(current()).toBe(2);
 });
 it('discloses browser drafts and Workers AI accurately, with reassurance only at send', () => {
-  const privacy = readFileSync('src/pages/privacy.astro', 'utf8'); expect(privacy).toContain("isn't used to train models without your explicit consent"); expect(privacy).toContain('You can turn suggestions off'); expect(privacy).toContain('in your browser');
+  const privacy = readFileSync('src/pages/privacy.astro', 'utf8'); expect(privacy).toContain("isn't used to train models without your explicit consent"); expect(privacy).toContain('You can turn suggestions off'); expect(privacy).toContain('in your browser'); expect(privacy).toContain('strictly necessary security cookie that expires after 30 minutes'); expect(privacy).toContain('Updated October 10, 2026');
   expect(readFileSync('src/pages/software/start.astro', 'utf8').match(/No booking or payment at this stage\./g)).toHaveLength(1);
 });
 
@@ -203,4 +204,12 @@ it.each(['different', 'invalid', 'missing'])('preserves a %s saved draft when de
   await vi.waitFor(() => expect(form.hidden).toBe(true));
   expect(store.get('software-brief-draft')).toBe(saved);
   expect(store.get('software-brief-sent')).toBe(sentId);
+});
+
+it('offers no suggestion when the silent pass requires interaction', async () => {
+  const mock = vi.spyOn(await import('~/scripts/brief-suggestion-pass'), 'setupSuggestionPass').mockReturnValue(async () => false);
+  await setup(); vi.useFakeTimers(); choose('path', 'workflow'); fill('today', 'We track new clients');
+  await vi.advanceTimersByTimeAsync(400);
+  expect(fetch).not.toHaveBeenCalled(); expect(steps[1].nodes['[data-accept]'].hidden).toBe(true);
+  mock.mockRestore();
 });
