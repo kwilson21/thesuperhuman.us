@@ -878,6 +878,26 @@ it.each([false,true])('keeps earlier accepted milestones under current work, pai
     expect(current).toContain('Your files · Milestone 1');expect(current).not.toMatch(/<h2[^>]*>Milestone 1<\/h2>/);
   } finally {sql.close();}
 });
+it.each([false,true])('shows each combined review record once before and after earlier handoff, paid=%s',async paid=>{
+  const {sql,render,add,decision}=await reviewStateFixture();
+  try {
+    add('accepted','delivery_review');decision('accepted');
+    add('direction','direction_review',1,'2026-10-02');
+    add('delivery','delivery_review',1,'2026-10-03');
+    add('progress','progress',1,'2026-10-04');
+    sql.exec("UPDATE software_projects SET milestone_index=1");
+    if(paid)sql.exec("INSERT INTO software_milestone_payments VALUES('r',0,'2026-10-03','owner')");
+    for(const handedOff of [false,true]) {
+      if(handedOff)add('handoff','handoff',0,'2026-10-05');
+      const html=await render(),history=html.slice(html.indexOf('class="project-history'));
+      expect(html.match(/You accepted Version 1 on Oct 2, 2026\./g)).toHaveLength(1);
+      for(const id of ['direction','delivery','progress'])expect(html.match(new RegExp(`${id} work`,'g'))).toHaveLength(1);
+      expect(history.includes('id="version-accepted"')).toBe(handedOff);
+      expect(html).not.toContain('id="version-direction"');
+      expect(html).not.toContain('id="version-delivery"');
+    }
+  } finally {sql.close();}
+});
 it.each([false,true])('derives acceptance from delivery despite an undecided direction, paid=%s',async paid=>{
   const {sql,render,add,decision}=await reviewStateFixture();
   try {
