@@ -95,6 +95,33 @@ it('seeds a completed send so missing details reach the real agreement validatio
   }
 });
 
+it('prepares attachment captures with visible Remove controls and a shrinking list', async () => {
+  const scenario = await import('../../scripts/screenshots/scenarios/software-signing.mjs');
+  let captures=0;
+  await scenario.default.run({
+    templates: signingTemplates,
+    sql: () => '[{"results":[{"status":"ready"}]}]',
+    ownerFetch: async () => ({documents:[{id:'msa',kind:'msa',hash:'a'.repeat(64)},{id:'sow',kind:'sow',hash:'b'.repeat(64)}]}),
+    capture: async ({file,prepare}: any) => {
+      if (!file.includes('attachment-remove-control') && !file.includes('attachment-removed')) return file;
+      // Earlier desktop/phone captures can leave multiple saved uploads in the draft.
+      let remaining=3;
+      const remove={
+        count:async()=>remaining,
+        first:()=>({waitFor:async()=>expect(remaining).toBeGreaterThan(0),click:async()=>{expect(remaining).toBeGreaterThan(0);remaining--;}}),
+        all:async()=>Array.from({length:remaining},(_,index)=>({click:async()=>{expect(index).toBeLessThan(remaining);remaining--;}})),
+      };
+      const locator:any={locator:(selector:string)=>selector==='[data-remove-attachment]'?remove:locator,
+        setInputFiles:async()=>{},fill:async()=>{},click:async()=>{},filter:()=>locator,waitFor:async()=>{}};
+      await prepare({locator:()=>locator,viewportSize:()=>({width:1280,height:800}),setViewportSize:async()=>{},evaluate:async()=>false});
+      expect(remaining).toBe(file.includes('attachment-removed')?0:3);
+      captures++;
+      return file;
+    },
+  });
+  expect(captures).toBe(4);
+});
+
 describe('screenshot coverage', () => {
   it('captures every page file or says why not', () => {
     const captured = new Set(PAGES.map(page => page.path));

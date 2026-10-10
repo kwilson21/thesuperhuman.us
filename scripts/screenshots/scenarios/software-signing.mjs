@@ -141,8 +141,10 @@ export default {
           await block.locator('[data-attachment-date]').fill('2026-10-01');
           await block.locator('[data-upload-attachment]').click();
           await editor.locator('[data-software-status]').filter({hasText:'Attachment saved.'}).waitFor();
+          const removeButtons=block.locator('[data-remove-attachment]');
+          await removeButtons.first().waitFor({state:'visible'});
           if(remove){
-            for(const button of await block.locator('[data-remove-attachment]').all())await button.click();
+            while(await removeButtons.count())await removeButtons.first().click();
           }
           await editor.locator('[type=submit]').click();
           await editor.locator('[data-software-status]').filter({hasText:'Draft saved.'}).waitFor();

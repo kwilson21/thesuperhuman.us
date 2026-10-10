@@ -1731,10 +1731,11 @@ it('covers later orphan pages, wraps, and applies the reviewed page after anothe
   expect(first.orphan_attachments).toEqual([]);
   const second = await previewAgreementRetention(db, env.AUDIO, 'test-storage', now);
   expect(second.orphan_attachments.map(item => item.key)).toEqual([key]);
+  expect((await previewAgreementRetention(db, env.AUDIO, 'test-storage', now)).orphan_attachments).toEqual(second.orphan_attachments);
+  await applyAgreementRetention(db, env.AUDIO, 'test-storage', second, now);
   const wrapped = await previewAgreementRetention(db, env.AUDIO, 'test-storage', now);
   expect(wrapped.orphan_scan_cursor).toBeNull();
   expect(wrapped.orphan_attachments).toEqual([]);
-  await applyAgreementRetention(db, env.AUDIO, 'test-storage', second, now);
   expect(bucketData.has(key)).toBe(false);
   const next = await previewAgreementRetention(db, env.AUDIO, 'test-storage', now);
   expect(next.orphan_scan_cursor).toBe(second.orphan_scan_cursor);
@@ -1748,4 +1749,29 @@ it.each(['not json', JSON.stringify({ version: 1, cursor: 42 }), JSON.stringify(
   const manifest = await previewAgreementRetention(db, env.AUDIO, 'test-storage');
   expect(manifest.orphan_scan_cursor).toBeNull();
   expect(manifest.orphan_attachments.map(item => item.key)).toEqual([key]);
+});
+
+it('retries the same orphan page after storage refuses deletion', async () => {
+  const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
+  for (let i=0;i<101;i++) bucketData.set(`agreements/attachments/${String(i).padStart(3,'0')}.pdf`,new Uint8Array([1]));
+  const first=await previewAgreementRetention(db,env.AUDIO,'test-storage');
+  expect((await previewAgreementRetention(db,env.AUDIO,'test-storage')).orphan_attachments).toEqual(first.orphan_attachments);
+  vi.mocked(env.AUDIO.delete).mockRejectedValueOnce(new Error('Storage unavailable'));
+  await expect(applyAgreementRetention(db,env.AUDIO,'test-storage',first)).rejects.toThrow('Storage unavailable');
+  expect((await previewAgreementRetention(db,env.AUDIO,'test-storage')).orphan_attachments).toEqual(first.orphan_attachments);
+  await applyAgreementRetention(db,env.AUDIO,'test-storage',first);
+  expect((await previewAgreementRetention(db,env.AUDIO,'test-storage')).orphan_attachments).toHaveLength(1);
+});
+
+it('clears offer snapshots only when its last retained agreement is deleted', async () => {
+  const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
+  await signed();
+  const snapshot=()=>sql.prepare("SELECT recipient_email_snapshot,agreement_details_json FROM software_offers WHERE id='o'").get();
+  const original=snapshot();
+  sql.exec("UPDATE software_agreements SET status='abandoned',ended_at='2000-01-01',retain_until='2010-01-01' WHERE kind='sow'");
+  await applyAgreementRetention(db,env.AUDIO,'test-storage',await previewAgreementRetention(db,env.AUDIO,'test-storage'));
+  expect(snapshot()).toEqual(original);
+  sql.exec("UPDATE software_agreements SET status='abandoned',ended_at='2000-01-01',retain_until='2010-01-01',terminated_at='2000-01-01'");
+  await applyAgreementRetention(db,env.AUDIO,'test-storage',await previewAgreementRetention(db,env.AUDIO,'test-storage'));
+  expect(snapshot()).toEqual({recipient_email_snapshot:null,agreement_details_json:null});
 });
