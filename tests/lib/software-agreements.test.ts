@@ -1976,4 +1976,68 @@ it('retries an executed copy instead of the failed waiting receipt',async()=>{
   expect(payloads.length).toBeGreaterThan(0);
   expect(JSON.stringify(payloads)).not.toContain('Waiting for Kazon');
   expect(sql.prepare("SELECT status FROM software_agreement_deliveries WHERE agreement_id=? AND recipient_role='client'").get(id).status).toBe('sent');
+  expect(sql.prepare("SELECT count(*) n FROM software_agreement_notifications WHERE status='pending'").get().n).toBe(0);
+});
+
+it('retries genuinely failed current signing notices', async () => {
+  const { POST } = await import('~/pages/api/owner/requests/[id]/agreement');
+  await signed();
+  const id = (await offerAgreements(db, 'o')).find(a => a.kind === 'sow')!.id;
+  sql.exec("UPDATE software_agreement_notifications SET status='failed'");
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ id: 'message' })));
+  const response = await POST({ params: { id: 'r' }, locals: { owner: { email: 'owner@example.com' }, runtime: { env } }, request: new Request('https://example.com/api/owner/requests/r/agreement', {
+    method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'retry-copy', agreement_id: id }),
+  }) } as never);
+  expect(response.status).toBe(200);
+  expect(sql.prepare("SELECT count(*) n FROM software_agreement_notifications WHERE status='sent'").get().n).toBe(2);
+});
+
+it.each(['executed', 'abandoned'])('settles uncertain waiting notices when %s and allows retention', async status => {
+  const { deliverAgreementNotifications } = await import('~/lib/agreement-artifacts');
+  const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
+  const result = await signed();
+  const id = (await offerAgreements(db, 'o')).find(a => a.kind === 'sow')!.id;
+  vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('unknown provider outcome'); }));
+  await deliverAgreementNotifications(env, id);
+  expect(sql.prepare("SELECT count(*) n FROM software_agreement_notifications WHERE status='sending'").get().n).toBe(2);
+  if (status === 'executed') {
+    await countersignAgreements(db, (await offer())!, result.documents, 'Owner', 'owner@example.com', request());
+    await prepareAgreementArtifact(env, id, async () => new TextEncoder().encode('%PDF-settled'));
+  } else {
+    const { POST } = await import('~/pages/api/owner/requests/[id]/agreement');
+    const response = await POST({ params: { id: 'r' }, locals: { owner: { email: 'owner@example.com' }, runtime: { env } }, request: new Request('https://example.com/api/owner/requests/r/agreement', {
+      method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'abandon', documents: result.documents, reason: 'Cancelled', confirmed: true }),
+    }) } as never);
+    expect(response.status).toBe(200);
+  }
+  expect(sql.prepare('SELECT status,attempt_id FROM software_agreement_notifications').all()).toEqual([
+    { status: 'failed', attempt_id: expect.any(String) }, { status: 'failed', attempt_id: expect.any(String) },
+  ]);
+  expect(sql.prepare("SELECT reason FROM software_agreement_events WHERE action='delivery-failed' AND reason LIKE 'obsolete-%'").all()).toEqual([
+    { reason: `obsolete-signing-notice:${status}` },
+  ]);
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ id: 'message' })));
+  const { POST } = await import('~/pages/api/owner/requests/[id]/agreement');
+  const retry = await POST({ params: { id: 'r' }, locals: { owner: { email: 'owner@example.com' }, runtime: { env } }, request: new Request('https://example.com/api/owner/requests/r/agreement', {
+    method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'retry-copy', agreement_id: id }),
+  }) } as never);
+  expect(retry.status).toBe(200);
+  expect(sql.prepare("SELECT count(*) n FROM software_agreement_notifications WHERE status='failed'").get().n).toBe(2);
+  vi.mocked(fetch).mockClear();
+  await deliverAgreementNotifications(env, id);
+  expect(fetch).not.toHaveBeenCalled();
+  if (status === 'executed') {
+    await deliverAgreementCopies(env, id);
+    expect(sql.prepare("SELECT status FROM software_agreement_deliveries WHERE agreement_id=? AND recipient_role='client'").get(id).status).toBe('sent');
+    expect(JSON.stringify(vi.mocked(fetch).mock.calls)).not.toContain('Waiting for Kazon');
+  }
+  sql.exec("UPDATE software_offers SET status='superseded'; UPDATE software_agreements SET ended_at='2000-01-01',retain_until='2010-01-01',terminated_at='2000-01-01'");
+  const manifest = await previewAgreementRetention(db, env.AUDIO, 'test-storage');
+  expect(manifest.agreements.map(a => a.id)).toContain(id);
+  await applyAgreementRetention(db, env.AUDIO, 'test-storage', manifest);
+  await applyAgreementRetention(db, env.AUDIO, 'test-storage', await previewAgreementRetention(db, env.AUDIO, 'test-storage'));
+  expect(sql.prepare('SELECT count(*) n FROM software_agreements').get().n).toBe(0);
 });

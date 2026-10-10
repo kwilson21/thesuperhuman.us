@@ -473,7 +473,18 @@ it('renders one signing page, returning details, waiting and both-signed actions
     expect(html).not.toContain('name=\"authority\"');
     expect(html).toContain("Countersigning applies your name above as your electronic signature on the statement of work you reviewed.");
     expect(html.indexOf('Client’s signed choices')).toBeLessThan(html.indexOf('value="countersign"'));
-    sql.exec("UPDATE software_agreements SET status='executed'");
+    const renderAgreementPanel = () => container.renderToString(agreementPanel, { props: { requestId: 'r', offerId: 'current' }, locals: { runtime: { env: { MUSIC_DB: db } } } as any });
+    sql.exec("INSERT INTO software_agreement_notifications(agreement_id,kind,email,status) VALUES('sow','signature-receipt','client@example.com','failed')");
+    expect(await renderAgreementPanel()).toContain('Retry agreement email');
+    for (const status of ['executed', 'abandoned']) {
+      sql.prepare('UPDATE software_agreements SET status=?').run(status);
+      sql.prepare("INSERT INTO software_agreement_events(id,agreement_id,action,actor,occurred_at,reason) VALUES(?, 'sow','delivery-failed','owner','now',?)").run(`obsolete-${status}`, `obsolete-signing-notice:${status}`);
+      expect(await renderAgreementPanel()).not.toContain('Retry agreement email');
+    }
+    sql.exec("UPDATE software_agreements SET status='executed'; INSERT INTO software_agreement_deliveries(agreement_id,recipient_role,email,status) VALUES('sow','client','client@example.com','failed')");
+    expect(await renderAgreementPanel()).toContain('Retry agreement email');
+    sql.exec("UPDATE software_agreement_deliveries SET status='sent'");
+    expect(await renderAgreementPanel()).not.toContain('Retry agreement email');
     html = await render();
     expect(html).toContain('Signed by both of you.');
     expect(html).not.toContain('Open your project page');
@@ -499,8 +510,9 @@ it('keeps manual signing closed and shows start exceptions only when required', 
     expect(html).not.toContain('name="earlier_start_on"');
     html = await render({ po_requirement: 'before_start', planned_start: '2099-01-01' });
     expect(html).toContain('name="po_number"');
-    expect(html).toContain('name="earlier_start_on"');
-    expect(html).toContain('name="earlier_start_agreement"');
+    expect(html).toMatch(/<label[^>]*>Client agreement date for an earlier start<input[^>]*name="earlier_start_on"[^>]*required/);
+    expect(html).toMatch(/<label[^>]*>Client agreement for an earlier start<textarea[^>]*name="earlier_start_agreement"[^>]*required/);
+    expect(html).not.toContain('if applicable');
   } finally { sql.close(); }
 });
 
