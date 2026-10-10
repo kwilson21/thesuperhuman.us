@@ -251,7 +251,7 @@ it('keeps newer progress first and pending review actions in the rail', async ()
     html = await renderProject();
     expect(html).not.toContain('Latest update');
     expect(html).toContain('Current offer');expect(html).not.toContain('aria-label="Next steps"');
-    expect(html.slice(html.indexOf('class="project-current'),html.indexOf('class="project-history'))).not.toContain('Pending delivery');
+    expect(html.slice(html.indexOf('class="project-current'),html.indexOf('class="project-history'))).toContain('See the delivered version');
   } finally {sql.close();}
 });
 
@@ -588,6 +588,8 @@ it.each(['accepted-unpaid','paid-awaiting-handoff','handed-off'].flatMap(state=>
     expect(html.slice(acceptance,html.indexOf('Your files',acceptance)>-1 ? html.indexOf('Your files',acceptance) : html.indexOf('class="project-history',acceptance))).toContain(`Corrections are covered through ${deadline}.`);
     if(state==='handed-off') return;
     const current=html.slice(0,html.indexOf('class="project-history'));
+    expect(html.match(/You accepted Version 2 on Oct 2, 2026\./g)).toHaveLength(1);
+    expect(html.slice(html.indexOf('class="project-history'))).not.toContain('id="version-accepted"');
     expect(current).toContain(paid ? 'Paid. Your files are on the way.' : 'Version 2 is accepted.');
     expect(current).toContain(paid ? 'I&#39;ll share the files and handoff notes here soon.' : 'Thanks. The last step is the balance.');
     expect(current).toMatch(/<h2[^>]*>Preparing your guide<\/h2>/);
@@ -662,7 +664,7 @@ it('puts the named review work first through partial, complete, accepted and han
     html=await render();expect(html).toContain("It&#39;s yours.");expect(html).toContain('Handoff notes');expect(html.match(/Corrections are covered through Nov 1, 2026\./g)).toHaveLength(1);expect(html).not.toContain('data-software-review');
     sql.exec(`UPDATE software_project_updates SET what_changed='The final source and guide are ready.',client_request='Save the source and guide.',checks_limitations='No live rollout.',next_step='Support within the correction period.' WHERE id='handoff'`);
     html=await render();expect(html).toContain("It&#39;s yours.");expect(html).toContain('Your files');expect(html).toMatch(/<h3[^>]*>Not included<\/h3><p[^>]*>No live rollout\.<\/p>/);expect(html).toMatch(/<h3[^>]*>Support after handoff<\/h3><p[^>]*>Support within the correction period\.<\/p>/);
-    const currentHandoffFiles=html.slice(html.indexOf('Your files'),html.indexOf('class="project-history'));
+    const currentHandoffFiles=html.slice(html.indexOf('Your files'),html.indexOf('</section>',html.indexOf('Your files')));
     expect(currentHandoffFiles).not.toMatch(/<h2[^>]*>Files<\/h2>/);
     expect(html.indexOf('Your files · Milestone 1')).toBeLessThan(html.indexOf('Your decision'));
     expect(html).not.toContain('Next update:');
@@ -675,7 +677,7 @@ it('puts the named review work first through partial, complete, accepted and han
     expect(currentHandoffFiles).not.toContain('Open work');
     sql.exec(`INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,what_changed,next_step,client_request,created_by,created_at,updated_at,shared_at) VALUES ('later','r','progress','shared',0,'Later work','Aftercare V3','working_preview','I updated the operating guide.','Check in next week.','Read the guide.','owner','2026-10-04','2026-10-04','2026-10-04')`);
     html=await render();expect(html).toContain('I updated the operating guide.');expect(html).toContain('Next from me: Check in next week.');expect(html).toContain('I need from you: Read the guide.');expect(html.indexOf('I updated the operating guide.')).toBeLessThan(html.indexOf('Your files'));expect(html).toContain('https://example.com/notes');expect(html).toContain('Support within the correction period.');expect(html.match(/Corrections are covered through Nov 1, 2026\./g)).toHaveLength(1);
-    const textOnlyFiles=html.slice(html.indexOf('Your files'),html.indexOf('class="project-history'));
+    const textOnlyFiles=html.slice(html.indexOf('Your files'),html.indexOf('</section>',html.indexOf('Your files')));
     expect(textOnlyFiles).not.toMatch(/<h2[^>]*>Files<\/h2>/);
     expect(html).toContain('Next update: Oct 11, 2026');
     expect(textOnlyFiles).toContain('The final source and guide are ready.');
@@ -688,11 +690,11 @@ it('puts the named review work first through partial, complete, accepted and han
     expect(html.match(/id="version-v2"/g)).toHaveLength(1);
     sql.exec("UPDATE software_project_updates SET visual_key='handoff-image',visual_alt='The handed-off tracker.',preview_url='https://example.com/handoff-preview' WHERE id='handoff'");
     html=await render();
-    const files=html.slice(html.indexOf('Your files'),html.indexOf('class="project-history'));
+    const files=html.slice(html.indexOf('Your files'),html.indexOf('</section>',html.indexOf('Your files')));
     expect(files).toContain('/updates/handoff/visual');expect(files).toContain('alt="The handed-off tracker."');expect(files).toContain('href="https://example.com/handoff-preview"');
     expect(html.match(/src="[^"]*updates\/handoff\/visual"/g)).toHaveLength(1);
     sql.exec("UPDATE software_project_updates SET status='draft' WHERE id='later'");
-    html=await render();expect(html).toContain("It&#39;s yours.");expect(html.slice(html.indexOf('Your files'),html.indexOf('class="project-history'))).toContain('https://example.com/handoff-preview');
+    html=await render();expect(html).toContain("It&#39;s yours.");expect(html.slice(html.indexOf('Your files'),html.indexOf('</section>',html.indexOf('Your files')))).toContain('https://example.com/handoff-preview');
     sql.exec("UPDATE software_project_updates SET status='shared' WHERE id='later'");
     sql.exec(`INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,created_by,created_at,updated_at,shared_at) VALUES ('sketch','r','direction_review','shared',0,'Undecided sketch','Direction v3','concept','owner','2026-10-05','2026-10-05','2026-10-05')`);
     html=await render();expect(html).toContain('Confirm this direction');expect(html).toContain('Your files');expect(html).toContain('https://example.com/notes');expect(html).toMatch(/<strong[^>]*>Yours<\/strong><span[^>]*>Oct 3, 2026<\/span>/);
@@ -705,7 +707,7 @@ it('puts the named review work first through partial, complete, accepted and han
     sql.exec(`UPDATE software_project_updates SET delivered_deliverables_json='["Status view"]' WHERE id='new-delivery'`);
     sql.exec("UPDATE software_project_updates SET client_request='Try the corrected import.' WHERE id='new-delivery'; UPDATE software_project_updates SET client_request='Save the files.' WHERE id='handoff'");
     html=await render();
-    expect(html.slice(html.indexOf('Your files'),html.indexOf('class="project-history'))).toContain('I need from you: Save the files.');
+    expect(html.slice(html.indexOf('Your files'),html.indexOf('</section>',html.indexOf('Your files')))).toContain('I need from you: Save the files.');
     sql.exec("UPDATE software_project_updates SET client_request='Review the sketch.' WHERE id='sketch'");
     html=await render();expect(html.slice(html.indexOf('id="review-sketch"'))).toContain('I need from you: Review the sketch.');
     sql.exec("UPDATE software_project_updates SET status='superseded' WHERE id='sketch'; INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES ('r','client','token','Accepted corrected delivery','new-delivery','milestone_accepted','2026-10-08'); DELETE FROM software_milestone_payments; UPDATE software_invoices SET status='open'");
@@ -870,10 +872,21 @@ it.each([false,true])('keeps earlier accepted milestones under current work, pai
   const {sql,render,add,decision}=await reviewStateFixture();
   try {
     add('accepted','delivery_review');decision('accepted');add('current','progress',1,'2026-10-04');
+    sql.exec("UPDATE software_project_updates SET preview_url='https://example.com/delivered',visual_key='private-image',visual_alt='Delivered screen',checks_limitations='Delivery limitation',next_step='Delivery next step' WHERE id='accepted'");
     sql.exec("UPDATE software_projects SET milestone_index=1; INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,created_by,created_at,updated_at) VALUES('balance','r','current',0,'balance',120000,15,'open','https://example.com/pay','owner','now','now')");
     if(paid)sql.exec("INSERT INTO software_milestone_payments VALUES('r',0,'2026-10-03','owner'); UPDATE software_invoices SET status='paid'");
     let html=await render(),current=html.slice(html.indexOf('class="project-current'),html.indexOf('class="project-history'));
     expect(current).toMatch(/<h2[^>]*>Milestone 1<\/h2>/);
+    expect(current).toContain('See the delivered version');
+    expect(current).toContain('accepted work');
+    expect(current).toContain('Unique evidence for this check.');
+    expect(current).toContain('accepted explanation');
+    expect(current).toContain('https://example.com/delivered');
+    expect(current).toContain('/updates/accepted/visual');
+    expect(current).toContain('Delivered screen');
+    expect(current).toContain('Delivery limitation');
+    expect(current).toContain('Delivery next step');
+    expect(current.match(/You accepted Version 1 on Oct 2, 2026\./g)).toHaveLength(1);
     expect(current).toContain('You accepted Version 1 on Oct 2, 2026.');
     expect(current).toContain(paid?'Paid. Your files are on the way.':'Pay $1,200 ↗');
     expect(current.match(/Corrections are covered through Nov 1, 2026\./g)).toHaveLength(1);

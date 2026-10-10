@@ -16,9 +16,9 @@ export function setupSoftwareComposer() {
     const milestoneSelect=form.elements.namedItem('milestone_index') as HTMLInputElement;
     const currentMilestone=Number(milestoneSelect.dataset.currentMilestone);
     form.querySelectorAll<HTMLOptionElement>('[name=milestone_index] option').forEach(option=>{
-      option.disabled=option.hidden=kind==='progress' && Number(option.value)>currentMilestone;
+      option.disabled=option.hidden=kind==='progress' && Number(option.value)!==currentMilestone;
     });
-    if(kind==='progress' && Number(milestoneSelect.value)>currentMilestone) milestoneSelect.value=String(currentMilestone);
+    milestoneSelect.setCustomValidity(kind==='progress' && Number(milestoneSelect.value)!==currentMilestone ? 'Choose a milestone that has started.' : '');
     const milestone=value('milestone_index');
     const heading=root!.querySelector<HTMLElement>('[data-composer-heading]');
     const intro=root!.querySelector<HTMLElement>('[data-composer-intro]');
@@ -173,7 +173,10 @@ export function setupSoftwareComposer() {
     preview.querySelector<HTMLElement>('[data-preview-figure]')!.hidden = false; render();
   });
   async function save(share: boolean) {
-    if (busy || (share && !form.reportValidity())) return;
+    if (busy) return;
+    const milestoneSelect=form.elements.namedItem('milestone_index') as HTMLInputElement;
+    if (value('kind')==='progress' && Number(milestoneSelect.value)!==Number(milestoneSelect.dataset.currentMilestone)) { milestoneSelect.reportValidity(); return; }
+    if (share && !form.reportValidity()) return;
     if (share && value('kind')==='delivery_review' && !form.querySelector('[name=delivered_deliverables]:checked')) {
       status.textContent='Select at least one agreed deliverable included in this version.';
       form.querySelector<HTMLInputElement>('[name=delivered_deliverables]')?.focus(); return;

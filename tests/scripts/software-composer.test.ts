@@ -2,24 +2,24 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { setupSoftwareComposer } from '~/scripts/software-composer';
 
 // Exercise the actual composer render and kind-change handlers without a browser service.
-function fixture(saved=false, savedVisual='', paymentBlocked='[false]', currentMilestone=0) {
+function fixture(saved=false, savedVisual='', paymentBlocked='[false]', currentMilestone=0, savedMilestone=0) {
   const handlers=new Map<string,(event?:any)=>void>();
   const fields: Record<string,any> = {};
   for (const name of ['what_changed','kind','milestone_index','artifact_version','review_window_days','checks_limitations','next_step','client_request','evidence_type','title','preview_url','next_update_on','email_client','visual_alt','visual','paid_confirmed']) {
-    fields[name]={value: name==='kind' ? 'progress' : name==='milestone_index' ? '0' : name==='review_window_days' ? '5' : name==='evidence_type' ? 'concept' : '',checked:false,files:[],addEventListener:(event:string,handler:()=>void)=>handlers.set(`${name}:${event}`,handler),closest:()=>null};
+    fields[name]={value: name==='kind' ? 'progress' : name==='milestone_index' ? String(savedMilestone) : name==='review_window_days' ? '5' : name==='evidence_type' ? 'concept' : '',reportValidity:vi.fn(),setCustomValidity:vi.fn(),checked:false,files:[],addEventListener:(event:string,handler:()=>void)=>handlers.set(`${name}:${event}`,handler),closest:()=>null};
   }
   fields.milestone_index.dataset={currentMilestone:String(currentMilestone)};
   const milestoneOptions=[0,1,2].map(value=>({value:String(value),disabled:false,hidden:false}));
   const elements=new Map<string,any>();
   const element=(selector:string)=>{
-    if (!elements.has(selector)) elements.set(selector,{hidden:false,textContent:'',addEventListener:vi.fn(),replaceChildren:vi.fn(),querySelectorAll:()=>[],dataset:{accepted:'[true]',paymentBlocked},classList:{toggle:vi.fn()},getAttribute:()=>selector==='[data-preview-image]' ? savedVisual : null,removeAttribute:vi.fn()});
+    if (!elements.has(selector)) elements.set(selector,{hidden:false,textContent:'',addEventListener:(event:string,handler:()=>void)=>handlers.set(`${selector}:${event}`,handler),replaceChildren:vi.fn(),querySelectorAll:()=>[],dataset:{accepted:'[true]',paymentBlocked},classList:{toggle:vi.fn()},getAttribute:()=>selector==='[data-preview-image]' ? savedVisual : null,removeAttribute:vi.fn()});
     return elements.get(selector);
   };
   const form={reportValidity:()=>true,elements:{namedItem:(name:string)=>fields[name]},querySelector:(selector:string)=>selector.startsWith('[name=') && !selector.includes(' ') ? fields[selector.slice(6,-1)] : element(selector),querySelectorAll:(selector:string)=>selector==='[name=milestone_index] option' ? milestoneOptions : [],addEventListener:(event:string,handler:(event?:any)=>void)=>handlers.set(`form:${event}`,handler)};
   const preview={querySelector:element,querySelectorAll:()=>[]};
   const root={dataset:{id:saved ? 'draft' : '',endpoint:'/api/owner/requests/r/updates',projectUpdatedAt:'project-loaded'},querySelector:(selector:string)=>selector==='[data-update-form]' ? form : selector==='.client-preview' ? preview : element(selector)};
   vi.stubGlobal('document',{querySelector:()=>root});setupSoftwareComposer();
-  return {fields,elements,milestoneOptions,fileChange:()=>handlers.get('visual:change')!(),submit:()=>handlers.get('form:submit')!({preventDefault:()=>{}} as never),change:(kind:string)=>{fields.kind.value=kind;handlers.get('kind:change')!();},choose:()=>{handlers.get('email_client:change')!();handlers.get('form:input')!();}};
+  return {fields,elements,milestoneOptions,saveDraft:()=>handlers.get('[data-save-draft]:click')!(),fileChange:()=>handlers.get('visual:change')!(),submit:()=>handlers.get('form:submit')!({preventDefault:()=>{}} as never),change:(kind:string)=>{fields.kind.value=kind;handlers.get('kind:change')!();},choose:()=>{handlers.get('email_client:change')!();handlers.get('form:input')!();}};
 }
 afterEach(()=>vi.unstubAllGlobals());
 it.each(['direction_review','delivery_review','handoff'])('defaults new %s to email and preserves a manual opt-out',kind=>{
@@ -101,18 +101,25 @@ it('hides manual handoff payment and blocks sharing while the selected installme
   const page=fixture(false,'','[true,false]');page.change('handoff');
   expect(page.elements.get('[data-handoff-payment]').hidden).toBe(true);
   expect(page.elements.get('[data-payment-reminder]').hidden).toBe(false);
-  expect(page.fields.paid_confirmed.disabled).toBe(true);page.submit();expect(send).not.toHaveBeenCalled();
+  expect(page.fields.paid_confirmed.disabled).toBe(true);page.submit();page.saveDraft();expect(send).not.toHaveBeenCalled();
   page.fields.milestone_index.value='1';page.choose();
   expect(page.elements.get('[data-handoff-payment]').hidden).toBe(false);
   expect(page.fields.paid_confirmed.disabled).toBe(false);
   expect(page.fields.paid_confirmed.required).toBe(true);
 });
 
-it('limits progress to started milestones and resets a future review selection on kind change',()=>{
-  const page=fixture(false,'','[false]',1);
-  expect(page.milestoneOptions.map(option=>option.disabled)).toEqual([false,false,true]);
-  page.change('direction_review');expect(page.milestoneOptions.every(option=>!option.disabled && !option.hidden)).toBe(true);
-  page.fields.milestone_index.value='2';page.change('progress');
-  expect(page.fields.milestone_index.value).toBe('1');expect(page.milestoneOptions.map(option=>option.hidden)).toEqual([false,false,true]);
+it('offers only the current milestone for progress without changing a saved selection',()=>{
+  const page=fixture(true,'','[false]',1,2);
+  expect(page.fields.milestone_index.value).toBe('2');
+  expect(page.fields.milestone_index.setCustomValidity).toHaveBeenLastCalledWith('Choose a milestone that has started.');
+  expect(page.milestoneOptions.map(option=>option.disabled)).toEqual([true,false,true]);
+  const send=vi.fn();vi.stubGlobal('fetch',send);page.submit();page.saveDraft();expect(send).not.toHaveBeenCalled();
+  page.fields.milestone_index.value='1';page.choose();
+  expect(page.fields.milestone_index.setCustomValidity).toHaveBeenLastCalledWith('');
   page.change('delivery_review');expect(page.milestoneOptions.every(option=>!option.disabled && !option.hidden)).toBe(true);
+});
+it('preserves an earlier saved progress milestone and flags it',()=>{
+  const page=fixture(true,'','[false]',1,0);
+  expect(page.fields.milestone_index.value).toBe('0');
+  expect(page.fields.milestone_index.setCustomValidity).toHaveBeenLastCalledWith('Choose a milestone that has started.');
 });

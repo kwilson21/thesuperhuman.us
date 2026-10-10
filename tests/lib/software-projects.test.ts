@@ -1012,9 +1012,11 @@ it('rejects progress for a milestone that has not started before saving or email
   await start();vi.mocked(fetch).mockClear();
   sql.prepare('UPDATE software_projects SET terms_json=?').run(JSON.stringify({...terms,milestones:[terms.milestones[0],terms.milestones[0]]}));
   const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,milestone_index:1,email_client:true}});
-  expect(response.status).toBe(400);expect(await response.json()).toMatchObject({error:'Start milestone 2 first.'});
+  expect(response.status).toBe(400);expect(await response.json()).toMatchObject({error:'Progress updates go on the current milestone.'});
   expect(sql.prepare('SELECT count(*) n FROM software_project_updates').get().n).toBe(0);expect(fetch).not.toHaveBeenCalled();
   const current=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update});expect(current.status).toBe(200);
   sql.exec('UPDATE software_projects SET milestone_index=1');
-  expect((await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update})).status).toBe(200);
+  vi.mocked(fetch).mockClear();
+  const earlier=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,email_client:true}});
+  expect(earlier.status).toBe(400);expect(await earlier.json()).toMatchObject({error:'Progress updates go on the current milestone.'});expect(fetch).not.toHaveBeenCalled();
 });

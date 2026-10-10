@@ -54,8 +54,8 @@ const paid=payments.some(payment=>payment.milestone_index===currentMilestone);
 const acceptedPaid=accepted && !handedOff && paid;
 const acceptedWaiting=accepted && !paid;
 const earlierAccepted=acceptedDeliveries.filter((update,index)=>update.milestone_index!<currentMilestone && acceptedDeliveries.findIndex(item=>item.milestone_index===update.milestone_index)===index && !handoffs.some(handoff=>handoff.milestone_index===update.milestone_index));
-const earlierVersions=updates.filter(update=>update.kind?.endsWith('_review') && update.id!==currentUpdate?.id && !undecidedReviews.includes(update) && !earlierAccepted.includes(update));
-const earlierUpdates=updates.filter(update=>update.id!==currentUpdate?.id && !earlierVersions.includes(update) && !railReviews.includes(update) && !handoffs.includes(update) && !earlierAccepted.includes(update));
+const earlierVersions=updates.filter(update=>update.kind?.endsWith('_review') && update.id!==currentUpdate?.id && !undecidedReviews.includes(update) && update.id!==decidedReview?.id && !earlierAccepted.includes(update));
+const earlierUpdates=updates.filter(update=>update.id!==currentUpdate?.id && !earlierVersions.includes(update) && !railReviews.includes(update) && update.id!==decidedReview?.id && !handoffs.includes(update) && !earlierAccepted.includes(update));
 const timeline=updates.filter(update=>update.milestone_index===currentMilestone && update.kind?.endsWith('_review')).slice().reverse();
 const note=currentUpdate?.what_changed ?? '';
 const visual = (id: string) => `/api/studio/software/${project!.request_id}/updates/${id}/visual`;
@@ -88,6 +88,7 @@ const agreementDocuments = [masterAgreement, agreementRecord?.id && !agreementRe
         const milestone=update.milestone_index ?? 0,paid=payments.some(payment=>payment.milestone_index===milestone),balance=balanceFor(milestone);
         return <section class="handoff-strip">
           <h2>Milestone {milestone+1}</h2>
+          <details id={`version-${update.id}`}><summary>See the delivered version</summary><SoftwareProjectUpdate update={update} checks={terms.milestones[milestone].acceptance} deliverables={terms.milestones[milestone].deliverables} visualUrl={update.has_visual ? visual(update.id) : undefined} /></details>
           <SoftwareReviewResponse update={update} checks={terms.milestones[milestone].acceptance} deliverables={terms.milestones[milestone].deliverables} milestoneName={terms.milestones[milestone].name} endpoint="" readonly />
           {paid ? <p>Paid. Your files are on the way.</p> : <>
             {balance && <a class="studio-button" href={balance.hosted_invoice_url!} target="_blank" rel="noopener noreferrer">Pay {formatUSD(balance.amount_cents)} ↗</a>}
@@ -100,6 +101,7 @@ const agreementDocuments = [masterAgreement, agreementRecord?.id && !agreementRe
         const external=new URL(link.url).origin!==Astro.url.origin;
         return <li><a class="studio-button" href={link.url} target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer' : undefined}>{link.label} <span aria-hidden="true">{external ? '↗' : '→'}</span></a></li>;
       })}</ul>{handoff.client_request && <p>I need from you: {handoff.client_request}</p>}{handoff.what_changed && <p>{handoff.what_changed}</p>}{handoff.checks_limitations && <><h3>Not included</h3><p>{handoff.checks_limitations}</p></>}{handoff.next_step && <><h3>Support after handoff</h3><p>{handoff.next_step}</p></>}{(handoff.milestone_index!==currentMilestone || !accepted) && <p>Corrections are covered through {correctionDeadline(handoff.milestone_index)}.</p>}</section>)}
+      {decidedReview && decidedReview.id!==currentUpdate?.id && <details id={`version-${decidedReview.id}`}><summary>See the delivered version</summary><SoftwareProjectUpdate update={decidedReview} checks={terms.milestones[currentMilestone].acceptance} deliverables={terms.milestones[currentMilestone].deliverables} visualUrl={decidedReview.has_visual ? visual(decidedReview.id) : undefined} /></details>}
       {decidedReview && <SoftwareReviewResponse update={decidedReview} checks={terms.milestones[currentMilestone].acceptance} deliverables={terms.milestones[currentMilestone].deliverables} milestoneName={terms.milestones[currentMilestone].name} endpoint="" readonly />}
       {accepted && <p>Corrections are covered through {correctionDeadline(currentMilestone)}.</p>}
       {acceptedWaiting && <section>{balance && <a class="studio-button" href={balance.hosted_invoice_url!} target="_blank" rel="noopener noreferrer">Pay {formatUSD(balance.amount_cents)} ↗</a>}<p>{balance ? "Your files unlock as soon as it's paid." : 'Handoff follows full payment.'}</p></section>}
