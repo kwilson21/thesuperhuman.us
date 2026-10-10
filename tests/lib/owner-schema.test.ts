@@ -101,7 +101,7 @@ describe('owner insights schema', () => {
     db.close();
   });
 
-  it('pins the Wrangler release that preserves numbered D1 migration order', () => {
+  it('pins the reviewed Wrangler release', () => {
     const packageJson = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
       devDependencies?: Record<string, string>;
     };
