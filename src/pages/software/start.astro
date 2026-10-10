@@ -29,6 +29,7 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
       {[1, 2].map(index => <section data-step={index} hidden>
         <h1 tabindex="-1" data-question-title></h1>
         <p class="intake-intro" data-question-hint></p>
+        <p class="intake-footnote">Plain language is fine. We’ll work out the technical details together. Please leave out passwords, access details and real customer data.</p>
         <div class="intake-field brief-answer">
           <label class="sr-only" for={`brief-answer-${index}`} data-answer-label></label>
           <div class="brief-ghost" aria-hidden="true"><span data-ghost-prefix></span><span data-ghost-text></span></div>
@@ -36,7 +37,7 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
         </div>
         <div id={`brief-help-${index}`}>
           <button type="button" data-accept hidden></button>
-          <p class="intake-muted"><button type="button" data-suggestions-toggle>Suggestions on · Turn off</button></p>
+          <p class="intake-muted"><span data-suggestions-disclosure>Suggestions come from Cloudflare's AI, which sees what you type here, never your name or email. Leave out passwords and customer data. <a href={href('/privacy#software-briefs')}>Privacy</a> · </span><span data-suggestions-off hidden>Suggestions are off. </span><button type="button" data-suggestions-toggle>Turn off</button></p>
         </div>
         <p data-form-error={index === 1 ? 'today' : 'firstResult'} hidden></p>
         <button type="button" data-skip hidden={index !== 2}>Skip</button>

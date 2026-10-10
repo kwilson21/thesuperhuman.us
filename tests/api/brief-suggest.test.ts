@@ -93,11 +93,18 @@ it('caps a concurrent burst before invoking AI or daily KV counters', async () =
   expect(new Set(limiter.limit.mock.calls.map(([options]) => options.key)).size).toBe(1);
   expect(kv.put).toHaveBeenCalledTimes(60);
 });
-it('fails closed when the minute binding or daily KV throws', async () => {
+it('fails closed only when the minute binding throws', async () => {
   limiter.limit.mockRejectedValueOnce(new Error('unavailable'));
   expect(await (await POST(context())).json()).toEqual({ suggestion: '' });
   expect(kv.get).not.toHaveBeenCalled();
   kv.put.mockRejectedValueOnce(new Error('write limit'));
-  expect(await (await POST(context())).json()).toEqual({ suggestion: '' });
-  expect(run).not.toHaveBeenCalled();
+  expect(await (await POST(context())).json()).toEqual({ suggestion: ' in a shared spreadsheet' });
+  kv.get.mockRejectedValueOnce(new Error('read failure'));
+  expect(await (await POST(context())).json()).toEqual({ suggestion: ' in a shared spreadsheet' });
+});
+
+it('continues concurrent suggestions when daily writes contend', async () => {
+  kv.put.mockRejectedValue(new Error('one write per second'));
+  const responses = await Promise.all(Array.from({ length: 5 }, () => POST(context())));
+  for (const response of responses) expect(await response.json()).toEqual({ suggestion: ' in a shared spreadsheet' });
 });

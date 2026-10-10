@@ -1,7 +1,6 @@
 import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
 import { musicRequest } from '~/lib/music-request';
-import { checkRateLimit } from '~/lib/rate-limit';
 export const prerender = false;
 const schema = z.object({
   question: z.enum(['What happens today?', "What's the idea?", 'Have a first result in mind?', 'Have a first version in mind?']),
@@ -30,7 +29,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
       [`visitor-day:${day}:${hash}`, 300, 86400],
       [`site-day:${day}`, 10000, 86400],
     ] as const) {
-      if (!(await checkRateLimit(env.RATE_LIMIT, key, 'rl:brief-suggest:', max, ttl)).allowed) return empty();
+      try {
+        const count = Number(await env.RATE_LIMIT.get(`rl:brief-suggest:${key}`) ?? 0);
+        if (Number.isFinite(count) && count >= max) return empty();
+        if (Number.isFinite(count)) await env.RATE_LIMIT.put(`rl:brief-suggest:${key}`, String(count + 1), { expirationTtl: ttl });
+      } catch { /* KV reads and writes are best effort, including same-key write contention. */ }
     }
     const result = await Promise.race([
       env.AI.run('@cf/meta/llama-3.2-1b-instruct', { messages: [

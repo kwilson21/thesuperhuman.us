@@ -3,7 +3,11 @@ export function setupBriefAutocomplete(form: HTMLFormElement, earlier: () => Rec
   let controller: AbortController | undefined;
   try { enabled = localStorage.getItem('software-suggestions') !== 'off'; } catch { /* Storage is optional. */ }
   const toggles = [...form.querySelectorAll<HTMLButtonElement>('[data-suggestions-toggle]')];
-  const updateToggles = () => toggles.forEach(button => button.textContent = enabled ? 'Suggestions on · Turn off' : 'Suggestions off · Turn on');
+  const updateToggles = () => {
+    toggles.forEach(button => button.textContent = enabled ? 'Turn off' : 'Turn on');
+    form.querySelectorAll<HTMLElement>('[data-suggestions-disclosure]').forEach(node => node.hidden = !enabled);
+    form.querySelectorAll<HTMLElement>('[data-suggestions-off]').forEach(node => node.hidden = enabled);
+  };
   const clear = () => {
     generation++; clearTimeout(timer); controller?.abort();
     form.querySelectorAll<HTMLElement>('[data-ghost-prefix], [data-ghost-text]').forEach(node => node.textContent = '');

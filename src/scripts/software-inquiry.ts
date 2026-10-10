@@ -24,12 +24,27 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
   const submit = form.querySelector<HTMLButtonElement>('[type=submit]')!;
   const status = form.querySelector<HTMLElement>('[data-form-status]')!;
   const storageKey = 'software-brief-draft';
+  const sentKey = 'software-brief-sent';
+  const answers: Record<string, string> = {};
+  let sentElsewhere = false;
+  const sentNotice = 'This brief was already sent from another tab. Your changes here will be sent as a new brief.';
   let step = 0, submissionId = crypto.randomUUID();
   const path = () => new FormData(form).get('path') === 'idea' ? 'idea' : 'workflow';
   const fields = () => ['path', path() === 'idea' ? 'idea' : 'today', path() === 'idea' ? 'firstVersion' : 'firstResult', 'timing', 'timingDate', 'budgetNote', 'name', 'email', 'company'];
   const payload = (trim = true) => Object.fromEntries(fields().map(key => [key, trim ? String(new FormData(form).get(key) ?? '').trim() : String(new FormData(form).get(key) ?? '')]));
+  function noticeSentDraft() {
+    // Keep the identity stable until the in-flight response has been handled.
+    if (form.getAttribute('aria-busy') === 'true') return false;
+    try {
+      if (localStorage.getItem(sentKey) !== submissionId) return false;
+      submissionId = crypto.randomUUID(); sentElsewhere = true; status.textContent = sentNotice;
+      return true;
+    } catch { return false; }
+  }
   function save() {
-    try { localStorage.setItem(storageKey, JSON.stringify({ answers: payload(false), step, submissionId })); } catch { /* Keep writing when storage is unavailable. */ }
+    noticeSentDraft();
+    steps.slice(1, 3).forEach(section => { const box = section.querySelector<HTMLTextAreaElement>('[data-answer]')!; answers[box.name] = box.value; });
+    try { localStorage.setItem(storageKey, JSON.stringify({ answers: { ...payload(false), ...answers }, step, submissionId })); } catch { /* Keep writing when storage is unavailable. */ }
   }
   function configureQuestions() {
     const idea = path() === 'idea';
@@ -52,6 +67,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
     if (saved && saved.answers && typeof saved.answers === 'object') {
+      for (const key of ['today', 'firstResult', 'idea', 'firstVersion']) if (typeof saved.answers[key] === 'string') answers[key] = saved.answers[key].slice(0, ['idea', 'firstVersion'].includes(key) ? 1000 : 2000);
       for (const name of ['path', 'timing']) form.querySelectorAll<HTMLInputElement>(`[name="${name}"]`).forEach(box => box.checked = box.value === saved.answers[name]);
       configureQuestions();
       for (const key of fields()) {
@@ -84,7 +100,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
     document.querySelectorAll('.intake-progress li').forEach((item, i) => i === index ? item.setAttribute('aria-current', 'step') : item.removeAttribute('aria-current'));
     form.querySelector<HTMLElement>('[data-send-reassurance]')!.hidden = index !== 6;
     next.hidden = index === 6; submit.hidden = index !== 6; back.hidden = index === 0;
-    status.textContent = '';
+    status.textContent = sentElsewhere ? sentNotice : '';
     if (index === 6) renderSummary();
     if (focus) steps[index].querySelector<HTMLElement>('h1')!.focus();
     save();
@@ -110,8 +126,10 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
   form.addEventListener('change', event => {
     const control = event.target as HTMLInputElement;
     if (control.name === 'path') {
-      steps.slice(1, 3).forEach(section => section.querySelector<HTMLTextAreaElement>('textarea')!.value = '');
-      configureQuestions(); continueStep();
+      steps.slice(1, 3).forEach(section => { const box = section.querySelector<HTMLTextAreaElement>('textarea')!; answers[box.name] = box.value; });
+      configureQuestions();
+      steps.slice(1, 3).forEach(section => { const box = section.querySelector<HTMLTextAreaElement>('textarea')!; box.value = answers[box.name] ?? ''; });
+      continueStep();
     }
     if (control.name === 'timing') {
       form.querySelector<HTMLElement>('[data-date-field]')!.hidden = control.value !== 'date';
@@ -126,10 +144,13 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
     steps[step].querySelector<HTMLInputElement | HTMLTextAreaElement>('input, textarea')!.value = ''; continueStep();
   }));
   form.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && step < 6) { event.preventDefault(); continueStep(); } });
-  form.addEventListener('submit', event => { if (step !== 6) { event.preventDefault(); event.stopImmediatePropagation(); continueStep(); } });
+  window.addEventListener('storage', event => { if (event.key === sentKey) { if (noticeSentDraft()) save(); } });
+  form.addEventListener('submit', event => {
+    if (noticeSentDraft()) { event.preventDefault(); event.stopImmediatePropagation(); save(); return; }
+    if (step !== 6) { event.preventDefault(); event.stopImmediatePropagation(); continueStep(); } });
   setupFormSubmission({ form, endpoint: '/api/software-inquiry', success: document.getElementById('software-success')!,
     payload: () => ({ ...payload(), submissionId }),
-    onSuccess: result => { clearSuggestion(); try { localStorage.removeItem(storageKey); } catch { /* Storage is optional. */ } renderSoftwareReceipt(result); },
+    onSuccess: result => { clearSuggestion(); try { localStorage.setItem(sentKey, submissionId); localStorage.removeItem(storageKey); } catch { /* Storage is optional. */ } renderSoftwareReceipt(result); },
     onConflict: () => { submissionId = crypto.randomUUID(); save(); },
   });
   const observer = new MutationObserver(records => {

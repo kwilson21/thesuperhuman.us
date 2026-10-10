@@ -21,14 +21,14 @@ const make = (name = '', type = '', value = '') => { const node = new Input(); O
 function fire(node: Node, event: string, props: Record<string, unknown> = {}) { const message = new Event(event, { cancelable: true }); Object.assign(message, props); node.dispatchEvent(message); return message; }
 function fill(name: string, value: string) { const node = controls.find(node => node.name === name)!; node.value = value; node.setSelectionRange(value.length, value.length); fire(node, 'input'); fire(form, 'input'); return node; }
 function click(selector: string) { fire(form.nodes[selector], 'click'); }
-function choose(name: string, value: string) { const node = controls.find(node => node.name === name && node.value === value)!; controls.filter(node => node.name === name).forEach(node => node.checked = node.value === value); const message = new Event('change'); Object.defineProperty(message, 'target', { value: node }); form.dispatchEvent(message); }
+function choose(name: string, value: string) { const node = controls.find(node => node.name === name && node.value === value)!; controls.filter(node => node.name === name).forEach(node => node.checked = node.value === value); fire(form, 'input'); const message = new Event('change'); Object.defineProperty(message, 'target', { value: node }); form.dispatchEvent(message); }
 const current = () => steps.findIndex(node => !node.hidden);
 async function setup() {
   form = new Node() as any; form.dataset.available = 'false'; steps = Array.from({ length: 7 }, () => new Node()); controls = [];
   for (const section of steps) section.nodes.h1 = new Node();
   for (const [index, key] of [[1, 'today'], [2, 'firstResult']] as const) {
     const section = steps[index], box = new Textarea(); box.name = key; box.required = index === 1; box.section = section; controls.push(box);
-    for (const selector of ['[data-answer-label]', '[data-question-hint]', '[data-accept]', '[data-suggestions-toggle]', '[data-ghost-prefix]', '[data-ghost-text]']) section.nodes[selector] = new Node();
+    for (const selector of ['[data-answer-label]', '[data-question-hint]', '[data-accept]', '[data-suggestions-toggle]', '[data-suggestions-disclosure]', '[data-suggestions-off]', '[data-ghost-prefix]', '[data-ghost-text]']) section.nodes[selector] = new Node();
     section.nodes['[data-ghost-prefix]'].parentElement = new Node();
     section.nodes['[data-answer]'] = box; section.nodes.textarea = box; section.nodes['input, textarea'] = box;
     section.nodes['[data-form-error]'] = new Node();
@@ -49,7 +49,7 @@ async function setup() {
     if (selector === '[data-step]') return steps;
     if (selector === '[data-answer]') return steps.slice(1, 3).map(node => node.nodes['[data-answer]']);
     if (selector === '[data-skip]') return skips;
-    if (selector === '[data-suggestions-toggle]') return steps.slice(1, 3).map(node => node.nodes[selector]);
+    if (['[data-suggestions-toggle]', '[data-suggestions-disclosure]', '[data-suggestions-off]'].includes(selector)) return steps.slice(1, 3).map(node => node.nodes[selector]);
     if (selector === '[data-ghost-prefix], [data-ghost-text]') return steps.slice(1, 3).flatMap(node => [node.nodes['[data-ghost-prefix]'], node.nodes['[data-ghost-text]']]);
     if (selector === '[data-accept]') return steps.slice(1, 3).map(node => node.nodes[selector]);
     if (selector === '[data-form-error]') return Object.entries(form.nodes).filter(([key]) => key.startsWith('[data-form-error=')).map(([, value]) => value);
@@ -58,7 +58,7 @@ async function setup() {
   form.elements = controls; form.elements.namedItem = (key: string) => controls.find(node => node.name === key && node.type !== 'radio');
   vi.stubGlobal('HTMLElement', Node); vi.stubGlobal('HTMLInputElement', Input); vi.stubGlobal('HTMLTextAreaElement', Textarea);
   vi.stubGlobal('FormData', class { get(name: string) { return controls.find(node => node.name === name && !node.disabled && (node.type !== 'radio' || node.checked))?.value ?? null; } });
-  vi.stubGlobal('window', {});
+  vi.stubGlobal('window', new EventTarget());
   vi.stubGlobal('MutationObserver', class { observe() {} });
   vi.stubGlobal('document', { querySelector: () => null, querySelectorAll: () => [], getElementById: () => new Node(), createElement: () => new Node(), createTextNode: () => new Node() });
   vi.stubGlobal('localStorage', { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => store.set(key, value), removeItem: (key: string) => store.delete(key) });
@@ -97,7 +97,10 @@ it('ignores suggestions when typing, moving the cursor or switching questions, a
   vi.useFakeTimers(); choose('path', 'workflow'); const box = fill('today', 'We track new clients'); await vi.advanceTimersByTimeAsync(400);
   fire(box, 'keydown', { key: 'x' }); expect(steps[1].nodes['[data-accept]'].hidden).toBe(true);
   fill('today', 'We track other clients'); box.selectionStart = 0; fire(box, 'select'); await vi.advanceTimersByTimeAsync(400); expect(steps[1].nodes['[data-accept]'].hidden).toBe(true);
-  fire(steps[1].nodes['[data-suggestions-toggle]'], 'click'); await setup(); expect(steps[1].nodes['[data-suggestions-toggle]'].textContent).toBe('Suggestions off · Turn on');
+  fire(steps[1].nodes['[data-suggestions-toggle]'], 'click');
+  expect(steps[1].nodes['[data-suggestions-disclosure]'].hidden).toBe(true);
+  expect(steps[1].nodes['[data-suggestions-off]'].hidden).toBe(false);
+  await setup(); expect(steps[1].nodes['[data-suggestions-toggle]'].textContent).toBe('Turn on');
 });
 it('never sends contact fields, and only supplies earlier project answers for question three', async () => {
   vi.useFakeTimers(); choose('path', 'workflow'); fill('name', 'Private'); fill('email', 'private@example.com'); fill('company', 'Private'); fill('today', 'We track new clients');
@@ -131,4 +134,55 @@ it('discards a late suggestion after navigation', async () => {
   fill('today', 'We track new clients'); await vi.advanceTimersByTimeAsync(400); click('[data-next]');
   resolve(Response.json({ suggestion: ' in a spreadsheet' })); await vi.advanceTimersByTimeAsync(1);
   expect(steps[1].nodes['[data-accept]'].hidden).toBe(true); expect(current()).toBe(2);
+});
+
+it('preserves both paths across switching and refresh, but sends only the selected answers', async () => {
+  choose('path', 'workflow'); fill('today', 'Workflow writing '); fill('firstResult', 'Workflow result');
+  choose('path', 'idea'); expect(controls.find(node => node.name === 'idea')!.value).toBe('');
+  fill('idea', 'Idea writing '); fill('firstVersion', 'Idea version');
+  await setup(); choose('path', 'workflow');
+  expect(controls.find(node => node.name === 'today')!.value).toBe('Workflow writing ');
+  expect(controls.find(node => node.name === 'firstResult')!.value).toBe('Workflow result');
+  choose('path', 'idea'); expect(controls.find(node => node.name === 'idea')!.value).toBe('Idea writing ');
+  expect(controls.find(node => node.name === 'firstVersion')!.value).toBe('Idea version');
+  click('[data-next]'); click('[data-next]'); click('[data-next]'); click('[data-next]');
+  fill('name', 'Alex'); fill('email', 'alex@example.com'); click('[data-next]');
+  form.dataset.available = 'true'; form.nodes['[type=submit]'].disabled = false;
+  fire(form, 'submit');
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+  const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
+  expect(body.idea).toBe('Idea writing'); expect(body.firstVersion).toBe('Idea version');
+  expect(body).not.toHaveProperty('today'); expect(body).not.toHaveProperty('firstResult');
+});
+it.each(['storage', 'submit'])('notices a sent draft through %s before sending with a new identity', async trigger => {
+  choose('path', 'workflow'); fill('today', 'We track clients');
+  const oldId = JSON.parse(store.get('software-brief-draft')!).submissionId;
+  click('[data-next]'); fire(steps[2].nodes['[data-skip]'], 'click'); click('[data-next]');
+  fire(steps[4].nodes['[data-skip]'], 'click'); fill('name', 'Alex'); fill('email', 'alex@example.com'); click('[data-next]');
+  store.set('software-brief-sent', oldId); store.delete('software-brief-draft');
+  form.dataset.available = 'true'; form.nodes['[type=submit]'].disabled = false;
+  if (trigger === 'storage') window.dispatchEvent(Object.assign(new Event('storage'), { key: 'software-brief-sent' }));
+  else fire(form, 'submit');
+  expect(fetch).not.toHaveBeenCalled();
+  expect(form.nodes['[data-form-status]'].textContent).toBe('This brief was already sent from another tab. Your changes here will be sent as a new brief.');
+  fire(form, 'submit'); await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+  expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string).submissionId).not.toBe(oldId);
+});
+
+it('keeps the sent identity stable if another tab finishes while delivery is pending', async () => {
+  choose('path', 'workflow'); fill('today', 'We track clients');
+  click('[data-next]'); fire(steps[2].nodes['[data-skip]'], 'click'); click('[data-next]');
+  fire(steps[4].nodes['[data-skip]'], 'click'); fill('name', 'Alex'); fill('email', 'alex@example.com'); click('[data-next]');
+  const sentId = JSON.parse(store.get('software-brief-draft')!).submissionId;
+  form.dataset.available = 'true'; form.nodes['[type=submit]'].disabled = false;
+  let resolve!: (response: Response) => void;
+  vi.mocked(fetch).mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+  fire(form, 'submit');
+  store.set('software-brief-sent', sentId);
+  window.dispatchEvent(Object.assign(new Event('storage'), { key: 'software-brief-sent' }));
+  expect(JSON.parse(store.get('software-brief-draft')!).submissionId).toBe(sentId);
+  vi.stubGlobal('document', { querySelector: () => new Node() });
+  resolve(Response.json({ ok: true, brief: { name: 'Alex', email: 'alex@example.com' }, clientCopyStatus: 'sent' }));
+  await vi.waitFor(() => expect(form.hidden).toBe(true));
+  expect(store.get('software-brief-sent')).toBe(sentId);
 });
