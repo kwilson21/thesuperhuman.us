@@ -53,9 +53,9 @@ const showNextUpdate = project?.next_update_on && project.next_update_on >= toda
 const paid=payments.some(payment=>payment.milestone_index===currentMilestone);
 const acceptedPaid=accepted && !handedOff && paid;
 const acceptedWaiting=accepted && !paid;
-const earlierAccepted=acceptedDeliveries.filter((update,index)=>update.milestone_index!<currentMilestone && acceptedDeliveries.findIndex(item=>item.milestone_index===update.milestone_index)===index && !handoffs.some(handoff=>handoff.milestone_index===update.milestone_index));
-const earlierVersions=updates.filter(update=>update.kind?.endsWith('_review') && update.id!==currentUpdate?.id && !undecidedReviews.includes(update) && update.id!==decidedReview?.id && !earlierAccepted.includes(update));
-const earlierUpdates=updates.filter(update=>update.id!==currentUpdate?.id && !earlierVersions.includes(update) && !railReviews.includes(update) && update.id!==decidedReview?.id && !handoffs.includes(update) && !earlierAccepted.includes(update));
+const otherAccepted=acceptedDeliveries.filter((update,index)=>update.milestone_index!==currentMilestone && acceptedDeliveries.findIndex(item=>item.milestone_index===update.milestone_index)===index && !handoffs.some(handoff=>handoff.milestone_index===update.milestone_index)).sort((a,b)=>(a.milestone_index ?? 0)-(b.milestone_index ?? 0));
+const earlierVersions=updates.filter(update=>update.kind?.endsWith('_review') && update.id!==currentUpdate?.id && !undecidedReviews.includes(update) && update.id!==decidedReview?.id && !otherAccepted.includes(update));
+const earlierUpdates=updates.filter(update=>update.id!==currentUpdate?.id && !earlierVersions.includes(update) && !railReviews.includes(update) && update.id!==decidedReview?.id && !handoffs.includes(update) && !otherAccepted.includes(update));
 const timeline=updates.filter(update=>update.milestone_index===currentMilestone && update.kind?.endsWith('_review')).slice().reverse();
 const note=currentUpdate?.what_changed ?? '';
 const visual = (id: string) => `/api/studio/software/${project!.request_id}/updates/${id}/visual`;
@@ -84,7 +84,7 @@ const agreementDocuments = [masterAgreement, agreementRecord?.id && !agreementRe
     </header>
     <div class:list={["project-columns", {"without-actions": railReviews.length===0}]}><div class="project-current">
       {currentUpdate && currentUpdate.kind!=='handoff' ? <SoftwareProjectUpdate workFirst hideChecks={Boolean(currentReview && !conversationClosed)} showExplanation={Boolean(acceptedWaiting || acceptedPaid)} projectName={terms.outcome} update={currentUpdate} checks={terms.milestones[currentMilestone].acceptance} deliverables={terms.milestones[currentMilestone].deliverables} visualUrl={currentUpdate.has_visual ? visual(currentUpdate.id) : undefined} /> : !currentUpdate && <section><h2>Your first update is on its way.</h2></section>}
-      {earlierAccepted.map(update=>{
+      {otherAccepted.map(update=>{
         const milestone=update.milestone_index ?? 0,paid=payments.some(payment=>payment.milestone_index===milestone),balance=balanceFor(milestone);
         return <section class="handoff-strip">
           <h2>Milestone {milestone+1}</h2>

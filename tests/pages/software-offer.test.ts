@@ -1085,6 +1085,35 @@ it('keeps every earlier acceptance visible until its own handoff',async()=>{
   } finally {sql.close();}
 });
 
+it('keeps later accepted milestones visible after moving the active milestone backward',async()=>{
+  const {sql,render,add,decision,scope}=await reviewStateFixture();
+  try {
+    scope.milestones.push({...scope.milestones[0],name:'Final stage'});
+    sql.prepare('UPDATE software_projects SET milestone_index=2,terms_json=?').run(JSON.stringify(scope));
+    for(const milestone of [0,1,2]){add(`accepted-${milestone}`,'delivery_review',milestone);decision(`accepted-${milestone}`);}
+    sql.exec("INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,created_by,created_at,updated_at) VALUES('balance','r','current',2,'balance',120000,15,'open','https://example.com/later-pay','owner','now','now')");
+    await render();
+    sql.exec('UPDATE software_projects SET milestone_index=1');
+    let html=await render(),current=html.slice(html.indexOf('class="project-current'),html.indexOf('class="project-history'));
+    expect(current).toMatch(/<h2[^>]*>Milestone 1<\/h2>/);
+    expect(current).toMatch(/<h2[^>]*>Milestone 3<\/h2>/);
+    expect(current.indexOf('>Milestone 1</h2>')).toBeLessThan(current.indexOf('>Milestone 3</h2>'));
+    expect(current).not.toMatch(/<h2[^>]*>Milestone 2<\/h2>/);
+    expect(current).toContain('href="https://example.com/later-pay"');
+    expect(current).toContain('Pay $1,200 ↗');
+    expect(html.slice(html.indexOf('class="project-history'))).not.toMatch(/id="version-accepted-[02]"/);
+    sql.exec("INSERT INTO software_milestone_payments VALUES('r',2,'2026-10-03','owner'); UPDATE software_invoices SET status='paid'");
+    html=await render();
+    const later=html.slice(html.indexOf('>Milestone 3</h2>'),html.indexOf('class="project-history'));
+    expect(later).toContain('Paid. Your files are on the way.');
+    expect(later).not.toContain('https://example.com/later-pay');
+    add('handoff','handoff',2,'2026-10-04');
+    html=await render();
+    expect(html).toContain('Your files · Milestone 3');
+    expect(html).not.toMatch(/<h2[^>]*>Milestone 3<\/h2>/);
+  } finally {sql.close();}
+});
+
 it('renders all four personalized receipt outcomes into the rendered page', async () => {
   const container = await AstroContainer.create();
   const html = await container.renderToString(start,{request:new Request('https://thesuperhuman.us/software/start'),locals:{runtime:{env:{}}} as any});
