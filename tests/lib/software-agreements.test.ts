@@ -1519,3 +1519,22 @@ it('prevents external start if website signing commits after the initial read',a
  expect(response.status).toBe(409);expect(sql.prepare('SELECT count(*) n FROM software_projects').get().n).toBe(0);
  expect(sql.prepare("SELECT count(*) n FROM software_agreements WHERE status='client_signed'").get().n).toBe(2);
 });
+
+it.each(['legal_name', 'entity_type', 'state', 'country', 'business_address', 'signer_name', 'signer_title', 'reviewer_name', 'reviewer_email', 'approver_name', 'approver_email', 'notice_email'])('maps control characters in %s to a field error in browser and API validation', async field => {
+  const { resolveClientDetails } = await import('~/lib/agreement-draft');
+  const { jurisdiction, portfolio, naming, ...rest } = client;
+  const values = { ...rest, state: jurisdiction, portfolio_choice: 'private', [field]: 'Example\u0001 LLC' };
+  const resolved = resolveClientDetails(values, 'client@example.com');
+  expect(resolved).toEqual({ ok: false, errors: { [field]: 'Remove unusual characters from this field.' } });
+  for (const route of ['review', 'draft']) {
+    const { POST } = route === 'review' ? await import('~/pages/api/offer/[token]/review') : await import('~/pages/api/offer/[token]/draft');
+    const response = await POST({ params: { token }, locals: { runtime: { env } }, request: new Request(request().url, { method: 'POST', headers: { cookie: `agreement_session=${token}`, origin: 'https://example.com', 'content-type': 'application/json' }, body: JSON.stringify({ csrf_nonce: 'csrf', values }) }) } as never);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ ok: false, error: 'Check the highlighted details.', errors: { [field]: 'Remove unusual characters from this field.' } });
+  }
+});
+it('maps unfamiliar draft validation issues to a generic message on the field', async () => {
+  const { resolveClientDetails } = await import('~/lib/agreement-draft');
+  expect(resolveClientDetails({ signer_title: 123 }, 'client@example.com')).toEqual({ ok: false, errors: { signer_title: 'Check this field.' } });
+  expect(resolveClientDetails({ legal_name: 'x'.repeat(201) }, 'client@example.com')).toEqual({ ok: false, errors: { legal_name: 'Check this field.' } });
+});

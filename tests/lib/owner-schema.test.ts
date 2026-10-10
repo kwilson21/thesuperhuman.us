@@ -116,31 +116,9 @@ describe('owner insights schema', () => {
   });
 
   it('provides an idempotent music baseline plus separate owner domains', () => {
-    const baseline = readFileSync(new URL('../../migrations/music/0001_music_schema.sql', import.meta.url), 'utf8');
-    const retention = readFileSync(new URL('../../migrations/music/0002_owner_retention.sql', import.meta.url), 'utf8');
-    const payments = readFileSync(new URL('../../migrations/music/0003_audio_payments.sql', import.meta.url), 'utf8');
-    const reconciliation = readFileSync(new URL('../../migrations/music/0004_stripe_reconciliation.sql', import.meta.url), 'utf8');
-    const projects = readFileSync(new URL('../../migrations/music/0005_audio_projects.sql', import.meta.url), 'utf8');
-    const clientAccess = readFileSync(new URL('../../migrations/music/0006_audio_client_access.sql', import.meta.url), 'utf8');
-    const messages = readFileSync(new URL('../../migrations/music/0007_audio_project_messages.sql', import.meta.url), 'utf8');
-    const updates = readFileSync(new URL('../../migrations/music/0008_audio_project_updates.sql', import.meta.url), 'utf8');
-    const invitations = readFileSync(new URL('../../migrations/music/0009_audio_project_invitations.sql', import.meta.url), 'utf8');
-    const files = readFileSync(new URL('../../migrations/music/0010_audio_project_files.sql', import.meta.url), 'utf8');
-    const uploads = readFileSync(new URL('../../migrations/music/0011_audio_project_uploads.sql', import.meta.url), 'utf8');
-    const publication = readFileSync(new URL('../../migrations/music/0012_audio_project_publication.sql', import.meta.url), 'utf8');
-    const revocation = readFileSync(new URL('../../migrations/music/0013_audio_project_revocation.sql', import.meta.url), 'utf8');
-    const studioRetention = readFileSync(new URL('../../migrations/music/0014_audio_project_retention.sql', import.meta.url), 'utf8');
-    const declined = readFileSync(new URL('../../migrations/music/0015_audio_project_close_declined.sql', import.meta.url), 'utf8');
-    const peaks = readFileSync(new URL('../../migrations/music/0016_audio_project_file_peaks.sql', import.meta.url), 'utf8');
-    const milestones = readFileSync(new URL('../../migrations/music/0017_audio_project_update_milestones.sql', import.meta.url), 'utf8');
-    const decisions = readFileSync(new URL('../../migrations/music/0018_audio_project_review_decisions.sql', import.meta.url), 'utf8');
-    const softwareSigning = readFileSync(new URL('../../migrations/music/0023_software_signing.sql', import.meta.url), 'utf8');
-    const deliverySelection = readFileSync(new URL('../../migrations/music/0024_software_delivery_selection_and_review_windows.sql', import.meta.url), 'utf8');
-    const softwareInvoices = readFileSync(new URL('../../migrations/music/0022_software_invoices.sql', import.meta.url), 'utf8');
-    const softwareProjects = readFileSync(new URL('../../migrations/music/0021_software_projects.sql', import.meta.url), 'utf8');
-    const offers = readFileSync(new URL('../../migrations/music/0020_software_offers.sql', import.meta.url), 'utf8');
-    const software = readFileSync(new URL('../../migrations/music/0019_software_requests.sql', import.meta.url), 'utf8');
-    expect(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8')).toBe(`${baseline.trim()}\n${retention.trim()}\n${payments.trim()}\n${reconciliation.trim()}\n${projects.trim()}\n${clientAccess.trim()}\n${messages.trim()}\n${updates.trim()}\n${invitations.trim()}\n${files.trim()}\n${uploads.trim()}\n${publication.trim()}\n${revocation.trim()}\n${studioRetention.trim()}\n${declined.trim()}\n${peaks.trim()}\n${milestones.trim()}\n${decisions.trim()}\n${software.trim()}\n${offers.trim()}\n${softwareProjects.trim()}\n${softwareInvoices.trim()}\n${softwareSigning.trim()}\n${deliverySelection.trim()}\n`);
+    const migrations = readdirSync(new URL('../../migrations/music/', import.meta.url)).filter(name => name.endsWith('.sql')).sort();
+    const concatenated = Buffer.concat(migrations.map(name => readFileSync(new URL(`../../migrations/music/${name}`, import.meta.url))));
+    expect(readFileSync(new URL('../../db/music.sql', import.meta.url))).toEqual(concatenated);
     const db = apply('../../db/music.sql');
     const expected = [
       'music_event_daily', 'music_events', 'music_interest', 'music_playback_daily',
@@ -153,7 +131,7 @@ describe('owner insights schema', () => {
       'software_invoices', 'software_stripe_unmatched_events', 'software_projects', 'software_project_updates', 'software_project_messages', 'software_project_audit', 'software_milestone_payments',
     ];
     expect(tableNames(db)).toEqual(expect.arrayContaining(expected));
-    expect(() => db.exec(`${baseline}\n${retention}\n${payments}`)).not.toThrow();
+    expect(() => db.exec(migrations.slice(0, 3).map(name => readFileSync(new URL(`../../migrations/music/${name}`, import.meta.url), 'utf8')).join(''))).not.toThrow();
     expect(() => db.prepare(`INSERT INTO owner_requests
       (id,kind,email,summary,status,created_at,updated_at)
       VALUES ('1','unknown','fan@example.com','Bad kind','new','now','now')`).run()).toThrow();

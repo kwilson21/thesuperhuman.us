@@ -43,9 +43,9 @@ const post: APIRoute = async ({ request, locals, params }) => {
   if (!input.success || input.data.csrf_nonce !== session.csrf_nonce)
     return agreementJson({ ok: false, error: 'Reload and try again.' }, 403);
   try {
-    await saveAgreementDraft(db, offer!, session, input.data.values);
     const resolved = resolveClientDetails(input.data.values, session.recipient_email);
     if (!resolved.ok) return agreementJson({ok:false,error:'Check the highlighted details.',errors:resolved.errors},400);
+    await saveAgreementDraft(db, offer!, session, input.data.values);
     return nativeAgreementResponse(
       request,
       agreementJson({

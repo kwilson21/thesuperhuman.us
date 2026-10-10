@@ -99,8 +99,21 @@ export const fieldMessages: Record<string, string> = {
   approver_email: "Add a valid approver email",
   notice_email: "Add a valid notice email",
 };
+export function draftFieldErrors(issues: z.ZodIssue[]) {
+  const errors: Record<string, string> = {};
+  for (const issue of issues) {
+    const field = String(issue.path[0] ?? "legal_name");
+    errors[field] = issue.message === "Remove control characters."
+      ? "Remove unusual characters from this field."
+      : "Check this field.";
+  }
+  return errors;
+}
 export function resolveClientDetails(input: unknown, email: string) {
-  const draft = draftSchema.parse(input);
+  const parsed = draftSchema.safeParse(input);
+  if (!parsed.success)
+    return { ok: false as const, errors: draftFieldErrors(parsed.error.issues) };
+  const draft = parsed.data;
   const client = clientAgreementSchema.safeParse({
     legal_name: draft.legal_name,
     entity_type: draft.entity_type,
@@ -126,7 +139,11 @@ export function resolveClientDetails(input: unknown, email: string) {
             ? "country"
             : "state"
           : String(issue.path[0]);
-      errors[field] = fieldMessages[field] ?? "Check this answer";
+      errors[field] = issue.message === "Remove control characters."
+        ? "Remove unusual characters from this field."
+        : issue.message === "This answer is required." || issue.code === "invalid_string"
+          ? fieldMessages[field] ?? "Check this field."
+          : "Check this field.";
     }
   if (!businessTypes.includes(draft.entity_type))
     errors.entity_type = fieldMessages.entity_type;
