@@ -268,7 +268,7 @@ export async function issueAgreementLink(
     }
     await db.prepare('UPDATE software_agreement_links SET used_at=? WHERE id=?').bind(at.toISOString(),id).run();
   }
-  if (sent.ok) await db.prepare(
+  if (sent.ok || sent.uncertain) await db.prepare(
     "UPDATE software_agreement_links SET used_at=? WHERE purpose=? AND recipient_email=? AND offer_id IS ? AND used_at IS NULL AND id<>? AND issued_at<=?",
   ).bind(at.toISOString(),purpose,email,offer?.id??null,id,at.toISOString()).run();
   return agreementJson(receipt);

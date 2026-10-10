@@ -20,12 +20,12 @@ export function wranglerSecretListArguments() {
   return ['node_modules/wrangler/bin/wrangler.js', 'secret', 'list', '--format', 'json'];
 }
 
-export async function ownerHealth({ now = new Date(), configuredNames, query, media, head, remote = false, verify = head, siteOrigin: configuredOrigin = /** @type {string | undefined} */ (undefined) }) {
+export async function ownerHealth({ now = new Date(), configuredNames, query, media, head, remote = false, postDeploy = false, verify = head, siteOrigin: configuredOrigin = /** @type {string | undefined} */ (undefined) }) {
   const checks = [];
   try {
     const origin=siteOrigin(configuredOrigin);
     checks.push(pass('signing-origin', `Effective signing origin: ${origin}.`));
-    if(remote) {
+    if(remote && postDeploy) {
       try {
         const result=await verify(`${origin}/agreements/verify`);
         checks.push(result.status===401 ? pass('signing-route','The deployed agreement verification route returned the expected bare-visit 401.')
@@ -126,8 +126,9 @@ export async function ownerHealth({ now = new Date(), configuredNames, query, me
 
 async function main() {
   const args = process.argv.slice(2);
-  if (args.some(arg => arg !== '--remote')) throw new Error('Usage: node scripts/owner-health.mjs [--remote]');
+  if (args.some(arg => !['--remote','--post-deploy'].includes(arg))) throw new Error('Usage: node scripts/owner-health.mjs [--remote] [--post-deploy]');
   const remote = args.includes('--remote');
+  const postDeploy = args.includes('--post-deploy');
   const recording = JSON.parse(await readFile(new URL('../src/content/recordings/old-news-recording.json', import.meta.url), 'utf8'));
   const baseUrl = process.env.OWNER_HEALTH_BASE_URL || 'https://thesuperhuman.us';
   const configuredNames = new Set(['MUSIC_DB', 'AUDIO', ...requiredConfiguration.filter(name => process.env[name])]);
@@ -153,6 +154,7 @@ async function main() {
       configuredNames,
       siteOrigin: config.vars?.SITE_ORIGIN,
       remote,
+      postDeploy,
       verify: async url => {
         const response=await fetch(url,{redirect:'manual',signal:AbortSignal.timeout(10_000)});
         await response.body?.cancel();

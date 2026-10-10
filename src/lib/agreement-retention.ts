@@ -10,6 +10,7 @@ export type RetentionManifest = {
     id: string;
     sha256: string;
     row_hash: string;
+    project_evidence: { request_id: string; external_signature_details_json: string | null }[];
     objects: { key: string; sha256: string }[];
   }[];
   unattached_attachments: { id: string; key: string; sha256: string; created_at: string }[];
@@ -88,6 +89,7 @@ export async function previewAgreementRetention(
       id: row.id,
       sha256: row.text_sha256,
       row_hash: await hashOfferToken(canonicalJson(row)),
+      project_evidence: (await db.prepare('SELECT request_id,external_signature_details_json FROM software_projects WHERE offer_id=? ORDER BY request_id').bind(row.offer_id).all<RetentionManifest['agreements'][number]['project_evidence'][number]>()).results,
       objects: objects.sort((a, b) => a.key.localeCompare(b.key)),
     });
   }
@@ -176,7 +178,12 @@ export async function applyAgreementRetention(
     throw new Error('Archive changed. Preview again.');
   const manifestHash = await hashOfferToken(canonicalJson(manifest));
   for (const item of manifest.agreements) {
+    const evidenceGuards = () => [
+      softwareGuard(db, 'SELECT 1 WHERE (SELECT count(*) FROM software_projects WHERE offer_id=(SELECT offer_id FROM software_agreements WHERE id=?))=?', [item.id,item.project_evidence.length]),
+      ...item.project_evidence.map(project => softwareGuard(db, 'SELECT 1 FROM software_projects WHERE request_id=? AND external_signature_details_json IS ?', [project.request_id,project.external_signature_details_json])),
+    ];
     await db.batch([
+      ...evidenceGuards(),
       softwareGuard(
         db,
         `SELECT 1 FROM software_agreements a WHERE a.id=? AND a.text_sha256=? AND ${eligible}`,
@@ -199,6 +206,7 @@ export async function applyAgreementRetention(
       await bucket.delete(object.key);
     }
     await db.batch([
+      ...evidenceGuards(),
       softwareGuard(
         db,
         `SELECT 1 FROM software_agreements a WHERE a.id=? AND a.text_sha256=? AND ${eligible}`,
@@ -228,6 +236,9 @@ export async function applyAgreementRetention(
       db.prepare(`DELETE FROM software_agreement_events WHERE agreement_id IS NULL
         AND offer_id=(SELECT offer_id FROM software_agreements WHERE id=?)
         AND NOT EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_agreement_events.offer_id AND a.id<>?)`).bind(item.id,item.id),
+      db.prepare(`UPDATE software_projects SET external_signature_details_json=NULL
+        WHERE content_deleted_at IS NOT NULL AND offer_id=(SELECT offer_id FROM software_agreements WHERE id=?)
+          AND NOT EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_projects.offer_id AND a.id<>?)`).bind(item.id,item.id),
       db.prepare('DELETE FROM software_agreements WHERE id=?').bind(item.id),
       ...item.objects.map(object => db.prepare(
         "DELETE FROM software_agreement_attachments WHERE object_key=? AND NOT EXISTS(SELECT 1 FROM software_agreements a,json_each(a.attachment_manifest_json) m WHERE json_extract(m.value,'$.key')=software_agreement_attachments.object_key)",

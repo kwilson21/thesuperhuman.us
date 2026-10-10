@@ -188,7 +188,13 @@ it('reports the default and overridden effective signing origin', async () => {
 
 it.each([401,404])('checks the deployed signing landing status %s',async status=>{
   const urls:string[]=[];
-  const report=await ownerHealth({...healthyFixture(),siteOrigin:'https://deployed.example',remote:true,verify:async(url:string)=>{urls.push(url);return {status};}});
+  const report=await ownerHealth({...healthyFixture(),siteOrigin:'https://deployed.example',remote:true,postDeploy:true,verify:async(url:string)=>{urls.push(url);return {status};}});
   expect(urls).toEqual(['https://deployed.example/agreements/verify']);
   expect(report.checks.find(c=>c.id==='signing-route')?.status).toBe(status===401?'pass':'attention');
+});
+
+it('does not check the live signing route before deployment',async()=>{
+ const verify=async()=>{throw new Error('must not call');};
+ const report=await ownerHealth({...healthyFixture(),remote:true,verify});
+ expect(report.checks.some(c=>c.id==='signing-route')).toBe(false);
 });
