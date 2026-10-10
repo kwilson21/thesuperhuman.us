@@ -146,3 +146,25 @@ const privateTemplateFile = '.private/signing/templates.json';
 it.runIf(existsSync(privateTemplateFile))('renders the real v1 agreements and embeds exact signing evidence', async () => {
   await checkTemplatePacket(privateTemplateFile, ['1 Parties and scope', '14 Signatures', '1 Engagement details', '9 Exceptions attachments and signatures']);
 }, 30000);
+
+it('preserves heading characters absent from Newsreader using Inter', async () => {
+  const { default: fontkit } = await import('@pdf-lib/fontkit');
+  const heading = fontkit.create(Buffer.from(newsreaderBase64,'base64'));
+  const inter = fontkit.create(Buffer.from(interBase64,'base64'));
+  const character = String.fromCodePoint(inter.characterSet.find((point:number)=>point>1024 && !heading.characterSet.includes(point))!);
+  const text = '1 Client '+character;
+  const pdf = await PDFDocument.load(await renderAgreementPacket({} as Env,[document('sow',text)],[{}]));
+  expect(extract(pdf)).toContain('Client '+character);
+});
+
+it.each([false,true])('prints stored statement versions unchanged in the PDF (SOW only: %s)',async sowOnly=>{
+  const {intentText,consentText}=await import('~/lib/agreement-fields');
+  const signatures=['client','contractor'].map(party=>({party,typed_name:'Example Signer',consent_version:'website-signing-v3',consent_text:consentText('Example LLC',party==='contractor'),intent_text:intentText(party==='contractor',sowOnly)}));
+  signatures.push({party:'client',typed_name:'Earlier Signer',consent_version:'website-signing-v2',consent_text:'Earlier stored consent',intent_text:'Earlier stored intent'});
+  const certificate={signatures};
+  const original=JSON.stringify(certificate);
+  const pdf=await PDFDocument.load(await renderAgreementPacket({ASSETS:assets} as unknown as Env,[document('sow','Exact retained agreement')],[certificate]));
+  const text=extract(pdf).replace(/\s+/g,' ');
+  for(const signature of signatures)for(const key of ['consent_version','consent_text','intent_text'] as const)expect(text).toContain(signature[key]);
+  expect(JSON.stringify(certificate)).toBe(original);
+});

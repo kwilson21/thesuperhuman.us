@@ -27,7 +27,14 @@ export const offerTermsSchema = z.object({
 export type OfferTerms = z.infer<typeof offerTermsSchema>;
 export function validateOfferTerms(input: unknown) {
   const result = offerTermsSchema.safeParse(input, { errorMap: issue => ({ message: issue.path[0] === 'paymentMode' ? 'Choose a payment mode.' : 'This answer is required.' }) });
-  if (result.success) return { ok: true as const, value: result.data };
+  if (result.success) {
+    const errors: Record<string,string> = {};
+    result.data.milestones.forEach((milestone,index)=>{
+      const normalized=milestone.deliverables.map(line=>line.normalize('NFC').replace(/\s+/g,' ').trim().toLowerCase());
+      if(new Set(normalized).size!==normalized.length) errors[`milestones.${index}.deliverables`]='Each deliverable needs to be different.';
+    });
+    return Object.keys(errors).length ? {ok:false as const,errors} : {ok:true as const,value:result.data};
+  }
   return { ok: false as const, errors: Object.fromEntries(result.error.issues.map(issue => [issue.path.join('.'), issue.message])) };
 }
 export const paymentSchedules = {
@@ -58,7 +65,7 @@ export async function getLinkedOffer(db: D1Database, token: string) {
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
   return db.prepare(`SELECT o.* FROM software_offers o JOIN software_offer_links l ON l.request_id=o.request_id
     JOIN owner_requests r ON r.id=o.request_id WHERE l.token_hash=? AND l.revoked_at IS NULL AND o.status='sent'
-    AND r.kind='software' AND r.status<>'withdrawn' AND r.email<>''`).bind(await hashOfferToken(token)).first<SoftwareOffer>();
+    AND r.kind='software' AND r.status NOT IN ('withdrawn','resolved') AND r.email<>''`).bind(await hashOfferToken(token)).first<SoftwareOffer>();
 }
 
 export const offerSendingMessage = 'An offer is still being sent. Try again in a moment.';

@@ -10,12 +10,12 @@ import { beforeAll, afterAll, expect, it } from 'vitest';
 import { hashOfferToken, type OfferTerms } from '~/lib/software-offers';
 import { agreementValues, agreementDetailsSchema } from '~/lib/agreement-fields';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
-let agreements: any, signPage: any, agreementPanel: any, directory: string, softwarePage: any, composer: any, today: any, page: any, preview: any, editor: any, questions: any, fit: any, panel: any, ownerRequest: any;
+let linkLanding: any, archiveLanding: any, agreements: any, signPage: any, agreementPanel: any, directory: string, softwarePage: any, composer: any, today: any, page: any, preview: any, editor: any, questions: any, fit: any, panel: any, ownerRequest: any;
 const token = 'a'.repeat(43);
 const terms = { outcome:'Current offer',summary:'A shared view.',milestones:[{ name:'Tracker',deliverables:['Status view'],acceptance:['Add a client.'],feeCents:240000 }],clientInputs:'',exclusions:'',timing:'',paymentMode:'standard' };
 beforeAll(async () => {
   directory = await mkdtemp(resolve('.software-render-'));
-  await build({ entryPoints:{ agreements:'src/pages/owner/agreements.astro', signPage:'src/pages/offer/[token]/sign.astro', agreementPanel:'src/components/owner/SoftwareAgreementPanel.astro', panel:'src/components/owner/SoftwareProjectPanel.astro', ownerRequest:'src/pages/owner/requests/[id].astro', today:'src/pages/owner/index.astro', composer:'src/pages/owner/requests/[id]/update.astro', software:'src/pages/studio/software/[id].astro', client:'src/pages/offer/[token].astro', preview:'src/pages/owner/requests/[id]/offer.astro', editor:'src/components/owner/SoftwareOfferEditor.astro', questions:'src/components/owner/SoftwareQuestions.astro', fit:'src/components/owner/SoftwareFitReview.astro' }, outdir:directory, outExtension:{ '.js':'.mjs' }, bundle:true, format:'esm', platform:'node', packages:'external',
+  await build({ entryPoints:{ linkLanding:'src/pages/offer/[token]/verify.astro', archiveLanding:'src/pages/agreements/verify.astro', agreements:'src/pages/owner/agreements.astro', signPage:'src/pages/offer/[token]/sign.astro', agreementPanel:'src/components/owner/SoftwareAgreementPanel.astro', panel:'src/components/owner/SoftwareProjectPanel.astro', ownerRequest:'src/pages/owner/requests/[id].astro', today:'src/pages/owner/index.astro', composer:'src/pages/owner/requests/[id]/update.astro', software:'src/pages/studio/software/[id].astro', client:'src/pages/offer/[token].astro', preview:'src/pages/owner/requests/[id]/offer.astro', editor:'src/components/owner/SoftwareOfferEditor.astro', questions:'src/components/owner/SoftwareQuestions.astro', fit:'src/components/owner/SoftwareFitReview.astro' }, outdir:directory, outExtension:{ '.js':'.mjs' }, bundle:true, format:'esm', platform:'node', packages:'external',
     plugins:[{ name:'astro-test-render', setup(builder) {
       builder.onResolve({ filter:/\.css(?:\?|$)|\?astro/ }, () => ({ path:'empty-style',namespace:'empty' }));
       builder.onLoad({ filter:/.*/,namespace:'empty' }, () => ({ contents:'',loader:'js' }));
@@ -24,7 +24,7 @@ beforeAll(async () => {
     } }],
   });
   const { readdir } = await import('node:fs/promises');
-  for (const file of await readdir(directory)) { const compiled = (await import(/* @vite-ignore */ pathToFileURL(resolve(directory,file)).href)).default; if (file.startsWith('agreements')) agreements = compiled; else if (file.startsWith('signPage')) signPage = compiled; else if (file.startsWith('agreementPanel')) agreementPanel = compiled; else if (file.startsWith('panel')) panel = compiled; else if (file.startsWith('ownerRequest')) ownerRequest = compiled; else if (file.startsWith('today')) today = compiled; else if (file.startsWith('composer')) composer = compiled; else if (file.startsWith('software')) softwarePage = compiled; else if (file.startsWith('client')) page = compiled; else if (file.startsWith('preview')) preview = compiled; else if (file.startsWith('editor')) editor = compiled; else if (file.startsWith('questions')) questions = compiled; else fit = compiled; }
+  for (const file of await readdir(directory)) { const compiled = (await import(/* @vite-ignore */ pathToFileURL(resolve(directory,file)).href)).default; if (file.startsWith('linkLanding')) linkLanding = compiled; else if (file.startsWith('archiveLanding')) archiveLanding = compiled; else if (file.startsWith('agreements')) agreements = compiled; else if (file.startsWith('signPage')) signPage = compiled; else if (file.startsWith('agreementPanel')) agreementPanel = compiled; else if (file.startsWith('panel')) panel = compiled; else if (file.startsWith('ownerRequest')) ownerRequest = compiled; else if (file.startsWith('today')) today = compiled; else if (file.startsWith('composer')) composer = compiled; else if (file.startsWith('software')) softwarePage = compiled; else if (file.startsWith('client')) page = compiled; else if (file.startsWith('preview')) preview = compiled; else if (file.startsWith('editor')) editor = compiled; else if (file.startsWith('questions')) questions = compiled; else fit = compiled; }
 });
 afterAll(async () => { if (directory) await rm(directory,{ recursive:true,force:true }); });
 async function fixture() {
@@ -404,12 +404,14 @@ it('renders one signing page, returning details, waiting and both-signed actions
     const render = (query = '') => container.renderToString(signPage, { params: { token }, request: new Request(`https://thesuperhuman.us/offer/${token}/sign${query}`, { headers: { cookie: `agreement_session=${session}` } }), locals: { runtime: { env: { MUSIC_DB: db } } } as any });
     let html = await render();
     expect(html).toContain('Ready to sign.');expect(html).toContain('value="Example LLC"');
+    expect(html).toContain('Read the agreement');expect(html).toContain('Read the statement of work');
+    expect(html).toContain('Signing applies your name above as your electronic signature on the agreement and statement of work linked above.');
     expect(html).not.toContain('Step 2 of 3');expect(html).not.toContain('Before you sign');
     expect(html.match(/type="checkbox"/g)).toHaveLength(1);expect(html.match(/type="radio"/g)).toHaveLength(3);
     expect(html).toContain('data-terms-reader');expect(html).toContain('v2026-09-30');
     sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES('reused','msa','old','r','client','msa','executed','Original executed MSA',?,?,'now','2026-09-30','old-session')").run('b'.repeat(64),JSON.stringify({client:{legal_name:'Example LLC',entity_type:'LLC',jurisdiction:'Wyoming',business_address:'Business address'}}));
     sql.exec("UPDATE software_offers SET reused_msa_id='reused' WHERE id='current'");
-    html=await render();expect(html).toContain('Same as last time: Example LLC, LLC, Wyoming, Business address.');expect(html).toMatch(/data-business-details[^>]*hidden/);
+    html=await render();expect(html).toContain('Your signed agreement from Sep 30, 2026 still applies.');expect(html).toContain('Read it');expect(html).not.toContain('Read the agreement');expect(html).not.toContain('Read the full agreement and statement of work');expect(html).toContain('Signing applies your name above as your electronic signature on the statement of work linked above.');expect(html).toContain('Same as last time: Example LLC, LLC, Wyoming, Business address.');expect(html).toMatch(/data-business-details[^>]*hidden/);
     sql.prepare("INSERT INTO software_agreement_drafts VALUES('current','alex@example.com',?,'now')").run(JSON.stringify({legal_name:'Example LLC',signer_name:'Alex',entity_type:'LLC',state:'Wyoming',business_address:'Updated business address'}));
     html=await render();expect(html).not.toContain('Same as last time');expect(html).toContain('Updated business address');expect(html).not.toMatch(/data-business-details[^>]*hidden/);
     sql.exec("DELETE FROM software_agreement_drafts WHERE offer_id='current'");
@@ -432,12 +434,15 @@ it('renders one signing page, returning details, waiting and both-signed actions
     expect(html).toContain('data-agreement-review-link');
     expect(html).toContain('Countersign as Example Contractor');
     expect(html).not.toContain('name=\"authority\"');
-    expect(html).toContain("Countersigning applies your name above");
+    expect(html).toContain("Countersigning applies your name above as your electronic signature on the statement of work you reviewed.");
     expect(html.indexOf('Client’s signed choices')).toBeLessThan(html.indexOf('value="countersign"'));
     sql.exec("UPDATE software_agreements SET status='executed'");
     html = await render();
     expect(html).toContain('Signed by both of you.');
-    expect(html).toContain('Open your project page');
+    expect(html).not.toContain('Open your project page');
+    expect(html).toContain("I'll email you the link to your project page when work starts.");
+    sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('r','current',?,'standard','now','now','now','owner','now','now')").run(JSON.stringify(terms));
+    html=await render();expect(html).toContain('Open your project page');
     sql.exec("INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,created_by,created_at,updated_at) VALUES('signing-deposit','r','current',0,'deposit',120000,7,'open','https://example.com/deposit','owner','now','now')");
     html=await render();expect(html).toContain('Pay the deposit ↗');expect(html).toContain('https://example.com/deposit');
   } finally { sql.close(); }
@@ -509,7 +514,7 @@ it('reads immutable agreed fees, dates and complete legal text without enabling 
     const reader=html.slice(html.indexOf('data-terms-reader'),html.indexOf('Invoices'));
     expect(html).toContain('Planned Oct 1, 2026 to Oct 20, 2026');expect(html).toContain('Target delivery: Oct 19, 2026');
     expect(reader).not.toContain('Nov 1, 2026');
-    expect(html).toContain('$0.51 deposit / $0.50 balance');expect(html).toContain('80%, includes prior payments');
+    expect(html).toContain('$0.50 deposit / $0.51 balance');expect(html).toContain('80%, includes prior payments');
     for (const text of ['Synthetic access and sample.','Live rollout.','Client operates the delivered tool.','Source and notices','Every Thursday','Agreed support only','No extra expenses']) expect(html).toContain(text);
     expect(html).toContain('Exact MSA: &lt;script&gt;not executable&lt;/script&gt;');expect(html).toContain('Exact SOW: full material terms and responsibilities.');
     // Reused MSA belongs to an older request. Download the current SOW packet,
@@ -595,5 +600,63 @@ it('puts the named review work first through partial, complete, accepted and han
     html=await render();expect(html).toContain('Milestone 2 is starting.');expect(html).toContain('Next update: Oct 10, 2026');expect(html).not.toContain('Sketch 3.');expect(html).toContain('Your files');expect(html).toContain('https://example.com/notes');expect(html.match(/Corrections are covered through Nov 1, 2026\./g)).toHaveLength(1);
     const olderReview=html.slice(html.indexOf('data-endpoint="/api/studio/software/r/reviews/new-delivery"'));
     expect(olderReview).toMatch(/name="missing_deliverables" value="1"/);expect(olderReview).toMatch(/name="inaccessible_deliverables" value="0"/);
+  } finally {sql.close();}
+});
+it('masks the recipient on every unauthenticated email receipt', async () => {
+  const {sql,db}=await fixture();
+  try {
+    sql.prepare("INSERT INTO software_agreement_templates VALUES('msa','msa',1,'Template',?,1,'now','owner')").run('a'.repeat(64));
+    sql.exec("UPDATE software_signing_settings SET software_signing_enabled=1; UPDATE software_offers SET msa_template_id='msa',recipient_email_snapshot='alex@example.com' WHERE id='current'");
+    const container=await AstroContainer.create();
+    const html=await container.renderToString(signPage,{params:{token},request:new Request(`https://thesuperhuman.us/offer/${token}/sign?email=sent`),locals:{runtime:{env:{MUSIC_DB:db}}}} as any);
+    expect(html).toContain('I sent a link to a•••@example.com.');
+    expect(html).not.toContain('alex@example.com');
+  } finally {sql.close();}
+});
+
+it('renders a quiet Remove control beside each unsent attachment',async()=>{
+  const {sql,db}=await fixture();
+  try {
+    sql.exec('UPDATE software_signing_settings SET software_signing_enabled=1');
+    const attachment={filename:'Draft.pdf',version:'1',date:'2026-10-01',key:'agreements/attachments/draft.pdf'};
+    sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE status='draft'").run(JSON.stringify({attachments:[attachment]}));
+    const offers=(await db.prepare('SELECT * FROM software_offers').all()).results;
+    const html=await (await AstroContainer.create()).renderToString(editor,{props:{requestId:'r',email:'alex@example.com',offers},locals:{runtime:{env:{MUSIC_DB:db}}}} as any);
+    expect(html).toMatch(/Draft.pdf[\s\S]*class="studio-quiet"[^>]*data-remove-attachment[^>]*>Remove<\/button>/);
+  } finally {sql.close();}
+});
+
+it('renders omitted duplicate legacy deliverables by index without offering acceptance',async()=>{
+  const {sql,db}=await fixture();
+  try {
+    const purchased={...terms,milestones:[{...terms.milestones[0],deliverables:['Status view','Status view']}]};
+    sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES('r','current',?,'standard','now','now','now','owner','now','now')").run(JSON.stringify(purchased));
+    sql.exec("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,delivered_deliverables_json,created_by,created_at,updated_at,shared_at) VALUES('review','r','delivery_review','shared',0,'Tracker','working_preview','[0]','owner','2026-10-01','2026-10-01','2026-10-01')");
+    const session='a'.repeat(72);const {createHash}=await import('node:crypto');
+    sql.prepare("INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES(?,'alex@example.com','now','2099-01-01','now')").run(createHash('sha256').update(session).digest('hex'));
+    const html=await (await AstroContainer.create()).renderToString(softwarePage,{params:{id:'r'},request:new Request('https://thesuperhuman.us/studio/software/r',{headers:{cookie:`studio_session=${session}`}}),locals:{runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}}} as any);
+    expect(html).toMatch(/value="milestone_accepted"[^>]*disabled[^>]*>Accept Latest update/);
+    expect(html).toMatch(/name="missing_deliverables" value="1"/);
+    expect(html).not.toMatch(/name="inaccessible_deliverables" value="1"/);
+  } finally {sql.close();}
+});
+
+it('renders scanner-safe agreement and archive landings with exact copy', async()=>{
+  const {sql,db}=await fixture();
+  try {
+    const key='k'.repeat(43);
+    sql.exec("UPDATE software_signing_settings SET software_signing_enabled=1; UPDATE software_offers SET recipient_email_snapshot='alex@example.com' WHERE id='current'");
+    const container=await AstroContainer.create();
+    for(const archive of [false,true]) {
+      sql.prepare("INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES(?,?,?,?,?,?,?,?)").run(archive?'archive':'agreement',archive?'archive':'agreement',archive?null:'current',archive?null:await hashOfferToken(token),'alex@example.com',await hashOfferToken(key),'now','2099-01-01');
+      const response=await container.renderToResponse(archive?archiveLanding:linkLanding,{params:{token},request:new Request(`https://thesuperhuman.us/${archive?'agreements':`offer/${token}`}/verify?key=${key}`),locals:{runtime:{env:{MUSIC_DB:db}}}} as any);
+      const html=await response.text();
+      expect(response.status).toBe(200);expect(response.headers.get('referrer-policy')).toBe('no-referrer');expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(html).toContain(archive?'Your documents are ready.':'Your agreement is ready.');
+      expect(html).toContain(archive?'>Continue</button>':'>Continue to sign</button>');expect(html).toContain('This link works once.');expect(html).toContain('method="post"');
+      if(!archive)expect(html).toContain('Current offer');
+      expect(sql.prepare('SELECT used_at FROM software_agreement_links WHERE id=?').get(archive?'archive':'agreement').used_at).toBeNull();
+      sql.exec('DELETE FROM software_agreement_links');
+    }
   } finally {sql.close();}
 });

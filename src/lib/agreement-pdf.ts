@@ -66,6 +66,7 @@ export async function renderAgreementPacket(
   const inter = await pdf.embedFont(fontBytes(interBase64)),
     heading = await pdf.embedFont(fontBytes(newsreaderBase64));
   const supported = new Set(inter.getCharacterSet());
+  const headingSupported = new Set(heading.getCharacterSet());
   const text = (value: string) => {
     for (const char of value)
       if (
@@ -79,7 +80,7 @@ export async function renderAgreementPacket(
     y = 720,
     importedPages = 0;
   const add = (value: string, title = false) => {
-    const font = title ? heading : inter,
+    const font = title && [...value].every(char=>headingSupported.has(char.codePointAt(0)!)) ? heading : inter,
       size = title ? 18 : 11,
       lines = wrap(text(value), font, size, 516);
     if (title && y < 90) {

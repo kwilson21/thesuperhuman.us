@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { agreementSession, agreementHeaders } from '~/lib/agreement-access';
+import { hashBytes } from '~/lib/agreement-artifacts';
 export const prerender = false;
 export const GET: APIRoute = async ({ locals, request, params }) => {
   const env = locals.runtime.env,
@@ -10,20 +11,21 @@ export const GET: APIRoute = async ({ locals, request, params }) => {
     return new Response('Verify email first.', { status: 401, headers: agreementHeaders });
   const row = await db
     .prepare(
-      `SELECT a.object_key FROM software_agreement_attachments a JOIN software_offers o ON o.request_id=a.request_id WHERE a.id=? AND o.id=? AND EXISTS(SELECT 1 FROM json_each(o.agreement_details_json,'$.attachments') WHERE json_extract(value,'$.key')=a.object_key AND json_extract(value,'$.sha256')=a.sha256)`,
+      `SELECT a.object_key,a.sha256 FROM software_agreement_attachments a JOIN software_offers o ON o.request_id=a.request_id WHERE a.id=? AND o.id=? AND EXISTS(SELECT 1 FROM json_each(o.agreement_details_json,'$.attachments') WHERE json_extract(value,'$.key')=a.object_key AND json_extract(value,'$.sha256')=a.sha256)`,
     )
     .bind(params.id, session.offer_id)
-    .first<{ object_key: string }>();
+    .first<{ object_key: string; sha256: string }>();
   if (!row) return new Response('Not found', { status: 404 });
   const object = await env.AUDIO.get(row.object_key);
-  return object
-    ? new Response(object.body, {
+  if (!object) return new Response('Unavailable', {status:503,headers:agreementHeaders});
+  const bytes=await object.arrayBuffer();
+  if (await hashBytes(bytes)!==row.sha256) return new Response("This file couldn't be verified, so I've held it back. Please let me know before you sign.", {status:503,headers:agreementHeaders});
+  return new Response(bytes, {
         headers: {
           ...agreementHeaders,
           'content-type': 'application/pdf',
           'content-disposition': 'attachment; filename="agreement-attachment.pdf"',
           'x-content-type-options': 'nosniff',
         },
-      })
-    : new Response('Unavailable', { status: 503 });
+      });
 };

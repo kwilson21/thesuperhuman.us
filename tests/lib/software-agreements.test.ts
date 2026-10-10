@@ -164,10 +164,17 @@ beforeEach(async () => {
       bucketUploaded.set(k, new Date());
       return bucketData.set(k, typeof v === 'string' ? new TextEncoder().encode(v) : v);
     }),
-    list: vi.fn(async ({ prefix }: { prefix: string }) => ({
-      objects: [...bucketData.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key, uploaded: bucketUploaded.get(key) ?? new Date(0) })),
-      truncated: false,
-    })),
+    list: vi.fn(async ({ prefix, cursor, limit = 1000 }: { prefix: string; cursor?: string; limit?: number }) => {
+      const keys = [...bucketData.keys()].filter(k => k.startsWith(prefix)).sort();
+      if (cursor && !cursor.startsWith('after:')) throw new Error('Invalid cursor');
+      const remaining = keys.filter(key => !cursor || key > cursor.slice(6));
+      const page = remaining.slice(0, limit);
+      return {
+        objects: page.map(key => ({ key, uploaded: bucketUploaded.get(key) ?? new Date(0) })),
+        truncated: remaining.length > limit,
+        cursor: remaining.length > limit ? `after:${page.at(-1)}` : undefined,
+      };
+    }),
     delete: vi.fn(async (k: string) => {
       bucketUploaded.delete(k);
       return bucketData.delete(k);
@@ -452,7 +459,10 @@ it('issues a hashed pinned-recipient link, consumes once, expires and limits res
   expect(stored).toBeTruthy();
   expect(JSON.stringify(stored)).not.toContain(key);
   expect(Date.parse(stored.expires_at)-Date.parse(stored.issued_at)).toBe(3600000);
-  const opened = await completeAgreementLink(env, req, key, token);
+  const landing = await completeAgreementLink(env, req, key, token);
+  expect(landing.status).toBe(200);
+  expect(sql.prepare('SELECT used_at FROM software_agreement_links WHERE id=?').get(stored.id).used_at).toBeNull();
+  const opened = await completeAgreementLink(env, new Request(req.url, {method:"POST"}), key, token);
   expect(opened.status).toBe(303);
   expect(opened.headers.get('location')).toBe(`/offer/${token}/sign`);
   expect(opened.headers.get('set-cookie')).toContain('Max-Age=7200');
@@ -464,7 +474,7 @@ it('rejects expired links without creating a session', async () => {
   const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
   const key = new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get('key')!;
   sql.prepare("UPDATE software_agreement_links SET expires_at='2000-01-01'").run();
-  expect((await completeAgreementLink(env,request(),key,token)).status).toBe(401);
+  expect((await completeAgreementLink(env,new Request(request(),{method:"POST"}),key,token)).status).toBe(401);
   expect(sql.prepare('SELECT count(*) n FROM software_agreement_sessions').get().n).toBe(1);
 });
 it('keeps archive access independent of closed projects and the signing switch', async () => {
@@ -1080,7 +1090,7 @@ it('consumes a link atomically under parallel verification', async () => {
   await issueAgreementLink(env,request(),{turnstileToken:'test'},token);
   const payload=JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
   const key=new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get('key')!;
-  const results=await Promise.all([completeAgreementLink(env,request(),key,token),completeAgreementLink(env,request(),key,token)]);
+  const results=await Promise.all([completeAgreementLink(env,new Request(request(),{method:"POST"}),key,token),completeAgreementLink(env,new Request(request(),{method:"POST"}),key,token)]);
   expect(results.map(r=>r.status).sort()).toEqual([303,401]);
 });
 it('rejects expired sessions, wrong recipients, studio cookies and archive purpose for signing', async () => {
@@ -1134,6 +1144,16 @@ it('reuses an MSA across two offers without importing the first SOW attachments'
   expect(JSON.parse(msa.attachment_manifest_json)).toEqual([]);
   expect(JSON.parse((await offerAgreements(db, 'o')).find(a => a.kind === 'sow')!.attachment_manifest_json)).toEqual([first]);
   expect(JSON.parse((await offerAgreements(db, 'o2'))[0].attachment_manifest_json)).toEqual([second]);
+  const nextOffer=(await db.prepare("SELECT * FROM software_offers WHERE id='o2'").first<SoftwareOffer>())!;
+  await signAgreements(db,nextOffer,(await agreementSession(db,request(),'agreement','o2'))!,reviewed.documents.map(d=>({id:d.id,hash:d.hash})),request());
+  await countersignAgreements(db,nextOffer,reviewed.documents.map(d=>({id:d.id,hash:d.hash})),'Owner','owner@example.com',request());
+  const rows=sql.prepare('SELECT * FROM software_agreement_signatures WHERE agreement_id=?').all(reviewed.documents[0].id);
+  expect(rows).toHaveLength(2);
+  for(const row of rows) {
+    expect(row.intent_text).toBe(row.party==='client'?'Signing applies your name above as your electronic signature on the statement of work linked above.':'Countersigning applies your name above as your electronic signature on the statement of work you reviewed.');
+    expect(row.consent_version).toBe('website-signing-v3');
+  }
+
 });
 
 it.each([false, true])('cleans the last shared attachment reference while preserving a held reference (%s)', async held => {
@@ -1435,7 +1455,7 @@ it('resumes the server draft under a fresh two-hour email session without sharin
   await issueAgreementLink(env,request(),{turnstileToken:'test'},token);
   const payload=JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
   const key=new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get('key')!;
-  const opened=await completeAgreementLink(env,request(),key,token);
+  const opened=await completeAgreementLink(env,new Request(request(),{method:"POST"}),key,token);
   const newSession=await agreementSession(db,new Request(request().url,{headers:{cookie:opened.headers.get('set-cookie')!}}),'agreement','o');
   expect(newSession).not.toBeNull();
   expect(Date.parse(newSession!.expires_at)-Date.parse(newSession!.verified_at)).toBe(7200000);
@@ -1466,7 +1486,7 @@ it('retains both verbatim statements and verification method in signatures and c
     const row=sql.prepare('SELECT * FROM software_agreement_signatures WHERE party=? LIMIT 1').get(party);
     expect(row.consent_text).toBe(consentText(client.legal_name,party==='contractor'));
     expect(row.intent_text).toBe(intentText(party==='contractor'));
-    expect(row.consent_version).toBe('website-signing-v2');
+    expect(row.consent_version).toBe('website-signing-v3');
     expect(row.verification_method).toBe(party==='client'?'verified by one-time email link':'verified by owner authentication');
   }
   await prepareAgreementArtifact(env,id,async(_env,_docs,certificates)=>{
@@ -1537,4 +1557,195 @@ it('maps unfamiliar draft validation issues to a generic message on the field', 
   const { resolveClientDetails } = await import('~/lib/agreement-draft');
   expect(resolveClientDetails({ signer_title: 123 }, 'client@example.com')).toEqual({ ok: false, errors: { signer_title: 'Check this field.' } });
   expect(resolveClientDetails({ legal_name: 'x'.repeat(201) }, 'client@example.com')).toEqual({ ok: false, errors: { legal_name: 'Check this field.' } });
+});
+
+it('renders cumulative checkpoint payments and invoice-identical odd-cent installments', async () => {
+  const { agreementValues, agreementDetailsSchema } = await import('~/lib/agreement-fields');
+  const { softwareInvoiceTerms } = await import('~/lib/software-invoices');
+  const purchased = {...terms, paymentMode:'standard' as const, milestones:[terms.milestones[0],{...terms.milestones[0],feeCents:303,checkpoint:{label:'Preview',cancellationPercent:75}}]};
+  const values = agreementValues(purchased,agreementDetailsSchema.parse({...details,milestones:[details.milestones[0],{...details.milestones[0],start:'2026-10-20',checkpoint_criteria:'View',checkpoint_evidence:'Preview'}]}),clientAgreementSchema.parse(client),contractorSchema.parse(contractor),{effective_on:'2026-10-01',msa_version:'2026-10-01 / template 1',sow_number:'SOW-test',offer_version:1,template_version:1});
+  expect(values.milestones[1].checkpoint_cumulative_amount).toBe('$3.28 (includes prior payments)');
+  expect(values.milestones[1].checkpoint).toContain('cumulative cancellation amount $3.28');
+  expect(values.system.amount1).toBe('$0.50 deposit / $0.51 balance');
+  expect(values.milestones[0].deposit).toBe('$0.50');
+  expect(values.milestones[0].balance).toBe('$0.51');
+  expect(softwareInvoiceTerms(purchased,0,'deposit').amountCents).toBe(50);
+  const rendered=renderAgreement('sow',synthetic('sow'),values);
+  expect(rendered).toContain('milestone.checkpoint_cumulative_amount: $3.28 (includes prior payments)');
+  expect(rendered).toContain('milestone.deposit: $0.50');
+  expect(rendered).toContain('milestone.balance: $0.51');
+});
+it.each(['data_retention','handoff_access'])('requires a complete day count in custom %s prose', field => {
+  const input = {...details,project_retention_days:30,handoff_access_days:30,data_retention:'Keep for 30 days.',handoff_access:'Keep for 30 days.',[field]:'Keep access for 130 days.'};
+  expect(()=>validateAgreementDetails(input,terms as any)).toThrow('State the agreed');
+  expect(()=>validateAgreementDetails({...input,[field]:'Keep access for 30 days.'},terms as any)).not.toThrow();
+});
+
+it('masks link receipts and refunds definite token-scoped email rejection without cooldown', async () => {
+  sql.exec('DELETE FROM software_agreement_sessions');
+  vi.stubGlobal('fetch',vi.fn(async (url:string)=>url.includes('turnstile') ? Response.json({success:true}) : Response.json({message:'Rejected'},{status:422})));
+  for(let i=0;i<4;i++) {
+    const response=await issueAgreementLink(env,request(),{turnstileToken:'test'},token);
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({error:"That email didn't go through. Please try again."});
+    expect(sql.prepare('SELECT COALESCE(sum(uses),0) n FROM audio_client_allowances').get().n).toBe(0);
+    expect(sql.prepare("SELECT count(*) n FROM software_agreement_links WHERE id<>'challenge'").get().n).toBe(0);
+  }
+  vi.stubGlobal('fetch',vi.fn(async()=>Response.json({success:true})));
+  const response=await issueAgreementLink(env,request(),{turnstileToken:'test'},token);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({message:'I sent a link to c•••@example.com. Tap it on any device to open your agreement.'});
+});
+it('keeps definite archive send rejection generic', async () => {
+  await signed();
+  sql.exec("UPDATE software_agreements SET status='executed'");
+  vi.stubGlobal('fetch',vi.fn(async (url:string)=>url.includes('turnstile') ? Response.json({success:true}) : Response.json({message:'Rejected'},{status:422})));
+  const response=await issueAgreementLink(env,request(),{turnstileToken:'test',email:'client@example.com'});
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({message:'If an agreement is available, a link is on its way.'});
+});
+it('verifies the attachment bytes against the offer hash before client download', async () => {
+  const {GET}=await import('~/pages/api/agreements/attachments/[id]');
+  const id=crypto.randomUUID(),key=`agreements/attachments/${id}.pdf`,bytes=new TextEncoder().encode('%PDF-original'),sha=await hashBytes(bytes);
+  sql.prepare('INSERT INTO software_agreement_attachments VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,'r','File.pdf','1','2026-10-01',key,sha,bytes.length,'now','owner');
+  sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='o'").run(JSON.stringify({...details,attachments:[{key,sha256:sha}]}));
+  bucketData.set(key,bytes);
+  const call=()=>GET({locals:{runtime:{env}},request:request(),params:{id}} as never);
+  expect(new Uint8Array(await (await call()).arrayBuffer())).toEqual(bytes);
+  bucketData.set(key,new TextEncoder().encode('%PDF-altered'));
+  const refused=await call();expect(refused.status).toBe(503);
+  expect(await refused.text()).toBe("This file couldn't be verified, so I've held it back. Please let me know before you sign.");
+});
+
+it.each(['resolve','withdraw'])('retires unsigned signing atomically when request is closed (%s)',async action=>{
+  const {changeOwnerRequest}=await import('~/lib/owner-requests');
+  sql.exec("UPDATE software_offer_links SET created_at='2000-01-01'");
+  const current=await offer();await reviewAgreements(db,current!, (await agreementSession(db,request()))!,client);
+  sql.prepare("INSERT INTO software_agreement_drafts VALUES('o','client@example.com',?,'now')").run(JSON.stringify({legal_name:'Private'}));
+  await changeOwnerRequest(db,{id:'r',action:action as 'resolve'|'withdraw',actor:'owner@example.com'});
+  expect(sql.prepare("SELECT count(*) n FROM software_agreements WHERE status='review'").get().n).toBe(0);
+  expect(sql.prepare('SELECT count(*) n FROM software_agreement_drafts').get().n).toBe(0);
+  expect(sql.prepare('SELECT count(*) n FROM software_agreement_sessions WHERE revoked_at IS NULL').get().n).toBe(0);
+  expect(sql.prepare('SELECT count(*) n FROM software_agreement_links WHERE used_at IS NULL').get().n).toBe(0);
+});
+it.each(['revoke','replace'])('deletes signing drafts when an offer stops being signable (%s)',async action=>{
+  const {POST}=await import('~/pages/api/owner/requests/[id]/software');
+  sql.exec("UPDATE software_offer_links SET created_at='2000-01-01'");
+  sql.prepare("INSERT INTO software_agreement_drafts VALUES('o','client@example.com',?,'now')").run(JSON.stringify({legal_name:'Private'}));
+  if(action==='replace'){
+    sql.prepare("INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES('draft','r',2,'draft',?,'now','now')").run(JSON.stringify(terms));
+    sql.exec('UPDATE software_signing_settings SET software_signing_enabled=0');
+  }
+  const body=action==='revoke'?{action:'revoke',expectedLinkCreatedAt:'2000-01-01'}:{action:'send',version:2,expectedUpdatedAt:'now'};
+  const response=await POST({params:{id:'r'},request:new Request('https://example.com/api/owner/requests/r/software',{method:'POST',headers:{origin:'https://example.com','content-type':'application/json'},body:JSON.stringify(body)}),locals:{owner:{email:'owner@example.com'},runtime:{env}}} as never);
+  expect(response.status).toBe(200);
+  expect(sql.prepare('SELECT count(*) n FROM software_agreement_drafts').get().n).toBe(0);
+});
+it.each(['creating','open','payment_failed','uncollectible','paid'])('blocks pending signing abandonment with an unrefunded %s deposit',async status=>{
+  const result=await signed();const {POST}=await import('~/pages/api/owner/requests/[id]/agreement');
+  sql.prepare("INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,created_by,created_at,updated_at) VALUES('deposit','r','o',0,'deposit',50,7,?,'owner','now','now')").run(status);
+  const call=()=>POST({params:{id:'r'},request:new Request('https://example.com/api/owner/requests/r/agreement',{method:'POST',headers:{origin:'https://example.com','content-type':'application/json'},body:JSON.stringify({action:'abandon',documents:result.documents,reason:'Cancelled',confirmed:true})}),locals:{owner:{email:'owner@example.com'},runtime:{env}}} as never);
+  const response=await call();expect(response.status).toBe(409);expect(await response.json()).toMatchObject({error:'Void or refund the deposit invoice first.'});
+  expect((await offer())!.status).toBe('sent');expect((await offerAgreements(db,'o')).every(a=>a.status==='client_signed')).toBe(true);
+  sql.exec(status==='paid' ? "UPDATE software_invoices SET refunded_at='now'" : "UPDATE software_invoices SET status='void'");expect((await call()).status).toBe(200);
+});
+it.each(['draft','sent'])('refuses MSA termination while a live %s offer reuses it',async status=>{
+  const result=await signed();await countersignAgreements(db,(await offer())!,result.documents,'Example Owner','owner@example.com',request());
+  const msa=(await offerAgreements(db,'o')).find(a=>a.kind==='msa')!;
+  sql.exec("INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES('r2','software','client@example.com','Tool','reviewed','now','now')");
+  sql.prepare("INSERT INTO software_offers(id,request_id,version,status,terms_json,reused_msa_id,created_at,updated_at) VALUES('reuse','r2',1,?,'{}',?,'now','now')").run(status,msa.id);
+  const {POST}=await import('~/pages/api/owner/requests/[id]/agreement');
+  const call=()=>POST({params:{id:'r'},request:new Request('https://example.com/api/owner/requests/r/agreement',{method:'POST',headers:{origin:'https://example.com','content-type':'application/json'},body:JSON.stringify({action:'end',agreement_id:msa.id,ended_on:projectToday(),confirmed:true})}),locals:{owner:{email:'owner@example.com'},runtime:{env}}} as never);
+  const response=await call();expect(response.status).toBe(409);expect(await response.json()).toMatchObject({error:'An open offer uses this agreement. Withdraw that offer first.'});
+  expect(sql.prepare('SELECT terminated_at FROM software_agreements WHERE id=?').get(msa.id).terminated_at).toBeNull();
+  sql.exec("UPDATE software_offers SET status='withdrawn' WHERE id='reuse'");expect((await call()).status).toBe(200);
+});
+it('bounds the attachment scan even when the archive has nothing eligible',async()=>{
+  const {previewAgreementRetention}=await import('~/lib/agreement-retention');
+  const list=vi.fn(async()=>{if(list.mock.calls.length>1)throw new Error('Unbounded scan');return {objects:[],truncated:true,cursor:'next'};});env.AUDIO.list=list as any;
+  await previewAgreementRetention(db,env.AUDIO,'local');expect(list).toHaveBeenCalledTimes(1);
+  expect(list).toHaveBeenCalledWith(expect.objectContaining({prefix:'agreements/attachments/',limit:100}));
+});
+
+it.each([false,true])('removes draft attachments and preserves objects referenced by sent offers (%s)',async sentReference=>{
+  const {POST}=await import('~/pages/api/owner/requests/[id]/software');
+  const id=crypto.randomUUID(),key=`agreements/attachments/${id}.pdf`,bytes=new TextEncoder().encode('%PDF-attachment'),sha=await hashBytes(bytes);
+  const attachment={key,sha256:sha,filename:'File.pdf',version:'1',date:'2026-10-01',bytes:bytes.length};
+  bucketData.set(key,bytes);
+  sql.prepare('INSERT INTO software_agreement_attachments VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,'r','File.pdf','1','2026-10-01',key,sha,bytes.length,'now','owner');
+  if(sentReference)sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='o'").run(JSON.stringify({...details,attachments:[attachment]}));
+  sql.prepare("INSERT INTO software_offers(id,request_id,version,status,terms_json,agreement_details_json,created_at,updated_at) VALUES('draft','r',2,'draft',?,?,'now','now')").run(JSON.stringify(terms),JSON.stringify({...details,attachments:[attachment]}));
+  const response=await POST({params:{id:'r'},request:new Request('https://example.com/api/owner/requests/r/software',{method:'POST',headers:{origin:'https://example.com','content-type':'application/json'},body:JSON.stringify({action:'draft',terms,agreementDetails:{...details,attachments:[]},removedAttachmentKeys:[key],expectedUpdatedAt:'now'})}),locals:{owner:{email:'owner@example.com'},runtime:{env}}} as never);
+  expect(response.status).toBe(200);
+  expect(JSON.parse(sql.prepare("SELECT agreement_details_json FROM software_offers WHERE id='draft'").get().agreement_details_json).attachments).toEqual([]);
+  expect(bucketData.has(key)).toBe(sentReference);
+});
+
+it('saves a valid empty manifest after more than five cumulative attachment removals',async()=>{
+  const {POST}=await import('~/pages/api/owner/requests/[id]/software');
+  const response=await POST({params:{id:'r'},request:new Request('https://example.com/api/owner/requests/r/software',{method:'POST',headers:{origin:'https://example.com','content-type':'application/json'},body:JSON.stringify({action:'draft',terms,agreementDetails:{...details,attachments:[]},removedAttachmentKeys:Array.from({length:6},()=>`agreements/attachments/${crypto.randomUUID()}.pdf`),expectedUpdatedAt:null})}),locals:{owner:{email:'owner@example.com'},runtime:{env}}} as never);
+  expect(response.status).toBe(200);
+});
+
+it('rechecks a newly live deposit inside the abandonment transaction',async()=>{
+  const result=await signed(),{POST}=await import('~/pages/api/owner/requests/[id]/agreement');
+  const batch=db.batch.bind(db);
+  db.batch=async statements=>{
+    sql.exec("INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,created_by,created_at,updated_at) VALUES('racing-deposit','r','o',0,'deposit',50,7,'open','owner','now','now')");
+    return batch(statements);
+  };
+  const response=await POST({params:{id:'r'},request:new Request('https://example.com/api/owner/requests/r/agreement',{method:'POST',headers:{origin:'https://example.com','content-type':'application/json'},body:JSON.stringify({action:'abandon',documents:result.documents,reason:'Cancelled',confirmed:true})}),locals:{owner:{email:'owner@example.com'},runtime:{env}}} as never);
+  expect(response.status).toBe(409);expect(await response.json()).toMatchObject({error:'Void or refund the deposit invoice first.'});
+  expect((await offer())!.status).toBe('sent');expect((await offerAgreements(db,'o')).every(a=>a.status==='client_signed')).toBe(true);
+});
+
+it.each(['agreement','archive'])('GET leaves %s links reusable until POST, which rechecks expiry',async purpose=>{
+  const key='z'.repeat(43),hash=await hashOfferToken(key),offerToken=purpose==='agreement'?token:undefined;
+  sql.prepare('INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES(?,?,?,?,?,?,?,?)').run('landing',purpose,purpose==='agreement'?'o':null,purpose==='agreement'?await hashOfferToken(token):null,'client@example.com',hash,'now','2099-01-01');
+  const sessions=sql.prepare('SELECT count(*) n FROM software_agreement_sessions').get().n;
+  for(let i=0;i<2;i++)expect((await completeAgreementLink(env,new Request('https://example.com'),key,offerToken)).status).toBe(200);
+  expect(sql.prepare("SELECT used_at FROM software_agreement_links WHERE id='landing'").get().used_at).toBeNull();
+  expect(sql.prepare('SELECT count(*) n FROM software_agreement_sessions').get().n).toBe(sessions);
+  sql.prepare("UPDATE software_agreement_links SET expires_at='2000-01-01' WHERE id='landing'").run();
+  expect((await completeAgreementLink(env,new Request('https://example.com',{method:'POST'}),key,offerToken)).status).toBe(401);
+  sql.prepare("UPDATE software_agreement_links SET expires_at='2099-01-01' WHERE id='landing'").run();
+  const response=await completeAgreementLink(env,new Request('https://example.com',{method:'POST'}),key,offerToken);
+  expect(response.status).toBe(303);expect(response.headers.get('location')).toBe(purpose==='agreement'?`/offer/${token}/sign`:'/agreements');
+  expect(sql.prepare('SELECT count(*) n FROM software_agreement_sessions').get().n).toBe(sessions+1);
+  for(const method of ['GET','POST'])expect((await completeAgreementLink(env,new Request('https://example.com',{method}),key,offerToken)).status).toBe(401);
+});
+
+
+it('covers later orphan pages, wraps, and applies the reviewed page after another preview', async () => {
+  const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
+  const now = new Date('2026-10-01T12:00:00Z');
+  for (let i = 0; i < 101; i++) {
+    const key = `agreements/attachments/kept-${String(i).padStart(3, '0')}.pdf`;
+    bucketData.set(key, new Uint8Array([1]));
+    bucketUploaded.set(key, now);
+  }
+  const key = 'agreements/attachments/z-orphan.pdf';
+  bucketData.set(key, new Uint8Array([2]));
+  const first = await previewAgreementRetention(db, env.AUDIO, 'test-storage', now);
+  expect(first.orphan_scan_cursor).toBeNull();
+  expect(first.orphan_attachments).toEqual([]);
+  const second = await previewAgreementRetention(db, env.AUDIO, 'test-storage', now);
+  expect(second.orphan_attachments.map(item => item.key)).toEqual([key]);
+  const wrapped = await previewAgreementRetention(db, env.AUDIO, 'test-storage', now);
+  expect(wrapped.orphan_scan_cursor).toBeNull();
+  expect(wrapped.orphan_attachments).toEqual([]);
+  await applyAgreementRetention(db, env.AUDIO, 'test-storage', second, now);
+  expect(bucketData.has(key)).toBe(false);
+  const next = await previewAgreementRetention(db, env.AUDIO, 'test-storage', now);
+  expect(next.orphan_scan_cursor).toBe(second.orphan_scan_cursor);
+});
+
+it.each(['not json', JSON.stringify({ version: 1, cursor: 42 }), JSON.stringify({ version: 1, cursor: 'damaged' })])('restarts a corrupted orphan cursor (%s)', async marker => {
+  const { previewAgreementRetention } = await import('~/lib/agreement-retention');
+  bucketData.set('agreements/retention/attachment-cursor.json', new TextEncoder().encode(marker));
+  const key = 'agreements/attachments/orphan.pdf';
+  bucketData.set(key, new Uint8Array([2]));
+  const manifest = await previewAgreementRetention(db, env.AUDIO, 'test-storage');
+  expect(manifest.orphan_scan_cursor).toBeNull();
+  expect(manifest.orphan_attachments.map(item => item.key)).toEqual([key]);
 });

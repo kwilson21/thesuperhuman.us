@@ -20,7 +20,7 @@ export const updateInput = z.object({
   what_changed: text(1000), checks_limitations: text(1000), next_step: text(300), client_request: text(300),
   next_update_on: projectDate, email_client: z.boolean(),
   criteria: z.array(text(300)).max(20).default([]),
-  delivered_deliverables: z.array(text(300)).max(20).default([]),
+  delivered_deliverables: z.array(z.union([z.number().int().min(0).max(7),text(300)])).max(20).default([]),
   // Drafts may contain an unfinished reference; the share action enforces a
   // complete, safe HTTPS target before exposing any link to the client.
   links: z.array(z.object({ label: text(80), url: text(2000) })).max(10).default([]),
@@ -67,10 +67,16 @@ export type ClientSoftwareUpdate = Pick<SoftwareUpdate, 'id' | 'title' | 'artifa
   criteria_json?: string; delivered_deliverables_json?: string; links_json?: string; review_window_days?: number; decision?: SoftwareDecision | null; decided_at?: string | null; decision_body?: string | null;
 };
 /** Older review rows predate saved scope snapshots; treat them as full scope. */
+export function deliveredIndexes(update: Pick<ClientSoftwareUpdate, 'delivered_deliverables_json'>, planned: string[]) {
+  try {
+    const saved: unknown = JSON.parse(update.delivered_deliverables_json ?? '[]');
+    if (!Array.isArray(saved)) return [];
+    if (!saved.length) return planned.map((_,index)=>index); // Legacy rows predate scope snapshots.
+    return [...new Set(saved.map(item=>typeof item==='number' ? item : typeof item==='string' ? planned.indexOf(item) : -1))].filter(index=>Number.isInteger(index) && index>=0 && index<planned.length);
+  } catch { return []; }
+}
 export function deliveredScope(update: Pick<ClientSoftwareUpdate, 'delivered_deliverables_json'>, planned: string[]) {
-  let saved: string[] = [];
-  try { const parsed = JSON.parse(update.delivered_deliverables_json ?? '[]'); if (Array.isArray(parsed)) saved = parsed.filter((item): item is string => typeof item === 'string'); } catch { /* legacy/corrupt snapshots fall back to the agreed scope */ }
-  return saved.length ? saved.filter(item=>planned.includes(item)) : planned;
+  return deliveredIndexes(update,planned).map(index=>planned[index]);
 }
 function parseLegacyRevisionTargets(header: string, checks: string[], planned: string[]) {
   const prefix = header.match(/^Requested changes to .* for milestone \d+: /);

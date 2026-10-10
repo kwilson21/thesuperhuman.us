@@ -178,6 +178,11 @@ export async function applyOwnerRetention(database, review, environment, now = n
     `DELETE FROM ${table} WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`) : [];
   const draftsTable = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_agreement_drafts'");
   if (draftsTable.length) softwareCleanup.push(`DELETE FROM software_agreement_drafts WHERE offer_id IN (SELECT id FROM software_offers WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection}))`);
+  const sessionsTable = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_agreement_sessions'");
+  const linksTable = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_agreement_links'");
+  const selectedOffers = `SELECT id FROM software_offers WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`;
+  if (sessionsTable.length) softwareCleanup.push(`DELETE FROM software_agreement_sessions WHERE offer_id IN (${selectedOffers})`);
+  if (linksTable.length) softwareCleanup.push(`DELETE FROM software_agreement_links WHERE offer_id IN (${selectedOffers})`);
   const invoiceTable = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_invoices'");
   if(invoiceTable.length) softwareCleanup.push(
     `DELETE FROM stripe_webhook_events WHERE invoice_id IN (SELECT stripe_invoice_id FROM software_invoices WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection}))`,
@@ -189,7 +194,7 @@ export async function applyOwnerRetention(database, review, environment, now = n
   if (projectsTable.length) softwareCleanup.push(
     `DELETE FROM software_milestone_payments WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection}) AND request_id IN (SELECT request_id FROM software_projects WHERE content_deleted_at IS NOT NULL)`,
     `UPDATE software_projects SET terms_json='{}',waiting_for='',started_by='' WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection}) AND content_deleted_at IS NOT NULL`,
-    `UPDATE software_offers SET terms_json='{}',sent_by=NULL,sent_at=NULL,status='withdrawn' WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`);
+    `UPDATE software_offers SET terms_json='{}',sent_by=NULL,sent_at=NULL,status='withdrawn',recipient_email_snapshot=CASE WHEN EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_offers.id) THEN recipient_email_snapshot ELSE NULL END,agreement_details_json=CASE WHEN EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_offers.id) THEN agreement_details_json ELSE NULL END WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`);
   const guard = (query, expected) => `SELECT CASE WHEN (${query})=${quote(expected)} THEN 1 ELSE json_extract('retention source changed','$') END`;
   const runId = hash(`${review.generatedAt}:${review.requestSourceHash}:${review.playbackSourceHash}`);
   const statements = [

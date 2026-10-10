@@ -33,8 +33,13 @@ export async function ownerHealth({ now = new Date(), configuredNames, query, me
   }
   if (availableSchema.size) {
     const missing = requiredSchema.filter(name => !availableSchema.has(name));
+    try {
+      const columns = new Set((await query("SELECT name FROM pragma_table_info('software_project_updates')")).map(row=>row.name));
+      for (const column of ['delivered_deliverables_json','review_window_days_extended'])
+        if (!columns.has(column)) missing.push(`software_project_updates.${column} (migration 0024)`);
+    } catch { missing.push('software_project_updates columns (migration 0024)'); }
     checks.push(missing.length
-      ? attention('schema', `${missing.length} required owner data object${missing.length === 1 ? ' is' : 's are'} missing.`, 'Reconcile the database migration ledger before applying any migration.')
+      ? attention('schema', `Required owner schema is missing: ${missing.join(', ')}.`, 'Reconcile the database migration ledger before applying any migration.')
       : pass('schema', 'Required owner data objects are present.'));
   }
 

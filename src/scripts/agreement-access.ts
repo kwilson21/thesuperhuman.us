@@ -1,6 +1,19 @@
 import { consentText } from "~/lib/agreement-fields";
 import { resolveClientDetails } from "~/lib/agreement-draft";
 export function setupAgreementAccess() {
+  for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-document-link], a[href="#executed-agreement"]')) {
+    link.addEventListener('click', (event) => {
+      const target = document.querySelector<HTMLElement>(link.hash);
+      const reader = document.querySelector<HTMLDetailsElement>('[data-agreed-terms]');
+      if (link.hasAttribute('data-document-link') && reader) {
+        event.preventDefault();
+        reader.open = true;
+        reader.querySelector<HTMLButtonElement>('[data-terms-stage-button="3"]')?.click();
+        target?.scrollIntoView({block:'start'});
+      } else if (target instanceof HTMLDetailsElement) target.open = true;
+    });
+  }
+
   for (const form of document.querySelectorAll<HTMLFormElement>(
     "[data-agreement-link]",
   )) {
@@ -171,6 +184,7 @@ export function setupAgreementAccess() {
         text = document.createElement("pre"),
         download = document.createElement("a");
       section.className = "agreement-section";
+      section.id = `review-${doc.kind}`;
       heading.textContent = doc.kind.toUpperCase();
       text.className = "agreement-text";
       text.textContent = doc.text;

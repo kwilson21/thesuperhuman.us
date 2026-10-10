@@ -1,4 +1,5 @@
 import { z } from 'astro/zod';
+import { softwareInvoiceTerms } from './software-invoices';
 import { validProjectDate } from './audio-project-updates';
 import { formatUSD, offerTotal, type OfferTerms } from './software-offers';
 export const cleanText = (max: number) =>
@@ -106,12 +107,12 @@ export const agreementDetailsSchema = z
       issue('longer_review_confirmed', 'Confirm the longer review period.');
     if (
       v.data_retention !== 'MSA default, including one year for the private project page' &&
-      !v.data_retention.includes(String(v.project_retention_days))
+      !new RegExp(`(?<![\\p{L}\\p{N}.])${v.project_retention_days}(?![\\p{L}\\p{N}.])`, 'u').test(v.data_retention)
     )
       issue('data_retention', 'State the agreed project page period in days.');
     if (
       v.handoff_access !== 'MSA default' &&
-      !v.handoff_access.includes(String(v.handoff_access_days))
+      !new RegExp(`(?<![\\p{L}\\p{N}.])${v.handoff_access_days}(?![\\p{L}\\p{N}.])`, 'u').test(v.handoff_access)
     )
       issue('handoff_access', 'State the agreed handoff period in days.');
     if (
@@ -173,9 +174,9 @@ export const signatureReference =
 export const consentText = (party: string, owner = false) => owner
   ? "I agree to sign and receive these documents electronically, and I'm authorized to sign for The Superhuman Group LLC."
   : `I agree to sign and receive these documents electronically, and I'm authorized to sign for ${party}, a business. I can download and keep a complete copy.`;
-export const intentText = (owner = false) => owner
-  ? 'Countersigning applies your name above as your electronic signature on the agreement and statement of work you reviewed.'
-  : 'Signing applies your name above as your electronic signature on the agreement and statement of work you just reviewed.';
+export const intentText = (owner = false, sowOnly = false) => owner
+  ? `Countersigning applies your name above as your electronic signature on the ${sowOnly ? 'statement of work' : 'agreement and statement of work'} you reviewed.`
+  : `Signing applies your name above as your electronic signature on the ${sowOnly ? 'statement of work' : 'agreement and statement of work'} linked above.`;
 export const agreementVersionLabel = 'v2026-09-30';
 export function agreementValues(
   terms: OfferTerms,
@@ -190,11 +191,12 @@ export function agreementValues(
     template_version: number;
   },
 ) {
-  const amounts = terms.milestones.map((m) =>
+  const amounts = terms.milestones.map((m, i) =>
     terms.paymentMode === 'standard'
-      ? `${formatUSD(Math.ceil(m.feeCents / 2))} deposit / ${formatUSD(Math.floor(m.feeCents / 2))} balance`
+      ? `${formatUSD(softwareInvoiceTerms(terms,i,'deposit').amountCents)} deposit / ${formatUSD(softwareInvoiceTerms(terms,i,'balance').amountCents)} balance`
       : `${formatUSD(m.feeCents)} full invoice`,
   );
+  const checkpointAmount = (i: number) => terms.milestones.slice(0,i).reduce((sum,m)=>sum+m.feeCents,0) + Math.round(terms.milestones[i].feeCents * terms.milestones[i].checkpoint!.cancellationPercent / 100);
   const base = {
     client,
     contractor,
@@ -248,7 +250,7 @@ export function agreementValues(
           ? `${details.invoice_first_duration} calendar days`
           : 'N/A',
       checkpoint: m.checkpoint
-        ? `${m.checkpoint.label}; ${details.milestones[i].checkpoint_criteria}; ${details.milestones[i].checkpoint_evidence}; cumulative cancellation amount ${formatUSD(Math.round((m.feeCents * m.checkpoint.cancellationPercent) / 100))} (${m.checkpoint.cancellationPercent}%, includes prior payments)`
+        ? `${m.checkpoint.label}; ${details.milestones[i].checkpoint_criteria}; ${details.milestones[i].checkpoint_evidence}; cumulative cancellation amount ${formatUSD(checkpointAmount(i))} (${m.checkpoint.cancellationPercent}%, includes prior payments)`
         : 'None',
     })),
   };
@@ -302,15 +304,15 @@ export function agreementValues(
       checkpoint_criteria: details.milestones[i].checkpoint_criteria,
       checkpoint_evidence: details.milestones[i].checkpoint_evidence,
       checkpoint_cumulative_amount: terms.milestones[i].checkpoint
-        ? `${formatUSD(Math.round((terms.milestones[i].feeCents * terms.milestones[i].checkpoint!.cancellationPercent) / 100))} (includes prior payments)`
+        ? `${formatUSD(checkpointAmount(i))} (includes prior payments)`
         : 'None',
       deposit:
         terms.paymentMode === 'standard'
-          ? formatUSD(Math.ceil(terms.milestones[i].feeCents / 2))
+          ? formatUSD(softwareInvoiceTerms(terms,i,'deposit').amountCents)
           : 'N/A',
       balance:
         terms.paymentMode === 'standard'
-          ? formatUSD(Math.floor(terms.milestones[i].feeCents / 2))
+          ? formatUSD(softwareInvoiceTerms(terms,i,'balance').amountCents)
           : 'N/A',
       invoice_amount:
         terms.paymentMode === 'invoice' ? formatUSD(terms.milestones[i].feeCents) : 'N/A',

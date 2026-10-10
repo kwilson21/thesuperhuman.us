@@ -42,3 +42,8 @@ it('allows a whole-project estimate above an individual milestone ceiling', () =
 });
 
 it.each([undefined, 'unknown'])('labels missing or unknown payment mode %s', paymentMode => { expect(errors({ ...terms, paymentMode }).paymentMode).toBe('Choose a payment mode.'); });
+
+it('rejects repeated deliverable lines after case and whitespace normalization',()=>{
+  const value={...terms,milestones:[{...terms.milestones[0],deliverables:['Status view',' STATUS   VIEW ']}]};
+  expect(validateOfferTerms(value)).toMatchObject({ok:false,errors:{'milestones.0.deliverables':'Each deliverable needs to be different.'}});
+});

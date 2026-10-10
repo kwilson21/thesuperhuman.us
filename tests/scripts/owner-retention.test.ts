@@ -220,10 +220,13 @@ it('clears fit notes, offer terms and links with eligible software contact data'
     VALUES ('old-software','software','client@example.com','Private client','resolved','2026-01-01','2026-01-02','2026-01-02');
     INSERT INTO software_fit_reviews VALUES ('old-software','potential-fit','Private client context','now','owner');
     INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('old-offer','old-software',1,'sent','{"outcome":"Private client"}','now','now');
-    INSERT INTO software_offer_links VALUES ('old-software','hash','now',NULL);`);
+    INSERT INTO software_offer_links VALUES ('old-software','hash','now',NULL);
+    INSERT INTO software_agreement_links(id,purpose,offer_id,recipient_email,token_hash,issued_at,expires_at) VALUES('link','agreement','old-offer','client@example.com','hash','2020-01-01','2020-01-02');
+    INSERT INTO software_agreement_sessions(token_hash,purpose,offer_id,recipient_email,link_id,verified_at,expires_at,csrf_nonce) VALUES('session','agreement','old-offer','client@example.com','link','2020-01-01','2020-01-02','csrf');`);
+  database.db.exec('PRAGMA foreign_keys=ON');
   const review = await previewOwnerRetention(database, 'Local test data', now);
   await applyOwnerRetention(database, review, 'Local test data', now);
-  for (const table of ['software_fit_reviews','software_offers','software_offer_links']) expect(await database.query(`SELECT * FROM ${table}`)).toEqual([]);
+  for (const table of ['software_fit_reviews','software_offers','software_offer_links','software_agreement_sessions','software_agreement_links']) expect(await database.query(`SELECT * FROM ${table}`)).toEqual([]);
   expect((await database.query("SELECT email FROM owner_requests WHERE id='old-software'"))[0].email).toBe('');
 });
 
@@ -235,9 +238,10 @@ it('holds software request contact data until project content is deleted, then c
     INSERT INTO software_milestone_payments VALUES ('software-project',0,'now','owner')`);
   let review=await previewOwnerRetention(database,'Local test data',now); await applyOwnerRetention(database,review,'Local test data',now);
   expect(database.db.prepare("SELECT email FROM owner_requests WHERE id='software-project'").get()).toEqual({email:'alex@example.com'});
-  database.db.exec("UPDATE software_projects SET revoked_at='2020-01-01',content_deleted_at='2021-01-01'");
+  database.db.exec("UPDATE software_projects SET revoked_at='2020-01-01',content_deleted_at='2021-01-01'; UPDATE software_offers SET recipient_email_snapshot='alex@example.com',agreement_details_json='{}'");
   review=await previewOwnerRetention(database,'Local test data',now); await applyOwnerRetention(database,review,'Local test data',now);
   expect(database.db.prepare("SELECT email FROM owner_requests WHERE id='software-project'").get()).toEqual({email:''});
+  expect(database.db.prepare("SELECT recipient_email_snapshot,agreement_details_json FROM software_offers WHERE id='snapshot-offer'").get()).toEqual({recipient_email_snapshot:null,agreement_details_json:null});
   expect(database.db.prepare('SELECT terms_json,offer_id FROM software_projects').get()).toEqual({terms_json:'{}',offer_id:'snapshot-offer'});
   expect(database.db.prepare('SELECT status,sent_at FROM software_offers').get()).toEqual({status:'withdrawn',sent_at:null});
   expect(database.db.prepare('SELECT * FROM software_milestone_payments').all()).toEqual([]);

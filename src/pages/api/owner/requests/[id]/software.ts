@@ -1,4 +1,4 @@
-import { abandonUnsignedAgreementReviews } from '~/lib/software-agreements';
+import { retireRequestSigning } from '~/lib/software-agreements';
 import type { APIRoute } from 'astro';
 import { hashBytes } from '~/lib/agreement-artifacts';
 import { signingEnabled } from '~/lib/agreement-access';
@@ -14,7 +14,7 @@ import { sendAudioMessage } from '~/lib/audio-resend';
 export const prerender = false;
 const schema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('fit'), label: z.enum(['potential-fit','needs-clarification','stated-mismatch']), note: z.string().trim().max(500), expectedRequestUpdatedAt: z.string().optional() }),
-  z.object({ action: z.literal('draft'), terms: z.unknown(), agreementDetails: z.unknown().optional(), reusedMsaId: z.string().uuid().nullable().optional(), confirmMsaReuse: z.boolean().optional(), expectedUpdatedAt: z.string().nullable() }),
+  z.object({ action: z.literal('draft'), terms: z.unknown(), agreementDetails: z.unknown().optional(), reusedMsaId: z.string().uuid().nullable().optional(), confirmMsaReuse: z.boolean().optional(), removedAttachmentKeys: z.array(z.string().regex(/^agreements\/attachments\/[a-f0-9-]+\.pdf$/)).max(100).default([]), expectedUpdatedAt: z.string().nullable() }),
   z.object({ action: z.literal('send'), version: z.number().int().positive(), expectedUpdatedAt: z.string() }),
   z.object({ action: z.literal('revoke'), expectedLinkCreatedAt: z.string().min(1) }),
   z.object({ action: z.enum(['question','decline']), text: z.string().trim().min(1).max(2000) }),
@@ -80,7 +80,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
         guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM audio_projects WHERE request_id=?)', [record.id]),
         guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)', [record.id]),
         db.prepare("UPDATE software_offers SET status='withdrawn',updated_at=? WHERE request_id=? AND status IN ('sent','draft')").bind(now, record.id),
-        abandonUnsignedAgreementReviews(db,record.id,now),
+        ...retireRequestSigning(db,record.id,now),
         db.prepare('UPDATE software_offer_links SET revoked_at=? WHERE request_id=? AND revoked_at IS NULL').bind(now, record.id),
         db.prepare('UPDATE owner_requests SET updated_at=? WHERE id=?').bind(now, record.id),
         audit('offer-link-revoked', 'Offer withdrawn and link closed to decline the request'),
@@ -98,7 +98,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       return json({ ok: true, copySent: sent.copySent });
     }
     if (command.action === 'revoke') {
-      await db.batch([requestGuard(), abandonUnsignedAgreementReviews(db,record.id,now),db.prepare('UPDATE software_agreement_sessions SET revoked_at=? WHERE offer_id IN (SELECT id FROM software_offers WHERE request_id=?)').bind(now,record.id),db.prepare('UPDATE software_agreement_links SET used_at=? WHERE offer_id IN (SELECT id FROM software_offers WHERE request_id=?)').bind(now,record.id), offerSendingGuard(db, record.id), guard('SELECT 1 FROM software_offer_links WHERE request_id=? AND created_at=? AND revoked_at IS NULL', [record.id, command.expectedLinkCreatedAt]),
+      await db.batch([requestGuard(), ...retireRequestSigning(db,record.id,now),offerSendingGuard(db, record.id), guard('SELECT 1 FROM software_offer_links WHERE request_id=? AND created_at=? AND revoked_at IS NULL', [record.id, command.expectedLinkCreatedAt]),
         db.prepare('UPDATE software_offer_links SET revoked_at=? WHERE request_id=? AND created_at=? AND revoked_at IS NULL').bind(now, record.id, command.expectedLinkCreatedAt), audit('offer-link-revoked')]);
       return json({ ok: true });
     }
@@ -109,7 +109,8 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       if (!terms.ok) return json({ ok: false, errors: terms.errors }, 400);
       if ((draft?.updated_at ?? null) !== command.expectedUpdatedAt) return json({ ok: false, updatedAt: draft?.updated_at ?? null, message: 'The saved draft changed since this page loaded. Save again to keep what’s on screen, or reload to see the saved version.' }, 409);
       const version = draft?.version ?? ((offers[0]?.version ?? 0) + 1), id = draft?.id ?? crypto.randomUUID();
-      await db.batch([
+      const removedMetadata = command.removedAttachmentKeys.length ? (await db.prepare('SELECT * FROM software_agreement_attachments WHERE request_id=? AND object_key IN (SELECT value FROM json_each(?))').bind(record.id,JSON.stringify(command.removedAttachmentKeys)).all<{id:string;request_id:string;filename:string;version:string;document_date:string;object_key:string;sha256:string;bytes:number;created_at:string;created_by:string}>()).results : [];
+      const saved = await db.batch([
         requestGuard(),
         guard('SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)', [record.id]),
         ...(draft ? [guard("SELECT 1 FROM software_offers WHERE id=? AND status='draft' AND updated_at=?", [draft.id, command.expectedUpdatedAt!])] : []),
@@ -119,8 +120,19 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
         ...(command.agreementDetails !== undefined ? [db.prepare('UPDATE software_offers SET agreement_details_json=? WHERE id=?').bind(command.agreementDetails === null ? null : JSON.stringify(command.agreementDetails),id)] : []),
         ...(command.confirmMsaReuse !== undefined ? [db.prepare('UPDATE software_offers SET reused_msa_id=? WHERE id=?').bind(command.confirmMsaReuse ? command.reusedMsaId ?? null : null,id)] : []),
         audit('offer-draft-saved'),
+        ...removedMetadata.map(attachment=>db.prepare(`DELETE FROM software_agreement_attachments WHERE id=? AND request_id=?
+          AND NOT EXISTS(SELECT 1 FROM software_offers o,json_each(o.agreement_details_json,'$.attachments') item WHERE json_extract(item.value,'$.key')=software_agreement_attachments.object_key)
+          AND NOT EXISTS(SELECT 1 FROM software_agreements a,json_each(a.attachment_manifest_json) item WHERE json_extract(item.value,'$.key')=software_agreement_attachments.object_key) RETURNING object_key`).bind(attachment.id,record.id)),
       ]);
-      return json({ ok: true, version, updatedAt: now });
+      let attachmentCleanupPending=false;
+      const removedKeys=saved.flatMap(result=>result.results).filter((row):row is {object_key:string}=>typeof (row as {object_key?:unknown}).object_key==='string').map(row=>row.object_key);
+      for (const attachment of removedMetadata.filter(row=>removedKeys.includes(row.object_key))) {
+        try { await env.AUDIO.delete(attachment.object_key); } catch {
+          await db.prepare('INSERT OR IGNORE INTO software_agreement_attachments VALUES(?,?,?,?,?,?,?,?,?,?)').bind(attachment.id,attachment.request_id,attachment.filename,attachment.version,attachment.document_date,attachment.object_key,attachment.sha256,attachment.bytes,attachment.created_at,attachment.created_by).run();
+          attachmentCleanupPending=true;
+        }
+      }
+      return json({ ok: true, version, updatedAt: now, attachmentCleanupPending });
     }
     if (command.action !== 'send') return json({ ok: false }, 400);
     if (await offerIsSending(db, record.id)) return json({ ok: false, message: offerSendingMessage }, 409);
@@ -163,9 +175,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       db.prepare(`INSERT INTO software_offer_links(request_id,token_hash,created_at,revoked_at) VALUES (?,?,?,NULL)
         ON CONFLICT(request_id) DO UPDATE SET token_hash=excluded.token_hash,created_at=excluded.created_at,revoked_at=NULL`).bind(record.id, tokenHash, now),
       ...(pin ? [db.prepare('UPDATE software_offers SET agreement_details_json=?,msa_template_id=?,sow_template_id=?,contractor_snapshot_json=?,recipient_email_snapshot=? WHERE id=?').bind(pin.details,pin.msa,pin.sow,pin.contractor,pin.email,offer.id)] : []),
-      abandonUnsignedAgreementReviews(db,record.id,now),
-      db.prepare('UPDATE software_agreement_sessions SET revoked_at=? WHERE offer_id IN (SELECT id FROM software_offers WHERE request_id=?) AND revoked_at IS NULL').bind(now,record.id),
-      db.prepare('UPDATE software_agreement_links SET used_at=? WHERE offer_id IN (SELECT id FROM software_offers WHERE request_id=?) AND used_at IS NULL').bind(now,record.id),
+      ...retireRequestSigning(db,record.id,now),
       audit('offer-sent', `Offer v${offer.version} sent`),
     ]);
     const sent = await email(`Your project offer: ${terms.value.outcome}`, `Hi ${record.name.trim().split(/\s+/)[0] || 'there'},\n\nHere’s the offer for ${terms.value.outcome}: ${link}\n\nThe link is private to you. You can forward it to whoever approves the budget. Reply to this email with any questions.\n\nKazon`);

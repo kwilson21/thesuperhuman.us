@@ -45,7 +45,7 @@ export function studioRetentionProjectPredicate(now) {
 
 
 export function softwareRetentionProjectPredicate(now) {
-  const days=`COALESCE((SELECT json_extract(a.values_json,'$.owner.project_retention_days') FROM software_agreements a WHERE a.id=software_projects.agreement_id AND a.status='executed'),365)`;
+  const days=`COALESCE((SELECT json_extract(a.values_json,'$.owner.project_retention_days') FROM software_agreements a WHERE a.id=software_projects.agreement_id AND a.status='executed'),(SELECT json_extract(o.agreement_details_json,'$.project_retention_days') FROM software_offers o WHERE o.id=software_projects.offer_id AND o.sent_at IS NOT NULL),365)`;
   return `content_deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM software_invoices i WHERE i.request_id=software_projects.request_id AND i.status IN ('creating','open','payment_failed','uncollectible')) AND ((completed_at IS NOT NULL AND julianday(completed_at)+${days}<=julianday(${quote(now.toISOString())}))
     OR (revoked_at IS NOT NULL AND julianday(revoked_at)+${days}<=julianday(${quote(now.toISOString())})))`;
 }
@@ -213,7 +213,7 @@ export async function applyStudioRetention(database, review, environment, storag
     `DELETE FROM software_project_updates WHERE request_id IN (${softwareIds})`,
     `DELETE FROM software_milestone_deposits WHERE request_id IN (${softwareIds})`,
     `DELETE FROM software_milestone_payments WHERE request_id IN (${softwareIds})`,
-    `UPDATE software_offers SET terms_json='{}',sent_by=NULL WHERE request_id IN (${softwareIds})`,
+    `UPDATE software_offers SET terms_json='{}',sent_by=NULL,recipient_email_snapshot=CASE WHEN EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_offers.id) THEN recipient_email_snapshot ELSE NULL END,agreement_details_json=CASE WHEN EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_offers.id) THEN agreement_details_json ELSE NULL END WHERE request_id IN (${softwareIds})`,
     `UPDATE software_projects SET terms_json='{}',waiting_for='',started_by='',content_deleted_at=${quote(now.toISOString())} WHERE request_id IN (${softwareIds})`,
     `INSERT INTO software_project_audit(request_id,action,actor,occurred_at) SELECT request_id,'content-deleted','retention',${quote(now.toISOString())} FROM software_projects WHERE request_id IN (${softwareIds})`,
   ] : [];

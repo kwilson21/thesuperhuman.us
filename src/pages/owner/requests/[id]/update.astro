@@ -5,7 +5,7 @@ import SoftwareAcceptanceChecks from '~/components/SoftwareAcceptanceChecks.astr
 import SoftwareProjectUpdate from '~/components/SoftwareProjectUpdate.astro';
 import { getOwnerRequest, listOwnerRequests } from '~/lib/owner-requests';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
-import { clearUnmetRevisionEvidence, deliveredScope, getSoftwareProject, listSoftwareUpdates, projectTerms, evidenceTypes, softwareRevisionTargets, softwareRevisionHistoryBody, updateKinds, sharedSoftwareUpdates } from '~/lib/software-projects';
+import { clearUnmetRevisionEvidence, deliveredIndexes, getSoftwareProject, listSoftwareUpdates, projectTerms, evidenceTypes, softwareRevisionTargets, softwareRevisionHistoryBody, updateKinds, sharedSoftwareUpdates } from '~/lib/software-projects';
 import { listSoftwareInvoices, payableSoftwareInvoice, manualPaymentReminder } from '~/lib/software-invoices';
 import type { ClientSoftwareUpdate } from '~/lib/software-projects';
 import '~/styles/studio.css';
@@ -50,7 +50,7 @@ const accepted = terms.milestones.map((_,index)=>shared.some(item=>item.kind==='
 const savedCriteria: string[] = draft ? JSON.parse(draft.criteria_json) : revisionEvidence;
 const criteria = draft ? savedCriteria : revisionSource ? clearUnmetRevisionEvidence(savedCriteria,unmetRevisionIndexes) : [];
 const initialMilestone = seed?.milestone_index ?? project.milestone_index;
-const initialDeliverables: string[] = seed ? deliveredScope(seed, terms.milestones[seed.milestone_index ?? project.milestone_index].deliverables) : [];
+const initialDeliverables: number[] = seed ? deliveredIndexes(seed, terms.milestones[seed.milestone_index ?? project.milestone_index].deliverables) : [];
 update.delivered_deliverables_json = JSON.stringify(initialDeliverables);
 ---
 <OwnerLayout title={revisionSource ? "Respond to requested changes" : "New project update"} current="requests" newRequestCount={newRequests.length} ownerEmail={Astro.locals.owner.email}>
@@ -76,7 +76,7 @@ update.delivered_deliverables_json = JSON.stringify(initialDeliverables);
           <p class="delivery-step">Delivery details</p>
           <h2 id="delivery-evidence-heading">Keep the agreed milestone in view</h2>
           <p class="delivery-intro">Choose the agreed items included in this version. For a delivery review, the client can accept only after every agreed deliverable and check is complete. If this version is a subset, they can request changes but cannot accept the milestone yet.</p>
-          <div class="delivery-scope" data-delivery-scope>{terms.milestones.map((item,index)=><fieldset data-scope-milestone={index} hidden={index!==initialMilestone} disabled={index!==initialMilestone}><legend>Included in this delivery · Milestone {index+1}</legend>{item.deliverables.map(deliverable=><label class="deliverable-choice"><input type="checkbox" name="delivered_deliverables" value={deliverable} checked={initialDeliverables.includes(deliverable)} />{deliverable}</label>)}</fieldset>)}</div>
+          <div class="delivery-scope" data-delivery-scope>{terms.milestones.map((item,index)=><fieldset data-scope-milestone={index} hidden={index!==initialMilestone} disabled={index!==initialMilestone}><legend>Included in this delivery · Milestone {index+1}</legend>{item.deliverables.map((deliverable,deliverableIndex)=><label class="deliverable-choice"><input type="checkbox" name="delivered_deliverables" value={deliverableIndex} data-deliverable-label={deliverable} checked={initialDeliverables.includes(deliverableIndex)} />{deliverable}</label>)}</fieldset>)}</div>
           <p class="delivery-access" data-delivery-acceptance-boundary>Acceptance is for the complete milestone. If any planned deliverable remains, the client cannot accept this version as complete.</p>
           <div class="delivery-scope full-scope" data-full-scope>{terms.milestones.map((item,index)=><section data-full-scope-milestone={index} hidden={index!==initialMilestone}><h3>Full agreed scope · Milestone {index+1}</h3><ul>{item.deliverables.map(deliverable=><li>{deliverable}</li>)}</ul></section>)}</div>
           <fieldset class="delivery-checks">

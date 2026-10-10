@@ -124,11 +124,11 @@ it('uses the isolated site origin for the client link and email', async () => {
   expect(result.link).toMatch(/^https:\/\/preview.example.workers.dev\/offer\//);
   expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body)).text).toContain(result.link);
 });
-it('decline withdraws live and draft offers and revokes access, but ordinary resolution keeps access', async () => {
+it('decline withdraws live and draft offers and revokes access, and ordinary resolution retires access', async () => {
   const sent = await send(await draft()), token = sent.link.split('/').pop();
   await draft();
   sql.exec("UPDATE owner_requests SET status='resolved'");
-  expect(await getLinkedOffer(db,token)).toMatchObject({ status:'sent' });
+  expect(await getLinkedOffer(db,token)).toBeNull();
   sql.exec("UPDATE owner_requests SET status='reviewed'; UPDATE software_offer_links SET created_at='2020-01-01T00:00:00Z'");
   expect((await call({ action:'decline', text:'Thanks.' })).status).toBe(200);
   expect(await getLinkedOffer(db,token)).toBeNull();

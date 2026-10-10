@@ -1,3 +1,4 @@
+import { retireRequestSigning } from './software-agreements';
 import { depositOfferBlock, depositOfferGuard } from './software-invoices';
 import { getSoftwareProject, softwareAccessRevocation, softwareGuard } from './software-projects';
 import { offerSendingGuard, offerIsSending, offerSendingMessage } from './software-offers';
@@ -141,6 +142,11 @@ export async function changeOwnerRequest(db: D1Database, command: RequestCommand
       SELECT ?,? ,?,'',? WHERE EXISTS
         (SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND status=?)`)
       .bind(command.id, transition.audit, actor, now, command.id, now, transition.to),
+    ...(closingSoftware || resolvingSoftware ? [
+      softwareGuard(db, 'SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND status=?', [command.id,now,transition.to]),
+      ...retireRequestSigning(db,command.id,now),
+      db.prepare('UPDATE software_offer_links SET revoked_at=? WHERE request_id=? AND revoked_at IS NULL').bind(now,command.id),
+    ] : []),
     ...(current.kind === 'software' && command.action === 'withdraw' ? [
       softwareGuard(db, "SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND status='withdrawn'", [command.id, now]),
       ...softwareAccessRevocation(db, command.id, actor, now),
