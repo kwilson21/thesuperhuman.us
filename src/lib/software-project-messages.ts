@@ -73,7 +73,7 @@ export function readableSoftwareProjectMessages(
     const label=softwareVersionLabel({artifact_version:update.artifact_version ?? '',kind:update.kind});
     const version=softwareVersionNumber({artifact_version:update.artifact_version ?? ''}) ? label.toLowerCase() : label;
     const milestoneLabel=terms.milestones.length>1 ? ` of milestone ${(update.milestone_index ?? 0)+1}` : '';
-    if(message.decision!=='changes_requested') return {...message,body:message.decision==='direction_confirmed' ? terms.milestones.length>1 ? `You confirmed the direction for milestone ${(update.milestone_index ?? 0)+1}.` : 'You confirmed this direction.' : `You accepted ${version}${milestoneLabel}.`};
+    if(message.decision!=='changes_requested') return {...message,body:message.decision==='direction_confirmed' ? `You confirmed ${version}${terms.milestones.length>1 ? ` for milestone ${(update.milestone_index ?? 0)+1}` : ''}.` : `You accepted ${version}${milestoneLabel}.`};
     return {...message,body:`You asked for changes to ${version}${milestoneLabel}.\n\n${softwareClientRevisionBody(message.body,milestone.acceptance,milestone.deliverables)}`};
   });
 }

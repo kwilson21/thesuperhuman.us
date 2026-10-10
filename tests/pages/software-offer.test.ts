@@ -176,7 +176,7 @@ it('renders version-specific direction, delivery, acceptance, handoff and earlie
     sql.exec("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,created_by,created_at,updated_at,shared_at,review_window_days) VALUES ('direction','r','direction_review','shared',0,'Proposed direction','Direction v1','concept','PRIVATE AUTHOR','2026-09-29','2026-09-29','2026-09-29',5)");
     let html=await renderProject();expect(html).toContain('Does this match how you work?');expect(html).toContain('Confirm this direction');expect(html).toContain('The working milestone is reviewed separately.');
     sql.exec("INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES ('r','client','PRIVATE TOKEN','Direction confirmed','direction','direction_confirmed','2026-09-30')");
-    html=await renderProject();expect(html).toContain('You confirmed this direction.');expect(html).not.toContain('data-software-review');expect(html).not.toContain('Does this match how you work?');
+    html=await renderProject();expect(html).toContain('You confirmed sketch 1.');expect(html).not.toContain('data-software-review');expect(html).not.toContain('Does this match how you work?');
     sql.exec("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,criteria_json,created_by,created_at,updated_at,shared_at,review_window_days) VALUES ('delivery','r','delivery_review','shared',0,'Working tracker','Delivery v1','working_preview','[\"Try adding the fictional client.\"]','PRIVATE AUTHOR','2026-10-01','2026-10-01','2026-10-01',5)");
     html=await renderProject();expect(html).toContain('Version 1 is ready to try.');expect(html).toContain('Please try it by Oct 8, 2026.');expect(html).toContain('Included in this delivery');expect(html).toContain('Full agreed scope · Milestone 1');expect(html).toContain('Nothing is accepted until you click Accept.');expect(html).toContain('Try adding the fictional client.');expect(html).not.toContain('Demonstrated');expect(html).toContain('Accept version 1');expect(html).toContain('name="criteria"');expect(html).toMatch(/<h2[^>]*>Your decision<\/h2>/);expect(html).not.toContain('Does this match how you work?');
     sql.exec("INSERT INTO software_project_updates(id,request_id,status,kind,milestone_index,title,evidence_type,created_by,created_at,updated_at,shared_at) VALUES ('progress','r','shared','progress',0,'Progress after review','concept','owner','2026-10-02','2026-10-02','2026-10-02')");
@@ -954,7 +954,25 @@ it.each(['direction_confirmed','milestone_accepted','changes_requested'])('names
   try {
     add('review',value==='direction_confirmed'?'direction_review':'delivery_review',1);decision('review',value);
     const html=await render();
-    expect(html).toContain(value==='direction_confirmed'?'You confirmed the direction for milestone 2.':value==='milestone_accepted'?'You accepted version 1 of milestone 2.':'You asked for changes to version 1 of milestone 2.');
+    expect(html).toContain(value==='direction_confirmed'?'You confirmed sketch 1 for milestone 2.':value==='milestone_accepted'?'You accepted version 1 of milestone 2.':'You asked for changes to version 1 of milestone 2.');
+  } finally {sql.close();}
+});
+it.each([
+  [false,'Direction v2','You confirmed sketch 2.'],
+  [true,'Direction v2','You confirmed sketch 2 for milestone 2.'],
+  [false,'Import workflow sketch','You confirmed Import workflow sketch.'],
+  [true,'Import workflow sketch','You confirmed Import workflow sketch for milestone 2.'],
+])('names the confirmed sketch (multiple milestones: %s, label: %s)',async(multiple,label,expected)=>{
+  const {sql,render,add,decision,scope}=await reviewStateFixture();
+  try {
+    if(!multiple) {
+      scope.milestones=scope.milestones.slice(0,1);
+      sql.prepare('UPDATE software_projects SET terms_json=?').run(JSON.stringify(scope));
+    }
+    add('review','direction_review',multiple?1:0);
+    sql.prepare('UPDATE software_project_updates SET artifact_version=? WHERE id=?').run(label,'review');
+    decision('review','direction_confirmed');
+    expect(await render()).toContain(expected);
   } finally {sql.close();}
 });
 it('renders future milestone choices unavailable for progress but available for review drafts',async()=>{
