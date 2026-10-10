@@ -5,7 +5,7 @@ import {feedChange, publicationMilestones, journalMilestones, latestJournalMiles
 import type {Milestone} from '../../src/lib/project-story';
 import type {ProjectFeed, PublicEntry} from '../../src/lib/publication/read';
 import {websiteMilestones, websiteStory} from '../../src/data/project-stories/personal-website';
-import {tallyStory} from '../../src/data/project-stories/tally';
+import {tallyStory, tallyMilestones, tallyDecisionHighlights} from '../../src/data/project-stories/tally';
 import {kailleraStory} from '../../src/data/project-stories/kaillera-next';
 import {threadlineStory} from '../../src/data/project-stories/threadline';
 import dailyStory from '../../src/data/project-stories/the-engineers-daily.json';
@@ -210,5 +210,32 @@ describe('journal default selection', () => {
   expect(journalSelection(undefined, newestFirst, 'older', undefined)).toBe('older');
   expect(journalSelection(undefined, newestFirst, undefined, 'explicit')).toBe('explicit');
   expect(journalSelection(undefined, newestFirst, undefined, undefined)).toBeUndefined();
+ });
+});
+
+
+describe('Tally decision highlight sources', () => {
+ it('cites both AI entries in order and keeps every source resolvable', () => {
+  expect(tallyDecisionHighlights.map(highlight => highlight.entries.map(source => source.entry))).toEqual([
+   ['tally-jev-categorization', 'tally-store-names'],
+   ['tally-design-system-catalog'],
+   ['tally-demo-environment'],
+  ]);
+  for (const highlight of tallyDecisionHighlights) {
+   expect(highlight).not.toHaveProperty('credit');
+   for (const source of highlight.entries) {
+    expect(source).not.toHaveProperty('id');
+    expect(tallyMilestones.filter(milestone => milestone.id === source.entry)).toHaveLength(1);
+   }
+  }
+ });
+ it('pairs the merchant-name entry with its demo capture and supported copy', () => {
+  const merchant = tallyMilestones.find(milestone => milestone.id === 'tally-store-names');
+  expect(merchant?.day).toBe('2026-10-06');
+  expect(merchant?.summary).toBe("Some bank text comes without a clean store name. Plaid’s merchant name comes first. When Plaid sends none, Workers AI suggests up to three names. A suggestion can appear provisionally in the list, dashed, but it becomes the saved name only when a person accepts it. A suggestion a person turns down isn’t offered again for that merchant record. Merchant-name suggestions are optional, with their own switch in Settings. Implemented and tested locally.");
+  expect(merchant?.artifacts).toHaveLength(1);
+  expect(merchant?.artifacts?.[0].kind).toBe('Screen capture, demo data');
+  expect(tallyDecisionHighlights[0].relevance).toBe('You can change the category or reject the suggested name.');
+  expect(tallyMilestones.at(-1)).toBe(merchant);
  });
 });

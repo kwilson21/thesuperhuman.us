@@ -16,6 +16,7 @@ import bankSyncDiagram from '~/assets/projects/tally/bank-sync-diagram.webp';
 import accountsPage from '~/assets/projects/tally/accounts-annotated.webp';
 import emptyStates from '~/assets/projects/tally/empty-states-annotated.webp';
 import formFeedback from '~/assets/projects/tally/form-feedback-annotated.webp';
+import merchantNameSuggestion from '~/assets/projects/tally/merchant-name-suggestion.webp';
 
 export const tallyStory = {
   title: 'Tally',
@@ -31,6 +32,27 @@ const artifact = (image: ImageMetadata, title: string, caption: string, kind: st
 
 // Publicist entries. Each is the owner-approved draft from its private
 // review note (same ID), changed only for formatting. Captures use demo data.
+export const tallyDecisionHighlights = [
+  {
+    entries: [{ entry: 'tally-jev-categorization' }, { entry: 'tally-store-names' }],
+    headline: 'AI suggestions, with people in control',
+    decision: 'Jev suggests categories, and Workers AI suggests names for bank text with no clean name. A person has the final say on both.',
+    relevance: 'You can change the category or reject the suggested name.',
+  },
+  {
+    entries: [{ entry: 'tally-design-system-catalog' }],
+    headline: 'Design reviewed on real components',
+    decision: 'A catalog renders Tally’s real components with sample data. I wrote the design brief and decided six proposals beside today’s version.',
+    relevance: 'Tests catch design-token drift, and each proposal has its own reversible PR.',
+  },
+  {
+    entries: [{ entry: 'tally-demo-environment' }],
+    headline: 'A public demo kept apart from real data',
+    decision: 'The demo runs the same code with its own database and only fictional data. At my request, its nightly reset refuses to run if it finds bank credentials.',
+    relevance: 'People can try Tally without running it locally, while the reset guard protects the real app.',
+  },
+] as const;
+
 export const tallyMilestones: Milestone[] = [
   {
     id: 'tally-phase-0', day: '2026-09-22',
@@ -153,5 +175,11 @@ export const tallyMilestones: Milestone[] = [
     title: 'Saving, and a shake: form feedback in Tally',
     summary: 'A design review of Tally found that its forms gave no sign a save was under way, nothing stopped a second tap from sending it twice, and an error didn’t draw the eye to the field. Now Save shows a ring and "Saving…" while it works and can’t be pressed again, and a field that comes back with an error shakes once, unless the device asks for reduced motion. Without JavaScript the forms still post normally. Codex built the shared Button and TextInput components and the busy state. I chose that Save stays full colour while saving, and Claude Code fixed two sheets where it still dimmed. Built and tested on demo data.',
     artifacts: [artifact(formFeedback, 'Tally · Form feedback', 'The catalog’s busy Save, disabled Save and a field with an error, on demo data from PR #105, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-store-names', day: '2026-10-06',
+    title: 'Names for bank text, chosen by a person',
+    summary: 'Some bank text comes without a clean store name. Plaid’s merchant name comes first. When Plaid sends none, Workers AI suggests up to three names. A suggestion can appear provisionally in the list, dashed, but it becomes the saved name only when a person accepts it. A suggestion a person turns down isn’t offered again for that merchant record. Merchant-name suggestions are optional, with their own switch in Settings. Implemented and tested locally.',
+    artifacts: [artifact(merchantNameSuggestion, 'Tally · Names for bank text, chosen by a person', 'A suggested store name, shown dashed until a person chooses it. From a local demo run on fictional data.', 'Screen capture, demo data')],
   },
 ];
