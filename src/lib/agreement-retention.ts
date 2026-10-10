@@ -14,6 +14,7 @@ export type RetentionManifest = {
   }[];
   unattached_attachments: { id: string; key: string; sha256: string; created_at: string }[];
   orphan_scan_cursor?: string | null;
+  orphan_next_cursor?: string | null;
   orphan_attachments: { key: string; sha256: string; uploaded_at: string }[];
 };
 const orphanCursorKey = 'agreements/retention/attachment-cursor.json';
@@ -103,6 +104,7 @@ export async function previewAgreementRetention(
   const orphan_attachments: RetentionManifest['orphan_attachments'] = [];
   const orphanCutoff = new Date(now.getTime() - 30 * 86400000);
   let orphanScanCursor = scan?.cursor ?? null;
+  let orphanNextCursor: string | null = null;
   if (!scan) {
     const marker = await bucket.get(orphanCursorKey);
     if (marker) {
@@ -143,10 +145,12 @@ export async function previewAgreementRetention(
         uploaded_at: uploaded.toISOString(),
       });
     }
-    if (!scan) await bucket.put(orphanCursorKey, JSON.stringify({ version: 1, cursor: listed.truncated ? listed.cursor : null }));
+    orphanNextCursor = listed.truncated ? listed.cursor : null;
+    if (!scan && !orphan_attachments.length)
+      await bucket.put(orphanCursorKey, JSON.stringify({ version: 1, cursor: orphanNextCursor }));
   }
   orphan_attachments.sort((a, b) => a.key.localeCompare(b.key));
-  return { version: 1, created_at: now.toISOString(), binding, agreements, unattached_attachments, orphan_attachments, orphan_scan_cursor: orphanScanCursor };
+  return { version: 1, created_at: now.toISOString(), binding, agreements, unattached_attachments, orphan_attachments, orphan_scan_cursor: orphanScanCursor, orphan_next_cursor: orphanNextCursor };
 }
 export async function applyAgreementRetention(
   db: D1Database,
@@ -216,6 +220,9 @@ export async function applyAgreementRetention(
       db
         .prepare('UPDATE software_offers SET reused_msa_id=NULL WHERE reused_msa_id=?')
         .bind(item.id),
+      db.prepare(`UPDATE software_offers SET recipient_email_snapshot=NULL,agreement_details_json=NULL
+        WHERE id=(SELECT offer_id FROM software_agreements WHERE id=?)
+          AND NOT EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_offers.id AND a.id<>?)`).bind(item.id,item.id),
       db.prepare('DELETE FROM software_agreements WHERE id=?').bind(item.id),
       ...item.objects.map(object => db.prepare(
         "DELETE FROM software_agreement_attachments WHERE object_key=? AND NOT EXISTS(SELECT 1 FROM software_agreements a,json_each(a.attachment_manifest_json) m WHERE json_extract(m.value,'$.key')=software_agreement_attachments.object_key)",
@@ -286,4 +293,5 @@ export async function applyAgreementRetention(
       AND NOT EXISTS(${activeOfferAttachment()})`, [orphan.key, orphan.key, orphan.key])]);
     await bucket.delete(orphan.key);
   }
+  await bucket.put(orphanCursorKey, JSON.stringify({ version: 1, cursor: fresh.orphan_next_cursor ?? null }));
 }
