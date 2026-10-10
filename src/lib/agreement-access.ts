@@ -1,3 +1,4 @@
+import { siteOrigin } from './site-origin.mjs';
 import { agreementEvent } from "./agreement-events";
 import {
   hashOfferToken,
@@ -21,7 +22,7 @@ export const agreementJson = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: agreementHeaders });
 export function canonicalAgreementRequest(env: Env, request: Request) {
   try {
-    const canonical = new URL(env.SITE_ORIGIN!);
+    const canonical = new URL(siteOrigin(env.SITE_ORIGIN));
     const url = new URL(request.url);
     return url.origin === canonical.origin && (!request.headers.has('host') || request.headers.get('host')?.toLowerCase() === canonical.host);
   } catch { return false; }
@@ -234,7 +235,7 @@ export async function issueAgreementLink(
   }
   const url = new URL(
     token ? `/offer/${token}/verify` : "/agreements/verify",
-    env.SITE_ORIGIN!,
+    siteOrigin(env.SITE_ORIGIN),
   );
   url.searchParams.set("key", key);
   const brief = offer

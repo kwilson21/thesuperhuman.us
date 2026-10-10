@@ -237,6 +237,7 @@ export const ACCESS_AUDIENCE = 'screenshots';
  * so a feature flag flipped there shows up in the screenshots.
  */
 export const PREVIEW_OVERRIDES = {
+  SITE_ORIGIN: 'http://127.0.0.1:4321',
   // Turnstile's always-pass test keys: the production site key rejects localhost.
   PUBLIC_TURNSTILE_SITE_KEY: '1x00000000000000000000AA',
   TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA',

@@ -595,16 +595,21 @@ it('renders scanner-safe agreement and archive landings with exact copy', async(
     const container=await AstroContainer.create();
     for(const archive of [false,true]) {
       sql.prepare("INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES(?,?,?,?,?,?,?,?)").run(archive?'archive':'agreement',archive?'archive':'agreement',archive?null:'current',archive?null:await hashOfferToken(token),'alex@example.com',await hashOfferToken(key),'now','2099-01-01');
-      const response=await container.renderToResponse(archive?archiveLanding:linkLanding,{params:{token},request:new Request(`https://thesuperhuman.us/${archive?'agreements':`offer/${token}`}/verify?key=${key}`),locals:{runtime:{env:{MUSIC_DB:db,SITE_ORIGIN:"https://thesuperhuman.us"}}}} as any);
+      const response=await container.renderToResponse(archive?archiveLanding:linkLanding,{params:{token},request:new Request(`https://thesuperhuman.us/${archive?'agreements':`offer/${token}`}/verify?key=${key}`),locals:{runtime:{env:{MUSIC_DB:db}}}} as any);
       const html=await response.text();
       expect(response.status).toBe(200);expect(response.headers.get('referrer-policy')).toBe('no-referrer');expect(response.headers.get('cache-control')).toBe('no-store');
       expect(html).toContain(archive?'Your documents are ready.':'Your agreement is ready.');
       expect(html).toContain(archive?'>Continue</button>':'>Continue to sign</button>');expect(html).toContain('This link works once.');expect(html).toContain('method="post"');
       expect(html).toMatch(/<form class="agreement-form"/);
       if(!archive)expect(html).toContain('Current offer');
+      for (const origin of ['https://thesuperhuman.us', 'http://127.0.0.1:4321']) {
+        const preview = await container.renderToResponse(archive?archiveLanding:linkLanding, {params:{token}, request:new Request(`${origin}/${archive?'agreements':`offer/${token}`}/verify?key=${key}`), locals:{runtime:{env:{MUSIC_DB:db,SITE_ORIGIN:'http://127.0.0.1:4321'}}}} as any);
+        expect(preview.status).toBe(origin === 'http://127.0.0.1:4321' ? 200 : 404);
+        if (preview.status === 200) expect(await preview.text()).toContain(archive?'Your documents are ready.':'Your agreement is ready.');
+      }
       expect(sql.prepare('SELECT used_at FROM software_agreement_links WHERE id=?').get(archive?'archive':'agreement').used_at).toBeNull();
       sql.exec('DELETE FROM software_agreement_links');
-      const expired=await container.renderToString(archive?archiveLanding:linkLanding,{params:{token},request:new Request(`https://thesuperhuman.us/${archive?'agreements':`offer/${token}`}/verify?key=${key}`),locals:{runtime:{env:{MUSIC_DB:db,SITE_ORIGIN:"https://thesuperhuman.us"}}}} as any);
+      const expired=await container.renderToString(archive?archiveLanding:linkLanding,{params:{token},request:new Request(`https://thesuperhuman.us/${archive?'agreements':`offer/${token}`}/verify?key=${key}`),locals:{runtime:{env:{MUSIC_DB:db}}}} as any);
       expect(expired).toMatch(/class="page-lede"[^>]*>Links work once and last an hour\.<\/p>/);
       expect(expired).toMatch(/class="agreement-form"/);
     }

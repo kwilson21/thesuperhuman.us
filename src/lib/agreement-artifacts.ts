@@ -1,3 +1,4 @@
+import { siteOrigin } from './site-origin.mjs';
 import { hashOfferToken } from './software-offers';
 import { sendAudioMessage } from './audio-resend';
 import type { Agreement } from './software-agreements';
@@ -196,6 +197,9 @@ export async function deliverAgreementCopies(env: Env, id: string) {
   const bytes = new Uint8Array(await object.arrayBuffer());
   if ((await hashBytes(bytes)) !== artifact.pdf_sha256) return;
   for (const role of ['client', 'contractor']) {
+    const signature = await db.prepare('SELECT receipt_id FROM software_agreement_signatures WHERE agreement_id=? AND party=?')
+      .bind(id, role).first<{ receipt_id: string }>();
+    if (!signature) continue;
     const attempt = crypto.randomUUID(),
       at = new Date().toISOString();
     const claim = await db
@@ -212,7 +216,7 @@ export async function deliverAgreementCopies(env: Env, id: string) {
         from: env.CONTACT_FROM_EMAIL,
         to: [claim.email],
         subject: 'Your signed agreement',
-        text: `Both signatures are saved. A complete signed PDF is attached. Keep this copy. Your agreement archive: ${new URL('/agreements', env.SITE_ORIGIN!).href}\nReceipt: ${id}\nEmail acceptance is not proof of inbox receipt.`,
+        text: `Both signatures are saved. A complete signed PDF is attached. Keep this copy. Your agreement archive: ${new URL('/agreements', siteOrigin(env.SITE_ORIGIN)).href}\nReceipt: ${signature.receipt_id}\nEmail acceptance is not proof of inbox receipt.`,
         attachments: [{ filename: 'signed-agreement.pdf', content: base64(bytes) }],
       },
     });
@@ -280,7 +284,7 @@ export async function deliverAgreementNotifications(env: Env, id: string) {
         text:
           kind === 'signature-receipt'
             ? `Your signature is saved. Waiting for Kazon to countersign. The project has not started. Receipt: ${agreement.receipt_id}`
-            : `A client signature is saved. Review the exact agreement before countersigning: ${new URL(`/owner/requests/${agreement.request_id}`, env.SITE_ORIGIN!).href}`,
+            : `A client signature is saved. Review the exact agreement before countersigning: ${new URL(`/owner/requests/${agreement.request_id}`, siteOrigin(env.SITE_ORIGIN)).href}`,
       },
     });
     if (!sent.uncertain)

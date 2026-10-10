@@ -200,3 +200,15 @@ it.each(['/api/agreements/link','/api/agreements/packet/file','/api/offer/token/
     expect(next).not.toHaveBeenCalled();
   }
 });
+
+it.each(['/api/offer/token/link', '/api/agreements/link'])('uses the effective canonical origin for %s', async path => {
+  for (const origin of [undefined, 'http://127.0.0.1:4321']) {
+    for (const host of ['https://thesuperhuman.us', 'http://127.0.0.1:4321', 'https://foreign.example']) {
+      const ctx = makeContext(host + path);
+      ctx.locals.runtime.env.SITE_ORIGIN = origin;
+      const next = vi.fn(async () => new Response('next'));
+      const response = await onRequest(ctx, next) as Response;
+      expect(response.status).toBe(host === (origin ?? 'https://thesuperhuman.us') ? 200 : 404);
+    }
+  }
+});

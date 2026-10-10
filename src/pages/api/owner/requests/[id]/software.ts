@@ -1,3 +1,4 @@
+import { siteOrigin } from '../../../../../lib/site-origin.mjs';
 import { retireRequestSigning } from '~/lib/software-agreements';
 import type { APIRoute } from 'astro';
 import { hashBytes } from '~/lib/agreement-artifacts';
@@ -161,7 +162,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     const signingChangeGuard=softwareGuard(db,"SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_agreements WHERE request_id=? AND status IN ('client_signed','executed'))",[record.id]);
     const token = newOfferToken(), tokenHash = await hashOfferToken(token);
     let link: string;
-    try { link = new URL(`/offer/${token}`, env.SITE_ORIGIN ?? 'https://thesuperhuman.us').href; }
+    try { link = new URL(`/offer/${token}`, siteOrigin(env.SITE_ORIGIN)).href; }
     catch { return json({ ok: false, message: 'The offer link couldn’t be built. Check SITE_ORIGIN. Nothing was sent.' }, 500); }
     await db.batch([
       requestGuard(), offerSendingGuard(db, record.id), signingChangeGuard,
