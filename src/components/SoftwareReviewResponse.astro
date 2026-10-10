@@ -1,8 +1,10 @@
 ---
 import { softwareDate, softwareClientRevisionBody, softwareVersionLabel, softwareVersionNumber } from '~/lib/software-projects';
+import { formatUSD } from '~/lib/software-offers';
+import type { ClientSoftwareInvoice } from '~/lib/software-invoices';
 import type { ClientSoftwareUpdate } from '~/lib/software-projects';
-type Props = { update: ClientSoftwareUpdate; checks: string[]; deliverables?: string[]; missingDeliverables?: {label:string;index:number}[]; inaccessibleDeliverables?: {label:string;index:number}[]; milestoneName: string; endpoint: string; readonly?: boolean; canAccept?: boolean; paymentLine?: string };
-const {update,checks,deliverables=[],missingDeliverables=[],inaccessibleDeliverables=[],milestoneName,endpoint,readonly=false,canAccept=true,paymentLine}=Astro.props;
+type Props = { update: ClientSoftwareUpdate; checks: string[]; deliverables?: string[]; missingDeliverables?: {label:string;index:number}[]; inaccessibleDeliverables?: {label:string;index:number}[]; milestoneName: string; endpoint: string; readonly?: boolean; canAccept?: boolean; paymentLine?: string; invoice?: ClientSoftwareInvoice };
+const {update,checks,deliverables=[],missingDeliverables=[],inaccessibleDeliverables=[],milestoneName,endpoint,readonly=false,canAccept=true,paymentLine,invoice}=Astro.props;
 const version=softwareVersionLabel(update);
 const direction=update.kind==='direction_review';
 const evidence: string[] = JSON.parse(update.criteria_json ?? '[]');
@@ -24,6 +26,7 @@ const decisionBody=softwareClientRevisionBody(update.decision_body,checks,delive
     {!direction && canAccept && <p>Accepting {softwareVersionNumber(update) ? version.toLowerCase() : version} accepts milestone {(update.milestone_index ?? 0)+1} in full, including every check above.</p>}
     <button class="studio-button" type="submit" name="decision" formnovalidate value={direction ? 'direction_confirmed' : 'milestone_accepted'} disabled={!direction && !canAccept}>{direction ? 'Confirm this direction' : `Accept ${softwareVersionNumber(update) ? version.toLowerCase() : version}`}</button>
     {!direction && paymentLine && <p>{paymentLine}</p>}
+    {!direction && invoice && <p>{invoice.due_at && `Invoice due ${softwareDate(invoice.due_at)}.`}{['open','payment_failed','uncollectible'].includes(invoice.status) && invoice.hosted_invoice_url && <> <a class="site-link" href={invoice.hosted_invoice_url} target="_blank" rel="noopener noreferrer">Pay {formatUSD(invoice.amount_cents)} ↗</a></>}</p>}
     {!direction && !canAccept && <p>This version can't be accepted yet because it doesn't include everything we agreed. You can still try it and send notes.</p>}
     <details data-request-changes><summary>Something's not right? Tell me what</summary>
       {!direction && <fieldset><legend>Which agreed checks are unmet?</legend>{checks.map((check,index)=><label class="check-choice"><input type="checkbox" name="criteria" value={index} />{check}</label>)}<p class="hint">Select a check that does not pass, or choose a deliverable below.</p></fieldset>}
