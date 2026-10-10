@@ -262,7 +262,7 @@ it('serves a scenario-local Turnstile API for silent and receipt widgets', async
         } });
       },
       waitForFunction: async () => expect(window.turnstile).toBeTruthy(),
-      locator: () => ({ check: async () => {}, fill: async () => {}, waitFor: async () => {}, inputValue: async () => 'We track new clients' }),
+      locator: () => ({ dispatchEvent: async () => {}, check: async () => {}, fill: async () => {}, waitFor: async () => {}, inputValue: async () => 'We track new clients' }),
     });
     const api = window.turnstile;
     expect(onload).toHaveBeenCalledOnce();
@@ -284,9 +284,9 @@ it('serves a scenario-local Turnstile API for silent and receipt widgets', async
   } });
 });
 
-it.each(['reload', 'API wait', 'chip wait'])('prints %s failure diagnostics and rethrows the original capture failure', async (stage) => {
+it.each(['reload', 'API wait', 'ghost wait'])('prints %s failure diagnostics and rethrows the original capture failure', async (stage) => {
   const scenario = await import('../../scripts/screenshots/scenarios/software-brief.mjs');
-  const failure = new Error('accept chip hidden'), log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const failure = new Error('ghost text hidden'), log = vi.spyOn(console, 'error').mockImplementation(() => {});
   const request = { url: () => 'http://127.0.0.1:4321/api/software/brief/pass', method: () => 'POST' };
   try {
     await expect(scenario.default.run({ sql() {}, capture: async ({ file, prepare }: any) => {
@@ -299,7 +299,7 @@ it.each(['reload', 'API wait', 'chip wait'])('prints %s failure diagnostics and 
           if (event === 'response') handler({ request: () => request, status: () => 200 });
         },
         evaluate: async () => ({ enabled: true, passState: 'token', lastError: null }),
-        locator: () => ({ check: async () => {}, fill: async () => {}, waitFor: async () => { throw failure; } }),
+        locator: () => ({ dispatchEvent: async () => {}, check: async () => {}, fill: async () => {}, waitFor: async () => { throw failure; } }),
       });
       return file;
     } })).rejects.toBe(failure);
@@ -308,4 +308,19 @@ it.each(['reload', 'API wait', 'chip wait'])('prints %s failure diagnostics and 
     expect(diagnostic.requests).toEqual([{ method: 'POST', path: '/api/software/brief/pass', status: 200 }]);
     expect(diagnostic.autocomplete).toEqual({ enabled: true, passState: 'pass 200', lastError: null });
   } finally { log.mockRestore(); }
+});
+
+it.each(['desktop', 'phone'])('captures the ghost text with the %s input hint', async viewport => {
+  const scenario = await import('../../scripts/screenshots/scenarios/software-brief.mjs');
+  const dispatchEvent = vi.fn(), waits: string[] = [];
+  await scenario.default.run({ sql() {}, capture: async ({ file, prepare }: any) => {
+    if (file !== `software-brief-suggestion-${viewport}.png`) return file;
+    await prepare({
+      on() {}, route: async () => {}, addInitScript: async () => {}, reload: async () => {}, waitForFunction: async () => {},
+      locator: (selector: string) => ({ dispatchEvent, check: async () => {}, fill: async () => {}, waitFor: async () => { waits.push(selector); }, inputValue: async () => 'We track new clients' }),
+    });
+    return file;
+  } });
+  expect(dispatchEvent).toHaveBeenCalledWith('pointerdown', { pointerType: viewport === 'phone' ? 'touch' : 'mouse' });
+  expect(waits).toEqual(['[data-step="1"] [data-ghost-text]']);
 });

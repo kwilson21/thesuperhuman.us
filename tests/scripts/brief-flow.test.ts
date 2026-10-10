@@ -29,7 +29,7 @@ async function setup() {
   for (const section of steps) section.nodes.h1 = new Node();
   for (const [index, key] of [[1, 'today'], [2, 'firstResult']] as const) {
     const section = steps[index], box = new Textarea(); box.name = key; box.required = index === 1; box.section = section; controls.push(box);
-    for (const selector of ['[data-answer-label]', '[data-question-hint]', '[data-accept]', '[data-suggestions-toggle]', '[data-suggestions-disclosure]', '[data-suggestions-off]', '[data-ghost-prefix]', '[data-ghost-text]']) section.nodes[selector] = new Node();
+    for (const selector of ['[data-accept-hint]', '[data-answer-label]', '[data-question-hint]', '[data-accept]', '[data-suggestions-toggle]', '[data-suggestions-disclosure]', '[data-suggestions-off]', '[data-ghost-prefix]', '[data-ghost-text]']) section.nodes[selector] = new Node();
     section.nodes['[data-ghost-prefix]'].parentElement = new Node();
     section.nodes['[data-answer]'] = box; section.nodes.textarea = box; section.nodes['input, textarea'] = box;
     section.nodes['[data-form-error]'] = new Node();
@@ -52,7 +52,7 @@ async function setup() {
     if (selector === '[data-skip]') return skips;
     if (['[data-suggestions-toggle]', '[data-suggestions-disclosure]', '[data-suggestions-off]'].includes(selector)) return steps.slice(1, 3).map(node => node.nodes[selector]);
     if (selector === '[data-ghost-prefix], [data-ghost-text]') return steps.slice(1, 3).flatMap(node => [node.nodes['[data-ghost-prefix]'], node.nodes['[data-ghost-text]']]);
-    if (selector === '[data-accept]') return steps.slice(1, 3).map(node => node.nodes[selector]);
+    if (selector === '[data-accept]' || selector === '[data-accept-hint]') return steps.slice(1, 3).map(node => node.nodes[selector]);
     if (selector === '[data-form-error]') return Object.entries(form.nodes).filter(([key]) => key.startsWith('[data-form-error=')).map(([, value]) => value);
     const match = selector.match(/^\[name="(.+)"\]$/); return match ? controls.filter(node => node.name === match[1]) : [];
   };
@@ -90,8 +90,8 @@ it('restores untrimmed answers, step and identity and supports keyboard continua
 it('suggests only after a pause and accepts Tab, arrow and the accessible button explicitly', async () => {
   vi.useFakeTimers(); choose('path', 'workflow'); const box = fill('today', 'We track new clients'); const chip = steps[1].nodes['[data-accept]'];
   await vi.advanceTimersByTimeAsync(399); expect(fetch).not.toHaveBeenCalled(); await vi.advanceTimersByTimeAsync(1);
-  expect(box.value).toBe('We track new clients'); expect(chip.hidden).toBe(false); expect(chip.attrs['aria-label']).toContain('Add suggestion');
-  fire(box, 'keydown', { key: 'Tab', isComposing: false }); expect(box.value).toBe('We track new clients in a spreadsheet');
+  expect(box.value).toBe('We track new clients'); expect(chip.hidden).toBe(false); expect(chip.attrs['aria-label']).toBe('Add suggestion: in a spreadsheet');
+  expect(fire(box, 'keydown', { key: 'Tab', isComposing: false }).defaultPrevented).toBe(true); expect(box.value).toBe('We track new clients in a spreadsheet');
   await vi.advanceTimersByTimeAsync(400); fire(box, 'keydown', { key: 'ArrowRight' }); expect(box.value).toBe('We track new clients in a spreadsheet in a spreadsheet');
   await vi.advanceTimersByTimeAsync(400); fire(chip, 'click'); expect(box.value).toBe('We track new clients in a spreadsheet in a spreadsheet in a spreadsheet');
 });
@@ -257,4 +257,42 @@ it.each(['check fails', 'retry still expired', 'retry throws'])('stays silent fo
   expect(steps[1].nodes['[data-accept]'].hidden).toBe(true);
   expect(form.nodes['[data-form-status]'].textContent).toBe('');
   mock.mockRestore();
+});
+
+it('accepts taps only on ghost text and updates the hint for touch and keyboard', async () => {
+  choose('path', 'workflow');
+  fire(form, 'pointerdown', { pointerType: 'touch' });
+  fire(steps[1].nodes['[data-answer]'], 'keydown', { key: 'Unidentified', keyCode: 229 });
+  const box = fill('today', 'We track new clients');
+  await vi.advanceTimersByTimeAsync(400);
+  const hint = steps[1].nodes['[data-accept-hint]'], ghost = steps[1].nodes['[data-ghost-text]'];
+  expect(hint.hidden).toBe(false); expect(hint.textContent).toBe('Tap to accept');
+  fire(box, 'click'); expect(box.value).toBe('We track new clients');
+  expect(fire(ghost, 'pointerdown').defaultPrevented).toBe(true);
+  fire(ghost, 'click'); expect(box.value).toBe('We track new clients in a spreadsheet');
+  expect(hint.hidden).toBe(true);
+  await vi.advanceTimersByTimeAsync(400);
+  fire(box, 'keydown', { key: 'Shift' });
+  expect(hint.textContent).toBe('Tab to accept'); expect(hint.hidden).toBe(true);
+});
+it('keeps the decorative mirror on phones and the accessible accept control visually hidden', () => {
+  const page = readFileSync('src/pages/software/start.astro', 'utf8');
+  const css = readFileSync('src/styles/software-intake.css', 'utf8');
+  expect(page).toContain('class="sr-only" data-accept hidden');
+  expect(page).toContain('class="brief-ghost" aria-hidden="true"');
+  expect(css).toContain('[data-ghost-text]{pointer-events:auto');
+  expect(css).toContain('pointer-events:none;z-index:1');
+  expect(css).not.toContain('.brief-ghost{visibility:hidden}');
+  expect(readFileSync('src/scripts/brief-autocomplete.ts', 'utf8')).not.toContain('Use:');
+});
+
+it('leaves normal Tab navigation alone without a suggestion or with a selection', async () => {
+  choose('path', 'workflow'); const box = fill('today', 'We track new clients');
+  expect(fire(box, 'keydown', { key: 'Tab' }).defaultPrevented).toBe(false);
+  expect(steps[1].nodes['[data-accept]'].hidden).toBe(true);
+  await vi.advanceTimersByTimeAsync(400);
+  box.selectionStart = 0;
+  expect(fire(box, 'keydown', { key: 'ArrowRight' }).defaultPrevented).toBe(false);
+  expect(box.value).toBe('We track new clients');
+  expect(steps[1].nodes['[data-accept-hint]'].hidden).toBe(true);
 });

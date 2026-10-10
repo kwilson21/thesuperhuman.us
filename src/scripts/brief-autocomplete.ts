@@ -3,6 +3,9 @@ export function setupBriefAutocomplete(form: HTMLFormElement, earlier: () => Rec
   const startPass = setupSuggestionPass(form);
   const start = () => { if (enabled) void startPass(); };
   let unavailable = false;
+  let inputType = 'keyboard';
+  const updateHints = () => form.querySelectorAll<HTMLElement>('[data-accept-hint]').forEach(hint => hint.textContent = inputType === 'touch' ? 'Tap to accept' : 'Tab to accept');
+  form.addEventListener('pointerdown', event => { inputType = event.pointerType === 'touch' ? 'touch' : 'keyboard'; updateHints(); });
   let enabled = true, generation = 0, timer: ReturnType<typeof setTimeout> | undefined;
   let controller: AbortController | undefined;
   let renewedRetry: AbortController | undefined;
@@ -16,6 +19,7 @@ export function setupBriefAutocomplete(form: HTMLFormElement, earlier: () => Rec
   const clear = () => {
     if (renewedRetry && controller === renewedRetry) unavailable = false;
     generation++; clearTimeout(timer); controller?.abort();
+    form.querySelectorAll<HTMLElement>('[data-accept-hint]').forEach(hint => hint.hidden = true);
     form.querySelectorAll<HTMLElement>('[data-ghost-prefix], [data-ghost-text]').forEach(node => node.textContent = '');
     form.querySelectorAll<HTMLButtonElement>('[data-accept]').forEach(button => { button.hidden = true; button.dataset.suggestion = ''; });
   };
@@ -25,20 +29,25 @@ export function setupBriefAutocomplete(form: HTMLFormElement, earlier: () => Rec
   }));
   form.querySelectorAll<HTMLTextAreaElement>('[data-answer]').forEach(box => {
     const section = box.closest<HTMLElement>('[data-step]')!;
-    const chip = section.querySelector<HTMLButtonElement>('[data-accept]')!;
+    const control = section.querySelector<HTMLButtonElement>('[data-accept]')!;
     const prefix = section.querySelector<HTMLElement>('[data-ghost-prefix]')!;
     const ghost = section.querySelector<HTMLElement>('[data-ghost-text]')!;
     const overlay = prefix.parentElement!;
+    const hint = section.querySelector<HTMLElement>('[data-accept-hint]')!;
     const atEnd = () => box.selectionStart === box.value.length && box.selectionEnd === box.value.length;
     const accept = () => {
-      if (!chip.dataset.suggestion || !atEnd()) return;
-      box.value += chip.dataset.suggestion;
+      if (!control.dataset.suggestion || !atEnd()) return;
+      box.value += control.dataset.suggestion;
       box.focus(); box.setSelectionRange(box.value.length, box.value.length);
       clear(); box.dispatchEvent(new Event('input', { bubbles: true }));
     };
-    chip.addEventListener('click', accept);
+    control.addEventListener('click', accept);
+    ghost.addEventListener('pointerdown', event => event.preventDefault());
+    ghost.addEventListener('click', accept);
     box.addEventListener('keydown', event => {
-      if (!event.isComposing && chip.dataset.suggestion && atEnd() && (event.key === 'Tab' || event.key === 'ArrowRight') && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) { event.preventDefault(); accept(); }
+      if (!event.isComposing && event.key !== 'Unidentified' && event.keyCode !== 229) inputType = 'keyboard';
+      updateHints();
+      if (!event.isComposing && control.dataset.suggestion && atEnd() && (event.key === 'Tab' || event.key === 'ArrowRight') && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) { event.preventDefault(); accept(); }
       else if (event.key !== 'Tab') clear();
     });
     box.addEventListener('select', () => { if (!atEnd()) clear(); });
@@ -74,8 +83,9 @@ export function setupBriefAutocomplete(form: HTMLFormElement, earlier: () => Rec
           const suggestion = result.suggestion.slice(0, 100);
           if (box.value.length + suggestion.length > box.maxLength) return;
           prefix.textContent = text; ghost.textContent = suggestion;
-          chip.dataset.suggestion = suggestion; chip.textContent = `Use: "${suggestion.trim()}"`;
-          chip.setAttribute('aria-label', `Add suggestion: ${suggestion.trim()}`); chip.hidden = false;
+          control.dataset.suggestion = suggestion; control.textContent = `Add suggestion: ${suggestion.trim()}`;
+          updateHints(); hint.hidden = false;
+          control.setAttribute('aria-label', `Add suggestion: ${suggestion.trim()}`); control.hidden = false;
           overlay.scrollTop = box.scrollTop;
         } catch { /* Suggestions never interrupt writing. */ }
         finally { if (renewedRetry === requestController) renewedRetry = undefined; }

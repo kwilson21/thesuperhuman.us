@@ -73,8 +73,9 @@ export default {
           await page.locator(`[name=path][value=${path}]`).check();
           if (target === 1) {
             if (suggestion) {
+              await page.locator('[data-step="1"] textarea').dispatchEvent('pointerdown', { pointerType: viewport === 'phone' ? 'touch' : 'mouse' });
               await page.locator('[data-step="1"] textarea').fill('We track new clients');
-              await page.locator('[data-step="1"] [data-accept]').waitFor({ state: 'visible' });
+              await page.locator('[data-step="1"] [data-ghost-text]').waitFor({ state: 'visible' });
               if (await page.locator('[data-step="1"] textarea').inputValue() !== 'We track new clients') throw new Error('Suggestion was inserted without acceptance');
             }
             return;
@@ -119,7 +120,7 @@ export default {
         steps.push({ title: `Brief question ${question + 1}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-question-${question + 1}-${viewport}.png`, path: '/software/start', viewport, prepare: page => prepare(page, question) }), caption: 'Fictional brief, one question at a time' }] });
       }
       for (const question of [1, 2]) steps.push({ title: `Idea question ${question + 1}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-idea-${question + 1}-${viewport}.png`, path: '/software/start', viewport, prepare: page => prepare(page, question, 'idea') }), caption: 'Fictional idea brief' }] });
-      steps.push({ title: `Autocomplete, ${viewport}`, images: [{ file: await capture({ file: `software-brief-suggestion-${viewport}.png`, path: '/software/start', viewport, prepare: page => prepare(page, 1, 'workflow', true) }), caption: viewport === 'phone' ? 'Mocked suggestion with an explicit accept button' : 'Mocked decorative ghost text' }] });
+      steps.push({ title: `Autocomplete, ${viewport}`, images: [{ file: await capture({ file: `software-brief-suggestion-${viewport}.png`, path: '/software/start', viewport, prepare: page => prepare(page, 1, 'workflow', true) }), caption: viewport === 'phone' ? 'Ghost text inside the box with Tap to accept' : 'Ghost text inside the box with Tab to accept' }] });
       for (const clientCopyStatus of ['sent', 'uncertain', 'failed', undefined]) {
         steps.push({ title: `Client receipt ${clientCopyStatus ?? 'unattempted'}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-receipt-${clientCopyStatus ?? 'unattempted'}-${viewport}.png`, path: '/software/start', viewport, prepare: async page => {
           await page.route('**/api/software-inquiry', async route => {
