@@ -21,6 +21,7 @@ function healthyFixture() {
     now: new Date('2026-09-19T12:00:00Z'),
     configuredNames: new Set(['MUSIC_DB', 'AUDIO', 'OWNER_ACCESS_TEAM_DOMAIN', 'OWNER_ACCESS_AUD', 'OWNER_EMAIL']),
     query: async (sql: string) => {
+      if (sql.includes('pragma_table_info')) return [{name:'delivered_deliverables_json'},{name:'review_window_days_extended'}];
       if (sql.includes('sqlite_master')) return requiredSchema.map(name => ({ name }));
       if (sql.includes('owner_retention_runs')) return [{ completed_at: '2026-09-18T12:00:00Z' }];
       if (sql.includes('stripe_unmatched_events')) return [{ total: 0 }];
@@ -85,14 +86,14 @@ it('reports attention when the request audit trigger is missing', async () => {
   expect(report.checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
 });
 
-it('detects schemas through 0022 and passes only after 0023', async () => {
+it('detects schemas through 0023 and passes only after 0024', async () => {
   const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
   const db = new DatabaseSync(':memory:');
   const migrations = readdirSync(new URL('../../migrations/music/', import.meta.url)).filter(name => name.endsWith('.sql')).sort();
   for (const name of migrations.filter(name => name < '0019')) db.exec(readFileSync(new URL(`../../migrations/music/${name}`, import.meta.url), 'utf8'));
   const fixture = healthyFixture();
   const baseQuery = fixture.query;
-  fixture.query = sql => sql.includes('sqlite_master') ? Promise.resolve(db.prepare(sql).all() as { name: string }[]) : baseQuery(sql);
+  fixture.query = sql => (sql.includes('sqlite_master') || sql.includes('pragma_table_info')) ? Promise.resolve(db.prepare(sql).all() as { name: string }[]) : baseQuery(sql);
   expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
   db.exec('BEGIN');
   db.exec(readFileSync(new URL('../../migrations/music/0019_software_requests.sql', import.meta.url), 'utf8'));
@@ -105,6 +106,8 @@ it('detects schemas through 0022 and passes only after 0023', async () => {
   db.exec(readFileSync(new URL('../../migrations/music/0022_software_invoices.sql', import.meta.url), 'utf8'));
   expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
   db.exec(readFileSync(new URL('../../migrations/music/0023_software_signing.sql', import.meta.url), 'utf8'));
+  expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
+  db.exec(readFileSync(new URL('../../migrations/music/0024_software_delivery_selection_and_review_windows.sql', import.meta.url), 'utf8'));
   expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'pass' }));
   db.close();
 });
