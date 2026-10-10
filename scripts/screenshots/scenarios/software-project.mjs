@@ -77,7 +77,7 @@ export default {
     const direction=await share({kind:'direction_review',artifact_version:'Direction v1',client_request:''});
     await shot('Direction review awaiting a decision',`/studio/software/${id}`,'direction-review',{cookie});
     await decide(direction,{decision:'direction_confirmed'});
-    await shot('Direction confirmed',`/studio/software/${id}`,'direction-confirmed',{cookie});
+    await shot('Direction confirmed',`/studio/software/${id}`,'direction-confirmed',{cookie,prepare:async page=>{if(!await page.locator('.project-current').getByRole('heading',{name:'Your decision',exact:true}).isVisible()) throw new Error('The confirmed direction must keep its decision beside the work.');}});
     const delivery={...update,kind:'delivery_review',artifact_version:'Delivery v1',evidence_type:'working_preview',checks_limitations:'Checked with the fictional sample. Live rollout is outside this milestone.',title:'Client onboarding',client_request:'',review_window_days:5,delivered_deliverables:['A shared status view'],criteria:terms.milestones[0].acceptance.map(check=>`${check} Checked with the fictional sample in the preview.`),links:[{label:'Fictional release notes',url:'https://example.com/releases/delivery-v1'}],preview_url:'https://example.com/preview',email_client:false};
     const deliveryDraft=await ownerFetch(`/api/owner/requests/${id}/updates`,{action:'draft',expectedProjectUpdatedAt:projectAt(),update:{...delivery,links:[{label:'',url:'https://draft.example.com/unlabeled'}]},expectedUpdatedAt:null});
     await shot('Owner composer with every delivery check',`/owner/requests/${id}/update`,'delivery-composer',{owner:true,prepare:async page=>{
@@ -120,7 +120,7 @@ export default {
     await decide(review,{decision:'changes_requested',criteria:[0],note:'Adding the fictional sample client does not save.'});
     const corrected=await share({...delivery,artifact_version:'Delivery v2',delivered_deliverables:terms.milestones[0].deliverables});
     await shot('Redelivery invoice replacement prompt',`/owner/requests/${id}`,'redelivery-invoice',{owner:true});
-    await shot('Complete version ready to try',`/studio/software/${id}`,'delivery-complete',{cookie,prepare:async page=>{await page.locator('[data-review-mark="works"]').first().click();}});
+    await shot('Complete version ready to try',`/studio/software/${id}`,'delivery-complete',{cookie,prepare:async page=>{await page.locator('[data-review-mark="works"]').first().click();if(!await page.getByText('Accepting version 2 accepts milestone 1 in full, including every check above.',{exact:true}).isVisible()) throw new Error('Complete delivery must explain full milestone acceptance.');const payment=page.locator('[data-software-review] button[value=milestone_accepted] + p');if(!await payment.isVisible() || !(await payment.textContent()).startsWith('After you accept, the')) throw new Error('Payment terms must follow the acceptance button.');}});
     sql(`UPDATE software_projects SET payment_mode='invoice' WHERE request_id=${quote(id)}`);
     await shot('Invoice Terms review',`/studio/software/${id}`,'delivery-invoice-terms',{cookie});
     sql(`UPDATE software_projects SET payment_mode='standard' WHERE request_id=${quote(id)}`);
