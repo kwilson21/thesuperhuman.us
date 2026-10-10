@@ -182,14 +182,13 @@ export default {
     async function captureLinks(purpose) {
       const archive = purpose === 'archive';
       const route = archive ? '/agreements/verify' : `/offer/${token}/verify`;
-      const destination = archive ? '/agreements' : `/offer/${token}/sign`;
       for (const viewport of ['desktop', 'phone']) {
         for (const expired of [false, true]) {
           const name = `${archive ? 'archive-' : ''}link-${expired ? 'expired' : 'open'}`;
           const linkKey = `${archive ? 'a' : 's'}${expired ? 'e' : 'v'}${viewport === 'desktop' ? 'd' : 'p'}`.padEnd(43, 'x');
           const linkId = `screenshot-${purpose}-${expired ? 'expired' : 'open'}-${viewport}`;
           sql(`INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES(${quote(linkId)},${quote(purpose)},${archive ? 'NULL' : "'screenshot-signing-offer'"},${archive ? 'NULL' : quote(hash(token))},'signer@example.com',${quote(hash(linkKey))},${quote(at)},${quote(expired ? '2000-01-01' : '2099-01-01')});`);
-          const title = expired ? 'This link has expired.' : `Email link opens the ${archive ? 'archive' : 'agreement'}`;
+          const title = expired ? 'This link has expired.' : archive ? 'Your documents are ready.' : 'Your agreement is ready.';
           const file = await capture({
             file: `software-signing-${name}-${viewport}.png`,
             path: `${route}?key=${linkKey}`,
@@ -197,8 +196,11 @@ export default {
             status: expired ? 401 : 200,
             prepare: async page => {
               if (expired) await page.getByRole('heading', { name: 'This link has expired.', exact: true }).waitFor();
-              else if (new URL(page.url()).pathname !== destination || new URL(page.url()).search)
-                throw new Error(`One-time link did not redirect to ${destination} with the token removed.`);
+              else {
+                await page.getByRole('heading', {name:title,exact:true}).waitFor();
+                await page.getByRole('button', {name:archive?'Continue':'Continue to sign',exact:true}).waitFor();
+                if(!await page.getByText('This link works once.',{exact:true}).isVisible())throw new Error('Missing one-time link copy.');
+              }
             },
           });
           steps.push({ title: `${title}, ${viewport}`, images: [{ file, caption: title }] });

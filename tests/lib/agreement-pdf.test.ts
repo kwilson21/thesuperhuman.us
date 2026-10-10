@@ -156,3 +156,15 @@ it('preserves heading characters absent from Newsreader using Inter', async () =
   const pdf = await PDFDocument.load(await renderAgreementPacket({} as Env,[document('sow',text)],[{}]));
   expect(extract(pdf)).toContain('Client '+character);
 });
+
+it.each([false,true])('prints stored statement versions unchanged in the PDF (SOW only: %s)',async sowOnly=>{
+  const {intentText,consentText}=await import('~/lib/agreement-fields');
+  const signatures=['client','contractor'].map(party=>({party,typed_name:'Example Signer',consent_version:'website-signing-v3',consent_text:consentText('Example LLC',party==='contractor'),intent_text:intentText(party==='contractor',sowOnly)}));
+  signatures.push({party:'client',typed_name:'Earlier Signer',consent_version:'website-signing-v2',consent_text:'Earlier stored consent',intent_text:'Earlier stored intent'});
+  const certificate={signatures};
+  const original=JSON.stringify(certificate);
+  const pdf=await PDFDocument.load(await renderAgreementPacket({ASSETS:assets} as unknown as Env,[document('sow','Exact retained agreement')],[certificate]));
+  const text=extract(pdf).replace(/\s+/g,' ');
+  for(const signature of signatures)for(const key of ['consent_version','consent_text','intent_text'] as const)expect(text).toContain(signature[key]);
+  expect(JSON.stringify(certificate)).toBe(original);
+});

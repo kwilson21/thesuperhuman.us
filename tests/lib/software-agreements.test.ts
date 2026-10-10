@@ -452,7 +452,10 @@ it('issues a hashed pinned-recipient link, consumes once, expires and limits res
   expect(stored).toBeTruthy();
   expect(JSON.stringify(stored)).not.toContain(key);
   expect(Date.parse(stored.expires_at)-Date.parse(stored.issued_at)).toBe(3600000);
-  const opened = await completeAgreementLink(env, req, key, token);
+  const landing = await completeAgreementLink(env, req, key, token);
+  expect(landing.status).toBe(200);
+  expect(sql.prepare('SELECT used_at FROM software_agreement_links WHERE id=?').get(stored.id).used_at).toBeNull();
+  const opened = await completeAgreementLink(env, new Request(req.url, {method:"POST"}), key, token);
   expect(opened.status).toBe(303);
   expect(opened.headers.get('location')).toBe(`/offer/${token}/sign`);
   expect(opened.headers.get('set-cookie')).toContain('Max-Age=7200');
@@ -464,7 +467,7 @@ it('rejects expired links without creating a session', async () => {
   const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
   const key = new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get('key')!;
   sql.prepare("UPDATE software_agreement_links SET expires_at='2000-01-01'").run();
-  expect((await completeAgreementLink(env,request(),key,token)).status).toBe(401);
+  expect((await completeAgreementLink(env,new Request(request(),{method:"POST"}),key,token)).status).toBe(401);
   expect(sql.prepare('SELECT count(*) n FROM software_agreement_sessions').get().n).toBe(1);
 });
 it('keeps archive access independent of closed projects and the signing switch', async () => {
@@ -1080,7 +1083,7 @@ it('consumes a link atomically under parallel verification', async () => {
   await issueAgreementLink(env,request(),{turnstileToken:'test'},token);
   const payload=JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
   const key=new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get('key')!;
-  const results=await Promise.all([completeAgreementLink(env,request(),key,token),completeAgreementLink(env,request(),key,token)]);
+  const results=await Promise.all([completeAgreementLink(env,new Request(request(),{method:"POST"}),key,token),completeAgreementLink(env,new Request(request(),{method:"POST"}),key,token)]);
   expect(results.map(r=>r.status).sort()).toEqual([303,401]);
 });
 it('rejects expired sessions, wrong recipients, studio cookies and archive purpose for signing', async () => {
@@ -1134,6 +1137,16 @@ it('reuses an MSA across two offers without importing the first SOW attachments'
   expect(JSON.parse(msa.attachment_manifest_json)).toEqual([]);
   expect(JSON.parse((await offerAgreements(db, 'o')).find(a => a.kind === 'sow')!.attachment_manifest_json)).toEqual([first]);
   expect(JSON.parse((await offerAgreements(db, 'o2'))[0].attachment_manifest_json)).toEqual([second]);
+  const nextOffer=(await db.prepare("SELECT * FROM software_offers WHERE id='o2'").first<SoftwareOffer>())!;
+  await signAgreements(db,nextOffer,(await agreementSession(db,request(),'agreement','o2'))!,reviewed.documents.map(d=>({id:d.id,hash:d.hash})),request());
+  await countersignAgreements(db,nextOffer,reviewed.documents.map(d=>({id:d.id,hash:d.hash})),'Owner','owner@example.com',request());
+  const rows=sql.prepare('SELECT * FROM software_agreement_signatures WHERE agreement_id=?').all(reviewed.documents[0].id);
+  expect(rows).toHaveLength(2);
+  for(const row of rows) {
+    expect(row.intent_text).toBe(row.party==='client'?'Signing applies your name above as your electronic signature on the statement of work linked above.':'Countersigning applies your name above as your electronic signature on the statement of work you reviewed.');
+    expect(row.consent_version).toBe('website-signing-v3');
+  }
+
 });
 
 it.each([false, true])('cleans the last shared attachment reference while preserving a held reference (%s)', async held => {
@@ -1435,7 +1448,7 @@ it('resumes the server draft under a fresh two-hour email session without sharin
   await issueAgreementLink(env,request(),{turnstileToken:'test'},token);
   const payload=JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
   const key=new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get('key')!;
-  const opened=await completeAgreementLink(env,request(),key,token);
+  const opened=await completeAgreementLink(env,new Request(request(),{method:"POST"}),key,token);
   const newSession=await agreementSession(db,new Request(request().url,{headers:{cookie:opened.headers.get('set-cookie')!}}),'agreement','o');
   expect(newSession).not.toBeNull();
   expect(Date.parse(newSession!.expires_at)-Date.parse(newSession!.verified_at)).toBe(7200000);
@@ -1466,7 +1479,7 @@ it('retains both verbatim statements and verification method in signatures and c
     const row=sql.prepare('SELECT * FROM software_agreement_signatures WHERE party=? LIMIT 1').get(party);
     expect(row.consent_text).toBe(consentText(client.legal_name,party==='contractor'));
     expect(row.intent_text).toBe(intentText(party==='contractor'));
-    expect(row.consent_version).toBe('website-signing-v2');
+    expect(row.consent_version).toBe('website-signing-v3');
     expect(row.verification_method).toBe(party==='client'?'verified by one-time email link':'verified by owner authentication');
   }
   await prepareAgreementArtifact(env,id,async(_env,_docs,certificates)=>{
@@ -1677,4 +1690,20 @@ it('rechecks a newly live deposit inside the abandonment transaction',async()=>{
   const response=await POST({params:{id:'r'},request:new Request('https://example.com/api/owner/requests/r/agreement',{method:'POST',headers:{origin:'https://example.com','content-type':'application/json'},body:JSON.stringify({action:'abandon',documents:result.documents,reason:'Cancelled',confirmed:true})}),locals:{owner:{email:'owner@example.com'},runtime:{env}}} as never);
   expect(response.status).toBe(409);expect(await response.json()).toMatchObject({error:'Void or refund the deposit invoice first.'});
   expect((await offer())!.status).toBe('sent');expect((await offerAgreements(db,'o')).every(a=>a.status==='client_signed')).toBe(true);
+});
+
+it.each(['agreement','archive'])('GET leaves %s links reusable until POST, which rechecks expiry',async purpose=>{
+  const key='z'.repeat(43),hash=await hashOfferToken(key),offerToken=purpose==='agreement'?token:undefined;
+  sql.prepare('INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES(?,?,?,?,?,?,?,?)').run('landing',purpose,purpose==='agreement'?'o':null,purpose==='agreement'?await hashOfferToken(token):null,'client@example.com',hash,'now','2099-01-01');
+  const sessions=sql.prepare('SELECT count(*) n FROM software_agreement_sessions').get().n;
+  for(let i=0;i<2;i++)expect((await completeAgreementLink(env,new Request('https://example.com'),key,offerToken)).status).toBe(200);
+  expect(sql.prepare("SELECT used_at FROM software_agreement_links WHERE id='landing'").get().used_at).toBeNull();
+  expect(sql.prepare('SELECT count(*) n FROM software_agreement_sessions').get().n).toBe(sessions);
+  sql.prepare("UPDATE software_agreement_links SET expires_at='2000-01-01' WHERE id='landing'").run();
+  expect((await completeAgreementLink(env,new Request('https://example.com',{method:'POST'}),key,offerToken)).status).toBe(401);
+  sql.prepare("UPDATE software_agreement_links SET expires_at='2099-01-01' WHERE id='landing'").run();
+  const response=await completeAgreementLink(env,new Request('https://example.com',{method:'POST'}),key,offerToken);
+  expect(response.status).toBe(303);expect(response.headers.get('location')).toBe(purpose==='agreement'?`/offer/${token}/sign`:'/agreements');
+  expect(sql.prepare('SELECT count(*) n FROM software_agreement_sessions').get().n).toBe(sessions+1);
+  for(const method of ['GET','POST'])expect((await completeAgreementLink(env,new Request('https://example.com',{method}),key,offerToken)).status).toBe(401);
 });

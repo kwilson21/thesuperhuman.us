@@ -174,9 +174,9 @@ export const signatureReference =
 export const consentText = (party: string, owner = false) => owner
   ? "I agree to sign and receive these documents electronically, and I'm authorized to sign for The Superhuman Group LLC."
   : `I agree to sign and receive these documents electronically, and I'm authorized to sign for ${party}, a business. I can download and keep a complete copy.`;
-export const intentText = (owner = false) => owner
-  ? 'Countersigning applies your name above as your electronic signature on the agreement and statement of work you reviewed.'
-  : 'Signing applies your name above as your electronic signature on the agreement and statement of work you just reviewed.';
+export const intentText = (owner = false, sowOnly = false) => owner
+  ? `Countersigning applies your name above as your electronic signature on the ${sowOnly ? 'statement of work' : 'agreement and statement of work'} you reviewed.`
+  : `Signing applies your name above as your electronic signature on the ${sowOnly ? 'statement of work' : 'agreement and statement of work'} linked above.`;
 export const agreementVersionLabel = 'v2026-09-30';
 export function agreementValues(
   terms: OfferTerms,

@@ -123,3 +123,17 @@ it("autosaves changed fields and clears consent before a new review", async () =
   const body = JSON.parse(String(vi.mocked(fetch).mock.calls.at(-1)![1]?.body));
   expect(body.values.signer_title).toBe("Director");
 });
+
+it('document links activate the existing reader navigation',()=>{
+  let click: Function;
+  const stageClick=vi.fn(), scroll=vi.fn();
+  const reader={open:false,querySelector:(selector:string)=>{expect(selector).toBe('[data-terms-stage-button="3"]');return {click:stageClick};}};
+  const link={hash:'#review-sow',hasAttribute:()=>true,addEventListener:(_event:string,handler:Function)=>{click=handler;}};
+  vi.stubGlobal('document',{
+    querySelectorAll:(selector:string)=>selector.includes('[data-document-link]')?[link]:[],
+    querySelector:(selector:string)=>selector==='#review-sow'?{scrollIntoView:scroll}:selector==='[data-agreed-terms]'?reader:null,
+  });
+  setupAgreementAccess();
+  const preventDefault=vi.fn();click!({preventDefault});
+  expect(reader.open).toBe(true);expect(stageClick).toHaveBeenCalledOnce();expect(scroll).toHaveBeenCalledOnce();expect(preventDefault).toHaveBeenCalledOnce();
+});

@@ -23,7 +23,7 @@ const workingTerms = details ? [
 ] : [];
 ---
 <details class="agreed-terms" data-agreed-terms>
-  <summary>{signing?'Read the full agreement and statement of work':'What we agreed'}</summary>
+  <summary>What we agreed</summary>
   <div class="terms-reader" data-terms-reader>
     <header class="terms-summary" aria-label="Agreed project summary">
       <div><strong>{terms.outcome}</strong><span>{terms.milestones.length} {terms.milestones.length === 1 ? 'milestone' : 'milestones'} · {formatUSD(offerTotal(terms))} fixed fee</span></div>
@@ -71,7 +71,7 @@ const workingTerms = details ? [
     <section id="agreed-stage-3" data-terms-stage aria-labelledby="agreed-review">
       <p class="terms-kicker">04 · The complete record</p><h2 id="agreed-review" tabindex="-1">Review agreed terms</h2>
       <p>{signing?'Review the complete filled documents before signing. Reading terms does not sign anything.':'This project’s agreement is already recorded. Opening stages or reading terms does not give consent, sign anything, or change what you agreed.'}</p>
-      {signing ? <><p class="agreement-hint" data-review-hint>Complete your details and portfolio choice to see the exact filled documents. You can download and keep a complete copy.</p><div data-reviewed-documents>{documents.map(d=><section class="agreement-section"><h3>{d.kind.toUpperCase()}</h3><pre class="agreement-text">{d.canonical_text}</pre></section>)}</div></> : documents.length ? <>
+      {signing ? <><p class="agreement-hint" data-review-hint>Complete your details and portfolio choice to see the exact filled documents. You can download and keep a complete copy.</p><div data-reviewed-documents>{documents.map(d=><section id={`review-${d.kind}`} class="agreement-section"><h3>{d.kind.toUpperCase()}</h3><pre class="agreement-text">{d.canonical_text}</pre></section>)}</div></> : documents.length ? <>
         <p>Read the complete signed documents for all obligations, change and cancellation terms. This overview does not replace them.</p>
         {packet && <p><a class="site-link" data-terms-packet href={`/api/agreements/${packet.id}/file`}>Download complete signed agreement packet</a></p>}
         {documents.map(document => <div class="terms-document"><h3>{document.kind.toUpperCase()} · Effective {softwareDate(document.effective_on)}</h3><details class="terms-disclosure"><summary>Read complete {document.kind.toUpperCase()} text</summary><p class="terms-hash">SHA-256 {document.text_sha256}</p><pre class="terms-legal">{document.canonical_text}</pre></details></div>)}

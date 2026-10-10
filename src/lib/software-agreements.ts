@@ -361,7 +361,7 @@ function signatureInsert(
     throw new Error('Browser evidence exceeds its limits.');
   return db
     .prepare(
-      `INSERT INTO software_agreement_signatures(id,agreement_id,party,typed_name,title,consent_text,consent_version,consent_at,signed_at,document_sha256,session_token_hash,owner_subject,verified_email,verified_at,verification_method,intent_text,document_list_json,receipt_id,ip_address,user_agent) VALUES(?,?,?,?,?,?,'website-signing-v2',?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO software_agreement_signatures(id,agreement_id,party,typed_name,title,consent_text,consent_version,consent_at,signed_at,document_sha256,session_token_hash,owner_subject,verified_email,verified_at,verification_method,intent_text,document_list_json,receipt_id,ip_address,user_agent) VALUES(?,?,?,?,?,?,'website-signing-v3',?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     )
     .bind(
       crypto.randomUUID(),
@@ -378,7 +378,7 @@ function signatureInsert(
       email,
       verified,
       party === 'client' ? 'verified by one-time email link' : 'verified by owner authentication',
-      intentText(party === 'contractor'),
+      intentText(party === 'contractor', documents.length === 1 && a.kind === 'sow'),
       signatureIds(documents),
       receipt,
       ip,

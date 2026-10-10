@@ -294,6 +294,14 @@ export async function completeAgreementLink(
     }>();
   if (!link || (token && (await hashOfferToken(token)) !== link.link_hash))
     return expired();
+  if (request.method === 'GET') {
+    if (token) {
+      try { await liveSigningGuard(db, link.offer_id, link.link_hash, link.recipient_email).first(); }
+      catch { return expired(); }
+    }
+    return agreementJson({ ok: true });
+  }
+  if (request.method !== 'POST') return expired();
   const session = newOfferToken(),
     sessionHash = await hashOfferToken(session),
     csrf = newOfferToken();

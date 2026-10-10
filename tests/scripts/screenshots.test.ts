@@ -146,17 +146,16 @@ describe('screenshot coverage', () => {
           const key = url.searchParams.get('key')!;
           const seed = seeds.find(query => query.includes(createHash('sha256').update(key).digest('hex')));
           expect(seed).toContain(expired ? '2000-01-01' : '2099-01-01');
-          const destination = url.pathname.replace(/\/verify$/, url.pathname.startsWith('/offer/') ? '/sign' : '');
           const page = {
-            url: () => `http://localhost${destination}`,
+            url: () => url.href,
+            getByText: (text: string) => { expect(text).toBe('This link works once.'); return {isVisible:async()=>true}; },
             getByRole: (role: string, options: any) => {
-              expect(role).toBe('heading');
-              expect(options).toEqual({ name: 'This link has expired.', exact: true });
+              expect(options.exact).toBe(true);
+              expect(options.name).toBe(expired ? 'This link has expired.' : role==='button' ? (url.pathname.startsWith('/offer/')?'Continue to sign':'Continue') : url.pathname.startsWith('/offer/')?'Your agreement is ready.':'Your documents are ready.');
               return { waitFor: async () => {} };
             },
           };
           await prepare(page);
-          if (!expired) await expect(prepare({ ...page, url: () => url.href })).rejects.toThrow('did not redirect');
         } else expect(status).toBe(401);
         return file;
       },
