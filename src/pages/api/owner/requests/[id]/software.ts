@@ -178,7 +178,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       ...retireRequestSigning(db,record.id,now),
       audit('offer-sent', `Offer v${offer.version} sent`),
     ]);
-    const sent = await email(`Your project offer: ${terms.value.outcome}`, `Hi ${record.name.trim().split(/\s+/)[0] || 'there'},\n\nHere’s the offer for ${terms.value.outcome}: ${link}\n\n${pin || offer.msa_template_id ? 'Review and sign on the website.' : 'We will arrange for you to sign outside the website.'}\n\nThe link is private to you. You can forward it to whoever approves the budget. Reply to this email with any questions.\n\nKazon`);
+    const sent = await email(`Your project offer: ${terms.value.outcome}`, `Hi ${record.name.trim().split(/\s+/)[0] || 'there'},\n\nHere’s the offer for ${terms.value.outcome}: ${link}\n\n${enabled && (pin || offer.msa_template_id) ? 'Review and sign on the website.' : 'We will arrange for you to sign outside the website.'}\n\nThe link is private to you. You can forward it to whoever approves the budget. Reply to this email with any questions.\n\nKazon`);
     const live = await db.prepare(`SELECT 1 FROM software_offer_links WHERE request_id=? AND token_hash=? AND revoked_at IS NULL
       AND EXISTS(SELECT 1 FROM software_offers WHERE id=? AND status='sent')
       AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND status<>'withdrawn' AND email<>'')`).bind(record.id, tokenHash, offer.id, record.id).first();
