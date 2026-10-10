@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { prepareAgreedTerms } from '../agreed-terms.mjs';
+import { BARE_LINK_LANDINGS } from '../config.mjs';
 import { readFileSync } from 'node:fs';
 const hash = (text) => createHash('sha256').update(text).digest('hex');
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
@@ -140,16 +141,38 @@ export default {
       },
     });
     sql("DELETE FROM software_offers WHERE id='screenshot-incomplete-draft'");
-    await shot('archive-expired-link','Expired archive email link','/agreements/verify',{expectedResponses:[{path:'/agreements/verify',status:401}]});
+    for (const { name, path, status } of BARE_LINK_LANDINGS) {
+      await shot(name, 'Expired one-time link landing', path, { status });
+    }
     await shot('offer', 'Offer review and signing link', `/offer/${token}`);
     await shot('check-email', 'Check your email and resend', `/offer/${token}/sign?email=sent`);
-    await shot('link-landing', 'Expired one-time link landing', `/offer/${token}/verify`, {expectedResponses:[{path:`/offer/${token}/verify`,status:401}]});
-    for(const viewport of ['desktop','phone']) {
-      const linkKey=(viewport==='desktop'?'d':'p').repeat(43), linkId=`screenshot-open-${viewport}`;
-      sql(`INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES(${quote(linkId)},'agreement','screenshot-signing-offer',${quote(hash(token))},'signer@example.com',${quote(hash(linkKey))},${quote(at)},'2099-01-01');`);
-      const file=await capture({file:`software-signing-link-open-${viewport}.png`,path:`/offer/${token}/verify?key=${linkKey}`,viewport,prepare:async page=>{if(new URL(page.url()).searchParams.has('key'))throw new Error('One-time token remained in the URL.');}});
-      steps.push({title:`Email link opens the agreement, ${viewport}`,images:[{file,caption:'Verified recipient reaches the signing page with the one-time token removed.'}]});
+    async function captureLinks(purpose) {
+      const archive = purpose === 'archive';
+      const route = archive ? '/agreements/verify' : `/offer/${token}/verify`;
+      const destination = archive ? '/agreements' : `/offer/${token}/sign`;
+      for (const viewport of ['desktop', 'phone']) {
+        for (const expired of [false, true]) {
+          const name = `${archive ? 'archive-' : ''}link-${expired ? 'expired' : 'open'}`;
+          const linkKey = `${archive ? 'a' : 's'}${expired ? 'e' : 'v'}${viewport === 'desktop' ? 'd' : 'p'}`.padEnd(43, 'x');
+          const linkId = `screenshot-${purpose}-${expired ? 'expired' : 'open'}-${viewport}`;
+          sql(`INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES(${quote(linkId)},${quote(purpose)},${archive ? 'NULL' : "'screenshot-signing-offer'"},${archive ? 'NULL' : quote(hash(token))},'signer@example.com',${quote(hash(linkKey))},${quote(at)},${quote(expired ? '2000-01-01' : '2099-01-01')});`);
+          const title = expired ? 'This link has expired.' : `Email link opens the ${archive ? 'archive' : 'agreement'}`;
+          const file = await capture({
+            file: `software-signing-${name}-${viewport}.png`,
+            path: `${route}?key=${linkKey}`,
+            viewport,
+            status: expired ? 401 : 200,
+            prepare: async page => {
+              if (expired) await page.getByRole('heading', { name: 'This link has expired.', exact: true }).waitFor();
+              else if (new URL(page.url()).pathname !== destination || new URL(page.url()).search)
+                throw new Error(`One-time link did not redirect to ${destination} with the token removed.`);
+            },
+          });
+          steps.push({ title: `${title}, ${viewport}`, images: [{ file, caption: title }] });
+        }
+      }
     }
+    await captureLinks('agreement');
     sql(`INSERT OR REPLACE INTO software_agreement_drafts VALUES('screenshot-signing-offer','signer@example.com','{}',${quote(at)});`);
     await shot('empty', 'One signing page with empty details', `/offer/${token}/sign`, {cookie});
     sql(`DELETE FROM software_agreement_drafts WHERE offer_id='screenshot-signing-offer'; UPDATE owner_requests SET details_json='{"company":"Example Client LLC"}' WHERE id=${quote(id)};`);
@@ -312,6 +335,7 @@ export default {
       '/agreements',
       { cookie: { name: 'agreement_archive', value: archive } },
     );
+    await captureLinks('archive');
     sql('UPDATE software_signing_settings SET software_signing_enabled=0');
     return steps;
   },

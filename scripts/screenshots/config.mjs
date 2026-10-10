@@ -37,6 +37,12 @@ export const NOT_PAGES = {
   'src/pages/music/[slug].astro': 'Captured through music-old-news.',
 };
 
+/** Bare one-time links must refuse access, including a seeded offer with no email key. */
+export const BARE_LINK_LANDINGS = [
+  { name: 'archive-expired-link', path: '/agreements/verify', status: 401 },
+  { name: 'link-landing', path: `/offer/${'g'.repeat(43)}/verify`, status: 401 },
+];
+
 /** Page files that only redirect. Capture checks each one answers with this status and location. */
 export const REDIRECTS = {
   'src/pages/services.html.astro': { from: '/services.html', to: '/services', status: 301 },

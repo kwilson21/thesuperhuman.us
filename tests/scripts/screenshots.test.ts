@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { templateFields } from '../../src/lib/agreement-template-fields.mjs';
 const signingTemplates = Object.fromEntries(['msa', 'sow'].map(kind => [kind, templateFields[kind as keyof typeof templateFields].filter(field => !field.startsWith('milestone.')).map(field => `${field}: {{${field}}}`).join('\n') + (kind === 'sow' ? '\n{{#milestones}}\n' + templateFields.sow.filter(field => field.startsWith('milestone.')).map(field => `${field}: {{${field}}}`).join('\n') + '\n{{/milestones}}' : '')]));
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -11,7 +12,7 @@ import { prepareWithDiagnostics } from '../../scripts/screenshots/prepare.mjs';
 import { POST as sendOffer } from '../../src/pages/api/owner/requests/[id]/software';
 import { contractorSchema } from '../../src/lib/agreement-fields';
 import {
-  expectedResourceError, missingScenarioRoutes, NOT_PAGES, PAGES, parseJsonc, PREVIEW_OVERRIDES, previewWrangler, REDIRECTS, SCENARIO_PAGES,
+  BARE_LINK_LANDINGS, expectedResourceError, missingScenarioRoutes, NOT_PAGES, PAGES, parseJsonc, PREVIEW_OVERRIDES, previewWrangler, REDIRECTS, SCENARIO_PAGES,
   relevantScreenshots, sanitizeManifest, screenshotSection, withScreenshots,
 } from '../../scripts/screenshots/config.mjs';
 
@@ -121,6 +122,56 @@ describe('screenshot coverage', () => {
       expect(steps.length).toBeGreaterThan(0);
     }
     expect(missingScenarioRoutes(SCENARIO_PAGES, captured)).toEqual([]);
+  });
+
+  it('captures bare, expired and valid one-time landings with their document statuses and destinations', async () => {
+    const scenario = await import('../../scripts/screenshots/scenarios/software-signing.mjs');
+    const landings: { path: string; status: number }[] = [];
+    const seeds: string[] = [];
+    const documents = [{ id: 'msa', kind: 'msa', hash: 'a'.repeat(64) }, { id: 'sow', kind: 'sow', hash: 'b'.repeat(64) }];
+    await scenario.default.run({
+      templates: signingTemplates,
+      sql: (query: string) => {
+        seeds.push(query);
+        return query.startsWith('SELECT status FROM software_agreement_artifacts') ? '[{"results":[{"status":"ready"}]}]' : '[]';
+      },
+      ownerFetch: async () => ({ documents }),
+      capture: async ({ file, path, status = 200, prepare }: any) => {
+        const url = new URL(path, 'http://localhost');
+        if (!url.pathname.endsWith('/verify')) return file;
+        landings.push({ path, status });
+        if (url.searchParams.has('key')) {
+          const expired = file.includes('expired');
+          expect(status).toBe(expired ? 401 : 200);
+          const key = url.searchParams.get('key')!;
+          const seed = seeds.find(query => query.includes(createHash('sha256').update(key).digest('hex')));
+          expect(seed).toContain(expired ? '2000-01-01' : '2099-01-01');
+          const destination = url.pathname.replace(/\/verify$/, url.pathname.startsWith('/offer/') ? '/sign' : '');
+          const page = {
+            url: () => `http://localhost${destination}`,
+            getByRole: (role: string, options: any) => {
+              expect(role).toBe('heading');
+              expect(options).toEqual({ name: 'This link has expired.', exact: true });
+              return { waitFor: async () => {} };
+            },
+          };
+          await prepare(page);
+          if (!expired) await expect(prepare({ ...page, url: () => url.href })).rejects.toThrow('did not redirect');
+        } else expect(status).toBe(401);
+        return file;
+      },
+    });
+    expect(BARE_LINK_LANDINGS.map(({ path, status }) => ({ path, status }))).toEqual([
+      { path: '/agreements/verify', status: 401 },
+      { path: `/offer/${'g'.repeat(43)}/verify`, status: 401 },
+    ]);
+    for (const { path: route, status } of BARE_LINK_LANDINGS) {
+      const visits = landings.filter(visit => new URL(visit.path, 'http://localhost').pathname === route);
+      expect(visits.filter(visit => !visit.path.includes('?'))).toHaveLength(2);
+      expect(visits.filter(visit => !visit.path.includes('?')).every(visit => visit.status === status)).toBe(true);
+      expect(visits.filter(visit => visit.path.includes('?') && visit.status === 401)).toHaveLength(2);
+      expect(visits.filter(visit => visit.status === 200)).toHaveLength(2);
+    }
   });
 
   it('reports a seeded page whose scenario never captured it', () => {
