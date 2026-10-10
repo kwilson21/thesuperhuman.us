@@ -489,7 +489,7 @@ it('rejects expired links without creating a session', async () => {
   expect((await completeAgreementLink(env,new Request(request(),{method:"POST"}),key,token)).status).toBe(401);
   expect(sql.prepare('SELECT count(*) n FROM software_agreement_sessions').get().n).toBe(1);
 });
-it('keeps archive access independent of closed projects and the signing switch', async () => {
+it('keeps archive access after project cleanup and disabling signing', async () => {
   const result = await signed(),
     id = await countersignAgreements(
       db,
@@ -503,11 +503,26 @@ it('keeps archive access independent of closed projects and the signing switch',
   sql.exec(
     "UPDATE software_signing_settings SET software_signing_enabled=0; UPDATE owner_requests SET email='',name='',details_json='{}',private_note='',city_region='',status='withdrawn';",
   );
+  sql.exec("INSERT INTO software_agreement_links VALUES('archive-link','archive','o',NULL,'client@example.com','archive-token','now','2099-01-01',NULL)");
   sql
     .prepare(
-      "INSERT INTO software_agreement_sessions VALUES(?,'archive',NULL,NULL,'client@example.com','challenge','now','2099-01-01',NULL,'archive-csrf')",
+      "INSERT INTO software_agreement_sessions VALUES(?,'archive','o',NULL,'client@example.com','archive-link','now','2099-01-01',NULL,'archive-csrf')",
     )
     .run(await hashOfferToken('a'.repeat(43)));
+  sql.exec("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,completed_at) VALUES('r','o','{}','standard','now','now','now','owner','now','now','2020-01-01')");
+  const { previewStudioRetention, applyStudioRetention } = await import('../../scripts/studio-retention.mjs');
+  const database = {
+    query: async (query: string) => sql.prepare(query).all().map((row: Record<string, unknown>) => ({ ...row })),
+    batch: async (queries: string[]) => db.batch(queries.map(query => db.prepare(query))),
+  };
+  const storage = { accountId: null, databaseId: 'local', bucket: 'local', jurisdiction: null };
+  const now = new Date(), list = async () => [];
+  const review = await previewStudioRetention(database, 'Local test data', storage, now, list);
+  expect(review.counts).toMatchObject({ softwareProjects: 1 });
+  await applyStudioRetention(database, review, 'Local test data', storage, async () => {}, now, list);
+  expect(sql.prepare("SELECT revoked_at FROM software_agreement_sessions WHERE purpose='agreement'").get().revoked_at).toBe(now.toISOString());
+  expect(sql.prepare("SELECT revoked_at FROM software_agreement_sessions WHERE purpose='archive'").get().revoked_at).toBeNull();
+  expect(sql.prepare("SELECT used_at FROM software_agreement_links WHERE id='archive-link'").get().used_at).toBeNull();
   const response = await agreementDownload(
     env,
     new Request('https://example.com', {

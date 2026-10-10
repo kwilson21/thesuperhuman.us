@@ -211,8 +211,8 @@ export async function applyStudioRetention(database, review, environment, storag
   const softwareIds=ids(software.values.softwareProjects);
   const softwareStatements = software.values.softwareProjects.length ? [
     `UPDATE software_offer_links SET revoked_at=${quote(now.toISOString())} WHERE request_id IN (${softwareIds}) AND revoked_at IS NULL`,
-    `UPDATE software_agreement_sessions SET revoked_at=${quote(now.toISOString())} WHERE offer_id IN (SELECT id FROM software_offers WHERE request_id IN (${softwareIds})) AND revoked_at IS NULL`,
-    `UPDATE software_agreement_links SET used_at=${quote(now.toISOString())} WHERE offer_id IN (SELECT id FROM software_offers WHERE request_id IN (${softwareIds})) AND used_at IS NULL`,
+    `UPDATE software_agreement_sessions SET revoked_at=${quote(now.toISOString())} WHERE purpose='agreement' AND offer_id IN (SELECT id FROM software_offers WHERE request_id IN (${softwareIds})) AND revoked_at IS NULL`,
+    `UPDATE software_agreement_links SET used_at=${quote(now.toISOString())} WHERE purpose='agreement' AND offer_id IN (SELECT id FROM software_offers WHERE request_id IN (${softwareIds})) AND used_at IS NULL`,
     `DELETE FROM software_project_messages WHERE request_id IN (${softwareIds})`,
     `DELETE FROM software_project_updates WHERE request_id IN (${softwareIds})`,
     `DELETE FROM software_milestone_deposits WHERE request_id IN (${softwareIds})`,
