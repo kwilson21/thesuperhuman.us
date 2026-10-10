@@ -1839,3 +1839,14 @@ it.each([false,true])('conditionally advances the attachment cursor if storage c
   await applyAgreementRetention(db,env.AUDIO,'test-storage',old);
   expect(new TextDecoder().decode(bucketData.get(marker))).toBe(newer);
 });
+
+it('retains a reused MSA and its pinned offer reference for a project tombstone', async () => {
+  const { previewAgreementRetention, applyAgreementRetention } = await import('~/lib/agreement-retention');
+  await review();
+  sql.exec("UPDATE software_offers SET status='superseded' WHERE id='o'; UPDATE software_agreements SET msa_id=NULL,legal_hold=1 WHERE kind='sow'; UPDATE software_agreements SET status='abandoned',ended_at='2000-01-01',retain_until='2010-01-01',terminated_at='2000-01-01'; INSERT INTO software_offers(id,request_id,version,status,terms_json,reused_msa_id,created_at,updated_at) SELECT 'reused','r',2,'sent','{}',id,'now','now' FROM software_agreements WHERE kind='msa'; INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,content_deleted_at) VALUES('r','reused','{}','standard','now','now','now','owner','now','now','now')");
+  const original=sql.prepare("SELECT reused_msa_id FROM software_offers WHERE id='reused'").get();
+  const manifest=await previewAgreementRetention(db,env.AUDIO,'test-storage');
+  expect(manifest.agreements).toEqual([]);
+  await applyAgreementRetention(db,env.AUDIO,'test-storage',manifest);
+  expect(sql.prepare("SELECT reused_msa_id FROM software_offers WHERE id='reused'").get()).toEqual(original);
+});
