@@ -645,7 +645,7 @@ it('puts the named review work first through partial, complete, accepted and han
     expect(html.match(/See what's included/g)).toHaveLength(1);
     sql.exec("UPDATE software_project_updates SET criteria_json='[\"Evidence without a repeated check.\"]' WHERE id='v2'");
     expect(await render()).toContain('Evidence without a repeated check.');
-    expect(html).toMatch(/<strong[^>]*>Yours<\/strong><span[^>]*>After payment<\/span>/);
+    expect(html).toMatch(/<strong[^>]*>Yours<\/strong><span[^>]*>After you accept<\/span>/);
     expect(html).toMatch(/<h3[^>]*>Not included yet<\/h3><p[^>]*>Sample import is not included\.<\/p>/);
     expect(html).toContain('Version 2 is ready to try.');expect(html).toContain('I need from you: Send a sample.');expect(html).toContain('Next from me: Build the import.');expect(html).toContain('Please try it by Oct 8, 2026.');expect(html).toContain('More internal detail.');
     expect(html).toContain('Open version 2 ↗');expect(html).toContain('Try these');expect(html).toContain('aria-pressed="false"');expect(html).toContain('data-review-mark="not-yet"');
@@ -654,9 +654,12 @@ it('puts the named review work first through partial, complete, accepted and han
     for(const old of ['WORKING PREVIEW','Demonstrated','Try check','Agreement · Complete','Initial payment ·','Waiting on you','What I need from you']) expect(html).not.toContain(old);
     expect(html.indexOf('class="project-current')).toBeLessThan(html.indexOf('aria-label="Next steps"'));expect(html.indexOf('aria-label="Next steps"')).toBeLessThan(html.indexOf('So far'));
     sql.exec(`UPDATE software_project_updates SET delivered_deliverables_json='["Status view","Sample import"]'; UPDATE software_projects SET payment_mode='invoice'`);
-    html=await render();expect(html).toMatch(/<strong[^>]*>Yours<\/strong><span[^>]*>After payment<\/span>/);expect(html).not.toMatch(/value="milestone_accepted" disabled/);expect(html).toContain('This milestone is invoiced on delivery and due within 30 days.');
+    html=await render();expect(html).toMatch(/<strong[^>]*>Yours<\/strong><span[^>]*>After you accept<\/span>/);expect(html).not.toMatch(/value="milestone_accepted" disabled/);expect(html).toContain('This milestone is invoiced on delivery and due within 30 days.');
+    sql.exec("INSERT INTO software_milestone_payments(request_id,milestone_index,paid_recorded_at,recorded_by) VALUES('r',0,'2026-10-02','owner')");
+    html=await render();expect(html).toMatch(/<strong[^>]*>Yours<\/strong><span[^>]*>After you accept<\/span>/);expect(html).not.toContain('Handoff coming');
+    sql.exec('DELETE FROM software_milestone_payments');
     sql.exec(`UPDATE software_project_updates SET kind='direction_review',artifact_version='Direction v1',evidence_type='concept'`);
-    html=await render();expect(html).toMatch(/<h3[^>]*>Not included yet<\/h3><p[^>]*>Sample import is not included\.<\/p>/);expect(html).toContain("Here&#39;s the first sketch.");expect(html).toContain('Please look it over by Oct 8, 2026.');expect(html).toContain('Confirm this direction');expect(html).not.toContain('After you accept');expect(html).not.toContain('accepts milestone 1 in full');expect(html).not.toContain('data-review-mark');expect(html).not.toContain('name="criteria"');
+    html=await render();expect(html).toMatch(/<h3[^>]*>Not included yet<\/h3><p[^>]*>Sample import is not included\.<\/p>/);expect(html).toContain("Here&#39;s the first sketch.");expect(html).toContain('Please look it over by Oct 8, 2026.');expect(html).toContain('Confirm this direction');expect(html).toMatch(/<strong[^>]*>Yours<\/strong><span[^>]*>After you accept<\/span>/);expect(html).not.toContain('accepts milestone 1 in full');expect(html).not.toContain('data-review-mark');expect(html).not.toContain('name="criteria"');
     for (const kind of ['direction_review','delivery_review','progress']) {
       for (const evidence of ['concept','prototype','working_preview']) {
         sql.prepare('UPDATE software_project_updates SET kind=?,evidence_type=? WHERE id=\'v2\'').run(kind,evidence);
@@ -888,11 +891,16 @@ it('keeps payment and acceptance terms with each rail review and decisions with 
     sql.exec("INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,due_at,created_by,created_at,updated_at) VALUES('balance','r','current',0,'milestone',240000,30,'open','https://example.com/pay','2026-11-01','owner','now','now')");
     let html=await render();
     let rail=html.slice(html.indexOf('id="review-old"'),html.indexOf('</form>',html.indexOf('id="review-old"')));
-    expect(rail).toContain('Invoice due Nov 1, 2026.');expect(rail).toContain('Pay $2,400 ↗');expect(rail).toContain('href="https://example.com/pay"');expect(rail).toContain('The files are yours once it&#39;s paid.');
+    expect(rail).toContain('Invoice due Nov 1, 2026.');expect(rail).toContain('Pay $2,400 ↗');expect(rail).toContain('href="https://example.com/pay"');expect(rail).toContain('The files are yours after you accept and it&#39;s paid.');
     expect(html.slice(html.indexOf('id="review-new"'),html.indexOf('</form>',html.indexOf('id="review-new"')))).not.toContain('Invoice due');
     sql.exec("UPDATE software_invoices SET status='paid'");
     html=await render();rail=html.slice(html.indexOf('id="review-old"'),html.indexOf('</form>',html.indexOf('id="review-old"')));
-    expect(rail).toContain('Invoice due Nov 1, 2026.');expect(rail).not.toContain('Pay $2,400');
+    expect(rail).toContain('Paid.');expect(rail).not.toContain('Invoice due');expect(rail).not.toContain('Pay $2,400');
+    for(const status of ['open','payment_failed','uncollectible','creating']) {
+      sql.prepare('UPDATE software_invoices SET status=?').run(status);
+      html=await render();rail=html.slice(html.indexOf('id="review-old"'),html.indexOf('</form>',html.indexOf('id="review-old"')));
+      expect(rail.includes('Pay $2,400')).toBe(status!=='creating');
+    }
     sql.exec('DELETE FROM software_invoices');
     for(const kind of ['direction_review','delivery_review']) {
       sql.prepare("UPDATE software_project_updates SET status='superseded',kind=? WHERE id='new'").run(kind);

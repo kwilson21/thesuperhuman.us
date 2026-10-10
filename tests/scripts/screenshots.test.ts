@@ -562,3 +562,22 @@ it('declares the mocked 503 only for send-failed captures at both widths', async
   } });
   expect(allowances).toEqual(['software-brief-send-failed-desktop.png', 'software-brief-send-failed-phone.png']);
 });
+
+it.each(['The $1,200 balance is invoiced on delivery and due within 15 days.', 'This milestone is invoiced on delivery and due within 30 days.'])('checks delivery payment terms after Accept: %s',async wording=>{
+  const scenario=await import('../../scripts/screenshots/scenarios/software-project.mjs');
+  let prepared=0;
+  await scenario.default.run({sql:()=> '[]',ownerFetch:async()=>({}),capture:async({file,prepare}:any)=>{
+    if(file.includes('delivery-complete')) {
+      await prepare({
+        getByText:()=>({isVisible:async()=>true}),
+        locator:(selector:string)=>selector.includes('data-review-mark') ? {first:()=>({click:async()=>{}})} : (()=>{
+          expect(selector).toBe('[data-software-review] button[value=milestone_accepted] + p');
+          return {isVisible:async()=>true,textContent:async()=>wording};
+        })(),
+      });
+      prepared++;
+    }
+    return file;
+  }});
+  expect(prepared).toBe(2);
+});
