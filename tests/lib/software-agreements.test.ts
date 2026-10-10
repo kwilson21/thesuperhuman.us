@@ -1976,6 +1976,21 @@ it('retries an executed copy instead of the failed waiting receipt',async()=>{
   expect(payloads.length).toBeGreaterThan(0);
   expect(JSON.stringify(payloads)).not.toContain('Waiting for Kazon');
   expect(sql.prepare("SELECT status FROM software_agreement_deliveries WHERE agreement_id=? AND recipient_role='client'").get(id).status).toBe('sent');
+  expect(sql.prepare("SELECT count(*) n FROM software_agreement_notifications WHERE status='pending'").get().n).toBe(0);
+});
+
+it('retries genuinely failed current signing notices', async () => {
+  const { POST } = await import('~/pages/api/owner/requests/[id]/agreement');
+  await signed();
+  const id = (await offerAgreements(db, 'o')).find(a => a.kind === 'sow')!.id;
+  sql.exec("UPDATE software_agreement_notifications SET status='failed'");
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ id: 'message' })));
+  const response = await POST({ params: { id: 'r' }, locals: { owner: { email: 'owner@example.com' }, runtime: { env } }, request: new Request('https://example.com/api/owner/requests/r/agreement', {
+    method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'retry-copy', agreement_id: id }),
+  }) } as never);
+  expect(response.status).toBe(200);
+  expect(sql.prepare("SELECT count(*) n FROM software_agreement_notifications WHERE status='sent'").get().n).toBe(2);
 });
 
 it.each(['executed', 'abandoned'])('settles uncertain waiting notices when %s and allows retention', async status => {
@@ -2004,6 +2019,14 @@ it.each(['executed', 'abandoned'])('settles uncertain waiting notices when %s an
     { reason: `obsolete-signing-notice:${status}` },
   ]);
   vi.stubGlobal('fetch', vi.fn(async () => Response.json({ id: 'message' })));
+  const { POST } = await import('~/pages/api/owner/requests/[id]/agreement');
+  const retry = await POST({ params: { id: 'r' }, locals: { owner: { email: 'owner@example.com' }, runtime: { env } }, request: new Request('https://example.com/api/owner/requests/r/agreement', {
+    method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'retry-copy', agreement_id: id }),
+  }) } as never);
+  expect(retry.status).toBe(200);
+  expect(sql.prepare("SELECT count(*) n FROM software_agreement_notifications WHERE status='failed'").get().n).toBe(2);
+  vi.mocked(fetch).mockClear();
   await deliverAgreementNotifications(env, id);
   expect(fetch).not.toHaveBeenCalled();
   if (status === 'executed') {

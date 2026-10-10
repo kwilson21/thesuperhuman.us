@@ -254,6 +254,8 @@ export async function recoverAgreementRendering(
       .first(),
   );
 }
+export const currentSigningNotification = "EXISTS(SELECT 1 FROM software_agreements a WHERE a.id=software_agreement_notifications.agreement_id AND a.archive_closed_at IS NULL AND a.status='client_signed' AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.request_id=a.request_id))";
+
 export async function deliverAgreementNotifications(env: Env, id: string) {
   if (!env.MUSIC_DB || !env.RESEND_API_KEY || !env.CONTACT_FROM_EMAIL) return;
   const agreement = await env.MUSIC_DB.prepare(
@@ -266,7 +268,7 @@ export async function deliverAgreementNotifications(env: Env, id: string) {
     const attempt = crypto.randomUUID(),
       at = new Date().toISOString();
     const claim = await env.MUSIC_DB.prepare(
-      "UPDATE software_agreement_notifications SET status='sending',attempt_id=?,attempted_at=? WHERE agreement_id=? AND kind=? AND status='pending' AND EXISTS(SELECT 1 FROM software_agreements a WHERE a.id=software_agreement_notifications.agreement_id AND a.archive_closed_at IS NULL AND a.status='client_signed' AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.request_id=a.request_id)) RETURNING email",
+      `UPDATE software_agreement_notifications SET status='sending',attempt_id=?,attempted_at=? WHERE agreement_id=? AND kind=? AND status='pending' AND ${currentSigningNotification} RETURNING email`,
     )
       .bind(attempt, at, id, kind)
       .first<{ email: string }>();

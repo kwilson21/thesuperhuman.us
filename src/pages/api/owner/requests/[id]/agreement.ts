@@ -9,6 +9,7 @@ import {
   prepareAgreementArtifact,
   deliverAgreementCopies,
   deliverAgreementNotifications,
+  currentSigningNotification,
   recoverAgreementRendering,
 } from '~/lib/agreement-artifacts';
 import { softwareGuard } from '~/lib/software-projects';
@@ -146,7 +147,7 @@ const post: APIRoute = async ({ request, locals, params }) => {
           .run();
         await db
           .prepare(
-            "UPDATE software_agreement_notifications SET status='pending' WHERE agreement_id=? AND (status='failed' OR (status='sending' AND ?=1 AND attempted_at<=?))",
+            `UPDATE software_agreement_notifications SET status='pending' WHERE agreement_id=? AND ${currentSigningNotification} AND (status='failed' OR (status='sending' AND ?=1 AND attempted_at<=?))`,
           )
           .bind(
             c.agreement_id,
