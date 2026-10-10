@@ -702,8 +702,3 @@ CREATE TABLE software_milestone_deposits (
   recorded_by TEXT NOT NULL,
   PRIMARY KEY (request_id,milestone_index)
 );
-CREATE TABLE brief_suggestion_limits (
-  key TEXT PRIMARY KEY,
-  count INTEGER NOT NULL,
-  expires INTEGER NOT NULL
-);

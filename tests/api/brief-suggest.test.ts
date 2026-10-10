@@ -1,17 +1,16 @@
-import { createRequire } from 'node:module';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { POST } from '~/pages/api/software/brief/suggest';
-const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
-let sql: any, db: D1Database, run: ReturnType<typeof vi.fn>;
+let values: Map<string, string>, kv: { get: ReturnType<typeof vi.fn>; put: ReturnType<typeof vi.fn> }, run: ReturnType<typeof vi.fn>;
 const input = { question: 'What happens today?', text: 'We track new clients', earlier: { path: 'workflow' } };
 function context(body: unknown = input, env: Record<string, unknown> = {}) {
-  return { request: new Request('https://example.com/api/software/brief/suggest', { method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json', 'cf-connecting-ip': 'test' }, body: JSON.stringify(body) }), locals: { runtime: { env: { AI: { run }, MUSIC_DB: db, SOFTWARE_SUGGESTIONS_ENABLED: 'true', ...env } } } } as any;
+  return { request: new Request('https://example.com/api/software/brief/suggest', { method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json', 'cf-connecting-ip': 'test' }, body: JSON.stringify(body) }), locals: { runtime: { env: { AI: { run }, RATE_LIMIT: kv, SOFTWARE_SUGGESTIONS_ENABLED: 'true', ...env } } } } as any;
 }
 beforeEach(() => {
-  sql = new DatabaseSync(':memory:');
-  sql.exec('CREATE TABLE brief_suggestion_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, expires INTEGER NOT NULL)');
-  const statement = (query: string, args: unknown[] = []) => ({ query, args, bind: (...values: unknown[]) => statement(query, values) });
-  db = { prepare: statement, batch: async (items: any[]) => items.map(item => ({ results: sql.prepare(item.query).all(...item.args) })) } as any;
+  values = new Map();
+  kv = {
+    get: vi.fn(async (key: string) => values.get(key) ?? null),
+    put: vi.fn(async (key: string, value: string, _options: { expirationTtl: number }) => { values.set(key, value); }),
+  };
   run = vi.fn(async () => ({ response: ' in a shared spreadsheet' }));
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
@@ -28,7 +27,7 @@ it.each([
   expect(await (await POST(context(body))).json()).toEqual({ suggestion: '' });
   expect(run).not.toHaveBeenCalled();
 });
-it.each([{ AI: undefined }, { MUSIC_DB: undefined }, { SOFTWARE_SUGGESTIONS_ENABLED: 'false' }])('silently disables unavailable suggestions', async env => {
+it.each([{ AI: undefined }, { RATE_LIMIT: undefined }, { SOFTWARE_SUGGESTIONS_ENABLED: 'false' }])('silently disables unavailable suggestions', async env => {
   expect(await (await POST(context(input, env))).json()).toEqual({ suggestion: '' });
   expect(run).not.toHaveBeenCalled();
 });
@@ -38,7 +37,9 @@ it('enforces the minute limit', async () => {
 });
 it.each([['visitor-day', 300], ['site-day', 10000]])('enforces %s cap', async (key, count) => {
   await POST(context());
-  sql.prepare('UPDATE brief_suggestion_limits SET count=? WHERE key LIKE ?').run(count, `${key}:%`);
+  for (const storedKey of values.keys()) {
+    if (storedKey.startsWith(`rl:brief-suggest:${key}:`)) values.set(storedKey, String(count));
+  }
   run.mockClear();
   expect(await (await POST(context())).json()).toEqual({ suggestion: '' });
   expect(run).not.toHaveBeenCalled();
@@ -53,8 +54,9 @@ it('returns no suggestion on error, empty model output or timeout', async () => 
   expect(await (await response).json()).toEqual({ suggestion: '' });
 });
 
-it('reserves quota atomically under concurrent requests and recovers at the next minute', async () => {
-  await Promise.all(Array.from({ length: 40 }, () => POST(context())));
+it('recovers at the next minute and uses separate minute and daily TTLs', async () => {
+  for (let i = 0; i < 40; i++) await POST(context());
+  expect(kv.put.mock.calls.slice(0, 3).map(call => call[2].expirationTtl)).toEqual([60, 86400, 86400]);
   expect(run).toHaveBeenCalledTimes(30);
   vi.useFakeTimers(); vi.setSystemTime(Date.now() + 60001);
   await POST(context()); expect(run).toHaveBeenCalledTimes(31);
