@@ -121,7 +121,7 @@ describe('owner insights schema', () => {
     expect(readFileSync(new URL('../../db/music.sql', import.meta.url))).toEqual(concatenated);
     const db = apply('../../db/music.sql');
     const expected = [
-      'music_event_daily', 'music_events', 'music_interest', 'music_playback_daily',
+      'brief_suggestion_budget', 'music_event_daily', 'music_events', 'music_interest', 'music_playback_daily',
       'music_playback_events', 'music_playback_geography_daily', 'owner_campaign_tags',
       'owner_retention_runs', 'owner_campaigns', 'owner_request_audit', 'owner_requests',
       'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts', 'stripe_unmatched_events',

@@ -749,3 +749,9 @@ CREATE TABLE software_agreement_drafts (offer_id TEXT NOT NULL REFERENCES softwa
 ALTER TABLE software_project_updates ADD COLUMN delivered_deliverables_json TEXT NOT NULL DEFAULT '[]';
 ALTER TABLE software_project_updates ADD COLUMN review_window_days_extended INTEGER
   CHECK(review_window_days_extended IS NULL OR review_window_days_extended BETWEEN 31 AND 365);
+CREATE TABLE brief_suggestion_budget (
+  day TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  count INTEGER NOT NULL,
+  PRIMARY KEY (day, scope)
+);

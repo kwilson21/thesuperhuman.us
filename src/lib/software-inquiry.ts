@@ -11,34 +11,35 @@ export const softwareLabels = {
   firstResult: 'What would a useful first result look like?', name: 'Your name', email: 'Email',
   idea: 'What’s the idea?', audienceToday: 'Who is it for, and what do they do today instead?',
   firstVersion: 'What’s the one thing the first version must let them do?', signal: 'How will you know it’s worth building further? (optional)',
-  company: 'Company (optional)', timing: 'Timing', timingReason: 'Why this timing? (optional)',
+  company: 'Company, if you have one', timingDate: 'Needed by', timing: 'Timing', timingReason: 'Why this timing? (optional)',
   budgetStatus: 'Budget status', budgetNote: 'Budget amount, if you’d like to share it (optional)',
   approver: 'Who will approve the project?', approverRole: 'Their role (optional)',
 } as const;
 export const softwareQuestions = { workflow: ['today', 'audience', 'firstResult'], idea: ['idea', 'audienceToday', 'firstVersion', 'signal'] } as const;
-export const softwareDetailKeys = ['name', 'email', 'company', 'timing', 'timingReason', 'budgetStatus', 'budgetNote', 'approver', 'approverRole'] as const;
-export const timingLabels = { flexible: 'Flexible', month: 'Within a month', quarter: 'In one to three months', date: 'By a specific date' } as const;
+export const softwareDetailKeys = ['name', 'email', 'company', 'timing', 'timingDate', 'timingReason', 'budgetStatus', 'budgetNote', 'approver', 'approverRole'] as const;
+export const timingLabels = { flexible: 'Flexible', month: 'Within a month', quarter: 'In one to three months', date: 'By a date', asap: 'As soon as possible' } as const;
 export const budgetLabels = { approved: 'Approved', pending: 'Waiting for approval', exploring: 'Still exploring', unsure: 'Not sure yet' } as const;
 export const approverLabels = { self: 'I do', other: 'Someone else, and I can involve them', unsure: 'Not sure yet' } as const;
 const single = (max: number) => z.string().trim().max(max, `Keep this under ${max} characters.`);
 const required = (max: number) => single(max).min(1, 'This answer is required.');
 const common = {
   name: single(100).min(1, 'Add your name.'), email: single(120).email('Add a valid email address.'),
-  company: single(120).default(''), timing: z.enum(['flexible', 'month', 'quarter', 'date'], { errorMap: () => ({ message: 'Choose one.' }) }),
-  timingReason: single(500).default(''), budgetStatus: z.enum(['approved', 'pending', 'exploring', 'unsure'], { errorMap: () => ({ message: 'Choose one.' }) }),
-  budgetNote: single(200).default(''), approver: z.enum(['self', 'other', 'unsure'], { errorMap: () => ({ message: 'Choose one.' }) }),
+  company: single(120).default(''), timing: z.enum(['flexible', 'month', 'quarter', 'date', 'asap'], { errorMap: () => ({ message: 'Choose one.' }) }),
+  timingDate: z.string().regex(/^$|^\d{4}-\d{2}-\d{2}$/, 'Add a date.').default(''), timingReason: single(500).default(''), budgetStatus: z.enum(['', 'approved', 'pending', 'exploring', 'unsure'], { errorMap: () => ({ message: 'Choose one.' }) }).default(''),
+  budgetNote: single(200).default(''), approver: z.enum(['', 'self', 'other', 'unsure'], { errorMap: () => ({ message: 'Choose one.' }) }).default(''),
   approverRole: single(120).default(''), turnstileToken: z.string().min(1, 'Complete the security check.').max(2048, 'Keep this under 2048 characters.'),
   submissionId: z.string().uuid('Invalid submission ID.'),
 };
 const schema = z.discriminatedUnion('path', [
-  z.object({ ...common, path: z.literal('workflow'), today: required(2000), audience: required(1000), firstResult: required(2000) }),
-  z.object({ ...common, path: z.literal('idea'), idea: required(1000), audienceToday: required(1000), firstVersion: required(1000), signal: single(500).default('') }),
+  z.object({ ...common, path: z.literal('workflow'), today: required(2000), audience: single(1000).default(''), firstResult: single(2000).default('') }),
+  z.object({ ...common, path: z.literal('idea'), idea: required(1000), audienceToday: single(1000).default(''), firstVersion: single(1000).default(''), signal: single(500).default('') }),
 ]);
 export type SoftwareInput = z.infer<typeof schema>;
 export function validateSoftwareInquiry(input: unknown): { ok: true; value: SoftwareInput } | { ok: false; errors: Record<string, string> } {
   const lineErrors: Record<string, string> = {};
   if (input && typeof input === 'object') {
     const raw = input as Record<string, unknown>;
+    if ('timingDate' in raw && raw.timing === 'date' && (typeof raw.timingDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(raw.timingDate) || !Number.isFinite(Date.parse(raw.timingDate)) || new Date(raw.timingDate).toISOString().slice(0, 10) !== raw.timingDate)) lineErrors.timingDate = 'Add a valid date.';
     for (const key of ['name', 'email', 'company', 'timingReason', 'budgetNote', 'approverRole'])
       if (typeof raw[key] === 'string' && /[\r\n]/.test(raw[key])) lineErrors[key] = 'Use one line.';
     const questions = raw.path === 'idea' ? softwareQuestions.idea : raw.path === 'workflow' ? softwareQuestions.workflow : [];
@@ -56,12 +57,12 @@ export function validateSoftwareInquiry(input: unknown): { ok: true; value: Soft
   return { ok: true, value };
 }
 export function softwareRequest(input: SoftwareInput): NewOwnerRequest {
-  const firstLine = (input.path === 'idea' ? input.idea : input.firstResult).split(/\r?\n/, 1)[0];
+  const firstLine = (input.path === 'idea' ? input.idea : input.today).trim().replace(/\s+/g, ' ').split(/(?<=[.!?])\s/, 1)[0];
   const summaryCharacters = typeof Intl.Segmenter === 'function' ? [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(firstLine)].map(part => part.segment) : Array.from(firstLine);
   return {
     kind: 'software', serviceId: input.path, submissionId: input.submissionId,
     name: input.name, email: input.email,
-    summary: summaryCharacters.length > 120 ? `${summaryCharacters.slice(0, 117).join('').trimEnd()}…` : firstLine,
+    summary: summaryCharacters.slice(0, 80).join('').trimEnd(),
     details: Object.fromEntries(['path', ...softwareQuestions[input.path], ...softwareDetailKeys.filter(key => key !== 'name' && key !== 'email')].map(key => [key, input[key as keyof SoftwareInput]])),
   };
 }

@@ -6,7 +6,7 @@ import * as ownerHealthModule from '../../scripts/owner-health.mjs';
 const { ownerHealth } = ownerHealthModule;
 
 const requiredSchema = [
-  'owner_campaigns', 'owner_requests', 'owner_request_audit',
+  'brief_suggestion_budget', 'owner_campaigns', 'owner_requests', 'owner_request_audit',
   'music_playback_events', 'music_playback_daily', 'music_playback_geography_daily', 'owner_retention_runs',
   'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts', 'stripe_unmatched_events',
   'audio_projects', 'audio_client_codes', 'audio_client_sessions', 'audio_client_access_audit',
@@ -86,7 +86,7 @@ it('reports attention when the request audit trigger is missing', async () => {
   expect(report.checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
 });
 
-it('detects schemas through 0023 and passes only after 0024', async () => {
+it('detects incomplete schemas and passes only after 0025', async () => {
   const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
   const db = new DatabaseSync(':memory:');
   const migrations = readdirSync(new URL('../../migrations/music/', import.meta.url)).filter(name => name.endsWith('.sql')).sort();
@@ -108,6 +108,8 @@ it('detects schemas through 0023 and passes only after 0024', async () => {
   db.exec(readFileSync(new URL('../../migrations/music/0023_software_signing.sql', import.meta.url), 'utf8'));
   expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
   db.exec(readFileSync(new URL('../../migrations/music/0024_software_delivery_selection_and_review_windows.sql', import.meta.url), 'utf8'));
+  expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
+  db.exec(readFileSync(new URL('../../migrations/music/0025_brief_suggestion_budget.sql', import.meta.url), 'utf8'));
   expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'pass' }));
   db.close();
 });
@@ -197,4 +199,14 @@ it('does not check the live signing route before deployment',async()=>{
  const verify=async()=>{throw new Error('must not call');};
  const report=await ownerHealth({...healthyFixture(),remote:true,verify});
  expect(report.checks.some(c=>c.id==='signing-route')).toBe(false);
+});
+
+it('requires the brief suggestion budget schema', async () => {
+  const fixture = healthyFixture();
+  const query = fixture.query;
+  fixture.query = sql => sql.includes('sqlite_master')
+    ? Promise.resolve(requiredSchema.filter(name => name !== 'brief_suggestion_budget').map(name => ({ name })))
+    : query(sql);
+  const result = await ownerHealth(fixture);
+  expect(JSON.stringify(result)).toContain('missing');
 });
