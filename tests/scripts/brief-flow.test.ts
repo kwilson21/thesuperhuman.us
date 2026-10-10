@@ -226,6 +226,22 @@ it('renews an expired pass once and retries the current suggestion', async () =>
   expect(steps[1].nodes['[data-accept]'].hidden).toBe(false);
   mock.mockRestore();
 });
+it('allows a later suggestion after typing cancels a successfully renewed retry', async () => {
+  const pass = vi.fn(async (_renew = false) => true);
+  const mock = vi.spyOn(await import('~/scripts/brief-suggestion-pass'), 'setupSuggestionPass').mockReturnValue(pass);
+  await setup(); vi.useFakeTimers(); choose('path', 'workflow');
+  vi.mocked(fetch).mockResolvedValueOnce(Response.json({ suggestion: '', passRequired: true }))
+    .mockImplementationOnce((_url, options) => new Promise((_resolve, reject) => {
+      options!.signal!.addEventListener('abort', () => reject(new DOMException('Cancelled', 'AbortError')), { once: true });
+    }));
+  fill('today', 'We track new clients'); await vi.advanceTimersByTimeAsync(400);
+  expect(fetch).toHaveBeenCalledTimes(2);
+  fill('today', 'We track other clients'); await vi.advanceTimersByTimeAsync(400);
+  expect(fetch).toHaveBeenCalledTimes(3);
+  expect(pass.mock.calls.filter(args => args[0] === true)).toHaveLength(1);
+  expect(steps[1].nodes['[data-accept]'].hidden).toBe(false);
+  mock.mockRestore();
+});
 it.each(['check fails', 'retry still expired', 'retry throws'])('stays silent for the page after renewal: %s', async failure => {
   const pass = vi.fn(async (renew = false) => !renew || failure !== 'check fails');
   const mock = vi.spyOn(await import('~/scripts/brief-suggestion-pass'), 'setupSuggestionPass').mockReturnValue(pass);
