@@ -4,19 +4,19 @@ Date: October 10, 2026
 Repository: `kwilson21/thesuperhuman.us`
 Pull request: [#164](https://github.com/kwilson21/thesuperhuman.us/pull/164)
 Branch: `codex/deps-164-wrangler`
-Starting head: `8a5d42b6c26867cb155ef4fa0cc18471a73649f5`
-Merged-main revision: `8b2252c4e59b904ba8cf07f4492dda0d51189235` (caller-supplied origin/main snapshot). No merge or rebase performed in this task.
-Current branch verification: the rebased stack base is `e9341580c9f57b86387b738bb3b284547b8e9d5f`, the dependency commit is `0527d43916bcb68532dd64c7335fb07c405fc914`, and the original record commit is `c18c3122`. The starting head and dependency hash in the earlier run evidence below describe the pre-rebase history, not the current two-commit chain.
-This record's commit: the record-only commit following the dependency commit, identifiable with `git log -1 -- docs/prelaunch-qa-2026-10-10-dependabot-wrangler.md`. The final handoff supplies its hash.
+Starting head: `e9341580c9f57b86387b738bb3b284547b8e9d5f`, the final PR #165 head, now on main as a parent of merge commit `1da24a4962791cd8a78f47d43f98fdbe2ff9bb7b`.
+Earlier evidence below was collected at `8a5d42b6c26867cb155ef4fa0cc18471a73649f5`, which differs from `e9341580` only by a two-line header edit in the PR #165 record; origin/main was `8b2252c4e59b904ba8cf07f4492dda0d51189235` when that work began.
+PR branch commit chain: `e9341580` -> `0527d439` (dependency commit) -> `c18c3122` -> `64bf28bc` -> `302c1198` -> the record-only commit that last touches this file, identifiable with `git log -1 -- docs/prelaunch-qa-2026-10-10-dependabot-wrangler.md`.
+Merge method and record revision: this chain is preserved on `main` only by a merge-commit merge, the method planned for this PR and used for recent PRs #157, #158, #165, #171 and #172. A squash or rebase merge would not preserve these hashes; if either were used, the deployed revision would have to be identified by the PR number and its merge commit instead, and this record would need a note saying so. A commit cannot embed its own hash; the final handoff supplies the exact hash.
 Target: production `https://thesuperhuman.us`
 Reviewer: Codex (gpt-6.1-sol), local evidence collection for owner Kazon Wilson. This record does not certify independent current-head review.
-Rollback revision: `8b2252c4e59b904ba8cf07f4492dda0d51189235`
+Rollback revision: `1da24a4962791cd8a78f47d43f98fdbe2ff9bb7b`. The caller observed production running this revision on 2026-10-10 at about 17:14 UTC: Workers Builds for this commit completed with success, and `npm run owner:health -- --remote --post-deploy` reported 9 of 9 PASS. Rolling back to `8b2252c4` would also undo the PR #165 dependency updates.
 
 Scope: dependency and lockfile change only, plus the v5 runtime type declaration and the existing Wrangler pin test expectation. No migration, public copy, page, asset or route change. No runtime behavior was changed.
 
 ## Owner decisions and authorization
 
-This branch is stacked on PR #165 at starting head 8a5d42b6. PR #165 is waiting for review and is not yet merged. The diff against main shrinks once #165 merges. The owner authorized offline implementation, evidence collection and two local commits only. No network, fetch, push, PR creation, rebase, merge or deployment is authorized. Current-head CI, independent engineering/security review, Greptile review and answered review threads remain UNVERIFIED. No release exception is accepted here.
+This branch is stacked on the final PR #165 head `e9341580`, merged to main on 2026-10-10 as `1da24a49`. The PR diff against main now contains only dependency commit `0527d439` and the record commits listed above. The owner authorized offline implementation, evidence collection and two local commits only. No network, fetch, push, PR creation, rebase, merge or deployment is authorized. Current-head CI, independent engineering/security review, Greptile review and answered review threads remain UNVERIFIED. No release exception is accepted here.
 
 ## Evidence and limits
 
@@ -244,7 +244,7 @@ PASS below covers only observed evidence. Unknown is UNVERIFIED. This record doe
 
 - **UNVERIFIED · 7.3. Verify production bindings/secrets, migrations/backups where applicable, HTTPS, host routing, cache behavior and response headers on dynamic as well as static responses.** Local schema validation and bundling pass; no migration or binding change. Production bindings, secrets, ledger, headers and routing not queried. Offline ordering comparison is recorded above; executed ordering remains UNVERIFIED.
 
-- **UNVERIFIED · 7.4. Preserve a rollback version and any required backup before deployment. Follow existing review and authorization rules.** Rollback revision recorded; production recovery and authorization/review gates pending.
+- **UNVERIFIED · 7.4. Preserve a rollback version and any required backup before deployment. Follow existing review and authorization rules.** Rollback revision `1da24a49` recorded to retain the merged PR #165 dependency updates; production recovery and authorization/review gates pending.
 
 - **UNVERIFIED · 7.5. After authorized deployment, verify the actual production revision, main journeys, sitemap/robots, metadata/OG/icons, missing page, forms and monitoring on every supported host.** No target-environment or manual verification in this offline task. Unchanged source and local regressions do not certify the full checklist item.
 
@@ -317,4 +317,4 @@ PASS below covers only observed evidence. Unknown is UNVERIFIED. This record doe
 - **Deployed:** UNVERIFIED. No push or merge performed.
 - **Verified live:** UNVERIFIED. No network access performed.
 
-Owner follow-up: allow PR #165 to complete its own review and merge; require green current-head CI and real local R2 integration evidence, independent engineering/security review, Greptile current-head review and answered threads before authorizing a production merge. Resolve checklist unknowns or explicitly accept bounded exceptions. Confirm Workers Builds and live journeys after merge. Existing audit findings need separate owner triage; no new security approval is implied.
+Owner follow-up: require green current-head CI and real local R2 integration evidence, independent engineering/security review, Greptile current-head review and answered threads before authorizing a production merge. Resolve checklist unknowns or explicitly accept bounded exceptions. Confirm Workers Builds and live journeys after merge. Existing audit findings need separate owner triage; no new security approval is implied.
