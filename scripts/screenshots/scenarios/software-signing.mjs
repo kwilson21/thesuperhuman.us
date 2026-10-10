@@ -238,7 +238,7 @@ export default {
       msa = reviewed.documents?.find((d) => d.kind === 'msa');
     if (!sow || !msa) throw new Error('Agreement review did not return both exact snapshots.');
     await shot('prefilled', 'One page with saved details and a required portfolio choice', `/offer/${token}/sign`, {cookie,prepare:async page=>{
-      await page.locator('[role=status]').filter({hasText:'Details saved.'}).waitFor();
+      await page.waitForFunction(()=>{const field=document.querySelector('[name=documents]');return field && JSON.parse(field.value).length===2;});
       if(await page.locator('[name=country]').inputValue()!=='United States')throw new Error('US state must prefill an empty country.');
       if(!await page.locator('.signing-card').getByText('Agreement version v2026-09-30',{exact:true}).isVisible())throw new Error('Version must stay inside the summary card.');
     }});

@@ -1599,6 +1599,7 @@ it('masks link receipts and refunds definite token-scoped email rejection withou
   for(let i=0;i<4;i++) {
     const response=await issueAgreementLink(env,request(),{turnstileToken:'test'},token);
     expect(response.status).toBe(502);
+    expect(sql.prepare("SELECT used_at FROM software_agreement_links WHERE id='challenge'").get().used_at).toBeNull();
     expect(await response.json()).toMatchObject({error:"That email didn't go through. Please try again."});
     expect(sql.prepare('SELECT COALESCE(sum(uses),0) n FROM audio_client_allowances').get().n).toBe(0);
     expect(sql.prepare("SELECT count(*) n FROM software_agreement_links WHERE id<>'challenge'").get().n).toBe(0);
@@ -1606,6 +1607,7 @@ it('masks link receipts and refunds definite token-scoped email rejection withou
   vi.stubGlobal('fetch',vi.fn(async()=>Response.json({success:true})));
   const response=await issueAgreementLink(env,request(),{turnstileToken:'test'},token);
   expect(response.status).toBe(200);
+  expect(sql.prepare("SELECT used_at FROM software_agreement_links WHERE id='challenge'").get().used_at).not.toBeNull();
   expect(await response.json()).toMatchObject({message:'I sent a link to c•••@example.com. Tap it on any device to open your agreement.'});
 });
 it('keeps definite archive send rejection generic', async () => {
@@ -1875,4 +1877,26 @@ it('emails archive access with signed-document copy and the canonical link',asyn
   expect(payload.text).toContain('Tap below to open your signed agreement documents.');
   expect(payload.html).toContain('Open your documents</a>');
   expect(payload.html).toContain('https://example.com/agreements/verify?key=');
+});
+
+it('removes offer events only when its last retained agreement is deleted', async()=>{
+  const {previewAgreementRetention,applyAgreementRetention}=await import('~/lib/agreement-retention');
+  await review();
+  sql.exec("UPDATE software_offers SET status='superseded' WHERE id='o'; UPDATE software_agreements SET msa_id=NULL,status='abandoned',ended_at='2000-01-01',retain_until='2010-01-01',terminated_at='2000-01-01'; INSERT INTO software_agreement_events VALUES('offer-event',NULL,'o','link-issued','actor','2000-01-01','{}')");
+  sql.exec("UPDATE software_agreements SET legal_hold=1 WHERE kind='sow'");
+  const manifest=await previewAgreementRetention(db,env.AUDIO,'test-storage');
+  await applyAgreementRetention(db,env.AUDIO,'test-storage',manifest);
+  expect(sql.prepare("SELECT count(*) n FROM software_agreement_events WHERE id='offer-event'").get().n).toBe(1);
+  sql.exec("UPDATE software_agreements SET legal_hold=0");
+  await applyAgreementRetention(db,env.AUDIO,'test-storage',await previewAgreementRetention(db,env.AUDIO,'test-storage'));
+  expect(sql.prepare("SELECT count(*) n FROM software_agreement_events WHERE offer_id='o' AND agreement_id IS NULL").get().n).toBe(0);
+});
+
+it('redirects a successful native retention apply to the owner agreements page',async()=>{
+  const {previewAgreementRetention}=await import('~/lib/agreement-retention');
+  const {POST}=await import('~/pages/api/owner/agreements');
+  const manifest=await previewAgreementRetention(db,env.AUDIO,'test-storage');
+  const response=await POST({request:new Request('https://example.com/api/owner/agreements',{method:'POST',headers:{origin:'https://example.com','content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action:'retention-apply',confirmed:'true',manifest:JSON.stringify(manifest)})}),locals:{owner:{email:'owner@example.com'},runtime:{env:{...env,AGREEMENT_RETENTION_BINDING_ID:'test-storage'}}}} as never);
+  expect(response.status).toBe(303);
+  expect(response.headers.get('location')).toBe('/owner/agreements');
 });

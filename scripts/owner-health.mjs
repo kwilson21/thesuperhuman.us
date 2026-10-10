@@ -20,10 +20,18 @@ export function wranglerSecretListArguments() {
   return ['node_modules/wrangler/bin/wrangler.js', 'secret', 'list', '--format', 'json'];
 }
 
-export async function ownerHealth({ now = new Date(), configuredNames, query, media, head, siteOrigin: configuredOrigin = /** @type {string | undefined} */ (undefined) }) {
+export async function ownerHealth({ now = new Date(), configuredNames, query, media, head, remote = false, verify = head, siteOrigin: configuredOrigin = /** @type {string | undefined} */ (undefined) }) {
   const checks = [];
   try {
-    checks.push(pass('signing-origin', `Effective signing origin: ${siteOrigin(configuredOrigin)}.`));
+    const origin=siteOrigin(configuredOrigin);
+    checks.push(pass('signing-origin', `Effective signing origin: ${origin}.`));
+    if(remote) {
+      try {
+        const result=await verify(`${origin}/agreements/verify`);
+        checks.push(result.status===401 ? pass('signing-route','The deployed agreement verification route returned the expected bare-visit 401.')
+          : attention('signing-route',`The deployed agreement verification route returned ${result.status}; expected 401.`,'Confirm the signing routes are deployed at the configured origin.'));
+      } catch { checks.push(attention('signing-route','The deployed agreement verification route could not be reached.','Confirm the configured origin and deployment.')); }
+    }
   } catch {
     checks.push(attention('signing-origin', 'The signing origin is invalid.', 'Set SITE_ORIGIN to the canonical website origin.'));
   }
@@ -143,7 +151,13 @@ async function main() {
   try {
     const report = await ownerHealth({
       configuredNames,
-      siteOrigin: process.env.SITE_ORIGIN ?? config.vars?.SITE_ORIGIN,
+      siteOrigin: config.vars?.SITE_ORIGIN,
+      remote,
+      verify: async url => {
+        const response=await fetch(url,{redirect:'manual',signal:AbortSignal.timeout(10_000)});
+        await response.body?.cancel();
+        return {status:response.status};
+      },
       query: sql => database.query(sql),
       media,
       head: async url => {

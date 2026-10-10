@@ -76,7 +76,7 @@ const post: APIRoute = async ({ request, locals }) => {
         env.AGREEMENT_RETENTION_BINDING_ID,
         c.manifest as RetentionManifest,
       );
-      return agreementJson({ ok: true });
+      return nativeAgreementResponse(request, agreementJson({ ok: true }), '/owner/agreements');
     }
     if (c.action === 'setting') {
       await db

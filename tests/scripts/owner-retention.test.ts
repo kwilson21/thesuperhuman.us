@@ -304,3 +304,11 @@ it('holds unstarted request contacts for invoices younger than two years, then r
   expect(database.db.prepare("SELECT email FROM owner_requests WHERE id='software-invoice'").get().email).toBe('');
   expect(database.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
 });
+
+it('deletes offer-scoped events when owner retention deletes the offer',async()=>{
+  const database=fixture();
+  database.db.exec("INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES('old-offer','old-request',1,'withdrawn','{}','2026-01-01','2026-01-01'); INSERT INTO software_agreement_events VALUES('old-event',NULL,'old-offer','link-issued','actor','2026-01-01','{}')");
+  const manifest=await previewOwnerRetention(database,'Local test data',now);
+  await applyOwnerRetention(database,manifest,'Local test data',now);
+  expect((await database.query("SELECT count(*) n FROM software_agreement_events WHERE offer_id='old-offer'"))[0].n).toBe(0);
+});

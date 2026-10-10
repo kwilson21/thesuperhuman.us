@@ -183,6 +183,8 @@ export async function applyOwnerRetention(database, review, environment, now = n
   const selectedOffers = `SELECT id FROM software_offers WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection})`;
   if (sessionsTable.length) softwareCleanup.push(`DELETE FROM software_agreement_sessions WHERE offer_id IN (${selectedOffers})`);
   if (linksTable.length) softwareCleanup.push(`DELETE FROM software_agreement_links WHERE offer_id IN (${selectedOffers})`);
+  const eventsTable = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_agreement_events'");
+  if (eventsTable.length) softwareCleanup.push(`DELETE FROM software_agreement_events WHERE agreement_id IS NULL AND offer_id IN (${selectedOffers})${projectsTable.length ? ' AND offer_id NOT IN (SELECT offer_id FROM software_projects)' : ''}`);
   const invoiceTable = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_invoices'");
   if(invoiceTable.length) softwareCleanup.push(
     `DELETE FROM stripe_webhook_events WHERE invoice_id IN (SELECT stripe_invoice_id FROM software_invoices WHERE request_id IN (SELECT id FROM owner_requests WHERE ${requestSelection}))`,

@@ -225,6 +225,9 @@ export async function applyAgreementRetention(
         WHERE id=(SELECT offer_id FROM software_agreements WHERE id=?)
           AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=software_offers.id AND p.content_deleted_at IS NULL)
           AND NOT EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_offers.id AND a.id<>?)`).bind(item.id,item.id),
+      db.prepare(`DELETE FROM software_agreement_events WHERE agreement_id IS NULL
+        AND offer_id=(SELECT offer_id FROM software_agreements WHERE id=?)
+        AND NOT EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_agreement_events.offer_id AND a.id<>?)`).bind(item.id,item.id),
       db.prepare('DELETE FROM software_agreements WHERE id=?').bind(item.id),
       ...item.objects.map(object => db.prepare(
         "DELETE FROM software_agreement_attachments WHERE object_key=? AND NOT EXISTS(SELECT 1 FROM software_agreements a,json_each(a.attachment_manifest_json) m WHERE json_extract(m.value,'$.key')=software_agreement_attachments.object_key)",

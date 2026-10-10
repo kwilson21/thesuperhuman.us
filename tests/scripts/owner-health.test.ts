@@ -185,3 +185,10 @@ it('reports the default and overridden effective signing origin', async () => {
     expect(report.checks).toContainEqual(expect.objectContaining({ id: 'signing-origin', status: 'pass', summary: expect.stringContaining(siteOrigin ?? 'https://thesuperhuman.us') }));
   }
 });
+
+it.each([401,404])('checks the deployed signing landing status %s',async status=>{
+  const urls:string[]=[];
+  const report=await ownerHealth({...healthyFixture(),siteOrigin:'https://deployed.example',remote:true,verify:async(url:string)=>{urls.push(url);return {status};}});
+  expect(urls).toEqual(['https://deployed.example/agreements/verify']);
+  expect(report.checks.find(c=>c.id==='signing-route')?.status).toBe(status===401?'pass':'attention');
+});

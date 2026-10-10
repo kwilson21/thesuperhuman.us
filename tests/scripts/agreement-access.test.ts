@@ -203,3 +203,17 @@ it('keeps the matching review already rendered on page load',async()=>{
   setupAgreementAccess();await new Promise(resolve=>setTimeout(resolve,0));
   expect(fetch).not.toHaveBeenCalled();
 });
+
+it.each([502, 'network'])('resets verification before enabling a failed link request (%s)',async failure=>{
+  let submit!:Function;
+  const button={disabled:false},status={textContent:''},reset=vi.fn(()=>expect(button.disabled).toBe(true));
+  const form={action:'/api/offer/token/link',dataset:{},querySelector:()=>button,addEventListener:(_:string,fn:Function)=>{submit=fn;}};
+  vi.stubGlobal('document',{querySelectorAll:()=>[form],querySelector:(selector:string)=>selector==='[data-signing-page]'?null:status});
+  vi.stubGlobal('FormData',class{get(){return 'token';}});
+  vi.stubGlobal('window',{turnstile:{reset}});
+  vi.stubGlobal('fetch',vi.fn(async()=>{if(failure==='network')throw new Error('Offline');return Response.json({error:'Retry'},{status:502});}));
+  setupAgreementAccess();
+  await submit({preventDefault(){}});
+  expect(reset).toHaveBeenCalledOnce();
+  expect(button.disabled).toBe(false);
+});

@@ -196,11 +196,6 @@ export async function issueAgreementLink(
           new Date(at.getTime() - 30000).toISOString(),
         ),
       ...(offer ? [liveSigningGuard(db, offer.id, linkHash!, email)] : []),
-      db
-        .prepare(
-          "UPDATE software_agreement_links SET used_at=? WHERE purpose=? AND recipient_email=? AND offer_id IS ? AND used_at IS NULL",
-        )
-        .bind(at.toISOString(), purpose, email, offer?.id ?? null),
       agreementEvent(
         db,
         "link-issued",
@@ -273,6 +268,9 @@ export async function issueAgreementLink(
     }
     await db.prepare('UPDATE software_agreement_links SET used_at=? WHERE id=?').bind(at.toISOString(),id).run();
   }
+  if (sent.ok) await db.prepare(
+    "UPDATE software_agreement_links SET used_at=? WHERE purpose=? AND recipient_email=? AND offer_id IS ? AND used_at IS NULL AND id<>? AND issued_at<=?",
+  ).bind(at.toISOString(),purpose,email,offer?.id??null,id,at.toISOString()).run();
   return agreementJson(receipt);
 }
 export const liveSigningGuard = (
