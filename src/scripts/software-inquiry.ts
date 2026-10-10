@@ -152,7 +152,15 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
     if (step !== 6) { event.preventDefault(); event.stopImmediatePropagation(); continueStep(); } });
   setupFormSubmission({ form, endpoint: '/api/software-inquiry', success: document.getElementById('software-success')!,
     payload: () => ({ ...payload(), submissionId }),
-    onSuccess: result => { clearSuggestion(); try { localStorage.setItem(sentKey, submissionId); localStorage.removeItem(storageKey); } catch { /* Storage is optional. */ } renderSoftwareReceipt(result); },
+    onSuccess: result => {
+      clearSuggestion();
+      try {
+        localStorage.setItem(sentKey, submissionId);
+        const saved = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
+        if (saved?.submissionId === submissionId) localStorage.removeItem(storageKey);
+      } catch { /* Storage is optional. */ }
+      renderSoftwareReceipt(result);
+    },
     onConflict: () => { submissionId = crypto.randomUUID(); save(); },
   });
   const observer = new MutationObserver(records => {

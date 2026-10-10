@@ -186,3 +186,21 @@ it('keeps the sent identity stable if another tab finishes while delivery is pen
   await vi.waitFor(() => expect(form.hidden).toBe(true));
   expect(store.get('software-brief-sent')).toBe(sentId);
 });
+
+it.each(['different', 'invalid', 'missing'])('preserves a %s saved draft when delivery succeeds', async draft => {
+  choose('path', 'workflow'); fill('today', 'We track clients');
+  click('[data-next]'); fire(steps[2].nodes['[data-skip]'], 'click'); click('[data-next]');
+  fire(steps[4].nodes['[data-skip]'], 'click'); fill('name', 'Alex'); fill('email', 'alex@example.com'); click('[data-next]');
+  const sentId = JSON.parse(store.get('software-brief-draft')!).submissionId;
+  form.dataset.available = 'true'; form.nodes['[type=submit]'].disabled = false;
+  let resolve!: (response: Response) => void;
+  vi.mocked(fetch).mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+  fire(form, 'submit');
+  const saved = draft === 'different' ? JSON.stringify({ answers: { today: 'Another tab writing' }, step: 1, submissionId: crypto.randomUUID() }) : draft === 'invalid' ? '{' : undefined;
+  if (saved !== undefined) store.set('software-brief-draft', saved); else store.delete('software-brief-draft');
+  vi.stubGlobal('document', { querySelector: () => new Node() });
+  resolve(Response.json({ ok: true, brief: { name: 'Alex', email: 'alex@example.com' }, clientCopyStatus: 'sent' }));
+  await vi.waitFor(() => expect(form.hidden).toBe(true));
+  expect(store.get('software-brief-draft')).toBe(saved);
+  expect(store.get('software-brief-sent')).toBe(sentId);
+});
