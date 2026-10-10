@@ -397,6 +397,26 @@ it('software print styling never forces a receipt before submission', () => {
   expect(css).not.toMatch(/@media print[^}]*#software-inquiry/);
 });
 
+it('allows only exact deliberate HTTP resource failures, preserving other console errors', () => {
+  const base = 'http://127.0.0.1:4321';
+  const expected = [{ url: base + '/api/offer/sample/session', status: 401 }];
+  const resource = (text: string, url: string) => ({ text: () => text, location: () => ({ url }) });
+  const message = 'Failed to load resource: the server responded with a status of 401 (Unauthorized)';
+  expect(expectedResourceError(resource(message, expected[0].url), expected)).toBe(true);
+  expect(expectedResourceError(resource(message, base + '/api/offer/other/session'), expected)).toBe(false);
+  expect(expectedResourceError(resource(message.replace('401', '500'), expected[0].url), expected)).toBe(false);
+  expect(expectedResourceError(resource('Unexpected script error', expected[0].url), expected)).toBe(false);
+});
+
+it('captures the work-first project states at desktop and phone sizes',async()=>{
+  const scenario=await import('../../scripts/screenshots/scenarios/software-project.mjs');
+  const files:string[]=[];
+  await scenario.default.run({sql:()=> '[]',ownerFetch:async()=>({}),capture:async({file}:{file:string})=>{files.push(file);return file;}});
+  for(const state of ['first','shared','direction-review','delivery-review','progress-pending-review','changes-open','delivery-complete','delivery-invoice-terms','accepted','earlier-accepted','paid-handoff-pending','earlier-paid-handoff-pending','handoff','earlier-versions','progress-after-handoff','next-milestone-starting']) {
+    for(const viewport of ['desktop','phone']) expect(files).toContain(`software-project-${state}-${viewport}.png`);
+  }
+});
+
 it('can seed empty details after link-landing captures have autosaved a draft',async()=>{
  const {DatabaseSync}=createRequire(import.meta.url)('node:sqlite');
  const sql=new DatabaseSync(':memory:');sql.exec(readFileSync('db/music.sql','utf8'));
@@ -410,6 +430,24 @@ it('can seed empty details after link-landing captures have autosaved a draft',a
    },ownerFetch:async()=>{throw stop;},
   })).rejects.toBe(stop);
  } finally {sql.close();}
+});
+
+
+it.each([false,true])('runs the change-request capture checks with a saved Not yet mark: %s',async(saved)=>{
+  const scenario=await import('../../scripts/screenshots/scenarios/software-project.mjs');
+  let prepared=0;
+  await scenario.default.run({sql:()=> '[]',ownerFetch:async()=>({}),capture:async({file,prepare}:any)=>{
+    if(file.includes('changes-open')) {
+      let marked=saved,checked=false,manual=false;
+      const first=(value:any)=>({...value,first:()=>value});
+      const mark={getAttribute:async()=>String(marked),click:async()=>{marked=!marked;if(!manual)checked=marked;}};
+      const checkbox={isChecked:async()=>checked,uncheck:async()=>{checked=false;manual=true;},check:async()=>{checked=true;manual=true;}};
+      await prepare({locator:(selector:string)=>selector.includes('not-yet') ? first(mark) : selector.includes('works') ? first({click:async()=>{marked=false;if(!manual)checked=false;}}) : selector==='[name=criteria]' ? first(checkbox) : selector.includes('summary') ? {click:async()=>{if(!manual)checked=marked;}} : {fill:async()=>{}},waitForFunction:async()=>{expect(checked).toBe(true);}});
+      expect(checked).toBe(true);prepared++;
+    }
+    return file;
+  }});
+  expect(prepared).toBe(2);
 });
 
 it('serves a scenario-local Turnstile API for silent and receipt widgets', async () => {
@@ -523,4 +561,23 @@ it('declares the mocked 503 only for send-failed captures at both widths', async
     return file;
   } });
   expect(allowances).toEqual(['software-brief-send-failed-desktop.png', 'software-brief-send-failed-phone.png']);
+});
+
+it.each(['The $1,200 balance is invoiced on delivery and due within 15 days.', 'This milestone is invoiced on delivery and due within 30 days.'])('checks delivery payment terms after Accept: %s',async wording=>{
+  const scenario=await import('../../scripts/screenshots/scenarios/software-project.mjs');
+  let prepared=0;
+  await scenario.default.run({sql:()=> '[]',ownerFetch:async()=>({}),capture:async({file,prepare}:any)=>{
+    if(file.includes('delivery-complete')) {
+      await prepare({
+        getByText:()=>({isVisible:async()=>true}),
+        locator:(selector:string)=>selector.includes('data-review-mark') ? {first:()=>({click:async()=>{}})} : (()=>{
+          expect(selector).toBe('[data-software-review] button[value=milestone_accepted] + p');
+          return {isVisible:async()=>true,textContent:async()=>wording};
+        })(),
+      });
+      prepared++;
+    }
+    return file;
+  }});
+  expect(prepared).toBe(2);
 });

@@ -1,9 +1,10 @@
 ---
 import SoftwareAcceptanceChecks from './SoftwareAcceptanceChecks.astro';
-import { evidenceTypes, deliveredScope, deliveredIndexes } from '~/lib/software-projects';
+import { evidenceTypes, deliveredScope, deliveredIndexes, softwareVersionNumber, softwareVersionLabel, softwareDate } from '~/lib/software-projects';
 import type { ClientSoftwareUpdate } from '~/lib/software-projects';
-type Props = { update: ClientSoftwareUpdate; visualUrl?: string; preview?: boolean; checks?: string[]; deliverables?: string[] };
-const { update, visualUrl, preview = false, checks=[], deliverables=[] } = Astro.props;
+type Props = { update: ClientSoftwareUpdate; visualUrl?: string; preview?: boolean; checks?: string[]; deliverables?: string[]; workFirst?: boolean; showExplanation?: boolean; hideTitle?: boolean; hideChecks?: boolean; projectName?: string };
+const { update, visualUrl, preview = false, checks=[], deliverables=[], workFirst=false, showExplanation=false, hideTitle=false, hideChecks=false, projectName=update.title } = Astro.props;
+const historyLabel=update.artifact_version ? softwareVersionLabel(update) : 'Update';
 const evidence: string[] = JSON.parse(update.criteria_json ?? '[]');
 const includedDeliverables = deliveredScope(update,deliverables);
 const includedIndexes = deliveredIndexes(update,deliverables);
@@ -15,13 +16,30 @@ const deliveryReferences = update.kind === 'delivery_review' ? references.filter
 }) : [];
 ---
 <article class="software-update" data-software-update>
-  <p class="studio-kicker" data-preview-kicker>{[evidenceTypes[update.evidence_type], update.artifact_version, update.evidence_type === 'concept' ? 'Not implemented' : ''].filter(Boolean).join(' · ')}</p>
+  {workFirst ? <>
+    {!hideTitle && <h2>{update.title || 'Untitled update'}</h2>}
+    {showExplanation && update.what_changed && <p>{update.what_changed}</p>}
+    {showExplanation && update.client_request && <p>I need from you: {update.client_request}</p>}
+    {visualUrl ? <figure><img src={visualUrl} alt={update.visual_alt} /></figure> : <div class="work-frame">{projectName}</div>}
+    {update.evidence_type==='concept' && <p class="access-note">Sketch, not built yet</p>}
+    {update.preview_url && <p><a class="studio-button" href={update.preview_url} target="_blank" rel="noopener noreferrer">Open {softwareVersionNumber(update) ? softwareVersionLabel(update).toLowerCase() : update.artifact_version || 'work'} ↗</a></p>}
+    {partialDelivery && <p>This version doesn't include everything we agreed yet.</p>}
+    {update.kind==='delivery_review' && <details id={`included-${update.id}`}><summary>See what's included</summary><h3>Included in this delivery</h3><ul>{includedDeliverables.map(item=><li>{item}</li>)}</ul><section data-preview-delivery-scope><h3>Full agreed scope · Milestone {(update.milestone_index ?? 0)+1}</h3><ul>{deliverables.map(item=><li>{item}</li>)}</ul></section>
+      {!hideChecks && checks.length>0 && <SoftwareAcceptanceChecks checks={checks} evidence={evidence} />}
+      {deliveryReferences.length>0 && <><h3>Supporting links</h3><ul>{deliveryReferences.map(link=><li><a href={link.url} target="_blank" rel="noopener noreferrer">{link.label}</a></li>)}</ul></>}
+      {update.checks_limitations && <><h3>Not included yet</h3><p>{update.checks_limitations}</p></>}
+    </details>}
+    {update.next_step && <p>Next from me: {update.next_step}</p>}
+    {update.kind!=='delivery_review' && update.checks_limitations && <section><h3>Not included yet</h3><p>{update.checks_limitations}</p></section>}
+  </> : <>
+  <p class="studio-kicker" data-preview-kicker>{(preview ? [evidenceTypes[update.evidence_type], update.artifact_version, update.evidence_type === 'concept' ? 'Not implemented' : ''] : [historyLabel, update.shared_at ? softwareDate(update.shared_at) : '']).filter(Boolean).join(' · ')}</p>
+  {!preview && update.evidence_type==='concept' && <p class="access-note">Sketch, not built yet</p>}
   <h2 data-preview-title class:list={{"rail-muted": !update.title}}>{update.title || 'Untitled update'}</h2>
   <figure data-preview-figure hidden={!visualUrl}>
     <img src={visualUrl} alt={update.visual_alt} data-preview-image loading={preview ? 'eager' : 'lazy'} />
-    <figcaption data-preview-caption>{update.evidence_type === 'concept' ? 'Illustrative concept' : update.artifact_version}</figcaption>
+    <figcaption data-preview-caption>{preview ? update.evidence_type === 'concept' ? 'Illustrative concept' : update.artifact_version : historyLabel}</figcaption>
   </figure>
-  <p hidden={!update.preview_url} data-preview-link-row><a href={update.preview_url || undefined} data-preview-link target="_blank" rel="noopener noreferrer">Open preview ↗</a></p>
+  <p hidden={!update.preview_url} data-preview-link-row><a href={update.preview_url || undefined} data-preview-link target="_blank" rel="noopener noreferrer">{preview ? 'Open preview ↗' : `Open ${softwareVersionNumber(update) ? softwareVersionLabel(update).toLowerCase() : update.artifact_version || 'work'} ↗`}</a></p>
   <p class="delivery-preview-links access-note" hidden={!update.preview_url} data-preview-access-note>Client access to this preview link is not verified by the site.</p>
   {!preview && update.kind==='delivery_review' && deliverables.length>0 && <section class="delivery-included" aria-labelledby={`delivery-included-${update.id}`}>
     <h3 id={`delivery-included-${update.id}`}>Included in this delivery</h3>
@@ -32,12 +50,18 @@ const deliveryReferences = update.kind === 'delivery_review' ? references.filter
     <h3 id={`delivery-scope-${update.id}`}>Full agreed scope · Milestone {(update.milestone_index ?? 0)+1}</h3>
     <ul>{deliverables.map(deliverable=><li>{deliverable}</li>)}</ul>
   </section>}
+  {!preview && update.kind==='handoff' && <ul>{references.map(link=>{
+    const external=new URL(link.url).origin!==Astro.url.origin;
+    return <li><a class="studio-button" href={link.url} target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer' : undefined}>{link.label} <span aria-hidden="true">{external ? '↗' : '→'}</span></a></li>;
+  })}</ul>}
   {(update.kind==='delivery_review' || preview) && <section class="delivery-preview-links" data-preview-delivery-links hidden={preview ? update.kind!=='delivery_review' || deliveryReferences.length===0 : deliveryReferences.length===0}>
     <h3>Supporting links</h3><ul data-preview-delivery-link-list>{deliveryReferences.map(reference=><li><a href={reference.url} target="_blank" rel="noopener noreferrer">{reference.label}</a></li>)}</ul>
     <p class="access-note">The owner provided these HTTPS links. The site does not verify that each recipient can open them.</p>
   </section>}
-  {(['what_changed','checks_limitations','client_request'] as const).map((key, index) => <section data-preview-section={key} hidden={!update[key]}><h3>{index === 0 ? 'What changed' : index === 1 ? 'Checks and limitations' : 'What I need from you'}</h3><p data-preview-text={key}>{update[key]}</p></section>)}
-  {!preview && update.kind==='delivery_review' && checks.length>0 && <SoftwareAcceptanceChecks checks={checks} evidence={evidence} />}
+  {(['what_changed','checks_limitations','client_request'] as const).map((key, index) => <section data-preview-section={key} hidden={!update[key]}><h3>{index === 0 ? 'What changed' : index === 1 ? preview ? 'Checks and limitations' : update.kind==='handoff' ? 'Not included' : 'Not included yet' : 'What I need from you'}</h3><p data-preview-text={key}>{update[key]}</p></section>)}
+  {!preview && update.next_step && <section><h3>{update.kind==='handoff' ? 'Support after handoff' : 'Next from me'}</h3><p>{update.next_step}</p></section>}
+  {!preview && update.kind==='delivery_review' && !hideChecks && checks.length>0 && <SoftwareAcceptanceChecks checks={checks} evidence={evidence} />}
+  </>}
 </article>
 <style>
   .software-update { min-width: 0; overflow-wrap: anywhere; }
@@ -45,6 +69,8 @@ const deliveryReferences = update.kind === 'delivery_review' ? references.filter
   h3 { font: 400 1.6rem/1.2 Libron,Georgia,serif; margin: 1.5rem 0 .5rem; }
   p { font: 1rem/1.6 Inter,sans-serif; white-space: pre-wrap; }
   .studio-kicker { font: 500 .68rem/1.5 'JetBrains Mono',monospace; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .work-frame { display: grid; place-items: center; min-height: 20rem; border: 1px solid var(--rule); background: var(--studio-field); font: 400 2rem/1.2 Libron,Georgia,serif; padding: 2rem; text-align: center; }
+  details { border-top: 1px solid var(--rule); padding-top: 1rem; }
   figure { margin: 1.5rem 0; }
   img { display: block; width: 100%; height: auto; border: 1px solid var(--rule); }
   figcaption { font: .8rem/1.5 Inter,sans-serif; color: var(--muted); margin-top: .4rem; }

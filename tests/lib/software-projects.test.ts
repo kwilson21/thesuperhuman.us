@@ -12,10 +12,10 @@ import { POST as updatePost } from '~/pages/api/owner/requests/[id]/updates';
 import { GET as ownerVisual, PUT as uploadVisual } from '~/pages/api/owner/requests/[id]/updates/[updateId]/visual';
 import { GET as clientVisual } from '~/pages/api/studio/software/[id]/updates/[updateId]/visual';
 import { clientSoftwareProjectForSession, clientSoftwareProjectsForSession, clientProjectForSession, clientProjectsForSession, issueClientCode, completeClientCode, discardUndeliveredCode } from '~/lib/audio-client-access';
-import { clearUnmetRevisionEvidence, sharedSoftwareUpdates, listSoftwareUpdates, queueSoftwareNotice, deliverSoftwareNotice, softwareRevisionTargets, softwareRevisionHistoryBody } from '~/lib/software-projects';
+import { clearUnmetRevisionEvidence, sharedSoftwareUpdates, listSoftwareUpdates, queueSoftwareNotice, deliverSoftwareNotice, softwareRevisionTargets, softwareRevisionHistoryBody, softwareClientRevisionBody, softwareVersionLabel } from '~/lib/software-projects';
 import { softwareInvitationEmail, softwareUpdateEmail } from '~/lib/client-emails';
 import { loadStudioLedger, listStudioProjectAttention } from '~/lib/owner-reporting';
-import { postClientSoftwareProjectMessage } from '~/lib/software-project-messages';
+import { postClientSoftwareProjectMessage, readableSoftwareProjectMessages } from '~/lib/software-project-messages';
 import { POST as reviewPost } from '~/pages/api/studio/software/[id]/reviews/[updateId]';
 import { correctionPeriodEnd, projectAgreementDetails, getSoftwareProject } from '~/lib/software-projects';
 import { softwareReviewEmail, softwareHandoffEmail } from '~/lib/client-emails';
@@ -961,6 +961,25 @@ it('allows resolving a software request without a project',async()=>{
   expect((await call(requestPost,{action:'resolve'})).status).toBe(200);
 });
 
+it('shows client revision events as sentences while preserving stored target parsing and the note',()=>{
+  const body='Requested changes to Delivery v2. Checks reported unmet: [1]. Deliverables unavailable: [2]. Included but inaccessible: [1].\n\nThe sample form failed.';
+  const text=softwareClientRevisionBody(body,['Add a client'],['Status view','Sample import']);
+  expect(text).toBe('You marked "Add a client" as not working yet.\n\nYou reported "Sample import" as not included yet.\n\nYou could not open or find "Status view".\n\nThe sample form failed.');
+  expect(text).not.toContain('Checks reported unmet:');expect(softwareRevisionTargets(body,['Add a client'],['Status view','Sample import']).checks).toEqual([0]);
+  expect(softwareVersionLabel({artifact_version:'Delivery v2',kind:'delivery_review'})).toBe('Version 2');
+  expect(softwareVersionLabel({artifact_version:'Direction v1',kind:'direction_review'})).toBe('Sketch 1');
+  for(const label of ['v2','Version 2','Release V2 beta','Delivery v2 final',' Delivery v2','Client Sketch 3']) expect(softwareVersionLabel({artifact_version:label,kind:'delivery_review'})).toBe(label);
+  expect(softwareVersionLabel({artifact_version:'dElIvErY V12',kind:'delivery_review'})).toBe('Version 12');
+  expect(softwareVersionLabel({artifact_version:'Direction v3',kind:'direction_review'})).toBe('Sketch 3');
+  expect(softwareVersionLabel({artifact_version:'Release candidate',kind:'delivery_review'})).toBe('Release candidate');
+  const messages=[{body,decision:'changes_requested',update_id:'v2'}] as any;
+  const updates=[{id:'v2',milestone_index:0,artifact_version:'Delivery v2',kind:'delivery_review'}];
+  const terms={milestones:[{acceptance:['Add a client'],deliverables:['Status view','Sample import']}]} as any;
+  expect(readableSoftwareProjectMessages(messages,updates,terms)[0].body).toContain('Checks reported unmet: [1]');
+  expect(readableSoftwareProjectMessages(messages,updates,terms,'client')[0].body).toBe(`You asked for changes to version 2.\n\n${text}`);
+  updates[0].artifact_version='Release V2 beta';expect(readableSoftwareProjectMessages(messages,updates,terms,'client')[0].body).toContain('You asked for changes to Release V2 beta.');
+  expect(readableSoftwareProjectMessages([{...messages[0],decision:'milestone_accepted'}],updates,terms,'client')[0].body).toBe('You accepted Release V2 beta.');
+});
 it('stores stable deliverable indexes and cannot accept one repeated label as two selections',async()=>{
   await start();
   const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',criteria:['Evidence'],delivered_deliverables:[0]}});
@@ -987,4 +1006,17 @@ it('reads external correction and handoff periods from the linked sent offer',as
   const agreed=await projectAgreementDetails(db,project!);
   expect(agreed).toEqual({correction_calendar_days:60,handoff_access_days:90});
   expect(correctionPeriodEnd('2026-10-01',undefined,Number(agreed!.correction_calendar_days))).toBe('2026-11-30');
+});
+
+it('rejects progress for a milestone that has not started before saving or emailing',async()=>{
+  await start();vi.mocked(fetch).mockClear();
+  sql.prepare('UPDATE software_projects SET terms_json=?').run(JSON.stringify({...terms,milestones:[terms.milestones[0],terms.milestones[0]]}));
+  const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,milestone_index:1,email_client:true}});
+  expect(response.status).toBe(400);expect(await response.json()).toMatchObject({error:'Progress updates go on the current milestone.'});
+  expect(sql.prepare('SELECT count(*) n FROM software_project_updates').get().n).toBe(0);expect(fetch).not.toHaveBeenCalled();
+  const current=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update});expect(current.status).toBe(200);
+  sql.exec('UPDATE software_projects SET milestone_index=1');
+  vi.mocked(fetch).mockClear();
+  const earlier=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,email_client:true}});
+  expect(earlier.status).toBe(400);expect(await earlier.json()).toMatchObject({error:'Progress updates go on the current milestone.'});expect(fetch).not.toHaveBeenCalled();
 });
