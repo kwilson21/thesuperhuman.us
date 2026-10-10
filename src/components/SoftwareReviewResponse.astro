@@ -5,6 +5,11 @@ type Props = { update: ClientSoftwareUpdate; checks: string[]; deliverables?: st
 const {update,checks,deliverables=[],missingDeliverables=[],inaccessibleDeliverables=[],milestoneName,endpoint,readonly=false,canAccept=true}=Astro.props;
 const version=softwareVersionLabel(update);
 const direction=update.kind==='direction_review';
+const evidence: string[] = JSON.parse(update.criteria_json ?? '[]');
+const checkEvidence = checks.map((check,index) => {
+  const text = evidence[index]?.trim() ?? '';
+  return text.startsWith(check) ? text.slice(check.length).trim() : text;
+});
 const decisionBody=softwareClientRevisionBody(update.decision_body,checks,deliverables);
 ---
 <section class="software-review">
@@ -13,7 +18,7 @@ const decisionBody=softwareClientRevisionBody(update.decision_body,checks,delive
     <p>{update.decision==='direction_confirmed' ? `You confirmed this direction on ${softwareDate(update.decided_at!)}.` : update.decision==='milestone_accepted' ? `You accepted ${version} on ${softwareDate(update.decided_at!)}.` : `You asked for changes on ${softwareDate(update.decided_at!)}. I’ll reply here.`}</p>
     {update.decision==='changes_requested' && <p>{decisionBody}</p>}
   </> : readonly ? <p>This update is shown for reference.</p> : <form data-software-review data-endpoint={endpoint} data-version={version} data-milestone={milestoneName} data-direction={String(direction)}>
-    {!direction && <><p>Mark what you've tried. Nothing is accepted until you click Accept.</p><div class="try-checks">{checks.map((check,index)=><div class="try-check"><span>{check}</span><div role="group" aria-label={check}><button type="button" data-review-check={index} data-review-mark="works" aria-pressed="false">Works</button><button type="button" data-review-check={index} data-review-mark="not-yet" aria-pressed="false">Not yet</button></div></div>)}</div></>}
+    {!direction && <><p>Mark what you've tried. Nothing is accepted until you click Accept.</p><div class="try-checks">{checks.map((check,index)=><div class="try-check"><div>{check}{checkEvidence[index] && <p class="hint">{checkEvidence[index]}</p>}</div><div role="group" aria-label={check}><button type="button" data-review-check={index} data-review-mark="works" aria-pressed="false">Works</button><button type="button" data-review-check={index} data-review-mark="not-yet" aria-pressed="false">Not yet</button></div></div>)}</div></>}
     <button class="studio-button" type="submit" name="decision" formnovalidate value={direction ? 'direction_confirmed' : 'milestone_accepted'} disabled={!direction && !canAccept}>{direction ? 'Confirm this direction' : `Accept ${softwareVersionNumber(update) ? version.toLowerCase() : version}`}</button>
     {!direction && !canAccept && <p>This version can't be accepted yet because it doesn't include everything we agreed. You can still try it and send notes.</p>}
     <details data-request-changes><summary>Something's not right? Tell me what</summary>
@@ -29,6 +34,7 @@ const decisionBody=softwareClientRevisionBody(update.decision_body,checks,delive
 </section>
 <style>
   .try-check { display: flex; justify-content: space-between; align-items: center; gap: .8rem; border-top: 1px solid var(--rule); padding: .7rem 0; font: .9rem/1.5 Inter,sans-serif; }
+  .try-check p { margin: .2rem 0 0; }
   .try-check [role=group] { display: flex; gap: .4rem; flex-shrink: 0; }
   .try-check button { border: 1px solid var(--rule); padding: .4rem .6rem; background: transparent; color: var(--ink); }
   .try-check button[aria-pressed=true] { border-color: var(--studio-done); background: var(--studio-soft); }

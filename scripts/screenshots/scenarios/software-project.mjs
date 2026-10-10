@@ -107,7 +107,9 @@ export default {
     await shot('Open balance after delivery',`/owner/requests/${id}`,'balance-open',{owner:true});
     await shot('Client invoices and payment strip',`/studio/software/${id}`,'invoices',{cookie,prepare:async page=>{await page.getByText('Invoices',{exact:true}).click();}});
     await shot('Delivery review awaiting a decision with selected items and full milestone scope',`/studio/software/${id}`,'delivery-review',{cookie,prepare:async page=>{
-      await page.getByRole('link',{name:"See what's included",exact:true}).click();
+      await page.locator('summary').filter({hasText:"See what's included"}).click();
+      if(await page.getByRole('heading',{name:'Agreed checks',exact:true}).count()) throw new Error('Pending checks should appear only in Try these.');
+      if(!await page.locator('.try-check .hint').first().isVisible()) throw new Error('Each check should show its evidence beside the helper.');
       if(!await page.getByRole('heading',{name:'Included in this delivery'}).isVisible()) throw new Error('Client review should name what is included in this delivery.');
       if(!await page.getByRole('heading',{name:'Full agreed scope · Milestone 1'}).isVisible()) throw new Error('Client review should keep the complete acceptance scope visible.');
       if(!await page.locator('[data-preview-delivery-scope]').getByText('Next actions with a named owner',{exact:true}).isVisible()) throw new Error('Client should still see planned scope beyond this delivery.');
@@ -128,7 +130,12 @@ export default {
     sql(`INSERT INTO software_milestone_payments(request_id,milestone_index,paid_recorded_at,recorded_by) VALUES (${quote(id)},0,${quote(at)},'owner@example.com')`);
     await shot('Paid delivery awaiting handoff',`/studio/software/${id}`,'paid-handoff-pending',{cookie});
     await share({kind:'handoff',artifact_version:'Delivery v2',title:'Your handoff is ready.',what_changed:'Delivered files and operating notes.',checks_limitations:'Fictional sample only. Live rollout is outside scope.',next_step:'Corrections within the correction period. Anything new is a separate milestone.',paid_confirmed:true,links:[{label:'Download handoff notes',url:'https://example.com/notes'},{label:'View delivered files',url:'https://example.com/files'}],client_request:''});
-    await shot('Accepted milestone with handoff ready',`/studio/software/${id}`,'handoff',{cookie});
+    await shot('Accepted milestone with handoff ready',`/studio/software/${id}`,'handoff',{cookie,prepare:async page=>{
+      const current=page.locator('.project-current');
+      const headings=await current.locator('h2').allTextContents();
+      if(headings[0]!=='Your files · Milestone 1' || headings.includes('Your handoff is ready.')) throw new Error('Handoff files should lead without a duplicate heading.');
+      if(await page.locator('header').getByText(/^Next update:/).count()) throw new Error('A finished handoff should not promise a next update.');
+    }});
     await shot('Earlier versions with their own decisions',`/studio/software/${id}`,'earlier-versions',{cookie,prepare:async page=>{await page.getByText('Earlier versions',{exact:true}).click();}});
     await share({kind:'progress',title:'Guide updated after handoff',what_changed:'I updated the operating guide.',client_request:''});
     await shot('Progress after handoff keeps files and notes',`/studio/software/${id}`,'progress-after-handoff',{cookie});

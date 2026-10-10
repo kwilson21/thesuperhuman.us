@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { transform } from '@astrojs/compiler';
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
-import { beforeAll, afterAll, expect, it } from 'vitest';
+import { beforeAll, afterAll, expect, it, vi } from 'vitest';
 import { hashOfferToken, type OfferTerms } from '~/lib/software-offers';
 import { agreementValues, agreementDetailsSchema } from '~/lib/agreement-fields';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
@@ -593,6 +593,8 @@ it.each(['accepted-unpaid','paid-awaiting-handoff','handed-off'].flatMap(state=>
 });
 
 it('puts the named review work first through partial, complete, accepted and handoff states', async () => {
+  vi.useFakeTimers({toFake:['Date']});
+  vi.setSystemTime(new Date('2026-10-11T03:30:00Z'));
   const {sql,db}=await fixture(), container=await AstroContainer.create();
   try {
     const scope={...terms,milestones:[{...terms.milestones[0],deliverables:['Status view','Sample import']}]};
@@ -609,6 +611,18 @@ it('puts the named review work first through partial, complete, accepted and han
     sql.exec("UPDATE software_projects SET next_update_on='2026-10-10'");
     let html=await render();
     expect(html.match(/Next update: Oct 10, 2026/g)).toHaveLength(1);
+    sql.exec("UPDATE software_projects SET next_update_on='2026-10-09'");
+    expect(await render()).not.toContain('Next update:');
+    sql.exec("UPDATE software_projects SET next_update_on='2026-10-11'");
+    expect(await render()).toContain('Next update: Oct 11, 2026');
+    sql.exec("UPDATE software_project_updates SET criteria_json='[\"Add a client. Checked in the preview.\"]' WHERE id='v2'");
+    html=await render();
+    expect(html).not.toContain('Agreed checks');
+    expect(html).toMatch(/<strong[^>]*>Version 2<\/strong><span[^>]*>Now · Oct 1, 2026<\/span>/);
+    expect(html).toMatch(/<div[^>]*>Add a client\.<p[^>]*>Checked in the preview\.<\/p><\/div>/);
+    expect(html.match(/See what's included/g)).toHaveLength(1);
+    sql.exec("UPDATE software_project_updates SET criteria_json='[\"Evidence without a repeated check.\"]' WHERE id='v2'");
+    expect(await render()).toContain('Evidence without a repeated check.');
     expect(html).toMatch(/<strong[^>]*>Yours<\/strong><span[^>]*>After payment<\/span>/);
     expect(html).toMatch(/<h3[^>]*>Not included yet<\/h3><p[^>]*>Sample import is not included\.<\/p>/);
     expect(html).toContain('Version 2 is ready to try.');expect(html).toContain('I need from you: Send a sample.');expect(html).toContain('Next from me: Build the import.');expect(html).toContain('Please try it by Oct 8, 2026.');expect(html).toContain('More internal detail.');
@@ -642,7 +656,10 @@ it('puts the named review work first through partial, complete, accepted and han
     sql.exec(`UPDATE software_project_updates SET what_changed='The final source and guide are ready.',client_request='Save the source and guide.',checks_limitations='No live rollout.',next_step='Support within the correction period.' WHERE id='handoff'`);
     html=await render();expect(html).toContain("It&#39;s yours.");expect(html).toContain('Your files');expect(html).toMatch(/<h3[^>]*>Not included<\/h3><p[^>]*>No live rollout\.<\/p>/);expect(html).toMatch(/<h3[^>]*>Support after handoff<\/h3><p[^>]*>Support within the correction period\.<\/p>/);
     const currentHandoffFiles=html.slice(html.indexOf('Your files'),html.indexOf('class="project-history'));
-    expect(currentHandoffFiles).toMatch(/<h2[^>]*>Files<\/h2>/);
+    expect(currentHandoffFiles).not.toMatch(/<h2[^>]*>Files<\/h2>/);
+    expect(html.indexOf('Your files · Milestone 1')).toBeLessThan(html.indexOf('Your decision'));
+    expect(html).not.toContain('Next update:');
+    expect(html).toContain('Agreed checks');
     expect(currentHandoffFiles).toContain('The final source and guide are ready.');
     expect(currentHandoffFiles).toContain('I need from you: Save the source and guide.');
     expect(currentHandoffFiles).toContain('No live rollout.');
@@ -652,7 +669,8 @@ it('puts the named review work first through partial, complete, accepted and han
     sql.exec(`INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,what_changed,next_step,client_request,created_by,created_at,updated_at,shared_at) VALUES ('later','r','progress','shared',0,'Later work','Aftercare V3','working_preview','I updated the operating guide.','Check in next week.','Read the guide.','owner','2026-10-04','2026-10-04','2026-10-04')`);
     html=await render();expect(html).toContain('I updated the operating guide.');expect(html).toContain('Next from me: Check in next week.');expect(html).toContain('I need from you: Read the guide.');expect(html.indexOf('I updated the operating guide.')).toBeLessThan(html.indexOf('Your files'));expect(html).toContain('https://example.com/notes');expect(html).toContain('Support within the correction period.');expect(html.match(/Corrections are covered through Nov 1, 2026\./g)).toHaveLength(1);
     const textOnlyFiles=html.slice(html.indexOf('Your files'),html.indexOf('class="project-history'));
-    expect(textOnlyFiles).toMatch(/<h2[^>]*>Files<\/h2>/);
+    expect(textOnlyFiles).not.toMatch(/<h2[^>]*>Files<\/h2>/);
+    expect(html).toContain('Next update: Oct 11, 2026');
     expect(textOnlyFiles).toContain('The final source and guide are ready.');
     expect(textOnlyFiles).toContain('I need from you: Save the source and guide.');
     expect(textOnlyFiles).toContain('No live rollout.');
@@ -696,7 +714,7 @@ it('puts the named review work first through partial, complete, accepted and han
     html=await render();expect(html).toContain('Milestone 2 is starting.');expect(html).toContain('Next update: Oct 10, 2026');expect(html).not.toContain('Sketch 3.');expect(html).toContain('Your files');expect(html).toContain('https://example.com/notes');expect(html.match(/Corrections are covered through Nov 1, 2026\./g)).toHaveLength(1);
     const olderReview=html.slice(html.indexOf('data-endpoint="/api/studio/software/r/reviews/new-delivery"'));
     expect(olderReview).toMatch(/name="missing_deliverables" value="1"/);expect(olderReview).toMatch(/name="inaccessible_deliverables" value="0"/);
-  } finally {sql.close();}
+  } finally {sql.close();vi.useRealTimers();}
 });
 it('masks the recipient on every unauthenticated email receipt', async () => {
   const {sql,db}=await fixture();
