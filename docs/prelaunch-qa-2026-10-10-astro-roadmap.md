@@ -3,7 +3,8 @@
 Date: October 10, 2026
 Repository: `kwilson21/thesuperhuman.us`
 Branch: `codex/astro-migration-roadmap`
-Starting head: `5e3ac1edaf6bd9cc92319611c3272730fbf170f2`, matching the local `origin/main` ref.
+Starting head, supplied by the caller: `5e3ac1edaf6bd9cc92319611c3272730fbf170f2`. Offline
+inspection confirms that the local `origin/main` ref resolves to this revision.
 PR branch commit chain: `5e3ac1ed` -> the documentation commit that last touches this file, identifiable with `git log -1 -- docs/prelaunch-qa-2026-10-10-astro-roadmap.md`.
 Merge method and record revision: this chain is preserved on `main` only by a merge-commit merge, the method planned for this PR and used for recent PRs #157, #158, #165, #171 and #172. A squash or rebase merge would not preserve these hashes; if either were used, the deployed revision would have to be identified by the PR number and its merge commit instead, and this record would need a note saying so. A commit cannot embed its own hash; the final handoff supplies the exact hash.
 Target: production `https://thesuperhuman.us`

@@ -139,10 +139,11 @@ Audio notes become optional so empty prose is not required to publish a recordin
   the surrounding typeface instead of inserting a differently styled glyph.
 
 - Migrate the site from Astro 5 to Astro 7 with the matching Cloudflare adapter
-  and Tailwind setup. Proposed and not scheduled, this is planned maintenance,
-  not a dependency bump. Dependabot's grouped PR #138 is only a placeholder and
-  cannot install as it stands. Keep the framework and adapter on a supported
-  release line so their fixes keep arriving, and unblock later toolchain updates.
+  and Tailwind setup. This is proposed maintenance and is not scheduled. It
+  requires a migration, not just a dependency bump. Dependabot's grouped PR #138
+  is only a placeholder and cannot install as it stands. Newer framework and
+  adapter fixes ship only on the newer major versions, so the migration is how
+  the site keeps receiving them. It also unblocks later toolchain updates.
   Plan and verify:
   - Replace `Astro.locals.runtime` access to env, cf, caches and context with the
     adapter's current APIs across pages, API routes, middleware, libraries and
