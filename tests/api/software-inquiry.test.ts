@@ -13,7 +13,7 @@ let db: D1Database;
 let kv: { get: ReturnType<typeof vi.fn>; put: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
 let stored: Map<string, string>;
 function context(input: unknown = base, options: { origin?: string; type?: string; db?: D1Database | null; token?: string | null; rate?: typeof kv | null } = {}) {
-  return { request: new Request('https://thesuperhuman.us/api/software-inquiry', { method: 'POST', headers: { origin: options.origin ?? 'https://thesuperhuman.us', 'content-type': options.type ?? 'application/json' }, body: typeof input === 'string' ? input : JSON.stringify(input) }), locals: { runtime: { env: { MUSIC_DB: options.db === undefined ? db : options.db, TURNSTILE_SECRET_KEY: options.token === undefined ? 'test' : options.token, RATE_LIMIT: options.rate === undefined ? kv : options.rate, RESEND_API_KEY: 'test', CONTACT_FROM_EMAIL: 'from@example.com', CONTACT_TO_EMAIL: 'inbox@example.com', OWNER_EMAIL: 'owner@example.com' } } } } as any;
+  return { request: new Request('https://thesuperhuman.us/api/software-inquiry', { method: 'POST', headers: { origin: options.origin ?? 'https://thesuperhuman.us', 'content-type': options.type ?? 'application/json' }, body: typeof input === 'string' ? input : JSON.stringify(input) }), locals: { runtime: { env: { MUSIC_DB: options.db === undefined ? db : options.db, TURNSTILE_SECRET_KEY: options.token === undefined ? 'test' : options.token, RATE_LIMIT: options.rate === undefined ? kv : options.rate, RESEND_API_KEY: 'test', CONTACT_FROM_EMAIL: 'from@example.com', CONTACT_TO_EMAIL: 'inbox@example.com' } } } } as any;
 }
 beforeEach(() => {
   sql = new DatabaseSync(':memory:'); sql.exec(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8'));
@@ -262,12 +262,12 @@ it('treats an oversized saved detail as a field error without an urgent alert', 
 });
 
 
-it('emails only answered fields to the client with the saved title and owner Reply-To', async () => {
+it('emails only answered fields to the client with the saved title and configured contact Reply-To', async () => {
   const response = await POST(context({ ...base, name: 'Alex Example', today: '<script>first</script>\nSecond line' }));
   expect(await response.json()).toMatchObject({ ok: true, clientCopyStatus: 'sent' });
   const emails = vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com')).map(([, init]) => JSON.parse(init!.body as string));
   const copy = emails.find(email => email.to[0] === 'alex@example.com');
-  expect(copy).toMatchObject({ from: 'from@example.com', subject: 'Your brief: <script>first</script> Second line', reply_to: 'owner@example.com' });
+  expect(copy).toMatchObject({ from: 'from@example.com', subject: 'Your brief: <script>first</script> Second line', reply_to: 'inbox@example.com' });
   expect(copy.text).toContain('Hi Alex,');
   expect(copy.text).toContain("I'll read it myself and reply within two business days with a fixed-price first milestone, or a question or two.");
   expect(copy.text).toContain('What happens today?\n<script>first</script>\nSecond line');
@@ -342,4 +342,62 @@ it('accepts legacy date briefs and validates explicit new dates', () => {
     expect(result).toMatchObject({ ok: false, errors: { timingDate: 'Add a valid date.' } });
   }
   expect(validateSoftwareInquiry({ ...base, timing: 'date', timingDate: '2027-02-28' }).ok).toBe(true);
+});
+
+it.each(['claim', 'construction', 'config'] as const)('records a pre-send %s failure and returns an error on owner retry', async (failure) => {
+  const ctx = context();
+  if (failure === 'config') delete ctx.locals.runtime.env.CONTACT_TO_EMAIL;
+  if (failure === 'claim') {
+    const prepare = db.prepare.bind(db);
+    vi.spyOn(db, 'prepare').mockImplementation((query: string) => {
+      if (query.includes("'$.clientCopyStatus','uncertain'")) throw new Error('claim failed');
+      return prepare(query);
+    });
+  }
+  if (failure === 'construction') {
+    const emails = await import('~/lib/client-emails');
+    vi.spyOn(emails, 'softwareBriefEmail').mockImplementation(() => { throw new Error('construction failed'); });
+  }
+  try {
+    expect(await (await POST(ctx)).json()).toMatchObject({ ok: true, clientCopyStatus: 'failed' });
+    expect(JSON.parse(sql.prepare('SELECT details_json FROM owner_requests').get().details_json).clientCopyStatus).toBe('failed');
+    const { POST: retry } = await import('~/pages/api/owner/requests/[id]/brief-copy');
+    const response = await retry({ ...ctx, params: { id: sql.prepare('SELECT id FROM owner_requests').get().id },
+      locals: { ...ctx.locals, owner: { email: 'owner@example.com' } },
+      request: new Request('https://thesuperhuman.us/api/owner/requests/r/brief-copy', { method: 'POST', headers: { origin: 'https://thesuperhuman.us', 'content-type': 'application/json' }, body: JSON.stringify({ action: 'send' }) }) });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ ok: false });
+    expect(JSON.parse(sql.prepare('SELECT details_json FROM owner_requests').get().details_json).clientCopyStatus).toBe('failed');
+    expect(vi.mocked(fetch).mock.calls.filter(([url, init]) => String(url).includes('api.resend.com') && JSON.parse(init!.body as string).to?.[0] === 'alex@example.com')).toHaveLength(0);
+  } finally { vi.restoreAllMocks(); }
+});
+
+it('omits blank optional answers from the owner idea notification', async () => {
+  await POST(context({ ...base, path: 'idea', idea: 'A shift board', audienceToday: 'Volunteers', firstVersion: 'Claim a shift', signal: '' }));
+  const notice = vi.mocked(fetch).mock.calls.find(([url, init]) => String(url).includes('api.resend.com') && JSON.parse(init!.body as string).to[0] === 'inbox@example.com')!;
+  const email = JSON.parse(notice[1]!.body as string);
+  expect(email.text).toContain('What’s the idea?\nA shift board');
+  expect(email.text).not.toMatch(/undefined|How will you know/);
+});
+
+it('recovers an unrecorded first claim failure through the guarded owner retry', async () => {
+  const prepare = db.prepare.bind(db);
+  const failedWrites = vi.spyOn(db, 'prepare').mockImplementation((query: string) => {
+    if (query.includes("'$.clientCopyStatus','uncertain'") || query.includes("'$.clientCopyStatus','failed'")) throw new Error('copy write failed');
+    return prepare(query);
+  });
+  expect(await (await POST(context())).json()).toMatchObject({ ok: true, clientCopyStatus: 'failed' });
+  expect(JSON.parse(sql.prepare('SELECT details_json FROM owner_requests').get().details_json)).not.toHaveProperty('clientCopyStatus');
+  failedWrites.mockRestore();
+  expect(await (await POST(context())).json()).toMatchObject({ ok: true, clientCopyStatus: 'failed' });
+  const { POST: retry } = await import('~/pages/api/owner/requests/[id]/brief-copy');
+  const ctx = context();
+  const retryContext = { ...ctx, params: { id: sql.prepare('SELECT id FROM owner_requests').get().id },
+    locals: { ...ctx.locals, owner: { email: 'owner@example.com' } },
+    request: new Request('https://thesuperhuman.us/api/owner/requests/r/brief-copy', { method: 'POST', headers: { origin: 'https://thesuperhuman.us', 'content-type': 'application/json' }, body: JSON.stringify({ action: 'send' }) }) };
+  expect((await retry({ ...retryContext, locals: { ...ctx.locals, owner: null } } as any)).status).toBe(403);
+  expect((await retry({ ...retryContext, request: retryContext.request.clone() })).status).toBe(200);
+  expect((await retry({ ...retryContext, request: retryContext.request.clone() })).status).toBe(409);
+  expect(JSON.parse(sql.prepare('SELECT details_json FROM owner_requests').get().details_json).clientCopyStatus).toBe('sent');
+  expect(vi.mocked(fetch).mock.calls.filter(([url, init]) => String(url).includes('api.resend.com') && JSON.parse(init!.body as string).to[0] === 'alex@example.com')).toHaveLength(1);
 });

@@ -17,7 +17,7 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
   <article class="site-shell intake-page software-intake">
     <p class="intake-return"><a class="site-link" href={href('/services#software')}>Back to Software <span aria-hidden="true">←</span></a></p>
     <p class="intake-muted">Software brief</p>
-    <ol class="intake-progress brief-dots" aria-label="Your progress">{Array.from({ length: 7 }, (_, i) => <li aria-current={i === 0 ? 'step' : undefined}><span class="step-number"><span class="sr-only">Question {i + 1} of 7</span></span></li>)}</ol>
+    <ol data-intake-progress class="intake-progress brief-dots" aria-label="Your progress">{Array.from({ length: 7 }, (_, i) => <li aria-current={i === 0 ? 'step' : undefined}><span class="step-number"><span class="sr-only">Question {i + 1} of 7</span></span></li>)}</ol>
     <form id="software-inquiry" data-available={available} novalidate>
       <noscript><p>Please enable JavaScript to use this form, or email <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>.</p></noscript>
       <section data-step="0">
@@ -74,12 +74,15 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
     </form>
     <section id="software-success" hidden tabindex="-1" role="status">
       <p class="intake-muted">Software brief · sent</p><h1>Your brief is in.</h1><p class="intake-intro" data-receipt-thanks></p>
-      <ol class="max-w-content">
+      <div class="intake-link-panel max-w-content" data-copy-card>
+        <span data-copy-icon class="block text-accent" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" ><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 6 9 7 9-7" /></svg></span>
+        <p data-copy-status></p><p class="intake-muted" data-copy-note>It has everything you wrote, so you don't need to save this page.</p>
+      </div>
+      <ol class="intake-next-steps max-w-content">
         <li>I reply with a fixed-price first milestone, or a question or two.</li>
         <li>If it looks right, you sign the agreement online. It takes about two minutes.</li>
         <li>Work starts, and you follow it on your own private project page.</li>
       </ol>
-      <div class="intake-service-detail max-w-content"><p data-copy-status></p><p data-copy-note>It has everything you wrote, so you don't need to save this page.</p></div>
     </section>
     <p class="intake-contact">Not sure it fits? <a href={href('/#contact')}>Get in touch</a>. Hiring for a role? <a href={href('/about#resumes')}>Request my resume</a>.</p>
   </article>

@@ -25,3 +25,5 @@
 .software-intake [data-accept],.software-intake [data-suggestions-toggle],.software-intake [data-skip],.software-intake [data-review] button{min-height:44px;text-decoration:underline;text-underline-offset:.2em}
 .software-intake [data-accept]{color:var(--muted);text-align:left}
 @media(max-width:700px),(pointer:coarse){.software-intake .brief-ghost{visibility:hidden}}
+
+.software-intake [data-copy-card]{overflow-wrap:anywhere}.software-intake [data-copy-status]{margin-top:.75rem}

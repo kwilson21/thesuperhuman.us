@@ -367,27 +367,35 @@ it('renders the approved receipt and keeps booking reassurance only on the send 
   for (const copy of ['Software brief · sent','Your brief is in.','I reply with a fixed-price first milestone, or a question or two.','If it looks right, you sign the agreement online. It takes about two minutes.','Work starts, and you follow it on your own private project page.']) expect(html).toContain(copy);
   expect(html).not.toMatch(/data-print|Print or save|Not provided/);
   expect(html.match(/No booking or payment at this stage\./g)).toHaveLength(1);
+  const receipt = parse(html) as any;
+  const find = (node: any): any => node.attrs?.some((attr: any) => attr.name === 'class' && attr.value.split(' ').includes('intake-next-steps')) ? node : node.childNodes?.map(find).find(Boolean);
+  const steps = find(receipt);
+  expect(steps?.tagName).toBe('ol');
+  expect(steps.childNodes.filter((node: any) => node.tagName === 'li')).toHaveLength(3);
+  expect(await readFile('src/styles/audio-intake.css', 'utf8')).toMatch(/\.intake-next-steps\s*\{[^}]*list-style:\s*decimal\s*[;}]/);
 });
 
 it('renders each owner brief outcome and gates uncertain retry at one minute', async () => {
   const {sql,db} = await fixture();
   const container = await AstroContainer.create();
   try {
-    for (const [status,age,button] of [['sent',120000,false],['failed',0,true],['uncertain',0,false],['uncertain',120000,true]] as const) {
-      sql.prepare("UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus',?,'$.clientCopyAttemptedAt',?)").run(status,new Date(Date.now()-age).toISOString());
+    for (const [status,age,button] of [[null,0,true],['sent',120000,false],['failed',0,true],['uncertain',0,false],['uncertain',120000,true]] as const) {
+      if (status === null) sql.exec("UPDATE owner_requests SET details_json=json_remove(details_json,'$.clientCopyStatus','$.clientCopyAttemptedAt')");
+      else sql.prepare("UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus',?,'$.clientCopyAttemptedAt',?)").run(status,new Date(Date.now()-age).toISOString());
       const html = await container.renderToString(ownerRequest,{params:{id:'r'},request:new Request('https://thesuperhuman.us/owner/requests/r'),locals:{owner:{email:'owner@example.com'},runtime:{env:{MUSIC_DB:db}}} as any});
-      expect(html).toContain(`Client copy: ${status === 'failed' ? "didn&#39;t send" : status}`);
+      expect(html).toContain(`Client copy: ${status == null || status === 'failed' ? "didn&#39;t send" : status}`);
       expect(html.includes('data-send-project-invitation')).toBe(button);
       expect(html.includes('data-confirmed-not-sent="true"')).toBe(status === 'uncertain' && button);
     }
   } finally {sql.close();}
 });
 
-it('renders all three personalized receipt outcomes into the rendered page', async () => {
+it('renders all four personalized receipt outcomes into the rendered page', async () => {
   const container = await AstroContainer.create();
   const html = await container.renderToString(start,{request:new Request('https://thesuperhuman.us/software/start'),locals:{runtime:{env:{}}} as any});
   const dom = parse(html);
   const find = (node: any, attribute: string): any => node.attrs?.some((attr: any) => attr.name === attribute) ? node : node.childNodes?.map((child: any) => find(child,attribute)).find(Boolean);
+  expect(find(dom,'data-intake-progress').attrs.some((attr: any) => attr.name === 'hidden')).toBe(false);
   const document = {querySelector: (selector: string) => {
     if (selector === '#software-inquiry') return null;
     const node = find(dom,selector.slice(1,-1));
@@ -402,11 +410,21 @@ it('renders all three personalized receipt outcomes into the rendered page', asy
     for (const [status,line,note] of [
       ['sent','A copy is on its way to alex@example.com.',"It has everything you wrote, so you don't need to save this page."],
       ['uncertain','Your copy should arrive shortly.',"If it doesn't, your brief is still saved and I'll still reply."],
+      [undefined,"I couldn't send your copy just now, but your brief is saved and I'll still reply.",null],
       ['failed',"I couldn't send your copy just now, but your brief is saved and I'll still reply.",null],
-    ]) {
+    ] as const) {
       renderSoftwareReceipt({brief:{name:'Alex Example',email:'alex@example.com'},clientCopyStatus:status});
       expect(serialize(find(dom,'data-receipt-thanks'))).toBe("Thanks, Alex. I'll read it myself and reply within two business days.");
       expect(serialize(find(dom,'data-copy-status'))).toBe(line);
+      const card = find(dom,'data-copy-card');
+      expect(serialize(card).split(line)).toHaveLength(2);
+      expect(card.attrs.find((attr: any) => attr.name === 'class').value).toContain('intake-link-panel');
+      const receipt = card.parentNode;
+      expect(receipt.childNodes.indexOf(card)).toBeLessThan(receipt.childNodes.findIndex((node: any) => node.tagName === 'ol'));
+      expect(serialize(receipt).match(/data-copy-card/g)).toHaveLength(1);
+      expect(serialize(dom).match(/data-copy-status/g)).toHaveLength(1);
+      expect(find(dom,'data-intake-progress').attrs.some((attr: any) => attr.name === 'hidden')).toBe(true);
+      expect(find(dom,'data-copy-icon').attrs.some((attr: any) => attr.name === 'hidden')).toBe(status !== 'sent' && status !== 'uncertain');
       const renderedNote = find(dom,'data-copy-note');
       expect(renderedNote.attrs.some((attr: any) => attr.name === 'hidden')).toBe(note === null);
       if (note) expect(serialize(renderedNote)).toBe(note);

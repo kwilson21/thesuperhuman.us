@@ -44,8 +44,8 @@ export default {
       }
       for (const question of [1, 2]) steps.push({ title: `Idea question ${question + 1}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-idea-${question + 1}-${viewport}.png`, path: '/software/start', viewport, prepare: page => prepare(page, question, 'idea') }), caption: 'Fictional idea brief' }] });
       steps.push({ title: `Autocomplete, ${viewport}`, images: [{ file: await capture({ file: `software-brief-suggestion-${viewport}.png`, path: '/software/start', viewport, prepare: page => prepare(page, 1, 'workflow', true) }), caption: viewport === 'phone' ? 'Mocked suggestion with an explicit accept button' : 'Mocked decorative ghost text' }] });
-      for (const clientCopyStatus of ['sent', 'uncertain', 'failed']) {
-        steps.push({ title: `Client receipt ${clientCopyStatus}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-receipt-${clientCopyStatus}-${viewport}.png`, path: '/software/start', viewport, prepare: async page => {
+      for (const clientCopyStatus of ['sent', 'uncertain', 'failed', undefined]) {
+        steps.push({ title: `Client receipt ${clientCopyStatus ?? 'unattempted'}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-receipt-${clientCopyStatus ?? 'unattempted'}-${viewport}.png`, path: '/software/start', viewport, prepare: async page => {
           await page.route('**/api/software-inquiry', async route => {
             const input = route.request().postDataJSON();
             await route.fulfill({ json: { ok: true, brief: { name: input.name, email: input.email }, clientCopyStatus } });
@@ -56,13 +56,15 @@ export default {
           await page.locator('[type=submit]').click();
           await page.locator('#software-success:visible').waitFor({ timeout: 30_000 });
           if (await page.evaluate(() => localStorage.getItem('software-brief-draft'))) throw new Error('Sent draft was not cleared');
+          await page.locator('[data-intake-progress]').waitFor({ state: 'hidden' });
+          await page.locator('[data-copy-card]:visible').waitFor();
         } }), caption: 'Fictional receipt with mocked delivery; no email call' }] });
       }
     }
     const images = [];
     for (const viewport of ['desktop', 'phone']) {
-      for (const status of ['sent', 'failed', 'uncertain']) {
-        sql(`UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus','${status}','$.clientCopyAttemptedAt','2026-09-29T12:00:00.000Z') WHERE id='screenshot-software'`);
+      for (const status of ['sent', 'failed', 'uncertain', 'unattempted']) {
+        sql(status === 'unattempted' ? `UPDATE owner_requests SET details_json=json_remove(details_json,'$.clientCopyStatus','$.clientCopyAttemptedAt') WHERE id='screenshot-software'` : `UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus','${status}','$.clientCopyAttemptedAt','2026-09-29T12:00:00.000Z') WHERE id='screenshot-software'`);
         images.push({ file: await capture({ file: `software-brief-owner-${status}-${viewport}.png`, path: '/owner/requests/screenshot-software', viewport, owner: true }), caption: `Fictional software brief ${status}, ${viewport}` });
       }
       images.push({ file: await capture({ file: `software-brief-list-${viewport}.png`, path: '/owner/requests?kind=software', viewport, owner: true }), caption: `Software request list, ${viewport}` });

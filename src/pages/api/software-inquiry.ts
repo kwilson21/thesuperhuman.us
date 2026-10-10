@@ -37,7 +37,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       return Response.json({ ok: false, error: preserved }, { status: 503 });
     }
     if (prior) return prior.email.toLowerCase() === input.email.toLowerCase()
-      ? Response.json({ ok: true, brief: softwareBrief(prior), clientCopyStatus: prior.details.clientCopyStatus ?? 'uncertain' })
+      ? Response.json({ ok: true, brief: softwareBrief(prior), clientCopyStatus: prior.details.clientCopyStatus ?? 'failed' })
       : Response.json({ ok: false, error: preserved }, { status: 409 });
     const limit = await checkRateLimit(env.RATE_LIMIT, ip, 'rl:software:');
     if (!limit.allowed) return Response.json({ ok: false, error: 'Please wait a few minutes before sending again. Your details are still here.' }, { status: 429 });
@@ -47,7 +47,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     } catch (error) {
       const raced = await existing(env.MUSIC_DB, input.submissionId).catch(() => null);
       if (raced) return raced.email.toLowerCase() === input.email.toLowerCase()
-        ? Response.json({ ok: true, brief: softwareBrief(raced), clientCopyStatus: raced.details.clientCopyStatus ?? 'uncertain' })
+        ? Response.json({ ok: true, brief: softwareBrief(raced), clientCopyStatus: raced.details.clientCopyStatus ?? 'failed' })
         : Response.json({ ok: false, error: preserved }, { status: 409 });
       if (error instanceof RequestDetailsTooLargeError) {
         await env.RATE_LIMIT.delete(`rl:software:${ip}`);
