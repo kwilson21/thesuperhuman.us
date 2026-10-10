@@ -2,7 +2,14 @@
 import ProjectLayout from '~/layouts/ProjectLayout.astro';
 import ProjectTimeline from '~/components/ProjectTimeline.astro';
 import { tallyStory, tallyMilestones, tallyDecisionHighlights } from '~/data/project-stories/tally';
-const highlightedEntries = tallyDecisionHighlights.map(decision => ({ decision, entries: decision.entries.map(source => tallyMilestones.find(entry => entry.id === source.entry)!) }));
+const highlightedEntries = tallyDecisionHighlights.map(decision => ({
+  decision,
+  entries: decision.entries.map(source => {
+    const entry = tallyMilestones.find(entry => entry.id === source.entry);
+    if (!entry) throw new Error(`Tally highlight cites a missing journal entry: ${source.entry}`);
+    return entry;
+  }),
+}));
 const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 ---
 <ProjectLayout title={tallyStory.title} subtitle={tallyStory.subtitle} description={tallyStory.description} status={tallyStory.status} journalHref="#tally-updates-title">
