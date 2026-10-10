@@ -1,6 +1,12 @@
 # Website pre-launch checklist / Definition of Done
 
-Use before every new website launch and every deployment that changes public behavior. Copy into the new project's docs and link it from that project's AGENTS.md and README. Keep one checklist, adapting it to the site's actual features. Reuse existing layouts, components, validation, hosting and monitoring.
+Use before every new website launch, every deployment that changes public behavior,
+and every resume upload that changes the professional claims delivered by the
+website. For a resume-only upload, complete the applicable content and backup /
+readback checks and mark website-only items N/A with a reason. Copy this checklist
+into the new project's docs and link it from that project's AGENTS.md and README.
+Keep one checklist, adapting it to the site's actual features. Reuse existing
+layouts, components, validation, hosting and monitoring.
 
 ## Release record
 
@@ -12,7 +18,7 @@ Every item receives **PASS**, **FAIL**, **UNVERIFIED**, or **N/A with a reason**
 
 - [ ] Confirm the correct project, branch, local changes, site instructions, audience and deployment authorization.
 - [ ] Preserve approved design and truthful claims; remove placeholders and verify ownership/rights for media.
-- [ ] For explanatory copy, apply the [action-led copy rule](website-content-model.md#copy-explain-the-action-when-visitors-need-to-understand-the-work). For professional-claim or resume changes, record a private website/resume comparison of facts, metric scope, attribution and status, including intentional differences and the actual stored PDF version. N/A is appropriate when neither changes.
+- [ ] For explanatory copy, explain who does what, what action they take, and the supported result or reason when visitors need that context; keep useful labels and personal or creative writing in their intended roles. For professional-claim or resume changes, record a private website/resume comparison of facts, metric scope, attribution and status, including intentional differences and the actual stored PDF version. N/A is appropriate when neither changes.
 - [ ] The first screen explains who/what the site is for and offers a useful next step. Verify the CTA works at narrow and desktop sizes. A sticky CTA is optional, justified by the actual journey.
 - [ ] Navigation, footer, contact route and important external links work. Never invent an address or expose a home address.
 

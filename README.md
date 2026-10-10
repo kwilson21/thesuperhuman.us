@@ -107,12 +107,42 @@ Declared in `wrangler.jsonc` `kv_namespaces` with explicit namespace IDs.
 
 Resume PDFs are **never** committed to this repo and **never** served from `public/`. They live exclusively in KV and are emailed to requesters only after you approve each request.
 
+For a replacement, first download the current remote value into a private, backed-up
+directory outside the repository. Keep that copy until the replacement is verified.
+Use the same sequence for `pdf:general` and `pdf:dod`, substituting the key and
+filename. `BACKUP_DIR` must be a new directory on private storage, not a path in the
+repository:
+
 ```bash
-npx wrangler kv key put --binding=RESUME_STORE --remote pdf:general --path "/path/to/KWilson_Resume_G_2026.pdf"
-npx wrangler kv key put --binding=RESUME_STORE --remote pdf:dod     --path "/path/to/KWilson_Resume_D_2026.pdf"
+set -e
+umask 077
+mkdir -p /secure/private/resume-backups
+BACKUP_DIR="$(mktemp -d /secure/private/resume-backups/resume.XXXXXX)"
+
+# Preserve the bytes currently served before overwriting the canonical key.
+npx wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.before.pdf"
+shasum -a 256 "$BACKUP_DIR/pdf-general.before.pdf"
+
+# Upload the candidate, download the stored bytes, and require an exact match.
+npx wrangler kv key put pdf:general --binding=RESUME_STORE --remote --path "/path/to/resume.pdf"
+npx wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.after.pdf"
+cmp "/path/to/resume.pdf" "$BACKUP_DIR/pdf-general.after.pdf"
+shasum -a 256 "/path/to/resume.pdf" "$BACKUP_DIR/pdf-general.after.pdf"
 ```
 
-Re-run any of these whenever a resume changes.
+Do not report completion unless the remote readback matches the candidate bytes.
+If it does not match, restore the saved `*.before.pdf` to the same key, read it
+back again, and confirm the restored bytes with `cmp`:
+
+```bash
+npx wrangler kv key put pdf:general --binding=RESUME_STORE --remote --path "$BACKUP_DIR/pdf-general.before.pdf"
+npx wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.restored.pdf"
+cmp "$BACKUP_DIR/pdf-general.before.pdf" "$BACKUP_DIR/pdf-general.restored.pdf"
+```
+
+Keep the backup and the before/after hashes as the private replacement receipt.
+For an initial upload where the key does not yet exist, upload the candidate and
+perform the same readback and comparison; there is no previous object to back up.
 
 ### Rebuilding the services one-pager PDF
 
