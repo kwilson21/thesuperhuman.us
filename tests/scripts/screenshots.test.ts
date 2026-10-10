@@ -336,3 +336,18 @@ it('captures the work-first project states at desktop and phone sizes',async()=>
     for(const viewport of ['desktop','phone']) expect(files).toContain(`software-project-${state}-${viewport}.png`);
   }
 });
+
+it('can seed empty details after link-landing captures have autosaved a draft',async()=>{
+ const {DatabaseSync}=createRequire(import.meta.url)('node:sqlite');
+ const sql=new DatabaseSync(':memory:');sql.exec(readFileSync('db/music.sql','utf8'));
+ const stop=new Error('draft collision passed');
+ const scenario=await import('../../scripts/screenshots/scenarios/software-signing.mjs');
+ try {
+  await expect(scenario.default.run({templates:signingTemplates,sql:(query:string)=>sql.exec(query),
+   capture:async({file}:{file:string})=>{
+    if(file.includes('link-open'))sql.exec("INSERT OR REPLACE INTO software_agreement_drafts VALUES('screenshot-signing-offer','signer@example.com','{}','now')");
+    return file;
+   },ownerFetch:async()=>{throw stop;},
+  })).rejects.toBe(stop);
+ } finally {sql.close();}
+});

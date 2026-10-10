@@ -52,10 +52,10 @@ export default {
       registered_agent_confirmed: true,
     };
     const client = {
-      business_engagement: true,
-      legal_name: 'Example Client LLC',
+          legal_name: 'Example Client LLC',
       entity_type: 'LLC',
-      jurisdiction: 'Wyoming',
+      state: 'Wyoming',
+      country: '',
       business_address: '100 Example Business Street',
       notice_email: 'notices@example.com',
       signer_name: 'Example Signer',
@@ -64,9 +64,7 @@ export default {
       reviewer_email: 'reviewer@example.com',
       approver_name: 'Example Approver',
       approver_email: 'approver@example.com',
-      portfolio: 'deny',
-      naming: false,
-      initials: 'ES',
+      portfolio_choice: 'private',
     };
     sql(`UPDATE software_signing_settings SET software_signing_enabled=1;
    INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at) VALUES(${quote(id)},'software','Example Client','signer@example.com','Fictional tracker','reviewed',${quote(at)},${quote(at)});
@@ -74,7 +72,7 @@ export default {
    ${['msa', 'sow'].map((kind) => `INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES('screenshot-${kind}',${quote(kind)},1,${quote(template(kind))},${quote(hash(template(kind)))},${quote(at)},'owner@example.com');`).join('\n')}
    INSERT INTO software_offers(id,request_id,version,status,terms_json,agreement_details_json,msa_template_id,sow_template_id,contractor_snapshot_json,recipient_email_snapshot,created_at,updated_at,sent_at) VALUES('screenshot-signing-offer',${quote(id)},1,'sent',${quote(JSON.stringify(terms))},${quote(JSON.stringify(details))},'screenshot-msa','screenshot-sow',${quote(JSON.stringify({ ...contractor, config_version: 1 }))},'signer@example.com',${quote(at)},${quote(at)},${quote(sentAt)});
    INSERT INTO software_offer_links VALUES(${quote(id)},${quote(hash(token))},${quote(sentAt)},NULL);
-   INSERT INTO software_agreement_challenges(id,purpose,offer_id,link_hash,recipient_email,code_hash,issued_at,expires_at) VALUES('screenshot-challenge','agreement','screenshot-signing-offer',${quote(hash(token))},'signer@example.com','synthetic-code-hash',${quote(at)},'2099-01-01');
+   INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES('screenshot-challenge','agreement','screenshot-signing-offer',${quote(hash(token))},'signer@example.com',${quote(hash('fixture-primary'))},${quote(at)},'2099-01-01');
    INSERT INTO software_agreement_sessions VALUES(${quote(hash(session))},'agreement','screenshot-signing-offer',${quote(hash(token))},'signer@example.com','screenshot-challenge',${quote(at)},'2099-01-01',NULL,'screenshot-csrf');`);
     const steps = [];
     async function shot(name, title, path, options = {}) {
@@ -142,30 +140,29 @@ export default {
       },
     });
     sql("DELETE FROM software_offers WHERE id='screenshot-incomplete-draft'");
+    await shot('archive-expired-link','Expired archive email link','/agreements/verify',{expectedResponses:[{path:'/agreements/verify',status:401}]});
     await shot('offer', 'Offer review and signing link', `/offer/${token}`);
-    await shot('code', 'Recipient email verification', `/offer/${token}/sign`);
-    for (const [name,expires] of [['invalid-code','2099-01-01'],['expired-code','2000-01-01']]) {
-      const challenge='00000000-0000-4000-8000-000000000019';
-      sql(`INSERT OR REPLACE INTO software_agreement_challenges(id,purpose,offer_id,link_hash,recipient_email,code_hash,issued_at,expires_at) VALUES(${quote(challenge)},'agreement','screenshot-signing-offer',${quote(hash(token))},'signer@example.com','invalid-hash',${quote(at)},${quote(expires)});`);
-      await shot(name,'Invalid or expired code requires fresh verification',`/offer/${token}/sign?challenge=${challenge}`,{
-        expectedResponses: [{ path: `/api/offer/${token}/session`, status: 401 }],
-        prepare:async page=>{
-          await page.locator('[name=code]').fill('00000000');
-          await page.locator('[data-agreement-session] button').click();
-          await page.locator('[role=status]').filter({hasText:'That code is invalid or expired. Request a new one if needed.'}).waitFor();
-        },
-      });
+    await shot('check-email', 'Check your email and resend', `/offer/${token}/sign?email=sent`);
+    await shot('link-landing', 'Expired one-time link landing', `/offer/${token}/verify`, {expectedResponses:[{path:`/offer/${token}/verify`,status:401}]});
+    for(const viewport of ['desktop','phone']) {
+      const linkKey=(viewport==='desktop'?'d':'p').repeat(43), linkId=`screenshot-open-${viewport}`;
+      sql(`INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES(${quote(linkId)},'agreement','screenshot-signing-offer',${quote(hash(token))},'signer@example.com',${quote(hash(linkKey))},${quote(at)},'2099-01-01');`);
+      const file=await capture({file:`software-signing-link-open-${viewport}.png`,path:`/offer/${token}/verify?key=${linkKey}`,viewport,prepare:async page=>{if(new URL(page.url()).searchParams.has('key'))throw new Error('One-time token remained in the URL.');}});
+      steps.push({title:`Email link opens the agreement, ${viewport}`,images:[{file,caption:'Verified recipient reaches the signing page with the one-time token removed.'}]});
     }
-    await shot('party', 'Verified legal party and required choices', `/offer/${token}/sign`, {
+    sql(`INSERT OR REPLACE INTO software_agreement_drafts VALUES('screenshot-signing-offer','signer@example.com','{}',${quote(at)});`);
+    await shot('empty', 'One signing page with empty details', `/offer/${token}/sign`, {cookie});
+    sql(`DELETE FROM software_agreement_drafts WHERE offer_id='screenshot-signing-offer'; UPDATE owner_requests SET details_json='{"company":"Example Client LLC"}' WHERE id=${quote(id)};`);
+    await shot('brief-prefill','Name and legal business name from the brief',`/offer/${token}/sign`,{cookie});
+    await shot('required-choice', 'Field errors and a linked summary', `/offer/${token}/sign`, {
       cookie,
-    });
-    await shot('required-choice','Missing party fields and choices prevent review',`/offer/${token}/sign`,{
-      cookie,
-      expectedResponses: [{ path: `/api/offer/${token}/review`, status: 409 }],
-      prepare:async page=>{
-        await page.locator('[data-agreement-flow="review"]').evaluate(form=>form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
-        await page.locator('[role=status]').filter({hasText:'"portfolio"'}).filter({hasText:'"business_engagement"'}).waitFor();
+      prepare: async page=>{
+        await page.locator('[data-sign-button]').click();
+        await page.locator('[data-signing-errors]').filter({hasText:'Choose a portfolio option'}).waitFor();
       },
+    });
+    await shot('other-contacts', 'Optional reviewer, approver and notice contacts', `/offer/${token}/sign`, {
+      cookie, prepare:async page=>{await page.locator('[data-other-contact]').click();},
     });
     const reviewed = await ownerFetch(
       `/api/offer/${token}/review`,
@@ -173,28 +170,21 @@ export default {
       'POST',
       { cookie: `agreement_session=${session}` },
     );
-    const sow = reviewed.documents?.find((d) => d.kind === 'sow'),
+    let sow = reviewed.documents?.find((d) => d.kind === 'sow'),
       msa = reviewed.documents?.find((d) => d.kind === 'msa');
     if (!sow || !msa) throw new Error('Agreement review did not return both exact snapshots.');
-    await shot('preview', 'Complete exact agreement preview', `/offer/${token}/sign?review=1`, {
-      cookie,
-    });
-    await shot('sow', 'SOW preview continuation', `/offer/${token}/sign?review=1`, {
-      cookie,
-      selector: '[data-agreement-document="sow"]',
-    });
-    await shot('signature', 'Consent and signature footer', `/offer/${token}/sign?review=1`, {
-      cookie,
-      selector: '[data-agreement-flow="sign"]',
-    });
+    await shot('prefilled', 'One page with saved details and a required portfolio choice', `/offer/${token}/sign`, {cookie,prepare:async page=>{await page.locator('[role=status]').filter({hasText:'ready to review'}).waitFor();}});
+    await shot('signature', 'Name signature and one consent checkbox', `/offer/${token}/sign`, {cookie,selector:'[data-signing-page] aside'});
+    // Browser captures refresh review snapshots. Fetch the current immutable manifest before signing.
+    const currentReview = await ownerFetch(`/api/offer/${token}/review`,{csrf_nonce:'screenshot-csrf',values:client},'POST',{cookie:`agreement_session=${session}`});
+    sow=currentReview.documents.find(d=>d.kind==='sow');
+    msa=currentReview.documents.find(d=>d.kind==='msa');
     await ownerFetch(
         `/api/offer/${token}/sign`,
         {
           csrf_nonce: 'screenshot-csrf',
-          documents: reviewed.documents.map((d) => ({ id: d.id, hash: d.hash })),
+          documents: currentReview.documents.map((d) => ({ id: d.id, hash: d.hash })),
           consent: true,
-          authority: true,
-          intent: true,
         },
         'POST',
         { cookie: `agreement_session=${session}` },
@@ -208,11 +198,9 @@ export default {
     await shot('counter', 'Owner countersign review', `/owner/requests/${id}`, { owner: true });
     await ownerFetch(`/api/owner/requests/${id}/agreement`, {
       action: 'countersign',
-      documents: reviewed.documents.map((d) => ({ id: d.id, hash: d.hash })),
+      documents: currentReview.documents.map((d) => ({ id: d.id, hash: d.hash })),
       typed_name: 'Example Owner',
       consent: true,
-      authority: true,
-      intent: true,
     });
     await shot(
       'executed',
@@ -286,7 +274,7 @@ export default {
     sql(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at) VALUES(${quote(reuseId)},'software','Example Client','signer@example.com','Second fictional milestone','reviewed',${quote(at)},${quote(at)});
    INSERT INTO software_offers(id,request_id,version,status,terms_json,agreement_details_json,msa_template_id,sow_template_id,contractor_snapshot_json,recipient_email_snapshot,reused_msa_id,created_at,updated_at,sent_at) SELECT 'screenshot-reuse-offer',${quote(reuseId)},1,'sent',terms_json,agreement_details_json,msa_template_id,sow_template_id,contractor_snapshot_json,recipient_email_snapshot,${quote(msa.id)},${quote(at)},${quote(at)},${quote(at)} FROM software_offers WHERE id='screenshot-signing-offer';
    INSERT INTO software_offer_links VALUES(${quote(reuseId)},${quote(hash(reuseToken))},${quote(at)},NULL);
-   INSERT INTO software_agreement_challenges(id,purpose,offer_id,link_hash,recipient_email,code_hash,issued_at,expires_at) VALUES('screenshot-reuse-challenge','agreement','screenshot-reuse-offer',${quote(hash(reuseToken))},'signer@example.com','synthetic-code-hash',${quote(at)},'2099-01-01');
+   INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES('screenshot-reuse-challenge','agreement','screenshot-reuse-offer',${quote(hash(reuseToken))},'signer@example.com',${quote(hash('fixture-reuse'))},${quote(at)},'2099-01-01');
    INSERT INTO software_agreement_sessions VALUES(${quote(hash(reuseSession))},'agreement','screenshot-reuse-offer',${quote(hash(reuseToken))},'signer@example.com','screenshot-reuse-challenge',${quote(at)},'2099-01-01',NULL,'screenshot-reuse-csrf');`);
     await shot(
       'reuse-confirmation',
@@ -316,7 +304,7 @@ export default {
     await shot('archive-signin', 'Agreement archive sign-in', '/agreements');
     const archive = 'z'.repeat(43);
     sql(`UPDATE software_projects SET revoked_at=${quote(at)} WHERE request_id=${quote(id)};UPDATE owner_requests SET email='',status='withdrawn' WHERE id=${quote(id)};
-   INSERT INTO software_agreement_challenges(id,purpose,recipient_email,code_hash,issued_at,expires_at) VALUES('screenshot-archive-challenge','archive','signer@example.com','synthetic-code-hash',${quote(at)},'2099-01-01');
+   INSERT INTO software_agreement_links(id,purpose,recipient_email,token_hash,issued_at,expires_at) VALUES('screenshot-archive-challenge','archive','signer@example.com',${quote(hash('fixture-archive'))},${quote(at)},'2099-01-01');
    INSERT INTO software_agreement_sessions VALUES(${quote(hash(archive))},'archive',NULL,NULL,'signer@example.com','screenshot-archive-challenge',${quote(at)},'2099-01-01',NULL,'screenshot-archive-csrf');`);
     await shot(
       'archive-retained',

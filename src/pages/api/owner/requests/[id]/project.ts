@@ -52,7 +52,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
         ...(command.signature_source==='external'?[
           abandonUnsignedAgreementReviews(db,id,at),
           db.prepare('UPDATE software_agreement_sessions SET revoked_at=? WHERE offer_id=? AND revoked_at IS NULL').bind(at,command.offer_id),
-          db.prepare('UPDATE software_agreement_challenges SET used_at=? WHERE offer_id=? AND used_at IS NULL').bind(at,command.offer_id),
+          db.prepare('UPDATE software_agreement_links SET used_at=? WHERE offer_id=? AND used_at IS NULL').bind(at,command.offer_id),
           db.prepare('UPDATE software_offer_links SET revoked_at=? WHERE request_id=? AND revoked_at IS NULL').bind(at,id),
         ]:[]),
         db.prepare(`INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,next_update_on,created_at,updated_at)

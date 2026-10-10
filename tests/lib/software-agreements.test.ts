@@ -10,7 +10,6 @@ import {
 } from '~/lib/agreement-templates';
 import {
   validateAgreementDetails,
-  agreementDetailsSchema,
   clientAgreementSchema,
   contractorSchema,
 } from '~/lib/agreement-fields';
@@ -23,8 +22,8 @@ import {
 } from '~/lib/software-agreements';
 import {
   agreementSession,
-  completeAgreementCode,
-  issueAgreementCode,
+  completeAgreementLink,
+  issueAgreementLink,
 } from '~/lib/agreement-access';
 import {
   prepareAgreementArtifact,
@@ -58,7 +57,6 @@ const details = {
   milestones: [{ start: '2026-10-01', target: '2026-10-20', handoff: 'Source and notices' }],
 };
 const client = {
-  business_engagement: true,
   legal_name: 'Sample LLC',
   entity_type: 'LLC',
   jurisdiction: 'Wyoming',
@@ -72,7 +70,6 @@ const client = {
   approver_email: 'approver@example.com',
   portfolio: 'deny',
   naming: false,
-  initials: 'ES',
 };
 const contractor = {
   legal_name: 'Example Contractor LLC',
@@ -154,7 +151,7 @@ beforeEach(async () => {
     .run(await hashOfferToken(token));
   sql
     .prepare(
-      "INSERT INTO software_agreement_challenges(id,purpose,offer_id,link_hash,recipient_email,code_hash,issued_at,expires_at) VALUES('challenge','agreement','o',?,'client@example.com','hash','2020-01-01','2099-01-01')",
+      "INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES('challenge','agreement','o',?,'client@example.com','hash','2020-01-01','2099-01-01')",
     )
     .run(await hashOfferToken(token));
   sql
@@ -443,55 +440,32 @@ it('invalidates scoped signing access on revoked links without granting studio a
     ),
   ).toBeNull();
 });
-it('issues a pinned-recipient code, rejects wrong codes, consumes once and limits resend', async () => {
+it('issues a hashed pinned-recipient link, consumes once, expires and limits resend', async () => {
   const req = new Request('https://example.com', { headers: { 'cf-connecting-ip': '192.0.2.2' } });
-  const response = await issueAgreementCode(env, req, { turnstileToken: 'test' }, token);
-  expect(response.status).toBe(200);
-  const body = (await response.json()) as { challenge_id: string };
+  expect((await issueAgreementLink(env, req, { turnstileToken: 'test' }, token)).status).toBe(200);
   const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
   expect(payload.to).toEqual(['client@example.com']);
-  const code = payload.text.match(/\d{8}/)[0];
-  expect(
-    (
-      await completeAgreementCode(
-        env,
-        req,
-        { challenge_id: body.challenge_id, code: '00000000' },
-        token,
-      )
-    ).status,
-  ).toBe(401);
-  expect(
-    (await completeAgreementCode(env, req, { challenge_id: body.challenge_id, code }, token))
-      .status,
-  ).toBe(200);
-  expect(
-    (await completeAgreementCode(env, req, { challenge_id: body.challenge_id, code }, token))
-      .status,
-  ).toBe(401);
-  expect((await issueAgreementCode(env, req, { turnstileToken: 'test' }, token)).status).toBe(429);
+  expect(payload.subject).toBe('Open your agreement');
+  const link = new URL(payload.text.match(/https:\/\/\S+/)[0]);
+  const key = link.searchParams.get('key')!;
+  const stored = sql.prepare('SELECT * FROM software_agreement_links WHERE token_hash=?').get(await hashOfferToken(key));
+  expect(stored).toBeTruthy();
+  expect(JSON.stringify(stored)).not.toContain(key);
+  expect(Date.parse(stored.expires_at)-Date.parse(stored.issued_at)).toBe(3600000);
+  const opened = await completeAgreementLink(env, req, key, token);
+  expect(opened.status).toBe(303);
+  expect(opened.headers.get('location')).toBe(`/offer/${token}/sign`);
+  expect(opened.headers.get('set-cookie')).toContain('Max-Age=7200');
+  expect((await completeAgreementLink(env, req, key, token)).status).toBe(401);
+  expect((await issueAgreementLink(env, req, { turnstileToken: 'test' }, token)).status).toBe(429);
 });
-it('charges five failed attempts and refuses later correct code', async () => {
-  const req = new Request('https://example.com'),
-    issued = await issueAgreementCode(env, req, { turnstileToken: 'test' }, token),
-    body = (await issued.json()) as { challenge_id: string };
-  const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body)),
-    code = payload.text.match(/\d{8}/)[0];
-  for (let i = 0; i < 5; i++)
-    expect(
-      (
-        await completeAgreementCode(
-          env,
-          req,
-          { challenge_id: body.challenge_id, code: 'wrong' },
-          token,
-        )
-      ).status,
-    ).toBe(401);
-  expect(
-    (await completeAgreementCode(env, req, { challenge_id: body.challenge_id, code }, token))
-      .status,
-  ).toBe(401);
+it('rejects expired links without creating a session', async () => {
+  await issueAgreementLink(env, request(), {turnstileToken:'test'}, token);
+  const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
+  const key = new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get('key')!;
+  sql.prepare("UPDATE software_agreement_links SET expires_at='2000-01-01'").run();
+  expect((await completeAgreementLink(env,request(),key,token)).status).toBe(401);
+  expect(sql.prepare('SELECT count(*) n FROM software_agreement_sessions').get().n).toBe(1);
 });
 it('keeps archive access independent of closed projects and the signing switch', async () => {
   const result = await signed(),
@@ -606,7 +580,7 @@ it('recovers only an owner-confirmed stale artifact attempt', async () => {
 it('normalizes native Turnstile form submissions and enforces Origin', async () => {
   const { agreementRequest } = await import('~/lib/agreement-request');
   const body = await agreementRequest(
-    new Request('https://example.com/api/agreements/code', {
+    new Request('https://example.com/api/agreements/link', {
       method: 'POST',
       headers: {
         origin: 'https://example.com',
@@ -619,7 +593,7 @@ it('normalizes native Turnstile form submissions and enforces Origin', async () 
   expect(
     (
       (await agreementRequest(
-        new Request('https://example.com/api/agreements/code', {
+        new Request('https://example.com/api/agreements/link', {
           method: 'POST',
           headers: {
             origin: 'https://other.example',
@@ -733,20 +707,21 @@ it('allows expired SOW cleanup after project content cleanup and clears only its
     sql.prepare("SELECT agreement_id FROM software_projects WHERE request_id='r'").get(),
   ).toEqual({ agreement_id: null });
 });
-it('requires an explicit business engagement before review', () => {
-  expect(() => clientAgreementSchema.parse({ ...client, business_engagement: false })).toThrow();
-  const { business_engagement, ...without } = client;
-  expect(() => clientAgreementSchema.parse(without)).toThrow();
+it('records business authority in the single explicit consent statement', () => {
+  expect(clientAgreementSchema.safeParse(client).success).toBe(true);
+  const source=readFileSync('src/pages/offer/[token]/sign.astro','utf8');
+  expect(source.match(/type="checkbox"/g)).toHaveLength(1);
+  expect(source).not.toContain('name="initials"');
 });
 it('removes expired access data while retaining signature verification evidence', async () => {
   const { cleanupAgreementAccess } = await import('~/lib/agreement-access');
   await signed();
   sql.exec(
-    "UPDATE software_agreement_sessions SET expires_at='2020-01-01';UPDATE software_agreement_challenges SET expires_at='2020-01-01';",
+    "UPDATE software_agreement_sessions SET expires_at='2020-01-01';UPDATE software_agreement_links SET expires_at='2020-01-01';",
   );
   await cleanupAgreementAccess(db);
   expect(sql.prepare('SELECT count(*) n FROM software_agreement_sessions').get().n).toBe(0);
-  expect(sql.prepare('SELECT count(*) n FROM software_agreement_challenges').get().n).toBe(0);
+  expect(sql.prepare('SELECT count(*) n FROM software_agreement_links').get().n).toBe(0);
   expect(
     sql
       .prepare('SELECT verified_email,verified_at FROM software_agreement_signatures LIMIT 1')
@@ -1101,16 +1076,12 @@ it.each(['resolved','withdrawn'])('rejects signing and new sessions for a %s req
   expect(await agreementSession(db,request(),'agreement','o')).toBeNull();
   await expect(signAgreements(db,(await offer())!,session,reviewed.documents,request())).rejects.toThrow();
 });
-it('charges the final code attempt once under parallel verification and issues one session', async () => {
-  const req = new Request('https://example.com');
-  const issued = await issueAgreementCode(env,req,{turnstileToken:'test'},token);
-  const {challenge_id} = await issued.json() as {challenge_id:string};
+it('consumes a link atomically under parallel verification', async () => {
+  await issueAgreementLink(env,request(),{turnstileToken:'test'},token);
   const payload=JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
-  const code=payload.text.match(/\d{8}/)[0];
-  sql.prepare('UPDATE software_agreement_challenges SET attempts=4 WHERE id=?').run(challenge_id);
-  const attempts = await Promise.all([completeAgreementCode(env,req,{challenge_id,code},token),completeAgreementCode(env,req,{challenge_id,code},token)]);
-  expect(attempts.map(r=>r.status).sort()).toEqual([200,401]);
-  expect(sql.prepare('SELECT attempts FROM software_agreement_challenges WHERE id=?').get(challenge_id).attempts).toBe(5);
+  const key=new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get('key')!;
+  const results=await Promise.all([completeAgreementLink(env,request(),key,token),completeAgreementLink(env,request(),key,token)]);
+  expect(results.map(r=>r.status).sort()).toEqual([303,401]);
 });
 it('rejects expired sessions, wrong recipients, studio cookies and archive purpose for signing', async () => {
   const original = (await agreementSession(db,request(),'agreement','o'))!;
@@ -1156,7 +1127,7 @@ it('reuses an MSA across two offers without importing the first SOW attachments'
   const replacements: Record<string, string> = { id: "'o2'", version: '2', status: "'sent'", reused_msa_id: '?', agreement_details_json: '?' };
   sql.prepare(`INSERT INTO software_offers(${columns.join(',')}) SELECT ${columns.map((name: string) => replacements[name] ?? name).join(',')} FROM software_offers WHERE id='o'`)
     .run(...columns.filter((name: string) => replacements[name] === '?').map((name: string) => name === 'reused_msa_id' ? msa.id : JSON.stringify({ ...details, attachments: [second] })));
-  sql.exec("UPDATE software_agreement_sessions SET offer_id='o2'; UPDATE software_agreement_challenges SET offer_id='o2'");
+  sql.exec("UPDATE software_agreement_sessions SET offer_id='o2'; UPDATE software_agreement_links SET offer_id='o2'");
   const reviewed = await reviewAgreements(db, (await db.prepare("SELECT * FROM software_offers WHERE id='o2'").first<SoftwareOffer>())!, (await agreementSession(db, request(), 'agreement', 'o2'))!, client);
   expect(reviewed.reused_msa?.id).toBe(msa.id);
   expect(reviewed.documents.map(document => document.kind)).toEqual(['sow']);
@@ -1187,14 +1158,14 @@ it.each([false, true])('cleans the last shared attachment reference while preser
 it.each(['agreement', 'archive'] as const)('invalid Turnstile requests preserve the recipient allowance for %s', async purpose => {
   vi.mocked(fetch).mockResolvedValue(new Response('{"success":false}', { status: 200 }));
   for (let i = 0; i < 3; i++) {
-    const response = await issueAgreementCode(env, request(), { turnstileToken: 'invalid', email: 'client@example.com' }, purpose === 'agreement' ? token : undefined);
+    const response = await issueAgreementLink(env, request(), { turnstileToken: 'invalid', email: 'client@example.com' }, purpose === 'agreement' ? token : undefined);
     expect(response.status).toBe(403);
   }
-  expect(sql.prepare('SELECT uses FROM audio_client_allowances').all()).toEqual([{ uses: 3 }]);
+  expect(sql.prepare('SELECT uses FROM audio_client_allowances').all()).toEqual([]);
   vi.mocked(fetch).mockImplementation(async () => new Response('{"success":true}', { status: 200 }));
-  const response = await issueAgreementCode(env, request(), { turnstileToken: 'valid', email: 'client@example.com' }, purpose === 'agreement' ? token : undefined);
+  const response = await issueAgreementLink(env, request(), { turnstileToken: 'valid', email: 'client@example.com' }, purpose === 'agreement' ? token : undefined);
   expect(response.status).toBe(200);
-  expect(sql.prepare('SELECT uses FROM audio_client_allowances ORDER BY uses').all()).toEqual([{ uses: 1 }, { uses: 4 }]);
+  expect(sql.prepare('SELECT uses FROM audio_client_allowances ORDER BY uses').all()).toEqual([{ uses: 1 }, { uses: 1 }]);
 });
 
 it.each([true, false])('external start atomically retires unsigned reviews and signing access when request is current (%s)', async current => {
@@ -1218,7 +1189,7 @@ it.each([true, false])('external start atomically retires unsigned reviews and s
     expect(Boolean(row.retain_until)).toBe(current);
   }
   expect(Boolean(sql.prepare('SELECT revoked_at FROM software_agreement_sessions').get().revoked_at)).toBe(current);
-  expect(Boolean(sql.prepare('SELECT used_at FROM software_agreement_challenges').get().used_at)).toBe(current);
+  expect(Boolean(sql.prepare('SELECT used_at FROM software_agreement_links').get().used_at)).toBe(current);
   expect(Boolean(sql.prepare('SELECT revoked_at FROM software_offer_links').get().revoked_at)).toBe(current);
   expect(sql.prepare('SELECT count(*) n FROM software_projects').get().n).toBe(current ? 1 : 0);
 });
@@ -1448,4 +1419,122 @@ it('restores retry metadata when private storage refuses orphan deletion', async
   await applyAgreementRetention(db, env.AUDIO, 'test-storage', retry, now);
   expect(bucketData.has(key)).toBe(false);
   expect(sql.prepare("SELECT id FROM software_agreement_attachments WHERE id='retry-attachment'").get()).toBeUndefined();
+});
+
+it('resumes the server draft under a fresh two-hour email session without sharing it with another email', async () => {
+  const { saveAgreementDraft, loadAgreementDraft, prefillAgreementDraft, resolveClientDetails } = await import('~/lib/agreement-draft');
+  const { getOwnerRequest } = await import('~/lib/owner-requests');
+  sql.prepare("UPDATE owner_requests SET name='Alex Example',details_json=? WHERE id='r'").run(JSON.stringify({company:'Example Client LLC'}));
+  const prefilled=prefillAgreementDraft((await getOwnerRequest(db,'r'))!);
+  expect(prefilled.legal_name).toBe('Example Client LLC');expect(prefilled.signer_name).toBe('Alex Example');
+  expect(prefilled.signer_title).toBe('');expect(prefilled.portfolio_choice).toBe('');
+  const session=(await agreementSession(db,request(),'agreement','o'))!;
+  const input={...prefilled,entity_type:'LLC',state:'Wyoming',business_address:'100 Example Street',signer_title:'Owner',portfolio_choice:'anonymous' as const};
+  await saveAgreementDraft(db,(await offer())!,session,input);
+  sql.prepare("UPDATE software_agreement_sessions SET expires_at='2000-01-01'").run();
+  await issueAgreementLink(env,request(),{turnstileToken:'test'},token);
+  const payload=JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
+  const key=new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get('key')!;
+  const opened=await completeAgreementLink(env,request(),key,token);
+  const newSession=await agreementSession(db,new Request(request().url,{headers:{cookie:opened.headers.get('set-cookie')!}}),'agreement','o');
+  expect(newSession).not.toBeNull();
+  expect(Date.parse(newSession!.expires_at)-Date.parse(newSession!.verified_at)).toBe(7200000);
+  expect(await loadAgreementDraft(db,'o','client@example.com')).toEqual(input);
+  expect(await loadAgreementDraft(db,'o','other@example.com')).toBeNull();
+  const resolved=resolveClientDetails(input,session.recipient_email);
+  expect(resolved.ok).toBe(true);
+  if(resolved.ok){expect(resolved.client.reviewer_name).toBe('Alex Example');expect(resolved.client.reviewer_email).toBe(session.recipient_email);expect(resolved.client.approver_email).toBe(session.recipient_email);expect(resolved.client.notice_email).toBe(session.recipient_email);}
+});
+it.each([['private','deny',false],['anonymous','allow',false],['named','allow',true]] as const)('maps %s into the exact SOW fields',async(choice,portfolio,naming)=>{
+  const {resolveClientDetails}=await import('~/lib/agreement-draft');
+  const {jurisdiction,...rest}=client;
+  const {portfolio:unused,naming:unusedNaming,...fields}=rest;
+  const result=resolveClientDetails({...fields,state:jurisdiction,portfolio_choice:choice},'client@example.com');
+  expect(result.ok).toBe(true);if(!result.ok)return;
+  expect(result.client.portfolio).toBe(portfolio);expect(result.client.naming).toBe(naming);
+  const reviewed=await reviewAgreements(db,(await offer())!,(await agreementSession(db,request()))!,result.client);
+  const sow=reviewed.documents.find(d=>d.kind==='sow')!;
+  expect(sow.text).toContain(`sow.portfolio: ${portfolio==='deny'?'Do not allow':'Allow'}`);
+  expect(sow.text).toContain(`sow.naming: ${naming?'Yes':'No'}`);
+  expect(sow.text).not.toContain('initials');
+});
+it('retains both verbatim statements and verification method in signatures and certificates',async()=>{
+  const {consentText,intentText}=await import('~/lib/agreement-fields');
+  const result=await signed();
+  const id=await countersignAgreements(db,(await offer())!,result.documents,'Example Owner','owner@example.com',request());
+  for(const party of ['client','contractor']) {
+    const row=sql.prepare('SELECT * FROM software_agreement_signatures WHERE party=? LIMIT 1').get(party);
+    expect(row.consent_text).toBe(consentText(client.legal_name,party==='contractor'));
+    expect(row.intent_text).toBe(intentText(party==='contractor'));
+    expect(row.consent_version).toBe('website-signing-v2');
+    expect(row.verification_method).toBe(party==='client'?'verified by one-time email link':'verified by owner authentication');
+  }
+  await prepareAgreementArtifact(env,id,async(_env,_docs,certificates)=>{
+    const json=JSON.stringify(certificates);
+    expect(json).toContain(consentText(client.legal_name));expect(json).toContain(intentText());
+    expect(json).toContain(intentText(true));expect(json).toContain('verified by one-time email link');
+    expect(json).toContain('v2026-09-30');return new TextEncoder().encode('%PDF-synthetic');
+  });
+});
+it('rejects signing stale reviewed documents after autosaved details change',async()=>{
+  const {resolveClientDetails,saveAgreementDraft}=await import('~/lib/agreement-draft');
+  const {jurisdiction,portfolio,naming,...rest}=client;
+  const input={...rest,state:jurisdiction,portfolio_choice:'private' as const};
+  const session=(await agreementSession(db,request()))!;
+  await saveAgreementDraft(db,(await offer())!,session,input);
+  const resolved=resolveClientDetails(input,session.recipient_email);if(!resolved.ok)throw new Error('Invalid fixture');
+  const result=await reviewAgreements(db,(await offer())!,session,resolved.client);
+  await saveAgreementDraft(db,(await offer())!,session,{...input,signer_title:'Updated title'});
+  await expect(signAgreements(db,(await offer())!,session,result.documents,request())).rejects.toThrow('details changed');
+  expect(sql.prepare('SELECT count(*) n FROM software_agreement_signatures').get().n).toBe(0);
+});
+it('returns field-linked validation messages without raw schema output',async()=>{
+  const {POST}=await import('~/pages/api/offer/[token]/review');
+  const response=await POST({params:{token},locals:{runtime:{env}},request:new Request(request().url,{method:'POST',headers:{cookie:`agreement_session=${token}`,origin:'https://example.com','content-type':'application/json'},body:JSON.stringify({csrf_nonce:'csrf',values:{}})})} as never);
+  expect(response.status).toBe(400);const body=await response.json() as {error:string;errors:Record<string,string>};
+  expect(body.errors.signer_title).toBe('Add your title');expect(body.errors.portfolio_choice).toBe('Choose a portfolio option');expect(body.error).not.toContain('invalid_type');
+});
+
+it('retires the redundant draft after saving immutable signatures',async()=>{
+ const {saveAgreementDraft,resolveClientDetails}=await import('~/lib/agreement-draft');
+ const {jurisdiction,portfolio,naming,...rest}=client;
+ const input={...rest,state:jurisdiction,portfolio_choice:'private' as const},session=(await agreementSession(db,request()))!;
+ await saveAgreementDraft(db,(await offer())!,session,input);
+ const resolved=resolveClientDetails(input,session.recipient_email);if(!resolved.ok)throw new Error('Invalid fixture');
+ const result=await reviewAgreements(db,(await offer())!,session,resolved.client);
+ await signAgreements(db,(await offer())!,session,result.documents,request());
+ expect(sql.prepare('SELECT count(*) n FROM software_agreement_drafts').get().n).toBe(0);
+ expect(sql.prepare('SELECT count(*) n FROM software_agreement_signatures').get().n).toBe(2);
+});
+it('prevents external start if website signing commits after the initial read',async()=>{
+ const reviewed=await review(),session=(await agreementSession(db,request()))!;
+ sql.prepare("UPDATE software_offers SET agreement_details_json=NULL WHERE id='o'").run();
+ const originalBatch=db.batch.bind(db);
+ vi.spyOn(db,'batch').mockImplementationOnce(async statements=>{
+   await signAgreements({...db,batch:originalBatch} as D1Database,(await offer())!,session,reviewed.documents,request());
+   return originalBatch(statements);
+ });
+ const {POST}=await import('~/pages/api/owner/requests/[id]/project');
+ const response=await POST({params:{id:'r'},request:new Request('https://example.com/api/owner/requests/r/project',{method:'POST',headers:{origin:'https://example.com','content-type':'application/json'},body:JSON.stringify({action:'start',signature_source:'external',offer_id:'o',offer_version:1,expectedRequestUpdatedAt:'now',signatures:true,payment:true,inputs_ready:true,external_signed_on:'2026-09-30',external_parties:'Sample LLC / Example Contractor LLC',external_kept_copy:true,external_copy_reference:'Synthetic copy',next_update_on:''})}),locals:{owner:{email:'owner@example.com'},runtime:{env:{...env,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}}} as never);
+ expect(response.status).toBe(409);expect(sql.prepare('SELECT count(*) n FROM software_projects').get().n).toBe(0);
+ expect(sql.prepare("SELECT count(*) n FROM software_agreements WHERE status='client_signed'").get().n).toBe(2);
+});
+
+it.each(['legal_name', 'entity_type', 'state', 'country', 'business_address', 'signer_name', 'signer_title', 'reviewer_name', 'reviewer_email', 'approver_name', 'approver_email', 'notice_email'])('maps control characters in %s to a field error in browser and API validation', async field => {
+  const { resolveClientDetails } = await import('~/lib/agreement-draft');
+  const { jurisdiction, portfolio, naming, ...rest } = client;
+  const values = { ...rest, state: jurisdiction, portfolio_choice: 'private', [field]: 'Example\u0001 LLC' };
+  const resolved = resolveClientDetails(values, 'client@example.com');
+  expect(resolved).toEqual({ ok: false, errors: { [field]: 'Remove unusual characters from this field.' } });
+  for (const route of ['review', 'draft']) {
+    const { POST } = route === 'review' ? await import('~/pages/api/offer/[token]/review') : await import('~/pages/api/offer/[token]/draft');
+    const response = await POST({ params: { token }, locals: { runtime: { env } }, request: new Request(request().url, { method: 'POST', headers: { cookie: `agreement_session=${token}`, origin: 'https://example.com', 'content-type': 'application/json' }, body: JSON.stringify({ csrf_nonce: 'csrf', values }) }) } as never);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ ok: false, error: 'Check the highlighted details.', errors: { [field]: 'Remove unusual characters from this field.' } });
+  }
+});
+it('maps unfamiliar draft validation issues to a generic message on the field', async () => {
+  const { resolveClientDetails } = await import('~/lib/agreement-draft');
+  expect(resolveClientDetails({ signer_title: 123 }, 'client@example.com')).toEqual({ ok: false, errors: { signer_title: 'Check this field.' } });
+  expect(resolveClientDetails({ legal_name: 'x'.repeat(201) }, 'client@example.com')).toEqual({ ok: false, errors: { legal_name: 'Check this field.' } });
 });

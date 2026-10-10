@@ -7,7 +7,6 @@ import {
   clientAgreementSchema,
   contractorSchema,
   consentText,
-  authorityText,
   intentText,
 } from './agreement-fields';
 import {
@@ -250,11 +249,17 @@ export async function signAgreements(
   const values = JSON.parse(toSign[0].values_json),
     client = clientAgreementSchema.parse(values.client),
     at = new Date().toISOString(),
-    receipt = crypto.randomUUID(),
-    action = toSign.length === 2 ? 'Sign MSA and SOW' : 'Sign SOW';
+    receipt = crypto.randomUUID();
+  const draft = await db.prepare('SELECT values_json FROM software_agreement_drafts WHERE offer_id=? AND recipient_email=?').bind(offer.id,session.recipient_email).first<{values_json:string}>();
+  if (draft) {
+    const {resolveClientDetails} = await import('./agreement-draft');
+    const resolved=resolveClientDetails(JSON.parse(draft.values_json),session.recipient_email);
+    if (!resolved.ok || JSON.stringify(resolved.client)!==JSON.stringify(client)) throw new Error('Your details changed. Review the agreement again.');
+  }
   await db.batch([
     liveSigningGuard(db, offer.id, session.link_hash!, session.recipient_email),
     sessionGuard(db, session),
+    ...(draft ? [softwareGuard(db,'SELECT 1 FROM software_agreement_drafts WHERE offer_id=? AND recipient_email=? AND values_json=?',[offer.id,session.recipient_email,draft.values_json])] : []),
     ...reusedMsaGuard(db, offer),
     db
       .prepare(
@@ -290,7 +295,6 @@ export async function signAgreements(
         null,
         receipt,
         at,
-        action,
         documents,
         request,
       ),
@@ -301,6 +305,7 @@ export async function signAgreements(
         )
         .bind(at, a.id),
     ]),
+    db.prepare('DELETE FROM software_agreement_drafts WHERE offer_id=? AND recipient_email=?').bind(offer.id,session.recipient_email),
     db
       .prepare(
         "INSERT INTO software_agreement_notifications(agreement_id,kind,email) VALUES(?,'signature-receipt',?)",
@@ -338,7 +343,6 @@ function signatureInsert(
   owner: string | null,
   receipt: string,
   at: string,
-  action: string,
   documents: { id: string; hash: string }[],
   request: Request,
 ) {
@@ -349,7 +353,7 @@ function signatureInsert(
     throw new Error('Browser evidence exceeds its limits.');
   return db
     .prepare(
-      `INSERT INTO software_agreement_signatures(id,agreement_id,party,typed_name,title,consent_text,authority_text,consent_version,consent_at,signed_at,document_sha256,session_token_hash,owner_subject,verified_email,verified_at,intent_text,document_list_json,receipt_id,ip_address,user_agent) VALUES(?,?,?,?,?,?,?,'website-signing-v1',?,?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO software_agreement_signatures(id,agreement_id,party,typed_name,title,consent_text,consent_version,consent_at,signed_at,document_sha256,session_token_hash,owner_subject,verified_email,verified_at,verification_method,intent_text,document_list_json,receipt_id,ip_address,user_agent) VALUES(?,?,?,?,?,?,'website-signing-v2',?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     )
     .bind(
       crypto.randomUUID(),
@@ -357,8 +361,7 @@ function signatureInsert(
       party,
       name,
       title,
-      consentText,
-      authorityText(legalParty),
+      consentText(legalParty, party === 'contractor'),
       at,
       at,
       a.text_sha256,
@@ -366,7 +369,8 @@ function signatureInsert(
       owner,
       email,
       verified,
-      intentText(action),
+      party === 'client' ? 'verified by one-time email link' : 'verified by owner authentication',
+      intentText(party === 'contractor'),
       signatureIds(documents),
       receipt,
       ip,
@@ -421,7 +425,6 @@ export async function countersignAgreements(
         actor,
         receipt,
         at,
-        pending.length === 2 ? 'Countersign MSA and SOW' : 'Countersign SOW',
         documents,
         request,
       ),

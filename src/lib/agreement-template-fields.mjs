@@ -40,7 +40,6 @@ export const templateFields = {
     'sow.approver_email',
     'sow.portfolio',
     'sow.naming',
-    'sow.initials',
     'sow.attachments',
     'msa.effective_on',
     'msa.template_version',

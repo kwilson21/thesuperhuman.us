@@ -24,8 +24,6 @@ const schema = z.discriminatedUnion('action', [
     documents,
     typed_name: cleanText(200).refine(Boolean),
     consent: z.literal(true),
-    authority: z.literal(true),
-    intent: z.literal(true),
   }),
   z.object({
     action: z.literal('abandon'),
@@ -119,7 +117,7 @@ const post: APIRoute = async ({ request, locals, params }) => {
         db.prepare("UPDATE software_offers SET status='superseded',updated_at=? WHERE id=? AND status='sent'").bind(at, offer.id),
         db.prepare('UPDATE software_offer_links SET revoked_at=? WHERE request_id=? AND revoked_at IS NULL').bind(at, params.id),
         db.prepare('UPDATE software_agreement_sessions SET revoked_at=? WHERE offer_id=? AND revoked_at IS NULL').bind(at, offer.id),
-        db.prepare('UPDATE software_agreement_challenges SET used_at=? WHERE offer_id=? AND used_at IS NULL').bind(at, offer.id),
+        db.prepare('UPDATE software_agreement_links SET used_at=? WHERE offer_id=? AND used_at IS NULL').bind(at, offer.id),
       ]);
     } else {
       const agreement = await db

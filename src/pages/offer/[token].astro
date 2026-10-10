@@ -14,4 +14,4 @@ Astro.response.headers.set('cache-control', 'private, no-store');
 Astro.response.headers.set('x-robots-tag', 'noindex, nofollow');
 Astro.response.headers.set('referrer-policy', 'no-referrer');
 ---
-<SoftwareOffer offer={offer} temporarilyUnavailable={!db} signingUrl={sent?.msa_template_id && db && await signingEnabled(db) ? `/offer/${Astro.params.token}/sign` : undefined} />
+<SoftwareOffer turnstileSiteKey={Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY??import.meta.env.PUBLIC_TURNSTILE_SITE_KEY} offer={offer} temporarilyUnavailable={!db} signingUrl={sent?.msa_template_id && db && await signingEnabled(db) ? `/offer/${Astro.params.token}/sign` : undefined} />

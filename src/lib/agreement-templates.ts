@@ -102,6 +102,7 @@ export function validateTemplate(kind: AgreementKind, text: string) {
   return text.replace(/\r\n?/g, '\n');
 }
 function lookup(values: Record<string, unknown>, path: string): string {
+  if (path === 'msa.source_revision') return 'v2026-09-30';
   let value: unknown = values;
   for (const part of path.split('.'))
     value =
@@ -119,7 +120,7 @@ export function renderAgreement(
   validateTemplate(kind, template);
   const fill = (t: string, v: Record<string, unknown>) =>
     t.replace(/{{([a-z_]+\.[a-z_0-9]+)}}/g, (_, p) => lookup(v, p));
-  const rendered = template.replace(
+  const rendered = template.replaceAll('Interim v2026-09-30', 'v2026-09-30').replace(
     /{{#milestones}}([\s\S]*?){{\/milestones}}|{{([a-z_]+\.[a-z_0-9]+)}}/g,
     (_, block, path) => {
       if (path) return lookup(values, path);

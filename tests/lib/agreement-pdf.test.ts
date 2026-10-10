@@ -51,7 +51,7 @@ it('renders selectable full legal text, Unicode, wrapped long words, certificate
   const result = await renderAgreementPacket(env, [document('msa', text), sow], [{}, { signatures: [{ verified_email: 'client@example.test', ip_address: '192.0.2.1', user_agent: 'Synthetic browser', receipt_id: 'receipt-2' }] }]);
   const pdf = await PDFDocument.load(result);
   const extracted = extract(pdf);
-  expect(extracted.replace(/(?:Master Services Agreement|Statement of Work) · Template v1/g, '').replace(/Page \d+ of \d+ \| website-pdf-v2/g, '').replace(/\s/g, '')).toContain(text.replace(/\s/g, ''));
+  expect(extracted.replace(/(?:Master Services Agreement|Statement of Work) · v2026-09-30/g, '').replace(/Page \d+ of \d+ \| website-pdf-v2/g, '').replace(/\s/g, '')).toContain(text.replace(/\s/g, ''));
   expect(extracted).toContain('client@example.test');
   expect(extracted).toContain('192.0.2.1');
   expect(extracted).toContain('Synthetic browser');
@@ -101,7 +101,7 @@ it('formats PDF certificate dates in New York without changing source evidence',
   expect(text).toContain('Sep 30, 2026, 9:15 AM EDT');
   expect(text).toContain('Dec 31, 2025, 9:15 PM EST');
   expect(text).not.toContain('2026-09-30T');
-  expect(text).not.toContain('2026-09-30');
+  expect(text).not.toContain('2026-09-30T13:15:43.382Z');
   expect(JSON.stringify(certificate)).toBe(original);
 });
 
@@ -111,18 +111,25 @@ async function checkTemplatePacket(templateFile: string | URL, headings: string[
   const terms: OfferTerms = { outcome:'Client tracker',summary:'One shared view',milestones:[{name:'Tracker',deliverables:['A shared view'],acceptance:['Add a client'],feeCents:240000}],paymentMode:'standard',clientInputs:'Synthetic sample',exclusions:'Production rollout',timing:'Agreed dates' };
   const details = agreementDetailsSchema.parse({ planned_start:'2026-10-01',planned_end:'2026-10-20',environment:'Browser prototype',operating_responsibilities:'Client',update_rhythm:'Weekly',milestones:[{start:'2026-10-01',target:'2026-10-20',handoff:'Source and notices'}] });
   const contractor = contractorSchema.parse({legal_name:'Example Contractor LLC',entity_jurisdiction:'Wyoming LLC',signer_name:'Example Owner',signer_title:'Representative',notice_email:'owner@example.com',business_address:'200 Example Business Street',registered_agent_confirmed:true});
-  const client = { business_engagement:true as const,legal_name:'Example Client LLC',entity_type:'LLC',jurisdiction:'Wyoming',business_address:'100 Example Business Street',notice_email:'notices@example.com',signer_name:'Example Signer',signer_title:'Representative',reviewer_name:'Reviewer',reviewer_email:'reviewer@example.com',approver_name:'Approver',approver_email:'approver@example.com',portfolio:'deny' as const,naming:false,initials:'ES' };
+  const client = { legal_name:'Example Client LLC',entity_type:'LLC',jurisdiction:'Wyoming',business_address:'100 Example Business Street',notice_email:'notices@example.com',signer_name:'Example Signer',signer_title:'Representative',reviewer_name:'Reviewer',reviewer_email:'reviewer@example.com',approver_name:'Approver',approver_email:'approver@example.com',portfolio:'deny' as const,naming:false };
   const values = agreementValues(terms, details, client, contractor, {effective_on:'2026-09-30',msa_version:'2026-09-30 / template 1',sow_number:'SOW-1',offer_version:1,template_version:1});
   const docs = (['msa','sow'] as const).map(kind => document(kind, renderAgreement(kind, templates[kind], values)));
   for (const doc of docs) doc.text_sha256 = await hashBytes(new TextEncoder().encode(doc.canonical_text));
-  const certificates = docs.map(doc => ({document_id:doc.id,document_sha256:doc.text_sha256,effective_on:'2026-09-30',executed_at:'2026-09-30T13:25:00Z',versions:{template:1,offer:1},signatures:['client','contractor'].map(party=>({party,typed_name:party==='client'?'Example Signer':'Example Owner',title:'Representative',verified_email:party==='client'?'signer@example.com':'owner@example.com',verified_at:'2026-09-30T13:23:00Z',consent_at:'2026-09-30T13:25:00Z',signed_at:'2026-09-30T13:25:00Z',ip_address:'192.0.2.1',user_agent:'Synthetic browser 🧪',consent_text:'Electronic records consent',authority_text:'Authority for '+party,intent_text:'Signature intent for '+party}))}));
+  const certificates = docs.map(doc => ({document_id:doc.id,document_sha256:doc.text_sha256,effective_on:'2026-09-30',executed_at:'2026-09-30T13:25:00Z',versions:{template:1,offer:1,version_label:'v2026-09-30',source_revision:'private-source-revision'},signatures:['client','contractor'].map(party=>({party,typed_name:party==='client'?'Example Signer':'Example Owner',title:'Representative',verified_email:party==='client'?'signer@example.com':'owner@example.com',verified_at:'2026-09-30T13:23:00Z',consent_at:'2026-09-30T13:25:00Z',signed_at:'2026-09-30T13:25:00Z',ip_address:'192.0.2.1',user_agent:'Synthetic browser 🧪',consent_version:'website-signing-v2-'+party,consent_text:'Electronic records consent',intent_text:'Signature intent for '+party}))}));
   const pdf = await PDFDocument.load(await renderAgreementPacket({} as Env, docs, certificates));
   const text = extract(pdf).replace(/\s+/g,' ');
   for (const expected of [...headings,'Example Client LLC','Client tracker','Signed electronically by Example Signer, Representative, on Sep 30, 2026, 9:25 AM EDT']) expect(text).toContain(expected);
   expect(text).not.toContain('client.legal_name:');
   expect(text).not.toContain('{{');
   const certificateText = text.slice(text.indexOf('Signing certificate'));
-  for (const label of ['Party','Typed name','Title','Verified email','Verified at (New York)','Consent at (New York)','Signed at (New York)','IP address','Browser','Documents','Template version','SHA-256']) expect(certificateText).toContain(label);
+  for (const label of ['Party','Typed name','Title','Verified email','Verified at (New York)','Consent at (New York)','Signed at (New York)','IP address','Browser','Documents','Agreement version','Consent version','SHA-256']) expect(certificateText).toContain(label);
+  expect(text).toContain('v2026-09-30');
+  expect(text).not.toContain('Template v1');
+  expect(text).not.toContain('Template version');
+  expect(text).not.toContain('Source revision');
+  expect(text).not.toContain('private-source-revision');
+  for (const party of ['client','contractor']) expect(certificateText).toContain('website-signing-v2-'+party);
+  expect(certificateText).toContain('Agreement version v2026-09-30');
   expect(certificateText).not.toMatch(/[{}]/);
   const names = pdf.catalog.lookup(PDFName.of('Names'), PDFDict).lookup(PDFName.of('EmbeddedFiles'), PDFDict).lookup(PDFName.of('Names'), PDFArray);
   const file = names.lookup(1, PDFDict).lookup(PDFName.of('EF'), PDFDict).lookup(PDFName.of('F')) as PDFRawStream;

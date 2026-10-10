@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { resolveClientDetails, saveAgreementDraft } from '~/lib/agreement-draft';
 import { z } from 'astro/zod';
 import { agreementSession, agreementJson, signingEnabled } from '~/lib/agreement-access';
 import { nativeAgreementRoute, agreementRequest, nativeAgreementResponse } from '~/lib/agreement-request';
@@ -36,17 +37,20 @@ const post: APIRoute = async ({ request, locals, params }) => {
     session = offer ? await agreementSession(db, request, 'agreement', offer.id) : null;
   if (!(await signingEnabled(db)) || !session)
     return agreementJson(
-      { ok: false, error: 'Request a fresh code, then review the agreement again.' },
+      { ok: false, error: 'Open a fresh email link to keep going. Your saved details will be here.' },
       401,
     );
   if (!input.success || input.data.csrf_nonce !== session.csrf_nonce)
     return agreementJson({ ok: false, error: 'Reload and try again.' }, 403);
   try {
+    const resolved = resolveClientDetails(input.data.values, session.recipient_email);
+    if (!resolved.ok) return agreementJson({ok:false,error:'Check the highlighted details.',errors:resolved.errors},400);
+    await saveAgreementDraft(db, offer!, session, input.data.values);
     return nativeAgreementResponse(
       request,
       agreementJson({
         ok: true,
-        ...(await reviewAgreements(db, offer!, session, input.data.values)),
+        ...(await reviewAgreements(db, offer!, session, resolved.client)),
       }),
       `/offer/${params.token}/sign?review=1`,
     );
@@ -54,7 +58,7 @@ const post: APIRoute = async ({ request, locals, params }) => {
     return agreementJson(
       {
         ok: false,
-        error: error instanceof Error ? error.message : 'The agreement could not be reviewed.',
+        error: error instanceof Error && !error.message.startsWith('[') ? error.message : 'The agreement could not be reviewed.',
       },
       409,
     );

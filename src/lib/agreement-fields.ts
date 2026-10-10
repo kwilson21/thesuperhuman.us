@@ -151,7 +151,6 @@ export function validateAgreementDetails(input: unknown, terms: OfferTerms) {
 }
 export const clientAgreementSchema = z
   .object({
-    business_engagement: z.literal(true),
     legal_name: required(200),
     entity_type: required(200),
     jurisdiction: required(100),
@@ -165,18 +164,19 @@ export const clientAgreementSchema = z
     signer_title: required(200),
     portfolio: z.enum(['allow', 'deny']),
     naming: z.boolean().default(false),
-    initials: required(20),
   })
   .strict()
   .refine((v) => v.portfolio === 'allow' || !v.naming, 'Naming requires portfolio permission.');
 export type ClientAgreement = z.infer<typeof clientAgreementSchema>;
 export const signatureReference =
   'Signature recorded in the signing certificate for this document.';
-export const consentText =
-  'I agree to use electronic records and signatures for the documents listed above. I can download and keep a complete copy.';
-export const intentText = (action: string) =>
-  `By selecting ${action}, I intend my typed full legal name to be my electronic signature on the exact documents I reviewed.`;
-export const authorityText = (party: string) => `I am authorized to bind ${party}.`;
+export const consentText = (party: string, owner = false) => owner
+  ? "I agree to sign and receive these documents electronically, and I'm authorized to sign for The Superhuman Group LLC."
+  : `I agree to sign and receive these documents electronically, and I'm authorized to sign for ${party}, a business. I can download and keep a complete copy.`;
+export const intentText = (owner = false) => owner
+  ? 'Countersigning applies your name above as your electronic signature on the agreement and statement of work you reviewed.'
+  : 'Signing applies your name above as your electronic signature on the agreement and statement of work you just reviewed.';
+export const agreementVersionLabel = 'v2026-09-30';
 export function agreementValues(
   terms: OfferTerms,
   details: AgreementDetails,
@@ -233,7 +233,6 @@ export function agreementValues(
     choices: {
       portfolio: client.portfolio === 'allow' ? 'Allow' : 'Do not allow',
       naming: client.naming ? 'Yes' : 'No',
-      initials: client.initials,
     },
     milestones: terms.milestones.map((m, i) => ({
       number: String(i + 1),
@@ -265,6 +264,7 @@ export function agreementValues(
       effective_on: system.msa_version.split(' / ')[0],
       template_version: system.msa_version.split('template ')[1],
       source_revision: 'Interim v2026-09-30',
+      version_label: agreementVersionLabel,
     },
     signature: { client_record: signatureReference, contractor_record: signatureReference },
     details: {
@@ -293,7 +293,6 @@ export function agreementValues(
       approver_email: client.approver_email,
       portfolio: base.choices.portfolio,
       naming: base.choices.naming,
-      initials: client.initials,
       attachments: base.system.attachments,
     },
     milestones: base.milestones.map((m, i) => ({

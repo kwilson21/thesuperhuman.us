@@ -387,35 +387,39 @@ it('renders only the client project invoices with private payment links and pres
 });
 
 
-it('renders agreement sheets with step metadata, review aside and inline native confirmations', async () => {
+it('renders one signing page, returning details, waiting and both-signed actions', async () => {
   const { sql, db } = await fixture();
   try {
     const session = 's'.repeat(43), sessionHash = await hashOfferToken(session);
     sql.prepare("INSERT INTO software_agreement_templates VALUES ('msa','msa',1,'Template',?,1,'now','owner')").run('a'.repeat(64));
-    sql.exec("INSERT INTO software_agreement_clients VALUES ('client','alex@example.com','Example LLC','example llc','LLC','Wyoming','Business address','notice@example.com','now'); INSERT INTO software_agreement_challenges(id,purpose,offer_id,recipient_email,code_hash,issued_at,expires_at) VALUES ('challenge','agreement','current','alex@example.com','synthetic','now','2099-01-01')");
-    sql.exec("UPDATE software_signing_settings SET software_signing_enabled=1; UPDATE software_offers SET msa_template_id='msa',recipient_email_snapshot='alex@example.com',agreement_details_json='{\"attachments\":[]}' WHERE id='current'");
+    sql.exec("INSERT INTO software_agreement_clients VALUES ('client','alex@example.com','Example LLC','example llc','LLC','Wyoming','Business address','notice@example.com','now'); INSERT INTO software_agreement_links(id,purpose,offer_id,recipient_email,token_hash,issued_at,expires_at) VALUES ('challenge','agreement','current','alex@example.com','synthetic','now','2099-01-01')");
+    sql.exec("UPDATE software_signing_settings SET software_signing_enabled=1; UPDATE software_offers SET msa_template_id='msa',recipient_email_snapshot='alex@example.com',agreement_details_json='{}' WHERE id='current'");
     sql.prepare("INSERT INTO software_agreement_sessions VALUES (?,'agreement','current',?,'alex@example.com','challenge','now','2099-01-01',NULL,'csrf')").run(sessionHash, await hashOfferToken(token));
+    sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='current'").run(JSON.stringify({planned_start:'2026-10-01',planned_end:'2026-10-20',environment:'Browser',operating_responsibilities:'Client operates',update_rhythm:'Weekly',milestones:terms.milestones.map(()=>({start:'2026-10-01',target:'2026-10-20',handoff:'Source'}))}));
+    sql.prepare("UPDATE owner_requests SET details_json=? WHERE id='r'").run(JSON.stringify({company:'Example LLC'}));
     const container = await AstroContainer.create();
     const render = (query = '') => container.renderToString(signPage, { params: { token }, request: new Request(`https://thesuperhuman.us/offer/${token}/sign${query}`, { headers: { cookie: `agreement_session=${session}` } }), locals: { runtime: { env: { MUSIC_DB: db } } } as any });
     let html = await render();
-    expect(html).toContain('Your agreement details.');
-    expect(html).toContain('Private agreement · Step 2 of 3');
-    expect(html).toMatch(/<aside[^>]*class="agreement-aside"/);
-    expect(html).toContain('Before you sign');
-    expect(html).toMatch(/<label class="confirmation[^"]*"[^>]*><input type="radio"/);
-    expect(html).toMatch(/<label class="confirmation[^"]*"[^>]*><input type="checkbox"/);
+    expect(html).toContain('Ready to sign.');expect(html).toContain('value="Example LLC"');
+    expect(html).not.toContain('Step 2 of 3');expect(html).not.toContain('Before you sign');
+    expect(html.match(/type="checkbox"/g)).toHaveLength(1);expect(html.match(/type="radio"/g)).toHaveLength(3);
+    expect(html).toContain('data-terms-reader');expect(html).toContain('v2026-09-30');
+    sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES('reused','msa','old','r','client','msa','executed','Original executed MSA',?,?,'now','2026-09-30','old-session')").run('b'.repeat(64),JSON.stringify({client:{legal_name:'Example LLC',entity_type:'LLC',jurisdiction:'Wyoming',business_address:'Business address'}}));
+    sql.exec("UPDATE software_offers SET reused_msa_id='reused' WHERE id='current'");
+    html=await render();expect(html).toContain('Same as last time: Example LLC, LLC, Wyoming, Business address.');expect(html).toMatch(/data-business-details[^>]*hidden/);
+    sql.prepare("INSERT INTO software_agreement_drafts VALUES('current','alex@example.com',?,'now')").run(JSON.stringify({legal_name:'Example LLC',signer_name:'Alex',entity_type:'LLC',state:'Wyoming',business_address:'Updated business address'}));
+    html=await render();expect(html).not.toContain('Same as last time');expect(html).toContain('Updated business address');expect(html).not.toMatch(/data-business-details[^>]*hidden/);
+    sql.exec("DELETE FROM software_agreement_drafts WHERE offer_id='current'");
+    sql.exec("UPDATE software_offers SET reused_msa_id=NULL WHERE id='current'");
     const values = { client: { signer_name: 'Example Signer', signer_title: 'Owner', legal_name: 'Example LLC', portfolio: 'deny', naming: false }, contractor: { signer_name: 'Example Contractor', legal_name: 'Example Contractor LLC' }, system: { payment: 'Standard' }, choices: { portfolio: 'Do not allow', naming: 'No' } };
     sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES ('sow','sow','current','r','client','msa','review','Exact SOW',?,?,'now','2026-09-30',?)").run('a'.repeat(64), JSON.stringify(values), sessionHash);
     html = await render('?review=1');
-    expect(html).toContain('Review your exact agreement.');
-    expect(html).toContain('Private agreement · Step 3 of 3');
-    expect(html).toContain('What you’re signing');
-    expect(html).toContain('id="review-sow"');
-    expect(html).toMatch(/<label class="confirmation[^"]*"[^>]*><input type="checkbox" name="consent"/);
+    expect(html).toContain('Ready to sign.');expect(html).toContain('Exact SOW');
+    expect(html).not.toContain('SHA-256');expect(html.match(/type="checkbox"/g)).toHaveLength(1);
     sql.exec("UPDATE software_agreements SET status='client_signed'");
     html = await render();
-    expect(html).toContain('Your signature is saved.');
-    expect(html).toContain('Waiting for Kazon to countersign.');
+    expect(html).toContain('Signed. Over to Kazon.');
+    expect(html).toContain('Kazon countersigns next.');
     html = await container.renderToString(agreementPanel, { props: { requestId: 'r', offerId: 'current' }, locals: { runtime: { env: { MUSIC_DB: db } } } as any });
     expect(html).toContain('Countersign the agreement.');
     expect(html).toContain('countersign-columns');
@@ -423,11 +427,16 @@ it('renders agreement sheets with step metadata, review aside and inline native 
     expect(html).toContain('Payment · Standard');
     expect(html).toContain('Review filled SOW');
     expect(html).toContain('data-agreement-review-link');
+    expect(html).toContain('Countersign as Example Contractor');
+    expect(html).not.toContain('name=\"authority\"');
+    expect(html).toContain("Countersigning applies your name above");
     expect(html.indexOf('Client’s signed choices')).toBeLessThan(html.indexOf('value="countersign"'));
     sql.exec("UPDATE software_agreements SET status='executed'");
     html = await render();
-    expect(html).toContain('Signed by both parties.');
-    expect(html).toContain('Agreement archive');
+    expect(html).toContain('Signed by both of you.');
+    expect(html).toContain('Open your project page');
+    sql.exec("INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,created_by,created_at,updated_at) VALUES('signing-deposit','r','current',0,'deposit',120000,7,'open','https://example.com/deposit','owner','now','now')");
+    html=await render();expect(html).toContain('Pay the deposit ↗');expect(html).toContain('https://example.com/deposit');
   } finally { sql.close(); }
 });
 
@@ -477,7 +486,7 @@ it('reads immutable agreed fees, dates and complete legal text without enabling 
   const session='a'.repeat(72), hash='b'.repeat(64);
   const fixed:OfferTerms={...terms,paymentMode:'standard',clientInputs:'Synthetic access and sample.',exclusions:'Live rollout.',timing:'Dates are conditional on agreed client inputs.',milestones:[{...terms.milestones[0],feeCents:101,checkpoint:{label:'Working view',cancellationPercent:80}}]};
   const owner=agreementDetailsSchema.parse({planned_start:'2026-10-01',planned_end:'2026-10-20',environment:'Synthetic browser environment',operating_responsibilities:'Client operates the delivered tool.',update_rhythm:'Every Thursday',milestones:[{start:'2026-10-02',target:'2026-10-19',handoff:'Source and notices',checkpoint_criteria:'Status is saved',checkpoint_evidence:'Synthetic preview'}],support:'Agreed support only',expenses_taxes:'No extra expenses'});
-  const values=agreementValues(fixed,owner,{business_engagement:true,legal_name:'Example Client LLC',entity_type:'LLC',jurisdiction:'WY',business_address:'Example business address',notice_email:'alex@example.com',reviewer_name:'Alex',reviewer_email:'alex@example.com',approver_name:'Alex',approver_email:'alex@example.com',signer_name:'Alex',signer_title:'Owner',portfolio:'deny',naming:false,initials:'AE'},{legal_name:'Example Contractor LLC',entity_jurisdiction:'WY',signer_name:'Example Owner',signer_title:'Owner',notice_email:'owner@example.com',business_address:'Registered agent address',registered_agent_confirmed:true},{effective_on:'2026-09-30',msa_version:'2026-09-30 / template 1',sow_number:'SOW-example',offer_version:2,template_version:1});
+  const values=agreementValues(fixed,owner,{legal_name:'Example Client LLC',entity_type:'LLC',jurisdiction:'WY',business_address:'Example business address',notice_email:'alex@example.com',reviewer_name:'Alex',reviewer_email:'alex@example.com',approver_name:'Alex',approver_email:'alex@example.com',signer_name:'Alex',signer_title:'Owner',portfolio:'deny',naming:false},{legal_name:'Example Contractor LLC',entity_jurisdiction:'WY',signer_name:'Example Owner',signer_title:'Owner',notice_email:'owner@example.com',business_address:'Registered agent address',registered_agent_confirmed:true},{effective_on:'2026-09-30',msa_version:'2026-09-30 / template 1',sow_number:'SOW-example',offer_version:2,template_version:1});
   try {
     sql.prepare("INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES (?,'alex@example.com','now','2099-01-01','now')").run(createHash('sha256').update(session).digest('hex'));
     sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,next_update_on) VALUES ('r','current',?,'standard','now','now','2026-09-30','PRIVATE OWNER','now','now','2026-11-01')").run(JSON.stringify(fixed));
