@@ -3,7 +3,7 @@ export const prerender = false;
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import Footer from '~/components/Footer.astro';
 import { mainSitePath } from '~/lib/host-routing';
-import { softwareLabels, softwarePaths, timingLabels, budgetLabels, approverLabels } from '~/lib/software-inquiry';
+import { softwarePaths } from '~/lib/software-inquiry';
 import '~/styles/audio-intake.css';
 import '~/styles/software-intake.css';
 const env = Astro.locals.runtime?.env;
@@ -11,74 +11,66 @@ const siteKey = env?.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 const available = Boolean(siteKey && env?.MUSIC_DB && env.TURNSTILE_SECRET_KEY && env.RATE_LIMIT);
 const requested = Astro.url.searchParams.get('path');
 const selected = requested === 'idea' || requested === 'workflow' ? requested : null;
-const questions = {
-  workflow: [
-    ['today', 'Walk me through it as it works now: who does it, how often, and where it gets stuck.', 'For example: Every Monday our ops lead copies orders from three supplier emails into a spreadsheet. It takes about two hours and mistakes slip through.', 2000],
-    ['audience', 'The people who’d use it, and roughly how many.', 'For example: Four people on our operations team, plus the manager who reads the weekly report.', 1000],
-    ['firstResult', 'Something small you could try within a few weeks.', 'For example: Orders from all three suppliers land in one list each morning, with anything unusual flagged.', 2000],
-  ],
-  idea: [
-    ['idea', 'In a sentence or two, as you’d explain it to a friend.', 'For example: An app that lets food bank volunteers pick their own shifts, so coordinators stop juggling group texts.', 1000],
-    ['audienceToday', 'Real people you could put it in front of, and how they manage without it.', 'For example: About 30 volunteers and two coordinators. Today they sign up over group texts and a shared spreadsheet.', 1000],
-    ['firstVersion', 'Pick the single most important action. Everything else can wait.', 'For example: Let a volunteer see open shifts for the next two weeks and claim one.', 1000],
-    ['signal', 'What would you see after a few weeks of real use?', 'For example: Most volunteers use it for a month without going back to texts.', 500],
-  ],
-} as const;
 const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ?? Astro.url.host, path);
 ---
 <BaseLayout title="Start a software project · Kazon Wilson" description="Share a short software project brief for Kazon Wilson to review.">
   <article class="site-shell intake-page software-intake">
     <p class="intake-return"><a class="site-link" href={href('/services#software')}>Back to Software <span aria-hidden="true">←</span></a></p>
-    <ol data-intake-progress class="intake-progress" aria-label="Your progress"><li aria-current="step"><span class="step-number">1</span> Project</li><li><span class="step-number">2</span> Details</li><li><span class="step-number">3</span> Review</li></ol>
-    <form id="software-inquiry" data-available={available} novalidate>
+    <p class="intake-muted">Software brief</p>
+    <ol data-intake-progress class="intake-progress brief-dots" aria-label="Your progress">{Array.from({ length: 7 }, (_, i) => <li aria-current={i === 0 ? 'step' : undefined}><span class="step-number"><span class="sr-only">Question {i + 1} of 7</span></span></li>)}</ol>
+    <form id="software-inquiry" data-available={available} data-suggestion-sitekey={siteKey} novalidate>
       <noscript><p>Please enable JavaScript to use this form, or email <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>.</p></noscript>
-      <section data-step="0" aria-labelledby="software-step-one">
-        <h1 id="software-step-one" tabindex="-1">What are you working on?</h1>
-        <p class="intake-intro">Start with the problem or the idea.</p>
-        <p class="intake-muted software-step-help">A few sentences per question is plenty. Specific examples help most.</p>
-        <div class="intake-columns intake-service-columns">
-          <fieldset class="offer-list"><legend class="sr-only">Choose a starting point</legend>
-            {Object.entries(softwarePaths).map(([key, value]) => <label class="intake-offer"><input type="radio" name="path" value={key} checked={selected === key} /><span><strong>{value}</strong><small>{key === 'workflow' ? 'A focused tool, automation or integration for a task your team repeats.' : 'A first version people can try to help you decide what to build next.'}</small></span></label>)}
-            <p data-form-error="path" hidden></p>
-          </fieldset>
-          <div>
-            <p class="intake-muted" data-choose-path hidden={selected !== null}>Choose a starting point to see its questions.</p>
-            {Object.entries(questions).map(([path, items]) => <div data-questions={path} hidden={selected !== path}>
-              {path === 'idea' && <p class="software-idea-note">I build a first version people can try, not the whole product. These questions help us find the part worth testing first.</p>}
-              {items.map(([key, hint, example, max]) => <div><div class="intake-field">
-                <label for={`software-${key}`}>{softwareLabels[key]}</label>
-                <p id={`software-${key}-help`} class="intake-muted software-question-help">{hint}</p>
-                <textarea id={`software-${key}`} name={key} aria-describedby={`software-${key}-help`} placeholder={example} maxlength={max} rows="4" required={key !== 'signal'} disabled={selected !== path}></textarea>
-                </div>
-                <p data-form-error={key} hidden></p>
-              </div>)}
-            </div>)}
-            <p class="intake-footnote">Plain language is fine. We’ll work out the technical details together. Please leave out passwords, access details and real customer data.</p>
-          </div>
+      <section data-step="0">
+        <h1 tabindex="-1">What are you working on?</h1>
+        <fieldset class="offer-list"><legend class="sr-only">Choose a starting point</legend>
+          {Object.keys(softwarePaths).map(key => <label class="intake-offer"><input type="radio" name="path" value={key} checked={selected === key} /><span><strong>{key === 'workflow' ? 'A workflow that should be easier' : 'An idea to bring to life'}</strong></span></label>)}
+        </fieldset><p data-form-error="path" hidden></p>
+      </section>
+      {[1, 2].map(index => <section data-step={index} hidden>
+        <h1 tabindex="-1" data-question-title></h1>
+        <p class="intake-intro" data-question-hint></p>
+        <p class="intake-footnote">Plain language is fine. We’ll work out the technical details together. Please leave out passwords, access details and real customer data.</p>
+        <div class="intake-field brief-answer">
+          <label class="sr-only" for={`brief-answer-${index}`} data-answer-label></label>
+          <div class="brief-ghost" aria-hidden="true"><span data-ghost-prefix></span><span data-ghost-text></span></div>
+          <textarea id={`brief-answer-${index}`} rows="6" data-answer aria-describedby={`brief-help-${index}`} required={index === 1}></textarea>
         </div>
+        <div id={`brief-help-${index}`}>
+          <p class="intake-muted" data-accept-hint hidden></p>
+          <button type="button" class="sr-only" data-accept hidden></button>
+          <p class="intake-muted"><span data-suggestions-disclosure>Suggestions come from Cloudflare's AI, which sees only what you type in the answer boxes. <a href={href('/privacy#software-briefs')}>Privacy</a> · </span><span data-suggestions-off hidden>Suggestions are off. </span><button type="button" data-suggestions-toggle>Turn off</button></p>
+        </div>
+        <p data-form-error={index === 1 ? 'today' : 'firstResult'} hidden></p>
+        <button type="button" data-skip hidden={index !== 2}>Skip</button>
+      </section>)}
+      <section data-step="3" hidden>
+        <h1 tabindex="-1">When do you need it?</h1>
+        <fieldset class="offer-list"><legend class="sr-only">Timing</legend>
+          {[['flexible', 'Flexible'], ['date', 'By a date'], ['asap', 'As soon as possible']].map(([key, label]) => <label class="intake-offer"><input type="radio" name="timing" value={key} checked={key === 'flexible'} /><span>{label}</span></label>)}
+        </fieldset>
+        <label class="intake-field" data-date-field hidden>Needed by<input type="date" name="timingDate" /></label>
+        <p data-form-error="timingDate" hidden></p>
       </section>
-      <section data-step="1" aria-labelledby="software-step-two" hidden>
-        <h1 id="software-step-two" tabindex="-1">A few practical details.</h1><p class="intake-intro">Tell me how to reach you and where the decision stands.</p>
-        <div class="intake-columns intake-review-columns"><div class="intake-contact-fields">
-          <div class="intake-pair"><label class="intake-field" for="software-name">Your name<input id="software-name" name="name" autocomplete="name" maxlength="100" required /></label><label class="intake-field" for="software-email">Email<input id="software-email" name="email" type="email" autocomplete="email" maxlength="120" required /></label></div><p data-form-error="name" hidden></p><p data-form-error="email" hidden></p>
-          <label class="intake-field" for="software-company">{softwareLabels.company}<input id="software-company" name="company" autocomplete="organization" maxlength="120" /></label><p data-form-error="company" hidden></p>
-          <label class="intake-field" for="software-timing">Timing<select id="software-timing" name="timing" required><option value="">Choose one</option>{Object.entries(timingLabels).map(([key, value]) => <option value={key}>{value}</option>)}</select></label><p data-form-error="timing" hidden></p>
-          <label class="intake-field" for="software-timing-reason">{softwareLabels.timingReason}<input id="software-timing-reason" name="timingReason" maxlength="500" /></label><p data-form-error="timingReason" hidden></p>
-        </div><div>
-          <label class="intake-field" for="software-budget">Budget status<select id="software-budget" name="budgetStatus" aria-describedby="software-budget-help" required><option value="">Choose one</option>{Object.entries(budgetLabels).map(([key, value]) => <option value={key}>{value}</option>)}</select></label><p id="software-budget-help" class="intake-muted">Choose the closest status. A fixed price is agreed later, in writing.</p><p data-form-error="budgetStatus" hidden></p>
-          <label class="intake-field" for="software-budget-note">{softwareLabels.budgetNote}<input id="software-budget-note" name="budgetNote" aria-describedby="software-budget-note-help" maxlength="200" /></label><p id="software-budget-note-help" class="intake-muted">Private. A figure or range is fine.</p><p data-form-error="budgetNote" hidden></p>
-          <label class="intake-field" for="software-approver">{softwareLabels.approver}<select id="software-approver" name="approver" required><option value="">Choose one</option>{Object.entries(approverLabels).map(([key, value]) => <option value={key}>{value}</option>)}</select></label><p data-form-error="approver" hidden></p>
-          <div data-approver-role hidden><label class="intake-field" for="software-approver-role">{softwareLabels.approverRole}<input id="software-approver-role" name="approverRole" maxlength="120" /></label><p data-form-error="approverRole" hidden></p></div>
-        </div></div>
+      <section data-step="4" hidden>
+        <h1 tabindex="-1">Is there a budget you'd like to share?</h1>
+        <p class="intake-intro">Only if it helps. I'll quote a fixed price either way.</p>
+        <label class="intake-field">Amount (optional)<input name="budgetNote" type="number" min="0" step="0.01" inputmode="decimal" /></label>
+        <p data-form-error="budgetNote" hidden></p><button type="button" data-skip>Skip</button>
       </section>
-      <section data-step="2" aria-labelledby="software-step-three" hidden><h1 id="software-step-three" tabindex="-1">Here’s your project brief.</h1><p class="intake-intro">Check every answer before sending.</p>
-        <div class="intake-columns intake-review-columns"><div class="intake-review"><dl data-review></dl><div class="intake-edit"><button type="button" data-edit="0">Edit project</button><button type="button" data-edit="1">Edit details</button></div></div>
-          <div class="intake-service-detail"><h2>What happens next?</h2><p>I’ll read your brief and reply by email with a question, a proposed first milestone, or a note if it isn’t a fit. Sending it doesn’t book work or commit you to anything. No payment now.</p>
-            {available ? <div class="cf-turnstile" data-sitekey={siteKey}></div> : <p class="intake-unavailable">This preview isn’t connected to delivery yet. You can try every step; sending is unavailable.</p>}<p data-form-error="turnstileToken" hidden></p>
-          </div></div>
+      <section data-step="5" hidden>
+        <h1 tabindex="-1">Who should I reply to?</h1>
+        <label class="intake-field">Name<input name="name" autocomplete="name" maxlength="100" required /></label><p data-form-error="name" hidden></p>
+        <label class="intake-field">Email<input name="email" type="email" autocomplete="email" maxlength="120" required /></label><p data-form-error="email" hidden></p>
+        <label class="intake-field">Company, if you have one<input name="company" autocomplete="organization" maxlength="120" /></label><p data-form-error="company" hidden></p>
+      </section>
+      <section data-step="6" hidden>
+        <h1 tabindex="-1">Ready to send?</h1>
+        <div class="intake-review"><dl data-review></dl></div>
+        {available ? <div class="cf-turnstile" data-sitekey={siteKey}></div> : <p class="intake-unavailable">This preview isn't connected to delivery yet. You can try every step; sending is unavailable.</p>}
+        <p data-form-error="turnstileToken" hidden></p>
       </section>
       <p data-form-status role="status" tabindex="-1"></p>
-      <div class="intake-actions"><button type="button" data-back hidden>Back</button><button type="button" class="site-button" data-next>Continue</button><button type="submit" class="site-button" hidden disabled>Send project brief</button></div>
+      <div class="intake-actions"><button type="button" data-back hidden>Back</button><button type="button" class="site-button" data-next>Next</button><button type="submit" class="site-button" hidden disabled>Send brief</button></div>
       <p class="intake-reassurance" data-send-reassurance hidden>No booking or payment at this stage.</p>
     </form>
     <section id="software-success" hidden tabindex="-1" role="status">

@@ -1,11 +1,12 @@
 /** Shared interaction states; each form retains its own payload and server rules. */
-export function setupFormSubmission({ form, endpoint, payload, success, onSuccess, onConflict }: {
+export function setupFormSubmission({ form, endpoint, payload, success, onSuccess, onConflict, onSendingChange }: {
   form: HTMLFormElement;
   endpoint: string;
   payload: (data: FormData) => Record<string, unknown>;
   success: HTMLElement;
   onSuccess?: (result: Record<string, unknown>) => void;
   onConflict?: () => void;
+  onSendingChange?: (sending: boolean) => void;
 }) {
   const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
   const status = form.querySelector<HTMLElement>('[data-form-status]')!;
@@ -36,13 +37,16 @@ export function setupFormSubmission({ form, endpoint, payload, success, onSucces
 
     try {
       const data = new FormData(form);
+      const body = JSON.stringify({ ...payload(data), turnstileToken: String(data.get('cf-turnstile-response') ?? '') });
+      onSendingChange?.(true);
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...payload(data), turnstileToken: String(data.get('cf-turnstile-response') ?? '') }),
+        body,
         signal: AbortSignal.timeout(30_000),
       });
       const result = await response.json() as { ok?: boolean; errors?: Record<string, string>; error?: string };
+      onSendingChange?.(false);
       if (response.ok && result.ok === true) {
         onSuccess?.(result);
         form.hidden = true;
@@ -73,6 +77,7 @@ export function setupFormSubmission({ form, endpoint, payload, success, onSucces
       status.textContent = 'We couldn’t confirm your message was sent. Your text is still here. Try again or use email.';
       status.focus();
     } finally {
+      onSendingChange?.(false);
       pending = false;
       button.disabled = form.dataset.available !== 'true';
       button.textContent = label;

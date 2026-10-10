@@ -9,6 +9,10 @@ declare namespace App {
 }
 
 interface Env {
+  AI?: Ai;
+  BRIEF_SUGGEST_RATE_LIMIT?: RateLimit;
+  BRIEF_SUGGEST_SITE_LIMIT?: RateLimit;
+  SOFTWARE_SUGGESTIONS_ENABLED?: string;
   // Deployment-controlled email origin. Never populated from request headers.
   SITE_ORIGIN?: string;
   MUSIC_DB?: D1Database;

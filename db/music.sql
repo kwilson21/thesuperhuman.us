@@ -702,3 +702,9 @@ CREATE TABLE software_milestone_deposits (
   recorded_by TEXT NOT NULL,
   PRIMARY KEY (request_id,milestone_index)
 );
+CREATE TABLE brief_suggestion_budget (
+  day TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  count INTEGER NOT NULL,
+  PRIMARY KEY (day, scope)
+);

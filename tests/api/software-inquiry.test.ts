@@ -30,7 +30,7 @@ it('stores one verbatim software brief, audit, and no audio project, then return
   const response = await POST(context());
   expect(response.status).toBe(200);
   expect((await response.json() as { brief: unknown }).brief).toMatchObject({ today: 'First line\nSecond line', email: 'alex@example.com' });
-  expect(sql.prepare('SELECT kind,service_id,email,summary,details_json,submission_id FROM owner_requests').get()).toMatchObject({ kind: 'software', service_id: 'workflow', email: 'alex@example.com', summary: 'One place to see next steps.', submission_id: id });
+  expect(sql.prepare('SELECT kind,service_id,email,summary,details_json,submission_id FROM owner_requests').get()).toMatchObject({ kind: 'software', service_id: 'workflow', email: 'alex@example.com', summary: 'First line Second line', submission_id: id });
   const details = JSON.parse((sql.prepare('SELECT details_json FROM owner_requests').get() as { details_json: string }).details_json);
   expect(details).toMatchObject({ today: 'First line\nSecond line', approverRole: '' });
   expect(sql.prepare('SELECT COUNT(*) AS n FROM audio_projects').get()).toEqual({ n: 0 });
@@ -57,8 +57,7 @@ it('stores and returns only the selected idea questions, including the optional 
 it('validates each idea answer with the same plain messages and drops unknown keys', () => {
   const idea = { ...base, path: 'idea', idea: 'An idea', audienceToday: 'Volunteers', firstVersion: 'Claim a shift' };
   for (const [key, value, message] of [
-    ['idea', '', 'This answer is required.'], ['audienceToday', '', 'This answer is required.'],
-    ['firstVersion', '', 'This answer is required.'], ['idea', 'x'.repeat(1001), 'Keep this under 1000 characters.'],
+    ['idea', '', 'This answer is required.'], ['idea', 'x'.repeat(1001), 'Keep this under 1000 characters.'],
     ['audienceToday', 'x'.repeat(1001), 'Keep this under 1000 characters.'], ['firstVersion', 'x'.repeat(1001), 'Keep this under 1000 characters.'],
     ['signal', 'x'.repeat(501), 'Keep this under 500 characters.'], ...(['idea', 'audienceToday', 'firstVersion', 'signal'] as const).map(key => [key, '\u0001', 'Remove control characters.'] as const),
   ] as const) {
@@ -72,15 +71,15 @@ it('validates each idea answer with the same plain messages and drops unknown ke
 });
 
 it('keeps an emoji intact at the summary cutoff', () => {
-  const parsed = validateSoftwareInquiry({ ...base, firstResult: `${'a'.repeat(116)}😀${'b'.repeat(10)}` });
+  const parsed = validateSoftwareInquiry({ ...base, today: `${'a'.repeat(79)}😀${'b'.repeat(10)}` });
   expect(parsed.ok).toBe(true);
-  if (parsed.ok) expect(softwareRequest(parsed.value).summary).toBe(`${'a'.repeat(116)}😀…`);
+  if (parsed.ok) expect(softwareRequest(parsed.value).summary).toBe(`${'a'.repeat(79)}😀`);
 });
 
 it('keeps a joined emoji intact at the summary cutoff', () => {
-  const parsed = validateSoftwareInquiry({ ...base, firstResult: `${'a'.repeat(116)}👩‍💻${'b'.repeat(10)}` });
+  const parsed = validateSoftwareInquiry({ ...base, today: `${'a'.repeat(79)}👩‍💻${'b'.repeat(10)}` });
   expect(parsed.ok).toBe(true);
-  if (parsed.ok) expect(softwareRequest(parsed.value).summary).toBe(`${'a'.repeat(116)}👩‍💻…`);
+  if (parsed.ok) expect(softwareRequest(parsed.value).summary).toBe(`${'a'.repeat(79)}👩‍💻`);
 });
 
 it('orders workflow questions in the saved brief', () => {
@@ -142,7 +141,7 @@ it('does not undo a saved request when the owner notice fails', async () => {
 
 it('rejects invalid answers, unknown choices, line breaks, and unknown keys', () => {
   const expectedErrors: Record<string, string> = { path: 'Choose a starting point.', name: 'Add your name.', email: 'Add a valid email address.', timing: 'Choose one.', budgetStatus: 'Choose one.', approver: 'Choose one.', submissionId: 'Invalid submission ID.' };
-  for (const [key, value] of [['path', 'other'], ['today', ''], ['name', ''], ['email', ''], ['audience', ''], ['timing', ''], ['budgetStatus', ''], ['approver', ''], ['audience', 'x'.repeat(1001)], ['firstResult', ''], ['name', 'A\nB'], ['email', 'bad'], ['company', 'A\nB'], ['timing', 'soon'], ['budgetStatus', 'nope'], ['approver', 'nope'], ['submissionId', 'bad']] as const) {
+  for (const [key, value] of [['path', 'other'], ['today', ''], ['name', ''], ['email', ''], ['timing', ''], ['audience', 'x'.repeat(1001)], ['name', 'A\nB'], ['email', 'bad'], ['company', 'A\nB'], ['timing', 'soon'], ['budgetStatus', 'nope'], ['approver', 'nope'], ['submissionId', 'bad']] as const) {
     const result = validateSoftwareInquiry({ ...base, [key]: value });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errors[key]).toBe(value.includes('\n') ? 'Use one line.' : value.length === 1001 ? 'Keep this under 1000 characters.' : expectedErrors[key] ?? 'This answer is required.');
@@ -164,7 +163,7 @@ it('guards origin, content type, size, and missing bindings', async () => {
 it('reports simultaneous field errors, including empty choices and controls', () => {
   const result = validateSoftwareInquiry({ ...base, name: '', audience: '', today: '\u0001', timing: '', budgetStatus: '', approver: '' });
   expect(result.ok).toBe(false);
-  if (!result.ok) expect(result.errors).toMatchObject({ name: 'Add your name.', audience: 'This answer is required.', today: 'Remove control characters.', timing: 'Choose one.', budgetStatus: 'Choose one.', approver: 'Choose one.' });
+  if (!result.ok) expect(result.errors).toMatchObject({ name: 'Add your name.', today: 'Remove control characters.', timing: 'Choose one.' });
 });
 
 it('uses plain messages for missing fields, wrong types, and non-object bodies', () => {
@@ -231,8 +230,6 @@ it('uses plain exact messages for choices, line breaks, controls, and lone surro
   const cases = [
     ['path', '', 'Choose a starting point.'],
     ['timing', '', 'Choose one.'],
-    ['budgetStatus', '', 'Choose one.'],
-    ['approver', '', 'Choose one.'],
     ['name', 'A\nB', 'Use one line.'],
     ['today', '\u0001', 'Remove control characters.'],
     ['today', '\ud800', 'Remove control characters.'],
@@ -270,7 +267,7 @@ it('emails only answered fields to the client with the saved title and configure
   expect(await response.json()).toMatchObject({ ok: true, clientCopyStatus: 'sent' });
   const emails = vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com')).map(([, init]) => JSON.parse(init!.body as string));
   const copy = emails.find(email => email.to[0] === 'alex@example.com');
-  expect(copy).toMatchObject({ from: 'from@example.com', subject: 'Your brief: One place to see next steps.', reply_to: 'inbox@example.com' });
+  expect(copy).toMatchObject({ from: 'from@example.com', subject: 'Your brief: <script>first</script> Second line', reply_to: 'inbox@example.com' });
   expect(copy.text).toContain('Hi Alex,');
   expect(copy.text).toContain("I'll read it myself and reply within two business days with a fixed-price first milestone, or a question or two.");
   expect(copy.text).toContain('What happens today?\n<script>first</script>\nSecond line');
@@ -327,6 +324,24 @@ it('keeps delivery uncertain after sending when the final status write fails', a
   expect(details.clientCopyAttemptedAt).toBeTruthy();
   expect(await (await POST(context())).json()).toMatchObject({ok:true,clientCopyStatus:'uncertain'});
   expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('api.resend.com'))).toHaveLength(2);
+});
+
+it('accepts and stores a short new brief without removed or optional answers', async () => {
+  const response = await POST(context({ path: 'workflow', today: 'We track clients. Follow-ups slip.', name: 'Alex', email: 'alex@example.com', timing: 'flexible', submissionId: id, turnstileToken: 'test' }));
+  expect(response.status).toBe(200);
+  const brief = (await response.json() as any).brief;
+  expect(brief).not.toHaveProperty('audience');
+  expect(brief).not.toHaveProperty('firstResult');
+  expect(sql.prepare('SELECT summary FROM owner_requests').get().summary).toBe('We track clients.');
+});
+
+it('accepts legacy date briefs and validates explicit new dates', () => {
+  expect(validateSoftwareInquiry({ ...base, timing: 'date' }).ok).toBe(true);
+  for (const timingDate of ['', '2027-02-30', 'invalid']) {
+    const result = validateSoftwareInquiry({ ...base, timing: 'date', timingDate });
+    expect(result).toMatchObject({ ok: false, errors: { timingDate: 'Add a valid date.' } });
+  }
+  expect(validateSoftwareInquiry({ ...base, timing: 'date', timingDate: '2027-02-28' }).ok).toBe(true);
 });
 
 it.each(['claim', 'construction', 'config'] as const)('records a pre-send %s failure and returns an error on owner retry', async (failure) => {

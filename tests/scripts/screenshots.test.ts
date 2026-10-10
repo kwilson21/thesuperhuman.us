@@ -1,9 +1,10 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { runInNewContext } from 'node:vm';
+import { describe, expect, it, vi } from 'vitest';
 import {
-  missingScenarioRoutes, NOT_PAGES, PAGES, parseJsonc, PREVIEW_OVERRIDES, previewWrangler, REDIRECTS, SCENARIO_PAGES,
+  expectedResourceError, missingScenarioRoutes, NOT_PAGES, PAGES, parseJsonc, PREVIEW_OVERRIDES, previewWrangler, REDIRECTS, SCENARIO_PAGES,
   relevantScreenshots, sanitizeManifest, screenshotSection, withScreenshots,
 } from '../../scripts/screenshots/config.mjs';
 
@@ -239,4 +240,117 @@ it('software print styling never forces a receipt before submission', () => {
   const css = readFileSync(new URL('../../src/styles/software-intake.css', import.meta.url), 'utf8');
   expect(css).not.toMatch(/#software-success\s*\{\s*display:block/);
   expect(css).not.toMatch(/@media print[^}]*#software-inquiry/);
+});
+
+it('serves a scenario-local Turnstile API for silent and receipt widgets', async () => {
+  const scenario = await import('../../scripts/screenshots/scenarios/software-brief.mjs');
+  const routes = new Map<string, any>(), callback = vi.fn(), onload = vi.fn();
+  const inputs: any[] = [], receipt = { appendChild: (input: any) => inputs.push(input) };
+  const window: any = { loaded: onload };
+  const document = {
+    createElement: () => ({ remove: vi.fn() }), querySelectorAll: () => [receipt],
+    currentScript: { src: 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=loaded' },
+  };
+  await scenario.default.run({ base: 'http://127.0.0.1:4321', sql() {}, capture: async ({ file, prepare }: any) => {
+    if (file !== 'software-brief-suggestion-phone.png') return file;
+    await prepare({
+      on() {}, route: async (path: string, handler: any) => { routes.set(path, handler); },
+      addInitScript: async () => {}, reload: async () => {
+        await routes.get('https://challenges.cloudflare.com/turnstile/**')({ fulfill: ({ body, contentType }: any) => {
+          expect(contentType).toBe('application/javascript');
+          runInNewContext(body, { window, document, URL, queueMicrotask });
+        } });
+      },
+      waitForFunction: async () => expect(window.turnstile).toBeTruthy(),
+      locator: () => ({ dispatchEvent: async () => {}, check: async () => {}, fill: async () => {}, waitFor: async () => {}, inputValue: async () => 'We track new clients' }),
+    });
+    const api = window.turnstile;
+    expect(onload).toHaveBeenCalledOnce();
+    expect(inputs[0]).toMatchObject({ name: 'cf-turnstile-response', value: 'XXXX.DUMMY.TOKEN.XXXX' });
+    const id = api.render({}, { 'response-field': false, callback });
+    await Promise.resolve();
+    expect(callback).toHaveBeenCalledWith('XXXX.DUMMY.TOKEN.XXXX');
+    expect(inputs).toHaveLength(1);
+    expect(api.getResponse(id)).toBe('XXXX.DUMMY.TOKEN.XXXX');
+    api.reset(id); api.execute(id); api.ready(callback);
+    await Promise.resolve();
+    expect(callback).toHaveBeenCalledTimes(4);
+    api.remove(id); expect(api.getResponse(id)).toBe('');
+    api.remove('screenshot-widget-1'); expect(inputs[0].remove).toHaveBeenCalledOnce();
+    const fulfill = vi.fn();
+    await routes.get('**/api/software/brief/pass')({ fulfill });
+    expect(fulfill).toHaveBeenCalledWith({ json: { ok: true } });
+    return file;
+  } });
+});
+
+it.each(['reload', 'API wait', 'ghost wait'])('prints %s failure diagnostics and rethrows the original capture failure', async (stage) => {
+  const scenario = await import('../../scripts/screenshots/scenarios/software-brief.mjs');
+  const failure = new Error('ghost text hidden'), log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const request = { url: () => 'http://127.0.0.1:4321/api/software/brief/pass', method: () => 'POST' };
+  try {
+    await expect(scenario.default.run({ base: 'http://127.0.0.1:4321', sql() {}, capture: async ({ file, prepare }: any) => {
+      if (file !== 'software-brief-suggestion-phone.png') return file;
+      await prepare({
+        route: async () => {}, addInitScript: async () => {}, reload: async () => { if (stage === 'reload') throw failure; }, waitForFunction: async () => { if (stage === 'API wait') throw failure; },
+        on: (event: string, handler: any) => {
+          if (event === 'console') handler({ type: () => 'warning', text: () => 'test message' });
+          if (event === 'request') handler(request);
+          if (event === 'response') handler({ request: () => request, status: () => 200 });
+        },
+        evaluate: async () => ({ enabled: true, passState: 'token', lastError: null }),
+        locator: () => ({ dispatchEvent: async () => {}, check: async () => {}, fill: async () => {}, waitFor: async () => { throw failure; } }),
+      });
+      return file;
+    } })).rejects.toBe(failure);
+    const diagnostic = JSON.parse(log.mock.calls[0][1]);
+    expect(diagnostic.console).toEqual(['warning: test message']);
+    expect(diagnostic.requests).toEqual([{ method: 'POST', path: '/api/software/brief/pass', status: 200 }]);
+    expect(diagnostic.autocomplete).toEqual({ enabled: true, passState: 'pass 200', lastError: null });
+  } finally { log.mockRestore(); }
+});
+
+it.each(['desktop', 'phone'])('captures the ghost text with the %s input hint', async viewport => {
+  const scenario = await import('../../scripts/screenshots/scenarios/software-brief.mjs');
+  const dispatchEvent = vi.fn(), waits: string[] = [];
+  await scenario.default.run({ base: 'http://127.0.0.1:4321', sql() {}, capture: async ({ file, prepare }: any) => {
+    if (file !== `software-brief-suggestion-${viewport}.png`) return file;
+    await prepare({
+      on() {}, route: async () => {}, addInitScript: async () => {}, reload: async () => {}, waitForFunction: async () => {},
+      locator: (selector: string) => ({ dispatchEvent, check: async () => {}, fill: async () => {}, waitFor: async () => { waits.push(selector); }, inputValue: async () => 'We track new clients' }),
+    });
+    return file;
+  } });
+  expect(dispatchEvent).toHaveBeenCalledWith('pointerdown', { pointerType: viewport === 'phone' ? 'touch' : 'mouse' });
+  expect(waits).toEqual(['[data-step="1"] [data-ghost-text]']);
+});
+
+
+it('allows only the exact declared failed resource URL and status', () => {
+  const url = 'http://127.0.0.1:4321/api/software-inquiry';
+  const message = (resource: string, text: string) => ({ location: () => ({ url: resource }), text: () => text });
+  const failed = (status: number) => `Failed to load resource: the server responded with a status of ${status} (Service Unavailable)`;
+  const allowed = [{ url, status: 503 }];
+  expect(expectedResourceError(message(url, failed(503)), allowed)).toBe(true);
+  expect(expectedResourceError(message(url, failed(503)), [])).toBe(false);
+  for (const resource of [url + '?other=1', url + '/other', 'https://other.example/api/software-inquiry']) {
+    expect(expectedResourceError(message(resource, failed(503)), allowed)).toBe(false);
+  }
+  expect(expectedResourceError(message(url, failed(500)), allowed)).toBe(false);
+  expect(expectedResourceError(message(url, 'Unexpected application error'), allowed)).toBe(false);
+  expect(expectedResourceError(message(url, failed(503) + ' extra'), allowed)).toBe(false);
+  expect(expectedResourceError(message(url, failed(200)), [{ url, status: 200 }])).toBe(false);
+});
+
+it('declares the mocked 503 only for send-failed captures at both widths', async () => {
+  const scenario = await import('../../scripts/screenshots/scenarios/software-brief.mjs');
+  const allowances: string[] = [];
+  await scenario.default.run({ base: 'http://127.0.0.1:4321', sql() {}, capture: async ({ file, expectedResourceErrors = [] }: any) => {
+    if (expectedResourceErrors.length) {
+      allowances.push(file);
+      expect(expectedResourceErrors).toEqual([{ url: 'http://127.0.0.1:4321/api/software-inquiry', status: 503 }]);
+    }
+    return file;
+  } });
+  expect(allowances).toEqual(['software-brief-send-failed-desktop.png', 'software-brief-send-failed-phone.png']);
 });
