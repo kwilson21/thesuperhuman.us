@@ -66,8 +66,9 @@ async function setup() {
   vi.stubGlobal('fetch', vi.fn(async () => Response.json({ suggestion: ' in a spreadsheet' })));
   const { setupSoftwareInquiry } = await import('~/scripts/software-inquiry'); setupSoftwareInquiry(form as any);
 }
-beforeEach(async () => { store = new Map(); await setup(); });
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+// Every flow can schedule suggestions; keep old forms from calling the next test's fetch.
+beforeEach(async () => { vi.useFakeTimers(); store = new Map(); await setup(); });
+afterEach(() => { vi.clearAllTimers(); vi.restoreAllMocks(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 it('enforces required answers, traverses all questions, Back and individual summary Edit', () => {
   click('[data-next]'); expect(current()).toBe(0); choose('path', 'workflow'); expect(current()).toBe(1);
   click('[data-next]'); expect(current()).toBe(1); fill('today', 'We track clients.'); click('[data-next]'); expect(current()).toBe(2);

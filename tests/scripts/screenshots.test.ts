@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   missingScenarioRoutes, NOT_PAGES, PAGES, parseJsonc, PREVIEW_OVERRIDES, previewWrangler, REDIRECTS, SCENARIO_PAGES,
   relevantScreenshots, sanitizeManifest, screenshotSection, withScreenshots,
@@ -239,4 +239,33 @@ it('software print styling never forces a receipt before submission', () => {
   const css = readFileSync(new URL('../../src/styles/software-intake.css', import.meta.url), 'utf8');
   expect(css).not.toMatch(/#software-success\s*\{\s*display:block/);
   expect(css).not.toMatch(/@media print[^}]*#software-inquiry/);
+});
+
+it('mocks the silent suggestion pass without replacing receipt verification', async () => {
+  const scenario = await import('../../scripts/screenshots/scenarios/software-brief.mjs');
+  const render = vi.fn(() => 'receipt-widget'), remove = vi.fn(), callback = vi.fn();
+  const routes = new Map<string, any>();
+  vi.stubGlobal('window', { turnstile: { render, remove } });
+  vi.stubGlobal('localStorage', { removeItem() {} });
+  try {
+    await scenario.default.run({ sql() {}, capture: async ({ file, prepare }: any) => {
+      if (file !== 'software-brief-suggestion-phone.png') return file;
+      await prepare({
+        route: async (path: string, handler: any) => { routes.set(path, handler); },
+        evaluate: async (fn: () => unknown) => fn(), reload: async () => {}, waitForFunction: async (fn: () => unknown) => expect(fn()).toBe(true),
+        locator: () => ({ check: async () => {}, fill: async () => {}, waitFor: async () => {}, inputValue: async () => 'We track new clients' }),
+      });
+      const api = (window as any).turnstile;
+      const id = api.render({}, { 'response-field': false, callback });
+      await Promise.resolve();
+      expect(callback).toHaveBeenCalledWith('screenshot-suggestion-token');
+      api.remove(id); expect(remove).not.toHaveBeenCalled();
+      expect(api.render({}, {})).toBe('receipt-widget');
+      api.remove('receipt-widget'); expect(remove).toHaveBeenCalledWith('receipt-widget');
+      const fulfill = vi.fn();
+      await routes.get('**/api/software/brief/pass')({ fulfill });
+      expect(fulfill).toHaveBeenCalledWith({ json: { ok: true } });
+      return file;
+    } });
+  } finally { vi.unstubAllGlobals(); }
 });

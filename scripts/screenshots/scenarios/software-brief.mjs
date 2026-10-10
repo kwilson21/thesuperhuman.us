@@ -15,6 +15,17 @@ export default {
         await page.evaluate(() => { localStorage.removeItem('software-brief-draft'); localStorage.removeItem('software-suggestions'); });
         await page.reload();
         if (target === 0) return;
+        await page.waitForFunction(() => !!window.turnstile);
+        // Mock only the silent suggestion widget; receipt verification uses the preview test keys.
+        await page.evaluate(() => {
+          const api = window.turnstile, render = api.render.bind(api), remove = api.remove.bind(api);
+          api.render = (container, options) => {
+            if (options['response-field'] !== false) return render(container, options);
+            queueMicrotask(() => options.callback('screenshot-suggestion-token'));
+            return 'screenshot-suggestion-widget';
+          };
+          api.remove = id => { if (id !== 'screenshot-suggestion-widget') remove(id); };
+        });
         await page.locator(`[name=path][value=${path}]`).check();
         if (target === 1) {
           if (suggestion) {
