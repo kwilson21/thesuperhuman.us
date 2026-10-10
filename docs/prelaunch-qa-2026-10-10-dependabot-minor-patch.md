@@ -5,8 +5,8 @@ Repository: `kwilson21/thesuperhuman.us`
 Pull request: [#165](https://github.com/kwilson21/thesuperhuman.us/pull/165)
 Branch: `codex/deps-165-minor-patch`
 Starting head: `67f2ecbdd25fb87ee3da0b3caf185bdca2d47144`
-Merged-main revision: `8b2252c4e59b904ba8cf07f4492dda0d51189235`. Local merge commit: `bc49efd76b248d8c7b987a82b2ee6a2362e8d5d5`.
-This record's commit: the record-only commit directly following that merge, identifiable with `git log -1 -- docs/prelaunch-qa-2026-10-10-dependabot-minor-patch.md`. A commit cannot embed its own hash; the final handoff supplies the exact hash.
+PR branch commit chain: on `codex/deps-165-minor-patch` (pushed as the PR head branch `dependabot/npm_and_yarn/npm-minor-and-patch-f371826560`), starting head `67f2ecbdd25fb87ee3da0b3caf185bdca2d47144` -> local merge commit `bc49efd76b248d8c7b987a82b2ee6a2362e8d5d5` merging origin/main `8b2252c4e59b904ba8cf07f4492dda0d51189235` -> the record-only commit that last touches this file, identifiable with `git log -1 -- docs/prelaunch-qa-2026-10-10-dependabot-minor-patch.md`.
+Merge method and record revision: this chain is preserved on `main` only by a merge-commit merge, the method used for this PR and recent PRs #157, #158, #171 and #172. A squash or rebase merge would not preserve these hashes; if either were used, the deployed revision would have to be identified by the PR number and its merge commit instead, and this record would need a note saying so. A commit cannot embed its own hash; the final handoff supplies the exact hash.
 Target: production `https://thesuperhuman.us`
 Reviewer: Codex (gpt-6.1-sol), local evidence collection for owner Kazon Wilson. This record does not certify independent current-head review.
 Rollback revision: `8b2252c4e59b904ba8cf07f4492dda0d51189235`
