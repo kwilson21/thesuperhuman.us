@@ -37,7 +37,7 @@ export function setupSoftwareComposer() {
     if(boundary) boundary.textContent=acceptanceBoundary;
     const previewBoundary=preview.querySelector<HTMLElement>('[data-preview-acceptance-boundary]');if(previewBoundary)previewBoundary.textContent=acceptanceBoundary;
     const includedList=preview.querySelector<HTMLElement>('[data-preview-delivered-items]');
-    if(includedList) includedList.replaceChildren(...selectedItems.map(item=>{const li=document.createElement('li');li.textContent=item;return li;}));
+    if(includedList) includedList.replaceChildren(...selectedItems.map(item=>{const li=document.createElement('li');li.textContent=form.querySelector<HTMLInputElement>(`[data-scope-milestone="${milestone}"] [name=delivered_deliverables][value="${item}"]`)?.dataset.deliverableLabel ?? item;return li;}));
     form.querySelectorAll<HTMLElement>('[data-full-scope-milestone]').forEach(group=>group.hidden=group.dataset.fullScopeMilestone!==milestone);
     form.querySelectorAll<HTMLFieldSetElement>('[data-criteria-group]').forEach(group=>{
       group.hidden = group.dataset.criteriaGroup !== milestone; group.disabled = !delivery || group.hidden;

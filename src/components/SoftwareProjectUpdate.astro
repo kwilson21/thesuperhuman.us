@@ -1,13 +1,13 @@
 ---
 import SoftwareAcceptanceChecks from './SoftwareAcceptanceChecks.astro';
-import { evidenceTypes } from '~/lib/software-projects';
+import { evidenceTypes, deliveredScope, deliveredIndexes } from '~/lib/software-projects';
 import type { ClientSoftwareUpdate } from '~/lib/software-projects';
 type Props = { update: ClientSoftwareUpdate; visualUrl?: string; preview?: boolean; checks?: string[]; deliverables?: string[] };
 const { update, visualUrl, preview = false, checks=[], deliverables=[] } = Astro.props;
 const evidence: string[] = JSON.parse(update.criteria_json ?? '[]');
-const selectedDeliverables: string[] = JSON.parse(update.delivered_deliverables_json ?? '[]');
-const includedDeliverables = selectedDeliverables.length ? selectedDeliverables : deliverables;
-const partialDelivery = update.kind==='delivery_review' && deliverables.some(item=>!includedDeliverables.includes(item));
+const includedDeliverables = deliveredScope(update,deliverables);
+const includedIndexes = deliveredIndexes(update,deliverables);
+const partialDelivery = update.kind==='delivery_review' && deliverables.some((_,index)=>!includedIndexes.includes(index));
 const references: {label:string;url:string}[] = JSON.parse(update.links_json ?? '[]');
 const deliveryReferences = update.kind === 'delivery_review' ? references.filter(reference => {
   try { const url = new URL(reference.url); return url.protocol === 'https:' && !url.username && !url.password && Boolean(reference.label.trim()); }

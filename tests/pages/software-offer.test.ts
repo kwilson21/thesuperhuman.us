@@ -523,3 +523,18 @@ it('reads immutable agreed fees, dates and complete legal text without enabling 
     html=await render();expect(html).not.toMatch(/Exact MSA|Exact SOW|Synthetic browser environment/);expect(html).toContain('retained website agreement is unavailable here');expect(html).not.toContain('signed outside the website');
   } finally {sql.close();}
 });
+
+it('renders omitted duplicate legacy deliverables by index without offering acceptance',async()=>{
+  const {sql,db}=await fixture();
+  try {
+    const purchased={...terms,milestones:[{...terms.milestones[0],deliverables:['Status view','Status view']}]};
+    sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES('r','current',?,'standard','now','now','now','owner','now','now')").run(JSON.stringify(purchased));
+    sql.exec("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,delivered_deliverables_json,created_by,created_at,updated_at,shared_at) VALUES('review','r','delivery_review','shared',0,'Tracker','working_preview','[0]','owner','2026-10-01','2026-10-01','2026-10-01')");
+    const session='a'.repeat(72);const {createHash}=await import('node:crypto');
+    sql.prepare("INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES(?,'alex@example.com','now','2099-01-01','now')").run(createHash('sha256').update(session).digest('hex'));
+    const html=await (await AstroContainer.create()).renderToString(softwarePage,{params:{id:'r'},request:new Request('https://thesuperhuman.us/studio/software/r',{headers:{cookie:`studio_session=${session}`}}),locals:{runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}}} as any);
+    expect(html).toMatch(/value="milestone_accepted"[^>]*disabled[^>]*>Accept milestone/);
+    expect(html).toMatch(/name="missing_deliverables" value="1"/);
+    expect(html).not.toMatch(/name="inaccessible_deliverables" value="1"/);
+  } finally {sql.close();}
+});

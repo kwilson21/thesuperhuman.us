@@ -1,7 +1,7 @@
 import { hashValue } from './audio-client-access';
 import type { ProjectMessage } from './audio-project-messages';
 import { z } from 'astro/zod';
-import { deliveredScope, getSoftwareProject, projectTerms, softwareAudit, softwareGuard, softwareRevisionHistoryBody } from './software-projects';
+import { deliveredIndexes, getSoftwareProject, projectTerms, softwareAudit, softwareGuard, softwareRevisionHistoryBody } from './software-projects';
 import type { SoftwareDecision, SoftwareUpdate } from './software-projects';
 export type SoftwareProjectMessage = Omit<ProjectMessage, 'review_decision'> & { review_decision: null; decision: SoftwareDecision | null; update_id: string | null };
 const messageColumns = 'id,actor,body,created_at,read_at,NULL AS review_decision,decision,update_id';
@@ -18,15 +18,15 @@ export async function postSoftwareReviewDecision(db: D1Database, id: string, tok
   const project = await getSoftwareProject(db,id);
   if (!update || !project) return {ok:false,status:409};
   const direction = update.kind === 'direction_review', milestone = projectTerms(project).milestones[update.milestone_index], checks = milestone.acceptance;
-  const delivered = deliveredScope(update, milestone.deliverables);
+  const delivered = deliveredIndexes(update, milestone.deliverables);
   if ((input.decision === 'direction_confirmed' && !direction) || (input.decision === 'milestone_accepted' && direction)) return {ok:false,status:400,error:"This decision doesn’t apply to this review."};
-  if (input.decision === 'milestone_accepted' && milestone.deliverables.some(item=>!delivered.includes(item)))
+  if (input.decision === 'milestone_accepted' && milestone.deliverables.some((_,index)=>!delivered.includes(index)))
     return {ok:false,status:400,error:'This version includes only part of the milestone. The client can accept after every agreed deliverable is included in a review.'};
   const criteria = input.decision === 'changes_requested' ? [...new Set(input.criteria)].sort((first,second)=>first-second) : [];
   const missing = input.decision === 'changes_requested' ? [...new Set(input.missing_deliverables)].sort((first,second)=>first-second) : [];
   const inaccessible = input.decision === 'changes_requested' ? [...new Set(input.inaccessible_deliverables)].sort((first,second)=>first-second) : [];
-  if (criteria.some(index=>index >= checks.length) || missing.some(index=>index >= milestone.deliverables.length || delivered.includes(milestone.deliverables[index])) ||
-    inaccessible.some(index=>index >= milestone.deliverables.length || !delivered.includes(milestone.deliverables[index])) ||
+  if (criteria.some(index=>index >= checks.length) || missing.some(index=>index >= milestone.deliverables.length || delivered.includes(index)) ||
+    inaccessible.some(index=>index >= milestone.deliverables.length || !delivered.includes(index)) ||
     (!direction && input.decision === 'changes_requested' && !criteria.length && !missing.length && !inaccessible.length))
     return {ok:false,status:400,error:'Choose an unmet check, an omitted deliverable, or an included deliverable you cannot access. Tell me what happened.'};
   const tokenHash = await hashValue(token), at = now.toISOString();

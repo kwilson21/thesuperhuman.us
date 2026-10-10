@@ -86,8 +86,8 @@ it('snapshots selected deliverables but blocks acceptance until the full milesto
   const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v1',criteria:['Try adding a client in the preview.'],delivered_deliverables:selected}});
   expect(response.status).toBe(200);const {id}=await response.json() as {id:string};
   const row=sql.prepare('SELECT delivered_deliverables_json FROM software_project_updates WHERE id=?').get(id);
-  expect(row).toEqual({delivered_deliverables_json:JSON.stringify(selected)});
-  expect((await sharedSoftwareUpdates(db,'software'))[0]).toMatchObject({delivered_deliverables_json:JSON.stringify(selected)});
+  expect(row).toEqual({delivered_deliverables_json:JSON.stringify(selected.map(item=>terms.milestones[0].deliverables.indexOf(item)))});
+  expect((await sharedSoftwareUpdates(db,'software'))[0]).toMatchObject({delivered_deliverables_json:JSON.stringify(selected.map(item=>terms.milestones[0].deliverables.indexOf(item)))});
   const token=await session();
   const partial=await decide(id,{decision:'milestone_accepted',confirm:true},token);
   expect(partial.status).toBe(400); expect(((await partial.json()) as {error:string}).error).toMatch(/only part of the milestone/i);
@@ -959,4 +959,15 @@ it.each(['completed_at','revoked_at'])('allows resolving a software project with
 });
 it('allows resolving a software request without a project',async()=>{
   expect((await call(requestPost,{action:'resolve'})).status).toBe(200);
+});
+
+it('stores stable deliverable indexes and cannot accept one repeated label as two selections',async()=>{
+  await start();
+  const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',criteria:['Evidence'],delivered_deliverables:[0]}});
+  expect(response.status).toBe(200);const {id}=await response.json() as {id:string};
+  expect(sql.prepare('SELECT delivered_deliverables_json FROM software_project_updates WHERE id=?').get(id).delivered_deliverables_json).toBe('[0]');
+  // Legacy offers can contain duplicate labels, but a saved index still covers only one item.
+  sql.prepare("UPDATE software_projects SET terms_json=? WHERE request_id='software'").run(JSON.stringify({...terms,milestones:[{...terms.milestones[0],deliverables:['Status view','Status view']}]}));
+  const rejected=await decide(id,{decision:'milestone_accepted',confirm:true},await session());
+  expect(rejected.status).toBe(400);
 });
