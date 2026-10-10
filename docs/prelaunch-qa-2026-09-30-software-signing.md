@@ -39,6 +39,8 @@ Main integration retains migrations 0023/0024 before 0025, the listed required s
 
 ## Checks run October 10, 2026
 
+After the test typing fix on parent revision `e122e50d`, reran `npm run check` (exit 0: 440 files, zero errors, zero warnings, 17 hints), `npx vitest run tests/lib/software-agreements.test.ts` (exit 0: 140 tests pass), and `npm run copy:check` (exit 0: no banned patterns). The archive cooldown assertion now uses the existing fixture secret supplied to `AUDIO_CLIENT_CODE_KEY`; production hashing is unchanged. Other checks below retain their earlier results and were not rerun for this test-only fix.
+
 | Check | Status and evidence |
 |---|---|
 | `npx vitest run tests/scripts/screenshots.test.ts` | PASS: 30 tests. |

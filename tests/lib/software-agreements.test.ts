@@ -1819,7 +1819,7 @@ it('applies the same archive cooldown to known and unknown emails without storin
   expect(sql.prepare('SELECT key FROM audio_client_allowances WHERE key=?').get(await hashOfferToken('archive-link-cooldown:unknown@example.com'))).toBeUndefined();
   expect(JSON.stringify((fetch as any).mock.calls)).not.toContain('unknown@example.com');
   const {keyedHash}=await import('~/lib/audio-client-access');
-  const key=await keyedHash(env.AUDIO_CLIENT_CODE_KEY,'archive-link-cooldown:unknown@example.com');
+  const key=await keyedHash(secret,'archive-link-cooldown:unknown@example.com');
   expect(sql.prepare('SELECT key FROM audio_client_allowances WHERE key=?').get(key)).toBeDefined();
   expect(await keyedHash('different-secret-key-that-is-32-characters','archive-link-cooldown:unknown@example.com')).not.toBe(key);
   sql.prepare('UPDATE audio_client_allowances SET window_start=? WHERE key=?').run('2000-01-01',key);
