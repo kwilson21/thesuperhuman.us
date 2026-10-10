@@ -34,7 +34,7 @@ const artifact = (image: ImageMetadata, title: string, caption: string, kind: st
 // review note (same ID), changed only for formatting. Captures use demo data.
 export const tallyDecisionHighlights = [
   {
-    entries: [{ entry: 'tally-jev-categorization' }, { entry: 'tally-merchant-names' }],
+    entries: [{ entry: 'tally-jev-categorization' }, { entry: 'tally-store-names' }],
     headline: 'AI suggestions, with people in control',
     decision: 'Jev suggests categories, and Workers AI suggests names for bank text with no clean name. A person has the final say on both.',
     relevance: 'You can change the category or reject the suggested name.',
@@ -177,7 +177,7 @@ export const tallyMilestones: Milestone[] = [
     artifacts: [artifact(formFeedback, 'Tally · Form feedback', 'The catalog’s busy Save, disabled Save and a field with an error, on demo data from PR #105, with numbered pointers.', 'Annotated screen capture, demo data')],
   },
   {
-    id: 'tally-merchant-names', day: '2026-10-06',
+    id: 'tally-store-names', day: '2026-10-06',
     title: 'Names for bank text, chosen by a person',
     summary: 'Some bank text comes without a clean store name. Plaid’s merchant name comes first. When Plaid sends none, Workers AI suggests up to three names. A suggestion can appear provisionally in the list, dashed, but it becomes the saved name only when a person accepts it. A suggestion a person turns down isn’t offered again for that merchant record. Merchant-name suggestions are optional, with their own switch in Settings. Implemented and tested locally.',
     artifacts: [artifact(merchantNameSuggestion, 'Tally · Names for bank text, chosen by a person', 'A suggested store name, shown dashed until a person chooses it. From a local demo run on fictional data.', 'Screen capture, demo data')],

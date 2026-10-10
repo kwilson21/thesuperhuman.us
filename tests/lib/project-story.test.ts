@@ -217,7 +217,7 @@ describe('journal default selection', () => {
 describe('Tally decision highlight sources', () => {
  it('cites both AI entries in order and keeps every source resolvable', () => {
   expect(tallyDecisionHighlights.map(highlight => highlight.entries.map(source => source.entry))).toEqual([
-   ['tally-jev-categorization', 'tally-merchant-names'],
+   ['tally-jev-categorization', 'tally-store-names'],
    ['tally-design-system-catalog'],
    ['tally-demo-environment'],
   ]);
@@ -230,7 +230,7 @@ describe('Tally decision highlight sources', () => {
   }
  });
  it('pairs the merchant-name entry with its demo capture and supported copy', () => {
-  const merchant = tallyMilestones.find(milestone => milestone.id === 'tally-merchant-names');
+  const merchant = tallyMilestones.find(milestone => milestone.id === 'tally-store-names');
   expect(merchant?.day).toBe('2026-10-06');
   expect(merchant?.summary).toBe("Some bank text comes without a clean store name. Plaid’s merchant name comes first. When Plaid sends none, Workers AI suggests up to three names. A suggestion can appear provisionally in the list, dashed, but it becomes the saved name only when a person accepts it. A suggestion a person turns down isn’t offered again for that merchant record. Merchant-name suggestions are optional, with their own switch in Settings. Implemented and tested locally.");
   expect(merchant?.artifacts).toHaveLength(1);
