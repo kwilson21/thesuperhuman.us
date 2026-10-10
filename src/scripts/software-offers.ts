@@ -243,11 +243,14 @@ export function setupAgreementAttachments(block:HTMLElement) {
    block.dataset.removedKeys=JSON.stringify([...new Set([...JSON.parse(block.dataset.removedKeys??'[]'),button.dataset.removeAttachment])]);
    button.closest('li')!.remove();field.dispatchEvent(new Event('input',{bubbles:true}));
  });
- block.querySelector('[data-upload-attachment]')!.addEventListener('click',async()=>{
+ const upload=block.querySelector<HTMLButtonElement>('[data-upload-attachment]')!;
+ upload.addEventListener('click',async()=>{
+ if(upload.disabled)return;
  const file=block.querySelector<HTMLInputElement>('[data-attachment-file]')!.files?.[0],version=block.querySelector<HTMLInputElement>('[data-attachment-version]')!.value,date=block.querySelector<HTMLInputElement>('[data-attachment-date]')!.value;
  const field=block.querySelector<HTMLInputElement>('[name="agreement.attachments"]')!,attachments=JSON.parse(field.value),status=block.closest('[data-software-editor]')!.querySelector<HTMLElement>('[data-software-status]')!;
  if(!file||!version||!date||attachments.length>=5){status.textContent='Choose a PDF, version and date. Up to five attachments.';return;}
- try{const query=new URLSearchParams({filename:file.name,version,date}),response=await fetch(`${block.dataset.uploadEndpoint}?${query}`,{method:'PUT',headers:{'content-type':'application/pdf'},body:file}),result=await response.json() as {error:string;attachment:{filename:string;version:string;date:string;key:string}};if(!response.ok)throw new Error(result.error);attachments.push(result.attachment);field.value=JSON.stringify(attachments);field.dispatchEvent(new Event('input',{bubbles:true}));const item=document.createElement('li');item.textContent=`${result.attachment.filename} · ${version} · ${date} `;const remove=document.createElement('button');remove.type='button';remove.className='studio-quiet';remove.dataset.removeAttachment=result.attachment.key;remove.textContent='Remove';item.appendChild(remove);block.querySelector('[data-attachment-list]')!.appendChild(item);status.textContent='Attachment saved. Save the offer draft to include it.';}catch(e){status.textContent=(e as Error).message;}
+ upload.disabled=true;
+ try{const query=new URLSearchParams({filename:file.name,version,date}),response=await fetch(`${block.dataset.uploadEndpoint}?${query}`,{method:'PUT',headers:{'content-type':'application/pdf'},body:file}),result=await response.json() as {error:string;attachment:{filename:string;version:string;date:string;key:string}};if(!response.ok)throw new Error(result.error);field.value=JSON.stringify([...JSON.parse(field.value),result.attachment]);field.dispatchEvent(new Event('input',{bubbles:true}));const item=document.createElement('li');item.textContent=`${result.attachment.filename} · ${version} · ${date} `;const remove=document.createElement('button');remove.type='button';remove.className='studio-quiet';remove.dataset.removeAttachment=result.attachment.key;remove.textContent='Remove';item.appendChild(remove);block.querySelector('[data-attachment-list]')!.appendChild(item);status.textContent='Attachment saved. Save the offer draft to include it.';}catch(e){status.textContent=(e as Error).message;}finally{upload.disabled=false;}
 });
 
 }

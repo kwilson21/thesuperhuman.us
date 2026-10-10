@@ -44,6 +44,8 @@ export function setupAgreementAccess() {
       } catch (error) {
         if (status) status.textContent = (error as Error).message;
       } finally {
+        const turnstile = (window as Window & { turnstile?: { reset: () => void } }).turnstile;
+        try { turnstile?.reset(); } catch { /* Verification can still be loading. */ }
         button.disabled = false;
       }
     });
