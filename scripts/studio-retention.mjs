@@ -46,7 +46,8 @@ export function studioRetentionProjectPredicate(now) {
 
 export function softwareRetentionProjectPredicate(now) {
   const days=`COALESCE((SELECT json_extract(a.values_json,'$.owner.project_retention_days') FROM software_agreements a WHERE a.id=software_projects.agreement_id AND a.status='executed'),(SELECT json_extract(o.agreement_details_json,'$.project_retention_days') FROM software_offers o WHERE o.id=software_projects.offer_id AND o.sent_at IS NOT NULL),365)`;
-  return `content_deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM software_invoices i WHERE i.request_id=software_projects.request_id AND i.status IN ('creating','open','payment_failed','uncollectible')) AND ((completed_at IS NOT NULL AND julianday(completed_at)+${days}<=julianday(${quote(now.toISOString())}))
+  const handoffDays=`COALESCE((SELECT json_extract(a.values_json,'$.owner.handoff_access_days') FROM software_agreements a WHERE a.id=software_projects.agreement_id AND a.status='executed'),(SELECT json_extract(o.agreement_details_json,'$.handoff_access_days') FROM software_offers o WHERE o.id=software_projects.offer_id AND o.sent_at IS NOT NULL),30)`;
+  return `content_deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM software_project_updates h WHERE h.request_id=software_projects.request_id AND h.kind='handoff' AND h.status='shared' AND julianday(h.shared_at)+${handoffDays}>julianday(${quote(now.toISOString())})) AND NOT EXISTS(SELECT 1 FROM software_invoices i WHERE i.request_id=software_projects.request_id AND i.status IN ('creating','open','payment_failed','uncollectible')) AND ((completed_at IS NOT NULL AND julianday(completed_at)+${days}<=julianday(${quote(now.toISOString())}))
     OR (revoked_at IS NOT NULL AND julianday(revoked_at)+${days}<=julianday(${quote(now.toISOString())})))`;
 }
 async function softwareSources(database, now) {

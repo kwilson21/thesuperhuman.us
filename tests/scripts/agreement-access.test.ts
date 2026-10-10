@@ -52,12 +52,15 @@ function fixture() {
     "[data-signature-name]",
     "[data-signature-details]",
     "[data-consent-text]",
-    "[data-country]",
+    '[name="country"]',
     '[name="consent"]',
     "[data-fresh-link]",
     "[data-agreed-terms]",
+    "[data-reviewed-documents]",
+    "[data-review-hint]",
   ])
     elements[selector] = node();
+  Object.defineProperty(elements['[name="country"]'], 'value', {get:()=>values.country,set:(value:string)=>{values.country=value;}});
   elements['[name="csrf_nonce"]'].value = "csrf";
   const form = node({
     dataset: { token: "offer", email: "alex@example.com" },
@@ -136,4 +139,35 @@ it('document links activate the existing reader navigation',()=>{
   setupAgreementAccess();
   const preventDefault=vi.fn();click!({preventDefault});
   expect(reader.open).toBe(true);expect(stageClick).toHaveBeenCalledOnce();expect(scroll).toHaveBeenCalledOnce();expect(preventDefault).toHaveBeenCalledOnce();
+});
+
+it.each(['Wyoming','District of Columbia'])('prefills an empty country for %s and preserves edits',async state=>{
+  vi.useFakeTimers();
+  const {values,form}=fixture();values.state=state;
+  setupAgreementAccess();expect(values.country).toBe('United States');
+  values.country='Canada';await form.emit('input');expect(values.country).toBe('Canada');
+  await vi.runAllTimersAsync();
+
+ });
+it.each(['','Outside the US','Unknown'])('leaves an empty country for %s',state=>{
+  const {values}=fixture();values.state=state;setupAgreementAccess();expect(values.country).toBe('');
+ });
+
+it('renders only the saved-details confirmation after refreshing review documents',async()=>{
+  const {values,elements}=fixture();
+  Object.assign(values,{entity_type:'LLC',state:'Wyoming',business_address:'Example business address',portfolio_choice:'private'});
+  vi.mocked(fetch).mockImplementation(async()=>Response.json({documents:[{id:'sow',kind:'sow',hash:'a'.repeat(64),text:'Exact SOW'}]}));
+  setupAgreementAccess();
+  await new Promise(resolve=>setTimeout(resolve,0));
+  expect(elements['[role="status"]'].textContent).toBe('Details saved.');
+  expect(elements['[data-reviewed-documents]'].appendChild).toHaveBeenCalledOnce();
+});
+
+it.each(['United States','Canada'])('clears only the US default when switching outside the US (%s)',async country=>{
+  vi.useFakeTimers();
+  const {values,form}=fixture();values.state='Wyoming';
+  setupAgreementAccess();values.country=country;values.state='Outside the US';
+  await form.emit('input');
+  expect(values.country).toBe(country==='United States'?'':country);
+  await vi.runAllTimersAsync();
 });

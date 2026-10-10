@@ -217,7 +217,7 @@ it('renders version-specific direction, delivery, acceptance, handoff and earlie
     for(const secret of ['PRIVATE OWNER','PRIVATE AUTHOR','PRIVATE TOKEN','PRIVATE NOTE','PRIVATE FIT REVIEW','240000']) expect(html).not.toContain(secret);
     sql.exec("INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,links_json,created_by,created_at,updated_at,shared_at) VALUES ('progress-link','r','progress','shared',0,'Prior progress','concept','[{\"label\":\"Prior progress reference\",\"url\":\"https://example.com/progress\"}]','owner','2026-10-14','2026-10-14','2026-10-14')");
     const ownerHTML=await container.renderToString(composer,{request:new Request('https://thesuperhuman.us/owner/requests/r/update'),params:{id:'r'},locals:{owner:{email:'owner@example.com'},runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}} as any});
-    expect(ownerHTML).toContain('Delivery review');expect(ownerHTML).toContain('Evidence for every acceptance check');expect(ownerHTML).toContain('Choose 5–30 Business Days. Larger windows are set in the executed agreement.');expect(ownerHTML).toContain('name="delivered_deliverables"');expect(ownerHTML).toContain('Reuse a saved project link');expect(ownerHTML).toContain('Prior progress reference');expect(ownerHTML).toContain('This milestone is paid in full');expect(ownerHTML).toContain('Keep the files available for at least 30 days.');
+    expect(ownerHTML).toContain('Delivery review');expect(ownerHTML).toContain('Evidence for every acceptance check');expect(ownerHTML).toContain('Choose 5–30 Business Days. Larger windows are set in the executed agreement.');expect(ownerHTML).toContain('name="delivered_deliverables"');expect(ownerHTML).toContain('Reuse a saved project link');expect(ownerHTML).toContain('Prior progress reference');expect(ownerHTML).toContain('This milestone is paid in full');expect(ownerHTML).toContain('Keep these files available for 30 days.');
   } finally {sql.close();}
 });
 
@@ -404,7 +404,18 @@ it('renders one signing page, returning details, waiting and both-signed actions
     const render = (query = '') => container.renderToString(signPage, { params: { token }, request: new Request(`https://thesuperhuman.us/offer/${token}/sign${query}`, { headers: { cookie: `agreement_session=${session}` } }), locals: { runtime: { env: { MUSIC_DB: db } } } as any });
     let html = await render();
     expect(html).toContain('Ready to sign.');expect(html).toContain('value="Example LLC"');
-    expect(html).toContain('Read the agreement');expect(html).toContain('Read the statement of work');
+    expect(html).toMatch(/<p[^>]*><a[^>]*data-document-link="msa"[^>]*>Read the agreement<\/a><\/p>/);
+    expect(html).toMatch(/<p[^>]*><a[^>]*data-document-link="sow"[^>]*>Read the statement of work<\/a><\/p>/);
+    expect(html).toContain('1 milestone ·');expect(html).not.toContain('1 milestones');
+    expect(html).toMatch(/Agreement version v2026-09-30<\/p>\s*<\/section>/);
+    sql.prepare("UPDATE software_offers SET terms_json=? WHERE id='current'").run(JSON.stringify({...terms,milestones:[terms.milestones[0],terms.milestones[0]]}));
+    const originalDetails=sql.prepare("SELECT agreement_details_json FROM software_offers WHERE id='current'").get().agreement_details_json;
+    const multiDetails=JSON.parse(originalDetails);
+    multiDetails.milestones=[{...multiDetails.milestones[0],target:'2026-10-10'},{...multiDetails.milestones[0],start:'2026-10-11'}];
+    sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='current'").run(JSON.stringify(multiDetails));
+    expect(await render()).toContain('2 milestones ·');
+    sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='current'").run(originalDetails);
+    sql.prepare("UPDATE software_offers SET terms_json=? WHERE id='current'").run(JSON.stringify(terms));
     expect(html).toContain('Signing applies your name above as your electronic signature on the agreement and statement of work linked above.');
     expect(html).not.toContain('Step 2 of 3');expect(html).not.toContain('Before you sign');
     expect(html.match(/type="checkbox"/g)).toHaveLength(1);expect(html.match(/type="radio"/g)).toHaveLength(3);
@@ -413,7 +424,7 @@ it('renders one signing page, returning details, waiting and both-signed actions
     sql.exec("UPDATE software_offers SET reused_msa_id='reused' WHERE id='current'");
     html=await render();expect(html).toContain('Your signed agreement from Sep 30, 2026 still applies.');expect(html).toContain('Read it');expect(html).not.toContain('Read the agreement');expect(html).not.toContain('Read the full agreement and statement of work');expect(html).toContain('Signing applies your name above as your electronic signature on the statement of work linked above.');expect(html).toContain('Same as last time: Example LLC, LLC, Wyoming, Business address.');expect(html).toMatch(/data-business-details[^>]*hidden/);
     sql.prepare("INSERT INTO software_agreement_drafts VALUES('current','alex@example.com',?,'now')").run(JSON.stringify({legal_name:'Example LLC',signer_name:'Alex',entity_type:'LLC',state:'Wyoming',business_address:'Updated business address'}));
-    html=await render();expect(html).not.toContain('Same as last time');expect(html).toContain('Updated business address');expect(html).not.toMatch(/data-business-details[^>]*hidden/);
+    html=await render();expect(html).toMatch(/name="country"[^>]*value="United States"/);expect(html).not.toMatch(/data-country[^>]*hidden/);expect(html).not.toContain('Same as last time');expect(html).toContain('Updated business address');expect(html).not.toMatch(/data-business-details[^>]*hidden/);
     sql.exec("DELETE FROM software_agreement_drafts WHERE offer_id='current'");
     sql.exec("UPDATE software_offers SET reused_msa_id=NULL WHERE id='current'");
     const values = { client: { signer_name: 'Example Signer', signer_title: 'Owner', legal_name: 'Example LLC', portfolio: 'deny', naming: false }, contractor: { signer_name: 'Example Contractor', legal_name: 'Example Contractor LLC' }, system: { payment: 'Standard' }, choices: { portfolio: 'Do not allow', naming: 'No' } };
@@ -532,7 +543,7 @@ it('reads immutable agreed fees, dates and complete legal text without enabling 
   } finally {sql.close();}
 });
 
-it.each(['accepted-unpaid','paid-awaiting-handoff','handed-off'].flatMap(state=>[30,45].map(days=>({state,days}))))('keeps the correction deadline beside acceptance ($state, $days days)', async ({state,days}) => {
+it.each(['accepted-unpaid','paid-awaiting-handoff','handed-off'].flatMap(state=>[30,45].flatMap(days=>['website','external'].map(signing=>({state,days,signing})))))('keeps the correction deadline beside acceptance ($state, $days days, $signing)', async ({state,days,signing}) => {
   const paid=state!=='accepted-unpaid';
   const {sql,db}=await fixture(), container=await AstroContainer.create();
   try {
@@ -541,7 +552,8 @@ it.each(['accepted-unpaid','paid-awaiting-handoff','handed-off'].flatMap(state=>
     const values=agreementValues({...terms,paymentMode:'standard'},owner,{legal_name:'Example Client LLC',entity_type:'LLC',jurisdiction:'WY',business_address:'Example business address',notice_email:'alex@example.com',reviewer_name:'Alex',reviewer_email:'alex@example.com',approver_name:'Alex',approver_email:'alex@example.com',signer_name:'Alex',signer_title:'Owner',portfolio:'deny',naming:false},{legal_name:'Example Contractor LLC',entity_jurisdiction:'WY',signer_name:'Example Owner',signer_title:'Owner',notice_email:'owner@example.com',business_address:'Registered agent address',registered_agent_confirmed:true},{effective_on:'2026-09-30',msa_version:'2026-09-30 / template 1',sow_number:'SOW-example',offer_version:2,template_version:1});
     sql.exec("INSERT INTO software_agreement_clients VALUES ('party','alex@example.com','Example Client LLC','example','LLC','WY','Example address','alex@example.com','now'); INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES ('sow','sow',1,'Template','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','now','owner')");
     sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES ('sow','sow','current','r','party','sow','executed','Agreed terms','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',?,'now','2026-09-30','session')").run(JSON.stringify(values));
-    sql.exec("UPDATE software_projects SET agreement_id='sow'");
+    sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='current'").run(JSON.stringify({...owner,correction_calendar_days:signing==='website' ? 90 : days}));
+    if(signing==='website') sql.exec("UPDATE software_projects SET agreement_id='sow'");
     const session='a'.repeat(72);
     sql.prepare("INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES (?,'alex@example.com','now','2099-01-01','now')").run(await hashOfferToken(session));
     sql.exec(`INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,created_by,created_at,updated_at,shared_at) VALUES ('accepted','r','delivery_review','shared',0,'Delivery','Delivery v2','working_preview','owner','2026-10-01','2026-10-01','2026-10-01');
@@ -684,6 +696,7 @@ it('masks the recipient on every unauthenticated email receipt', async () => {
     const html=await container.renderToString(signPage,{params:{token},request:new Request(`https://thesuperhuman.us/offer/${token}/sign?email=sent`),locals:{runtime:{env:{MUSIC_DB:db}}}} as any);
     expect(html).toContain('I sent a link to a•••@example.com.');
     expect(html).not.toContain('alex@example.com');
+    expect(html).toContain('data-appearance="interaction-only"');
   } finally {sql.close();}
 });
 
@@ -727,9 +740,41 @@ it('renders scanner-safe agreement and archive landings with exact copy', async(
       expect(response.status).toBe(200);expect(response.headers.get('referrer-policy')).toBe('no-referrer');expect(response.headers.get('cache-control')).toBe('no-store');
       expect(html).toContain(archive?'Your documents are ready.':'Your agreement is ready.');
       expect(html).toContain(archive?'>Continue</button>':'>Continue to sign</button>');expect(html).toContain('This link works once.');expect(html).toContain('method="post"');
+      expect(html).toMatch(/<form class="agreement-form"/);
       if(!archive)expect(html).toContain('Current offer');
       expect(sql.prepare('SELECT used_at FROM software_agreement_links WHERE id=?').get(archive?'archive':'agreement').used_at).toBeNull();
       sql.exec('DELETE FROM software_agreement_links');
+      const expired=await container.renderToString(archive?archiveLanding:linkLanding,{params:{token},request:new Request(`https://thesuperhuman.us/${archive?'agreements':`offer/${token}`}/verify?key=${key}`),locals:{runtime:{env:{MUSIC_DB:db}}}} as any);
+      expect(expired).toMatch(/class="page-lede"[^>]*>Links work once and last an hour\.<\/p>/);
+      expect(expired).toMatch(/class="agreement-form"/);
     }
+  } finally {sql.close();}
+});
+
+it('renders legacy reissue guidance and removes signing actions after a project starts',async()=>{
+  const {sql,db}=await fixture();
+  try {
+    const container=await AstroContainer.create();
+    const offers=(await db.prepare('SELECT * FROM software_offers').all()).results;
+    const html=await container.renderToString(editor,{props:{requestId:'r',email:'alex@example.com',revoked:true,offers}});
+    expect(html).toContain('Sent before website signing. The client will sign outside the website. For website signing, create a new draft.');
+    sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('r','current',?,'standard','now','now','now','owner','now','now')").run(JSON.stringify(terms));
+    const done=await (await render(db,token)).text();
+    expect(done).toContain('Signed by both of you.');expect(done).toContain('Open your project page');expect(done).not.toContain('Review and sign');
+    sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='current'").run(JSON.stringify({review_business_days:12,correction_calendar_days:60,handoff_access_days:90}));
+    const ownerHTML=await container.renderToString(composer,{request:new Request('https://thesuperhuman.us/owner/requests/r/update'),params:{id:'r'},locals:{owner:{email:'owner@example.com'},runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}} as any});
+    expect(ownerHTML).toContain('Keep these files available for 90 days.');
+  } finally {sql.close();}
+});
+it.each(['client_signed','executed'])('renders a %s offer without another signing action',async status=>{
+  const {sql,db}=await fixture();
+  try {
+    sql.exec("UPDATE software_signing_settings SET software_signing_enabled=1; INSERT INTO software_agreement_clients VALUES('party','alex@example.com','Example Client','example','LLC','WY','Example address','alex@example.com','now'); INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES('template','sow',1,'Synthetic',lower(hex(zeroblob(32))),'now','owner')");
+    sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES('agreement','sow','current','r','party','template',?,'Synthetic',?,'{}','now','2026-10-01','session')").run(status,'a'.repeat(64));
+    sql.exec("UPDATE software_offers SET msa_template_id='template' WHERE id='current'");
+    const html=await (await render(db,token)).text();
+    expect(html).toContain(status==='executed'?'Signed by both of you.':'Signed. Over to Kazon.');
+    expect(html).not.toContain('Review and sign');expect(html).not.toContain('data-agreement-link');
+    expect(sql.prepare('SELECT count(*) n FROM audio_client_allowances').get().n).toBe(0);
   } finally {sql.close();}
 });

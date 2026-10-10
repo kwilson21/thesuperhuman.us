@@ -145,6 +145,7 @@ label.confirmation input { flex: none; width: auto; min-height: 0; margin: .3rem
 .agreement-page .page-lede { margin: 1.5rem 0 2.5rem; }
 .agreement-page h2 { font-size: 1.5rem; line-height: 1.2; margin-bottom: 1rem; }
 .agreement-form { display: grid; gap: 1.2rem; min-width: 0; margin-block: 1.5rem; }
+.agreement-page .page-title + .agreement-form { margin-top: 2.5rem; }
 .agreement-form label:not(.confirmation) { display: grid; gap: .4rem; font: 500 .82rem/1.4 Inter, sans-serif; }
 .agreement-form input, .agreement-form textarea { max-width: 100%; min-width: 0; }
 .agreement-form fieldset { display: grid; gap: 1rem; min-width: 0; border-top: 1px solid var(--rule); padding-top: 1.5rem; }

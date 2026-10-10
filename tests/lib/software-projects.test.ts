@@ -17,7 +17,7 @@ import { softwareInvitationEmail, softwareUpdateEmail } from '~/lib/client-email
 import { loadStudioLedger, listStudioProjectAttention } from '~/lib/owner-reporting';
 import { postClientSoftwareProjectMessage, readableSoftwareProjectMessages } from '~/lib/software-project-messages';
 import { POST as reviewPost } from '~/pages/api/studio/software/[id]/reviews/[updateId]';
-import { correctionPeriodEnd } from '~/lib/software-projects';
+import { correctionPeriodEnd, projectAgreementDetails, getSoftwareProject } from '~/lib/software-projects';
 import { softwareReviewEmail, softwareHandoffEmail } from '~/lib/client-emails';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database, env: Env;
@@ -989,4 +989,21 @@ it('stores stable deliverable indexes and cannot accept one repeated label as tw
   sql.prepare("UPDATE software_projects SET terms_json=? WHERE request_id='software'").run(JSON.stringify({...terms,milestones:[{...terms.milestones[0],deliverables:['Status view','Status view']}]}));
   const rejected=await decide(id,{decision:'milestone_accepted',confirm:true},await session());
   expect(rejected.status).toBe(400);
+});
+
+it('uses the external sent offer review window instead of submitted days',async()=>{
+  await start();
+  sql.prepare("UPDATE software_offers SET sent_at='2026-09-30',agreement_details_json=? WHERE id=(SELECT offer_id FROM software_projects WHERE request_id='software')").run(JSON.stringify({review_business_days:45}));
+  const response=await call(updatePost,{action:'share',confirmed:true,expectedUpdatedAt:null,update:{...update,kind:'delivery_review',artifact_version:'Delivery v1',criteria:['Try the preview.'],review_window_days:5}});
+  expect(response.status).toBe(200);
+  expect((await sharedSoftwareUpdates(db,'software'))[0].review_window_days).toBe(45);
+});
+
+it('reads external correction and handoff periods from the linked sent offer',async()=>{
+  await start();
+  sql.prepare("UPDATE software_offers SET sent_at='2026-09-30',agreement_details_json=? WHERE id=(SELECT offer_id FROM software_projects WHERE request_id='software')").run(JSON.stringify({correction_calendar_days:60,handoff_access_days:90}));
+  const project=await getSoftwareProject(db,'software');
+  const agreed=await projectAgreementDetails(db,project!);
+  expect(agreed).toEqual({correction_calendar_days:60,handoff_access_days:90});
+  expect(correctionPeriodEnd('2026-10-01',undefined,Number(agreed!.correction_calendar_days))).toBe('2026-11-30');
 });

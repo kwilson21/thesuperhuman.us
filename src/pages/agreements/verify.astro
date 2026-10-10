@@ -14,7 +14,7 @@ const valid = response.status === 200;
 {valid ? <>
 
 <h1 class="page-title">Your documents are ready.</h1>
-<form method="post" action={Astro.url.pathname}><input type="hidden" name="key" value={key} /><button class="studio-button">Continue</button></form>
+<form class="agreement-form" method="post" action={Astro.url.pathname}><input type="hidden" name="key" value={key} /><button class="studio-button">Continue</button></form>
 <p class="agreement-hint">This link works once.</p>
-</> : <><h1 class="page-title">This link has expired.</h1><p><a class="studio-button" href={'/agreements'}>Send a new link</a></p></>}
+</> : <><h1 class="page-title">This link has expired.</h1><p class="page-lede">Links work once and last an hour.</p><p class="agreement-form"><a class="studio-button" href={'/agreements'}>Send a new link</a></p></>}
 </AgreementLayout>

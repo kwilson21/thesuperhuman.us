@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
 import { musicRequest } from '~/lib/music-request';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
-import { updateInput, getSoftwareProject, projectTerms, softwareAudit, softwareGuard, openSoftwareGuard, deliverSoftwareNotice, recordMilestonePayment, acceptedDeliveryGuard, priorMilestonePaymentGuard, milestoneDepositGuard } from '~/lib/software-projects';
+import { updateInput, getSoftwareProject, projectTerms, projectAgreementDetails, softwareAudit, softwareGuard, openSoftwareGuard, deliverSoftwareNotice, recordMilestonePayment, acceptedDeliveryGuard, priorMilestonePaymentGuard, milestoneDepositGuard } from '~/lib/software-projects';
 import type { SoftwareUpdate } from '~/lib/software-projects';
 import { listSoftwareInvoices, payableSoftwareInvoice, manualPaymentReminder } from '~/lib/software-invoices';
 export const prerender = false;
@@ -22,8 +22,8 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   try {
     const project = await getSoftwareProject(db, id);
     if (!project || project.revoked_at || project.content_deleted_at) return json({ ok: false }, 404);
-    const agreement=project.agreement_id ? await db.prepare("SELECT values_json FROM software_agreements WHERE id=? AND status='executed'").bind(project.agreement_id).first<{values_json:string}>() : null;
-    if(agreement)value.review_window_days=Number(JSON.parse(agreement.values_json).owner.review_business_days);
+    const agreementDetails=await projectAgreementDetails(db,project);
+    if(agreementDetails?.review_business_days)value.review_window_days=Number(agreementDetails.review_business_days);
     else if(value.review_window_days>30)return json({ok:false,error:'Use up to 30 business days.'},400);
     if (project.state === 'complete') return json({ ok: false, error: 'This project is complete.' }, 409);
     if (value.milestone_index >= projectTerms(project).milestones.length) return json({ ok: false, error: 'Choose a milestone from this project.' }, 400);

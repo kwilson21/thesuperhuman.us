@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { expect, it, vi } from 'vitest';
-import { applyStudioRetention, studioRetentionCompletion, previewStudioRetention, remoteObjectDeleteArgs, studioStorageIdentity } from '../../scripts/studio-retention.mjs';
+import { applyStudioRetention, studioRetentionCompletion, previewStudioRetention, remoteObjectDeleteArgs, studioStorageIdentity, softwareRetentionProjectPredicate } from '../../scripts/studio-retention.mjs';
 
 const storage = { accountId: null, databaseId: 'local-music', bucket: 'local-audio', jurisdiction: null };
 
@@ -356,4 +356,14 @@ it('uses the sent offer retention period for externally signed projects and clea
   await applyStudioRetention(database,review,'Local test data',storage,async()=>{},now,list);
   expect(sql.prepare("SELECT recipient_email_snapshot,agreement_details_json FROM software_offers WHERE id='offer'").get()).toEqual({recipient_email_snapshot:null,agreement_details_json:null});
   sql.close();
+});
+
+it('preserves handoff access beyond a shorter project retention period',()=>{
+  const {sql}=fixture();
+  try {
+    sql.exec("INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES('external','software','client@example.com','Tool','resolved','now','now'); INSERT INTO software_offers(id,request_id,version,status,terms_json,agreement_details_json,created_at,updated_at,sent_at) VALUES('offer','external',1,'sent','{}','{\"project_retention_days\":30,\"handoff_access_days\":90}','now','now','now'); INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,completed_at) VALUES('external','offer','{}','standard','now','now','now','owner','now','now','2027-12-01'); INSERT INTO software_project_updates(id,request_id,milestone_index,kind,status,title,evidence_type,created_by,created_at,updated_at,shared_at) VALUES('handoff','external',0,'handoff','shared','Files','handoff','owner','now','now','2027-12-01')");
+    const eligible=(date:Date)=>sql.prepare(`SELECT request_id FROM software_projects WHERE ${softwareRetentionProjectPredicate(date)}`).all();
+    expect(eligible(now)).toEqual([]);
+    expect(eligible(new Date('2028-03-01T12:00:00Z'))).toEqual([{request_id:'external'}]);
+  } finally {sql.close();}
 });

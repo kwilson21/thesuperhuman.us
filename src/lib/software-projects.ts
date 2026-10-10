@@ -251,3 +251,11 @@ export const milestoneDepositGuard = (db: D1Database, id: string, milestone: num
 
 // The Start action records today as the service start; match its existing date gate.
 export const requiresEarlierStartAgreement = (plannedStart: string | undefined, startOn: string) => Boolean(plannedStart && startOn < plannedStart);
+
+/** Website agreements take precedence; external projects retain the linked sent offer's terms. */
+export async function projectAgreementDetails(db: D1Database, project: Pick<SoftwareProject, 'agreement_id' | 'offer_id'>) {
+  const row = project.agreement_id
+    ? await db.prepare("SELECT json_extract(values_json,'$.owner') AS details FROM software_agreements WHERE id=? AND status='executed'").bind(project.agreement_id).first<{details:string|null}>()
+    : await db.prepare("SELECT agreement_details_json AS details FROM software_offers WHERE id=? AND sent_at IS NOT NULL").bind(project.offer_id).first<{details:string|null}>();
+  return row?.details ? JSON.parse(row.details) as {review_business_days?:string|number;correction_calendar_days?:string|number;handoff_access_days?:number} : null;
+}

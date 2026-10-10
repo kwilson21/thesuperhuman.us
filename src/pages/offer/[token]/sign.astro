@@ -33,7 +33,7 @@ if(!offer?.msa_template_id) Astro.response.status=404;
   <h1 class="page-title">{Astro.url.searchParams.has('email')?'Check your email.':'Open your agreement.'}</h1>
   <p class="page-lede">{Astro.url.searchParams.has('email')?`I sent a link to ${recipient}. Tap it on any device to open your agreement.`:'Use a one-time email link to review and sign.'}</p>
   <form class="agreement-form" action={`/api/offer/${token}/link`} method="post" data-agreement-link>
-    <div class="cf-turnstile" data-sitekey={env.PUBLIC_TURNSTILE_SITE_KEY??import.meta.env.PUBLIC_TURNSTILE_SITE_KEY} data-size="compact"></div>
+    <div class="cf-turnstile" data-sitekey={env.PUBLIC_TURNSTILE_SITE_KEY??import.meta.env.PUBLIC_TURNSTILE_SITE_KEY} data-size="compact" data-appearance={Astro.url.searchParams.has('email')?'interaction-only':undefined}></div>
     <button class="studio-button">{Astro.url.searchParams.has('email')?"Didn't get it? Send it again":'Send a new link'}</button>
   </form><p class="agreement-status" role="status" aria-live="polite"></p>
   <noscript><p>The security check needs JavaScript. Contact Kazon for outside-site signing.</p></noscript>
@@ -49,21 +49,21 @@ if(!offer?.msa_template_id) Astro.response.status=404;
     <input type="hidden" name="csrf_nonce" value={session.csrf_nonce} />
     <input type="hidden" name="documents" value={JSON.stringify(readyDocs.map(d=>({id:d.id,hash:d.text_sha256})))} />
     <div class="offer-columns"><div>
-      <section class="signing-card"><h2>What you're getting</h2><p>{terms.summary}</p><p class="agreement-meta">{terms.milestones.length} milestones · {formatUSD(offerTotal(terms))} fixed · {terms.paymentMode==='standard'?'50% deposit before each milestone':'Invoices on delivery, due within 30 days'} · done by {softwareDate(JSON.parse(offer.agreement_details_json!).planned_end)}</p>
+      <section class="signing-card"><h2>What you're getting</h2><p>{terms.summary}</p><p class="agreement-meta">{terms.milestones.length} {terms.milestones.length===1?'milestone':'milestones'} · {formatUSD(offerTotal(terms))} fixed · {terms.paymentMode==='standard'?'50% deposit before each milestone':'Invoices on delivery, due within 30 days'} · done by {softwareDate(JSON.parse(offer.agreement_details_json!).planned_end)}</p>
       {reused && <p>Your signed agreement from {softwareDate(reused.effective_on)} still applies. <a href="#executed-agreement">Read it</a></p>}
-      <p>{!reused && <a href="#review-msa" data-document-link="msa">Read the agreement</a>} <a href="#review-sow" data-document-link="sow">Read the statement of work</a></p>
+      {!reused && <p><a href="#review-msa" data-document-link="msa">Read the agreement</a></p>}<p><a href="#review-sow" data-document-link="sow">Read the statement of work</a></p>
       <SoftwareAgreedTerms terms={terms} values={sow ? JSON.parse(sow.values_json) : null} agreementDetails={validateAgreementDetails(JSON.parse(offer.agreement_details_json!),terms)} documents={readyDocs} websiteSigned={false} conversationOpen={false} signing={true} />
       {reused && <details id="executed-agreement"><summary>Signed agreement</summary><a href={`/api/agreements/${reused.id}/file`}>Download executed MSA</a><pre class="agreement-text">{reused.canonical_text}</pre></details>}
       {(JSON.parse(offer.agreement_details_json!).attachments??[]).map((a:{key:string;filename:string})=><p><a href={`/api/agreements/attachments/${a.key.split('/').pop()!.replace('.pdf','')}`}>Review attachment: {a.filename}</a></p>)}
-</section>
-      <p class="agreement-meta">{agreementVersionLabel}</p><section class="agreement-section"><h2>Your details</h2><p class="agreement-hint">Filled in from your brief. Change anything that's off.</p>
+<p class="agreement-meta">Agreement version {agreementVersionLabel}</p></section>
+      <section class="agreement-section"><h2>Your details</h2><p class="agreement-hint">Filled in from your brief. Change anything that's off.</p>
       {sameAsPrevious && <p data-returning-summary>Same as last time: {previous.legal_name}, {previous.entity_type}, {previous.jurisdiction}, {previous.business_address}. <button type="button" class="studio-quiet" data-edit-details>Edit</button></p>}
       <div class="signing-fields" data-business-details hidden={sameAsPrevious}>
       <label>Legal business name<input class="studio-input" name="legal_name" id="legal_name" value={draft.legal_name} maxlength="200" required aria-describedby="error-legal_name" /><span id="error-legal_name" data-field-error="legal_name"></span></label>
       {!previous && <label>Your title<input class="studio-input" name="signer_title" id="signer_title" value={draft.signer_title} placeholder="e.g. Owner, Operations Lead" maxlength="200" required aria-describedby="error-signer_title" /><span id="error-signer_title" data-field-error="signer_title"></span></label>}
       <label>Business type<select class="studio-select" name="entity_type" id="entity_type" required aria-describedby="error-entity_type"><option value="">Choose</option>{businessTypes.map(v=><option value={v} selected={v===draft.entity_type}>{v}</option>)}</select><span id="error-entity_type" data-field-error="entity_type"></span></label>
       <label>State<select class="studio-select" name="state" id="state" required aria-describedby="error-state"><option value="">Choose</option>{states.map(v=><option value={v} selected={v===draft.state}>{v}</option>)}</select><span id="error-state" data-field-error="state"></span></label>
-      <label data-country hidden={draft.state!=='Outside the US'}>Country<input class="studio-input" name="country" id="country" value={draft.country} maxlength="100" aria-describedby="error-country" /><span id="error-country" data-field-error="country"></span></label>
+      <label data-country>Country<input class="studio-input" name="country" id="country" value={draft.country || (states.includes(draft.state) && draft.state!=='Outside the US'?'United States':'')} maxlength="100" aria-describedby="error-country" /><span id="error-country" data-field-error="country"></span></label>
       <label class="signing-wide">Business mailing address<textarea class="studio-textarea" name="business_address" id="business_address" maxlength="1000" required aria-describedby="error-business_address">{draft.business_address}</textarea><span id="error-business_address" data-field-error="business_address"></span></label>
       </div>
       {previous && <label>Your title<input class="studio-input" name="signer_title" id="signer_title" value={draft.signer_title} placeholder="e.g. Owner, Operations Lead" maxlength="200" required aria-describedby="error-signer_title" /><span id="error-signer_title" data-field-error="signer_title"></span></label>}

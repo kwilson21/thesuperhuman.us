@@ -175,7 +175,7 @@ describe('screenshot coverage', () => {
           expect(seed).toContain(expired ? '2000-01-01' : '2099-01-01');
           const page = {
             url: () => url.href,
-            getByText: (text: string) => { expect(text).toBe('This link works once.'); return {isVisible:async()=>true}; },
+            getByText: (text: string) => { expect(text).toBe(expired?'Links work once and last an hour.':'This link works once.'); return {isVisible:async()=>true}; },
             getByRole: (role: string, options: any) => {
               expect(options.exact).toBe(true);
               expect(options.name).toBe(expired ? 'This link has expired.' : role==='button' ? (url.pathname.startsWith('/offer/')?'Continue to sign':'Continue') : url.pathname.startsWith('/offer/')?'Your agreement is ready.':'Your documents are ready.');

@@ -5,7 +5,7 @@ import SoftwareAcceptanceChecks from '~/components/SoftwareAcceptanceChecks.astr
 import SoftwareProjectUpdate from '~/components/SoftwareProjectUpdate.astro';
 import { getOwnerRequest, listOwnerRequests } from '~/lib/owner-requests';
 import { clientPortalEnabled } from '~/lib/audio-client-access';
-import { clearUnmetRevisionEvidence, deliveredIndexes, getSoftwareProject, listSoftwareUpdates, projectTerms, evidenceTypes, softwareRevisionTargets, softwareRevisionHistoryBody, updateKinds, sharedSoftwareUpdates } from '~/lib/software-projects';
+import { clearUnmetRevisionEvidence, deliveredIndexes, getSoftwareProject, listSoftwareUpdates, projectTerms, projectAgreementDetails, evidenceTypes, softwareRevisionTargets, softwareRevisionHistoryBody, updateKinds, sharedSoftwareUpdates } from '~/lib/software-projects';
 import { listSoftwareInvoices, payableSoftwareInvoice, manualPaymentReminder } from '~/lib/software-invoices';
 import type { ClientSoftwareUpdate } from '~/lib/software-projects';
 import '~/styles/studio.css';
@@ -33,8 +33,8 @@ const unmetRevisionChecks = unmetRevisionIndexes.map(index=>revisionChecks[index
 const missingRevisionIndexes = revisionTargets.deliverables;
 const inaccessibleRevisionIndexes = revisionTargets.inaccessibleDeliverables;
 const revisionEvidence = revisionSource ? JSON.parse(revisionSource.criteria_json ?? '[]') as string[] : [];
-const agreementValues = project.agreement_id ? await db.prepare("SELECT values_json FROM software_agreements WHERE id=? AND status='executed'").bind(project.agreement_id).first<{values_json:string}>() : null;
-const agreedReviewDays = agreementValues ? Number(JSON.parse(agreementValues.values_json).owner?.review_business_days) : null;
+const agreementDetails = await projectAgreementDetails(db,project);
+const agreedReviewDays = agreementDetails?.review_business_days ? Number(agreementDetails.review_business_days) : null;
 const links: {label:string;url:string}[] = seed ? JSON.parse(seed.links_json ?? '[]') : [];
 const savedReferences = [...new Map(history.filter(item=>item.status!=='draft').flatMap(item=>{
   try { return (JSON.parse(item.links_json) as {label:string;url:string}[]).filter(reference=>{
@@ -98,7 +98,7 @@ update.delivered_deliverables_json = JSON.stringify(initialDeliverables);
           <p class="rail-caption">Rights in this milestone’s work transfer on full payment. Hand off within 5 Business Days of payment.</p>
           <p class="rail-caption" data-handoff-unavailable hidden>Share an accepted delivery review before handing off this milestone.</p>
           <h2>Delivered links</h2>
-          <p id="handoff-links-hint" class="rail-caption">Keep the files available for at least 30 days.</p>
+          <p id="handoff-links-hint" class="rail-caption">Keep these files available for {agreementDetails?.handoff_access_days ?? 30} days.</p>
           {Array.from({length:10},(_,index)=><div data-handoff-link hidden={index>=Math.max(1,links.length)}><label>Link {index+1} label<input class="studio-input" name="link_label" maxlength="80" placeholder="Delivered files or handoff notes" value={links[index]?.label ?? ''} /></label><label>HTTPS URL<input class="studio-input" name="link_url" type="url" placeholder="https://…" aria-describedby="handoff-links-hint" value={links[index]?.url ?? ''} /></label></div>)}
           <button type="button" class="studio-quiet" data-add-link>Add another link</button>
         </section>

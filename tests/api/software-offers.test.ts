@@ -441,3 +441,13 @@ it('allows only one overlapping decline to email and record its resolution', asy
   expect(sql.prepare("SELECT * FROM owner_request_audit WHERE action='declined'").all()).toHaveLength(1);
   expect(sql.prepare('SELECT status FROM owner_requests').get()).toEqual({ status:'resolved' });
 });
+
+it('reissues a pre-signing offer in its original external mode',async()=>{
+  const first=await send(await draft());
+  sql.exec("UPDATE software_signing_settings SET software_signing_enabled=1");
+  sql.exec("UPDATE software_offer_links SET created_at='2020-01-01'");
+  expect((await call({action:'revoke',expectedLinkCreatedAt:'2020-01-01'})).status).toBe(200);
+  await send(first);
+  expect(sql.prepare('SELECT msa_template_id FROM software_offers').get().msa_template_id).toBeNull();
+  expect(JSON.stringify((fetch as any).mock.calls)).toContain('sign outside the website');
+});
