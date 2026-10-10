@@ -16,6 +16,7 @@ import bankSyncDiagram from '~/assets/projects/tally/bank-sync-diagram.webp';
 import accountsPage from '~/assets/projects/tally/accounts-annotated.webp';
 import emptyStates from '~/assets/projects/tally/empty-states-annotated.webp';
 import formFeedback from '~/assets/projects/tally/form-feedback-annotated.webp';
+import merchantNameSuggestion from '~/assets/projects/tally/merchant-name-suggestion.webp';
 
 export const tallyStory = {
   title: 'Tally',
@@ -36,7 +37,7 @@ export const tallyDecisionHighlights = [
     entries: [{ entry: 'tally-jev-categorization' }, { entry: 'tally-merchant-names' }],
     headline: 'AI suggestions, with people in control',
     decision: 'Jev suggests categories, and Workers AI suggests names for bank text with no clean name. A person has the final say on both.',
-    relevance: 'Every suggestion stays visible and editable.',
+    relevance: 'You can change the category or reject the suggested name.',
   },
   {
     entries: [{ entry: 'tally-design-system-catalog' }],
@@ -178,6 +179,7 @@ export const tallyMilestones: Milestone[] = [
   {
     id: 'tally-merchant-names', day: '2026-10-06',
     title: 'Names for bank text, chosen by a person',
-    summary: 'Tally’s rule is that the app helps and doesn’t decide. Some bank text comes without a clean store name, so Plaid’s merchant name comes first. When Plaid sends none, Workers AI suggests up to three names, and a person picks one, types their own, or turns the suggestions down. A name a person turns down is never suggested again. Each AI feature has its own switch in Settings. Built and tested.',
+    summary: 'I kept to one rule: the app helps and doesn\'t decide. Some bank text comes without a clean store name, so Plaid’s merchant name comes first. When Plaid sends none, Workers AI suggests up to three names, and a person picks one, types their own, or turns the suggestions down. A name a person turns down is never suggested again. Merchant-name suggestions are optional, with their own switch in Settings. Implemented with unit tests.',
+    artifacts: [artifact(merchantNameSuggestion, 'Tally · Names for bank text, chosen by a person', 'A suggested store name, shown dashed until a person chooses it. From a local demo run on fictional data.', 'Screen capture, demo data')],
   },
 ];
