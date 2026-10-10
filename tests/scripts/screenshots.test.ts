@@ -332,7 +332,7 @@ it('captures the work-first project states at desktop and phone sizes',async()=>
   const scenario=await import('../../scripts/screenshots/scenarios/software-project.mjs');
   const files:string[]=[];
   await scenario.default.run({sql:()=> '[]',ownerFetch:async()=>({}),capture:async({file}:{file:string})=>{files.push(file);return file;}});
-  for(const state of ['first','shared','direction-review','delivery-review','changes-open','delivery-complete','delivery-invoice-terms','accepted','handoff','earlier-versions']) {
+  for(const state of ['first','shared','direction-review','delivery-review','changes-open','delivery-complete','delivery-invoice-terms','accepted','paid-handoff-pending','handoff','earlier-versions','progress-after-handoff','next-milestone-starting']) {
     for(const viewport of ['desktop','phone']) expect(files).toContain(`software-project-${state}-${viewport}.png`);
   }
 });
@@ -350,4 +350,22 @@ it('can seed empty details after link-landing captures have autosaved a draft',a
    },ownerFetch:async()=>{throw stop;},
   })).rejects.toBe(stop);
  } finally {sql.close();}
+});
+
+
+it.each([false,true])('runs the change-request capture checks with a saved Not yet mark: %s',async(saved)=>{
+  const scenario=await import('../../scripts/screenshots/scenarios/software-project.mjs');
+  let prepared=0;
+  await scenario.default.run({sql:()=> '[]',ownerFetch:async()=>({}),capture:async({file,prepare}:any)=>{
+    if(file.includes('changes-open')) {
+      let marked=saved,checked=false,manual=false;
+      const first=(value:any)=>({...value,first:()=>value});
+      const mark={getAttribute:async()=>String(marked),click:async()=>{marked=!marked;if(!manual)checked=marked;}};
+      const checkbox={isChecked:async()=>checked,uncheck:async()=>{checked=false;manual=true;},check:async()=>{checked=true;manual=true;}};
+      await prepare({locator:(selector:string)=>selector.includes('not-yet') ? first(mark) : selector.includes('works') ? first({click:async()=>{marked=false;if(!manual)checked=false;}}) : selector==='[name=criteria]' ? first(checkbox) : selector.includes('summary') ? {click:async()=>{if(!manual)checked=marked;}} : {fill:async()=>{}},waitForFunction:async()=>{expect(checked).toBe(true);}});
+      expect(checked).toBe(true);prepared++;
+    }
+    return file;
+  }});
+  expect(prepared).toBe(2);
 });

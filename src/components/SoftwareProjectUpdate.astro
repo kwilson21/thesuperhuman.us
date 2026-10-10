@@ -18,13 +18,14 @@ const deliveryReferences = update.kind === 'delivery_review' ? references.filter
   {workFirst ? <>
     {visualUrl ? <figure><img src={visualUrl} alt={update.visual_alt} /></figure> : <div class="work-frame">{projectName}</div>}
     {update.kind==='direction_review' && <p class="access-note">Sketch, not built yet</p>}
-    {update.preview_url && <p><a class="studio-button" href={update.preview_url} target="_blank" rel="noopener noreferrer">Open {softwareVersionNumber(update) ? `version ${softwareVersionNumber(update)}` : update.artifact_version || 'work'} ↗</a></p>}
+    {update.preview_url && <p><a class="studio-button" href={update.preview_url} target="_blank" rel="noopener noreferrer">Open {softwareVersionNumber(update) ? softwareVersionLabel(update).toLowerCase() : update.artifact_version || 'work'} ↗</a></p>}
     {partialDelivery && <p>This version doesn't include everything we agreed yet. <a class="site-link" data-open-details href={`#included-${update.id}`}>See what's included</a></p>}
     {update.kind==='delivery_review' && <details id={`included-${update.id}`}><summary>See what's included</summary><h3>Included in this delivery</h3><ul>{includedDeliverables.map(item=><li>{item}</li>)}</ul><section data-preview-delivery-scope><h3>Full agreed scope · Milestone {(update.milestone_index ?? 0)+1}</h3><ul>{deliverables.map(item=><li>{item}</li>)}</ul></section>
       {checks.length>0 && <SoftwareAcceptanceChecks checks={checks} evidence={evidence} />}
       {deliveryReferences.length>0 && <><h3>Supporting links</h3><ul>{deliveryReferences.map(link=><li><a href={link.url} target="_blank" rel="noopener noreferrer">{link.label}</a></li>)}</ul></>}
       {update.checks_limitations && <><h3>Not included yet</h3><p>{update.checks_limitations}</p></>}
     </details>}
+    {update.next_step && <p>Next from me: {update.next_step}</p>}
     {update.kind!=='delivery_review' && update.checks_limitations && <section><h3>Not included yet</h3><p>{update.checks_limitations}</p></section>}
   </> : <>
   <p class="studio-kicker" data-preview-kicker>{(preview ? [evidenceTypes[update.evidence_type], update.artifact_version, update.evidence_type === 'concept' ? 'Not implemented' : ''] : [softwareVersionLabel(update)]).filter(Boolean).join(' · ')}</p>
@@ -33,7 +34,7 @@ const deliveryReferences = update.kind === 'delivery_review' ? references.filter
     <img src={visualUrl} alt={update.visual_alt} data-preview-image loading={preview ? 'eager' : 'lazy'} />
     <figcaption data-preview-caption>{update.evidence_type === 'concept' ? preview ? 'Illustrative concept' : 'Sketch, not built yet' : preview ? update.artifact_version : softwareVersionLabel(update)}</figcaption>
   </figure>
-  <p hidden={!update.preview_url} data-preview-link-row><a href={update.preview_url || undefined} data-preview-link target="_blank" rel="noopener noreferrer">{preview ? 'Open preview ↗' : `Open ${softwareVersionNumber(update) ? `version ${softwareVersionNumber(update)}` : update.artifact_version || 'work'} ↗`}</a></p>
+  <p hidden={!update.preview_url} data-preview-link-row><a href={update.preview_url || undefined} data-preview-link target="_blank" rel="noopener noreferrer">{preview ? 'Open preview ↗' : `Open ${softwareVersionNumber(update) ? softwareVersionLabel(update).toLowerCase() : update.artifact_version || 'work'} ↗`}</a></p>
   <p class="delivery-preview-links access-note" hidden={!update.preview_url} data-preview-access-note>Client access to this preview link is not verified by the site.</p>
   {!preview && update.kind==='delivery_review' && deliverables.length>0 && <section class="delivery-included" aria-labelledby={`delivery-included-${update.id}`}>
     <h3 id={`delivery-included-${update.id}`}>Included in this delivery</h3>
@@ -52,7 +53,8 @@ const deliveryReferences = update.kind === 'delivery_review' ? references.filter
     <h3>Supporting links</h3><ul data-preview-delivery-link-list>{deliveryReferences.map(reference=><li><a href={reference.url} target="_blank" rel="noopener noreferrer">{reference.label}</a></li>)}</ul>
     <p class="access-note">The owner provided these HTTPS links. The site does not verify that each recipient can open them.</p>
   </section>}
-  {(['what_changed','checks_limitations','client_request'] as const).map((key, index) => <section data-preview-section={key} hidden={!update[key]}><h3>{index === 0 ? 'What changed' : index === 1 ? preview ? 'Checks and limitations' : 'Not included yet' : 'What I need from you'}</h3><p data-preview-text={key}>{update[key]}</p></section>)}
+  {(['what_changed','checks_limitations','client_request'] as const).map((key, index) => <section data-preview-section={key} hidden={!update[key]}><h3>{index === 0 ? 'What changed' : index === 1 ? preview ? 'Checks and limitations' : update.kind==='handoff' ? 'Not included' : 'Not included yet' : 'What I need from you'}</h3><p data-preview-text={key}>{update[key]}</p></section>)}
+  {!preview && update.next_step && <section><h3>{update.kind==='handoff' ? 'Support after handoff' : 'Next from me'}</h3><p>{update.next_step}</p></section>}
   {!preview && update.kind==='delivery_review' && checks.length>0 && <SoftwareAcceptanceChecks checks={checks} evidence={evidence} />}
   </>}
 </article>

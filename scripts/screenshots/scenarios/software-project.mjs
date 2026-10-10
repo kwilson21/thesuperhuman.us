@@ -114,7 +114,7 @@ export default {
     }});
     await share({kind:'progress',title:'The next update',client_request:''});
     await shot('Progress update with an undecided delivery review',`/studio/software/${id}`,'progress-pending-review',{cookie});
-    await shot('Delivery change request form open',`/studio/software/${id}`,'changes-open',{cookie,prepare:async page=>{await page.locator('[data-review-mark="not-yet"]').first().click();await page.locator('[data-request-changes] summary').click();if(!await page.locator('[name=criteria]').first().isChecked()) throw new Error('Not yet must pre-tick the matching agreed check.');await page.locator('[name=note]').fill('Adding the fictional sample client does not save.');}});
+    await shot('Delivery change request form open',`/studio/software/${id}`,'changes-open',{cookie,prepare:async page=>{const mark=page.locator('[data-review-mark="not-yet"]').first();if(await mark.getAttribute('aria-pressed')!=='true') await mark.click();await page.locator('[data-request-changes] summary').click();await page.waitForFunction(()=>document.querySelector('[data-request-changes] input[name=criteria]')?.checked);const check=page.locator('[name=criteria]').first();if(!await check.isChecked()) throw new Error('Not yet must pre-tick the matching agreed check.');await page.locator('[data-review-mark="works"]').first().click();if(await check.isChecked()) throw new Error('Works must clear a helper-ticked check.');await mark.click();if(!await check.isChecked()) throw new Error('Not yet must re-tick an untouched check.');await check.uncheck();await page.locator('[data-request-changes] summary').click();await page.locator('[data-request-changes] summary').click();if(await check.isChecked()) throw new Error('Reopening changes must preserve a manual untick.');await check.check();await page.locator('[name=note]').fill('Adding the fictional sample client does not save.');}});
     await decide(review,{decision:'changes_requested',criteria:[0],note:'Adding the fictional sample client does not save.'});
     const corrected=await share({...delivery,artifact_version:'Delivery v2',delivered_deliverables:terms.milestones[0].deliverables});
     await shot('Redelivery invoice replacement prompt',`/owner/requests/${id}`,'redelivery-invoice',{owner:true});
@@ -125,9 +125,15 @@ export default {
     await decide(corrected,{decision:'milestone_accepted',confirm:true});
     await shot('Accepted delivery before full-payment handoff',`/studio/software/${id}`,'accepted',{cookie});
     sql(`UPDATE software_invoices SET status='paid',status_updated_at=${quote(at)} WHERE id='screenshot-balance'`);
+    sql(`INSERT INTO software_milestone_payments(request_id,milestone_index,paid_recorded_at,recorded_by) VALUES (${quote(id)},0,${quote(at)},'owner@example.com')`);
+    await shot('Paid delivery awaiting handoff',`/studio/software/${id}`,'paid-handoff-pending',{cookie});
     await share({kind:'handoff',artifact_version:'Delivery v2',title:'Your handoff is ready.',what_changed:'Delivered files and operating notes.',checks_limitations:'Fictional sample only. Live rollout is outside scope.',next_step:'Corrections within the correction period. Anything new is a separate milestone.',paid_confirmed:true,links:[{label:'Download handoff notes',url:'https://example.com/notes'},{label:'View delivered files',url:'https://example.com/files'}],client_request:''});
     await shot('Accepted milestone with handoff ready',`/studio/software/${id}`,'handoff',{cookie});
     await shot('Earlier versions with their own decisions',`/studio/software/${id}`,'earlier-versions',{cookie,prepare:async page=>{await page.getByText('Earlier versions',{exact:true}).click();}});
+    await share({kind:'progress',title:'Guide updated after handoff',what_changed:'I updated the operating guide.',client_request:''});
+    await shot('Progress after handoff keeps files and notes',`/studio/software/${id}`,'progress-after-handoff',{cookie});
+    sql(`UPDATE software_projects SET milestone_index=1,next_update_on='2026-10-16' WHERE request_id=${quote(id)}`);
+    await shot('New milestone before its first update',`/studio/software/${id}`,'next-milestone-starting',{cookie});
     await shot('Owner milestone statuses and full-payment record',`/owner/requests/${id}`,'milestone-statuses',{owner:true});
     await share({kind:'direction_review',milestone_index:1,artifact_version:'Direction v1',title:'Client follow-up direction',client_request:''});
     await shot('Milestone 2 direction review with milestone 1 handoff',`/studio/software/${id}`,'next-milestone-handoff',{cookie});

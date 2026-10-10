@@ -43,7 +43,7 @@ it('sends included but inaccessible items through a separate selection',async()=
 
 it('keeps helper marks local to a review and pre-ticks only Not yet when opening changes',()=>{
   const listeners:Record<string,(event?:any)=>void>={};
-  const checkbox={value:'0',checked:false};
+  const checkbox={value:'0',checked:false,addEventListener:(_event:string,handler:any)=>listeners.manual=handler};
   const makeMark=(mark:string)=>({dataset:{reviewCheck:'0',reviewMark:mark},setAttribute:vi.fn(),addEventListener:(_event:string,handler:any)=>listeners[mark]=handler});
   const works=makeMark('works'),notYet=makeMark('not-yet');
   const details={addEventListener:(_event:string,handler:any)=>listeners.toggle=handler};
@@ -53,7 +53,9 @@ it('keeps helper marks local to a review and pre-ticks only Not yet when opening
   vi.stubGlobal('localStorage',storage);vi.stubGlobal('document',{querySelectorAll:()=>[form]});vi.stubGlobal('fetch',vi.fn());
   setupSoftwareReviews();expect(storage.getItem).toHaveBeenCalledWith('software-review:/review/version-2');expect(notYet.setAttribute).toHaveBeenLastCalledWith('aria-pressed','true');
   listeners.toggle({currentTarget:{open:true}});expect(checkbox.checked).toBe(true);
-  listeners.works();expect(works.setAttribute).toHaveBeenLastCalledWith('aria-pressed','true');expect(storage.setItem).toHaveBeenLastCalledWith('software-review:/review/version-2','{"0":"works"}');expect(fetch).not.toHaveBeenCalled();
+  listeners.works();expect(checkbox.checked).toBe(false);listeners['not-yet']();expect(checkbox.checked).toBe(true);listeners['not-yet']();expect(checkbox.checked).toBe(false);listeners.works();expect(works.setAttribute).toHaveBeenLastCalledWith('aria-pressed','true');expect(storage.setItem).toHaveBeenLastCalledWith('software-review:/review/version-2','{"0":"works"}');expect(fetch).not.toHaveBeenCalled();
+  checkbox.checked=true;listeners.manual();listeners.works();expect(checkbox.checked).toBe(true);listeners['not-yet']();expect(checkbox.checked).toBe(true);
+  checkbox.checked=false;listeners.manual();listeners.toggle({currentTarget:{open:true}});expect(checkbox.checked).toBe(false);listeners.works();listeners['not-yet']();expect(checkbox.checked).toBe(false);
   storage.getItem.mockImplementation(()=>{throw new Error('Unavailable');});storage.setItem.mockImplementation(()=>{throw new Error('Unavailable');});
   expect(()=>setupSoftwareReviews()).not.toThrow();expect(()=>listeners['not-yet']()).not.toThrow();
 });

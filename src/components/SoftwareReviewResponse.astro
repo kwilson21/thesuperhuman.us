@@ -1,5 +1,5 @@
 ---
-import { softwareDate, softwareClientRevisionBody, softwareVersionLabel } from '~/lib/software-projects';
+import { softwareDate, softwareClientRevisionBody, softwareVersionLabel, softwareVersionNumber } from '~/lib/software-projects';
 import type { ClientSoftwareUpdate } from '~/lib/software-projects';
 type Props = { update: ClientSoftwareUpdate; checks: string[]; deliverables?: string[]; missingDeliverables?: {label:string;index:number}[]; inaccessibleDeliverables?: {label:string;index:number}[]; milestoneName: string; endpoint: string; readonly?: boolean; canAccept?: boolean };
 const {update,checks,deliverables=[],missingDeliverables=[],inaccessibleDeliverables=[],milestoneName,endpoint,readonly=false,canAccept=true}=Astro.props;
@@ -14,7 +14,7 @@ const decisionBody=softwareClientRevisionBody(update.decision_body,checks,delive
     {update.decision==='changes_requested' && <p>{decisionBody}</p>}
   </> : readonly ? <p>This update is shown for reference.</p> : <form data-software-review data-endpoint={endpoint} data-version={version} data-milestone={milestoneName} data-direction={String(direction)}>
     {!direction && <><p>Mark what you've tried. Nothing is accepted until you click Accept.</p><div class="try-checks">{checks.map((check,index)=><div class="try-check"><span>{check}</span><div role="group" aria-label={check}><button type="button" data-review-check={index} data-review-mark="works" aria-pressed="false">Works</button><button type="button" data-review-check={index} data-review-mark="not-yet" aria-pressed="false">Not yet</button></div></div>)}</div></>}
-    <button class="studio-button" type="submit" name="decision" formnovalidate value={direction ? 'direction_confirmed' : 'milestone_accepted'} disabled={!direction && !canAccept}>{direction ? 'Confirm this direction' : `Accept ${version.toLowerCase()}`}</button>
+    <button class="studio-button" type="submit" name="decision" formnovalidate value={direction ? 'direction_confirmed' : 'milestone_accepted'} disabled={!direction && !canAccept}>{direction ? 'Confirm this direction' : `Accept ${softwareVersionNumber(update) ? version.toLowerCase() : version}`}</button>
     {!direction && !canAccept && <p>This version can't be accepted yet because it doesn't include everything we agreed. You can still try it and send notes.</p>}
     <details data-request-changes><summary>Something's not right? Tell me what</summary>
       {!direction && <fieldset><legend>Which agreed checks are unmet?</legend>{checks.map((check,index)=><label class="check-choice"><input type="checkbox" name="criteria" value={index} />{check}</label>)}<p class="hint">Select a check that does not pass, or choose a deliverable below.</p></fieldset>}

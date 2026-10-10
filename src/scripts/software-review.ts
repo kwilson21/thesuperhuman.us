@@ -18,18 +18,29 @@ export function setupSoftwareReviews() {
     } catch { /* The helper still works when browser storage is unavailable. */ }
     const renderMarks=()=>marks.forEach(button=>button.setAttribute('aria-pressed',String(saved[button.dataset.reviewCheck!]===button.dataset.reviewMark)));
     renderMarks();
+    const criteria=Array.from(form.querySelectorAll<HTMLInputElement>('[name=criteria]'));
+    const helperTicked=new Set<HTMLInputElement>(),manual=new Set<HTMLInputElement>();
+    criteria.forEach(checkbox=>checkbox.addEventListener('change',()=>{
+      manual.add(checkbox);helperTicked.delete(checkbox);
+    }));
+    const syncCriteria=()=>criteria.forEach(checkbox=>{
+      if(manual.has(checkbox)) return;
+      if(saved[checkbox.value]==='not-yet' && !checkbox.checked) {
+        checkbox.checked=true;helperTicked.add(checkbox);
+      } else if(saved[checkbox.value]!=='not-yet' && helperTicked.has(checkbox)) {
+        checkbox.checked=false;helperTicked.delete(checkbox);
+      }
+    });
     marks.forEach(button=>button.addEventListener('click',()=>{
       if(busy) return;
       const index=button.dataset.reviewCheck!, mark=button.dataset.reviewMark!;
       if(saved[index]===mark) delete saved[index]; else saved[index]=mark;
-      renderMarks();
+      renderMarks();syncCriteria();
       try { localStorage.setItem(storageKey,JSON.stringify(saved)); } catch { /* Optional browser helper. */ }
     }));
     form.querySelector<HTMLDetailsElement>('[data-request-changes]')?.addEventListener('toggle',event=>{
       if(!(event.currentTarget as HTMLDetailsElement).open) return;
-      form.querySelectorAll<HTMLInputElement>('[name=criteria]').forEach(checkbox=>{
-        if(saved[checkbox.value]==='not-yet') checkbox.checked=true;
-      });
+      syncCriteria();
     });
     form.addEventListener('submit',async event=>{
       event.preventDefault();if(busy)return;

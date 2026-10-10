@@ -1,7 +1,7 @@
 import { hashValue } from './audio-client-access';
 import type { ProjectMessage } from './audio-project-messages';
 import { z } from 'astro/zod';
-import { deliveredScope, getSoftwareProject, projectTerms, softwareAudit, softwareGuard, softwareClientRevisionBody, softwareVersionLabel, softwareRevisionHistoryBody } from './software-projects';
+import { deliveredScope, getSoftwareProject, projectTerms, softwareAudit, softwareGuard, softwareClientRevisionBody, softwareVersionLabel, softwareVersionNumber, softwareRevisionHistoryBody } from './software-projects';
 import type { SoftwareDecision, SoftwareUpdate } from './software-projects';
 export type SoftwareProjectMessage = Omit<ProjectMessage, 'review_decision'> & { review_decision: null; decision: SoftwareDecision | null; update_id: string | null };
 const messageColumns = 'id,actor,body,created_at,read_at,NULL AS review_decision,decision,update_id';
@@ -70,9 +70,10 @@ export function readableSoftwareProjectMessages(
     const update=updates.find(item=>item.id===message.update_id), milestone=terms.milestones[update?.milestone_index ?? 0];
     if(!milestone || !update) return message;
     if(reader==='owner') return message.decision==='changes_requested' ? {...message,body:softwareRevisionHistoryBody(message.body,milestone.acceptance,milestone.deliverables)} : message;
-    const version=softwareVersionLabel({artifact_version:update.artifact_version ?? '',kind:update.kind});
-    if(message.decision!=='changes_requested') return {...message,body:message.decision==='direction_confirmed' ? 'You confirmed this direction.' : `You accepted ${version.toLowerCase()}.`};
-    return {...message,body:`You asked for changes to ${version.toLowerCase()}.\n\n${softwareClientRevisionBody(message.body,milestone.acceptance,milestone.deliverables)}`};
+    const label=softwareVersionLabel({artifact_version:update.artifact_version ?? '',kind:update.kind});
+    const version=softwareVersionNumber({artifact_version:update.artifact_version ?? ''}) ? label.toLowerCase() : label;
+    if(message.decision!=='changes_requested') return {...message,body:message.decision==='direction_confirmed' ? 'You confirmed this direction.' : `You accepted ${version}.`};
+    return {...message,body:`You asked for changes to ${version}.\n\n${softwareClientRevisionBody(message.body,milestone.acceptance,milestone.deliverables)}`};
   });
 }
 

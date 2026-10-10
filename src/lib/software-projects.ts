@@ -42,12 +42,12 @@ export type SoftwareUpdate = Omit<SoftwareUpdateInput, 'email_client' | 'criteri
 };
 export const projectTerms = (project: { terms_json: string }) => offerTermsSchema.parse(JSON.parse(project.terms_json));
 export function softwareVersionNumber(update: { artifact_version: string }) {
-  return update.artifact_version.match(/(?:v|version |sketch )(\d+)/i)?.[1] ?? null;
+  return update.artifact_version.match(/^(?:Delivery|Direction) v(\d+)$/i)?.[1] ?? null;
 }
 export function softwareVersionLabel(update: { artifact_version: string; kind?: string }) {
   const number=softwareVersionNumber(update);
   if(!number) return update.artifact_version || 'Latest update';
-  return update.kind==='direction_review' ? number==='1' ? 'First sketch' : `Sketch ${number}` : `Version ${number}`;
+  return /^Direction /i.test(update.artifact_version) ? `Sketch ${number}` : `Version ${number}`;
 }
 export function softwareStateSentence(project: { state: string; waiting_for: string }) {
   return ({ preparing: 'Getting set up.', building: 'In progress.', waiting_for_input: `Waiting on you: ${project.waiting_for}`, ready_for_review: 'Ready for your review.', complete: 'Complete.' }[project.state] ?? 'Getting set up.');

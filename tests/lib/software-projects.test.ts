@@ -967,7 +967,9 @@ it('shows client revision events as sentences while preserving stored target par
   expect(text).toBe('You marked "Add a client" as not working yet.\n\nYou reported "Sample import" as not included yet.\n\nYou could not open or find "Status view".\n\nThe sample form failed.');
   expect(text).not.toContain('Checks reported unmet:');expect(softwareRevisionTargets(body,['Add a client'],['Status view','Sample import']).checks).toEqual([0]);
   expect(softwareVersionLabel({artifact_version:'Delivery v2',kind:'delivery_review'})).toBe('Version 2');
-  expect(softwareVersionLabel({artifact_version:'Direction v1',kind:'direction_review'})).toBe('First sketch');
+  expect(softwareVersionLabel({artifact_version:'Direction v1',kind:'direction_review'})).toBe('Sketch 1');
+  for(const label of ['v2','Version 2','Release V2 beta','Delivery v2 final',' Delivery v2','Client Sketch 3']) expect(softwareVersionLabel({artifact_version:label,kind:'delivery_review'})).toBe(label);
+  expect(softwareVersionLabel({artifact_version:'dElIvErY V12',kind:'delivery_review'})).toBe('Version 12');
   expect(softwareVersionLabel({artifact_version:'Direction v3',kind:'direction_review'})).toBe('Sketch 3');
   expect(softwareVersionLabel({artifact_version:'Release candidate',kind:'delivery_review'})).toBe('Release candidate');
   const messages=[{body,decision:'changes_requested',update_id:'v2'}] as any;
@@ -975,4 +977,6 @@ it('shows client revision events as sentences while preserving stored target par
   const terms={milestones:[{acceptance:['Add a client'],deliverables:['Status view','Sample import']}]} as any;
   expect(readableSoftwareProjectMessages(messages,updates,terms)[0].body).toContain('Checks reported unmet: [1]');
   expect(readableSoftwareProjectMessages(messages,updates,terms,'client')[0].body).toBe(`You asked for changes to version 2.\n\n${text}`);
+  updates[0].artifact_version='Release V2 beta';expect(readableSoftwareProjectMessages(messages,updates,terms,'client')[0].body).toContain('You asked for changes to Release V2 beta.');
+  expect(readableSoftwareProjectMessages([{...messages[0],decision:'milestone_accepted'}],updates,terms,'client')[0].body).toBe('You accepted Release V2 beta.');
 });
