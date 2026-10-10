@@ -38,7 +38,7 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
         <div id={`brief-help-${index}`}>
           <p class="intake-muted" data-accept-hint hidden></p>
           <button type="button" class="sr-only" data-accept hidden></button>
-          <p class="intake-muted"><span data-suggestions-disclosure>Suggestions come from Cloudflare's AI, which sees what you type here, never your name or email. <a href={href('/privacy#software-briefs')}>Privacy</a> · </span><span data-suggestions-off hidden>Suggestions are off. </span><button type="button" data-suggestions-toggle>Turn off</button></p>
+          <p class="intake-muted"><span data-suggestions-disclosure>Suggestions come from Cloudflare's AI, which sees only what you type in the answer boxes. <a href={href('/privacy#software-briefs')}>Privacy</a> · </span><span data-suggestions-off hidden>Suggestions are off. </span><button type="button" data-suggestions-toggle>Turn off</button></p>
         </div>
         <p data-form-error={index === 1 ? 'today' : 'firstResult'} hidden></p>
         <button type="button" data-skip hidden={index !== 2}>Skip</button>

@@ -139,7 +139,13 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
     }
     if (control.name === 'timing') {
       form.querySelector<HTMLElement>('[data-date-field]')!.hidden = control.value !== 'date';
-      if (control.value !== 'date') (form.elements.namedItem('timingDate') as HTMLInputElement).value = '';
+      if (control.value !== 'date') {
+        const date = form.elements.namedItem('timingDate') as HTMLInputElement;
+        date.value = ''; date.removeAttribute('aria-invalid');
+        const error = form.querySelector<HTMLElement>('[data-form-error="timingDate"]')!;
+        error.textContent = ''; error.hidden = true;
+        status.textContent = sentElsewhere ? sentNotice : '';
+      }
     }
     save();
   });

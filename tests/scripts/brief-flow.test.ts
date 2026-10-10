@@ -115,7 +115,7 @@ it('keeps writing with unavailable browser storage', async () => {
   await setup(); vi.stubGlobal('localStorage', { getItem: () => { throw new Error(); }, setItem: () => { throw new Error(); } }); choose('path', 'workflow'); fill('today', 'We track clients'); click('[data-next]'); expect(current()).toBe(2);
 });
 it('discloses browser drafts and Workers AI accurately, with reassurance only at send', () => {
-  const privacy = readFileSync('src/pages/privacy.astro', 'utf8'); expect(privacy).toContain("isn't used to train models without your explicit consent"); expect(privacy).toContain('You can turn suggestions off'); expect(privacy).toContain('in your browser'); expect(privacy).toContain('strictly necessary security cookie that expires after 30 minutes'); expect(privacy).toContain('Updated October 10, 2026'); expect(privacy).toContain('kept for up to two days'); expect(privacy).not.toContain('approximate counter');
+  const privacy = readFileSync('src/pages/privacy.astro', 'utf8'); expect(privacy).toContain("isn't used to train models without your explicit consent"); expect(privacy).toContain('The name, email and company fields are never sent for suggestions. Anything you type in an answer box is sent for suggestions.'); expect(privacy).toContain('You can turn suggestions off'); expect(privacy).toContain('in your browser'); expect(privacy).toContain('strictly necessary security cookie that expires after 30 minutes'); expect(privacy).toContain('Updated October 10, 2026'); expect(privacy).toContain('kept for up to two days'); expect(privacy).not.toContain('approximate counter');
   expect(readFileSync('src/pages/software/start.astro', 'utf8').match(/No booking or payment at this stage\./g)).toHaveLength(1);
 });
 
@@ -371,4 +371,17 @@ it('fits the full suggestion after a grown answer shrinks', async () => {
   expect(box.style.height).toBe('262px');
   expect(steps[1].nodes['[data-ghost-text]'].textContent).toBe(' in a spreadsheet');
   expect(steps[1].nodes['[data-accept]'].hidden).toBe(false);
+});
+
+it.each(['flexible', 'asap'])('clears a rejected date immediately when timing changes to %s', timing => {
+  choose('path', 'workflow'); fill('today', 'We track clients'); click('[data-next]');
+  fire(steps[2].nodes['[data-skip]'], 'click'); choose('timing', 'date'); click('[data-next]');
+  const date = controls.find(node => node.name === 'timingDate')!;
+  const error = form.nodes['[data-form-error="timingDate"]'];
+  expect(error.textContent).toBe('Add a valid date.'); expect(date.getAttribute('aria-invalid')).toBe('true');
+  expect(form.nodes['[data-form-status]'].textContent).toBe('Please check the highlighted fields.');
+  choose('timing', timing);
+  expect(error.textContent).toBe(''); expect(error.hidden).toBe(true);
+  expect(date.getAttribute('aria-invalid')).toBeNull(); expect(form.nodes['[data-form-status]'].textContent).toBe('');
+  choose('timing', 'date'); expect(error.hidden).toBe(true);
 });

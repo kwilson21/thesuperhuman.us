@@ -441,7 +441,7 @@ it('renders the AI disclosure beside both answer boxes and the dated retention n
   visit(document); expect(sections).toHaveLength(2);
   for (const section of sections) {
     const output = serialize(section);
-    expect(output).toContain("Suggestions come from Cloudflare's AI, which sees what you type here, never your name or email.");
+    expect(output).toContain("Suggestions come from Cloudflare's AI, which sees only what you type in the answer boxes.");
     expect(output).toContain('Please leave out passwords, access details and real customer data.');
     expect(output).not.toContain('Leave out passwords and customer data.');
     expect(output).toContain('href="/privacy#software-briefs"'); expect(output).toContain('Suggestions are off.'); expect(output).toContain('Turn off');
