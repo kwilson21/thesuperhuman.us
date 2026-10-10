@@ -30,7 +30,7 @@ The regenerated lockfile has 12,211 lines and 818 package entries including the 
 
 The caller's registry npm audit query reports 33 total vulnerabilities: 1 low, 7 moderate, 23 high and 2 critical. Main reports 33 total: 2 low, 7 moderate, 22 high and 2 critical. The only per-package label difference is @astrojs/tailwind changing from low to high, without a version change in its own dependency tree. These are the caller's registry measurements, not an audit performed in this offline run. Existing vulnerabilities are not fixed by this update.
 
-Regenerated-lockfile re-verification on October 10, 2026: npm run check passed (441 files, 0 errors, 0 warnings, 17 hints); npm test failed only at the existing local R2 test with listen EPERM: operation not permitted 127.0.0.1 (125 files passed, one failed; 1390 tests passed, one failed, one skipped). The token-unset, telemetry-disabled npm run build passed, including asset, copy and mechanical publicist gates; private note lookup was skipped for 49 entries. Offline npx wrangler deploy --dry-run with a temporary outdir passed without deploying, and offline npx wrangler --version returned 4.146.0. No additional test failure was observed. Dependency CI and current-head independent/Greptile review remain UNVERIFIED until they run.
+Regenerated-lockfile re-verification on October 10, 2026: npm run check passed (441 files, 0 errors, 0 warnings, 17 hints); npm test failed only at the existing local R2 test with listen EPERM: operation not permitted 127.0.0.1 (125 files passed, one failed; 1390 tests passed, one failed, one skipped). The token-unset, telemetry-disabled npm run build passed, including asset, copy and mechanical publicist gates; private note lookup was skipped for 49 entries. Offline npx wrangler deploy --dry-run with a temporary outdir was observed once by the implementing run without deploying: **PASS (single run, not independently reproduced)**. A fresh verifier could not reproduce it in its sandbox because of the keychain error detailed below. Offline npx wrangler --version returned 4.146.0. No additional test failure was observed. Dependency CI and current-head independent/Greptile review remain UNVERIFIED until they run.
 
 ### Types v5 compatibility
 
@@ -95,14 +95,16 @@ GitHub screenshot workflow invokes Astro, which resolves its adapter's nested Wr
 
 ### Configuration and bundle validation
 
-PASS: parsed wrangler.jsonc using installed jsonc-parser, validated against node_modules/wrangler/config-schema.json using installed Ajv (strict:false, allErrors:true), with no validation errors or warnings. Dry-run also accepted the config with no configuration warning or error.
+PASS: parsed wrangler.jsonc using installed jsonc-parser, validated against node_modules/wrangler/config-schema.json using installed Ajv (strict:false, allErrors:true), with no validation errors or warnings. The implementing run observed the dry-run accepting the config with no configuration warning or error; this single run was not independently reproduced.
 
 - ai: binding AI accepted; no model invocation performed.
-- ratelimits: simple limits 30/60 and 120/60 accepted with their existing namespace IDs; dry-run prints 30 requests/60s and 120 requests/60s.
+- ratelimits: simple limits 30/60 and 120/60 accepted with their existing namespace IDs; the implementing run reported dry-run output of 30 requests/60s and 120 requests/60s, not independently reproduced.
 - observability: enabled:true accepted; real monitoring and delivery remain UNVERIFIED.
-- assets: binding ASSETS and directory ./dist accepted; dry-run read 460 assets.
+- assets: binding ASSETS and directory ./dist accepted; the implementing run reported the dry-run reading 460 assets, not independently reproduced.
 
-Wrangler 4.146.0 dry-run emitted the Worker bundle: Total Upload: 7304.52 KiB / gzip: 1730.98 KiB. It ended with `--dry-run: exiting now.` No upload or deployment occurred. The cached CLI banner advertises 4.149.0; this task retains the requested 4.146.0 pin.
+**PASS (single run, not independently reproduced):** the implementing run reported that Wrangler 4.146.0 dry-run emitted the Worker bundle: Total Upload: 7,304.47 KiB / gzip: 1,730.92 KiB, ending with `--dry-run: exiting now.` A fresh independent verifier could not reproduce `npx --offline wrangler deploy --dry-run --outdir <tmp>` in its sandbox: it ended with `ERROR: SecItemCopyMatching failed -50`, a macOS keychain access failure, with no bundle output and no `--dry-run: exiting now.` line. The same environment limit affected `npm ci --dry-run` and the first `npm run build` earlier (exit 139). This is an environment limit, not evidence of a defect; the verifier reproduced the build, check, Wrangler version and test results. No upload or deployment occurred.
+
+**UNVERIFIED:** the authoritative bundle and deploy-path check is Workers Builds on the pushed head, where `wrangler` 4.146.0 builds the Worker. It remains UNVERIFIED in this record until it completes. The cached CLI banner advertises 4.149.0; this task retains the requested 4.146.0 pin.
 
 ### Local checks
 
@@ -119,7 +121,7 @@ Wrangler 4.146.0 dry-run emitted the Worker bundle: Total Upload: 7304.52 KiB / 
 | All 14 npx --offline wrangler command --help calls and flag assertions | PASS | Inventory above. |
 | npm ls wrangler @cloudflare/workers-types --all | PASS | Root v5 and nested adapter v4 tree confirmed. |
 | Installed JSON Schema validation with Node/Ajv/jsonc-parser | PASS | No validation error or warning. |
-| npx --offline wrangler deploy --dry-run --outdir (temporary output) | PASS | Worker bundled with root Wrangler 4.146.0; no deploy. |
+| npx --offline wrangler deploy --dry-run --outdir (temporary output) | **PASS (single run, not independently reproduced)** | Implementing run reported a bundle with root Wrangler 4.146.0; fresh verifier blocked by `ERROR: SecItemCopyMatching failed -50`, with no bundle output or exit marker; no deploy. |
 | git diff --check | PASS | No whitespace errors. |
 | Local dependency commit | PASS | HEAD verified despite packed-refs.lock sandbox diagnostic. |
 | python3 scripts/development_journal.py checkpoint | FAIL | Corrected input reached private journal .lock and was denied by sandbox. No write claimed. |
@@ -147,9 +149,9 @@ publicist-gate: skipped private note lookup for 49 entries (no token; local buil
 publicist-gate passed: 49 entries checked.
 ```
 
-Private approval lookup remains UNVERIFIED. Asset QA verifies 36 existing file hashes. Copy checks pass. Build warnings are the existing absent notes/audio-tracks collections and Zod PURE annotation placement; Rollup removes those comments and completes. Checker retains 17 hints (unused declarations, retention properties, inline JSON-LD and deprecated keyCode). No warning caused a source patch. Configuration validation and dry-run report no warnings or errors.
+Private approval lookup remains UNVERIFIED. Asset QA verifies 36 existing file hashes. Copy checks pass. Build warnings are the existing absent notes/audio-tracks collections and Zod PURE annotation placement; Rollup removes those comments and completes. Checker retains 17 hints (unused declarations, retention properties, inline JSON-LD and deprecated keyCode). No warning caused a source patch. Configuration validation reports no warnings or errors. Only the implementing run reported a dry-run without warnings or errors; the fresh verifier encountered the sandbox keychain error above.
 
-PASS below covers only observed evidence. Unknown is UNVERIFIED. This record does not claim launch readiness. Deployment, Workers Builds, live verification and monitoring remain UNVERIFIED until after merge. Post-deploy follow-up includes production merge-commit check-runs, `npm run owner:health -- --remote --post-deploy`, live journeys and operator response to attention results.
+PASS below covers only observed evidence. Unknown is UNVERIFIED. This record does not claim launch readiness. Deployment, live verification and monitoring remain UNVERIFIED until after merge. Workers Builds is the authoritative bundle and deploy-path check on the pushed head and remains UNVERIFIED until it completes. Post-deploy follow-up includes production merge-commit check-runs, `npm run owner:health -- --remote --post-deploy`, live journeys and operator response to attention results.
 
 
 ## 1. Purpose and content
@@ -250,7 +252,7 @@ PASS below covers only observed evidence. Unknown is UNVERIFIED. This record doe
 
 - **UNVERIFIED · 7.2. Review the exact diff, dependencies, generated files and public artifacts. No secrets, private logs, unapproved claims or accidental unrelated changes.** Local dependency/type/test diff inspected; independent current-head review and CI remain pending.
 
-- **UNVERIFIED · 7.3. Verify production bindings/secrets, migrations/backups where applicable, HTTPS, host routing, cache behavior and response headers on dynamic as well as static responses.** Local schema validation and bundling pass; no migration or binding change. Production bindings, secrets, ledger, headers and routing not queried. Offline ordering comparison is recorded above; executed ordering remains UNVERIFIED.
+- **UNVERIFIED · 7.3. Verify production bindings/secrets, migrations/backups where applicable, HTTPS, host routing, cache behavior and response headers on dynamic as well as static responses.** Local schema validation passes; dry-run bundling is **PASS (single run, not independently reproduced)**. Workers Builds on the pushed head remains UNVERIFIED as the authoritative bundle and deploy-path check; no migration or binding change. Production bindings, secrets, ledger, headers and routing not queried. Offline ordering comparison is recorded above; executed ordering remains UNVERIFIED.
 
 - **UNVERIFIED · 7.4. Preserve a rollback version and any required backup before deployment. Follow existing review and authorization rules.** Rollback revision `1da24a49` recorded to retain the merged PR #165 dependency updates; production recovery and authorization/review gates pending.
 
@@ -321,7 +323,7 @@ PASS below covers only observed evidence. Unknown is UNVERIFIED. This record doe
 ## Delivery status and remaining gates
 
 - **Implemented:** Wrangler 4.146.0 and workers-types v5, lockfile resolutions, v5 context declaration and exact-pin test update. No migration or runtime behavior change.
-- **Verified locally:** Type check, 1390 passing tests, full build, asset/copy checks, CLI help/flags, installed schema validation and Wrangler dry-run bundle. Full test suite remains FAIL under the expected sandbox constraint.
+- **Verified locally:** Type check, 1390 passing tests, full build, asset/copy checks, CLI help/flags, installed schema validation. Wrangler dry-run bundle: **PASS (single run, not independently reproduced)**, observed once by the implementing run; fresh verifier blocked by the sandbox keychain error. Authoritative Workers Builds bundle and deploy-path check on the pushed head: UNVERIFIED until it completes. Full test suite remains FAIL under the expected sandbox constraint.
 - **Deployed:** UNVERIFIED. No push or merge performed.
 - **Verified live:** UNVERIFIED. No network access performed.
 
