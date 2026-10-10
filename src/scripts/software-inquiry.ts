@@ -5,12 +5,14 @@ export function renderSoftwareReceipt(result: Record<string, unknown>) {
   const brief = result.brief && typeof result.brief === 'object' && !Array.isArray(result.brief) ? result.brief as Record<string, string> : {};
   const firstName = brief.name?.trim().split(/\s+/)[0] || 'there';
   document.querySelector<HTMLElement>('[data-receipt-thanks]')!.textContent = `Thanks, ${firstName}. I'll read it myself and reply within two business days.`;
+  document.querySelector<HTMLElement>('[data-intake-progress]')!.hidden = true;
   const sent = result.clientCopyStatus === 'sent';
   const uncertain = result.clientCopyStatus === 'uncertain';
   document.querySelector<HTMLElement>('[data-copy-status]')!.textContent = sent
     ? `A copy is on its way to ${brief.email}.`
     : uncertain ? 'Your copy should arrive shortly.'
     : "I couldn't send your copy just now, but your brief is saved and I'll still reply.";
+  document.querySelector<HTMLElement>('[data-copy-icon]')!.hidden = !sent && !uncertain;
   const note = document.querySelector<HTMLElement>('[data-copy-note]')!;
   note.hidden = !sent && !uncertain;
   note.textContent = uncertain ? "If it doesn't, your brief is still saved and I'll still reply." : "It has everything you wrote, so you don't need to save this page.";

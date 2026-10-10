@@ -30,6 +30,7 @@ export default {
         await page.locator('[name=cf-turnstile-response]').waitFor({ state: 'attached', timeout: 30_000 });
         await page.waitForFunction(() => !!document.querySelector('[name=cf-turnstile-response]')?.value, { timeout: 30_000 });
         await page.locator('[data-step="2"]:visible').waitFor();
+        await page.locator('[data-intake-progress]:visible').waitFor();
         await page.waitForTimeout(1_500);
       };
       steps.push({ title: `Client review, ${viewport}`, images: [{ file: await capture({ file: `software-brief-review-${viewport}.png`, path: '/software/start?path=workflow', viewport, prepare: review }), caption: 'Fictional review step' }] });
@@ -42,6 +43,8 @@ export default {
           await review(page);
           await page.locator('[type=submit]').click();
           await page.locator('#software-success:visible').waitFor({ timeout: 30_000 });
+          await page.locator('[data-intake-progress]').waitFor({ state: 'hidden' });
+          await page.locator('[data-copy-card]:visible').waitFor();
         } }), caption: 'Fictional receipt with mocked delivery; no email call' }] });
       }
     }

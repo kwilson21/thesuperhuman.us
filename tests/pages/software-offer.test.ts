@@ -390,11 +390,12 @@ it('renders each owner brief outcome and gates uncertain retry at one minute', a
   } finally {sql.close();}
 });
 
-it('renders all three personalized receipt outcomes into the rendered page', async () => {
+it('renders all four personalized receipt outcomes into the rendered page', async () => {
   const container = await AstroContainer.create();
   const html = await container.renderToString(start,{request:new Request('https://thesuperhuman.us/software/start'),locals:{runtime:{env:{}}} as any});
   const dom = parse(html);
   const find = (node: any, attribute: string): any => node.attrs?.some((attr: any) => attr.name === attribute) ? node : node.childNodes?.map((child: any) => find(child,attribute)).find(Boolean);
+  expect(find(dom,'data-intake-progress').attrs.some((attr: any) => attr.name === 'hidden')).toBe(false);
   const document = {querySelector: (selector: string) => {
     if (selector === '#software-inquiry') return null;
     const node = find(dom,selector.slice(1,-1));
@@ -411,10 +412,19 @@ it('renders all three personalized receipt outcomes into the rendered page', asy
       ['uncertain','Your copy should arrive shortly.',"If it doesn't, your brief is still saved and I'll still reply."],
       [undefined,"I couldn't send your copy just now, but your brief is saved and I'll still reply.",null],
       ['failed',"I couldn't send your copy just now, but your brief is saved and I'll still reply.",null],
-    ]) {
+    ] as const) {
       renderSoftwareReceipt({brief:{name:'Alex Example',email:'alex@example.com'},clientCopyStatus:status});
       expect(serialize(find(dom,'data-receipt-thanks'))).toBe("Thanks, Alex. I'll read it myself and reply within two business days.");
       expect(serialize(find(dom,'data-copy-status'))).toBe(line);
+      const card = find(dom,'data-copy-card');
+      expect(serialize(card).split(line)).toHaveLength(2);
+      expect(card.attrs.find((attr: any) => attr.name === 'class').value).toContain('intake-link-panel');
+      const receipt = card.parentNode;
+      expect(receipt.childNodes.indexOf(card)).toBeLessThan(receipt.childNodes.findIndex((node: any) => node.tagName === 'ol'));
+      expect(serialize(receipt).match(/data-copy-card/g)).toHaveLength(1);
+      expect(serialize(dom).match(/data-copy-status/g)).toHaveLength(1);
+      expect(find(dom,'data-intake-progress').attrs.some((attr: any) => attr.name === 'hidden')).toBe(true);
+      expect(find(dom,'data-copy-icon').attrs.some((attr: any) => attr.name === 'hidden')).toBe(status !== 'sent' && status !== 'uncertain');
       const renderedNote = find(dom,'data-copy-note');
       expect(renderedNote.attrs.some((attr: any) => attr.name === 'hidden')).toBe(note === null);
       if (note) expect(serialize(renderedNote)).toBe(note);
