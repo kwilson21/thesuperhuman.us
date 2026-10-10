@@ -24,7 +24,7 @@ function fill(name: string, value: string) { const node = controls.find(node => 
 function click(selector: string) { fire(form.nodes[selector], 'click'); }
 function choose(name: string, value: string) { const node = controls.find(node => node.name === name && node.value === value)!; controls.filter(node => node.name === name).forEach(node => node.checked = node.value === value); fire(form, 'input'); const message = new Event('change'); Object.defineProperty(message, 'target', { value: node }); form.dispatchEvent(message); }
 const current = () => steps.findIndex(node => !node.hidden);
-async function setup() {
+async function setup(requestedPath?: string) {
   form = new Node() as any; form.dataset.available = 'false'; steps = Array.from({ length: 7 }, () => new Node()); controls = [];
   for (const section of steps) section.nodes.h1 = new Node();
   for (const [index, key] of [[1, 'today'], [2, 'firstResult']] as const) {
@@ -36,6 +36,7 @@ async function setup() {
   }
   controls.push(make('path', 'radio', 'workflow'), make('path', 'radio', 'idea'), make('timing', 'radio', 'flexible'), make('timing', 'radio', 'date'), make('timing', 'radio', 'asap'), make('timingDate', 'date'), make('budgetNote', 'number'), make('name'), make('email', 'email'), make('company'));
   controls.find(node => node.name === 'timing')!.checked = true;
+  controls.filter(node => node.name === 'path').forEach(node => node.checked = node.value === requestedPath);
   steps[4].nodes['input, textarea'] = controls.find(node => node.name === 'budgetNote')!;
   for (const key of ['[data-next]', '[data-back]', '[type=submit]', '[data-form-status]', '[data-send-reassurance]', '[data-review]', '[data-date-field]']) form.nodes[key] = new Node();
   form.nodes['button[type="submit"]'] = form.nodes['[type=submit]'];
@@ -295,4 +296,33 @@ it('leaves normal Tab navigation alone without a suggestion or with a selection'
   expect(fire(box, 'keydown', { key: 'ArrowRight' }).defaultPrevented).toBe(false);
   expect(box.value).toBe('We track new clients');
   expect(steps[1].nodes['[data-accept-hint]'].hidden).toBe(true);
+});
+
+it.each(['idea', 'workflow'])('explicit %s entry restores its answers at the first question over another saved path', async requested => {
+  choose('path', 'workflow'); fill('today', 'Workflow answer'); fill('firstResult', 'Workflow result');
+  choose('path', 'idea'); fill('idea', 'Idea answer'); fill('firstVersion', 'Idea version');
+  choose('path', requested === 'idea' ? 'workflow' : 'idea');
+  click('[data-next]'); click('[data-next]');
+  await setup(requested);
+  expect(current()).toBe(1);
+  expect(controls.find(node => node.name === 'path' && node.checked)!.value).toBe(requested);
+  expect(steps[1].nodes['[data-answer]'].value).toBe(requested === 'idea' ? 'Idea answer' : 'Workflow answer');
+  expect(steps[2].nodes['[data-answer]'].value).toBe(requested === 'idea' ? 'Idea version' : 'Workflow result');
+});
+it('opens an explicit path at its first question with no draft', async () => {
+  await setup('idea'); expect(current()).toBe(1);
+});
+it('clears remapped question errors and invalid markers when switching paths', () => {
+  choose('path', 'workflow'); click('[data-next]');
+  expect(steps[1].nodes['[data-form-error]'].hidden).toBe(false);
+  expect(steps[1].nodes['[data-answer]'].getAttribute('aria-invalid')).toBe('true');
+  click('[data-back]'); choose('path', 'idea');
+  expect(steps[1].nodes['[data-form-error]'].hidden).toBe(true);
+  expect(steps[1].nodes['[data-form-error]'].textContent).toBe('');
+  expect(steps[1].nodes['[data-answer]'].getAttribute('aria-invalid')).toBeNull();
+});
+it('reserves the same scrollbar gutter for the textarea and ghost mirror', () => {
+  const css = readFileSync('src/styles/software-intake.css', 'utf8');
+  expect(css).toMatch(/textarea,\.software-intake \.brief-ghost\{[^}]*scrollbar-gutter:stable/);
+  expect(css).toMatch(/\.software-intake \.brief-ghost\{[^}]*overflow:auto/);
 });

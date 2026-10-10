@@ -20,7 +20,7 @@
 .software-intake .brief-answer{position:relative}
 .software-intake .brief-answer textarea,.software-intake .brief-ghost{font:inherit;line-height:1.6;padding:.75rem;white-space:pre-wrap;overflow-wrap:break-word;letter-spacing:normal;scrollbar-gutter:stable}
 .software-intake .brief-answer textarea{display:block;position:relative;background:transparent}
-.software-intake .brief-ghost{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:1;border:1px solid transparent;color:var(--muted)}
+.software-intake .brief-ghost{position:absolute;inset:0;overflow:auto;pointer-events:none;z-index:1;border:1px solid transparent;color:var(--muted)}
 .software-intake [data-ghost-prefix]{visibility:hidden}
 .software-intake [data-suggestions-toggle],.software-intake [data-skip],.software-intake [data-review] button{min-height:44px;text-decoration:underline;text-underline-offset:.2em}
 /* Keep the 44px touch target without expanding the small-text line box. */

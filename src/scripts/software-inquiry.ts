@@ -27,6 +27,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
   const status = form.querySelector<HTMLElement>('[data-form-status]')!;
   const storageKey = 'software-brief-draft';
   const sentKey = 'software-brief-sent';
+  const requestedPath = new FormData(form).get('path');
   const answers: Record<string, string> = {};
   let sentElsewhere = false;
   const sentNotice = 'This brief was already sent from another tab. Your changes here will be sent as a new brief.';
@@ -63,14 +64,16 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
       section.querySelector('h1')!.textContent = String(title);
       section.querySelector('[data-answer-label]')!.textContent = String(title);
       section.querySelector('[data-question-hint]')!.textContent = String(hint);
-      section.querySelector<HTMLElement>('[data-form-error]')!.dataset.formError = String(key);
+      const error = section.querySelector<HTMLElement>('[data-form-error]')!;
+      error.dataset.formError = String(key); error.textContent = ''; error.hidden = true;
+      box.removeAttribute('aria-invalid');
     });
   }
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
     if (saved && saved.answers && typeof saved.answers === 'object') {
       for (const key of ['today', 'firstResult', 'idea', 'firstVersion']) if (typeof saved.answers[key] === 'string') answers[key] = saved.answers[key].slice(0, ['idea', 'firstVersion'].includes(key) ? 1000 : 2000);
-      for (const name of ['path', 'timing']) form.querySelectorAll<HTMLInputElement>(`[name="${name}"]`).forEach(box => box.checked = box.value === saved.answers[name]);
+      for (const name of ['path', 'timing']) form.querySelectorAll<HTMLInputElement>(`[name="${name}"]`).forEach(box => box.checked = box.value === (name === 'path' && requestedPath ? requestedPath : saved.answers[name]));
       configureQuestions();
       for (const key of fields()) {
         const control = form.elements.namedItem(key);
@@ -80,6 +83,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
       if (typeof saved.submissionId === 'string' && /^[a-f0-9-]{36}$/i.test(saved.submissionId)) submissionId = saved.submissionId;
     }
   } catch { /* Ignore unavailable storage and invalid drafts. */ }
+  if (requestedPath === 'idea' || requestedPath === 'workflow') step = 1;
   configureQuestions();
   const suggestions = setupBriefAutocomplete(form, () => step === 2 ? { path: path(), [path() === 'idea' ? 'idea' : 'today']: payload()[path() === 'idea' ? 'idea' : 'today'] } : { path: path() });
   function renderSummary() {
