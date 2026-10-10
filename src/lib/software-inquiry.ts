@@ -74,6 +74,6 @@ export function softwareBrief(request: OwnerRequest): Record<string, string> {
       key === 'timing' ? timingLabels[value as keyof typeof timingLabels] :
       key === 'budgetStatus' ? budgetLabels[value as keyof typeof budgetLabels] :
       key === 'approver' ? approverLabels[value as keyof typeof approverLabels] : value;
-    return [key, typeof display === 'string' && display ? display : 'Not provided'];
-  }));
+    return [key, typeof display === 'string' ? display : ''];
+  }).filter(([, value]) => value));
 }
