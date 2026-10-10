@@ -367,6 +367,12 @@ it('renders the approved receipt and keeps booking reassurance only on the send 
   for (const copy of ['Software brief · sent','Your brief is in.','I reply with a fixed-price first milestone, or a question or two.','If it looks right, you sign the agreement online. It takes about two minutes.','Work starts, and you follow it on your own private project page.']) expect(html).toContain(copy);
   expect(html).not.toMatch(/data-print|Print or save|Not provided/);
   expect(html.match(/No booking or payment at this stage\./g)).toHaveLength(1);
+  const receipt = parse(html) as any;
+  const find = (node: any): any => node.attrs?.some((attr: any) => attr.name === 'class' && attr.value.split(' ').includes('intake-next-steps')) ? node : node.childNodes?.map(find).find(Boolean);
+  const steps = find(receipt);
+  expect(steps?.tagName).toBe('ol');
+  expect(steps.childNodes.filter((node: any) => node.tagName === 'li')).toHaveLength(3);
+  expect(await readFile('src/styles/audio-intake.css', 'utf8')).toMatch(/\.intake-next-steps\s*\{[^}]*list-style:\s*decimal\s*[;}]/);
 });
 
 it('renders each owner brief outcome and gates uncertain retry at one minute', async () => {
