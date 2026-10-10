@@ -17,5 +17,5 @@ it('shows earlier-start evidence only before the SOW service start', () => {
   expect(requiresEarlierStartAgreement('2026-09-29', '2026-09-30')).toBe(false);
   expect(requiresEarlierStartAgreement(undefined, '2026-09-30')).toBe(false);
   const panel = readFileSync('src/components/owner/SoftwareProjectPanel.astro', 'utf8');
-  expect(panel).toContain('requiresEarlierStartAgreement(startDetails?.planned_start, today) && <>');
+  expect(panel).toContain('requiresEarlierStartAgreement(startDetails?.planned_start, today) && <div data-earlier-start>');
 });
