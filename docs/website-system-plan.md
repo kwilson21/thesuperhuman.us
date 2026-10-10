@@ -141,9 +141,8 @@ Audio notes become optional so empty prose is not required to publish a recordin
 - Migrate the site from Astro 5 to Astro 7 with the matching Cloudflare adapter
   and Tailwind setup. This is proposed maintenance and is not scheduled. It
   requires a migration, not just a dependency bump. Dependabot's grouped PR #138
-  is only a placeholder and cannot install as it stands. Newer framework and
-  adapter fixes ship only on the newer major versions, so the migration is how
-  the site keeps receiving them. It also unblocks later toolchain updates.
+  is only a placeholder and cannot install as it stands. The migration is intended
+  to prepare the site for later framework, adapter and toolchain updates.
   Plan and verify:
   - Replace `Astro.locals.runtime` access to env, cf, caches and context with the
     adapter's current APIs across pages, API routes, middleware, libraries and
