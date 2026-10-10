@@ -532,6 +532,30 @@ it('reads immutable agreed fees, dates and complete legal text without enabling 
   } finally {sql.close();}
 });
 
+it.each([false,true])('keeps text-only progress fully explained after acceptance (paid: %s)', async (paid) => {
+  const {sql,db}=await fixture(), container=await AstroContainer.create();
+  try {
+    sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('r','current',?,'standard','now','now','2026-09-29','owner','now','now')").run(JSON.stringify(terms));
+    const session='a'.repeat(72);
+    sql.prepare("INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES (?,'alex@example.com','now','2099-01-01','now')").run(await hashOfferToken(session));
+    sql.exec(`INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,created_by,created_at,updated_at,shared_at) VALUES ('accepted','r','delivery_review','shared',0,'Delivery','Delivery v2','working_preview','owner','2026-10-01','2026-10-01','2026-10-01');
+      INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES ('r','client','token','Accepted','accepted','milestone_accepted','2026-10-02');
+      INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,created_by,created_at,updated_at) VALUES ('balance','r','current',0,'milestone',240000,30,'open','https://example.com/invoice','owner','now','now');
+      INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,what_changed,client_request,next_step,created_by,created_at,updated_at,shared_at) VALUES ('progress','r','progress','shared',0,'Preparing your guide','working_preview','The guide is drafted. The examples are ready. The final checklist is complete.','Read the guide.','Share the files.','owner','2026-10-03','2026-10-03','2026-10-03')`);
+    if(paid) sql.exec("INSERT INTO software_milestone_payments VALUES ('r',0,'2026-10-03','owner'); UPDATE software_invoices SET status='paid'");
+    const html=await container.renderToString(softwarePage,{request:new Request('https://thesuperhuman.us/studio/software/r',{headers:{cookie:`studio_session=${session}`}}),params:{id:'r'},locals:{runtime:{env:{MUSIC_DB:db,AUDIO_CLIENT_PORTAL_ENABLED:'true'}}}} as any);
+    const current=html.slice(0,html.indexOf('class="project-history'));
+    expect(current).toContain(paid ? 'Paid. Your files are on the way.' : 'Version 2 is accepted.');
+    expect(current).toContain(paid ? 'I&#39;ll share the files and handoff notes here soon.' : 'Thanks. The last step is the balance.');
+    expect(current).toMatch(/<h2[^>]*>Preparing your guide<\/h2>/);
+    expect(current).toContain('The guide is drafted. The examples are ready. The final checklist is complete.');
+    expect(current).toContain('I need from you: Read the guide.');
+    expect(current).toContain('Next from me: Share the files.');
+    expect(current).not.toContain('/updates/progress/visual');
+    if(!paid) expect(current).toContain('Pay $2,400 ↗');
+  } finally {sql.close();}
+});
+
 it('puts the named review work first through partial, complete, accepted and handoff states', async () => {
   const {sql,db}=await fixture(), container=await AstroContainer.create();
   try {
@@ -551,7 +575,7 @@ it('puts the named review work first through partial, complete, accepted and han
     expect(html.match(/Next update: Oct 10, 2026/g)).toHaveLength(1);
     expect(html).toMatch(/<strong[^>]*>Yours<\/strong><span[^>]*>After payment<\/span>/);
     expect(html).toMatch(/<h3[^>]*>Not included yet<\/h3><p[^>]*>Sample import is not included\.<\/p>/);
-    expect(html).toContain('Version 2 is ready to try.');expect(html).toContain('I need from you: Send a sample.');expect(html).toContain('Next from me: Build the import.');expect(html).toContain('Please try it by Oct 8, 2026.');expect(html).not.toContain('More internal detail.');
+    expect(html).toContain('Version 2 is ready to try.');expect(html).toContain('I need from you: Send a sample.');expect(html).toContain('Next from me: Build the import.');expect(html).toContain('Please try it by Oct 8, 2026.');expect(html).toContain('More internal detail.');
     expect(html).toContain('Open version 2 ↗');expect(html).toContain('Try these');expect(html).toContain('aria-pressed="false"');expect(html).toContain('data-review-mark="not-yet"');
     expect(html).toContain("This version doesn't include everything we agreed yet.");expect(html).toMatch(/value="milestone_accepted" disabled/);
     expect(html).toContain('What did you see?');expect(html).toContain('After you accept, the $1,200 balance invoice comes next.');
