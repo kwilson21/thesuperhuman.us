@@ -208,7 +208,7 @@ export const kailleraMilestones: Milestone[] = [
     id: 'kaillera-next-netplay-reliability', day: '2026-09-28',
     title: 'Keeping matches in step when the browser gets in the way',
     summary: 'A netplay match has to survive browsers that throttle timers and pause background tabs. On one day, Claude Code fixed four ways matches broke. A phone whose timers fire about 30 times a second now runs a second frame per tick to catch up, instead of holding the match at 30 frames a second. Clicking the toolbar mid-match no longer steals the emulator’s frame and quietly desyncs the players. Returning to a background tab no longer wipes inputs both players were waiting for. A shader cache that wrote past its table now stays in bounds, and a core crash now ends the match with an error instead of a frozen screen. Released in v0.63.1 to v0.63.14.',
-    artifacts: [artifact(netplayReliability, 'Kaillera Next · Keeping matches in step', 'Before and after for throttled timers, the toolbar click, tab return, boot stalls and the core crash. Drawn from the commits, not a gameplay capture.', 'Diagram')],
+    artifacts: [artifact(netplayReliability, 'Kaillera Next · Keeping matches in step', 'Before and after for throttled timers, the toolbar click, tab return and the core crash, among other fixes in these releases. Drawn from the commits, not a gameplay capture.', 'Diagram')],
   },
   {
     id: 'kaillera-next-switch2-controller', day: '2026-09-30',

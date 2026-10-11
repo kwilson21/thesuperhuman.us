@@ -270,7 +270,7 @@ export const tallyMilestones: Milestone[] = [
     id: 'tally-smarter-sorting', day: '2026-10-06',
     title: 'Tally’s AI sorts sooner and learns from people',
     summary: 'I want Tally’s AI to earn trust: quick, taught by the right people, and easy to check. Jev now sorts a bank sync’s new transactions right after the sync, not only overnight, inside the same daily limit and with its own off switch. Before each guess, it is told how that store’s last five trips were sorted, counting only choices a person or a merchant rule made, so a wrong AI guess can’t teach itself. For the demo, two links switch the list between what Tally made of it and what the bank sent. I picked these rules; Claude Code and Codex built them. Built and tested; not on the public demo yet.',
-    artifacts: [artifact(smarterSorting, 'Tally · The AI sorts sooner and learns from people', 'Transactions in Tally’s view and straight from the bank, side by side, PR #270 on demo data, with numbered pointers.', 'Annotated screen captures, demo data')],
+    artifacts: [artifact(smarterSorting, 'Tally · The AI sorts sooner and learns from people', 'Transactions in Tally’s view and straight from the bank, side by side, from PR #270 on demo data (2026-10-06), with numbered pointers. One raw bank row is blurred.', 'Annotated screen captures, demo data')],
   },
   {
     id: 'tally-new-category-suggestions', day: '2026-10-06',
