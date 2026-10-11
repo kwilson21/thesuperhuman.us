@@ -216,7 +216,7 @@ export const tallyMilestones: Milestone[] = [
     id: 'tally-production-setup', day: '2026-09-28',
     title: 'Keeping the real app apart from the demo',
     summary: 'Tally’s demo erases every table each night, so the real app must never be mistaken for it. Production is a second environment of the same code, with its own database, no demo banner and no reset, and tests fail if it shares the demo’s database or puts a secret in its config. Claude Code built it with a setup script that walks me through each step. Secrets are typed at Wrangler’s own prompt, so they stay out of shell history, and it deploys only once every setting and table is in place, so a skipped step can’t put the app live without its sign-in check. A refused sign-in logs which check failed, never the token. Built and tested.',
-    artifacts: [artifact(productionSetup, 'Tally · Keeping the real app apart from the demo', 'The demo and production environments side by side, the setup script’s steps and deploy gate, and the sign-in check. No addresses, IDs or secrets.', 'Diagram')],
+    artifacts: [artifact(productionSetup, 'Tally · Keeping the real app apart from the demo', 'The demo and the real app kept apart, the guided setup and what a refused sign-in logs. Outcome level; no settings, steps, addresses or secrets.', 'Diagram')],
   },
   {
     id: 'tally-proposals-p10-p22', day: '2026-09-28',
