@@ -36,6 +36,11 @@ import ownerTooltipAfter from '~/assets/projects/website/bugfixes/owner-tooltip-
 import motionHomeWorlds from '~/assets/projects/website/motion-home-worlds-annotated.webp';
 import pagesRefreshBuilding from '~/assets/projects/website/pages-refresh-building-annotated.webp';
 import copyCheckDiagram from '~/assets/projects/website/copy-check-diagram.webp';
+import audioIntake from '~/assets/projects/website/audio-intake-annotated.webp';
+import softwareServices from '~/assets/projects/website/software-services-annotated.webp';
+import plainExplanations from '~/assets/projects/website/plain-explanations-building-annotated.webp';
+import homepageSpeed from '~/assets/projects/website/homepage-speed-phone-annotated.webp';
+import libronType from '~/assets/projects/website/libron-typography-annotated.webp';
 
 export const websiteStory = {
   title: 'Personal website',
@@ -215,5 +220,35 @@ export const websiteMilestones: Milestone[] = [
     title: 'Let the build check the copy rules',
     summary: 'My site has a few firm copy rules: no em dashes, no buzzwords, no hourly rates, and nothing that implies a current security clearance. They were written down for the coding agents I work with, yet two em dashes had still made it into a journal summary. Claude Code wrote a check that reads the site’s pages, data and public files on every build and stops the build with the file and line of each match. It still passes wording I do use, like "No active security clearance, but open to pursuing one." It matches words and characters, not tone or truth. Built and tested; it now runs on every build of the site.', // copy-check: allow (the entry names the rule itself; approved text, reviewed exception)
     artifacts: [artifact(copyCheckDiagram, 'Copy check · Rules the build enforces', 'The four rules, what the check reads and skips, and where it runs in the build.', 'Diagram')],
+  },
+  {
+    id: 'website-audio-intake', day: '2026-09-27',
+    title: 'One way to start a song',
+    summary: 'The Audio page had two different forms for the same request: a booking form on the landing page and a three-step intake on the services pages. I kept the intake, since it’s the flow most likely to bring paid work. Before retiring the old form, Claude Code tested the intake on a local preview and found it never emailed me about a new request; the old form did. I chose to add that notice and delete the old form in the same change. The landing page now leads with what you can hire me for and something to hear, and the old Audio About page redirects to the services page, where its process notes now live.',
+    artifacts: [artifact(audioIntake, 'Audio · One way to start a song', 'The Audio landing page after PR #125, with numbered pointers.', 'Annotated page capture')],
+  },
+  {
+    id: 'website-software-services', day: '2026-09-29',
+    title: 'A way to start a software project',
+    summary: 'Software visitors used to reach only my general contact form, while audio had its own path. Now the software section of Work with me mirrors the audio page: work from Lyft, Skupos and Tally, two starting points ("Make a workflow easier" or "Bring an idea to life"), and a short brief whose questions change with the path. Behind it, I can review a brief, ask a question or decline, and send a versioned fixed-price offer through a private link. Once work starts, the client gets a private project page with updates, reviews and messages. Codex built each part from designs I chose; Claude Code reviewed them. Built and tested; the public pages are live.',
+    artifacts: [artifact(softwareServices, 'Services · A way to start a software project', 'The software section of the services page from PR #152, with numbered pointers.', 'Annotated page capture')],
+  },
+  {
+    id: 'website-plain-explanations', day: '2026-09-30',
+    title: 'Saying what each thing does',
+    summary: 'Visitors could see my service categories without knowing what they would send, what I would do, or what the work would change. So I rewrote the site’s descriptions as plain actions. Home now says I build software, design websites, and mix and master music, and that I turn an idea into a first version people can try or make a repeated task easier. Work says what I built at Skupos and Lyft. The Building page now shows each project with a drawn illustration, three things you can do with it, and how it is built. The Engineer’s Daily and Threadline moved to an Earlier prototypes section, still linked. Built and tested; both changes are live.',
+    artifacts: [artifact(plainExplanations, 'Building · Saying what each thing does', 'The Building page after PR #159, with numbered pointers.', 'Annotated page capture')],
+  },
+  {
+    id: 'website-homepage-speed', day: '2026-10-02',
+    title: 'A faster first read of Home',
+    summary: 'I wanted Home to say who I am and what you can do here more quickly. The opening is now one sentence: I build software, design websites, and mix and master music. Beside it, a "Work with me" button goes straight to the contact section, next to the link to what I’m building. My Lyft result (5,000 to 100,000+ rows per batch) now comes right after the opening instead of further down the page. A follow-up removed a duplicate "Start your song" button, so each action appears once. Built and tested; live on the site.',
+    artifacts: [artifact(homepageSpeed, 'Home · A faster first read', 'Home on a phone before PR #161 and after PR #162, with numbered pointers.', 'Annotated page captures')],
+  },
+  {
+    id: 'website-libron-typography', day: '2026-10-04',
+    title: 'Moving the site’s serif to Libron',
+    summary: 'The site’s headings and serif text now use Libron v0.25, an open-source typeface under the SIL Open Font License, served from the site itself instead of Google Fonts. The bar over the z in my name is drawn inside the font, so I rebuilt both name fonts from Libron Regular. The page still holds the plain letters "Kazon Wilson", so selecting, copying and searching the name work as before, and a browser check on every screenshot run now confirms it. Inter and JetBrains Mono stay. Code review by Greptile caught four follow-ups before merge, including a social card still using the old type.',
+    artifacts: [artifact(libronType, 'Type · Moving the serif to Libron', 'The top of the home page before and after PR #163, with numbered pointers.', 'Annotated page captures')],
   },
 ];

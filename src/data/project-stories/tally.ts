@@ -17,6 +17,24 @@ import accountsPage from '~/assets/projects/tally/accounts-annotated.webp';
 import emptyStates from '~/assets/projects/tally/empty-states-annotated.webp';
 import formFeedback from '~/assets/projects/tally/form-feedback-annotated.webp';
 import merchantNameSuggestion from '~/assets/projects/tally/merchant-name-suggestion.webp';
+import bankConnections from '~/assets/projects/tally/bank-connections-annotated.webp';
+import organizeMerchant from '~/assets/projects/tally/organize-annotated.webp';
+import feedbackButton from '~/assets/projects/tally/feedback-button-annotated.webp';
+import productionSetup from '~/assets/projects/tally/production-setup-diagram.webp';
+import proposalsP15 from '~/assets/projects/tally/proposals-p15-annotated.webp';
+import billsScreen from '~/assets/projects/tally/bills-annotated.webp';
+import transactionTools from '~/assets/projects/tally/transaction-tools-annotated.webp';
+import trustworthyNumbers from '~/assets/projects/tally/price-changed-annotated.webp';
+import problemSignals from '~/assets/projects/tally/problem-signals-annotated.webp';
+import trendsNetWorth from '~/assets/projects/tally/trends-net-worth-annotated.webp';
+import aiSwitches from '~/assets/projects/tally/ai-switches-annotated.webp';
+import proposalsP41 from '~/assets/projects/tally/proposals-p41-annotated.webp';
+import smarterSorting from '~/assets/projects/tally/smarter-sorting-annotated.webp';
+import newCategories from '~/assets/projects/tally/new-category-suggestions-annotated.webp';
+import transfersBills from '~/assets/projects/tally/transfers-and-bills-annotated.webp';
+import everydayTools from '~/assets/projects/tally/everyday-tools-annotated.webp';
+import squircles from '~/assets/projects/tally/squircles-annotated.webp';
+import codexBuilds from '~/assets/projects/tally/codex-builds-diagram.webp';
 
 export const tallyStory = {
   title: 'Tally',
@@ -175,6 +193,114 @@ export const tallyMilestones: Milestone[] = [
     title: 'Saving, and a shake: form feedback in Tally',
     summary: 'A design review of Tally found that its forms gave no sign a save was under way, nothing stopped a second tap from sending it twice, and an error didn’t draw the eye to the field. Now Save shows a ring and "Saving…" while it works and can’t be pressed again, and a field that comes back with an error shakes once, unless the device asks for reduced motion. Without JavaScript the forms still post normally. Codex built the shared Button and TextInput components and the busy state. I chose that Save stays full colour while saving, and Claude Code fixed two sheets where it still dimmed. Built and tested on demo data.',
     artifacts: [artifact(formFeedback, 'Tally · Form feedback', 'The catalog’s busy Save, disabled Save and a field with an error, on demo data from PR #105, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-bank-connections', day: '2026-09-28',
+    title: 'Linking, fixing and disconnecting banks',
+    summary: 'Bank sync needs more than linking: a way to repair a broken login, pull in new purchases without waiting, and back out of a bank linked by mistake. On Accounts, Link a bank opens Plaid Link; before any bank it sits in an empty state, not a $0 net worth (the design I picked). Fix connection reopens Link for a bank whose login broke. Sync now fetches new transactions, at most once a minute per bank, and each bank shows when it last synced. I put Disconnect behind Manage, keeping history unless you delete it. Codex wrote the Plaid flows; Claude Code drew the empty state and fixed edge cases. Built and tested; the demo has no Plaid.',
+    artifacts: [artifact(bankConnections, 'Tally · Linking, fixing and disconnecting banks', 'The Accounts controls in the design system catalog on sample data, from PR #140, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-organize-and-export', day: '2026-09-28',
+    title: 'Organize by merchant, and download your data',
+    summary: 'A newly linked bank brings about 90 days of transactions at once, too many to categorize one row at a time. Organize groups the uncategorized ones by merchant and shows one group at a time, largest total first. One category choice applies to the whole group and becomes the rule for that merchant’s later purchases. I picked the one-group-at-a-time layout from drawn options. Settings also gained Your data, so nothing is stuck in Tally: every transaction as CSV, or everything as JSON, never bank logins. Codex wrote the first versions and Claude Code made the follow-up fixes. Built and tested on demo data.',
+    artifacts: [artifact(organizeMerchant, 'Tally · Organize by merchant', 'Organize showing one merchant group on demo data, from PR #138, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-feedback-button', day: '2026-09-28',
+    title: 'A Feedback button on every page',
+    summary: 'I want feedback to be easy to send at the moment something goes wrong, when a link at the bottom of a long page is easy to miss. So Tally now has a small Feedback button fixed at the bottom-right of every page. It opens a short form: what it is, how Tally feels right now, and a message. Tally saves the report with the page it came from and the kind of device, then files it as an issue in a private GitHub repository. A nightly job retries any that didn’t go through. Codex and Claude Code built it from a design I signed off. It is off in the public demo. Built and tested.',
+    artifacts: [artifact(feedbackButton, 'Tally · A Feedback button on every page', 'The Feedback button on Home on a phone, beside the form it opens, on demo data, with numbered pointers.', 'Annotated screen captures, demo data')],
+  },
+  {
+    id: 'tally-production-setup', day: '2026-09-28',
+    title: 'Keeping the real app apart from the demo',
+    summary: 'Tally’s demo erases every table each night, so the real app must never be mistaken for it. Production is a second environment of the same code, with its own database, no demo banner and no reset, and tests fail if it shares the demo’s database or puts a secret in its config. Claude Code built it with a setup script that walks me through each step. Secrets are typed at Wrangler’s own prompt, so they stay out of shell history, and it deploys only once every setting and table is in place, so a skipped step can’t put the app live without its sign-in check. A refused sign-in logs which check failed, never the token. Built and tested.',
+    artifacts: [artifact(productionSetup, 'Tally · Keeping the real app apart from the demo', 'The demo and production environments side by side, the setup script’s steps and deploy gate, and the sign-in check. No addresses, IDs or secrets.', 'Diagram')],
+  },
+  {
+    id: 'tally-proposals-p10-p22', day: '2026-09-28',
+    title: 'Picking Tally’s next screens by seeing them',
+    summary: 'I decide how Tally looks by seeing it, not from a description. Before building 13 new screens and flows, Claude Code drew them as phone screens on Tally’s proposals page, usually two options each, from the real components on demo data, each option with what it costs and, for the later eight, a recommendation and its reason. I picked from the drawings. For feedback I chose neither option and asked for a button that’s always visible; for suggested bills I asked for a banner that stands out more and picked from two new drawings. These are design choices, not finished features: the Bills and splits screens aren’t built yet.',
+    artifacts: [artifact(proposalsP15, 'Tally · Picking the next screens by seeing them', 'The proposals page after PR #146 with P15’s two options side by side and the recommendation, on demo data, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-bills', day: '2026-10-04',
+    title: 'Bills: what’s due, what’s paid, and what might be a bill',
+    summary: 'Safe to spend should hold back money for bills due, so Tally now has Bills: each one overdue, due in the next 7 days, upcoming or paid, and Home sets aside those due or overdue. My rule: a missed bill stays overdue until it’s paid or the next one is due. Tally matches each bill to one payment from the same merchant, within 10% of the amount and 5 days of the due date. On a bill’s page you can link one by hand, pick its month, or reject a wrong match. Tally also suggests bills from repeat charges for you to add. Claude Code and Codex built it from drawings I picked. Built and tested on demo data.',
+    artifacts: [artifact(billsScreen, 'Tally · Bills', 'The Bills screen on demo data after PR #161, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-transaction-tools', day: '2026-10-04',
+    title: 'Four tools for the transaction list',
+    summary: 'These four features from my earlier app are now in Tally’s transaction list. Codex and Claude Code built them from the drawings I picked. A purchase can be split across categories, and the parts must add up exactly; if the bank later changes the amount, the split is removed and the purchase asks for a category again. Cash spending can be added by hand, into one Cash account kept out of net worth. A refund belongs with what it refunds, so linking it makes it count in the purchase’s month and category. Select ticks several rows to set a category or exclude them at once. Built and tested on demo data.',
+    artifacts: [artifact(transactionTools, 'Tally · Four tools for the transaction list', 'Transactions on demo data after PR #166, with Select, Add cash and a split purchase marked.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-trustworthy-numbers', day: '2026-10-05',
+    title: 'Numbers you can trust',
+    summary: 'A review against my earlier app found ways Tally’s safe to spend could be wrong: paychecks counted as negative spending, pending charges missing, and the month turning over at midnight UTC. Trust in that number is the point, so I put these fixes ahead of new features. Pending transactions now count, marked "Pending"; income comes from the bank’s category or a "Count as income" choice; and unreviewed credits stay out of spending until checked. "Today" follows the household’s time zone. Merchant rules run after every sync, a refund can’t exceed its purchase, and Bills offers to update a bill whose price changed. Claude Code built it, with Codex on income. Built and tested.',
+    artifacts: [artifact(trustworthyNumbers, 'Tally · Numbers you can trust', 'Bills on demo data after PR #228, with “Price changed?” and the payment on offer marked.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-problem-signals', day: '2026-10-05',
+    title: 'When something’s wrong, Tally says so',
+    summary: 'A review against my earlier budgeting app found places where Tally stayed quiet: a bank that stopped syncing, a save lost to a bad connection, a missing page, and a first empty list that read like a failed search. Home now says when a bank needs signing in or hasn’t synced for 3 days, since Safe to spend may be too high. A failed save shows an error toast and keeps what was typed. Tally has its own 404 and 500 pages, and the first empty list says "Link a bank" or "Importing". How Tally works now explains a household’s own numbers too. I picked each design from options Claude Code drew. Built and tested, with sample data.',
+    artifacts: [artifact(problemSignals, 'Tally · When something’s wrong, Tally says so', 'The stale-bank line on Home beside the new 404 and 500 pages, from the design system catalog on sample data, with numbered pointers.', 'Annotated screen captures, demo data')],
+  },
+  {
+    id: 'tally-trends-net-worth', day: '2026-10-05',
+    title: 'Trends and a net-worth line',
+    summary: 'I wanted Trends to make budgeting feel worth it. It shows what’s spent so far this month against the same days last month, then each category’s change. Money with no category gets its own row, so the rows add up. Below that, "Going well" lists categories under budget three months running and "Worth a look" lists ones rising three months running. Accounts now draws net worth over six months from one balance per account per day. The line waits until every account has a balance, so linking a bank never looks like growth. Code writes every sentence, not AI. Claude Code built both from designs I picked. Built and tested on demo data.',
+    artifacts: [artifact(trendsNetWorth, 'Tally · Trends and a net-worth line', 'Trends from PR #229 and Accounts from PR #230 on demo data, with numbered pointers.', 'Annotated screen captures, demo data')],
+  },
+  {
+    id: 'tally-ai-switches', day: '2026-10-05',
+    title: 'Switches to turn Tally’s AI off',
+    summary: 'I want every AI feature in Tally to have its own off switch, so people choose what it does rather than take it on trust. Settings now has an AI suggestions group with two switches: one for category guesses and the transfer and reimbursement flags that leave a transaction out of the budget, one for spotting income. Off means Tally works from your rules and choices alone, and nothing already decided changes. The nightly run checks the switches before each question and again before using each answer, so turning one off mid-run counts at once. Switches for planned AI features come when those ship. I picked the layout; Claude Code built it. Built and tested on demo data.',
+    artifacts: [artifact(aiSwitches, 'Tally · Switches to turn the AI off', 'Settings with the AI suggestions group, PR #231 on demo data, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-proposals-p23-p75', day: '2026-10-05',
+    title: 'Fifty-three more design choices, made by seeing them',
+    summary: 'After Bills and splits, Tally had 53 more design questions: Trends, net worth, fixes that keep Safe to spend honest, a switch for every AI feature, eight more features, forms, motion and corners. Claude Code drew each on the proposals page and recommended one option, and I picked from the pictures. Usually I agreed; I didn’t for the AI switches, the error pages, the reconnect email and the type filter. I asked for Trends to make budgeting feel worth it, so Claude Code redrew it to lead with good news. I later dropped one pick, storing documents, as I couldn’t see a use for them. Trends and the AI switches are built since; most picks aren’t yet.',
+    artifacts: [artifact(proposalsP41, 'Tally · Fifty-three more design choices', 'P41 on the proposals page: the recommended option and the one I picked, on demo data, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-smarter-sorting', day: '2026-10-06',
+    title: 'Tally’s AI sorts sooner and learns from people',
+    summary: 'I want Tally’s AI to earn trust: quick, taught by the right people, and easy to check. Jev now sorts a bank sync’s new transactions right after the sync, not only overnight, inside the same daily limit and with its own off switch. Before each guess, it is told how that store’s last five trips were sorted, counting only choices a person or a merchant rule made, so a wrong AI guess can’t teach itself. For the demo, two links switch the list between what Tally made of it and what the bank sent. I picked these rules; Claude Code and Codex built them. Built and tested; not on the public demo yet.',
+    artifacts: [artifact(smarterSorting, 'Tally · The AI sorts sooner and learns from people', 'Transactions in Tally’s view and straight from the bank, side by side, PR #270 on demo data, with numbered pointers.', 'Annotated screen captures, demo data')],
+  },
+  {
+    id: 'tally-new-category-suggestions', day: '2026-10-06',
+    title: 'Tally suggests new categories; people create them',
+    summary: 'When Tally’s AI says none of a household’s categories fit, that shouldn’t be a dead end, and the AI should never make categories itself. Now, when three or more such purchases look alike, Workers AI proposes a name, like Pet Care, and Settings shows it as a dashed card with its purchases ticked. A person creates the category with the ticked ones or dismisses the idea, and a dismissed name is never suggested again. Unticked purchases are sorted again right away, with an optional note. The AI sees store and category names, never amounts or dates. I picked how it looks and behaves; Claude Code and Codex built it. Built and tested; not on the public demo yet.',
+    artifacts: [artifact(newCategories, 'Tally · Suggested new categories', 'Settings with a suggested Pet Care category on demo data, with numbered pointers.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-transfers-and-bills', day: '2026-10-06',
+    title: 'Transfers out, bill payments in',
+    summary: 'Moving money between your own accounts or paying a card isn’t spending, but Tally left those out only after its nightly AI run, and a card payment could be counted twice. Now the bank’s transfer and loan-payment categories leave a transaction out as soon as it syncs, unless a person decided otherwise. A payment linked to a bill always counts, and it takes its bill’s category, so fewer transactions wait for one. Bills now shows what bills cost a month and what’s still to pay this month. I picked the Bills layouts and which category wins. Claude Code built the transfer rule; Codex built the Bills changes. Built and tested on demo data.',
+    artifacts: [artifact(transfersBills, 'Tally · Transfers out, bill payments in', 'Bills and Transactions side by side on demo data from PR #287, with numbered pointers.', 'Annotated screen captures, demo data')],
+  },
+  {
+    id: 'tally-everyday-tools', day: '2026-10-06',
+    title: 'Everyday controls in Tally',
+    summary: 'Each of these closes a gap I found against my earlier app or follows a choice I made after seeing it drawn. Settings now lets a household pick its time zone, which decides when the month and each bill’s status turn over. Transactions can be filtered by account and by type: spending, income, refunds or excluded. A budget’s sheet offers a 3-month average beside last month’s spending; code works it out, and the person decides. Deleting a cash entry asks first, then offers Undo for ten seconds, a safety net under the question, not a replacement. Claude Code built the time zone and filters; Codex built the average and Undo. Built and tested on demo data.',
+    artifacts: [artifact(everydayTools, 'Tally · Everyday controls', 'The time zone setting, the account and type filters, and the 3-month average, on demo data, with numbered pointers.', 'Annotated screen captures, demo data')],
+  },
+  {
+    id: 'tally-polish-and-motion', day: '2026-10-06',
+    title: 'Quiet motion, calmer corners and a phone that fits',
+    summary: 'I asked to adopt what helps from micro-interaction libraries I’d shared, without adding any. Tally’s motion is plain CSS: sheets rise, toasts fade and pages cross-fade in 200 ms or less, and nothing moves under reduced motion. I picked squircle corners for buttons, fields and sheets after seeing them drawn five times larger; chips stay pills, and browsers without support keep round corners. A polish pass over the Phase 3.5 pages fixed tap targets, headings and copy. On phones, focused items and a list’s last rows scroll clear of the tab bar, and a long store name no longer widens the page. Claude Code built most of it; Codex built the phone fixes. Built and tested on demo data.',
+    artifacts: [artifact(squircles, 'Tally · Calmer corners', 'The budget sheet after PR #257 on demo data, with a magnified before and after of a button’s corner.', 'Annotated screen capture, demo data')],
+  },
+  {
+    id: 'tally-codex-builds', day: '2026-10-06',
+    title: 'Codex builds, Claude Code delivers',
+    summary: 'Work that never reaches GitHub is lost, and Codex’s work on three Tally issues was lost that way when it was trusted to push. So on October 6 I changed how Tally is built. Codex builds each issue from a brief, tests first, in a worktree on my machine; a fresh Codex run verifies it. Claude Code only delivers: it pushes only the verified commit, opens the PR, confirms both on GitHub, answers every review and checks changed pages in a browser. Design and product choices stay mine. By that night 16 more code PRs had merged, each built or verified by Codex. That morning, the last of Phase 3.5’s fixes to the rules behind Tally’s numbers merged.',
+    artifacts: [artifact(codexBuilds, 'Tally · Codex builds, Claude Code delivers', 'The build, verify and deliver steps, and the decisions that led to them.', 'Diagram')],
   },
   {
     id: 'tally-store-names', day: '2026-10-06',

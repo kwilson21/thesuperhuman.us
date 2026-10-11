@@ -18,6 +18,9 @@ import landingPage from '~/assets/projects/kaillera-next/landing-page-annotated.
 import directionADemo from '~/assets/projects/kaillera-next/direction-a-demo-annotated.webp';
 import remixMenuRollback from '~/assets/projects/kaillera-next/remix-menu-rollback-diagram.webp';
 import graphicsFixes from '~/assets/projects/kaillera-next/graphics-fixes-diagram.webp';
+import matchLogsDiagram from '~/assets/projects/kaillera-next/match-logs-diagram.webp';
+import netplayReliability from '~/assets/projects/kaillera-next/netplay-reliability-diagram.webp';
+import switch2Diagram from '~/assets/projects/kaillera-next/switch2-controller-diagram.webp';
 
 export const kailleraStory = {
   title: 'Kaillera Next',
@@ -194,5 +197,23 @@ export const kailleraMilestones: Milestone[] = [
     title: 'Fixing two graphics glitches in Smash Remix',
     summary: 'Two picture bugs showed up in Smash Remix while both players’ games stayed in sync. On Pokemon Stadium, stage pieces stretched into slabs: our copy of the GLideN64 renderer predated two upstream fixes for reading past its vertex buffer, so Claude Code backported them. The other glitch hit the first frame shown after a rollback caught up. Replay had skipped a graphics-state bookkeeping step while the renderer kept drawing, so that frame restored stale state. Claude Code kept the step running and added a per-frame picture comparison to our two-player test, since state hashes couldn’t see the problem. Released in v0.59.3 and v0.59.4.',
     artifacts: [artifact(graphicsFixes, 'Kaillera Next · Two graphics glitches fixed', 'The vertex buffer read past its end, and the replay step that restored stale graphics state. Drawn from the commits, not a gameplay capture.', 'Diagram')],
+  },
+  {
+    id: 'kaillera-next-match-logs', day: '2026-09-28',
+    title: 'Match logs that outlast a restart',
+    summary: 'Kaillera Next’s room server runs on a free plan with no lasting disk, so every deploy, restart or idle sleep wiped its logs, including those of a match being debugged. Claude Code moved them to Cloudflare: rows in D1, screenshots in R2, with logs split and capped to fit D1’s 2 MB row limit. Each match is now registered when it starts, and late log uploads are refused for matches the server doesn’t know or that have closed. Matches whose logs show a crash, freeze or desync, or that a player sent feedback about, are kept for up to 180 days; the rest are deleted after 7 days. Released in v0.63.0.',
+    artifacts: [artifact(matchLogsDiagram, 'Kaillera Next · Match logs that outlast a restart', 'Where logs and screenshots go now, which matches are kept, and how the rest are deleted. Drawn from the code.', 'Diagram')],
+  },
+  {
+    id: 'kaillera-next-netplay-reliability', day: '2026-09-28',
+    title: 'Keeping matches in step when the browser gets in the way',
+    summary: 'A netplay match has to survive browsers that throttle timers and pause background tabs. On one day, Claude Code fixed four ways matches broke. A phone whose timers fire about 30 times a second now runs a second frame per tick to catch up, instead of holding the match at 30 frames a second. Clicking the toolbar mid-match no longer steals the emulator’s frame and quietly desyncs the players. Returning to a background tab no longer wipes inputs both players were waiting for. A shader cache that wrote past its table now stays in bounds, and a core crash now ends the match with an error instead of a frozen screen. Released in v0.63.1 to v0.63.14.',
+    artifacts: [artifact(netplayReliability, 'Kaillera Next · Keeping matches in step', 'Before and after for throttled timers, the toolbar click, tab return, boot stalls and the core crash. Drawn from the commits, not a gameplay capture.', 'Diagram')],
+  },
+  {
+    id: 'kaillera-next-switch2-controller', day: '2026-09-30',
+    title: 'Switch 2 Pro Controller over USB-C',
+    summary: 'The Nintendo Switch 2 Pro Controller stays silent to a browser until it gets a vendor handshake over USB, and on a Mac nothing sends it, so it never showed up as a gamepad. Claude Code added a small WebUSB module that sends the handshake after one click on "Connect Switch 2 Pro" in the room. After that first permission, it re-enables the controller on every page load and replug. A built-in profile maps its buttons and sticks, using numbers measured on the hardware. It’s experimental: wired USB-C in Chrome, tested on macOS only. Bluetooth, Safari and Firefox aren’t supported. A Codex review caught a stalled write being reported as success. Released in v0.64.0.',
+    artifacts: [artifact(switch2Diagram, 'Kaillera Next · Switch 2 Pro Controller over USB-C', 'The handshake, the profile choice and the stick mapping. Drawn from the code.', 'Diagram')],
   },
 ];
