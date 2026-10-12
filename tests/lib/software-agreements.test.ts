@@ -390,6 +390,11 @@ it('refuses identical text before duplicate labels, and refuses a label already 
     await failure(publishTemplate(db, 'sow', revised('sow'), 1, 'owner@example.com', { versionLabel: 'v1' })),
   ).toBe('v1 is already used for the SOW. Choose another label.');
 });
+it('refuses text that matches the current version once line endings are normalized', async () => {
+  expect(
+    await failure(publishTemplate(db, 'msa', synthetic('msa').replace(/\n/g, '\r\n'), 1, 'owner@example.com', { versionLabel: 'v2' })),
+  ).toBe('This text matches v1. Nothing to publish.');
+});
 it('allows the same label on both kinds', async () => {
   await expect(
     publishTemplate(db, 'msa', revised('msa'), 1, 'owner@example.com', { versionLabel: 'v2' }),
@@ -2275,8 +2280,16 @@ it('keeps a returning client on the executed MSA after a newer MSA is published,
   expect(signedRows()).toEqual(before);
 });
 
-it('gives a different client with no executed MSA the current MSA', async () => {
-  const current = await publishTemplate(db, 'msa', synthetic('msa') + '\nCurrent terms.\n', 1, 'owner@example.com', { versionLabel: 'v2026-11-01' });
+it('gives a different client with no executed MSA the current MSA, and leaves the first client executed MSA unchanged', async () => {
+  const executed = await publishTemplate(db, 'msa', revised('msa'), 1, 'owner@example.com', { versionLabel: 'v2026-09-30' });
+  sql.prepare("UPDATE software_offers SET msa_template_id=? WHERE id='o'").run(executed.id);
+  const first = await signed();
+  await countersignAgreements(db, (await offer())!, first.documents, 'Owner', 'owner@example.com', request());
+  const firstMsa = (await offerAgreements(db, 'o')).find((a) => a.kind === 'msa')!;
+  await prepareAgreementArtifact(env, firstMsa.id, async () => new TextEncoder().encode('%PDF-synthetic'));
+  const firstRows = () => sql.prepare("SELECT id,kind,status,template_id,canonical_text,values_json FROM software_agreements WHERE offer_id='o' ORDER BY id").all();
+  const before = firstRows();
+  const current = await publishTemplate(db, 'msa', synthetic('msa') + '\nCurrent terms.\n', 2, 'owner@example.com', { versionLabel: 'v2026-11-01' });
   const otherLink = await hashOfferToken('y'.repeat(43));
   sql.exec("UPDATE software_offers SET status='superseded' WHERE id='o'; INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at) VALUES('r2','software','Other','other@example.com','Tool','reviewed','now','now')");
   sql.prepare("INSERT INTO software_offer_links(request_id,token_hash,created_at,revoked_at) VALUES('r2',?,'now',NULL)").run(otherLink);
@@ -2291,4 +2304,5 @@ it('gives a different client with no executed MSA the current MSA', async () => 
   const msa = (await offerAgreements(db, 'o3')).find((a) => a.kind === 'msa')!;
   expect(msa.template_id).toBe(current.id);
   expect(JSON.parse(msa.values_json).msa).toMatchObject({ version_label: 'v2026-11-01' });
+  expect(firstRows()).toEqual(before);
 });
