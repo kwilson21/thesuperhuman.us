@@ -2,7 +2,7 @@
 
 Date: October 12, 2026  
 Repository: `kwilson21/thesuperhuman.us`  
-Pull request: opened from this branch after this record; the migration section below names it.  
+Pull request: [#176](https://github.com/kwilson21/thesuperhuman.us/pull/176)  
 Branch: `claude/agreement-versioning-v1-b28b03`  
 Starting revision: `2d98c299` (`origin/main`). Verified revision: `05419bad` (this record is committed on top).  
 Target: production `https://thesuperhuman.us`, `/owner/agreements`, `POST /api/owner/agreements` (`preview`, `publish`, new `template-version`), owner request pages with a software offer (agreement details), `/offer/{token}/sign`, signed agreement PDFs and certificates, and production `MUSIC_DB`.  
@@ -16,13 +16,11 @@ Owner, in conversation, 2026-10-12:
 
 - "A and A are fine, go ahead": existing clients keep the MSA they signed until both agree otherwise and new clients get the current MSA; mid-project changes to a signed SOW become change orders (separate design, not in this release).
 - Implementation by Claude Haiku 5.5 subagents with Sonnet or Opus review rounds, for this repository.
+- Migration 0026 production authorization, with a read-only check of the template rows: "Yes, apply 0026".
+- The `{{msa.source_revision}}` placeholder in agreement text prints the MSA's version label, which keeps today's rendered text; the typed source revision is stored in the agreement values and the certificate JSON (the signing record attached to the signed PDF), not on the visible PDF pages: "Yes, keep it".
+- Source revision hint reworded to "Your reference for the legal source, for example a counsel revision. Clients can see it in the signing record attached to the signed PDF." (owner chose to reword the hint).
 
-Coordinator rulings awaiting owner confirmation:
-
-- The `{{msa.source_revision}}` placeholder in agreement text prints the MSA's version label, which keeps today's rendered text. The typed source revision is stored in the agreement values and the certificate JSON (the signing record attached to the signed PDF), not on the visible PDF pages.
-- Each document's certificate carries its own template's label and source revision, so a SOW shows the SOW template's.
-
-Migration 0026 production authorization: pending.
+Coordinator ruling: each document's certificate carries its own template's label and source revision, so a SOW shows the SOW template's.
 
 ## Evidence and limits
 
@@ -81,23 +79,23 @@ Not run locally: `npm run build` and screenshot capture (CI runs both). No remot
 
 - **PASS · Data inventory (checklist 6.1).** New stored data: a version label and an optional owner-typed source revision per template, copied into agreement values and certificates. The source revision is visible to clients only inside the signing record attached to the signed PDF.
 - **N/A · Privacy notice, consent, commerce, analytics (checklist 6.2 to 6.5).** No visitor data collection changes.
-- **UNVERIFIED · Monitoring (checklist 6.6).** `owner:health` requires both columns and the index; target run pending.
+- **PASS · Schema monitoring (checklist 6.6).** `owner:health` requires both columns and the index; `owner:health --remote` passed 8/8 after 0026. Real failure receipt not exercised.
 
 ## 7. Release and final QA
 
 - **PASS · Required checks, local (checklist 7.1).** Counts above. Build and CI pending.
 - **UNVERIFIED · Exact diff and review (checklist 7.2).** Three whole-branch review rounds, the last clean. Greptile review of the final head pending.
-- **UNVERIFIED · Production configuration (checklist 7.3).** No new bindings or secrets. Migration evidence pending.
-- **UNVERIFIED · Rollback and backup (checklist 7.4).** Rollback revision recorded; backup pending with the migration.
+- **PASS · Production schema (checklist 7.3).** No new bindings or secrets. 0026 applied with the evidence below.
+- **PASS · Rollback and backup (checklist 7.4).** Rollback revision recorded; full export restore-tested and Time Travel bookmark recorded before 0026 (below). Redeployment not exercised.
 - **UNVERIFIED · Post-deployment QA (checklist 7.5).** No deployment yet.
 - **PASS · Local receipt (checklist 7.6).** This record separates local verification from deployment and live verification.
 
 ## 8. Private owner center
 
 - **UNVERIFIED · Access and headers (checklist 8.1, 8.2).** The new action uses the existing owner guard; target Access and headers not exercised.
-- **UNVERIFIED · Migration reconciliation and backup (checklist 8.3).** 0026 is two `ADD COLUMN` statements and a partial unique index; the immutability trigger is unaffected. Production ledger, export and applied evidence pending.
+- **PASS · Migration reconciliation and backup (checklist 8.3).** 0026 is two `ADD COLUMN` statements and a partial unique index; the immutability trigger is unaffected. Ledger, export, restore test and applied evidence below.
 - **N/A · Checklist 8.4 to 8.14.** No request persistence, traffic, playback, retention, studio, payment or recovery changes.
-- **UNVERIFIED · Target health (checklist 8.15).** `owner:health -- --remote` pending after 0026.
+- **PASS · Target health (checklist 8.15).** `owner:health -- --remote` 8/8 PASS after 0026; the post-deploy run follows merge.
 
 ## Software agreement signing
 
@@ -108,4 +106,10 @@ Not run locally: `npm run build` and screenshot capture (CI runs both). No remot
 - **UNVERIFIED · Workers runtime PDF.** Rendering checked in Node tests only.
 - **UNVERIFIED · CI screenshots.** The templates shot now appends a synthetic line and waits for `Changes from v2026-09-30`; captures pending review.
 
-Remaining work: Greptile and green CI at the final head; screenshot review; owner confirmation of the rulings above; authorized production migration with backup and health evidence; merge; post-deploy health and live check of `/owner/agreements`. This record does not claim launch readiness.
+## Production migration 0026: applied
+
+**PASS · Migration and backup.** Kazon authorized applying 0026 to production ("Yes, apply 0026", owner, in conversation, 2026-10-12). Before applying, read-only checks at approximately 18:44 America/New_York from revision `bcd252ec` showed only `0026_agreement_template_labels.sql` pending. Counts were 3 requests, 6 request audit rows, 1 audio project, 0 offers, 0 software projects, 0 project updates, 1 audio payment, 0 suggestion budget rows, 0 agreement templates, 0 agreements, 0 signatures and 0 contractor config versions; website signing was off; no template text contained "Interim"; the audit sequence was 6 and there were 156 schema objects. The request audit rows were hashed as the SHA-256 of their JSON (ordered by id, sorted keys), first 16 hex characters: `e9c998004e46defd` (a different method from earlier records, so the values are not comparable across records). A full export was taken (stored privately, outside the repository) and restored into scratch SQLite with matching request, audit, audio project, offer and template counts (3/6/1/0/0) and 11 triggers; the scratch database was deleted. The pre-migration D1 Time Travel bookmark `00000054-00000000-00005102-3342184cc315d40e287db7bcbf8392d3` is the database rollback point.
+
+0026 applied on October 12, 2026 (4 commands), before merge to main. Afterwards: every count was unchanged; the request audit hash was identical (`e9c998004e46defd`); of 156 pre-existing definitions, 155 were identical and only `software_agreement_templates` changed, gaining `version_label TEXT` and `source_revision TEXT`; the one new object is the partial unique index `software_agreement_templates_label`, for 157 schema objects. `PRAGMA foreign_key_check` was empty, the ledger was clean ("No migrations to apply!"), and `owner:health --remote` passed 8/8 checks.
+
+Remaining work: review of the final head and green CI; owner approval of the screenshots; merge; post-deploy `owner:health -- --remote --post-deploy` and a live check of `/owner/agreements`. This record does not claim launch readiness.
