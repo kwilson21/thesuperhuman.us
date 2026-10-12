@@ -90,6 +90,13 @@ it('previews the submitted version label where the template names the source rev
   expect(blank.text).toContain('msa.source_revision: Sample version label');
 });
 
+it('falls back to the sample label when a typed preview label would not publish', async () => {
+  for (const versionLabel of ['[draft]', 'v{{x}}']) {
+    const preview = (await (await post({ action: 'preview', kind: 'msa', text: synthetic('msa'), expectedCurrentVersion: 0, versionLabel })).json()) as { ok: boolean; text: string };
+    expect(preview).toMatchObject({ ok: true, text: expect.stringContaining('msa.source_revision: Sample version label') });
+  }
+});
+
 it('publishes the label and source revision, storing a blank revision as NULL', async () => {
   expect(await (await publish('msa', synthetic('msa'), 0, 'v2026-09-30', { sourceRevision: ' ' })).json()).toEqual({
     ok: true,
