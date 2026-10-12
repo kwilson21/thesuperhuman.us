@@ -1,7 +1,6 @@
 import { createRequire } from 'node:module';
 import { readFile, mkdtemp, rm } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
-import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
