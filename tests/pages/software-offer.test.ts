@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { readFile, mkdtemp, rm } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
@@ -924,6 +925,12 @@ it('names only the signed MSA label when no newer MSA has a different label',asy
 it('shows no continuity line without a reused MSA or when the reused MSA is not a candidate',async()=>{
   expect(await renderMsaContinuity({})).not.toContain('data-msa-continuity');
   expect(await renderMsaContinuity({reusedMsaId:'msa-draft'})).not.toContain('data-msa-continuity');
+});
+
+it('lets a 40 character MSA label wrap in the continuity line, so the request page does not scroll sideways',()=>{
+  const css=readFileSync(new URL('../../src/styles/owner.css',import.meta.url),'utf8').replace(/\/\*[\s\S]*?\*\//g,'');
+  const rules=[...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([,selector,body])=>({selectors:selector.split(',').map(s=>s.trim()),body}));
+  expect(rules.filter(rule=>rule.selectors.includes('.software-offer-editor [data-agreement-details]')&&/overflow-wrap:\s*anywhere/.test(rule.body))).toHaveLength(1);
 });
 
 it('renders omitted duplicate legacy deliverables by index without offering acceptance',async()=>{
