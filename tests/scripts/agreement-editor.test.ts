@@ -123,6 +123,7 @@ it('fills a version entry with its stored text, or its changes from the previous
   await viewText.handlers.get('click')!({});
   expect(output.kids).toHaveLength(1);
   expect(output.kids[0].tagName).toBe('PRE');
+  expect(output.kids[0].className).toBe('template-text');
   expect(output.textContent).toBe('New clause.\nShared clause.\n');
   await compare.handlers.get('click')!({});
   const [heading, pre] = output.kids;

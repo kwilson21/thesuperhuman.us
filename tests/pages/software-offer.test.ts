@@ -588,7 +588,31 @@ it('renders template version labels, source revision fields, the current version
     expect(html).toMatch(/Version 2 · v2026-10-02 · /);
     expect(html).toMatch(/Version 1 · v2026-09-30 · /);
     expect(html.match(/data-template-version-output/g)).toHaveLength(3);
+    // Both containers change after a click or preview, so screen readers need them to be live regions.
+    const outputs = html.match(/<div[^>]*data-template-version-output[^>]*>/g) ?? [];
+    expect(outputs).toHaveLength(3);
+    expect(outputs.every(tag => tag.includes('aria-live="polite"'))).toBe(true);
+    expect(html.match(/<div[^>]*data-template-diff[^>]*>/g)!.every(tag => tag.includes('aria-live="polite"'))).toBe(true);
   } finally { sql.close(); }
+});
+
+it('styles the script-built diff and version text globally on Agreements, so the rules reach those nodes', async () => {
+  // The page script creates these elements at runtime, so scoped rules (which need the Astro scope class) never match them.
+  const { css } = await transform(readFileSync('src/pages/owner/agreements.astro', 'utf8'), { filename: 'src/pages/owner/agreements.astro', internalURL: 'astro/compiler-runtime' });
+  const rules = [...css.join('\n').matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(match => ({ selectors: match[1].split(',').map(selector => selector.trim()), body: match[2] }));
+  const bodyOf = (selector: string) => rules.filter(rule => rule.selectors.includes(selector)).map(rule => rule.body).join(';');
+  for (const cls of ['template-diff', 'template-text', 'diff-removed', 'diff-unchanged', 'diff-added']) {
+    const selectors = rules.flatMap(rule => rule.selectors).filter(selector => selector.includes(`.${cls}`));
+    expect(selectors, cls).not.toHaveLength(0);
+    expect(selectors.every(selector => selector === `.${cls}`), cls).toBe(true);
+  }
+  for (const cls of ['template-diff', 'template-text']) {
+    expect(bodyOf(`.${cls}`)).toMatch(/white-space:\s*pre-wrap/);
+    expect(bodyOf(`.${cls}`)).toMatch(/overflow-wrap:\s*anywhere/);
+  }
+  expect(bodyOf('.diff-removed')).toMatch(/color:\s*var\(--muted\)/);
+  expect(bodyOf('.diff-unchanged')).toMatch(/color:\s*var\(--muted\)/);
+  expect(bodyOf('.diff-added')).toMatch(/color:\s*var\(--accent\)/);
 });
 
 
