@@ -125,6 +125,13 @@ it('refuses a missing, spaced, slashed or over-long label before publishing', as
   expect(sql.prepare('SELECT COUNT(*) AS total FROM software_agreement_templates').get()).toEqual({ total: 0 });
 });
 
+it('refuses a source revision over 120 characters before publishing', async () => {
+  const response = await publish('msa', synthetic('msa'), 0, 'v1', { sourceRevision: 'a'.repeat(121) });
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ ok: false, error: 'Check required fields and limits.' });
+  expect(sql.prepare('SELECT COUNT(*) AS total FROM software_agreement_templates').get()).toEqual({ total: 0 });
+});
+
 it('shows the identical-text and duplicate-label refusals to the owner unchanged', async () => {
   expect((await publish('msa', synthetic('msa'), 0, 'v1')).status).toBe(200);
   expect((await publish('sow', synthetic('sow'), 0, 'v1')).status).toBe(200);
