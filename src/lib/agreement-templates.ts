@@ -115,7 +115,7 @@ function lookup(values: Record<string, unknown>, path: string): string {
       typeof value === 'object' && value !== null
         ? (value as Record<string, unknown>)[part]
         : undefined;
-  if (typeof value !== 'string' || !value.trim()) throw new Error(`Missing value: ${key}.`);
+  if (typeof value !== 'string' || !value.trim()) throw new Error(`Missing value: ${path}.`);
   return value.normalize('NFC');
 }
 export function renderAgreement(

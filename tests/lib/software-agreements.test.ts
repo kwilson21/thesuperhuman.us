@@ -305,6 +305,12 @@ it('prints the MSA version label where the template names the source revision, n
   expect(rendered).not.toContain('Interim');
   expect(rendered).not.toContain('counsel draft 3');
 });
+it('names the template placeholder in a missing-value error, not the label it reads from', () => {
+  const text = synthetic('msa');
+  const values = sampleAgreementValues('msa', text, 'v2026-11-01');
+  delete (values.msa as Record<string, unknown>).version_label;
+  expect(() => renderAgreement('msa', text, values)).toThrow('Missing value: msa.source_revision.');
+});
 it('enforces dates, milestone counts, invoice duration and owner default semantics', () => {
   expect(validateAgreementDetails(details, terms as never).review_business_days).toBe(5);
   for (const value of [
