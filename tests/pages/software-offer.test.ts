@@ -573,6 +573,14 @@ it('renders template version labels, source revision fields, the current version
     for (const input of versionInputs) expect(input).toMatch(/ required/);
     for (const input of versionInputs) expect(input).toContain('maxlength="40"');
     for (const input of versionInputs) expect(input).toContain('pattern="[A-Za-z0-9.\\-]{1,40}"');
+    // The browser shows this title as the pattern-mismatch message, so it names the allowed format.
+    for (const input of versionInputs) expect(input).toContain('title="Use letters, digits, dots and dashes for the version label, up to 40 characters."');
+    // Preview may run on an unfinished label, so it skips browser validation. Publish keeps the format check in the browser.
+    const actionButtons = (value: string) => html.match(new RegExp(`<button[^>]*value="${value}"[^>]*>`, 'g')) ?? [];
+    expect(actionButtons('preview')).toHaveLength(2);
+    expect(actionButtons('preview').every(button => / formnovalidate[ >]/.test(button))).toBe(true);
+    expect(actionButtons('publish')).toHaveLength(2);
+    expect(actionButtons('publish').some(button => button.includes('formnovalidate'))).toBe(false);
     // Browsers compile pattern with the v flag, where an unescaped trailing dash is a syntax error.
     const pattern = new RegExp(`^(?:${versionInputs[0]!.match(/pattern="([^"]*)"/)![1]})$`, 'v');
     expect(pattern.test(`v${projectToday()}`)).toBe(true);
