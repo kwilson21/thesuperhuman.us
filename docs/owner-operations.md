@@ -134,9 +134,15 @@ After checking a full pre-start deposit refund in Stripe, record it with `npm ru
 ## Software agreements
 
 Website signing starts off. The Agreements page controls the setting, private
-contractor configuration, immutable MSA and SOW template versions, field reference
-and sample preview. Review templates and consent with counsel when possible.
+contractor configuration, immutable MSA and SOW template versions, field reference,
+sample preview, a line diff against the current version, and version history.
+Review templates and consent with counsel when possible.
 Publish a new version to change a template; sent offers keep their pinned version.
+Each published version carries a required label (letters, digits, dots and dashes,
+1 to 40 characters) that clients see on the agreement. An optional source revision
+is printed in the signing record. Version history can compare each version with the
+previous one. Publishing never forces re-signing: returning clients keep the MSA they
+signed, and new clients get the current one.
 Private legal source files and filled agreements do not belong in Git.
 
 Complete Agreement details before sending an offer. Defaults are folded under
