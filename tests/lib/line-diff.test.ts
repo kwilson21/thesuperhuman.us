@@ -42,6 +42,29 @@ describe('line diff', () => {
     ]);
   });
 
+  it('collapses consecutive matched lines inside a changed middle into one unchanged row', () => {
+    expect(lineDiff('a\nb\nc\nd\ne\nf', 'a\nX\nc\nd\nY\nf')).toEqual([
+      { kind: 'unchanged', count: 1 },
+      { kind: 'removed', text: 'b' },
+      { kind: 'added', text: 'X' },
+      { kind: 'unchanged', count: 2 },
+      { kind: 'removed', text: 'e' },
+      { kind: 'added', text: 'Y' },
+      { kind: 'unchanged', count: 1 },
+    ]);
+  });
+
+  it('reports every middle line as changed above the table cap, even when lines are shared', () => {
+    // 2001 x 2000 cells is above the cap, so shared middle lines are not aligned and no unchanged row appears.
+    const middle = (length: number, changed: (k: number) => string) =>
+      Array.from({ length }, (_, k) => (k % 2 ? changed(k) : `same ${k}`));
+    const before = ['top old', ...middle(1999, (k) => `old ${k}`), 'bottom old'].join('\n');
+    const after = ['top new', ...middle(1998, (k) => `new ${k}`), 'bottom new'].join('\n');
+    const rows = lineDiff(before, after);
+    expect(rows).toHaveLength(4001);
+    expect(rows.every((row) => row.kind !== 'unchanged')).toBe(true);
+  });
+
   it('gives only added rows when before is empty', () => {
     expect(lineDiff('', 'a\nb')).toEqual([
       { kind: 'added', text: 'a' },
