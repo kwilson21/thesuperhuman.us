@@ -86,7 +86,7 @@ export const experience = [
     dates: 'October 2025 – May 2026', location: 'Remote',
     outcome: 'I kept the systems that process retail transaction data running and fixed bugs that triggered recurring alarms.',
     context: [
-      'Maintained and operated inherited ETL pipelines in a Ruby on Rails platform, using GoodJob, EC2, and S3 to transform legacy store transaction data and bulk-load results.',
+      'Maintained and operated inherited ETL pipelines in a Ruby on Rails platform, using GoodJob and S3 to transform legacy store transaction data and bulk-load results.',
       'Handled on-call issues and deployed fixes for bugs causing recurring alarms. Prototyped an MCP-driven store-onboarding pipeline and a PII-stripping debug tool; both remained internal prototypes and were not shipped.',
       'Conducted scenario-based senior engineering interviews and contributed to hiring decisions. Advocated for AI-assisted development and helped the engineering team adopt it.',
     ],
