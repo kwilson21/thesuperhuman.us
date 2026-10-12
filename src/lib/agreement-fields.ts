@@ -191,6 +191,7 @@ export function agreementValues(
     msa_version_label: string;
     msa_source_revision: string;
     sow_version_label: string;
+    sow_source_revision: string;
   },
 ) {
   const amounts = terms.milestones.map((m, i) =>
@@ -282,6 +283,7 @@ export function agreementValues(
       number: system.sow_number,
       version: String(system.offer_version),
       version_label: system.sow_version_label,
+      source_revision: system.sow_source_revision,
       effective_on: system.effective_on,
       project_name: terms.outcome,
       outcome: base.offer.outcome_summary,

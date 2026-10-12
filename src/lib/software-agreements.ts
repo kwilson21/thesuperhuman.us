@@ -151,6 +151,7 @@ export async function reviewAgreements(
       msa_version_label: templateVersionLabel(msaTemplate),
       msa_source_revision: msaTemplate.source_revision ?? '',
       sow_version_label: templateVersionLabel(sowTemplate),
+      sow_source_revision: sowTemplate.source_revision ?? '',
     },
   );
   const documents = [] as { id: string; kind: 'msa' | 'sow'; hash: string; text: string }[];

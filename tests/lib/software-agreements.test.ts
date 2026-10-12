@@ -698,7 +698,7 @@ it('runs private source templates through one, two and three milestones in both 
           template_version: 1,
           msa_version_label: 'v1',
           msa_source_revision: '',
-          sow_version_label: 'v1',
+          sow_version_label: 'v1', sow_source_revision: '',
         },
       );
       for (const kind of ['msa', 'sow'] as const)
@@ -1711,7 +1711,7 @@ it('renders cumulative checkpoint payments and invoice-identical odd-cent instal
   const { agreementValues, agreementDetailsSchema } = await import('~/lib/agreement-fields');
   const { softwareInvoiceTerms } = await import('~/lib/software-invoices');
   const purchased = {...terms, paymentMode:'standard' as const, milestones:[terms.milestones[0],{...terms.milestones[0],feeCents:303,checkpoint:{label:'Preview',cancellationPercent:75}}]};
-  const values = agreementValues(purchased,agreementDetailsSchema.parse({...details,milestones:[details.milestones[0],{...details.milestones[0],start:'2026-10-20',checkpoint_criteria:'View',checkpoint_evidence:'Preview'}]}),clientAgreementSchema.parse(client),contractorSchema.parse(contractor),{effective_on:'2026-10-01',msa_version:'2026-10-01 / template 1',sow_number:'SOW-test',offer_version:1,template_version:1,msa_version_label:'v1',msa_source_revision:'',sow_version_label:'v1'});
+  const values = agreementValues(purchased,agreementDetailsSchema.parse({...details,milestones:[details.milestones[0],{...details.milestones[0],start:'2026-10-20',checkpoint_criteria:'View',checkpoint_evidence:'Preview'}]}),clientAgreementSchema.parse(client),contractorSchema.parse(contractor),{effective_on:'2026-10-01',msa_version:'2026-10-01 / template 1',sow_number:'SOW-test',offer_version:1,template_version:1,msa_version_label:'v1',msa_source_revision:'',sow_version_label:'v1', sow_source_revision: ''});
   expect(values.milestones[1].checkpoint_cumulative_amount).toBe('$3.28 (includes prior payments)');
   expect(values.milestones[1].checkpoint).toContain('cumulative cancellation amount $3.28');
   expect(values.system.amount1).toBe('$0.50 deposit / $0.51 balance');
@@ -2206,15 +2206,33 @@ it("certificates carry each document's own version label when the MSA and SOW la
   ]);
 });
 
-it('certificates read older stored values with no SOW label from the template row, and blank source revisions as empty', async () => {
-  sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES('sow-legacy','sow',2,?,?,'2026-09-01T12:00:00.000Z','owner@example.com')").run(revised('sow'), 'b'.repeat(64));
-  sql.prepare("UPDATE software_offers SET sow_template_id='sow-legacy' WHERE id='o'").run();
+it("certificates carry each document's own source revision, not the MSA's", async () => {
+  const msa = await publishTemplate(db, 'msa', revised('msa'), 1, 'owner@example.com', { versionLabel: 'v2026-11-01', sourceRevision: 'MSA rev 7' });
+  const sow = await publishTemplate(db, 'sow', revised('sow'), 1, 'owner@example.com', { versionLabel: 'v2026-11-02', sourceRevision: 'SOW rev 2' });
+  sql.prepare("UPDATE software_offers SET msa_template_id=?, sow_template_id=? WHERE id='o'").run(msa.id, sow.id);
+  const result = await signed();
+  const id = await countersignAgreements(db, (await offer())!, result.documents, 'Owner', 'owner@example.com', request());
+  let certificates: { versions: Record<string, unknown> }[] = [];
+  await prepareAgreementArtifact(env, id, async (_env, _documents, received) => {
+    certificates = received as typeof certificates;
+    return new TextEncoder().encode('%PDF-synthetic');
+  });
+  expect(certificates.map((c) => c.versions)).toEqual([
+    expect.objectContaining({ source_revision: 'MSA rev 7' }),
+    expect.objectContaining({ source_revision: 'SOW rev 2' }),
+  ]);
+});
+it('certificates read older stored values from the template rows, and blank source revisions as empty', async () => {
+  sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES('msa-legacy','msa',2,?,?,'2026-08-15T12:00:00.000Z','owner@example.com')").run(revised('msa'), 'c'.repeat(64));
+  sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by,source_revision) VALUES('sow-legacy','sow',2,?,?,'2026-09-01T12:00:00.000Z','owner@example.com','SOW rev 2')").run(revised('sow'), 'b'.repeat(64));
+  sql.prepare("UPDATE software_offers SET msa_template_id='msa-legacy', sow_template_id='sow-legacy' WHERE id='o'").run();
   const reviewed = await review();
   for (const agreement of await offerAgreements(db, 'o')) {
     const values = JSON.parse(agreement.values_json);
     delete values.sow?.version_label;
+    delete values.sow?.source_revision;
     values.msa = { version_label: 'v2026-09-30', source_revision: 'Interim v2026-09-30' };
-    if (agreement.kind === 'msa') delete values.msa.source_revision;
+    if (agreement.kind === 'msa') delete values.msa.version_label;
     sql.prepare('UPDATE software_agreements SET values_json=? WHERE id=?').run(JSON.stringify(values), agreement.id);
   }
   await signAgreements(db, (await offer())!, (await agreementSession(db, request(), 'agreement', 'o'))!, reviewed.documents, request());
@@ -2226,8 +2244,8 @@ it('certificates read older stored values with no SOW label from the template ro
   });
   expect(sql.prepare('SELECT status FROM software_agreement_artifacts WHERE agreement_id=?').get(id)).toEqual({ status: 'ready' });
   expect(certificates.map((c) => c.versions)).toEqual([
-    expect.objectContaining({ version_label: 'v2026-09-30', source_revision: '' }),
-    expect.objectContaining({ version_label: 'v2026-09-01', source_revision: 'Interim v2026-09-30' }),
+    expect.objectContaining({ version_label: 'v2026-08-15', source_revision: 'Interim v2026-09-30' }),
+    expect.objectContaining({ version_label: 'v2026-09-01', source_revision: 'SOW rev 2' }),
   ]);
 });
 

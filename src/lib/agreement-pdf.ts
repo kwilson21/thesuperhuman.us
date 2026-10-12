@@ -327,7 +327,7 @@ export async function preflightAgreementPacket(env: Env, terms: OfferTerms, deta
       effective_on: details.planned_start, msa_version: `${details.planned_start} / template ${templates[0].version}`, sow_number: 'SOW-preflight',
       offer_version: 1, template_version: template.version,
       msa_version_label: templateVersionLabel(msaTemplate), msa_source_revision: msaTemplate.source_revision ?? '',
-      sow_version_label: templateVersionLabel(sowTemplate),
+      sow_version_label: templateVersionLabel(sowTemplate), sow_source_revision: sowTemplate.source_revision ?? '',
     });
     return { id: 'preflight', kind: template.kind, offer_id: 'preflight',
       canonical_text: renderAgreement(template.kind, template.text, values),

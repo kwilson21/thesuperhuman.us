@@ -43,6 +43,18 @@ async function documentVersionLabel(db: D1Database, d: Agreement) {
     .first<{ version_label: string | null; published_at: string }>();
   return templateVersionLabel(row!);
 }
+// Each document prints its own template's source revision. Older stored SOW values lack it, so the pinned template row supplies it.
+async function documentSourceRevision(db: D1Database, d: Agreement) {
+  const values = JSON.parse(d.values_json);
+  if (d.kind === 'msa') return values.msa?.source_revision ?? '';
+  if (typeof values.sow?.source_revision === 'string') return values.sow.source_revision as string;
+  const row = await db
+    .prepare('SELECT source_revision FROM software_agreement_templates WHERE id=?')
+    .bind(d.template_id)
+    .first<{ source_revision: string | null }>();
+  return row?.source_revision ?? '';
+}
+
 /** Signatures persist first. Artifact retries never create a signature. */
 export async function prepareAgreementArtifact(
   env: Env,
@@ -93,7 +105,7 @@ export async function prepareAgreementArtifact(
               : JSON.parse(d.values_json).system?.template_version,
           offer: JSON.parse(d.values_json).sow?.version,
           contractor_config: JSON.parse(d.values_json).contractor.config_version,
-          source_revision: JSON.parse(d.values_json).msa?.source_revision ?? '',
+          source_revision: await documentSourceRevision(db, d),
           version_label: await documentVersionLabel(db, d),
         },
         attachments: JSON.parse(d.attachment_manifest_json),
