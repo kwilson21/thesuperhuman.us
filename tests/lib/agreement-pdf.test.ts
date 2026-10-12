@@ -141,6 +141,20 @@ it('renders supplied or fictional agreements and embeds exact signing evidence',
     process.env.AGREEMENT_TEMPLATE_FILE ? [] : ['Sample Master Services Agreement', 'Sample Statement of Work', '2 Sample review list', '4 Sample signature records']);
 }, 30000);
 
+it("prints each document's own version label in its page headers and in the certificate", async () => {
+  const docs = [document('msa', 'Synthetic MSA\nNo missing terms.'), document('sow', 'Synthetic SOW\nNo missing terms.')];
+  const certificates = [{ versions: { version_label: 'v2026-09-30' } }, { versions: { version_label: 'v2026-11-01' } }];
+  const pdf = await PDFDocument.load(await renderAgreementPacket({} as Env, docs, certificates));
+  const text = extract(pdf).replace(/\s+/g, ' ');
+  expect(text).toContain('Master Services Agreement · v2026-09-30');
+  expect(text).toContain('Statement of Work · v2026-11-01');
+  expect(text).not.toContain('Master Services Agreement · v2026-11-01');
+  expect(text).not.toContain('Statement of Work · v2026-09-30');
+  const certificateText = text.slice(text.indexOf('Signing certificate'));
+  expect(certificateText).toContain('Agreement version v2026-09-30');
+  expect(certificateText).toContain('Agreement version v2026-11-01');
+});
+
 // Real clauses stay private; this additional local coverage is optional.
 const privateTemplateFile = '.private/signing/templates.json';
 it.runIf(existsSync(privateTemplateFile))('renders the real v1 agreements and embeds exact signing evidence', async () => {

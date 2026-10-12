@@ -294,6 +294,17 @@ it('fills optional SOW fields in template samples', () => {
   expect(rendered).toContain('Summary: Sample summary');
   expect(rendered).toContain('Timing: Sample timing');
 });
+it('prints the MSA version label where the template names the source revision, never the internal revision', () => {
+  const text = synthetic('msa');
+  expect(renderAgreement('msa', text, sampleAgreementValues('msa', text))).toContain('msa.source_revision: Sample version label');
+  const values = sampleAgreementValues('msa', text, 'v2026-11-01');
+  expect(values.msa).toMatchObject({ version_label: 'v2026-11-01' });
+  expect(renderAgreement('msa', text, values)).toContain('msa.source_revision: v2026-11-01');
+  const rendered = renderAgreement('msa', text, { ...values, msa: { ...(values.msa as object), source_revision: 'Interim counsel draft 3' } });
+  expect(rendered).toContain('msa.source_revision: v2026-11-01');
+  expect(rendered).not.toContain('Interim');
+  expect(rendered).not.toContain('counsel draft 3');
+});
 it('enforces dates, milestone counts, invoice duration and owner default semantics', () => {
   expect(validateAgreementDetails(details, terms as never).review_business_days).toBe(5);
   for (const value of [
@@ -1619,7 +1630,7 @@ it('retains both verbatim statements and verification method in signatures and c
     const json=JSON.stringify(certificates);
     expect(json).toContain(consentText(client.legal_name));expect(json).toContain(intentText());
     expect(json).toContain(intentText(true));expect(json).toContain('verified by one-time email link');
-    expect(json).toContain('v2026-09-30');return new TextEncoder().encode('%PDF-synthetic');
+    expect(json).toContain('"version_label":"v1"');return new TextEncoder().encode('%PDF-synthetic');
   });
 });
 it('rejects signing stale reviewed documents after autosaved details change',async()=>{
@@ -2139,4 +2150,72 @@ it.each(['executed', 'abandoned'])('settles uncertain waiting notices when %s an
   await applyAgreementRetention(db, env.AUDIO, 'test-storage', manifest);
   await applyAgreementRetention(db, env.AUDIO, 'test-storage', await previewAgreementRetention(db, env.AUDIO, 'test-storage'));
   expect(sql.prepare('SELECT count(*) n FROM software_agreements').get().n).toBe(0);
+});
+
+it('stores each pinned version label and the source revision on the agreement values', async () => {
+  const pinned = await publishTemplate(db, 'msa', revised('msa'), 1, 'owner@example.com', { versionLabel: 'v2026-11-01', sourceRevision: 'Counsel draft 3' });
+  sql.prepare("UPDATE software_offers SET msa_template_id=? WHERE id='o'").run(pinned.id);
+  await review();
+  const stored = async (kind: 'msa' | 'sow') => JSON.parse((await offerAgreements(db, 'o')).find((a) => a.kind === kind)!.values_json);
+  expect((await stored('msa')).msa).toMatchObject({ version_label: 'v2026-11-01', source_revision: 'Counsel draft 3' });
+  expect((await stored('sow')).msa).toMatchObject({ version_label: 'v2026-11-01', source_revision: 'Counsel draft 3' });
+  expect((await stored('sow')).sow).toMatchObject({ version_label: 'v1' });
+});
+
+it('keeps the reused MSA label on a new SOW when the offer pins a newer MSA template', async () => {
+  const result = await signed();
+  await countersignAgreements(db, (await offer())!, result.documents, 'Owner', 'owner@example.com', request());
+  const msa = (await offerAgreements(db, 'o')).find((a) => a.kind === 'msa')!;
+  await prepareAgreementArtifact(env, msa.id, async () => new TextEncoder().encode('%PDF-synthetic'));
+  const newer = await publishTemplate(db, 'msa', revised('msa'), 1, 'owner@example.com', { versionLabel: 'v2026-11-01' });
+  sql.prepare("UPDATE software_offers SET status='superseded' WHERE id='o'").run();
+  const columns = sql.prepare('PRAGMA table_info(software_offers)').all().map((row: { name: string }) => row.name);
+  const replacements: Record<string, string> = { id: "'o2'", version: '2', status: "'sent'", reused_msa_id: '?' };
+  sql.prepare(`INSERT INTO software_offers(${columns.join(',')}) SELECT ${columns.map((name: string) => replacements[name] ?? name).join(',')} FROM software_offers WHERE id='o'`).run(msa.id);
+  sql.exec("UPDATE software_agreement_sessions SET offer_id='o2'; UPDATE software_agreement_links SET offer_id='o2'");
+  sql.prepare("UPDATE software_offers SET msa_template_id=? WHERE id='o2'").run(newer.id);
+  const reviewed = await reviewAgreements(db, (await db.prepare("SELECT * FROM software_offers WHERE id='o2'").first<SoftwareOffer>())!, (await agreementSession(db, request(), 'agreement', 'o2'))!, client);
+  expect(reviewed.reused_msa?.id).toBe(msa.id);
+  expect(JSON.parse((await offerAgreements(db, 'o2'))[0].values_json).msa).toMatchObject({ version_label: 'v1' });
+});
+
+it("certificates carry each document's own version label when the MSA and SOW labels differ", async () => {
+  const later = await publishTemplate(db, 'sow', revised('sow'), 1, 'owner@example.com', { versionLabel: 'v2026-11-01' });
+  sql.prepare("UPDATE software_offers SET sow_template_id=? WHERE id='o'").run(later.id);
+  const result = await signed();
+  const id = await countersignAgreements(db, (await offer())!, result.documents, 'Owner', 'owner@example.com', request());
+  let certificates: { versions: Record<string, unknown> }[] = [];
+  await prepareAgreementArtifact(env, id, async (_env, _documents, received) => {
+    certificates = received as typeof certificates;
+    return new TextEncoder().encode('%PDF-synthetic');
+  });
+  expect(certificates.map((c) => c.versions)).toEqual([
+    expect.objectContaining({ version_label: 'v1', source_revision: '' }),
+    expect.objectContaining({ version_label: 'v2026-11-01', source_revision: '' }),
+  ]);
+});
+
+it('certificates read older stored values with no SOW label from the template row, and blank source revisions as empty', async () => {
+  sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES('sow-legacy','sow',2,?,?,'2026-09-01T12:00:00.000Z','owner@example.com')").run(revised('sow'), 'b'.repeat(64));
+  sql.prepare("UPDATE software_offers SET sow_template_id='sow-legacy' WHERE id='o'").run();
+  const reviewed = await review();
+  for (const agreement of await offerAgreements(db, 'o')) {
+    const values = JSON.parse(agreement.values_json);
+    delete values.sow?.version_label;
+    values.msa = { version_label: 'v2026-09-30', source_revision: 'Interim v2026-09-30' };
+    if (agreement.kind === 'msa') delete values.msa.source_revision;
+    sql.prepare('UPDATE software_agreements SET values_json=? WHERE id=?').run(JSON.stringify(values), agreement.id);
+  }
+  await signAgreements(db, (await offer())!, (await agreementSession(db, request(), 'agreement', 'o'))!, reviewed.documents, request());
+  const id = await countersignAgreements(db, (await offer())!, reviewed.documents, 'Owner', 'owner@example.com', request());
+  let certificates: { versions: Record<string, unknown> }[] = [];
+  await prepareAgreementArtifact(env, id, async (_env, _documents, received) => {
+    certificates = received as typeof certificates;
+    return new TextEncoder().encode('%PDF-synthetic');
+  });
+  expect(sql.prepare('SELECT status FROM software_agreement_artifacts WHERE agreement_id=?').get(id)).toEqual({ status: 'ready' });
+  expect(certificates.map((c) => c.versions)).toEqual([
+    expect.objectContaining({ version_label: 'v2026-09-30', source_revision: '' }),
+    expect.objectContaining({ version_label: 'v2026-09-01', source_revision: 'Interim v2026-09-30' }),
+  ]);
 });

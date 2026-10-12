@@ -419,9 +419,10 @@ it('renders one signing page, returning details, waiting and both-signed actions
   const { sql, db } = await fixture();
   try {
     const session = 's'.repeat(43), sessionHash = await hashOfferToken(session);
-    sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by) VALUES ('msa','msa',1,'Template',?,1,'now','owner')").run('a'.repeat(64));
+    sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by,version_label) VALUES ('msa','msa',1,'Template',?,1,'now','owner','v2026-09-30')").run('a'.repeat(64));
+    sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by,version_label) VALUES ('sow','sow',1,'Template',?,1,'now','owner','v2026-09-30')").run('c'.repeat(64));
     sql.exec("INSERT INTO software_agreement_clients VALUES ('client','alex@example.com','Example LLC','example llc','LLC','Wyoming','Business address','notice@example.com','now'); INSERT INTO software_agreement_links(id,purpose,offer_id,recipient_email,token_hash,issued_at,expires_at) VALUES ('challenge','agreement','current','alex@example.com','synthetic','now','2099-01-01')");
-    sql.exec("UPDATE software_signing_settings SET software_signing_enabled=1; UPDATE software_offers SET msa_template_id='msa',recipient_email_snapshot='alex@example.com',agreement_details_json='{}' WHERE id='current'");
+    sql.exec("UPDATE software_signing_settings SET software_signing_enabled=1; UPDATE software_offers SET msa_template_id='msa',sow_template_id='sow',recipient_email_snapshot='alex@example.com',agreement_details_json='{}' WHERE id='current'");
     sql.prepare("INSERT INTO software_agreement_sessions VALUES (?,'agreement','current',?,'alex@example.com','challenge','now','2099-01-01',NULL,'csrf')").run(sessionHash, await hashOfferToken(token));
     sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='current'").run(JSON.stringify({planned_start:'2026-10-01',planned_end:'2026-10-20',environment:'Browser',operating_responsibilities:'Client operates',update_rhythm:'Weekly',milestones:terms.milestones.map(()=>({start:'2026-10-01',target:'2026-10-20',handoff:'Source'}))}));
     sql.prepare("UPDATE owner_requests SET details_json=? WHERE id='r'").run(JSON.stringify({company:'Example LLC'}));
@@ -432,6 +433,18 @@ it('renders one signing page, returning details, waiting and both-signed actions
     expect(html).toMatch(/<p[^>]*><a[^>]*data-document-link="msa"[^>]*>Read the agreement<\/a><\/p>/);
     expect(html).toMatch(/<p[^>]*><a[^>]*data-document-link="sow"[^>]*>Read the statement of work<\/a><\/p>/);
     expect(html).toContain('1 milestone ·');expect(html).not.toContain('1 milestones');
+    expect(html).toMatch(/Agreement version v2026-09-30<\/p>\s*<\/section>/);
+    sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by,version_label) VALUES ('sow-later','sow',2,'Template',?,1,'now','owner','v2026-11-01')").run('d'.repeat(64));
+    sql.exec("UPDATE software_offers SET sow_template_id='sow-later' WHERE id='current'");
+    html = await render();
+    expect(html).toContain('Agreement v2026-09-30 · Statement of work v2026-11-01');
+    expect(html).not.toMatch(/Agreement version/);
+    sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by) VALUES ('msa-legacy','msa',2,'Template',?,1,'2026-09-01T12:00:00.000Z','owner')").run('e'.repeat(64));
+    sql.exec("UPDATE software_offers SET msa_template_id='msa-legacy', sow_template_id='sow' WHERE id='current'");
+    html = await render();
+    expect(html).toContain('Agreement v2026-09-01 · Statement of work v2026-09-30');
+    sql.exec("UPDATE software_offers SET msa_template_id='msa', sow_template_id='sow' WHERE id='current'");
+    html = await render();
     expect(html).toMatch(/Agreement version v2026-09-30<\/p>\s*<\/section>/);
     sql.prepare("UPDATE software_offers SET terms_json=? WHERE id='current'").run(JSON.stringify({...terms,milestones:[terms.milestones[0],terms.milestones[0]]}));
     const originalDetails=sql.prepare("SELECT agreement_details_json FROM software_offers WHERE id='current'").get().agreement_details_json;

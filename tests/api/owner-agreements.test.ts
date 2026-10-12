@@ -83,6 +83,13 @@ it('previews without a comparison before the first publication and with a line d
   });
 });
 
+it('previews the submitted version label where the template names the source revision', async () => {
+  const labelled = await (await post({ action: 'preview', kind: 'msa', text: synthetic('msa'), expectedCurrentVersion: 0, versionLabel: 'v2026-12-01' })).json() as { text: string };
+  expect(labelled.text).toContain('msa.source_revision: v2026-12-01');
+  const blank = await (await post({ action: 'preview', kind: 'msa', text: synthetic('msa'), expectedCurrentVersion: 0, versionLabel: '' })).json() as { text: string };
+  expect(blank.text).toContain('msa.source_revision: Sample version label');
+});
+
 it('publishes the label and source revision, storing a blank revision as NULL', async () => {
   expect(await (await publish('msa', synthetic('msa'), 0, 'v2026-09-30', { sourceRevision: ' ' })).json()).toEqual({
     ok: true,
