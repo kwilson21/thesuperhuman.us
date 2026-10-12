@@ -160,8 +160,10 @@ export async function renderAgreementPacket(
     }
     for (const line of agreementText.split('\n'))
       add(line, line === title || /^\d+ [A-Z]|^Milestone \d+$/.test(line));
+    // Older certificates can lack a label; the header then shows the title alone.
+    const header = versions.version_label ? `${title} · ${versions.version_label}` : title;
     for (const p of pdf.getPages().slice(start))
-      p.drawText(`${title} · ${versions.version_label}`, {
+      p.drawText(header, {
         x: 48,
         y: 755,
         font: inter,

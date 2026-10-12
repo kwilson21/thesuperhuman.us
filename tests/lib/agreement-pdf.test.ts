@@ -105,6 +105,14 @@ it('formats PDF certificate dates in New York without changing source evidence',
   expect(JSON.stringify(certificate)).toBe(original);
 });
 
+it('draws only the document title in the page header when a certificate has no version label', async () => {
+  const pdf = await PDFDocument.load(await renderAgreementPacket({ ASSETS: assets } as unknown as Env, [document('sow', 'Exact header text')], [{ executed_at: '2026-09-30T13:15:43.382Z', effective_on: '2026-09-30' }]));
+  const text = extract(pdf).replace(/\s+/g, ' ');
+  expect(text).toContain('Exact header text');
+  expect(text).not.toContain('Statement of Work ·');
+  expect(text).not.toContain('undefined');
+});
+
 const sampleTemplateFile = new URL('../../scripts/screenshots/fixtures/sample-agreement-templates.json', import.meta.url);
 async function checkTemplatePacket(templateFile: string | URL, headings: string[]) {
   const templates = JSON.parse(readFileSync(templateFile, 'utf8'));
