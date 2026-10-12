@@ -4,11 +4,11 @@ Date: October 12, 2026
 Repository: `kwilson21/thesuperhuman.us`  
 Pull request: [#176](https://github.com/kwilson21/thesuperhuman.us/pull/176)  
 Branch: `claude/agreement-versioning-v1-b28b03`  
-Starting revision: `2d98c299` (`origin/main`). Verified revision: `05419bad` (this record is committed on top).  
+Starting revision: `2d98c299` (`origin/main` at branch start). Verified revision: `c033811c`, where the checks under Evidence and limits were rerun. Commits after the three review rounds (`05419bad`): `bcd252ec` and `1baa440c` record the release gate and the production migration; `73112d20` rewords the Source revision hint in `src/pages/owner/agreements.astro` and its assertions in `tests/pages/software-offer.test.ts` to the owner-approved copy; `7bb99943` adds a source revision limit test; `c033811c` corrects the runbook's hint wording. This record is committed on top of `c033811c`.  
 Target: production `https://thesuperhuman.us`, `/owner/agreements`, `POST /api/owner/agreements` (`preview`, `publish`, new `template-version`), owner request pages with a software offer (agreement details), `/offer/{token}/sign`, signed agreement PDFs and certificates, and production `MUSIC_DB`.  
-Reviewer: Claude (Opus 5.5) coordinating for owner Kazon Wilson. Claude Haiku 5.5 subagents implemented each task tests first. Claude Sonnet 5.5 reviewed each task, and two Claude Opus 5.5 reviewers (correctness and security; UI, copy and repository rules) reviewed the whole branch in three rounds, with each finding checked by an independent verifier. The third round found nothing to fix. This record does not certify Greptile or CI results at the final head.  
+Reviewer: Claude (Opus 5.5) coordinating for owner Kazon Wilson. Claude Haiku 5.5 subagents implemented each task tests first. Claude Sonnet 5.5 reviewed each task, and two Claude Opus 5.5 reviewers (correctness and security; UI, copy and repository rules) reviewed the whole branch in three rounds up to `05419bad`, with each finding checked by an independent verifier. The third round found nothing to fix. `73112d20` (the hint reword) was reviewed separately, clean, by two Claude Sonnet 5.5 reviewers. Fixes made after the review of `1baa440c` (`7bb99943`, `c033811c`) have not been reviewed yet. This record does not certify Greptile or CI results at the final head.  
 Scope: each published template version carries its own `version_label` and optional `source_revision`, replacing the fixed `v2026-09-30` label and the fixed interim source revision; the Agreements page publish form gains Version label and Source revision fields; Preview shows a line diff against the current version (`Changes from {label}`, or `First version. Nothing to compare yet.`); version history gains View text and Compare with previous; publishing identical text or a reused label is refused; the sign page, PDF page headers and certificates show each document's own label; returning clients keep the MSA they signed, and the offer editor says which MSA a reused agreement uses. Migration `0026_agreement_template_labels.sql`.  
-Rollback revision: `2d98c299`, current `origin/main`. Deploy order: apply additive 0026 before merging to main, because a push to main deploys production. Current main keeps working with 0026 applied: it reads templates with `SELECT *` and its insert names its columns. Keep the additive columns on code rollback; no data is migrated or deleted.
+Rollback revision: `04c32461` (#177), `origin/main` at inspection and the revision production ran per the Workers Builds run that succeeded at 2026-10-12 20:38 UTC. Rolling back to `2d98c299` would also undo #177's profile correction. Confirm this against the production deployment or `git ls-remote origin main` at merge time, and record what it shows if main has moved. Deploy order: apply additive 0026 before merging to main, because a push to main deploys production. Current main keeps working with 0026 applied: it reads templates with `SELECT *` and its insert names its columns. Keep the additive columns on code rollback; no data is migrated or deleted.
 
 ## Owner decisions and authorization
 
@@ -24,21 +24,22 @@ Coordinator ruling: each document's certificate carries its own template's label
 
 ## Evidence and limits
 
-Checks at `05419bad`, run by the third-round reviewers from this worktree:
+Checks at `c033811c`, rerun from this worktree by a Claude Haiku 5.5 subagent for this fix round (the three whole-branch review rounds ran against `05419bad`):
 
-- `npx vitest run`: PASS, 130 files, 1,450 passed, 1 skipped. The skip is the private-template test that runs only when the private template file exists.
+- `npx vitest run`: PASS, 130 files, 1,451 passed, 1 skipped. The extra pass over `05419bad` is the new source revision limit test. The skip is the private-template test that runs only when the private template file exists.
 - `npm run check`: PASS, 447 files, 0 errors, 0 warnings, 17 hints. The two hints in touched files predate this branch.
 - `npm run copy:check`: PASS. `npm run assets:check`: PASS, 36 production files match their review records.
 - `npx vitest run tests/scripts/screenshots.test.ts`: PASS, 36 tests.
 - `grep -rn "2026-09-30\|Interim" src`: no output. `cmp db/music.sql <(LC_ALL=C cat migrations/music/*.sql)`: silent.
-- No em dashes or buzzwords in added lines; `package.json` and `package-lock.json` unchanged; no private template text, rates or PDFs in the diff.
+- Re-checked at `c033811c`: no em dashes in added lines since `2d98c299`; `package.json` and `package-lock.json` unchanged since `2d98c299`. From `05419bad`, not rechecked here: no buzzwords in added lines, and no private template text, rates or PDFs in the diff.
+- `73112d20` (hint copy and its test) was reviewed clean by two Sonnet reviewers before this run, and this run covers it.
 
 Not run locally: `npm run build` and screenshot capture (CI runs both). No remote command, migration, deployment or live check was performed for this record.
 
 ## 1. Purpose and content
 
 - **PASS · Scope and instructions (checklist 1.1).** Branch, revisions, scope and owner decisions recorded above; deployment waits on migration authorization.
-- **PASS · Approved design and claims (checklist 1.2).** Field labels, hints, diff copy, refusals, sign-page line and offer-editor line match the owner-approved spec character for character (UI and copy reviewer, round 3). No media changes.
+- **PASS · Approved design and claims (checklist 1.2).** Field labels, hints, diff copy, refusals, sign-page line and offer-editor line match the owner-approved spec character for character (UI and copy reviewer, round 3, at `05419bad`; the reworded Source revision hint at `73112d20` checked by two Sonnet reviewers). No media changes.
 - **N/A · Explanatory copy (checklist 1.3).** Owner and signing UI only; no public explanatory copy or resume claims change.
 - **N/A · First screen and CTA (checklist 1.4).** No public page changes.
 - **N/A · Navigation and links (checklist 1.5).** No navigation changes.
@@ -68,7 +69,7 @@ Not run locally: `npm run build` and screenshot capture (CI runs both). No remot
 
 ## 5. Forms and sensitive flows
 
-- **PASS · Server boundaries by tests (checklist 5.1).** Owner-only API; strict schema; label pattern `^[A-Za-z0-9.-]{1,40}$`, unique per kind by index; source revision trimmed to 120 characters; identical text refused before a reused label; a label race maps to the same refusal; all SQL bound.
+- **PASS · Server boundaries by tests (checklist 5.1).** Owner-only API; strict schema; label pattern `^[A-Za-z0-9.-]{1,40}$`, unique per kind by index; source revision trimmed of surrounding whitespace, blank stored as NULL, and refused above 120 characters; identical text refused before a reused label; a label race maps to the same refusal; all SQL bound.
 - **PASS · Failure matrix by tests (checklist 5.2).** Missing, invalid, duplicate and identical publishes, stale version, unknown history version and older stored agreement values are covered.
 - **N/A · Unavailable JavaScript (checklist 5.3).** The existing native form post remains; Publish still requires a valid label.
 - **N/A · Delivery and receipt (checklist 5.4).** Agreement emails print no version label today and are unchanged.
