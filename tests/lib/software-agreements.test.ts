@@ -7,6 +7,9 @@ import {
   sampleAgreementValues,
   templateFields,
   publishTemplate,
+  templateVersion,
+  compareWithPrevious,
+  templateVersionLabel,
 } from '~/lib/agreement-templates';
 import {
   validateAgreementDetails,
@@ -93,6 +96,9 @@ const synthetic = (kind: 'msa' | 'sow') =>
         .join('\n') +
       '\n{{/milestones}}'
     : '');
+const revised = (kind: 'msa' | 'sow') => synthetic(kind).replace('\n', ' revised\n');
+const labelRefusal = 'Use letters, digits, dots and dashes for the version label, up to 40 characters.';
+const failure = (promise: Promise<unknown>) => promise.then(() => '', (error: Error) => error.message);
 const bucketData = new Map<string, Uint8Array>();
 const bucketUploaded = new Map<string, Date>();
 function adapter(database: InstanceType<typeof DatabaseSync>) {
@@ -133,8 +139,8 @@ beforeEach(async () => {
   sql.exec(
     "UPDATE software_signing_settings SET software_signing_enabled=1; INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at) VALUES('r','software','Example','client@example.com','Tool','reviewed','now','now');",
   );
-  const msa = await publishTemplate(db, 'msa', synthetic('msa'), 0, 'owner@example.com'),
-    sow = await publishTemplate(db, 'sow', synthetic('sow'), 0, 'owner@example.com');
+  const msa = await publishTemplate(db, 'msa', synthetic('msa'), 0, 'owner@example.com', { versionLabel: 'v1' }),
+    sow = await publishTemplate(db, 'sow', synthetic('sow'), 0, 'owner@example.com', { versionLabel: 'v1' });
   sql
     .prepare(
       "INSERT INTO software_offers(id,request_id,version,status,terms_json,agreement_details_json,msa_template_id,sow_template_id,contractor_snapshot_json,recipient_email_snapshot,created_at,updated_at) VALUES('o','r',1,'sent',?,?,?,?,?,'client@example.com','now','now')",
@@ -306,15 +312,108 @@ it('enforces dates, milestone counts, invoice duration and owner default semanti
   ).toThrow();
 });
 it('pins immutable templates with publication CAS', async () => {
-  await expect(publishTemplate(db, 'msa', synthetic('msa'), 0, 'owner')).rejects.toThrow();
+  await expect(
+    publishTemplate(db, 'msa', revised('msa'), 0, 'owner', { versionLabel: 'v2' }),
+  ).rejects.toThrow();
   const original = (await offer())!.msa_template_id;
-  await publishTemplate(db, 'msa', synthetic('msa'), 1, 'owner');
+  await publishTemplate(db, 'msa', revised('msa'), 1, 'owner', { versionLabel: 'v2' });
   expect((await offer())!.msa_template_id).toBe(original);
   expect(() =>
     sql
       .prepare('UPDATE software_agreement_templates SET text=? WHERE id=?')
       .run('changed', original),
   ).toThrow();
+});
+it('stores the version label and a trimmed source revision, and an empty revision as NULL', async () => {
+  const first = await publishTemplate(db, 'msa', revised('msa'), 1, 'owner@example.com', {
+    versionLabel: '2.0.1-rc',
+    sourceRevision: '  synthetic-revision  ',
+  });
+  expect(first).toEqual({
+    id: expect.any(String),
+    sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+    version: 2,
+    versionLabel: '2.0.1-rc',
+  });
+  expect(
+    sql
+      .prepare("SELECT version_label,source_revision FROM software_agreement_templates WHERE kind='msa' AND version=2")
+      .get(),
+  ).toEqual({ version_label: '2.0.1-rc', source_revision: 'synthetic-revision' });
+  await publishTemplate(db, 'msa', `${revised('msa')}\nSecond revision.`, 2, 'owner@example.com', {
+    versionLabel: 'v3',
+    sourceRevision: '   ',
+  });
+  expect(
+    sql
+      .prepare("SELECT source_revision FROM software_agreement_templates WHERE kind='msa' AND version=3")
+      .get(),
+  ).toEqual({ source_revision: null });
+});
+it('accepts dotted, dashed and dated labels and refuses missing, spaced, slashed or over-long ones', async () => {
+  for (const versionLabel of ['', 'v 1', 'v1/2', 'a'.repeat(41)])
+    expect(
+      await failure(publishTemplate(db, 'msa', revised('msa'), 1, 'owner@example.com', { versionLabel })),
+    ).toBe(labelRefusal);
+  expect(
+    (await publishTemplate(db, 'msa', revised('msa'), 1, 'owner@example.com', { versionLabel: 'v2026-09-30' })).versionLabel,
+  ).toBe('v2026-09-30');
+  expect(
+    (await publishTemplate(db, 'msa', `${revised('msa')}\nSecond revision.`, 2, 'owner@example.com', { versionLabel: '2.0.1-rc' })).versionLabel,
+  ).toBe('2.0.1-rc');
+});
+it('refuses identical text before duplicate labels, and refuses a label already used within one kind', async () => {
+  expect(
+    await failure(publishTemplate(db, 'msa', synthetic('msa'), 1, 'owner@example.com', { versionLabel: 'v1' })),
+  ).toBe('This text matches v1. Nothing to publish.');
+  expect(
+    await failure(publishTemplate(db, 'msa', revised('msa'), 1, 'owner@example.com', { versionLabel: 'v1' })),
+  ).toBe('v1 is already used for the MSA. Choose another label.');
+  expect(
+    await failure(publishTemplate(db, 'sow', revised('sow'), 1, 'owner@example.com', { versionLabel: 'v1' })),
+  ).toBe('v1 is already used for the SOW. Choose another label.');
+});
+it('allows the same label on both kinds', async () => {
+  await expect(
+    publishTemplate(db, 'msa', revised('msa'), 1, 'owner@example.com', { versionLabel: 'v2' }),
+  ).resolves.toMatchObject({ version: 2, versionLabel: 'v2' });
+  await expect(
+    publishTemplate(db, 'sow', revised('sow'), 1, 'owner@example.com', { versionLabel: 'v2' }),
+  ).resolves.toMatchObject({ version: 2, versionLabel: 'v2' });
+});
+it('reports a label race caught by the unique index with the same refusal', async () => {
+  const raced = {
+    ...db,
+    batch: async () => {
+      throw new Error(
+        'UNIQUE constraint failed: software_agreement_templates.kind, software_agreement_templates.version_label',
+      );
+    },
+  } as unknown as D1Database;
+  expect(
+    await failure(publishTemplate(raced, 'msa', revised('msa'), 1, 'owner@example.com', { versionLabel: 'v2' })),
+  ).toBe('v2 is already used for the MSA. Choose another label.');
+});
+it('labels an unlabeled template with the first ten characters of its publication time', () => {
+  expect(templateVersionLabel({ version_label: null, published_at: '2026-09-01T12:00:00.000Z' })).toBe('v2026-09-01');
+  expect(templateVersionLabel({ version_label: 'v2026-09-30', published_at: '2026-09-01T12:00:00.000Z' })).toBe('v2026-09-30');
+});
+it('returns a version by number and compares it only with the version before it', async () => {
+  await publishTemplate(db, 'msa', revised('msa'), 1, 'owner@example.com', { versionLabel: 'v2' });
+  const first = await templateVersion(db, 'msa', 1),
+    second = await templateVersion(db, 'msa', 2);
+  expect(first).toMatchObject({ version: 1, version_label: 'v1', text: synthetic('msa') });
+  expect(await templateVersion(db, 'msa', 3)).toBeNull();
+  expect(await compareWithPrevious(db, first!)).toBeNull();
+  const lines = synthetic('msa').split('\n');
+  expect(await compareWithPrevious(db, second!)).toEqual({
+    label: 'v1',
+    rows: [
+      { kind: 'removed', text: lines[0] },
+      { kind: 'added', text: `${lines[0]} revised` },
+      { kind: 'unchanged', count: lines.length - 1 },
+    ],
+  });
 });
 it('creates complete canonical previews and exact cents without unresolved fields', async () => {
   const result = await review();
