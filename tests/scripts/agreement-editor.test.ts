@@ -13,14 +13,14 @@ class FakeElement {
   hidden = false;
   dataset: Record<string, string> = {};
   handlers = new Map<string, (event: unknown) => unknown>();
-  kids: (FakeElement | string)[] = [];
+  kids: FakeElement[] = [];
   private text = '';
   get textContent(): string {
-    return this.kids.length ? this.kids.map(kid => (typeof kid === 'string' ? kid : kid.textContent)).join('') : this.text;
+    return this.kids.length ? this.kids.map(kid => kid.textContent).join('') : this.text;
   }
   set textContent(value: string) { this.kids = []; this.text = value; }
-  append(...nodes: (FakeElement | string)[]) { this.kids.push(...nodes); }
-  replaceChildren(...nodes: (FakeElement | string)[]) { this.kids = nodes; this.text = ''; }
+  appendChild(node: FakeElement) { this.kids.push(node); return node; }
+  replaceChildren(...nodes: FakeElement[]) { this.kids = nodes; this.text = ''; }
   addEventListener(type: string, handler: (event: unknown) => unknown) { this.handlers.set(type, handler); }
 }
 const createElement = (tagName: string) => Object.assign(new FakeElement(), { tagName: tagName.toUpperCase() });
@@ -97,12 +97,12 @@ it('shows the preview changes from the current version, with unchanged lines col
   await form.handlers.get('submit')!({ preventDefault: () => {}, submitter: { value: 'preview' } });
   expect(status.textContent).toBe('');
   expect(diff.hidden).toBe(false);
-  const [heading, pre] = diff.kids as FakeElement[];
+  const [heading, pre] = diff.kids;
   expect(heading.tagName).toBe('H3');
   expect(heading.textContent).toBe('Changes from v2026-09-30');
   expect(pre.tagName).toBe('PRE');
   expect(pre.className).toBe('template-diff');
-  expect((pre.kids as FakeElement[]).map(line => line.className)).toEqual(['diff-removed', 'diff-added', 'diff-unchanged']);
+  expect(pre.kids.map(line => line.className)).toEqual(['diff-removed', 'diff-added', 'diff-unchanged']);
   expect(pre.textContent).toBe(`- Old clause.\n+ New clause.\n${templateFields.msa.length} unchanged lines\n`);
 });
 
@@ -122,10 +122,10 @@ it('fills a version entry with its stored text, or its changes from the previous
   runPage({ form: previewForm().form, buttons: [viewText, compare, missing], fetch });
   await viewText.handlers.get('click')!({});
   expect(output.kids).toHaveLength(1);
-  expect((output.kids[0] as FakeElement).tagName).toBe('PRE');
+  expect(output.kids[0].tagName).toBe('PRE');
   expect(output.textContent).toBe('New clause.\nShared clause.\n');
   await compare.handlers.get('click')!({});
-  const [heading, pre] = output.kids as FakeElement[];
+  const [heading, pre] = output.kids;
   expect(heading.tagName).toBe('H3');
   expect(heading.textContent).toBe('Changes from v2026-09-30');
   expect(pre.textContent).toBe('- Old clause.\n+ New clause.\n1 unchanged line\n');

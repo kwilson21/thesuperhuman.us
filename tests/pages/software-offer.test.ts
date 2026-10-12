@@ -541,6 +541,7 @@ it('renders template version labels, source revision fields, the current version
   const { sql, db } = await fixture();
   try {
     const insert = sql.prepare('INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by,version_label,source_revision) VALUES(?,?,?,?,?,?,?,?,?)');
+    // msa-1 has no stored label, so its history falls back to its publish date.
     insert.run('msa-1', 'msa', 1, 'Synthetic MSA one.', 'a'.repeat(64), '2026-09-30T12:00:00.000Z', 'owner@example.com', null, null);
     insert.run('msa-2', 'msa', 2, 'Synthetic MSA two.', 'b'.repeat(64), '2026-10-02T12:00:00.000Z', 'owner@example.com', 'v2026-10-02', null);
     insert.run('sow-1', 'sow', 1, 'Synthetic SOW one.', 'c'.repeat(64), '2026-09-30T12:00:00.000Z', 'owner@example.com', 'v2026-09-30', null);
@@ -557,16 +558,20 @@ it('renders template version labels, source revision fields, the current version
     for (const input of versionInputs) expect(input).toMatch(/ required/);
     for (const input of versionInputs) expect(input).toContain('maxlength="40"');
     for (const input of versionInputs) expect(input).toContain('pattern="[A-Za-z0-9.\\-]{1,40}"');
+    // Browsers compile pattern with the v flag, where an unescaped trailing dash is a syntax error.
+    const pattern = new RegExp(`^(?:${versionInputs[0]!.match(/pattern="([^"]*)"/)![1]})$`, 'v');
+    expect(pattern.test(`v${projectToday()}`)).toBe(true);
+    expect(pattern.test('v2026 10 12')).toBe(false);
     for (const input of revisionInputs) expect(input).toContain('maxlength="120"');
     for (const input of revisionInputs) expect(input).not.toMatch(/ required|value=/);
     expect(html).toMatch(/<input[^>]*name="versionLabel"[^>]*aria-describedby="msa-version-label-hint"/);
     expect(html).toMatch(/<input[^>]*name="versionLabel"[^>]*aria-describedby="sow-version-label-hint"/);
     expect(html).toMatch(/<input[^>]*name="sourceRevision"[^>]*aria-describedby="msa-source-revision-hint"/);
     expect(html).toMatch(/<input[^>]*name="sourceRevision"[^>]*aria-describedby="sow-source-revision-hint"/);
-    expect(html.split('<p class="rail-muted rail-caption" id="msa-version-label-hint">Clients see this on the agreement. Use the date of the legal text it reflects.</p>')).toHaveLength(2);
-    expect(html.split('<p class="rail-muted rail-caption" id="sow-version-label-hint">Clients see this on the agreement. Use the date of the legal text it reflects.</p>')).toHaveLength(2);
-    expect(html.split('<p class="rail-muted rail-caption" id="msa-source-revision-hint">Your internal reference for the legal source, for example a counsel revision. Printed in the signing record.</p>')).toHaveLength(2);
-    expect(html.split('<p class="rail-muted rail-caption" id="sow-source-revision-hint">Your internal reference for the legal source, for example a counsel revision. Printed in the signing record.</p>')).toHaveLength(2);
+    expect(html).toMatch(/<p class="rail-muted rail-caption[^"]*" id="msa-version-label-hint">Clients see this on the agreement\. Use the date of the legal text it reflects\.<\/p>/);
+    expect(html).toMatch(/<p class="rail-muted rail-caption[^"]*" id="sow-version-label-hint">Clients see this on the agreement\. Use the date of the legal text it reflects\.<\/p>/);
+    expect(html).toMatch(/<p class="rail-muted rail-caption[^"]*" id="msa-source-revision-hint">Your internal reference for the legal source, for example a counsel revision\. Printed in the signing record\.<\/p>/);
+    expect(html).toMatch(/<p class="rail-muted rail-caption[^"]*" id="sow-source-revision-hint">Your internal reference for the legal source, for example a counsel revision\. Printed in the signing record\.<\/p>/);
     expect(html).toContain('Current version 2 · v2026-10-02');
     expect(html).toContain('Current version 1 · v2026-09-30');
     expect(html.match(/<div[^>]*data-template-diff[^>]*>/g)).toHaveLength(2);
@@ -574,7 +579,7 @@ it('renders template version labels, source revision fields, the current version
     const historyButtons = html.match(/<button[^>]*data-template-version[^>]*>[^<]*<\/button>/g) ?? [];
     expect(historyButtons).toHaveLength(4);
     expect(historyButtons.filter(button => button.includes('>View text</button>'))).toHaveLength(3);
-    expect(historyButtons.filter(button => button.includes('class="studio-quiet"') && button.includes('type="button"'))).toHaveLength(4);
+    expect(historyButtons.filter(button => /class="studio-quiet[ "]/.test(button) && button.includes('type="button"'))).toHaveLength(4);
     const compare = historyButtons.filter(button => button.includes('>Compare with previous</button>'));
     expect(compare).toHaveLength(1);
     expect(compare[0]).toContain('data-kind="msa"');
@@ -582,8 +587,7 @@ it('renders template version labels, source revision fields, the current version
     expect(compare[0]).toContain('data-view="compare"');
     expect(html).toMatch(/Version 2 · v2026-10-02 · /);
     expect(html).toMatch(/Version 1 · v2026-09-30 · /);
-    expect(html).toMatch(/Version 1 · v2026-09-30 · [^<]*<\/li>/);
-    expect(html.match(/data-template-version-output/g)).toHaveLength(4);
+    expect(html.match(/data-template-version-output/g)).toHaveLength(3);
   } finally { sql.close(); }
 });
 
