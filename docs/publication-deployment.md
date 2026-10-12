@@ -9,8 +9,10 @@ to the comma-separated IDs approved for public display. Set `PUBLICATION_TOKEN`
 as a Cloudflare encrypted secret and in the publisher's private credential store.
 Never put the token in source, browser code, chat output or project payloads.
 Production uses the dedicated `thesuperhuman-publication` database, bound as
-`PUBLICATION_DB` in `wrangler.jsonc`, with `threadline` and `the-engineers-daily`
-as its allowlisted public projects. Existing OAuth grants need renewed owner consent
+`PUBLICATION_DB` in `wrangler.jsonc`, with `threadline`, `the-engineers-daily`, and
+`personal-website` as its allowlisted public projects (see
+[publication-mcp.md](publication-mcp.md) for the personal-website activation).
+Existing OAuth grants need renewed owner consent
 for an additional project; changing the allowlist does not expand issued tokens.
 The initial migration was applied through the Cloudflare API on 2026-09-05,
 before enabling the binding. After comparing the production table constraints and
