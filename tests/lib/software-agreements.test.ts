@@ -690,6 +690,9 @@ it('runs private source templates through one, two and three milestones in both 
           sow_number: 'SOW-example',
           offer_version: 1,
           template_version: 1,
+          msa_version_label: 'v1',
+          msa_source_revision: '',
+          sow_version_label: 'v1',
         },
       );
       for (const kind of ['msa', 'sow'] as const)
@@ -1700,7 +1703,7 @@ it('renders cumulative checkpoint payments and invoice-identical odd-cent instal
   const { agreementValues, agreementDetailsSchema } = await import('~/lib/agreement-fields');
   const { softwareInvoiceTerms } = await import('~/lib/software-invoices');
   const purchased = {...terms, paymentMode:'standard' as const, milestones:[terms.milestones[0],{...terms.milestones[0],feeCents:303,checkpoint:{label:'Preview',cancellationPercent:75}}]};
-  const values = agreementValues(purchased,agreementDetailsSchema.parse({...details,milestones:[details.milestones[0],{...details.milestones[0],start:'2026-10-20',checkpoint_criteria:'View',checkpoint_evidence:'Preview'}]}),clientAgreementSchema.parse(client),contractorSchema.parse(contractor),{effective_on:'2026-10-01',msa_version:'2026-10-01 / template 1',sow_number:'SOW-test',offer_version:1,template_version:1});
+  const values = agreementValues(purchased,agreementDetailsSchema.parse({...details,milestones:[details.milestones[0],{...details.milestones[0],start:'2026-10-20',checkpoint_criteria:'View',checkpoint_evidence:'Preview'}]}),clientAgreementSchema.parse(client),contractorSchema.parse(contractor),{effective_on:'2026-10-01',msa_version:'2026-10-01 / template 1',sow_number:'SOW-test',offer_version:1,template_version:1,msa_version_label:'v1',msa_source_revision:'',sow_version_label:'v1'});
   expect(values.milestones[1].checkpoint_cumulative_amount).toBe('$3.28 (includes prior payments)');
   expect(values.milestones[1].checkpoint).toContain('cumulative cancellation amount $3.28');
   expect(values.system.amount1).toBe('$0.50 deposit / $0.51 balance');

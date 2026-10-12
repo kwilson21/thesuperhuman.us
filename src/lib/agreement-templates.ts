@@ -19,7 +19,7 @@ const optionalFields = [
 ];
 export type AgreementKind = keyof typeof templateFields;
 const bytes = (s: string) => new TextEncoder().encode(s).length;
-export function sampleAgreementValues(kind: AgreementKind, text: string) {
+export function sampleAgreementValues(kind: AgreementKind, text: string, versionLabel = 'Sample version label') {
   const values: Record<string, Record<string, string> | unknown> = {};
   const addSample = (field: string) => {
     const [namespace, key] = field.split('.');
@@ -30,6 +30,9 @@ export function sampleAgreementValues(kind: AgreementKind, text: string) {
   for (const field of templateFields[kind]) addSample(field);
   for (const match of text.matchAll(/{{([a-z_]+\.[a-z_0-9]+)}}/g)) addSample(match[1]);
   if (kind === 'sow') values.milestones = [values.milestone];
+  // Previews show the label the owner typed, as clients will see it.
+  const msa = (values.msa ??= {}) as Record<string, string>;
+  msa.version_label = versionLabel;
   return values;
 }
 export const agreementCharacterSupported = (character: string) =>
@@ -103,14 +106,15 @@ export function validateTemplate(kind: AgreementKind, text: string) {
   return text.replace(/\r\n?/g, '\n');
 }
 function lookup(values: Record<string, unknown>, path: string): string {
-  if (path === 'msa.source_revision') return 'v2026-09-30';
+  // {{msa.source_revision}} prints the MSA's client-visible label; the internal revision stays in the signing record.
+  const key = path === 'msa.source_revision' ? 'msa.version_label' : path;
   let value: unknown = values;
-  for (const part of path.split('.'))
+  for (const part of key.split('.'))
     value =
       typeof value === 'object' && value !== null
         ? (value as Record<string, unknown>)[part]
         : undefined;
-  if (typeof value !== 'string' || !value.trim()) throw new Error(`Missing value: ${path}.`);
+  if (typeof value !== 'string' || !value.trim()) throw new Error(`Missing value: ${key}.`);
   return value.normalize('NFC');
 }
 export function renderAgreement(
@@ -121,7 +125,7 @@ export function renderAgreement(
   validateTemplate(kind, template);
   const fill = (t: string, v: Record<string, unknown>) =>
     t.replace(/{{([a-z_]+\.[a-z_0-9]+)}}/g, (_, p) => lookup(v, p));
-  const rendered = template.replaceAll('Interim v2026-09-30', 'v2026-09-30').replace(
+  const rendered = template.replace(
     /{{#milestones}}([\s\S]*?){{\/milestones}}|{{([a-z_]+\.[a-z_0-9]+)}}/g,
     (_, block, path) => {
       if (path) return lookup(values, path);
