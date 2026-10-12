@@ -9,10 +9,16 @@ import { nativeAgreementRoute, agreementRequest, nativeAgreementResponse } from 
 import { agreementJson, cleanupAgreementAccess } from '~/lib/agreement-access';
 import { contractorSchema } from '~/lib/agreement-fields';
 import {
+  compareWithPrevious,
+  currentTemplate,
   publishTemplate,
   renderAgreement,
   sampleAgreementValues,
+  templateComparison,
+  templateVersion,
+  templateVersionLabel,
   validateTemplate,
+  versionLabelPattern,
 } from '~/lib/agreement-templates';
 export const prerender = false;
 const schema = z.discriminatedUnion('action', [
@@ -24,11 +30,26 @@ const schema = z.discriminatedUnion('action', [
     manifest: z.unknown(),
   }),
   z.object({
-    action: z.enum(['preview', 'publish']),
+    action: z.literal('preview'),
     kind: z.enum(['msa', 'sow']),
     text: z.string().max(102400),
     expectedCurrentVersion: z.coerce.number().int().min(0),
+    versionLabel: z.string().trim().max(40).optional(),
+    sourceRevision: z.string().trim().max(120).optional(),
+  }),
+  z.object({
+    action: z.literal('publish'),
+    kind: z.enum(['msa', 'sow']),
+    text: z.string().max(102400),
+    expectedCurrentVersion: z.coerce.number().int().min(0),
+    versionLabel: z.string().trim().regex(versionLabelPattern),
+    sourceRevision: z.string().trim().max(120).optional(),
     confirmed: z.boolean().optional(),
+  }),
+  z.object({
+    action: z.literal('template-version'),
+    kind: z.enum(['msa', 'sow']),
+    version: z.coerce.number().int().positive(),
   }),
   z.object({ action: z.literal('setting'), enabled: z.boolean(), confirmed: z.literal(true) }),
   z.object({
@@ -100,9 +121,25 @@ const post: APIRoute = async ({ request, locals }) => {
       ]);
       return nativeAgreementResponse(request, agreementJson({ ok: true }), '/owner/agreements');
     }
-    validateTemplate(c.kind, c.text);
+    if (c.action === 'template-version') {
+      const row = await templateVersion(db, c.kind, c.version);
+      if (!row) return agreementJson({ ok: false, error: 'That version was not found.' }, 404);
+      return agreementJson({
+        ok: true,
+        version: row.version,
+        label: templateVersionLabel(row),
+        text: row.text,
+        compare: await compareWithPrevious(db, row),
+      });
+    }
+    const canonical = validateTemplate(c.kind, c.text);
     if (c.action === 'preview') {
-      return agreementJson({ ok: true, text: renderAgreement(c.kind, c.text, sampleAgreementValues(c.kind, c.text)) });
+      const current = await currentTemplate(db, c.kind);
+      return agreementJson({
+        ok: true,
+        text: renderAgreement(c.kind, c.text, sampleAgreementValues(c.kind, c.text)),
+        compare: current ? templateComparison(current, canonical) : null,
+      });
     }
     if (!c.confirmed)
       return agreementJson(
@@ -113,7 +150,10 @@ const post: APIRoute = async ({ request, locals }) => {
       request,
       agreementJson({
         ok: true,
-        ...(await publishTemplate(db, c.kind, c.text, c.expectedCurrentVersion, actor)),
+        ...(await publishTemplate(db, c.kind, c.text, c.expectedCurrentVersion, actor, {
+          versionLabel: c.versionLabel,
+          sourceRevision: c.sourceRevision,
+        })),
       }),
       '/owner/agreements',
     );

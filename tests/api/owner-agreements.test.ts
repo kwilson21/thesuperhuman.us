@@ -72,7 +72,7 @@ it('previews without a comparison before the first publication and with a line d
   expect(first).toEqual({ ok: true, text: expect.any(String), compare: null });
   expect((await publish('msa', synthetic('msa'), 0, 'v1')).status).toBe(200);
   const lines = synthetic('msa').split('\n');
-  const changed = await (await post({ action: 'preview', kind: 'msa', text: revised('msa'), expectedCurrentVersion: 1 })).json();
+  const changed = (await (await post({ action: 'preview', kind: 'msa', text: revised('msa'), expectedCurrentVersion: 1 })).json()) as { compare: unknown };
   expect(changed.compare).toEqual({
     label: 'v1',
     rows: [

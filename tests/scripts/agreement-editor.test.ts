@@ -25,7 +25,8 @@ it.each(['msa', 'sow'] as const)('renders the %s preview when named action butto
     expect(JSON.parse(String(init.body)).action).toBe('preview');
     return POST({
       request: new Request(`https://example.test${path}`, { ...init, headers: { ...init.headers, origin: 'https://example.test' } }),
-      locals: { owner: { email: 'owner@example.test' }, runtime: { env: { MUSIC_DB: {} } } },
+      // Preview reads the current template; no template is published here, so the stub returns none.
+      locals: { owner: { email: 'owner@example.test' }, runtime: { env: { MUSIC_DB: { prepare: () => ({ bind: () => ({ first: async () => null }) }) } } } },
     } as unknown as APIContext);
   });
   const source = readFileSync('src/pages/owner/agreements.astro', 'utf8').split('<script>')[1].split('</script>')[0];

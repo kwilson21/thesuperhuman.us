@@ -4,6 +4,7 @@ import { agreementEvent } from './agreement-events';
 import { hashOfferToken } from './software-offers';
 import { templateFields } from './agreement-template-fields.mjs';
 import coverage from '../assets/agreement-fonts/Inter-coverage.json';
+import { lineDiff } from './line-diff';
 export { templateFields } from './agreement-template-fields.mjs';
 const optionalFields = [
   'contractor.legal_name',
@@ -148,7 +149,13 @@ export type AgreementTemplate = {
   version: number;
   text: string;
   sha256: string;
+  version_label: string | null;
+  source_revision: string | null;
+  published_at: string;
 };
+export const versionLabelPattern = /^[A-Za-z0-9.-]{1,40}$/;
+export const templateVersionLabel = (t: { version_label?: string | null; published_at: string }) =>
+  t.version_label || `v${t.published_at.slice(0, 10)}`;
 export async function currentTemplate(db: D1Database, kind: AgreementKind) {
   return db
     .prepare(
@@ -157,29 +164,70 @@ export async function currentTemplate(db: D1Database, kind: AgreementKind) {
     .bind(kind)
     .first<AgreementTemplate>();
 }
+export async function templateVersion(db: D1Database, kind: AgreementKind, version: number) {
+  return db
+    .prepare('SELECT * FROM software_agreement_templates WHERE kind=? AND version=?')
+    .bind(kind, version)
+    .first<AgreementTemplate>();
+}
+export const templateComparison = (previous: AgreementTemplate, text: string) => ({
+  label: templateVersionLabel(previous),
+  rows: lineDiff(previous.text, text),
+});
+export async function compareWithPrevious(db: D1Database, template: AgreementTemplate) {
+  const previous = await templateVersion(db, template.kind, template.version - 1);
+  return previous ? templateComparison(previous, template.text) : null;
+}
 export async function publishTemplate(
   db: D1Database,
   kind: AgreementKind,
   text: string,
   expected: number,
   actor: string,
+  label: { versionLabel: string; sourceRevision?: string | null },
 ) {
   const canonical = validateTemplate(kind, text),
+    versionLabel = label.versionLabel,
+    sourceRevision = label.sourceRevision?.trim() || null,
     id = crypto.randomUUID(),
     sha = await hashOfferToken(canonical),
-    at = new Date().toISOString();
-  await db.batch([
-    db
+    at = new Date().toISOString(),
+    labelUsed = `${versionLabel} is already used for the ${kind.toUpperCase()}. Choose another label.`;
+  if (!versionLabelPattern.test(versionLabel))
+    throw new Error(
+      'Use letters, digits, dots and dashes for the version label, up to 40 characters.',
+    );
+  const current = await currentTemplate(db, kind);
+  if (current?.sha256 === sha)
+    throw new Error(`This text matches ${templateVersionLabel(current)}. Nothing to publish.`);
+  if (
+    await db
       .prepare(
-        `SELECT CASE WHEN COALESCE((SELECT max(version) FROM software_agreement_templates WHERE kind=?),0)=? THEN 1 ELSE json_extract('Template changed','$') END`,
+        'SELECT 1 FROM software_agreement_templates WHERE kind=? AND version_label=? LIMIT 1',
       )
-      .bind(kind, expected),
-    db
-      .prepare(
-        'INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES(?,?,?,?,?,?,?)',
-      )
-      .bind(id, kind, expected + 1, canonical, sha, at, actor),
-    agreementEvent(db, 'template-published', actor, at),
-  ]);
-  return { id, sha256: sha, version: expected + 1 };
+      .bind(kind, versionLabel)
+      .first()
+  )
+    throw new Error(labelUsed);
+  try {
+    await db.batch([
+      db
+        .prepare(
+          `SELECT CASE WHEN COALESCE((SELECT max(version) FROM software_agreement_templates WHERE kind=?),0)=? THEN 1 ELSE json_extract('Template changed','$') END`,
+        )
+        .bind(kind, expected),
+      db
+        .prepare(
+          'INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by,version_label,source_revision) VALUES(?,?,?,?,?,?,?,?,?)',
+        )
+        .bind(id, kind, expected + 1, canonical, sha, at, actor, versionLabel, sourceRevision),
+      agreementEvent(db, 'template-published', actor, at),
+    ]);
+  } catch (error) {
+    // A concurrent publish can take the label between the check above and this insert.
+    if (error instanceof Error && /UNIQUE constraint failed.*version_label/.test(error.message))
+      throw new Error(labelUsed);
+    throw error;
+  }
+  return { id, sha256: sha, version: expected + 1, versionLabel };
 }
