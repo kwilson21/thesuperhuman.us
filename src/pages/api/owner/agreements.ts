@@ -137,7 +137,7 @@ const post: APIRoute = async ({ request, locals }) => {
       const current = await currentTemplate(db, c.kind);
       return agreementJson({
         ok: true,
-        text: renderAgreement(c.kind, c.text, sampleAgreementValues(c.kind, c.text, c.versionLabel || undefined)),
+        text: renderAgreement(c.kind, c.text, sampleAgreementValues(c.kind, c.text, c.versionLabel && versionLabelPattern.test(c.versionLabel) ? c.versionLabel : undefined)),
         compare: current ? templateComparison(current, canonical) : null,
       });
     }
