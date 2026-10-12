@@ -11,6 +11,8 @@ class FakeElement {
   tagName = '';
   className = '';
   hidden = false;
+  tabIndex = 0;
+  focus = vi.fn();
   dataset: Record<string, string> = {};
   handlers = new Map<string, (event: unknown) => unknown>();
   kids: FakeElement[] = [];
@@ -19,6 +21,7 @@ class FakeElement {
     return this.kids.length ? this.kids.map(kid => kid.textContent).join('') : this.text;
   }
   set textContent(value: string) { this.kids = []; this.text = value; }
+  get firstElementChild(): FakeElement | null { return this.kids[0] ?? null; }
   appendChild(node: FakeElement) { this.kids.push(node); return node; }
   replaceChildren(...nodes: FakeElement[]) { this.kids = nodes; this.text = ''; }
   addEventListener(type: string, handler: (event: unknown) => unknown) { this.handlers.set(type, handler); }
@@ -47,7 +50,7 @@ function previewForm() {
     // HTMLFormElement named access returns a RadioNodeList for these two buttons.
     action: { toString: () => '[object RadioNodeList]' },
     getAttribute: (name: string) => name === 'action' ? '/api/owner/agreements' : null,
-    hasAttribute: () => false,
+    hasAttribute: (name: string) => name === 'data-template-editor',
     querySelector: (selector: string) => selector === '[role="status"]' ? status : selector === '[data-template-diff]' ? diff : preview,
   });
   return { form, status, preview, diff };
@@ -106,6 +109,50 @@ it('shows the preview changes from the current version, with unchanged lines col
   expect(pre.textContent).toBe(`- Old clause.\n+ New clause.\n${templateFields.msa.length} unchanged lines\n`);
 });
 
+it('clears the diff region and shows it before a preview request, so the result is announced when it arrives', async () => {
+  const { form, status, diff } = previewForm();
+  diff.replaceChildren(createElement('p'));
+  let seen: { hidden: boolean; children: number } | undefined;
+  const fetch = vi.fn(async () => {
+    seen = { hidden: diff.hidden, children: diff.kids.length };
+    return new Response(JSON.stringify({ error: 'Preview refused.' }), { status: 400, headers: { 'content-type': 'application/json' } });
+  });
+  runPage({ form, fetch, data: { kind: 'msa', text: 'Clause.', expectedCurrentVersion: '1' } });
+  await form.handlers.get('submit')!({ preventDefault: () => {}, submitter: { value: 'preview' } });
+  expect(seen).toEqual({ hidden: false, children: 0 });
+  // After a failed preview the region stays visible but empty, so the earlier diff is gone.
+  expect(diff.kids).toHaveLength(0);
+  expect(status.textContent).toBe('Preview refused.');
+});
+
+it('leaves the diff region hidden while a publish request runs', async () => {
+  const { form, status, diff } = previewForm();
+  let seen: boolean | undefined;
+  const fetch = vi.fn(async () => {
+    seen = diff.hidden;
+    return new Response(JSON.stringify({ error: 'Publish refused.' }), { status: 400, headers: { 'content-type': 'application/json' } });
+  });
+  runPage({ form, fetch, data: { kind: 'msa', text: 'Clause.', expectedCurrentVersion: '1' } });
+  await form.handlers.get('submit')!({ preventDefault: () => {}, submitter: { value: 'publish' } });
+  expect(seen).toBe(true);
+  expect(diff.hidden).toBe(true);
+  expect(status.textContent).toBe('Publish refused.');
+});
+
+it('submits the contractor form, which has no diff region, without touching one', async () => {
+  const status = new FakeElement();
+  const form = Object.assign(new FakeElement(), {
+    getAttribute: (name: string) => name === 'action' ? '/api/owner/agreements' : null,
+    hasAttribute: (name: string) => name === 'data-agreement-config',
+    querySelector: (selector: string) => selector === '[role="status"]' ? status : null,
+  });
+  const fetch = vi.fn(async () => new Response(JSON.stringify({ error: 'Config refused.' }), { status: 400, headers: { 'content-type': 'application/json' } }));
+  runPage({ form, fetch, data: { action: 'config', expectedCurrentVersion: '0', legal_name: 'Synthetic Legal LLC', registered_agent_confirmed: 'on' } });
+  await form.handlers.get('submit')!({ preventDefault: () => {}, submitter: { value: '' } });
+  expect(fetch).toHaveBeenCalledOnce();
+  expect(status.textContent).toBe('Config refused.');
+});
+
 it('fills a version entry with its stored text, or its changes from the previous version, or the server error', async () => {
   const rows: TemplateRow[] = [
     { id: 'msa-1', kind: 'msa', version: 1, text: 'Old clause.\nShared clause.\n', sha256: 'a'.repeat(64), version_label: 'v2026-09-30', source_revision: null, published_at: '2026-09-30T12:00:00.000Z' },
@@ -125,12 +172,21 @@ it('fills a version entry with its stored text, or its changes from the previous
   expect(output.kids[0].tagName).toBe('PRE');
   expect(output.kids[0].className).toBe('template-text');
   expect(output.textContent).toBe('New clause.\nShared clause.\n');
+  // Focus moves to the new content, so a screen reader announces it without reading the whole output.
+  expect(output.kids[0].tabIndex).toBe(-1);
+  expect(output.kids[0].focus).toHaveBeenCalledOnce();
   await compare.handlers.get('click')!({});
   const [heading, pre] = output.kids;
   expect(heading.tagName).toBe('H3');
   expect(heading.textContent).toBe('Changes from v2026-09-30');
   expect(pre.textContent).toBe('- Old clause.\n+ New clause.\n1 unchanged line\n');
+  expect(heading.tabIndex).toBe(-1);
+  expect(heading.focus).toHaveBeenCalledOnce();
   await missing.handlers.get('click')!({});
   expect(output.textContent).toBe('That version was not found.');
+  expect(output.kids).toHaveLength(1);
+  expect(output.kids[0].tagName).toBe('P');
+  expect(output.kids[0].tabIndex).toBe(-1);
+  expect(output.kids[0].focus).toHaveBeenCalledOnce();
   expect(fetch).toHaveBeenCalledTimes(3);
 });

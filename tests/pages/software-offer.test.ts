@@ -617,10 +617,11 @@ it('renders template version labels, source revision fields, the current version
     expect(html).toMatch(/Version 2 · v2026-10-02 · /);
     expect(html).toMatch(/Version 1 · v2026-09-15 · /);
     expect(html.match(/data-template-version-output/g)).toHaveLength(3);
-    // Both containers change after a click or preview, so screen readers need them to be live regions.
+    // History output is announced by moving focus to it. As a live region, a stored template (up to 100 KB) would be read aloud.
     const outputs = html.match(/<div[^>]*data-template-version-output[^>]*>/g) ?? [];
     expect(outputs).toHaveLength(3);
-    expect(outputs.every(tag => tag.includes('aria-live="polite"'))).toBe(true);
+    expect(outputs.every(tag => !tag.includes('aria-live'))).toBe(true);
+    // The preview diff starts hidden and stays a polite live region, so its content is announced when a preview arrives.
     expect(html.match(/<div[^>]*data-template-diff[^>]*>/g)!.every(tag => tag.includes('aria-live="polite"'))).toBe(true);
   } finally { sql.close(); }
 });
