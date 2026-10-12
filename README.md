@@ -283,3 +283,7 @@ agreed milestone. It also stores executed-agreement review windows longer than
 30 business days without changing the earlier column constraint. Both
 migrations remain pending production approval; do not deploy this code before
 the required schema is applied.
+
+### Agreement template labels
+
+Apply music migration `0026_agreement_template_labels.sql` after `0025_brief_suggestion_budget.sql` and before deploying code that reads template version labels. It is additive only: it adds nullable `version_label` and `source_revision` columns to `software_agreement_templates` and a partial unique index on `(kind, version_label)`. Existing template rows keep NULL values and show a `v` plus published-date fallback label. Deploying this code first breaks the owner request page for any request with an offer (even with signing off), the owner Agreements page, the client signing page after email verification and template publishing. `npm run owner:health -- --remote` reports `software_agreement_templates.version_label (migration 0026)` as missing until the migration is applied. Do not edit previously applied migrations.
