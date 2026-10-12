@@ -140,9 +140,10 @@ Review templates and consent with counsel when possible.
 Publish a new version to change a template; sent offers keep their pinned version.
 Each published version carries a required label (letters, digits, dots and dashes,
 1 to 40 characters) that clients see on the agreement. An optional source revision
-is printed in the signing record. Version history can compare each version with the
-previous one. Publishing never forces re-signing: returning clients keep the MSA they
-signed, and new clients get the current one.
+is your reference for the legal source, for example a counsel revision. Clients can
+see it in the signing record attached to the signed PDF. Version history can compare
+each version with the previous one. Publishing never forces re-signing: returning
+clients keep the MSA they signed, and new clients get the current one.
 Private legal source files and filled agreements do not belong in Git.
 
 Complete Agreement details before sending an offer. Defaults are folded under
