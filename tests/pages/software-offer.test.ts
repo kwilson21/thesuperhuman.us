@@ -593,8 +593,8 @@ it('renders template version labels, source revision fields, the current version
     expect(html).toMatch(/<input[^>]*name="sourceRevision"[^>]*aria-describedby="sow-source-revision-hint"/);
     expect(html).toMatch(/<p class="rail-muted rail-caption[^"]*" id="msa-version-label-hint">Clients see this on the agreement\. Use the date of the legal text it reflects\.<\/p>/);
     expect(html).toMatch(/<p class="rail-muted rail-caption[^"]*" id="sow-version-label-hint">Clients see this on the agreement\. Use the date of the legal text it reflects\.<\/p>/);
-    expect(html).toMatch(/<p class="rail-muted rail-caption[^"]*" id="msa-source-revision-hint">Your internal reference for the legal source, for example a counsel revision\. Printed in the signing record\.<\/p>/);
-    expect(html).toMatch(/<p class="rail-muted rail-caption[^"]*" id="sow-source-revision-hint">Your internal reference for the legal source, for example a counsel revision\. Printed in the signing record\.<\/p>/);
+    expect(html).toMatch(/<p class="rail-muted rail-caption[^"]*" id="msa-source-revision-hint">Your reference for the legal source, for example a counsel revision\. Clients can see it in the signing record attached to the signed PDF\.<\/p>/);
+    expect(html).toMatch(/<p class="rail-muted rail-caption[^"]*" id="sow-source-revision-hint">Your reference for the legal source, for example a counsel revision\. Clients can see it in the signing record attached to the signed PDF\.<\/p>/);
     // Each hint sits in its field's group, so the field gap (not the form gap) separates it from the next field.
     for (const [name, id] of [['versionLabel', 'msa-version-label-hint'], ['versionLabel', 'sow-version-label-hint'], ['sourceRevision', 'msa-source-revision-hint'], ['sourceRevision', 'sow-source-revision-hint']])
       expect(html).toMatch(new RegExp(`<div class="software-field[^"]*"><label[^>]*>[^<]*<input[^>]*name="${name}"[^>]*><\\/label><p class="rail-muted rail-caption[^"]*" id="${id}">`));
