@@ -1635,6 +1635,8 @@ it('retains both verbatim statements and verification method in signatures and c
     expect(json).toContain(intentText(true));expect(json).toContain('verified by one-time email link');
     expect(json).toContain('"version_label":"v1"');return new TextEncoder().encode('%PDF-synthetic');
   });
+  // prepareAgreementArtifact catches render errors, so a failed assertion above only shows here.
+  expect(sql.prepare('SELECT status FROM software_agreement_artifacts WHERE agreement_id=?').get(id)).toEqual({ status: 'ready' });
 });
 it('rejects signing stale reviewed documents after autosaved details change',async()=>{
   const {resolveClientDetails,saveAgreementDraft}=await import('~/lib/agreement-draft');
