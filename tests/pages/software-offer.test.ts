@@ -458,9 +458,11 @@ it('renders one signing page, returning details, waiting and both-signed actions
     expect(html).not.toContain('Step 2 of 3');expect(html).not.toContain('Before you sign');
     expect(html.match(/type="checkbox"/g)).toHaveLength(1);expect(html.match(/type="radio"/g)).toHaveLength(3);
     expect(html).toContain('data-terms-reader');expect(html).toContain('v2026-09-30');
-    sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES('reused','msa','old','r','client','msa','executed','Original executed MSA',?,?,'now','2026-09-30','old-session')").run('b'.repeat(64),JSON.stringify({client:{legal_name:'Example LLC',entity_type:'LLC',jurisdiction:'Wyoming',business_address:'Business address'}}));
+    sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES('reused','msa','old','r','client','msa-legacy','executed','Original executed MSA',?,?,'now','2026-09-30','old-session')").run('b'.repeat(64),JSON.stringify({client:{legal_name:'Example LLC',entity_type:'LLC',jurisdiction:'Wyoming',business_address:'Business address'}}));
     sql.exec("UPDATE software_offers SET reused_msa_id='reused' WHERE id='current'");
-    html=await render();expect(html).toContain('Your signed agreement from Sep 30, 2026 still applies.');expect(html).toContain('Read it');expect(html).not.toContain('Read the agreement');expect(html).not.toContain('Read the full agreement and statement of work');expect(html).toContain('Signing applies your name above as your electronic signature on the statement of work linked above.');expect(html).toContain('Same as last time: Example LLC, LLC, Wyoming, Business address.');expect(html).toMatch(/data-business-details[^>]*hidden/);
+    html=await render();
+    // The card names the template the signed MSA pins (msa-legacy), not the offer's current MSA.
+    expect(html).toContain('Agreement v2026-09-01 · Statement of work v2026-09-30');expect(html).toContain('Your signed agreement from Sep 30, 2026 still applies.');expect(html).toContain('Read it');expect(html).not.toContain('Read the agreement');expect(html).not.toContain('Read the full agreement and statement of work');expect(html).toContain('Signing applies your name above as your electronic signature on the statement of work linked above.');expect(html).toContain('Same as last time: Example LLC, LLC, Wyoming, Business address.');expect(html).toMatch(/data-business-details[^>]*hidden/);
     sql.prepare("INSERT INTO software_agreement_drafts VALUES('current','alex@example.com',?,'now')").run(JSON.stringify({legal_name:'Example LLC',signer_name:'Alex',entity_type:'LLC',state:'Wyoming',business_address:'Updated business address'}));
     html=await render();expect(html).toMatch(/name="country"[^>]*value="United States"/);expect(html).not.toMatch(/data-country[^>]*hidden/);expect(html).not.toContain('Same as last time');expect(html).toContain('Updated business address');expect(html).not.toMatch(/data-business-details[^>]*hidden/);
     sql.exec("DELETE FROM software_agreement_drafts WHERE offer_id='current'");
@@ -555,7 +557,7 @@ it('renders template version labels, source revision fields, the current version
   try {
     const insert = sql.prepare('INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by,version_label,source_revision) VALUES(?,?,?,?,?,?,?,?,?)');
     // msa-1 has no stored label, so its history falls back to its publish date.
-    insert.run('msa-1', 'msa', 1, 'Synthetic MSA one.', 'a'.repeat(64), '2026-09-30T12:00:00.000Z', 'owner@example.com', null, null);
+    insert.run('msa-1', 'msa', 1, 'Synthetic MSA one.', 'a'.repeat(64), '2026-09-15T12:00:00.000Z', 'owner@example.com', null, null);
     insert.run('msa-2', 'msa', 2, 'Synthetic MSA two.', 'b'.repeat(64), '2026-10-02T12:00:00.000Z', 'owner@example.com', 'v2026-10-02', null);
     insert.run('sow-1', 'sow', 1, 'Synthetic SOW one.', 'c'.repeat(64), '2026-09-30T12:00:00.000Z', 'owner@example.com', 'v2026-09-30', null);
     const container = await AstroContainer.create();
@@ -605,7 +607,7 @@ it('renders template version labels, source revision fields, the current version
     expect(html.match(/<div class="software-actions[^"]*"><button[^>]*>View text<\/button><button[^>]*>Compare with previous<\/button><\/div>/g)).toHaveLength(1);
     expect(html.match(/<div class="software-actions[^"]*"><button[^>]*>View text<\/button><\/div>/g)).toHaveLength(2);
     expect(html).toMatch(/Version 2 · v2026-10-02 · /);
-    expect(html).toMatch(/Version 1 · v2026-09-30 · /);
+    expect(html).toMatch(/Version 1 · v2026-09-15 · /);
     expect(html.match(/data-template-version-output/g)).toHaveLength(3);
     // Both containers change after a click or preview, so screen readers need them to be live regions.
     const outputs = html.match(/<div[^>]*data-template-version-output[^>]*>/g) ?? [];
