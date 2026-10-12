@@ -2,7 +2,7 @@ import { siteOrigin } from './site-origin.mjs';
 import { hashOfferToken } from './software-offers';
 import { sendAudioMessage } from './audio-resend';
 import type { Agreement } from './software-agreements';
-import { templateVersionLabel } from './agreement-templates';
+import { templateVersionLabel } from './agreement-version-label';
 export const hashBytes = async (bytes: ArrayBuffer | Uint8Array) =>
   [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as BufferSource))]
     .map((b) => b.toString(16).padStart(2, '0'))

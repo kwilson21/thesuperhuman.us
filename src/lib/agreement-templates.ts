@@ -1,4 +1,5 @@
 import { newYorkTime } from './agreement-artifacts';
+import { templateVersionLabel, versionLabelPattern } from './agreement-version-label';
 import { softwareDate } from './software-projects';
 import { agreementEvent } from './agreement-events';
 import { hashOfferToken } from './software-offers';
@@ -157,9 +158,7 @@ export type AgreementTemplate = {
   source_revision: string | null;
   published_at: string;
 };
-export const versionLabelPattern = /^[A-Za-z0-9.-]{1,40}$/;
-export const templateVersionLabel = (t: { version_label?: string | null; published_at: string }) =>
-  t.version_label || `v${t.published_at.slice(0, 10)}`;
+export { templateVersionLabel, versionLabelPattern } from './agreement-version-label';
 export async function currentTemplate(db: D1Database, kind: AgreementKind) {
   return db
     .prepare(
