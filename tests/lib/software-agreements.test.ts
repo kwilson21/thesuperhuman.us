@@ -2224,3 +2224,47 @@ it('certificates read older stored values with no SOW label from the template ro
     expect.objectContaining({ version_label: 'v2026-09-01', source_revision: 'Interim v2026-09-30' }),
   ]);
 });
+
+it('keeps a returning client on the executed MSA after a newer MSA is published, and leaves the signed agreements unchanged', async () => {
+  const executed = await publishTemplate(db, 'msa', revised('msa'), 1, 'owner@example.com', { versionLabel: 'v2026-09-30' });
+  sql.prepare("UPDATE software_offers SET msa_template_id=? WHERE id='o'").run(executed.id);
+  const result = await signed();
+  await countersignAgreements(db, (await offer())!, result.documents, 'Owner', 'owner@example.com', request());
+  const msa = (await offerAgreements(db, 'o')).find((a) => a.kind === 'msa')!;
+  await prepareAgreementArtifact(env, msa.id, async () => new TextEncoder().encode('%PDF-synthetic'));
+  const signedRows = () => sql.prepare("SELECT id,kind,status,template_id,msa_id,canonical_text,text_sha256,values_json,executed_at FROM software_agreements WHERE offer_id='o' ORDER BY id").all();
+  const before = signedRows();
+  const newer = await publishTemplate(db, 'msa', synthetic('msa') + '\nRevised after the first signature.\n', 2, 'owner@example.com', { versionLabel: 'v2026-11-01' });
+  expect(signedRows()).toEqual(before);
+  sql.prepare("UPDATE software_offers SET status='superseded' WHERE id='o'").run();
+  const columns = sql.prepare('PRAGMA table_info(software_offers)').all().map((row: { name: string }) => row.name);
+  const replacements: Record<string, string> = { id: "'o2'", version: '2', status: "'sent'", reused_msa_id: '?' };
+  sql.prepare(`INSERT INTO software_offers(${columns.join(',')}) SELECT ${columns.map((name: string) => replacements[name] ?? name).join(',')} FROM software_offers WHERE id='o'`).run(msa.id);
+  sql.prepare("UPDATE software_offers SET msa_template_id=? WHERE id='o2'").run(newer.id);
+  sql.exec("UPDATE software_agreement_sessions SET offer_id='o2'; UPDATE software_agreement_links SET offer_id='o2'");
+  const reviewed = await reviewAgreements(db, (await db.prepare("SELECT * FROM software_offers WHERE id='o2'").first<SoftwareOffer>())!, (await agreementSession(db, request(), 'agreement', 'o2'))!, client);
+  expect(reviewed.reused_msa?.id).toBe(msa.id);
+  expect(reviewed.documents.map((d) => d.kind)).toEqual(['sow']);
+  const [sow] = await offerAgreements(db, 'o2');
+  expect(sow).toMatchObject({ kind: 'sow', msa_id: msa.id });
+  expect(JSON.parse(sow.values_json).msa).toMatchObject({ version_label: 'v2026-09-30' });
+  expect(signedRows()).toEqual(before);
+});
+
+it('gives a different client with no executed MSA the current MSA', async () => {
+  const current = await publishTemplate(db, 'msa', synthetic('msa') + '\nCurrent terms.\n', 1, 'owner@example.com', { versionLabel: 'v2026-11-01' });
+  const otherLink = await hashOfferToken('y'.repeat(43));
+  sql.exec("UPDATE software_offers SET status='superseded' WHERE id='o'; INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at) VALUES('r2','software','Other','other@example.com','Tool','reviewed','now','now')");
+  sql.prepare("INSERT INTO software_offer_links(request_id,token_hash,created_at,revoked_at) VALUES('r2',?,'now',NULL)").run(otherLink);
+  const columns = sql.prepare('PRAGMA table_info(software_offers)').all().map((row: { name: string }) => row.name);
+  const replacements: Record<string, string> = { id: "'o3'", request_id: "'r2'", version: '2', status: "'sent'", msa_template_id: '?', recipient_email_snapshot: "'other@example.com'" };
+  sql.prepare(`INSERT INTO software_offers(${columns.join(',')}) SELECT ${columns.map((name: string) => replacements[name] ?? name).join(',')} FROM software_offers WHERE id='o'`).run(current.id);
+  sql.prepare("UPDATE software_agreement_sessions SET offer_id='o3', recipient_email='other@example.com', link_hash=?").run(otherLink);
+  sql.prepare("UPDATE software_agreement_links SET offer_id='o3', recipient_email='other@example.com', link_hash=?").run(otherLink);
+  const reviewed = await reviewAgreements(db, (await db.prepare("SELECT * FROM software_offers WHERE id='o3'").first<SoftwareOffer>())!, (await agreementSession(db, request(), 'agreement', 'o3'))!, { ...client, legal_name: 'Other Sample LLC' });
+  expect(reviewed.reused_msa).toBeNull();
+  expect(reviewed.documents.map((d) => d.kind)).toEqual(['msa', 'sow']);
+  const msa = (await offerAgreements(db, 'o3')).find((a) => a.kind === 'msa')!;
+  expect(msa.template_id).toBe(current.id);
+  expect(JSON.parse(msa.values_json).msa).toMatchObject({ version_label: 'v2026-11-01' });
+});
