@@ -870,6 +870,36 @@ it('renders a quiet Remove control beside each unsent attachment',async()=>{
   } finally {sql.close();}
 });
 
+async function renderMsaContinuity({ reusedMsaId, currentLabel }: { reusedMsaId?: string; currentLabel?: string }) {
+  const {sql,db}=await fixture();
+  try {
+    sql.exec("UPDATE software_signing_settings SET software_signing_enabled=1; INSERT INTO software_agreement_clients VALUES ('client','alex@example.com','Example LLC','example llc','LLC','Wyoming','Business address','notice@example.com','now')");
+    sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by,version_label) VALUES ('msa-signed','msa',1,'Template',?,1,'2026-09-30T12:00:00.000Z','owner','v2026-09-30')").run('a'.repeat(64));
+    if (currentLabel) sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by,version_label) VALUES ('msa-current','msa',2,'Template',?,1,'2026-11-01T12:00:00.000Z','owner',?)").run('b'.repeat(64),currentLabel);
+    sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,executed_at,effective_on,review_session_hash) VALUES ('msa-agreement','msa',NULL,'r','client','msa-signed','executed','Signed text',?,'{}','now','now','2026-09-30','session')").run('c'.repeat(64));
+    sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES ('msa-draft','msa',NULL,'r','client','msa-signed','review','Unsigned text',?,'{}','now','2026-09-30','session')").run('d'.repeat(64));
+    if (reusedMsaId) sql.prepare("UPDATE software_offers SET reused_msa_id=? WHERE id='draft'").run(reusedMsaId);
+    const offers=(await db.prepare('SELECT * FROM software_offers').all()).results;
+    return await (await AstroContainer.create()).renderToString(editor,{props:{requestId:'r',email:'alex@example.com',offers},locals:{runtime:{env:{MUSIC_DB:db}}}} as any);
+  } finally {sql.close();}
+}
+
+it('names the signed MSA label beside the Existing MSA choice, with the current label when it differs',async()=>{
+  const html=await renderMsaContinuity({reusedMsaId:'msa-agreement',currentLabel:'v2026-11-01'});
+  expect(html).toMatch(/Existing MSA[\s\S]*confirmMsaReuse[\s\S]*<p[^>]*data-msa-continuity[^>]*>Uses their signed MSA v2026-09-30\. Your current MSA is v2026-11-01\.<\/p>/);
+});
+
+it('names only the signed MSA label when no newer MSA has a different label',async()=>{
+  const html=await renderMsaContinuity({reusedMsaId:'msa-agreement'});
+  expect(html).toMatch(/<p[^>]*data-msa-continuity[^>]*>Uses their signed MSA v2026-09-30\.<\/p>/);
+  expect(html).not.toContain('Your current MSA');
+});
+
+it('shows no continuity line without a reused MSA or when the reused MSA is not a candidate',async()=>{
+  expect(await renderMsaContinuity({})).not.toContain('data-msa-continuity');
+  expect(await renderMsaContinuity({reusedMsaId:'msa-draft'})).not.toContain('data-msa-continuity');
+});
+
 it('renders omitted duplicate legacy deliverables by index without offering acceptance',async()=>{
   const {sql,db}=await fixture();
   try {
