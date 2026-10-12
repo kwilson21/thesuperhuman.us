@@ -142,9 +142,11 @@ Each published version carries a required label (letters, digits, dots and dashe
 1 to 40 characters) that clients see on the agreement. An optional source revision
 is your reference for the legal source, for example a counsel revision. Clients can
 see it in the signing record attached to the signed PDF. Version history can compare
-each version with the previous one. Publishing never forces re-signing: returning
-clients keep the MSA they signed, and new clients get the current one.
-Private legal source files and filled agreements do not belong in Git.
+each version with the previous one. Publishing never forces re-signing. To keep a
+returning client on the MSA they signed, choose it under Existing MSA in Agreement
+details and tick the reuse confirmation; otherwise the offer uses the current MSA,
+as it does for new clients. Private legal source files and filled agreements do not
+belong in Git.
 
 Complete Agreement details before sending an offer. Defaults are folded under
 Using the SOW defaults. Reuse an executed MSA only after confirming the same legal
