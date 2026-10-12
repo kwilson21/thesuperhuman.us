@@ -645,6 +645,15 @@ it('scopes the script-built diff and version text rules to the agreement setting
   expect(bodyOf('diff-added')).toMatch(/color:\s*var\(--accent\)/);
 });
 
+it('lets a 40 character version label wrap inside the agreement settings root, so the page does not scroll sideways', async () => {
+  const { css } = await transform(readFileSync('src/pages/owner/agreements.astro', 'utf8'), { filename: 'src/pages/owner/agreements.astro', internalURL: 'astro/compiler-runtime' });
+  const rules = [...css.join('\n').matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(match => ({ selectors: match[1].split(',').map(selector => selector.trim()), body: match[2] }));
+  const root = rules.filter(rule => rule.selectors.some(selector => /^\.agreement-settings:where\(\.astro-\w+\)$/.test(selector)));
+  expect(root).toHaveLength(1);
+  // overflow-wrap is inherited, so this reaches the history items, the current version line and the script-built heading.
+  expect(root[0].body).toMatch(/overflow-wrap:\s*anywhere/);
+});
+
 
 it('reads immutable agreed fees, dates and complete legal text without enabling new consent', async () => {
   const {sql,db} = await fixture();
