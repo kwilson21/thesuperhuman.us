@@ -100,12 +100,18 @@ Not run locally: `npm run build` and screenshot capture (CI runs both). The chec
 
 ## Software agreement signing
 
-- **UNVERIFIED · Counsel review.** Not changed by this release.
-- **PASS · Template preview by tests.** Preview renders with the typed label, or the sample label while the label is unfinished, and shows the diff.
-- **PASS · MSA reuse by tests.** Reused MSAs keep their own label on the sign page, certificates and the offer editor line.
-- **PASS · Certificates by tests.** Each document's certificate and page header carry its own label; older stored values fall back to their template row.
-- **UNVERIFIED · Workers runtime PDF.** Rendering checked in Node tests only.
-- **UNVERIFIED · CI screenshots.** The templates shot now appends a synthetic line and waits for `Changes from v2026-09-30`; captures pending review.
+- **UNVERIFIED · Signing.1. Record counsel review status for the templates and electronic consent.** Counsel review: not changed by this release.
+- **N/A · Signing.2. Owner verifies the registered-agent business address and contractor config.** This diff does not change contractor config or the address; inherited from #158.
+- **PASS · Signing.3. Preview seeded templates for one, two and three milestones in both payment modes.** PASS by tests for the typed label, the sample label while the label is unfinished, and the diff in preview. The milestone and payment-mode matrix is not changed by this diff and was not rerun for this record.
+- **PASS · Signing.4. Verify the signing setting defaults off and the outside-site path still works.** Production readback before 0026 showed website signing off (a readback of the current value, not a test of the default). The outside-site path is not changed by this diff and was not exercised.
+- **PASS · Signing.5. Verify scoped email authentication, revocation, stale hashes and MSA reuse confirmation.** MSA reuse confirmation by tests: reused MSAs keep their own label on the sign page, certificates and the offer editor line. Scoped email authentication, revocation and stale hashes are not changed by this diff and were not rerun.
+- **UNVERIFIED · Signing.6. Exercise PDF rendering in the actual Workers runtime, including Unicode and attachments.** Rendering checked in Node tests only.
+- **UNVERIFIED · Signing.7. Verify full text extraction, every document certificate, packet hashes and two retained copies.** Certificates by tests: each document's certificate and page header carry its own label; older stored values fall back to their template row. Text extraction, packet hashes and two retained copies are UNVERIFIED because the certificate JSON content changed.
+- **UNVERIFIED · Signing.8. Test artifact failure and each recipient's uncertain email/retry separately.** Not N/A: prepareAgreementArtifact now does template-row lookups (documentVersionLabel and documentSourceRevision), and no failure or retry test added in this release covers them.
+- **N/A · Signing.9. Verify project-page and archive downloads, including closed project and redacted request.** Download routes are unchanged; only the PDF contents differ.
+- **UNVERIFIED · Signing.10. Rehearse restoring agreement database records, templates, fonts and private storage, with hashes.** The D1 export restore is recorded under 7.4 and 8.3; templates, fonts and private storage with hashes were not rehearsed.
+- **N/A · Signing.11. Verify custom project retention and exclusion of open, held and actively reused agreements.** Retention is unchanged by this release.
+- **UNVERIFIED · Signing.12. Review real CI screenshots, keyboard/no-JS behavior and overflow from 320 to 1280 pixels.** CI screenshots: the templates shot now appends a synthetic line and waits for `Changes from v2026-09-30`; captures pending review. Keyboard, no-JS and 320 to 1280 overflow: pending, see 3.3 and 3.6.
 
 ## Production migration 0026: applied
 
