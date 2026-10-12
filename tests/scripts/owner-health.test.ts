@@ -13,7 +13,7 @@ const requiredSchema = [
   'audio_project_messages', 'audio_project_updates', 'audio_project_files', 'audio_project_uploads',
   'owner_requests_audit_personal_delete', 'audio_project_after_service_request', 'audio_project_close_declined_request',
   'owner_requests_submission_id', 'software_fit_reviews', 'software_offers', 'software_offer_links', 'software_offers_one_draft', 'software_offers_one_sent',
-  'software_projects', 'software_project_updates', 'software_project_updates_one_draft', 'software_project_updates_shared', 'software_project_messages', 'software_project_messages_request', 'software_project_messages_one_decision', 'software_project_audit', 'software_project_audit_request', 'software_milestone_payments', 'software_invoices', 'software_invoices_one_active', 'software_invoices_request', 'software_stripe_unmatched_events', 'software_milestone_deposits', 'software_signing_settings', 'software_contractor_config', 'software_agreement_templates', 'software_agreement_clients', 'software_agreements', 'software_agreements_sow_offer', 'software_agreements_pending_msa', 'software_agreement_signatures', 'software_agreement_links', 'software_agreement_links_scope', 'software_agreement_drafts', 'software_agreement_sessions', 'software_agreement_artifacts', 'software_agreement_deliveries', 'software_agreement_events', 'software_agreement_templates_immutable', 'software_contractor_config_immutable', 'software_agreement_signatures_immutable', 'software_agreements_signed_immutable', 'software_agreement_attachments', 'software_agreement_clients_immutable', 'software_agreement_retention_receipts', 'software_agreement_cleanup_lock', 'software_agreement_notices', 'software_agreement_notices_immutable', 'software_agreement_notifications',
+  'software_projects', 'software_project_updates', 'software_project_updates_one_draft', 'software_project_updates_shared', 'software_project_messages', 'software_project_messages_request', 'software_project_messages_one_decision', 'software_project_audit', 'software_project_audit_request', 'software_milestone_payments', 'software_invoices', 'software_invoices_one_active', 'software_invoices_request', 'software_stripe_unmatched_events', 'software_milestone_deposits', 'software_signing_settings', 'software_contractor_config', 'software_agreement_templates', 'software_agreement_clients', 'software_agreements', 'software_agreements_sow_offer', 'software_agreements_pending_msa', 'software_agreement_signatures', 'software_agreement_links', 'software_agreement_links_scope', 'software_agreement_drafts', 'software_agreement_sessions', 'software_agreement_artifacts', 'software_agreement_deliveries', 'software_agreement_events', 'software_agreement_templates_immutable', 'software_agreement_templates_label', 'software_contractor_config_immutable', 'software_agreement_signatures_immutable', 'software_agreements_signed_immutable', 'software_agreement_attachments', 'software_agreement_clients_immutable', 'software_agreement_retention_receipts', 'software_agreement_cleanup_lock', 'software_agreement_notices', 'software_agreement_notices_immutable', 'software_agreement_notifications',
 ];
 
 function healthyFixture() {
@@ -93,7 +93,7 @@ it('reports attention when the request audit trigger is missing', async () => {
   expect(report.checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
 });
 
-it('detects incomplete schemas and passes only after 0025', async () => {
+it('detects incomplete schemas and passes only after 0026', async () => {
   const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
   const db = new DatabaseSync(':memory:');
   const migrations = readdirSync(new URL('../../migrations/music/', import.meta.url)).filter(name => name.endsWith('.sql')).sort();
@@ -117,7 +117,24 @@ it('detects incomplete schemas and passes only after 0025', async () => {
   db.exec(readFileSync(new URL('../../migrations/music/0024_software_delivery_selection_and_review_windows.sql', import.meta.url), 'utf8'));
   expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
   db.exec(readFileSync(new URL('../../migrations/music/0025_brief_suggestion_budget.sql', import.meta.url), 'utf8'));
+  expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'attention' }));
+  db.exec(readFileSync(new URL('../../migrations/music/0026_agreement_template_labels.sql', import.meta.url), 'utf8'));
   expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({ id: 'schema', status: 'pass' }));
+  db.close();
+});
+
+it('reports the agreement template label migration missing on a database migrated only through 0025', async () => {
+  const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
+  const db = new DatabaseSync(':memory:');
+  const migrations = readdirSync(new URL('../../migrations/music/', import.meta.url)).filter(name => name.endsWith('.sql')).sort();
+  for (const name of migrations.filter(name => name < '0026')) db.exec(readFileSync(new URL(`../../migrations/music/${name}`, import.meta.url), 'utf8'));
+  const fixture = healthyFixture();
+  const baseQuery = fixture.query;
+  fixture.query = sql => (sql.includes('sqlite_master') || sql.includes('pragma_table_info')) ? Promise.resolve(db.prepare(sql).all() as { name: string }[]) : baseQuery(sql);
+  expect((await ownerHealth(fixture)).checks).toContainEqual(expect.objectContaining({
+    id: 'schema', status: 'attention',
+    summary: expect.stringContaining('software_agreement_templates.version_label (migration 0026)'),
+  }));
   db.close();
 });
 
