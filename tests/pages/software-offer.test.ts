@@ -418,7 +418,7 @@ it('renders one signing page, returning details, waiting and both-signed actions
   const { sql, db } = await fixture();
   try {
     const session = 's'.repeat(43), sessionHash = await hashOfferToken(session);
-    sql.prepare("INSERT INTO software_agreement_templates VALUES ('msa','msa',1,'Template',?,1,'now','owner')").run('a'.repeat(64));
+    sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by) VALUES ('msa','msa',1,'Template',?,1,'now','owner')").run('a'.repeat(64));
     sql.exec("INSERT INTO software_agreement_clients VALUES ('client','alex@example.com','Example LLC','example llc','LLC','Wyoming','Business address','notice@example.com','now'); INSERT INTO software_agreement_links(id,purpose,offer_id,recipient_email,token_hash,issued_at,expires_at) VALUES ('challenge','agreement','current','alex@example.com','synthetic','now','2099-01-01')");
     sql.exec("UPDATE software_signing_settings SET software_signing_enabled=1; UPDATE software_offers SET msa_template_id='msa',recipient_email_snapshot='alex@example.com',agreement_details_json='{}' WHERE id='current'");
     sql.prepare("INSERT INTO software_agreement_sessions VALUES (?,'agreement','current',?,'alex@example.com','challenge','now','2099-01-01',NULL,'csrf')").run(sessionHash, await hashOfferToken(token));
@@ -756,7 +756,7 @@ it('puts the named review work first through partial, complete, accepted and han
 it('masks the recipient on every unauthenticated email receipt', async () => {
   const {sql,db}=await fixture();
   try {
-    sql.prepare("INSERT INTO software_agreement_templates VALUES('msa','msa',1,'Template',?,1,'now','owner')").run('a'.repeat(64));
+    sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by) VALUES('msa','msa',1,'Template',?,1,'now','owner')").run('a'.repeat(64));
     sql.exec("UPDATE software_signing_settings SET software_signing_enabled=1; UPDATE software_offers SET msa_template_id='msa',recipient_email_snapshot='alex@example.com' WHERE id='current'");
     const container=await AstroContainer.create();
     const html=await container.renderToString(signPage,{params:{token},request:new Request(`https://thesuperhuman.us/offer/${token}/sign?email=sent`),locals:{runtime:{env:{MUSIC_DB:db}}}} as any);
@@ -1190,7 +1190,7 @@ it('renders the AI disclosure beside both answer boxes and the dated retention n
 it('shows the countersign requirement beside both disabled closing actions', async () => {
   const {sql,db}=await fixture();
   try {
-    sql.prepare("INSERT INTO software_agreement_templates VALUES ('msa','msa',1,'Template',?,1,'now','owner')").run('a'.repeat(64));
+    sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by) VALUES ('msa','msa',1,'Template',?,1,'now','owner')").run('a'.repeat(64));
     sql.exec("INSERT INTO software_agreement_clients VALUES ('client','alex@example.com','Example LLC','example llc','LLC','Wyoming','Business address','notice@example.com','now')");
     sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES('sow','sow','current','r','client','msa','client_signed','Exact',?,'{}','now','2026-09-30','session')").run('a'.repeat(64));
     const container=await AstroContainer.create();
