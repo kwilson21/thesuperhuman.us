@@ -110,15 +110,20 @@ export default {
     await shot('templates', 'Private template editor and sample fields', '/owner/agreements', {
       owner: true,
       prepare: async (page) => {
-        await page
-          .locator('[data-template-editor]')
-          .first()
-          .locator('[name=action][value=preview]')
-          .click();
+        const editor = page.locator('[data-template-editor]').first(),
+          text = editor.locator('textarea');
+        // A synthetic line makes the preview show a change from the published version.
+        await text.fill(`${(await text.inputValue()).trimEnd()}\nSynthetic change for the screenshot.\n`);
+        await editor.locator('[name=action][value=preview]').click();
         await page
           .locator('[data-template-preview]')
           .first()
           .filter({ hasText: 'Sample' })
+          .waitFor();
+        await page
+          .locator('[data-template-diff]')
+          .first()
+          .filter({ hasText: 'Changes from v2026-09-30' })
           .waitFor();
       },
     });
