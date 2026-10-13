@@ -1,5 +1,7 @@
 ---
 import PayloadReviewIllustration from './PayloadReviewIllustration.astro';
+import PersonalName from './PersonalName.astro';
+import { personalNameSegments } from '~/lib/personal-name';
 import type { Milestone } from '~/lib/project-story';
 interface Props {
   id: string; title: string; entries: Milestone[]; selectedId?: string; unavailable?: boolean;
@@ -38,7 +40,7 @@ const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('e
       </nav>}
     <div class="milestone-panels">{entries.map((entry, index) => <article id={entry.id} data-panel>
       <p class="meta"><time datetime={entry.day}>{date(entry.day)}</time>{entry.status && ` · ${entry.status}`}</p>
-      {entry.publishedAt && <p class="meta">Published <time datetime={entry.publishedAt}>{new Date(entry.publishedAt).toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })} UTC</time>{entry.backfilled && " · Added from project history"}</p>}<h3 data-testid={bounded && index === 0 ? 'journal-latest-change' : undefined}>{entry.title}</h3><p class="milestone-summary">{entry.summary}</p>
+      {entry.publishedAt && <p class="meta">Published <time datetime={entry.publishedAt}>{new Date(entry.publishedAt).toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })} UTC</time>{entry.backfilled && " · Added from project history"}</p>}<h3 data-testid={bounded && index === 0 ? 'journal-latest-change' : undefined}>{entry.title}</h3><p class="milestone-summary">{personalNameSegments(entry.summary).map(part => part.variant ? <PersonalName variant={part.variant} style="inherit" /> : part.text)}</p>
       {(entry.detail || entry.basis) && <details><summary>{entry.detailLabel || 'Context and what comes next'}</summary>{entry.detail && <p class="detail">{entry.detail}</p>}{entry.basis && <p class="meta">Basis: {entry.basis.replaceAll('-', ' ')}</p>}</details>}
       {entry.illustration === 'payload-review' && <PayloadReviewIllustration />}
       {entry.visualProof && <section class="timeline-visual-proof" aria-label={entry.visualProof.label}>
