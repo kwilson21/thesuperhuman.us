@@ -35,6 +35,12 @@ import transfersBills from '~/assets/projects/tally/transfers-and-bills-annotate
 import everydayTools from '~/assets/projects/tally/everyday-tools-annotated.webp';
 import squircles from '~/assets/projects/tally/squircles-annotated.webp';
 import codexBuilds from '~/assets/projects/tally/codex-builds-diagram.webp';
+import homeMonth from '~/assets/projects/tally/home-month-annotated.webp';
+import aiGuesses from '~/assets/projects/tally/ai-guesses-annotated.webp';
+import billsSchedules from '~/assets/projects/tally/bills-schedules-annotated.webp';
+import transactionControls from '~/assets/projects/tally/transaction-controls-annotated.webp';
+import phase3Review from '~/assets/projects/tally/add-cash-before-after-annotated.webp';
+import releasesReminders from '~/assets/projects/tally/releases-reminders-diagram.webp';
 
 export const tallyStory = {
   title: 'Tally',
@@ -301,6 +307,42 @@ export const tallyMilestones: Milestone[] = [
     title: 'Codex builds, Claude Code delivers',
     summary: 'Work that never reaches GitHub is lost, and Codex’s work on three Tally issues was lost that way when it was trusted to push. So on October 6 I changed how Tally is built. Codex builds each issue from a brief, tests first, in a worktree on my machine; a fresh Codex run verifies it. Claude Code only delivers: it pushes only the verified commit, opens the PR, confirms both on GitHub, answers every review and checks changed pages in a browser. Design and product choices stay mine. By that night 16 more code PRs had merged, each built or verified by Codex. That morning, the last of Phase 3.5’s fixes to the rules behind Tally’s numbers merged.',
     artifacts: [artifact(codexBuilds, 'Tally · Codex builds, Claude Code delivers', 'The build, verify and deliver steps, and the decisions that led to them.', 'Diagram')],
+  },
+  {
+    id: 'tally-home-month', day: '2026-10-11',
+    title: 'Home tells you about the month',
+    summary: 'A review against my earlier budgeting app found Tally missing things that app had: past months, a savings goal, a nearly-spent warning, and a plain "Over budget this month" instead of a bare negative. Tally has them now, each picked from pictures. Arrows and month dots open a finished month, stamped Under or Over, with one bar per category. From day 7, Home forecasts where the month ends at its current pace. A savings goal comes off Safe to spend from the 1st. Bars turn amber at 80% spent, older uncategorized transactions get their own chip, and a budget links to its transactions. Codex and Claude Code built it. Built and tested on demo data.',
+    artifacts: [artifact(homeMonth, 'Tally · Home tells you about the month', 'This month on a phone, a finished month, budget rows and a budget sheet, from CI captures of PRs #330 and #386 on demo data, with numbered pointers.', 'Annotated screen captures, demo data')],
+  },
+  {
+    id: 'tally-ai-guesses', day: '2026-10-12',
+    title: 'Tally’s AI guesses, shown as guesses',
+    summary: 'I want Tally’s AI guesses to read as guesses, and its work to be easy to check. An income answer Tally is unsure about shows as a dashed "Maybe income". Tally fills in what a purchase was, its kind and who it was for, dashed until someone keeps them, and writes "what it was" only when it can say more than the store’s name. Settings shows what the AI did this month and how many of its picks people changed, and lists each always-use rule with Remove. After a person’s third matching pick, Tally asks before making a rule; Organize doesn’t ask yet. I picked the designs; Claude Code and Codex built them. Built and tested on demo data.',
+    artifacts: [artifact(aiGuesses, 'Tally · AI guesses, shown as guesses', 'Maybe income, the dashed detail rows and the rule question, from the design system catalog on sample data, with numbered pointers.', 'Annotated screen captures, demo data')],
+  },
+  {
+    id: 'tally-bills-schedules', day: '2026-10-12',
+    title: 'Bills that fit real schedules and prices',
+    summary: 'My earlier budgeting app handled bills that don’t come monthly, so Tally now does too: weekly, every two weeks and quarterly, each judged on its own due date. Changing a bill’s amount used to change past months, so each bill now keeps an amount history, like a budget: a new price applies from its month on, and earlier months keep theirs. A review of Bills led to fixes: a bill added after its due date isn’t counted as missed, typed bank text now matches, and a refund can’t pay a bill. Status headings gained a Why?, and Possible bills suggests steady loan payments. I chose the designs and rules; Claude Code built it. Built and tested on demo data.',
+    artifacts: [artifact(billsSchedules, 'Tally · Bills that fit real schedules and prices', 'Bills on demo data after PR #441, beside the catalog\'s amount history and inactive bill examples, with numbered pointers.', 'Annotated screen captures, demo data')],
+  },
+  {
+    id: 'tally-transaction-controls', day: '2026-10-12',
+    title: 'Working through many transactions',
+    summary: 'Feedback on my earlier app said people search by category or amount, and that being stuck mid-sort with no way to add a category frustrated them most. Now Tally’s search finds amounts and category names in every month, and the count says what matched. A New category chip sits beside the others. Select ticks a whole page with one link, then every match in the month, and ticks stay across pages and filters. A transaction can be renamed alone or with every one from its store. A cash entry’s date and amount can be edited; a bank entry keeps the bank’s. I picked each design from drawings, and Claude Code built them. Built and tested on demo data.',
+    artifacts: [artifact(transactionControls, 'Tally · Working through many transactions', 'The Select bar\'s states, search counts, the Rename list and the New category chip, from the design system catalog on sample data, with numbered pointers.', 'Annotated screen captures, demo data')],
+  },
+  {
+    id: 'tally-phase-3-review', day: '2026-10-11',
+    title: 'Checking Phase 3, then fixing what it found',
+    summary: 'Each Tally phase ends with a review against its spec. For Phase 3 (bills, splits, refunds and cash), Claude Code ran nine read-only audits, and a second reader challenged each finding before it was kept. The biggest of the 22: the public demo was still running a build from before Phase 3, so I had it deployed. Where behavior was a choice, I picked from pictures of the screen beside the options; clear bugs became issues. Claude Code then fixed them, including: Add cash opens with an empty amount, removing a split says which bill is no longer paid, and a linked credit marked as income counts on its own. Built and tested on demo data.',
+    artifacts: [artifact(phase3Review, 'Tally · Checking Phase 3, then fixing what it found', 'Add cash before and after one of the review\'s fixes, on demo data, with numbered pointers.', 'Annotated screen captures, demo data')],
+  },
+  {
+    id: 'tally-releases-reminders', day: '2026-10-11',
+    title: 'Bank sign-in reminders and dated releases',
+    summary: 'When a bank needs signing in again, Tally stops syncing it, and nobody may notice. Now a nightly run emails everyone who signed in lately, then again every three days until the bank is fixed. The email names the bank and its account endings and never shows amounts. It can be turned off in Settings. Before this, nobody could say which build of Tally was running. I chose to name each production deploy by its date, as a tagged release, and feedback reports now keep that name. Claude Code built both. Built and tested; the demo never sends email.',
+    artifacts: [artifact(releasesReminders, 'Tally · Sign-in reminders and dated releases', 'How the reminder run picks banks, and how a release name reaches a feedback report. Drawn from the code.', 'Diagram')],
   },
   {
     id: 'tally-store-names', day: '2026-10-06',
