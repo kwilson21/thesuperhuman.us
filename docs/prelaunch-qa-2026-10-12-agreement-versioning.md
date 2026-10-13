@@ -71,7 +71,7 @@ Not run locally: `npm run build` and screenshot capture (CI runs both). The chec
 
 - **PASS · Server boundaries by tests (checklist 5.1).** Owner-only API; strict schema; label pattern `^[A-Za-z0-9.-]{1,40}$`, unique per kind by index; source revision trimmed of surrounding whitespace, blank stored as NULL, and refused above 120 characters; identical text refused before a reused label; a label race maps to the same refusal; all SQL bound.
 - **PASS · Failure matrix by tests (checklist 5.2).** Missing, invalid, duplicate and identical publishes, stale version, unknown history version and older stored agreement values are covered.
-- **N/A · Unavailable JavaScript (checklist 5.3).** The existing native form post remains; Publish still requires a valid label.
+- **UNVERIFIED · Unavailable JavaScript (checklist 5.3).** The template form still posts natively. Reading `agreementRequest` and the publish schema, a native Publish with `versionLabel` and `sourceRevision` should work: the browser and the server both require a valid label, and a blank source revision is stored as NULL. No test or manual run has exercised it. Without JavaScript, Preview shows the sample text but not the diff, and View text and Compare with previous in version history do nothing.
 - **N/A · Delivery and receipt (checklist 5.4).** Agreement emails print no version label today and are unchanged.
 - **PASS · Approval and permissions by tests (checklist 5.5).** Publishing still needs the explicit confirmation; signed agreements, sent offers and templates stay immutable; returning-client tests show a newer MSA never forces re-signing.
 - **N/A · Inline confirmation (checklist 5.6).** Unchanged.
@@ -111,7 +111,7 @@ Not run locally: `npm run build` and screenshot capture (CI runs both). The chec
 - **N/A · Signing.9. Verify project-page and archive downloads, including closed project and redacted request.** Download routes are unchanged; only the PDF contents differ.
 - **UNVERIFIED · Signing.10. Rehearse restoring agreement database records, templates, fonts and private storage, with hashes.** The D1 export restore is recorded under 7.4 and 8.3; templates, fonts and private storage with hashes were not rehearsed.
 - **N/A · Signing.11. Verify custom project retention and exclusion of open, held and actively reused agreements.** Retention is unchanged by this release.
-- **UNVERIFIED · Signing.12. Review real CI screenshots, keyboard/no-JS behavior and overflow from 320 to 1280 pixels.** CI screenshots: the templates shot now appends a synthetic line and waits for `Changes from v2026-09-30`; captures pending review. Keyboard, no-JS and 320 to 1280 overflow: pending, see 3.3 and 3.6.
+- **UNVERIFIED · Signing.12. Review real CI screenshots, keyboard/no-JS behavior and overflow from 320 to 1280 pixels.** CI screenshots: the templates shot now appends a synthetic line and waits for `Changes from v2026-09-30`; captures pending review. Keyboard, no-JS and 320 to 1280 overflow: pending, see 3.3, 5.3 and 3.6.
 
 ## Production migration 0026: applied
 
