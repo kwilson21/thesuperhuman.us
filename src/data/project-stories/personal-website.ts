@@ -41,6 +41,9 @@ import softwareServices from '~/assets/projects/website/software-services-annota
 import plainExplanations from '~/assets/projects/website/plain-explanations-building-annotated.webp';
 import homepageSpeed from '~/assets/projects/website/homepage-speed-phone-annotated.webp';
 import libronType from '~/assets/projects/website/libron-typography-annotated.webp';
+import homepageReading from '~/assets/projects/website/homepage-reading-annotated.webp';
+import tallyStory from '~/assets/projects/website/tally-story-annotated.webp';
+import briefConversation from '~/assets/projects/website/brief-conversation-annotated.webp';
 
 export const websiteStory = {
   title: 'Personal website',
@@ -250,5 +253,23 @@ export const websiteMilestones: Milestone[] = [
     title: 'Moving the site’s serif to Libron',
     summary: 'The site’s headings and serif text now use Libron v0.25, an open-source typeface under the SIL Open Font License, served from the site itself instead of Google Fonts. The bar over the z in my name is drawn inside the font, so I rebuilt both name fonts from Libron Regular. The page still holds the plain letters "Kazon Wilson", so selecting, copying and searching the name work as before, and a browser check on every screenshot run now confirms it. Inter and JetBrains Mono stay. Code review by Greptile caught four follow-ups before merge, including a social card still using the old type.',
     artifacts: [artifact(libronType, 'Type · Moving the serif to Libron', 'The top of the home page before and after PR #163, with numbered pointers.', 'Annotated page captures')],
+  },
+  {
+    id: 'website-homepage-reading', day: '2026-10-10',
+    title: 'Easier to read, easier to start',
+    summary: 'Two small updates to Home. First, reading and tapping: descriptive text now stops at about 65 characters a line, headings balance across their lines, and small controls like "About this A/B" and "Credits and full comparison" are 44 pixels tall to tap while looking the same size. Hover effects now apply only with a mouse or trackpad, a press gives a light dimmed feedback, and pages fade briefly into each other when your device allows motion. Second, the main button on Home now reads "Start a software project" and opens the software brief already set to an idea, at "What’s the idea?". Both are live on the site.',
+    artifacts: [artifact(homepageReading, 'Home · Easier to start', 'Home on a phone before and after PR #173, with numbered pointers.', 'Annotated page captures')],
+  },
+  {
+    id: 'website-tally-story', day: '2026-10-10',
+    title: 'Who does what on Tally',
+    summary: 'My Tally page needed to say what I do and what AI coding agents do. It now says I shape Tally’s product design and architecture, the agents implement it, and I focus on decisions that could cause problems later and on keeping development repeatable. The Work page names Tally as my current example of product ownership with AI, with a link. The journal opens with three highlights, each a decision, why it matters and the entries it comes from. Built and tested; the changes are live.',
+    artifacts: [artifact(tallyStory, 'Building · Who does what on Tally', 'The Tally page after PR #169, with numbered pointers.', 'Annotated page capture')],
+  },
+  {
+    id: 'website-brief-signing', day: '2026-10-10',
+    title: 'A software brief as a conversation',
+    summary: 'A software brief used to be a three-step form and a page to print or save. Now it is a short conversation, one question at a time, and Cloudflare’s Workers AI suggests your next few words in light grey as you type. Tab accepts; you can turn it off. Only what you type in the answer boxes is sent, never your name, email or company. Afterwards you get an email copy and a reply time. Codex built it from options I picked.',
+    artifacts: [artifact(briefConversation, 'Software brief · A conversation', 'A brief question with a suggestion in the answer box, from PR #172 with fictional text, with numbered pointers.', 'Annotated page capture')],
   },
 ];

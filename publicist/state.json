@@ -75,7 +75,16 @@
     "tally-everyday-tools",
     "tally-polish-and-motion",
     "tally-codex-builds",
-    "tally-store-names"
+    "tally-store-names",
+    "tally-home-month",
+    "tally-ai-guesses",
+    "tally-bills-schedules",
+    "tally-transaction-controls",
+    "tally-phase-3-review",
+    "tally-releases-reminders",
+    "website-homepage-reading",
+    "website-tally-story",
+    "website-brief-signing"
   ],
   "declined": []
 }
