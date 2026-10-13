@@ -48,7 +48,7 @@ it('renders selectable full legal text, Unicode, wrapped long words, certificate
   const sow = document('sow', 'Synthetic SOW\nNo missing terms.');
   sow.attachment_manifest_json = JSON.stringify([{ key: 'attachment', sha256: await hashBytes(bytes) }]);
   const env = { ASSETS: assets, AUDIO: { get: async () => ({ arrayBuffer: async () => bytes }) } } as unknown as Env;
-  const result = await renderAgreementPacket(env, [document('msa', text), sow], [{}, { signatures: [{ verified_email: 'client@example.test', ip_address: '192.0.2.1', user_agent: 'Synthetic browser', receipt_id: 'receipt-2' }] }]);
+  const result = await renderAgreementPacket(env, [document('msa', text), sow], [{ versions: { version_label: 'v2026-09-30' } }, { versions: { version_label: 'v2026-09-30' }, signatures: [{ verified_email: 'client@example.test', ip_address: '192.0.2.1', user_agent: 'Synthetic browser', receipt_id: 'receipt-2' }] }]);
   const pdf = await PDFDocument.load(result);
   const extracted = extract(pdf);
   expect(extracted.replace(/(?:Master Services Agreement|Statement of Work) · v2026-09-30/g, '').replace(/Page \d+ of \d+ \| website-pdf-v2/g, '').replace(/\s/g, '')).toContain(text.replace(/\s/g, ''));
@@ -78,7 +78,7 @@ it('preflights exact attachment merge inputs and rejects a missing original MSA 
   const terms: OfferTerms = { outcome:'Synthetic',summary:'Test',milestones:[{name:'One',deliverables:['View'],acceptance:['Open'],feeCents:101}],paymentMode:'standard',clientInputs:'',exclusions:'',timing:'' };
   const details = agreementDetailsSchema.parse({ planned_start:'2026-10-01',planned_end:'2026-10-20',environment:'Browser',operating_responsibilities:'Client',update_rhythm:'Weekly',milestones:[{start:'2026-10-01',target:'2026-10-20',handoff:'Source'}] });
   const contractor = contractorSchema.parse({legal_name:'Example LLC',entity_jurisdiction:'Wyoming LLC',signer_name:'Owner',signer_title:'Representative',notice_email:'owner@example.test',business_address:'Example business street',registered_agent_confirmed:true});
-  const templates = (['msa','sow'] as const).map(kind => ({kind,version:1,text:templateFields[kind].filter(field=>!field.startsWith('milestone.')).map(field=>`${field}: {{${field}}}`).join('\n')+(kind==='sow'?'\n{{#milestones}}\n'+templateFields.sow.filter(field=>field.startsWith('milestone.')).map(field=>`${field}: {{${field}}}`).join('\n')+'\n{{/milestones}}':'')} as AgreementTemplate));
+  const templates = (['msa','sow'] as const).map(kind => ({kind,version:1,published_at:'2026-10-01T12:00:00.000Z',version_label:'v2026-10-01',source_revision:null,text:templateFields[kind].filter(field=>!field.startsWith('milestone.')).map(field=>`${field}: {{${field}}}`).join('\n')+(kind==='sow'?'\n{{#milestones}}\n'+templateFields.sow.filter(field=>field.startsWith('milestone.')).map(field=>`${field}: {{${field}}}`).join('\n')+'\n{{/milestones}}':'')} as AgreementTemplate));
   const env = {ASSETS:assets,MUSIC_DB:{prepare:()=>({bind:()=>({first:async()=>null})})}} as unknown as Env;
   await expect(preflightAgreementPacket(env,terms,details,contractor,templates,null)).resolves.toBeUndefined();
   await expect(preflightAgreementPacket(env,terms,details,contractor,templates,'missing')).rejects.toThrow('Original MSA unavailable');
@@ -105,6 +105,14 @@ it('formats PDF certificate dates in New York without changing source evidence',
   expect(JSON.stringify(certificate)).toBe(original);
 });
 
+it('draws only the document title in the page header when a certificate has no version label', async () => {
+  const pdf = await PDFDocument.load(await renderAgreementPacket({ ASSETS: assets } as unknown as Env, [document('sow', 'Exact header text')], [{ executed_at: '2026-09-30T13:15:43.382Z', effective_on: '2026-09-30' }]));
+  const text = extract(pdf).replace(/\s+/g, ' ');
+  expect(text).toContain('Exact header text');
+  expect(text).not.toContain('Statement of Work ·');
+  expect(text).not.toContain('undefined');
+});
+
 const sampleTemplateFile = new URL('../../scripts/screenshots/fixtures/sample-agreement-templates.json', import.meta.url);
 async function checkTemplatePacket(templateFile: string | URL, headings: string[]) {
   const templates = JSON.parse(readFileSync(templateFile, 'utf8'));
@@ -112,7 +120,7 @@ async function checkTemplatePacket(templateFile: string | URL, headings: string[
   const details = agreementDetailsSchema.parse({ planned_start:'2026-10-01',planned_end:'2026-10-20',environment:'Browser prototype',operating_responsibilities:'Client',update_rhythm:'Weekly',milestones:[{start:'2026-10-01',target:'2026-10-20',handoff:'Source and notices'}] });
   const contractor = contractorSchema.parse({legal_name:'Example Contractor LLC',entity_jurisdiction:'Wyoming LLC',signer_name:'Example Owner',signer_title:'Representative',notice_email:'owner@example.com',business_address:'200 Example Business Street',registered_agent_confirmed:true});
   const client = { legal_name:'Example Client LLC',entity_type:'LLC',jurisdiction:'Wyoming',business_address:'100 Example Business Street',notice_email:'notices@example.com',signer_name:'Example Signer',signer_title:'Representative',reviewer_name:'Reviewer',reviewer_email:'reviewer@example.com',approver_name:'Approver',approver_email:'approver@example.com',portfolio:'deny' as const,naming:false };
-  const values = agreementValues(terms, details, client, contractor, {effective_on:'2026-09-30',msa_version:'2026-09-30 / template 1',sow_number:'SOW-1',offer_version:1,template_version:1});
+  const values = agreementValues(terms, details, client, contractor, {effective_on:'2026-09-30',msa_version:'2026-09-30 / template 1',sow_number:'SOW-1',offer_version:1,template_version:1,msa_version_label:'v2026-09-30',msa_source_revision:'private-source-revision',sow_version_label:'v2026-09-30', sow_source_revision: ''});
   const docs = (['msa','sow'] as const).map(kind => document(kind, renderAgreement(kind, templates[kind], values)));
   for (const doc of docs) doc.text_sha256 = await hashBytes(new TextEncoder().encode(doc.canonical_text));
   const certificates = docs.map(doc => ({document_id:doc.id,document_sha256:doc.text_sha256,effective_on:'2026-09-30',executed_at:'2026-09-30T13:25:00Z',versions:{template:1,offer:1,version_label:'v2026-09-30',source_revision:'private-source-revision'},signatures:['client','contractor'].map(party=>({party,typed_name:party==='client'?'Example Signer':'Example Owner',title:'Representative',verified_email:party==='client'?'signer@example.com':'owner@example.com',verified_at:'2026-09-30T13:23:00Z',consent_at:'2026-09-30T13:25:00Z',signed_at:'2026-09-30T13:25:00Z',ip_address:'192.0.2.1',user_agent:'Synthetic browser 🧪',consent_version:'website-signing-v2-'+party,consent_text:'Electronic records consent',intent_text:'Signature intent for '+party}))}));
@@ -140,6 +148,20 @@ it('renders supplied or fictional agreements and embeds exact signing evidence',
   await checkTemplatePacket(process.env.AGREEMENT_TEMPLATE_FILE ?? sampleTemplateFile,
     process.env.AGREEMENT_TEMPLATE_FILE ? [] : ['Sample Master Services Agreement', 'Sample Statement of Work', '2 Sample review list', '4 Sample signature records']);
 }, 30000);
+
+it("prints each document's own version label in its page headers and in the certificate", async () => {
+  const docs = [document('msa', 'Synthetic MSA\nNo missing terms.'), document('sow', 'Synthetic SOW\nNo missing terms.')];
+  const certificates = [{ versions: { version_label: 'v2026-09-30' } }, { versions: { version_label: 'v2026-11-01' } }];
+  const pdf = await PDFDocument.load(await renderAgreementPacket({} as Env, docs, certificates));
+  const text = extract(pdf).replace(/\s+/g, ' ');
+  expect(text).toContain('Master Services Agreement · v2026-09-30');
+  expect(text).toContain('Statement of Work · v2026-11-01');
+  expect(text).not.toContain('Master Services Agreement · v2026-11-01');
+  expect(text).not.toContain('Statement of Work · v2026-09-30');
+  const certificateText = text.slice(text.indexOf('Signing certificate'));
+  expect(certificateText).toContain('Agreement version v2026-09-30');
+  expect(certificateText).toContain('Agreement version v2026-11-01');
+});
 
 // Real clauses stay private; this additional local coverage is optional.
 const privateTemplateFile = '.private/signing/templates.json';

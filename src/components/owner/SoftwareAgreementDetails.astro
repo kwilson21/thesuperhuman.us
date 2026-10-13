@@ -1,6 +1,7 @@
 ---
 import { softwareDate } from "~/lib/software-projects";
 import { signingEnabled } from '~/lib/agreement-access';
+import { currentTemplate, templateVersionLabel } from '~/lib/agreement-templates';
 import type { SoftwareOffer, OfferTerms } from '~/lib/software-offers';
 interface Props {
   requestId: string;
@@ -16,7 +17,7 @@ const candidates =
     ? (
         await db
           .prepare(
-            "SELECT a.id,c.legal_name,c.entity_type,c.jurisdiction,a.effective_on FROM software_agreements a JOIN software_agreement_clients c ON c.id=a.client_id JOIN owner_requests r ON r.email=c.recipient_email WHERE r.id=? AND a.kind='msa' AND a.status='executed' AND a.terminated_at IS NULL",
+            "SELECT a.id,c.legal_name,c.entity_type,c.jurisdiction,a.effective_on,t.version_label,t.published_at FROM software_agreements a JOIN software_agreement_clients c ON c.id=a.client_id JOIN owner_requests r ON r.email=c.recipient_email JOIN software_agreement_templates t ON t.id=a.template_id WHERE r.id=? AND a.kind='msa' AND a.status='executed' AND a.terminated_at IS NULL",
           )
           .bind(offer.request_id)
           .all<{
@@ -25,9 +26,19 @@ const candidates =
             entity_type: string;
             jurisdiction: string;
             effective_on: string;
+            version_label: string | null;
+            published_at: string;
           }>()
       ).results
     : [];
+const reusedMsa = candidates.find((a) => a.id === offer?.reused_msa_id);
+const theirMsa = reusedMsa ? templateVersionLabel(reusedMsa) : '';
+const currentMsa = reusedMsa && db ? await currentTemplate(db, 'msa') : null;
+const currentLabel = currentMsa ? templateVersionLabel(currentMsa) : theirMsa;
+const continuity =
+  currentLabel === theirMsa
+    ? `Uses their signed MSA ${theirMsa}.`
+    : `Uses their signed MSA ${theirMsa}. Your current MSA is ${currentLabel}.`;
 ---
 {enabled&&<fieldset data-agreement-details><legend>Agreement details</legend><p class="rail-muted">Required before sending. Dates and deliverables must match the work you can promise.</p>
  {(['planned_start','planned_end'] as const).map(name=><label>{name==='planned_start'?'Planned start':'Planned end'}<input class="studio-input" type="date" name={`agreement.${name}`} value={details[name]??''} /></label>)}
@@ -42,5 +53,5 @@ const candidates =
  <label>Project page retention (days)<input class="studio-input" type="number" name="agreement.project_retention_days" min="1" max="3650" value={details.project_retention_days??365} /></label><label>Data return or retention<textarea class="studio-textarea" name="agreement.data_retention" maxlength="4000">{details.data_retention??'MSA default, including one year for the private project page'}</textarea></label>
  <label>Handoff access (days)<input class="studio-input" type="number" name="agreement.handoff_access_days" min="30" max="3650" value={details.handoff_access_days??30} /></label><label>Handoff and download access<textarea class="studio-textarea" name="agreement.handoff_access" maxlength="4000">{details.handoff_access??'MSA default'}</textarea></label></details>
  <fieldset data-agreement-attachments data-upload-endpoint={`/api/owner/requests/${requestId}/agreement-attachments`}><legend>Attachments</legend><input type="hidden" name="agreement.attachments" value={JSON.stringify(details.attachments??[])} /><label>PDF<input type="file" accept="application/pdf" data-attachment-file /></label><label>Version<input class="studio-input" data-attachment-version maxlength="80" /></label><label>Document date<input class="studio-input" type="date" data-attachment-date /></label><button class="studio-quiet" type="button" data-upload-attachment>Upload exact PDF</button><p class="rail-muted">Up to five PDFs, 10 MiB each. Changing an attachment requires a new offer.</p><ul data-attachment-list>{(details.attachments??[]).map((a:{filename:string;version:string;date:string;key:string})=><li>{a.filename} · {a.version} · {softwareDate(a.date)} <button type="button" class="studio-quiet" data-remove-attachment={a.key}>Remove</button></li>)}</ul></fieldset>
- {candidates.length>0&&<><label>Existing MSA<select class="studio-select" name="reusedMsaId"><option value="">New MSA</option>{candidates.map(a=><option value={a.id} selected={offer?.reused_msa_id===a.id}>{a.legal_name} · {a.entity_type} · {a.jurisdiction} · {softwareDate(a.effective_on)}</option>)}</select></label><label class="confirmation"><input type="checkbox" name="confirmMsaReuse" checked={Boolean(offer?.reused_msa_id)} />I confirm this is the same legal party and authorize MSA reuse.</label></>}
+ {candidates.length>0&&<><label>Existing MSA<select class="studio-select" name="reusedMsaId"><option value="">New MSA</option>{candidates.map(a=><option value={a.id} selected={offer?.reused_msa_id===a.id}>{a.legal_name} · {a.entity_type} · {a.jurisdiction} · {softwareDate(a.effective_on)}</option>)}</select></label><label class="confirmation"><input type="checkbox" name="confirmMsaReuse" checked={Boolean(offer?.reused_msa_id)} />I confirm this is the same legal party and authorize MSA reuse.</label>{reusedMsa&&<p class="rail-muted rail-caption" data-msa-continuity>{continuity}</p>}</>}
  </fieldset>}

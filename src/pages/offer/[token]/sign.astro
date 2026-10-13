@@ -7,7 +7,8 @@ import { getLinkedOffer, offerTermsSchema, formatUSD, offerTotal } from '~/lib/s
 import { getOwnerRequest } from '~/lib/owner-requests';
 import { agreementSession, signingEnabled, maskedAgreementEmail } from '~/lib/agreement-access';
 import { offerAgreements } from '~/lib/software-agreements';
-import { consentText, intentText, agreementVersionLabel } from '~/lib/agreement-fields';
+import { consentText, intentText } from '~/lib/agreement-fields';
+import { templateVersionLabel } from '~/lib/agreement-templates';
 import { businessTypes, states, resolveClientDetails, loadAgreementDraft, prefillAgreementDraft } from '~/lib/agreement-draft';
 import { softwareDate } from '~/lib/software-projects';
 const env=Astro.locals.runtime.env, db=env.MUSIC_DB, token=Astro.params.token!;
@@ -17,7 +18,9 @@ const docs=session ? await offerAgreements(db!,offer!.id) : [];
 const sow=docs.find(d=>d.kind==='sow'), signed=sow && sow.status!=='review';
 const terms=offer ? offerTermsSchema.parse(JSON.parse(offer.terms_json)) : null;
 const request=offer ? await getOwnerRequest(db!,offer.request_id) : null;
-const reused=offer?.reused_msa_id && session ? await db!.prepare('SELECT canonical_text,values_json,id,effective_on FROM software_agreements WHERE id=?').bind(offer.reused_msa_id).first<{canonical_text:string;values_json:string;id:string;effective_on:string}>() : null;
+const reused=offer?.reused_msa_id && session ? await db!.prepare('SELECT canonical_text,values_json,id,effective_on,template_id FROM software_agreements WHERE id=?').bind(offer.reused_msa_id).first<{canonical_text:string;values_json:string;id:string;effective_on:string;template_id:string}>() : null;
+const templateLabel=async(id?:string|null)=>{const row=id ? await db!.prepare('SELECT version_label,published_at FROM software_agreement_templates WHERE id=?').bind(id).first<{version_label:string|null;published_at:string}>() : null;return row ? templateVersionLabel(row) : null};
+const msaLabel=session ? await templateLabel(reused?.template_id ?? offer?.msa_template_id) : null, sowLabel=session ? await templateLabel(offer?.sow_template_id) : null;
 const previous=reused ? JSON.parse(reused.values_json).client : undefined;
 const draft=session && request ? await loadAgreementDraft(db!,offer!.id,session.recipient_email) ?? prefillAgreementDraft(request,previous) : null;
 const sameAsPrevious=Boolean(previous && draft && previous.legal_name===draft.legal_name && previous.entity_type===draft.entity_type && previous.jurisdiction===(draft.state==='Outside the US'?draft.country:draft.state) && previous.business_address===draft.business_address);
@@ -58,7 +61,7 @@ if(!offer?.msa_template_id) Astro.response.status=404;
       <SoftwareAgreedTerms terms={terms} values={sow ? JSON.parse(sow.values_json) : null} agreementDetails={validateAgreementDetails(JSON.parse(offer.agreement_details_json!),terms)} documents={readyDocs} websiteSigned={false} conversationOpen={false} signing={true} />
       {reused && <details id="executed-agreement"><summary>Signed agreement</summary><a href={`/api/agreements/${reused.id}/file`}>Download executed MSA</a><pre class="agreement-text">{reused.canonical_text}</pre></details>}
       {(JSON.parse(offer.agreement_details_json!).attachments??[]).map((a:{key:string;filename:string})=><p><a href={`/api/agreements/attachments/${a.key.split('/').pop()!.replace('.pdf','')}`}>Review attachment: {a.filename}</a></p>)}
-<p class="agreement-meta">Agreement version {agreementVersionLabel}</p></section>
+{msaLabel && sowLabel && <p class="agreement-meta">{msaLabel===sowLabel?`Agreement version ${msaLabel}`:`Agreement ${msaLabel} · Statement of work ${sowLabel}`}</p>}</section>
       <section class="agreement-section"><h2>Your details</h2><p class="agreement-hint">Filled in from your brief. Change anything that's off.</p>
       {sameAsPrevious && <p data-returning-summary>Same as last time: {previous.legal_name}, {previous.entity_type}, {previous.jurisdiction}, {previous.business_address}. <button type="button" class="studio-quiet" data-edit-details>Edit</button></p>}
       <div class="signing-fields" data-business-details hidden={sameAsPrevious}>

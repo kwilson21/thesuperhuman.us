@@ -71,7 +71,7 @@ export default {
     sql(`UPDATE software_signing_settings SET software_signing_enabled=1;
    INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at) VALUES(${quote(id)},'software','Example Client','signer@example.com','Fictional tracker','reviewed',${quote(at)},${quote(at)});
    INSERT INTO software_contractor_config VALUES(1,${quote(JSON.stringify(contractor))},${quote(at)},'owner@example.com');
-   ${['msa', 'sow'].map((kind) => `INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES('screenshot-${kind}',${quote(kind)},1,${quote(template(kind))},${quote(hash(template(kind)))},${quote(at)},'owner@example.com');`).join('\n')}
+   ${['msa', 'sow'].map((kind) => `INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by,version_label) VALUES('screenshot-${kind}',${quote(kind)},1,${quote(template(kind))},${quote(hash(template(kind)))},${quote(at)},'owner@example.com','v2026-09-30');`).join('\n')}
    INSERT INTO software_offers(id,request_id,version,status,terms_json,agreement_details_json,msa_template_id,sow_template_id,contractor_snapshot_json,recipient_email_snapshot,created_at,updated_at,sent_at) VALUES('screenshot-signing-offer',${quote(id)},1,'sent',${quote(JSON.stringify(terms))},${quote(JSON.stringify(details))},'screenshot-msa','screenshot-sow',${quote(JSON.stringify({ ...contractor, config_version: 1 }))},'signer@example.com',${quote(at)},${quote(at)},${quote(sentAt)});
    INSERT INTO software_offer_links VALUES(${quote(id)},${quote(hash(token))},${quote(sentAt)},NULL);
    INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES('screenshot-challenge','agreement','screenshot-signing-offer',${quote(hash(token))},'signer@example.com',${quote(hash('fixture-primary'))},${quote(at)},'2099-01-01');
@@ -110,15 +110,20 @@ export default {
     await shot('templates', 'Private template editor and sample fields', '/owner/agreements', {
       owner: true,
       prepare: async (page) => {
-        await page
-          .locator('[data-template-editor]')
-          .first()
-          .locator('[name=action][value=preview]')
-          .click();
+        const editor = page.locator('[data-template-editor]').first(),
+          text = editor.locator('textarea');
+        // A synthetic line makes the preview show a change from the published version.
+        await text.fill(`${(await text.inputValue()).trimEnd()}\nSynthetic change for the screenshot.\n`);
+        await editor.locator('[name=action][value=preview]').click();
         await page
           .locator('[data-template-preview]')
           .first()
           .filter({ hasText: 'Sample' })
+          .waitFor();
+        await page
+          .locator('[data-template-diff]')
+          .first()
+          .filter({ hasText: 'Changes from v2026-09-30' })
           .waitFor();
       },
     });

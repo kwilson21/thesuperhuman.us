@@ -6,7 +6,6 @@ import type { Agreement } from './software-agreements';
 import { canonicalJson, hashBytes, newYorkTime } from './agreement-artifacts';
 import {
   agreementValues,
-  agreementVersionLabel,
   type AgreementDetails,
   type ClientAgreement,
   contractorSchema,
@@ -18,6 +17,7 @@ import type { AgreementTemplate } from './agreement-templates';
 import {
   renderAgreement,
   agreementCharacterSupported,
+  templateVersionLabel,
 } from './agreement-templates';
 function fontBytes(base64: string) {
   // Raw base64 imports bundle the licensed bytes; no asset binding or filesystem.
@@ -160,8 +160,10 @@ export async function renderAgreementPacket(
     }
     for (const line of agreementText.split('\n'))
       add(line, line === title || /^\d+ [A-Z]|^Milestone \d+$/.test(line));
+    // Older certificates can lack a label; the header then shows the title alone.
+    const header = versions.version_label ? `${title} · ${versions.version_label}` : title;
     for (const p of pdf.getPages().slice(start))
-      p.drawText(`${title} · ${versions.version_label ?? agreementVersionLabel}`, {
+      p.drawText(header, {
         x: 48,
         y: 755,
         font: inter,
@@ -254,8 +256,7 @@ export async function renderAgreementPacket(
       );
       row(
         'Agreement version',
-        (c.versions as Record<string, unknown> | undefined)?.version_label ??
-          agreementVersionLabel,
+        (c.versions as Record<string, unknown> | undefined)?.version_label,
       );
       row(
         'Offer version',
@@ -320,10 +321,13 @@ export async function preflightAgreementPacket(env: Env, terms: OfferTerms, deta
     approver_email: 'sample@example.test', signer_name: 'W'.repeat(200), signer_title: 'W'.repeat(200),
     portfolio: 'deny', naming: false,
   };
+  const [msaTemplate, sowTemplate] = templates;
   const documents: Agreement[] = templates.map(template => {
     const values = agreementValues(terms, details, client, contractor, {
       effective_on: details.planned_start, msa_version: `${details.planned_start} / template ${templates[0].version}`, sow_number: 'SOW-preflight',
       offer_version: 1, template_version: template.version,
+      msa_version_label: templateVersionLabel(msaTemplate), msa_source_revision: msaTemplate.source_revision ?? '',
+      sow_version_label: templateVersionLabel(sowTemplate), sow_source_revision: sowTemplate.source_revision ?? '',
     });
     return { id: 'preflight', kind: template.kind, offer_id: 'preflight',
       canonical_text: renderAgreement(template.kind, template.text, values),
@@ -335,10 +339,11 @@ export async function preflightAgreementPacket(env: Env, terms: OfferTerms, deta
     if (!original) throw new Error('Original MSA unavailable.');
     documents[0] = original;
   }
-  const packet = await renderAgreementPacket(env, documents, documents.map(() => ({ signatures: ['client', 'contractor'].map(party => ({
+  // Labels are at most 40 characters, so the header and certificate row reserve the widest label.
+  const packet = await renderAgreementPacket(env, documents, documents.map(() => ({ versions: { version_label: 'W'.repeat(40) }, signatures: ['client', 'contractor'].map(party => ({
     party, typed_name: 'W'.repeat(200), title: 'W'.repeat(200), verified_email: 'W'.repeat(254),
-    ip_address: 'W'.repeat(100), user_agent: 'W'.repeat(2000), signed_at: '2026-09-30T13:25:00Z',
-    consent_at: '2026-09-30T13:25:00Z', verified_at: '2026-09-30T13:25:00Z',
+    ip_address: 'W'.repeat(100), user_agent: 'W'.repeat(2000), signed_at: '2026-12-31T13:25:00Z',
+    consent_at: '2026-12-31T13:25:00Z', verified_at: '2026-12-31T13:25:00Z',
   })) })));
   if (packet.length + 1024 * 1024 > 25 * 1024 * 1024) throw new Error('Complete packet exceeds the copy limit.');
 }

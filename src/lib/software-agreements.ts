@@ -11,6 +11,7 @@ import {
 } from './agreement-fields';
 import {
   renderAgreement,
+  templateVersionLabel,
   validateAgreementCharacters,
   type AgreementTemplate,
 } from './agreement-templates';
@@ -147,6 +148,10 @@ export async function reviewAgreements(
       sow_number: `SOW-${sowId}`,
       offer_version: offer.version,
       template_version: sowTemplate.version,
+      msa_version_label: templateVersionLabel(msaTemplate),
+      msa_source_revision: msaTemplate.source_revision ?? '',
+      sow_version_label: templateVersionLabel(sowTemplate),
+      sow_source_revision: sowTemplate.source_revision ?? '',
     },
   );
   const documents = [] as { id: string; kind: 'msa' | 'sow'; hash: string; text: string }[];

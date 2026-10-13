@@ -10,6 +10,7 @@ import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { beforeAll, afterAll, expect, it, vi } from 'vitest';
 import { hashOfferToken, type OfferTerms } from '~/lib/software-offers';
 import { agreementValues, agreementDetailsSchema } from '~/lib/agreement-fields';
+import { projectToday } from '~/lib/audio-project-updates';
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 let start: any, privacy: any;
 let linkLanding: any, archiveLanding: any, agreements: any, signPage: any, agreementPanel: any, directory: string, softwarePage: any, composer: any, today: any, page: any, preview: any, editor: any, questions: any, fit: any, panel: any, ownerRequest: any;
@@ -418,9 +419,10 @@ it('renders one signing page, returning details, waiting and both-signed actions
   const { sql, db } = await fixture();
   try {
     const session = 's'.repeat(43), sessionHash = await hashOfferToken(session);
-    sql.prepare("INSERT INTO software_agreement_templates VALUES ('msa','msa',1,'Template',?,1,'now','owner')").run('a'.repeat(64));
+    sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by,version_label) VALUES ('msa','msa',1,'Template',?,1,'now','owner','v2026-09-30')").run('a'.repeat(64));
+    sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by,version_label) VALUES ('sow','sow',1,'Template',?,1,'now','owner','v2026-09-30')").run('c'.repeat(64));
     sql.exec("INSERT INTO software_agreement_clients VALUES ('client','alex@example.com','Example LLC','example llc','LLC','Wyoming','Business address','notice@example.com','now'); INSERT INTO software_agreement_links(id,purpose,offer_id,recipient_email,token_hash,issued_at,expires_at) VALUES ('challenge','agreement','current','alex@example.com','synthetic','now','2099-01-01')");
-    sql.exec("UPDATE software_signing_settings SET software_signing_enabled=1; UPDATE software_offers SET msa_template_id='msa',recipient_email_snapshot='alex@example.com',agreement_details_json='{}' WHERE id='current'");
+    sql.exec("UPDATE software_signing_settings SET software_signing_enabled=1; UPDATE software_offers SET msa_template_id='msa',sow_template_id='sow',recipient_email_snapshot='alex@example.com',agreement_details_json='{}' WHERE id='current'");
     sql.prepare("INSERT INTO software_agreement_sessions VALUES (?,'agreement','current',?,'alex@example.com','challenge','now','2099-01-01',NULL,'csrf')").run(sessionHash, await hashOfferToken(token));
     sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='current'").run(JSON.stringify({planned_start:'2026-10-01',planned_end:'2026-10-20',environment:'Browser',operating_responsibilities:'Client operates',update_rhythm:'Weekly',milestones:terms.milestones.map(()=>({start:'2026-10-01',target:'2026-10-20',handoff:'Source'}))}));
     sql.prepare("UPDATE owner_requests SET details_json=? WHERE id='r'").run(JSON.stringify({company:'Example LLC'}));
@@ -431,6 +433,18 @@ it('renders one signing page, returning details, waiting and both-signed actions
     expect(html).toMatch(/<p[^>]*><a[^>]*data-document-link="msa"[^>]*>Read the agreement<\/a><\/p>/);
     expect(html).toMatch(/<p[^>]*><a[^>]*data-document-link="sow"[^>]*>Read the statement of work<\/a><\/p>/);
     expect(html).toContain('1 milestone ·');expect(html).not.toContain('1 milestones');
+    expect(html).toMatch(/Agreement version v2026-09-30<\/p>\s*<\/section>/);
+    sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by,version_label) VALUES ('sow-later','sow',2,'Template',?,1,'now','owner','v2026-11-01')").run('d'.repeat(64));
+    sql.exec("UPDATE software_offers SET sow_template_id='sow-later' WHERE id='current'");
+    html = await render();
+    expect(html).toContain('Agreement v2026-09-30 · Statement of work v2026-11-01');
+    expect(html).not.toMatch(/Agreement version/);
+    sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by) VALUES ('msa-legacy','msa',2,'Template',?,1,'2026-09-01T12:00:00.000Z','owner')").run('e'.repeat(64));
+    sql.exec("UPDATE software_offers SET msa_template_id='msa-legacy', sow_template_id='sow' WHERE id='current'");
+    html = await render();
+    expect(html).toContain('Agreement v2026-09-01 · Statement of work v2026-09-30');
+    sql.exec("UPDATE software_offers SET msa_template_id='msa', sow_template_id='sow' WHERE id='current'");
+    html = await render();
     expect(html).toMatch(/Agreement version v2026-09-30<\/p>\s*<\/section>/);
     sql.prepare("UPDATE software_offers SET terms_json=? WHERE id='current'").run(JSON.stringify({...terms,milestones:[terms.milestones[0],terms.milestones[0]]}));
     const originalDetails=sql.prepare("SELECT agreement_details_json FROM software_offers WHERE id='current'").get().agreement_details_json;
@@ -444,9 +458,11 @@ it('renders one signing page, returning details, waiting and both-signed actions
     expect(html).not.toContain('Step 2 of 3');expect(html).not.toContain('Before you sign');
     expect(html.match(/type="checkbox"/g)).toHaveLength(1);expect(html.match(/type="radio"/g)).toHaveLength(3);
     expect(html).toContain('data-terms-reader');expect(html).toContain('v2026-09-30');
-    sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES('reused','msa','old','r','client','msa','executed','Original executed MSA',?,?,'now','2026-09-30','old-session')").run('b'.repeat(64),JSON.stringify({client:{legal_name:'Example LLC',entity_type:'LLC',jurisdiction:'Wyoming',business_address:'Business address'}}));
+    sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES('reused','msa','old','r','client','msa-legacy','executed','Original executed MSA',?,?,'now','2026-09-30','old-session')").run('b'.repeat(64),JSON.stringify({client:{legal_name:'Example LLC',entity_type:'LLC',jurisdiction:'Wyoming',business_address:'Business address'}}));
     sql.exec("UPDATE software_offers SET reused_msa_id='reused' WHERE id='current'");
-    html=await render();expect(html).toContain('Your signed agreement from Sep 30, 2026 still applies.');expect(html).toContain('Read it');expect(html).not.toContain('Read the agreement');expect(html).not.toContain('Read the full agreement and statement of work');expect(html).toContain('Signing applies your name above as your electronic signature on the statement of work linked above.');expect(html).toContain('Same as last time: Example LLC, LLC, Wyoming, Business address.');expect(html).toMatch(/data-business-details[^>]*hidden/);
+    html=await render();
+    // The card names the template the signed MSA pins (msa-legacy), not the offer's current MSA.
+    expect(html).toContain('Agreement v2026-09-01 · Statement of work v2026-09-30');expect(html).toContain('Your signed agreement from Sep 30, 2026 still applies.');expect(html).toContain('Read it');expect(html).not.toContain('Read the agreement');expect(html).not.toContain('Read the full agreement and statement of work');expect(html).toContain('Signing applies your name above as your electronic signature on the statement of work linked above.');expect(html).toContain('Same as last time: Example LLC, LLC, Wyoming, Business address.');expect(html).toMatch(/data-business-details[^>]*hidden/);
     sql.prepare("INSERT INTO software_agreement_drafts VALUES('current','alex@example.com',?,'now')").run(JSON.stringify({legal_name:'Example LLC',signer_name:'Alex',entity_type:'LLC',state:'Wyoming',business_address:'Updated business address'}));
     html=await render();expect(html).toMatch(/name="country"[^>]*value="United States"/);expect(html).not.toMatch(/data-country[^>]*hidden/);expect(html).not.toContain('Same as last time');expect(html).toContain('Updated business address');expect(html).not.toMatch(/data-business-details[^>]*hidden/);
     sql.exec("DELETE FROM software_agreement_drafts WHERE offer_id='current'");
@@ -536,6 +552,108 @@ it('renders Agreements with the owner heading, active navigation and ordered rai
   } finally { sql.close(); }
 });
 
+it('renders template version labels, source revision fields, the current version and version history on Agreements', async () => {
+  const { sql, db } = await fixture();
+  try {
+    const insert = sql.prepare('INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by,version_label,source_revision) VALUES(?,?,?,?,?,?,?,?,?)');
+    // msa-1 has no stored label, so its history falls back to its publish date.
+    insert.run('msa-1', 'msa', 1, 'Synthetic MSA one.', 'a'.repeat(64), '2026-09-15T12:00:00.000Z', 'owner@example.com', null, null);
+    insert.run('msa-2', 'msa', 2, 'Synthetic MSA two.', 'b'.repeat(64), '2026-10-02T12:00:00.000Z', 'owner@example.com', 'v2026-10-02', null);
+    insert.run('sow-1', 'sow', 1, 'Synthetic SOW one.', 'c'.repeat(64), '2026-09-30T12:00:00.000Z', 'owner@example.com', 'v2026-09-30', null);
+    const container = await AstroContainer.create();
+    const html = (await container.renderToString(agreements, { partial: false,
+      request: new Request('https://thesuperhuman.us/owner/agreements'),
+      locals: { owner: { email: 'owner@example.com' }, runtime: { env: { MUSIC_DB: db } } },
+    } as any)).replace(/<!--[\s\S]*?-->/g, '');
+    const inputs = (name: string) => html.match(new RegExp(`<input[^>]*name="${name}"[^>]*>`, 'g')) ?? [];
+    const versionInputs = inputs('versionLabel'), revisionInputs = inputs('sourceRevision');
+    expect(versionInputs).toHaveLength(2);
+    expect(revisionInputs).toHaveLength(2);
+    for (const input of versionInputs) expect(input).toContain(`value="v${projectToday()}"`);
+    for (const input of versionInputs) expect(input).toMatch(/ required/);
+    for (const input of versionInputs) expect(input).toContain('maxlength="40"');
+    for (const input of versionInputs) expect(input).toContain('pattern="[A-Za-z0-9.\\-]{1,40}"');
+    // The browser shows this title as the pattern-mismatch message, so it names the allowed format.
+    for (const input of versionInputs) expect(input).toContain('title="Use letters, digits, dots and dashes for the version label, up to 40 characters."');
+    // Preview may run on an unfinished label, so it skips browser validation. Publish keeps the format check in the browser.
+    const actionButtons = (value: string) => html.match(new RegExp(`<button[^>]*value="${value}"[^>]*>`, 'g')) ?? [];
+    expect(actionButtons('preview')).toHaveLength(2);
+    expect(actionButtons('preview').every(button => / formnovalidate[ >]/.test(button))).toBe(true);
+    expect(actionButtons('publish')).toHaveLength(2);
+    expect(actionButtons('publish').some(button => button.includes('formnovalidate'))).toBe(false);
+    // Browsers compile pattern with the v flag, where an unescaped trailing dash is a syntax error.
+    const pattern = new RegExp(`^(?:${versionInputs[0]!.match(/pattern="([^"]*)"/)![1]})$`, 'v');
+    expect(pattern.test(`v${projectToday()}`)).toBe(true);
+    expect(pattern.test('v2026 10 12')).toBe(false);
+    for (const input of revisionInputs) expect(input).toContain('maxlength="120"');
+    for (const input of revisionInputs) expect(input).not.toMatch(/ required|value=/);
+    expect(html).toMatch(/<input[^>]*name="versionLabel"[^>]*aria-describedby="msa-version-label-hint"/);
+    expect(html).toMatch(/<input[^>]*name="versionLabel"[^>]*aria-describedby="sow-version-label-hint"/);
+    expect(html).toMatch(/<input[^>]*name="sourceRevision"[^>]*aria-describedby="msa-source-revision-hint"/);
+    expect(html).toMatch(/<input[^>]*name="sourceRevision"[^>]*aria-describedby="sow-source-revision-hint"/);
+    expect(html).toMatch(/<p class="rail-muted rail-caption[^"]*" id="msa-version-label-hint">Clients see this on the agreement\. Use the date of the legal text it reflects\.<\/p>/);
+    expect(html).toMatch(/<p class="rail-muted rail-caption[^"]*" id="sow-version-label-hint">Clients see this on the agreement\. Use the date of the legal text it reflects\.<\/p>/);
+    expect(html).toMatch(/<p class="rail-muted rail-caption[^"]*" id="msa-source-revision-hint">Your reference for the legal source, for example a counsel revision\. Clients can see it in the signing record attached to the signed PDF\.<\/p>/);
+    expect(html).toMatch(/<p class="rail-muted rail-caption[^"]*" id="sow-source-revision-hint">Your reference for the legal source, for example a counsel revision\. Clients can see it in the signing record attached to the signed PDF\.<\/p>/);
+    // Each hint sits in its field's group, so the field gap (not the form gap) separates it from the next field.
+    for (const [name, id] of [['versionLabel', 'msa-version-label-hint'], ['versionLabel', 'sow-version-label-hint'], ['sourceRevision', 'msa-source-revision-hint'], ['sourceRevision', 'sow-source-revision-hint']])
+      expect(html).toMatch(new RegExp(`<div class="software-field[^"]*"><label[^>]*>[^<]*<input[^>]*name="${name}"[^>]*><\\/label><p class="rail-muted rail-caption[^"]*" id="${id}">`));
+    expect(html).toContain('Current version 2 · v2026-10-02');
+    expect(html).toContain('Current version 1 · v2026-09-30');
+    expect(html.match(/<div[^>]*data-template-diff[^>]*>/g)).toHaveLength(2);
+    expect(html.match(/<div[^>]*data-template-diff[^>]*>/g)!.every(tag => tag.includes(' hidden'))).toBe(true);
+    const historyButtons = html.match(/<button[^>]*data-template-version[^>]*>[^<]*<\/button>/g) ?? [];
+    expect(historyButtons).toHaveLength(4);
+    expect(historyButtons.filter(button => button.includes('>View text</button>'))).toHaveLength(3);
+    expect(historyButtons.filter(button => /class="studio-quiet[ "]/.test(button) && button.includes('type="button"'))).toHaveLength(4);
+    const compare = historyButtons.filter(button => button.includes('>Compare with previous</button>'));
+    expect(compare).toHaveLength(1);
+    expect(compare[0]).toContain('data-kind="msa"');
+    expect(compare[0]).toContain('data-version="2"');
+    expect(compare[0]).toContain('data-view="compare"');
+    // Adjacent history buttons share one gap-separated row, so their labels never run together.
+    expect(html.match(/<div class="software-actions[^"]*"><button[^>]*>View text<\/button><button[^>]*>Compare with previous<\/button><\/div>/g)).toHaveLength(1);
+    expect(html.match(/<div class="software-actions[^"]*"><button[^>]*>View text<\/button><\/div>/g)).toHaveLength(2);
+    expect(html).toMatch(/Version 2 · v2026-10-02 · /);
+    expect(html).toMatch(/Version 1 · v2026-09-15 · /);
+    expect(html.match(/data-template-version-output/g)).toHaveLength(3);
+    // History output is announced by moving focus to it. As a live region, a stored template (up to 100 KB) would be read aloud.
+    const outputs = html.match(/<div[^>]*data-template-version-output[^>]*>/g) ?? [];
+    expect(outputs).toHaveLength(3);
+    expect(outputs.every(tag => !tag.includes('aria-live'))).toBe(true);
+    // The preview diff starts hidden and stays a polite live region, so its content is announced when a preview arrives.
+    expect(html.match(/<div[^>]*data-template-diff[^>]*>/g)!.every(tag => tag.includes('aria-live="polite"'))).toBe(true);
+  } finally { sql.close(); }
+});
+
+it('scopes the script-built diff and version text rules to the agreement settings, so the rules reach those nodes', async () => {
+  // The page script creates these nodes at runtime without Astro's scope class, so only the leaf is unscoped; the settings root keeps the rules on this page.
+  const { css } = await transform(readFileSync('src/pages/owner/agreements.astro', 'utf8'), { filename: 'src/pages/owner/agreements.astro', internalURL: 'astro/compiler-runtime' });
+  const rules = [...css.join('\n').matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(match => ({ selectors: match[1].split(',').map(selector => selector.trim()), body: match[2] }));
+  const bodyOf = (cls: string) => rules.filter(rule => rule.selectors.some(selector => selector.endsWith(` .${cls}`))).map(rule => rule.body).join(';');
+  for (const cls of ['template-diff', 'template-text', 'diff-removed', 'diff-unchanged', 'diff-added']) {
+    const selectors = rules.flatMap(rule => rule.selectors).filter(selector => selector.includes(`.${cls}`));
+    expect(selectors, cls).not.toHaveLength(0);
+    expect(selectors.every(selector => /^\.agreement-settings:where\(\.astro-\w+\) \.[\w-]+$/.test(selector) && selector.endsWith(`.${cls}`)), cls).toBe(true);
+  }
+  for (const cls of ['template-diff', 'template-text']) {
+    expect(bodyOf(cls)).toMatch(/white-space:\s*pre-wrap/);
+    expect(bodyOf(cls)).toMatch(/overflow-wrap:\s*anywhere/);
+  }
+  expect(bodyOf('diff-removed')).toMatch(/color:\s*var\(--muted\)/);
+  expect(bodyOf('diff-unchanged')).toMatch(/color:\s*var\(--muted\)/);
+  expect(bodyOf('diff-added')).toMatch(/color:\s*var\(--accent\)/);
+});
+
+it('lets a 40 character version label wrap inside the agreement settings root, so the page does not scroll sideways', async () => {
+  const { css } = await transform(readFileSync('src/pages/owner/agreements.astro', 'utf8'), { filename: 'src/pages/owner/agreements.astro', internalURL: 'astro/compiler-runtime' });
+  const rules = [...css.join('\n').matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(match => ({ selectors: match[1].split(',').map(selector => selector.trim()), body: match[2] }));
+  const root = rules.filter(rule => rule.selectors.some(selector => /^\.agreement-settings:where\(\.astro-\w+\)$/.test(selector)));
+  expect(root).toHaveLength(1);
+  // overflow-wrap is inherited, so this reaches the history items, the current version line and the script-built heading.
+  expect(root[0].body).toMatch(/overflow-wrap:\s*anywhere/);
+});
+
 
 it('reads immutable agreed fees, dates and complete legal text without enabling new consent', async () => {
   const {sql,db} = await fixture();
@@ -543,7 +661,7 @@ it('reads immutable agreed fees, dates and complete legal text without enabling 
   const session='a'.repeat(72), hash='b'.repeat(64);
   const fixed:OfferTerms={...terms,paymentMode:'standard',clientInputs:'Synthetic access and sample.',exclusions:'Live rollout.',timing:'Dates are conditional on agreed client inputs.',milestones:[{...terms.milestones[0],feeCents:101,checkpoint:{label:'Working view',cancellationPercent:80}}]};
   const owner=agreementDetailsSchema.parse({planned_start:'2026-10-01',planned_end:'2026-10-20',environment:'Synthetic browser environment',operating_responsibilities:'Client operates the delivered tool.',update_rhythm:'Every Thursday',milestones:[{start:'2026-10-02',target:'2026-10-19',handoff:'Source and notices',checkpoint_criteria:'Status is saved',checkpoint_evidence:'Synthetic preview'}],support:'Agreed support only',expenses_taxes:'No extra expenses'});
-  const values=agreementValues(fixed,owner,{legal_name:'Example Client LLC',entity_type:'LLC',jurisdiction:'WY',business_address:'Example business address',notice_email:'alex@example.com',reviewer_name:'Alex',reviewer_email:'alex@example.com',approver_name:'Alex',approver_email:'alex@example.com',signer_name:'Alex',signer_title:'Owner',portfolio:'deny',naming:false},{legal_name:'Example Contractor LLC',entity_jurisdiction:'WY',signer_name:'Example Owner',signer_title:'Owner',notice_email:'owner@example.com',business_address:'Registered agent address',registered_agent_confirmed:true},{effective_on:'2026-09-30',msa_version:'2026-09-30 / template 1',sow_number:'SOW-example',offer_version:2,template_version:1});
+  const values=agreementValues(fixed,owner,{legal_name:'Example Client LLC',entity_type:'LLC',jurisdiction:'WY',business_address:'Example business address',notice_email:'alex@example.com',reviewer_name:'Alex',reviewer_email:'alex@example.com',approver_name:'Alex',approver_email:'alex@example.com',signer_name:'Alex',signer_title:'Owner',portfolio:'deny',naming:false},{legal_name:'Example Contractor LLC',entity_jurisdiction:'WY',signer_name:'Example Owner',signer_title:'Owner',notice_email:'owner@example.com',business_address:'Registered agent address',registered_agent_confirmed:true},{effective_on:'2026-09-30',msa_version:'2026-09-30 / template 1',sow_number:'SOW-example',offer_version:2,template_version:1,msa_version_label:'v2026-09-30',msa_source_revision:'',sow_version_label:'v2026-09-30', sow_source_revision: ''});
   try {
     sql.prepare("INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES (?,'alex@example.com','now','2099-01-01','now')").run(createHash('sha256').update(session).digest('hex'));
     sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,next_update_on) VALUES ('r','current',?,'standard','now','now','2026-09-30','PRIVATE OWNER','now','now','2026-11-01')").run(JSON.stringify(fixed));
@@ -592,7 +710,7 @@ it.each(['accepted-unpaid','paid-awaiting-handoff','handed-off'].flatMap(state=>
   try {
     sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('r','current',?,'standard','now','now','2026-09-29','owner','now','now')").run(JSON.stringify(terms));
     const owner=agreementDetailsSchema.parse({correction_calendar_days:days,planned_start:'2026-10-01',planned_end:'2026-10-20',environment:'Synthetic browser environment',operating_responsibilities:'Client operates the delivered tool.',update_rhythm:'Every Thursday',milestones:[{start:'2026-10-02',target:'2026-10-19',handoff:'Source and notices',checkpoint_criteria:'Status is saved',checkpoint_evidence:'Synthetic preview'}],support:'Agreed support only',expenses_taxes:'No extra expenses'});
-    const values=agreementValues({...terms,paymentMode:'standard'},owner,{legal_name:'Example Client LLC',entity_type:'LLC',jurisdiction:'WY',business_address:'Example business address',notice_email:'alex@example.com',reviewer_name:'Alex',reviewer_email:'alex@example.com',approver_name:'Alex',approver_email:'alex@example.com',signer_name:'Alex',signer_title:'Owner',portfolio:'deny',naming:false},{legal_name:'Example Contractor LLC',entity_jurisdiction:'WY',signer_name:'Example Owner',signer_title:'Owner',notice_email:'owner@example.com',business_address:'Registered agent address',registered_agent_confirmed:true},{effective_on:'2026-09-30',msa_version:'2026-09-30 / template 1',sow_number:'SOW-example',offer_version:2,template_version:1});
+    const values=agreementValues({...terms,paymentMode:'standard'},owner,{legal_name:'Example Client LLC',entity_type:'LLC',jurisdiction:'WY',business_address:'Example business address',notice_email:'alex@example.com',reviewer_name:'Alex',reviewer_email:'alex@example.com',approver_name:'Alex',approver_email:'alex@example.com',signer_name:'Alex',signer_title:'Owner',portfolio:'deny',naming:false},{legal_name:'Example Contractor LLC',entity_jurisdiction:'WY',signer_name:'Example Owner',signer_title:'Owner',notice_email:'owner@example.com',business_address:'Registered agent address',registered_agent_confirmed:true},{effective_on:'2026-09-30',msa_version:'2026-09-30 / template 1',sow_number:'SOW-example',offer_version:2,template_version:1,msa_version_label:'v2026-09-30',msa_source_revision:'',sow_version_label:'v2026-09-30', sow_source_revision: ''});
     sql.exec("INSERT INTO software_agreement_clients VALUES ('party','alex@example.com','Example Client LLC','example','LLC','WY','Example address','alex@example.com','now'); INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES ('sow','sow',1,'Template','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','now','owner')");
     sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES ('sow','sow','current','r','party','sow','executed','Agreed terms','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',?,'now','2026-09-30','session')").run(JSON.stringify(values));
     sql.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='current'").run(JSON.stringify({...owner,correction_calendar_days:signing==='website' ? 90 : days}));
@@ -756,7 +874,7 @@ it('puts the named review work first through partial, complete, accepted and han
 it('masks the recipient on every unauthenticated email receipt', async () => {
   const {sql,db}=await fixture();
   try {
-    sql.prepare("INSERT INTO software_agreement_templates VALUES('msa','msa',1,'Template',?,1,'now','owner')").run('a'.repeat(64));
+    sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by) VALUES('msa','msa',1,'Template',?,1,'now','owner')").run('a'.repeat(64));
     sql.exec("UPDATE software_signing_settings SET software_signing_enabled=1; UPDATE software_offers SET msa_template_id='msa',recipient_email_snapshot='alex@example.com' WHERE id='current'");
     const container=await AstroContainer.create();
     const html=await container.renderToString(signPage,{params:{token},request:new Request(`https://thesuperhuman.us/offer/${token}/sign?email=sent`),locals:{runtime:{env:{MUSIC_DB:db}}}} as any);
@@ -776,6 +894,42 @@ it('renders a quiet Remove control beside each unsent attachment',async()=>{
     const html=await (await AstroContainer.create()).renderToString(editor,{props:{requestId:'r',email:'alex@example.com',offers},locals:{runtime:{env:{MUSIC_DB:db}}}} as any);
     expect(html).toMatch(/Draft.pdf[\s\S]*class="studio-quiet"[^>]*data-remove-attachment[^>]*>Remove<\/button>/);
   } finally {sql.close();}
+});
+
+async function renderMsaContinuity({ reusedMsaId, currentLabel }: { reusedMsaId?: string; currentLabel?: string }) {
+  const {sql,db}=await fixture();
+  try {
+    sql.exec("UPDATE software_signing_settings SET software_signing_enabled=1; INSERT INTO software_agreement_clients VALUES ('client','alex@example.com','Example LLC','example llc','LLC','Wyoming','Business address','notice@example.com','now')");
+    sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by,version_label) VALUES ('msa-signed','msa',1,'Template',?,1,'2026-09-30T12:00:00.000Z','owner','v2026-09-30')").run('a'.repeat(64));
+    if (currentLabel) sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by,version_label) VALUES ('msa-current','msa',2,'Template',?,1,'2026-11-01T12:00:00.000Z','owner',?)").run('b'.repeat(64),currentLabel);
+    sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,executed_at,effective_on,review_session_hash) VALUES ('msa-agreement','msa',NULL,'r','client','msa-signed','executed','Signed text',?,'{}','now','now','2026-09-30','session')").run('c'.repeat(64));
+    sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES ('msa-draft','msa',NULL,'r','client','msa-signed','review','Unsigned text',?,'{}','now','2026-09-30','session')").run('d'.repeat(64));
+    if (reusedMsaId) sql.prepare("UPDATE software_offers SET reused_msa_id=? WHERE id='draft'").run(reusedMsaId);
+    const offers=(await db.prepare('SELECT * FROM software_offers').all()).results;
+    return await (await AstroContainer.create()).renderToString(editor,{props:{requestId:'r',email:'alex@example.com',offers},locals:{runtime:{env:{MUSIC_DB:db}}}} as any);
+  } finally {sql.close();}
+}
+
+it('names the signed MSA label beside the Existing MSA choice, with the current label when it differs',async()=>{
+  const html=await renderMsaContinuity({reusedMsaId:'msa-agreement',currentLabel:'v2026-11-01'});
+  expect(html).toMatch(/Existing MSA[\s\S]*confirmMsaReuse[\s\S]*<p[^>]*data-msa-continuity[^>]*>Uses their signed MSA v2026-09-30\. Your current MSA is v2026-11-01\.<\/p>/);
+});
+
+it('names only the signed MSA label when no newer MSA has a different label',async()=>{
+  const html=await renderMsaContinuity({reusedMsaId:'msa-agreement'});
+  expect(html).toMatch(/<p[^>]*data-msa-continuity[^>]*>Uses their signed MSA v2026-09-30\.<\/p>/);
+  expect(html).not.toContain('Your current MSA');
+});
+
+it('shows no continuity line without a reused MSA or when the reused MSA is not a candidate',async()=>{
+  expect(await renderMsaContinuity({})).not.toContain('data-msa-continuity');
+  expect(await renderMsaContinuity({reusedMsaId:'msa-draft'})).not.toContain('data-msa-continuity');
+});
+
+it('lets a 40 character MSA label wrap in the continuity line, so the request page does not scroll sideways',()=>{
+  const css=readFileSync(new URL('../../src/styles/owner.css',import.meta.url),'utf8').replace(/\/\*[\s\S]*?\*\//g,'');
+  const rules=[...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([,selector,body])=>({selectors:selector.split(',').map(s=>s.trim()),body}));
+  expect(rules.filter(rule=>rule.selectors.includes('.software-offer-editor [data-agreement-details]')&&/overflow-wrap:\s*anywhere/.test(rule.body))).toHaveLength(1);
 });
 
 it('renders omitted duplicate legacy deliverables by index without offering acceptance',async()=>{
@@ -1190,7 +1344,7 @@ it('renders the AI disclosure beside both answer boxes and the dated retention n
 it('shows the countersign requirement beside both disabled closing actions', async () => {
   const {sql,db}=await fixture();
   try {
-    sql.prepare("INSERT INTO software_agreement_templates VALUES ('msa','msa',1,'Template',?,1,'now','owner')").run('a'.repeat(64));
+    sql.prepare("INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by) VALUES ('msa','msa',1,'Template',?,1,'now','owner')").run('a'.repeat(64));
     sql.exec("INSERT INTO software_agreement_clients VALUES ('client','alex@example.com','Example LLC','example llc','LLC','Wyoming','Business address','notice@example.com','now')");
     sql.prepare("INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES('sow','sow','current','r','client','msa','client_signed','Exact',?,'{}','now','2026-09-30','session')").run('a'.repeat(64));
     const container=await AstroContainer.create();

@@ -1,9 +1,11 @@
 import { newYorkTime } from './agreement-artifacts';
+import { templateVersionLabel, versionLabelPattern } from './agreement-version-label';
 import { softwareDate } from './software-projects';
 import { agreementEvent } from './agreement-events';
 import { hashOfferToken } from './software-offers';
 import { templateFields } from './agreement-template-fields.mjs';
 import coverage from '../assets/agreement-fonts/Inter-coverage.json';
+import { lineDiff } from './line-diff';
 export { templateFields } from './agreement-template-fields.mjs';
 const optionalFields = [
   'contractor.legal_name',
@@ -18,7 +20,7 @@ const optionalFields = [
 ];
 export type AgreementKind = keyof typeof templateFields;
 const bytes = (s: string) => new TextEncoder().encode(s).length;
-export function sampleAgreementValues(kind: AgreementKind, text: string) {
+export function sampleAgreementValues(kind: AgreementKind, text: string, versionLabel = 'Sample version label') {
   const values: Record<string, Record<string, string> | unknown> = {};
   const addSample = (field: string) => {
     const [namespace, key] = field.split('.');
@@ -29,6 +31,9 @@ export function sampleAgreementValues(kind: AgreementKind, text: string) {
   for (const field of templateFields[kind]) addSample(field);
   for (const match of text.matchAll(/{{([a-z_]+\.[a-z_0-9]+)}}/g)) addSample(match[1]);
   if (kind === 'sow') values.milestones = [values.milestone];
+  // Previews show the label the owner typed, as clients will see it.
+  const msa = (values.msa ??= {}) as Record<string, string>;
+  msa.version_label = versionLabel;
   return values;
 }
 export const agreementCharacterSupported = (character: string) =>
@@ -102,9 +107,10 @@ export function validateTemplate(kind: AgreementKind, text: string) {
   return text.replace(/\r\n?/g, '\n');
 }
 function lookup(values: Record<string, unknown>, path: string): string {
-  if (path === 'msa.source_revision') return 'v2026-09-30';
+  // {{msa.source_revision}} prints the MSA's client-visible label; the internal revision stays in the signing record.
+  const key = path === 'msa.source_revision' ? 'msa.version_label' : path;
   let value: unknown = values;
-  for (const part of path.split('.'))
+  for (const part of key.split('.'))
     value =
       typeof value === 'object' && value !== null
         ? (value as Record<string, unknown>)[part]
@@ -120,7 +126,7 @@ export function renderAgreement(
   validateTemplate(kind, template);
   const fill = (t: string, v: Record<string, unknown>) =>
     t.replace(/{{([a-z_]+\.[a-z_0-9]+)}}/g, (_, p) => lookup(v, p));
-  const rendered = template.replaceAll('Interim v2026-09-30', 'v2026-09-30').replace(
+  const rendered = template.replace(
     /{{#milestones}}([\s\S]*?){{\/milestones}}|{{([a-z_]+\.[a-z_0-9]+)}}/g,
     (_, block, path) => {
       if (path) return lookup(values, path);
@@ -148,7 +154,11 @@ export type AgreementTemplate = {
   version: number;
   text: string;
   sha256: string;
+  version_label: string | null;
+  source_revision: string | null;
+  published_at: string;
 };
+export { templateVersionLabel, versionLabelPattern } from './agreement-version-label';
 export async function currentTemplate(db: D1Database, kind: AgreementKind) {
   return db
     .prepare(
@@ -157,29 +167,70 @@ export async function currentTemplate(db: D1Database, kind: AgreementKind) {
     .bind(kind)
     .first<AgreementTemplate>();
 }
+export async function templateVersion(db: D1Database, kind: AgreementKind, version: number) {
+  return db
+    .prepare('SELECT * FROM software_agreement_templates WHERE kind=? AND version=?')
+    .bind(kind, version)
+    .first<AgreementTemplate>();
+}
+export const templateComparison = (previous: AgreementTemplate, text: string) => ({
+  label: templateVersionLabel(previous),
+  rows: lineDiff(previous.text, text),
+});
+export async function compareWithPrevious(db: D1Database, template: AgreementTemplate) {
+  const previous = await templateVersion(db, template.kind, template.version - 1);
+  return previous ? templateComparison(previous, template.text) : null;
+}
 export async function publishTemplate(
   db: D1Database,
   kind: AgreementKind,
   text: string,
   expected: number,
   actor: string,
+  label: { versionLabel: string; sourceRevision?: string | null },
 ) {
   const canonical = validateTemplate(kind, text),
+    versionLabel = label.versionLabel,
+    sourceRevision = label.sourceRevision?.trim() || null,
     id = crypto.randomUUID(),
     sha = await hashOfferToken(canonical),
-    at = new Date().toISOString();
-  await db.batch([
-    db
+    at = new Date().toISOString(),
+    labelUsed = `${versionLabel} is already used for the ${kind.toUpperCase()}. Choose another label.`;
+  if (!versionLabelPattern.test(versionLabel))
+    throw new Error(
+      'Use letters, digits, dots and dashes for the version label, up to 40 characters.',
+    );
+  const current = await currentTemplate(db, kind);
+  if (current?.sha256 === sha)
+    throw new Error(`This text matches ${templateVersionLabel(current)}. Nothing to publish.`);
+  if (
+    await db
       .prepare(
-        `SELECT CASE WHEN COALESCE((SELECT max(version) FROM software_agreement_templates WHERE kind=?),0)=? THEN 1 ELSE json_extract('Template changed','$') END`,
+        'SELECT 1 FROM software_agreement_templates WHERE kind=? AND version_label=? LIMIT 1',
       )
-      .bind(kind, expected),
-    db
-      .prepare(
-        'INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES(?,?,?,?,?,?,?)',
-      )
-      .bind(id, kind, expected + 1, canonical, sha, at, actor),
-    agreementEvent(db, 'template-published', actor, at),
-  ]);
-  return { id, sha256: sha, version: expected + 1 };
+      .bind(kind, versionLabel)
+      .first()
+  )
+    throw new Error(labelUsed);
+  try {
+    await db.batch([
+      db
+        .prepare(
+          `SELECT CASE WHEN COALESCE((SELECT max(version) FROM software_agreement_templates WHERE kind=?),0)=? THEN 1 ELSE json_extract('Template changed','$') END`,
+        )
+        .bind(kind, expected),
+      db
+        .prepare(
+          'INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by,version_label,source_revision) VALUES(?,?,?,?,?,?,?,?,?)',
+        )
+        .bind(id, kind, expected + 1, canonical, sha, at, actor, versionLabel, sourceRevision),
+      agreementEvent(db, 'template-published', actor, at),
+    ]);
+  } catch (error) {
+    // A concurrent publish can take the label between the check above and this insert.
+    if (error instanceof Error && /UNIQUE constraint failed.*version_label/.test(error.message))
+      throw new Error(labelUsed);
+    throw error;
+  }
+  return { id, sha256: sha, version: expected + 1, versionLabel };
 }

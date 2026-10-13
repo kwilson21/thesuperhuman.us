@@ -177,7 +177,6 @@ export const consentText = (party: string, owner = false) => owner
 export const intentText = (owner = false, sowOnly = false) => owner
   ? `Countersigning applies your name above as your electronic signature on the ${sowOnly ? 'statement of work' : 'agreement and statement of work'} you reviewed.`
   : `Signing applies your name above as your electronic signature on the ${sowOnly ? 'statement of work' : 'agreement and statement of work'} linked above.`;
-export const agreementVersionLabel = 'v2026-09-30';
 export function agreementValues(
   terms: OfferTerms,
   details: AgreementDetails,
@@ -189,6 +188,10 @@ export function agreementValues(
     sow_number: string;
     offer_version: number;
     template_version: number;
+    msa_version_label: string;
+    msa_source_revision: string;
+    sow_version_label: string;
+    sow_source_revision: string;
   },
 ) {
   const amounts = terms.milestones.map((m, i) =>
@@ -265,8 +268,8 @@ export function agreementValues(
     msa: {
       effective_on: system.msa_version.split(' / ')[0],
       template_version: system.msa_version.split('template ')[1],
-      source_revision: 'Interim v2026-09-30',
-      version_label: agreementVersionLabel,
+      source_revision: system.msa_source_revision,
+      version_label: system.msa_version_label,
     },
     signature: { client_record: signatureReference, contractor_record: signatureReference },
     details: {
@@ -279,6 +282,8 @@ export function agreementValues(
     sow: {
       number: system.sow_number,
       version: String(system.offer_version),
+      version_label: system.sow_version_label,
+      source_revision: system.sow_source_revision,
       effective_on: system.effective_on,
       project_name: terms.outcome,
       outcome: base.offer.outcome_summary,

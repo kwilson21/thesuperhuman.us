@@ -21,6 +21,7 @@
 .software-offer-editor [hidden], .software-rail [hidden] { display: none !important; }
 .software-offer-editor .studio-status { white-space: pre-line; }
 .software-offer-editor li { overflow-wrap: anywhere; }
+.software-offer-editor [data-agreement-details] { overflow-wrap: anywhere; }
 .rail-section { display: grid; gap: .45rem; padding: 1.4rem 0; border-bottom: 1px solid var(--rule); }
 .rail-section:first-child { padding-top: 0; }
 .rail-section h2, .rail-section > summary span:first-child { font: 400 1.45rem/1.15 Libron, Georgia, serif; }

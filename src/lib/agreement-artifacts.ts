@@ -2,6 +2,7 @@ import { siteOrigin } from './site-origin.mjs';
 import { hashOfferToken } from './software-offers';
 import { sendAudioMessage } from './audio-resend';
 import type { Agreement } from './software-agreements';
+import { templateVersionLabel } from './agreement-version-label';
 export const hashBytes = async (bytes: ArrayBuffer | Uint8Array) =>
   [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as BufferSource))]
     .map((b) => b.toString(16).padStart(2, '0'))
@@ -31,6 +32,29 @@ export const newYorkTime = (value: unknown) =>
   typeof value === 'string'
     ? new Date(value).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' })
     : null;
+// Each document's own label. Older stored values lack it, so the pinned template row supplies it.
+async function documentVersionLabel(db: D1Database, d: Agreement) {
+  const values = JSON.parse(d.values_json);
+  const stored = d.kind === 'msa' ? values.msa?.version_label : values.sow?.version_label;
+  if (stored) return stored as string;
+  const row = await db
+    .prepare('SELECT version_label,published_at FROM software_agreement_templates WHERE id=?')
+    .bind(d.template_id)
+    .first<{ version_label: string | null; published_at: string }>();
+  return templateVersionLabel(row!);
+}
+// Each document prints its own template's source revision. Older stored SOW values lack it, so the pinned template row supplies it.
+async function documentSourceRevision(db: D1Database, d: Agreement) {
+  const values = JSON.parse(d.values_json);
+  if (d.kind === 'msa') return values.msa?.source_revision ?? '';
+  if (typeof values.sow?.source_revision === 'string') return values.sow.source_revision as string;
+  const row = await db
+    .prepare('SELECT source_revision FROM software_agreement_templates WHERE id=?')
+    .bind(d.template_id)
+    .first<{ source_revision: string | null }>();
+  return row?.source_revision ?? '';
+}
+
 /** Signatures persist first. Artifact retries never create a signature. */
 export async function prepareAgreementArtifact(
   env: Env,
@@ -81,8 +105,8 @@ export async function prepareAgreementArtifact(
               : JSON.parse(d.values_json).system?.template_version,
           offer: JSON.parse(d.values_json).sow?.version,
           contractor_config: JSON.parse(d.values_json).contractor.config_version,
-          source_revision: JSON.parse(d.values_json).msa?.source_revision,
-          version_label: JSON.parse(d.values_json).msa?.version_label,
+          source_revision: await documentSourceRevision(db, d),
+          version_label: await documentVersionLabel(db, d),
         },
         attachments: JSON.parse(d.attachment_manifest_json),
         signatures: (
