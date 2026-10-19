@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getAudioContextConstructor, setPlaybackAudioSession, waveformGeometry, waveformSeekSeconds } from '../../src/scripts/comparison-player';
+import { getAudioContextConstructor, isWaveformScrub, setPlaybackAudioSession, waveformGeometry, waveformSeekSeconds } from '../../src/scripts/comparison-player';
 
 describe('getAudioContextConstructor', () => {
   it('uses the prefixed Web Audio constructor exposed by mobile Safari', () => {
@@ -43,5 +43,26 @@ describe('waveformSeekSeconds', () => {
 
   it('returns 0 when the waveform has no width', () => {
     expect(waveformSeekSeconds(200, 100, 0, 300)).toBe(0);
+  });
+
+  it('clamps a drag past the left edge to the start of the track', () => {
+    expect(waveformSeekSeconds(50, 100, 200, 300)).toBe(0);
+  });
+
+  it('clamps a drag past the right edge to the end of the track', () => {
+    expect(waveformSeekSeconds(400, 100, 200, 300)).toBe(300);
+  });
+});
+
+describe('isWaveformScrub', () => {
+  it('scrubs with a mouse or pen whatever the direction of movement', () => {
+    expect(isWaveformScrub('mouse', 0, 50)).toBe(true);
+    expect(isWaveformScrub('pen', 2, 40)).toBe(true);
+  });
+
+  it('scrubs a touch only when it moves more sideways than vertically', () => {
+    expect(isWaveformScrub('touch', 10, 3)).toBe(true);
+    expect(isWaveformScrub('touch', 3, 10)).toBe(false);
+    expect(isWaveformScrub('touch', 0, 0)).toBe(false);
   });
 });

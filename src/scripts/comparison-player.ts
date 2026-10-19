@@ -1,8 +1,8 @@
 import { ComparisonTransport } from './comparison-transport';
 import { registerMusicPlayer } from './music-playback';
-import { waveformGeometry, waveformSeekSeconds } from '~/lib/waveform';
+import { isWaveformScrub, waveformGeometry, waveformSeekSeconds } from '~/lib/waveform';
 
-export { waveformGeometry, waveformSeekSeconds } from '~/lib/waveform';
+export { isWaveformScrub, waveformGeometry, waveformSeekSeconds } from '~/lib/waveform';
 
 /** Load the comparison pair on demand; A/B and loudness never restart playback. */
 type AudioContextConstructor = new () => AudioContext;
@@ -56,10 +56,12 @@ export function setupComparisonPlayers() {
       if (!compactWaveform) return;
       const side = media[selected].dataset.version === 'after' ? 'after' : 'before';
       const amplitudes = JSON.parse(compactWaveform.dataset[`waveform${side === 'before' ? 'Before' : 'After'}`] ?? '[]') as number[];
-      compactWaveform.querySelectorAll<SVGLineElement>('[data-compact-wave-line]').forEach((line, index) => {
-        const coordinates = waveformGeometry([amplitudes[index] ?? 0])[0];
-        line.setAttribute('y1', String(coordinates.y1));
-        line.setAttribute('y2', String(coordinates.y2));
+      root.querySelectorAll<SVGSVGElement>('.compact-waveform').forEach(svg => {
+        svg.querySelectorAll<SVGLineElement>('[data-compact-wave-line]').forEach((line, index) => {
+          const coordinates = waveformGeometry([amplitudes[index] ?? 0])[0];
+          line.setAttribute('y1', String(coordinates.y1));
+          line.setAttribute('y2', String(coordinates.y2));
+        });
       });
       compactWaveform.dataset.version = side;
       if (compactVersionLabel) compactVersionLabel.textContent = media[selected].dataset.label ?? 'Audio version';
@@ -123,11 +125,25 @@ export function setupComparisonPlayers() {
       transport?.seek(position); render();
     }
     seek.addEventListener('input', () => seekTo(Number(seek.value)));
-    root.querySelectorAll<SVGSVGElement>('.comparison-waveform, [data-compact-waveform]').forEach(waveform => {
-      waveform.addEventListener('click', event => {
-        const bounds = waveform.getBoundingClientRect();
+    root.querySelectorAll<HTMLElement>('.comparison-waveform-stage, .compact-waveform-frame').forEach(stage => {
+      let startX = 0, startY = 0;
+      const seekFromPointer = (event: PointerEvent) => {
+        const bounds = stage.getBoundingClientRect();
         if (!bounds.width) return;
         seekTo(waveformSeekSeconds(event.clientX, bounds.left, bounds.width, transport?.duration ?? Number(root.dataset.duration)));
+      };
+      stage.addEventListener('pointerdown', event => {
+        if (!event.isPrimary || event.button !== 0) return;
+        stage.setPointerCapture(event.pointerId);
+        startX = event.clientX; startY = event.clientY;
+        if (event.pointerType !== 'touch') seekFromPointer(event);
+      });
+      stage.addEventListener('pointermove', event => {
+        if (!stage.hasPointerCapture(event.pointerId) || !isWaveformScrub(event.pointerType, event.clientX - startX, event.clientY - startY)) return;
+        seekFromPointer(event);
+      });
+      stage.addEventListener('pointerup', event => {
+        if (stage.hasPointerCapture(event.pointerId)) seekFromPointer(event);
       });
     });
     volume?.addEventListener('input', applyVolume);
