@@ -1514,3 +1514,34 @@ it('links the rail service to the row for each software path', async () => {
     expect(await serviceLink('r')).toBe('/services#workflow');
   } finally {sql.close();}
 });
+
+it('uses the website question placeholder only for website briefs and keeps the decline placeholder', async () => {
+  const container = await AstroContainer.create();
+  const websiteText = 'Could you send the page text and photos you have so far?';
+  const exportText = 'Could you share an example of the export you use today?';
+  const declineText = 'Thanks for the brief. This isn’t a fit for me right now because…';
+  const questionPlaceholder = (html: string) => html.match(/<textarea[^>]*id="software-question"[^>]*placeholder="([^"]*)"/)?.[1];
+  const declinePlaceholder = (html: string) => html.match(/<textarea[^>]*id="software-decline"[^>]*placeholder="([^"]*)"/)?.[1];
+  const website = await container.renderToString(questions, { props:{ requestId:'r', path:'website' } });
+  expect(questionPlaceholder(website)).toBe(websiteText);
+  expect(website).not.toContain(exportText);
+  expect(declinePlaceholder(website)).toBe(declineText);
+  for (const path of ['workflow', 'webapp', 'idea', undefined]) {
+    const html = await container.renderToString(questions, { props:{ requestId:'r', path } });
+    expect(questionPlaceholder(html)).toBe(exportText);
+    expect(html).not.toContain(websiteText);
+    expect(declinePlaceholder(html)).toBe(declineText);
+  }
+});
+
+it('shows the website question placeholder on a seeded website owner request', async () => {
+  const {sql,db} = await fixture();
+  try {
+    sql.prepare(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,private_note,created_at,updated_at)
+      VALUES ('site','software','website','Jordan Example','jordan@example.com','A site for my pottery studio.',?,'new','','now','now')`).run(JSON.stringify({ path:'website', purpose:'A site for my pottery studio. People should see upcoming classes and sign up without messaging me first.', currentUrl:'https://jordanclay.example', existing:'A logo and about 30 class photos.', updates:'self', company:'Jordan Clay Studio', timing:'date', timingDate:'2026-12-01' }));
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(ownerRequest, { params:{ id:'site' }, request:new Request('https://thesuperhuman.us/owner/requests/site'), locals:{ owner:{ email:'owner@example.com' }, runtime:{ env:{ MUSIC_DB:db } } } as any });
+    expect(html).toMatch(/<textarea[^>]*id="software-question"[^>]*placeholder="Could you send the page text and photos you have so far\?"/);
+    expect(html).not.toContain('Could you share an example of the export you use today?');
+  } finally {sql.close();}
+});
