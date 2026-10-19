@@ -979,7 +979,8 @@ it('renders scanner-safe agreement and archive landings with exact copy', async(
 it('renders the approved receipt and keeps booking reassurance only on the send step', async () => {
   const container = await AstroContainer.create();
   const html = await container.renderToString(start, { request:new Request('https://thesuperhuman.us/software/start'), locals:{runtime:{env:{PUBLIC_TURNSTILE_SITE_KEY:'test',MUSIC_DB:{},TURNSTILE_SECRET_KEY:'test',RATE_LIMIT:{}}}} as any });
-  for (const copy of ['Software brief · sent','Your brief is in.','I reply with a fixed-price first milestone, or a question or two.','If it looks right, you sign the agreement online. It takes about two minutes.','Work starts, and you follow it on your own private project page.']) expect(html).toContain(copy);
+  for (const copy of ['Project brief · sent','Your brief is in.','I reply with a fixed-price first milestone, or a question or two.','If it looks right, you sign the agreement online. It takes about two minutes.','Work starts, and you follow it on your own private project page.']) expect(html).toContain(copy);
+  expect(html).not.toContain('Software brief · sent');
   expect(html).not.toMatch(/data-print|Print or save|Not provided/);
   expect(html.match(/No booking or payment at this stage\./g)).toHaveLength(1);
   const receipt = parse(html) as any;
@@ -987,7 +988,54 @@ it('renders the approved receipt and keeps booking reassurance only on the send 
   const steps = find(receipt);
   expect(steps?.tagName).toBe('ol');
   expect(steps.childNodes.filter((node: any) => node.tagName === 'li')).toHaveLength(3);
+  expect(steps.childNodes.filter((node: any) => node.tagName === 'li' && node.attrs.some((attr: any) => attr.name === 'data-receipt-first-step'))).toHaveLength(1);
   expect(await readFile('src/styles/audio-intake.css', 'utf8')).toMatch(/\.intake-next-steps\s*\{[^}]*list-style:\s*decimal\s*[;}]/);
+});
+
+it('renders the project brief start page with named paths, website screens and the old idea link', async () => {
+  const container = await AstroContainer.create();
+  const render = (query: string) => container.renderToString(start, { request: new Request(`https://thesuperhuman.us/software/start${query}`), locals: { runtime: { env: {} } } as any });
+  const textOf = (node: any): string => node.nodeName === '#text' ? node.value : (node.childNodes ?? []).map(textOf).join('');
+  const find = (node: any, test: (node: any) => boolean): any => test(node) ? node : (node.childNodes ?? []).map((child: any) => find(child, test)).find(Boolean);
+  const hasAttr = (node: any, name: string) => node.attrs?.some((attr: any) => attr.name === name);
+  const attrValue = (node: any, name: string) => node.attrs.find((attr: any) => attr.name === name)?.value;
+  const pathRadios = (html: string) => {
+    const found: { value: string; checked: boolean }[] = [];
+    const visit = (node: any) => {
+      if (node.tagName === 'input' && attrValue(node, 'name') === 'path') found.push({ value: attrValue(node, 'value'), checked: hasAttr(node, 'checked') });
+      for (const child of node.childNodes ?? []) visit(child);
+    };
+    visit(parse(html)); return found;
+  };
+  const progress = (html: string): { hidden: boolean; label: string }[] => find(parse(html), node => hasAttr(node, 'data-intake-progress')).childNodes
+    .filter((node: any) => node.tagName === 'li').map((item: any) => ({ hidden: hasAttr(item, 'hidden'), label: textOf(item) }));
+  const steps = (html: string) => {
+    const found: string[] = [];
+    const visit = (node: any) => { if (node.tagName === 'section' && hasAttr(node, 'data-step')) found.push(attrValue(node, 'data-step')); for (const child of node.childNodes ?? []) visit(child); };
+    visit(parse(html)); return found;
+  };
+
+  const first = await render('');
+  expect(first).toContain('Start a project · Kazon Wilson'); expect(first).toContain('Share a short project brief for Kazon Wilson to review.');
+  expect(first).toContain('Back to Work with me'); expect(first).not.toContain('Back to Software');
+  expect(first).toContain('data-brief-kicker>Project brief</p>');
+  for (const copy of ['A site people can read on a phone and act on.', 'An app people open in a browser, on a phone or a computer.', 'A tool that takes manual steps out of a task your team repeats.', 'Not sure which? Pick the closest. I’ll suggest the right fit when I reply.']) expect(first).toContain(copy);
+  expect(pathRadios(first)).toEqual([{ value: 'website', checked: false }, { value: 'webapp', checked: false }, { value: 'workflow', checked: false }]);
+  expect(progress(first).filter(item => !item.hidden)).toHaveLength(7); expect(progress(first)[0].label).toBe('Question 1 of 7');
+  expect(steps(first)).toEqual(['0', '1', '2', '3', '4', '5', '6', '7', '8']);
+  expect(first).toContain('What do you have today?'); expect(first).toContain('Who will keep it up to date?');
+  expect(find(parse(first), node => hasAttr(node, 'data-timing-hint')).attrs.some((attr: any) => attr.name === 'hidden')).toBe(true);
+
+  const website = await render('?path=website');
+  expect(website).toContain('data-brief-kicker>Website brief</p>');
+  expect(pathRadios(website)).toEqual([{ value: 'website', checked: true }, { value: 'webapp', checked: false }, { value: 'workflow', checked: false }]);
+  expect(progress(website).filter(item => !item.hidden)).toHaveLength(8); expect(progress(website)[0].label).toBe('Question 1 of 8');
+  expect(progress(website)[7].hidden).toBe(false);
+
+  const legacy = await render('?path=idea');
+  expect(legacy).toContain('data-brief-kicker>Web app brief</p>'); expect(legacy).not.toContain('value="idea"');
+  expect(pathRadios(legacy)).toEqual([{ value: 'website', checked: false }, { value: 'webapp', checked: true }, { value: 'workflow', checked: false }]);
+  expect(progress(legacy).filter(item => !item.hidden)).toHaveLength(7);
 });
 
 it('renders each owner brief outcome and gates uncertain retry at one minute', async () => {
@@ -1337,7 +1385,7 @@ it('renders the AI disclosure beside both answer boxes and the dated retention n
     expect(output).toContain('href="/privacy#software-briefs"'); expect(output).toContain('Suggestions are off.'); expect(output).toContain('Turn off');
   }
   const notice = await container.renderToString(privacy, { request:new Request('https://thesuperhuman.us/privacy') });
-  expect(notice).toContain('Updated October 10, 2026'); expect(notice).toContain('id="software-briefs"');
+  expect(notice).toContain('Updated October 19, 2026'); expect(notice).toContain('id="software-briefs"');
   expect(notice).toContain('a counter derived from your IP address, kept for up to two days');
 });
 

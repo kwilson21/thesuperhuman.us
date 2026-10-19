@@ -4,7 +4,7 @@ vi.mock('~/scripts/brief-suggestion-pass', () => ({ setupSuggestionPass: () => a
 class Node extends EventTarget {
   dataset: Record<string, string> = {}; attrs: Record<string, string> = {}; hidden = false; disabled = false;
   name = ''; value = ''; checked = false; type = ''; required = false; maxLength = -1; textContent = ''; placeholder = ''; scrollTop = 0; style = { height: '' }; offsetHeight = 200; clientHeight = 198; scrollHeight = 198;
-  selectionStart = 0; selectionEnd = 0; children: Node[] = []; parentElement!: Node; section!: Node; nodes: Record<string, Node> = {};
+  selectionStart = 0; selectionEnd = 0; children: Node[] = []; parentElement!: Node; section!: Node; nodes: Record<string, Node> = {}; inputs: Node[] = [];
   focus = vi.fn();
   getAttribute(key: string) { return key === 'name' ? this.name : this.attrs[key] ?? null; }
   setAttribute(key: string, value: string) { this.attrs[key] = value; } removeAttribute(key: string) { delete this.attrs[key]; }
@@ -12,40 +12,51 @@ class Node extends EventTarget {
   contains(node: Node) { return Object.values(this.nodes).includes(node); }
   closest() { return this.section; }
   querySelector(selector: string): any { return this.nodes[selector] ?? null; }
-  querySelectorAll(selector: string): Node[] { return selector === '[data-form-error]' ? Object.entries(this.nodes).filter(([key]) => key.startsWith('[data-form-error=')).map(([, value]) => value) : []; }
+  querySelectorAll(selector: string): Node[] {
+    if (selector === 'input, textarea') return this.inputs;
+    return selector === '[data-form-error]' ? Object.entries(this.nodes).filter(([key]) => key.startsWith('[data-form-error=')).map(([, value]) => value) : [];
+  }
   setSelectionRange(start: number, end: number) { this.selectionStart = start; this.selectionEnd = end; }
   checkValidity() { return (!this.required || !!this.value) && (this.type !== 'email' || /.+@.+\..+/.test(this.value)) && (this.type !== 'number' || this.value === '' || Number(this.value) >= 0); }
 }
 class Input extends Node {} class Textarea extends Node {}
-let form: Node & { elements: any }, steps: Node[], controls: Node[], store: Map<string, string>;
+let form: Node & { elements: any }, steps: Node[], controls: Node[], store: Map<string, string>, dots: Node[], kicker: Node;
 const make = (name = '', type = '', value = '') => { const node = new Input(); Object.assign(node, { name, type, value }); return node; };
 function fire(node: Node, event: string, props: Record<string, unknown> = {}) { const message = new Event(event, { cancelable: true }); Object.assign(message, props); node.dispatchEvent(message); return message; }
 function fill(name: string, value: string) { const node = controls.find(node => node.name === name)!; node.value = value; node.setSelectionRange(value.length, value.length); fire(node, 'input'); fire(form, 'input'); return node; }
+const field = (name: string) => controls.find(node => node.name === name)!;
 function click(selector: string) { fire(form.nodes[selector], 'click'); }
 function choose(name: string, value: string) { const node = controls.find(node => node.name === name && node.value === value)!; controls.filter(node => node.name === name).forEach(node => node.checked = node.value === value); fire(form, 'input'); const message = new Event('change'); Object.defineProperty(message, 'target', { value: node }); form.dispatchEvent(message); }
 const current = () => steps.findIndex(node => !node.hidden);
+const backToStart = () => { while (current() > 0) click('[data-back]'); };
+const visibleDots = () => dots.map(item => item.hidden);
 async function setup(requestedPath?: string) {
-  form = new Node() as any; form.dataset.available = 'false'; steps = Array.from({ length: 7 }, () => new Node()); controls = [];
+  form = new Node() as any; form.dataset.available = 'false'; steps = Array.from({ length: 9 }, () => new Node()); controls = [];
   for (const section of steps) section.nodes.h1 = new Node();
-  for (const [index, key] of [[1, 'today'], [2, 'firstResult']] as const) {
-    const section = steps[index], box = new Textarea(); box.name = key; box.required = index === 1; box.section = section; controls.push(box);
-    for (const selector of ['[data-accept-hint]', '[data-answer-label]', '[data-question-hint]', '[data-accept]', '[data-suggestions-toggle]', '[data-suggestions-disclosure]', '[data-suggestions-off]', '[data-ghost-prefix]', '[data-ghost-text]']) section.nodes[selector] = new Node();
+  for (const index of [1, 2]) {
+    const section = steps[index], box = new Textarea(); box.name = ''; box.required = index === 1; box.section = section; controls.push(box);
+    for (const selector of ['[data-accept-hint]', '[data-answer-label]', '[data-question-hint]', '[data-question-footnote]', '[data-accept]', '[data-suggestions-toggle]', '[data-suggestions-disclosure]', '[data-suggestions-off]', '[data-ghost-prefix]', '[data-ghost-text]']) section.nodes[selector] = new Node();
     section.nodes['[data-ghost-prefix]'].parentElement = new Node();
-    section.nodes['[data-answer]'] = box; section.nodes.textarea = box; section.nodes['input, textarea'] = box;
+    section.nodes['[data-answer]'] = box; section.nodes.textarea = box; section.inputs = [box];
     section.nodes['[data-form-error]'] = new Node();
   }
-  controls.push(make('path', 'radio', 'workflow'), make('path', 'radio', 'idea'), make('timing', 'radio', 'flexible'), make('timing', 'radio', 'date'), make('timing', 'radio', 'asap'), make('timingDate', 'date'), make('budgetNote', 'number'), make('name'), make('email', 'email'), make('company'));
+  // Website-only screens: the link and notes (no suggestions) and who keeps it up to date.
+  const website = steps[7], currentUrl = make('currentUrl', 'url'), existing = new Textarea(); existing.name = 'existing';
+  const updates = ['self', 'help', 'unsure'].map(value => make('updates', 'radio', value));
+  website.inputs = [currentUrl, existing]; steps[8].inputs = updates;
+  controls.push(make('path', 'radio', 'website'), make('path', 'radio', 'webapp'), make('path', 'radio', 'workflow'), make('timing', 'radio', 'flexible'), make('timing', 'radio', 'date'), make('timing', 'radio', 'asap'), make('timingDate', 'date'), make('budgetNote', 'number'), make('name'), make('email', 'email'), make('company'), currentUrl, existing, ...updates);
   controls.find(node => node.name === 'timing')!.checked = true;
   controls.filter(node => node.name === 'path').forEach(node => node.checked = node.value === requestedPath);
-  steps[4].nodes['input, textarea'] = controls.find(node => node.name === 'budgetNote')!;
-  for (const key of ['[data-next]', '[data-back]', '[type=submit]', '[data-form-status]', '[data-send-reassurance]', '[data-review]', '[data-date-field]']) form.nodes[key] = new Node();
+  steps[4].inputs = [controls.find(node => node.name === 'budgetNote')!];
+  for (const key of ['[data-next]', '[data-back]', '[type=submit]', '[data-form-status]', '[data-send-reassurance]', '[data-review]', '[data-date-field]', '[data-timing-hint]']) form.nodes[key] = new Node();
   form.nodes['button[type="submit"]'] = form.nodes['[type=submit]'];
-  const skips = [2, 4].map(i => { const node = new Node(); steps[i].nodes['[data-skip]'] = node; return node; });
+  const skips = [2, 4, 7].map(i => { const node = new Node(); steps[i].nodes['[data-skip]'] = node; return node; });
   for (const node of controls) { const error = new Node(); error.dataset.formError = node.name; form.nodes[`[data-form-error="${node.name}"]`] = error; }
   form.querySelector = (selector: string): any => {
+    // A question's error paragraph follows the question it is configured for.
     const match = selector.match(/^\[data-form-error="(.+)"\]$/);
-    if (match && ['today', 'idea', 'firstResult', 'firstVersion'].includes(match[1])) return steps[['today', 'idea'].includes(match[1]) ? 1 : 2].nodes['[data-form-error]'];
-    return form.nodes[selector] ?? null;
+    const remapped = match ? steps.map(node => node.nodes['[data-form-error]']).find(error => error?.dataset.formError === match[1]) : undefined;
+    return remapped ?? form.nodes[selector] ?? null;
   };
   form.querySelectorAll = (selector: string) => {
     if (selector === 'input, textarea, button') return [...controls, form.nodes['[data-back]'], form.nodes['[data-next]'], form.nodes['[type=submit]'], ...skips, ...form.nodes['[data-review]'].children.flatMap(node => node.children).filter(node => node.type === 'button')];
@@ -63,7 +74,10 @@ async function setup(requestedPath?: string) {
   vi.stubGlobal('FormData', class { get(name: string) { return controls.find(node => node.name === name && !node.disabled && (node.type !== 'radio' || node.checked))?.value ?? null; } });
   vi.stubGlobal('window', new EventTarget());
   vi.stubGlobal('MutationObserver', class { observe() {} });
-  vi.stubGlobal('document', { querySelector: () => null, querySelectorAll: () => [], getElementById: () => new Node(), createElement: () => new Node(), createTextNode: () => new Node() });
+  // The progress dots mirror the page: eight items, each with a visually hidden label.
+  dots = Array.from({ length: 8 }, () => { const item = new Node(); item.nodes['.sr-only'] = new Node(); return item; });
+  kicker = new Node();
+  vi.stubGlobal('document', { querySelector: (selector: string) => selector === '[data-brief-kicker]' ? kicker : null, querySelectorAll: (selector: string) => selector === '.intake-progress li' ? dots : [], getElementById: () => new Node(), createElement: () => new Node(), createTextNode: () => new Node() });
   vi.stubGlobal('localStorage', { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => store.set(key, value), removeItem: (key: string) => store.delete(key) });
   vi.stubGlobal('fetch', vi.fn(async () => Response.json({ suggestion: ' in a spreadsheet' })));
   const { setupSoftwareInquiry } = await import('~/scripts/software-inquiry'); setupSoftwareInquiry(form as any);
@@ -84,8 +98,8 @@ it('enforces required answers, traverses all questions, Back and individual summ
   fire(rows[3].children[1], 'click'); expect(current()).toBe(1); expect(steps[1].nodes.h1.focus).toHaveBeenCalled();
 });
 it('restores untrimmed answers, step and identity and supports keyboard continuation', async () => {
-  choose('path', 'idea'); fill('idea', 'An idea with space '); const saved = JSON.parse(store.get('software-brief-draft')!);
-  await setup(); expect(current()).toBe(1); expect(controls.find(node => node.name === 'idea')!.value).toBe('An idea with space ');
+  choose('path', 'webapp'); fill('appGoal', 'An idea with space '); const saved = JSON.parse(store.get('software-brief-draft')!);
+  await setup(); expect(current()).toBe(1); expect(field('appGoal').value).toBe('An idea with space ');
   fire(form, 'keydown', { ctrlKey: true, key: 'Enter' }); expect(current()).toBe(2);
   expect(JSON.parse(store.get('software-brief-draft')!).submissionId).toBe(saved.submissionId);
 });
@@ -116,7 +130,18 @@ it('keeps writing with unavailable browser storage', async () => {
   await setup(); vi.stubGlobal('localStorage', { getItem: () => { throw new Error(); }, setItem: () => { throw new Error(); } }); choose('path', 'workflow'); fill('today', 'We track clients'); click('[data-next]'); expect(current()).toBe(2);
 });
 it('discloses browser drafts and Workers AI accurately, with reassurance only at send', () => {
-  const privacy = readFileSync('src/pages/privacy.astro', 'utf8'); expect(privacy).toContain("isn't used to train models without your explicit consent"); expect(privacy).toContain('The name, email and company fields are never sent for suggestions. Anything you type in an answer box is sent for suggestions.'); expect(privacy).toContain('You can turn suggestions off'); expect(privacy).toContain('in your browser'); expect(privacy).toContain('strictly necessary security cookie that expires after 30 minutes'); expect(privacy).toContain('Updated October 10, 2026'); expect(privacy).toContain('kept for up to two days'); expect(privacy).not.toContain('approximate counter');
+  const privacy = readFileSync('src/pages/privacy.astro', 'utf8');
+  for (const sentence of [
+    "isn't used to train models without your explicit consent",
+    'The name, email and company fields are never sent for suggestions.',
+    'Neither are a website brief’s link and notes on what you already have, which show no suggestions.',
+    'Anything you type in an answer box is sent for suggestions.',
+    'You can turn suggestions off', 'in your browser', 'strictly necessary security cookie that expires after 30 minutes',
+    'Updated October 19, 2026', 'kept for up to two days',
+    'Project brief suggestions use', 'While you write a project brief,',
+    'Project briefs, including website briefs, include the project answers you enter, an optional link to your current website, your name, email and optional company, and the timing and optional budget you choose to share. I use them to review your project, including any current site you link to, and reply to you.',
+  ]) expect(privacy).toContain(sentence);
+  expect(privacy).not.toContain('Software brief suggestions use'); expect(privacy).not.toContain('While you write a software brief'); expect(privacy).not.toContain('Updated October 10, 2026'); expect(privacy).not.toContain('approximate counter');
   expect(readFileSync('src/pages/software/start.astro', 'utf8').match(/No booking or payment at this stage\./g)).toHaveLength(1);
 });
 
@@ -142,20 +167,20 @@ it('discards a late suggestion after navigation', async () => {
 
 it('preserves both paths across switching and refresh, but sends only the selected answers', async () => {
   choose('path', 'workflow'); fill('today', 'Workflow writing '); fill('firstResult', 'Workflow result');
-  choose('path', 'idea'); expect(controls.find(node => node.name === 'idea')!.value).toBe('');
-  fill('idea', 'Idea writing '); fill('firstVersion', 'Idea version');
+  choose('path', 'webapp'); expect(field('appGoal').value).toBe('');
+  fill('appGoal', 'Web app writing '); fill('firstVersion', 'Web app version');
   await setup(); choose('path', 'workflow');
-  expect(controls.find(node => node.name === 'today')!.value).toBe('Workflow writing ');
-  expect(controls.find(node => node.name === 'firstResult')!.value).toBe('Workflow result');
-  choose('path', 'idea'); expect(controls.find(node => node.name === 'idea')!.value).toBe('Idea writing ');
-  expect(controls.find(node => node.name === 'firstVersion')!.value).toBe('Idea version');
+  expect(field('today').value).toBe('Workflow writing ');
+  expect(field('firstResult').value).toBe('Workflow result');
+  choose('path', 'webapp'); expect(field('appGoal').value).toBe('Web app writing ');
+  expect(field('firstVersion').value).toBe('Web app version');
   click('[data-next]'); click('[data-next]'); click('[data-next]'); click('[data-next]');
   fill('name', 'Alex'); fill('email', 'alex@example.com'); click('[data-next]');
   form.dataset.available = 'true'; form.nodes['[type=submit]'].disabled = false;
   fire(form, 'submit');
   await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
   const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
-  expect(body.idea).toBe('Idea writing'); expect(body.firstVersion).toBe('Idea version');
+  expect(body.appGoal).toBe('Web app writing'); expect(body.firstVersion).toBe('Web app version');
   expect(body).not.toHaveProperty('today'); expect(body).not.toHaveProperty('firstResult');
 });
 it.each(['storage', 'submit'])('notices a sent draft through %s before sending with a new identity', async trigger => {
@@ -299,25 +324,25 @@ it('leaves normal Tab navigation alone without a suggestion or with a selection'
   expect(steps[1].nodes['[data-accept-hint]'].hidden).toBe(true);
 });
 
-it.each(['idea', 'workflow'])('explicit %s entry restores its answers at the first question over another saved path', async requested => {
+it.each(['webapp', 'workflow'])('explicit %s entry restores its answers at the first question over another saved path', async requested => {
   choose('path', 'workflow'); fill('today', 'Workflow answer'); fill('firstResult', 'Workflow result');
-  choose('path', 'idea'); fill('idea', 'Idea answer'); fill('firstVersion', 'Idea version');
-  choose('path', requested === 'idea' ? 'workflow' : 'idea');
+  choose('path', 'webapp'); fill('appGoal', 'Web app answer'); fill('firstVersion', 'Web app version');
+  choose('path', requested === 'webapp' ? 'workflow' : 'webapp');
   click('[data-next]'); click('[data-next]');
   await setup(requested);
   expect(current()).toBe(1);
   expect(controls.find(node => node.name === 'path' && node.checked)!.value).toBe(requested);
-  expect(steps[1].nodes['[data-answer]'].value).toBe(requested === 'idea' ? 'Idea answer' : 'Workflow answer');
-  expect(steps[2].nodes['[data-answer]'].value).toBe(requested === 'idea' ? 'Idea version' : 'Workflow result');
+  expect(steps[1].nodes['[data-answer]'].value).toBe(requested === 'webapp' ? 'Web app answer' : 'Workflow answer');
+  expect(steps[2].nodes['[data-answer]'].value).toBe(requested === 'webapp' ? 'Web app version' : 'Workflow result');
 });
 it('opens an explicit path at its first question with no draft', async () => {
-  await setup('idea'); expect(current()).toBe(1);
+  await setup('webapp'); expect(current()).toBe(1);
 });
 it('clears remapped question errors and invalid markers when switching paths', () => {
-  choose('path', 'workflow'); click('[data-next]');
+  choose('path', 'webapp'); click('[data-next]');
   expect(steps[1].nodes['[data-form-error]'].hidden).toBe(false);
   expect(steps[1].nodes['[data-answer]'].getAttribute('aria-invalid')).toBe('true');
-  click('[data-back]'); choose('path', 'idea');
+  click('[data-back]'); choose('path', 'workflow');
   expect(steps[1].nodes['[data-form-error]'].hidden).toBe(true);
   expect(steps[1].nodes['[data-form-error]'].textContent).toBe('');
   expect(steps[1].nodes['[data-answer]'].getAttribute('aria-invalid')).toBeNull();
@@ -334,8 +359,8 @@ it('grows the answer to fit typed text and the tappable suggestion without scrol
   expect(css).toMatch(/brief-answer textarea\{[^}]*overflow:hidden/);
   expect(css).not.toContain('scrollbar-gutter');
 });
-it.each(['idea', 'workflow'])('refresh of the same explicit %s path restores the saved step', async requested => {
-  choose('path', requested); fill(requested === 'idea' ? 'idea' : 'today', 'A saved answer');
+it.each(['webapp', 'workflow'])('refresh of the same explicit %s path restores the saved step', async requested => {
+  choose('path', requested); fill(requested === 'webapp' ? 'appGoal' : 'today', 'A saved answer');
   click('[data-next]'); click('[data-next]');
   await setup(requested); expect(current()).toBe(3);
 });
@@ -357,9 +382,9 @@ it('shrinks the reused answer box when switching to a shorter answer', () => {
   choose('path', 'workflow'); const box = steps[1].nodes['[data-answer]'];
   modelAnswerHeight(box);
   fill('today', 'Long answer '.repeat(20)); expect(box.style.height).toBe('302px');
-  click('[data-back]'); choose('path', 'idea'); fill('idea', 'Short');
+  click('[data-back]'); choose('path', 'webapp'); fill('appGoal', 'Short');
   click('[data-back]'); choose('path', 'workflow'); expect(box.style.height).toBe('302px');
-  click('[data-back]'); choose('path', 'idea');
+  click('[data-back]'); choose('path', 'webapp');
   expect(box.value).toBe('Short'); expect(box.style.height).toBe('200px');
 });
 it('fits the full suggestion after a grown answer shrinks', async () => {
@@ -420,4 +445,117 @@ it.each(['success', 'server failure', 'network failure'])('locks editing during 
     click('[data-next]'); fill('today', 'Corrected answer');
     expect(JSON.parse(store.get('software-brief-draft')!).answers.today).toBe('Corrected answer');
   }
+});
+
+// Website and web app briefs.
+it('starts a project brief on its first screen and labels it as a project brief', () => {
+  expect(kicker.textContent).toBe('Project brief'); expect(visibleDots()).toEqual([false, false, false, false, false, false, false, true]);
+});
+it('walks a website brief through its own screens, the link and notes, updates, timing and review', () => {
+  choose('path', 'website');
+  expect(kicker.textContent).toBe('Website brief'); expect(visibleDots()).toEqual(Array(8).fill(false));
+  expect(dots[0].nodes['.sr-only'].textContent).toBe('Question 1 of 8'); expect(dots[1].attrs['aria-current']).toBe('step'); expect(dots[0].attrs['aria-current']).toBeUndefined();
+  expect(current()).toBe(1);
+  expect(steps[1].nodes.h1.textContent).toBe("What's the website for?");
+  expect(steps[1].nodes['[data-question-footnote]'].textContent).toBe('Plain language is fine. We’ll work out the design and technical details together. Please leave out passwords and access details.');
+  click('[data-next]'); expect(current()).toBe(1);
+  expect(steps[1].nodes['[data-form-error]'].textContent).toBe('This answer is required.');
+  fill('purpose', 'A site for my pottery studio.'); click('[data-next]'); expect(current()).toBe(7);
+  expect(dots[2].attrs['aria-current']).toBe('step'); expect(dots[2].nodes['.sr-only'].textContent).toBe('Question 3 of 8');
+  fill('currentUrl', 'yourstudio.com'); click('[data-next]'); expect(current()).toBe(7);
+  expect(form.nodes['[data-form-error="currentUrl"]'].textContent).toBe('Start the link with https:// or http://.');
+  fill('currentUrl', 'https://yourstudio.com'); fill('existing', 'A logo and about 30 class photos.'); click('[data-next]'); expect(current()).toBe(8);
+  click('[data-next]'); expect(current()).toBe(8);
+  expect(form.nodes['[data-form-error="updates"]'].textContent).toBe('Choose one.');
+  choose('updates', 'self'); click('[data-next]'); expect(current()).toBe(3);
+  expect(form.nodes['[data-timing-hint]'].hidden).toBe(false);
+  click('[data-next]'); expect(current()).toBe(4);
+  fire(steps[4].nodes['[data-skip]'], 'click'); expect(current()).toBe(5);
+  fill('name', 'Alex'); fill('email', 'alex@example.com'); click('[data-next]'); expect(current()).toBe(6);
+  const rows = form.nodes['[data-review]'].children;
+  const text = rows.map(node => node.textContent).join(' ');
+  expect(text).toContain('Website design'); expect(text).toContain('Me or someone on my team'); expect(text).toContain('What you already have');
+  const edit = rows.flatMap(node => node.children).find(node => node.attrs['aria-label'] === 'Edit Current website')!;
+  fire(edit, 'click'); expect(current()).toBe(7); expect(steps[7].nodes.h1.focus).toHaveBeenCalled();
+});
+it('skips the website link and notes together and moves on to who keeps it up to date', () => {
+  choose('path', 'website'); fill('purpose', 'A site for my pottery studio.'); click('[data-next]');
+  fill('currentUrl', 'https://yourstudio.com'); fill('existing', 'A logo.');
+  fire(steps[7].nodes['[data-skip]'], 'click');
+  expect(current()).toBe(8);
+  expect(field('currentUrl').value).toBe(''); expect(field('existing').value).toBe('');
+});
+it('sends only the answers for the chosen path, website answers for a website brief', async () => {
+  choose('path', 'website'); fill('purpose', 'A site for my pottery studio.'); click('[data-next]');
+  fill('currentUrl', 'https://yourstudio.com'); fill('existing', 'A logo.'); click('[data-next]');
+  choose('updates', 'self'); click('[data-next]'); click('[data-next]');
+  fire(steps[4].nodes['[data-skip]'], 'click'); fill('name', 'Alex'); fill('email', 'alex@example.com'); click('[data-next]');
+  expect(current()).toBe(6);
+  form.dataset.available = 'true'; form.nodes['[type=submit]'].disabled = false;
+  fire(form, 'submit');
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+  const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
+  expect(body).toMatchObject({ path: 'website', purpose: 'A site for my pottery studio.', currentUrl: 'https://yourstudio.com', existing: 'A logo.', updates: 'self' });
+  for (const key of ['today', 'firstResult', 'appGoal', 'firstVersion', 'idea']) expect(body).not.toHaveProperty(key);
+});
+it('sends no website answers for a workflow brief, even after website answers were typed', async () => {
+  choose('path', 'website'); fill('purpose', 'A site for my pottery studio.'); fill('currentUrl', 'https://yourstudio.com'); fill('existing', 'A logo.');
+  backToStart(); choose('path', 'workflow'); expect(current()).toBe(1);
+  fill('today', 'We track clients in a spreadsheet.'); click('[data-next]'); expect(current()).toBe(2);
+  fire(steps[2].nodes['[data-skip]'], 'click'); expect(current()).toBe(3);
+  click('[data-next]'); fire(steps[4].nodes['[data-skip]'], 'click');
+  fill('name', 'Alex'); fill('email', 'alex@example.com'); click('[data-next]'); expect(current()).toBe(6);
+  form.dataset.available = 'true'; form.nodes['[type=submit]'].disabled = false;
+  fire(form, 'submit');
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+  const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
+  expect(body).toMatchObject({ path: 'workflow', today: 'We track clients in a spreadsheet.' });
+  for (const key of ['purpose', 'currentUrl', 'existing', 'updates', 'appGoal', 'firstVersion']) expect(body).not.toHaveProperty(key);
+});
+it('keeps website-only answers through a path switch and a refresh', async () => {
+  choose('path', 'website'); fill('purpose', 'A site for my pottery studio.'); click('[data-next]');
+  fill('currentUrl', 'https://yourstudio.com'); fill('existing', 'A logo.'); click('[data-next]'); choose('updates', 'help');
+  backToStart(); choose('path', 'workflow'); backToStart(); choose('path', 'website');
+  expect(field('purpose').value).toBe('A site for my pottery studio.');
+  expect(field('currentUrl').value).toBe('https://yourstudio.com'); expect(field('existing').value).toBe('A logo.');
+  expect(controls.find(node => node.name === 'updates' && node.checked)!.value).toBe('help');
+  await setup();
+  expect(controls.find(node => node.name === 'path' && node.checked)!.value).toBe('website');
+  expect(field('purpose').value).toBe('A site for my pottery studio.');
+  expect(field('currentUrl').value).toBe('https://yourstudio.com'); expect(field('existing').value).toBe('A logo.');
+  expect(controls.find(node => node.name === 'updates' && node.checked)!.value).toBe('help');
+});
+it('shows the web app brief with seven screens, its own first question and no timing hint', () => {
+  choose('path', 'webapp');
+  expect(kicker.textContent).toBe('Web app brief'); expect(visibleDots()).toEqual([false, false, false, false, false, false, false, true]);
+  expect(dots[0].nodes['.sr-only'].textContent).toBe('Question 1 of 7');
+  expect(steps[1].nodes.h1.textContent).toBe('What should the app let people do?');
+  expect(steps[1].nodes['[data-question-footnote]'].textContent).toBe('Plain language is fine. We’ll work out the technical details together. Please leave out passwords, access details and real customer data.');
+  fill('appGoal', 'Let my students book and pay for lessons.'); click('[data-next]'); expect(current()).toBe(2);
+  expect(steps[2].nodes.h1.textContent).toBe('Have a first version in mind?');
+  click('[data-next]'); expect(current()).toBe(3);
+  expect(form.nodes['[data-timing-hint]'].hidden).toBe(true);
+});
+it('restores an old idea draft as a web app brief with its idea as the first answer', async () => {
+  store.set('software-brief-draft', JSON.stringify({ answers: { path: 'idea', idea: 'Old idea text' }, step: 1 }));
+  await setup();
+  expect(controls.find(node => node.name === 'path' && node.checked)!.value).toBe('webapp');
+  expect(field('appGoal').value).toBe('Old idea text');
+  expect(current()).toBe(1); expect(kicker.textContent).toBe('Web app brief');
+});
+it.each([
+  ['website', "I'll look at what you have and reply with a fixed-price first milestone, or a question or two."],
+  ['workflow', 'I reply with a fixed-price first milestone, or a question or two.'],
+])('sets the receipt first step for a %s brief', async (path, line) => {
+  const firstStep = new Node(); firstStep.textContent = 'I reply with a fixed-price first milestone, or a question or two.';
+  vi.stubGlobal('document', { querySelector: (selector: string) => selector === '[data-receipt-first-step]' ? firstStep : selector === '#software-inquiry' ? null : new Node() });
+  const { renderSoftwareReceipt } = await import('~/scripts/software-inquiry');
+  renderSoftwareReceipt({ brief: { name: 'Alex', email: 'alex@example.com' }, clientCopyStatus: 'sent' }, path);
+  expect(firstStep.textContent).toBe(line);
+});
+it('sends the web app first answer as earlier context for the second question', async () => {
+  vi.useFakeTimers(); choose('path', 'webapp');
+  fill('appGoal', 'Let my students book and pay for lessons.'); click('[data-next]');
+  fill('firstVersion', 'A booking page with a calendar'); await vi.advanceTimersByTimeAsync(400);
+  expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string)).toEqual({ question: 'Have a first version in mind?', text: 'A booking page with a calendar', earlier: { path: 'webapp', appGoal: 'Let my students book and pay for lessons.' } });
 });

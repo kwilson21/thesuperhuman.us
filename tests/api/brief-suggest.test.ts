@@ -43,9 +43,23 @@ it.each([
   { ...input, name: 'Private' }, { ...input, earlier: { email: 'private@example.com' } },
   { ...input, text: '' }, { ...input, text: 'one two' }, { ...input, text: 'x'.repeat(2001) },
   { ...input, question: 'Who should I reply to?' },
+  { ...input, earlier: { path: 'website', currentUrl: 'https://yourstudio.com' } },
+  { ...input, earlier: { path: 'website', existing: 'A logo and about 30 class photos.' } },
+  { ...input, earlier: { path: 'webapp', updates: 'self' } },
+  { ...input, question: 'Have a first version in mind?', earlier: { path: 'webapp', appGoal: 'x'.repeat(1001) } },
 ])('silently rejects invalid or private payloads', async body => {
   expect(await (await POST(context(body))).json()).toEqual({ suggestion: '' });
   expect(run).not.toHaveBeenCalled();
+});
+it.each([
+  ["What's the website for?", { path: 'website', purpose: 'A pottery studio site for classes.' }],
+  ['What should the app let people do?', { path: 'webapp' }],
+  ['Have a first version in mind?', { path: 'webapp', appGoal: 'Let students book and pay for lessons.' }],
+  ["What's the idea?", { path: 'idea' }],
+  ['What happens today?', { path: 'workflow', today: 'We track clients in a spreadsheet.' }],
+])('accepts the brief question %s with its earlier answers', async (question, earlier) => {
+  expect(await (await POST(context({ question, text: 'We track new clients', earlier }))).json()).toEqual({ suggestion: ' in a shared spreadsheet' });
+  expect(run).toHaveBeenCalledOnce();
 });
 it.each([{ AI: undefined }, { MUSIC_DB: undefined }, { BRIEF_SUGGEST_RATE_LIMIT: undefined }, { SOFTWARE_SUGGESTIONS_ENABLED: 'false' }])('silently disables unavailable suggestions', async env => {
   expect(await (await POST(context(input, env))).json()).toEqual({ suggestion: '' });
