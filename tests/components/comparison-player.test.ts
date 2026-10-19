@@ -28,7 +28,7 @@ it('supports a compact homepage variant while keeping the same synchronized, acc
   expect(home).not.toContain("Start your song");
 });
 
-it('places compact playback beside the waveform and seeking on a separate track', () => {
+it('places compact playback beside the waveform and seeks from both the track and the waveform', () => {
   expect(component).toContain('data-compact-waveform');
   expect(component).toContain('data-waveform-before=');
   expect(component).toContain('data-waveform-after=');
@@ -45,4 +45,8 @@ it('places compact playback beside the waveform and seeking on a separate track'
   expect(component).toContain('.comparison-player--compact[data-initialized="true"]:not([data-audio-fallback="true"]) .compact-waveform-stage{display:grid}');
   expect(script.indexOf('media.forEach(audio => { audio.pause(); audio.controls = false; audio.hidden = true; });')).toBeLessThan(script.indexOf("root.dataset.initialized = 'true';"));
   expect(component).toContain('.comparison-player--compact .comparison-switch span{display:inline}');
+  expect(script).toContain("'.comparison-waveform, [data-compact-waveform]'");
+  expect(script).toContain('waveformSeekSeconds(');
+  expect(component).not.toContain('height:38px;color:var(--ink);pointer-events:none');
+  expect(component).toContain('.comparison-player[data-initialized="true"] .comparison-waveform,.comparison-player[data-initialized="true"] .compact-waveform{cursor:pointer}');
 });

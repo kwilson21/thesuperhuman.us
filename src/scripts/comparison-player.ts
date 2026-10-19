@@ -1,8 +1,8 @@
 import { ComparisonTransport } from './comparison-transport';
 import { registerMusicPlayer } from './music-playback';
-import { waveformGeometry } from '~/lib/waveform';
+import { waveformGeometry, waveformSeekSeconds } from '~/lib/waveform';
 
-export { waveformGeometry } from '~/lib/waveform';
+export { waveformGeometry, waveformSeekSeconds } from '~/lib/waveform';
 
 /** Load the comparison pair on demand; A/B and loudness never restart playback. */
 type AudioContextConstructor = new () => AudioContext;
@@ -123,11 +123,11 @@ export function setupComparisonPlayers() {
       transport?.seek(position); render();
     }
     seek.addEventListener('input', () => seekTo(Number(seek.value)));
-    root.querySelectorAll<SVGSVGElement>('.comparison-waveform').forEach(waveform => {
+    root.querySelectorAll<SVGSVGElement>('.comparison-waveform, [data-compact-waveform]').forEach(waveform => {
       waveform.addEventListener('click', event => {
         const bounds = waveform.getBoundingClientRect();
         if (!bounds.width) return;
-        seekTo((event.clientX - bounds.left) / bounds.width * (transport?.duration ?? Number(root.dataset.duration)));
+        seekTo(waveformSeekSeconds(event.clientX, bounds.left, bounds.width, transport?.duration ?? Number(root.dataset.duration)));
       });
     });
     volume?.addEventListener('input', applyVolume);

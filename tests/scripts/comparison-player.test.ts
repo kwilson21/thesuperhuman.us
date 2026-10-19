@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getAudioContextConstructor, setPlaybackAudioSession, waveformGeometry } from '../../src/scripts/comparison-player';
+import { getAudioContextConstructor, setPlaybackAudioSession, waveformGeometry, waveformSeekSeconds } from '../../src/scripts/comparison-player';
 
 describe('getAudioContextConstructor', () => {
   it('uses the prefixed Web Audio constructor exposed by mobile Safari', () => {
@@ -29,5 +29,19 @@ describe('waveformGeometry', () => {
       { y1: 17, y2: 47 },
       { y1: 2, y2: 62 },
     ]);
+  });
+});
+
+describe('waveformSeekSeconds', () => {
+  it('maps a click at the middle of the waveform to the middle of the track', () => {
+    expect(waveformSeekSeconds(200, 100, 200, 300)).toBe(150);
+  });
+
+  it('maps a click at the left edge to the start of the track', () => {
+    expect(waveformSeekSeconds(100, 100, 200, 300)).toBe(0);
+  });
+
+  it('returns 0 when the waveform has no width', () => {
+    expect(waveformSeekSeconds(200, 100, 0, 300)).toBe(0);
   });
 });
