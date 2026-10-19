@@ -125,12 +125,15 @@ export function setupComparisonPlayers() {
     }
     seek.addEventListener('input', () => seekTo(Number(seek.value)));
     root.querySelectorAll<HTMLElement>('.comparison-waveform-stage, .compact-waveform-frame').forEach(stage => {
-      let gesture: { startX: number; startY: number; scrubbing: boolean; resume: boolean; lastX?: number } | undefined;
+      let gesture: { startX: number; startY: number; scrubbing: boolean; resume: boolean; lastSeconds?: number } | undefined;
       const seekFromPointer = (event: PointerEvent) => {
         const bounds = stage.getBoundingClientRect();
         if (!bounds.width || !gesture) return;
-        seekTo(waveformSeekSeconds(event.clientX, bounds.left, bounds.width, transport?.duration ?? Number(root.dataset.duration)));
-        gesture.lastX = event.clientX;
+        const seconds = waveformSeekSeconds(event.clientX, bounds.left, bounds.width, transport?.duration ?? Number(root.dataset.duration));
+        // Pen pressure and drags held past an edge repeat a target time; re-seeking it would restart the audio.
+        if (seconds === gesture.lastSeconds) return;
+        seekTo(seconds);
+        gesture.lastSeconds = seconds;
         // A drag past the end parks the transport at its end without resuming, so play again once the pointer is back inside the track.
         if (gesture.resume && transport && !transport.playing && position < transport.duration) { transport.play(); render(); }
       };
@@ -147,13 +150,10 @@ export function setupComparisonPlayers() {
           if (!isWaveformScrub(event.pointerType, event.clientX - gesture.startX, event.clientY - gesture.startY)) return;
           gesture.scrubbing = true;
         }
-        // Pen pressure and tilt also fire pointermove without moving; re-seeking the same spot would restart the transport.
-        if (event.clientX === gesture.lastX) return;
         seekFromPointer(event);
       });
       stage.addEventListener('pointerup', event => {
-        // A scrubbing gesture has already seeked on its moves or pointerdown; only a touch tap seeks here.
-        if (!gesture || gesture.scrubbing || !stage.hasPointerCapture(event.pointerId)) return;
+        if (!gesture || !stage.hasPointerCapture(event.pointerId)) return;
         seekFromPointer(event);
       });
     });

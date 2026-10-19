@@ -85,7 +85,7 @@ it('keeps the compact played fill above the unplayed bars by source order', () =
 it('seeks once per gesture, keeps playback through a drag past the end, and leaves fallback players alone', () => {
   expect(script).toContain("root.dataset.audioFallback === 'true'");
   expect(script).toContain('scrubbing: isWaveformScrub(event.pointerType, 0, 0)');
-  expect(script).toContain('if (!gesture || gesture.scrubbing || !stage.hasPointerCapture(event.pointerId)) return;');
+  expect(script).toContain("      stage.addEventListener('pointerup', event => {\n        if (!gesture || !stage.hasPointerCapture(event.pointerId)) return;\n        seekFromPointer(event);\n      });");
   expect(script).toContain('resume: Boolean(transport?.playing)');
   expect(script).toContain('position < transport.duration');
   expect(script).toContain('transport.play()');
@@ -93,7 +93,9 @@ it('seeks once per gesture, keeps playback through a drag past the end, and leav
   expect(script).toContain('gesture.scrubbing = true');
 });
 
-it('skips pen pressure moves that leave the pointer in place so a resting pen does not restart playback', () => {
-  expect(script).toContain('if (event.clientX === gesture.lastX) return;');
-  expect(script).toContain('gesture.lastX = event.clientX;');
+it('seeks only when the target time changes, so pen pressure and clamped drags cannot restart playback', () => {
+  expect(script).toContain('const seconds = waveformSeekSeconds(');
+  expect(script).toContain('if (seconds === gesture.lastSeconds) return;');
+  expect(script).toContain('gesture.lastSeconds = seconds;');
+  expect(script.indexOf('if (seconds === gesture.lastSeconds) return;')).toBeLessThan(script.indexOf('seekTo(seconds);'));
 });
