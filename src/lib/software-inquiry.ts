@@ -47,10 +47,11 @@ export function currentSiteHref(value: unknown): string | null {
     return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname && !url.username && !url.password ? url.href : null;
   } catch { return null; }
 }
-// Four cases, in order: a failed web link is checked; a mistyped or other scheme (https//x.com, ftp://x) is named; a bare host, host:port or localhost gets https:// added; anything else (none, n/a) is checked or left empty.
+// Four cases, in order: a failed web link is checked; a mistyped or other scheme (https//x.com, ftp://x) is named, unless a digit or space follows the colon, which makes it label text (a:1, Website: x.com); a bare host, host:port or localhost gets https:// added; anything else (none, n/a, an email address) is checked or left empty.
+// The host pattern runs in linear time: dots split the labels and '@' is excluded, so an email address is not a host. Values over 2048 characters skip these checks, because max(2048) already reports them.
 const currentUrlMessage = (value: string) => /^https?:\/\//i.test(value) ? 'Check the link, or leave it empty.'
-  : /^https?\/\//i.test(value) || /^[a-z][a-z\d+.-]*:(?!\d)/i.test(value) ? 'Use https:// or http:// at the start of the link.'
-  : /^(\/\/)?([^\s\/:?#]+\.[^\s\/:?#]+|localhost)(:\d+)?([\/?#]\S*)?$/i.test(value) ? 'Add https:// to the start of the link.'
+  : /^https?\/\//i.test(value) || /^[a-z][a-z\d+.-]*:(?![\d\s])/i.test(value) ? 'Use https:// or http:// at the start of the link.'
+  : /^(\/\/)?([^\s\/:?#.@]+(\.[^\s\/:?#.@]+)+\.?|localhost)(:\d+)?([\/?#]\S*)?$/i.test(value) ? 'Add https:// to the start of the link.'
   : 'Check the link, or leave it empty.';
 const single = (max: number) => z.string().trim().max(max, `Keep this under ${max} characters.`);
 const required = (max: number) => single(max).min(1, 'This answer is required.');
@@ -65,7 +66,7 @@ const common = {
 const schema = z.discriminatedUnion('path', [
   z.object({ ...common, path: z.literal('workflow'), today: required(2000), audience: single(1000).default(''), firstResult: single(2000).default('') }),
   z.object({ ...common, path: z.literal('idea'), idea: required(1000), audienceToday: single(1000).default(''), firstVersion: single(1000).default(''), signal: single(500).default('') }),
-  z.object({ ...common, path: z.literal('website'), purpose: required(2000), currentUrl: single(2048).default('').refine(value => value === '' || currentSiteHref(value) !== null, value => ({ message: currentUrlMessage(value) })), existing: single(2000).default(''), updates: z.enum(['self', 'help', 'unsure'], { message: 'Choose one.' }) }),
+  z.object({ ...common, path: z.literal('website'), purpose: required(2000), currentUrl: single(2048).default('').refine(value => value.length > 2048 || value === '' || currentSiteHref(value) !== null, value => ({ message: currentUrlMessage(value) })), existing: single(2000).default(''), updates: z.enum(['self', 'help', 'unsure'], { message: 'Choose one.' }) }),
   z.object({ ...common, path: z.literal('webapp'), appGoal: required(1000), firstVersion: single(1000).default('') }),
 ]);
 export type SoftwareInput = z.infer<typeof schema>;

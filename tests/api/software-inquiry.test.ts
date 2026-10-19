@@ -459,6 +459,11 @@ it('validates website answers with the approved messages', () => {
     ['currentUrl', 'javascript:alert(1)', 'Use https:// or http:// at the start of the link.'], ['currentUrl', 'https:evil.com', 'Use https:// or http:// at the start of the link.'], ['currentUrl', 'https:/x.com', 'Use https:// or http:// at the start of the link.'],
     ['currentUrl', 'none', 'Check the link, or leave it empty.'], ['currentUrl', 'n/a', 'Check the link, or leave it empty.'], ['currentUrl', 'not yet', 'Check the link, or leave it empty.'],
     ['currentUrl', 'yourstudio.com and our Instagram', 'Check the link, or leave it empty.'], ['currentUrl', 'a:1', 'Check the link, or leave it empty.'],
+    ['currentUrl', 'kazon@example.com', 'Check the link, or leave it empty.'], ['currentUrl', 'a@b.com', 'Check the link, or leave it empty.'],
+    ['currentUrl', 'Website: yourstudio.com', 'Check the link, or leave it empty.'], ['currentUrl', 'Note: none', 'Check the link, or leave it empty.'],
+    ['currentUrl', 'a..b', 'Check the link, or leave it empty.'], ['currentUrl', '...', 'Check the link, or leave it empty.'],
+    ['currentUrl', '192.168.0.1:8080', 'Add https:// to the start of the link.'], ['currentUrl', 'café.example', 'Add https:// to the start of the link.'],
+    ['currentUrl', 'yourstudio.com.', 'Add https:// to the start of the link.'],
     ['currentUrl', 'https://studio.com/our classes', 'Check the link, or leave it empty.'], ['currentUrl', 'HTTPS://studio.com/our classes', 'Check the link, or leave it empty.'], ['currentUrl', 'https://', 'Check the link, or leave it empty.'],
     ['currentUrl', 'https://jordanclay.example\nSecond line', 'Use one line.'],
     ['currentUrl', `https://x.example/${'a'.repeat(2048)}`, 'Keep this under 2048 characters.'],
@@ -480,6 +485,17 @@ it('validates website answers with the approved messages', () => {
   for (const currentUrl of ['http://example.com', '', ' https://lead.example', 'HTTPS://Example.com/path']) expect(validateSoftwareInquiry({ ...site, currentUrl }).ok, currentUrl).toBe(true);
   expect(validateSoftwareInquiry({ ...site, currentUrl: '   ' })).toMatchObject({ ok: true, value: { currentUrl: '' } });
   expect(validateSoftwareInquiry({ ...site, currentUrl: undefined, existing: undefined }).ok).toBe(true);
+});
+
+it('answers an oversized current URL with the length limit alone, without running the link checks', () => {
+  const site = { ...base, path: 'website', purpose: 'A site for my pottery studio.', currentUrl: '', existing: '', updates: 'self' };
+  const timed = (currentUrl: string) => { const started = performance.now(); const result = validateSoftwareInquiry({ ...site, currentUrl }); return { result, elapsed: performance.now() - started }; };
+  const oversized = timed('.'.repeat(32000) + ':1x');
+  expect(oversized.result).toMatchObject({ ok: false, errors: { currentUrl: 'Keep this under 2048 characters.' } });
+  expect(oversized.elapsed).toBeLessThan(200);
+  const underCap = timed('.'.repeat(2040) + ':1x');
+  expect(underCap.result).toMatchObject({ ok: false, errors: { currentUrl: 'Check the link, or leave it empty.' } });
+  expect(underCap.elapsed).toBeLessThan(50);
 });
 
 it('keeps the web app goal required and bounded', () => {
