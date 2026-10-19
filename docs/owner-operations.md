@@ -56,7 +56,7 @@ If invoice creation fails, refresh the request before retrying. Stable Stripe id
 
 To stop new invoices, set `STRIPE_PAYMENTS_ENABLED=false` and deploy the reviewed configuration change. This does not erase payment history or disable signed status updates for invoices already sent.
 
-Software briefs appear in Requests and Today with the saved answers read only. They have separate question sets for workflow and idea paths. Fit review, clarification, offers and declines are described below.
+Software briefs appear in Requests and Today with the saved answers read only. Each path (Website design, Web app, Workflow automation) has its own question set; earlier idea briefs keep the name "Bring an idea to life" and their original questions. A website brief's current site opens in a new tab, and its fit review and offer editor show website reminders and examples. Fit review, clarification, offers and declines are described below.
 
 ## Retention
 
