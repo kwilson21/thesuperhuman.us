@@ -63,7 +63,6 @@ export function setupComparisonPlayers() {
           line.setAttribute('y2', String(coordinates.y2));
         });
       });
-      compactWaveform.dataset.version = side;
       if (compactVersionLabel) compactVersionLabel.textContent = media[selected].dataset.label ?? 'Audio version';
     }
     function render() {
@@ -126,24 +125,34 @@ export function setupComparisonPlayers() {
     }
     seek.addEventListener('input', () => seekTo(Number(seek.value)));
     root.querySelectorAll<HTMLElement>('.comparison-waveform-stage, .compact-waveform-frame').forEach(stage => {
-      let startX = 0, startY = 0;
+      let gesture: { startX: number; startY: number; scrubbing: boolean; seeked: boolean; resume: boolean } | undefined;
       const seekFromPointer = (event: PointerEvent) => {
         const bounds = stage.getBoundingClientRect();
-        if (!bounds.width) return;
+        if (!bounds.width || !gesture) return;
         seekTo(waveformSeekSeconds(event.clientX, bounds.left, bounds.width, transport?.duration ?? Number(root.dataset.duration)));
+        // A drag past the end parks the transport at its end without resuming, so play again once the pointer is back inside the track.
+        if (gesture.resume && transport && !transport.playing && position < transport.duration) { transport.play(); render(); }
+        gesture.seeked = true;
       };
       stage.addEventListener('pointerdown', event => {
-        if (!event.isPrimary || event.button !== 0) return;
+        if (root.dataset.audioFallback === 'true' || !event.isPrimary || event.button !== 0) return;
         stage.setPointerCapture(event.pointerId);
-        startX = event.clientX; startY = event.clientY;
-        if (event.pointerType !== 'touch') seekFromPointer(event);
+        gesture = { startX: event.clientX, startY: event.clientY, scrubbing: event.pointerType !== 'touch', seeked: false, resume: Boolean(transport?.playing) };
+        if (gesture.scrubbing) seekFromPointer(event);
       });
       stage.addEventListener('pointermove', event => {
-        if (!stage.hasPointerCapture(event.pointerId) || !isWaveformScrub(event.pointerType, event.clientX - startX, event.clientY - startY)) return;
+        if (!gesture || !stage.hasPointerCapture(event.pointerId)) return;
+        // Once a touch has moved sideways it stays a scrub until the gesture ends.
+        if (!gesture.scrubbing) {
+          if (!isWaveformScrub(event.pointerType, event.clientX - gesture.startX, event.clientY - gesture.startY)) return;
+          gesture.scrubbing = true;
+        }
         seekFromPointer(event);
       });
       stage.addEventListener('pointerup', event => {
-        if (stage.hasPointerCapture(event.pointerId)) seekFromPointer(event);
+        // Mouse and pen already seeked on pointerdown; a touch tap seeks here.
+        if (!gesture || gesture.seeked || !stage.hasPointerCapture(event.pointerId)) return;
+        seekFromPointer(event);
       });
     });
     volume?.addEventListener('input', applyVolume);

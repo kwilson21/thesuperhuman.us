@@ -47,7 +47,7 @@ it('places compact playback beside the waveform and seeks from both the track an
   expect(script).toContain("'.comparison-waveform-stage, .compact-waveform-frame'");
   expect(script).toContain('waveformSeekSeconds(');
   expect(component).not.toContain('height:38px;color:var(--ink);pointer-events:none');
-  expect(component).toContain('.comparison-player[data-initialized="true"] .comparison-waveform-stage,.comparison-player[data-initialized="true"] .compact-waveform-frame{cursor:pointer;touch-action:pan-y;user-select:none;-webkit-user-select:none}');
+  expect(component).toContain('.comparison-player[data-initialized="true"]:not([data-audio-fallback="true"]) .comparison-waveform-stage,.comparison-player[data-initialized="true"]:not([data-audio-fallback="true"]) .compact-waveform-frame{cursor:pointer;touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none}');
 });
 
 it('fills the played part of every A/B waveform in the accent over neutral unplayed bars', () => {
@@ -63,7 +63,7 @@ it('fills the played part of every A/B waveform in the accent over neutral unpla
   expect(component).not.toContain('.compact-waveform[data-version="after"]{color:var(--accent)}');
   expect(component).not.toContain('transition:color 160ms ease');
   expect(component).toContain('.comparison-player--compact .compact-waveform :global(line){transition:y1 180ms ease,y2 180ms ease}');
-  expect(component).toContain('.comparison-player--compact .compact-waveform,.comparison-player--compact .compact-waveform :global(line){transition:none}');
+  expect(component).toContain('@media(prefers-reduced-motion:reduce){.comparison-player--compact .compact-waveform :global(line){transition:none}}');
   expect(script).toContain("root.querySelectorAll<SVGSVGElement>('.compact-waveform').forEach(svg => {");
   expect(script).toContain("svg.querySelectorAll<SVGLineElement>('[data-compact-wave-line]')");
   expect(script).not.toContain('compactWaveform.querySelectorAll<SVGLineElement>');
@@ -82,4 +82,27 @@ it('drags across both waveforms with pointer events so mouse, pen and touch each
 it('tells visitors they can click, tap or drag the full waveform to seek', () => {
   expect(component).toContain('Switch versions. Keep your place. Click, tap or drag either waveform to seek.');
   expect(component).not.toContain('Click or tap either waveform to seek.');
+});
+
+it('keeps the compact played fill above the unplayed bars by source order', () => {
+  expect(component.indexOf('.comparison-player--compact .compact-waveform{')).toBeLessThan(component.indexOf('.comparison-player--compact .compact-waveform-played{'));
+});
+
+it('seeks once per gesture, keeps playback through a drag past the end, and leaves fallback players alone', () => {
+  expect(script).toContain("root.dataset.audioFallback === 'true'");
+  expect(script).toContain("event.pointerType !== 'touch'");
+  expect(script).toContain('seeked: false');
+  expect(script).toContain('gesture.seeked = true');
+  expect(script).toContain('if (!gesture || gesture.seeked');
+  expect(script).toContain('resume: Boolean(transport?.playing)');
+  expect(script).toContain('position < transport.duration');
+  expect(script).toContain('transport.play()');
+  expect(script).toContain('if (!gesture.scrubbing) {');
+  expect(script).toContain('gesture.scrubbing = true');
+  expect(component).toContain('touch-action:pan-y pinch-zoom');
+});
+
+it('drops the dead compact version attribute now that the color rule is gone', () => {
+  expect(component).not.toContain('data-version="before"');
+  expect(script).not.toContain('compactWaveform.dataset.version');
 });
