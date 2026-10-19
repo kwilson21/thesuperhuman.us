@@ -564,7 +564,7 @@ it.each(['desktop', 'phone'])('captures the ghost text with the %s input hint', 
   expect(waits).toEqual(['[data-step="1"] [data-ghost-text]']);
 });
 
-it('holds the sending request whether fetch gets a string, a URL or a Request, and passes other requests on', async () => {
+it('holds the sending request whether fetch gets a string, a URL, a Request or a relative path, and passes other requests on', async () => {
   const scenario = await import('../../scripts/screenshots/scenarios/software-brief.mjs');
   let script = '';
   const page = { on() {}, route: async () => {}, reload: async () => {}, waitForFunction: async () => {},
@@ -580,7 +580,7 @@ it('holds the sending request whether fetch gets a string, a URL or a Request, a
   const sandbox: any = { window: { fetch: vi.fn(async (input: unknown) => { passed.push(String(input)); return 'passed'; }) }, location: { href: 'http://127.0.0.1:4321/software/start' }, URL, Request };
   runInNewContext(`(${script})()`, sandbox);
   const wrapped = sandbox.window.fetch;
-  wrapped(inquiry, { method: 'POST' }); wrapped(new URL(inquiry), { method: 'POST' }); wrapped(new Request(inquiry, { method: 'POST' }));
+  wrapped(inquiry, { method: 'POST' }); wrapped(new URL(inquiry), { method: 'POST' }); wrapped(new Request(inquiry, { method: 'POST' })); wrapped('/api/software-inquiry', { method: 'POST' });
   expect(await wrapped(pass)).toBe('passed');
   expect(passed).toEqual([pass]);
 });
