@@ -1394,6 +1394,9 @@ it('renders the AI disclosure beside both answer boxes and the dated retention n
   const notice = await container.renderToString(privacy, { request:new Request('https://thesuperhuman.us/privacy') });
   expect(notice).toContain('Updated October 19, 2026'); expect(notice).toContain('id="software-briefs"');
   expect(notice).toContain('a counter derived from your IP address, kept for up to two days');
+  expect(notice).toContain("Neither are a website brief's link and notes on what you already have; those boxes show no suggestions.");
+  expect(notice).toContain("Anything you type in a box that shows suggestions is sent, even if you don't accept one.");
+  expect(notice).not.toContain('Anything you type in an answer box is sent for suggestions.');
 });
 
 it('shows the countersign requirement beside both disabled closing actions', async () => {
@@ -1468,7 +1471,8 @@ it('helps the owner review a website brief: link, offer examples and unsafe link
     const html = await render();
     const brief = briefOf(html);
     for (const text of ['Website design', 'What’s the website for?', 'What they already have', 'Me or someone on my team']) expect(brief).toContain(text);
-    expect(brief).toMatch(/<a href="https:\/\/jordanclay\.example\/" target="_blank" rel="noopener noreferrer"[^>]*>https:\/\/jordanclay\.example\/<\/a> <span[^>]*>opens in a new tab<\/span>/);
+    expect(brief).toMatch(/<a href="https:\/\/jordanclay\.example\/" target="_blank" rel="noopener noreferrer"[^>]*>https:\/\/jordanclay\.example\/<span class="visually-hidden[^"]*">\(opens in a new tab\)<\/span><\/a> <span [^>]*aria-hidden="true"[^>]*>opens in a new tab<\/span>/);
+    expect(html).toMatch(/<a href="\/services#website"[^>]*>Service →<\/a>/);
     for (const text of websiteOfferText) expect(html).toContain(text);
     expect(html).toContain('Before an offer:');
     sql.prepare("UPDATE owner_requests SET details_json=json_set(details_json,'$.currentUrl',?) WHERE id='site'").run('javascript:alert(1)');
@@ -1478,7 +1482,7 @@ it('helps the owner review a website brief: link, offer examples and unsafe link
     sql.prepare("UPDATE owner_requests SET details_json=json_set(details_json,'$.currentUrl',?) WHERE id='site'").run('https://p\u0430ypal.example/');
     const lookalike = briefOf(await render()), punycode = new URL('https://p\u0430ypal.example/').href;
     expect(punycode).toContain('xn--');
-    expect(lookalike).toContain(`<a href="${punycode}" target="_blank" rel="noopener noreferrer"`); expect(lookalike).toContain(`>${punycode}</a>`);
+    expect(lookalike).toContain(`<a href="${punycode}" target="_blank" rel="noopener noreferrer"`); expect(lookalike).toContain(`>${punycode}<span class="visually-hidden`); expect(lookalike).toMatch(/visually-hidden[^"]*">\(opens in a new tab\)<\/span><\/a>/);
     expect(lookalike).not.toContain('\u0430');
   } finally {sql.close();}
 });
@@ -1491,5 +1495,22 @@ it('keeps the workflow owner page on the existing fit note without website copy'
     expect(html).toContain('placeholder="Clarify who will use the first version."');
     for (const text of ['For a website, name the pages', 'Before an offer:', 'Five pages built from the approved design', 'Design direction']) expect(html).not.toContain(text);
     for (const text of workflowOfferText) expect(html).toContain(text);
+    expect(html).toMatch(/<a href="\/services#workflow"[^>]*>Service →<\/a>/);
+  } finally {sql.close();}
+});
+it('links the rail service to the row for each software path', async () => {
+  const {sql,db} = await fixture();
+  try {
+    for (const [id, serviceId] of [['app', 'webapp'], ['old-idea', 'idea'], ['other', 'elsewhere']]) sql.prepare(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,private_note,created_at,updated_at)
+      VALUES (?,'software',?,'Alex Example','alex@example.com','Book lessons online.','{"path":"webapp","appGoal":"Book lessons online."}','new','','now','now')`).run(id, serviceId);
+    const container = await AstroContainer.create();
+    const serviceLink = async (id: string) => {
+      const html = await container.renderToString(ownerRequest, { params:{ id }, request:new Request(`https://thesuperhuman.us/owner/requests/${id}`), locals:{ owner:{ email:'owner@example.com' }, runtime:{ env:{ MUSIC_DB:db } } } as any });
+      return html.match(/<a href="([^"]+)"[^>]*>Service →<\/a>/)?.[1];
+    };
+    expect(await serviceLink('app')).toBe('/services#web-app');
+    expect(await serviceLink('old-idea')).toBe('/services#web-app');
+    expect(await serviceLink('other')).toBe('/services#software');
+    expect(await serviceLink('r')).toBe('/services#workflow');
   } finally {sql.close();}
 });

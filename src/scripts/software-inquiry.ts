@@ -82,6 +82,9 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
       section.querySelector('[data-question-footnote]')!.textContent = footnote;
       const error = section.querySelector<HTMLElement>('[data-form-error]')!;
       error.dataset.formError = String(key); error.textContent = ''; error.hidden = true;
+      // form-submission links an error to its box only when the box is named at setup. Link it now if the error already has an id.
+      const described = box.getAttribute('aria-describedby') ?? '';
+      if (error.id && !described.split(/\s+/).includes(error.id)) box.setAttribute('aria-describedby', [described, error.id].filter(Boolean).join(' '));
       box.removeAttribute('aria-invalid');
     });
   }

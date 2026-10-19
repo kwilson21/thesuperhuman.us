@@ -152,6 +152,23 @@ describe('screenshot coverage', () => {
     expect(missingScenarioRoutes(SCENARIO_PAGES, captured)).toEqual([]);
   });
 
+  it('captures the website brief journey at both widths, with its seeded owner pages', async () => {
+    const captures: { path: string; owner: boolean }[] = [];
+    const scenario = await import('../../scripts/screenshots/scenarios/website-brief.mjs');
+    const steps = await scenario.default.run({
+      sql: () => '[]',
+      capture: async ({ file, path, owner = false }: { file: string; path: string; owner?: boolean }) => { captures.push({ path, owner }); return file; },
+    });
+    expect(steps).toHaveLength(11);
+    expect(steps.every(step => step.images.length === 2)).toBe(true);
+    // Nine client screens, then the owner's brief and the request list, each at desktop and phone width.
+    expect(captures.filter(item => !item.owner)).toHaveLength(18);
+    expect(captures.filter(item => !item.owner).every(item => item.path === '/software/start')).toBe(true);
+    expect(captures.filter(item => item.path === '/owner/requests/screenshot-website')).toEqual([{ path: '/owner/requests/screenshot-website', owner: true }, { path: '/owner/requests/screenshot-website', owner: true }]);
+    expect(captures.filter(item => item.path === '/owner/requests?kind=software')).toEqual([{ path: '/owner/requests?kind=software', owner: true }, { path: '/owner/requests?kind=software', owner: true }]);
+    expect(captures).toHaveLength(22);
+  });
+
   it('captures bare, expired and valid one-time landings with their document statuses and destinations', async () => {
     const scenario = await import('../../scripts/screenshots/scenarios/software-signing.mjs');
     const landings: { path: string; status: number }[] = [];
@@ -348,6 +365,20 @@ describe('screenshot coverage', () => {
     const selected = relevantScreenshots(manifest, ['src/lib/software-inquiry.ts']);
     expect(selected.pages.map((page: { name: string }) => page.name)).toEqual(['software-start']);
     expect(selected.scenarios.map((scenario: { name: string }) => scenario.name)).toEqual(['software-brief']);
+  });
+
+  it('selects both brief journeys when the software start page or its question component changes', () => {
+    const manifest = { pages: [{ name: 'software-start', path: '/software/start' }],
+      scenarios: [
+        { name: 'software-brief', title: 'Software brief journey', steps: [] },
+        { name: 'website-brief', title: 'Website brief journey', steps: [] },
+        { name: 'software-offer', title: 'Software offer', steps: [] },
+      ] };
+    const start = relevantScreenshots(manifest, ['src/pages/software/start.astro']);
+    expect(start.pages.map((page: { name: string }) => page.name)).toEqual(['software-start']);
+    expect(start.scenarios.map((scenario: { name: string }) => scenario.name)).toEqual(['software-brief', 'website-brief']);
+    expect(relevantScreenshots(manifest, ['src/components/owner/SoftwareQuestions.astro']).scenarios.map((scenario: { name: string }) => scenario.name))
+      .toEqual(['website-brief', 'software-offer']);
   });
 
   it('fails closed to no unrelated images when changed files have no mapped route', () => {

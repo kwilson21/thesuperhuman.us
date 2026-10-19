@@ -452,8 +452,10 @@ it('validates website answers with the approved messages', () => {
   for (const [key, value, message] of [
     ['purpose', undefined, 'This answer is required.'], ['purpose', '', 'This answer is required.'],
     ['purpose', 'x'.repeat(2001), 'Keep this under 2000 characters.'], ['purpose', 'A\u0001', 'Remove control characters.'],
-    ['currentUrl', 'yourstudio.com', 'Start the link with https:// or http://.'], ['currentUrl', 'ftp://x.example', 'Start the link with https:// or http://.'],
-    ['currentUrl', 'javascript:alert(1)', 'Start the link with https:// or http://.'], ['currentUrl', 'https://jordanclay.example\nSecond line', 'Use one line.'],
+    ['currentUrl', 'yourstudio.com', 'Add https:// to the start of the link.'], ['currentUrl', 'ftp://x.example', 'Add https:// to the start of the link.'],
+    ['currentUrl', 'javascript:alert(1)', 'Add https:// to the start of the link.'], ['currentUrl', 'https:evil.com', 'Add https:// to the start of the link.'],
+    ['currentUrl', 'https://studio.com/our classes', 'Check the link, or leave it empty.'], ['currentUrl', 'https://', 'Check the link, or leave it empty.'],
+    ['currentUrl', 'https://jordanclay.example\nSecond line', 'Use one line.'],
     ['currentUrl', `https://x.example/${'a'.repeat(2048)}`, 'Keep this under 2048 characters.'],
     ['existing', 'x'.repeat(2001), 'Keep this under 2000 characters.'],
     ['updates', undefined, 'Choose one.'], ['updates', 'nobody', 'Choose one.'],
@@ -463,8 +465,8 @@ it('validates website answers with the approved messages', () => {
     if (!result.ok) expect(result.errors[key], key).toBe(message);
   }
   for (const [currentUrl, message] of [
-    ['https://user:pass@host.example', 'Start the link with https:// or http://.'], ['https://user@host.example', 'Start the link with https:// or http://.'],
-    ['https://exa\tmple.com', 'Start the link with https:// or http://.'], ['https:evil.com', 'Start the link with https:// or http://.'],
+    ['https://user:pass@host.example', 'Check the link, or leave it empty.'], ['https://user@studio.com', 'Check the link, or leave it empty.'],
+    ['https://exa\tmple.com', 'Check the link, or leave it empty.'],
   ] as const) {
     const result = validateSoftwareInquiry({ ...site, currentUrl });
     expect(result.ok, currentUrl).toBe(false);

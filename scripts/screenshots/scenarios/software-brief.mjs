@@ -90,7 +90,15 @@ export default {
       steps.push({ title: `Autocomplete, ${viewport}`, images: [{ file: await capture({ file: `software-brief-suggestion-${viewport}.png`, path: '/software/start', viewport, prepare: page => prepare(page, 1, 'workflow', true) }), caption: viewport === 'phone' ? 'Ghost text inside the box with Tap to accept' : 'Ghost text inside the box with Tab to accept' }] });
       for (const state of ['sending', 'send-failed']) {
         steps.push({ title: `Brief ${state}, ${viewport}`, images: [{ file: await capture({ file: `software-brief-${state}-${viewport}.png`, path: '/software/start', viewport, expectedResourceErrors: state === 'send-failed' ? [{ url: new URL('/api/software-inquiry', base).href, status: 503 }] : [], prepare: async page => {
-          await page.route('**/api/software-inquiry', route => state === 'sending' ? new Promise(() => {}) : route.fulfill({ status: 503, json: { ok: false, error: 'Try again.' } }));
+          if (state === 'sending') {
+            // The request is held inside the page and never issued. A held route would not do: Playwright continues a
+            // pending request when the page closes, so it reached the server (verified against the dev server).
+            await page.addInitScript(() => {
+              const send = window.fetch;
+              window.fetch = (input, init) => new URL(typeof input === 'string' ? input : input.url, location.href).pathname === '/api/software-inquiry'
+                ? new Promise(() => {}) : send.call(window, input, init);
+            });
+          } else await page.route('**/api/software-inquiry', route => route.fulfill({ status: 503, json: { ok: false, error: 'Try again.' } }));
           await prepare(page, 6, 'workflow', false, async () => {
             await page.waitForFunction(() => !!document.querySelector('[name=cf-turnstile-response]')?.value);
             await page.locator('[type=submit]').click();

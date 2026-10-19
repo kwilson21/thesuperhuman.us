@@ -85,6 +85,8 @@ async function chooseWebsitePath(page) {
   await page.locator('[name=path][value=website]').check();
   await page.locator('[data-step="1"]:visible').waitFor();
   await page.locator('[data-back]').click();
+  // Move the pointer off Next, so its hover style is not captured on a phone.
+  await page.mouse.move(0, 0);
   await page.locator('[data-step="0"]:visible').waitFor();
   if (!await page.locator('[name=path][value=website]').isChecked()) throw new Error('The website path was not kept after Back.');
 }
@@ -120,9 +122,9 @@ const clientShots = [
   { name: 'choose-path', title: 'Choose a path', caption: 'Three starting points, with Website design checked', path: '/software/start',
     prepare: page => guard(page, 'choose a path', () => chooseWebsitePath(page)) },
   { name: 'purpose', title: 'What the website is for', caption: 'Fictional purpose of the website', path: '/software/start', prepare: prepareAt('purpose', 0) },
-  { name: 'today', title: 'What they have today', caption: 'Fictional current site and existing material, both optional', path: '/software/start', prepare: prepareAt('today', 1) },
+  { name: 'today', title: 'What you have today', caption: 'Fictional current site and existing material, both optional', path: '/software/start', prepare: prepareAt('today', 1) },
   { name: 'keeps-up-to-date', title: 'Who keeps it up to date', caption: 'Fictional answer: the client keeps the site up to date', path: '/software/start', prepare: prepareAt('keeps up to date', 2) },
-  { name: 'timing', title: 'Timing', caption: 'Fictional needed-by date with the website hint', path: '/software/start', prepare: prepareAt('timing', 3) },
+  { name: 'timing', title: 'Timing', caption: 'Fictional needed-by date with the website hint', path: '/software/start', prepare: prepareAt('timing', 3, page => page.locator('[name=timingDate]').blur()) },
   { name: 'budget', title: 'Budget', caption: 'Budget left empty, which is optional', path: '/software/start', prepare: prepareAt('budget', 4) },
   { name: 'contact', title: 'Contact', caption: 'Fictional name, email and company', path: '/software/start', prepare: prepareAt('contact', 5) },
   { name: 'review', title: 'Review', caption: 'Ready to send, with the website answers listed', path: '/software/start', prepare: prepareAt('review', 6, assertReview) },
@@ -142,9 +144,9 @@ export default {
 
     const shots = [
       ...clientShots,
-      { name: 'owner-brief', title: 'Owner reads the website brief', owner: true, caption: 'Their brief, the fit review and the empty offer editor with website prompts',
+      { name: 'owner-brief', title: 'Owner reads the website brief', owner: true, caption: 'Seeded fictional website brief: their brief, the fit review and the empty offer editor with website prompts',
         path: `/owner/requests/${BRIEF_ID}`, prepare: page => page.getByRole('heading', { name: 'Their brief' }).waitFor() },
-      { name: 'owner-list', title: 'Owner request list', owner: true, caption: 'Software requests, with the website brief listed',
+      { name: 'owner-list', title: 'Owner request list', owner: true, caption: 'Software requests, with the seeded website brief listed',
         path: '/owner/requests?kind=software', prepare: page => page.getByText('A site for my pottery studio.').first().waitFor() },
     ];
     const steps = [];

@@ -137,8 +137,8 @@ it('discloses browser drafts and Workers AI accurately, with reassurance only at
   for (const sentence of [
     "isn't used to train models without your explicit consent",
     'The name, email and company fields are never sent for suggestions.',
-    'Neither are a website brief’s link and notes on what you already have, which show no suggestions.',
-    'Anything you type in an answer box is sent for suggestions.',
+    "Neither are a website brief's link and notes on what you already have; those boxes show no suggestions.",
+    "Anything you type in a box that shows suggestions is sent, even if you don't accept one.",
     'You can turn suggestions off', 'in your browser', 'strictly necessary security cookie that expires after 30 minutes',
     'Updated October 19, 2026', 'kept for up to two days',
     'Project brief suggestions use', 'While you write a project brief,',
@@ -466,7 +466,7 @@ it('walks a website brief through its own screens, the link and notes, updates, 
   fill('purpose', 'A site for my pottery studio.'); click('[data-next]'); expect(current()).toBe(7);
   expect(dots[2].attrs['aria-current']).toBe('step'); expect(dots[2].nodes['.sr-only'].textContent).toBe('Question 3 of 8');
   fill('currentUrl', 'yourstudio.com'); click('[data-next]'); expect(current()).toBe(7);
-  expect(form.nodes['[data-form-error="currentUrl"]'].textContent).toBe('Start the link with https:// or http://.');
+  expect(form.nodes['[data-form-error="currentUrl"]'].textContent).toBe('Add https:// to the start of the link.');
   fill('currentUrl', 'https://yourstudio.com'); fill('existing', 'A logo and about 30 class photos.'); click('[data-next]'); expect(current()).toBe(8);
   click('[data-next]'); expect(current()).toBe(8);
   expect(form.nodes['[data-form-error="updates"]'].textContent).toBe('Choose one.');
@@ -480,6 +480,17 @@ it('walks a website brief through its own screens, the link and notes, updates, 
   expect(text).toContain('Website design'); expect(text).toContain('Me or someone on my team'); expect(text).toContain('What you already have');
   const edit = rows.flatMap(node => node.children).find(node => node.attrs['aria-label'] === 'Edit Current website')!;
   fire(edit, 'click'); expect(current()).toBe(7); expect(steps[7].nodes.h1.focus).toHaveBeenCalled();
+});
+it('links the second answer box to its error once a path names that box, without duplicating the link', () => {
+  choose('path', 'website', false);
+  const box = steps[2].nodes['[data-answer]'], error = steps[2].nodes['[data-form-error]'];
+  // The markup gives the box its help text. Website names no second box, so form-submission had nothing to link at setup.
+  box.attrs['aria-describedby'] = 'brief-help-2'; error.dataset.formError = 'firstResult'; Object.assign(error, { id: 'software-inquiry-firstResult-error' });
+  const described = () => (box.getAttribute('aria-describedby') ?? '').split(' ');
+  choose('path', 'workflow', false);
+  expect(box.name).toBe('firstResult'); expect(described()).toEqual(['brief-help-2', 'software-inquiry-firstResult-error']);
+  choose('path', 'webapp', false); choose('path', 'workflow', false);
+  expect(box.name).toBe('firstResult'); expect(described()).toEqual(['brief-help-2', 'software-inquiry-firstResult-error']);
 });
 it('skips the website link and notes together and moves on to who keeps it up to date', () => {
   choose('path', 'website'); fill('purpose', 'A site for my pottery studio.'); click('[data-next]');
