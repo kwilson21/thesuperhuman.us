@@ -62,12 +62,12 @@ export function setupSoftwareComposer() {
     field('paid_confirmed').disabled = paymentBlocked;
     field('paid_confirmed').required = handoff && !paymentBlocked;
     form.querySelectorAll<HTMLInputElement>('[data-handoff-link] [name=link_label],[data-handoff-link] [name=link_url]').forEach(input=>{
-      input.disabled = !handoff || input.closest<HTMLElement>('[data-handoff-link]')!.hidden;
+      input.disabled = !handoff || Boolean(input.closest<HTMLElement>('[data-handoff-link]')!.hidden);
       input.required = handoff && !input.disabled;
     });
     form.querySelectorAll<HTMLInputElement>('[data-delivery-reference] [name=link_label],[data-delivery-reference] [name=link_url]').forEach(input=>{
       const row=input.closest<HTMLElement>('[data-delivery-reference]')!;
-      input.disabled=!delivery || row.hidden;
+      input.disabled=!delivery || Boolean(row.hidden);
       const rowInputs=row.querySelectorAll<HTMLInputElement>('input');
       input.required=delivery && !row.hidden && [...rowInputs].some(rowInput=>Boolean(rowInput.value.trim()));
     });
