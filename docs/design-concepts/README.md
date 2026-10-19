@@ -10,6 +10,7 @@ The September 2026 redesign keeps the existing palette and changes the reading o
 - Writing: [article composition](2026-09-09/article-desktop-v1.png).
 - Audio: [headphones, notebook and service icons](2026-09-09/audio-page-v3.png).
 - Services: [software and audio selection](2026-09-10/audio-services-studies/README.md), [implementation review](2026-09-10/audio-services-studies/implementation-review.md).
+- Project brief paths: [Website design, Web app and Workflow automation](2026-10-19/website-intake/index.html), approved October 19, 2026.
 
 ## Resume and contact
 
