@@ -1,7 +1,7 @@
 import { lyftBonus } from '~/data/profile';
 import tallyImage from '~/assets/site/tally-transactions.webp';
 import { tallyStory } from '~/data/project-stories/tally';
-import { softwarePaths } from '~/lib/software-inquiry';
+import { legacySoftwarePaths, softwarePaths } from '~/lib/software-inquiry';
 
 export const softwareSheet = {
   path: '/services',
@@ -13,7 +13,7 @@ export const softwareSheet = {
     evidence: { title: 'Skupos · Internal tools', description: 'I built a tool that helped data operators troubleshoot retail transactions and automated updates to their shared Google Sheets.', path: '/work#skupos', context: 'about Skupos' },
     historyLabel: 'Explore my work history', historyPath: '/work',
   },
-  idea: { title: softwarePaths.idea, lead: 'For an idea you want people to try.', detail: 'I build a first version that lets people try the most important part of your idea.', button: 'Tell me about your idea', path: '/software/start?path=idea', project: tallyStory,
+  idea: { title: legacySoftwarePaths.idea, lead:'For an idea you want people to try.', detail: 'I build a first version that lets people try the most important part of your idea.', button: 'Tell me about your idea', path: '/software/start?path=idea', project: tallyStory,
     image: tallyImage, imageAlt: 'Tally’s transactions screen, running on demo data', imageCaption: 'Tally · public demo on demo data',
     evidenceLabel: 'Try something I’m building', meta: 'Personal project · Public demo · In development',
     demoUrl: 'https://tally-demo.thesuperhuman.us', demoLabel: 'Try the demo',

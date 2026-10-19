@@ -2,7 +2,8 @@ import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { POST } from '~/pages/api/software-inquiry';
-import { softwareBrief, softwareRequest, validateSoftwareInquiry } from '~/lib/software-inquiry';
+import { softwareBriefEmail } from '~/lib/client-emails';
+import { currentSiteHref, softwareBrief, softwareLabels, softwarePathLabel, softwarePaths, softwareRequest, updateLabels, validateSoftwareInquiry } from '~/lib/software-inquiry';
 import { RequestDetailsTooLargeError } from '~/lib/owner-requests';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
@@ -400,4 +401,107 @@ it('recovers an unrecorded first claim failure through the guarded owner retry',
   expect((await retry({ ...retryContext, request: retryContext.request.clone() })).status).toBe(409);
   expect(JSON.parse(sql.prepare('SELECT details_json FROM owner_requests').get().details_json).clientCopyStatus).toBe('sent');
   expect(vi.mocked(fetch).mock.calls.filter(([url, init]) => String(url).includes('api.resend.com') && JSON.parse(init!.body as string).to[0] === 'alex@example.com')).toHaveLength(1);
+});
+
+const websiteInput = { ...base, path: 'website', purpose: 'A site for my pottery studio. People should see upcoming classes and sign up without messaging me first.', currentUrl: 'https://jordanclay.example', existing: 'A logo and about 30 class photos.', updates: 'self', name: 'Jordan Clay', email: 'jordan@example.com', today: 'inactive' };
+const questionKeys = ['today', 'audience', 'firstResult', 'idea', 'audienceToday', 'firstVersion', 'signal', 'purpose', 'currentUrl', 'existing', 'updates', 'appGoal'];
+const askedKeys = (details: Record<string, unknown>) => Object.keys(details).filter(key => questionKeys.includes(key));
+const savedRequest = () => sql.prepare('SELECT service_id,summary,details_json FROM owner_requests').get() as { service_id: string; summary: string; details_json: string };
+const ownerNotice = () => JSON.parse(vi.mocked(fetch).mock.calls.find(([url, init]) => String(url).includes('api.resend.com') && JSON.parse(init!.body as string).to[0] === 'inbox@example.com')![1]!.body as string);
+
+it('stores a website brief under its own path and questions, and names it in the owner notice', async () => {
+  const response = await POST(context(websiteInput));
+  expect(response.status).toBe(200);
+  const brief = (await response.json() as { brief: Record<string, string> }).brief;
+  expect(Object.keys(brief).slice(0, 5)).toEqual(['path', 'purpose', 'currentUrl', 'existing', 'updates']);
+  expect(brief).toMatchObject({ path: 'Website design', updates: 'Me or someone on my team', currentUrl: 'https://jordanclay.example' });
+  const saved = savedRequest();
+  expect(saved).toMatchObject({ service_id: 'website', summary: 'A site for my pottery studio.' });
+  expect(askedKeys(JSON.parse(saved.details_json))).toEqual(['purpose', 'currentUrl', 'existing', 'updates']);
+  const email = ownerNotice();
+  expect(email.subject).toContain('Website design');
+  expect(email.text).toContain('What’s the website for?\nA site for my pottery studio.');
+});
+
+it('stores a web app brief under its own path and questions', async () => {
+  const app = { ...base, path: 'webapp', appGoal: 'Let volunteers claim an open shift from their phone.', firstVersion: 'See open shifts and claim one.', today: 'inactive' };
+  const response = await POST(context(app));
+  expect(response.status).toBe(200);
+  const brief = (await response.json() as { brief: Record<string, string> }).brief;
+  expect(Object.keys(brief).slice(0, 3)).toEqual(['path', 'appGoal', 'firstVersion']);
+  expect(brief).toMatchObject({ path: 'Web app', appGoal: app.appGoal });
+  expect(brief).not.toHaveProperty('today');
+  const saved = savedRequest();
+  expect(saved).toMatchObject({ service_id: 'webapp', summary: 'Let volunteers claim an open shift from their phone.' });
+  expect(askedKeys(JSON.parse(saved.details_json))).toEqual(['appGoal', 'firstVersion']);
+});
+
+it('validates website answers with the approved messages', () => {
+  const site = { ...base, path: 'website', purpose: 'A site for my pottery studio.', currentUrl: '', existing: '', updates: 'self' };
+  for (const [key, value, message] of [
+    ['purpose', undefined, 'This answer is required.'], ['purpose', '', 'This answer is required.'],
+    ['purpose', 'x'.repeat(2001), 'Keep this under 2000 characters.'], ['purpose', 'A\u0001', 'Remove control characters.'],
+    ['currentUrl', 'yourstudio.com', 'Start the link with https:// or http://.'], ['currentUrl', 'ftp://x.example', 'Start the link with https:// or http://.'],
+    ['currentUrl', 'javascript:alert(1)', 'Start the link with https:// or http://.'], ['currentUrl', 'https://jordanclay.example\nSecond line', 'Use one line.'],
+    ['currentUrl', `https://x.example/${'a'.repeat(2048)}`, 'Keep this under 2048 characters.'],
+    ['existing', 'x'.repeat(2001), 'Keep this under 2000 characters.'],
+    ['updates', undefined, 'Choose one.'], ['updates', 'nobody', 'Choose one.'],
+  ] as const) {
+    const result = validateSoftwareInquiry({ ...site, [key]: value });
+    expect(result.ok, `${key}: ${message}`).toBe(false);
+    if (!result.ok) expect(result.errors[key], key).toBe(message);
+  }
+  for (const currentUrl of ['http://example.com', '']) expect(validateSoftwareInquiry({ ...site, currentUrl }).ok, currentUrl).toBe(true);
+  expect(validateSoftwareInquiry({ ...site, currentUrl: undefined, existing: undefined }).ok).toBe(true);
+});
+
+it('keeps the web app goal required and bounded', () => {
+  const app = { ...base, path: 'webapp', appGoal: 'Let people claim a shift.', firstVersion: '' };
+  expect(validateSoftwareInquiry({ ...app, appGoal: '' })).toMatchObject({ ok: false, errors: { appGoal: 'This answer is required.' } });
+  expect(validateSoftwareInquiry({ ...app, appGoal: undefined })).toMatchObject({ ok: false, errors: { appGoal: 'This answer is required.' } });
+  expect(validateSoftwareInquiry({ ...app, appGoal: 'x'.repeat(1001) })).toMatchObject({ ok: false, errors: { appGoal: 'Keep this under 1000 characters.' } });
+  expect(validateSoftwareInquiry({ ...app, firstVersion: 'x'.repeat(1001) })).toMatchObject({ ok: false, errors: { firstVersion: 'Keep this under 1000 characters.' } });
+});
+
+it('names each path, keeps the legacy idea label, and rejects inherited keys', () => {
+  expect(Object.keys(softwarePaths)).toEqual(['website', 'webapp', 'workflow']);
+  expect(softwarePathLabel('website')).toBe('Website design');
+  expect(softwarePathLabel('webapp')).toBe('Web app');
+  expect(softwarePathLabel('workflow')).toBe('Workflow automation');
+  expect(softwarePathLabel('idea')).toBe('Bring an idea to life');
+  for (const value of ['toString', 'constructor', '', undefined, null]) expect(softwarePathLabel(value), String(value)).toBeUndefined();
+});
+
+it('uses the approved labels for the new website and web app answers', () => {
+  expect(softwareLabels).toMatchObject({ purpose: 'What’s the website for?', currentUrl: 'Current website', existing: 'What they already have', updates: 'Who will keep it up to date?', appGoal: 'What should the app let people do?' });
+  expect(updateLabels).toEqual({ self: 'Me or someone on my team', help: 'I’d like help with updates', unsure: 'Not sure yet' });
+});
+
+it('accepts only http and https links with a host', () => {
+  expect(currentSiteHref('https://jordanclay.example')).toBe('https://jordanclay.example/');
+  expect(currentSiteHref('http://example.com')).toBe('http://example.com/');
+  for (const value of ['yourstudio.com', 'ftp://x.example', 'javascript:alert(1)', 'https://', 'file:///etc/hosts', '', undefined, 42]) expect(currentSiteHref(value), String(value)).toBeNull();
+});
+
+it('labels stored briefs by the path they were sent with', () => {
+  const shared = { name: 'Alex', email: 'alex@example.com', timing: 'flexible', approver: 'self', budgetStatus: 'exploring' };
+  const idea = softwareBrief({ ...shared, details: { ...shared, path: 'idea', idea: 'A shift board', audienceToday: 'Volunteers', firstVersion: 'Claim a shift', signal: '' } } as any);
+  expect(idea.path).toBe('Bring an idea to life');
+  expect(Object.keys(idea).slice(0, 4)).toEqual(['path', 'idea', 'audienceToday', 'firstVersion']);
+  expect(idea).not.toHaveProperty('today');
+  const workflow = softwareBrief({ ...shared, details: { ...shared, path: 'workflow', today: 'We track clients.', audience: 'Our team', firstResult: 'One place.' } } as any);
+  expect(workflow.path).toBe('Workflow automation');
+  expect(Object.keys(workflow).slice(0, 4)).toEqual(['path', 'today', 'audience', 'firstResult']);
+  const fallback = softwareBrief({ ...shared, details: { ...shared, path: 'toString', today: 'Fallback' } } as any);
+  expect(fallback.today).toBe('Fallback');
+});
+
+it('words the client copy of a website brief in the client’s voice', () => {
+  const copy = softwareBriefEmail('Jordan Clay', { path: 'Website design', purpose: 'A site for my pottery studio.', currentUrl: 'https://jordanclay.example', existing: 'A logo and about 30 class photos.', updates: 'Me or someone on my team' });
+  expect(copy.html).toContain('Project brief');
+  expect(copy.html).toContain('You received this because you sent a project brief.');
+  expect(copy.html).not.toContain('Software brief');
+  expect(copy.text).toContain('What you already have\nA logo and about 30 class photos.');
+  expect(copy.text).toContain('Current website\nhttps://jordanclay.example');
+  expect(`${copy.text}${copy.html}`).not.toContain('What they already have');
 });

@@ -26,7 +26,7 @@ describe('software service sheet', () => {
   it('preserves approved path copy and the website door anchor', async () => {
     expect(softwareSheet.title).toBe('Let’s build something useful.');
     expect(softwareSheet.introduction).toBe('Make a workflow easier, or bring an idea to life. We’ll choose a clear first milestone together.');
-    expect(softwareSheet.workflow.title).toBe('Make a workflow easier');
+    expect(softwareSheet.workflow.title).toBe('Workflow automation');
     expect(softwareSheet.workflow.detail).toBe('I build a tool or connect the systems you already use so your team can do a repeated task with fewer manual steps.');
     expect(softwareSheet.idea.title).toBe('Bring an idea to life');
     expect(softwareSheet.idea.detail).toBe('I build a first version that lets people try the most important part of your idea.');
