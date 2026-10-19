@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=1280" />
+<title>Project brief paths</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" />
+<style>
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Regular.woff2) format('woff2'); font-weight: 400; }
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Bold.woff2) format('woff2'); font-weight: 700; }
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Italic.woff2) format('woff2'); font-style: italic; }
+  :root { --paper: #FBF8F2; --ink: #0E0E0E; --muted: #4A4A4A; --rule: #E8E3DA; --accent: #AE5534; --tint: #F5ECE5; --panel: #F3EEE5; --board: #ECE6DB; --ok: #3E6B4A; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--board); color: var(--ink); font-family: Libron, Georgia, serif; -webkit-font-smoothing: antialiased; }
+  .board { width: 1280px; margin: 0 auto; padding: 56px 56px 72px; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .sans { font-family: Inter, system-ui, sans-serif; }
+  .eyebrow { font: 500 11px/1 'JetBrains Mono', monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin: 0 0 14px; }
+  .board > header h1 { font-size: 52px; line-height: 1.02; letter-spacing: -.03em; margin: 0 0 16px; font-weight: 400; }
+  .board > header p:not(.eyebrow) { font-size: 20px; line-height: 1.5; color: var(--muted); max-width: 60rem; margin: 0; }
+  section.study { margin-top: 64px; padding-top: 40px; border-top: 1px solid #d8d0c3; }
+  section.study > h2 { font-size: 34px; letter-spacing: -.02em; font-weight: 400; margin: 0 0 8px; }
+  section.study > p.lead { font-size: 18px; line-height: 1.5; color: var(--muted); max-width: 62rem; margin: 0 0 28px; }
+  .cols3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; align-items: start; }
+  .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+  .cols4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; align-items: start; }
+  .option-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+  .option-head h3 { font-size: 24px; font-weight: 400; margin: 0; letter-spacing: -.01em; }
+  .badge { font: 600 11px/1 Inter, sans-serif; letter-spacing: .04em; text-transform: uppercase; padding: 6px 9px; border-radius: 3px; white-space: nowrap; }
+  .badge.rec { background: var(--accent); color: var(--paper); }
+  .badge.no { background: transparent; color: var(--muted); border: 1px solid #cfc6b8; }
+  .frame { background: var(--paper); border: 1px solid #d6cdbf; border-radius: 10px; overflow: hidden; box-shadow: 0 10px 24px -20px #0e0e0e66; }
+  .frame-bar { font: 11px/1 'JetBrains Mono', monospace; color: var(--muted); padding: 9px 12px; border-bottom: 1px solid var(--rule); background: #f6f1e9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .frame-bar b { color: var(--ink); font-weight: 500; }
+  .crop { overflow: hidden; }
+  .note { font-family: Inter, sans-serif; font-size: 13px; line-height: 1.5; color: var(--muted); margin: 10px 2px 0; }
+  .note strong { color: var(--ink); font-weight: 600; }
+  .marker { display: inline-block; font: 600 10px/1 Inter, sans-serif; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 3px 7px; margin-left: 6px; vertical-align: 2px; letter-spacing: .02em; }
+
+  /* ---- phone mock, designed at 390px ---- */
+  .phone { width: 390px; background: var(--paper); padding: 0 24px 22px; }
+  .zoom-94 { zoom: .94; } .zoom-72 { zoom: .7; }
+  .ph-head { display: flex; justify-content: space-between; align-items: center; height: 86px; }
+  .ph-name { font-size: 22px; letter-spacing: -.03em; }
+  .ph-menu { font-size: 17px; display: flex; align-items: center; gap: 14px; }
+  .ph-menu i { display: grid; gap: 7px; width: 25px; } .ph-menu i::before, .ph-menu i::after { content: ''; height: 1px; background: var(--accent); }
+  .back { font-size: 17px; margin: 6px 0 0; } .back span { border-bottom: 1px solid var(--accent); padding-bottom: 9px; display: inline-block; }
+  .back em { font-style: normal; color: var(--accent); font-size: 14px; margin-left: 10px; }
+  .kicker { font-size: 13px; color: var(--muted); margin: 20px 0 0; }
+  .dots { display: flex; gap: 12px; list-style: none; padding: 0; margin: 30px 0 18px; }
+  .dots li { width: 10px; height: 10px; border-radius: 50%; border: 1px solid #d9cfc2; }
+  .dots li.on { background: var(--accent); border-color: var(--accent); }
+  .dots li.done { background: #e4d8cc; border-color: #e4d8cc; }
+  .rule { height: 1px; background: var(--rule); margin: 0; border: 0; }
+  .phone h1 { font-size: 37px; line-height: 1.04; letter-spacing: -.025em; font-weight: 400; margin: 26px 0 10px; }
+  .intro { font-size: 18px; line-height: 1.45; color: var(--muted); margin: 0 0 18px; }
+  .foot { font-size: 13px; line-height: 1.5; color: #3c3c3c; margin: 0 0 18px; }
+  .ta { border: 1px solid var(--rule); background: #FDFBF7; border-radius: 3px; padding: 14px 13px; min-height: 172px; font-size: 17px; line-height: 1.5; color: #7a7570; }
+  .ta.short { min-height: 128px; }
+  .input { border: 1px solid var(--rule); background: #FDFBF7; border-radius: 3px; padding: 12px 13px; font-size: 16px; color: #7a7570; margin-top: 6px; }
+  .flabel { font-size: 15px; margin: 0 0 6px; display: block; }
+  .field { margin-bottom: 16px; }
+  .sugg { font-size: 13px; line-height: 1.5; color: #3c3c3c; margin: 12px 0 18px; } .sugg u { text-decoration-color: var(--accent); text-underline-offset: 3px; }
+  .radio { display: flex; gap: 14px; align-items: center; border: 1px solid var(--rule); border-radius: 3px; padding: 18px 16px; font-size: 17px; margin-bottom: 10px; background: #FDFBF7; }
+  .radio::before { content: ''; width: 17px; height: 17px; border-radius: 50%; border: 1px solid #8a8580; flex: none; }
+  .radio.sel { background: var(--tint); border-color: var(--accent); }
+  .radio.sel::before { border-color: var(--accent); box-shadow: inset 0 0 0 3px var(--tint), inset 0 0 0 9px var(--accent); }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px; }
+  .btn { height: 46px; border-radius: 3px; font-size: 17px; display: grid; place-items: center; }
+  .btn.out { border: 1px solid var(--ink); } .btn.fill { background: var(--accent); color: var(--paper); }
+  .skip { font-size: 15px; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 4px; margin: 4px 0 0; }
+  .contact-line { font-size: 15px; text-align: center; color: #3c3c3c; margin: 22px 0 0; }
+
+  /* contact form mock (option C) */
+  .c-h { font-size: 34px; line-height: 1.08; letter-spacing: -.02em; margin: 30px 0 10px; }
+  .c-lede { font-size: 17px; color: var(--muted); margin: 0 0 16px; }
+  .c-disc { font-size: 15px; margin: 0 0 16px; } .c-disc::before { content: '▾ '; font-size: 12px; }
+  .c-field { margin-bottom: 12px; } .c-field label { font: 500 14px/1.3 Inter, sans-serif; display: block; margin-bottom: 5px; }
+  .c-field .box { border: 1px solid var(--rule); background: var(--paper); border-radius: 3px; padding: 10px 12px; font: 15px/1.4 Inter, sans-serif; color: #8a8580; min-height: 42px; }
+  .c-field .box.tall { min-height: 92px; }
+  .c-field.new label::after { content: 'new'; font: 600 10px/1 Inter, sans-serif; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 2px 6px; margin-left: 6px; }
+  .c-send { background: var(--accent); color: var(--paper); border-radius: 3px; display: inline-block; padding: 11px 18px; font-size: 16px; margin-top: 4px; }
+
+  /* outcome panel under each option */
+  .gets { margin-top: 14px; background: var(--paper); border: 1px solid #d6cdbf; border-radius: 8px; padding: 14px 16px; }
+  .gets h4 { font: 600 11px/1 Inter, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  .row { display: grid; grid-template-columns: 10px 1fr auto; gap: 10px; align-items: start; padding: 10px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+  .row .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-top: 8px; }
+  .row strong { font-weight: 400; font-size: 16px; display: block; line-height: 1.3; }
+  .row small { font: 12px/1.4 Inter, sans-serif; color: #4a5160; }
+  .row time { font: 12px Inter, sans-serif; color: #4a5160; }
+  .mail { font: 13px/1.5 Inter, sans-serif; border: 1px solid var(--rule); border-radius: 4px; padding: 10px 12px; background: #fff; }
+  .mail b { font-weight: 600; } .mail span { color: var(--muted); }
+  .pipe { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 2px; }
+  .pipe span { font: 500 12px/1 Inter, sans-serif; padding: 6px 8px; border-radius: 3px; border: 1px solid var(--ok); color: var(--ok); }
+  .pipe span.off { border-color: #c9c1b4; color: #9a9389; text-decoration: line-through; }
+  .pipe span.maybe { border-style: dashed; border-color: #b0896f; color: #8a5a3c; }
+  .cost { font: 13.5px/1.5 Inter, sans-serif; color: #2b2b2b; margin: 14px 0 0; padding-left: 18px; }
+  .cost li { margin-bottom: 7px; }
+  .cost code, .note code, td code, li code { font: 12px 'JetBrains Mono', monospace; background: #efe8dd; padding: 1px 4px; border-radius: 3px; }
+  .drift { font: 600 13px/1.4 Inter, sans-serif; margin: 10px 0 0; }
+  .drift.low { color: var(--ok); } .drift.high { color: #9b3b22; } .drift.na { color: #9b3b22; }
+
+  /* question captions */
+  .qcap { font: 13px/1.5 Inter, sans-serif; color: var(--muted); margin: 10px 2px 0; }
+  .qcap b { color: var(--ink); font-weight: 600; }
+  .after { margin-top: 22px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .after div { background: var(--paper); border: 1px solid #d6cdbf; border-radius: 8px; padding: 14px 16px; font: 13.5px/1.5 Inter, sans-serif; color: #2b2b2b; }
+  .after div b { display: block; font: 400 18px/1.3 Libron, serif; margin-bottom: 4px; }
+
+  /* owner center mocks */
+  .owner { background: var(--paper); padding: 22px 26px 24px; font-family: Inter, sans-serif; }
+  .owner h5 { font: 400 26px/1.15 Libron, serif; margin: 0 0 4px; letter-spacing: -.01em; }
+  .owner .cap { font-size: 12px; color: #6b6b6b; margin: 0 0 14px; }
+  .owner dl { margin: 0; } .owner dt { font-size: 12.5px; color: #555; margin-top: 12px; } .owner dd { margin: 3px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink); white-space: pre-wrap; }
+  .owner dd a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+  .owner .ext { font-size: 11px; color: #6b6b6b; }
+  .o-label { font-size: 13px; color: var(--ink); margin: 14px 0 6px; display: block; font-weight: 500; }
+  .o-input { border: 1px solid #ddd5c8; background: #FEFCF8; border-radius: 2px; padding: 9px 10px; font-size: 13px; color: #8f8a83; }
+  .o-input.tall { min-height: 76px; white-space: pre-line; line-height: 1.55; }
+  .o-hint { font-size: 11.5px; color: #6b6b6b; margin: 5px 0 0; }
+  .remind { border-left: 3px solid var(--accent); background: var(--tint); padding: 10px 12px; font-size: 13px; line-height: 1.5; margin: 12px 0 4px; color: #2b2b2b; }
+  .remind b { font-weight: 600; }
+  .o-radios { font-size: 13px; line-height: 1.9; } .o-radios span::before { content: '○ '; color: #777; }
+  .o-h3 { font: 400 20px/1.2 Libron, serif; margin: 18px 0 2px; }
+  .o-ms { font-size: 12.5px; font-weight: 600; margin: 12px 0 0; }
+  .o-btns { display: flex; gap: 10px; margin-top: 14px; align-items: center; font-size: 12.5px; }
+  .o-btns .q { border-bottom: 1px solid var(--ink); padding-bottom: 2px; }
+  .o-btns .send { background: #d9a48e; color: #fff; padding: 9px 14px; border-radius: 2px; }
+  .alt { font: 12.5px/1.5 Inter, sans-serif; color: var(--muted); margin-top: 12px; padding-top: 10px; border-top: 1px dashed #d6cdbf; }
+  .alt .row { border-top: 0; border-bottom: 0; padding: 4px 0 0; }
+
+  /* services mocks */
+  .door { background: var(--paper); padding: 22px 24px 26px; }
+  .door img { display: block; width: 100%; aspect-ratio: 3/2; object-fit: cover; object-position: top; border: 1px solid var(--rule); border-radius: 3px; }
+  .door .dcap { font: 12px Inter, sans-serif; color: var(--muted); margin: 10px 0 10px; }
+  .door .dtitle { font-size: 24px; margin: 0 0 6px; letter-spacing: -.02em; }
+  .door .dline { font-size: 16px; line-height: 1.5; color: var(--muted); margin: 0 0 14px; max-width: 30ch; }
+  .door .dbtn { display: inline-block; background: var(--accent); color: var(--paper); border-radius: 3px; padding: 9px 16px; font-size: 15px; }
+  .arrow { font: 12px 'JetBrains Mono', monospace; color: var(--accent); margin-top: 10px; }
+  .prow { background: var(--paper); padding: 22px 24px 26px; }
+  .prow .ph { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; border-top: 1px solid var(--rule); padding-top: 14px; }
+  .prow .ph h6 { font: 400 21px/1.2 Libron, serif; margin: 0; } .prow .ph p { font-size: 14px; color: var(--muted); margin: 3px 0 0; }
+  .prow .body { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 14px; }
+  .prow .body p { font-size: 15px; line-height: 1.5; margin: 0 0 12px; }
+  .prow .body p.ev { font: 500 10px/1 'JetBrains Mono', monospace; letter-spacing: .12em; color: var(--accent); text-transform: uppercase; margin: 0 0 8px; }
+  .prow .lnk { font-size: 14px; border-bottom: 1px solid var(--accent); padding-bottom: 3px; display: inline-block; margin-bottom: 14px; }
+  .prow img { width: 100%; border: 1px solid var(--rule); border-radius: 3px; display: block; aspect-ratio: 4/3; object-fit: cover; object-position: top; }
+  .prow .pbtn { display: inline-block; background: var(--accent); color: var(--paper); border-radius: 3px; padding: 9px 14px; font-size: 14px; }
+
+  /* decisions */
+  .decisions { counter-reset: d; list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .decisions li { counter-increment: d; background: var(--paper); border: 1px solid #d6cdbf; border-radius: 8px; padding: 16px 18px 16px 52px; position: relative; font: 14px/1.55 Inter, sans-serif; color: #2b2b2b; }
+  .decisions li::before { content: counter(d); position: absolute; left: 18px; top: 15px; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--accent); color: var(--accent); font: 600 12px/20px Inter, sans-serif; text-align: center; }
+  .decisions li b { display: block; font: 400 19px/1.3 Libron, serif; color: var(--ink); margin-bottom: 4px; }
+  .decisions li .def { display: block; margin-top: 6px; font-weight: 600; color: var(--ok); }
+  .decisions li.flag { border-color: var(--accent); }
+  table.files { width: 100%; border-collapse: collapse; font: 13.5px/1.45 Inter, sans-serif; background: var(--paper); border: 1px solid #d6cdbf; border-radius: 8px; overflow: hidden; }
+  table.files th, table.files td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  table.files th { font-weight: 600; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); background: #f6f1e9; }
+
+  .radio.desc { align-items: flex-start; padding: 15px 16px; }
+  .radio.desc::before { margin-top: 3px; }
+  .radio .rt strong { display: block; font-weight: 400; font-size: 17px; line-height: 1.3; }
+  .radio .rt small { display: block; font-size: 14px; color: var(--muted); line-height: 1.4; margin-top: 3px; }
+  .held { margin-top: 24px; background: var(--paper); border: 1px dashed #c4ab92; border-radius: 8px; padding: 14px 18px; font: 14px/1.55 Inter, sans-serif; color: #2b2b2b; }
+  .held b { font-weight: 600; }
+  .qlist { list-style: none; padding: 0; margin: 0; font: 13.5px/1.5 Inter, sans-serif; color: #2b2b2b; }
+  .qlist li { background: var(--paper); border: 1px solid #d6cdbf; border-radius: 8px; padding: 12px 14px; margin-top: 10px; }
+  .qlist li b { display: block; font: 400 19px/1.3 Libron, serif; margin: 4px 0 3px; color: var(--ink); }
+  .qlist li i { font-style: normal; color: #77706a; display: block; margin-top: 6px; }
+  .qlist .tag { font: 600 10.5px/1 Inter, sans-serif; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .svc { background: var(--paper); padding: 22px 24px 24px; }
+  .svc .eyebrow { font-size: 10px; margin-bottom: 8px; }
+  .svc-h { font-size: 30px; line-height: 1.05; letter-spacing: -.02em; margin: 0 0 8px; }
+  .svc-intro { font-size: 16px; line-height: 1.45; color: var(--muted); margin: 0 0 18px; }
+  .svc-fit { font-size: 21px; margin: 0 0 6px; }
+  .svc-row { display: grid; grid-template-columns: 1.1fr 1fr; gap: 6px 16px; border-top: 1px solid var(--rule); padding: 14px 0; }
+  .svc-row h6 { font: 400 19px/1.25 Libron, serif; margin: 0; } .svc-row p { font-size: 14px; color: var(--muted); margin: 3px 0 0; }
+  .svc-ev { font-size: 14px; line-height: 1.5; } .svc-ev b { font-weight: 400; } .svc-ev .ev { display: block; font: 500 9.5px/1 'JetBrains Mono', monospace; letter-spacing: .12em; color: var(--accent); text-transform: uppercase; margin-bottom: 6px; }
+  .svc-row .pbtn { grid-column: 1 / -1; justify-self: start; background: var(--accent); color: var(--paper); border-radius: 3px; padding: 7px 12px; font-size: 13.5px; margin-top: 6px; }
+  .svc-door { font: 12.5px/1.6 Inter, sans-serif; color: var(--muted); border-top: 1px dashed #d6cdbf; padding-top: 12px; margin: 6px 0 0; }
+  .cost s { color: #9a9389; }
+</style>
+</head>
+<body>
+<main class="board">
+  <header id="intro">
+    <p class="eyebrow">Design study · Project brief paths · approved 2026-10-19</p>
+    <h1>Name each path by what it is</h1>
+    <p>Updated after your note. The brief’s first screen names the work: Website design and Web app open now, with this site, Tally and Kaillera Next as the examples. Mobile apps and data integration wait until each has a personal project to show. Everything stays in one brief and one offer, agreement and invoice pipeline. Approved by Kazon on 2026-10-19: three named paths with the defaults below. He will confirm the agreement text covers website design before the first website offer.</p>
+  </header>
+
+  <!-- 1. First screen -->
+  <section class="study" id="paths">
+    <p class="eyebrow">1 · The first screen</p>
+    <h2>“What are you working on?” today and named</h2>
+    <p class="lead">Each choice gets a name and one plain line, using the two-line radio style the audio intake already uses for “How much direction would you like to give?”.</p>
+    <div class="cols3">
+      <div>
+        <div class="option-head"><h3>Today</h3><span class="badge no">Live now</span></div>
+        <div class="frame"><div class="frame-bar">thesuperhuman.us<b>/software/start</b></div>
+          <div class="crop" style="height:720px"><div class="phone zoom-94">
+            <div class="ph-head"><span class="ph-name">Kazon Wilson</span><span class="ph-menu">Menu <i></i></span></div>
+            <p class="back"><span>Back to Software <em>←</em></span></p>
+            <p class="kicker">Software brief</p>
+            <ol class="dots"><li class="on"></li><li></li><li></li><li></li><li></li><li></li><li></li></ol>
+            <hr class="rule" />
+            <h1>What are you working on?</h1>
+            <div class="radio">A workflow that should be easier</div>
+            <div class="radio">An idea to bring to life</div>
+            <div class="actions"><span></span><span class="btn fill">Next</span></div>
+          </div></div>
+        </div>
+        <ul class="cost">
+          <li>Neither choice says whether it covers a website, a web app or a phone app.</li>
+          <li>Website leads don’t come here at all; their button opens the contact form.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="option-head"><h3>Three named paths</h3><span class="badge rec">Recommended</span></div>
+        <div class="frame"><div class="frame-bar">thesuperhuman.us<b>/software/start</b></div>
+          <div class="crop" style="height:720px"><div class="phone zoom-94">
+            <div class="ph-head"><span class="ph-name">Kazon Wilson</span><span class="ph-menu">Menu <i></i></span></div>
+            <p class="back"><span>Back to Work with me <em>←</em></span></p>
+            <p class="kicker">Project brief</p>
+            <ol class="dots"><li class="on"></li><li></li><li></li><li></li><li></li><li></li><li></li></ol>
+            <hr class="rule" />
+            <h1>What are you working on?</h1>
+            <div class="radio desc"><span class="rt"><strong>Website design</strong><small>A site people can read on a phone and act on.</small></span></div>
+            <div class="radio desc"><span class="rt"><strong>Web app</strong><small>An app people open in a browser, on a phone or a computer.</small></span></div>
+            <div class="radio desc"><span class="rt"><strong>Workflow automation</strong><small>A tool that takes manual steps out of a task your team repeats.</small></span></div>
+            <p class="foot" style="margin-top:12px">Not sure which? Pick the closest. I’ll suggest the right fit when I reply.</p>
+            <div class="actions"><span></span><span class="btn fill">Next</span></div>
+          </div></div>
+        </div>
+        <ul class="cost">
+          <li>“Bring an idea to life” becomes <b>Web app</b>. “Make a workflow easier” becomes <b>Workflow automation</b>, with its questions and Skupos example unchanged.</li>
+          <li>Old links keep working: <code>?path=idea</code> opens Web app and <code>?path=workflow</code> opens Workflow automation.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="option-head"><h3>Two named paths</h3><span class="badge no">Stricter</span></div>
+        <div class="frame"><div class="frame-bar">thesuperhuman.us<b>/software/start</b></div>
+          <div class="crop" style="height:720px"><div class="phone zoom-94">
+            <div class="ph-head"><span class="ph-name">Kazon Wilson</span><span class="ph-menu">Menu <i></i></span></div>
+            <p class="back"><span>Back to Work with me <em>←</em></span></p>
+            <p class="kicker">Project brief</p>
+            <ol class="dots"><li class="on"></li><li></li><li></li><li></li><li></li><li></li><li></li></ol>
+            <hr class="rule" />
+            <h1>What are you working on?</h1>
+            <div class="radio desc"><span class="rt"><strong>Website design</strong><small>A site people can read on a phone and act on.</small></span></div>
+            <div class="radio desc"><span class="rt"><strong>Web app</strong><small>An app people open in a browser, on a phone or a computer.</small></span></div>
+            <p class="foot" style="margin-top:12px">Not sure which? Pick the closest. I’ll suggest the right fit when I reply.</p>
+            <div class="actions"><span></span><span class="btn fill">Next</span></div>
+          </div></div>
+        </div>
+        <ul class="cost">
+          <li>Applies your personal-project rule to the workflow path too. Skupos is client work, not a personal project, so the workflow path closes until data integration has its own example.</li>
+          <li>Old <code>?path=workflow</code> links land on this screen.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="held"><b>Held until there’s a personal project to show:</b> Mobile app (iPhone, Android, iPad and tablets) and Data integration. Each opens later as its own named path with its own questions. I’ll record the rule beside the doors rule: a brief path opens once it has a personal project example.</div>
+  </section>
+
+  <!-- 2. What each path asks -->
+  <section class="study" id="asks">
+    <p class="eyebrow">2 · What each path asks</p>
+    <h2>Two or three questions per path, each with a hint and an example</h2>
+    <p class="lead">After the path’s questions, every path shares the same timing, optional budget, contact and review screens. Website design has eight screens; the other two keep seven.</p>
+    <div class="cols3">
+      <div>
+        <div class="option-head"><h3>Website design</h3><span class="badge no">New</span></div>
+        <ol class="qlist">
+          <li><span class="tag">Required · AI suggestions on</span><b>What’s the website for?</b>Who it’s for, and what you want visitors to do when they get there.<i>“A site for my pottery studio. People should see upcoming classes and sign up without messaging me first.”</i></li>
+          <li><span class="tag">Optional</span><b>What do you have today?</b>Your current site, if there is one, and anything you want to keep: pages, text, photos or a logo.<i>Link: “https://yourstudio.com” · Notes: “A logo and about 30 class photos. The About and Pricing pages are still accurate.”</i></li>
+          <li><span class="tag">One choice</span><b>Who will keep it up to date?</b>This shapes how I build it and what the handoff covers.<i>Me or someone on my team · I’d like help with updates · Not sure yet</i></li>
+        </ol>
+        <p class="note">Screens and your owner view for this path are below.</p>
+      </div>
+      <div>
+        <div class="option-head"><h3>Web app</h3><span class="badge no">Renamed</span></div>
+        <div class="frame"><div class="crop" style="height:440px"><div class="phone zoom-72">
+          <div class="ph-head"><span class="ph-name">Kazon Wilson</span><span class="ph-menu">Menu <i></i></span></div>
+          <p class="kicker" style="margin-top:0">Web app brief</p>
+          <ol class="dots"><li class="done"></li><li class="on"></li><li></li><li></li><li></li><li></li><li></li></ol>
+          <hr class="rule" />
+          <h1>What should the app let people do?</h1>
+          <p class="intro">Who it’s for, and the one thing they’d come back for.</p>
+          <div class="ta short">Let my students book and pay for lessons without emailing me.</div>
+          <div class="actions"><span class="btn out">Back</span><span class="btn fill">Next</span></div>
+        </div></div></div>
+        <ol class="qlist">
+          <li><span class="tag">Optional · AI suggestions on</span><b>Have a first version in mind?</b>If you have a hunch, or a spreadsheet or prototype it should replace. Otherwise I’ll propose one.</li>
+        </ol>
+        <p class="note">Same two questions as today’s idea path, retitled for apps.</p>
+      </div>
+      <div>
+        <div class="option-head"><h3>Workflow automation</h3><span class="badge no">Unchanged</span></div>
+        <ol class="qlist">
+          <li><span class="tag">Required · AI suggestions on</span><b>What happens today?</b>Who does it, what’s slow or error-prone, and what it costs you.<i>“We track new clients in a shared spreadsheet. Three of us update it, and follow-ups slip through the cracks.”</i></li>
+          <li><span class="tag">Optional · AI suggestions on</span><b>Have a first result in mind?</b>If you have a hunch. Otherwise I’ll propose one.</li>
+        </ol>
+        <p class="note">Only the path name changes. Not offered if you choose two paths.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="study" id="questions">
+    <p class="eyebrow">3 · Website design, screen by screen</p>
+    <h2>The website path from the door or a campaign link</h2>
+    <p class="lead">The door and campaign links use <code style="font-size:14px">?path=website</code>, which skips “What are you working on?” and starts at question 1. One question per screen, like the software brief. Each has a one-line hint and an example, so the answer is useful the first time.</p>
+    <div class="cols4">
+      <div>
+        <div class="frame"><div class="crop" style="height:530px"><div class="phone zoom-72">
+          <div class="ph-head"><span class="ph-name">Kazon Wilson</span><span class="ph-menu">Menu <i></i></span></div>
+          <p class="kicker" style="margin-top:0">Website brief</p>
+          <ol class="dots"><li class="done"></li><li class="on"></li><li></li><li></li><li></li><li></li><li></li><li></li></ol>
+          <hr class="rule" />
+          <h1>What’s the website for?</h1>
+          <p class="intro">Who it’s for, and what you want visitors to do when they get there.</p>
+          <p class="foot">Plain language is fine. We’ll work out the design and technical details together. Please leave out passwords and access details.</p>
+          <div class="ta">A site for my pottery studio. People should see upcoming classes and sign up without messaging me first.</div>
+          <p class="sugg">Suggestions come from Cloudflare’s AI… <u>Turn off</u></p>
+          <div class="actions"><span class="btn out">Back</span><span class="btn fill">Next</span></div>
+        </div></div></div>
+        <p class="qcap"><b>1 · Purpose.</b> Required. Up to 2,000 characters. AI suggestions on, like the software brief’s first question. Its first sentence becomes the request title.</p>
+      </div>
+      <div>
+        <div class="frame"><div class="crop" style="height:530px"><div class="phone zoom-72">
+          <div class="ph-head"><span class="ph-name">Kazon Wilson</span><span class="ph-menu">Menu <i></i></span></div>
+          <p class="kicker" style="margin-top:0">Website brief</p>
+          <ol class="dots"><li class="done"></li><li class="done"></li><li class="on"></li><li></li><li></li><li></li><li></li><li></li></ol>
+          <hr class="rule" />
+          <h1>What do you have today?</h1>
+          <p class="intro">Your current site, if there is one, and anything you want to keep: pages, text, photos or a logo.</p>
+          <div class="field"><span class="flabel">Current website (optional)</span><div class="input">https://yourstudio.com</div></div>
+          <div class="field"><span class="flabel">What you already have (optional)</span><div class="ta short">A logo and about 30 class photos. The About and Pricing pages are still accurate. I like how calm the Example Ceramics site feels.</div></div>
+          <div class="actions"><span class="btn out">Back</span><span class="btn fill">Next</span></div>
+          <p class="skip">Skip</p>
+        </div></div></div>
+        <p class="qcap"><b>2 · What exists.</b> Both optional. The link must start with https:// or http://. No AI suggestions here: it’s an inventory, and a suggestion would invent things they don’t have.</p>
+      </div>
+      <div>
+        <div class="frame"><div class="crop" style="height:530px"><div class="phone zoom-72">
+          <div class="ph-head"><span class="ph-name">Kazon Wilson</span><span class="ph-menu">Menu <i></i></span></div>
+          <p class="kicker" style="margin-top:0">Website brief</p>
+          <ol class="dots"><li class="done"></li><li class="done"></li><li class="done"></li><li class="on"></li><li></li><li></li><li></li><li></li></ol>
+          <hr class="rule" />
+          <h1>Who will keep it up to date?</h1>
+          <p class="intro">This shapes how I build it and what the handoff covers.</p>
+          <div class="radio sel">Me or someone on my team</div>
+          <div class="radio">I’d like help with updates</div>
+          <div class="radio">Not sure yet</div>
+          <p class="foot" style="margin-top:12px">Updates after launch are quoted separately, at a fixed price. <span class="marker">needs your OK</span></p>
+          <div class="actions"><span class="btn out">Back</span><span class="btn fill">Next</span></div>
+        </div></div></div>
+        <p class="qcap"><b>3 · Who updates it.</b> One choice, “Not sure yet” is fine. It tells you whether the offer needs an editing setup and a walkthrough, or follow-on work.</p>
+      </div>
+      <div>
+        <div class="frame"><div class="crop" style="height:530px"><div class="phone zoom-72">
+          <div class="ph-head"><span class="ph-name">Kazon Wilson</span><span class="ph-menu">Menu <i></i></span></div>
+          <p class="kicker" style="margin-top:0">Website brief</p>
+          <ol class="dots"><li class="done"></li><li class="done"></li><li class="done"></li><li class="done"></li><li class="on"></li><li></li><li></li><li></li></ol>
+          <hr class="rule" />
+          <h1>When do you need it?</h1>
+          <p class="intro">If it’s tied to a launch, an event or a season, choose a date.</p>
+          <div class="radio">Flexible</div>
+          <div class="radio sel">By a date</div>
+          <div class="radio">As soon as possible</div>
+          <div class="field"><span class="flabel">Needed by</span><div class="input">12 / 01 / 2026</div></div>
+          <div class="actions"><span class="btn out">Back</span><span class="btn fill">Next</span></div>
+        </div></div></div>
+        <p class="qcap"><b>4 · Timing.</b> The software brief’s timing screen, plus a website hint. Same three choices and date check.</p>
+      </div>
+    </div>
+    <div class="after">
+      <div><b>Budget (optional)</b>Unchanged: “Is there a budget you’d like to share? Only if it helps. I’ll quote a fixed price either way.” No public website price.</div>
+      <div><b>Who should I reply to? · Ready to send?</b>Unchanged: name, email, company if they have one, then the review list and the security check.</div>
+      <div><b>After sending</b>Same receipt and emailed copy, with one website line: “I’ll look at what you have and reply with a fixed-price first milestone, or a question or two.”</div>
+    </div>
+  </section>
+
+  <!-- 3. Owner -->
+  <section class="study" id="owner">
+    <p class="eyebrow">4 · What you see in the owner center</p>
+    <h2>A website brief in your inbox, fit review and offer editor</h2>
+    <p class="lead">Same pages as any software request. The labels, examples and reminders change with the path, so the website decisions are in front of you when you make them. Web app and workflow requests look as they do today, under their new names.</p>
+    <div class="cols2">
+      <div>
+        <div class="frame"><div class="frame-bar">/owner/requests</div><div class="owner">
+          <h5>Requests</h5><p class="cap">Every person waiting for a clear next step.</p>
+          <div class="row"><span class="dot"></span><span><strong>A site for my pottery studio.</strong><small>Software · Website design · Jordan Example</small></span><time>Oct 19</time></div>
+          <div class="row" style="border-top:0"><span class="dot"></span><span><strong>Let my students book and pay for lessons.</strong><small>Software · Web app · Sam Example</small></span><time>Oct 19</time></div>
+          <div class="row" style="border-top:0"><span class="dot"></span><span><strong>We track new clients in a shared spreadsheet.</strong><small>Software · Workflow automation · Alex Example</small></span><time>Oct 18</time></div>
+          <div class="row" style="border-top:0"><span class="dot" style="background:#c9c1b4"></span><span><strong>One place to see what each client needs next.</strong><small>Software · Bring an idea to life · Riley Example</small></span><time>Sep 29</time></div>
+          <p class="o-hint" style="margin-top:10px">Earlier briefs keep the path name they were sent with. The Kind filter’s “Software” option covers every path.</p>
+        </div></div>
+        <div class="frame" style="margin-top:20px"><div class="frame-bar">/owner/requests/… · Their brief</div><div class="owner">
+          <h5>Their brief</h5><p class="cap">As submitted by the client. Read only.</p>
+          <dl>
+            <dt>Project</dt><dd>Website design</dd>
+            <dt>What’s the website for?</dt><dd>A site for my pottery studio. People should see upcoming classes and sign up without messaging me first.</dd>
+            <dt>Current website</dt><dd><a>jordanclay.example</a> <span class="ext">opens in a new tab</span></dd>
+            <dt>What they already have</dt><dd>A logo and about 30 class photos. The About and Pricing pages are still accurate.</dd>
+            <dt>Who will keep it up to date?</dt><dd>Me or someone on my team</dd>
+            <dt>Company, if you have one</dt><dd>Jordan Clay Studio</dd>
+            <dt>Timing</dt><dd>By a date · Needed by Dec 1, 2026</dd>
+          </dl>
+        </div></div>
+        <div class="frame" style="margin-top:20px"><div class="frame-bar">Right rail · Fit review</div><div class="owner">
+          <h5 style="font-size:22px">Fit review</h5>
+          <div class="o-radios"><span>Potential fit</span><br /><span>Needs clarification</span><br /><span>Stated mismatch</span></div>
+          <div class="remind"><b>Before an offer:</b> is the page text ready, who updates the site after launch, and whose account will host it?</div>
+          <span class="o-label">Review note</span><div class="o-input tall">Ask whether page text and photos are ready.</div>
+          <p class="o-hint">Private. Up to 500 characters.</p><p class="o-hint">Advisory. Your judgment decides.</p>
+        </div></div>
+      </div>
+      <div>
+        <div class="frame"><div class="frame-bar">/owner/requests/… · Offer (website path)</div><div class="owner">
+          <h5>Offer</h5><p class="cap">Draft v1 · Not sent</p>
+          <span class="o-label">Outcome</span><div class="o-input">A five-page site for Jordan Clay Studio that works on phones</div>
+          <span class="o-label">Summary</span><div class="o-input">Visitors see upcoming classes and sign up without messaging you first.</div>
+          <p class="o-h3">Milestones</p><p class="o-hint">A statement of work covers up to 3 milestones or 90 days.</p>
+          <div class="remind"><b>For a website,</b> name the pages, the number of design rounds, where it’s hosted and what the handoff includes. Pages that depend on text or photos they haven’t sent yet go in a later milestone.</div>
+          <p class="o-ms">Milestone 1</p>
+          <span class="o-label">Name</span><div class="o-input">Design direction</div>
+          <span class="o-label">Deliverables, one per line</span><div class="o-input tall">Page list and navigation
+Homepage design at phone and computer widths
+One round of design changes</div>
+          <span class="o-label">Acceptance examples, one per line</span><div class="o-input tall" style="min-height:54px">Open the homepage design on your phone and approve it</div>
+          <p class="o-ms">Milestone 2 (example)</p>
+          <span class="o-label">Deliverables, one per line</span><div class="o-input tall">Five pages built from the approved design
+Contact form that emails you
+Site live on your domain
+Handoff notes and a short editing walkthrough</div>
+          <span class="o-label">What you need from them</span><div class="o-input tall" style="min-height:54px">Logo, photos and page text
+An invite to your domain settings (not a password)</div>
+          <span class="o-label">Outside this offer</span><div class="o-input tall" style="min-height:54px">Writing page text from scratch
+Updates after handoff
+Hosting and domain fees</div>
+          <p class="o-hint">One per line. Name hosting fees and updates after handoff here if the offer doesn’t include them.</p>
+          <span class="o-label">Timing</span><div class="o-input">About 4 weeks from the start date, once page text is in.</div>
+          <div class="o-btns"><span class="q">Save draft</span><span class="send">Send offer</span></div>
+        </div></div>
+        <p class="note">Grey text is placeholder examples, as in the software editor today. Fees, payment mode, the whole-project range and agreement details stay exactly as they are.</p>
+      </div>
+    </div>
+  </section>
+
+    <!-- 5. Services -->
+  <section class="study" id="services">
+    <p class="eyebrow">5 · /services</p>
+    <h2>The rows follow the paths</h2>
+    <p class="lead">Each path gets a row in “Find the right fit.” with its own example and button, so the hub, the brief and the menu use the same names. The Lyft before-and-after stays at the top of the section.</p>
+    <div class="cols2">
+      <div>
+        <div class="option-head"><h3>Today</h3><span class="badge no">Live now</span></div>
+        <div class="frame"><div class="frame-bar">/services#software</div><div class="svc">
+          <p class="eyebrow">Software</p><p class="svc-h">Let’s build something useful.</p>
+          <p class="svc-intro">Make a workflow easier, or bring an idea to life. We’ll choose a clear first milestone together.</p>
+          <p class="svc-fit">Find the right fit.</p>
+          <div class="svc-row"><div><h6>Make a workflow easier</h6><p>For the tasks your team keeps doing by hand.</p></div><div class="svc-ev"><span class="ev">Relevant work</span><b>Skupos · Internal tools</b></div><span class="pbtn">Tell me about your workflow →</span></div>
+          <div class="svc-row"><div><h6>Bring an idea to life</h6><p>For an idea you want people to try.</p></div><div class="svc-ev"><span class="ev">Try something I’m building</span><b>Tally</b> · public demo</div><span class="pbtn">Tell me about your idea →</span></div>
+          <p class="svc-door">Website design door: <code>Plan your website</code> → <code>/#contact</code></p>
+        </div></div>
+      </div>
+      <div>
+        <div class="option-head"><h3>Named rows</h3><span class="badge rec">Recommended</span></div>
+        <div class="frame"><div class="frame-bar">/services#software</div><div class="svc">
+          <p class="eyebrow">Websites &amp; software</p><p class="svc-h">Let’s build something useful.</p>
+          <p class="svc-intro">A website, a web app, or a task your team repeats. We’ll choose a clear first milestone together.</p>
+          <p class="svc-fit">Find the right fit.</p>
+          <div class="svc-row" id="website"><div><h6>Website design</h6><p>For a site people can read on a phone and act on.</p></div><div class="svc-ev"><span class="ev">Relevant work</span><b>This site</b> · September 2026 redesign</div><span class="pbtn">Tell me about your website →</span></div>
+          <div class="svc-row"><div><h6>Web app</h6><p>For an app people open in a browser, on a phone or a computer.</p></div><div class="svc-ev"><span class="ev">Try something I’m building</span><b>Tally</b> · public demo<br /><b>Kaillera Next</b> · playable demo build</div><span class="pbtn">Tell me about your app →</span></div>
+          <div class="svc-row"><div><h6>Workflow automation</h6><p>For the tasks your team keeps doing by hand.</p></div><div class="svc-ev"><span class="ev">Relevant work</span><b>Skupos · Internal tools</b></div><span class="pbtn">Tell me about your workflow →</span></div>
+          <p class="svc-door">Website design door: <code>Plan your website</code> → <code>/software/start?path=website</code><br />Phone menu “Website design” → <code>/services#website</code></p>
+        </div></div>
+        <ul class="cost">
+          <li>Software door line: “I build <s>a first version people can try</s> <b>web apps people can try</b>, or a tool that makes a task your team repeats easier.”</li>
+          <li>Home’s “Start a software project” opens the first screen instead of jumping into the idea path.</li>
+          <li>A third row likely pushes the one-page print view onto a second page. I’ll check it in the build and tighten the print layout if it does.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. Pipeline -->
+  <section class="study" id="choice">
+    <p class="eyebrow">6 · Behind the paths</p>
+    <h2>One brief and one pipeline (option A), unchanged</h2>
+    <p class="lead">Naming the paths makes the earlier recommendation stronger: one more path costs a few labels, while a new request kind per path would cost a production table rebuild each time.</p>
+    <div class="cols3">
+      <div class="gets"><div class="option-head"><h3>A · Paths in one brief</h3><span class="badge rec">Recommended</span></div>
+        <div class="pipe"><span>Brief</span><span>Offer</span><span>Agreement</span><span>Stripe invoice</span><span>Project page</span></div>
+        <ul class="cost">
+          <li>About 20 files, no database migration. Every path stays kind <code>software</code>.</li>
+          <li>14 two-path checks in four files (<code>path === 'idea' ? … : 'workflow'</code>) become lookups.</li>
+          <li>The brief page adapts to the path: dot count, link field and single-choice screens.</li>
+          <li>/services rows come from a list instead of two fixed rows.</li>
+        </ul><p class="drift low">Drift: low.</p></div>
+      <div class="gets"><div class="option-head"><h3>B · A request kind per path</h3><span class="badge no">Not recommended</span></div>
+        <div class="pipe"><span>Brief</span><span class="maybe">Offer</span><span class="maybe">Agreement</span><span class="maybe">Stripe invoice</span><span class="maybe">Project page</span></div>
+        <ul class="cost">
+          <li><code>owner_requests.kind</code> has a CHECK constraint: each new kind is a table-rebuild migration on production D1.</li>
+          <li>16 files branch on <code>kind</code>, including SQL in offers, invoices, signing and project pages.</li>
+        </ul><p class="drift high">Drift: high, and it grows with each new path.</p></div>
+      <div class="gets"><div class="option-head"><h3>C · Fields on the contact form</h3><span class="badge no">Misses the goal</span></div>
+        <div class="pipe"><span class="off">Brief</span><span class="off">Offer</span><span class="off">Agreement</span><span class="off">Stripe invoice</span></div>
+        <ul class="cost">
+          <li>Website leads still end as an email with no way to an offer, agreement or invoice.</li>
+        </ul><p class="drift na">Can’t take a client through to an invoice.</p></div>
+    </div>
+  </section>
+
+  <!-- 7. Decisions -->
+  <section class="study" id="decisions">
+    <p class="eyebrow">7 · Your calls</p>
+    <h2>What I need from you before anything is built</h2>
+    <p class="lead">Approved 2026-10-19: build with these defaults.</p>
+    <ol class="decisions">
+      <li><b>Workflow path</b>Keep it as “Workflow automation”, or close it until data integration has a personal project example.<span class="def">Default: keep it</span></li>
+      <li class="flag"><b>Agreement text</b>Website and web app clients sign the same MSA and SOW templates as today’s software clients. The real template text is private and I can’t see it from here. Please confirm it covers website design, or publish a new template version before the first website offer.<span class="def" style="color:var(--accent)">No default: needs your check</span></li>
+      <li><b>/services</b>Named rows for every path, or keep website design as a door only.<span class="def">Default: named rows</span></li>
+      <li><b>Public starting price</b>Show a “from” price for website design, as audio does, or quote after the brief, as software does.<span class="def">Default: no public price</span></li>
+      <li><b>Updates after launch</b>Keep “Updates after launch are quoted separately, at a fixed price.” on the website path’s third question, or leave it out.<span class="def">Default: keep it</span></li>
+      <li><b>Path names</b>“Website design”, “Web app” and “Workflow automation”, with the one-line descriptions shown in section 1.<span class="def">Default: as shown</span></li>
+    </ol>
+  </section>
+
+  <!-- 8. Files -->
+  <section class="study" id="files">
+    <p class="eyebrow">8 · The build</p>
+    <h2>What changes</h2>
+    <p class="lead">Written by Haiku subagents, tests first, then reviewed each round until clean, then Greptile and Codex on the PR. Merging deploys production, so it follows the deployment gate.</p>
+    <table class="files">
+      <tr><th>Where</th><th>Change</th></tr>
+      <tr><td><code>src/lib/software-inquiry.ts</code></td><td>Paths <code>website</code>, <code>webapp</code> and <code>workflow</code> (renamed), their labels, questions and schema branches. Earlier <code>idea</code> briefs keep “Bring an idea to life” and their original questions on your pages and their offers. A key changes only when the meaning changes.</td></tr>
+      <tr><td><code>src/pages/software/start.astro</code>, <code>src/scripts/software-inquiry.ts</code></td><td>Named first screen; path-aware kicker, back link, title and dot count; link field and single-choice screen; old <code>?path=</code> links mapped; draft saving for new answers.</td></tr>
+      <tr><td><code>src/pages/api/software/brief/suggest.ts</code></td><td>Accept the new question titles and paths for suggestions.</td></tr>
+      <tr><td><code>src/lib/software-offers.ts</code>, <code>src/lib/client-emails.ts</code>, <code>src/pages/privacy.astro</code></td><td>Path names on offers; “project brief” wording in client emails; privacy note covers website briefs and the optional site link.</td></tr>
+      <tr><td><code>src/components/owner/</code></td><td>Website examples and reminders in fit review and the offer editor; the current-site link opens in a new tab without a referrer.</td></tr>
+      <tr><td><code>src/data/services.ts</code>, <code>src/layouts/ServiceSheet.astro</code>, <code>src/data/work-with-me.ts</code>, <code>src/components/SiteNav.astro</code>, <code>src/components/Hero.astro</code></td><td>Three named rows from a list; section kicker and intro; door links and software door line; phone menu link to <code>#website</code>; Home button to the first screen; print view checked.</td></tr>
+      <tr><td><code>docs/website-content-model.md</code></td><td>Record the named paths, the website door decision, and the rule that a path opens once it has a personal project example.</td></tr>
+      <tr><td><code>tests/</code>, <code>scripts/screenshots/scenarios/</code></td><td>Unit and page tests for each path and the old links; a scenario capturing each website screen, the receipt and your owner view at both widths; the software brief scenario updated for the new names.</td></tr>
+    </table>
+  </section>
+</main>
+</body>
+</html>
