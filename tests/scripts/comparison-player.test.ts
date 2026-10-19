@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getAudioContextConstructor, isWaveformScrub, setPlaybackAudioSession, waveformGeometry, waveformSeekSeconds } from '../../src/scripts/comparison-player';
+import { TOUCH_SCRUB_MIN_DISTANCE } from '../../src/lib/waveform';
 
 describe('getAudioContextConstructor', () => {
   it('uses the prefixed Web Audio constructor exposed by mobile Safari', () => {
@@ -70,8 +71,8 @@ describe('isWaveformScrub', () => {
 
   it('ignores contact jitter so a touch scrubs only after a clear sideways move', () => {
     expect(isWaveformScrub('touch', 2, 1)).toBe(false);
-    expect(isWaveformScrub('touch', 9, 0)).toBe(false);
-    expect(isWaveformScrub('touch', 10, 0)).toBe(true);
+    expect(isWaveformScrub('touch', TOUCH_SCRUB_MIN_DISTANCE - 1, 0)).toBe(false);
+    expect(isWaveformScrub('touch', TOUCH_SCRUB_MIN_DISTANCE, 0)).toBe(true);
     expect(isWaveformScrub('touch', 12, 3)).toBe(true);
     expect(isWaveformScrub('touch', 3, 12)).toBe(false);
   });

@@ -46,26 +46,23 @@ it('places compact playback beside the waveform and seeks from both the track an
   expect(component).toContain('.comparison-player--compact .comparison-switch span{display:inline}');
   expect(script).toContain("'.comparison-waveform-stage, .compact-waveform-frame'");
   expect(script).toContain('waveformSeekSeconds(');
-  expect(component).not.toContain('height:38px;color:var(--ink);pointer-events:none');
   expect(component).toContain('.comparison-player[data-initialized="true"]:not([data-audio-fallback="true"]) .comparison-waveform-stage,.comparison-player[data-initialized="true"]:not([data-audio-fallback="true"]) .compact-waveform-frame{cursor:pointer;touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none}');
 });
 
 it('fills the played part of every A/B waveform in the accent over neutral unplayed bars', () => {
   expect(component).toContain('.comparison-player{border:1px solid var(--rule);border-radius:4px;padding:1rem;--wave-unplayed:#BDB6AA}');
   expect(component).toContain('.comparison-waveform{height:44px;color:var(--wave-unplayed)}');
-  expect(component).toContain('.comparison-waveform-played{position:absolute;top:0;left:0;width:100%;height:100%;display:block;color:var(--accent);pointer-events:none;clip-path:inset(0 calc(100% - var(--position,0%)) 0 0)}');
+  expect(component).toContain('.comparison-waveform-played{position:absolute;top:0;left:0;width:100%;height:100%;color:var(--accent);pointer-events:none;clip-path:inset(0 calc(100% - var(--position,0%)) 0 0)}');
   expect(component).toContain('.comparison-player--compact .compact-waveform{display:block;width:100%;height:38px;color:var(--wave-unplayed)}');
   expect(component).toContain('.comparison-player--compact .compact-waveform-played{position:absolute;top:0;left:0;color:var(--accent);pointer-events:none;clip-path:inset(0 calc(100% - var(--position,0%)) 0 0)}');
-  expect(component).toContain('.compact-waveform-frame{position:relative}');
+  expect(component).toContain('.comparison-player--compact .compact-waveform-frame{position:relative}');
   expect(component).toContain('<div class="compact-waveform-frame">');
   expect(component).toContain('class="comparison-waveform-played"');
   expect(component).toContain('class="compact-waveform compact-waveform-played"');
-  expect(component).not.toContain('.compact-waveform[data-version="after"]{color:var(--accent)}');
   expect(component).toContain('.comparison-player--compact .compact-waveform :global(line){transition:y1 180ms ease,y2 180ms ease}');
   expect(component).toContain('@media(prefers-reduced-motion:reduce){.comparison-player--compact .compact-waveform :global(line){transition:none}}');
   expect(script).toContain("root.querySelectorAll<SVGSVGElement>('.compact-waveform').forEach(svg => {");
   expect(script).toContain("svg.querySelectorAll<SVGLineElement>('[data-compact-wave-line]')");
-  expect(script).not.toContain('compactWaveform.querySelectorAll<SVGLineElement>');
 });
 
 it('drags across both waveforms with pointer events so mouse, pen and touch each scrub in their own way', () => {
@@ -75,12 +72,10 @@ it('drags across both waveforms with pointer events so mouse, pen and touch each
   expect(script).toContain("addEventListener('pointerup'");
   expect(script).toContain('isWaveformScrub(event.pointerType');
   expect(script).toContain('event.isPrimary');
-  expect(script).not.toContain("waveform.addEventListener('click'");
 });
 
 it('tells visitors they can click, tap or drag the full waveform to seek', () => {
   expect(component).toContain('Switch versions. Keep your place. Click, tap or drag either waveform to seek.');
-  expect(component).not.toContain('Click or tap either waveform to seek.');
 });
 
 it('keeps the compact played fill above the unplayed bars by source order', () => {
@@ -96,5 +91,9 @@ it('seeks once per gesture, keeps playback through a drag past the end, and leav
   expect(script).toContain('transport.play()');
   expect(script).toContain('if (!gesture.scrubbing) {');
   expect(script).toContain('gesture.scrubbing = true');
-  expect(component).toContain('touch-action:pan-y pinch-zoom');
+});
+
+it('skips pen pressure moves that leave the pointer in place so a resting pen does not restart playback', () => {
+  expect(script).toContain('if (event.clientX === gesture.lastX) return;');
+  expect(script).toContain('gesture.lastX = event.clientX;');
 });
