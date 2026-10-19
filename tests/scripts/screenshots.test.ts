@@ -564,6 +564,27 @@ it.each(['desktop', 'phone'])('captures the ghost text with the %s input hint', 
   expect(waits).toEqual(['[data-step="1"] [data-ghost-text]']);
 });
 
+it('holds the sending request whether fetch gets a string, a URL or a Request, and passes other requests on', async () => {
+  const scenario = await import('../../scripts/screenshots/scenarios/software-brief.mjs');
+  let script = '';
+  const page = { on() {}, route: async () => {}, reload: async () => {}, waitForFunction: async () => {},
+    addInitScript: async (fn: unknown) => { if (typeof fn === 'function' && fn.toString().includes('/api/software-inquiry')) script = fn.toString(); },
+    locator: () => ({ check: async () => {}, fill: async () => {}, click: async () => {}, waitFor: async () => {}, dispatchEvent: async () => {}, innerText: async () => '', isDisabled: async () => true, evaluateAll: async () => true }) };
+  await scenario.default.run({ base: 'http://127.0.0.1:4321', sql() {}, capture: async ({ file, prepare }: any) => {
+    if (file === 'software-brief-sending-desktop.png') await prepare(page);
+    return file;
+  } });
+  expect(script).toContain('/api/software-inquiry');
+  const inquiry = 'http://127.0.0.1:4321/api/software-inquiry', pass = 'http://127.0.0.1:4321/api/software/brief/pass';
+  const passed: string[] = [];
+  const sandbox: any = { window: { fetch: vi.fn(async (input: unknown) => { passed.push(String(input)); return 'passed'; }) }, location: { href: 'http://127.0.0.1:4321/software/start' }, URL, Request };
+  runInNewContext(`(${script})()`, sandbox);
+  const wrapped = sandbox.window.fetch;
+  wrapped(inquiry, { method: 'POST' }); wrapped(new URL(inquiry), { method: 'POST' }); wrapped(new Request(inquiry, { method: 'POST' }));
+  expect(await wrapped(pass)).toBe('passed');
+  expect(passed).toEqual([pass]);
+});
+
 
 it('allows only the exact declared failed resource URL and status', () => {
   const url = 'http://127.0.0.1:4321/api/software-inquiry';

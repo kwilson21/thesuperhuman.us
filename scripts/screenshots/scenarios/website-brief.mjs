@@ -127,7 +127,7 @@ const clientShots = [
   { name: 'timing', title: 'Timing', caption: 'Fictional needed-by date with the website hint', path: '/software/start', prepare: prepareAt('timing', 3, page => page.locator('[name=timingDate]').blur()) },
   { name: 'budget', title: 'Budget', caption: 'Budget left empty, which is optional', path: '/software/start', prepare: prepareAt('budget', 4) },
   { name: 'contact', title: 'Contact', caption: 'Fictional name, email and company', path: '/software/start', prepare: prepareAt('contact', 5) },
-  { name: 'review', title: 'Review', caption: 'Ready to send, with the website answers listed', path: '/software/start', prepare: prepareAt('review', 6, assertReview) },
+  { name: 'review', title: 'Review', caption: 'Fictional answers ready to send, with the website answers listed', path: '/software/start', prepare: prepareAt('review', 6, assertReview) },
   { name: 'receipt', title: 'Receipt', caption: 'Fictional receipt with mocked delivery and no email call', path: '/software/start', prepare: prepareAt('receipt', 6, sendBrief) },
 ];
 
@@ -144,7 +144,7 @@ export default {
 
     const shots = [
       ...clientShots,
-      { name: 'owner-brief', title: 'Owner reads the website brief', owner: true, caption: 'Seeded fictional website brief: their brief, the fit review and the empty offer editor with website prompts',
+      { name: 'owner-brief', title: 'Owner reads the website brief', owner: true, caption: "Seeded fictional website brief as the owner reads it, with the fit review and the empty offer editor's website prompts",
         path: `/owner/requests/${BRIEF_ID}`, prepare: page => page.getByRole('heading', { name: 'Their brief' }).waitFor() },
       { name: 'owner-list', title: 'Owner request list', owner: true, caption: 'Software requests, with the seeded website brief listed',
         path: '/owner/requests?kind=software', prepare: page => page.getByText('A site for my pottery studio.').first().waitFor() },

@@ -47,8 +47,8 @@ export function currentSiteHref(value: unknown): string | null {
     return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname && !url.username && !url.password ? url.href : null;
   } catch { return null; }
 }
-// A link without a web scheme needs one added. Any other problem is with a link that already starts with one.
-const currentUrlMessage = (value: string) => /^https?:\/\//i.test(value) ? 'Check the link, or leave it empty.' : 'Add https:// to the start of the link.';
+// Three cases: a failed web link is checked; another scheme (or a mistyped one, such as https:evil.com) is named; anything else, such as a bare host or host:port, gets https:// added.
+const currentUrlMessage = (value: string) => /^https?:\/\//i.test(value) ? 'Check the link, or leave it empty.' : /^[a-z][a-z\d+.-]*:(?!\d)/i.test(value) ? 'Start the link with https:// or http://.' : 'Add https:// to the start of the link.';
 const single = (max: number) => z.string().trim().max(max, `Keep this under ${max} characters.`);
 const required = (max: number) => single(max).min(1, 'This answer is required.');
 const common = {

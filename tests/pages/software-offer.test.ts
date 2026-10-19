@@ -1471,7 +1471,7 @@ it('helps the owner review a website brief: link, offer examples and unsafe link
     const html = await render();
     const brief = briefOf(html);
     for (const text of ['Website design', 'What’s the website for?', 'What they already have', 'Me or someone on my team']) expect(brief).toContain(text);
-    expect(brief).toMatch(/<a href="https:\/\/jordanclay\.example\/" target="_blank" rel="noopener noreferrer"[^>]*>https:\/\/jordanclay\.example\/<span class="visually-hidden[^"]*">\(opens in a new tab\)<\/span><\/a> <span [^>]*aria-hidden="true"[^>]*>opens in a new tab<\/span>/);
+    expect(brief).toMatch(/<a href="https:\/\/jordanclay\.example\/" target="_blank" rel="noopener noreferrer"[^>]*>https:\/\/jordanclay\.example\/<span class="visually-hidden[^"]*"> \(opens in a new tab\)<\/span><\/a> <span [^>]*aria-hidden="true"[^>]*>opens in a new tab<\/span>/);
     expect(html).toMatch(/<a href="\/services#website"[^>]*>Service →<\/a>/);
     for (const text of websiteOfferText) expect(html).toContain(text);
     expect(html).toContain('Before an offer:');
@@ -1482,7 +1482,7 @@ it('helps the owner review a website brief: link, offer examples and unsafe link
     sql.prepare("UPDATE owner_requests SET details_json=json_set(details_json,'$.currentUrl',?) WHERE id='site'").run('https://p\u0430ypal.example/');
     const lookalike = briefOf(await render()), punycode = new URL('https://p\u0430ypal.example/').href;
     expect(punycode).toContain('xn--');
-    expect(lookalike).toContain(`<a href="${punycode}" target="_blank" rel="noopener noreferrer"`); expect(lookalike).toContain(`>${punycode}<span class="visually-hidden`); expect(lookalike).toMatch(/visually-hidden[^"]*">\(opens in a new tab\)<\/span><\/a>/);
+    expect(lookalike).toContain(`<a href="${punycode}" target="_blank" rel="noopener noreferrer"`); expect(lookalike).toContain(`>${punycode}<span class="visually-hidden`); expect(lookalike).toMatch(/visually-hidden[^"]*"> \(opens in a new tab\)<\/span><\/a>/);
     expect(lookalike).not.toContain('\u0430');
   } finally {sql.close();}
 });

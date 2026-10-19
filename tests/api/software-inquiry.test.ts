@@ -452,8 +452,9 @@ it('validates website answers with the approved messages', () => {
   for (const [key, value, message] of [
     ['purpose', undefined, 'This answer is required.'], ['purpose', '', 'This answer is required.'],
     ['purpose', 'x'.repeat(2001), 'Keep this under 2000 characters.'], ['purpose', 'A\u0001', 'Remove control characters.'],
-    ['currentUrl', 'yourstudio.com', 'Add https:// to the start of the link.'], ['currentUrl', 'ftp://x.example', 'Add https:// to the start of the link.'],
-    ['currentUrl', 'javascript:alert(1)', 'Add https:// to the start of the link.'], ['currentUrl', 'https:evil.com', 'Add https:// to the start of the link.'],
+    ['currentUrl', 'yourstudio.com', 'Add https:// to the start of the link.'], ['currentUrl', 'yourstudio.com:8080', 'Add https:// to the start of the link.'], ['currentUrl', '//x.com', 'Add https:// to the start of the link.'], ['currentUrl', 'http//x', 'Add https:// to the start of the link.'],
+    ['currentUrl', 'ftp://x.example', 'Start the link with https:// or http://.'], ['currentUrl', 'mailto:a@b.c', 'Start the link with https:// or http://.'],
+    ['currentUrl', 'javascript:alert(1)', 'Start the link with https:// or http://.'], ['currentUrl', 'https:evil.com', 'Start the link with https:// or http://.'], ['currentUrl', 'https:/x.com', 'Start the link with https:// or http://.'],
     ['currentUrl', 'https://studio.com/our classes', 'Check the link, or leave it empty.'], ['currentUrl', 'https://', 'Check the link, or leave it empty.'],
     ['currentUrl', 'https://jordanclay.example\nSecond line', 'Use one line.'],
     ['currentUrl', `https://x.example/${'a'.repeat(2048)}`, 'Keep this under 2048 characters.'],
@@ -473,6 +474,7 @@ it('validates website answers with the approved messages', () => {
     if (!result.ok) expect(result.errors.currentUrl, currentUrl).toBe(message);
   }
   for (const currentUrl of ['http://example.com', '', ' https://lead.example', 'HTTPS://Example.com/path']) expect(validateSoftwareInquiry({ ...site, currentUrl }).ok, currentUrl).toBe(true);
+  expect(validateSoftwareInquiry({ ...site, currentUrl: '   ' })).toMatchObject({ ok: true, value: { currentUrl: '' } });
   expect(validateSoftwareInquiry({ ...site, currentUrl: undefined, existing: undefined }).ok).toBe(true);
 });
 

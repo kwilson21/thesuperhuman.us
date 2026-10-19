@@ -95,7 +95,7 @@ export default {
             // pending request when the page closes, so it reached the server (verified against the dev server).
             await page.addInitScript(() => {
               const send = window.fetch;
-              window.fetch = (input, init) => new URL(typeof input === 'string' ? input : input.url, location.href).pathname === '/api/software-inquiry'
+              window.fetch = (input, init) => new URL(input instanceof Request ? input.url : String(input), location.href).pathname === '/api/software-inquiry'
                 ? new Promise(() => {}) : send.call(window, input, init);
             });
           } else await page.route('**/api/software-inquiry', route => route.fulfill({ status: 503, json: { ok: false, error: 'Try again.' } }));
