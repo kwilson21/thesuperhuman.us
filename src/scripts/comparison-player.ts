@@ -125,19 +125,18 @@ export function setupComparisonPlayers() {
     }
     seek.addEventListener('input', () => seekTo(Number(seek.value)));
     root.querySelectorAll<HTMLElement>('.comparison-waveform-stage, .compact-waveform-frame').forEach(stage => {
-      let gesture: { startX: number; startY: number; scrubbing: boolean; seeked: boolean; resume: boolean } | undefined;
+      let gesture: { startX: number; startY: number; scrubbing: boolean; resume: boolean } | undefined;
       const seekFromPointer = (event: PointerEvent) => {
         const bounds = stage.getBoundingClientRect();
         if (!bounds.width || !gesture) return;
         seekTo(waveformSeekSeconds(event.clientX, bounds.left, bounds.width, transport?.duration ?? Number(root.dataset.duration)));
         // A drag past the end parks the transport at its end without resuming, so play again once the pointer is back inside the track.
         if (gesture.resume && transport && !transport.playing && position < transport.duration) { transport.play(); render(); }
-        gesture.seeked = true;
       };
       stage.addEventListener('pointerdown', event => {
         if (root.dataset.audioFallback === 'true' || !event.isPrimary || event.button !== 0) return;
         stage.setPointerCapture(event.pointerId);
-        gesture = { startX: event.clientX, startY: event.clientY, scrubbing: event.pointerType !== 'touch', seeked: false, resume: Boolean(transport?.playing) };
+        gesture = { startX: event.clientX, startY: event.clientY, scrubbing: isWaveformScrub(event.pointerType, 0, 0), resume: Boolean(transport?.playing) };
         if (gesture.scrubbing) seekFromPointer(event);
       });
       stage.addEventListener('pointermove', event => {
@@ -150,8 +149,8 @@ export function setupComparisonPlayers() {
         seekFromPointer(event);
       });
       stage.addEventListener('pointerup', event => {
-        // Mouse and pen already seeked on pointerdown; a touch tap seeks here.
-        if (!gesture || gesture.seeked || !stage.hasPointerCapture(event.pointerId)) return;
+        // A scrubbing gesture has already seeked on its moves or pointerdown; only a touch tap seeks here.
+        if (!gesture || gesture.scrubbing || !stage.hasPointerCapture(event.pointerId)) return;
         seekFromPointer(event);
       });
     });

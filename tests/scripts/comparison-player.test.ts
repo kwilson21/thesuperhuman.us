@@ -58,11 +58,21 @@ describe('isWaveformScrub', () => {
   it('scrubs with a mouse or pen whatever the direction of movement', () => {
     expect(isWaveformScrub('mouse', 0, 50)).toBe(true);
     expect(isWaveformScrub('pen', 2, 40)).toBe(true);
+    expect(isWaveformScrub('mouse', 0, 0)).toBe(true);
+    expect(isWaveformScrub('pen', 0, 0)).toBe(true);
   });
 
   it('scrubs a touch only when it moves more sideways than vertically', () => {
     expect(isWaveformScrub('touch', 10, 3)).toBe(true);
     expect(isWaveformScrub('touch', 3, 10)).toBe(false);
     expect(isWaveformScrub('touch', 0, 0)).toBe(false);
+  });
+
+  it('ignores contact jitter so a touch scrubs only after a clear sideways move', () => {
+    expect(isWaveformScrub('touch', 2, 1)).toBe(false);
+    expect(isWaveformScrub('touch', 9, 0)).toBe(false);
+    expect(isWaveformScrub('touch', 10, 0)).toBe(true);
+    expect(isWaveformScrub('touch', 12, 3)).toBe(true);
+    expect(isWaveformScrub('touch', 3, 12)).toBe(false);
   });
 });

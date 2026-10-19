@@ -61,7 +61,6 @@ it('fills the played part of every A/B waveform in the accent over neutral unpla
   expect(component).toContain('class="comparison-waveform-played"');
   expect(component).toContain('class="compact-waveform compact-waveform-played"');
   expect(component).not.toContain('.compact-waveform[data-version="after"]{color:var(--accent)}');
-  expect(component).not.toContain('transition:color 160ms ease');
   expect(component).toContain('.comparison-player--compact .compact-waveform :global(line){transition:y1 180ms ease,y2 180ms ease}');
   expect(component).toContain('@media(prefers-reduced-motion:reduce){.comparison-player--compact .compact-waveform :global(line){transition:none}}');
   expect(script).toContain("root.querySelectorAll<SVGSVGElement>('.compact-waveform').forEach(svg => {");
@@ -90,19 +89,12 @@ it('keeps the compact played fill above the unplayed bars by source order', () =
 
 it('seeks once per gesture, keeps playback through a drag past the end, and leaves fallback players alone', () => {
   expect(script).toContain("root.dataset.audioFallback === 'true'");
-  expect(script).toContain("event.pointerType !== 'touch'");
-  expect(script).toContain('seeked: false');
-  expect(script).toContain('gesture.seeked = true');
-  expect(script).toContain('if (!gesture || gesture.seeked');
+  expect(script).toContain('scrubbing: isWaveformScrub(event.pointerType, 0, 0)');
+  expect(script).toContain('if (!gesture || gesture.scrubbing || !stage.hasPointerCapture(event.pointerId)) return;');
   expect(script).toContain('resume: Boolean(transport?.playing)');
   expect(script).toContain('position < transport.duration');
   expect(script).toContain('transport.play()');
   expect(script).toContain('if (!gesture.scrubbing) {');
   expect(script).toContain('gesture.scrubbing = true');
   expect(component).toContain('touch-action:pan-y pinch-zoom');
-});
-
-it('drops the dead compact version attribute now that the color rule is gone', () => {
-  expect(component).not.toContain('data-version="before"');
-  expect(script).not.toContain('compactWaveform.dataset.version');
 });

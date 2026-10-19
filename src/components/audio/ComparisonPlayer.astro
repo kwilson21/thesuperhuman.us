@@ -5,7 +5,7 @@ import PlayIcon from './PlayIcon.astro';
 interface Props { example: MusicCatalog['examples'][number]; recording: Recording; compact?: boolean }
 const { example, recording, compact = false } = Astro.props;
 const labels = example.service === 'mastering' ? ['Mix', 'Master'] : ['Before mixing', 'Mixed version'];
-// Each waveform renders twice: a neutral base and an accent layer clipped to the playhead. Bar markup is built once per variant here and set into both layers.
+// Each waveform draws two layers: a neutral base and an accent layer clipped to the playhead. Each layer calls the same bar helper below.
 const fullBars = (heights: number[]) => heights.map((height, i) => `<line x1="${i * 4 + 2}" x2="${i * 4 + 2}" y1="${32 - Math.max(1, height * 75)}" y2="${32 + Math.max(1, height * 75)}" stroke="currentColor" stroke-width="2"></line>`).join('');
 const compactBars = (amplitudes: number[]) => amplitudes.map((amplitude, i) => { const { y1, y2 } = waveformGeometry([amplitude])[0]; return `<line data-compact-wave-line x1="${i * 4 + 2}" x2="${i * 4 + 2}" y1="${y1}" y2="${y2}" stroke="currentColor" stroke-width="2"></line>`; }).join('');
 ---
