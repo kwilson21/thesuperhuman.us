@@ -457,7 +457,7 @@ it('validates website answers with the approved messages', () => {
     ['currentUrl', 'https//x.com', 'Use https:// or http:// at the start of the link.'], ['currentUrl', 'http//x', 'Use https:// or http:// at the start of the link.'],
     ['currentUrl', 'ftp://x.example', 'Use https:// or http:// at the start of the link.'], ['currentUrl', 'mailto:a@b.c', 'Use https:// or http:// at the start of the link.'],
     ['currentUrl', 'javascript:alert(1)', 'Use https:// or http:// at the start of the link.'], ['currentUrl', 'https:evil.com', 'Use https:// or http:// at the start of the link.'], ['currentUrl', 'https:/x.com', 'Use https:// or http:// at the start of the link.'],
-    ['currentUrl', 'https: //x.com', 'Use https:// or http:// at the start of the link.'], ['currentUrl', 'http:x.com', 'Use https:// or http:// at the start of the link.'],
+    ['currentUrl', 'https: //x.com', 'Use https:// or http:// at the start of the link.'], ['currentUrl', 'http:3000', 'Use https:// or http:// at the start of the link.'], ['currentUrl', 'https:8080', 'Use https:// or http:// at the start of the link.'],
     ['currentUrl', 'none', 'Check the link, or leave it empty.'], ['currentUrl', 'n/a', 'Check the link, or leave it empty.'], ['currentUrl', 'not yet', 'Check the link, or leave it empty.'],
     ['currentUrl', 'yourstudio.com and our Instagram', 'Check the link, or leave it empty.'], ['currentUrl', 'a:1', 'Check the link, or leave it empty.'],
     ['currentUrl', 'kazon@example.com', 'Check the link, or leave it empty.'], ['currentUrl', 'a@b.com', 'Check the link, or leave it empty.'],
@@ -469,6 +469,7 @@ it('validates website answers with the approved messages', () => {
     ['currentUrl', 'https://studio.com/our classes', 'Check the link, or leave it empty.'], ['currentUrl', 'HTTPS://studio.com/our classes', 'Check the link, or leave it empty.'], ['currentUrl', 'https://', 'Check the link, or leave it empty.'],
     ['currentUrl', 'https://jordanclay.example\nSecond line', 'Use one line.'],
     ['currentUrl', `https://x.example/${'a'.repeat(2048)}`, 'Keep this under 2048 characters.'],
+    ['currentUrl', 'x'.repeat(2048), 'Check the link, or leave it empty.'], ['currentUrl', 'x'.repeat(2049), 'Keep this under 2048 characters.'],
     ['existing', 'x'.repeat(2001), 'Keep this under 2000 characters.'],
     ['updates', undefined, 'Choose one.'], ['updates', 'nobody', 'Choose one.'],
   ] as const) {
@@ -489,7 +490,7 @@ it('validates website answers with the approved messages', () => {
   expect(validateSoftwareInquiry({ ...site, currentUrl: undefined, existing: undefined }).ok).toBe(true);
 });
 
-it('checks a long dotted link in linear time', () => {
+it('checks the message regexes in linear time on long ASCII input, without reaching URL parsing', () => {
   const started = performance.now();
   expect(currentUrlMessage('a.'.repeat(16000) + ' ')).toBe('Check the link, or leave it empty.');
   expect(performance.now() - started).toBeLessThan(100);
@@ -497,8 +498,9 @@ it('checks a long dotted link in linear time', () => {
 
 it('answers an oversized current URL with the length limit alone, without parsing it, and checks a value just under the limit', () => {
   const site = { ...base, path: 'website', purpose: 'A site for my pottery studio.', currentUrl: '', existing: '', updates: 'self' };
+  // Unguarded URL parsing of this value takes several hundred ms (quadratic in length); the length guard keeps the check under 20 ms.
   const started = performance.now();
-  expect(validateSoftwareInquiry({ ...site, currentUrl: 'https://' + 'ü.'.repeat(15990) })).toMatchObject({ ok: false, errors: { currentUrl: 'Keep this under 2048 characters.' } });
+  expect(validateSoftwareInquiry({ ...site, currentUrl: 'https://' + 'ü.'.repeat(60000) })).toMatchObject({ ok: false, errors: { currentUrl: 'Keep this under 2048 characters.' } });
   expect(performance.now() - started).toBeLessThan(20);
   expect(validateSoftwareInquiry({ ...site, currentUrl: '.'.repeat(2040) + ':1x' })).toMatchObject({ ok: false, errors: { currentUrl: 'Check the link, or leave it empty.' } });
 });
