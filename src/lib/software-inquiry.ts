@@ -7,7 +7,7 @@ export const softwarePaths = {
   webapp: 'Web app',
   workflow: 'Workflow automation',
 } as const;
-// Earlier briefs keep the path name they were sent with. New briefs can't choose it.
+// Earlier briefs keep the name they were sent with. The page no longer offers it, but the server still accepts it from pages opened before the change.
 export const legacySoftwarePaths = { idea: 'Bring an idea to life' } as const;
 export const softwarePathDescriptions = {
   website: 'A site people can read on a phone and act on.',
@@ -32,6 +32,8 @@ export const softwareLabels = {
   approver: 'Who will approve the project?', approverRole: 'Their role (optional)',
   purpose: 'What’s the website for?', currentUrl: 'Current website', existing: 'What they already have', updates: 'Who will keep it up to date?', appGoal: 'What should the app let people do?',
 } as const;
+// The client reads their own answers, so "they" becomes "you".
+export const clientSoftwareLabels: Record<string, string> = { ...softwareLabels, existing: 'What you already have' };
 export const softwareQuestions = { website: ['purpose', 'currentUrl', 'existing', 'updates'], webapp: ['appGoal', 'firstVersion'], workflow: ['today', 'audience', 'firstResult'], idea: ['idea', 'audienceToday', 'firstVersion', 'signal'] } as const;
 export const softwareDetailKeys = ['name', 'email', 'company', 'timing', 'timingDate', 'timingReason', 'budgetStatus', 'budgetNote', 'approver', 'approverRole'] as const;
 export const timingLabels = { flexible: 'Flexible', month: 'Within a month', quarter: 'In one to three months', date: 'By a date', asap: 'As soon as possible' } as const;
@@ -39,10 +41,10 @@ export const budgetLabels = { approved: 'Approved', pending: 'Waiting for approv
 export const approverLabels = { self: 'I do', other: 'Someone else, and I can involve them', unsure: 'Not sure yet' } as const;
 export const updateLabels = { self: 'Me or someone on my team', help: 'I’d like help with updates', unsure: 'Not sure yet' } as const;
 export function currentSiteHref(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
+  if (typeof value !== 'string' || !/^https?:\/\//i.test(value) || /\s/.test(value)) return null;
   try {
     const url = new URL(value);
-    return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname ? url.href : null;
+    return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname && !url.username && !url.password ? url.href : null;
   } catch { return null; }
 }
 const single = (max: number) => z.string().trim().max(max, `Keep this under ${max} characters.`);
@@ -85,7 +87,7 @@ export function validateSoftwareInquiry(input: unknown): { ok: true; value: Soft
   return { ok: true, value };
 }
 export function softwareRequest(input: SoftwareInput): NewOwnerRequest {
-  const firstLine = String(input[softwareQuestions[input.path][0] as keyof SoftwareInput]).trim().replace(/\s+/g, ' ').split(/(?<=[.!?])\s/, 1)[0];
+  const firstLine = String((input as Record<string, unknown>)[softwareQuestions[input.path][0]]).trim().replace(/\s+/g, ' ').split(/(?<=[.!?])\s/, 1)[0];
   const summaryCharacters = typeof Intl.Segmenter === 'function' ? [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(firstLine)].map(part => part.segment) : Array.from(firstLine);
   return {
     kind: 'software', serviceId: input.path, submissionId: input.submissionId,

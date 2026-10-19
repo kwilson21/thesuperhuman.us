@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { POST } from '~/pages/api/software-inquiry';
 import { softwareBriefEmail } from '~/lib/client-emails';
-import { currentSiteHref, softwareBrief, softwareLabels, softwarePathLabel, softwarePaths, softwareRequest, updateLabels, validateSoftwareInquiry } from '~/lib/software-inquiry';
+import { clientSoftwareLabels, currentSiteHref, softwareBrief, softwareLabels, softwarePathLabel, softwarePaths, softwareRequest, updateLabels, validateSoftwareInquiry } from '~/lib/software-inquiry';
 import { RequestDetailsTooLargeError } from '~/lib/owner-requests';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
@@ -451,7 +451,15 @@ it('validates website answers with the approved messages', () => {
     expect(result.ok, `${key}: ${message}`).toBe(false);
     if (!result.ok) expect(result.errors[key], key).toBe(message);
   }
-  for (const currentUrl of ['http://example.com', '']) expect(validateSoftwareInquiry({ ...site, currentUrl }).ok, currentUrl).toBe(true);
+  for (const [currentUrl, message] of [
+    ['https://user:pass@host.example', 'Start the link with https:// or http://.'], ['https://user@host.example', 'Start the link with https:// or http://.'],
+    ['https://exa\tmple.com', 'Start the link with https:// or http://.'], ['https:evil.com', 'Start the link with https:// or http://.'],
+  ] as const) {
+    const result = validateSoftwareInquiry({ ...site, currentUrl });
+    expect(result.ok, currentUrl).toBe(false);
+    if (!result.ok) expect(result.errors.currentUrl, currentUrl).toBe(message);
+  }
+  for (const currentUrl of ['http://example.com', '', ' https://lead.example', 'HTTPS://Example.com/path']) expect(validateSoftwareInquiry({ ...site, currentUrl }).ok, currentUrl).toBe(true);
   expect(validateSoftwareInquiry({ ...site, currentUrl: undefined, existing: undefined }).ok).toBe(true);
 });
 
@@ -474,13 +482,15 @@ it('names each path, keeps the legacy idea label, and rejects inherited keys', (
 
 it('uses the approved labels for the new website and web app answers', () => {
   expect(softwareLabels).toMatchObject({ purpose: 'What’s the website for?', currentUrl: 'Current website', existing: 'What they already have', updates: 'Who will keep it up to date?', appGoal: 'What should the app let people do?' });
+  expect(softwareLabels.existing).toBe('What they already have'); expect(clientSoftwareLabels.existing).toBe('What you already have');
   expect(updateLabels).toEqual({ self: 'Me or someone on my team', help: 'I’d like help with updates', unsure: 'Not sure yet' });
 });
 
 it('accepts only http and https links with a host', () => {
   expect(currentSiteHref('https://jordanclay.example')).toBe('https://jordanclay.example/');
   expect(currentSiteHref('http://example.com')).toBe('http://example.com/');
-  for (const value of ['yourstudio.com', 'ftp://x.example', 'javascript:alert(1)', 'https://', 'file:///etc/hosts', '', undefined, 42]) expect(currentSiteHref(value), String(value)).toBeNull();
+  expect(currentSiteHref('HTTPS://Example.com/path')).toBe('https://example.com/path');
+  for (const value of ['yourstudio.com', 'ftp://x.example', 'javascript:alert(1)', 'https://', 'file:///etc/hosts', 'https:evil.com', 'https://user:pass@host.example', 'https://user@host.example', 'https://:pass@host.example', 'https://exa\tmple.com', ' https://lead.example', '', undefined, 42]) expect(currentSiteHref(value), String(value)).toBeNull();
 });
 
 it('labels stored briefs by the path they were sent with', () => {

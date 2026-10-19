@@ -1,5 +1,5 @@
 import { setupBriefAutocomplete } from './brief-autocomplete';
-import { softwareBriefKickers, softwareLabels, softwarePaths, timingLabels, updateLabels, validateSoftwareInquiry, type SoftwarePath } from '../lib/software-inquiry';
+import { clientSoftwareLabels, softwareBriefKickers, softwarePaths, timingLabels, updateLabels, validateSoftwareInquiry, type SoftwarePath } from '../lib/software-inquiry';
 import { setupFormSubmission } from './form-submission';
 
 // Each path's screens in order, by data-step. Website adds two screens after its first question.
@@ -107,12 +107,12 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
     const list = form.querySelector<HTMLDListElement>('[data-review]')!;
     list.replaceChildren();
     const values = payload();
-    const labels: Record<string, string> = { budgetNote: 'Budget', firstResult: 'First result', firstVersion: 'First version', existing: 'What you already have' };
+    const labels: Record<string, string> = { budgetNote: 'Budget', firstResult: 'First result', firstVersion: 'First version' };
     for (const [key, value] of Object.entries(values)) {
       if (!value || key === 'timingDate' && values.timing !== 'date') continue;
       const index = plan().findIndex(section => sectionFields(section).includes(key));
       const dt = document.createElement('dt'), dd = document.createElement('dd'), edit = document.createElement('button');
-      dt.textContent = labels[key] ?? softwareLabels[key as keyof typeof softwareLabels];
+      dt.textContent = labels[key] ?? clientSoftwareLabels[key];
       dd.textContent = key === 'path' ? softwarePaths[value as SoftwarePath] : key === 'timing' ? timingLabels[value as keyof typeof timingLabels] : key === 'updates' ? updateLabels[value as keyof typeof updateLabels] : value;
       edit.type = 'button'; edit.textContent = 'Edit'; edit.setAttribute('aria-label', `Edit ${dt.textContent}`);
       edit.addEventListener('click', () => showStep(index)); dd.appendChild(document.createTextNode(' ')); dd.appendChild(edit); list.appendChild(dt); list.appendChild(dd);

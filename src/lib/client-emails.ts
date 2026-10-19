@@ -1,4 +1,4 @@
-import { softwareLabels } from './software-inquiry';
+import { clientSoftwareLabels } from './software-inquiry';
 import { renderEmail } from './email-template';
 
 const site = 'https://thesuperhuman.us';
@@ -82,13 +82,11 @@ export const softwareHandoffEmail = (origin?: string) => renderEmail({
 });
 
 export function softwareBriefEmail(name: string, brief: Record<string, string>) {
-  // The client reads their own copy, so "they" becomes "you" for the existing-site answer only.
-  const labels: Record<string, string> = { ...softwareLabels, existing: 'What you already have' };
   const paragraphs = [
     `Hi ${name.trim().split(/\s+/)[0] || 'there'},`,
     "Thanks for sending this. I'll read it myself and reply within two business days with a fixed-price first milestone, or a question or two.",
     "Here's what you sent:",
-    ...Object.entries(brief).map(([key, answer]) => `${labels[key]}\n${answer}`),
+    ...Object.entries(brief).map(([key, answer]) => `${clientSoftwareLabels[key]}\n${answer}`),
     'Kazon',
     'Reply to this email if you want to add anything.',
   ];
