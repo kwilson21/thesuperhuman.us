@@ -1401,3 +1401,60 @@ it('shows the countersign requirement beside both disabled closing actions', asy
     for(const action of ['resolve','withdraw']) expect(html).toMatch(new RegExp(`data-action="${action}"[^>]*disabled`));
   } finally {sql.close();}
 });
+
+const websiteOfferText = ['A five-page site for Jordan Clay Studio that works on phones', 'Visitors see upcoming classes and sign up without messaging you first.', 'Logo, photos and page text\nAn invite to your domain settings (not a password)', 'Writing page text from scratch\nUpdates after handoff\nHosting and domain fees', 'One per line. Name hosting fees and updates after handoff here if the offer doesn’t include them.', 'About 4 weeks from the start date, once page text is in.', 'For a website, name the pages, the number of design rounds, where it’s hosted and what the handoff includes. Pages that depend on text or photos they haven’t sent yet go in a later milestone.', 'Design direction', 'Page list and navigation\nHomepage design at phone and computer widths\nOne round of design changes', 'Open the homepage design on your phone and approve it', 'Five pages built from the approved design\nContact form that emails you\nSite live on your domain\nHandoff notes and a short editing walkthrough'];
+const workflowOfferText = ['A shared view of client onboarding', 'Client onboarding tracker', 'About 3 weeks from the start date.'];
+
+it('shows website offer examples only for website briefs and keeps today’s examples for other paths', async () => {
+  const container = await AstroContainer.create();
+  const website = await container.renderToString(editor, { props:{ requestId:'r', email:'alex@example.com', offers:[], revoked:false, path:'website' } });
+  for (const text of websiteOfferText) expect(website).toContain(text);
+  for (const path of ['workflow', 'webapp', 'idea', undefined]) {
+    const html = await container.renderToString(editor, { props:{ requestId:'r', email:'alex@example.com', offers:[], revoked:false, path } });
+    for (const text of websiteOfferText) expect(html).not.toContain(text);
+    for (const text of workflowOfferText) expect(html).toContain(text);
+  }
+});
+
+it('asks website fit questions and keeps the workflow fit note', async () => {
+  const container = await AstroContainer.create();
+  const website = await container.renderToString(fit, { props:{ requestId:'r', fit:null, path:'website' } });
+  expect(website).toContain('Before an offer: is the page text ready, who updates the site after launch, and whose account will host it?');
+  expect(website).toContain('placeholder="Ask whether page text and photos are ready."');
+  expect(website).not.toContain('Clarify who will use the first version.');
+  const closed = await container.renderToString(fit, { props:{ requestId:'r', fit:{ label:'potential-fit', note:'Saved note' }, closed:true, path:'website' } });
+  expect(closed).toContain('Saved note'); expect(closed).not.toContain('Before an offer:');
+  const workflow = await container.renderToString(fit, { props:{ requestId:'r', fit:null, path:'workflow' } });
+  expect(workflow).toContain('placeholder="Clarify who will use the first version."'); expect(workflow).not.toContain('Before an offer:');
+});
+
+it('helps the owner review a website brief: link, offer examples and unsafe links as text', async () => {
+  const {sql,db} = await fixture();
+  try {
+    sql.prepare(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,private_note,created_at,updated_at)
+      VALUES ('site','software','website','Jordan Example','jordan@example.com','A site for my pottery studio.',?,'new','','now','now')`).run(JSON.stringify({ path:'website', purpose:'A site for my pottery studio. People should see upcoming classes and sign up without messaging me first.', currentUrl:'https://jordanclay.example', existing:'A logo and about 30 class photos.', updates:'self', company:'Jordan Clay Studio', timing:'date', timingDate:'2026-12-01' }));
+    const container = await AstroContainer.create();
+    const render = () => container.renderToString(ownerRequest, { params:{ id:'site' }, request:new Request('https://thesuperhuman.us/owner/requests/site'), locals:{ owner:{ email:'owner@example.com' }, runtime:{ env:{ MUSIC_DB:db } } } as any });
+    const briefOf = (html: string) => { const start = html.indexOf('Their brief'); return html.slice(start, html.indexOf('</section>', start)); };
+    const html = await render();
+    const brief = briefOf(html);
+    for (const text of ['Website design', 'What’s the website for?', 'What they already have', 'Me or someone on my team']) expect(brief).toContain(text);
+    expect(brief).toMatch(/<a href="https:\/\/jordanclay\.example\/" target="_blank" rel="noopener noreferrer"[^>]*>https:\/\/jordanclay\.example<\/a> <span[^>]*>opens in a new tab<\/span>/);
+    for (const text of websiteOfferText) expect(html).toContain(text);
+    expect(html).toContain('Before an offer:');
+    sql.prepare("UPDATE owner_requests SET details_json=json_set(details_json,'$.currentUrl',?) WHERE id='site'").run('javascript:alert(1)');
+    const unsafe = await render(), unsafeBrief = briefOf(unsafe);
+    expect(unsafeBrief).toContain('javascript:alert(1)'); expect(unsafeBrief).not.toContain('<a');
+  } finally {sql.close();}
+});
+
+it('keeps the workflow owner page on the existing fit note without website copy', async () => {
+  const {sql,db} = await fixture();
+  try {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(ownerRequest, { params:{ id:'r' }, request:new Request('https://thesuperhuman.us/owner/requests/r'), locals:{ owner:{ email:'owner@example.com' }, runtime:{ env:{ MUSIC_DB:db } } } as any });
+    expect(html).toContain('placeholder="Clarify who will use the first version."');
+    for (const text of ['For a website, name the pages', 'Before an offer:', 'Five pages built from the approved design', 'Design direction']) expect(html).not.toContain(text);
+    for (const text of workflowOfferText) expect(html).toContain(text);
+  } finally {sql.close();}
+});
