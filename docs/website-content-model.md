@@ -407,7 +407,7 @@ questions, labels, examples and owner reminders, never the pipeline.
 
 The website door uses the brief instead of the contact form, so a website lead
 reaches the owner center with a path to an offer, agreement and invoice. Home's
-"Start a software project" button opens the brief's first screen, where the
+"Start a project" button opens the brief's first screen, where the
 visitor names the path. Before the
 first website offer, the owner confirms the private MSA and SOW text covers website
 design or publishes a new template version.
