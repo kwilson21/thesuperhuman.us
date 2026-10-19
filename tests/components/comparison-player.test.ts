@@ -70,7 +70,7 @@ it('drags across both waveforms with pointer events so mouse, pen and touch each
   expect(script).toContain("addEventListener('pointerdown'");
   expect(script).toContain("addEventListener('pointermove'");
   expect(script).toContain("addEventListener('pointerup'");
-  expect(script).toContain('isWaveformScrub(event.pointerType');
+  expect(script).toContain('isWaveformScrub(event.pointerType, event.clientX - gesture.startX, event.clientY - gesture.startY)');
   expect(script).toContain('event.isPrimary');
 });
 

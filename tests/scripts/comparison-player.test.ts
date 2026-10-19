@@ -73,7 +73,7 @@ describe('isWaveformScrub', () => {
     expect(isWaveformScrub('touch', 2, 1)).toBe(false);
     expect(isWaveformScrub('touch', TOUCH_SCRUB_MIN_DISTANCE - 1, 0)).toBe(false);
     expect(isWaveformScrub('touch', TOUCH_SCRUB_MIN_DISTANCE, 0)).toBe(true);
-    expect(isWaveformScrub('touch', 12, 3)).toBe(true);
-    expect(isWaveformScrub('touch', 3, 12)).toBe(false);
+    expect(isWaveformScrub('touch', 12, 30)).toBe(false);
+    expect(isWaveformScrub('touch', TOUCH_SCRUB_MIN_DISTANCE, TOUCH_SCRUB_MIN_DISTANCE)).toBe(false);
   });
 });
