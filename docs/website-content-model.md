@@ -406,7 +406,9 @@ questions, labels, examples and owner reminders, never the pipeline.
   under its new name.
 
 The website door uses the brief instead of the contact form, so a website lead
-reaches the owner center with a path to an offer, agreement and invoice. Before the
+reaches the owner center with a path to an offer, agreement and invoice. Home's
+"Start a software project" button opens the brief's first screen, where the
+visitor names the path. Before the
 first website offer, the owner confirms the private MSA and SOW text covers website
 design or publishes a new template version.
 
@@ -431,8 +433,8 @@ reason. Explain what the visitor sends or does when that helps them act.
 For example:
 
 - Instead of “Prototypes, products, internal tools and integrations,” explain:
-  “I build a first version people can try, or a tool that makes a task your team
-  repeats easier.”
+  “I build web apps people can try, or a tool that makes a task your team repeats
+  easier.”
 - Instead of “Data ingestion for a healthcare credentialing platform,” explain:
   “I built pipelines that brought state medical-board data into a healthcare
   credentialing platform.”
