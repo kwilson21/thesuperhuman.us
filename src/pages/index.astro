@@ -205,7 +205,7 @@ const jsonLd = {
   .capacity-cells, .capacity-key { display: grid; grid-template-columns: repeat(var(--cells), minmax(0, 1fr)); gap: 3px; max-width: 26rem; }
   .cell { display: block; height: 12px; border-radius: 2px; background: var(--accent); }
   .capacity-cells .cell { opacity: clamp(.16, (var(--lit, 999) - var(--i)) * 10, 1); transition: opacity 180ms ease; }
-  .capacity-key { align-items: center; margin-top: .55rem; font-family: theme('fontFamily.mono'); font-size: .7rem; color: var(--muted); }
+  .capacity-key { align-items: center; margin-top: .55rem; font-family: var(--font-mono); font-size: .7rem; color: var(--muted); }
   .capacity-key > span { grid-column: 2 / -1; padding-left: .3rem; white-space: nowrap; }
 
   .editorial-pair { display: grid; grid-template-columns: 1.4fr 1fr; gap: 3rem; align-items: center; }
