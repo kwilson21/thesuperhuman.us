@@ -30,9 +30,25 @@
   font-weight: 700;
 }
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-rule: var(--rule);
+  --color-accent: var(--accent);
+
+  --font-serif: 'Libron', 'Iowan Old Style', 'Georgia', serif;
+  --font-sans: 'Inter', 'system-ui', '-apple-system', 'sans-serif';
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Menlo', 'monospace';
+
+  --container-measure: 38rem;
+  --container-content: 42.5rem;
+  --container-page: 64rem;
+
+  --tracking-eyebrow: 0.12em;
+}
 
 @font-face {
   font-family: 'Kazon Name Text';
