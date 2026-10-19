@@ -55,6 +55,17 @@ it('stores and returns only the selected idea questions, including the optional 
   expect(body.text).toContain('What’s the idea?\nVolunteers need a simpler way to find shifts.');
 });
 
+it('gives the updates choice a plain message without an error map, which some zod builds ignore', () => {
+  const lib = readFileSync('src/lib/software-inquiry.ts', 'utf8');
+  expect(lib).toContain("updates: z.enum(['self', 'help', 'unsure'], { message: 'Choose one.' })");
+  expect(lib).not.toMatch(/updates: z\.enum\([^)]*errorMap/);
+  const site = { ...base, path: 'website', purpose: 'A site for my pottery studio.', currentUrl: '', existing: '' };
+  for (const updates of [undefined, 'nobody']) {
+    const result = validateSoftwareInquiry({ ...site, updates });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.updates).toBe('Choose one.');
+  }
+});
 it('validates each idea answer with the same plain messages and drops unknown keys', () => {
   const idea = { ...base, path: 'idea', idea: 'An idea', audienceToday: 'Volunteers', firstVersion: 'Claim a shift' };
   for (const [key, value, message] of [

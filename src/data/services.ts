@@ -40,15 +40,15 @@ const rows: ServiceRow[] = [
     id: 'website', title: softwarePaths.website, lead: 'For a site people can read on a phone and act on.', detail: websiteDoor.line, button: 'Tell me about your website', path: '/software/start?path=website',
     image: websiteDoor.picture, imageAlt: 'This site’s Home page, with the Work with me doors below', imageCaption: websiteDoor.caption,
     evidenceLabel: 'Relevant work',
-    evidence: [{ title: 'This site', meta: 'September 2026 redesign', links: [{ label: 'Explore the project', path: '/building/personal-website' }] }],
+    evidence: [{ title: 'This site', meta: 'September 2026 redesign', links: [{ label: 'Explore the project', path: '/building/personal-website', context: 'about this site' }] }],
   },
   {
     id: 'web-app', title: softwarePaths.webapp, lead: 'For an app people open in a browser, on a phone or a computer.', detail: 'I build a first version that lets people try the most important part of your idea.', button: 'Tell me about your app', path: '/software/start?path=webapp',
     image: tallyImage, imageAlt: 'Tally’s transactions screen, running on demo data', imageCaption: 'Tally · public demo on demo data',
     evidenceLabel: 'Try something I’m building',
     evidence: [
-      { title: tallyStory.title, description: tallyStory.subtitle, meta: 'Personal project · Public demo · In development', links: [{ label: 'Try the demo', url: 'https://tally-demo.thesuperhuman.us' }, { label: 'Explore the project', path: '/building/tally' }] },
-      { title: kailleraStory.title, description: kailleraStory.subtitle, meta: kailleraStory.status, links: [{ label: 'Explore the project', path: '/building/kaillera-next' }] },
+      { title: tallyStory.title, description: tallyStory.subtitle, meta: 'Personal project · Public demo · In development', links: [{ label: 'Try the demo', url: 'https://tally-demo.thesuperhuman.us' }, { label: 'Explore the project', path: '/building/tally', context: 'about Tally' }] },
+      { title: kailleraStory.title, description: kailleraStory.subtitle, meta: kailleraStory.status, links: [{ label: 'Explore the project', path: '/building/kaillera-next', context: 'about Kaillera Next' }] },
     ],
   },
   {

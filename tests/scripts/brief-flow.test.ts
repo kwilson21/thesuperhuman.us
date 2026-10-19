@@ -21,12 +21,15 @@ class Node extends EventTarget {
 }
 class Input extends Node {} class Textarea extends Node {}
 let form: Node & { elements: any }, steps: Node[], controls: Node[], store: Map<string, string>, dots: Node[], kicker: Node;
+let observed: (records: { target: Node }[]) => void = () => {};
 const make = (name = '', type = '', value = '') => { const node = new Input(); Object.assign(node, { name, type, value }); return node; };
 function fire(node: Node, event: string, props: Record<string, unknown> = {}) { const message = new Event(event, { cancelable: true }); Object.assign(message, props); node.dispatchEvent(message); return message; }
 function fill(name: string, value: string) { const node = controls.find(node => node.name === name)!; node.value = value; node.setSelectionRange(value.length, value.length); fire(node, 'input'); fire(form, 'input'); return node; }
 const field = (name: string) => controls.find(node => node.name === name)!;
 function click(selector: string) { fire(form.nodes[selector], 'click'); }
-function choose(name: string, value: string) { const node = controls.find(node => node.name === name && node.value === value)!; controls.filter(node => node.name === name).forEach(node => node.checked = node.value === value); fire(form, 'input'); const message = new Event('change'); Object.defineProperty(message, 'target', { value: node }); form.dispatchEvent(message); }
+// A path choice is a pointer choice (pointerdown first) unless a test chooses it with the keyboard.
+function choose(name: string, value: string, pointer = true) { const node = controls.find(node => node.name === name && node.value === value)!; if (name === 'path' && pointer) fire(form, 'pointerdown'); controls.filter(node => node.name === name).forEach(node => node.checked = node.value === value); fire(form, 'input'); const message = new Event('change'); Object.defineProperty(message, 'target', { value: node }); form.dispatchEvent(message); }
+const chooseByKey = (value: string) => { fire(form, 'keydown', { key: 'ArrowDown' }); choose('path', value, false); };
 const current = () => steps.findIndex(node => !node.hidden);
 const backToStart = () => { while (current() > 0) click('[data-back]'); };
 const visibleDots = () => dots.map(item => item.hidden);
@@ -43,7 +46,7 @@ async function setup(requestedPath?: string) {
   // Website-only screens: the link and notes (no suggestions) and who keeps it up to date.
   const website = steps[7], currentUrl = make('currentUrl', 'url'), existing = new Textarea(); existing.name = 'existing';
   const updates = ['self', 'help', 'unsure'].map(value => make('updates', 'radio', value));
-  website.inputs = [currentUrl, existing]; steps[8].inputs = updates;
+  website.inputs = [currentUrl, existing]; website.nodes.currentUrl = currentUrl; website.nodes.existing = existing; steps[8].inputs = updates;
   controls.push(make('path', 'radio', 'website'), make('path', 'radio', 'webapp'), make('path', 'radio', 'workflow'), make('timing', 'radio', 'flexible'), make('timing', 'radio', 'date'), make('timing', 'radio', 'asap'), make('timingDate', 'date'), make('budgetNote', 'number'), make('name'), make('email', 'email'), make('company'), currentUrl, existing, ...updates);
   controls.find(node => node.name === 'timing')!.checked = true;
   controls.filter(node => node.name === 'path').forEach(node => node.checked = node.value === requestedPath);
@@ -73,7 +76,7 @@ async function setup(requestedPath?: string) {
   vi.stubGlobal('HTMLElement', Node); vi.stubGlobal('HTMLInputElement', Input); vi.stubGlobal('HTMLTextAreaElement', Textarea);
   vi.stubGlobal('FormData', class { get(name: string) { return controls.find(node => node.name === name && !node.disabled && (node.type !== 'radio' || node.checked))?.value ?? null; } });
   vi.stubGlobal('window', new EventTarget());
-  vi.stubGlobal('MutationObserver', class { observe() {} });
+  vi.stubGlobal('MutationObserver', class { constructor(callback: typeof observed) { observed = callback; } observe() {} });
   // The progress dots mirror the page: eight items, each with a visually hidden label.
   dots = Array.from({ length: 8 }, () => { const item = new Node(); item.nodes['.sr-only'] = new Node(); return item; });
   kicker = new Node();
@@ -558,4 +561,87 @@ it('sends the web app first answer as earlier context for the second question', 
   fill('appGoal', 'Let my students book and pay for lessons.'); click('[data-next]');
   fill('firstVersion', 'A booking page with a calendar'); await vi.advanceTimersByTimeAsync(400);
   expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string)).toEqual({ question: 'Have a first version in mind?', text: 'A booking page with a calendar', earlier: { path: 'webapp', appGoal: 'Let my students book and pay for lessons.' } });
+});
+
+// Keyboard and screen-reader choices wait for Next, so arrow keys reach every starting point.
+it('moves through the starting points with arrow keys without advancing, then continues with Next', () => {
+  click('[data-next]'); expect(form.nodes['[data-form-error="path"]'].textContent).toBe('Choose a starting point.');
+  chooseByKey('website');
+  expect(current()).toBe(0); expect(form.nodes['[data-form-error="path"]'].textContent).toBe(''); expect(form.nodes['[data-form-error="path"]'].hidden).toBe(true);
+  expect(visibleDots()).toEqual(Array(8).fill(false)); expect(kicker.textContent).toBe('Project brief');
+  chooseByKey('webapp'); chooseByKey('workflow');
+  expect(current()).toBe(0); expect(controls.find(node => node.name === 'path' && node.checked)!.value).toBe('workflow');
+  expect(visibleDots()).toEqual([false, false, false, false, false, false, false, true]);
+  click('[data-next]'); expect(current()).toBe(1);
+});
+it('clears a sent receipt\'s page kicker and progress, and tolerates a page without a kicker', async () => {
+  const { renderSoftwareReceipt } = await import('~/scripts/software-inquiry');
+  const pageKicker = new Node(), progress = new Node();
+  vi.stubGlobal('document', { querySelector: (selector: string) => selector === '[data-brief-kicker]' ? pageKicker : selector === '[data-intake-progress]' ? progress : new Node() });
+  renderSoftwareReceipt({ brief: { name: 'Alex', email: 'alex@example.com' }, clientCopyStatus: 'sent' }, 'workflow');
+  expect(pageKicker.hidden).toBe(true); expect(progress.hidden).toBe(true);
+  vi.stubGlobal('document', { querySelector: (selector: string) => selector === '[data-brief-kicker]' ? null : new Node() });
+  expect(() => renderSoftwareReceipt({ brief: { name: 'Alex', email: 'alex@example.com' }, clientCopyStatus: 'sent' }, 'workflow')).not.toThrow();
+});
+it('maps an old idea answer to the web app goal even when the draft switched to workflow', async () => {
+  store.set('software-brief-draft', JSON.stringify({ answers: { path: 'workflow', idea: 'Old idea text', today: 'We track clients.' }, step: 1 }));
+  await setup(); click('[data-back]'); choose('path', 'webapp');
+  expect(current()).toBe(1); expect(field('appGoal').value).toBe('Old idea text');
+});
+it.each([
+  ['an unknown path', { path: 'bogus', today: 'We track clients.' }],
+  ['no path', { today: 'We track clients.' }],
+])('opens a draft with %s at its first screen, whatever step it saved', async (_label, answers) => {
+  store.set('software-brief-draft', JSON.stringify({ answers, step: 3 }));
+  await setup();
+  expect(current()).toBe(0);
+});
+it.each([['workflow', 7], ['website', 8]])('ignores a saved step past the last screen of a %s draft', async (path, step) => {
+  store.set('software-brief-draft', JSON.stringify({ answers: { path }, step }));
+  await setup();
+  expect(current()).toBe(0);
+});
+it('gives AI suggestions only to the project answer screens, never the website link and notes', () => {
+  const page = readFileSync('src/pages/software/start.astro', 'utf8');
+  const section = (marker: string) => { const start = page.indexOf(marker); expect(start, marker).toBeGreaterThan(-1); return page.slice(start, page.indexOf('</section>', start)); };
+  expect(section('<section data-step="7"')).toContain('name="currentUrl"');
+  expect(section('<section data-step="7"')).not.toContain('data-answer');
+  expect(section('<section data-step="8"')).not.toContain('data-answer');
+  expect(section('<section data-step={index}')).toContain('data-answer');
+});
+it('keeps website answers through a refresh while workflow is selected', async () => {
+  choose('path', 'website'); fill('purpose', 'A site for my pottery studio.'); click('[data-next]');
+  fill('currentUrl', 'https://yourstudio.com'); fill('existing', 'A logo.'); click('[data-next]'); choose('updates', 'self');
+  backToStart(); choose('path', 'workflow');
+  await setup(); backToStart();
+  expect(controls.find(node => node.name === 'path' && node.checked)!.value).toBe('workflow');
+  choose('path', 'website');
+  expect(field('purpose').value).toBe('A site for my pottery studio.');
+  expect(field('currentUrl').value).toBe('https://yourstudio.com'); expect(field('existing').value).toBe('A logo.');
+  expect(controls.find(node => node.name === 'updates' && node.checked)!.value).toBe('self');
+});
+it('sends each website review Edit button to its plan position', () => {
+  choose('path', 'website'); fill('purpose', 'A site for my pottery studio.'); click('[data-next]');
+  fill('currentUrl', 'https://yourstudio.com'); fill('existing', 'A logo.'); click('[data-next]');
+  choose('updates', 'self'); click('[data-next]'); click('[data-next]');
+  fill('budgetNote', '500'); click('[data-next]');
+  fill('name', 'Alex'); fill('email', 'alex@example.com'); fill('company', 'Pottery Studio'); click('[data-next]');
+  expect(current()).toBe(6);
+  const edit = (label: string) => form.nodes['[data-review]'].children.flatMap(node => node.children).find(node => node.attrs['aria-label'] === `Edit ${label}`)!;
+  const cases: [string, number][] = [['Project', 0], ['What’s the website for?', 1], ['Current website', 2], ['What you already have', 2], ['Who will keep it up to date?', 3], ['Timing', 4], ['Budget', 5], ['Your name', 6], ['Email', 6], ['Company, if you have one', 6]];
+  for (const [label, position] of cases) {
+    fire(edit(label), 'click');
+    expect(dots.findIndex(item => item.attrs['aria-current'] === 'step'), label).toBe(position);
+  }
+});
+it('jumps to the website step that holds an invalid hidden control and ignores controls outside the plan', () => {
+  choose('path', 'website'); const url = field('currentUrl');
+  url.setAttribute('aria-invalid', 'true'); observed([{ target: url }]);
+  expect(current()).toBe(7); expect(dots.findIndex(item => item.attrs['aria-current'] === 'step')).toBe(2);
+  expect(url.focus).toHaveBeenCalled();
+});
+it('does not jump when an invalid control belongs to a section outside the current plan', () => {
+  choose('path', 'workflow'); const url = field('currentUrl');
+  url.setAttribute('aria-invalid', 'true'); observed([{ target: url }]);
+  expect(current()).toBe(1); expect(url.focus).not.toHaveBeenCalled();
 });

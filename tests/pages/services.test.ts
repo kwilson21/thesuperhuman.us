@@ -25,12 +25,13 @@ describe('software service sheet', () => {
     const [website, webApp, workflow] = softwareSheet.rows;
     expect(website.evidence.map(item => item.links.map(link => ('path' in link ? link.path : link.url)))).toEqual([['/building/personal-website']]);
     expect(webApp.evidence.map(item => item.title)).toEqual(['Tally', 'Kaillera Next']);
+    expect(website.evidence[0].links).toEqual([{ label: 'Explore the project', path: '/building/personal-website', context: 'about this site' }]);
     expect(webApp.evidence[0].links).toEqual([
       { label: 'Try the demo', url: 'https://tally-demo.thesuperhuman.us' },
-      { label: 'Explore the project', path: '/building/tally' },
+      { label: 'Explore the project', path: '/building/tally', context: 'about Tally' },
     ]);
     expect(webApp.evidence[1].meta).toBe('In development · playable demo build');
-    expect(webApp.evidence[1].links).toEqual([{ label: 'Explore the project', path: '/building/kaillera-next' }]);
+    expect(webApp.evidence[1].links).toEqual([{ label: 'Explore the project', path: '/building/kaillera-next', context: 'about Kaillera Next' }]);
     expect(workflow.evidence[0].links).toEqual([{ label: 'Read the work story', path: '/work#skupos', context: 'about Skupos' }]);
     expect(workflow.historyPath).toBe('/work');
     for (const target of ['href(row.path)', 'href(link.path)', 'link.url', 'href(row.historyPath)', 'href(lyft.path)']) {
@@ -52,7 +53,9 @@ describe('software service sheet', () => {
     const nav = readFileSync(new URL('../../src/components/SiteNav.astro', import.meta.url), 'utf8');
     expect(nav).toContain("mainHref('/services#website')");
     expect(nav).not.toContain('door-website');
-    expect(doors.some(door => `door-${door.id}` === 'door-website')).toBe(true);
+    const workWithMe = readFileSync(new URL('../../src/components/WorkWithMe.astro', import.meta.url), 'utf8');
+    expect(workWithMe).toContain('id={`door-${door.id}`}');
+    expect(doors.map(door => door.id)).toContain('website');
     const data = readFileSync(new URL('../../src/data/services.ts', import.meta.url), 'utf8');
     for (const removed of ['Quoted after your brief', 'Start a project brief', 'Illustrated workflow', 'Nothing starts until', 'Communication is async.', 'Fixed price · agreed in writing before work begins', 'Make a workflow easier', 'Tell me what happens today or what you want people to try.']) expect(data).not.toContain(removed);
   });
@@ -102,8 +105,15 @@ describe('software service sheet', () => {
     expect(print).toContain('display: grid !important');
     expect(print).toContain('font-size: 10.5pt');
     expect(print).toContain('.path-evidence .row-detail');
-    expect(print).toContain('font-size: 9pt; margin-top: 8pt');
-    expect(print).toContain('font-size: 8pt; margin-top: 8pt');
+    expect(print).toContain('font-size: 9pt; margin-top: 4pt');
+    expect(print).toContain('font-size: 8pt; margin-top: 4pt');
+    expect(print).toContain('.sheet-software .service-offer > summary { grid-template-columns: 1fr 1fr; gap: 8pt; padding: 2pt 0; }');
+    expect(print).not.toMatch(/font-size: [0-7](\.\d+)?pt/);
+    expect(print.match(/\.sheet-address \{/g)).toHaveLength(1);
+  });
+
+  it('tells screen-reader users that external evidence links open a new tab', () => {
+    expect(layout).toContain('<a class="site-link" href={link.url} target="_blank" rel="noopener">{link.label} <span class="sr-only">(opens in a new tab)</span> <span aria-hidden="true">↗</span></a>');
   });
 
   it('removes the former offering, working and contact blocks', () => {

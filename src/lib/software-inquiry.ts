@@ -60,7 +60,7 @@ const common = {
 const schema = z.discriminatedUnion('path', [
   z.object({ ...common, path: z.literal('workflow'), today: required(2000), audience: single(1000).default(''), firstResult: single(2000).default('') }),
   z.object({ ...common, path: z.literal('idea'), idea: required(1000), audienceToday: single(1000).default(''), firstVersion: single(1000).default(''), signal: single(500).default('') }),
-  z.object({ ...common, path: z.literal('website'), purpose: required(2000), currentUrl: single(2048).default('').refine(value => value === '' || currentSiteHref(value) !== null, 'Start the link with https:// or http://.'), existing: single(2000).default(''), updates: z.enum(['self', 'help', 'unsure'], { errorMap: () => ({ message: 'Choose one.' }) }) }),
+  z.object({ ...common, path: z.literal('website'), purpose: required(2000), currentUrl: single(2048).default('').refine(value => value === '' || currentSiteHref(value) !== null, 'Start the link with https:// or http://.'), existing: single(2000).default(''), updates: z.enum(['self', 'help', 'unsure'], { message: 'Choose one.' }) }),
   z.object({ ...common, path: z.literal('webapp'), appGoal: required(1000), firstVersion: single(1000).default('') }),
 ]);
 export type SoftwareInput = z.infer<typeof schema>;

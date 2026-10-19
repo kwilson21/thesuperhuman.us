@@ -12,6 +12,7 @@ export function renderSoftwareReceipt(result: Record<string, unknown>, path?: st
   const firstName = brief.name?.trim().split(/\s+/)[0] || 'there';
   document.querySelector<HTMLElement>('[data-receipt-thanks]')!.textContent = `Thanks, ${firstName}. I'll read it myself and reply within two business days.`;
   document.querySelector<HTMLElement>('[data-intake-progress]')!.hidden = true;
+  const kicker = document.querySelector<HTMLElement>('[data-brief-kicker]'); if (kicker) kicker.hidden = true;
   const sent = result.clientCopyStatus === 'sent';
   const uncertain = result.clientCopyStatus === 'uncertain';
   document.querySelector<HTMLElement>('[data-copy-status]')!.textContent = sent
@@ -88,8 +89,10 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
     const saved = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
     if (saved && saved.answers && typeof saved.answers === 'object') {
       const stored: Record<string, unknown> = { ...saved.answers };
-      // Drafts from before the named paths used one "idea" path, which is now the web app brief.
-      if (stored.path === 'idea') { stored.path = 'webapp'; stored.appGoal ??= stored.idea; }
+      // Drafts from before the named paths used one "idea" path, which is now the web app brief. Its idea text is the app goal on any path.
+      if (stored.path === 'idea') stored.path = 'webapp';
+      if (typeof stored.idea === 'string' && typeof stored.appGoal !== 'string') stored.appGoal = stored.idea;
+      const validPath = typeof stored.path === 'string' && Object.hasOwn(softwarePaths, stored.path);
       for (const [key, max] of Object.entries(questionLimits)) if (typeof stored[key] === 'string') answers[key] = (stored[key] as string).slice(0, max);
       for (const name of ['path', 'timing', 'updates']) form.querySelectorAll<HTMLInputElement>(`[name="${name}"]`).forEach(box => box.checked = box.value === (name === 'path' && requestedPath ? requestedPath : stored[name]));
       configureQuestions();
@@ -97,7 +100,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
         const control = form.elements.namedItem(key), value = stored[key];
         if ((control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) && typeof value === 'string') control.value = value.slice(0, control.maxLength > 0 ? control.maxLength : 200);
       }
-      if ((!requestedPath || requestedPath === stored.path) && Number.isInteger(saved.step) && saved.step >= 0 && saved.step <= last()) step = saved.step;
+      if (validPath && (!requestedPath || requestedPath === stored.path) && Number.isInteger(saved.step) && saved.step >= 0 && saved.step <= last()) step = saved.step;
       if (typeof saved.submissionId === 'string' && /^[a-f0-9-]{36}$/i.test(saved.submissionId)) submissionId = saved.submissionId;
     }
   } catch { /* Ignore unavailable storage and invalid drafts. */ }
@@ -157,13 +160,24 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
     if (step < last()) showStep(step + 1);
   }
   form.addEventListener('input', save);
+  // Only a pointer choice moves on by itself. Arrow keys step through the radio group, so keyboard and screen-reader users
+  // reach every starting point and continue with Next, as they do after any other answer.
+  let pointerChoice = false;
+  form.addEventListener('pointerdown', () => { pointerChoice = true; });
+  form.addEventListener('keydown', () => { pointerChoice = false; });
   form.addEventListener('change', event => {
     const control = event.target as HTMLInputElement;
     if (control.name === 'path') {
       steps.slice(1, 3).forEach(section => { const box = section.querySelector<HTMLTextAreaElement>('textarea')!; if (box.name) answers[box.name] = box.value; });
       configureQuestions();
       steps.slice(1, 3).forEach(section => { const box = section.querySelector<HTMLTextAreaElement>('textarea')!; if (box.name) box.value = answers[box.name] ?? ''; });
-      continueStep();
+      if (pointerChoice) continueStep();
+      else {
+        const error = form.querySelector<HTMLElement>('[data-form-error="path"]')!; error.textContent = ''; error.hidden = true;
+        form.querySelectorAll<HTMLInputElement>('[name="path"]').forEach(box => box.removeAttribute('aria-invalid'));
+        showStep(step, false);
+      }
+      pointerChoice = false;
     }
     if (control.name === 'timing') {
       form.querySelector<HTMLElement>('[data-date-field]')!.hidden = control.value !== 'date';

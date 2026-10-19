@@ -279,7 +279,7 @@ describe('screenshot coverage', () => {
       .toEqual(['about']);
     expect(relevantScreenshots(manifest, ['src/layouts/ServiceSheet.astro', 'src/data/services.ts'])
       .pages.map((page: { name: string }) => page.name)).toEqual(['services']);
-    for (const file of ['src/layouts/ServiceSheet.astro', 'src/data/services.ts', 'src/styles/service-pages.css', 'src/lib/software-inquiry.ts', 'src/data/profile.ts']) {
+    for (const file of ['src/layouts/ServiceSheet.astro', 'src/data/services.ts', 'src/data/work-with-me.ts', 'src/data/project-stories/tally.ts', 'src/data/project-stories/kaillera-next.ts', 'src/styles/service-pages.css', 'src/lib/software-inquiry.ts', 'src/data/profile.ts']) {
       expect(relevantScreenshots(manifest, [file]).scenarios.map((scenario: { name: string }) => scenario.name)).toEqual(['services-print']);
     }
     expect(relevantScreenshots(manifest, ['src/components/WorkDiagram.astro']).scenarios).toEqual([]);

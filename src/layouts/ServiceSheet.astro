@@ -31,7 +31,7 @@ const lyft = sheet.hero;
           {row.image && <figure><div class="row-visual"><img src={row.image.src} width={row.image.width} height={row.image.height} alt={row.imageAlt} loading="lazy" decoding="async" /></div><figcaption>{row.imageCaption}</figcaption></figure>}
           <div class="path-evidence"><p class="row-detail">{row.detail}</p>
             <p class="page-kicker">{row.evidenceLabel}</p>
-            {row.evidence.map(item => <article><h4>{item.title}</h4>{item.description && <p>{item.description}</p>}{item.meta && <p>{item.meta}</p>}<div class="site-links">{item.links.map(link => 'url' in link ? <a class="site-link" href={link.url} target="_blank" rel="noopener">{link.label} <span aria-hidden="true">↗</span></a> : <a class="site-link" href={href(link.path)}>{link.label} {link.context && <span class="sr-only">{link.context}</span>} <span aria-hidden="true">→</span></a>)}</div></article>)}
+            {row.evidence.map(item => <article><h4>{item.title}</h4>{item.description && <p>{item.description}</p>}{item.meta && <p>{item.meta}</p>}<div class="site-links">{item.links.map(link => 'url' in link ? <a class="site-link" href={link.url} target="_blank" rel="noopener">{link.label} <span class="sr-only">(opens in a new tab)</span> <span aria-hidden="true">↗</span></a> : <a class="site-link" href={href(link.path)}>{link.label} {link.context && <span class="sr-only">{link.context}</span>} <span aria-hidden="true">→</span></a>)}</div></article>)}
             {row.historyPath && <a class="site-link history-link" href={href(row.historyPath)}>{row.historyLabel} <span aria-hidden="true">→</span></a>}
             <a class="site-button row-button" href={href(row.path)}>{row.button} <span aria-hidden="true">→</span></a></div>
           {row.diagram === 'analyst' && <WorkDiagram kind="analyst" />}
@@ -139,7 +139,7 @@ h1 { font-size: clamp(2.75rem, 5.5vw, 4.5rem); line-height: 1.02; letter-spacing
     .software-story { margin-top: 5pt; }
     .sheet-software .service-offers { margin-top: 0; padding-top: 5pt; }
     .sheet-software .service-offers > header { margin-bottom: 2pt; }
-    .sheet-software .service-offer > summary { grid-template-columns: 1fr 1fr; gap: 8pt; padding: 3pt 0; }
+    .sheet-software .service-offer > summary { grid-template-columns: 1fr 1fr; gap: 8pt; padding: 2pt 0; }
     .sheet-software .service-offer h3 { font-size: 13pt; line-height: 1.2; }
     .sheet-software .service-offer summary > b { display: none; }
     .service-offer::details-content { display: block; content-visibility: visible; }
@@ -159,8 +159,7 @@ h1 { font-size: clamp(2.75rem, 5.5vw, 4.5rem); line-height: 1.02; letter-spacing
     .sheet-software .software-steps .step-number { margin: 0 3pt 0 0; vertical-align: middle; }
     .software-steps p { margin-top: 2pt; }
     .step-number { width: 12pt; height: 12pt; font-size: 8pt; margin-bottom: 3pt; }
-    .sheet-address { font-size: 9pt; margin-top: 8pt; }
-    .sheet-address { grid-auto-flow: column; justify-content: start; gap: 12pt; }
-    .sheet-footnote { font-size: 8pt; margin-top: 8pt; padding-top: 6pt; }
+    .sheet-address { font-size: 9pt; margin-top: 4pt; grid-auto-flow: column; justify-content: start; gap: 12pt; }
+    .sheet-footnote { font-size: 8pt; margin-top: 4pt; padding-top: 4pt; }
   }
 </style>
