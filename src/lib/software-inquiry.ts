@@ -47,17 +47,18 @@ export function currentSiteHref(value: unknown): string | null {
     return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname && !url.username && !url.password ? url.href : null;
   } catch { return null; }
 }
+// bareHost: dots split the host labels, so it runs in linear time; '@' is excluded, so an email address is not a host.
 const bareHost = /^(\/\/)?([^\s\/:?#.@]+(\.[^\s\/:?#.@]+)+\.?|localhost)(:\d+)?([\/?#]\S*)?$/i;
-// Four cases, in order. A link that starts with http:// or https:// but doesn't parse
-// is told to check the link or leave it empty.
+// Four cases, in order. A link that starts with http:// or https:// but isn't accepted as a link
+// (it doesn't parse, or has a space, username or password) is told to check the link or leave it
+// empty.
 // A mistyped or other scheme (https//x.com, https:/x.com, ftp://x) is told to start with
 // https:// or http://, unless a digit (a port, x.com:8080) or a space (a label, Website: x.com)
 // follows the colon after a scheme other than http or https.
 // A bare host, host:port or localhost is told to add https:// when that makes a valid link.
 // Anything else (none, n/a, an email address) is told to check the link or leave it empty.
-// Dots split the host labels, so the pattern runs in linear time; '@' is excluded, so an email address is not a host.
-// Callers pass at most 2048 characters (the schema skips longer values); the last check parses
-// the URL, which is slow on very long international hosts.
+// Callers pass at most 2048 characters (the schema skips longer values); the bare host check
+// parses the URL, which is slow on very long international hosts.
 export const currentUrlMessage = (value: string) => /^https?:\/\//i.test(value) ? 'Check the link, or leave it empty.'
   : /^https?:/i.test(value) || /^https?\/\//i.test(value) || /^[a-z][a-z\d+.-]*:(?![\d\s])/i.test(value) ? 'Use https:// or http:// at the start of the link.'
   : bareHost.test(value) && currentSiteHref('https://' + value) !== null ? 'Add https:// to the start of the link.'

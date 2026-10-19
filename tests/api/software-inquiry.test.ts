@@ -498,7 +498,7 @@ it('checks the message regexes in linear time on long ASCII input, without reach
 
 it('answers an oversized current URL with the length limit alone, without parsing it, and checks a value just under the limit', () => {
   const site = { ...base, path: 'website', purpose: 'A site for my pottery studio.', currentUrl: '', existing: '', updates: 'self' };
-  // Unguarded URL parsing of this value takes several hundred ms (quadratic in length); the length guard keeps the check under 20 ms.
+  // Unguarded URL parsing of this value takes seconds (about 4 s on Node 22; quadratic in length); the length guard keeps the check under 20 ms.
   const started = performance.now();
   expect(validateSoftwareInquiry({ ...site, currentUrl: 'https://' + 'ü.'.repeat(60000) })).toMatchObject({ ok: false, errors: { currentUrl: 'Keep this under 2048 characters.' } });
   expect(performance.now() - started).toBeLessThan(20);
