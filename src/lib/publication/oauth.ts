@@ -54,7 +54,7 @@ export const publicationOAuthRoute: APIRoute = async ({ request, locals }) => {
       authorizeEndpoint: publicationBase + '/authorize', tokenEndpoint: publicationBase + '/token',
       clientRegistrationEndpoint: publicationBase + '/register',
       scopesSupported: scopes, accessTokenTTL: 3600, refreshTokenTTL: 2592000,
-      allowPlainPKCE: false, allowImplicitFlow: false, clientIdMetadataDocumentEnabled: false,
+      clientIdMetadataDocumentEnabled: false,
       resourceMetadata: { resource: publicationResource, authorization_servers: [publicationOrigin], scopes_supported: scopes },
       // Refresh scope narrowing must also narrow the props consumed by MCP handlers.
       tokenExchangeCallback: options => ({ accessTokenProps: { ownerId: options.userId,
