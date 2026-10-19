@@ -7,7 +7,7 @@ import software from '~/assets/site/work-with-me-software.webp';
  * The three things a visitor can hire Kazon for. Shown as doors on Home and on the
  * Work with me hub. Each picture is real, verifiable work: a released record, this
  * live site, a public demo. A prototype earns a door only once it has a public demo.
- * Each button starts the relevant intake or contact path.
+ * Each button starts the relevant intake.
  */
 export interface Door {
   id: 'mixing' | 'website' | 'software';
@@ -29,12 +29,12 @@ export const doors: Door[] = [
   {
     id: 'website', title: 'Website design',
     line: 'I organize what you want to say, design the pages, and build a website that works on phones and computers.',
-    href: '/#contact', label: 'Plan your website',
+    href: '/software/start?path=website', label: 'Plan your website',
     picture: website, caption: 'This site, redesigned September 2026',
   },
   {
     id: 'software', title: 'Software engineering',
-    line: 'I build a first version people can try, or a tool that makes a task your team repeats easier.',
+    line: 'I build web apps people can try, or a tool that makes a task your team repeats easier.',
     href: '/software/start', label: 'Discuss your project',
     picture: software, caption: 'Tally · a budgeting app, public demo',
   },
