@@ -30,9 +30,25 @@
   font-weight: 700;
 }
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-rule: var(--rule);
+  --color-accent: var(--accent);
+
+  --font-serif: 'Libron', 'Iowan Old Style', 'Georgia', serif;
+  --font-sans: 'Inter', 'system-ui', '-apple-system', 'sans-serif';
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Menlo', 'monospace';
+
+  --container-measure: 38rem;
+  --container-content: 42.5rem;
+  --container-page: 64rem;
+
+  --tracking-eyebrow: 0.12em;
+}
 
 @font-face {
   font-family: 'Kazon Name Text';
@@ -62,7 +78,7 @@
   html {
     background: var(--paper);
     color: var(--ink);
-    font-family: theme('fontFamily.serif');
+    font-family: var(--font-serif);
     font-size: 16px;
     line-height: 1.6;
     text-rendering: optimizeLegibility;
@@ -74,7 +90,7 @@
   }
 
   h1, h2, h3 {
-    font-family: theme('fontFamily.serif');
+    font-family: var(--font-serif);
     color: var(--ink);
     letter-spacing: -0.01em;
     font-weight: 400;
@@ -125,9 +141,9 @@
   }
 
   .eyebrow {
-    font-family: theme('fontFamily.sans');
+    font-family: var(--font-sans);
     font-size: 11px;
-    letter-spacing: theme('letterSpacing.eyebrow');
+    letter-spacing: var(--tracking-eyebrow);
     text-transform: uppercase;
     font-weight: 500;
     color: var(--muted);
@@ -222,7 +238,7 @@
 
 @layer components {
   .primary-page { padding-top: clamp(2rem, 5vw, 4rem); padding-bottom: 1rem; }
-  .page-kicker { font-family: theme('fontFamily.mono'); color: var(--accent); font-size: .6875rem; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 1rem; }
+  .page-kicker { font-family: var(--font-mono); color: var(--accent); font-size: .6875rem; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 1rem; }
   .page-title { font-size: clamp(3.25rem, 6.5vw, 5.4rem); line-height: 1.02; letter-spacing: -.045em; }
   .page-lede { font-size: clamp(1.3rem, 2.5vw, 1.8rem); line-height: 1.35; margin-top: 1.25rem; max-width: 40rem; }
   .page-connect { border-top: 1px solid var(--rule); padding-block: 2.5rem; margin-top: var(--site-section-space); display: flex; justify-content: space-between; align-items: center; gap: 2rem; }
