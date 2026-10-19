@@ -10,7 +10,7 @@ it('routes the homepage hero CTA to the software intake and preserves other CTAs
   const siteNav = read('../../src/components/SiteNav.astro');
   const footer = read('../../src/components/Footer.astro');
 
-  expect(hero).toContain('<a class="site-button" href="/software/start">Start a software project</a>');
+  expect(hero).toContain('<a class="site-button" href="/software/start">Start a project</a>');
   expect(home).toContain('<WorkWithMe />');
   expect(workWithMe).toContain("href: '/software/start?path=website', label: 'Plan your website'");
   expect(workWithMe).toContain("href: '/software/start', label: 'Discuss your project'");

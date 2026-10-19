@@ -31,7 +31,10 @@ describe('software service sheet', () => {
       { label: 'Explore the project', path: '/building/tally', context: 'about Tally' },
     ]);
     expect(webApp.evidence[1].meta).toBe('In development · playable demo build');
-    expect(webApp.evidence[1].links).toEqual([{ label: 'Explore the project', path: '/building/kaillera-next', context: 'about Kaillera Next' }]);
+    expect(webApp.evidence[1].links).toEqual([
+      { label: 'Play the demo', url: 'https://kaillera-next.thesuperhuman.us' },
+      { label: 'Explore the project', path: '/building/kaillera-next', context: 'about Kaillera Next' },
+    ]);
     expect(workflow.evidence[0].links).toEqual([{ label: 'Read the work story', path: '/work#skupos', context: 'about Skupos' }]);
     expect(workflow.historyPath).toBe('/work');
     for (const target of ['href(row.path)', 'href(link.path)', 'link.url', 'href(row.historyPath)', 'href(lyft.path)']) {
@@ -114,6 +117,11 @@ describe('software service sheet', () => {
 
   it('tells screen-reader users that external evidence links open a new tab', () => {
     expect(layout).toContain('<a class="site-link" href={link.url} target="_blank" rel="noopener">{link.label} <span class="sr-only">(opens in a new tab)</span> <span aria-hidden="true">↗</span></a>');
+    const external = softwareSheet.rows.flatMap(row => row.evidence.flatMap(item => item.links)).filter(link => 'url' in link);
+    expect(external).toEqual([
+      { label: 'Try the demo', url: 'https://tally-demo.thesuperhuman.us' },
+      { label: 'Play the demo', url: 'https://kaillera-next.thesuperhuman.us' },
+    ]);
   });
 
   it('removes the former offering, working and contact blocks', () => {

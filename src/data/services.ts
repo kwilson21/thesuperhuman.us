@@ -48,7 +48,7 @@ const rows: ServiceRow[] = [
     evidenceLabel: 'Try something I’m building',
     evidence: [
       { title: tallyStory.title, description: tallyStory.subtitle, meta: 'Personal project · Public demo · In development', links: [{ label: 'Try the demo', url: 'https://tally-demo.thesuperhuman.us' }, { label: 'Explore the project', path: '/building/tally', context: 'about Tally' }] },
-      { title: kailleraStory.title, description: kailleraStory.subtitle, meta: kailleraStory.status, links: [{ label: 'Explore the project', path: '/building/kaillera-next', context: 'about Kaillera Next' }] },
+      { title: kailleraStory.title, description: kailleraStory.subtitle, meta: kailleraStory.status, links: [{ label: 'Play the demo', url: 'https://kaillera-next.thesuperhuman.us' }, { label: 'Explore the project', path: '/building/kaillera-next', context: 'about Kaillera Next' }] },
     ],
   },
   {
