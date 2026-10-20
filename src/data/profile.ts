@@ -95,7 +95,7 @@ export const experience = [
     id: 'axuall', company: 'Vendorpass / Axuall', role: 'Senior Python Developer (Contract)',
     dates: 'July 2025 – November 2025', location: 'Remote',
     outcome: 'I worked on pipelines to bring state medical-board records into a healthcare credentialing platform.',
-    context: ['Worked on pipelines to bring state medical-board records into PostgreSQL through SFTP, REST APIs and Selenium, using Selenium only for boards with no SFTP or API option. Wrote the per-state Selenium logic that turns board records into license-verification results, for several states including North Carolina, and contributed to the early transition from legacy Python connectors to per-state pipelines.'],
+    context: ['Worked on pipelines to bring state medical-board records into PostgreSQL through SFTP and REST APIs, falling back to Selenium only for boards with neither. Wrote the per-state Selenium logic that turns board records into license-verification results, for several states including North Carolina, and contributed to the early transition from legacy Python connectors to per-state pipelines.'],
   },
   {
     id: 'sure', company: 'Sure', role: 'Software Engineer',

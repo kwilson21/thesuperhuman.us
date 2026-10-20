@@ -65,7 +65,7 @@ export const softwareSheet = {
   title: 'Let’s build something useful.',
   kicker: 'Websites & software',
   introduction: 'A website, a web app, or a task your team repeats. We’ll choose a clear first milestone together.',
-  approach: 'We agree on the work and a fixed price before I start. We share questions and feedback in writing, and I use AI to help build the software.',
+  approach: 'We agree on the work and a fixed price before I start. We share questions and feedback in writing. I make the design decisions and review every change; Claude Code helps with implementation.',
   rows,
   hero: { title: 'Lyft · Associate Tools', description: lyftBonus.description, path: '/work#lyft', context: 'about Lyft', figure: lyftBonus },
   storyLabel: 'Read the work story',
