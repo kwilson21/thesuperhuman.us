@@ -1,6 +1,6 @@
 # Project brief paths release gate
 
-Date: October 20, 2026 (UTC; the evening of October 19 in America/New_York)  
+Date: October 20, 2026 (UTC; first answers the evening of October 19 in America/New_York, copy fixes and template approval on October 20)  
 Repository: `kwilson21/thesuperhuman.us`  
 Pull request: [#188](https://github.com/kwilson21/thesuperhuman.us/pull/188)  
 Branch: `claude/website-design-intake-dd111d`  
@@ -24,6 +24,10 @@ Scope:
 Every path stays request kind `software` and uses the existing offer, agreement and invoice pipeline.  
 Rollback revision: `b429889`, the current `main`. Its Workers Builds deploy succeeded on October 20, 2026 at 00:00 UTC, so it is the revision in production now. This PR changes no migration, binding, secret, dependency or header. Caveat: once a website or web app brief has been stored, code at `b429889` would show it in the owner center as a workflow brief without its answers. The rows stay intact in `MUSIC_DB`. After such a brief exists, roll forward with a fix rather than back, or read the request from D1.
 
+Copy commit: a commit after the verified revision `5683ec6` changes two website examples in the owner offer editor and updates this record. CI on the final commit must pass before merge.
+
+Agreements: see the owner-noted gap below.
+
 ## Owner decisions and authorization
 
 Owner, in conversation, October 19, 2026 (America/New_York):
@@ -41,31 +45,46 @@ Owner, in conversation, October 20, 2026 (UTC):
 - On the recaptured door picture, its row alternative text, and a note under Kaillera Next: "1. Yes 2. Okay 3. Keep as is".
 - "“I organize what you want to say” is odd wording for website design". The owner then chose "Design and build": "I design and build your website, from the page plan to a site that works on phones and computers."
 - Look approval and agreements: "I approve, the msa and sow does not cover website design so we may want to update everything after all of these changes".
+- Answers on the website offer examples:
+  - Launch: "I say make launch its own step after payment"
+  - Devices: "They should check on all approved devices"
+- On the updated MSA and SOW templates: "Keep 6 as is, approved, go ahead".
+- On the two website offer example fixes: "Update PR #188 with those two copy fixes."
 
 **Owner-noted gap: agreements.**
-- The owner says the private MSA and SOW templates do not cover website design. The owner plans to update them after these changes.
+- Status: approved, not yet published. The owner approved the updated MSA and SOW templates covering website design on October 20, 2026. They are held in private source and are not published in `/owner/agreements`. Publishing is the owner's step, and it comes before a website offer is sent for signing.
 - Impact: after this release, a website brief can reach the owner center, and nothing in the code stops an offer from being sent on it.
-- Proposed until the update (owner to confirm): answer website briefs with a question or a decline, and send the first website offer only under templates that cover website design.
+- Proposed until the templates are published (owner to confirm): answer website briefs with a question or a decline, and send the first website offer only under templates that cover website design.
 
 ## Evidence and limits
 
+- **Copy commit, after `5683ec6`:** the two website examples in the owner offer editor now say that the site launch is a handoff step after final payment, and that the client checks the homepage design on each approved device. Tests assert the new text and that the old text is gone.
 - **Checks:** run locally at `5683ec6`:
   - `npm run check`: 0 errors, 0 warnings. The 17 hints are in files this PR does not change.
   - `npm test`: 130 files, 1,532 passed, 1 skipped.
   - `npm run build`: passed, with the asset and copy gates. Locally, the publicist gate skips its private note lookup because there is no token. CI's Workers Builds ran it and passed.
-- **CI:** Validate, Screenshots capture and Workers Builds passed at `cb872a0`. Validate and Workers Builds passed at `5683ec6`. CI on this record's commit must pass before merge.
+- **Checks at the copy commit:** `npm run check`, `npm test`, `npm run copy:check` and `tests/pages/software-offer.test.ts`, run after the copy and record edits:
+  - `npm run check`: 0 errors, 0 warnings, 17 hints.
+  - `npm test`: 130 files, 1,532 passed, 1 skipped. The skip is the agreement PDF test that renders the real private templates. It runs only when the private file exists locally.
+  - `npm run copy:check`: passed.
+  - `tests/pages/software-offer.test.ts`: 98 passed.
+- **CI:** Validate, Screenshots and Workers Builds passed at `0fcccd8`. At `cb872a0`, Validate, Screenshots capture and Workers Builds passed. At `5683ec6`, Validate and Workers Builds passed, and the Screenshots run was cancelled, superseded by the next push.
 - **Reviews:**
   - Independent Claude reviewers checked each round and each owner follow-up: one for correctness and security, one for UI, copy and the CLAUDE.md/AGENTS.md rules.
   - At `cb872a0` the last passes found no blocking or should-fix issues.
   - Codex code review and Codex security review of `cb872a0` found no issues.
-  - A final Claude pass reviewed the merge of `main` and the first draft of this record at `5683ec6`. The merge is clean: the net change equals `main`'s #189 diff, and no keys collide in `scripts/screenshots/config.mjs`. That pass found no blocking issues, and its corrections to this record are applied here.
+  - A Claude pass at `5683ec6` reviewed the merge of `main` and the first draft of this record. The merge is clean: the net change equals `main`'s #189 diff, and no keys collide in `scripts/screenshots/config.mjs`. That pass found no blocking issues, and its corrections to this record are applied here.
   - Greptile did not review this PR.
 - **Screenshots:**
-  - CI captures at `pr-188/cb872a0` on the `screenshots` branch (181 images in the PR description).
+  - CI captures at `pr-188/0fcccd8` on the `screenshots` branch (181 images in the PR description).
+  - Screenshots runs on every push to this PR, because the PR's diff already includes UI files.
+  - `scripts/screenshots/config.mjs` maps `SoftwareMilestone.astro` to the `software-offer` and `website-brief` scenarios. The `owner-brief` capture shows the empty offer editor's first milestone. Of the two changed examples, only the acceptance one appears there. The captures at `0fcccd8` show the old text.
+  - The later-milestone handoff example appears only after Add milestone. No capture shows it; the unit tests cover it.
+  - The final commit's captures are `website-brief-owner-brief-desktop.png` (1280 px) and `website-brief-owner-brief-phone.png` (390 px) under `pr-188/<final commit>/` on the `screenshots` branch. They are not embedded in the PR description.
   - What they cover: every page at 1280 × 800 and 390 × 844; the `website-brief` scenario (each website screen, the receipt, the owner's view of a seeded fictional website brief, and the request list); and the `software-brief` scenario on the Web app path.
   - Viewed by the agent: Home's Work with me strip, the `/services` rows and the owner's website brief.
   - Delivery in the scenarios is mocked, so it is not evidence of real email.
-- **Local preview:** `astro dev` with the screenshot preview config, in Chromium, at `09fe9c7`. The changes since then touch no page code.
+- **Local preview:** `astro dev` with the screenshot preview config, in Chromium, at `09fe9c7`. Since then, the only page code change is the copy commit's placeholder text in the owner offer editor.
   - Widths: 320, 640 and 768 px on `/`, `/services` and every website brief screen.
   - Keyboard: a pass through the first screen.
   - No JavaScript: the view of `/software/start?path=website`.
@@ -82,7 +101,7 @@ PASS means the evidence named here was observed. Production checks after the mer
 - **PASS · Approved design and claims.**
   - The build follows the approved study, plus the owner's follow-ups quoted above.
   - Prices are fixed and no rates appear. "Updates after launch are quoted separately, at a fixed price."
-  - There are no clearance, exclusivity or hourly claims. The final pass found no em dashes in the PR's added lines; `copy:check` covers `src/`, `public/` and `README.md`.
+  - There are no clearance, exclusivity or hourly claims. The pass at `5683ec6` found no em dashes in the PR's added lines; `copy:check` covers `src/`, `public/` and `README.md`.
   - The door picture is a crop of this PR's own Home, recorded in `docs/asset-reviews/work-with-me-doors.md`.
   - The Tally picture is demo data with its banner.
   - The Kaillera Next play link goes to the public demo.
@@ -99,7 +118,7 @@ PASS means the evidence named here was observed. Production checks after the mer
   - The phone menu links `/services#website`.
   - "Service →" on owner pages opens the request's own `/services` row.
   - No address is shown beyond the existing registered-agent footer.
-  - The external links are the Tally and Kaillera Next public demos; both returned 200 during the final pass. Live link checks follow in section 7.
+  - The external links are the Tally and Kaillera Next public demos; both returned 200 during the pass at `5683ec6`. Live link checks follow in section 7.
 
 ## 2. Search and sharing
 
@@ -193,7 +212,7 @@ PASS means the evidence named here was observed. Production checks after the mer
 
 ## 7. Release and final QA
 
-- **PASS · Required checks.** Check, test and build pass at `5683ec6`, as recorded above. Green CI on this record's commit is required before merge.
+- **PASS · Required checks.** Check, test and build pass at `5683ec6`, as recorded above. Check, test and copy check pass at the copy commit, as recorded under Evidence.
 - **PASS · Diff and review.**
   - The diff is 39 files: 38 feature files and this record, plus the merge of `main`.
   - No dependencies, generated files, secrets or private data. The only image change is the reviewed door picture.
@@ -228,7 +247,7 @@ PASS means the evidence named here was observed. Production checks after the mer
 
 ## Software agreement signing
 
-- **FAIL, owner-noted gap · Template coverage for website design.** See above. The owner plans to update the templates after these changes.
+- **FAIL, owner-noted gap · Template coverage for website design.** See above. Approved, not yet published; publishing is the owner's step.
 - **N/A · The other signing checks.** These cover counsel review, contractor config, seeded template previews, the signing setting, email authentication, PDF rendering, certificates, failures, downloads, restore, retention and screenshots. The signing flow, templates and PDFs are unchanged by this PR.
 
 ## Known unknowns
@@ -245,5 +264,5 @@ The owner can cover the device check and email delivery after the deploy, by ope
 
 ## Remaining work
 
-- Green CI on this record's commit, the owner's answer on the known unknowns and the agreements proposal, then merge (deploys production) and the live checks in section 7.
-- Owner: update the MSA and SOW templates for website design.
+- CI on the final commit must pass before merge. Review `website-brief-owner-brief-desktop.png` (1280 px) and `website-brief-owner-brief-phone.png` (390 px) under `pr-188/<final commit>/` on the `screenshots` branch. After the owner answers on the known unknowns and the agreements proposal, merge (deploys production) and run the live checks in section 7.
+- Owner: publish the updated MSA and SOW templates in `/owner/agreements` before sending a website offer for website signing.
