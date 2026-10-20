@@ -36,7 +36,7 @@ defining the work the website should attract.
 ## Opportunity positioning
 
 Kazon works independently, through contracts and projects, and is selective about
-full-time roles: fully remote or in person in San Francisco or Washington, D.C.,
+full-time roles: fully remote or in person near Roanoke, Virginia,
 with meaningful ownership end to end. If a
 role doesn't fit, a contract is the suggested path.
 Autonomy over time, meaningful ownership, choice of collaborators, and interest
