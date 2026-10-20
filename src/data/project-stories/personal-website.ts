@@ -187,10 +187,10 @@ export const websiteMilestones: Milestone[] = [
   {
     id: 'website-current-direction', day: '2026-09-10', placement: 'story',
     title: 'Make the words fit the work I want to do.', status: 'Positioning',
-    summary: 'I wanted the site to reflect the work I enjoy now: shaping and building useful software with AI. My production engineering history provides evidence of what I bring to that work.',
+    summary: 'I wanted the site to reflect the work I enjoy now: shaping and building useful software. My production engineering history provides evidence of what I bring to that work.',
     detailLabel: 'What clarified in the conversation',
     detail: 'I enjoy shaping and building the solution; I do not need to originate the idea. I work independently, through contracts and projects, and I am selective about full-time roles. Work keeps the engineering history as evidence. The introduction describes where I want to go.',
-    artifacts: [artifact(work, 'Earlier positioning', 'The initial Work study led with backend and data engineering.'), artifact(currentWork, 'The current direction', 'The introduction now leads with owning useful software end to end. Work retains the career evidence.', 'Local implementation capture')],
+    artifacts: [artifact(work, 'Earlier positioning', 'The initial Work study led with backend and data engineering.'), artifact(currentWork, 'The current direction', 'On September 10 the introduction led with building with AI. It was revised on October 20 to lead with owning useful software end to end.', 'Local implementation capture')],
   },
   {
     id: 'website-general-resume', day: '2026-09-10', placement: 'story',
@@ -263,7 +263,7 @@ export const websiteMilestones: Milestone[] = [
   {
     id: 'website-tally-story', day: '2026-10-10',
     title: 'Who does what on Tally',
-    summary: 'My Tally page needed to say what I do and what AI coding agents do. It now says I shape Tally’s product design and architecture, the agents implement it, and I focus on decisions that could cause problems later and on keeping development repeatable. The Work page names Tally as my current example of product ownership with AI, with a link. The journal opens with three highlights, each a decision, why it matters and the entries it comes from. Built and tested; the changes are live.',
+    summary: 'My Tally page needed to say what I do and what AI coding agents do. It now says I make Tally’s product and architecture decisions and review every change, with AI coding tools helping on implementation, and I focus on decisions that could cause problems later and on keeping development repeatable. The Work page names Tally as my current example of owning a product end to end, with a link. The journal opens with three highlights, each a decision, why it matters and the entries it comes from. Built and tested; the changes are live.',
     artifacts: [artifact(tallyStory, 'Building · Who does what on Tally', 'The Tally page after PR #169, with numbered pointers.', 'Annotated page capture')],
   },
   {
