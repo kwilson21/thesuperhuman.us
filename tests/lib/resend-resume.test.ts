@@ -116,7 +116,7 @@ describe('sendResumeDelivery', () => {
       name: 'Jane Doe',
       audience: 'general',
       pdf: new ArrayBuffer(4),
-      filename: 'kazon-wilson-resume-general.pdf',
+      filename: 'kazon-wilson-resume.pdf',
     });
     expect(result.ok).toBe(false);
   });
