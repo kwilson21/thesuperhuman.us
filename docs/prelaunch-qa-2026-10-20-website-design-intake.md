@@ -79,8 +79,8 @@ Owner, in conversation, October 20, 2026 (UTC):
 - **Screenshots:**
   - CI captures for the final head are under `pr-188/10400d7/` on the `screenshots` branch; 181 of them are embedded in the PR description.
   - Screenshots runs on every push to this PR, because the PR's diff already includes UI files.
-  - `scripts/screenshots/config.mjs` maps `SoftwareMilestone.astro` to the `software-offer` and `website-brief` scenarios. The `owner-brief` capture shows the empty offer editor's first milestone. Of the two changed examples, only the acceptance one appears there. The captures at `0fcccd8` show the old text.
-  - The later-milestone handoff example appears only after Add milestone. No capture shows it; the unit tests cover it.
+  - `scripts/screenshots/config.mjs` maps `SoftwareMilestone.astro` to the `software-offer` and `website-brief` scenarios. The `owner-brief` capture shows the empty offer editor's first milestone. By source, of the two changed examples only the acceptance one is expected to appear there. The captures at `0fcccd8` show the old text.
+  - The later-milestone handoff example appears only after Add milestone. No capture is expected to show it; the unit tests cover it.
   - Under `pr-188/10400d7/`, the scenario captions describe `website-brief-owner-brief-desktop.png` (1280 px) and `website-brief-owner-brief-phone.png` (390 px) as the seeded fictional website brief as the owner reads it, with the fit review and the empty offer editor's website prompts. None of the `website-brief-*` captures are among the 181 embedded.
   - The captures include: every page at 1280 × 800 and 390 × 844; the `website-brief` scenario (each website screen, the receipt, the owner's view of a seeded fictional website brief, and the request list); and the `software-brief` scenario on the Web app path.
   - Viewed by the agent, at an earlier head and not `10400d7`: Home's Work with me strip, the `/services` rows and the owner's website brief.
@@ -221,7 +221,15 @@ PASS means the evidence named here was observed. Production checks after the mer
 - **PASS · Production configuration, by source.**
   - `wrangler.jsonc`, bindings, secrets, migrations, `public/_headers`, `astro.config.mjs`, `package.json` and the lockfile are unchanged.
   - Production served HTTPS with `strict-transport-security` before the merge.
-- **PASS · Rollback.** Revision `b429889`, in production until `f778ae42` deployed, with the stored-brief caveat in the header.
+  - Response headers on HTML pages: see the FAIL below.
+- **FAIL · Security headers on HTML responses.**
+  - Checklist item 7.3: response headers on dynamic as well as static responses.
+  - `public/_headers` sets `Permissions-Policy`, `Referrer-Policy`, `X-Content-Type-Options` and `X-Frame-Options` for `/*`.
+  - HTML pages returned none of those four headers and only `strict-transport-security`: `/` at 17:43 UTC (while the Workers Builds check run for `f778ae42` was still in progress; which revision answered is not known) and `/`, `/services` and `/software/start` again after 18:26 UTC (served by `30ff3214`, which contains #188).
+  - The static files `/robots.txt` and `/favicon.ico` returned all four.
+  - #188 changed no headers, so this is not caused by this PR, and no fix was made here.
+  - Follow-up: owner decision.
+- **PASS, with gaps · Rollback.** Revision `b429889`, in production until `f778ae42` deployed, with the stored-brief caveat in the header. Whether a website or web app brief has been stored since the deploy was not checked (the owner center and D1 were not inspected), so check before any rollback. If such a brief exists, roll forward with a fix or read the request from D1. A rollback to `b429889` would also undo later commits on `main`, so check what has merged since.
 - **PASS, with gaps · Post-deployment QA.** These were read-only checks run against production on October 20, 2026, after the deploy. No brief was sent, no one signed in and the owner center was not opened.
   - Method: status codes, headers, redirects, page metadata, `robots.txt`, the sitemaps, and the status and type of the pictures came from `curl`, without following the owner redirects.
   - Method: the brief walk-through used the Claude desktop app's built-in browser (Chromium-based) at emulated 390 and 1280 px widths.
@@ -289,7 +297,8 @@ PASS means the evidence named here was observed. Production checks after the mer
     - The overflow measurement on the other question screens at 390 px.
     - The overflow measurement on "What do you have today?" at 1280 px.
     - `/`, `/services`, `/privacy` and the 404 page rendered in a browser on production: not viewed.
-- **PASS, with gaps · Receipt.** Implemented: yes. Verified locally: yes. Deployed: yes, per the passing Workers Builds check run for `f778ae42` (17:44 UTC); the live site does not show its revision. Verified live: partly. The read-only checks above passed; the items under Still not covered did not run. Owner steps and the agreements gap remain (see Remaining work).
+- **UNVERIFIED · Review of the final commit's owner-brief captures before merge.** The record as merged (`f778ae42`) listed this review as a step before merge. Nothing in the record shows it was done, and none of the `10400d7` captures were viewed for this record. Judging by the source and the scenario captions, only the acceptance one of the offer editor's two changed examples is expected to appear in the `owner-brief` captures, and the later-milestone handoff example is expected in none. Owner decision: look at them now, or accept the gap as an exception with its impact and follow-up.
+- **PASS, with gaps · Receipt.** Implemented: yes. Verified locally: yes. Deployed: yes, per the passing Workers Builds check run for `f778ae42` (17:44 UTC); the live site does not show its revision. Verified live: partly. The read-only checks above passed, except security headers on HTML responses, which failed; the items under Still not covered did not run. Owner steps and the agreements gap remain (see Remaining work).
 
 ## 8. Private owner center
 
@@ -301,7 +310,7 @@ PASS means the evidence named here was observed. Production checks after the mer
   - The seeded fictional website brief shows its current site as a link (`rel="noopener noreferrer"`, with the normalized address).
   - It also shows the website fit-review reminder, the website offer prompts and the website "Ask a question" example.
   - By tests, web app, workflow and earlier idea requests render as before.
-- **UNVERIFIED · Target health.** No remote `owner:health` run. This PR changes no schema or binding that health checks.
+- **UNVERIFIED · Target health.** No remote `owner:health` run. This PR changes no schema or binding that health checks. Per the checklist (item 8.15, and the rule that unknowns are resolved or accepted before claiming launch-ready), this stays an open launch-blocking UNVERIFIED item until the post-deploy run is recorded.
 - **N/A · Traffic, playback, retention, studio, payments, Stripe, webhooks and recovery.** None of these are touched.
 
 ## Software agreement signing
@@ -311,7 +320,7 @@ PASS means the evidence named here was observed. Production checks after the mer
 
 ## Known unknowns
 
-These shipped unmeasured:
+These shipped unmeasured and stay UNVERIFIED unless the owner records an exception with its impact and follow-up in this record:
 
 - a second browser and a real device
 - lab and field performance
@@ -322,13 +331,15 @@ These shipped unmeasured:
 - the Web app, Workflow automation and legacy idea paths, walked in a browser (live)
 - `audio.thesuperhuman.us` (not checked live)
 - the live suggestion API (not called)
+- the final commit's owner-brief captures (not viewed)
 
 The owner can cover the device check and email delivery now that the site is deployed, by opening the brief on a phone and sending one test brief.
 
 ## Remaining work
 
-- Owner or reviewer: look at the final commit's captures under `pr-188/10400d7/` on the `screenshots` branch, including `website-brief-owner-brief-desktop.png` (1280 px) and `website-brief-owner-brief-phone.png` (390 px). None of the `10400d7` captures were viewed for this record.
-- Owner: run `npm run owner:health -- --remote --post-deploy`, or accept it as unmeasured.
+- Owner: look at the final commit's captures under `pr-188/10400d7/` on the `screenshots` branch, including `website-brief-owner-brief-desktop.png` (1280 px) and `website-brief-owner-brief-phone.png` (390 px), or accept the gap as an exception in this record (see the UNVERIFIED item in section 7).
+- Owner: run `npm run owner:health -- --remote --post-deploy`. Until it is recorded, target health stays a launch-blocking UNVERIFIED item (checklist item 8.15), unless the owner accepts it as an exception with its impact and follow-up in this record.
+- Owner: decide on the missing security headers on HTML responses (see the FAIL in section 7): fix them or accept the gap as an exception with its impact and follow-up in this record.
 - Owner: publish the updated MSA and SOW templates in `/owner/agreements` before sending a website offer for website signing.
 - Owner: confirm the proposal under the owner-noted gap (answer website briefs with a question or a decline until the templates are published).
 - Owner: open the offer editor and check the two changed website examples (owner only, behind Access).
