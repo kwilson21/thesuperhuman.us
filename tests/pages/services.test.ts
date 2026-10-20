@@ -63,6 +63,12 @@ describe('software service sheet', () => {
     for (const removed of ['Quoted after your brief', 'Start a project brief', 'Illustrated workflow', 'Nothing starts until', 'Communication is async.', 'Fixed price · agreed in writing before work begins', 'Make a workflow easier', 'Tell me what happens today or what you want people to try.']) expect(data).not.toContain(removed);
   });
 
+  it('describes the website row picture as the Home page, not the Work with me doors', () => {
+    const website = softwareSheet.rows.find(row => row.id === 'website')!;
+    expect(website.imageAlt).toBe('This site’s Home page, with the introduction and the Start a project button');
+    expect(website.imageAlt).not.toContain('doors');
+  });
+
   it('renders each row from the rows list with the shared anatomy, open by default', () => {
     expect(layout).toContain('sheet.rows.map(');
     expect(layout.match(/<details class="service-offer" id=\{row\.id\} open>/g)).toHaveLength(1);
@@ -117,6 +123,9 @@ describe('software service sheet', () => {
 
   it('tells screen-reader users that external evidence links open a new tab', () => {
     expect(layout).toContain('<a class="site-link" href={link.url} target="_blank" rel="noopener">{link.label} <span class="sr-only">(opens in a new tab)</span> <span aria-hidden="true">↗</span></a>');
+  });
+
+  it('lists only the approved external demo links', () => {
     const external = softwareSheet.rows.flatMap(row => row.evidence.flatMap(item => item.links)).filter(link => 'url' in link);
     expect(external).toEqual([
       { label: 'Try the demo', url: 'https://tally-demo.thesuperhuman.us' },

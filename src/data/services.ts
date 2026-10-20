@@ -38,7 +38,7 @@ export interface ServiceRow {
 const rows: ServiceRow[] = [
   {
     id: 'website', title: softwarePaths.website, lead: 'For a site people can read on a phone and act on.', detail: websiteDoor.line, button: 'Tell me about your website', path: '/software/start?path=website',
-    image: websiteDoor.picture, imageAlt: 'This site’s Home page, with the Work with me doors below', imageCaption: websiteDoor.caption,
+    image: websiteDoor.picture, imageAlt: 'This site’s Home page, with the introduction and the Start a project button', imageCaption: websiteDoor.caption,
     evidenceLabel: 'Relevant work',
     evidence: [{ title: 'This site', meta: 'September 2026 redesign', links: [{ label: 'Explore the project', path: '/building/personal-website', context: 'about this site' }] }],
   },
