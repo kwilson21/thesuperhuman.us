@@ -230,7 +230,7 @@ PASS means the evidence named here was observed. Production checks after the mer
   - #188 changed no headers, so this is not caused by this PR, and no fix was made here.
   - Follow-up: owner decision.
 - **PASS, with gaps · Rollback.** Revision `b429889`, in production until `f778ae42` deployed, with the stored-brief caveat in the header. Whether a website or web app brief has been stored since the deploy was not checked (the owner center and D1 were not inspected), so check before any rollback. If such a brief exists, roll forward with a fix or read the request from D1. A rollback to `b429889` would also undo later commits on `main`, so check what has merged since.
-- **PASS, with gaps · Post-deployment QA.** These were read-only checks run against production on October 20, 2026, after the deploy, except one header request at 17:43 UTC, before it finished (see the FAIL above). No brief was sent, no one signed in and the owner center was not opened.
+- **PASS, with gaps · Post-deployment QA.** These were read-only checks run against production on October 20, 2026, after the deploy, except one header request at 17:43 UTC, before the deploy finished (see the FAIL above). No brief was sent, no one signed in and the owner center was not opened.
   - Method: status codes, headers, redirects, page metadata, `robots.txt`, the sitemaps, and the status and type of the pictures came from `curl`, without following the owner redirects.
   - Method: the brief walk-through used the Claude desktop app's built-in browser (Chromium-based) at emulated 390 and 1280 px widths.
   - Method: text, links and alt text on `/`, `/services`, `/privacy` and the 404 page were read from the served HTML.
@@ -239,7 +239,7 @@ PASS means the evidence named here was observed. Production checks after the mer
     - The exact revision was not observed: no revision marker was found in the response headers or meta tags.
     - When the content checks started, `f778ae42` was the newest commit on `main`.
     - The two check runs present at that time, Workers Builds (the deploy) and `validate`, had passed by 17:44:32 UTC. The content checks ran after that.
-    - The next commit on `main` landed at 18:22 UTC, after the other live checks had finished (the picture check and the header re-check came later).
+    - The next commit on `main` landed at 18:22 UTC, after the other checks had finished (the picture check and the header re-check came later).
     - Two pieces of content that first appeared in #188 were served: the `/services` Website design line "I design and build your website, from the page plan to a site that works on phones and computers." and the `/software/start` title "Start a project · Kazon Wilson" (before #188 the title was "Start a software project · Kazon Wilson").
     - That shows a deploy containing #188's public changes was live. It does not show which revision.
   - **PASS, with gaps · Project brief on the website path.**
@@ -328,7 +328,7 @@ These shipped unmeasured and stay UNVERIFIED unless the owner records an excepti
 - a timeout, a malformed response and a 429 in a browser
 - real email delivery of a website brief and its owner notice
 - a remote `owner:health` run
-- the exact production revision serving traffic (the site shows no revision marker)
+- the exact revision production served during these checks (the site shows no revision marker)
 - the owner center, live, including the offer editor's two changed examples (owner only)
 - the Web app, Workflow automation and legacy idea paths, walked in a browser (live)
 - `audio.thesuperhuman.us` (not checked live)
@@ -343,7 +343,7 @@ The owner can cover the device check and email delivery now that the site is dep
 - Owner: look at the final commit's captures under `pr-188/10400d7/` on the `screenshots` branch, including `website-brief-owner-brief-desktop.png` (1280 px) and `website-brief-owner-brief-phone.png` (390 px), or accept the gap as an exception with its impact and follow-up in this record (see the UNVERIFIED item in section 7).
 - Owner: run `npm run owner:health -- --remote --post-deploy`. Until it is recorded, target health stays a launch-blocking UNVERIFIED item (checklist item 8.15), unless the owner accepts it as an exception with its impact and follow-up in this record.
 - Owner: decide on the missing security headers on HTML responses (see the FAIL in section 7): fix them or accept the gap as an exception with its impact and follow-up in this record.
-- Owner: confirm which revision production served (see the UNVERIFIED item in section 7, checklist item 7.5), for example from Cloudflare's deployment history, or accept the gap as an exception with its impact and follow-up in this record.
+- Owner: confirm which revision production served during these checks (see the UNVERIFIED item in section 7, checklist item 7.5), for example from Cloudflare's deployment history, or accept the gap as an exception with its impact and follow-up in this record.
 - Owner: publish the updated MSA and SOW templates in `/owner/agreements` before sending a website offer for website signing.
 - Owner: confirm the proposal under the owner-noted gap (answer website briefs with a question or a decline until the templates are published).
 - Owner: open the offer editor and check the two changed website examples (owner only, behind Access).
