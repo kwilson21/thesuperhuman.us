@@ -28,7 +28,7 @@ export const doors: Door[] = [
   },
   {
     id: 'website', title: 'Website design',
-    line: 'I organize what you want to say, design the pages, and build a website that works on phones and computers.',
+    line: 'I design and build your website, from the page plan to a site that works on phones and computers.',
     href: '/software/start?path=website', label: 'Plan your website',
     picture: website, caption: 'This site, redesigned September 2026',
   },

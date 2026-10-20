@@ -69,6 +69,17 @@ describe('software service sheet', () => {
     expect(website.imageAlt).not.toContain('doors');
   });
 
+  it('uses the approved Website design line on the door and the service row', async () => {
+    const approved = 'I design and build your website, from the page plan to a site that works on phones and computers.';
+    const { doors } = await import('../../src/data/work-with-me');
+    const door = doors.find(door => door.id === 'website')!;
+    const row = softwareSheet.rows.find(row => row.id === 'website')!;
+    expect(door.line).toBe(approved);
+    expect(row.detail).toBe(approved);
+    expect(door.line).not.toContain('organize');
+    expect(row.detail).not.toContain('organize');
+  });
+
   it('renders each row from the rows list with the shared anatomy, open by default', () => {
     expect(layout).toContain('sheet.rows.map(');
     expect(layout.match(/<details class="service-offer" id=\{row\.id\} open>/g)).toHaveLength(1);
