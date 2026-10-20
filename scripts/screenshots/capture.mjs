@@ -13,7 +13,7 @@ import { prepareWithDiagnostics } from './prepare.mjs';
 import { ACCESS_AUDIENCE, ACCESS_ISSUER, expectedResourceError, missingScenarioRoutes, OUT, OWNER_EMAIL, PAGES, REDIRECTS, SCENARIO_PAGES, VIEWPORTS } from './config.mjs';
 
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:4321';
-// GitHub's Linux runners have 4 cores, shared with the dev server.
+// Enough to keep a 4-core runner busy alongside the dev server.
 const PAGE_CONCURRENCY = 4;
 
 // A throwaway Access issuer so owner pages render with the real JWT check.
@@ -92,7 +92,6 @@ try {
       await capture({ file: `${page.name}-${viewport.name}.png`, path: page.path, viewport: viewport.name, owner: page.owner, status: page.status });
     }
   }));
-  const pages = PAGES;
   const scenarios = [];
   const directory = resolve('scripts/screenshots/scenarios');
   for (const name of (await readdir(directory)).filter(file => file.endsWith('.mjs')).sort()) {
@@ -101,7 +100,7 @@ try {
     scenarios.push({ name: currentScenario, title: scenario.title, steps: await scenario.run({ base: BASE, capture, sql, ownerFetch }) });
   }
   errors.push(...missingScenarioRoutes(SCENARIO_PAGES, captured).map(file => `${file}: its scenario captured no page under its route`));
-  await writeFile(`${OUT}/manifest.json`, JSON.stringify({ pages, scenarios }, null, 2));
+  await writeFile(`${OUT}/manifest.json`, JSON.stringify({ pages: PAGES, scenarios }, null, 2));
 } finally {
   await browser.close();
   issuer.close();
