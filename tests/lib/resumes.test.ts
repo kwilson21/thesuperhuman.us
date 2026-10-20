@@ -10,7 +10,7 @@ function makeKv(value: ArrayBuffer | null) {
 
 describe('RESUME_FILENAMES', () => {
   it('maps each audience to a downloadable filename', () => {
-    expect(RESUME_FILENAMES.general).toBe('kazon-wilson-resume-general.pdf');
+    expect(RESUME_FILENAMES.general).toBe('kazon-wilson-resume.pdf');
     expect(RESUME_FILENAMES.dod).toBe('kazon-wilson-resume-dod.pdf');
   });
 });
