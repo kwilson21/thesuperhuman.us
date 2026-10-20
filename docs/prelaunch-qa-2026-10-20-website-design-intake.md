@@ -5,6 +5,7 @@ Repository: `kwilson21/thesuperhuman.us`
 Pull request: [#188](https://github.com/kwilson21/thesuperhuman.us/pull/188)  
 Branch: `claude/website-design-intake-dd111d`  
 Verified revision: `5683ec6`, the reviewed head `cb872a0` with `main` at `b429889` merged in (`09fe9c7`) and the first draft of this record. This revision of the record is committed on top of it.  
+Merged revision: `f778ae42`, squash-merged to `main` on October 20, 2026 at 17:42 UTC. Workers Builds succeeded at 17:44 UTC. Live checks are in section 7.  
 Target: production `https://thesuperhuman.us`:
 - `/software/start`, with `?path=website`, `webapp`, `workflow` and the legacy `idea`
 - `/services`, Home and `/privacy`
@@ -22,9 +23,9 @@ Scope:
 - the privacy notice
 
 Every path stays request kind `software` and uses the existing offer, agreement and invoice pipeline.  
-Rollback revision: `b429889`, the current `main`. Its Workers Builds deploy succeeded on October 20, 2026 at 00:00 UTC, so it is the revision in production now. This PR changes no migration, binding, secret, dependency or header. Caveat: once a website or web app brief has been stored, code at `b429889` would show it in the owner center as a workflow brief without its answers. The rows stay intact in `MUSIC_DB`. After such a brief exists, roll forward with a fix rather than back, or read the request from D1.
+Rollback revision: `b429889`, the `main` revision before this PR merged. Its Workers Builds deploy succeeded on October 20, 2026 at 00:00 UTC, and it was in production until the deploy of `f778ae42` finished. This PR changes no migration, binding, secret, dependency or header. Caveat: once a website or web app brief has been stored, code at `b429889` would show it in the owner center as a workflow brief without its answers. The rows stay intact in `MUSIC_DB`. After such a brief exists, roll forward with a fix rather than back, or read the request from D1.
 
-Copy commit: a commit after the verified revision `5683ec6` changes two website examples in the owner offer editor and updates this record. CI on the final commit must pass before merge.
+Copy commit: `10400d7`, the final head of the PR, comes after the verified revision `5683ec6`. It changes two website examples in the owner offer editor and updates this record. CI on `10400d7` passed before merge: Validate, Screenshots capture and Workers Builds.
 
 Agreements: see the owner-noted gap below.
 
@@ -68,7 +69,7 @@ Owner, in conversation, October 20, 2026 (UTC):
   - `npm test`: 130 files, 1,532 passed, 1 skipped. The skip is the agreement PDF test that renders the real private templates. It runs only when the private file exists locally.
   - `npm run copy:check`: passed.
   - `tests/pages/software-offer.test.ts`: 98 passed.
-- **CI:** Validate, Screenshots and Workers Builds passed at `0fcccd8`. At `cb872a0`, Validate, Screenshots capture and Workers Builds passed. At `5683ec6`, Validate and Workers Builds passed, and the Screenshots run was cancelled, superseded by the next push.
+- **CI:** Validate, Screenshots and Workers Builds passed at `0fcccd8`. At `cb872a0`, Validate, Screenshots capture and Workers Builds passed. At `5683ec6`, Validate and Workers Builds passed, and the Screenshots run was cancelled, superseded by the next push. At `10400d7` (the final head), Validate, Screenshots capture and Workers Builds passed.
 - **Reviews:**
   - Independent Claude reviewers checked each round and each owner follow-up: one for correctness and security, one for UI, copy and the CLAUDE.md/AGENTS.md rules.
   - At `cb872a0` the last passes found no blocking or should-fix issues.
@@ -76,13 +77,13 @@ Owner, in conversation, October 20, 2026 (UTC):
   - A Claude pass at `5683ec6` reviewed the merge of `main` and the first draft of this record. The merge is clean: the net change equals `main`'s #189 diff, and no keys collide in `scripts/screenshots/config.mjs`. That pass found no blocking issues, and its corrections to this record are applied here.
   - Greptile did not review this PR.
 - **Screenshots:**
-  - CI captures at `pr-188/0fcccd8` on the `screenshots` branch (181 images in the PR description).
+  - CI captures for the final head are under `pr-188/10400d7/` on the `screenshots` branch; 181 of them are embedded in the PR description.
   - Screenshots runs on every push to this PR, because the PR's diff already includes UI files.
   - `scripts/screenshots/config.mjs` maps `SoftwareMilestone.astro` to the `software-offer` and `website-brief` scenarios. The `owner-brief` capture shows the empty offer editor's first milestone. Of the two changed examples, only the acceptance one appears there. The captures at `0fcccd8` show the old text.
   - The later-milestone handoff example appears only after Add milestone. No capture shows it; the unit tests cover it.
-  - The final commit's captures are `website-brief-owner-brief-desktop.png` (1280 px) and `website-brief-owner-brief-phone.png` (390 px) under `pr-188/<final commit>/` on the `screenshots` branch. They are not embedded in the PR description.
-  - What they cover: every page at 1280 × 800 and 390 × 844; the `website-brief` scenario (each website screen, the receipt, the owner's view of a seeded fictional website brief, and the request list); and the `software-brief` scenario on the Web app path.
-  - Viewed by the agent: Home's Work with me strip, the `/services` rows and the owner's website brief.
+  - Under `pr-188/10400d7/`, the scenario captions describe `website-brief-owner-brief-desktop.png` (1280 px) and `website-brief-owner-brief-phone.png` (390 px) as the seeded fictional website brief as the owner reads it, with the fit review and the empty offer editor's website prompts. None of the `website-brief-*` captures are among the 181 embedded.
+  - The captures include: every page at 1280 × 800 and 390 × 844; the `website-brief` scenario (each website screen, the receipt, the owner's view of a seeded fictional website brief, and the request list); and the `software-brief` scenario on the Web app path.
+  - Viewed by the agent, at an earlier head and not `10400d7`: Home's Work with me strip, the `/services` rows and the owner's website brief.
   - Delivery in the scenarios is mocked, so it is not evidence of real email.
 - **Local preview:** `astro dev` with the screenshot preview config, in Chromium, at `09fe9c7`. Since then, the only page code change is the copy commit's placeholder text in the owner offer editor.
   - Widths: 320, 640 and 768 px on `/`, `/services` and every website brief screen.
@@ -220,17 +221,75 @@ PASS means the evidence named here was observed. Production checks after the mer
 - **PASS · Production configuration, by source.**
   - `wrangler.jsonc`, bindings, secrets, migrations, `public/_headers`, `astro.config.mjs`, `package.json` and the lockfile are unchanged.
   - Production served HTTPS with `strict-transport-security` before the merge.
-- **PASS · Rollback.** Revision `b429889`, deployed now, with the stored-brief caveat in the header.
-- **UNVERIFIED · Post-deployment QA.** After the merge, these checks will be recorded below:
-  - the production revision
-  - `/software/start?path=website` through the review screen, without sending
-  - the `/services` rows and the Home doors
-  - `/privacy`
-  - the two demo links
-  - the owner routes redirecting to Cloudflare Access
-  - the sitemap and robots
-  - a missing page
-- **PASS · Receipt.** Implemented: yes. Verified locally: yes. Deployed: no, pending merge. Verified live: no, pending deploy.
+- **PASS · Rollback.** Revision `b429889`, in production until `f778ae42` deployed, with the stored-brief caveat in the header.
+- **PASS, with gaps · Post-deployment QA.** These were read-only checks run against production on October 20, 2026, after the deploy. No brief was sent, no one signed in and the owner center was not opened.
+  - Method: status codes, headers, redirects, page metadata, `robots.txt`, the sitemaps, and the status and type of the pictures came from `curl`, without following the owner redirects.
+  - Method: the brief walk-through used the Claude desktop app's built-in browser (Chromium-based) at emulated 390 and 1280 px widths.
+  - Method: text, links and alt text on `/`, `/services`, `/privacy` and the 404 page were read from the served HTML.
+  - **PASS, with gaps · Production revision.**
+    - The exact revision was not observed: no revision marker was found in the response headers or meta tags.
+    - When the live checks started, `f778ae42` was the newest commit on `main`.
+    - The two check runs present at that time, Workers Builds (the deploy) and `validate`, had passed by 17:44:32 UTC. The content checks ran after that.
+    - The next commit on `main` landed at 18:22 UTC, after the other live checks had finished (the picture check came later; see below).
+    - Two pieces of content that first appeared in #188 were served: the `/services` Website design line "I design and build your website, from the page plan to a site that works on phones and computers." and the `/software/start` title "Start a project · Kazon Wilson" (before #188 the title was "Start a software project · Kazon Wilson").
+    - That shows a deploy containing #188's public changes was live. It does not show which revision.
+  - **PASS, with gaps · Project brief on the website path.**
+    - First screen at 390 × 844 px: `/software/start` opened on "What are you working on?", with the three paths (Website design, Web app, Workflow automation).
+    - `?path=website` at 390 px: opened on question 2 of 8, "What's the website for?", with Website design preselected and the label "Website brief" above the heading.
+    - Suggestions were turned off with "Turn off" before anything was typed.
+    - No request to `/api/` appeared in the browser's network log in the 390 px and 1280 px passes (the log did show the pages' own script and font requests).
+    - After each pass, the saved draft and suggestions setting (`software-brief-draft`, `software-suggestions`) were cleared from the browser.
+    - Answers: a QA placeholder answer was typed for "What's the website for?", "What do you have today?" was skipped, and the budget was skipped.
+    - Choices: "Not sure yet" was chosen for "Who will keep it up to date?" (the screen showed the note "Updates after launch are quoted separately, at a fixed price."), and "Flexible" was left as the default timing selection.
+    - Contact details: a placeholder name and email were typed.
+    - Review screen: "Ready to send?" listed the answers with Edit buttons, plus Back and "Send brief". "Send brief" was never pressed.
+    - Overflow: `scrollWidth` equaled the viewport width on the first and review screens at 390 px, and on every screen at 1280 px except "What do you have today?", which was not measured.
+    - 1280 × 800 pass: the 390 px pass had cleared the saved suggestions setting, so "Turn off" was clicked again before anything was typed ("Suggestions are off." showed). The same walk-through reached every question screen in order through to "Ready to send?".
+    - At 1280 px, the "Edit" button for Project on the review screen (accessible name "Edit Project") opened "What are you working on?", which showed Website design selected.
+  - **PASS, with gaps · Services rows and Home doors.**
+    - `/services` had three doors (Mixing & mastering, Website design, Software engineering) and three rows (website, web app and workflow).
+    - Website design row picture: alt text "This site’s Home page, with the introduction and the Start a project button".
+    - Pictures: four returned 200 as `image/webp`: the website door picture (`/_astro/work-with-me-website.dVyRwGan.webp`, 40,058 bytes, also used by the Website design row), the mixing door picture, the software door picture and the Tally row picture. The website picture's size matches section 4. They were fetched, not viewed, after `30ff3214` landed on `main` at 18:22 UTC (later than the other checks). That commit does not touch these pictures.
+    - Website design row: the line "I design and build your website, from the page plan to a site that works on phones and computers."
+    - The row's work block (heading "This site", text "September 2026 redesign") had an "Explore the project" link to `/building/personal-website`. "Tell me about your website" linked to `/software/start?path=website`.
+    - Web app row demo links: Tally ("Try the demo", `https://tally-demo.thesuperhuman.us`) and Kaillera Next ("Play the demo", `https://kaillera-next.thesuperhuman.us`), both opening in a new tab. "Tell me about your app" linked to `/software/start?path=webapp`.
+    - Workflow automation row: "Skupos · Internal tools" with a "Read the work story" link to `/work#skupos`, and "Tell me about your workflow" linked to `/software/start?path=workflow`.
+    - The `/services` phone menu linked to `/services#website`.
+    - Home doors: Mixing & mastering ("Start your song", `/audio/start`), Website design ("Plan your website", `/software/start?path=website`) and Software engineering ("Discuss your project", `/software/start`).
+    - Home's hero button read "Start a project" and linked to `/software/start`.
+  - **PASS, with gaps · Search and sharing.**
+    - Status: `/`, `/software/start` and its `path` variants (`website`, `webapp`, `workflow`, `idea`), `/services` and `/privacy` returned 200.
+    - `/software/start` and `/software/start?path=website`: title "Start a project · Kazon Wilson", description "Share a short project brief for Kazon Wilson to review.", and canonical `https://thesuperhuman.us/software/start`.
+    - `/services`: title "Work with me · Kazon Wilson", description "Three ways to work with Kazon Wilson: mixing and mastering, website design, and software engineering. Fixed-price projects, agreed in writing before work begins.", and canonical `https://thesuperhuman.us/services`.
+    - `/privacy`: title "Privacy · Kazon Wilson", description "How this website handles contact messages, audio and software inquiries, resume requests, and information used to keep the site working.", and canonical `https://thesuperhuman.us/privacy`.
+    - Home (`/`): title "Kazon Wilson · Software, sound, and things worth exploring" and description "I build software, design websites, and mix and master music. Explore my projects, engineering work and writing." Its canonical was `https://thesuperhuman.us/`.
+    - On all five URLs, `og:url`, `og:title` and `og:description` matched the canonical, title and description.
+    - `/software/start?path=nope` returned 200 and showed the first screen with all three paths at 390 px in the browser, which matches the record's note that `path` only preselects a choice.
+    - Gap: the OG card image and the icons were not requested.
+  - **PASS · Privacy page.** `/privacy` showed "Updated October 19, 2026". The project briefs paragraph covered website briefs and the optional link to the current website. The next paragraph said the link and notes boxes are never sent for suggestions, and named Cloudflare's Workers AI.
+  - **PASS · Demo links.** `https://tally-demo.thesuperhuman.us` and `https://kaillera-next.thesuperhuman.us` each returned 200 with no redirect.
+  - **PASS · Owner routes.** `/owner`, `/owner/agreements`, `/owner/requests`, `/owner/software` and `/owner/anything` each returned 302 to the Cloudflare Access login.
+  - **PASS · Sitemap and robots.**
+    - `robots.txt` returned `User-agent: *`, `Allow: /` and `Sitemap: https://thesuperhuman.us/sitemap-index.xml`.
+    - `/sitemap-index.xml` listed `/sitemap-0.xml`, which had 26 URLs.
+    - Those 26 URLs included `/software/start`, `/services` and `/privacy`, and no `/owner`, `/api` or `/offer` URLs.
+    - `/sitemap.xml` returned 404, and `robots.txt` pointed to `/sitemap-index.xml` instead.
+  - **PASS · Missing page.** `/this-page-does-not-exist-qa` and `/software/start/nope` both returned 404 with the "Page not found" page (title "Page not found · Kazon Wilson", heading "This page isn’t here.").
+  - **UNVERIFIED · Still not covered.**
+    - A real device and a second browser (Safari or Firefox).
+    - Sending a brief and real email delivery.
+    - The owner center and the offer editor's two changed examples (owner only, behind Access).
+    - `npm run owner:health -- --remote --post-deploy`.
+    - `audio.thesuperhuman.us`: not checked. The changed pages do not render there, and the APIs are shared.
+    - The live suggestion API: not called, because suggestions were turned off.
+    - The OG card image and the icons: not requested (unchanged by this PR).
+    - The Web app, Workflow automation and legacy idea paths: fetched only (200), not walked in a browser.
+    - Typing into "What do you have today?" (the current-site link check) and the budget screen: both were skipped.
+    - Other widths (320 px and tablet) on any page.
+    - The overflow measurement on the other question screens at 390 px.
+    - The overflow measurement on "What do you have today?" at 1280 px.
+    - `/`, `/services`, `/privacy` and the 404 page rendered in a browser on production: not viewed.
+- **PASS, with gaps · Receipt.** Implemented: yes. Verified locally: yes. Deployed: yes, per the passing Workers Builds check run for `f778ae42` (17:44 UTC); the live site does not show its revision. Verified live: partly. The read-only checks above passed; the items under Still not covered did not run. Owner steps and the agreements gap remain (see Remaining work).
 
 ## 8. Private owner center
 
@@ -252,17 +311,25 @@ PASS means the evidence named here was observed. Production checks after the mer
 
 ## Known unknowns
 
-These ship unmeasured unless the owner decides otherwise:
+These shipped unmeasured:
 
 - a second browser and a real device
 - lab and field performance
 - a timeout, a malformed response and a 429 in a browser
 - real email delivery of a website brief and its owner notice
 - a remote `owner:health` run
+- the owner center, live, including the offer editor's two changed examples (owner only)
+- the Web app, Workflow automation and legacy idea paths, walked in a browser (live)
+- `audio.thesuperhuman.us` (not checked live)
+- the live suggestion API (not called)
 
-The owner can cover the device check and email delivery after the deploy, by opening the brief on a phone and sending one test brief.
+The owner can cover the device check and email delivery now that the site is deployed, by opening the brief on a phone and sending one test brief.
 
 ## Remaining work
 
-- CI on the final commit must pass before merge. Review `website-brief-owner-brief-desktop.png` (1280 px) and `website-brief-owner-brief-phone.png` (390 px) under `pr-188/<final commit>/` on the `screenshots` branch. After the owner answers on the known unknowns and the agreements proposal, merge (deploys production) and run the live checks in section 7.
+- Owner or reviewer: look at the final commit's captures under `pr-188/10400d7/` on the `screenshots` branch, including `website-brief-owner-brief-desktop.png` (1280 px) and `website-brief-owner-brief-phone.png` (390 px). None of the `10400d7` captures were viewed for this record.
+- Owner: run `npm run owner:health -- --remote --post-deploy`, or accept it as unmeasured.
 - Owner: publish the updated MSA and SOW templates in `/owner/agreements` before sending a website offer for website signing.
+- Owner: confirm the proposal under the owner-noted gap (answer website briefs with a question or a decline until the templates are published).
+- Owner: open the offer editor and check the two changed website examples (owner only, behind Access).
+- Owner: check the brief on a phone and send one test brief (see Known unknowns).
