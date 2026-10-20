@@ -1,7 +1,8 @@
 import type { IntakeInput } from './audio-intake';
 import { audioOffers, describePreferences } from './audio-intake';
 import { studioInvitationEmail, studioUpdateEmail } from './client-emails';
-import { softwareLabels, softwarePaths, softwareQuestions } from './software-inquiry';
+import { softwareLabels, softwarePathLabel, softwareQuestions } from './software-inquiry';
+import type { StoredSoftwarePath } from './software-inquiry';
 
 const ENDPOINT = 'https://api.resend.com/emails';
 
@@ -85,7 +86,7 @@ export async function sendOwnerRequestNotice(args: OwnerRequestNoticeArgs): Prom
 }
 
 export async function sendSoftwareRequestNotice(args: {
-  requestId: string; path: keyof typeof softwarePaths; name: string; email: string;
+  requestId: string; path: StoredSoftwarePath; name: string; email: string;
   brief: Record<string, string>;
   origin?: string; apiKey?: string; from?: string; to?: string;
 }): Promise<{ ok: boolean; uncertain?: boolean }> {
@@ -94,7 +95,7 @@ export async function sendSoftwareRequestNotice(args: {
     apiKey: args.apiKey,
     payload: {
       from: args.from, to: [args.to], reply_to: args.email,
-      subject: `Software request from ${args.name}: ${softwarePaths[args.path]}`,
+      subject: `Software request from ${args.name}: ${softwarePathLabel(args.path)}`,
       text: `A software project brief is ready for review.\n\n${softwareQuestions[args.path].filter(key => args.brief[key]?.trim()).map(key => `${softwareLabels[key]}\n${args.brief[key]}`).join('\n\n')}\n\n${new URL(`/owner/requests/${args.requestId}`, args.origin ?? 'https://thesuperhuman.us').href}`,
     },
   });

@@ -4,9 +4,9 @@ import { musicRequest } from '~/lib/music-request';
 import { suggestionPassCookie, suggestionVisitorHash, validSuggestionPass } from '~/lib/brief-suggestion-pass';
 export const prerender = false;
 const schema = z.object({
-  question: z.enum(['What happens today?', "What's the idea?", 'Have a first result in mind?', 'Have a first version in mind?']),
+  question: z.enum(['What happens today?', "What's the idea?", 'Have a first result in mind?', 'Have a first version in mind?', "What's the website for?", 'What should the app let people do?']),
   text: z.string().max(2000),
-  earlier: z.object({ path: z.enum(['workflow', 'idea']), today: z.string().max(2000).optional(), idea: z.string().max(1000).optional() }).strict(),
+  earlier: z.object({ path: z.enum(['workflow', 'idea', 'website', 'webapp']), today: z.string().max(2000).optional(), idea: z.string().max(1000).optional(), purpose: z.string().max(2000).optional(), appGoal: z.string().max(1000).optional() }).strict(),
 }).strict();
 const empty = () => Response.json({ suggestion: '' }, { headers: { 'cache-control': 'no-store' } });
 export const POST: APIRoute = async ({ request, locals }) => {

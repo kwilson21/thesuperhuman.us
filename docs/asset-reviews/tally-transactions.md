@@ -7,6 +7,7 @@
 - Delivery: WebP quality 80, 900 × 600, 19,988 bytes, matching the door pictures. The column renders it at most about 460 px wide on desktop and full width on a phone, so 900 px covers a 2× display.
 - Accessibility and motion: meaningful alternative text is set where it's used ("Tally's transactions screen, running on demo data"); static and lazy-loaded.
 - Publication check: no private content, secrets, home address or real money. Merchant names are the demo's fictional transactions; no third-party logos. No claim of production readiness; the caption says it's the public demo on demo data.
+- Placement update, October 19, 2026 (pull request 188): the "Bring an idea to life" row is now the Web app row (`/services#web-app`), and the picture sits beside the Tally and Kaillera Next evidence. It renders about 464 px wide on a 1280 px desktop and full width (324 px) on a 390 px phone, with the same alternative text and caption. Page inspection by the Claude Code agent (not the owner) in CI's 1× captures of head `7881963`: pass at 1280 px and 390 px, with the "Demo data" banner visible and no text cut along the edges. The file and its hash are unchanged.
 - Outcome: ready for production asset use. Deployment is separate.
 
 ```json

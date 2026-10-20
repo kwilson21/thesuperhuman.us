@@ -361,23 +361,63 @@ online. A finished essay will develop the argument rather than duplicate the jou
 
 `/services` is the "Work with me" hub. Its three doors show mixing and mastering,
 website design and software engineering through real work: the audio door opens
-`/audio/start`, the website door opens the contact form, and the software door
-opens `/software/start`. Below them, the software section shares the anatomy of
+`/audio/start`, the website door opens the project brief at
+`/software/start?path=website`, and the software door opens `/software/start`.
+Below them, the "Websites & software" section shares the anatomy of
 `/audio/services`: a hero with its introduction and muted tagline beside Lyft
-before-and-after evidence, two open path rows with Skupos evidence and its existing
-work diagram for workflows and Tally demo imagery and text for ideas, then the
-three "Before we start." steps. Only the two path rows have software calls to
-action. The hero panel, row bodies and steps use the shared reveal motion, with
-fully visible resting frames without JavaScript, with reduced motion and in print.
-Copy comes from `src/data/services.ts`, shared section styles from
-`src/styles/service-pages.css`, and hub doors from `src/data/work-with-me.ts`
-through `WorkWithMe.astro`. The software section retains a one-page US Letter
-print view, followed on screen by resume and contact links, the address and print
-control. Header, footer, Work and Home link visitors to the hub; the phone menu
-links its sections (`#door-website`, `#software`). Audio prices and scope live at
-`/audio/services`. The old `/services.html` address redirects to the hub. Audio
-belongs within the personal site, with its existing hostname retained as an
+before-and-after evidence, three open path rows named like the brief's paths, then
+the three "Before we start." steps. Website design (`#website`) shows this site
+and links to its project page; Web app (`#web-app`) shows the Tally demo and
+Kaillera Next; Workflow automation (`#workflow`) shows Skupos evidence and its
+existing work diagram. Only the path rows have calls to action, and each opens its
+own brief path. The hero panel, row bodies and steps use the shared reveal motion,
+with fully visible resting frames without JavaScript, with reduced motion and in
+print. Copy comes from `src/data/services.ts`, which lists the rows in order, shared
+section styles from `src/styles/service-pages.css`, and hub doors from
+`src/data/work-with-me.ts` through `WorkWithMe.astro`. The section retains a
+one-page US Letter print view, followed on screen by resume and contact links, the
+address and print control. Header, footer, Work and Home link visitors to the hub;
+the phone menu links its sections (`#website`, `#software`). Audio prices and scope
+live at `/audio/services`. The old `/services.html` address redirects to the hub.
+Audio belongs within the personal site, with its existing hostname retained as an
 alternate entry and main-site canonicals.
+
+### Project brief paths, October 19
+
+Approved by the owner on October 19, 2026 ([design study](design-concepts/2026-10-19/website-intake/index.html)).
+`/software/start` is one project brief with three named paths: Website design,
+Web app and Workflow automation. Its first screen names each path with one plain
+line, and a visitor who isn't sure picks the closest; the owner suggests the right
+fit in the reply. Every path is stored as request kind `software` and uses the same
+owner center, offer, agreement, invoice and project page. A path changes its
+questions, labels, examples and owner reminders, never the pipeline.
+
+- Website design asks what the site is for, what the visitor already has (an
+  optional `http` or `https` link to the current site and notes, without AI
+  suggestions, because a suggestion would invent things they don't have) and who
+  will keep it up to date. Updates after launch are quoted separately, at a fixed
+  price. There is no public website price; the reply quotes a fixed-price first
+  milestone.
+- Web app replaces "Bring an idea to life" with the same two questions retitled
+  for apps. Earlier `idea` briefs keep that name and their original questions on
+  owner and offer pages, the server still accepts `idea` from stale pages, and
+  `?path=idea` opens Web app.
+- Workflow automation keeps the earlier workflow questions and Skupos example
+  under its new name.
+
+The website door uses the brief instead of the contact form, so a website lead
+reaches the owner center with a path to an offer, agreement and invoice. Home's
+"Start a project" button opens the brief's first screen, where the
+visitor names the path. Before the
+first website offer, the owner confirms the private MSA and SOW text covers website
+design or publishes a new template version.
+
+A brief path opens once it has a personal project example, as a door needs real,
+verifiable work. Website design has this site; Web app has Tally and Kaillera Next.
+Mobile apps (iPhone, Android, iPad and tablets) and data integration are held until
+each has its own personal project to show; each then opens as its own named path
+with its own questions. Workflow automation predates this rule and stays open with
+its client-work example by the owner's decision.
 
 ## Copy: explain the action when visitors need to understand the work
 
@@ -393,8 +433,8 @@ reason. Explain what the visitor sends or does when that helps them act.
 For example:
 
 - Instead of “Prototypes, products, internal tools and integrations,” explain:
-  “I build a first version people can try, or a tool that makes a task your team
-  repeats easier.”
+  “I build web apps people can try, or a tool that makes a task your team repeats
+  easier.”
 - Instead of “Data ingestion for a healthcare credentialing platform,” explain:
   “I built pipelines that brought state medical-board data into a healthcare
   credentialing platform.”

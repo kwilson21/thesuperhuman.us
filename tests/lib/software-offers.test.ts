@@ -47,3 +47,8 @@ it('rejects repeated deliverable lines after case and whitespace normalization',
   const value={...terms,milestones:[{...terms.milestones[0],deliverables:['Status view',' STATUS   VIEW ']}]};
   expect(validateOfferTerms(value)).toMatchObject({ok:false,errors:{'milestones.0.deliverables':'Each deliverable needs to be different.'}});
 });
+
+it.each([['website','Website design'],['webapp','Web app'],['workflow','Workflow automation'],['idea','Bring an idea to life'],['unknown','Workflow automation']])('names the offer path for a %s brief', (serviceId, path) => {
+  const projection = clientOffer({ name: 'Alex', details: {}, serviceId } as any, { version: 1, terms_json: JSON.stringify(terms), status: 'sent' } as any);
+  expect(projection?.path).toBe(path);
+});

@@ -1,4 +1,4 @@
-import { softwareLabels } from './software-inquiry';
+import { clientSoftwareLabels } from './software-inquiry';
 import { renderEmail } from './email-template';
 
 const site = 'https://thesuperhuman.us';
@@ -86,11 +86,11 @@ export function softwareBriefEmail(name: string, brief: Record<string, string>) 
     `Hi ${name.trim().split(/\s+/)[0] || 'there'},`,
     "Thanks for sending this. I'll read it myself and reply within two business days with a fixed-price first milestone, or a question or two.",
     "Here's what you sent:",
-    ...Object.entries(brief).map(([key, answer]) => `${softwareLabels[key as keyof typeof softwareLabels]}\n${answer}`),
+    ...Object.entries(brief).map(([key, answer]) => `${clientSoftwareLabels[key]}\n${answer}`),
     'Kazon',
     'Reply to this email if you want to add anything.',
   ];
-  const { html } = renderEmail({ preheader: 'Your brief is in.', kicker: 'Software brief', heading: 'Your brief is in.', paragraphs,
-    reason: 'You received this because you sent a software project brief.' });
+  const { html } = renderEmail({ preheader: 'Your brief is in.', kicker: 'Project brief', heading: 'Your brief is in.', paragraphs,
+    reason: 'You received this because you sent a project brief.' });
   return { text: paragraphs.join('\n\n'), html: html.replace(/(<p style="margin:0 0 16px;)/g, '$1white-space:pre-wrap;') };
 }

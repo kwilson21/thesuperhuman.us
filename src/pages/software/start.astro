@@ -3,33 +3,37 @@ export const prerender = false;
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import Footer from '~/components/Footer.astro';
 import { mainSitePath } from '~/lib/host-routing';
-import { softwarePaths } from '~/lib/software-inquiry';
+import { softwareBriefKickers, softwarePathDescriptions, softwarePaths, updateLabels, type SoftwarePath } from '~/lib/software-inquiry';
 import '~/styles/audio-intake.css';
 import '~/styles/software-intake.css';
 const env = Astro.locals.runtime?.env;
 const siteKey = env?.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 const available = Boolean(siteKey && env?.MUSIC_DB && env.TURNSTILE_SECRET_KEY && env.RATE_LIMIT);
 const requested = Astro.url.searchParams.get('path');
-const selected = requested === 'idea' || requested === 'workflow' ? requested : null;
+// Old links keep working: ?path=idea opens Web app.
+const selected = requested === 'idea' ? 'webapp' : requested && Object.hasOwn(softwarePaths, requested) ? requested as SoftwarePath : null;
+const count = selected === 'website' ? 8 : 7;
 const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ?? Astro.url.host, path);
 ---
-<BaseLayout title="Start a software project · Kazon Wilson" description="Share a short software project brief for Kazon Wilson to review.">
+<BaseLayout title="Start a project · Kazon Wilson" description="Share a short project brief for Kazon Wilson to review.">
   <article class="site-shell intake-page software-intake">
-    <p class="intake-return"><a class="site-link" href={href('/services#software')}>Back to Software <span aria-hidden="true">←</span></a></p>
-    <p class="intake-muted">Software brief</p>
-    <ol data-intake-progress class="intake-progress brief-dots" aria-label="Your progress">{Array.from({ length: 7 }, (_, i) => <li aria-current={i === 0 ? 'step' : undefined}><span class="step-number"><span class="sr-only">Question {i + 1} of 7</span></span></li>)}</ol>
+    <p class="intake-return"><a class="site-link" href={href('/services#software')}>Back to Work with me <span aria-hidden="true">←</span></a></p>
+    <p class="intake-muted" data-brief-kicker>{selected ? softwareBriefKickers[selected] : 'Project brief'}</p>
+    <ol data-intake-progress class="intake-progress brief-dots" aria-label="Your progress">{Array.from({ length: 8 }, (_, i) => <li aria-current={i === 0 ? 'step' : undefined} hidden={i === 7 && selected !== 'website'}><span class="step-number"><span class="sr-only">{`Question ${i + 1} of ${count}`}</span></span></li>)}</ol>
     <form id="software-inquiry" data-available={available} data-suggestion-sitekey={siteKey} novalidate>
       <noscript><p>Please enable JavaScript to use this form, or email <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>.</p></noscript>
       <section data-step="0">
         <h1 tabindex="-1">What are you working on?</h1>
         <fieldset class="offer-list"><legend class="sr-only">Choose a starting point</legend>
-          {Object.keys(softwarePaths).map(key => <label class="intake-offer"><input type="radio" name="path" value={key} checked={selected === key} /><span><strong>{key === 'workflow' ? 'A workflow that should be easier' : 'An idea to bring to life'}</strong></span></label>)}
-        </fieldset><p data-form-error="path" hidden></p>
+          {(Object.entries(softwarePaths) as [SoftwarePath, string][]).map(([key, label]) => <label class="intake-offer"><input type="radio" name="path" value={key} checked={selected === key} /><span><strong>{label}</strong><small>{softwarePathDescriptions[key]}</small></span></label>)}
+        </fieldset>
+        <p data-form-error="path" hidden></p>
+        <p class="intake-footnote">Not sure which? Pick the closest. I’ll suggest the right fit when I reply.</p>
       </section>
       {[1, 2].map(index => <section data-step={index} hidden>
         <h1 tabindex="-1" data-question-title></h1>
         <p class="intake-intro" data-question-hint></p>
-        <p class="intake-footnote">Plain language is fine. We’ll work out the technical details together. Please leave out passwords, access details and real customer data.</p>
+        <p class="intake-footnote" data-question-footnote>Plain language is fine. We’ll work out the technical details together. Please leave out passwords, access details and real customer data.</p>
         <div class="intake-field brief-answer">
           <label class="sr-only" for={`brief-answer-${index}`} data-answer-label></label>
           <div class="brief-ghost" aria-hidden="true"><span data-ghost-prefix></span><span data-ghost-text></span></div>
@@ -45,6 +49,7 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
       </section>)}
       <section data-step="3" hidden>
         <h1 tabindex="-1">When do you need it?</h1>
+        <p class="intake-intro" data-timing-hint hidden>If it’s tied to a launch, an event or a season, choose a date.</p>
         <fieldset class="offer-list"><legend class="sr-only">Timing</legend>
           {[['flexible', 'Flexible'], ['date', 'By a date'], ['asap', 'As soon as possible']].map(([key, label]) => <label class="intake-offer"><input type="radio" name="timing" value={key} checked={key === 'flexible'} /><span>{label}</span></label>)}
         </fieldset>
@@ -69,18 +74,37 @@ const href = (path: string) => mainSitePath(Astro.request.headers.get('host') ??
         {available ? <div class="cf-turnstile" data-sitekey={siteKey}></div> : <p class="intake-unavailable">This preview isn't connected to delivery yet. You can try every step; sending is unavailable.</p>}
         <p data-form-error="turnstileToken" hidden></p>
       </section>
+      {/* Website-only screens. The script's step plan for each path sets their order. */}
+      <section data-step="7" hidden>
+        <h1 tabindex="-1">What do you have today?</h1>
+        <p class="intake-intro">Your current site, if there is one, and anything you want to keep: pages, text, photos or a logo.</p>
+        <label class="intake-field">Current website (optional)<input name="currentUrl" type="url" inputmode="url" autocomplete="url" maxlength="2048" placeholder="https://yourstudio.com" /></label>
+        <p data-form-error="currentUrl" hidden></p>
+        <label class="intake-field">What you already have (optional)<textarea name="existing" rows="4" maxlength="2000" placeholder="A logo and about 30 class photos. The About and Pricing pages are still accurate. I like how calm the Example Ceramics site feels."></textarea></label>
+        <p data-form-error="existing" hidden></p>
+        <button type="button" data-skip>Skip</button>
+      </section>
+      <section data-step="8" hidden>
+        <h1 tabindex="-1">Who will keep it up to date?</h1>
+        <p class="intake-intro">This shapes how I build it and what the handoff covers.</p>
+        <fieldset class="offer-list"><legend class="sr-only">Who will keep it up to date?</legend>
+          {Object.entries(updateLabels).map(([key, label]) => <label class="intake-offer"><input type="radio" name="updates" value={key} /><span>{label}</span></label>)}
+        </fieldset>
+        <p data-form-error="updates" hidden></p>
+        <p class="intake-footnote">Updates after launch are quoted separately, at a fixed price.</p>
+      </section>
       <p data-form-status role="status" tabindex="-1"></p>
       <div class="intake-actions"><button type="button" data-back hidden>Back</button><button type="button" class="site-button" data-next>Next</button><button type="submit" class="site-button" hidden disabled>Send brief</button></div>
       <p class="intake-reassurance" data-send-reassurance hidden>No booking or payment at this stage.</p>
     </form>
     <section id="software-success" hidden tabindex="-1" role="status">
-      <p class="intake-muted">Software brief · sent</p><h1>Your brief is in.</h1><p class="intake-intro" data-receipt-thanks></p>
+      <p class="intake-muted">Project brief · sent</p><h1>Your brief is in.</h1><p class="intake-intro" data-receipt-thanks></p>
       <div class="intake-link-panel max-w-content" data-copy-card>
         <span data-copy-icon class="block text-accent" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" ><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 6 9 7 9-7" /></svg></span>
         <p data-copy-status></p><p class="intake-muted" data-copy-note>It has everything you wrote, so you don't need to save this page.</p>
       </div>
       <ol class="intake-next-steps max-w-content">
-        <li>I reply with a fixed-price first milestone, or a question or two.</li>
+        <li data-receipt-first-step>I reply with a fixed-price first milestone, or a question or two.</li>
         <li>If it looks right, you sign the agreement online. It takes about two minutes.</li>
         <li>Work starts, and you follow it on your own private project page.</li>
       </ol>

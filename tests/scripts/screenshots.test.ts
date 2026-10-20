@@ -152,6 +152,23 @@ describe('screenshot coverage', () => {
     expect(missingScenarioRoutes(SCENARIO_PAGES, captured)).toEqual([]);
   });
 
+  it('captures the website brief journey at both widths, with its seeded owner pages', async () => {
+    const captures: { path: string; owner: boolean }[] = [];
+    const scenario = await import('../../scripts/screenshots/scenarios/website-brief.mjs');
+    const steps = await scenario.default.run({
+      sql: () => '[]',
+      capture: async ({ file, path, owner = false }: { file: string; path: string; owner?: boolean }) => { captures.push({ path, owner }); return file; },
+    });
+    expect(steps).toHaveLength(11);
+    expect(steps.every(step => step.images.length === 2)).toBe(true);
+    // Nine client screens, then the owner's brief and the request list, each at desktop and phone width.
+    expect(captures.filter(item => !item.owner)).toHaveLength(18);
+    expect(captures.filter(item => !item.owner).every(item => item.path === '/software/start')).toBe(true);
+    expect(captures.filter(item => item.path === '/owner/requests/screenshot-website')).toEqual([{ path: '/owner/requests/screenshot-website', owner: true }, { path: '/owner/requests/screenshot-website', owner: true }]);
+    expect(captures.filter(item => item.path === '/owner/requests?kind=software')).toEqual([{ path: '/owner/requests?kind=software', owner: true }, { path: '/owner/requests?kind=software', owner: true }]);
+    expect(captures).toHaveLength(22);
+  });
+
   it('captures bare, expired and valid one-time landings with their document statuses and destinations', async () => {
     const scenario = await import('../../scripts/screenshots/scenarios/software-signing.mjs');
     const landings: { path: string; status: number }[] = [];
@@ -279,7 +296,7 @@ describe('screenshot coverage', () => {
       .toEqual(['about']);
     expect(relevantScreenshots(manifest, ['src/layouts/ServiceSheet.astro', 'src/data/services.ts'])
       .pages.map((page: { name: string }) => page.name)).toEqual(['services']);
-    for (const file of ['src/layouts/ServiceSheet.astro', 'src/data/services.ts', 'src/styles/service-pages.css', 'src/lib/software-inquiry.ts', 'src/data/profile.ts']) {
+    for (const file of ['src/layouts/ServiceSheet.astro', 'src/data/services.ts', 'src/data/work-with-me.ts', 'src/data/project-stories/tally.ts', 'src/data/project-stories/kaillera-next.ts', 'src/styles/service-pages.css', 'src/lib/software-inquiry.ts', 'src/data/profile.ts']) {
       expect(relevantScreenshots(manifest, [file]).scenarios.map((scenario: { name: string }) => scenario.name)).toEqual(['services-print']);
     }
     expect(relevantScreenshots(manifest, ['src/components/WorkDiagram.astro']).scenarios).toEqual([]);
@@ -352,6 +369,20 @@ describe('screenshot coverage', () => {
     const selected = relevantScreenshots(manifest, ['src/lib/software-inquiry.ts']);
     expect(selected.pages.map((page: { name: string }) => page.name)).toEqual(['software-start']);
     expect(selected.scenarios.map((scenario: { name: string }) => scenario.name)).toEqual(['software-brief']);
+  });
+
+  it('selects both brief journeys when the software start page or its question component changes', () => {
+    const manifest = { pages: [{ name: 'software-start', path: '/software/start' }],
+      scenarios: [
+        { name: 'software-brief', title: 'Software brief journey', steps: [] },
+        { name: 'website-brief', title: 'Website brief journey', steps: [] },
+        { name: 'software-offer', title: 'Software offer', steps: [] },
+      ] };
+    const start = relevantScreenshots(manifest, ['src/pages/software/start.astro']);
+    expect(start.pages.map((page: { name: string }) => page.name)).toEqual(['software-start']);
+    expect(start.scenarios.map((scenario: { name: string }) => scenario.name)).toEqual(['software-brief', 'website-brief']);
+    expect(relevantScreenshots(manifest, ['src/components/owner/SoftwareQuestions.astro']).scenarios.map((scenario: { name: string }) => scenario.name))
+      .toEqual(['website-brief', 'software-offer']);
   });
 
   it('fails closed to no unrelated images when changed files have no mapped route', () => {
@@ -535,6 +566,27 @@ it.each(['desktop', 'phone'])('captures the ghost text with the %s input hint', 
   } });
   expect(dispatchEvent).toHaveBeenCalledWith('pointerdown', { pointerType: viewport === 'phone' ? 'touch' : 'mouse' });
   expect(waits).toEqual(['[data-step="1"] [data-ghost-text]']);
+});
+
+it('holds the sending request whether fetch gets a string, a URL, a Request or a relative path, and passes other requests on', async () => {
+  const scenario = await import('../../scripts/screenshots/scenarios/software-brief.mjs');
+  let script = '';
+  const page = { on() {}, route: async () => {}, reload: async () => {}, waitForFunction: async () => {},
+    addInitScript: async (fn: unknown) => { if (typeof fn === 'function' && fn.toString().includes('/api/software-inquiry')) script = fn.toString(); },
+    locator: () => ({ check: async () => {}, fill: async () => {}, click: async () => {}, waitFor: async () => {}, dispatchEvent: async () => {}, innerText: async () => '', isDisabled: async () => true, evaluateAll: async () => true }) };
+  await scenario.default.run({ base: 'http://127.0.0.1:4321', sql() {}, capture: async ({ file, prepare }: any) => {
+    if (file === 'software-brief-sending-desktop.png') await prepare(page);
+    return file;
+  } });
+  expect(script).toContain('/api/software-inquiry');
+  const inquiry = 'http://127.0.0.1:4321/api/software-inquiry', pass = 'http://127.0.0.1:4321/api/software/brief/pass';
+  const passed: string[] = [];
+  const sandbox: any = { window: { fetch: vi.fn(async (input: unknown) => { passed.push(String(input)); return 'passed'; }) }, location: { href: 'http://127.0.0.1:4321/software/start' }, URL, Request };
+  runInNewContext(`(${script})()`, sandbox);
+  const wrapped = sandbox.window.fetch;
+  wrapped(inquiry, { method: 'POST' }); wrapped(new URL(inquiry), { method: 'POST' }); wrapped(new Request(inquiry, { method: 'POST' })); wrapped('/api/software-inquiry', { method: 'POST' });
+  expect(await wrapped(pass)).toBe('passed');
+  expect(passed).toEqual([pass]);
 });
 
 

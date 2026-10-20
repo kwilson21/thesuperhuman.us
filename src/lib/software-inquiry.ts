@@ -3,9 +3,25 @@ import type { NewOwnerRequest } from './owner-requests';
 import type { OwnerRequest } from './owner-model';
 
 export const softwarePaths = {
-  workflow: 'Make a workflow easier',
-  idea: 'Bring an idea to life',
+  website: 'Website design',
+  webapp: 'Web app',
+  workflow: 'Workflow automation',
 } as const;
+// Earlier briefs keep the name they were sent with. The page no longer offers it, but the server still accepts it from pages opened before the change.
+export const legacySoftwarePaths = { idea: 'Bring an idea to life' } as const;
+export const softwarePathDescriptions = {
+  website: 'A site people can read on a phone and act on.',
+  webapp: 'An app people open in a browser, on a phone or a computer.',
+  workflow: 'A tool that takes manual steps out of a task your team repeats.',
+} as const;
+export const softwareBriefKickers = { website: 'Website brief', webapp: 'Web app brief', workflow: 'Workflow brief' } as const;
+export type SoftwarePath = keyof typeof softwarePaths;
+export type StoredSoftwarePath = SoftwarePath | keyof typeof legacySoftwarePaths;
+export function softwarePathLabel(path: unknown): string | undefined {
+  if (typeof path !== 'string') return undefined;
+  if (Object.hasOwn(softwarePaths, path)) return softwarePaths[path as SoftwarePath];
+  return Object.hasOwn(legacySoftwarePaths, path) ? legacySoftwarePaths[path as keyof typeof legacySoftwarePaths] : undefined;
+}
 export const softwareLabels = {
   path: 'Project', today: 'What happens today?', audience: 'Who needs this to work better?',
   firstResult: 'What would a useful first result look like?', name: 'Your name', email: 'Email',
@@ -14,12 +30,40 @@ export const softwareLabels = {
   company: 'Company, if you have one', timingDate: 'Needed by', timing: 'Timing', timingReason: 'Why this timing? (optional)',
   budgetStatus: 'Budget status', budgetNote: 'Budget amount, if you’d like to share it (optional)',
   approver: 'Who will approve the project?', approverRole: 'Their role (optional)',
+  purpose: 'What’s the website for?', currentUrl: 'Current website', existing: 'What they already have', updates: 'Who will keep it up to date?', appGoal: 'What should the app let people do?',
 } as const;
-export const softwareQuestions = { workflow: ['today', 'audience', 'firstResult'], idea: ['idea', 'audienceToday', 'firstVersion', 'signal'] } as const;
+// The client reads their own answers, so "they" becomes "you".
+export const clientSoftwareLabels: Record<string, string> = { ...softwareLabels, existing: 'What you already have' };
+export const softwareQuestions = { website: ['purpose', 'currentUrl', 'existing', 'updates'], webapp: ['appGoal', 'firstVersion'], workflow: ['today', 'audience', 'firstResult'], idea: ['idea', 'audienceToday', 'firstVersion', 'signal'] } as const;
 export const softwareDetailKeys = ['name', 'email', 'company', 'timing', 'timingDate', 'timingReason', 'budgetStatus', 'budgetNote', 'approver', 'approverRole'] as const;
 export const timingLabels = { flexible: 'Flexible', month: 'Within a month', quarter: 'In one to three months', date: 'By a date', asap: 'As soon as possible' } as const;
 export const budgetLabels = { approved: 'Approved', pending: 'Waiting for approval', exploring: 'Still exploring', unsure: 'Not sure yet' } as const;
 export const approverLabels = { self: 'I do', other: 'Someone else, and I can involve them', unsure: 'Not sure yet' } as const;
+export const updateLabels = { self: 'Me or someone on my team', help: 'I’d like help with updates', unsure: 'Not sure yet' } as const;
+export function currentSiteHref(value: unknown): string | null {
+  if (typeof value !== 'string' || !/^https?:\/\//i.test(value) || /\s/.test(value)) return null;
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname && !url.username && !url.password ? url.href : null;
+  } catch { return null; }
+}
+// bareHost: dots split the host labels, so it runs in linear time; '@' is excluded, so an email address is not a host.
+const bareHost = /^(\/\/)?([^\s\/:?#.@]+(\.[^\s\/:?#.@]+)+\.?|localhost)(:\d+)?([\/?#]\S*)?$/i;
+// Four cases, in order. A link that starts with http:// or https:// but isn't accepted as a link
+// (it doesn't parse, or has a space, username or password) is told to check the link or leave it
+// empty.
+// A mistyped or other scheme (https//x.com, https:/x.com, ftp://x) is told to start with
+// https:// or http://, unless a digit (a port, x.com:8080) or a space (a label, Website: x.com)
+// follows the colon after a scheme other than http or https.
+// A bare host, host:port or localhost is told to add https:// when that makes a valid link.
+// Anything else (none, n/a, an email address) is told to check the link or leave it empty.
+// Callers pass at most 2048 characters (the schema skips longer values); the bare host check
+// parses the URL, which is slow on very long international hosts.
+export const currentUrlMessage = (value: string) => /^https?:\/\//i.test(value) ? 'Check the link, or leave it empty.'
+  : /^https?:/i.test(value) || /^https?\/\//i.test(value) || /^[a-z][a-z\d+.-]*:(?![\d\s])/i.test(value) ? 'Use https:// or http:// at the start of the link.'
+  : bareHost.test(value) && currentSiteHref('https://' + value) !== null ? 'Add https:// to the start of the link.'
+  : 'Check the link, or leave it empty.';
+const currentUrlMax = 2048;
 const single = (max: number) => z.string().trim().max(max, `Keep this under ${max} characters.`);
 const required = (max: number) => single(max).min(1, 'This answer is required.');
 const common = {
@@ -33,6 +77,9 @@ const common = {
 const schema = z.discriminatedUnion('path', [
   z.object({ ...common, path: z.literal('workflow'), today: required(2000), audience: single(1000).default(''), firstResult: single(2000).default('') }),
   z.object({ ...common, path: z.literal('idea'), idea: required(1000), audienceToday: single(1000).default(''), firstVersion: single(1000).default(''), signal: single(500).default('') }),
+  // Over-long values skip the link checks: max already reports them, and URL parsing of a long international host is slow.
+  z.object({ ...common, path: z.literal('website'), purpose: required(2000), currentUrl: single(currentUrlMax).default('').refine(value => value.length > currentUrlMax || value === '' || currentSiteHref(value) !== null, value => ({ message: currentUrlMessage(value) })), existing: single(2000).default(''), updates: z.enum(['self', 'help', 'unsure'], { message: 'Choose one.' }) }),
+  z.object({ ...common, path: z.literal('webapp'), appGoal: required(1000), firstVersion: single(1000).default('') }),
 ]);
 export type SoftwareInput = z.infer<typeof schema>;
 export function validateSoftwareInquiry(input: unknown): { ok: true; value: SoftwareInput } | { ok: false; errors: Record<string, string> } {
@@ -42,11 +89,12 @@ export function validateSoftwareInquiry(input: unknown): { ok: true; value: Soft
     if ('timingDate' in raw && raw.timing === 'date' && (typeof raw.timingDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(raw.timingDate) || !Number.isFinite(Date.parse(raw.timingDate)) || new Date(raw.timingDate).toISOString().slice(0, 10) !== raw.timingDate)) lineErrors.timingDate = 'Add a valid date.';
     for (const key of ['name', 'email', 'company', 'timingReason', 'budgetNote', 'approverRole'])
       if (typeof raw[key] === 'string' && /[\r\n]/.test(raw[key])) lineErrors[key] = 'Use one line.';
-    const questions = raw.path === 'idea' ? softwareQuestions.idea : raw.path === 'workflow' ? softwareQuestions.workflow : [];
+    if (raw.path === 'website' && typeof raw.currentUrl === 'string' && /[\r\n]/.test(raw.currentUrl)) lineErrors.currentUrl = 'Use one line.';
+    const questions = typeof raw.path === 'string' && Object.hasOwn(softwareQuestions, raw.path) ? softwareQuestions[raw.path as StoredSoftwarePath] : [];
     for (const key of [...questions, ...softwareDetailKeys])
       if (typeof raw[key] === 'string' && /[\x00-\x08\x0b\x0c\x0e-\x1f]|\p{Cs}/u.test(raw[key])) lineErrors[key] = 'Remove control characters.';
   }
-  const parsed = schema.safeParse(input, { errorMap: (issue, context) => ({ message: issue.code === 'invalid_type' && !['path', 'timing', 'budgetStatus', 'approver'].includes(String(issue.path[0])) ? (issue.path.length ? 'This answer is required.' : 'Please send the form again.') : context.defaultError }) });
+  const parsed = schema.safeParse(input, { errorMap: (issue, context) => ({ message: issue.code === 'invalid_type' && !['path', 'timing', 'budgetStatus', 'approver', 'updates'].includes(String(issue.path[0])) ? (issue.path.length ? 'This answer is required.' : 'Please send the form again.') : context.defaultError }) });
   if (!parsed.success || Object.keys(lineErrors).length) {
     const errors: Record<string, string> = {};
     if (!parsed.success) for (const issue of parsed.error.issues) errors[String(issue.path[0] ?? '_form')] ??= issue.path[0] === 'path' ? 'Choose a starting point.' : issue.message;
@@ -57,7 +105,7 @@ export function validateSoftwareInquiry(input: unknown): { ok: true; value: Soft
   return { ok: true, value };
 }
 export function softwareRequest(input: SoftwareInput): NewOwnerRequest {
-  const firstLine = (input.path === 'idea' ? input.idea : input.today).trim().replace(/\s+/g, ' ').split(/(?<=[.!?])\s/, 1)[0];
+  const firstLine = String((input as Record<string, unknown>)[softwareQuestions[input.path][0]]).trim().replace(/\s+/g, ' ').split(/(?<=[.!?])\s/, 1)[0];
   const summaryCharacters = typeof Intl.Segmenter === 'function' ? [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(firstLine)].map(part => part.segment) : Array.from(firstLine);
   return {
     kind: 'software', serviceId: input.path, submissionId: input.submissionId,
@@ -68,13 +116,14 @@ export function softwareRequest(input: SoftwareInput): NewOwnerRequest {
 }
 export function softwareBrief(request: OwnerRequest): Record<string, string> {
   const details = request.details;
-  const path = details.path === 'idea' ? 'idea' : 'workflow';
+  const path: StoredSoftwarePath = typeof details.path === 'string' && Object.hasOwn(softwareQuestions, details.path) ? details.path as StoredSoftwarePath : 'workflow';
   return Object.fromEntries(['path', ...softwareQuestions[path], ...softwareDetailKeys].filter(key => key !== 'approverRole' || details.approver === 'other').map(key => {
     const value = key === 'name' ? request.name : key === 'email' ? request.email : details[key];
-    const display = key === 'path' ? softwarePaths[value as keyof typeof softwarePaths] :
+    const display = key === 'path' ? softwarePathLabel(value) :
       key === 'timing' ? timingLabels[value as keyof typeof timingLabels] :
       key === 'budgetStatus' ? budgetLabels[value as keyof typeof budgetLabels] :
-      key === 'approver' ? approverLabels[value as keyof typeof approverLabels] : value;
+      key === 'approver' ? approverLabels[value as keyof typeof approverLabels] :
+      key === 'updates' ? updateLabels[value as keyof typeof updateLabels] : value;
     return [key, typeof display === 'string' ? display : ''];
   }).filter(([, value]) => value));
 }

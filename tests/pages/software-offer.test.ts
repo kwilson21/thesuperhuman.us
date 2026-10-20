@@ -979,7 +979,8 @@ it('renders scanner-safe agreement and archive landings with exact copy', async(
 it('renders the approved receipt and keeps booking reassurance only on the send step', async () => {
   const container = await AstroContainer.create();
   const html = await container.renderToString(start, { request:new Request('https://thesuperhuman.us/software/start'), locals:{runtime:{env:{PUBLIC_TURNSTILE_SITE_KEY:'test',MUSIC_DB:{},TURNSTILE_SECRET_KEY:'test',RATE_LIMIT:{}}}} as any });
-  for (const copy of ['Software brief · sent','Your brief is in.','I reply with a fixed-price first milestone, or a question or two.','If it looks right, you sign the agreement online. It takes about two minutes.','Work starts, and you follow it on your own private project page.']) expect(html).toContain(copy);
+  for (const copy of ['Project brief · sent','Your brief is in.','I reply with a fixed-price first milestone, or a question or two.','If it looks right, you sign the agreement online. It takes about two minutes.','Work starts, and you follow it on your own private project page.']) expect(html).toContain(copy);
+  expect(html).not.toContain('Software brief · sent');
   expect(html).not.toMatch(/data-print|Print or save|Not provided/);
   expect(html.match(/No booking or payment at this stage\./g)).toHaveLength(1);
   const receipt = parse(html) as any;
@@ -987,7 +988,61 @@ it('renders the approved receipt and keeps booking reassurance only on the send 
   const steps = find(receipt);
   expect(steps?.tagName).toBe('ol');
   expect(steps.childNodes.filter((node: any) => node.tagName === 'li')).toHaveLength(3);
+  expect(steps.childNodes.filter((node: any) => node.tagName === 'li' && node.attrs.some((attr: any) => attr.name === 'data-receipt-first-step'))).toHaveLength(1);
   expect(await readFile('src/styles/audio-intake.css', 'utf8')).toMatch(/\.intake-next-steps\s*\{[^}]*list-style:\s*decimal\s*[;}]/);
+});
+
+it('renders the project brief start page with named paths, website screens and the old idea link', async () => {
+  const container = await AstroContainer.create();
+  const render = (query: string) => container.renderToString(start, { request: new Request(`https://thesuperhuman.us/software/start${query}`), locals: { runtime: { env: {} } } as any });
+  const textOf = (node: any): string => node.nodeName === '#text' ? node.value : (node.childNodes ?? []).map(textOf).join('');
+  const find = (node: any, test: (node: any) => boolean): any => test(node) ? node : (node.childNodes ?? []).map((child: any) => find(child, test)).find(Boolean);
+  const hasAttr = (node: any, name: string) => node.attrs?.some((attr: any) => attr.name === name);
+  const attrValue = (node: any, name: string) => node.attrs.find((attr: any) => attr.name === name)?.value;
+  const pathRadios = (html: string) => {
+    const found: { value: string; checked: boolean }[] = [];
+    const visit = (node: any) => {
+      if (node.tagName === 'input' && attrValue(node, 'name') === 'path') found.push({ value: attrValue(node, 'value'), checked: hasAttr(node, 'checked') });
+      for (const child of node.childNodes ?? []) visit(child);
+    };
+    visit(parse(html)); return found;
+  };
+  const progress = (html: string): { hidden: boolean; label: string }[] => find(parse(html), node => hasAttr(node, 'data-intake-progress')).childNodes
+    .filter((node: any) => node.tagName === 'li').map((item: any) => ({ hidden: hasAttr(item, 'hidden'), label: textOf(item) }));
+  const steps = (html: string) => {
+    const found: string[] = [];
+    const visit = (node: any) => { if (node.tagName === 'section' && hasAttr(node, 'data-step')) found.push(attrValue(node, 'data-step')); for (const child of node.childNodes ?? []) visit(child); };
+    visit(parse(html)); return found;
+  };
+
+  const first = await render('');
+  expect(first).toContain('Start a project · Kazon Wilson'); expect(first).toContain('Share a short project brief for Kazon Wilson to review.');
+  expect(first).toContain('Back to Work with me'); expect(first).not.toContain('Back to Software');
+  expect(first).toContain('data-brief-kicker>Project brief</p>');
+  for (const copy of ['A site people can read on a phone and act on.', 'An app people open in a browser, on a phone or a computer.', 'A tool that takes manual steps out of a task your team repeats.', 'Not sure which? Pick the closest. I’ll suggest the right fit when I reply.']) expect(first).toContain(copy);
+  expect(pathRadios(first)).toEqual([{ value: 'website', checked: false }, { value: 'webapp', checked: false }, { value: 'workflow', checked: false }]);
+  expect(progress(first).filter(item => !item.hidden)).toHaveLength(7); expect(progress(first)[0].label).toBe('Question 1 of 7');
+  expect(steps(first)).toEqual(['0', '1', '2', '3', '4', '5', '6', '7', '8']);
+  expect(first).toContain('What do you have today?'); expect(first).toContain('Who will keep it up to date?');
+  expect(find(parse(first), node => hasAttr(node, 'data-timing-hint')).attrs.some((attr: any) => attr.name === 'hidden')).toBe(true);
+
+  const website = await render('?path=website');
+  expect(website).toContain('data-brief-kicker>Website brief</p>');
+  expect(pathRadios(website)).toEqual([{ value: 'website', checked: true }, { value: 'webapp', checked: false }, { value: 'workflow', checked: false }]);
+  expect(progress(website).filter(item => !item.hidden)).toHaveLength(8); expect(progress(website)[0].label).toBe('Question 1 of 8');
+  expect(progress(website)[7].hidden).toBe(false);
+
+  const legacy = await render('?path=idea');
+  expect(legacy).toContain('data-brief-kicker>Web app brief</p>'); expect(legacy).not.toContain('value="idea"');
+  expect(pathRadios(legacy)).toEqual([{ value: 'website', checked: false }, { value: 'webapp', checked: true }, { value: 'workflow', checked: false }]);
+  expect(progress(legacy).filter(item => !item.hidden)).toHaveLength(7);
+  // Paths that are not on the list (or are object keys) open the first screen with nothing chosen.
+  for (const value of ['bogus', 'toString', '__proto__']) {
+    const html = await render(`?path=${value}`);
+    expect(pathRadios(html).filter(radio => radio.checked)).toEqual([]);
+    expect(html).toContain('data-brief-kicker>Project brief</p>');
+    expect(progress(html).filter(item => !item.hidden)).toHaveLength(7);
+  }
 });
 
 it('renders each owner brief outcome and gates uncertain retry at one minute', async () => {
@@ -1337,8 +1392,11 @@ it('renders the AI disclosure beside both answer boxes and the dated retention n
     expect(output).toContain('href="/privacy#software-briefs"'); expect(output).toContain('Suggestions are off.'); expect(output).toContain('Turn off');
   }
   const notice = await container.renderToString(privacy, { request:new Request('https://thesuperhuman.us/privacy') });
-  expect(notice).toContain('Updated October 10, 2026'); expect(notice).toContain('id="software-briefs"');
+  expect(notice).toContain('Updated October 19, 2026'); expect(notice).toContain('id="software-briefs"');
   expect(notice).toContain('a counter derived from your IP address, kept for up to two days');
+  expect(notice).toContain("Neither are a website brief's link and notes on what you already have; those boxes show no suggestions.");
+  expect(notice).toContain("Anything you type in a box that shows suggestions is sent, even if you don't accept one.");
+  expect(notice).not.toContain('Anything you type in an answer box is sent for suggestions.');
 });
 
 it('shows the countersign requirement beside both disabled closing actions', async () => {
@@ -1351,5 +1409,140 @@ it('shows the countersign requirement beside both disabled closing actions', asy
     const html=await container.renderToString(ownerRequest,{params:{id:'r'},request:new Request('https://thesuperhuman.us/owner/requests/r'),locals:{owner:{email:'owner@example.com'},runtime:{env:{MUSIC_DB:db}}}} as any);
     expect(html).toContain('Countersign or abandon the signed agreement first.');
     for(const action of ['resolve','withdraw']) expect(html).toMatch(new RegExp(`data-action="${action}"[^>]*disabled`));
+  } finally {sql.close();}
+});
+
+const websiteOfferText = ['A five-page site for Jordan Clay Studio that works on phones', 'Visitors see upcoming classes and sign up without messaging you first.', 'Logo, photos and page text\nAn invite to your domain settings (not a password)', 'Writing page text from scratch\nUpdates after handoff\nHosting and domain fees', 'One per line. Name hosting fees and updates after handoff here if the offer doesn’t include them.', 'About 4 weeks from the start date, once page text is in.', '<strong>For a website,</strong> name the pages, the number of design rounds, where it’s hosted and what the handoff includes. Pages that depend on text or photos they haven’t sent yet go in a later milestone.', 'Design direction', 'Page list and navigation\nHomepage design at phone and computer widths\nOne round of design changes', 'Open the homepage design on each approved device and approve it', 'Five pages built from the approved design\nContact form that emails you\nHandoff after final payment: site live on your domain, notes and a short editing walkthrough'];
+const workflowOfferText = ['A shared view of client onboarding', 'Client onboarding tracker', 'About 3 weeks from the start date.', 'Sample export of current client list', 'Live rollout to your team', 'Shared tracker with status, next action and owner', 'Add a client and see them in the list', 'Your team sees each client’s status and next step in one place.'];
+const templateOf = (html: string) => { const start = html.indexOf('<template data-milestone-template>'); expect(start).toBeGreaterThan(-1); return html.slice(start, html.indexOf('</template>', start)); };
+const beforeTemplate = (html: string) => html.slice(0, html.indexOf('<template data-milestone-template>'));
+
+it('shows website offer examples only for website briefs and keeps today’s examples for other paths', async () => {
+  const container = await AstroContainer.create();
+  const website = await container.renderToString(editor, { props:{ requestId:'r', email:'alex@example.com', offers:[], revoked:false, path:'website' } });
+  for (const text of websiteOfferText) expect(website).toContain(text);
+  expect(website).not.toContain('A shared view of client onboarding');
+  expect(website).not.toContain('on your phone and approve it'); expect(website).not.toContain('Site live on your domain\nHandoff notes');
+  // The first milestone shows the design step; the template a new milestone adds shows the later build step.
+  expect(beforeTemplate(website)).toContain('Design direction'); expect(beforeTemplate(website)).not.toContain('Five pages built from the approved design');
+  expect(templateOf(website)).toContain('Five pages built from the approved design'); expect(templateOf(website)).not.toContain('Design direction');
+  expect(templateOf(website)).toContain('milestone-2-milestoneName');
+  for (const path of ['workflow', 'webapp', 'idea', undefined]) {
+    const html = await container.renderToString(editor, { props:{ requestId:'r', email:'alex@example.com', offers:[], revoked:false, path } });
+    for (const text of websiteOfferText) expect(html).not.toContain(text);
+    expect(html).not.toContain('<strong>For a website,');
+    for (const text of workflowOfferText) expect(html).toContain(text);
+    expect(templateOf(html)).toContain('milestone-1-milestoneName');
+  }
+});
+it('renders a saved second website milestone with the later example and five deliverable rows', async () => {
+  const container = await AstroContainer.create();
+  const second = { name: 'Follow-up', deliverables: ['Saved page list'], acceptance: ['Saved check.'], feeCents: 100000 };
+  const html = await container.renderToString(editor, { props:{ requestId:'r', email:'alex@example.com', revoked:false, path:'website', offers:[{ id:'draft', version:1, status:'draft', terms_json:JSON.stringify({ ...terms, milestones:[terms.milestones[0], second] }), updated_at:'now', sent_at:null }] } });
+  const milestones = html.slice(html.indexOf('data-milestones'), html.indexOf('<template data-milestone-template>'));
+  const split = milestones.indexOf('Milestone 2</legend>');
+  expect(split).toBeGreaterThan(-1);
+  const [first, row2] = [milestones.slice(0, split), milestones.slice(split)];
+  expect(first).toContain('placeholder="Design direction"'); expect(first).toMatch(/name="deliverables"[^>]*rows="5"/);
+  expect(row2).toContain('placeholder="Five pages built from the approved design'); expect(row2).not.toContain('placeholder="Design direction"');
+  expect(row2).toMatch(/name="deliverables"[^>]*rows="5"/); expect(row2).toMatch(/name="acceptance"[^>]*rows="3"/);
+  expect(row2).toContain('Saved page list'); expect(row2).toContain('value="Follow-up"');
+});
+
+it('asks website fit questions and keeps the workflow fit note', async () => {
+  const container = await AstroContainer.create();
+  const website = await container.renderToString(fit, { props:{ requestId:'r', fit:null, path:'website' } });
+  expect(website).toContain('<strong>Before an offer:</strong> is the page text ready, who updates the site after launch, and whose account will host it?');
+  expect(website).toContain('placeholder="Ask whether page text and photos are ready."');
+  expect(website).not.toContain('Clarify who will use the first version.');
+  const closed = await container.renderToString(fit, { props:{ requestId:'r', fit:{ label:'potential-fit', note:'Saved note' }, closed:true, path:'website' } });
+  expect(closed).toContain('Saved note'); expect(closed).not.toContain('Before an offer:');
+  const workflow = await container.renderToString(fit, { props:{ requestId:'r', fit:null, path:'workflow' } });
+  expect(workflow).toContain('placeholder="Clarify who will use the first version."'); expect(workflow).not.toContain('Before an offer:');
+});
+
+it('helps the owner review a website brief: link, offer examples and unsafe links as text', async () => {
+  const {sql,db} = await fixture();
+  try {
+    sql.prepare(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,private_note,created_at,updated_at)
+      VALUES ('site','software','website','Jordan Example','jordan@example.com','A site for my pottery studio.',?,'new','','now','now')`).run(JSON.stringify({ path:'website', purpose:'A site for my pottery studio. People should see upcoming classes and sign up without messaging me first.', currentUrl:'https://jordanclay.example', existing:'A logo and about 30 class photos.', updates:'self', company:'Jordan Clay Studio', timing:'date', timingDate:'2026-12-01' }));
+    const container = await AstroContainer.create();
+    const render = () => container.renderToString(ownerRequest, { params:{ id:'site' }, request:new Request('https://thesuperhuman.us/owner/requests/site'), locals:{ owner:{ email:'owner@example.com' }, runtime:{ env:{ MUSIC_DB:db } } } as any });
+    const briefOf = (html: string) => { const start = html.indexOf('Their brief'); return html.slice(start, html.indexOf('</section>', start)); };
+    const html = await render();
+    const brief = briefOf(html);
+    for (const text of ['Website design', 'What’s the website for?', 'What they already have', 'Me or someone on my team']) expect(brief).toContain(text);
+    expect(brief).toMatch(/<a href="https:\/\/jordanclay\.example\/" target="_blank" rel="noopener noreferrer"[^>]*>https:\/\/jordanclay\.example\/<span class="visually-hidden[^"]*"> \(opens in a new tab\)<\/span><\/a> <span [^>]*aria-hidden="true"[^>]*>opens in a new tab<\/span>/);
+    expect(html).toMatch(/<a href="\/services#website"[^>]*>Service →<\/a>/);
+    for (const text of websiteOfferText) expect(html).toContain(text);
+    expect(html).toContain('Before an offer:');
+    sql.prepare("UPDATE owner_requests SET details_json=json_set(details_json,'$.currentUrl',?) WHERE id='site'").run('javascript:alert(1)');
+    const unsafe = await render(), unsafeBrief = briefOf(unsafe);
+    expect(unsafeBrief).toContain('javascript:alert(1)'); expect(unsafeBrief).not.toContain('<a');
+    // A look-alike Cyrillic 'a' links to its punycode host, and the visible text shows that same host.
+    sql.prepare("UPDATE owner_requests SET details_json=json_set(details_json,'$.currentUrl',?) WHERE id='site'").run('https://p\u0430ypal.example/');
+    const lookalike = briefOf(await render()), punycode = new URL('https://p\u0430ypal.example/').href;
+    expect(punycode).toContain('xn--');
+    expect(lookalike).toContain(`<a href="${punycode}" target="_blank" rel="noopener noreferrer"`); expect(lookalike).toContain(`>${punycode}<span class="visually-hidden`); expect(lookalike).toMatch(/visually-hidden[^"]*"> \(opens in a new tab\)<\/span><\/a>/);
+    expect(lookalike).not.toContain('\u0430');
+  } finally {sql.close();}
+});
+
+it('keeps the workflow owner page on the existing fit note without website copy', async () => {
+  const {sql,db} = await fixture();
+  try {
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(ownerRequest, { params:{ id:'r' }, request:new Request('https://thesuperhuman.us/owner/requests/r'), locals:{ owner:{ email:'owner@example.com' }, runtime:{ env:{ MUSIC_DB:db } } } as any });
+    expect(html).toContain('placeholder="Clarify who will use the first version."');
+    for (const text of ['For a website, name the pages', 'Before an offer:', 'Five pages built from the approved design', 'Design direction']) expect(html).not.toContain(text);
+    for (const text of workflowOfferText) expect(html).toContain(text);
+    expect(html).toMatch(/<a href="\/services#workflow"[^>]*>Service →<\/a>/);
+  } finally {sql.close();}
+});
+it('links the rail service to the row for each software path', async () => {
+  const {sql,db} = await fixture();
+  try {
+    for (const [id, serviceId] of [['app', 'webapp'], ['old-idea', 'idea'], ['other', 'elsewhere']]) sql.prepare(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,private_note,created_at,updated_at)
+      VALUES (?,'software',?,'Alex Example','alex@example.com','Book lessons online.','{"path":"webapp","appGoal":"Book lessons online."}','new','','now','now')`).run(id, serviceId);
+    const container = await AstroContainer.create();
+    const serviceLink = async (id: string) => {
+      const html = await container.renderToString(ownerRequest, { params:{ id }, request:new Request(`https://thesuperhuman.us/owner/requests/${id}`), locals:{ owner:{ email:'owner@example.com' }, runtime:{ env:{ MUSIC_DB:db } } } as any });
+      return html.match(/<a href="([^"]+)"[^>]*>Service →<\/a>/)?.[1];
+    };
+    expect(await serviceLink('app')).toBe('/services#web-app');
+    expect(await serviceLink('old-idea')).toBe('/services#web-app');
+    expect(await serviceLink('other')).toBe('/services#software');
+    expect(await serviceLink('r')).toBe('/services#workflow');
+  } finally {sql.close();}
+});
+
+it('uses the website question placeholder only for website briefs and keeps the decline placeholder', async () => {
+  const container = await AstroContainer.create();
+  const websiteText = 'Could you send the page text and photos you have so far?';
+  const exportText = 'Could you share an example of the export you use today?';
+  const declineText = 'Thanks for the brief. This isn’t a fit for me right now because…';
+  const questionPlaceholder = (html: string) => html.match(/<textarea[^>]*id="software-question"[^>]*placeholder="([^"]*)"/)?.[1];
+  const declinePlaceholder = (html: string) => html.match(/<textarea[^>]*id="software-decline"[^>]*placeholder="([^"]*)"/)?.[1];
+  const website = await container.renderToString(questions, { props:{ requestId:'r', path:'website' } });
+  expect(questionPlaceholder(website)).toBe(websiteText);
+  expect(website).not.toContain(exportText);
+  expect(declinePlaceholder(website)).toBe(declineText);
+  for (const path of ['workflow', 'webapp', 'idea', undefined]) {
+    const html = await container.renderToString(questions, { props:{ requestId:'r', path } });
+    expect(questionPlaceholder(html)).toBe(exportText);
+    expect(html).not.toContain(websiteText);
+    expect(declinePlaceholder(html)).toBe(declineText);
+  }
+});
+
+it('shows the website question placeholder on a seeded website owner request', async () => {
+  const {sql,db} = await fixture();
+  try {
+    sql.prepare(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,private_note,created_at,updated_at)
+      VALUES ('site','software','website','Jordan Example','jordan@example.com','A site for my pottery studio.',?,'new','','now','now')`).run(JSON.stringify({ path:'website', purpose:'A site for my pottery studio. People should see upcoming classes and sign up without messaging me first.', currentUrl:'https://jordanclay.example', existing:'A logo and about 30 class photos.', updates:'self', company:'Jordan Clay Studio', timing:'date', timingDate:'2026-12-01' }));
+    const container = await AstroContainer.create();
+    const html = await container.renderToString(ownerRequest, { params:{ id:'site' }, request:new Request('https://thesuperhuman.us/owner/requests/site'), locals:{ owner:{ email:'owner@example.com' }, runtime:{ env:{ MUSIC_DB:db } } } as any });
+    expect(html).toMatch(/<textarea[^>]*id="software-question"[^>]*placeholder="Could you send the page text and photos you have so far\?"/);
+    expect(html).not.toContain('Could you share an example of the export you use today?');
   } finally {sql.close();}
 });

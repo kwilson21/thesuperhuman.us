@@ -1,6 +1,6 @@
 import { z } from 'astro/zod';
 import type { OwnerRequest } from './owner-model';
-import { softwarePaths } from './software-inquiry';
+import { softwarePathLabel, softwarePaths } from './software-inquiry';
 
 const text = (max: number, oneLine = false) => z.string().trim().max(max, `Keep this under ${max} characters.`)
   .refine(value => !/[\x00-\x08\x0b\x0c\x0e-\x1f]|\p{Cs}/u.test(value), 'Remove control characters.')
@@ -54,7 +54,7 @@ export function clientOffer(request: OwnerRequest, offer: SoftwareOffer, offers:
   const terms = offerTermsSchema.safeParse(input);
   if (!terms.success) return null;
   return { name: request.name, company: typeof request.details.company === 'string' ? request.details.company : '',
-    path: softwarePaths[request.serviceId === 'idea' ? 'idea' : 'workflow'], version: offer.version,
+    path: softwarePathLabel(request.serviceId) ?? softwarePaths.workflow, version: offer.version,
     replacesVersion: offers.filter(previous => previous.version < offer.version && previous.sent_at && ['sent', 'superseded'].includes(previous.status)).sort((a, b) => b.version - a.version)[0]?.version,
     terms: terms.data };
 }
