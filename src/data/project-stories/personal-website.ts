@@ -209,7 +209,7 @@ export const websiteMilestones: Milestone[] = [
   {
     id: 'website-motion', day: '2026-09-27',
     title: 'Let Home change worlds as you scroll',
-    summary: 'I wanted Home to feel alive and change worlds as you scroll, without changing what it says. It follows the tagline: the studio plays a short scene, my current projects sit on a dark screen where the Lyft figure counts up, a waveform leads back to paper, and a sun rises over the contact section. Claude Code built it to my design as one shared motion layer that About, Audio, Building, Work and Writing also use, sized to each page’s job. Every page is complete without it: with reduced motion, without JavaScript or in print you see the finished frame, and anything that plays on its own rests within five seconds.',
+    summary: 'I wanted Home to feel alive and change worlds as you scroll, without changing what it says. It follows the tagline: the studio plays a short scene, my current projects sit on a dark screen where the Lyft figure counts up, a waveform leads back to paper, and a sun rises over the contact section. Claude Code built it to my design as one shared motion layer that About, Audio, Building, Work and Writing also use, sized to each page’s job, and I reviewed it. Every page is complete without it: with reduced motion, without JavaScript or in print you see the finished frame, and anything that plays on its own rests within five seconds.',
     artifacts: [artifact(motionHomeWorlds, 'Home · Four worlds as you scroll', 'Home’s resting frame from the last CI run on PR #132, with numbered pointers to each world.', 'Annotated screen capture')],
   },
   {
