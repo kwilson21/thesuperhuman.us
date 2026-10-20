@@ -190,7 +190,7 @@ export const websiteMilestones: Milestone[] = [
     summary: 'I wanted the site to reflect the work I enjoy now: shaping and building useful software with AI. My production engineering history provides evidence of what I bring to that work.',
     detailLabel: 'What clarified in the conversation',
     detail: 'I enjoy shaping and building the solution; I do not need to originate the idea. I work independently, through contracts and projects, and I am selective about full-time roles. Work keeps the engineering history as evidence. The introduction describes where I want to go.',
-    artifacts: [artifact(work, 'Earlier positioning', 'The initial Work study led with backend and data engineering.'), artifact(currentWork, 'The current direction', 'The introduction now leads with building with AI. Work retains the career evidence.', 'Local implementation capture')],
+    artifacts: [artifact(work, 'Earlier positioning', 'The initial Work study led with backend and data engineering.'), artifact(currentWork, 'The current direction', 'The introduction now leads with owning useful software end to end. Work retains the career evidence.', 'Local implementation capture')],
   },
   {
     id: 'website-general-resume', day: '2026-09-10', placement: 'story',
