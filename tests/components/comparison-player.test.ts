@@ -28,7 +28,7 @@ it('supports a compact homepage variant while keeping the same synchronized, acc
   expect(home).not.toContain("Start your song");
 });
 
-it('places compact playback beside the waveform and seeking on a separate track', () => {
+it('places compact playback beside the waveform and seeks from both the track and the waveform', () => {
   expect(component).toContain('data-compact-waveform');
   expect(component).toContain('data-waveform-before=');
   expect(component).toContain('data-waveform-after=');
@@ -38,11 +38,64 @@ it('places compact playback beside the waveform and seeking on a separate track'
   expect(component).toContain('<div class="compact-waveform-stage">\n      <button class="round-play compact-waveform-play"');
   expect(component).toContain('<div class="compact-waveform-column">');
   expect(component).toContain('::-webkit-slider-runnable-track');
-  expect(component).not.toContain('compact-waveform-progress');
   expect(component).not.toContain('compact-waveform-playhead');
   expect(component).toContain('.comparison-player--compact:not([data-initialized="true"]) .compact-waveform-stage,.comparison-player--compact:not([data-initialized="true"]) .compact-choice-row{display:none}');
   expect(component).toContain('.comparison-player--compact[data-initialized="true"]:not([data-audio-fallback="true"]) .comparison-lanes{display:none}');
   expect(component).toContain('.comparison-player--compact[data-initialized="true"]:not([data-audio-fallback="true"]) .compact-waveform-stage{display:grid}');
   expect(script.indexOf('media.forEach(audio => { audio.pause(); audio.controls = false; audio.hidden = true; });')).toBeLessThan(script.indexOf("root.dataset.initialized = 'true';"));
   expect(component).toContain('.comparison-player--compact .comparison-switch span{display:inline}');
+  expect(script).toContain("'.comparison-waveform-stage, .compact-waveform-frame'");
+  expect(script).toContain('waveformSeekSeconds(');
+  expect(component).toContain('.comparison-player[data-initialized="true"]:not([data-audio-fallback="true"]) .comparison-waveform-stage,.comparison-player[data-initialized="true"]:not([data-audio-fallback="true"]) .compact-waveform-frame{cursor:pointer;touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none}');
+});
+
+it('fills the played part of every A/B waveform in the accent over neutral unplayed bars', () => {
+  expect(component).toContain('.comparison-player{border:1px solid var(--rule);border-radius:4px;padding:1rem;--wave-unplayed:#BDB6AA}');
+  expect(component).toContain('.comparison-waveform{height:44px;color:var(--wave-unplayed)}');
+  expect(component).toContain('.comparison-waveform-played{position:absolute;top:0;left:0;width:100%;height:100%;color:var(--accent);pointer-events:none;clip-path:inset(0 calc(100% - var(--position,0%)) 0 0)}');
+  expect(component).toContain('.comparison-player--compact .compact-waveform{display:block;width:100%;height:38px;color:var(--wave-unplayed)}');
+  expect(component).toContain('.comparison-player--compact .compact-waveform-played{position:absolute;top:0;left:0;color:var(--accent);pointer-events:none;clip-path:inset(0 calc(100% - var(--position,0%)) 0 0)}');
+  expect(component).toContain('.comparison-player--compact .compact-waveform-frame{position:relative}');
+  expect(component).toContain('<div class="compact-waveform-frame">');
+  expect(component).toContain('class="comparison-waveform-played"');
+  expect(component).toContain('class="compact-waveform compact-waveform-played"');
+  expect(component).toContain('.comparison-player--compact .compact-waveform :global(line){transition:y1 180ms ease,y2 180ms ease}');
+  expect(component).toContain('@media(prefers-reduced-motion:reduce){.comparison-player--compact .compact-waveform :global(line){transition:none}}');
+  expect(script).toContain("root.querySelectorAll<SVGSVGElement>('.compact-waveform').forEach(svg => {");
+  expect(script).toContain("svg.querySelectorAll<SVGLineElement>('[data-compact-wave-line]')");
+});
+
+it('drags across both waveforms with pointer events so mouse, pen and touch each scrub in their own way', () => {
+  expect(script).toContain('setPointerCapture(event.pointerId)');
+  expect(script).toContain("addEventListener('pointerdown'");
+  expect(script).toContain("addEventListener('pointermove'");
+  expect(script).toContain("addEventListener('pointerup'");
+  expect(script).toContain('isWaveformScrub(event.pointerType, event.clientX - gesture.startX, event.clientY - gesture.startY)');
+  expect(script).toContain('event.isPrimary');
+});
+
+it('tells visitors they can click, tap or drag the full waveform to seek', () => {
+  expect(component).toContain('Switch versions. Keep your place. Click, tap or drag either waveform to seek.');
+});
+
+it('keeps the compact played fill above the unplayed bars by source order', () => {
+  expect(component.indexOf('.comparison-player--compact .compact-waveform{')).toBeLessThan(component.indexOf('.comparison-player--compact .compact-waveform-played{'));
+});
+
+it('seeks once per gesture, keeps playback through a drag past the end, and leaves fallback players alone', () => {
+  expect(script).toContain("root.dataset.audioFallback === 'true'");
+  expect(script).toContain('scrubbing: isWaveformScrub(event.pointerType, 0, 0)');
+  expect(script).toContain("      stage.addEventListener('pointerup', event => {\n        if (!gesture || !stage.hasPointerCapture(event.pointerId)) return;\n        seekFromPointer(event);\n      });");
+  expect(script).toContain('resume: Boolean(transport?.playing)');
+  expect(script).toContain('position < transport.duration');
+  expect(script).toContain('transport.play()');
+  expect(script).toContain('if (!gesture.scrubbing) {');
+  expect(script).toContain('gesture.scrubbing = true');
+});
+
+it('seeks only when the target time changes, so pen pressure and clamped drags cannot restart playback', () => {
+  expect(script).toContain('const seconds = waveformSeekSeconds(');
+  expect(script).toContain('if (seconds === gesture.lastSeconds) return;');
+  expect(script).toContain('gesture.lastSeconds = seconds;');
+  expect(script.indexOf('if (seconds === gesture.lastSeconds) return;')).toBeLessThan(script.indexOf('seekTo(seconds);'));
 });

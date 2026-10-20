@@ -74,6 +74,8 @@ const AUDIO_SHELL_PAGES = ['audio', 'audio-portfolio', 'audio-releases', 'audio-
 const AUDIO_NAV_PAGES = AUDIO_SHELL_PAGES.filter(name => name !== 'audio-start');
 const MUSIC_CATALOG_PAGES = ['audio-portfolio', 'audio-releases', 'audio-services', 'music-old-news'];
 const MUSIC_HUB_PAGES = ['audio-portfolio', 'audio-releases', 'audio-services'];
+// The homepage shows the compact A/B player; the audio pages show the full one.
+const COMPARISON_PAGES = ['home', 'audio', 'audio-portfolio', 'audio-services'];
 const PROJECT_STORY_PAGES = ['building-personal-website', 'building-personal-website-story', 'building-personal-website-archive', 'building-kaillera-next', 'building-tally', 'building-threadline', 'building-the-engineers-daily'];
 const OWNER_PAGES = ['owner-today', 'owner-requests', 'owner-campaigns'];
 const PAGE_NAMES_BY_FILE = {
@@ -113,7 +115,9 @@ const PAGE_NAMES_BY_FILE = {
   'src/components/audio/AudioFooter.astro': AUDIO_SHELL_PAGES,
   'src/components/audio/MusicNav.astro': AUDIO_NAV_PAGES,
   'src/components/audio/ServiceIcon.astro': ['audio', 'audio-portfolio'],
-  'src/components/audio/ComparisonPlayer.astro': ['audio', 'audio-portfolio', 'audio-services'],
+  'src/components/audio/ComparisonPlayer.astro': COMPARISON_PAGES,
+  'src/scripts/comparison-player.ts': COMPARISON_PAGES,
+  'src/lib/waveform.ts': COMPARISON_PAGES,
   'src/components/audio/PlayIcon.astro': ['audio-portfolio', 'audio-releases', 'audio-services', 'music-old-news'],
   'src/components/audio/LyricVideo.astro': ['music-old-news'],
   'src/components/audio/ReleaseInterest.astro': ['music-old-news'],

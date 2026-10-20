@@ -1,8 +1,8 @@
 import { ComparisonTransport } from './comparison-transport';
 import { registerMusicPlayer } from './music-playback';
-import { waveformGeometry } from '~/lib/waveform';
+import { isWaveformScrub, waveformGeometry, waveformSeekSeconds } from '~/lib/waveform';
 
-export { waveformGeometry } from '~/lib/waveform';
+export { isWaveformScrub, waveformGeometry, waveformSeekSeconds } from '~/lib/waveform';
 
 /** Load the comparison pair on demand; A/B and loudness never restart playback. */
 type AudioContextConstructor = new () => AudioContext;
@@ -56,12 +56,13 @@ export function setupComparisonPlayers() {
       if (!compactWaveform) return;
       const side = media[selected].dataset.version === 'after' ? 'after' : 'before';
       const amplitudes = JSON.parse(compactWaveform.dataset[`waveform${side === 'before' ? 'Before' : 'After'}`] ?? '[]') as number[];
-      compactWaveform.querySelectorAll<SVGLineElement>('[data-compact-wave-line]').forEach((line, index) => {
-        const coordinates = waveformGeometry([amplitudes[index] ?? 0])[0];
-        line.setAttribute('y1', String(coordinates.y1));
-        line.setAttribute('y2', String(coordinates.y2));
+      root.querySelectorAll<SVGSVGElement>('.compact-waveform').forEach(svg => {
+        svg.querySelectorAll<SVGLineElement>('[data-compact-wave-line]').forEach((line, index) => {
+          const coordinates = waveformGeometry([amplitudes[index] ?? 0])[0];
+          line.setAttribute('y1', String(coordinates.y1));
+          line.setAttribute('y2', String(coordinates.y2));
+        });
       });
-      compactWaveform.dataset.version = side;
       if (compactVersionLabel) compactVersionLabel.textContent = media[selected].dataset.label ?? 'Audio version';
     }
     function render() {
@@ -123,11 +124,37 @@ export function setupComparisonPlayers() {
       transport?.seek(position); render();
     }
     seek.addEventListener('input', () => seekTo(Number(seek.value)));
-    root.querySelectorAll<SVGSVGElement>('.comparison-waveform').forEach(waveform => {
-      waveform.addEventListener('click', event => {
-        const bounds = waveform.getBoundingClientRect();
-        if (!bounds.width) return;
-        seekTo((event.clientX - bounds.left) / bounds.width * (transport?.duration ?? Number(root.dataset.duration)));
+    root.querySelectorAll<HTMLElement>('.comparison-waveform-stage, .compact-waveform-frame').forEach(stage => {
+      let gesture: { startX: number; startY: number; scrubbing: boolean; resume: boolean; lastSeconds?: number } | undefined;
+      const seekFromPointer = (event: PointerEvent) => {
+        const bounds = stage.getBoundingClientRect();
+        if (!bounds.width || !gesture) return;
+        const seconds = waveformSeekSeconds(event.clientX, bounds.left, bounds.width, transport?.duration ?? Number(root.dataset.duration));
+        // Pen pressure and drags held past an edge repeat a target time; re-seeking it would restart the audio.
+        if (seconds === gesture.lastSeconds) return;
+        seekTo(seconds);
+        gesture.lastSeconds = seconds;
+        // A drag past the end parks the transport at its end without resuming, so play again once the pointer is back inside the track.
+        if (gesture.resume && transport && !transport.playing && position < transport.duration) { transport.play(); render(); }
+      };
+      stage.addEventListener('pointerdown', event => {
+        if (root.dataset.audioFallback === 'true' || !event.isPrimary || event.button !== 0) return;
+        stage.setPointerCapture(event.pointerId);
+        gesture = { startX: event.clientX, startY: event.clientY, scrubbing: isWaveformScrub(event.pointerType, 0, 0), resume: Boolean(transport?.playing) };
+        if (gesture.scrubbing) seekFromPointer(event);
+      });
+      stage.addEventListener('pointermove', event => {
+        if (!gesture || !stage.hasPointerCapture(event.pointerId)) return;
+        // Once a touch has moved sideways it stays a scrub until the gesture ends.
+        if (!gesture.scrubbing) {
+          if (!isWaveformScrub(event.pointerType, event.clientX - gesture.startX, event.clientY - gesture.startY)) return;
+          gesture.scrubbing = true;
+        }
+        seekFromPointer(event);
+      });
+      stage.addEventListener('pointerup', event => {
+        if (!gesture || !stage.hasPointerCapture(event.pointerId)) return;
+        seekFromPointer(event);
       });
     });
     volume?.addEventListener('input', applyVolume);

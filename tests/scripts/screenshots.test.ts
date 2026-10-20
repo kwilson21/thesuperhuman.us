@@ -305,6 +305,10 @@ describe('screenshot coverage', () => {
       .toEqual(['audio-services', 'services']);
     expect(relevantScreenshots(manifest, ['src/data/audio.ts']).pages.map((page: { name: string }) => page.name))
       .toEqual(['audio']);
+    for (const file of ['src/components/audio/ComparisonPlayer.astro', 'src/scripts/comparison-player.ts', 'src/lib/waveform.ts']) {
+      expect(relevantScreenshots(manifest, [file]).pages.map((page: { name: string }) => page.name))
+        .toEqual(['home', 'audio', 'audio-portfolio', 'audio-services']);
+    }
     expect(relevantScreenshots(manifest, ['src/components/audio/LyricVideo.astro']).pages.map((page: { name: string }) => page.name))
       .toEqual(['music-old-news']);
     expect(relevantScreenshots(manifest, ['src/components/audio/AudioPlayer.astro']).pages.map((page: { name: string }) => page.name))
