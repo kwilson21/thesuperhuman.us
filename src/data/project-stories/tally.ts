@@ -81,7 +81,7 @@ export const tallyMilestones: Milestone[] = [
   {
     id: 'tally-phase-0', day: '2026-09-22',
     title: 'Why Tally',
-    summary: 'I’m building Tally because nothing replaced Mint for me after it shut down. The goal is a budgeting app so simple that using it teaches you how to budget, and easy enough to come back to on a regular rhythm. It replaces my older Django personal finance app. I make the design decisions and review every change; Claude Code helps with implementation. One rule applies throughout: every part must be explainable in one plain sentence.',
+    summary: 'I’m building Tally because nothing replaced Mint for me after it shut down. The goal is a budgeting app so simple that using it teaches you how to budget, and easy enough to come back to on a regular rhythm. It replaces my older Django personal finance app. I set the direction and Claude Code writes the code, under one rule: every part must be explainable in one plain sentence.',
     backfilled: true,
   },
   {
