@@ -225,7 +225,7 @@ PASS means the evidence named here was observed. Production checks after the mer
 - **FAIL · Security headers on HTML responses.**
   - Checklist item 7.3: response headers on dynamic as well as static responses.
   - `public/_headers` sets `Permissions-Policy`, `Referrer-Policy`, `X-Content-Type-Options` and `X-Frame-Options` for `/*`.
-  - HTML pages returned none of those four headers and only `strict-transport-security`: `/` at 17:43 UTC (while the Workers Builds check run for `f778ae42` was still in progress; which revision answered is not known) and `/`, `/services` and `/software/start` again after 18:26 UTC (served by `30ff3214`, which contains #188).
+  - HTML pages returned none of those four headers and only `strict-transport-security`: `/` at 17:43 UTC (while the Workers Builds check run for `f778ae42` was still in progress; which revision answered is not known) and `/`, `/services` and `/software/start` again after the Workers Builds run for `30ff3214` passed at 18:26 UTC (the serving revision was not observed; every commit on `main` since `f778ae42` contains #188).
   - The static files `/robots.txt` and `/favicon.ico` returned all four.
   - #188 changed no headers, so this is not caused by this PR, and no fix was made here.
   - Follow-up: owner decision.
@@ -235,6 +235,7 @@ PASS means the evidence named here was observed. Production checks after the mer
   - Method: the brief walk-through used the Claude desktop app's built-in browser (Chromium-based) at emulated 390 and 1280 px widths.
   - Method: text, links and alt text on `/`, `/services`, `/privacy` and the 404 page were read from the served HTML.
   - **UNVERIFIED · Production revision.**
+    - Checklist item 7.5: verify the actual production revision.
     - The exact revision was not observed: no revision marker was found in the response headers or meta tags.
     - When the live checks started, `f778ae42` was the newest commit on `main`.
     - The two check runs present at that time, Workers Builds (the deploy) and `validate`, had passed by 17:44:32 UTC. The content checks ran after that.
@@ -298,7 +299,7 @@ PASS means the evidence named here was observed. Production checks after the mer
     - The overflow measurement on "What do you have today?" at 1280 px.
     - `/`, `/services`, `/privacy` and the 404 page rendered in a browser on production: not viewed.
 - **UNVERIFIED · Review of the final commit's owner-brief captures before merge.** The record as merged (`f778ae42`) listed this review as a step before merge. Nothing in the record shows it was done, and none of the `10400d7` captures were viewed for this record. Judging by the source and the scenario captions, only the acceptance one of the offer editor's two changed examples is expected to appear in the `owner-brief` captures, and the later-milestone handoff example is expected in none. Owner decision: look at them now, or accept the gap as an exception with its impact and follow-up.
-- **PASS, with gaps · Receipt.** Implemented: yes. Verified locally: yes. Deployed: yes, per the passing Workers Builds check run for `f778ae42` (17:44 UTC); the live site does not show its revision. Verified live: partly. The read-only checks above passed, except security headers on HTML responses, which failed, and the production revision, which is unverified; the items under Still not covered did not run. Owner steps and the agreements gap remain (see Remaining work).
+- **PASS, with gaps · Receipt.** Implemented: yes. Verified locally: yes. Deployed: yes, per the passing Workers Builds check run for `f778ae42` (17:44 UTC); the live site does not show its revision. Verified live: partly. The read-only checks above passed, with two exceptions: security headers on HTML responses (FAIL) and the production revision (UNVERIFIED). The items under Still not covered did not run. Owner steps and the agreements gap remain (see Remaining work).
 
 ## 8. Private owner center
 
@@ -333,6 +334,7 @@ These shipped unmeasured and stay UNVERIFIED unless the owner records an excepti
 - `audio.thesuperhuman.us` (not checked live)
 - the live suggestion API (not called)
 - the final commit's owner-brief captures (not viewed)
+- the other gaps listed under Still not covered in section 7
 
 The owner can cover the device check and email delivery now that the site is deployed, by opening the brief on a phone and sending one test brief.
 
@@ -341,6 +343,7 @@ The owner can cover the device check and email delivery now that the site is dep
 - Owner: look at the final commit's captures under `pr-188/10400d7/` on the `screenshots` branch, including `website-brief-owner-brief-desktop.png` (1280 px) and `website-brief-owner-brief-phone.png` (390 px), or accept the gap as an exception in this record (see the UNVERIFIED item in section 7).
 - Owner: run `npm run owner:health -- --remote --post-deploy`. Until it is recorded, target health stays a launch-blocking UNVERIFIED item (checklist item 8.15), unless the owner accepts it as an exception with its impact and follow-up in this record.
 - Owner: decide on the missing security headers on HTML responses (see the FAIL in section 7): fix them or accept the gap as an exception with its impact and follow-up in this record.
+- Owner: confirm which revision production served (see the UNVERIFIED item in section 7, checklist item 7.5), for example from Cloudflare's deployment history, or accept the gap as an exception with its impact and follow-up in this record.
 - Owner: publish the updated MSA and SOW templates in `/owner/agreements` before sending a website offer for website signing.
 - Owner: confirm the proposal under the owner-noted gap (answer website briefs with a question or a decline until the templates are published).
 - Owner: open the offer editor and check the two changed website examples (owner only, behind Access).
