@@ -134,7 +134,7 @@ implementation proposal as accepted before these findings inform the choice.
 
 ## September 10 positioning refinement
 
-Approved Work heading: “Software engineer. Building with AI.” The introduction
+Superseded on 2026-10-20 (see the end of this paragraph). Then-approved Work heading: “Software engineer. Building with AI.” The introduction
 expresses exploration, iteration, and engineering judgment. Home introduces a
 software engineer shaping ideas and building with AI (updated 2026-09-26 to
 remove a repeated “exploring” shared with the hero tagline; wording is the
