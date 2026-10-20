@@ -140,32 +140,32 @@ export const kailleraMilestones: Milestone[] = [
   {
     id: 'kaillera-next-ai-team', day: '2026-04-29',
     title: 'A team of AI models',
-    summary: 'I set up a team of AI models with clear roles: Claude writes most of the code and integrates the work, Codex takes on engineering tasks and cross-reviews designs, and DeepSeek audits the reasoning. A nightly tech-debt audit only opens a draft pull request for me when two models agree on a fix.',
+    summary: 'I set up a team of AI models with clear roles: Claude Code implements most of what I decide and integrates the work, under my review, Codex takes on engineering tasks and cross-reviews designs, and DeepSeek audits the reasoning. A nightly tech-debt audit only opens a draft pull request for me when two models agree on a fix.',
     backfilled: true,
     artifacts: [artifact(aiTeamDiagram, 'Kaillera Next · A team of AI models', 'The roles as designed and the nightly two-model audit.', 'Diagram')],
   },
   {
     id: 'kaillera-next-static-demo', day: '2026-09-24',
     title: 'A demo build with no ROMs',
-    summary: 'Kaillera Next now has a static demo build that runs on Cloudflare with no ROMs and no ROM sharing anywhere in the deploy. The same change fixed several rollback bugs, including a build step that quietly zeroed negative stick inputs. It also added a real two-browser test that plays against the server with added latency and jitter and compares both players’ game state. Claude Code built it.',
+    summary: 'Kaillera Next now has a static demo build that runs on Cloudflare with no ROMs and no ROM sharing anywhere in the deploy. The same change fixed several rollback bugs, including a build step that quietly zeroed negative stick inputs. It also added a real two-browser test that plays against the server with added latency and jitter and compares both players’ game state. Claude Code built it to my design, and I reviewed it.',
     artifacts: [artifact(staticDemoDiagram, 'Kaillera Next · A demo build with no ROMs', 'The static demo build and the rollback fixes that came with it.', 'Diagram')],
   },
   {
     id: 'kaillera-next-recovery-syncs', day: '2026-09-24',
     title: 'Getting a stuck player back in sync',
-    summary: 'When one player’s game drifts or freezes, the host sends a fresh copy of its game state to bring them back. These fixes make that recovery work in rollback mode: the host sends it only once its own state is final, waits until the connection is open, and retries a send that was skipped. A separate fix makes any stick mismatch between players trigger a rollback, where small differences used to slip through. Claude Code wrote the fixes and a test that freezes one player and checks both games match afterward. Released in v0.51.3.',
+    summary: 'When one player’s game drifts or freezes, the host sends a fresh copy of its game state to bring them back. These fixes make that recovery work in rollback mode: the host sends it only once its own state is final, waits until the connection is open, and retries a send that was skipped. A separate fix makes any stick mismatch between players trigger a rollback, where small differences used to slip through. Claude Code wrote the fixes and a test that freezes one player and checks both games match afterward, and I reviewed them. Released in v0.51.3.',
     artifacts: [artifact(recoveryDiagram, 'Kaillera Next · Getting a stuck player back in sync', 'The recovery path from drift to resync, and the stick-prediction fix.', 'Diagram')],
   },
   {
     id: 'kaillera-next-self-hosting', day: '2026-09-24',
     title: 'Moving Kaillera Next onto one small server',
-    summary: 'Kaillera Next needs a server for rooms, plus a relay for players whose networks block direct connections. It’s now set up to run on one small server behind a Cloudflare Tunnel, with no open inbound ports, and it redeploys itself when I merge to main. A free-tier host can take over with one command if needed. Players who can’t connect directly get short-lived relay credentials, and the key never reaches the browser. ROM sharing is off on the public server, and the server enforces that. Claude Code built the setup. The site now runs on the free-tier host, with the small server ready as the alternative.',
+    summary: 'Kaillera Next needs a server for rooms, plus a relay for players whose networks block direct connections. It’s now set up to run on one small server behind a Cloudflare Tunnel, with no open inbound ports, and it redeploys itself when I merge to main. A free-tier host can take over with one command if needed. Players who can’t connect directly get short-lived relay credentials, and the key never reaches the browser. ROM sharing is off on the public server, and the server enforces that. Claude Code built the setup to my design, and I reviewed it. The site now runs on the free-tier host, with the small server ready as the alternative.',
     artifacts: [artifact(selfHostingDiagram, 'Kaillera Next · One small server', 'The request path through the tunnel, the relay for direct play, and the server-side ROM switch.', 'Diagram')],
   },
   {
     id: 'kaillera-next-supported-roms', day: '2026-09-23',
     title: 'Saying which games work',
-    summary: 'Kaillera Next only works with three ROMs right now: Super Smash Bros. (US) and Smash Remix 2.0.0 and 2.0.1. The lobby now lists them. If you load anything else, the play page warns that it may not work and names the supported ones. It’s a warning, not a block. Claude Code built the warning from the server’s own list and added a test that fails if the lobby’s copy drifts from it. Released in v0.50.0.',
+    summary: 'Kaillera Next only works with three ROMs right now: Super Smash Bros. (US) and Smash Remix 2.0.0 and 2.0.1. The lobby now lists them. If you load anything else, the play page warns that it may not work and names the supported ones. It’s a warning, not a block. Claude Code built the warning from the server’s own list and added a test that fails if the lobby’s copy drifts from it, and I reviewed both. Released in v0.50.0.',
     artifacts: [artifact(supportedRoms, 'Kaillera Next · Saying which games work', 'The v0.50.0 lobby with the Supported ROMs list, rendered from the site’s own files without a server or ROMs, with numbered pointers.', 'Annotated page render')],
   },
   {
@@ -183,7 +183,7 @@ export const kailleraMilestones: Milestone[] = [
   {
     id: 'kaillera-next-direction-a', day: '2026-09-27',
     title: 'Direction A reaches the room and the demo',
-    summary: 'I chose one look for the new front page, a console-era online lobby, and asked for everything else to match it. This round carried it into the room page and the rollback demo. The room names the game the host is playing, says when a ROM doesn’t match, lets a player switch to watching without leaving, and explains plainly when a browser can’t run the game. The demo’s result card gets a timeline driven by the engine’s real rollbacks. The site has a KN logo and lighter link-preview cards. The Worker in front now notices when its copy of the front page is out of date. Claude Code and Codex built it. Released in v0.58.0.',
+    summary: 'I chose one look for the new front page, a console-era online lobby, and asked for everything else to match it. This round carried it into the room page and the rollback demo. The room names the game the host is playing, says when a ROM doesn’t match, lets a player switch to watching without leaving, and explains plainly when a browser can’t run the game. The demo’s result card gets a timeline driven by the engine’s real rollbacks. The site has a KN logo and lighter link-preview cards. The Worker in front now notices when its copy of the front page is out of date. Claude Code and Codex built it; I reviewed it. Released in v0.58.0.',
     artifacts: [artifact(directionADemo, 'Kaillera Next · Direction A reaches the demo', 'The v0.58.0 rollback demo page, rendered from the site’s own files without a server or ROMs, with numbered pointers.', 'Annotated page render')],
   },
   {
