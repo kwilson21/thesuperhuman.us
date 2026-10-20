@@ -13,6 +13,8 @@ import { prepareWithDiagnostics } from './prepare.mjs';
 import { ACCESS_AUDIENCE, ACCESS_ISSUER, expectedResourceError, missingScenarioRoutes, OUT, OWNER_EMAIL, PAGES, REDIRECTS, SCENARIO_PAGES, VIEWPORTS } from './config.mjs';
 
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:4321';
+// GitHub's Linux runners have 4 cores, shared with the dev server.
+const PAGE_CONCURRENCY = 4;
 
 // A throwaway Access issuer so owner pages render with the real JWT check.
 const { publicKey, privateKey } = await generateKeyPair('RS256');
@@ -81,11 +83,16 @@ try {
       errors.push(`${from}: HTTP ${response.status} to ${location}, expected ${status} to ${to}`);
     }
   }
-  const pages = [];
-  for (const page of PAGES) {
-    for (const viewport of VIEWPORTS) await capture({ file: `${page.name}-${viewport.name}.png`, path: page.path, viewport: viewport.name, owner: page.owner, status: page.status });
-    pages.push(page);
-  }
+  // Pages only read data, so a few render at once. Scenarios below stay serial: each one sees the
+  // rows the ones before it seeded.
+  const shots = PAGES.flatMap(page => VIEWPORTS.map(viewport => ({ page, viewport })));
+  await Promise.all(Array.from({ length: PAGE_CONCURRENCY }, async () => {
+    for (let shot = shots.shift(); shot; shot = shots.shift()) {
+      const { page, viewport } = shot;
+      await capture({ file: `${page.name}-${viewport.name}.png`, path: page.path, viewport: viewport.name, owner: page.owner, status: page.status });
+    }
+  }));
+  const pages = PAGES;
   const scenarios = [];
   const directory = resolve('scripts/screenshots/scenarios');
   for (const name of (await readdir(directory)).filter(file => file.endsWith('.mjs')).sort()) {
