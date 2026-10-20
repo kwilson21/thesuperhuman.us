@@ -25,7 +25,7 @@ import switch2Diagram from '~/assets/projects/kaillera-next/switch2-controller-d
 export const kailleraStory = {
   title: 'Kaillera Next',
   subtitle: 'Open a link and play supported N64 games with friends, nothing to install.',
-  description: 'Kaillera introduced me to programming. I set the direction and Claude Code writes the code.',
+  description: 'Kaillera introduced me to programming. I make the design decisions and review every change; Claude Code helps with implementation.',
   status: 'In development · playable demo build',
 };
 

@@ -45,7 +45,7 @@ import releasesReminders from '~/assets/projects/tally/releases-reminders-diagra
 export const tallyStory = {
   title: 'Tally',
   subtitle: 'Review your transactions, set monthly budgets and see how much remains to spend.',
-  description: 'I shape Tally’s product design and architecture. AI coding agents implement the software. I focus on decisions that could cause problems later, and on keeping development sustainable and repeatable.',
+  description: 'I make Tally’s product and architecture decisions and review every change; Claude Code and Codex help with implementation, and nothing ships without tests. I focus on decisions that could cause problems later, and on keeping development sustainable and repeatable.',
   status: 'In development · public demo',
 };
 
@@ -81,7 +81,7 @@ export const tallyMilestones: Milestone[] = [
   {
     id: 'tally-phase-0', day: '2026-09-22',
     title: 'Why Tally',
-    summary: 'I’m building Tally because nothing replaced Mint for me after it shut down. The goal is a budgeting app so simple that using it teaches you how to budget, and easy enough to come back to on a regular rhythm. It replaces my older Django personal finance app. I set the direction and Claude Code writes the code, under one rule: every part must be explainable in one plain sentence.',
+    summary: 'I’m building Tally because nothing replaced Mint for me after it shut down. The goal is a budgeting app so simple that using it teaches you how to budget, and easy enough to come back to on a regular rhythm. It replaces my older Django personal finance app. I make the design decisions and review every change; Claude Code helps with implementation. One rule applies throughout: every part must be explainable in one plain sentence.',
     backfilled: true,
   },
   {
