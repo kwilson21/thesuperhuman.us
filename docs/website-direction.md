@@ -16,7 +16,7 @@ Employment and contracting are possible outcomes, rather than its sole purpose.
 
 Past experience establishes credibility without defining future direction. The
 site should invite work Kazon wants to explore, not simply attract more of the work
-he has already done. His current direction is software engineering focused on AI-assisted building.
+he has already done. His current direction is software engineering: shaping and building useful software, using modern tools carefully.
 He enjoys shaping solutions, exploring, prototyping, and iterating toward something
 people can use. Collaborators can bring the idea; ownership of the original idea
 is not a requirement. Backend and data experience supplies evidence rather than
@@ -141,10 +141,9 @@ remove a repeated “exploring” shared with the hero tagline; wording is the
 owner's to confirm). Work and About share the
 current opportunity statement from `src/data/profile.ts`. Historical job titles,
 dates, and outcomes remain accurate. No AI/ML specialization, new credential,
-product launch, or open-source contribution is implied.
+product launch, or open-source contribution is implied. (Superseded 2026-10-20: the Work heading is "Software engineer. I build useful software." and AI is described per the AI stance in CLAUDE.md: Kazon makes the design decisions and reviews every change; Claude Code helps with implementation.)
 
-The preferred opportunity allows Kazon to help shape the solution, use AI in the
-building process, and stay close to how people use the result. Independent work
+The preferred opportunity allows Kazon to help shape the solution and stay close to how people use the result. Independent work
 is the default; full-time roles are considered selectively. “Product engineer” is a
 possible search term, not a replacement for historical titles or an adopted niche.
 The public site need not repeat private descriptions of former work as boring.
