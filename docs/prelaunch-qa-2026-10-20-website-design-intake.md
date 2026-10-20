@@ -234,7 +234,7 @@ PASS means the evidence named here was observed. Production checks after the mer
   - Method: status codes, headers, redirects, page metadata, `robots.txt`, the sitemaps, and the status and type of the pictures came from `curl`, without following the owner redirects.
   - Method: the brief walk-through used the Claude desktop app's built-in browser (Chromium-based) at emulated 390 and 1280 px widths.
   - Method: text, links and alt text on `/`, `/services`, `/privacy` and the 404 page were read from the served HTML.
-  - **PASS, with gaps · Production revision.**
+  - **UNVERIFIED · Production revision.**
     - The exact revision was not observed: no revision marker was found in the response headers or meta tags.
     - When the live checks started, `f778ae42` was the newest commit on `main`.
     - The two check runs present at that time, Workers Builds (the deploy) and `validate`, had passed by 17:44:32 UTC. The content checks ran after that.
@@ -298,7 +298,7 @@ PASS means the evidence named here was observed. Production checks after the mer
     - The overflow measurement on "What do you have today?" at 1280 px.
     - `/`, `/services`, `/privacy` and the 404 page rendered in a browser on production: not viewed.
 - **UNVERIFIED · Review of the final commit's owner-brief captures before merge.** The record as merged (`f778ae42`) listed this review as a step before merge. Nothing in the record shows it was done, and none of the `10400d7` captures were viewed for this record. Judging by the source and the scenario captions, only the acceptance one of the offer editor's two changed examples is expected to appear in the `owner-brief` captures, and the later-milestone handoff example is expected in none. Owner decision: look at them now, or accept the gap as an exception with its impact and follow-up.
-- **PASS, with gaps · Receipt.** Implemented: yes. Verified locally: yes. Deployed: yes, per the passing Workers Builds check run for `f778ae42` (17:44 UTC); the live site does not show its revision. Verified live: partly. The read-only checks above passed, except security headers on HTML responses, which failed; the items under Still not covered did not run. Owner steps and the agreements gap remain (see Remaining work).
+- **PASS, with gaps · Receipt.** Implemented: yes. Verified locally: yes. Deployed: yes, per the passing Workers Builds check run for `f778ae42` (17:44 UTC); the live site does not show its revision. Verified live: partly. The read-only checks above passed, except security headers on HTML responses, which failed, and the production revision, which is unverified; the items under Still not covered did not run. Owner steps and the agreements gap remain (see Remaining work).
 
 ## 8. Private owner center
 
@@ -327,6 +327,7 @@ These shipped unmeasured and stay UNVERIFIED unless the owner records an excepti
 - a timeout, a malformed response and a 429 in a browser
 - real email delivery of a website brief and its owner notice
 - a remote `owner:health` run
+- the exact production revision serving traffic (the site shows no revision marker)
 - the owner center, live, including the offer editor's two changed examples (owner only)
 - the Web app, Workflow automation and legacy idea paths, walked in a browser (live)
 - `audio.thesuperhuman.us` (not checked live)
