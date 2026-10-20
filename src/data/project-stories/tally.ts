@@ -81,7 +81,7 @@ export const tallyMilestones: Milestone[] = [
   {
     id: 'tally-phase-0', day: '2026-09-22',
     title: 'Why Tally',
-    summary: 'I’m building Tally because nothing replaced Mint for me after it shut down. The goal is a budgeting app so simple that using it teaches you how to budget, and easy enough to come back to on a regular rhythm. It replaces my older Django personal finance app. I set the direction and Claude Code writes the code, under one rule: every part must be explainable in one plain sentence.',
+    summary: 'I’m building Tally because nothing replaced Mint for me after it shut down. The goal is a budgeting app so simple that using it teaches you how to budget, and easy enough to come back to on a regular rhythm. It replaces my older Django personal finance app. I make the design decisions and review every change; Claude Code helps with implementation. One rule applies throughout: every part must be explainable in one plain sentence.',
     backfilled: true,
   },
   {
@@ -100,7 +100,7 @@ export const tallyMilestones: Milestone[] = [
   {
     id: 'tally-data-and-money', day: '2026-09-22',
     title: 'Decisions that make cents',
-    summary: 'Claude Code made the data calls here. Money is stored as whole cents, because SQLite has no exact decimal type, and all budget math lives in small tested functions. Income stays out of spending, so an uncategorized paycheck can’t look like negative spending. The public demo uses a fictional household that resets nightly.',
+    summary: 'Claude Code made the data calls here, and I reviewed them. Money is stored as whole cents, because SQLite has no exact decimal type, and all budget math lives in small tested functions. Income stays out of spending, so an uncategorized paycheck can’t look like negative spending. The public demo uses a fictional household that resets nightly.',
     backfilled: true,
   },
   {
@@ -119,19 +119,19 @@ export const tallyMilestones: Milestone[] = [
   {
     id: 'tally-transactions', day: '2026-09-24',
     title: 'Finding and fixing transactions',
-    summary: 'Home tells you how many transactions still need a category. This is where you fix them. The Transactions list has search, month and category filters, and a Needs category filter that always matches Home’s count. Tap a row to pick a category, rename the merchant, add a note, or tick one box to always use that category for the merchant. Saving updates the list and Home together. Claude Code built it, including a browser test that goes from Home’s band through one fix. Built and tested on demo data.',
+    summary: 'Home tells you how many transactions still need a category. This is where you fix them. The Transactions list has search, month and category filters, and a Needs category filter that always matches Home’s count. Tap a row to pick a category, rename the merchant, add a note, or tick one box to always use that category for the merchant. Saving updates the list and Home together. Claude Code built it to my design, with a browser test that goes from Home’s band through one fix, and I reviewed it. Built and tested on demo data.',
     artifacts: [artifact(transactionsEdit, 'Tally · Finding and fixing transactions', 'The edit panel over the Needs category list, from PR #45 on demo data, with numbered pointers.', 'Annotated screen capture, demo data')],
   },
   {
     id: 'tally-demo-environment', day: '2026-09-24',
     title: 'A demo that cleans up after itself',
-    summary: 'I wanted to try each change on my phone or laptop without running anything locally. So Tally’s demo is the same code deployed a second time, with its own database, a single public address and only fictional data. Every night it resets to that fictional household. The reset erases every table, so at my request it also checks for bank credentials, which the real app always has, and refuses to run if it finds any. Claude Code built the setup and a test that pins those safety settings. Deploying stays a step I run myself.',
+    summary: 'I wanted to try each change on my phone or laptop without running anything locally. So Tally’s demo is the same code deployed a second time, with its own database, a single public address and only fictional data. Every night it resets to that fictional household. The reset erases every table, so at my request it also checks for bank credentials, which the real app always has, and refuses to run if it finds any. Claude Code built the setup and a test that pins those safety settings, and I reviewed both. Deploying stays a step I run myself.',
     artifacts: [artifact(demoDiagram, 'Tally · A demo that cleans up after itself', 'The demo deployment, its own database, the nightly reset and the two-part guard.', 'Diagram')],
   },
   {
     id: 'tally-jev-categorization', day: '2026-09-24',
     title: 'AI suggests, people decide',
-    summary: 'Tally’s rule is that AI suggests, code calculates and people decide. So each night, after merchant rules run, Tally asks Jev, an AI classifier, about up to 40 transactions that still need a category. Code applies an answer only when Jev is at least 80% sure, and never over a choice a person or a rule already made. The edit panel shows "Picked by Jev · 93% sure" so you can change it. After Jev’s first run on the demo, I added a "None of these fit" answer, because Household had turned into a catch-all. Claude Code built it.',
+    summary: 'Tally’s rule is that AI suggests, code calculates and people decide. So each night, after merchant rules run, Tally asks Jev, an AI classifier, about up to 40 transactions that still need a category. Code applies an answer only when Jev is at least 80% sure, and never over a choice a person or a rule already made. The edit panel shows "Picked by Jev · 93% sure" so you can change it. After Jev’s first run on the demo, I added a "None of these fit" answer, because Household had turned into a catch-all. Claude Code built it to my design, and I reviewed it.',
     artifacts: [artifact(jevDiagram, 'Tally · AI suggests, people decide', 'The nightly order: merchant rules first, then Jev, with the 80% rule and a write that never overrides a person.', 'Diagram')],
   },
   {
@@ -143,7 +143,7 @@ export const tallyMilestones: Milestone[] = [
   {
     id: 'tally-exclusions', day: '2026-09-25',
     title: 'Leaving transfers out of the budget',
-    summary: 'Moving money between your own accounts or getting paid back isn’t spending, so Tally shouldn’t count it. Excluded transactions already stayed out of spending, safe to spend and the Needs category count; now you decide which ones. Any transaction can be excluded, or counted again, with one toggle in its edit panel: "Exclude from budget". Transactions Jev, Tally’s AI classifier, flags as a transfer or reimbursement start excluded, but Jev never overrides a choice a person made. The first panel was too cluttered, so I picked a simpler layout from three mockups. Claude Code built it, including a browser test that excludes a transaction and checks Home. Built and tested on demo data.',
+    summary: 'Moving money between your own accounts or getting paid back isn’t spending, so Tally shouldn’t count it. Excluded transactions already stayed out of spending, safe to spend and the Needs category count; now you decide which ones. Any transaction can be excluded, or counted again, with one toggle in its edit panel: "Exclude from budget". Transactions Jev, Tally’s AI classifier, flags as a transfer or reimbursement start excluded, but Jev never overrides a choice a person made. The first panel was too cluttered, so I picked a simpler layout from three mockups. Claude Code built it, with a browser test that excludes a transaction and checks Home, and I reviewed it. Built and tested on demo data.',
     artifacts: [artifact(exclusionsEdit, 'Tally · Leaving transfers out of the budget', 'The edit panel with the Exclude from budget toggle, from PR #59 on demo data, with numbered pointers.', 'Annotated screen capture, demo data')],
   },
   {
@@ -161,7 +161,7 @@ export const tallyMilestones: Milestone[] = [
   {
     id: 'tally-design-system-catalog', day: '2026-09-26',
     title: 'A catalog for Tally’s design system',
-    summary: 'The money input had drifted from my design, and there was nowhere to see and approve a component on its own. So Tally now has a catalog at /design-system, in the demo and development only. It renders the app’s real components with sample data, so it can’t show a copy that has drifted, and marks each one Visual, Interactive or Flow. Claude Code built it, with tests that fail on colors, radii or shadows outside the design tokens. I then wrote a design brief, and each built screen was audited against it. I decided six proposals by seeing each beside today’s version, and each ships in its own PR, so undoing one is a single revert.',
+    summary: 'The money input had drifted from my design, and there was nowhere to see and approve a component on its own. So Tally now has a catalog at /design-system, in the demo and development only. It renders the app’s real components with sample data, so it can’t show a copy that has drifted, and marks each one Visual, Interactive or Flow. Claude Code built it, with tests that fail on colors, radii or shadows outside the design tokens; I reviewed it. I then wrote a design brief, and each built screen was audited against it. I decided six proposals by seeing each beside today’s version, and each ships in its own PR, so undoing one is a single revert.',
     artifacts: [artifact(designCatalog, 'Tally · A catalog for the design system', 'The top of the design system catalog, from PR #91 on demo data, with numbered pointers.', 'Annotated screen capture, demo data')],
   },
   {
@@ -179,7 +179,7 @@ export const tallyMilestones: Milestone[] = [
   {
     id: 'tally-bank-sync', day: '2026-09-27',
     title: 'Syncing bank data safely',
-    summary: 'I chose automatic bank sync over statement uploads for Tally, and this is the server side of it. A linked bank’s Plaid token is encrypted before it’s stored, and the person who linked it is read from Cloudflare Access’s signed login token, not a header. Plaid’s webhooks count only when Plaid’s signature matches the exact body. A daily job catches up each bank in turn, so one failure doesn’t stop the rest. Each page of transactions is saved with its sync position in one database batch, so a retry never duplicates or skips anything. Codex wrote most of it; Claude Code reviewed it and made some fixes. Built and tested against a faked Plaid.',
+    summary: 'I chose automatic bank sync over statement uploads for Tally, and this is the server side of it. A linked bank’s Plaid token is encrypted before it’s stored, and the person who linked it is read from Cloudflare Access’s signed login token, not a header. Plaid’s webhooks count only when Plaid’s signature matches the exact body. A daily job catches up each bank in turn, so one failure doesn’t stop the rest. Each page of transactions is saved with its sync position in one database batch, so a retry never duplicates or skips anything. Codex wrote most of it; Claude Code reviewed it and made some fixes, and I reviewed the result. Built and tested against a faked Plaid.',
     artifacts: [artifact(bankSyncDiagram, 'Tally · Syncing bank data safely', 'How linking, token encryption, webhook checks, the atomic sync and the daily job connect. Drawn from the code; no real bank data.', 'Diagram')],
   },
   {
@@ -203,13 +203,13 @@ export const tallyMilestones: Milestone[] = [
   {
     id: 'tally-bank-connections', day: '2026-09-28',
     title: 'Linking, fixing and disconnecting banks',
-    summary: 'Bank sync needs more than linking: a way to repair a broken login, pull in new purchases without waiting, and back out of a bank linked by mistake. On Accounts, Link a bank opens Plaid Link; before any bank it sits in an empty state, not a $0 net worth (the design I picked). Fix connection reopens Link for a bank whose login broke. Sync now fetches new transactions, at most once a minute per bank, and each bank shows when it last synced. I put Disconnect behind Manage, keeping history unless you delete it. Codex wrote the Plaid flows; Claude Code drew the empty state and fixed edge cases. Built and tested; the demo has no Plaid.',
+    summary: 'Bank sync needs more than linking: a way to repair a broken login, pull in new purchases without waiting, and back out of a bank linked by mistake. On Accounts, Link a bank opens Plaid Link; before any bank it sits in an empty state, not a $0 net worth (the design I picked). Fix connection reopens Link for a bank whose login broke. Sync now fetches new transactions, at most once a minute per bank, and each bank shows when it last synced. I put Disconnect behind Manage, keeping history unless you delete it. Codex wrote the Plaid flows, Claude Code the empty state and edge cases; I reviewed both. Built and tested; the demo has no Plaid.',
     artifacts: [artifact(bankConnections, 'Tally · Linking, fixing and disconnecting banks', 'The Accounts controls in the design system catalog on sample data, from PR #140, with numbered pointers.', 'Annotated screen capture, demo data')],
   },
   {
     id: 'tally-organize-and-export', day: '2026-09-28',
     title: 'Organize by merchant, and download your data',
-    summary: 'A newly linked bank brings about 90 days of transactions at once, too many to categorize one row at a time. Organize groups the uncategorized ones by merchant and shows one group at a time, largest total first. One category choice applies to the whole group and becomes the rule for that merchant’s later purchases. I picked the one-group-at-a-time layout from drawn options. Settings also gained Your data, so nothing is stuck in Tally: every transaction as CSV, or everything as JSON, never bank logins. Codex wrote the first versions and Claude Code made the follow-up fixes. Built and tested on demo data.',
+    summary: 'A newly linked bank brings about 90 days of transactions at once, too many to categorize one row at a time. Organize groups the uncategorized ones by merchant and shows one group at a time, largest total first. One category choice applies to the whole group and becomes the rule for that merchant’s later purchases. I picked the one-group-at-a-time layout from drawn options. Settings also gained Your data, so nothing is stuck in Tally: every transaction as CSV, or everything as JSON, never bank logins. Codex wrote the first versions and Claude Code made the follow-up fixes, and I reviewed the result. Built and tested on demo data.',
     artifacts: [artifact(organizeMerchant, 'Tally · Organize by merchant', 'Organize showing one merchant group on demo data, from PR #138, with numbered pointers.', 'Annotated screen capture, demo data')],
   },
   {
@@ -221,7 +221,7 @@ export const tallyMilestones: Milestone[] = [
   {
     id: 'tally-production-setup', day: '2026-09-28',
     title: 'Keeping the real app apart from the demo',
-    summary: 'Tally’s demo erases every table each night, so the real app must never be mistaken for it. Production is a second environment of the same code, with its own database, no demo banner and no reset, and tests fail if it shares the demo’s database or puts a secret in its config. Claude Code built it with a setup script that walks me through each step. Secrets are typed at Wrangler’s own prompt, so they stay out of shell history, and it deploys only once every setting and table is in place, so a skipped step can’t put the app live without its sign-in check. A refused sign-in logs which check failed, never the token. Built and tested.',
+    summary: 'Tally’s demo erases every table each night, so the real app must never be mistaken for it. Production is a second environment of the same code, with its own database, no demo banner and no reset, and tests fail if it shares the demo’s database or puts a secret in its config. Claude Code built it, with a setup script that guides me; I reviewed it. Secrets are typed at Wrangler’s own prompt, so they stay out of shell history, and it deploys only once every setting and table is in place, so a skipped step can’t put the app live without its sign-in check. A refused sign-in logs which check failed, never the token. Built and tested.',
     artifacts: [artifact(productionSetup, 'Tally · Keeping the real app apart from the demo', 'The demo and the real app kept apart, the guided setup and what a refused sign-in logs. Outcome level; no settings, steps, addresses or secrets.', 'Diagram')],
   },
   {
@@ -245,7 +245,7 @@ export const tallyMilestones: Milestone[] = [
   {
     id: 'tally-trustworthy-numbers', day: '2026-10-05',
     title: 'Numbers you can trust',
-    summary: 'A review against my earlier app found ways Tally’s safe to spend could be wrong: paychecks counted as negative spending, pending charges missing, and the month turning over at midnight UTC. Trust in that number is the point, so I put these fixes ahead of new features. Pending transactions now count, marked "Pending"; income comes from the bank’s category or a "Count as income" choice; and unreviewed credits stay out of spending until checked. "Today" follows the household’s time zone. Merchant rules run after every sync, a refund can’t exceed its purchase, and Bills offers to update a bill whose price changed. Claude Code built it, with Codex on income. Built and tested.',
+    summary: 'A review against my earlier app found ways Tally’s safe to spend could be wrong: paychecks counted as negative spending, pending charges missing, and the month turning over at midnight UTC. Trust in that number is the point, so I put these fixes ahead of new features. Pending transactions now count, marked "Pending"; income comes from the bank’s category or a "Count as income" choice; and unreviewed credits stay out of spending until checked. "Today" follows the household’s time zone. Merchant rules run after every sync, a refund can’t exceed its purchase, and Bills offers to update a bill whose price changed. Claude Code built it, with Codex on income, and I reviewed it. Built and tested.',
     artifacts: [artifact(trustworthyNumbers, 'Tally · Numbers you can trust', 'Bills on demo data after PR #228, with “Price changed?” and the payment on offer marked.', 'Annotated screen capture, demo data')],
   },
   {
@@ -341,7 +341,7 @@ export const tallyMilestones: Milestone[] = [
   {
     id: 'tally-releases-reminders', day: '2026-10-11',
     title: 'Bank sign-in reminders and dated releases',
-    summary: 'When a bank needs signing in again, Tally stops syncing it, and nobody may notice. Now a nightly run emails everyone who signed in lately, then again every three days until the bank is fixed. The email names the bank and its account endings and never shows amounts. It can be turned off in Settings. Before this, nobody could say which build of Tally was running. I chose to name each production deploy by its date, as a tagged release, and feedback reports now keep that name. Claude Code built both. Built and tested; the demo never sends email.',
+    summary: 'When a bank needs signing in again, Tally stops syncing it, and nobody may notice. Now a nightly run emails everyone who signed in lately, then again every three days until the bank is fixed. The email names the bank and its account endings and never shows amounts. It can be turned off in Settings. Before this, nobody could say which build of Tally was running. I chose to name each production deploy by its date, as a tagged release, and feedback reports now keep that name. Claude Code built both, and I reviewed them. Built and tested; the demo never sends email.',
     artifacts: [artifact(releasesReminders, 'Tally · Sign-in reminders and dated releases', 'How the reminder run picks banks, and how a release name reaches a feedback report. Drawn from the code.', 'Diagram')],
   },
   {
