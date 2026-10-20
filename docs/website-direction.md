@@ -37,7 +37,7 @@ defining the work the website should attract.
 
 Kazon works independently, through contracts and projects, and is selective about
 full-time roles: fully remote or in person in San Francisco or Washington, D.C.,
-with meaningful ownership end to end, and with AI as a normal part of the job. If a
+with meaningful ownership end to end. If a
 role doesn't fit, a contract is the suggested path.
 Autonomy over time, meaningful ownership, choice of collaborators, and interest
 in the work matter more than the engagement label alone.

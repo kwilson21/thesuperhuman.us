@@ -45,7 +45,7 @@ import releasesReminders from '~/assets/projects/tally/releases-reminders-diagra
 export const tallyStory = {
   title: 'Tally',
   subtitle: 'Review your transactions, set monthly budgets and see how much remains to spend.',
-  description: 'I make Tally’s product and architecture decisions and review every change; Claude Code and Codex help with implementation, and nothing ships without tests. I focus on decisions that could cause problems later, and on keeping development sustainable and repeatable.',
+  description: 'I make Tally’s product and architecture decisions and review every change; Claude Code and Codex help with implementation. I focus on decisions that could cause problems later, and on keeping development sustainable and repeatable.',
   status: 'In development · public demo',
 };
 
