@@ -1,6 +1,6 @@
 // Curated from the owner's career account. Update professional facts here.
 export const workingPreference = 'I work independently, through contracts and projects, and I’m selective about full-time roles.';
-export const workingPreferenceDetail = 'I work independently, through contracts and projects. I’ll consider full-time roles where I’d own a system end to end and build with AI as a normal part of the job, either fully remotely or in person in San Francisco or Washington, D.C. If that isn’t your role, a contract is probably the better fit, and I’m glad to talk about that too.';
+export const workingPreferenceDetail = 'I work independently, through contracts and projects. I’ll consider full-time roles where I’d own a system end to end, either fully remotely or in person in San Francisco or Washington, D.C. If that isn’t your role, a contract is probably the better fit, and I’m glad to talk about that too.';
 export const lyftBonus = { before: '5,000', after: '100,000+', evidence: 'Owner-reported batch capacity', description: 'I changed Lyft’s driver-bonus tool so support could run and monitor larger batches without handing the work to on-call engineers.' };
 // Team scope clarified by the owner on September 10, 2026. Rentals projects come
 // from the existing career account. Quiet hours was completed after the July 2026
@@ -88,14 +88,14 @@ export const experience = [
     context: [
       'Maintained and operated inherited ETL pipelines in a Ruby on Rails platform, using GoodJob and S3 to transform legacy store transaction data and bulk-load results.',
       'Handled on-call issues and deployed fixes for bugs causing recurring alarms. Prototyped an MCP-driven store-onboarding pipeline and a PII-stripping debug tool; both remained internal prototypes and were not shipped.',
-      'Conducted scenario-based senior engineering interviews and contributed to hiring decisions. Advocated for AI-assisted development and helped the engineering team adopt it.',
+      'Conducted scenario-based senior engineering interviews and contributed to hiring decisions.',
     ],
   },
   {
     id: 'axuall', company: 'Vendorpass / Axuall', role: 'Senior Python Developer (Contract)',
     dates: 'July 2025 – November 2025', location: 'Remote',
-    outcome: 'I built pipelines that brought state medical-board data into a healthcare credentialing platform.',
-    context: ['Built per-state Dagster pipelines ingesting medical-board data from SFTP feeds, REST APIs, and Selenium-driven web sources. Applied credentialing logic for multiple states, including North Carolina, and contributed to the early transition from legacy Python connectors to per-state pipelines.'],
+    outcome: 'I worked on pipelines to bring state medical-board records into a healthcare credentialing platform.',
+    context: ['Worked on pipelines to bring state medical-board records into PostgreSQL through SFTP and REST APIs, falling back to Selenium only for boards with neither. Wrote the per-state Selenium logic that turns board records into license-verification results, for several states including North Carolina, and contributed to the early transition from legacy Python connectors to per-state pipelines.'],
   },
   {
     id: 'sure', company: 'Sure', role: 'Software Engineer',

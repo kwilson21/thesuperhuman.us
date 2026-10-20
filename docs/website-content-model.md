@@ -315,7 +315,7 @@ This increment uses curated index compositions. It does not add a page-block lan
 
 ## Current professional positioning, September 10
 
-Lead with “Software engineer. Building with AI.” and the interest in shaping
+Lead with “Software engineer. I build useful software.” (updated 2026-10-20; describe AI use per the AI stance in CLAUDE.md) and the interest in shaping
 solutions through exploration and iteration. Backend/data experience remains
 career evidence rather than a promoted specialty. Keep the current opportunity
 statement in `src/data/profile.ts` for Work and About; Home uses a brief

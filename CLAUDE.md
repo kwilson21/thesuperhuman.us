@@ -2,7 +2,7 @@
 
 ## Who You Are Working With
 
-You are working on the personal website of **Kazon Wilson**, who also operates **The Superhuman Group LLC**, a Wyoming LLC through which he can undertake independent work. His current direction is software engineering focused on building with AI.
+You are working on the personal website of **Kazon Wilson**, who also operates **The Superhuman Group LLC**, a Wyoming LLC through which he can undertake independent work. His current direction is software engineering: shaping and building useful software, using modern tools carefully.
 
 The September 2026 redesign direction in [docs/website-direction.md](docs/website-direction.md)
 and [docs/website-content-model.md](docs/website-content-model.md) supersedes the
@@ -16,7 +16,7 @@ pass [image QA](docs/generated-image-qa.md).
 
 - **7+ years** professional software engineering experience
 - **Background:** Lyft, Sure (Toggle homeowners insurance), Axuall/Vendorpass (contract), Scotch Inc.
-- **Current direction:** AI-assisted building, with room to shape solutions, prototype, iterate, and stay close to how people use the result. He welcomes ideas from collaborators; choosing the original idea is not a requirement.
+- **Current direction:** building useful software, with room to shape solutions, prototype, iterate, and stay close to how people use the result. He welcomes ideas from collaborators; choosing the original idea is not a requirement.
 - **Professional background:** Python, ETL pipelines, data engineering, backend API development. This establishes credibility; do not advertise data engineering as his desired next specialization.
 - **Regulated industry experience:** Healthcare credentialing, insurance document systems
 - **Website design:** Page structure, visual storytelling and responsive implementation. The personal website redesign is the current portfolio example; do not imply a history of client design projects.
@@ -38,16 +38,15 @@ See `README.md` for environment variables, KV bindings, the full resume request 
 
 ## Positioning & Brand Voice
 
-- **Person and interests first.** Show what Kazon cares about, makes, and contributes. Make professional evidence easy to assess. Present independent work (contracts and projects) as the default and full-time as selective: roles with meaningful ownership where building with AI is a normal part of the job, either fully remote or in person in San Francisco or Washington, D.C. Don't turn every page into a services pitch.
+- **Person and interests first.** Show what Kazon cares about, makes, and contributes. Make professional evidence easy to assess. Present independent work (contracts and projects) as the default and full-time as selective: roles where he owns the work end to end, either fully remote or in person in San Francisco or Washington, D.C. Don't turn every page into a services pitch.
 - **Tone:** Direct, confident, technically specific. No fluff, no buzzwords
 - **Explain actions where understanding matters.** Follow the [copy and resume parity rules](docs/website-content-model.md#copy-explain-the-action-when-visitors-need-to-understand-the-work): explain who does what in introductions, offers and project summaries. Keep useful labels and preserve the purpose of personal or creative writing. Compare shared professional facts with the current approved resume; richer verified website detail is allowed.
 - **Audience:** curious visitors, potential collaborators, recruiters, and hiring managers
 - **Key differentiators:**
   - Lyft pedigree
   - Regulated industry experience (healthcare, insurance)
-  - AI-assisted building grounded in production engineering experience
+  - Production engineering experience, with modern tools used carefully
   - Async-first, results-focused working style
-  - AI-assisted development advocate
   - Interest in shaping solutions and seeing ideas become useful software
 
 ### Clearance posture
@@ -58,7 +57,7 @@ No active security clearance, but open to pursuing one for the right engagement.
 
 - **Privacy.** Kazon's personal home address never appears in public-facing content. The business address is The Superhuman Group LLC's Wyoming registered agent address.
 - **Engagement model.** All contracts are **fixed-price, deliverable-based**, never hourly. Never add hourly rate copy anywhere.
-- **AI tool usage** is non-negotiable and is a feature, not a disclaimer. Reflect it positively. The Work page and project journals describe AI collaboration at a high level. Keep attribution truthful without publishing private operational recipes.
+- **AI stance.** Kazon is not "pro AI"; he keeps up with how the field is changing and must never read as a careless "vibe coder." His approved standard line (2026-10-20): "I use Claude Code to keep up with how the field is changing, but I treat it like a junior pair: I make the design decisions, read every line it writes, and nothing ships without tests." Summary lines say he makes the design decisions and reviews every change, and Claude Code helps with implementation. Never write that AI writes or builds the work on its own. The Work page and project journals describe AI collaboration at a high level. Keep attribution truthful without publishing private operational recipes.
 - **Async communication is preferred.** Reflect this in contact/engagement copy.
 
 ## Rate Context
@@ -107,7 +106,7 @@ Publicizing Tally, Kaillera-next and website work follows the design in
 
 - Keep tone direct, technically specific, and confident
 - Reflect async-first, results-focused working style in all engagement copy
-- Reflect AI-assisted development positively; it is a feature not a disclaimer
+- Describe AI use per the AI stance above: careful, owner-led, never AI-first
 - Keep privacy front of mind: registered agent address for business, never personal
 - Ensure all contact flows go through the approval-gated system
 - Keep Tailwind classes clean and consistent with existing design system

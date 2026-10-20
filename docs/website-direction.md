@@ -16,7 +16,7 @@ Employment and contracting are possible outcomes, rather than its sole purpose.
 
 Past experience establishes credibility without defining future direction. The
 site should invite work Kazon wants to explore, not simply attract more of the work
-he has already done. His current direction is software engineering focused on AI-assisted building.
+he has already done. His current direction is software engineering: shaping and building useful software, using modern tools carefully.
 He enjoys shaping solutions, exploring, prototyping, and iterating toward something
 people can use. Collaborators can bring the idea; ownership of the original idea
 is not a requirement. Backend and data experience supplies evidence rather than
@@ -37,7 +37,7 @@ defining the work the website should attract.
 
 Kazon works independently, through contracts and projects, and is selective about
 full-time roles: fully remote or in person in San Francisco or Washington, D.C.,
-with meaningful ownership end to end, and with AI as a normal part of the job. If a
+with meaningful ownership end to end. If a
 role doesn't fit, a contract is the suggested path.
 Autonomy over time, meaningful ownership, choice of collaborators, and interest
 in the work matter more than the engagement label alone.
@@ -134,17 +134,16 @@ implementation proposal as accepted before these findings inform the choice.
 
 ## September 10 positioning refinement
 
-Approved Work heading: “Software engineer. Building with AI.” The introduction
+Superseded on 2026-10-20 (see the end of this paragraph). Then-approved Work heading: “Software engineer. Building with AI.” The introduction
 expresses exploration, iteration, and engineering judgment. Home introduces a
 software engineer shaping ideas and building with AI (updated 2026-09-26 to
 remove a repeated “exploring” shared with the hero tagline; wording is the
 owner's to confirm). Work and About share the
 current opportunity statement from `src/data/profile.ts`. Historical job titles,
 dates, and outcomes remain accurate. No AI/ML specialization, new credential,
-product launch, or open-source contribution is implied.
+product launch, or open-source contribution is implied. (Superseded 2026-10-20: the Work heading is "Software engineer. I build useful software." and AI is described per the AI stance in CLAUDE.md: Kazon makes the design decisions and reviews every change; Claude Code helps with implementation.)
 
-The preferred opportunity allows Kazon to help shape the solution, use AI in the
-building process, and stay close to how people use the result. Independent work
+The preferred opportunity allows Kazon to help shape the solution and stay close to how people use the result. Independent work
 is the default; full-time roles are considered selectively. “Product engineer” is a
 possible search term, not a replacement for historical titles or an adopted niche.
 The public site need not repeat private descriptions of former work as boring.

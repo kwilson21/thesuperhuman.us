@@ -1,6 +1,6 @@
 # thesuperhuman.us
 
-Personal site for Kazon Wilson · software engineer building with AI · independent work through The Superhuman Group LLC.
+Personal site for Kazon Wilson · software engineer building useful software · independent work through The Superhuman Group LLC.
 
 ## Stack
 
