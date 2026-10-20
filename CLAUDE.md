@@ -38,7 +38,7 @@ See `README.md` for environment variables, KV bindings, the full resume request 
 
 ## Positioning & Brand Voice
 
-- **Person and interests first.** Show what Kazon cares about, makes, and contributes. Make professional evidence easy to assess. Present independent work (contracts and projects) as the default and full-time as selective: roles where he owns the work end to end, either fully remote or in person in San Francisco or Washington, D.C. Don't turn every page into a services pitch.
+- **Person and interests first.** Show what Kazon cares about, makes, and contributes. Make professional evidence easy to assess. Present independent work (contracts and projects) as the default and full-time as selective: roles where he owns the work end to end, either fully remote or in person near Roanoke, Virginia. Don't turn every page into a services pitch.
 - **Tone:** Direct, confident, technically specific. No fluff, no buzzwords
 - **Explain actions where understanding matters.** Follow the [copy and resume parity rules](docs/website-content-model.md#copy-explain-the-action-when-visitors-need-to-understand-the-work): explain who does what in introductions, offers and project summaries. Keep useful labels and preserve the purpose of personal or creative writing. Compare shared professional facts with the current approved resume; richer verified website detail is allowed.
 - **Audience:** curious visitors, potential collaborators, recruiters, and hiring managers
