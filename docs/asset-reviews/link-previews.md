@@ -43,6 +43,9 @@
   notebook page.
 - Accessibility: the poster's alt text is in `src/lib/og-media.ts` and states the
   name, the introduction and the desk objects.
+- Re-rendered after the kit gave `.frame` an explicit paper background, which the
+  artwork's multiply now blends against; poster re-inspected at native size, no
+  visible change.
 - Outcome: ready for production.
 
 ## services
@@ -84,10 +87,10 @@
 {
   "outcome": "ready for production",
   "files": [
-    {"path": "public/og/home-512dc0dcad.png", "sha256": "512dc0dcad3a1fbecbbcc6d1341de98848916f52fe07cb11f6d862b27769becd", "width": 1200, "height": 630, "bytes": 377184},
+    {"path": "public/og/home-257eb55b39.png", "sha256": "257eb55b39108da97c5c5c5ba0368d9e3ccd7dd6f5cfc8ef71fff070be342d53", "width": 1200, "height": 630, "bytes": 373273},
     {"path": "public/og/services-75a539dbee.png", "sha256": "75a539dbeec538a9e6bcd44d2a17fe225aa43b58edfd997a19fa6b1940cab492", "width": 1200, "height": 630, "bytes": 344075},
     {"path": "public/og/software-start-ca3244d4c1.png", "sha256": "ca3244d4c1805324ce58f03da51973ea7978e7b3068ee2ecb7f5b2927546521f", "width": 1200, "height": 630, "bytes": 192409},
-    {"path": "public/og/raw/home-16874210af.mp4", "sha256": "16874210afc42bb2d90846a73948f41ff2b9b2645a25d43bf1dee7416022d342", "width": 1200, "height": 630, "bytes": 269508},
+    {"path": "public/og/raw/home-c1231bc166.mp4", "sha256": "c1231bc166d34e859b066c8554bdcb69cc02ef33eff8c976012579c5ae091041", "width": 1200, "height": 630, "bytes": 267334},
     {"path": "public/og/raw/services-afd37a3254.mp4", "sha256": "afd37a3254c286617427f7b4a8c4e0399e8950734ca034d734c6ee9521a535a3", "width": 1200, "height": 630, "bytes": 760167},
     {"path": "public/og/raw/software-start-65d389073b.mp4", "sha256": "65d389073bcec0b0e7ac5c3e6d42abd54be1eb5362bddb672970dbca1721b2d6", "width": 1200, "height": 630, "bytes": 471341}
   ]

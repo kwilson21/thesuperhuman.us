@@ -1,13 +1,15 @@
-/* Shared frame for link-preview scenes: the site's fonts and colours at 1200 × 630.
+/* Shared frame for link-preview scenes: the site's fonts, colours and slots at 1200 × 630.
    Messages shows the clip about 300 points wide, so type stays large: headlines 56px and up,
-   labels 20px and up. */
+   labels 20px and up. Safe area: x 64-1136, y 60-582; the strip y 558-582 holds the url and
+   the aside. Only art may pass the safe area, and only inside .frame. */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=block');
 
 @font-face { font-family: 'Libron'; src: url('../../public/fonts/libron-v0.25/Libron-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: block; }
 @font-face { font-family: 'Libron'; src: url('../../public/fonts/libron-v0.25/Libron-Italic.woff2') format('woff2'); font-weight: 400; font-style: italic; font-display: block; }
 @font-face { font-family: 'Libron'; src: url('../../public/fonts/libron-v0.25/Libron-Bold.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: block; }
-/* Subset to the letters of "Kazon Wilson": use it for the name only. */
+/* Subset to the letters of "Kazon Wilson": use them for the name only. */
 @font-face { font-family: 'Kazon Name Display'; src: url('../../public/fonts/kazon-name-display.woff2') format('woff2'); font-display: block; }
+@font-face { font-family: 'Kazon Name Text'; src: url('../../public/fonts/kazon-name-text.woff2') format('woff2'); font-display: block; }
 
 :root {
   --paper: #FBF8F2;
@@ -15,15 +17,68 @@
   --muted: #4A4A4A;
   --rule: #E8E3DA;
   --accent: #AE5534;
+  --well: #f3eee5;
+  --well-divider: #d9d0c2;
+  --diagram-border: #c5b9a7;
+  --panel-border: #cbc5ba;
+  --wave-unplayed: #BDB6AA;
+  --placeholder: #6D6D6C;
+  --checked: color-mix(in srgb, var(--accent) 5%, var(--paper));
+  --glow: color-mix(in srgb, var(--accent) 14%, transparent);
   --serif: 'Libron', Georgia, serif;
   --sans: 'Inter', system-ui, sans-serif;
   --mono: 'JetBrains Mono', Menlo, monospace;
   --name: 'Kazon Name Display', 'Libron', Georgia, serif;
+  --name-text: 'Kazon Name Text', 'Libron', Georgia, serif;
 }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
 body { background: var(--paper); color: var(--ink); font-family: var(--serif); -webkit-font-smoothing: antialiased; }
 img { display: block; }
+p, h1, h2, h3 { margin: 0; font-weight: 400; }
 
-.frame { position: relative; width: 1200px; height: 630px; overflow: hidden; isolation: isolate; }
+.frame { position: relative; width: 1200px; height: 630px; overflow: hidden; isolation: isolate; background: var(--paper); color: var(--ink); }
+.card { padding: 60px 64px; }
+
+/* The home page's dark screen world (src/pages/index.astro). */
+.world-screen { --paper: #14120f; --ink: #f2ede4; --muted: #b0a799; --rule: #3a342d; --accent: #e08a62; --well: #1d1b18; background: var(--paper); color: var(--ink); }
+
+/* Slots. The kicker is the page's own kicker or breadcrumb, parts joined by " / ". */
+.kicker { position: absolute; left: 64px; top: 60px; margin: 0; font: 500 20px/24px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); white-space: nowrap; max-width: 1072px; }
+.kicker.tight { letter-spacing: .04em; }
+/* thesuperhuman.us plus the canonical path, no protocol, no trailing slash. */
+.url { position: absolute; left: 64px; bottom: 48px; margin: 0; font: 400 20px/24px var(--sans); color: var(--muted); white-space: nowrap; }
+.aside { position: absolute; right: 64px; bottom: 48px; margin: 0; font: 400 20px/24px var(--sans); color: var(--muted); white-space: nowrap; text-align: right; }
+.aside.caption { font: italic 400 20px/24px var(--serif); }
+.on-photo .url { color: var(--paper); text-shadow: 0 1px 7px #000; }
+.status { display: inline-flex; gap: 12px; align-items: center; font: 400 20px/24px var(--mono); color: var(--muted); }
+.status::before { content: ''; width: 13px; height: 13px; border-radius: 50%; background: var(--accent); flex: none; }
+
+/* Type scale: Libron 400. 56px is the smallest headline; three lines at most. */
+.h-112 { font: 400 112px/1 var(--serif); letter-spacing: -.045em; }
+.h-96 { font: 400 96px/1.02 var(--serif); letter-spacing: -.045em; }
+.h-84 { font: 400 84px/1.02 var(--serif); letter-spacing: -.045em; }
+.h-76 { font: 400 76px/1.02 var(--serif); letter-spacing: -.045em; }
+.h-68 { font: 400 68px/1.04 var(--serif); letter-spacing: -.04em; }
+.h-60 { font: 400 60px/1.04 var(--serif); letter-spacing: -.035em; }
+.h-56 { font: 400 56px/1.08 var(--serif); letter-spacing: -.035em; }
+.name-display { font-family: var(--name); font-size: 112px; line-height: .9; letter-spacing: -.065em; }
+.lede { font: 400 30px/1.25 var(--serif); }
+.label { font: 400 20px/24px var(--sans); }
+.label-l { font: 500 24px/28px var(--sans); }
+.mono { font: 400 20px/24px var(--mono); }
+
+/* Media. Illustrations blend into the paper; screenshots are framed and never edited. */
+.art { position: absolute; z-index: -1; mix-blend-mode: multiply;
+  mask-image: linear-gradient(to right, transparent, #000 var(--fx0, 18%), #000 var(--fx1, 92%), transparent), linear-gradient(to bottom, transparent, #000 var(--fy0, 10%), #000 var(--fy1, 86%), transparent);
+  mask-composite: intersect; }
+.art img, .art svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.capture { position: relative; border-radius: 6px; overflow: hidden; background: var(--well);
+  box-shadow: 0 0 0 1px var(--rule), 0 28px 70px -34px color-mix(in srgb, var(--accent) 45%, transparent), 0 14px 30px -18px #0000005c; }
+.world-screen .capture { box-shadow: 0 0 0 1px var(--rule), 0 28px 70px -34px color-mix(in srgb, var(--accent) 45%, transparent), 0 14px 30px -18px #000c; }
+.capture img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.panel { background: var(--well); border-radius: 3px; }
+.ring { position: absolute; border: 2px solid var(--accent); border-radius: 6px; opacity: 0; pointer-events: none; }
+.btn { display: inline-block; font: 400 26px/1.4 var(--serif); padding: 12px 30px; background: var(--accent); color: var(--paper); border: 1px solid var(--accent); border-radius: 3px; }
+.press-ring { position: absolute; border: 2px solid var(--accent); opacity: 0; pointer-events: none; }

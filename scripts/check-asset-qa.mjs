@@ -35,7 +35,7 @@ try {
     const path = `${assetRoot}/${file}`;
     if (!reviewed.has(path)) errors.push(`${path}: no review record`);
   }
-  const previews = existsSync(previewRoot) ? readdirSync(previewRoot, { recursive: true }).filter(name => /\.(png|mp4)$/i.test(name)) : [];
+  const previews = existsSync(previewRoot) ? readdirSync(previewRoot, { recursive: true }).filter(name => /\.(png|jpg|mp4)$/i.test(name)) : [];
   for (const file of previews) {
     const path = `${previewRoot}/${file}`;
     if (!reviewed.has(path)) errors.push(`${path}: no review record`);

@@ -16,6 +16,8 @@
     inOut: 'cubic-bezier(.45, .05, .3, 1)',
     in: 'cubic-bezier(.5, 0, .75, 0)',
     spring: 'cubic-bezier(.3, 1.5, .5, 1)',
+    ring: 'cubic-bezier(.2, .6, .3, 1)',
+    ink: 'cubic-bezier(.6, .1, .2, 1)',
   };
 
   function frames(steps, shift) {

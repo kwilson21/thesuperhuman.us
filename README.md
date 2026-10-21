@@ -220,9 +220,10 @@ Each scene is an HTML page in `scripts/og-video/scenes/`, styled by `scripts/og-
 node scripts/og-video/render.mjs                  # every scene
 node scripts/og-video/render.mjs services work    # only these
 node scripts/og-video/render.mjs --sheet services # contact sheet in .og-video/ for review; writes nothing else
+node scripts/og-video/render.mjs --sheet --at=0,2500 services  # also saves those moments (ms) at full size
 ```
 
-Rendering needs ffmpeg with libx264 and Chromium (set `CHROMIUM_PATH` if Playwright's own build is missing). The renderer pauses every animation and steps one clock at 30 fps, so output is repeatable. It refuses a scene whose fonts did not load, whose content overflows the frame, or whose last frame does not match its first (the loop would jump), and it keeps videos under 2.5 MB and posters under 600 KB. Files are named by content hash (`public/og/<scene>-<hash>.png` and `public/og/raw/<scene>-<hash>.mp4`), which lets caches keep them for a year; the hashed names are recorded in `src/data/og-media.json` and stale files are deleted.
+Rendering needs ffmpeg with libx264 and Chromium (set `CHROMIUM_PATH` if Playwright's own build is missing). The renderer pauses every animation and steps one clock at 30 fps, so output is repeatable. It refuses a scene whose fonts did not load, whose content overflows the frame, whose unwrapped text is wider than its box, or whose last frame does not match its first (the loop would jump), and it keeps videos under 2.5 MB and posters under 600 KB. Posters are PNG; a photographic scene sets `data-poster="jpeg"` on `<html>` for a JPEG poster instead. Files are named by content hash (`public/og/<scene>-<hash>.png` or `.jpg`, and `public/og/raw/<scene>-<hash>.mp4`), which lets caches keep them for a year; the hashed names are recorded in `src/data/og-media.json` and stale files are deleted.
 
 Static assets ignore `Range` requests and Safari's media stack expects them, so `/og/<scene>-<hash>.mp4` is served by `src/pages/og/[name].mp4.ts`, which reads the bytes from `/og/raw/` and answers 200, 206 or 416. Every rendered poster and video needs a review record in `docs/asset-reviews/` (`npm run assets:check` fails otherwise; see `docs/generated-image-qa.md`), so inspect each new render's frames and update the record with its hashes.
 

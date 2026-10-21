@@ -1,12 +1,12 @@
 {
   "home": {
-    "image": "/og/home-512dc0dcad.png",
-    "video": "/og/home-16874210af.mp4",
+    "image": "/og/home-257eb55b39.png",
+    "video": "/og/home-c1231bc166.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6000,
-    "imageBytes": 377184,
-    "videoBytes": 269508
+    "imageBytes": 373273,
+    "videoBytes": 267334
   },
   "services": {
     "image": "/og/services-75a539dbee.png",

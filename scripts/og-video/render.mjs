@@ -4,11 +4,13 @@
 //   node scripts/og-video/render.mjs                 every scene
 //   node scripts/og-video/render.mjs home services   only these scenes
 //   node scripts/og-video/render.mjs --sheet home    contact sheet of frames for review; writes nothing to public/
+//   node scripts/og-video/render.mjs --sheet --at=0,1500 home   also saves those moments (ms) at full size
 //
 // A scene is a 1200×630 HTML page whose <html> carries data-duration (ms). All motion must be CSS
 // animations or Web Animations: the renderer pauses every animation and steps currentTime frame by
-// frame, so the output is the same on every run. Frame 0 is the poster. The frame at data-duration
-// must match frame 0, so the clip loops without a jump.
+// frame, so the output is the same on every run. Frame 0 is the poster: a PNG, or a JPEG when
+// <html> carries data-poster="jpeg" (photographs, which PNG cannot keep under the size limit). The
+// frame at data-duration must match frame 0, so the clip loops without a jump.
 //
 // Needs ffmpeg with libx264. Set CHROMIUM_PATH when Playwright's bundled Chromium is unavailable.
 import { chromium } from 'playwright';
@@ -37,6 +39,8 @@ const MAX_POSTER_BYTES = 600 * 1024;
 
 const args = process.argv.slice(2);
 const sheetOnly = args.includes('--sheet');
+const moments = (args.find(arg => arg.startsWith('--at='))?.slice(5).split(',') ?? []).filter(Boolean).map(Number);
+if (moments.some(time => !Number.isFinite(time) || time < 0)) fail('--at takes milliseconds, for example --at=0,1500,3000');
 const requested = args.filter(arg => !arg.startsWith('--'));
 const available = readdirSync(SCENES).filter(name => name.endsWith('.html')).map(name => basename(name, '.html')).sort();
 const unknown = requested.filter(key => !available.includes(key));
@@ -78,10 +82,15 @@ async function renderScene(key) {
     const animations = document.getAnimations();
     for (const animation of animations) animation.pause();
     const root = document.documentElement;
+    // A line that may not wrap must fit its own box, or it runs into its neighbour unseen.
+    const cramped = texts.filter(element => getComputedStyle(element).whiteSpace === 'nowrap' && element.clientWidth > 0 && element.scrollWidth > element.clientWidth + 1)
+      .map(element => element.textContent.trim().slice(0, 40));
     return {
       duration: Number(root.dataset.duration),
+      poster: root.dataset.poster === 'jpeg' ? 'jpeg' : 'png',
       animations: animations.length,
       missing,
+      cramped,
       overflow: root.scrollWidth > innerWidth || root.scrollHeight > innerHeight,
     };
   });
@@ -90,6 +99,7 @@ async function renderScene(key) {
   if (errors.length) problem(errors.join('; '));
   if (setup.missing.length) problem(`fonts not loaded: ${setup.missing.join(', ')}`);
   if (setup.overflow) problem('content overflows the 1200×630 frame');
+  if (setup.cramped.length) problem(`text wider than its box: ${setup.cramped.join(' | ')}`);
   if (!Number.isInteger(setup.duration) || setup.duration < 2000 || setup.duration > 10000) problem('data-duration must be an integer from 2000 to 10000 ms');
   if (!setup.animations) problem('no animations found');
   if (failed) { await page.close(); return null; }
@@ -101,12 +111,20 @@ async function renderScene(key) {
       await page.evaluate(t => { for (const animation of document.getAnimations()) animation.currentTime = t; }, time);
       await page.screenshot({ path: file });
     };
-    if (sheetOnly) return await contactSheet(key, frames, capture, work).then(() => null);
-    for (let frame = 0; frame < frames; frame++) await capture(frame * 1000 / FPS, join(work, `${String(frame).padStart(4, '0')}.png`));
     // An infinite animation wraps back to frame 0 at exactly data-duration, so look 1 ms earlier.
+    await capture(0, join(work, '0000.png'));
     await capture(setup.duration - 1, join(work, 'end.png'));
     const seam = await difference(join(work, '0000.png'), join(work, 'end.png'));
     if (seam > 0.5) problem(`the end of the loop differs from frame 0 (mean difference ${seam.toFixed(2)}), so the loop jumps`);
+    if (sheetOnly) {
+      const bytes = (await posterOf(join(work, '0000.png'), setup.poster)).length;
+      if (bytes > MAX_POSTER_BYTES) problem(`poster is ${bytes} bytes; keep it under ${MAX_POSTER_BYTES}`);
+      else console.log(`${key}: poster ${bytes} bytes as ${setup.poster}`);
+      await contactSheet(key, frames, capture, work);
+      for (const time of moments) await capture(time, join(SHEETS, `${key}-t${time}.png`));
+      return null;
+    }
+    for (let frame = 1; frame < frames; frame++) await capture(frame * 1000 / FPS, join(work, `${String(frame).padStart(4, '0')}.png`));
 
     const video = join(work, 'video.mp4');
     const encode = spawnSync('ffmpeg', [
@@ -121,13 +139,13 @@ async function renderScene(key) {
       '-movflags', '+faststart', video,
     ], { encoding: 'utf8' });
     if (encode.status !== 0) { problem(`ffmpeg failed: ${encode.stderr}`); return null; }
-    const poster = await sharp(join(work, '0000.png')).resize(WIDTH, HEIGHT, { kernel: 'lanczos3' }).png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer();
+    const poster = await posterOf(join(work, '0000.png'), setup.poster);
     const videoBytes = readFileSync(video);
     if (videoBytes.length > MAX_VIDEO_BYTES) problem(`video is ${videoBytes.length} bytes; keep it under ${MAX_VIDEO_BYTES}`);
     if (poster.length > MAX_POSTER_BYTES) problem(`poster is ${poster.length} bytes; keep it under ${MAX_POSTER_BYTES}`);
     if (failed) return null;
 
-    const imageName = `${key}-${hash(poster)}.png`;
+    const imageName = `${key}-${hash(poster)}.${setup.poster === 'jpeg' ? 'jpg' : 'png'}`;
     const videoName = `${key}-${hash(videoBytes)}.mp4`;
     mkdirSync(RAW, { recursive: true });
     removeStale(PUBLIC, key, imageName);
@@ -170,6 +188,11 @@ async function contactSheet(key, frames, capture, work) {
   console.log(`${key}: contact sheet at ${out}`);
 }
 
+function posterOf(file, format) {
+  const resized = sharp(file).resize(WIDTH, HEIGHT, { kernel: 'lanczos3' });
+  return (format === 'jpeg' ? resized.jpeg({ quality: 85, mozjpeg: true }) : resized.png({ compressionLevel: 9, adaptiveFiltering: true })).toBuffer();
+}
+
 async function difference(a, b) {
   const [left, right] = await Promise.all([a, b].map(file => sharp(file).raw().toBuffer()));
   let total = 0;
@@ -178,7 +201,7 @@ async function difference(a, b) {
 }
 
 function removeStale(directory, key, keep) {
-  const pattern = new RegExp(`^${key}-[0-9a-f]{10}\\.(png|mp4)$`);
+  const pattern = new RegExp(`^${key}-[0-9a-f]{10}\\.(png|jpg|mp4)$`);
   for (const name of readdirSync(directory)) {
     if (name !== keep && pattern.test(name) && statSync(join(directory, name)).isFile()) unlinkSync(join(directory, name));
   }

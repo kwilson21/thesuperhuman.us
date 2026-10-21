@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 import rendered from '../../src/data/og-media.json';
 import { DEFAULT_OG_SCENE, OG_SCENES, ogMedia, ogSceneFor, serveOgVideo, type OgScene } from '~/lib/og-media';
@@ -81,13 +82,14 @@ describe('rendered scenes', () => {
     expect(sceneFiles.sort()).toEqual([...scenes].sort());
   });
 
-  it.each(scenes)('%s has a 1200×630 poster, a streamable MP4 and plain alt text', scene => {
+  it.each(scenes)('%s has a 1200×630 poster, a streamable MP4 and plain alt text', async scene => {
     const media = ogMedia(scene);
     expect(media.alt.length).toBeGreaterThan(20);
     expect(media.alt).not.toMatch(/—/);
     const poster = readFileSync(`public${media.image}`);
-    expect(poster.subarray(1, 4).toString()).toBe('PNG');
-    expect([poster.readUInt32BE(16), poster.readUInt32BE(20)]).toEqual([1200, 630]);
+    const { format, width, height } = await sharp(poster).metadata();
+    expect(format).toBe(media.image.endsWith('.jpg') ? 'jpeg' : 'png');
+    expect([width, height]).toEqual([1200, 630]);
     expect(poster.length).toBeLessThan(600 * 1024);
     const file = `public/og/raw/${media.video.slice('/og/'.length)}`;
     expect(existsSync(`public${media.video}`)).toBe(false);
