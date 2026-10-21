@@ -2,7 +2,8 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { hashFiles, listFiles, routeFiles, routePattern, scenarioPlanner, sourceClosure } from '../../scripts/screenshots/cache.mjs';
+import { DatabaseSync } from 'node:sqlite';
+import { hashFiles, listFiles, routeFiles, routePattern, scenarioPlanner, sourceClosure, stateHash } from '../../scripts/screenshots/cache.mjs';
 
 const PAGE_FILES = [
   'src/pages/404.astro',
@@ -52,11 +53,20 @@ describe('sourceClosure', () => {
     '/repo/src/pages/b.astro': { file: '/repo/src/pages/b.astro', imports: ['/repo/src/lib/z.ts'] },
   };
 
-  it('follows imports from every module of a root file, skipping node_modules and cycles', () => {
+  it('follows imports from a root file, skipping node_modules, cycles and stylesheet imports', () => {
     expect(sourceClosure(graph, ['src/pages/a.astro'], root)).toEqual({
-      files: ['src/lib/x.ts', 'src/lib/y.ts', 'src/pages/a.astro', 'src/styles/a.css'],
+      files: ['src/lib/x.ts', 'src/lib/y.ts', 'src/pages/a.astro'],
       content: true,
     });
+  });
+
+  it("does not follow a stylesheet's imports, which Tailwind fills with every scanned file", () => {
+    const tailwind = {
+      '/repo/src/pages/c.astro': { file: '/repo/src/pages/c.astro', imports: ['/repo/src/styles/global.css', '/repo/src/pages/c.astro?astro&type=style&index=0&lang.css'] },
+      '/repo/src/styles/global.css': { file: '/repo/src/styles/global.css', imports: ['/repo/src/lib/unrelated.ts'] },
+      '/repo/src/pages/c.astro?astro&type=style&index=0&lang.css': { file: '/repo/src/pages/c.astro', imports: ['/repo/src/lib/also-unrelated.ts'] },
+    };
+    expect(sourceClosure(tailwind, ['src/pages/c.astro'], root).files).toEqual(['src/pages/c.astro', 'src/styles/global.css']);
   });
 
   it('keeps a root the graph never loaded', () => {
@@ -117,6 +127,29 @@ describe('hashFiles', () => {
       expect(await hashFiles(files, root)).not.toBe(before);
       await rm(join(root, 'b.txt'));
       expect(await listFiles(['dir', 'b.txt'], root)).toEqual(['dir/a.txt']);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('stateHash', () => {
+  it("changes when a row does, not when Miniflare's query bookkeeping does", async () => {
+    const root = await mkdtemp(join(tmpdir(), 'screenshot-state-'));
+    try {
+      await mkdir(join(root, 'd1'));
+      await writeFile(join(root, 'blob'), 'kv value');
+      const db = new DatabaseSync(join(root, 'd1/db.sqlite'));
+      db.exec("PRAGMA journal_mode = WAL; CREATE TABLE _cf_METADATA (key INTEGER PRIMARY KEY, value BLOB); CREATE TABLE requests (id TEXT PRIMARY KEY, body BLOB); INSERT INTO _cf_METADATA VALUES (1, x'01'); INSERT INTO requests VALUES ('a', x'ff');");
+      const before = await stateHash(root);
+      db.exec("UPDATE _cf_METADATA SET value = x'02'");
+      expect(await stateHash(root)).toBe(before);
+      db.exec("INSERT INTO requests VALUES ('b', NULL)");
+      const written = await stateHash(root);
+      expect(written).not.toBe(before);
+      db.close();
+      await writeFile(join(root, 'blob'), 'changed');
+      expect(await stateHash(root)).not.toBe(written);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

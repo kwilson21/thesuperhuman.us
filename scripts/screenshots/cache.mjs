@@ -2,8 +2,10 @@
 // input it was drawn from is unchanged: the bytes the browser loaded for a page, and for a scenario
 // its script, the source files behind each route it hit and the assets it loaded.
 import { createHash } from 'node:crypto';
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { copyFile, mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join, relative, resolve, sep } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 /** Bump to discard every stored reference after changing what a key covers. */
 export const CACHE_VERSION = 1;
@@ -16,6 +18,9 @@ const NOT_GLOBAL = ['scripts/screenshots/scenarios'];
 // Content collections reach pages through Astro's data store, not imports.
 const CONTENT_MODULES = ['\0astro:content', '\0astro:data-layer-content'];
 const CONTENT_DIR = 'src/content';
+// Tailwind lists every file it scans as an import of each stylesheet. The stylesheet reaches the
+// browser as an asset whose bytes are replayed, so its own imports are not followed.
+const STYLESHEET = /\.css($|\?)|[?&]lang\.css|[?&]type=style/;
 // Requests for these are replayed and hashed; any other request runs server code for a route.
 export const ASSET_TYPES = ['stylesheet', 'script', 'image', 'font', 'media'];
 
@@ -49,10 +54,45 @@ export async function globalKey(runtime, root = process.cwd()) {
   return sha256(JSON.stringify({ version: CACHE_VERSION, runtime, files: await hashFiles(await listFiles(GLOBAL_INPUTS, root, NOT_GLOBAL), root) }));
 }
 
-/** The local database, KV and R2 files. SQLite's -shm index is skipped: readers touch it too. */
+// Miniflare updates this table on every D1 query, reads included.
+const BOOKKEEPING_TABLES = ['_cf_METADATA'];
+
+/**
+ * What the local D1, KV and R2 storage holds: every SQLite database's schema and rows (read from a
+ * copy, so the live files are untouched) and every other file's bytes.
+ */
 export async function stateHash(directory = '.wrangler/state') {
-  const files = (await listFiles(['.'], resolve(directory))).filter(file => !file.endsWith('-shm'));
-  return hashFiles(files, resolve(directory));
+  const root = resolve(directory);
+  const hash = createHash('sha256');
+  const copies = await mkdtemp(join(tmpdir(), 'screenshot-state-'));
+  try {
+    for (const file of (await listFiles(['.'], root)).filter(file => !/-(wal|shm)$/.test(file))) {
+      if (!file.endsWith('.sqlite')) {
+        hash.update(`${file}\0${sha256(await readFile(join(root, file)))}\0`);
+        continue;
+      }
+      const copy = join(copies, 'db.sqlite');
+      await rm(`${copy}-wal`, { force: true });
+      await copyFile(join(root, file), copy);
+      await copyFile(join(root, `${file}-wal`), `${copy}-wal`).catch(() => {});
+      const db = new DatabaseSync(copy);
+      try {
+        const tables = db.prepare("SELECT name, sql FROM sqlite_master WHERE type = 'table' ORDER BY name").all()
+          .filter(table => !BOOKKEEPING_TABLES.includes(table.name));
+        for (const { name, sql } of tables) {
+          const rows = db.prepare(`SELECT * FROM "${name.replaceAll('"', '""')}"`).all()
+            .map(row => JSON.stringify(row, (_, value) => (value instanceof Uint8Array ? Buffer.from(value).toString('hex') : value))).sort();
+          hash.update(`${file}\0${sql}\0${sha256(rows.join('\n'))}\0`);
+        }
+      } finally {
+        db.close();
+      }
+      await rm(copy, { force: true });
+    }
+  } finally {
+    await rm(copies, { recursive: true, force: true });
+  }
+  return hash.digest('hex');
 }
 
 /** A pattern matching the URL paths a file in src/pages serves. */
@@ -89,6 +129,7 @@ export function sourceClosure(graph, roots, root = process.cwd()) {
       const file = relative(root, mod.file).split(sep).join('/');
       if (!file.startsWith('..') && !file.split('/').includes('node_modules')) files.add(file);
     }
+    if (STYLESHEET.test(id)) continue;
     for (const next of mod.imports ?? []) if (!seen.has(next)) { seen.add(next); queue.push(next); }
   }
   return { files: [...files].sort(), content };
