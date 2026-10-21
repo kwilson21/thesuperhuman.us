@@ -1,0 +1,11 @@
+{
+  "home": {
+    "image": "/og/home-512dc0dcad.png",
+    "video": "/og/home-16874210af.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 6000,
+    "imageBytes": 377184,
+    "videoBytes": 269508
+  }
+}

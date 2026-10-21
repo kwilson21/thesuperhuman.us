@@ -1,9 +1,11 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, posix } from 'node:path';
 
 // The review documents are the inventory. No separate approval manifest.
 const assetRoot = 'src/assets/site';
+// Link-preview posters and videos rendered by scripts/og-video/render.mjs.
+const previewRoot = 'public/og';
 const reviewRoot = 'docs/asset-reviews';
 const errors = [];
 const reviewed = new Set();
@@ -18,7 +20,7 @@ try {
     if (record.outcome !== 'ready for production') errors.push(`${name}: not ready for production`);
     if (!Array.isArray(record.files) || !record.files.length) { errors.push(`${name}: no reviewed files`); continue; }
     for (const file of record.files) {
-      if (typeof file.path !== 'string' || !file.path.startsWith(`${assetRoot}/`) || posix.normalize(file.path) !== file.path || !/^[a-f0-9]{64}$/.test(file.sha256)) {
+      if (typeof file.path !== 'string' || ![assetRoot, previewRoot].some(root => file.path.startsWith(`${root}/`)) || posix.normalize(file.path) !== file.path || !/^[a-f0-9]{64}$/.test(file.sha256)) {
         errors.push(`${name}: invalid asset path or SHA-256`); continue;
       }
       if (reviewed.has(file.path)) errors.push(`${file.path}: duplicate review record`);
@@ -31,6 +33,11 @@ try {
   }
   for (const file of readdirSync(assetRoot, { recursive: true }).filter(name => /\.(png|jpe?g|webp|avif|gif|svg)$/i.test(name))) {
     const path = `${assetRoot}/${file}`;
+    if (!reviewed.has(path)) errors.push(`${path}: no review record`);
+  }
+  const previews = existsSync(previewRoot) ? readdirSync(previewRoot, { recursive: true }).filter(name => /\.(png|mp4)$/i.test(name)) : [];
+  for (const file of previews) {
+    const path = `${previewRoot}/${file}`;
     if (!reviewed.has(path)) errors.push(`${path}: no review record`);
   }
 } catch (error) { errors.push(`Cannot read asset QA inventory: ${error.message}`); }

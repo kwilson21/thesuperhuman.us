@@ -1,0 +1,203 @@
+#!/usr/bin/env node
+// Render the link-preview scenes in scripts/og-video/scenes/ to a poster PNG and a looping MP4 each.
+//
+//   node scripts/og-video/render.mjs                 every scene
+//   node scripts/og-video/render.mjs home services   only these scenes
+//   node scripts/og-video/render.mjs --sheet home    contact sheet of frames for review; writes nothing to public/
+//
+// A scene is a 1200×630 HTML page whose <html> carries data-duration (ms). All motion must be CSS
+// animations or Web Animations: the renderer pauses every animation and steps currentTime frame by
+// frame, so the output is the same on every run. Frame 0 is the poster. The frame at data-duration
+// must match frame 0, so the clip loops without a jump.
+//
+// Needs ffmpeg with libx264. Set CHROMIUM_PATH when Playwright's bundled Chromium is unavailable.
+import { chromium } from 'playwright';
+import sharp from 'sharp';
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const SCENES = join(ROOT, 'scripts/og-video/scenes');
+const PUBLIC = join(ROOT, 'public/og');
+const RAW = join(PUBLIC, 'raw');
+const MANIFEST = join(ROOT, 'src/data/og-media.json');
+const SHEETS = join(ROOT, '.og-video');
+const WIDTH = 1200;
+const HEIGHT = 630;
+const SCALE = 2;
+const FPS = 30;
+// Messages allows 10 MB for the whole preview; Discord measures the file within a 10 s budget.
+const MAX_VIDEO_BYTES = 2.5 * 1024 * 1024;
+// WhatsApp documents 600 KB as its og:image ceiling.
+const MAX_POSTER_BYTES = 600 * 1024;
+
+const args = process.argv.slice(2);
+const sheetOnly = args.includes('--sheet');
+const requested = args.filter(arg => !arg.startsWith('--'));
+const available = readdirSync(SCENES).filter(name => name.endsWith('.html')).map(name => basename(name, '.html')).sort();
+const unknown = requested.filter(key => !available.includes(key));
+if (unknown.length) fail(`Unknown scene: ${unknown.join(', ')}. Scenes: ${available.join(', ')}`);
+const keys = requested.length ? requested : available;
+if (!spawnSync('ffmpeg', ['-version']).stdout?.length) fail('ffmpeg is required.');
+
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+const manifest = readManifest();
+const problems = [];
+try {
+  const queue = [...keys];
+  const worker = async () => {
+    for (let key = queue.shift(); key; key = queue.shift()) {
+      const result = await renderScene(key);
+      if (result) manifest[key] = result;
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(3, keys.length) }, worker));
+} finally {
+  await browser.close();
+}
+if (!sheetOnly) writeManifest(manifest);
+if (problems.length) fail(problems.join('\n'));
+
+async function renderScene(key) {
+  const page = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT }, deviceScaleFactor: SCALE });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('requestfailed', request => errors.push(`${request.url()} failed to load`));
+  await page.goto(pathToFileURL(join(SCENES, `${key}.html`)).href, { waitUntil: 'load' });
+  const setup = await page.evaluate(async () => {
+    await document.fonts.ready;
+    await Promise.all([...document.images].map(image => image.decode().catch(() => { throw new Error(`${image.src} did not decode`); })));
+    // Only elements that draw text need their font; a wrapper's inherited family may never load.
+    const texts = [...document.querySelectorAll('body *')].filter(element => [...element.childNodes].some(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim()));
+    const families = [...new Set(texts.map(element => getComputedStyle(element).fontFamily.split(',')[0].trim().replace(/["']/g, '')))];
+    const missing = families.filter(family => !document.fonts.check(`16px "${family}"`) || ![...document.fonts].some(face => face.family.replace(/["']/g, '') === family && face.status === 'loaded'));
+    const animations = document.getAnimations();
+    for (const animation of animations) animation.pause();
+    const root = document.documentElement;
+    return {
+      duration: Number(root.dataset.duration),
+      animations: animations.length,
+      missing,
+      overflow: root.scrollWidth > innerWidth || root.scrollHeight > innerHeight,
+    };
+  });
+  let failed = false;
+  const problem = message => { problems.push(`${key}: ${message}`); failed = true; };
+  if (errors.length) problem(errors.join('; '));
+  if (setup.missing.length) problem(`fonts not loaded: ${setup.missing.join(', ')}`);
+  if (setup.overflow) problem('content overflows the 1200×630 frame');
+  if (!Number.isInteger(setup.duration) || setup.duration < 2000 || setup.duration > 10000) problem('data-duration must be an integer from 2000 to 10000 ms');
+  if (!setup.animations) problem('no animations found');
+  if (failed) { await page.close(); return null; }
+
+  const frames = Math.round(setup.duration * FPS / 1000);
+  const work = mkdtempSync(join(tmpdir(), `og-${key}-`));
+  try {
+    const capture = async (time, file) => {
+      await page.evaluate(t => { for (const animation of document.getAnimations()) animation.currentTime = t; }, time);
+      await page.screenshot({ path: file });
+    };
+    if (sheetOnly) return await contactSheet(key, frames, capture, work).then(() => null);
+    for (let frame = 0; frame < frames; frame++) await capture(frame * 1000 / FPS, join(work, `${String(frame).padStart(4, '0')}.png`));
+    // An infinite animation wraps back to frame 0 at exactly data-duration, so look 1 ms earlier.
+    await capture(setup.duration - 1, join(work, 'end.png'));
+    const seam = await difference(join(work, '0000.png'), join(work, 'end.png'));
+    if (seam > 0.5) problem(`the end of the loop differs from frame 0 (mean difference ${seam.toFixed(2)}), so the loop jumps`);
+
+    const video = join(work, 'video.mp4');
+    const encode = spawnSync('ffmpeg', [
+      '-y', '-v', 'error', '-framerate', String(FPS), '-i', join(work, '%04d.png'),
+      '-map', '0:v:0', '-an', '-sn', '-dn', '-map_metadata', '-1', '-map_chapters', '-1',
+      '-vf', `scale=${WIDTH}:${HEIGHT}:flags=lanczos:out_color_matrix=bt709:out_range=tv,format=yuv420p`,
+      // Scenes are flat colour and type: tune for animation, and spend more bits on flat areas so
+      // the paper and soft artwork masks do not band in predicted frames.
+      '-c:v', 'libx264', '-preset', 'slow', '-tune', 'animation', '-x264-params', 'aq-mode=3', '-crf', '20', '-maxrate', '3M', '-bufsize', '6M',
+      '-profile:v', 'high', '-g', String(FPS * 2),
+      '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
+      '-movflags', '+faststart', video,
+    ], { encoding: 'utf8' });
+    if (encode.status !== 0) { problem(`ffmpeg failed: ${encode.stderr}`); return null; }
+    const poster = await sharp(join(work, '0000.png')).resize(WIDTH, HEIGHT, { kernel: 'lanczos3' }).png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer();
+    const videoBytes = readFileSync(video);
+    if (videoBytes.length > MAX_VIDEO_BYTES) problem(`video is ${videoBytes.length} bytes; keep it under ${MAX_VIDEO_BYTES}`);
+    if (poster.length > MAX_POSTER_BYTES) problem(`poster is ${poster.length} bytes; keep it under ${MAX_POSTER_BYTES}`);
+    if (failed) return null;
+
+    const imageName = `${key}-${hash(poster)}.png`;
+    const videoName = `${key}-${hash(videoBytes)}.mp4`;
+    mkdirSync(RAW, { recursive: true });
+    removeStale(PUBLIC, key, imageName);
+    removeStale(RAW, key, videoName);
+    writeFileSync(join(PUBLIC, imageName), poster);
+    writeFileSync(join(RAW, videoName), videoBytes);
+    console.log(`${key}: ${frames} frames, poster ${poster.length} bytes, video ${videoBytes.length} bytes`);
+    return {
+      image: `/og/${imageName}`,
+      video: `/og/${videoName}`,
+      width: WIDTH,
+      height: HEIGHT,
+      durationMs: setup.duration,
+      imageBytes: poster.length,
+      videoBytes: videoBytes.length,
+    };
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+    await page.close();
+  }
+}
+
+// Twelve evenly spaced frames on one image, so a reviewer can read the motion at a glance.
+async function contactSheet(key, frames, capture, work) {
+  const count = 12;
+  const tile = { width: 600, height: 315 };
+  const tiles = [];
+  for (let index = 0; index < count; index++) {
+    const frame = Math.round(index * frames / count);
+    const file = join(work, `sheet-${index}.png`);
+    await capture(frame * 1000 / FPS, file);
+    const label = Buffer.from(`<svg width="${tile.width}" height="28"><rect width="100%" height="100%" fill="#0E0E0E"/><text x="10" y="19" font-family="monospace" font-size="15" fill="#FBF8F2">${key} · ${(frame / FPS).toFixed(2)} s</text></svg>`);
+    const input = await sharp(file).resize(tile.width, tile.height).extend({ bottom: 28, background: '#0E0E0E' }).composite([{ input: label, top: tile.height, left: 0 }]).png().toBuffer();
+    tiles.push({ input, left: (index % 3) * tile.width, top: Math.floor(index / 3) * (tile.height + 28) });
+  }
+  mkdirSync(SHEETS, { recursive: true });
+  const out = join(SHEETS, `${key}-sheet.png`);
+  await sharp({ create: { width: tile.width * 3, height: (tile.height + 28) * 4, channels: 3, background: '#0E0E0E' } }).composite(tiles).png().toFile(out);
+  for (const index of [0, 6]) await capture(Math.round(index * frames / count) * 1000 / FPS, join(SHEETS, `${key}-frame-${index}.png`));
+  console.log(`${key}: contact sheet at ${out}`);
+}
+
+async function difference(a, b) {
+  const [left, right] = await Promise.all([a, b].map(file => sharp(file).raw().toBuffer()));
+  let total = 0;
+  for (let index = 0; index < left.length; index++) total += Math.abs(left[index] - right[index]);
+  return total / left.length;
+}
+
+function removeStale(directory, key, keep) {
+  const pattern = new RegExp(`^${key}-[0-9a-f]{10}\\.(png|mp4)$`);
+  for (const name of readdirSync(directory)) {
+    if (name !== keep && pattern.test(name) && statSync(join(directory, name)).isFile()) unlinkSync(join(directory, name));
+  }
+}
+
+function hash(bytes) {
+  return createHash('sha256').update(bytes).digest('hex').slice(0, 10);
+}
+
+function readManifest() {
+  try { return JSON.parse(readFileSync(MANIFEST, 'utf8')); } catch { return {}; }
+}
+
+function writeManifest(entries) {
+  const sorted = Object.fromEntries(Object.keys(entries).sort().map(key => [key, entries[key]]));
+  writeFileSync(MANIFEST, `${JSON.stringify(sorted, null, 2)}\n`);
+}
+
+function fail(message) {
+  console.error(message);
+  process.exit(1);
+}

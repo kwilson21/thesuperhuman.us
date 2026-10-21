@@ -28,6 +28,11 @@ describe('production image QA gate', () => {
     const root = fixture(); writeFileSync(join(root, 'src/assets/site/new.webp'), 'new');
     const result = run(root); expect(result.status).toBe(1); expect(result.stderr).toContain('no review record');
   });
+  it('requires a review record for each rendered link-preview poster and video', () => {
+    const root = fixture(); mkdirSync(join(root, 'public/og/raw'), { recursive: true });
+    writeFileSync(join(root, 'public/og/raw/home-0123456789.mp4'), 'video');
+    const result = run(root); expect(result.status).toBe(1); expect(result.stderr).toContain('public/og/raw/home-0123456789.mp4: no review record');
+  });
   it('rejects an asset whose visual review still needs revision', () => {
     const result = run(fixture('needs revision')); expect(result.status).toBe(1); expect(result.stderr).toContain('not ready for production');
   });

@@ -1,0 +1,29 @@
+/* Shared frame for link-preview scenes: the site's fonts and colours at 1200 × 630.
+   Messages shows the clip about 300 points wide, so type stays large: headlines 56px and up,
+   labels 20px and up. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=block');
+
+@font-face { font-family: 'Libron'; src: url('../../public/fonts/libron-v0.25/Libron-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: block; }
+@font-face { font-family: 'Libron'; src: url('../../public/fonts/libron-v0.25/Libron-Italic.woff2') format('woff2'); font-weight: 400; font-style: italic; font-display: block; }
+@font-face { font-family: 'Libron'; src: url('../../public/fonts/libron-v0.25/Libron-Bold.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: block; }
+/* Subset to the letters of "Kazon Wilson": use it for the name only. */
+@font-face { font-family: 'Kazon Name Display'; src: url('../../public/fonts/kazon-name-display.woff2') format('woff2'); font-display: block; }
+
+:root {
+  --paper: #FBF8F2;
+  --ink: #0E0E0E;
+  --muted: #4A4A4A;
+  --rule: #E8E3DA;
+  --accent: #AE5534;
+  --serif: 'Libron', Georgia, serif;
+  --sans: 'Inter', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', Menlo, monospace;
+  --name: 'Kazon Name Display', 'Libron', Georgia, serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+body { background: var(--paper); color: var(--ink); font-family: var(--serif); -webkit-font-smoothing: antialiased; }
+img { display: block; }
+
+.frame { position: relative; width: 1200px; height: 630px; overflow: hidden; isolation: isolate; }

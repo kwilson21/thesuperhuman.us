@@ -1,0 +1,93 @@
+<!doctype html>
+<!-- Home: the studio card. The artwork comes alive the way it does on the home page
+     (src/components/home/StudioLife.astro): the monitor re-types its last rows of code,
+     the headphones give off rings of sound, and the notebook sketch redraws. -->
+<html lang="en" data-duration="6000">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../kit.css" />
+<style>
+  .card { padding: 60px 64px; }
+  .eyebrow { font: 20px var(--sans); color: var(--accent); letter-spacing: .06em; margin: 0; }
+  h1 { font-family: var(--name); font-size: 104px; font-weight: 400; line-height: .95; letter-spacing: -.045em; margin: 40px 0 26px; }
+  .lede { font-size: 34px; line-height: 1.22; max-width: 470px; margin: 0; }
+  .url { position: absolute; bottom: 48px; left: 64px; margin: 0; font: 20px var(--sans); color: var(--muted); }
+  /* The artwork and its overlay share one box and one mask, as on the home page. */
+  .studio { position: absolute; z-index: -1; width: 790px; right: -80px; top: 85px; mix-blend-mode: multiply;
+    mask-image: linear-gradient(to right, transparent, #000 25%, #000 85%, transparent), linear-gradient(to bottom, transparent, #000 10%, #000 85%, transparent); mask-composite: intersect; }
+  .studio img { width: 100%; height: auto; }
+  .studio svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .type-row rect { fill: #1d1f20; }
+  .type-row .caret { fill: #d8d2c6; }
+  .sound ellipse { fill: none; stroke: var(--accent); stroke-width: 2.4; vector-effect: non-scaling-stroke; transform-box: fill-box; transform-origin: center; opacity: 0; }
+  .sketch-path { fill: none; stroke: var(--accent); stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; }
+  .sketch-sun { fill: var(--accent); fill-opacity: .85; transform-box: fill-box; transform-origin: center; }
+</style>
+</head>
+<body>
+<main class="frame card">
+  <p class="eyebrow">Software, sound, and things worth exploring.</p>
+  <h1>Kazon<br />Wilson</h1>
+  <p class="lede">I build software, design websites, and mix and master music.</p>
+  <p class="url">thesuperhuman.us</p>
+  <div class="studio">
+    <img src="../../../src/assets/site/studio-v1.webp" alt="" width="1536" height="1024" />
+    <!-- Same coordinates as StudioLife: the artwork's own 1536 × 1024 pixels. -->
+    <svg viewBox="0 0 1536 1024" aria-hidden="true">
+      <g class="typing" transform="matrix(1 0.105 0 1 0 -94.5)"></g>
+      <g class="sound" transform="translate(1230 735)">
+        <ellipse rx="96" ry="84" /><ellipse rx="96" ry="84" /><ellipse rx="96" ry="84" />
+      </g>
+      <g transform="matrix(2.2 -0.88 2.75 0.95 815 840)">
+        <path class="sketch-path" pathLength="1" d="M18 55 C 25 50, 22 44, 30 41 S 43 43, 48 36 S 55 27, 64 28 S 76 25, 80 17" />
+        <ellipse class="sketch-sun" cx="84" cy="36" rx="4.6" ry="4.6" />
+      </g>
+    </svg>
+  </div>
+</main>
+<script src="../kit.js"></script>
+<script>
+  const { play, ease } = og;
+  // Code: the last four rows on the monitor, measured on the artwork (StudioLife.astro). Each row is
+  // hidden by a screen-coloured block that slides right in steps, caret first, as if typed.
+  const rows = [
+    { x: 908, y: 385, run: 84, at: 700, steps: 9 },
+    { x: 908, y: 397.5, run: 134, at: 1300, steps: 13 },
+    { x: 899, y: 426.5, run: 40, at: 2150, steps: 4 },
+    { x: 893, y: 438.5, run: 82, at: 2550, steps: 8 },
+  ];
+  const slope = 0.105;
+  const svg = 'http://www.w3.org/2000/svg';
+  for (const row of rows) {
+    const top = row.y + slope * 900 - slope * row.x - 5.5;
+    const group = document.createElementNS(svg, 'g');
+    group.setAttribute('class', 'type-row');
+    group.innerHTML = `<rect x="${row.x - 3}" y="${top}" width="${row.run + 14}" height="11" /><rect class="caret" x="${row.x - 3}" y="${top + 1.5}" width="1.6" height="8" />`;
+    document.querySelector('.typing').append(group);
+    const end = row.at + row.steps * 70;
+    play(group, [[0, { opacity: 0 }], [500, { opacity: 1 }], [end + 250, { opacity: 1 }], [end + 251, { opacity: 0 }]]);
+    play(group, [[row.at, { transform: 'translateX(0)', easing: `steps(${row.steps}, end)` }], [end, { transform: `translateX(${row.run + 8}px)` }], [end + 251, { transform: `translateX(${row.run + 8}px)` }], [end + 252, { transform: 'translateX(0)' }]]);
+  }
+  // Sound: three rings leave the headphones.
+  play('.sound ellipse', [
+    [1000, { opacity: 0, transform: 'scale(1)' }],
+    [1090, { opacity: .55, transform: 'scale(1.06)', easing: 'cubic-bezier(.2, .6, .3, 1)' }],
+    [3200, { opacity: 0, transform: 'scale(1.75)' }],
+  ], { stagger: 550 });
+  // The notebook sketch fades, then draws itself again and the sun pops back.
+  play('.sketch-path', [
+    [0, { strokeDashoffset: 0, opacity: 1 }],
+    [1300, { strokeDashoffset: 0, opacity: 1, easing: ease.out }],
+    [1600, { strokeDashoffset: 0, opacity: 0 }],
+    [1601, { strokeDashoffset: 1, opacity: 1, easing: ease.inOut }],
+    [3400, { strokeDashoffset: 0, opacity: 1 }],
+  ]);
+  play('.sketch-sun', [
+    [1300, { transform: 'scale(1)', easing: ease.out }],
+    [1600, { transform: 'scale(0)' }],
+    [3300, { transform: 'scale(0)', easing: ease.spring }],
+    [4000, { transform: 'scale(1)' }],
+  ]);
+</script>
+</body>
+</html>
