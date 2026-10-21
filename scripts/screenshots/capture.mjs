@@ -11,7 +11,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { chromium } from 'playwright';
-import { ASSET_TYPES, globalKey, listFiles, REFERENCE, routeFiles, scenarioKey, scenarioPlanner, sha256, sourceClosure, stateHash } from './cache.mjs';
+import { ASSET_TYPES, globalKey, listFiles, REFERENCE, routeFiles, routePattern, scenarioKey, scenarioPlanner, sha256, sourceClosure, stateHash } from './cache.mjs';
 import { prepareWithDiagnostics } from './prepare.mjs';
 import { ACCESS_AUDIENCE, ACCESS_ISSUER, expectedResourceError, missingScenarioRoutes, OUT, OWNER_EMAIL, PAGES, REDIRECTS, SCENARIO_PAGES, VIEWPORTS } from './config.mjs';
 
@@ -160,12 +160,21 @@ try {
   const directory = resolve('scripts/screenshots/scenarios');
   const names = (await readdir(directory)).filter(file => file.endsWith('.mjs')).sort().map(file => file.replace(/\.mjs$/, ''));
   const script = name => `scripts/screenshots/scenarios/${name}.mjs`;
-  const keyFor = async (name, { files, content, assets }) => scenarioKey({ global, script: script(name), files, content, assets: await replayHash(assets, false) });
+  // Scenarios seed dates from the clock, so a scenario image is reused only on the day it was taken.
+  const day = new Date().toISOString().slice(0, 10);
+  const keyFor = async (name, { files, content, assets }) => scenarioKey({ global, day, script: script(name), files, content, assets: await replayHash(assets, false) });
+  // A scenario that no longer exists may have seeded rows the later ones showed.
+  const removed = Object.keys(reference?.scenarios ?? {}).some(name => !names.includes(name));
   const changed = new Set();
   for (const name of names) {
     const earlier = reference?.scenarios?.[name];
-    if (!earlier || reference.pagesWrote || cache.pagesWrote || !await reusable(earlier.images) || await keyFor(name, earlier) !== earlier.key) changed.add(name);
+    if (!earlier || removed || reference.pagesWrote || cache.pagesWrote || !await reusable(earlier.images) || await keyFor(name, earlier) !== earlier.key) changed.add(name);
   }
+  const pageFiles = (await listFiles(['src/pages'])).filter(file => /\.(astro|ts|js|mjs)$/.test(file));
+  // Static files are replayed and hashed. Anything a route serves, such as an owner-only image from
+  // an API route, runs server code and may need credentials, so it is followed through the module graph.
+  const isAsset = request => request.method === 'GET' && ASSET_TYPES.includes(request.type)
+    && !pageFiles.some(file => routePattern(file).test(new URL(BASE + request.url).pathname));
   const planner = scenarioPlanner(names, changed, reference?.scenarios);
   const ran = [];
   for (const name of names) {
@@ -188,7 +197,6 @@ try {
     scenarios.push({ name, title: scenario.title, steps });
     const images = [...requestsByFile.keys()].filter(file => !filesBefore.has(file));
     const requests = images.flatMap(file => requestsByFile.get(file));
-    const isAsset = request => request.method === 'GET' && ASSET_TYPES.includes(request.type);
     ran.push({ name, title: scenario.title, steps, images, wrote,
       paths: [...scenarioPaths, ...requests.filter(request => !isAsset(request)).map(request => new URL(BASE + request.url).pathname)],
       assets: requests.filter(isAsset).map(({ url, accept }) => ({ url, accept })),
@@ -200,7 +208,6 @@ try {
     const graph = await fetch(`${BASE}/__screenshots/deps`).then(response => response.json()).catch(() => {
       throw new Error('No module graph at /__screenshots/deps: start the dev server with --config scripts/screenshots/dev.config.mjs.');
     });
-    const pageFiles = (await listFiles(['src/pages'])).filter(file => /\.(astro|ts|js|mjs)$/.test(file));
     for (const { name, paths, wrote, ...rest } of ran) {
       const roots = ['src/middleware.ts', ...new Set(paths.flatMap(path => routeFiles(path, pageFiles)))];
       const { files, content } = sourceClosure(graph, roots);

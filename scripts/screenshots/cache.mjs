@@ -94,10 +94,10 @@ export function sourceClosure(graph, roots, root = process.cwd()) {
   return { files: [...files].sort(), content };
 }
 
-/** A scenario's key: its script, the source files behind its routes, and its replayed assets. */
-export async function scenarioKey({ global, script, files, content, assets }, root = process.cwd()) {
+/** A scenario's key: the day, its script, the source files behind its routes, and its replayed assets. */
+export async function scenarioKey({ global, day, script, files, content, assets }, root = process.cwd()) {
   const sources = content ? [...files, ...await listFiles([CONTENT_DIR], root)] : files;
-  return sha256(JSON.stringify({ global, script: await hashFiles([script], root), sources: await hashFiles(sources, root), assets }));
+  return sha256(JSON.stringify({ global, day, script: await hashFiles([script], root), sources: await hashFiles(sources, root), assets }));
 }
 
 /**
