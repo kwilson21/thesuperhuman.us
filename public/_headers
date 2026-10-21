@@ -1,3 +1,4 @@
+# Worker responses get the /* headers from src/lib/security-headers.ts; tests check they match.
 /*
   Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()
   Referrer-Policy: strict-origin-when-cross-origin

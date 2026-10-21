@@ -1,7 +1,9 @@
+import type { APIContext, MiddlewareNext } from 'astro';
 import { canonicalAgreementRequest, agreementHeaders } from '~/lib/agreement-access';
 import { defineMiddleware } from 'astro:middleware';
 import { mainSitePath, rewritePathForHost } from '~/lib/host-routing';
 import { verifyOwnerAccess } from '~/lib/owner-access';
+import { withSecurityHeaders } from '~/lib/security-headers';
 
 const ownerPrivateHeaders = {
   'cache-control': 'private, no-store',
@@ -15,7 +17,7 @@ function withOwnerHeaders(response: Response) {
   return response;
 }
 
-export const onRequest = defineMiddleware(async (context, next) => {
+async function handle(context: APIContext, next: MiddlewareNext): Promise<Response> {
   const { request, url } = context;
   const ownerPage = url.pathname === '/owner' || url.pathname.startsWith('/owner/');
   const ownerApi = url.pathname === '/api/owner' || url.pathname.startsWith('/api/owner/');
@@ -75,4 +77,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
     for (const [name, value] of Object.entries(studioPrivateHeaders)) response.headers.set(name, value);
   }
   return response;
-});
+}
+
+export const onRequest = defineMiddleware(async (context, next) => withSecurityHeaders(await handle(context, next)));
