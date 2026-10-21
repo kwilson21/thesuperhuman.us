@@ -167,8 +167,10 @@ try {
   const directory = resolve('scripts/screenshots/scenarios');
   const names = (await readdir(directory)).filter(file => file.endsWith('.mjs')).sort().map(file => file.replace(/\.mjs$/, ''));
   const script = name => `scripts/screenshots/scenarios/${name}.mjs`;
-  // Scenarios seed dates from the clock, so a scenario image is reused only on the day it was taken.
-  const day = new Date().toISOString().slice(0, 10);
+  // Scenarios seed dates from the clock, in UTC and New York time, so a scenario image is reused
+  // only while both dates are the ones it was taken on.
+  const now = new Date();
+  const day = `${now.toISOString().slice(0, 10)} ${now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })}`;
   const inputsFor = async (name, { files, content, assets }) => scenarioInputs({ day, script: script(name), files, content, assets: await replayAll(assets, false) });
   // A scenario that no longer exists may have seeded rows the later ones showed.
   const removed = Object.keys(reference?.scenarios ?? {}).some(name => !names.includes(name));
@@ -184,10 +186,12 @@ try {
     }
   }
   const pageFiles = (await listFiles(['src/pages'])).filter(file => /\.(astro|ts|js|mjs)$/.test(file));
-  // Static files are replayed and hashed. Anything a route serves, such as an owner-only image from
-  // an API route, runs server code and may need credentials, so it is followed through the module graph.
+  // Static files are replayed and hashed. Anything an endpoint serves, such as an owner-only image
+  // from an API route, runs server code and may need credentials, so it is followed through the
+  // module graph instead. Pages render HTML, so an image under a page's dynamic route is a static file.
+  const endpoints = pageFiles.filter(file => !file.endsWith('.astro'));
   const isAsset = request => request.method === 'GET' && ASSET_TYPES.includes(request.type)
-    && !pageFiles.some(file => routePattern(file).test(new URL(BASE + request.url).pathname));
+    && !endpoints.some(file => routePattern(file).test(new URL(BASE + request.url).pathname));
   const planner = scenarioPlanner(names, changed, reference?.scenarios);
   const ran = [];
   for (const name of names) {

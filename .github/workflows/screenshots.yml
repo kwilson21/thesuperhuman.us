@@ -47,8 +47,10 @@ on:
 permissions:
   contents: read
 
+# A run for any other label skips its job, so it gets a group of its own instead of cancelling a
+# capture in progress.
 concurrency:
-  group: screenshots-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.event.action == 'labeled' && github.event.label.name != 'full-screenshots' && format('screenshots-label-{0}', github.run_id) || format('screenshots-{0}', github.event.pull_request.number || github.ref) }}
   cancel-in-progress: true
 
 jobs:
