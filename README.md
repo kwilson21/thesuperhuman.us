@@ -165,6 +165,8 @@ These render to `/tmp/services-overview.pdf` and `/tmp/audio-services-overview.p
 
 `public/_headers` overrides Cloudflare's default `Permissions-Policy` with an explicit policy that doesn't reference Chrome-only features (which other browsers log as "Unrecognized feature" warnings). Also sets `Referrer-Policy: strict-origin-when-cross-origin`, `X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY`.
 
+Cloudflare applies `_headers` only to static assets, so server-rendered pages and API routes get the same four headers from `src/lib/security-headers.ts`, which `src/middleware.ts` adds to every response unless the route already set that header. `tests/lib/security-headers.test.ts` fails if the two lists differ.
+
 ## Resume request flow
 
 1. A visitor requests the general resume via the form on `/about` (name/email/company/note + Turnstile). New requests always use the general audience; stored legacy approvals retain their original audience.
