@@ -31,8 +31,10 @@ export const sha256 = data => createHash('sha256').update(data).digest('hex');
 // from recorded URLs and from response bodies before hashing.
 const VITE_VERSION = /([?&])v=[0-9a-f]{6,}(&|$)/;
 export const withoutViteVersion = url => url.replace(VITE_VERSION, (_, before, after) => (after ? before : ''));
-// Vite's own client embeds a token made at each server start; its code comes from package-lock.json.
-export const UNHASHED_URLS = ['/@vite/client'];
+// Files Vite serves from node_modules, and its own client, come from package-lock.json, already in
+// the global key. Their served bytes still vary between server starts: the client embeds a fresh
+// token, and dependency pre-bundling can split and name chunks differently. So they are not hashed.
+export const unhashed = url => url === '/@vite/client' || url.startsWith('/node_modules/');
 export const hashBody = body => sha256(Buffer.from(body).toString('latin1').replace(/([?&]v=)[0-9a-f]{6,}/g, '$1'));
 
 /** Every file under the given paths, relative to root and sorted. Missing paths are skipped. */

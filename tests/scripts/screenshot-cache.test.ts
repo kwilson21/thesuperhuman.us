@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
-import { hashBody, hashFiles, inputsChange, listFiles, responsesChange, routeFiles, routePattern, scenarioPlanner, sourceClosure, stateHash, withoutViteVersion } from '../../scripts/screenshots/cache.mjs';
+import { hashBody, hashFiles, inputsChange, listFiles, responsesChange, routeFiles, routePattern, scenarioPlanner, sourceClosure, stateHash, unhashed, withoutViteVersion } from '../../scripts/screenshots/cache.mjs';
 
 const PAGE_FILES = [
   'src/pages/404.astro',
@@ -165,6 +165,11 @@ describe("Vite's dependency version tag", () => {
     ['/audio/v=deadbeef', '/audio/v=deadbeef'],
   ])('%s is recorded as %s', (url, expected) => {
     expect(withoutViteVersion(url)).toBe(expected);
+  });
+
+  it('leaves files from package-lock.json unhashed and hashes the rest', () => {
+    expect(['/@vite/client', '/node_modules/astro/dist/zod.js', '/node_modules/.vite/deps/zod.js'].every(unhashed)).toBe(true);
+    expect(['/src/styles/global.css', '/@id/astro:scripts/page.js', '/@fs/repo/src/a.ts', '/fonts/x.woff2'].some(unhashed)).toBe(false);
   });
 
   it('does not change a body hash, while any other change does', () => {
