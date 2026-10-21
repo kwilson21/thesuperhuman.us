@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { onRequest } from '~/middleware';
 import { verifyOwnerAccess } from '~/lib/owner-access';
+import { securityHeaders } from '~/lib/security-headers';
 
 vi.mock('~/lib/owner-access', () => ({ verifyOwnerAccess: vi.fn(async () => null) }));
 
@@ -19,15 +20,8 @@ function makeContext(url: string, hostHeader?: string) {
   } as any;
 }
 
-const securityHeaderValues = {
-  'permissions-policy': 'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()',
-  'referrer-policy': 'strict-origin-when-cross-origin',
-  'x-content-type-options': 'nosniff',
-  'x-frame-options': 'DENY',
-};
-
 function expectSecurityHeaders(response: Response, overrides: Record<string, string> = {}) {
-  for (const [name, value] of Object.entries({ ...securityHeaderValues, ...overrides })) expect(response.headers.get(name)).toBe(value);
+  for (const [name, value] of Object.entries({ ...securityHeaders, ...overrides })) expect(response.headers.get(name)).toBe(value);
 }
 
 describe('middleware.onRequest', () => {
@@ -224,17 +218,17 @@ it.each(['/api/offer/token/link', '/api/agreements/link'])('uses the effective c
   }
 });
 
-it('adds the public security headers to HTML pages', async () => {
+it('adds the _headers security headers to HTML pages', async () => {
   const next = vi.fn(async () => new Response('<!doctype html>', { headers: { 'content-type': 'text/html' } }));
   expectSecurityHeaders(await onRequest(makeContext('https://thesuperhuman.us/'), next) as Response);
 });
 
-it('adds the public security headers to API JSON', async () => {
+it('adds the _headers security headers to API JSON', async () => {
   const response = await onRequest(makeContext('https://thesuperhuman.us/api/work-feed'), async () => Response.json({ ok: true })) as Response;
   expectSecurityHeaders(response);
 });
 
-it('keeps owner 403 responses private and adds the public security headers', async () => {
+it('keeps owner 403 responses private and adds the _headers security headers', async () => {
   vi.mocked(verifyOwnerAccess).mockResolvedValueOnce(null);
   const response = await onRequest(makeContext('https://thesuperhuman.us/owner/requests'), vi.fn()) as Response;
   expect(response.status).toBe(403);
@@ -243,7 +237,7 @@ it('keeps owner 403 responses private and adds the public security headers', asy
   expectSecurityHeaders(response);
 });
 
-it('keeps studio pages on no-referrer and adds the other public security headers', async () => {
+it('keeps studio pages on no-referrer and adds the other _headers security headers', async () => {
   const response = await onRequest(makeContext('https://thesuperhuman.us/studio/projects/request-1'), async () => new Response('private project')) as Response;
   expectSecurityHeaders(response, { 'referrer-policy': 'no-referrer' });
 });
@@ -260,19 +254,19 @@ it('keeps a referrer policy that a route set on purpose', async () => {
   expectSecurityHeaders(response, { 'referrer-policy': 'same-origin' });
 });
 
-it('adds the public security headers to audio host rewrites', async () => {
+it('adds the _headers security headers to audio host rewrites', async () => {
   const response = await onRequest(makeContext('https://audio.thesuperhuman.us/about', 'audio.thesuperhuman.us'), vi.fn()) as Response;
   expect(await response.text()).toBe('rewritten:/audio/about');
   expectSecurityHeaders(response);
 });
 
-it('adds the public security headers to audio host offer redirects', async () => {
+it('adds the _headers security headers to audio host offer redirects', async () => {
   const response = await onRequest(makeContext('https://audio.thesuperhuman.us/offer/opaque'), vi.fn()) as Response;
   expect(response.status).toBe(302);
   expectSecurityHeaders(response);
 });
 
-it('adds the public security headers to redirects returned by routes', async () => {
+it('adds the _headers security headers to redirects returned by routes', async () => {
   const response = await onRequest(makeContext('https://thesuperhuman.us/'), async () => Response.redirect('https://thesuperhuman.us/next', 302)) as Response;
   expect(response.status).toBe(302);
   expect(response.headers.get('location')).toBe('https://thesuperhuman.us/next');

@@ -2,18 +2,20 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { securityHeaders, withSecurityHeaders } from '~/lib/security-headers';
 
-// Reads the indented Name: value lines under one path line in public/_headers.
+// Reads public/_headers the way wrangler does: lines are trimmed, blank and # lines are skipped,
+// a path line starts a rule, and every other line is a Name: value header of the current rule.
 function headersFor(path: string) {
   const lines = readFileSync(new URL('../../public/_headers', import.meta.url), 'utf8').split('\n');
   const headers: Record<string, string> = {};
-  let inBlock = false;
-  for (const line of lines) {
-    if (line.startsWith('#')) continue;
-    if (!inBlock) {
-      inBlock = line === path;
+  let rule = '';
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (line === '' || line.startsWith('#')) continue;
+    if (/^([^\s]+:\/\/|\/)/.test(line)) {
+      rule = line;
       continue;
     }
-    if (line.trim() === '' || !/^\s/.test(line)) break;
+    if (rule !== path) continue;
     const separator = line.indexOf(':');
     headers[line.slice(0, separator).trim().toLowerCase()] = line.slice(separator + 1).trim();
   }
@@ -44,5 +46,10 @@ describe('security headers', () => {
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('https://thesuperhuman.us/next');
     expect(Object.fromEntries(response.headers)).toMatchObject(securityHeaders);
+  });
+
+  it('rethrows errors other than the immutable-headers TypeError', () => {
+    const response = { headers: { has() { throw new RangeError('boom'); } } } as unknown as Response;
+    expect(() => withSecurityHeaders(response)).toThrow(RangeError);
   });
 });
