@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
-import { hashBody, hashFiles, listFiles, routeFiles, routePattern, scenarioPlanner, sourceClosure, stateHash, withoutViteVersion } from '../../scripts/screenshots/cache.mjs';
+import { hashBody, hashFiles, inputsChange, listFiles, responsesChange, routeFiles, routePattern, scenarioPlanner, sourceClosure, stateHash, withoutViteVersion } from '../../scripts/screenshots/cache.mjs';
 
 const PAGE_FILES = [
   'src/pages/404.astro',
@@ -171,5 +171,28 @@ describe("Vite's dependency version tag", () => {
     const body = (version: string, name = 'zod') => new TextEncoder().encode(`import x from "/node_modules/.vite/deps/${name}.js?v=${version}";`);
     expect(hashBody(body('41f0327e'))).toBe(hashBody(body('1aeeb6dc')));
     expect(hashBody(body('41f0327e'))).not.toBe(hashBody(body('41f0327e', 'jose')));
+  });
+});
+
+describe('explaining a miss', () => {
+  const inputs = { day: '2026-10-21', script: 's', sources: { 'src/a.ts': '1', 'src/b.ts': '2' }, assets: [['/x.css', '*/*', '200 h1']] as [string, string, string][] };
+
+  it('finds nothing when every input matches', () => {
+    expect(inputsChange(inputs, structuredClone(inputs))).toBeNull();
+  });
+
+  it.each([
+    [{ day: '2026-10-22' }, 'day'],
+    [{ script: 't' }, 'script'],
+    [{ sources: { 'src/a.ts': '1', 'src/b.ts': '3' } }, 'source src/b.ts'],
+    [{ sources: { 'src/a.ts': '9', 'src/b.ts': '9' } }, 'source src/a.ts and 1 more'],
+    [{ assets: [['/x.css', '*/*', '200 h2']] }, 'asset /x.css'],
+  ])('names %j as %s', (change, expected) => {
+    expect(inputsChange(inputs, { ...inputs, ...change })).toBe(expected);
+  });
+
+  it('notices a response that appears or disappears', () => {
+    expect(responsesChange([['/a', '*/*', '200 h']], [['/a', '*/*', '200 h'], ['/b', '*/*', '200 h']])).toBe('/b');
+    expect(responsesChange([['/a', '*/*', '200 h'], ['/b', '*/*', '200 h']], [['/a', '*/*', '200 h']])).toBe('a request added or removed');
   });
 });

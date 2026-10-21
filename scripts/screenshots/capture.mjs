@@ -11,7 +11,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { chromium } from 'playwright';
-import { ASSET_TYPES, globalKey, hashBody, listFiles, REFERENCE, routeFiles, routePattern, scenarioKey, scenarioPlanner, sha256, sourceClosure, stateHash, UNHASHED_URLS, withoutViteVersion } from './cache.mjs';
+import { ASSET_TYPES, globalKey, hashBody, inputsChange, listFiles, REFERENCE, responsesChange, routeFiles, routePattern, scenarioInputs, scenarioPlanner, sourceClosure, stateHash, UNHASHED_URLS, withoutViteVersion } from './cache.mjs';
 import { prepareWithDiagnostics } from './prepare.mjs';
 import { ACCESS_AUDIENCE, ACCESS_ISSUER, expectedResourceError, missingScenarioRoutes, OUT, OWNER_EMAIL, PAGES, REDIRECTS, SCENARIO_PAGES, VIEWPORTS } from './config.mjs';
 
@@ -110,11 +110,13 @@ function replay({ url, accept }, owner) {
   }
   return replayed.get(key);
 }
-async function replayHash(requests, owner) {
+/** Replays each distinct request: `[url, accept, result]`, sorted. */
+async function replayAll(requests, owner) {
   const unique = [...new Map(requests.map(request => [`${request.accept}\n${request.url}`, request])).values()]
     .sort((a, b) => (a.url + a.accept).localeCompare(b.url + b.accept));
-  return sha256(JSON.stringify(await Promise.all(unique.map(async request => [request.url, request.accept, await replay(request, owner)]))));
+  return Promise.all(unique.map(async request => [request.url, request.accept, await replay(request, owner)]));
 }
+const asRequests = responses => responses.map(([url, accept]) => ({ url, accept }));
 const reusable = files => Promise.all(files.map(file => access(`${REFERENCE}/${file}`))).then(() => true, () => false);
 
 /** A page at one size: copied when every response it loaded is unchanged, otherwise captured. */
@@ -122,17 +124,21 @@ async function shoot(page, viewport) {
   const file = `${page.name}-${viewport.name}.png`;
   const params = { path: page.path, owner: Boolean(page.owner), status: page.status ?? 200 };
   const earlier = reference?.pages?.[file];
-  if (earlier && JSON.stringify(Object.values(params)) === JSON.stringify([earlier.path, earlier.owner, earlier.status])
-    && await reusable([file]) && await replayHash(earlier.requests, params.owner) === earlier.hash) {
-    await copyFile(`${REFERENCE}/${file}`, `${OUT}/${file}`);
-    cache.pages[file] = earlier;
-    reusedPages++;
-    return;
+  if (earlier && earlier.path === params.path && earlier.owner === params.owner && earlier.status === params.status && await reusable([file])) {
+    const responses = await replayAll(asRequests(earlier.responses), params.owner);
+    const change = responsesChange(earlier.responses, responses);
+    if (!change) {
+      await copyFile(`${REFERENCE}/${file}`, `${OUT}/${file}`);
+      cache.pages[file] = earlier;
+      reusedPages++;
+      return;
+    }
+    console.log(`Capturing ${file}: ${change} changed.`);
   }
   await capture({ file, path: page.path, viewport: viewport.name, owner: page.owner, status: page.status });
-  const requests = requestsByFile.get(file).map(({ url, method, accept }) => ({ url, method, accept }));
+  const requests = requestsByFile.get(file);
   // A page that sent anything but GET can't be checked by replaying it.
-  if (requests.every(request => request.method === 'GET')) cache.pages[file] = { ...params, requests, hash: await replayHash(requests, params.owner) };
+  if (requests.every(request => request.method === 'GET')) cache.pages[file] = { ...params, responses: await replayAll(requests, params.owner) };
 }
 
 let reusedPages = 0;
@@ -163,13 +169,19 @@ try {
   const script = name => `scripts/screenshots/scenarios/${name}.mjs`;
   // Scenarios seed dates from the clock, so a scenario image is reused only on the day it was taken.
   const day = new Date().toISOString().slice(0, 10);
-  const keyFor = async (name, { files, content, assets }) => scenarioKey({ global, day, script: script(name), files, content, assets: await replayHash(assets, false) });
+  const inputsFor = async (name, { files, content, assets }) => scenarioInputs({ day, script: script(name), files, content, assets: await replayAll(assets, false) });
   // A scenario that no longer exists may have seeded rows the later ones showed.
   const removed = Object.keys(reference?.scenarios ?? {}).some(name => !names.includes(name));
   const changed = new Set();
   for (const name of names) {
     const earlier = reference?.scenarios?.[name];
-    if (!earlier || removed || reference.pagesWrote || cache.pagesWrote || !await reusable(earlier.images) || await keyFor(name, earlier) !== earlier.key) changed.add(name);
+    const why = !earlier ? 'new' : removed ? 'a scenario was removed' : reference.pagesWrote || cache.pagesWrote ? 'pages wrote to storage'
+      : !await reusable(earlier.images) ? 'images missing'
+      : inputsChange(earlier.inputs, await inputsFor(name, { files: Object.keys(earlier.inputs.sources), content: earlier.content, assets: asRequests(earlier.inputs.assets) }));
+    if (why) {
+      changed.add(name);
+      console.log(`Scenario ${name} changed: ${why}.`);
+    }
   }
   const pageFiles = (await listFiles(['src/pages'])).filter(file => /\.(astro|ts|js|mjs)$/.test(file));
   // Static files are replayed and hashed. Anything a route serves, such as an owner-only image from
@@ -212,7 +224,8 @@ try {
     for (const { name, paths, wrote, ...rest } of ran) {
       const roots = ['src/middleware.ts', ...new Set(paths.flatMap(path => routeFiles(path, pageFiles)))];
       const { files, content } = sourceClosure(graph, roots);
-      cache.scenarios[name] = { ...rest, files, content, key: await keyFor(name, { files, content, assets: rest.assets }), writer: wrote };
+      const inputs = await inputsFor(name, { files, content, assets: rest.assets });
+      cache.scenarios[name] = { ...rest, assets: undefined, content, inputs, writer: wrote };
     }
   }
   console.log(`Reused ${reusedPages} of ${PAGES.length * VIEWPORTS.length} page images.`);

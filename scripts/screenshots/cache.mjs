@@ -49,14 +49,19 @@ export async function listFiles(paths, root = process.cwd(), exclude = []) {
   return [...new Set(files)].sort();
 }
 
-/** Hash of the files' names and contents, so an edit, a rename or a deletion each change it. */
-export async function hashFiles(files, root = process.cwd()) {
-  const hash = createHash('sha256');
+/** Each file's content hash, or 'missing', by name. */
+export async function fileHashes(files, root = process.cwd()) {
+  const hashes = {};
   for (const file of [...new Set(files)].sort()) {
     const content = await readFile(join(root, file)).catch(() => null);
-    hash.update(`${file}\0${content === null ? 'missing' : sha256(content)}\0`);
+    hashes[file] = content === null ? 'missing' : sha256(content);
   }
-  return hash.digest('hex');
+  return hashes;
+}
+
+/** Hash of the files' names and contents, so an edit, a rename or a deletion each change it. */
+export async function hashFiles(files, root = process.cwd()) {
+  return sha256(JSON.stringify(await fileHashes(files, root)));
 }
 
 export async function globalKey(runtime, root = process.cwd()) {
@@ -144,10 +149,29 @@ export function sourceClosure(graph, roots, root = process.cwd()) {
   return { files: [...files].sort(), content };
 }
 
-/** A scenario's key: the day, its script, the source files behind its routes, and its replayed assets. */
-export async function scenarioKey({ global, day, script, files, content, assets }, root = process.cwd()) {
+/**
+ * A scenario's inputs: the day, its script, each source file behind its routes, and its replayed
+ * assets (`[url, accept, result]`). A scenario is reused only when every input matches.
+ */
+export async function scenarioInputs({ day, script, files, content, assets }, root = process.cwd()) {
   const sources = content ? [...files, ...await listFiles([CONTENT_DIR], root)] : files;
-  return sha256(JSON.stringify({ global, day, script: await hashFiles([script], root), sources: await hashFiles(sources, root), assets }));
+  return { day, script: await hashFiles([script], root), sources: await fileHashes(sources, root), assets };
+}
+
+/** Why two input sets differ, for the log: the first changed part, file or response. */
+export function inputsChange(before, after) {
+  for (const part of ['day', 'script']) if (before?.[part] !== after[part]) return part;
+  const files = Object.keys({ ...before?.sources, ...after.sources }).filter(file => before?.sources?.[file] !== after.sources[file]);
+  if (files.length) return `source ${files[0]}${files.length > 1 ? ` and ${files.length - 1} more` : ''}`;
+  const response = responsesChange(before?.assets, after.assets);
+  return response ? `asset ${response}` : null;
+}
+
+/** The first URL whose replayed response differs between two `[url, accept, result]` lists. */
+export function responsesChange(before = [], after = []) {
+  const earlier = new Map(before.map(([url, accept, result]) => [`${accept}\n${url}`, result]));
+  const changed = after.find(([url, accept, result]) => earlier.get(`${accept}\n${url}`) !== result);
+  return changed?.[0] ?? (before.length !== after.length ? 'a request added or removed' : null);
 }
 
 /**
