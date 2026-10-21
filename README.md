@@ -226,7 +226,7 @@ Rendering needs ffmpeg with libx264 and Chromium (set `CHROMIUM_PATH` if Playwri
 
 Static assets ignore `Range` requests and Safari's media stack expects them, so `/og/<scene>-<hash>.mp4` is served by `src/pages/og/[name].mp4.ts`, which reads the bytes from `/og/raw/` and answers 200, 206 or 416. Every rendered poster and video needs a review record in `docs/asset-reviews/` (`npm run assets:check` fails otherwise; see `docs/generated-image-qa.md`), so inspect each new render's frames and update the record with its hashes.
 
-After deploying, check the video from outside: `curl -sI https://thesuperhuman.us/og/<file>.mp4` should give 200, `video/mp4` and `accept-ranges: bytes`, and adding `-H 'Range: bytes=0-1'` should give 206. Then send a link in Messages on an iPhone and a Mac, and paste one into Discord's embed debugger and the Facebook Sharing Debugger.
+After deploying, check the video from outside: `curl -sI https://thesuperhuman.us/og/<file>.mp4` should give 200, `video/mp4` and `accept-ranges: bytes`, and `curl -s -o /dev/null -D - -H 'Range: bytes=0-1' https://thesuperhuman.us/og/<file>.mp4` should give 206 with `content-range: bytes 0-1/<size>`. (A HEAD request ignores `Range`, so the second check needs GET.) Then send a link in Messages on an iPhone and a Mac, and paste one into Discord's embed debugger and the Facebook Sharing Debugger.
 
 ## Email signature
 
