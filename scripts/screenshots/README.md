@@ -1,6 +1,6 @@
 # Screenshots
 
-CI runs these only on pull requests that change the UI (see the `paths` list in `screenshots.yml`; server-only code, migrations and config don't trigger it), in two workflows:
+CI runs these on pull requests that change the UI, and on the same changes once merged to `main` (see the `paths` list in `screenshots.yml`; server-only code, migrations and config don't trigger it), in two workflows:
 
 - `screenshots.yml` runs the pull request's code with a read-only token. It captures the pages and scenarios and uploads the PNGs and `manifest.json` as an artifact.
 - `screenshots-publish.yml` runs after it via `workflow_run`, always from the default branch. It finds the pull request from run metadata and skips the run if the PR has moved on to a newer commit. It accepts only PNG files with plain names that `verify-png.mjs` fully decodes, sanitizes the manifest, pushes the images to the `screenshots` branch and writes the table into the PR description, checking the PR head once more just before it writes.
@@ -11,9 +11,21 @@ Run locally:
 
 ```sh
 npm run screenshots:preview
-MUSIC_PREVIEW_CONFIG=.screenshots/wrangler.json npx astro dev --port 4321 --host 127.0.0.1
+MUSIC_PREVIEW_CONFIG=.screenshots/wrangler.json npx astro dev --config scripts/screenshots/dev.config.mjs --port 4321 --host 127.0.0.1
 npm run screenshots   # in a second terminal; images land in screenshots/
 ```
+
+`dev.config.mjs` is the site's Astro config plus a dev-only `/__screenshots/deps` endpoint that lists the server's module graph. Capture reads it to learn which source files each scenario used.
+
+## Reusing unchanged images
+
+CI keeps each run's images and `cache.json` in the Actions cache, and the next run on the same branch (or, failing that, the latest run on `main`) restores them into `.screenshots/reference`. `cache.mjs` decides what can be copied from there instead of captured:
+
+- **A page** at one size is reused when every same-origin response it loaded (its HTML, CSS, scripts, images and data requests) is byte-identical when fetched again. A change anywhere in its code, content, data or Tailwind output changes one of those responses. Files Vite serves from `node_modules` are only checked for presence: their bytes vary between server starts, and they come from `package-lock.json`, which recaptures everything when it changes.
+- **A scenario** is reused on the same day, in both UTC and New York time (scenarios seed dates from the clock), when its script, the source files behind every route it requested (from the module graph, plus all of `src/content/` if it reads content collections) and the static files it loaded are unchanged. Requests an endpoint serves, such as owner-only images from an API route, count as routes, not static files. If a scenario was removed since the earlier run, every scenario runs. Scenarios share one database, so a scenario that changed the stored state is a writer: a scenario that runs first reruns every writer before it, and once a run writes differently from before, every later scenario runs.
+- **Everything** is captured when the capture scripts, the dependencies, `astro.config.mjs`, `tsconfig.json`, `wrangler.jsonc`, the migrations, this workflow, Node or Chromium changed, when there is no earlier run, or when `SCREENSHOTS_FULL=1` is set. In a pull request, adding the `full-screenshots` label sets it.
+
+A reused image skips that page's console and status checks; its inputs are the same as in the run that passed them. Locally, nothing is reused unless you copy an earlier `screenshots/` folder to `.screenshots/reference`.
 
 The preview config is built from `wrangler.jsonc`: the same compatibility settings, vars and binding names, with local D1, KV and R2 in place of every production resource. `PREVIEW_OVERRIDES` in `config.mjs` lists the only vars it changes, and why: Turnstile's test keys, a throwaway Access issuer on `127.0.0.1:9911` so owner pages render through the real JWT check, a local studio code key, and the client portal flag turned on so gated pages can be reviewed before launch. Nothing reaches production.
 

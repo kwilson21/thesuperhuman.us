@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 // Opens every page at desktop and phone size, then runs each scenario in scripts/screenshots/scenarios.
 // Exits non-zero on a page error, a console error, or an unexpected HTTP status.
+// Images whose inputs match an earlier run in .screenshots/reference are copied from it instead (see
+// cache.mjs); SCREENSHOTS_FULL=1 captures everything.
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
-import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { chromium } from 'playwright';
+import { ASSET_TYPES, globalKey, hashBody, inputsChange, listFiles, REFERENCE, responsesChange, routeFiles, routePattern, scenarioInputs, scenarioPlanner, sourceClosure, stateHash, unhashed, withoutViteVersion } from './cache.mjs';
 import { prepareWithDiagnostics } from './prepare.mjs';
 import { ACCESS_AUDIENCE, ACCESS_ISSUER, expectedResourceError, missingScenarioRoutes, OUT, OWNER_EMAIL, PAGES, REDIRECTS, SCENARIO_PAGES, VIEWPORTS } from './config.mjs';
 
@@ -33,6 +36,20 @@ const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PAT
 const errors = [];
 // Every path that rendered with the expected status, so seeded pages can be checked afterwards.
 const captured = [];
+// Same-origin requests each capture made, by file: the inputs a reused image is checked against.
+const requestsByFile = new Map();
+
+const global = await globalKey({ node: process.version, browser: browser.version() });
+const reference = await readReference();
+const cache = { global, pagesWrote: false, pages: {}, scenarios: {} };
+
+async function readReference() {
+  if (process.env.SCREENSHOTS_FULL === '1') return console.log('SCREENSHOTS_FULL is set: capturing everything.');
+  const data = await readFile(`${REFERENCE}/cache.json`, 'utf8').then(JSON.parse).catch(() => null);
+  if (!data) return console.log('No earlier run to reuse: capturing everything.');
+  if (data.global !== global) return console.log('Capture code, dependencies or config changed since the earlier run: capturing everything.');
+  return data;
+}
 
 /** Saves one PNG. Pass `owner` for owner pages, `cookie` for a studio session, `selector` for one section. */
 async function capture({ file, path, viewport = 'desktop', owner = false, cookie, selector, status = 200, prepare, expectedResponses = [], expectedResourceErrors = [] }) {
@@ -42,6 +59,12 @@ async function capture({ file, path, viewport = 'desktop', owner = false, cookie
   if (owner) await context.route(url => url.origin === new URL(BASE).origin,
     route => route.continue({ headers: { ...route.request().headers(), ...ownerHeaders } }));
   if (cookie) await context.addCookies([{ ...cookie, url: BASE }]);
+  const requests = [];
+  context.on('request', request => {
+    const url = new URL(request.url());
+    if (url.origin === new URL(BASE).origin) requests.push({ url: withoutViteVersion(url.pathname + url.search), method: request.method(), type: request.resourceType(), accept: request.headers().accept ?? '' });
+  });
+  requestsByFile.set(file, requests);
   const page = await context.newPage();
   const where = `${path} (${viewport})`;
   page.on('console', message => {
@@ -66,6 +89,7 @@ const sql = command => execFileSync(process.execPath, [resolve('node_modules/wra
   '--config', resolve('.screenshots/wrangler.json'), '--persist-to', resolve('.wrangler/state'), '--json', '--command', command],
   { encoding: 'utf8', env: { ...process.env, CI: '1' } });
 async function ownerFetch(path, body, method = 'POST', headers = {}) {
+  scenarioPaths.push(new URL(BASE + path).pathname);
   const binary = body instanceof Uint8Array;
   const response = await fetch(BASE + path, { method, body: binary ? body : JSON.stringify(body),
     headers: { ...ownerHeaders, origin: BASE, 'content-type': binary ? 'application/octet-stream' : 'application/json', ...headers } });
@@ -74,7 +98,53 @@ async function ownerFetch(path, body, method = 'POST', headers = {}) {
   return json;
 }
 
+const replayed = new Map();
+/** Requests a recorded URL again and hashes what the server sends: status, redirect and body. */
+function replay({ url, accept }, owner) {
+  const key = `${owner}\n${accept}\n${url}`;
+  if (unhashed(url)) return 'not hashed';
+  if (!replayed.has(key)) {
+    replayed.set(key, fetch(BASE + url, { redirect: 'manual', headers: { accept, ...(owner ? ownerHeaders : {}) } })
+      .then(async response => `${response.status} ${response.headers.get('location') ?? ''} ${hashBody(await response.arrayBuffer())}`)
+      .catch(error => `failed ${error.message}`));
+  }
+  return replayed.get(key);
+}
+/** Replays each distinct request: `[url, accept, result]`, sorted. */
+async function replayAll(requests, owner) {
+  const unique = [...new Map(requests.map(request => [`${request.accept}\n${request.url}`, request])).values()]
+    .sort((a, b) => (a.url + a.accept).localeCompare(b.url + b.accept));
+  return Promise.all(unique.map(async request => [request.url, request.accept, await replay(request, owner)]));
+}
+const asRequests = responses => responses.map(([url, accept]) => ({ url, accept }));
+const reusable = files => Promise.all(files.map(file => access(`${REFERENCE}/${file}`))).then(() => true, () => false);
+
+/** A page at one size: copied when every response it loaded is unchanged, otherwise captured. */
+async function shoot(page, viewport) {
+  const file = `${page.name}-${viewport.name}.png`;
+  const params = { path: page.path, owner: Boolean(page.owner), status: page.status ?? 200 };
+  const earlier = reference?.pages?.[file];
+  if (earlier && earlier.path === params.path && earlier.owner === params.owner && earlier.status === params.status && await reusable([file])) {
+    const responses = await replayAll(asRequests(earlier.responses), params.owner);
+    const change = responsesChange(earlier.responses, responses);
+    if (!change) {
+      await copyFile(`${REFERENCE}/${file}`, `${OUT}/${file}`);
+      cache.pages[file] = earlier;
+      reusedPages++;
+      return;
+    }
+    console.log(`Capturing ${file}: ${change} changed.`);
+  }
+  await capture({ file, path: page.path, viewport: viewport.name, owner: page.owner, status: page.status });
+  const requests = requestsByFile.get(file);
+  // A page that sent anything but GET can't be checked by replaying it.
+  if (requests.every(request => request.method === 'GET')) cache.pages[file] = { ...params, responses: await replayAll(requests, params.owner) };
+}
+
+let reusedPages = 0;
 let currentScenario;
+// Paths each running scenario sent to ownerFetch, which runs server code without a browser.
+let scenarioPaths = [];
 try {
   for (const { from, to, status } of Object.values(REDIRECTS)) {
     const response = await fetch(BASE + from, { redirect: 'manual' });
@@ -86,21 +156,87 @@ try {
   // Pages only read data, so a few render at once. Scenarios below stay serial: each one sees the
   // rows the ones before it seeded.
   const shots = PAGES.flatMap(page => VIEWPORTS.map(viewport => ({ page, viewport })));
+  const stateBeforePages = await stateHash();
   await Promise.all(Array.from({ length: PAGE_CONCURRENCY }, async () => {
-    for (let shot = shots.shift(); shot; shot = shots.shift()) {
-      const { page, viewport } = shot;
-      await capture({ file: `${page.name}-${viewport.name}.png`, path: page.path, viewport: viewport.name, owner: page.owner, status: page.status });
-    }
+    for (let shot = shots.shift(); shot; shot = shots.shift()) await shoot(shot.page, shot.viewport);
   }));
+  // Scenarios are checked against a run whose pages left the database untouched.
+  cache.pagesWrote = (await stateHash()) !== stateBeforePages;
+
   const scenarios = [];
   const directory = resolve('scripts/screenshots/scenarios');
-  for (const name of (await readdir(directory)).filter(file => file.endsWith('.mjs')).sort()) {
-    const scenario = (await import(pathToFileURL(`${directory}/${name}`).href)).default;
-    currentScenario = name.replace(/\.mjs$/, '');
-    scenarios.push({ name: currentScenario, title: scenario.title, steps: await scenario.run({ base: BASE, capture, sql, ownerFetch }) });
+  const names = (await readdir(directory)).filter(file => file.endsWith('.mjs')).sort().map(file => file.replace(/\.mjs$/, ''));
+  const script = name => `scripts/screenshots/scenarios/${name}.mjs`;
+  // Scenarios seed dates from the clock, in UTC and New York time, so a scenario image is reused
+  // only while both dates are the ones it was taken on.
+  const now = new Date();
+  const day = `${now.toISOString().slice(0, 10)} ${now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })}`;
+  const inputsFor = async (name, { files, content, assets }) => scenarioInputs({ day, script: script(name), files, content, assets: await replayAll(assets, false) });
+  // A scenario that no longer exists may have seeded rows the later ones showed.
+  const removed = Object.keys(reference?.scenarios ?? {}).some(name => !names.includes(name));
+  const changed = new Set();
+  for (const name of names) {
+    const earlier = reference?.scenarios?.[name];
+    const why = !earlier ? 'new' : removed ? 'a scenario was removed' : reference.pagesWrote || cache.pagesWrote ? 'pages wrote to storage'
+      : !await reusable(earlier.images) ? 'images missing'
+      : inputsChange(earlier.inputs, await inputsFor(name, { files: Object.keys(earlier.inputs.sources), content: earlier.content, assets: asRequests(earlier.inputs.assets) }));
+    if (why) {
+      changed.add(name);
+      console.log(`Scenario ${name} changed: ${why}.`);
+    }
   }
+  const pageFiles = (await listFiles(['src/pages'])).filter(file => /\.(astro|ts|js|mjs)$/.test(file));
+  // Static files are replayed and hashed. Anything an endpoint serves, such as an owner-only image
+  // from an API route, runs server code and may need credentials, so it is followed through the
+  // module graph instead. Pages render HTML, so an image under a page's dynamic route is a static file.
+  const endpoints = pageFiles.filter(file => !file.endsWith('.astro'));
+  const isAsset = request => request.method === 'GET' && ASSET_TYPES.includes(request.type)
+    && !endpoints.some(file => routePattern(file).test(new URL(BASE + request.url).pathname));
+  const planner = scenarioPlanner(names, changed, reference?.scenarios);
+  const ran = [];
+  for (const name of names) {
+    if (!planner.shouldRun(name)) {
+      const earlier = reference.scenarios[name];
+      for (const file of earlier.images) await copyFile(`${REFERENCE}/${file}`, `${OUT}/${file}`);
+      captured.push(...earlier.captured);
+      scenarios.push({ name, title: earlier.title, steps: earlier.steps });
+      cache.scenarios[name] = earlier;
+      continue;
+    }
+    const scenario = (await import(pathToFileURL(script(name)).href)).default;
+    currentScenario = name;
+    scenarioPaths = [];
+    const filesBefore = new Set(requestsByFile.keys());
+    const stateBefore = await stateHash();
+    const steps = await scenario.run({ base: BASE, capture, sql, ownerFetch });
+    const wrote = (await stateHash()) !== stateBefore;
+    planner.ran(name, wrote);
+    scenarios.push({ name, title: scenario.title, steps });
+    const images = [...requestsByFile.keys()].filter(file => !filesBefore.has(file));
+    const requests = images.flatMap(file => requestsByFile.get(file));
+    ran.push({ name, title: scenario.title, steps, images, wrote,
+      paths: [...scenarioPaths, ...requests.filter(request => !isAsset(request)).map(request => new URL(BASE + request.url).pathname)],
+      assets: requests.filter(isAsset).map(({ url, accept }) => ({ url, accept })),
+      captured: captured.filter(item => item.scenario === name) });
+  }
+  currentScenario = undefined;
+  if (ran.length) {
+    // The dev server's module graph names the source files behind each route a scenario hit.
+    const graph = await fetch(`${BASE}/__screenshots/deps`).then(response => response.json()).catch(() => {
+      throw new Error('No module graph at /__screenshots/deps: start the dev server with --config scripts/screenshots/dev.config.mjs.');
+    });
+    for (const { name, paths, wrote, ...rest } of ran) {
+      const roots = ['src/middleware.ts', ...new Set(paths.flatMap(path => routeFiles(path, pageFiles)))];
+      const { files, content } = sourceClosure(graph, roots);
+      const inputs = await inputsFor(name, { files, content, assets: rest.assets });
+      cache.scenarios[name] = { ...rest, assets: undefined, content, inputs, writer: wrote };
+    }
+  }
+  console.log(`Reused ${reusedPages} of ${PAGES.length * VIEWPORTS.length} page images.`);
+  console.log(`Scenarios run: ${ran.map(item => item.name).join(', ') || 'none'}. Reused: ${names.filter(name => !ran.some(item => item.name === name)).join(', ') || 'none'}.`);
   errors.push(...missingScenarioRoutes(SCENARIO_PAGES, captured).map(file => `${file}: its scenario captured no page under its route`));
   await writeFile(`${OUT}/manifest.json`, JSON.stringify({ pages: PAGES, scenarios }, null, 2));
+  await writeFile(`${OUT}/cache.json`, JSON.stringify(cache));
 } finally {
   await browser.close();
   issuer.close();
