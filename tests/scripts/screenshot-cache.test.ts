@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
-import { hashFiles, listFiles, routeFiles, routePattern, scenarioPlanner, sourceClosure, stateHash } from '../../scripts/screenshots/cache.mjs';
+import { hashBody, hashFiles, listFiles, routeFiles, routePattern, scenarioPlanner, sourceClosure, stateHash, withoutViteVersion } from '../../scripts/screenshots/cache.mjs';
 
 const PAGE_FILES = [
   'src/pages/404.astro',
@@ -153,5 +153,23 @@ describe('stateHash', () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe("Vite's dependency version tag", () => {
+  it.each([
+    ['/node_modules/.vite/deps/zod.js?v=41f0327e', '/node_modules/.vite/deps/zod.js'],
+    ['/node_modules/.vite/deps/zod.js?v=41f0327e&x=1', '/node_modules/.vite/deps/zod.js?x=1'],
+    ['/src/a.astro?astro&type=style&v=05920f33', '/src/a.astro?astro&type=style'],
+    ['/src/a.astro?astro&type=style&index=0&lang.css', '/src/a.astro?astro&type=style&index=0&lang.css'],
+    ['/audio/v=deadbeef', '/audio/v=deadbeef'],
+  ])('%s is recorded as %s', (url, expected) => {
+    expect(withoutViteVersion(url)).toBe(expected);
+  });
+
+  it('does not change a body hash, while any other change does', () => {
+    const body = (version: string, name = 'zod') => new TextEncoder().encode(`import x from "/node_modules/.vite/deps/${name}.js?v=${version}";`);
+    expect(hashBody(body('41f0327e'))).toBe(hashBody(body('1aeeb6dc')));
+    expect(hashBody(body('41f0327e'))).not.toBe(hashBody(body('41f0327e', 'jose')));
   });
 });

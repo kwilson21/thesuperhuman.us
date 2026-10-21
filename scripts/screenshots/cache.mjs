@@ -26,6 +26,15 @@ export const ASSET_TYPES = ['stylesheet', 'script', 'image', 'font', 'media'];
 
 export const sha256 = data => createHash('sha256').update(data).digest('hex');
 
+// Vite tags optimized dependencies with ?v=<hash>, and the hash changes each time the dev server
+// starts. Those files come from package-lock.json, already in the global key, so the tag is dropped
+// from recorded URLs and from response bodies before hashing.
+const VITE_VERSION = /([?&])v=[0-9a-f]{6,}(&|$)/;
+export const withoutViteVersion = url => url.replace(VITE_VERSION, (_, before, after) => (after ? before : ''));
+// Vite's own client embeds a token made at each server start; its code comes from package-lock.json.
+export const UNHASHED_URLS = ['/@vite/client'];
+export const hashBody = body => sha256(Buffer.from(body).toString('latin1').replace(/([?&]v=)[0-9a-f]{6,}/g, '$1'));
+
 /** Every file under the given paths, relative to root and sorted. Missing paths are skipped. */
 export async function listFiles(paths, root = process.cwd(), exclude = []) {
   const files = [];

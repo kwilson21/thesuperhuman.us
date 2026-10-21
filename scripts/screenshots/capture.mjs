@@ -11,7 +11,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { chromium } from 'playwright';
-import { ASSET_TYPES, globalKey, listFiles, REFERENCE, routeFiles, routePattern, scenarioKey, scenarioPlanner, sha256, sourceClosure, stateHash } from './cache.mjs';
+import { ASSET_TYPES, globalKey, hashBody, listFiles, REFERENCE, routeFiles, routePattern, scenarioKey, scenarioPlanner, sha256, sourceClosure, stateHash, UNHASHED_URLS, withoutViteVersion } from './cache.mjs';
 import { prepareWithDiagnostics } from './prepare.mjs';
 import { ACCESS_AUDIENCE, ACCESS_ISSUER, expectedResourceError, missingScenarioRoutes, OUT, OWNER_EMAIL, PAGES, REDIRECTS, SCENARIO_PAGES, VIEWPORTS } from './config.mjs';
 
@@ -62,7 +62,7 @@ async function capture({ file, path, viewport = 'desktop', owner = false, cookie
   const requests = [];
   context.on('request', request => {
     const url = new URL(request.url());
-    if (url.origin === new URL(BASE).origin) requests.push({ url: url.pathname + url.search, method: request.method(), type: request.resourceType(), accept: request.headers().accept ?? '' });
+    if (url.origin === new URL(BASE).origin) requests.push({ url: withoutViteVersion(url.pathname + url.search), method: request.method(), type: request.resourceType(), accept: request.headers().accept ?? '' });
   });
   requestsByFile.set(file, requests);
   const page = await context.newPage();
@@ -102,9 +102,10 @@ const replayed = new Map();
 /** Requests a recorded URL again and hashes what the server sends: status, redirect and body. */
 function replay({ url, accept }, owner) {
   const key = `${owner}\n${accept}\n${url}`;
+  if (UNHASHED_URLS.includes(url)) return 'not hashed';
   if (!replayed.has(key)) {
     replayed.set(key, fetch(BASE + url, { redirect: 'manual', headers: { accept, ...(owner ? ownerHeaders : {}) } })
-      .then(async response => `${response.status} ${response.headers.get('location') ?? ''} ${sha256(Buffer.from(await response.arrayBuffer()))}`)
+      .then(async response => `${response.status} ${response.headers.get('location') ?? ''} ${hashBody(await response.arrayBuffer())}`)
       .catch(error => `failed ${error.message}`));
   }
   return replayed.get(key);
