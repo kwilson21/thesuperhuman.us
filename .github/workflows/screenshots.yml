@@ -5,9 +5,29 @@ name: Screenshots
 # Only UI changes: pages, components, layouts, styles, browser scripts, page content and
 # static assets. Server-only code (API routes, src/lib, middleware), migrations and
 # dependency or Worker config changes don't trigger it.
+# Runs on main too, so pull requests have a recent run to reuse unchanged images from. The
+# full-screenshots label makes a pull request capture everything.
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - 'src/pages/**'
+      - '!src/pages/api/**'
+      - 'src/components/**'
+      - 'src/layouts/**'
+      - 'src/styles/**'
+      - 'src/scripts/**'
+      - 'src/assets/**'
+      - 'src/content/**'
+      - 'src/data/**'
+      - 'public/**'
+      - 'astro.config.mjs'
+      - 'tailwind.config.mjs'
+      - 'scripts/screenshots/**'
+      - '.github/workflows/screenshots.yml'
+
+  push:
+    branches: [main]
     paths:
       - 'src/pages/**'
       - '!src/pages/api/**'
@@ -28,15 +48,17 @@ permissions:
   contents: read
 
 concurrency:
-  group: screenshots-${{ github.event.pull_request.number }}
+  group: screenshots-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   capture:
+    if: github.event.action != 'labeled' || github.event.label.name == 'full-screenshots'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       WRANGLER_SEND_METRICS: 'false'
+      SCREENSHOTS_FULL: ${{ contains(github.event.pull_request.labels.*.name, 'full-screenshots') && '1' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -46,17 +68,30 @@ jobs:
           node-version: 22.19.0
           cache: npm
       - run: npm ci
+      # The latest earlier run on this branch, or else on main. capture.mjs copies only the images
+      # whose inputs are unchanged.
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: screenshots
+          key: screenshots-${{ github.sha }}
+          restore-keys: screenshots-
+      - name: Keep the earlier run as the reference
+        run: if [ -d screenshots ]; then mkdir -p .screenshots && mv screenshots .screenshots/reference; fi
       - run: npx playwright install --with-deps chromium
       - run: npm run screenshots:preview
       - name: Start the local preview
         run: |
-          MUSIC_PREVIEW_CONFIG=.screenshots/wrangler.json npx astro dev --port 4321 --host 127.0.0.1 > astro.log 2>&1 &
+          MUSIC_PREVIEW_CONFIG=.screenshots/wrangler.json npx astro dev --config scripts/screenshots/dev.config.mjs --port 4321 --host 127.0.0.1 > astro.log 2>&1 &
           for i in $(seq 1 90); do curl -fsS -o /dev/null http://127.0.0.1:4321/ && break; sleep 2; done
       - run: npm run screenshots
       - name: Check personal name typography and copy behavior
         env:
           PW_ARTIFACT_DIR: screenshots
         run: node tests/browser/personal-name.cjs
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: screenshots
+          key: screenshots-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: screenshots
