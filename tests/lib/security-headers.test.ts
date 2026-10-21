@@ -30,7 +30,7 @@ describe('security headers', () => {
     expect(headersFor('/*')).toEqual(securityHeaders);
   });
 
-  it('leaves interest-cohort out of the Permissions-Policy, which browsers no longer recognize', () => {
+  it('leaves interest-cohort out of the Permissions-Policy, as the owner decided', () => {
     expect(securityHeaders['permissions-policy']).not.toContain('interest-cohort');
   });
 
