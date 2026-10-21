@@ -8,6 +8,51 @@
     "imageBytes": 341264,
     "videoBytes": 1042683
   },
+  "audio": {
+    "image": "/og/audio-974d88de7f.png",
+    "video": "/og/audio-b01c9e59c6.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 6000,
+    "imageBytes": 336091,
+    "videoBytes": 313078
+  },
+  "audio-portfolio": {
+    "image": "/og/audio-portfolio-7038000a78.png",
+    "video": "/og/audio-portfolio-07e6d16c09.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 6000,
+    "imageBytes": 235731,
+    "videoBytes": 259763
+  },
+  "audio-releases": {
+    "image": "/og/audio-releases-6c64bded1c.jpg",
+    "video": "/og/audio-releases-fb5742a5f2.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 6000,
+    "imageBytes": 82907,
+    "videoBytes": 516004
+  },
+  "audio-services": {
+    "image": "/og/audio-services-29bc40ffa2.png",
+    "video": "/og/audio-services-0f7a6ff561.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 6000,
+    "imageBytes": 142740,
+    "videoBytes": 182624
+  },
+  "audio-start": {
+    "image": "/og/audio-start-345932f345.png",
+    "video": "/og/audio-start-66de1174cf.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 8000,
+    "imageBytes": 139513,
+    "videoBytes": 552784
+  },
   "home": {
     "image": "/og/home-feaa0743d2.png",
     "video": "/og/home-b2de7f5328.mp4",
@@ -16,6 +61,24 @@
     "durationMs": 7000,
     "imageBytes": 439902,
     "videoBytes": 642613
+  },
+  "music-old-news": {
+    "image": "/og/music-old-news-775f5c3865.jpg",
+    "video": "/og/music-old-news-acf3446117.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 6000,
+    "imageBytes": 101437,
+    "videoBytes": 736236
+  },
+  "not-found": {
+    "image": "/og/not-found-3542b709fe.png",
+    "video": "/og/not-found-2b82690d2f.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 6000,
+    "imageBytes": 327295,
+    "videoBytes": 225603
   },
   "personal-website": {
     "image": "/og/personal-website-8b407f616e.png",
@@ -34,6 +97,15 @@
     "durationMs": 6800,
     "imageBytes": 379423,
     "videoBytes": 607369
+  },
+  "privacy": {
+    "image": "/og/privacy-1734dee716.png",
+    "video": "/og/privacy-661ffc0046.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 6000,
+    "imageBytes": 140594,
+    "videoBytes": 170404
   },
   "services": {
     "image": "/og/services-6518d2c6c8.png",

@@ -1,0 +1,137 @@
+<!doctype html>
+<!-- Start your song (/audio/start): the three-step audio intake, drawn at video scale. The numbered
+     progress leads; step 1 shows the checked offer with its starting price, and "No payment now." sits
+     in the aside from frame 0. Continue moves to step 2 (Shape your sound.), Review request moves to
+     step 3 (Does this sound right?), where the reassurance rises in full and the primary button reads
+     Send for review, which is never pressed. Then the form returns to step 1.
+     Copy is verbatim from src/pages/audio/start.astro (progress, headings, intros, direction choice,
+     reassurance, Continue and Send for review), src/scripts/audio-intake.ts (Back is shown from step 2;
+     the step 2 button reads "Review request") and src/lib/audio-intake.ts (audioOffers['vocal-mix'],
+     the owner-approved starting price). The kicker is a composite of the audio pages' kicker "Audio"
+     and the page title "Start your song". The page swaps steps instantly; the slides are illustrative.
+     No form data is shown and nothing is submitted.
+     8 s, because each of the three screens needs a legible hold (multi-step flow). -->
+<html lang="en" data-duration="8000">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../kit.css" />
+<style>
+  /* .intake-progress (audio-intake.css): numbered circles with a rule border, the current step in accent. */
+  .progress { position: absolute; left: 64px; right: 64px; top: 100px; height: 68px; margin: 0; padding: 0; list-style: none; display: flex; gap: 60px; border-bottom: 1px solid var(--rule); }
+  .progress li { position: relative; height: 48px; white-space: nowrap; }
+  .progress .item { display: flex; align-items: center; gap: 18px; font: 400 30px/48px var(--serif); color: var(--muted); }
+  .progress .num { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border: 1.5px solid var(--well-divider); border-radius: 50%; font: 400 24px/1 var(--serif); }
+  .progress .now { position: absolute; left: 0; top: 0; color: var(--accent); opacity: 0; }
+  .progress .now .num { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+  .progress .s1 .now { opacity: 1; }
+
+  /* Steps share one slot; only the current one is visible. */
+  .step { position: absolute; left: 64px; top: 192px; width: 1072px; height: 252px; }
+  /* .intake-page h1: line-height 1.07, tracking -.045em. */
+  .step h1 { position: absolute; left: 0; top: 0; margin: 0; font: 400 76px/1.07 var(--serif); letter-spacing: -.045em; white-space: nowrap; }
+  .intro { position: absolute; left: 0; top: 94px; margin: 0; font: 400 30px/1.3 var(--serif); color: var(--muted); white-space: nowrap; }
+  .st2, .st3 { opacity: 0; }
+  .st2 { transform: translateX(32px); }
+  .st3 { transform: translateX(32px); }
+
+  /* .intake-offer and .direction-list label when checked: accent border on the 5% accent tint. */
+  .choice { position: absolute; left: 0; top: 160px; display: flex; align-items: center; gap: 20px; padding: 0 26px 0 22px; border: 1.5px solid var(--accent); border-radius: 3px; background: var(--checked); }
+  .choice input { accent-color: var(--accent); width: 26px; height: 26px; margin: 0; flex: none; }
+  .offer { width: 600px; height: 80px; }
+  .offer .nm { flex: 1; margin: 0; font: 400 28px/34px var(--serif); white-space: nowrap; }
+  .offer .pr { margin: 0; font: 400 26px/34px var(--serif); white-space: nowrap; }
+  .direction { width: 600px; height: 92px; align-items: flex-start; padding-top: 14px; }
+  .direction input { margin-top: 4px; }
+  .direction .nm { margin: 0; font: 400 28px/34px var(--serif); white-space: nowrap; }
+  .direction .sm { margin: 2px 0 0; font: 400 22px/28px var(--serif); color: var(--muted); white-space: nowrap; }
+
+  /* Step 3's reassurance, set large: the page's line under the buttons. */
+  .no-pay { position: absolute; left: 0; top: 156px; margin: 0; font: 400 46px/52px var(--serif); letter-spacing: -.02em; white-space: nowrap; }
+  .offer-line { position: absolute; left: 0; top: 218px; margin: 0; font: 400 22px/28px var(--sans); color: var(--muted); white-space: nowrap; }
+
+  /* .intake-actions: a rule, Back on the left from step 2, the primary button on the right. */
+  .actions-rule { position: absolute; left: 64px; right: 64px; top: 458px; height: 1px; background: var(--rule); }
+  .primary { position: absolute; right: 64px; top: 474px; width: 330px; height: 62px; padding: 0; }
+  .primary span { position: absolute; left: 0; right: 0; top: 12px; text-align: center; white-space: nowrap; opacity: 0; }
+  .primary .b1 { opacity: 1; }
+  .back { position: absolute; left: 64px; top: 474px; width: 210px; height: 62px; padding: 12px 0; margin: 0; text-align: center; font: 400 26px/1.4 var(--serif); color: var(--ink); border: 1px solid var(--ink); border-radius: 3px; opacity: 0; white-space: nowrap; }
+  .primary-ring { right: 64px; top: 474px; width: 330px; height: 62px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<main class="frame card">
+  <p class="kicker">Audio / Start your song</p>
+  <ol class="progress">
+    <li class="s1"><span class="item"><span class="num">1</span>Service</span><span class="item now"><span class="num">1</span>Service</span></li>
+    <li class="s2"><span class="item"><span class="num">2</span>Song &amp; direction</span><span class="item now"><span class="num">2</span>Song &amp; direction</span></li>
+    <li class="s3"><span class="item"><span class="num">3</span>Review</span><span class="item now"><span class="num">3</span>Review</span></li>
+  </ol>
+
+  <section class="step st1">
+    <h1>What does your song need?</h1>
+    <p class="intro">I’ll review your files before you book.</p>
+    <label class="choice offer" data-offer="vocal-mix"><input type="radio" checked /><span class="nm">Two-track vocal mixing</span><b class="pr" style="font-weight:400">From $150</b></label>
+  </section>
+  <section class="step st2">
+    <h1>Shape your sound.</h1>
+    <p class="intro">Give as much direction as you like. I’ll bring the engineering judgment.</p>
+    <label class="choice direction"><input type="radio" checked /><span><span class="nm" style="display:block">Use your judgment</span><span class="sm" style="display:block">Find an approach that suits the song.</span></span></label>
+  </section>
+  <section class="step st3">
+    <h1>Does this sound right?</h1>
+    <p class="intro">Check the details, then send your song for review.</p>
+    <p class="no-pay">No payment now.</p>
+    <p class="offer-line">After file review, you’ll receive a written offer.</p>
+  </section>
+
+  <div class="actions-rule"></div>
+  <p class="back">Back</p>
+  <p class="btn primary"><span class="b1">Continue</span><span class="b2">Review request</span><span class="b3">Send for review</span></p>
+  <i class="press-ring primary-ring"></i>
+
+  <p class="url">thesuperhuman.us/audio/start</p>
+  <p class="aside reassure">No payment now.</p>
+</main>
+<script src="../kit.js"></script>
+<script>
+  const { play, ease } = og;
+  // Beats: hold the poster to 1300; Continue (1300) to step 2; hold; Review request (3500) to step 3;
+  // the reassurance rises 4400-5100; hold to 6300; back to step 1 by 7000; rest to 8000.
+  const P1 = 1300, P2 = 3500, BACK = 6300;
+
+  // Button press (kit grammar): scale .96 in ink at +120, back to accent by +350; a press ring leaves it.
+  const press = t => [[t, { transform: 'scale(1)', backgroundColor: '#AE5534', borderColor: '#AE5534', easing: ease.out }], [t + 120, { transform: 'scale(.96)', backgroundColor: '#0E0E0E', borderColor: '#0E0E0E', easing: ease.out }], [t + 350, { transform: 'scale(1)', backgroundColor: '#AE5534', borderColor: '#AE5534' }]];
+  play('.primary', [...press(P1), ...press(P2)]);
+  const ring = t => [[t + 60, { opacity: 0, transform: 'scale(1)', easing: ease.ring }], [t + 102, { opacity: .7, transform: 'scale(1.01)', easing: ease.ring }], [t + 760, { opacity: 0, transform: 'scale(1.15)' }], [t + 761, { opacity: 0, transform: 'scale(1)' }]];
+  play('.primary-ring', [...ring(P1), ...ring(P2)]);
+
+  // Steps: exit 32 px on ease.in, enter from 32 px on ease.out. Step 1 leaves to the left and comes back
+  // from the left; step 2 leaves to the left; step 3 leaves to the right on the way back.
+  const x = (v, o) => ({ transform: `translateX(${v}px)`, opacity: o });
+  play('.st1', [[P1 + 150, { ...x(0, 1), easing: ease.in }], [P1 + 450, x(-32, 0)], [BACK + 300, { ...x(-32, 0), easing: ease.out }], [BACK + 700, x(0, 1)]]);
+  play('.st2', [[P1 + 450, { ...x(32, 0), easing: ease.out }], [P1 + 850, x(0, 1)], [P2 + 150, { ...x(0, 1), easing: ease.in }], [P2 + 450, x(-32, 0)], [P2 + 451, x(32, 0)]]);
+  play('.st3', [[P2 + 450, { ...x(32, 0), easing: ease.out }], [P2 + 850, x(0, 1)], [BACK, { ...x(0, 1), easing: ease.in }], [BACK + 300, x(32, 0)]]);
+
+  // Reassurance in step 3: data-reveal rise of 26 px; it resets while the step is hidden.
+  const rise = (sel, t) => play(sel, [[t, { opacity: 0, transform: 'translateY(26px)', easing: ease.out }], [t + 500, { opacity: 1, transform: 'translateY(0)' }], [BACK + 300, { opacity: 1, transform: 'translateY(0)' }], [BACK + 301, { opacity: 0, transform: 'translateY(26px)' }]]);
+  rise('.no-pay', 4400);
+  rise('.offer-line', 4600);
+  // The aside's "No payment now." gives way while step 3 states it large, and returns with step 1.
+  play('.reassure', [[4400, { opacity: 1 }], [4650, { opacity: 0 }], [BACK + 400, { opacity: 0 }], [BACK + 700, { opacity: 1 }]]);
+
+  // Progress: the current step's accent layer crossfades to the next one.
+  const fade = (sel, steps) => play(sel, steps);
+  fade('.s1 .now', [[P1 + 300, { opacity: 1 }], [P1 + 600, { opacity: 0 }], [BACK + 150, { opacity: 0 }], [BACK + 450, { opacity: 1 }]]);
+  fade('.s2 .now', [[P1 + 300, { opacity: 0 }], [P1 + 600, { opacity: 1 }], [P2 + 300, { opacity: 1 }], [P2 + 600, { opacity: 0 }]]);
+  fade('.s3 .now', [[P2 + 300, { opacity: 0 }], [P2 + 600, { opacity: 1 }], [BACK + 150, { opacity: 1 }], [BACK + 450, { opacity: 0 }]]);
+
+  // Button labels: Continue (step 1), Review request (step 2), Send for review (step 3).
+  // Each swap is sequential (out 120 ms, in 150 ms), so the two labels never overlap.
+  fade('.b1', [[P1 + 380, { opacity: 1 }], [P1 + 500, { opacity: 0 }], [BACK + 370, { opacity: 0 }], [BACK + 520, { opacity: 1 }]]);
+  fade('.b2', [[P1 + 500, { opacity: 0 }], [P1 + 650, { opacity: 1 }], [P2 + 380, { opacity: 1 }], [P2 + 500, { opacity: 0 }]]);
+  fade('.b3', [[P2 + 500, { opacity: 0 }], [P2 + 650, { opacity: 1 }], [BACK + 250, { opacity: 1 }], [BACK + 370, { opacity: 0 }]]);
+  // Back appears from step 2 and leaves with step 3.
+  fade('.back', [[P1 + 450, { opacity: 0 }], [P1 + 750, { opacity: 1 }], [BACK, { opacity: 1 }], [BACK + 250, { opacity: 0 }]]);
+</script>
+</body>
+</html>

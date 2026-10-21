@@ -43,6 +43,38 @@ export const OG_SCENES = {
     routes: ['/writing', '/writing/*'],
     alt: 'Writing: “Notes on engineering, tools, and the choices behind the work.” over a hand-drawn underline, beside an illustration of a terracotta path winding through four checkpoints to an arrow.',
   },
+  audio: {
+    routes: ['/audio', '/audio/*'],
+    alt: 'Audio: “Mixing and mastering.” and “From $150 per song for two-track vocal mixing.” with a Start your song button, beside black and bronze headphones above line icons for mixing, mastering, production and recording.',
+  },
+  'audio-portfolio': {
+    routes: ['/audio/portfolio'],
+    alt: 'Audio portfolio: “Hear the difference.” and “Switch versions. Keep your place.” beside the Old News cover, with an A and B switch set to the master above the mix and master waveforms of the song, played to the same point.',
+  },
+  'audio-releases': {
+    routes: ['/audio/releases'],
+    alt: 'Releases: “Music by Kazon.” over a sepia drawing of a city skyline, bridge and river at sunset, with the Old News single cover beside its title, “Prod. Lexi Banks” and a play button.',
+  },
+  'audio-services': {
+    routes: ['/audio/services'],
+    alt: 'Audio services: “Your song. My full attention.” and “We agree on the work and price before you book.” beside a price sheet: two-track vocal mixing from $150, mastering from $75, and a two-track vocal mix plus master from $200.',
+  },
+  'audio-start': {
+    routes: ['/audio/start'],
+    alt: 'Start your song, step 1 of 3: Service, Song & direction, Review. “What does your song need?” over “I’ll review your files before you book.” with two-track vocal mixing from $150 selected, a Continue button and “No payment now.”',
+  },
+  'music-old-news': {
+    routes: ['/music/old-news'],
+    alt: 'Old News: a newspaper masthead with Kazon, the title OLD NEWS and “Prod. Lexi Banks · single”, above the release art of a folded newspaper headed Kazon by a river and city skyline at sunset, with a play button to watch the lyric video.',
+  },
+  privacy: {
+    routes: ['/privacy'],
+    alt: 'Privacy: “The website’s page code does not include advertising trackers.” above how long records last: form rate-limit records, five minutes; pending resume requests, seven days.',
+  },
+  'not-found': {
+    routes: [],
+    alt: '404: “This page isn’t here.” and “The link may have changed.” with a Back to home button, beside a painted coast with grassy dunes, a curved beach and calm water.',
+  },
 } satisfies Record<string, { routes: string[]; alt: string }>;
 
 export type OgScene = keyof typeof OG_SCENES;
