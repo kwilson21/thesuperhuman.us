@@ -30,6 +30,10 @@ describe('security headers', () => {
     expect(headersFor('/*')).toEqual(securityHeaders);
   });
 
+  it('leaves interest-cohort out of the Permissions-Policy, which browsers no longer recognize', () => {
+    expect(securityHeaders['permissions-policy']).not.toContain('interest-cohort');
+  });
+
   it('adds all four headers to a plain response', () => {
     const response = withSecurityHeaders(new Response('x'));
     expect(Object.fromEntries(response.headers)).toMatchObject(securityHeaders);

@@ -1,7 +1,7 @@
 // Mirrors the /* block in public/_headers, which Cloudflare applies only to static assets.
 // tests/lib/security-headers.test.ts fails if the two drift.
 export const securityHeaders = {
-  'permissions-policy': 'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()',
+  'permissions-policy': 'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()',
   'referrer-policy': 'strict-origin-when-cross-origin',
   'x-content-type-options': 'nosniff',
   'x-frame-options': 'DENY',
