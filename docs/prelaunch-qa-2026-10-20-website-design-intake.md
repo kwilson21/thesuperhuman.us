@@ -1,6 +1,6 @@
 # Project brief paths release gate
 
-Date: October 20, 2026 (UTC; first answers the evening of October 19 in America/New_York, copy fixes and template approval on October 20)  
+Date: October 20, 2026 (UTC; first answers the evening of October 19 in America/New_York, copy fixes and template approval on October 20; headers fix and its checks on October 21 UTC, the evening of October 20 in America/New_York)  
 Repository: `kwilson21/thesuperhuman.us`  
 Pull request: [#188](https://github.com/kwilson21/thesuperhuman.us/pull/188)  
 Branch: `claude/website-design-intake-dd111d`  
@@ -224,20 +224,20 @@ PASS means the evidence named here was observed. Production checks after the mer
   - No dependencies, generated files, secrets or private data. The only image change is the reviewed door picture.
   - Every review finding was verified, and the real ones were fixed.
 - **PASS · Production configuration, by source.**
-  - `wrangler.jsonc`, bindings, secrets, migrations, `public/_headers`, `astro.config.mjs`, `package.json` and the lockfile are unchanged.
+  - `wrangler.jsonc`, bindings, secrets, migrations, `public/_headers`, `astro.config.mjs`, `package.json` and the lockfile are unchanged by #188.
   - Production served HTTPS with `strict-transport-security` before the merge.
   - Response headers on HTML pages: see the security headers item below (fixed by #199).
-- **PASS · Security headers on HTML responses (fixed by #199).**
+- **PASS, with gaps · Security headers on HTML responses (fixed by #199).**
   - Checklist item 7.3: response headers on dynamic as well as static responses.
   - `public/_headers` sets `Permissions-Policy`, `Referrer-Policy`, `X-Content-Type-Options` and `X-Frame-Options` for `/*`.
   - Before the fix (FAIL):
     - HTML pages returned none of those four headers and only `strict-transport-security`: `/` at 17:43 UTC (while the Workers Builds check run for `f778ae42` was still in progress; which revision answered is not known) and `/`, `/services` and `/software/start` again after the Workers Builds run for `30ff3214` passed at 18:26 UTC (the serving revision was not observed; every commit on `main` since `f778ae42` contains #188).
     - The static files `/robots.txt` and `/favicon.ico` returned all four.
   - #188 changed no headers, so this was not caused by this PR.
-  - Fix: [#199](https://github.com/kwilson21/thesuperhuman.us/pull/199), squash-merged as `c05ec3ae` on October 21, 2026 at 01:24:14 UTC, after CI passed on its head `08e9b22d` (Workers Builds, validate, capture). Codex's code and security reviews of `a3d3b9f6` found nothing. Codex did not re-review `08e9b22d`; independent Claude reviewers reviewed it (round 5, no findings).
+  - Fix: [#199](https://github.com/kwilson21/thesuperhuman.us/pull/199), squash-merged as `c05ec3ae` on October 21, 2026 at 01:24:14 UTC, after CI passed on its head `08e9b22d` (Workers Builds, validate, capture). Codex's code and security reviews of `a3d3b9f6` found nothing. Codex did not re-review `08e9b22d`; independent Claude reviewers reviewed it (round 5, no findings). Greptile did not review #199.
   - Owner decisions, given in conversation on October 20, 2026 (America/New_York) and relayed: "Merge when clean"; "Remove it in #199" (drop `interest-cohort=()` from `Permissions-Policy` in both `public/_headers` and `src/lib/security-headers.ts`). Done in `08e9b22d`.
   - What it does: `src/middleware.ts` now adds the four `/*` headers from `public/_headers` (listed in `src/lib/security-headers.ts`) to every response that passes through the middleware, keeping any value a route or the studio/agreement rules already set.
-  - What it does not cover: Astro's redirect for repeated trailing slashes and its bare 500 after a thrown error skip the middleware and carry none of the four.
+  - What it does not cover: Astro's redirect for repeated trailing slashes and its bare 500 after a thrown error skip the middleware and carry none of the four. At 01:44:32 UTC, GET `/work//` and `/services//` each returned 301 with only `strict-transport-security` and none of the four headers. A reviewer's HEAD request to `/work//` at about 01:43 UTC returned 308, also with only `strict-transport-security`. The bare 500 was not requested.
   - Deploy: the Workers Builds check run for `c05ec3ae` concluded with success at 01:25:37 UTC, and `c05ec3ae` was the newest commit on `main` during the checks below. A background `curl` loop first saw `x-frame-options` on `/` at 01:25:42 UTC. The site shows no revision marker, so the serving revision was not observed directly. The new headers (with `interest-cohort` removed) prove that a deploy containing #199 was serving.
   - Post-deploy header check (read-only, against `https://thesuperhuman.us`, from 01:26:28 to 01:26:33 UTC, with HEAD (`curl -sI`) and GET (`curl -s -o /dev/null -D -`)):
     - Paths and status, identical for HEAD and GET: `/` 200 text/html; `/services` 200 text/html; `/software/start` 200 text/html; `/privacy` 200 text/html; `/api/work-feed?project=personal-website` 200 application/json; `/robots.txt` 200 text/plain (static file); `/this-page-does-not-exist-qa` 404 text/html.
@@ -252,15 +252,16 @@ PASS means the evidence named here was observed. Production checks after the mer
     - Baseline before #199 merged (taken before the PR opened): GET `/api/work-feed?project=personal-website` returned 200 `application/json` with none of the four headers.
     - Raw output is kept privately and not committed.
   - Music page console check (the Claude desktop app's built-in browser, Chromium 152, about 01:27 to 01:30 UTC):
-    - The lyric video on `/music/old-news` is self-hosted (`/music/file/old-news-recording/video`, a native video element). The page has no YouTube embed, so the YouTube concern in #199 does not apply to the current release.
-    - "Watch lyric video" was pressed once, and the video paused a few seconds later. Pressing play likely recorded one listening "start" event for Old News in the site's music analytics at about 01:27 UTC.
+    - The lyric video on `/music/old-news` is self-hosted (`/music/file/old-news-recording/video`, a native video element). The page has no YouTube embed, so the concern raised in #199 (a YouTube embed asking for `accelerometer` and `gyroscope`, which the policy denies) does not apply to the current release.
+    - "Watch lyric video" was pressed once, and was paused a few seconds later. Pressing play likely recorded one listening "start" event for Old News in the site's music analytics at about 01:27 UTC.
     - The console showed no Permissions-Policy messages, before or after playback.
 - **UNVERIFIED · Turnstile after the headers fix.**
-  - In the same built-in browser, Cloudflare Turnstile on `/` (contact form) and on `/music/old-news` issued no token. The widget rendered at 0 px height, and the console logged repeated `Uncaught TurnstileError: [Cloudflare Turnstile] Error: 600010.` Nothing was submitted.
-  - A/B test on a public third-party Turnstile test page (peet.ws), with real site keys, in the same browser: in non-interactive mode, a token was issued both in an unrestricted frame and in a frame denying the same eight features as the site's Permissions-Policy (accelerometer, camera, geolocation, gyroscope, magnetometer, microphone, payment, usb). In managed mode, both frames showed the same "Verify you are human" checkbox (not clicked).
-  - So the Permissions-Policy denial list did not change Turnstile's behavior there. The other three of the four headers do not affect a third-party iframe or script on the page, and Chrome's default referrer policy is already `strict-origin-when-cross-origin`.
-  - Not established: whether Turnstile works for real visitors on this site now, and whether it also failed in this browser before #199 (not tested then). A 0 px widget that errors fits a site key in invisible mode rejecting an automated, embedded browser, but the widget mode was not checked.
-  - Owner check: open the contact form on `/` in your own browser and confirm the Turnstile check completes (do not send), or look at the Turnstile analytics for this site key in the Cloudflare dashboard for a change around 01:25 UTC on October 21.
+  - `/`: observed with "Send a message" opened (the form sits in a collapsed disclosure): the widget rendered at 0 px height, issued no token after about 12 seconds, and the console logged more than 100 `Uncaught TurnstileError: [Cloudflare Turnstile] Error: 600010.` messages.
+  - `/music/old-news`: a compact widget with no hidden or collapsed parent also rendered at 0 px height, issued no token, and logged about 100 of the same error. Nothing was submitted on either page.
+  - A/B test on a public third-party Turnstile test page (peet.ws), using that page's own live site keys, not this site's key and not Cloudflare's dummy test keys, in the built-in browser: in non-interactive mode, a token was issued both in an unrestricted frame and in a frame denying the same eight features as the site's Permissions-Policy (accelerometer, camera, geolocation, gyroscope, magnetometer, microphone, payment, usb). In managed mode, both frames showed the same "Verify you are human" checkbox (not clicked).
+  - So the Permissions-Policy denial list did not change Turnstile's behavior there. `X-Content-Type-Options` and `X-Frame-Options` apply to this page's own response, not to a third-party iframe or script inside it, and the `Referrer-Policy` value is Chrome's default (`strict-origin-when-cross-origin`), so it changes nothing Turnstile receives.
+  - Not established: whether Turnstile works for real visitors on this site now, and whether it also failed in this browser before #199 (not tested then). A visible widget that stays at 0 px and errors is what an invisible-mode site key would show if it rejected an automated, embedded browser, but the widget mode was not checked.
+  - Owner check: in the Cloudflare dashboard, check this site key's widget mode and its Turnstile analytics for a change around 01:25 UTC on October 21. In your own browser, open "Send a message" on `/` without sending: a visible widget should show a success check mark; if no widget shows, open the developer console and confirm no `TurnstileError` appears.
 - **PASS, with gaps · Rollback.** Revision `b429889`, in production until `f778ae42` deployed, with the stored-brief caveat in the header. Whether a website or web app brief has been stored since the deploy was not checked (the owner center and D1 were not inspected), so check before any rollback. If such a brief exists, roll forward with a fix or read the request from D1. A rollback to `b429889` would also undo later commits on `main`, so check what has merged since.
 - **PASS, with gaps · Post-deployment QA.** These were read-only checks run against production on October 20, 2026, after the deploy, except one header request at 17:43 UTC, while the Workers Builds run for `f778ae42` was still in progress (see the security headers item above). No brief was sent, no one signed in and the owner center was not opened.
   - Method: status codes, headers, redirects, page metadata, `robots.txt`, the sitemaps, and the status and type of the pictures came from `curl`, without following the owner redirects.
@@ -331,11 +332,11 @@ PASS means the evidence named here was observed. Production checks after the mer
     - The overflow measurement on "What do you have today?" at 1280 px.
     - `/`, `/services`, `/privacy` and the 404 page rendered in a browser on production: not viewed.
 - **UNVERIFIED · Review of the final commit's owner-brief captures before merge.** The record as merged (`f778ae42`) listed this review as a step before merge. Nothing in the record shows it was done, and none of the `10400d7` captures were viewed for this record. Judging by the source and the scenario captions, only the acceptance one of the offer editor's two changed examples is expected to appear in the `owner-brief` captures, and the later-milestone handoff example is expected in none. Owner decision: look at them now, or accept the gap as an exception with its impact and follow-up.
-- **PASS, with gaps · Receipt.** Implemented: yes. Verified locally: yes. Deployed: yes, per the passing Workers Builds check run for `f778ae42` (17:44 UTC); the live site does not show its revision. Verified live: partly. The read-only checks above passed, with exceptions: security headers on HTML responses (FAIL on October 20, 2026; fixed by #199 and verified live on October 21, 2026 UTC), the production revision (UNVERIFIED), and Turnstile after the fix (UNVERIFIED, see section 7). The items under Still not covered did not run. Owner steps and the agreements gap remain (see Remaining work).
+- **PASS, with gaps · Receipt.** Implemented: yes. Verified locally: yes. Deployed: yes, per the passing Workers Builds check run for `f778ae42` (17:44 UTC); the live site does not show its revision. Verified live: partly. The checks above passed, except the production revision (UNVERIFIED) and Turnstile after the headers fix (UNVERIFIED, see section 7). Security headers on HTML responses failed on October 20, 2026 UTC; #199 fixed them, and the fix was verified live on October 21, 2026 UTC, except Astro's repeated-trailing-slash redirect and bare 500, which carry none of the four headers (see section 7). The items under Still not covered did not run. Owner steps and the agreements gap remain (see Remaining work).
 
 ## 8. Private owner center
 
-- **N/A · Access, headers and schema.** Owner routes, Access, response headers and the schema are unchanged.
+- **N/A · Access, headers and schema.** Owner routes, Access, response headers and the schema are unchanged by #188 (#199 later added the four `/*` headers to owner responses; not checked live).
 - **PASS · Persistence before success, by tests.**
   - `tests/api/software-inquiry.test.ts` covers this: "preserves input and clears success limit after a storage failure" returns 503 without success, and the website brief test stores the request under `website` before success.
   - Real storage failure is not exercised.
@@ -367,6 +368,7 @@ These shipped unmeasured and stay UNVERIFIED unless the owner records an excepti
 - the live suggestion API (not called)
 - the final commit's owner-brief captures (not viewed)
 - Turnstile for real visitors after #199 (it issued no token in the built-in browser)
+- the redirect for repeated trailing slashes and Astro's bare 500 after a thrown error, which carry none of the four security headers (the redirect was observed live; the 500 was not requested)
 - the other gaps listed under Still not covered in section 7
 
 The owner can cover the device check and email delivery now that the site is deployed, by opening the brief on a phone and sending one test brief.
@@ -375,7 +377,8 @@ The owner can cover the device check and email delivery now that the site is dep
 
 - Owner: look at the final commit's captures under `pr-188/10400d7/` on the `screenshots` branch, including `website-brief-owner-brief-desktop.png` (1280 px) and `website-brief-owner-brief-phone.png` (390 px), or accept the gap as an exception with its impact and follow-up in this record (see the UNVERIFIED item in section 7).
 - Owner: run `npm run owner:health -- --remote --post-deploy`. Until it is recorded, target health stays a launch-blocking UNVERIFIED item (checklist item 8.15), unless the owner accepts it as an exception with its impact and follow-up in this record.
-- Owner: open the contact form on `/` in your own browser and confirm the Turnstile check completes (do not send), or check the Turnstile analytics in the Cloudflare dashboard for a change around 01:25 UTC on October 21 (see the UNVERIFIED Turnstile item in section 7).
+- Owner: in the Cloudflare dashboard, check this site key's widget mode and its Turnstile analytics for a change around 01:25 UTC on October 21. In your own browser, open "Send a message" on `/` without sending: a visible widget should show a success check mark; if no widget shows, open the developer console and confirm no `TurnstileError` appears (see the UNVERIFIED Turnstile item in section 7).
+- Owner: accept, as an exception with its impact and follow-up in this record, that Astro's repeated-trailing-slash redirect and its bare 500 carry none of the four headers, or ask for a fix (see the security headers item in section 7).
 - Owner: confirm which revisions production served during these checks (see the UNVERIFIED item in section 7, checklist item 7.5), for example from Cloudflare's deployment history, or accept the gap as an exception with its impact and follow-up in this record.
 - Owner: save contractor details.
 - Owner: before turning on website signing, meet the gates in the signing release record (`docs/prelaunch-qa-2026-09-30-software-signing.md`), including counsel review of the final templates and electronic consent, and owner verification of the registered-agent address and the saved contractor configuration.
