@@ -1,0 +1,100 @@
+<!doctype html>
+<!-- Software brief (/software/start): the first screen of the project brief. Each path is chosen in
+     turn, the kicker and progress dots change as they do on the page (Website adds an eighth step),
+     and the path's first question opens with the form's own example answer in placeholder grey.
+     Copy is verbatim from src/pages/software/start.astro, src/lib/software-inquiry.ts and
+     src/scripts/software-inquiry.ts. On the page the question is the next screen; here it opens in
+     place so all three paths fit one loop. -->
+<html lang="en" data-duration="7200">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../kit.css" />
+<style>
+  .card { padding: 60px 64px; }
+  .eyebrow { position: relative; height: 24px; font: 20px var(--sans); color: var(--accent); letter-spacing: .06em; margin: 0; }
+  .eyebrow span { position: absolute; left: 0; top: 0; white-space: nowrap; opacity: 0; }
+  .eyebrow .k0 { opacity: 1; }
+  /* Brief dots (software-intake.css): the current step is filled with the accent. */
+  .dots { position: absolute; left: 64px; top: 100px; display: flex; gap: 12px; }
+  .dots i { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #D9D0C2; }
+  .dots i:first-child { background: var(--accent); border-color: var(--accent); }
+  .dots i:last-child { opacity: 0; }
+  .rule { position: absolute; left: 64px; right: 64px; top: 130px; height: 1px; background: var(--rule); }
+  h1 { position: absolute; left: 64px; top: 156px; margin: 0; font: 400 84px/84px var(--serif); letter-spacing: -.045em; }
+  .foot { position: absolute; left: 64px; top: 348px; width: 470px; margin: 0; font: 400 22px/30px var(--serif); color: var(--muted); }
+  .cards { position: absolute; left: 604px; top: 152px; width: 532px; display: flex; flex-direction: column; gap: 12px; }
+  /* .intake-offer (audio-intake.css): rule border; when checked, accent border on a 5% accent tint. */
+  .offer { position: relative; height: 118px; border: 1.5px solid var(--rule); border-radius: 3px; background: var(--paper); overflow: hidden; }
+  .radio { position: absolute; left: 24px; top: 21px; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #8F877B; background: var(--paper); }
+  .label { position: absolute; left: 68px; top: 13px; margin: 0; font: 400 32px/40px var(--serif); white-space: nowrap; }
+  .desc { position: absolute; left: 68px; top: 56px; width: 440px; margin: 0; font: 400 20px/26px var(--serif); color: var(--muted); }
+  .q { position: absolute; left: 68px; top: 58px; margin: 0; font: 400 26px/32px var(--serif); white-space: nowrap; opacity: 0; }
+  .box { position: absolute; left: 68px; top: 100px; width: 440px; padding: 10px 14px; border: 1.5px solid #D9D0C2; border-radius: 3px; background: var(--paper); opacity: 0; }
+  /* Placeholder colour: color-mix(in srgb, var(--muted) 80%, var(--paper)) from audio-intake.css. */
+  .ph { position: relative; min-height: 84px; margin: 0; font: 400 20px/28px var(--serif); color: #6D6D6C; }
+  .cover { position: absolute; left: -2px; right: -2px; height: 28px; background: var(--paper); transform-origin: right; }
+  .bottom { position: absolute; bottom: 48px; margin: 0; font: 20px var(--sans); color: var(--muted); }
+  .url { left: 64px; } .reassure { right: 64px; }
+</style>
+</head>
+<body>
+<main class="frame card">
+  <p class="eyebrow"><span class="k0">Project brief</span><span class="k1">Website brief</span><span class="k2">Web app brief</span><span class="k3">Workflow brief</span></p>
+  <div class="dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="rule"></div>
+  <h1>What are you<br />working on?</h1>
+  <p class="foot">Not sure which? Pick the closest. I’ll suggest the right fit when I reply.</p>
+  <div class="cards">
+    <div class="offer o0"><i class="radio"></i><p class="label">Website design</p><p class="desc">A site people can read on a phone and act on.</p>
+      <p class="q">What's the website for?</p><div class="box"><p class="ph">A site for my pottery studio. People should see upcoming classes and sign up without messaging me first.<i class="cover"></i><i class="cover"></i><i class="cover"></i></p></div></div>
+    <div class="offer o1"><i class="radio"></i><p class="label">Web app</p><p class="desc">An app people open in a browser, on a phone or a computer.</p>
+      <p class="q">What should the app let people do?</p><div class="box"><p class="ph">Let my students book and pay for lessons without emailing me.<i class="cover"></i><i class="cover"></i></p></div></div>
+    <div class="offer o2"><i class="radio"></i><p class="label">Workflow automation</p><p class="desc">A tool that takes manual steps out of a task your team repeats.</p>
+      <p class="q">What happens today?</p><div class="box"><p class="ph">We track new clients in a shared spreadsheet. Three of us update it, and follow-ups slip through the cracks.<i class="cover"></i><i class="cover"></i><i class="cover"></i></p></div></div>
+  </div>
+  <p class="bottom url">thesuperhuman.us/software/start</p>
+  <p class="bottom reassure">No booking or payment at this stage.</p>
+</main>
+<script src="../kit.js"></script>
+<script>
+  const { play, ease } = og;
+  // Each path holds for 2 s: 600-2600 Website design, 2600-4600 Web app, 4600-6600 Workflow automation.
+  const T = [600, 2600, 4600];
+  const H = { poster: 118, other: 68, open: 218 };
+  document.querySelectorAll('.ph').forEach(ph => ph.querySelectorAll('.cover').forEach((cover, line) => { cover.style.top = `${line * 28}px`; }));
+
+  [0, 1, 2].forEach(i => {
+    const offer = `.o${i}`;
+    // Heights: the chosen path opens, the other two close to their labels; the column stays 378 px tall.
+    const heights = [[0, { height: `${H.poster}px` }]];
+    T.forEach((t, k) => { const h = i === k ? H.open : H.other; heights.push([t + 200, { height: `${H.poster}px`, easing: ease.out }], [t + 600, { height: `${h}px` }], [t + 1700, { height: `${h}px`, easing: ease.out }], [t + 2000, { height: `${H.poster}px` }]); });
+    play(offer, heights);
+    const t = T[i];
+    play(offer, [[t, { borderColor: '#E8E3DA', backgroundColor: '#FBF8F2' }], [t + 250, { borderColor: '#AE5534', backgroundColor: '#F7F0E9' }], [t + 1700, { borderColor: '#AE5534', backgroundColor: '#F7F0E9' }], [t + 1900, { borderColor: '#E8E3DA', backgroundColor: '#FBF8F2' }]]);
+    // A checked radio drawn the way Chromium draws accent-color: accent ring and fill, paper centre.
+    play(`${offer} .radio`, [[t, { borderColor: '#8F877B', boxShadow: 'inset 0 0 0 0 #AE5534' }], [t + 250, { borderColor: '#AE5534', boxShadow: 'inset 0 0 0 6px #AE5534' }], [t + 1700, { borderColor: '#AE5534', boxShadow: 'inset 0 0 0 6px #AE5534' }], [t + 1900, { borderColor: '#8F877B', boxShadow: 'inset 0 0 0 0 #AE5534' }]]);
+    play(`${offer} .q`, [[t + 400, { opacity: 0, transform: 'translateY(8px)', easing: ease.out }], [t + 600, { opacity: 1, transform: 'translateY(0)' }], [t + 1650, { opacity: 1, transform: 'translateY(0)' }], [t + 1800, { opacity: 0, transform: 'translateY(0)' }]]);
+    play(`${offer} .box`, [[t + 450, { opacity: 0, transform: 'translateY(10px)', easing: ease.out }], [t + 650, { opacity: 1, transform: 'translateY(0)' }], [t + 1650, { opacity: 1, transform: 'translateY(0)' }], [t + 1800, { opacity: 0, transform: 'translateY(0)' }]]);
+    // The example answer appears a line at a time (paper covers slide off to the right) in 800 ms.
+    const covers = [...document.querySelectorAll(`${offer} .cover`)];
+    const step = 800 / covers.length;
+    covers.forEach((cover, line) => play(cover, [[t + 650 + step * line, { transform: 'scaleX(1)' }], [t + 650 + step * (line + 1), { transform: 'scaleX(0)' }], [t + 1800, { transform: 'scaleX(0)' }], [t + 1801, { transform: 'scaleX(1)' }]]));
+    // Kicker: "Project brief" gives way to the path's brief, as softwareBriefKickers does on the page.
+    play(`.k${i + 1}`, [[t + 150, { opacity: 0 }], [t + 300, { opacity: 1 }], [t + 1600, { opacity: 1 }], [t + 1750, { opacity: 0 }]]);
+  });
+  // Descriptions step aside while any path is open.
+  const desc = [[0, { opacity: 1 }]];
+  T.forEach(t => desc.push([t + 200, { opacity: 1 }], [t + 350, { opacity: 0 }], [t + 1850, { opacity: 0 }], [t + 2000, { opacity: 1 }]));
+  play('.desc', desc);
+  const k0 = [[0, { opacity: 1 }]];
+  T.forEach(t => k0.push([t, { opacity: 1 }], [t + 150, { opacity: 0 }], [t + 1750, { opacity: 0 }], [t + 1900, { opacity: 1 }]));
+  play('.k0', k0);
+  // Dots: question 1 of 7 becomes question 2; the Website brief has eight steps, so its eighth dot appears.
+  const on = { backgroundColor: '#AE5534', borderColor: '#AE5534' }, off = { backgroundColor: 'rgba(174, 85, 52, 0)', borderColor: '#D9D0C2' };
+  const dot = (a, b) => { const steps = [[0, a]]; T.forEach(t => steps.push([t + 100, a], [t + 300, b], [t + 1700, b], [t + 1900, a])); return steps; };
+  play('.dots i:nth-child(1)', dot(on, off));
+  play('.dots i:nth-child(2)', dot(off, on));
+  play('.dots i:nth-child(8)', [[T[0] + 100, { opacity: 0 }], [T[0] + 300, { opacity: 1 }], [T[0] + 1700, { opacity: 1 }], [T[0] + 1900, { opacity: 0 }]]);
+</script>
+</body>
+</html>

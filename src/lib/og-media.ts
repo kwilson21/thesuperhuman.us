@@ -15,6 +15,14 @@ export const OG_SCENES = {
     routes: ['/'],
     alt: 'Kazon Wilson’s card: his name, “I build software, design websites, and mix and master music.” and a desk with a monitor of code, a plant, headphones, a game controller and a notebook.',
   },
+  services: {
+    routes: ['/services'],
+    alt: 'Work with me: Three ways to work with me. The Old News record cover for mixing and mastering, a screenshot of this site for website design and the Tally budgeting demo for software engineering, above the line “Every project is fixed price and agreed in writing before work begins.”',
+  },
+  'software-start': {
+    routes: ['/software/start'],
+    alt: 'Project brief: What are you working on? Three choices: Website design, a site people can read on a phone and act on; Web app, an app people open in a browser, on a phone or a computer; and Workflow automation, a tool that takes manual steps out of a task your team repeats.',
+  },
 } satisfies Record<string, { routes: string[]; alt: string }>;
 
 export type OgScene = keyof typeof OG_SCENES;

@@ -7,5 +7,23 @@
     "durationMs": 6000,
     "imageBytes": 377184,
     "videoBytes": 269508
+  },
+  "services": {
+    "image": "/og/services-75a539dbee.png",
+    "video": "/og/services-afd37a3254.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 7200,
+    "imageBytes": 344075,
+    "videoBytes": 760167
+  },
+  "software-start": {
+    "image": "/og/software-start-ca3244d4c1.png",
+    "video": "/og/software-start-65d389073b.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 7200,
+    "imageBytes": 192409,
+    "videoBytes": 471341
   }
 }

@@ -45,12 +45,51 @@
   name, the introduction and the desk objects.
 - Outcome: ready for production.
 
+## services
+
+- Placement: `/services`.
+- Composition: the Work with me hub's three doors (`src/components/WorkWithMe.astro`)
+  with their reviewed artwork (`src/assets/site/work-with-me-*.webp`, recorded in
+  `work-with-me-doors.md`) and the page's own copy (`src/layouts/ServiceSheet.astro`,
+  `src/data/work-with-me.ts`, `src/data/services.ts`). The only prices shown are the
+  approved audio starting prices the page itself shows.
+- Motion: each door takes focus for 2 s while the others dim. Mixing plays the Old
+  News master waveform (`src/content/audio-examples/old-news-mastering.json`) across
+  its cover, the way the comparison player fills; Website design zooms into the real
+  screenshot and rings its Start a project button; Software engineering zooms into
+  the Tally demo with its "Demo data" banner kept in frame and rings Safe to spend.
+- Detail inspection: pass. Poster at native size and twelve frames on a contact
+  sheet. Rings sit on the button and the figure they mark; the zooms keep their
+  subjects in frame; every line fits inside the frame.
+- Physical logic: not applicable (screenshots and type; no drawn objects).
+- Outcome: ready for production.
+
+## software-start
+
+- Placement: `/software/start`.
+- Composition: the project brief drawn in HTML at video scale, with the page's own
+  heading, choices, descriptions, questions and example answers
+  (`src/pages/software/start.astro`, `src/lib/software-inquiry.ts`,
+  `src/scripts/software-inquiry.ts`). No images.
+- Motion: each path is chosen in turn; its card opens to its first question and the
+  form's own example answer appears line by line, while the step dots and the brief
+  name change as they do on the page. The page returns to its first step at the end.
+- Detail inspection: pass. Poster at native size and twelve frames on a contact
+  sheet. Card heights keep the column inside the frame; the example answers are the
+  form's placeholders, shown in placeholder grey, not presented as real requests.
+- Physical logic: not applicable.
+- Outcome: ready for production.
+
 ```json
 {
   "outcome": "ready for production",
   "files": [
-    { "path": "public/og/home-512dc0dcad.png", "sha256": "512dc0dcad3a1fbecbbcc6d1341de98848916f52fe07cb11f6d862b27769becd", "width": 1200, "height": 630, "bytes": 377184 },
-    { "path": "public/og/raw/home-16874210af.mp4", "sha256": "16874210afc42bb2d90846a73948f41ff2b9b2645a25d43bf1dee7416022d342", "width": 1200, "height": 630, "bytes": 269508 }
+    {"path": "public/og/home-512dc0dcad.png", "sha256": "512dc0dcad3a1fbecbbcc6d1341de98848916f52fe07cb11f6d862b27769becd", "width": 1200, "height": 630, "bytes": 377184},
+    {"path": "public/og/services-75a539dbee.png", "sha256": "75a539dbeec538a9e6bcd44d2a17fe225aa43b58edfd997a19fa6b1940cab492", "width": 1200, "height": 630, "bytes": 344075},
+    {"path": "public/og/software-start-ca3244d4c1.png", "sha256": "ca3244d4c1805324ce58f03da51973ea7978e7b3068ee2ecb7f5b2927546521f", "width": 1200, "height": 630, "bytes": 192409},
+    {"path": "public/og/raw/home-16874210af.mp4", "sha256": "16874210afc42bb2d90846a73948f41ff2b9b2645a25d43bf1dee7416022d342", "width": 1200, "height": 630, "bytes": 269508},
+    {"path": "public/og/raw/services-afd37a3254.mp4", "sha256": "afd37a3254c286617427f7b4a8c4e0399e8950734ca034d734c6ee9521a535a3", "width": 1200, "height": 630, "bytes": 760167},
+    {"path": "public/og/raw/software-start-65d389073b.mp4", "sha256": "65d389073bcec0b0e7ac5c3e6d42abd54be1eb5362bddb672970dbca1721b2d6", "width": 1200, "height": 630, "bytes": 471341}
   ]
 }
 ```
