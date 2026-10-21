@@ -57,7 +57,7 @@ Owner, in conversation, October 20, 2026 (UTC):
   - The owner approved the updated MSA and SOW templates covering website design on October 20, 2026, and chose to publish both (owner decision).
   - Published in the production owner center at `/owner/agreements`, each as version 1 with label `v2026-10-20`: the MSA at 18:22 UTC (2:22 PM EDT) and the SOW at 18:25 UTC (2:25 PM EDT).
   - Source: observed in the owner center by the coordinating Claude session at the owner's direction, which read each version and time back from the page. The published text matched the approved source.
-  - Website signing is off and no contractor details are saved. Saving contractor details and turning on website signing are the owner's remaining steps, and they come before a website offer is sent for signing.
+  - Website signing is off and no contractor details are saved. The owner's remaining steps are saving contractor details and turning on website signing. The gates in the signing release record (`docs/prelaunch-qa-2026-09-30-software-signing.md`) also apply before signing is enabled, including counsel review of the final templates and electronic consent, and owner verification of the registered-agent address and contractor configuration.
 - Impact: after this release, a website brief can reach the owner center, and nothing in the code stops an offer from being sent on it.
 - Condition met on October 20, 2026, when the templates were published (see Status). Original text, kept for history: Proposed until the templates are published (owner to confirm): answer website briefs with a question or a decline, and send the first website offer only under templates that cover website design.
 
@@ -320,7 +320,7 @@ PASS means the evidence named here was observed. Production checks after the mer
 
 ## Software agreement signing
 
-- **PASS · Template coverage for website design.** See above. The updated MSA and SOW templates the owner approved for website design were published in `/owner/agreements` on October 20, 2026 (both version 1, label `v2026-10-20`), observed as described under Status. Website signing is off and no contractor details are saved; saving them and turning on signing are owner steps (see Remaining work).
+- **PASS · Template coverage for website design.** See above. The updated MSA and SOW templates the owner approved for website design were published in `/owner/agreements` on October 20, 2026 (both version 1, label `v2026-10-20`), observed as described under Status. Website signing is off and no contractor details are saved; saving them, meeting the signing release gates and turning on signing are owner steps (see Remaining work).
 - **N/A · The other signing checks.** These cover counsel review, contractor config, seeded template previews, the signing setting, email authentication, PDF rendering, certificates, failures, downloads, restore, retention and screenshots. The signing flow, templates and PDFs are unchanged by this PR.
 
 ## Known unknowns
@@ -348,6 +348,8 @@ The owner can cover the device check and email delivery now that the site is dep
 - Owner: run `npm run owner:health -- --remote --post-deploy`. Until it is recorded, target health stays a launch-blocking UNVERIFIED item (checklist item 8.15), unless the owner accepts it as an exception with its impact and follow-up in this record.
 - Owner: decide on the missing security headers on HTML responses (see the FAIL in section 7): fix them or accept the gap as an exception with its impact and follow-up in this record.
 - Owner: confirm which revisions production served during these checks (see the UNVERIFIED item in section 7, checklist item 7.5), for example from Cloudflare's deployment history, or accept the gap as an exception with its impact and follow-up in this record.
-- Owner: save contractor details and turn on website signing before a website offer is sent for signing.
+- Owner: save contractor details.
+- Owner: before turning on website signing, meet the gates in the signing release record (`docs/prelaunch-qa-2026-09-30-software-signing.md`), including counsel review of the final templates and electronic consent, and owner verification of the registered-agent address and the saved contractor configuration.
+- Owner: turn on website signing after those gates are met, and before a website offer is sent for signing.
 - Owner: open the offer editor and check the two changed website examples (owner only, behind Access).
 - Owner: check the brief on a phone and send one test brief (see Known unknowns).
