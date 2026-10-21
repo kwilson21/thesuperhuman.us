@@ -1,0 +1,146 @@
+<!doctype html>
+<!-- About (/about): the person page, played like scrolling it. The poster is the page's intro
+     (src/pages/about.astro:27-28, src/content/pages/about.md) over the terrain, with the four
+     chapter labels as a contents line. The page then scrolls through the four chapters in the
+     page's alternating layout, each object multiplied into the paper as on the page, while one
+     terracotta trail draws on from the terrain's own painted path. The trail keeps to clear
+     paper (gutters and the space under each title) so it never crosses an object. The
+     headphones give off their rings and the notebook's sun glows (ObjectLife.astro); the smaller
+     beats are left out because they do not read at Messages size. Each panel carries its own
+     kicker and url, so every resting frame is complete. 7.2 s, above the 6 s default: four
+     chapters each need a readable hold of nearly a second. Copy is verbatim from
+     about.astro:18-21 and 27 and about.md:6; the kickers join the page kicker and a chapter
+     label with " / ". -->
+<html lang="en" data-duration="7200">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../kit.css" />
+<style>
+  /* Six 630 px panels: the intro, four chapters, and a copy of the intro for the loop seam. Each
+     panel carries its own kicker and url, so every resting frame is complete. The strip carries
+     the paper so the multiplied art blends into it. */
+  .strip { position: absolute; left: 0; top: 0; width: 1200px; height: 3780px; background: var(--paper); will-change: transform; }
+  .strip .url { bottom: auto; }
+  .trail { position: absolute; left: 0; top: 0; width: 1200px; height: 3780px; z-index: -2; overflow: visible; opacity: .8; }
+  .trail path { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
+  .trail .draw { stroke-dasharray: 1 2; stroke-dashoffset: 1.02; }
+  .trail .lead { stroke: url(#lead); }
+
+  /* Intro (about.astro:27; global.css page-title and page-lede). */
+  .intro-title { position: absolute; left: 64px; width: 520px; }
+  .intro-lede { position: absolute; left: 64px; width: 470px; font: 400 30px/1.3 var(--serif); }
+  .intro-lede .name { font-family: var(--name-text); }
+  .contents { position: absolute; left: 64px; white-space: nowrap; }
+  .contents i { font-style: normal; color: var(--accent); }
+  /* terrain-v1 (1536 × 1024) at 0.58: frame x = 390 + 0.58 × art x, y = 20 + 0.58 × art y. The
+     page's terrain mask, with the right stop at 92% to keep the summit tree and a short top fade
+     over the blank sky so the box shows no edge. */
+  .terrain { left: 390px; width: 890.88px; height: 593.92px; --fx0: 28%; --fx1: 92%; --fy0: 14%; --fy1: 75%; }
+
+  /* Chapters (about.astro:31-35): the title beside the object, sides alternating. */
+  .chapter-title { position: absolute; width: 460px; }
+  /* The page's object mask (about.astro:69), shared by each picture and its ObjectLife overlay. */
+  .object, .life { mask-image: radial-gradient(ellipse at center, #000 40%, transparent 72%); }
+  .life { position: absolute; z-index: -1; overflow: visible; }
+  /* Ring stroke 3 px, up from the page's 2.4, so the rings read at Messages size. */
+  .rings ellipse { fill: none; stroke: var(--accent); stroke-width: 3; vector-effect: non-scaling-stroke; transform-box: fill-box; transform-origin: center; opacity: 0; }
+  .sun circle { transform-box: fill-box; transform-origin: center; opacity: 0; }
+</style>
+</head>
+<body>
+<main class="frame">
+  <div class="strip">
+    <svg class="trail" viewBox="0 0 1200 3780" aria-hidden="true">
+      <!-- The intro's lead-out: it fades in along the terrain's painted path and runs off the bottom of the panel. -->
+      <defs><linearGradient id="lead" gradientUnits="userSpaceOnUse" x1="585" y1="507" x2="455" y2="545"><stop offset="0" stop-color="#AE5534" stop-opacity="0" /><stop offset="1" stop-color="#AE5534" /></linearGradient></defs>
+      <path class="lead" /><g transform="translate(0 3150)"><path class="lead" /></g>
+      <path class="draw t1" pathLength="1" /><path class="draw t2" pathLength="1" /><path class="draw t3" pathLength="1" />
+    </svg>
+  </div>
+</main>
+<template id="intro">
+  <p class="kicker" style="top: 60px">About</p>
+  <h1 class="intro-title h-84" style="top: 100px">A little more<br />about me.</h1>
+  <p class="intro-lede" style="top: 306px">I’m <span class="name">Kazon</span>. Software engineer, audio engineer, and a person who likes figuring things out.</p>
+  <p class="contents label-l" style="top: 452px">Audio <i>·</i> Software <i>·</i> Play <i>·</i> What’s next</p>
+  <p class="url" style="top: 558px">thesuperhuman.us/about</p>
+  <div class="art terrain" style="top: 20px"><img src="../../../src/assets/site/terrain-v1.webp" alt="" width="1536" height="1024" /></div>
+</template>
+<script src="../kit.js"></script>
+<script>
+  const { play, ease } = og;
+  const strip = document.querySelector('.strip');
+  const P = 630;
+
+  // Panels 0 and 5: the intro, identical so the loop closes on the poster.
+  [0, 5].forEach(k => {
+    const panel = document.getElementById('intro').content.cloneNode(true);
+    panel.querySelectorAll('[style*="top"]').forEach(el => { el.style.top = `${parseFloat(el.style.top) + k * P}px`; });
+    strip.append(panel);
+  });
+
+  // Chapters: title, art box (scale s, left x, top y in the panel) and its title position.
+  const chapters = [
+    { k: 1, label: 'Audio', title: 'I started with<br />sound.', img: 'headphones-v1', s: .5729, x: 414, y: 22, tx: 64, ty: 254 },
+    { k: 2, label: 'Software', title: 'Finding my way<br />into software.', img: 'laptop-v1', s: .52, x: -154, y: 58, tx: 676, ty: 254 },
+    { k: 3, label: 'Play', title: 'Room for play.', img: 'controller-v1', s: .48, x: 468, y: 68, tx: 64, ty: 285 },
+    { k: 4, label: 'What’s next', title: 'Making room for<br />what comes next.', img: 'notebook-v1', s: .52, x: -138, y: 50, tx: 676, ty: 254 },
+  ];
+  for (const c of chapters) {
+    const top = c.k * P;
+    const w = 1536 * c.s, h = 1024 * c.s;
+    const box = `left:${c.x}px;top:${top + c.y}px;width:${w}px;height:${h}px`;
+    strip.insertAdjacentHTML('beforeend',
+      `<p class="kicker" style="top:${top + 60}px">About / ${c.label}</p>` +
+      `<h2 class="chapter-title h-56" style="left:${c.tx}px;top:${top + c.ty}px">${c.title}</h2>` +
+      `<p class="url" style="top:${top + 558}px">thesuperhuman.us/about</p>` +
+      `<div class="art object" style="${box}"><img src="../../../src/assets/site/${c.img}.webp" alt="" width="1536" height="1024" /></div>`);
+    if (c.k === 1) strip.insertAdjacentHTML('beforeend',
+      `<svg class="life rings" style="${box}" viewBox="0 0 1536 1024"><g transform="translate(700 585)"><ellipse rx="172" ry="150" /><ellipse rx="172" ry="150" /><ellipse rx="172" ry="150" /></g></svg>`);
+    if (c.k === 4) strip.insertAdjacentHTML('beforeend',
+      `<svg class="life sun" style="${box}" viewBox="0 0 1536 1024"><defs><radialGradient id="sun-glow"><stop offset=".45" stop-color="#e08a62" stop-opacity=".5" /><stop offset="1" stop-color="#e08a62" stop-opacity="0" /></radialGradient></defs><g transform="translate(1053 266)"><circle r="70" fill="url(#sun-glow)" /><circle r="70" fill="url(#sun-glow)" /></g></svg>`);
+  }
+
+  // The trail: one smooth curve (Catmull-Rom as cubic Béziers) through points in strip
+  // coordinates, split into the intro's lead-out and three segments that draw in turn, so the
+  // joins stay smooth. The lead-out traces the terrain's painted path (art x 336-96 on it) and
+  // leaves the intro at the bottom; from there the trail winds as an S through each chapter's
+  // clear paper (the gutter between title and object, and the space under the title), never
+  // crossing an object, and ends just above chapter 4, out of view during that hold.
+  const pts = [
+    [585, 507], [557, 511], [529, 514], [501, 519], [474, 525], [446, 533], [410, 562], [395, 630],   // lead-out
+    [480, 780], [540, 910], [510, 1030], [430, 1130], [420, 1260],                                    // chapter 1
+    [500, 1320], [590, 1420], [620, 1560], [580, 1690], [560, 1790], [520, 1890],                     // chapter 2
+    [490, 2010], [495, 2190], [450, 2310], [380, 2400], [390, 2515],                                  // chapter 3
+  ];
+  const curve = pts.slice(1).map((p2, i) => {
+    const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p3 = pts[Math.min(pts.length - 1, i + 2)];
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    return ` C${[...c1, ...c2].map(n => n.toFixed(1)).join(' ')} ${p2.join(' ')}`;
+  });
+  const span = (from, to) => `M${pts[from].join(' ')}${curve.slice(from, to).join('')}`;
+  document.querySelectorAll('.lead').forEach(path => path.setAttribute('d', span(0, 7)));
+  [[7, 12], [12, 18], [18, 23]].forEach(([from, to], i) => document.querySelector(`.t${i + 1}`).setAttribute('d', span(from, to)));
+
+  // Timeline: rest 0-700, then each chapter scrolls in over 450 ms and holds 975 ms; the last
+  // scroll lands on the copy of the intro at 6850 and rests 350 ms into the seam.
+  const S = 450, H = 975, T0 = 700;
+  const into = k => T0 + (k - 1) * (S + H);        // scroll into panel k starts
+  const scroll = [[0, { transform: 'translateY(0px)' }]];
+  for (let k = 1; k <= 5; k++) scroll.push([into(k), { transform: `translateY(${-(k - 1) * P}px)`, easing: ease.inOut }], [into(k) + S, { transform: `translateY(${-k * P}px)` }]);
+  play('.strip', scroll);
+
+  // Trail segments draw while their panel is on screen, and reset once scrolled away.
+  const draw = (sel, from, to, reset) => play(sel, [[from, { strokeDashoffset: 1.02 }], [to, { strokeDashoffset: 0 }], [reset, { strokeDashoffset: 0 }], [reset + 1, { strokeDashoffset: 1.02 }]]);
+  draw('.t1', into(1) + 50, into(2) + 250, into(4));
+  draw('.t2', into(2) + 200, into(3) + 250, into(5));
+  draw('.t3', into(3) + 200, into(4) + 250, into(5) + 200);
+
+  // Headphones: three rings (ObjectLife ring-out, compressed to 1.2 s).
+  play('.rings ellipse', [[into(1) + 500, { transform: 'scale(1)', opacity: 0, easing: ease.ring }], [into(1) + 548, { opacity: .55, easing: ease.ring }], [into(1) + 1700, { transform: 'scale(1.7)', opacity: 0 }]], { stagger: 280 });
+  // Notebook: the sun glows twice (ObjectLife sun-glow, 1 s each).
+  play('.sun circle', [[into(4) + 450, { transform: 'scale(.6)', opacity: 0, easing: 'ease-out' }], [into(4) + 500, { opacity: .9, easing: 'ease-out' }], [into(4) + 1450, { transform: 'scale(1.9)', opacity: 0 }]], { stagger: 350 });
+</script>
+</body>
+</html>

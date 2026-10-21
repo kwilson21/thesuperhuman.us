@@ -13,15 +13,35 @@ import { mediaRange } from '~/lib/music-media';
 export const OG_SCENES = {
   home: {
     routes: ['/'],
-    alt: 'Kazon Wilson’s card: his name, “I build software, design websites, and mix and master music.” and a desk with a monitor of code, a plant, headphones, a game controller and a notebook.',
+    alt: 'Kazon Wilson’s name in large serif type, the tagline “Software, sound, and things worth exploring.” and the line “I build software, design websites, and mix and master music.” beside an illustrated desk with a monitor of code, a plant, a game controller, headphones and a sketched notebook.',
+  },
+  about: {
+    routes: ['/about'],
+    alt: 'About: “A little more about me.” above “I’m Kazon. Software engineer, audio engineer, and a person who likes figuring things out.” and the chapters Audio, Software, Play and What’s next, beside an illustrated pale terrain with a terracotta path winding past small trees.',
+  },
+  work: {
+    routes: ['/work'],
+    alt: 'Work: “Software engineer. I build useful software.” and “7+ years in production engineering”, above a Lyft panel reading 5,000 → 100,000+ rows per batch, drawn as twenty terracotta cells and labelled owner-reported batch capacity.',
   },
   services: {
     routes: ['/services'],
-    alt: 'Work with me: Three ways to work with me. The Old News record cover for mixing and mastering, a screenshot of this site for website design and the Tally budgeting demo for software engineering, above the line “Every project is fixed price and agreed in writing before work begins.”',
+    alt: 'Work with me: “Three ways to work with me.” Three framed pictures: the Old News record cover for mixing and mastering, a screenshot of this site for website design and the Tally budgeting demo for software engineering, above “Every project is fixed price and agreed in writing before work begins.”',
   },
   'software-start': {
     routes: ['/software/start'],
-    alt: 'Project brief: What are you working on? Three choices: Website design, a site people can read on a phone and act on; Web app, an app people open in a browser, on a phone or a computer; and Workflow automation, a tool that takes manual steps out of a task your team repeats.',
+    alt: 'Project brief: “What are you working on?” Three choices: Website design, a site people can read on a phone and act on; Web app, an app people open in a browser, on a phone or a computer; and Workflow automation, a tool that takes manual steps out of a task your team repeats.',
+  },
+  'personal-website': {
+    routes: ['/building/personal-website', '/building/personal-website/*'],
+    alt: 'Personal website: “Same palette. A different introduction.” Two homepage captures meet at a divider: the September 10 redesign with a large “Kazon Wilson” and a potted plant, and the original homepage’s portrait of Kazon.',
+  },
+  'personal-website-story': {
+    routes: ['/building/personal-website/story'],
+    alt: 'Personal website story: “Four ways the same palette could feel.” beside a grid of four generated homepage design studies cropped to their artwork: a quiet desk, linked sketches, a sound and pixel-game gallery and a winding landscape. The first is marked “A · Quiet studio, Chosen for Home.”',
+  },
+  writing: {
+    routes: ['/writing', '/writing/*'],
+    alt: 'Writing: “Notes on engineering, tools, and the choices behind the work.” over a hand-drawn underline, beside an illustration of a terracotta path winding through four checkpoints to an arrow.',
   },
 } satisfies Record<string, { routes: string[]; alt: string }>;
 

@@ -1,0 +1,63 @@
+<!doctype html>
+<!-- Personal website (/building/personal-website and /building/personal-website/*): the project
+     journal's opening comparison, "Same palette. A different introduction." Both homepage captures
+     sit in one window at the same scale and position, so the comparison is registered, and the
+     accent playhead from ComparisonPlayer.astro wipes the redesign across the original and back.
+     The redesign is on the left of the playhead and the original on the right, because the
+     original's left column carries superseded copy: the window only ever shows the original from
+     source x 801 (its text column ends at x 771), and the redesign's rows stop at source y 494,
+     above its September 10 lede (y 502). Captures are unedited; only crop, scale and clip are used.
+     Copy is verbatim: kicker from src/layouts/ProjectLayout.astro:28 with the title from
+     src/data/project-stories/personal-website.ts:49; status from personal-website.ts:54 (re-render
+     when it changes); headline, tags, dates and caption from src/pages/building/personal-website.astro:15-18. -->
+<html lang="en" data-duration="6000">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../kit.css" />
+<style>
+  h1 { position: absolute; left: 64px; top: 100px; white-space: nowrap; }
+  .status { position: absolute; right: 64px; top: 60px; white-space: nowrap; }
+
+  /* Window: 1072 × 324 showing source x 87-1440, y 85-494 of both 1440-wide captures (scale .7923). */
+  .window { position: absolute; left: 64px; top: 190px; width: 1072px; height: 324px; background: #FBF8F2; }
+  .layer { position: absolute; inset: 0; overflow: hidden; background: #FBF8F2; }
+  .layer img { position: absolute; left: -68.93px; top: -67.35px; width: 1140.93px; max-width: none; }
+  .after img { height: 792.31px; }
+  .before img { height: 713.08px; }
+  /* At rest the original shows from window x 566 (source x 801), clear of its text column, which ends at source x 771. */
+  .before { clip-path: inset(0 0 0 566px); will-change: clip-path; }
+  .playhead { position: absolute; top: 0; left: 0; width: 2px; height: 324px; margin-left: -1px; background: var(--accent); transform: translateX(566px); will-change: transform; }
+  .tag { position: absolute; top: 12px; margin: 0; padding: 3px 10px; font: 400 20px/1.3 var(--sans); color: var(--ink); background: rgba(251, 248, 242, .94); border: 1px solid var(--rule); border-radius: 3px; white-space: nowrap; }
+  .tag b { font-weight: 500; }
+  .tag span { color: var(--muted); }
+  .after .tag { left: 12px; }
+  .before .tag { right: 14px; }
+</style>
+</head>
+<body>
+<main class="frame card">
+  <p class="kicker">Building / Personal website</p>
+  <p class="status">Live - evolving</p>
+  <h1 class="h-60">Same palette. A different introduction.</h1>
+  <div class="window capture">
+    <div class="layer after"><img src="../../../src/assets/projects/website/home-after.png" alt="" width="1440" height="1000" />
+      <p class="tag"><b>Taking shape</b> <span>· September 10</span></p></div>
+    <div class="layer before"><img src="../../../src/assets/projects/website/home-before.png" alt="" width="1440" height="900" />
+      <p class="tag"><b>Before</b> <span>· September 9</span></p></div>
+    <i class="playhead"></i>
+  </div>
+  <p class="url">thesuperhuman.us/building/personal-website</p>
+  <p class="aside caption">Studio artwork is illustrative.</p>
+</main>
+<script src="../kit.js"></script>
+<script>
+  const { play, ease } = og;
+  const REST = 566, OPEN = 1072;
+  // 0-1000 poster; 1000-1800 the redesign sweeps across; 1800-3800 hold on it; 3800-4600 the original returns; rest.
+  const at = x => ({ clipPath: `inset(0 0 0 ${x}px)` });
+  const line = x => ({ transform: `translateX(${x}px)` });
+  play('.before', [[1000, { ...at(REST), easing: ease.inOut }], [1800, at(OPEN)], [3800, { ...at(OPEN), easing: ease.inOut }], [4600, at(REST)]]);
+  play('.playhead', [[1000, { ...line(REST), easing: ease.inOut }], [1800, line(OPEN + 2)], [3800, { ...line(OPEN + 2), easing: ease.inOut }], [4600, line(REST)]]);
+</script>
+</body>
+</html>

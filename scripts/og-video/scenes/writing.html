@@ -1,0 +1,66 @@
+<!doctype html>
+<!-- Writing (/writing and /writing/*): the Writing index, type-led. The poster is the section's own
+     lede beside the page's direction illustration, complete and still (the path-drawing motion
+     belongs to the AI essay's scene, so the two links look different side by side). The lede clears,
+     then is inked in from the left a line at a time with Home's writing reveal (index.astro:242-245:
+     clip-path inset, cubic-bezier(.6,.1,.2,1) over 1200 ms) and Home's pen stroke follows under it.
+     Copy is verbatim: the kicker is the page's h1 and the headline its lede
+     (src/pages/writing/index.astro:12, re-broken into three lines to sit beside the figure); the
+     caption is the figure's own (:23). The figure is the page's inline SVG (:16-22), viewBox cropped
+     to 56 28 440 352 and its strokes thickened about a third for the small preview. Because this
+     clip also serves future /writing/<slug> links until each gets its own scene, it never names an
+     entry, a date or a topic. Re-render if the lede or the drawing changes. 5 s rather than 6 s:
+     the only motion is the lede's reveal, and a longer still hold at the seam reads as a stalled
+     video. -->
+<html lang="en" data-duration="5000">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../kit.css" />
+<style>
+  h1 { position: absolute; left: 64px; top: 104px; margin: 0; }
+  /* Libron 60px, three lines, right edge near x 653: 47px clear of the figure. */
+  h1 span { display: block; width: fit-content; white-space: nowrap; clip-path: inset(-12% -6% -26% -2%); }
+  /* Home's pen stroke (index.astro:116, 214-216), stroke thickened for the small preview. */
+  .pen { position: absolute; left: 64px; top: 314px; width: 240px; height: 14px; overflow: visible; }
+  .pen path { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0; }
+  /* writing/index.astro:42: the figure sits on #f3eee5 with a 3px radius. */
+  .fig { position: absolute; left: 700px; top: 193px; width: 436px; height: 349px; margin: 0; }
+  .fig svg { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<main class="frame">
+  <p class="kicker">Writing</p>
+  <h1 class="h-60"><span>Notes on engineering,</span><span>tools, and the choices</span><span>behind the work.</span></h1>
+  <svg class="pen" viewBox="0 0 300 14" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M3 9 C 60 3, 110 12, 170 7 S 262 4, 297 8" /></svg>
+  <figure class="fig panel">
+    <svg viewBox="56 28 440 352" fill="none" aria-hidden="true">
+      <path pathLength="1" d="M357 368C231 342 255 301 164 304S56 269 128 244 262 247 307 201 408 212 369 147 422 115 470 66" stroke="var(--accent)" stroke-width="4.5" />
+      <path d="m449 72 24-10-4 25" stroke="var(--accent)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M164 304c68-33 176 14 140-33s-128-16-71-61 23-78-23-64 20-69-46-59M369 147c-58-18-48-58-7-52s28-52 55-46" stroke="#aaa18f" stroke-width="2" stroke-dasharray="6 8" />
+      <g fill="var(--paper)" stroke="var(--accent)" stroke-width="3.5"><circle cx="164" cy="304" r="6.5" /><circle cx="128" cy="244" r="6.5" /><circle cx="307" cy="201" r="6.5" /><circle cx="369" cy="147" r="6.5" /></g>
+      <g stroke="#9a967e" stroke-width="2" stroke-linecap="round"><path d="M104 197q-12-20-11-44m11 44q8-23 20-32m-20 32q-22-12-29-25m317 148q-12-25-8-56m8 56q5-23 18-40m-18 40q-21-13-24-29" /></g>
+    </svg>
+  </figure>
+  <p class="url">thesuperhuman.us/writing</p>
+  <p class="aside caption">Illustration</p>
+</main>
+<script src="../kit.js"></script>
+<script>
+  const { play, ease } = og;
+  // 0-800 poster. 800-1100 the lede and its pen stroke fade. While they are invisible (1101) each line
+  // is clipped back to its left edge and the stroke undrawn; then the lines ink in from 1200, 250 ms
+  // apart (the lede is wholly absent for about 0.3 s), and the stroke follows as the last line
+  // finishes. 3550-5000 rests on the poster.
+  const FADE = [800, 1100], RESET = FADE[1] + 1, INK = 1200, LINES = [1200, 1450, 1700];
+  const full = 'inset(-12% -6% -26% -2%)', empty = 'inset(-12% 106% -26% -2%)';
+  play('h1', [[FADE[0], { opacity: 1, easing: ease.in }], [FADE[1], { opacity: 0 }], [RESET + 1, { opacity: 0 }], [RESET + 2, { opacity: 1 }]]);
+  document.querySelectorAll('h1 span').forEach((line, i) => play(line, [[RESET, { clipPath: full }], [RESET + 1, { clipPath: empty }], [LINES[i], { clipPath: empty, easing: ease.ink }], [LINES[i] + INK, { clipPath: full }]]));
+  // Home starts the stroke 250 ms before its title finishes inking, and draws it over 900 ms.
+  const PEN = LINES[2] + INK - 250;
+  play('.pen path', [[RESET, { strokeDashoffset: 0 }], [RESET + 1, { strokeDashoffset: 1 }], [PEN, { strokeDashoffset: 1, easing: 'ease-in-out' }], [PEN + 900, { strokeDashoffset: 0 }]]);
+  // The undrawn stroke still shows its round cap, so it stays hidden until the pen touches down.
+  play('.pen', [[FADE[0], { opacity: 1, easing: ease.in }], [FADE[1], { opacity: 0 }], [PEN, { opacity: 0 }], [PEN + 1, { opacity: 1 }]]);
+</script>
+</body>
+</html>

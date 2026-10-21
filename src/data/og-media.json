@@ -1,21 +1,48 @@
 {
-  "home": {
-    "image": "/og/home-257eb55b39.png",
-    "video": "/og/home-c1231bc166.mp4",
-    "width": 1200,
-    "height": 630,
-    "durationMs": 6000,
-    "imageBytes": 373273,
-    "videoBytes": 267334
-  },
-  "services": {
-    "image": "/og/services-75a539dbee.png",
-    "video": "/og/services-afd37a3254.mp4",
+  "about": {
+    "image": "/og/about-b340333df0.png",
+    "video": "/og/about-ad416d9fa4.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 7200,
-    "imageBytes": 344075,
-    "videoBytes": 760167
+    "imageBytes": 341264,
+    "videoBytes": 1042683
+  },
+  "home": {
+    "image": "/og/home-feaa0743d2.png",
+    "video": "/og/home-b2de7f5328.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 7000,
+    "imageBytes": 439902,
+    "videoBytes": 642613
+  },
+  "personal-website": {
+    "image": "/og/personal-website-8b407f616e.png",
+    "video": "/og/personal-website-b492ac2c98.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 6000,
+    "imageBytes": 332958,
+    "videoBytes": 273977
+  },
+  "personal-website-story": {
+    "image": "/og/personal-website-story-af55f296e7.png",
+    "video": "/og/personal-website-story-28eb14e2fc.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 6800,
+    "imageBytes": 379423,
+    "videoBytes": 607369
+  },
+  "services": {
+    "image": "/og/services-6518d2c6c8.png",
+    "video": "/og/services-ee2799b652.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 7200,
+    "imageBytes": 343603,
+    "videoBytes": 767628
   },
   "software-start": {
     "image": "/og/software-start-ca3244d4c1.png",
@@ -25,5 +52,23 @@
     "durationMs": 7200,
     "imageBytes": 192409,
     "videoBytes": 471341
+  },
+  "work": {
+    "image": "/og/work-31561924d0.png",
+    "video": "/og/work-df5988c269.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 6000,
+    "imageBytes": 142618,
+    "videoBytes": 299833
+  },
+  "writing": {
+    "image": "/og/writing-ffaaf86028.png",
+    "video": "/og/writing-09fed73375.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 5000,
+    "imageBytes": 130411,
+    "videoBytes": 147052
   }
 }
