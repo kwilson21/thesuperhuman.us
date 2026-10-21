@@ -19,6 +19,17 @@ function makeContext(url: string, hostHeader?: string) {
   } as any;
 }
 
+const securityHeaderValues = {
+  'permissions-policy': 'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()',
+  'referrer-policy': 'strict-origin-when-cross-origin',
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'DENY',
+};
+
+function expectSecurityHeaders(response: Response, overrides: Record<string, string> = {}) {
+  for (const [name, value] of Object.entries({ ...securityHeaderValues, ...overrides })) expect(response.headers.get(name)).toBe(value);
+}
+
 describe('middleware.onRequest', () => {
   it('fails the build when an owner route is accidentally prerendered', async () => {
     const ctx = makeContext('https://thesuperhuman.us/owner');
@@ -211,4 +222,59 @@ it.each(['/api/offer/token/link', '/api/agreements/link'])('uses the effective c
       expect(response.status).toBe(host === (origin ?? 'https://thesuperhuman.us') ? 200 : 404);
     }
   }
+});
+
+it('adds the public security headers to HTML pages', async () => {
+  const next = vi.fn(async () => new Response('<!doctype html>', { headers: { 'content-type': 'text/html' } }));
+  expectSecurityHeaders(await onRequest(makeContext('https://thesuperhuman.us/'), next) as Response);
+});
+
+it('adds the public security headers to API JSON', async () => {
+  const response = await onRequest(makeContext('https://thesuperhuman.us/api/work-feed'), async () => Response.json({ ok: true })) as Response;
+  expectSecurityHeaders(response);
+});
+
+it('keeps owner 403 responses private and adds the public security headers', async () => {
+  vi.mocked(verifyOwnerAccess).mockResolvedValueOnce(null);
+  const response = await onRequest(makeContext('https://thesuperhuman.us/owner/requests'), vi.fn()) as Response;
+  expect(response.status).toBe(403);
+  expect(response.headers.get('cache-control')).toBe('private, no-store');
+  expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+  expectSecurityHeaders(response);
+});
+
+it('keeps studio pages on no-referrer and adds the other public security headers', async () => {
+  const response = await onRequest(makeContext('https://thesuperhuman.us/studio/projects/request-1'), async () => new Response('private project')) as Response;
+  expectSecurityHeaders(response, { 'referrer-policy': 'no-referrer' });
+});
+
+it('keeps the agreement no-referrer policy on early noncanonical host 404s', async () => {
+  const response = await onRequest(makeContext('https://thesuperhuman.us/api/agreements/link', 'foreign.example'), vi.fn()) as Response;
+  expect(response.status).toBe(404);
+  expectSecurityHeaders(response, { 'referrer-policy': 'no-referrer' });
+});
+
+it('keeps a referrer policy that a route set on purpose', async () => {
+  const next = vi.fn(async () => new Response('consent', { headers: { 'Referrer-Policy': 'same-origin' } }));
+  const response = await onRequest(makeContext('https://thesuperhuman.us/api/publication/authorize'), next) as Response;
+  expectSecurityHeaders(response, { 'referrer-policy': 'same-origin' });
+});
+
+it('adds the public security headers to audio host rewrites', async () => {
+  const response = await onRequest(makeContext('https://audio.thesuperhuman.us/about', 'audio.thesuperhuman.us'), vi.fn()) as Response;
+  expect(await response.text()).toBe('rewritten:/audio/about');
+  expectSecurityHeaders(response);
+});
+
+it('adds the public security headers to audio host offer redirects', async () => {
+  const response = await onRequest(makeContext('https://audio.thesuperhuman.us/offer/opaque'), vi.fn()) as Response;
+  expect(response.status).toBe(302);
+  expectSecurityHeaders(response);
+});
+
+it('adds the public security headers to redirects returned by routes', async () => {
+  const response = await onRequest(makeContext('https://thesuperhuman.us/'), async () => Response.redirect('https://thesuperhuman.us/next', 302)) as Response;
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe('https://thesuperhuman.us/next');
+  expectSecurityHeaders(response);
 });
