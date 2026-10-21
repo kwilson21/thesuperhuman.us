@@ -13,8 +13,8 @@ export const REFERENCE = '.screenshots/reference';
 
 /** Inputs that can change any image. A change to one of them recaptures everything. */
 export const GLOBAL_INPUTS = ['package-lock.json', 'astro.config.mjs', 'tsconfig.json', 'wrangler.jsonc', 'migrations', 'scripts/screenshots', '.github/workflows/screenshots.yml'];
-// Each scenario's own script goes into its own key instead.
-const NOT_GLOBAL = ['scripts/screenshots/scenarios'];
+// Each scenario's own script goes into its own key instead, and the README draws nothing.
+const NOT_GLOBAL = ['scripts/screenshots/scenarios', 'scripts/screenshots/README.md'];
 // Content collections reach pages through Astro's data store, not imports.
 const CONTENT_MODULES = ['\0astro:content', '\0astro:data-layer-content'];
 const CONTENT_DIR = 'src/content';
