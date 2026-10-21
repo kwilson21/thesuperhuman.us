@@ -165,7 +165,7 @@ These render to `/tmp/services-overview.pdf` and `/tmp/audio-services-overview.p
 
 `public/_headers` overrides Cloudflare's default `Permissions-Policy` with an explicit policy that doesn't reference Chrome-only features (which other browsers log as "Unrecognized feature" warnings). Also sets `Referrer-Policy: strict-origin-when-cross-origin`, `X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY`.
 
-Cloudflare applies `_headers` only to static assets, so `src/middleware.ts` adds the same four headers, listed in `src/lib/security-headers.ts`, to every response that passes through it. A header the route or the middleware's studio and agreement rules already set is kept, so those pages keep `Referrer-Policy: no-referrer`. Astro's trailing-slash redirects and its bare 500 after a thrown error skip the middleware and carry none of the four. `tests/lib/security-headers.test.ts` fails if that list and the `/*` block of `public/_headers` differ.
+Cloudflare applies `_headers` only to static assets, so `src/middleware.ts` adds the same four headers, listed in `src/lib/security-headers.ts`, to every response that passes through it. A header already set by the route, or by the middleware's studio and agreement rules, is kept, so those pages keep `Referrer-Policy: no-referrer`. Astro's redirects for repeated trailing slashes and its bare 500 after a thrown error skip the middleware and carry none of the four. `tests/lib/security-headers.test.ts` fails if that list and the `/*` block of `public/_headers` differ.
 
 ## Resume request flow
 

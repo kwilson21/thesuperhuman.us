@@ -2,22 +2,25 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { securityHeaders, withSecurityHeaders } from '~/lib/security-headers';
 
-// Reads public/_headers the way wrangler does: lines are trimmed, blank and # lines are skipped,
-// a path line starts a rule, and every other line is a Name: value header of the current rule.
+// Reads public/_headers the way wrangler does: trimmed, blank and # lines skipped, a path line starts a
+// rule (the last block for a path wins), and Name: value lines add headers (repeats joined with ", ").
 function headersFor(path: string) {
   const lines = readFileSync(new URL('../../public/_headers', import.meta.url), 'utf8').split('\n');
-  const headers: Record<string, string> = {};
+  let headers: Record<string, string> = {};
   let rule = '';
   for (const raw of lines) {
     const line = raw.trim();
     if (line === '' || line.startsWith('#')) continue;
     if (/^([^\s]+:\/\/|\/)/.test(line)) {
       rule = line;
+      if (rule === path) headers = {};
       continue;
     }
     if (rule !== path) continue;
     const separator = line.indexOf(':');
-    headers[line.slice(0, separator).trim().toLowerCase()] = line.slice(separator + 1).trim();
+    const name = line.slice(0, separator).trim().toLowerCase();
+    const value = line.slice(separator + 1).trim();
+    headers[name] = headers[name] ? `${headers[name]}, ${value}` : value;
   }
   return headers;
 }
