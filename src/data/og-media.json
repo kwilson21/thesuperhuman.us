@@ -1,13 +1,13 @@
 {
   "about": {
-    "image": "/og/about-b340333df0.png",
-    "video": "/og/about-b4419b2ca3.mp4",
+    "image": "/og/about-47cbfd0b33.png",
+    "video": "/og/about-ba81fc7496.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 7200,
-    "imageBytes": 341264,
-    "videoBytes": 1041510,
-    "frames": "772a3d8ab987894b",
+    "imageBytes": 341717,
+    "videoBytes": 1066222,
+    "frames": "52abe742237094a7",
     "inputs": [
       "public/fonts/kazon-name-text.woff2",
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
@@ -20,18 +20,18 @@
       "src/assets/site/notebook-v1.webp",
       "src/assets/site/terrain-v1.webp"
     ],
-    "source": "d7cc1b9aa0360a6f",
+    "source": "e1a2a9cc22290b60",
     "encoding": "5341c8ca6c6bf333"
   },
   "audio": {
-    "image": "/og/audio-974d88de7f.png",
-    "video": "/og/audio-b01c9e59c6.mp4",
+    "image": "/og/audio-867f795f49.png",
+    "video": "/og/audio-42f310cfe9.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6000,
-    "imageBytes": 336091,
-    "videoBytes": 313078,
-    "frames": "1088035fa5ffbe4f",
+    "imageBytes": 336579,
+    "videoBytes": 313247,
+    "frames": "fdbf41d7a33a1750",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
@@ -39,18 +39,18 @@
       "scripts/og-video/scenes/audio.html",
       "src/assets/site/headphones-v1.webp"
     ],
-    "source": "b07ead1841174ecd",
+    "source": "df85cde47f49be35",
     "encoding": "5341c8ca6c6bf333"
   },
   "audio-portfolio": {
-    "image": "/og/audio-portfolio-7038000a78.png",
-    "video": "/og/audio-portfolio-91605da64d.mp4",
+    "image": "/og/audio-portfolio-3ad50db094.png",
+    "video": "/og/audio-portfolio-0a608c6d2a.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6000,
-    "imageBytes": 235731,
-    "videoBytes": 259825,
-    "frames": "8cc5cbed51683de7",
+    "imageBytes": 238188,
+    "videoBytes": 260682,
+    "frames": "e85d9381d9cb4ad1",
     "inputs": [
       "public/fonts/kazon-name-text.woff2",
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
@@ -59,18 +59,18 @@
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/audio-portfolio.html"
     ],
-    "source": "33fdb3a348b1f7e0",
+    "source": "18e63b1d5ac81daa",
     "encoding": "5341c8ca6c6bf333"
   },
   "audio-releases": {
-    "image": "/og/audio-releases-6c64bded1c.jpg",
-    "video": "/og/audio-releases-fb5742a5f2.mp4",
+    "image": "/og/audio-releases-cac3cbd7f9.jpg",
+    "video": "/og/audio-releases-70872e2d9e.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6000,
-    "imageBytes": 82907,
-    "videoBytes": 516004,
-    "frames": "c07199b368ae9ea8",
+    "imageBytes": 83010,
+    "videoBytes": 516861,
+    "frames": "f8c29446bf087bad",
     "inputs": [
       "public/fonts/kazon-name-text.woff2",
       "public/fonts/libron-v0.25/Libron-Italic.woff2",
@@ -81,54 +81,54 @@
       "scripts/og-video/scenes/audio-releases.html",
       "src/assets/site/music-skyline.webp"
     ],
-    "source": "f57349ed4c4b089e",
+    "source": "8335d1642eeb6153",
     "encoding": "5341c8ca6c6bf333"
   },
   "audio-services": {
-    "image": "/og/audio-services-29bc40ffa2.png",
-    "video": "/og/audio-services-0f7a6ff561.mp4",
+    "image": "/og/audio-services-261b727b3a.png",
+    "video": "/og/audio-services-8a10573b99.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6000,
-    "imageBytes": 142740,
-    "videoBytes": 182624,
-    "frames": "707701e924d10941",
+    "imageBytes": 144109,
+    "videoBytes": 183163,
+    "frames": "849d089b52c15717",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/audio-services.html"
     ],
-    "source": "fafc5eab596448e9",
+    "source": "dea969aaf636456b",
     "encoding": "5341c8ca6c6bf333"
   },
   "audio-start": {
-    "image": "/og/audio-start-345932f345.png",
-    "video": "/og/audio-start-66de1174cf.mp4",
+    "image": "/og/audio-start-5203294952.png",
+    "video": "/og/audio-start-5ec0264e71.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 8000,
-    "imageBytes": 139513,
-    "videoBytes": 552784,
-    "frames": "eca68d6f4384114f",
+    "imageBytes": 142128,
+    "videoBytes": 553842,
+    "frames": "7f74e08caa3f4c0a",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/audio-start.html"
     ],
-    "source": "ac2348eb56e969e8",
+    "source": "a935fc359250105e",
     "encoding": "5341c8ca6c6bf333"
   },
   "building": {
-    "image": "/og/building-da7fd56eb0.png",
-    "video": "/og/building-9eb94e9662.mp4",
+    "image": "/og/building-9c404bf583.png",
+    "video": "/og/building-89affbdd1e.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6000,
-    "imageBytes": 128102,
-    "videoBytes": 374640,
-    "frames": "adf1d9ab666744d3",
+    "imageBytes": 130596,
+    "videoBytes": 360886,
+    "frames": "11301aece9f32b67",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Italic.woff2",
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
@@ -136,18 +136,18 @@
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/building.html"
     ],
-    "source": "df3a14acb4070d2c",
+    "source": "a4b90bba138bf4dc",
     "encoding": "5341c8ca6c6bf333"
   },
   "home": {
     "image": "/og/home-feaa0743d2.png",
-    "video": "/og/home-85175dfd8c.mp4",
+    "video": "/og/home-3d557ab871.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 7000,
     "imageBytes": 439902,
-    "videoBytes": 642380,
-    "frames": "6f3cf1503e28174d",
+    "videoBytes": 627105,
+    "frames": "46a5bc0eb55e3a3a",
     "inputs": [
       "public/fonts/kazon-name-display.woff2",
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
@@ -158,7 +158,7 @@
       "src/assets/projects/tally/transactions-demo-2026-09-26.webp",
       "src/assets/site/studio-v1.webp"
     ],
-    "source": "3192c4a80bc84ad6",
+    "source": "0844ed7d24a9a538",
     "encoding": "5341c8ca6c6bf333"
   },
   "music-old-news": {
@@ -181,36 +181,36 @@
       "scripts/og-video/scenes/music-old-news.html",
       "src/assets/site/old-news-premiere.webp"
     ],
-    "source": "d361a74c731962d7",
+    "source": "666f95f9c6e5b978",
     "encoding": "5341c8ca6c6bf333"
   },
   "not-found": {
-    "image": "/og/not-found-683fc38030.png",
-    "video": "/og/not-found-26be4859d7.mp4",
+    "image": "/og/not-found-188986acef.png",
+    "video": "/og/not-found-b9c6b3fa90.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6000,
-    "imageBytes": 97540,
-    "videoBytes": 99829,
-    "frames": "bb96d016c1da3c1e",
+    "imageBytes": 98177,
+    "videoBytes": 99955,
+    "frames": "792585d2da6bd8e8",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/not-found.html"
     ],
-    "source": "7069b0e7f9b2f337",
+    "source": "91fdc2a38173b438",
     "encoding": "5341c8ca6c6bf333"
   },
   "personal-website": {
-    "image": "/og/personal-website-c4fefc439c.png",
-    "video": "/og/personal-website-7d1e11a6d2.mp4",
+    "image": "/og/personal-website-3d9951c557.png",
+    "video": "/og/personal-website-02c685f11b.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6000,
-    "imageBytes": 332938,
-    "videoBytes": 273771,
-    "frames": "4d6053651d7dc58a",
+    "imageBytes": 337470,
+    "videoBytes": 274574,
+    "frames": "ea56ed90d623ba54",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Italic.woff2",
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
@@ -220,18 +220,18 @@
       "src/assets/projects/website/home-after.png",
       "src/assets/projects/website/home-before.png"
     ],
-    "source": "b4f1297198057803",
+    "source": "ecd7a109c49eaddc",
     "encoding": "5341c8ca6c6bf333"
   },
   "personal-website-story": {
-    "image": "/og/personal-website-story-af55f296e7.png",
-    "video": "/og/personal-website-story-28eb14e2fc.mp4",
+    "image": "/og/personal-website-story-c361104d85.png",
+    "video": "/og/personal-website-story-989d550c9f.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6800,
-    "imageBytes": 379423,
-    "videoBytes": 607369,
-    "frames": "8a2024f4d80c4c2e",
+    "imageBytes": 381987,
+    "videoBytes": 608000,
+    "frames": "09e49a9b057dfab0",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
@@ -242,36 +242,36 @@
       "src/assets/site/redesign-studies/c-project-gallery.webp",
       "src/assets/site/redesign-studies/d-open-landscape.webp"
     ],
-    "source": "7a7448634a44499d",
+    "source": "5d9c12de5ca519bb",
     "encoding": "5341c8ca6c6bf333"
   },
   "privacy": {
-    "image": "/og/privacy-1734dee716.png",
-    "video": "/og/privacy-661ffc0046.mp4",
+    "image": "/og/privacy-7b6434ee39.png",
+    "video": "/og/privacy-139cf50064.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6000,
-    "imageBytes": 140594,
-    "videoBytes": 170404,
-    "frames": "878ac0835a280186",
+    "imageBytes": 140851,
+    "videoBytes": 170597,
+    "frames": "ec6e14c9146720df",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/privacy.html"
     ],
-    "source": "cf78e01ab443b8a1",
+    "source": "f4d1c624b48312df",
     "encoding": "5341c8ca6c6bf333"
   },
   "project-kaillera-next": {
-    "image": "/og/project-kaillera-next-111eb0973b.png",
-    "video": "/og/project-kaillera-next-259db6aaf4.mp4",
+    "image": "/og/project-kaillera-next-f31199ba50.png",
+    "video": "/og/project-kaillera-next-fe2da5fe03.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6000,
-    "imageBytes": 198191,
-    "videoBytes": 207400,
-    "frames": "46543ec4cf47a616",
+    "imageBytes": 204689,
+    "videoBytes": 208510,
+    "frames": "d941488566f008aa",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
@@ -279,18 +279,18 @@
       "scripts/og-video/scenes/project-kaillera-next.html",
       "src/assets/projects/kaillera-next/landing-2026-09-26.webp"
     ],
-    "source": "72be88deda88fbe1",
+    "source": "61aa51377e7a4ffe",
     "encoding": "5341c8ca6c6bf333"
   },
   "project-tally": {
-    "image": "/og/project-tally-29117b28f5.png",
-    "video": "/og/project-tally-c18ee5d442.mp4",
+    "image": "/og/project-tally-8d03a58472.png",
+    "video": "/og/project-tally-90c337cad6.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 7200,
-    "imageBytes": 174102,
-    "videoBytes": 341690,
-    "frames": "4f1157ce4082425f",
+    "imageBytes": 175838,
+    "videoBytes": 341225,
+    "frames": "ba41543f799727b3",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
@@ -298,18 +298,18 @@
       "scripts/og-video/scenes/project-tally.html",
       "src/assets/projects/tally/home-annotated.webp"
     ],
-    "source": "156b77f8b27f86a0",
+    "source": "637cb6aca1b85697",
     "encoding": "5341c8ca6c6bf333"
   },
   "project-threadline": {
-    "image": "/og/project-threadline-8fdefa6291.jpg",
-    "video": "/og/project-threadline-b1a846e489.mp4",
+    "image": "/og/project-threadline-0770369cfe.jpg",
+    "video": "/og/project-threadline-a6e8cbd1db.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6000,
-    "imageBytes": 69381,
-    "videoBytes": 429175,
-    "frames": "f7e2e76ac147e53c",
+    "imageBytes": 69064,
+    "videoBytes": 428735,
+    "frames": "0e722256ed2dba7f",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Italic.woff2",
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
@@ -318,18 +318,18 @@
       "scripts/og-video/scenes/project-threadline.html",
       "src/assets/site/threadline-v1.webp"
     ],
-    "source": "85e4431785a4c14e",
+    "source": "a539235b77dbb212",
     "encoding": "5341c8ca6c6bf333"
   },
   "services": {
-    "image": "/og/services-6518d2c6c8.png",
-    "video": "/og/services-ee2799b652.mp4",
+    "image": "/og/services-d64d68f2e8.png",
+    "video": "/og/services-3ebf962499.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 7200,
-    "imageBytes": 343603,
-    "videoBytes": 767628,
-    "frames": "4cc3849e0bdd496b",
+    "imageBytes": 339477,
+    "videoBytes": 768679,
+    "frames": "c5d8957c6ad727c9",
     "inputs": [
       "public/fonts/kazon-name-text.woff2",
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
@@ -340,36 +340,36 @@
       "src/assets/site/work-with-me-software.webp",
       "src/assets/site/work-with-me-website.webp"
     ],
-    "source": "09b6e04003e326c2",
+    "source": "1c4c1ab5448c642f",
     "encoding": "5341c8ca6c6bf333"
   },
   "software-start": {
-    "image": "/og/software-start-24d1e7b824.png",
-    "video": "/og/software-start-db737f7218.mp4",
+    "image": "/og/software-start-23621b62eb.png",
+    "video": "/og/software-start-72db43281e.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 7200,
-    "imageBytes": 142640,
-    "videoBytes": 346669,
-    "frames": "e4227e41d2c852df",
+    "imageBytes": 143988,
+    "videoBytes": 351137,
+    "frames": "b20acff9da5fdc9e",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/software-start.html"
     ],
-    "source": "ca4174f68a768c11",
+    "source": "33d732ab453606be",
     "encoding": "5341c8ca6c6bf333"
   },
   "the-engineers-daily": {
-    "image": "/og/the-engineers-daily-db4353dc77.png",
-    "video": "/og/the-engineers-daily-4c7b5e3928.mp4",
+    "image": "/og/the-engineers-daily-54e84634c4.png",
+    "video": "/og/the-engineers-daily-d803f60e75.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6000,
-    "imageBytes": 292181,
-    "videoBytes": 558818,
-    "frames": "d9f1a1a1b49e293c",
+    "imageBytes": 293399,
+    "videoBytes": 559624,
+    "frames": "2677501aca753e79",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
@@ -377,36 +377,36 @@
       "scripts/og-video/scenes/the-engineers-daily.html",
       "src/assets/projects/daily-preview.webp"
     ],
-    "source": "7336723b495f0313",
+    "source": "a2aa84e0f051bb31",
     "encoding": "5341c8ca6c6bf333"
   },
   "work": {
-    "image": "/og/work-31561924d0.png",
-    "video": "/og/work-0b6bbe9f4e.mp4",
+    "image": "/og/work-279f9142d7.png",
+    "video": "/og/work-e64cf49591.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6000,
-    "imageBytes": 142618,
-    "videoBytes": 300277,
-    "frames": "d1da188dd2bb9715",
+    "imageBytes": 147773,
+    "videoBytes": 301288,
+    "frames": "753297b2571f1d94",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/work.html"
     ],
-    "source": "9dbdd821c382355d",
+    "source": "cf6d695b5c1b4ece",
     "encoding": "5341c8ca6c6bf333"
   },
   "writing": {
-    "image": "/og/writing-ffaaf86028.png",
-    "video": "/og/writing-09fed73375.mp4",
+    "image": "/og/writing-955bc53049.png",
+    "video": "/og/writing-da7c381d25.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 5000,
-    "imageBytes": 130411,
-    "videoBytes": 147052,
-    "frames": "12cdd7a50a361114",
+    "imageBytes": 130865,
+    "videoBytes": 147268,
+    "frames": "2270a976dd8d27df",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Italic.woff2",
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
@@ -414,18 +414,18 @@
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/writing.html"
     ],
-    "source": "4c3037d33324d965",
+    "source": "42d6519f044e7a30",
     "encoding": "5341c8ca6c6bf333"
   },
   "writing-ai-gives-you-speed": {
-    "image": "/og/writing-ai-gives-you-speed-11e01623f0.png",
-    "video": "/og/writing-ai-gives-you-speed-a04f7166f7.mp4",
+    "image": "/og/writing-ai-gives-you-speed-42c238a24e.png",
+    "video": "/og/writing-ai-gives-you-speed-14d23fbc72.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6000,
-    "imageBytes": 162593,
-    "videoBytes": 185233,
-    "frames": "068c65b4575feb50",
+    "imageBytes": 168059,
+    "videoBytes": 185570,
+    "frames": "4bb484590aad7ddf",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Italic.woff2",
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
@@ -433,7 +433,7 @@
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/writing-ai-gives-you-speed.html"
     ],
-    "source": "87cdc863beaad785",
+    "source": "062c1e184fa6725d",
     "encoding": "5341c8ca6c6bf333"
   }
 }

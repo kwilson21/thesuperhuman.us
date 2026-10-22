@@ -44,15 +44,16 @@ p, h1, h2, h3 { margin: 0; font-weight: 400; }
 /* The home page's dark screen world (src/pages/index.astro). */
 .world-screen { --paper: #14120f; --ink: #f2ede4; --muted: #b0a799; --rule: #3a342d; --accent: #e08a62; --well: #1d1b18; background: var(--paper); color: var(--ink); }
 
-/* Slots. The kicker is the page's own kicker or breadcrumb, parts joined by " / ". */
-.kicker { position: absolute; left: 64px; top: 60px; margin: 0; font: 500 20px/24px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); white-space: nowrap; max-width: 1072px; }
-.kicker.tight { letter-spacing: .04em; }
+/* Slots. The kicker is the page's own kicker or breadcrumb, parts joined by " / ", in the site's label face:
+   Inter 500 capitals at --tracking-eyebrow (global.css .page-kicker). */
+.kicker { position: absolute; left: 64px; top: 60px; margin: 0; font: 500 20px/24px var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); white-space: nowrap; max-width: 1072px; }
 /* thesuperhuman.us plus the canonical path, no protocol, no trailing slash. */
 .url { position: absolute; left: 64px; bottom: 48px; margin: 0; font: 400 20px/24px var(--sans); color: var(--muted); white-space: nowrap; }
 .aside { position: absolute; right: 64px; bottom: 48px; margin: 0; font: 400 20px/24px var(--sans); color: var(--muted); white-space: nowrap; text-align: right; }
 .aside.caption { font: italic 400 20px/24px var(--serif); }
 .on-photo .url { color: var(--paper); text-shadow: 0 1px 7px #000; }
-.status { display: inline-flex; gap: 12px; align-items: center; font: 400 20px/24px var(--mono); color: var(--muted); }
+/* A project's state as the site's dot line (global.css .project-status). */
+.status { display: inline-flex; gap: 12px; align-items: center; font: 400 20px/24px var(--sans); color: var(--muted); }
 .status::before { content: ''; width: 13px; height: 13px; border-radius: 50%; background: var(--accent); flex: none; }
 
 /* Type scale: Libron 400. 56px is the smallest headline; three lines at most. */

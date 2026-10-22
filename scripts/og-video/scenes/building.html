@@ -23,7 +23,9 @@
   .row { height: 76px; padding-left: 20px; }
   .row h2 { font: 400 34px/1.1 var(--serif); letter-spacing: -.02em; white-space: nowrap; }
   /* Status sits tight under its name (61.4px pair) so the list reads as three projects, not six lines. */
-  .row p { margin: 0; font: 400 20px/24px var(--mono); letter-spacing: .02em; text-transform: uppercase; color: var(--accent); white-space: nowrap; }
+  /* The status is the site's dot line under the name (global.css .project-status; building.astro:40). */
+  .row p { display: flex; align-items: center; gap: 12px; margin: 0; font: 400 20px/24px var(--sans); color: var(--muted); white-space: nowrap; }
+  .row p::before { content: ''; width: 13px; height: 13px; border-radius: 50%; background: var(--accent); flex: none; }
 
   /* Stage: 40px clear of the longest status line (x 530). */
   .stage { position: absolute; left: 572px; top: 92px; width: 564px; height: 446px; }
