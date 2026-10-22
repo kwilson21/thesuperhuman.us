@@ -23,7 +23,11 @@ nothing useful to put in them.
 - **Colors:** retain the existing `--paper`, `--ink`, `--muted`, `--rule`, and
   `--accent` values in `src/styles/global.css`. Tailwind continues to reference
   them rather than defining a second palette.
-- **Type:** retain Newsreader, Inter, and the existing monospace role. Refine the
+- **Type:** Libron (the serif since October 4, 2026, in place of Newsreader), Inter,
+  and the existing monospace role. Agreement, offer, studio and owner screens use
+  Libron for every serif line, and the signed agreement PDF sets its headings in a
+  TTF built from the pinned Libron source (`scripts/build-agreement-heading-font.py`)
+  over Inter text (D9.3-C). Emails still name Newsreader. Refine the
   existing display, heading, lede, and eyebrow styles against the approved studies.
   Keep a small set of named roles instead of per-page type scales.
 - **Layout:** retain the measure/content/page width roles in `tailwind.config.mjs`.

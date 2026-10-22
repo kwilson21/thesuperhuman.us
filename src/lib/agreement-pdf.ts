@@ -1,7 +1,8 @@
 import { PDFDocument, type PDFFont, type PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import interBase64 from '~/assets/agreement-fonts/Inter-400.base64?raw';
-import newsreaderBase64 from '~/assets/agreement-fonts/Newsreader-400.base64?raw';
+// Headings use Libron, the site serif; scripts/build-agreement-heading-font.py builds this file.
+import libronBase64 from '~/assets/agreement-fonts/Libron-400.base64?raw';
 import type { Agreement } from './software-agreements';
 import { canonicalJson, hashBytes, newYorkTime } from './agreement-artifacts';
 import {
@@ -64,7 +65,7 @@ export async function renderAgreementPacket(
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   const inter = await pdf.embedFont(fontBytes(interBase64)),
-    heading = await pdf.embedFont(fontBytes(newsreaderBase64));
+    heading = await pdf.embedFont(fontBytes(libronBase64));
   const supported = new Set(inter.getCharacterSet());
   const headingSupported = new Set(heading.getCharacterSet());
   const text = (value: string) => {
