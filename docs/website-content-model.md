@@ -264,8 +264,9 @@ The worlds follow the hero tagline, "Software, sound, and things worth exploring
 - **Screen (software, dark).** Currently building and the Lyft proof sit inside
   a dark screen that arrives as a rounded panel and widens to full width. The
   site's own tokens are inverted for that subtree, with the terracotta lifted for
-  contrast. Project captures glow like screens and lean toward a fine pointer.
-  The code rows at the top of the screen stay put as it widens.
+  contrast. Project captures glow like screens and lean toward a fine pointer;
+  the glow is steady and no longer grows on hover or focus (October 22). The
+  code rows at the top of the screen stay put as it widens.
   The Lyft figure counts up beside one cell per 5,000 rows.
 - **Sound.** The screen ends in a waveform: paper peaks rise into the dark and
   dark peaks fall into the paper. It swells as it crosses the viewport and is
