@@ -1,6 +1,6 @@
 # Sitemap and canonical journal URLs release gate
 
-Date: October 22, 2026 (UTC). Local checks ran between about 10:54 and 11:12 UTC on the same 10:55 build; the audio-host and missing-page observations in 4.6 ran at about 11:11.  
+Date: October 22, 2026 (UTC). Local checks ran between about 10:54 and 11:12 UTC on the same 10:55 build; the audio-host and missing-page observations in 4.6 ran at about 11:11. Live checks on production ran between 14:16 and 14:20 UTC.  
 Repository: `kwilson21/thesuperhuman.us`  
 Pull request: [#205](https://github.com/kwilson21/thesuperhuman.us/pull/205)  
 Branch: `sitemap-public-pages`  
@@ -108,7 +108,7 @@ PASS means the evidence named here was observed.
 Claude Code agents ran these on production between 14:16 and 14:18 UTC on October 22, 2026, with plain `curl` over HTTPS, and a separate agent re-ran every one between 14:18 and 14:20 UTC with the same results.
 
 1. Workers Builds on the merge commit succeeds; record its build ID and Worker Version ID.
-   - **PASS.** "Workers Builds: thesuperhuman-us" on `0ab273d` succeeded at 14:15:33 UTC: build `18847ceb-9c2f-46eb-97e5-06b9a717a457`, Worker Version ID `2df7d5f1-385c-46c0-b6b5-a0a1693f21a9`. On `0ab273d`, Validate succeeded (completed 14:14:43 UTC) and Screenshots capture succeeded (completed 14:25:57 UTC).
+   - **PASS.** "Workers Builds: thesuperhuman-us" on `0ab273d` succeeded at 14:15:33 UTC: build `18847ceb-9c2f-46eb-97e5-06b9a717a457`, Worker Version ID `2df7d5f1-385c-46c0-b6b5-a0a1693f21a9`. On `0ab273d`, Validate succeeded (completed 14:14:43 UTC). Screenshots capture was still running during both passes; it was read afterward and had succeeded (completed 14:25:57 UTC).
 2. `https://thesuperhuman.us/sitemap-0.xml` lists 22 URLs without `/studio`, `/studio/sign-in`, `/agreements` or `/agreements/verify`.
    - **PASS.** 200 `application/xml`, 22 URLs, none under `/studio`, `/agreements`, `/owner` or `/offer`. `/sitemap-index.xml` names only `sitemap-0.xml`.
 3. `curl -sI https://thesuperhuman.us/building/tally` and `/building/kaillera-next` give 200; with a trailing slash they redirect to the slashless URL.
