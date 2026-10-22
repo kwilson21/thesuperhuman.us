@@ -14,31 +14,31 @@ const turnstileSiteKey = Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY ?? i
 
   <div class="form-pair">
     <div>
-      <label  for="rr-name">Name</label>
-      <input id="rr-name" name="name" autocomplete="name" type="text" required maxlength="100" class="w-full border border-rule bg-paper px-3 py-2 text-base rounded-sm focus:outline-none focus:border-accent" />
-      <p hidden data-form-error="name" style="color: var(--accent);"></p>
+      <label for="rr-name">Name</label>
+      <input id="rr-name" name="name" autocomplete="name" type="text" required maxlength="100" />
+      <p hidden data-form-error="name"></p>
     </div>
     <div>
-      <label  for="rr-email">Email</label>
-      <input id="rr-email" name="email" autocomplete="email" type="email" required maxlength="120" class="w-full border border-rule bg-paper px-3 py-2 text-base rounded-sm focus:outline-none focus:border-accent" />
-      <p hidden data-form-error="email" style="color: var(--accent);"></p>
+      <label for="rr-email">Email</label>
+      <input id="rr-email" name="email" autocomplete="email" type="email" required maxlength="120" />
+      <p hidden data-form-error="email"></p>
     </div>
   </div>
 
   <div>
-    <label  for="rr-company">Company <span class="text-muted normal-case tracking-normal">(optional)</span></label>
-    <input id="rr-company" name="company" autocomplete="organization" type="text" maxlength="120" class="w-full border border-rule bg-paper px-3 py-2 text-base rounded-sm focus:outline-none focus:border-accent" /><p hidden data-form-error="company"></p>
+    <label for="rr-company">Company <span>(optional)</span></label>
+    <input id="rr-company" name="company" autocomplete="organization" type="text" maxlength="120" /><p hidden data-form-error="company"></p>
   </div>
 
   <div>
-    <label  for="rr-note">A short note <span class="text-muted normal-case tracking-normal">(optional)</span></label>
-    <textarea id="rr-note" name="note" maxlength="1000" rows="3" class="w-full border border-rule bg-paper px-3 py-2 text-base rounded-sm focus:outline-none focus:border-accent" placeholder="What kind of role or project? (Helps me prioritize.)"></textarea><p hidden data-form-error="note"></p>
+    <label for="rr-note">A short note <span>(optional)</span></label>
+    <textarea id="rr-note" name="note" maxlength="1000" rows="3" placeholder="What kind of role or project? (Helps me prioritize.)"></textarea><p hidden data-form-error="note"></p>
   </div>
 
   {turnstileSiteKey ? <div class="cf-turnstile" data-sitekey={turnstileSiteKey}></div> : <p class="text-sm text-muted">The form is unavailable right now. <a href="mailto:kazon.wilson@thesuperhuman.us?subject=Resume%20request">Email me instead.</a></p>}
 
   <div>
-    <button type="submit" disabled class="site-button disabled:opacity-50 disabled:cursor-not-allowed" style="border-bottom: none;">Request resume</button>
+    <button type="submit" disabled class="site-button">Request resume</button>
     <p id="rr-status" data-form-status role="status" tabindex="-1"></p>
   </div>
 
@@ -52,7 +52,7 @@ const turnstileSiteKey = Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY ?? i
 <div id="resume-request-success" class="form-success" tabindex="-1" role="status" hidden>
   <p class="lede">Request received.</p>
   <p class="text-base text-muted mt-3 max-w-measure">
-    I'll review your request. If approved, the resume will arrive by email.
+    I’ll review your request. If approved, the resume will arrive by email.
   </p>
 </div>
 

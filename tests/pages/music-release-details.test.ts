@@ -15,3 +15,12 @@ it('renders supplied YouTube and SoundCloud actions for a release', () => {
   expect(page).toContain('track.youtubeUrl');
   expect(page).toContain('track.soundcloudUrl');
 });
+
+it('sizes the all-caps masthead so its longest word fits the column, keeping the approved line-height', () => {
+  const css = readFileSync(new URL('../../src/styles/music-premiere.css', import.meta.url), 'utf8');
+  expect(page).toContain("const longestWord = Math.max(...mainTitle.split(/\\s+/).map(word => word.length));");
+  expect(page).toContain('style={`--masthead-word:${longestWord}`}');
+  expect(css).toContain('.premiere-masthead{text-align:center;container-type:inline-size}');
+  expect(css).toContain('font-size:min(var(--masthead-size),calc(110cqi / var(--masthead-word,1)))');
+  expect(css).toMatch(/\.masthead-title\{[^}]*line-height:\.93;/);
+});

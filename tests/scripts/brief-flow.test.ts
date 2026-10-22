@@ -135,10 +135,10 @@ it('keeps writing with unavailable browser storage', async () => {
 it('discloses browser drafts and Workers AI accurately, with reassurance only at send', () => {
   const privacy = readFileSync('src/pages/privacy.astro', 'utf8');
   for (const sentence of [
-    "isn't used to train models without your explicit consent",
+    'isn’t used to train models without your explicit consent',
     'The name, email and company fields are never sent for suggestions.',
-    "Neither are a website brief's link and notes on what you already have; those boxes show no suggestions.",
-    "Anything you type in a box that shows suggestions is sent, even if you don't accept one.",
+    'Neither are a website brief’s link and notes on what you already have; those boxes show no suggestions.',
+    'Anything you type in a box that shows suggestions is sent, even if you don’t accept one.',
     'You can turn suggestions off', 'in your browser', 'strictly necessary security cookie that expires after 30 minutes',
     'Updated October 19, 2026', 'kept for up to two days',
     'Project brief suggestions use', 'While you write a project brief,',

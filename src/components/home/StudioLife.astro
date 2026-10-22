@@ -40,11 +40,12 @@ const slope = 0.105;
   </g>
 </svg>
 <style>
-  .studio-life { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  /* Sampled from studio-v1.webp: the monitor's screen and its code. Local to this drawing. */
+  .studio-life { --studio-screen: #1d1f20; --studio-code: #d8d2c6; position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
   /* Resting frame: nothing covers the code, no rings, the sketch drawn. */
   .type-row, .life-sound ellipse { display: none; }
-  .type-row rect { fill: #1d1f20; }
-  .type-row .caret { fill: #d8d2c6; }
+  .type-row rect { fill: var(--studio-screen); }
+  .type-row .caret { fill: var(--studio-code); }
   .life-sound ellipse { fill: none; stroke: var(--accent); stroke-width: 2.4; vector-effect: non-scaling-stroke; }
   .life-sketch path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
   /* Stroke in page units (no non-scaling-stroke) so the pathLength dash draws the whole trail. */

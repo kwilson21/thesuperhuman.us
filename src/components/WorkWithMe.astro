@@ -1,19 +1,23 @@
 ---
-import PersonalNameText from '~/components/PersonalNameText.astro';
+import PersonalName from '~/components/PersonalName.astro';
 import { doors } from '~/data/work-with-me';
+import { personalNameSegments } from '~/lib/personal-name';
 interface Props {
   headingLevel?: 'h2' | 'h3';
   overrides?: Partial<Record<(typeof doors)[number]['id'], Partial<Pick<(typeof doors)[number], 'href' | 'label'>>>>;
+  /* 'eager' where the doors render in the first screen (the Work with me hub); Home keeps them lazy. */
+  loading?: 'lazy' | 'eager';
 }
-const { headingLevel = 'h3', overrides = {} } = Astro.props;
+const { headingLevel = 'h3', overrides = {}, loading = 'lazy' } = Astro.props;
 ---
 <div class="doors">
-  {doors.map(door => {
+  {doors.map((door, index) => {
     const href = overrides[door.id]?.href ?? door.href;
     const label = overrides[door.id]?.label ?? door.label;
     return <article class="door" id={`door-${door.id}`}>
-    <a class="door-art" href={href} tabindex="-1" aria-hidden="true"><img src={door.picture.src} width={door.picture.width} height={door.picture.height} alt="" loading="lazy" /></a>
-    <p class="door-caption"><PersonalNameText text={door.caption} /></p>
+    <a class="door-art" href={href} tabindex="-1" aria-hidden="true"><img src={door.picture.src} width={door.picture.width} height={door.picture.height} alt="" loading={loading} fetchpriority={loading === 'eager' && index === 0 ? 'high' : undefined} /></a>
+    {/* The caption is Inter, which has no name-mark cut yet, so the name inherits the caption face (website-system-plan.md, Deferred maintenance). */}
+    <p class="door-caption">{personalNameSegments(door.caption).map(part => part.variant ? <PersonalName variant={part.variant} style="inherit" /> : part.text)}</p>
     {headingLevel === 'h2' ? <h2 class="door-title">{door.title}</h2> : <h3 class="door-title">{door.title}</h3>}
     <p class="door-line">{door.line}</p>
     <a class="door-button site-button" href={href}>{label}</a>
@@ -24,12 +28,12 @@ const { headingLevel = 'h3', overrides = {} } = Astro.props;
   /* Subgrid keeps the captions, titles, lines and buttons on shared rows, so the three doors line up whatever wraps. */
   .doors { display: grid; grid-template-columns: repeat(3, 1fr); column-gap: 2.5rem; }
   .door { scroll-margin-top: 1.5rem; display: grid; grid-template-rows: subgrid; grid-row: span 5; }
-  .door-art { display: block; aspect-ratio: 3 / 2; border: 1px solid var(--rule); border-radius: 3px; padding: 0; overflow: hidden; background: #f3eee5; }
+  .door-art { display: block; aspect-ratio: 3 / 2; border: 1px solid var(--rule); border-radius: 3px; padding: 0; overflow: hidden; background: color-mix(in srgb, var(--rule) 50%, var(--paper)); }
   .door-art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
-  .door-caption { font-family: var(--font-sans); font-size: .78rem; color: var(--muted); margin: .7rem 0 .8rem; }
+  .door-caption { font-family: var(--font-sans); font-size: .78rem; color: var(--muted); margin: .7rem 0 .8rem; text-wrap: pretty; }
   .door-title { font-size: 1.55rem; line-height: 1.2; letter-spacing: -.02em; margin: 0 0 .35rem; }
   .door-line { font-size: 1.05rem; line-height: 1.5; color: var(--muted); max-width: 30ch; margin: 0 0 .9rem; text-wrap: pretty; }
-  .door-button { justify-self: start; align-self: start; min-height: 42px; padding: .45rem 1.15rem; }
+  .door-button { justify-self: start; align-self: start; min-height: 44px; padding: .45rem 1.15rem; }
   @media (max-width: 800px) {
     .doors { grid-template-columns: 1fr; row-gap: 1.75rem; }
     .door { grid-template-columns: 104px 1fr; grid-template-rows: none; grid-template-areas: "art caption" "art title" "art line" "art button"; grid-row: auto; column-gap: 1rem; align-items: start; }
@@ -38,5 +42,9 @@ const { headingLevel = 'h3', overrides = {} } = Astro.props;
     .door-title { grid-area: title; font-size: 1.4rem; }
     .door-line { grid-area: line; }
     .door-button { grid-area: button; }
+  }
+  /* Near 362px the button stops fitting beside the picture on one line, so at 370px and below it moves under the picture (with room for engine differences). */
+  @media (max-width: 370px) {
+    .door { grid-template-areas: "art caption" "art title" "art line" "button button"; }
   }
 </style>

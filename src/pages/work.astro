@@ -12,8 +12,8 @@ import { personJsonLd, experience, lyftBonus, lyftTeams, skuposStages, workingPr
       <p class="page-kicker">Work</p>
       <h1 class="page-title">Software engineer.<br />I build useful software.</h1>
       <p class="page-lede">7+ years in production engineering: I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft. {workingPreference}</p>
-      <p class="work-evidence">Tally is my current example of owning a product end to end: I make the product and architecture decisions and review every change; Claude Code and Codex help with implementation. <a class="site-link" href="/building/tally/">Tally development journal <span aria-hidden="true">→</span></a></p>
       <div class="site-links"><a class="site-link" href="/about#resumes">Request my resume <span aria-hidden="true">→</span></a><a class="site-link" href="/services#software">Hire me for software <span aria-hidden="true">→</span></a></div>
+      <p class="work-evidence">Tally is my current example of owning a product end to end: I make the product and architecture decisions and review every change; Claude Code and Codex help with implementation. <a class="site-link" href="/building/tally">Tally development journal <span aria-hidden="true">→</span></a></p>
     </header>
     <section id="selected-work" class="site-section">
       <div class="site-section-heading"><h2>Work highlights</h2></div>
@@ -57,8 +57,9 @@ import { personJsonLd, experience, lyftBonus, lyftTeams, skuposStages, workingPr
 </script>
 <style>
   .work-intro { max-width: 46rem; }
-  .work-evidence { margin-top: 1rem; color: var(--muted); font-size: 1.125rem; }
-  .work-intro .site-links { margin-top: 2rem; }
+  /* The recruiter actions come straight after the lede so they sit in the first screen (1280 × 800 and 390 × 844). */
+  .work-intro .site-links { margin-top: 1.75rem; }
+  .work-evidence { margin-top: 1.75rem; color: var(--muted); font-size: 1.125rem; max-width: var(--measure-prose); }
   .selected-story { display: grid; grid-template-columns: 1.05fr 1fr; gap: 3.5rem; align-items: start; padding-block: .5rem 2rem; }
   .selected-story + .selected-story { border-top: 1px solid var(--rule); padding-top: 2.5rem; }
   h3 { font-size: clamp(1.65rem, 2.7vw, 2.2rem); line-height: 1.15; letter-spacing: -.025em; }

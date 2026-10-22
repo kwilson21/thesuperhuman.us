@@ -24,33 +24,35 @@ const { kind } = Astro.props;
   <figcaption>{kind === 'bonus' ? 'Illustrated change in responsibility' : 'From individual scripts to an application I owned.'}</figcaption>
 </figure>
 <style>
-  .responsibility, .analyst { padding: 1.75rem; background: #f3eee5; border-radius: 3px; }
-  .responsibility > div + div { border-top: 1px solid #d9d0c2; margin-top: 1.5rem; padding-top: 1.5rem; }
+  /* Diagram colours stay local to the illustration (website-system-plan.md, Layout). */
+  .work-diagram { --diagram-panel: #f3eee5; --diagram-rule: #d9d0c2; --diagram-edge: #c5b9a7; }
+  .responsibility, .analyst { padding: 1.75rem; background: var(--diagram-panel); border-radius: 3px; }
+  .responsibility > div + div { border-top: 1px solid var(--diagram-rule); margin-top: 1.5rem; padding-top: 1.5rem; }
   .responsibility p { font-size: .9rem; color: var(--muted); }
   .responsibility strong { font-weight: 500; color: var(--ink); }
   .diagram-flow { display: grid; grid-template-columns: 1fr auto 1.2fr; gap: .75rem; align-items: center; margin-top: 1rem; font-size: 1.125rem; }
-  .diagram-flow > span:not([aria-hidden]) { border: 1px solid #c5b9a7; border-radius: 3px; min-height: 64px; display: grid; place-items: center; text-align: center; padding: .5rem; }
+  .diagram-flow > span:not([aria-hidden]) { border: 1px solid var(--diagram-edge); border-radius: 3px; min-height: 64px; display: grid; place-items: center; text-align: center; padding: .5rem; }
   .diagram-flow > .self-serve { border-color: var(--accent) !important; color: var(--ink); }
   .diagram-flow [aria-hidden] { color: var(--accent); }
   .timeline { list-style: none; margin: 0; padding: 0 0 0 1.625rem; }
   .timeline li { position: relative; padding-bottom: 2rem; }
   .timeline li:last-child { padding-bottom: 0; }
-  .timeline li::before { content: ''; position: absolute; left: -1.625rem; top: .3125rem; width: .625rem; height: .625rem; border: 1.5px solid var(--accent); background: #f3eee5; border-radius: 50%; z-index: 1; }
+  .timeline li::before { content: ''; position: absolute; left: -1.625rem; top: .3125rem; width: .625rem; height: .625rem; border: 1.5px solid var(--accent); background: var(--diagram-panel); border-radius: 50%; z-index: 1; }
   .timeline li:last-child::before { background: var(--accent); }
-  .timeline li:first-child::after { content: ''; position: absolute; left: -1.34375rem; top: .9375rem; bottom: -.3125rem; width: 1px; background: #c5b9a7; }
-  .phase { display: block; font: .625rem/1.5 'JetBrains Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: .5rem; }
+  .timeline li:first-child::after { content: ''; position: absolute; left: -1.34375rem; top: .9375rem; bottom: -.3125rem; width: 1px; background: var(--diagram-edge); }
+  .phase { display: block; font: .625rem/1.5 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: .5rem; }
   .timeline h4 { font-size: 1.4375rem; font-weight: 400; line-height: 1.2; margin-bottom: .5rem; }
   .timeline p { font-size: 1.0625rem; line-height: 1.45; color: var(--muted); }
-  .continuity { border-top: 1px solid #d9d0c2; margin-top: 1.5625rem; padding-top: 1.25rem; font-size: .9375rem; line-height: 1.5; color: var(--muted); }
+  .continuity { border-top: 1px solid var(--diagram-rule); margin-top: 1.5625rem; padding-top: 1.25rem; font-size: .9375rem; line-height: 1.5; color: var(--muted); }
   figcaption { font-size: .75rem; color: var(--muted); margin-top: .65rem; }
   @media(max-width: 400px) { .responsibility, .analyst { padding: 1.1rem; }.diagram-flow { font-size: .95rem; gap: .5rem; } }
   /* Builds once as it arrives (scroll-scenes.ts): before, then after; each step of the timeline in turn. */
   @media screen and (prefers-reduced-motion: no-preference) {
-    :global(.motion) .work-diagram :is(.responsibility > div, .timeline li, .continuity) { transition: opacity 700ms ease, transform 700ms cubic-bezier(.2, .7, .2, 1); }
+    :global(.motion) .work-diagram :is(.responsibility > div, .timeline li, .continuity) { transition: opacity 700ms var(--ease-site), transform 700ms var(--ease-site); }
     :global(.motion) .work-diagram:not(.is-in) :is(.responsibility > div, .timeline li, .continuity) { opacity: 0; transform: translateY(12px); }
     :global(.motion) .work-diagram :is(.responsibility > div:nth-child(2), .timeline li:nth-child(2)) { transition-delay: 450ms; }
     :global(.motion) .work-diagram .continuity { transition-delay: 900ms; }
-    :global(.motion) .work-diagram .timeline li:first-child::after { transform-origin: top; transition: transform 700ms ease 300ms; }
+    :global(.motion) .work-diagram .timeline li:first-child::after { transform-origin: top; transition: transform 700ms var(--ease-site) 300ms; }
     :global(.motion) .work-diagram:not(.is-in) .timeline li:first-child::after { transform: scaleY(0); }
   }
 </style>

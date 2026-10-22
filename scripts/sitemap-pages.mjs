@@ -17,13 +17,15 @@ export function publicReleasePages(releasesDirectory, site) {
     });
 }
 
+// Private and per-recipient areas. src/middleware.ts marks each of them noindex.
+const PRIVATE_SECTIONS = ['/owner', '/studio', '/offer', '/agreements'];
+
 export function shouldIncludeSitemapPage(page) {
   const pathname = new URL(page).pathname.replace(/\/$/, '') || '/';
   // Redirect-only pages: services.html.astro and audio/about.astro answer with a 301, never 200.
   if (pathname === '/services.html' || pathname === '/audio/about') return false;
   return !pathname.startsWith('/api/')
-    && pathname !== '/owner'
-    && !pathname.startsWith('/owner/')
+    && !PRIVATE_SECTIONS.some(section => pathname === section || pathname.startsWith(`${section}/`))
     && !pathname.startsWith('/audio/file/')
     && !pathname.startsWith('/music/file/');
 }
