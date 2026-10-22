@@ -20,7 +20,7 @@ Astro.response.headers.set('Cache-Control', 'no-store');
   </figure>
   <section class="project-section" aria-labelledby="threadline-idea">
     <div class="site-section-heading"><h2 id="threadline-idea">Behind the idea</h2></div>
-    <div class="project-pair thread-principles">
+    <div class="project-pair project-ideas">
       <div><h3>Less reconstructing.</h3><p>Returning to a task should feel familiar. I’m exploring how to keep its context close to the code.</p></div>
       <div><h3>You keep the final say.</h3><p>Suggestions should be inspectable and correctable. The developer decides what belongs together.</p></div>
     </div>
@@ -43,12 +43,10 @@ Astro.response.headers.set('Cache-Control', 'no-store');
   .thread-steps li:last-child .step-line { visibility: hidden; }
   .thread-steps h2 { font-size: 1.6rem; line-height: 1.25; }
   .thread-steps p { font-size: 1rem; color: var(--muted); margin-top: .5rem; padding-inline: 42px 2rem; line-height: 1.6; }
-  .thread-principles { align-items: start; grid-template-columns: 1fr 1fr; }
   .thread-state { margin-top: 1.5rem; font-size: 1.15rem; line-height: 1.6; max-width: var(--measure-prose); }
   @media(max-width: 700px) {
     .thread-experience > img { max-height: none; }
-    .thread-steps, .thread-principles { grid-template-columns: 1fr; }
-    .thread-steps { gap: 1.5rem; }
+    .thread-steps { grid-template-columns: 1fr; gap: 1.5rem; }
     .thread-steps li { position: relative; padding-left: 42px; }
     .step-head { display: block; }
     .step-number { position: absolute; left: 0; top: 1px; }

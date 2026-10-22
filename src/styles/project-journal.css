@@ -22,6 +22,8 @@
 .project-pair h3 { font-size: clamp(1.55rem, 2.6vw, 2rem); line-height: 1.2; }
 .project-pair p { font-size: 1.1rem; line-height: 1.6; color: var(--muted); margin-top: .6rem; max-width: 45ch; }
 .project-pair h3:not(:first-child) { margin-top: 2rem; }
+/* Two short ideas side by side, each a heading and its line (Behind the idea on Threadline and the Daily). */
+.project-ideas { grid-template-columns: 1fr 1fr; align-items: start; }
 .project-state { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem; margin-top: 1.5rem; }
 .project-state > div + div { border-left: 1px solid var(--rule); padding-left: 2rem; }
 .project-state p:not(.page-kicker) { font-size: 1.15rem; line-height: 1.5; }
