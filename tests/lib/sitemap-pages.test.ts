@@ -32,4 +32,11 @@ describe('shouldIncludeSitemapPage', () => {
     expect(shouldIncludeSitemapPage('https://thesuperhuman.us/audio/file/example')).toBe(false);
     expect(shouldIncludeSitemapPage('https://thesuperhuman.us/music/file/example/master')).toBe(false);
   });
+
+  it('leaves out the private studio, offer and agreement pages', () => {
+    for (const path of ['/studio', '/studio/sign-in', '/studio/projects/example', '/offer/example', '/agreements', '/agreements/verify']) {
+      expect(shouldIncludeSitemapPage(`https://thesuperhuman.us${path}`), path).toBe(false);
+    }
+    expect(shouldIncludeSitemapPage('https://thesuperhuman.us/studios')).toBe(true);
+  });
 });
