@@ -137,6 +137,11 @@ Audio notes become optional so empty prose is not required to publish a recordin
   typeface that needs the horizontal mark over the `z`, including Inter and
   JetBrains Mono. Until a matching derivative exists, render the plain name in
   the surrounding typeface instead of inserting a differently styled glyph.
+- Photograph the owner's own objects for the studio and the About chapters
+  (Hallmark board D5.1-D, deferred by the owner on October 22, 2026: "I think
+  we should defer D5.1-D as a future task to do later, what we have works for
+  now though."). Each photo needs an asset review record; the home, about and
+  audio link previews follow.
 
 ## Implementation sequence
 
