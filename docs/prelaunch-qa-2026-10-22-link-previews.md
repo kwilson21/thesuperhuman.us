@@ -407,7 +407,7 @@ PASS means the evidence named here was observed. Production checks are listed un
   - Note: `src/lib/cloudflare-analytics.ts` counts every eyeball request on `thesuperhuman.us`. The owner's "requests" figure will now include preview apps fetching posters and videos, which can mean several Range requests per video.
 - **UNVERIFIED · 6.6 Monitoring.**
   - No logging or monitoring code changed, and Workers observability was already enabled, so each request to the new route is recorded with its status.
-  - The new route adds a failure path that nothing alerts on: if the ASSETS fetch fails, `serveOgVideo` returns a 404 and logs nothing. Previews would stop playing in Messages without a log line or alert.
+  - The new route adds a failure path that nothing alerts on: if the ASSETS fetch fails, `serveOgVideo` returns a 404 and logs nothing. Previews would then lose their video, with no log line or alert to say so.
   - The post-deploy `curl` (live check 2) is a one-time check, not monitoring. Who would notice a later failure, and how, is not established; see Known unknowns.
 
 ## 7. Release and final QA
@@ -518,7 +518,7 @@ PASS means the evidence named here was observed. Production checks are listed un
       - All are under the README's 2.5 MB and 600 KB limits, and the sizes match `imageBytes` and `videoBytes` in `src/data/og-media.json`.
 - **UNVERIFIED · 7.3 (live) HTTPS, the Worker's ASSETS fetch, Range and headers on the deployed production Worker.**
   - This needs the deployed site. No request was sent to production in this run.
-  - The PR head's Workers Builds check uploaded only a branch preview version (`4d55f91a`). According to the PR description, that preview sits behind a sign-in.
+  - The Workers Builds check on `8e6e9cc` uploaded only a branch preview version (`4d55f91a`). According to the PR description, that preview sits behind a sign-in.
 - **UNVERIFIED · 7.4 Rollback version and backup; review and authorization rules.**
   - Rollback revision: `main` at `26e764a`. `git ls-remote` shows `origin/main` still at `26e764a`, and it is the PR's merge base.
     - It was committed on October 21, 2026 at 13:52:24 UTC (09:52 America/New_York).
@@ -538,7 +538,7 @@ PASS means the evidence named here was observed. Production checks are listed un
 - **UNVERIFIED · 7.6 Receipt.** This record is the receipt for the local evidence. Status as of October 22, 2026, about 07:55 UTC:
   - Implemented: yes (`8e6e9cc`).
   - Verified locally: yes, against `wrangler dev` serving the `dist/` of `8e6e9cc`.
-  - Deployed: no production deploy. Workers Builds uploaded preview versions only, for each pushed commit; the one for `8e6e9cc` is `4d55f91a`, and the branch preview alias now serves this record's commit.
+  - Deployed: no production deploy. Workers Builds uploaded preview versions only, one for each pushed commit; the one for `8e6e9cc` is `4d55f91a`.
   - Verified live: no.
 
 ## 8. Private owner center
@@ -579,7 +579,7 @@ PASS means the evidence named here was observed. Production checks are listed un
 
 ## Live checks still to run after deploy
 
-The owner agreed to these on October 22, 2026 ("Ok"). Record each result here after the merge.
+The owner agreed to the live checks on October 22, 2026 ("Ok"); item 6, the remote `owner:health` run, was added to this list afterwards. Record each result here after the merge.
 
 1. Workers Builds on the merge commit succeeds. Record its build ID and Worker Version ID.
 2. Run the README's "Link previews" checks against a live video:
@@ -602,11 +602,11 @@ The owner agreed to these on October 22, 2026 ("Ok"). Record each result here af
    - HTTPS, robots and the sitemap are unchanged.
    - `/owner*` still redirects to Access.
 6. Owner: run `npm run owner:health -- --remote --post-deploy` and record the result (8.15).
-6. Optional:
+7. Optional:
    - static-asset Range behavior in production
    - whether repeated video route requests are served from Cloudflare's cache (not verified locally)
    - a WhatsApp share of one of the posters over 300 KB
-7. On the deployed branch preview (behind a sign-in, according to the PR description):
+8. On the deployed branch preview (behind a sign-in, according to the PR description):
    - confirm the sign-in gate
    - confirm that static `/og/*` files there carry `X-Robots-Tag` from the `workers.dev` rule, as they did locally (2.6)
 
