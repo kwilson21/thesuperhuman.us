@@ -1,6 +1,6 @@
 # Link previews release gate
 
-Date: October 22, 2026. All local checks ran on October 22 (UTC). The type, test, asset and copy checks first ran between about 07:25 and 07:35 UTC. A second pass reran them between about 07:40 and 07:50 UTC, with the same results. The owner answered in conversation on October 22 (America/New_York).  
+Date: October 22, 2026. All local checks ran on October 22 (UTC). The type, test, asset and copy checks first ran between about 07:25 and 07:35 UTC. A second pass reran them between about 07:40 and 07:50 UTC, with the same results. The owner answered in conversation on October 22 (America/New_York), and gave the go-ahead to merge at about 10:36 UTC (06:36 America/New_York).  
 Repository: `kwilson21/thesuperhuman.us`  
 Pull request: [#203](https://github.com/kwilson21/thesuperhuman.us/pull/203), "Link previews that play a video (og:video), one scene per page"  
 Branch: `og-video-preview`  
@@ -44,8 +44,7 @@ Rollback revision: `26e764a`, "Record the Turnstile result and the owner's heade
 - A rollback would also undo anything merged to `main` after #203, so check what has merged since.
 
 Remaining work:
-- an explicit owner go-ahead to merge, because merging deploys production (1.1)
-- a fix or an owner-recorded exception for the sitemap FAIL, which existed before this PR (2.5)
+- the sitemap fix the owner chose, in a separate PR (2.5)
 - an independent review pass on this record's commit (7.4)
 - the live checks after deploy, including the owner's remote `owner:health` run (8.15)
 
@@ -67,11 +66,16 @@ The owner answered in conversation on October 22, 2026 (America/New_York). The c
 3. Recording this checklist before merging. Answer: "Ok".
 4. Running the live checks after deploy. Answer: "Ok".
 
+After this record was drafted, the owner answered two more questions in conversation, at about 10:36 UTC on October 22, 2026 (06:36 America/New_York):
+
+5. "PR #203 (the link-preview videos) is reviewed and CI is green. Merging puts it live on thesuperhuman.us. Should I merge and deploy it now?" Answer: "Merge and deploy now".
+6. "Separate from this PR: the sitemap lists private pages (/studio, /agreements) and two project URLs that redirect. What should I do about it?" Answer: "Fix it in a separate PR".
+
 Authorization:
-- The answers settle the two design calls and agree to this record and to the post-deploy live checks.
-- None of them is an explicit instruction to merge or deploy, and merging to `main` deploys production (AGENTS.md). Deployment authorization stays UNVERIFIED until the owner gives that go-ahead (see 1.1).
+- Answers 1 to 4 settle the two design calls and agree to this record and to the post-deploy live checks.
+- Answer 5 is the owner's explicit go-ahead to merge, which deploys production (AGENTS.md).
+- Answer 6 accepts the sitemap FAIL in 2.5, which existed before this PR, for this release, with a separate fix PR as its follow-up. Impact: the deploy leaves the sitemap exactly as it is in production now.
 - The PR's reviews by `kwilson21` are all COMMENTED. There is no APPROVED review.
-- This record accepts no exception. The sitemap FAIL in 2.5 existed before this PR and needs a fix or an owner-recorded exception with its impact and follow-up.
 
 ## Evidence and limits
 
@@ -112,13 +116,13 @@ PASS means the evidence named here was observed. Production checks are listed un
 
 ## 1. Purpose and content
 
-- **UNVERIFIED · 1.1 Project, branch, changes, instructions and deployment authorization.**
+- **PASS · 1.1 Project, branch, changes, instructions and deployment authorization.**
   - `git rev-parse HEAD` is `8e6e9ccdf7269f49b862f9c2c60ed52b4f6b8773` on `og-video-preview`, and `git status --short` shows a clean tracked tree.
   - `origin/main` and the merge base are both `26e764a`.
   - `git diff --stat 26e764a..8e6e9cc` lists 90 files. They match the scope above, including the small related files and the new `/og/*` block in `public/_headers` (`Cache-Control: public, max-age=31536000, immutable`).
   - Read: CLAUDE.md, the README section "Link previews" and the PR description.
   - The PR is open and not a draft, with head `8e6e9cc` and base `main`.
-  - Missing: an explicit owner go-ahead to merge or deploy. Merging to `main` deploys production. See Owner decisions and authorization.
+  - Authorization: the owner's go-ahead to merge and deploy (answer 5 under Owner decisions and authorization).
 - **PASS · 1.2 Approved design, truthful claims, no placeholders, media rights.**
   - Copy:
     - Every visible line on the 22 posters matches the site, and each poster matches its alt text.
@@ -235,7 +239,7 @@ PASS means the evidence named here was observed. Production checks are listed un
 - **N/A · 2.4 Icons.**
   - The diff does not touch `public/favicon.ico`, `public/favicon.svg`, `public/apple-touch-icon.png` or the icon `<link>` tags; `git diff --stat` on those paths is empty.
   - `<link rel="icon" href="/favicon.ico">` appears only as unchanged context in the BaseLayout hunk.
-- **FAIL (existed before this PR) · 2.5 Robots and sitemap.**
+- **FAIL (existed before this PR; owner-accepted for this release) · 2.5 Robots and sitemap.**
   - What this PR touches passes:
     - `/robots.txt` returns 200 with `User-agent: *`, `Allow: /` and `Sitemap: https://thesuperhuman.us/sitemap-index.xml`.
     - `/sitemap.xml` returns 404, and robots.txt points to `/sitemap-index.xml` instead, as in the October 20 live record.
@@ -248,7 +252,7 @@ PASS means the evidence named here was observed. Production checks are listed un
     - `/agreements`: noindex, nofollow
     - `/agreements/verify`: 404 "This link has expired" without a key, noindex, nofollow
     - `/building/tally` and `/building/kaillera-next`: 307 to `/building/tally/` and `/building/kaillera-next/`. Their canonical and `og:url` name the slashless URL that redirects.
-  - This needs a fix or an owner-recorded exception with its impact and follow-up. Merging #203 does not change the sitemap.
+  - The owner accepted this for this release and chose a fix in a separate PR as the follow-up (answer 6). Merging #203 does not change the sitemap.
 - **UNVERIFIED · 2.6 Preview indexing and access control.**
   - The PR head's Workers Builds summary lists two preview URLs. Both are shaped `<prefix>-thesuperhuman-us.<account>.workers.dev`, with two labels before `workers.dev`.
   - With a Host header of that shape, every response tested locally carried `x-robots-tag: noindex, nofollow`:
@@ -519,7 +523,7 @@ PASS means the evidence named here was observed. Production checks are listed un
 - **UNVERIFIED · 7.3 (live) HTTPS, the Worker's ASSETS fetch, Range and headers on the deployed production Worker.**
   - This needs the deployed site. No request was sent to production in this run.
   - The Workers Builds check on `8e6e9cc` uploaded only a branch preview version (`4d55f91a`). According to the PR description, that preview sits behind a sign-in.
-- **UNVERIFIED · 7.4 Rollback version and backup; review and authorization rules.**
+- **PASS · 7.4 Rollback version and backup; review and authorization rules.**
   - Rollback revision: `main` at `26e764a`. `git ls-remote` shows `origin/main` still at `26e764a`, and it is the PR's merge base.
     - It was committed on October 21, 2026 at 13:52:24 UTC (09:52 America/New_York).
     - Its Validate run succeeded at 14:05:46 UTC.
@@ -527,13 +531,13 @@ PASS means the evidence named here was observed. Production checks are listed un
   - Not observed: whether `f480f1b0` is serving now. No live request was sent, and the site shows no revision marker.
   - No backup is needed: there are no D1, KV, R2, migration or secret changes.
   - The rollback caveat about scraped previews is in the header.
-  - Review and authorization rules, which are not yet confirmed:
+  - Review and authorization rules:
     - Both GitHub review threads are resolved.
     - Codex reviewed only `1e97193`, and Greptile has not reviewed. CLAUDE.md therefore requires independent review agents on the current head until a pass finds nothing.
-    - The coordinating session ran independent review agents on each new head until a pass found nothing; the fifth pass, on `8e6e9cc`, found nothing (see Evidence and limits).
+    - The coordinating session ran independent review agents on each new head until a pass found nothing; the fifth pass, on `8e6e9cc`, found nothing (see Evidence and limits). This record's commits had their own passes: 7 corrections in `f1f0d5a`, 3 in `4e67e87`, then a clean pass on `4e67e87`.
     - `mergeable_state` is clean, and Validate, capture and Workers Builds are green on `8e6e9cc`.
-    - The owner's answers contain no explicit merge or deploy instruction, so deployment authorization is tracked as UNVERIFIED under 1.1. Nothing has been merged or deployed.
-  - Missing: the owner's go-ahead. This record's own commit also gets a review pass before merge.
+    - The owner gave the go-ahead to merge and deploy (answer 5; see 1.1).
+  - The commit that records answers 5 and 6 gets its own review pass before merge.
 - **UNVERIFIED · 7.5 Post-deployment verification.** Not deployed: PR #203 is open and unmerged. The owner agreed to the live checks ("Ok"). They are listed under "Live checks still to run after deploy".
 - **UNVERIFIED · 7.6 Receipt.** This record is the receipt for the local evidence. Status as of October 22, 2026, about 07:55 UTC:
   - Implemented: yes (`8e6e9cc`).
@@ -614,7 +618,6 @@ The owner agreed to the live checks on October 22, 2026 ("Ok"); item 6, the remo
 
 These stay UNVERIFIED unless the owner records an exception with its impact and follow-up in this record:
 
-- deployment authorization (1.1)
 - the deployed preview's headers and sign-in gate (2.6)
 - Messages behavior, including Reduce Motion and Auto-Play Video Previews off (3.5, 3.7)
 - how each preview app shows the poster or video (3.7)
@@ -628,9 +631,8 @@ These stay UNVERIFIED unless the owner records an exception with its impact and 
 
 ## Remaining work
 
-- **Owner:** give an explicit go-ahead to merge #203. Merging to `main` deploys production (1.1).
 - **Owner:** run `npm run owner:health -- --remote --post-deploy`, or accept it as an exception with its impact and follow-up (8.15).
-- **Owner:** decide the sitemap FAIL (2.5). The options are a fix in a separate PR, or an exception with its impact and follow-up. Two things need deciding:
+- **Sitemap (2.5), owner's choice: a fix in a separate PR.** It covers both parts:
   - `/studio`, `/studio/sign-in`, `/agreements` and `/agreements/verify` are listed in the sitemap.
   - `/building/tally` and `/building/kaillera-next` are listed under URLs that redirect.
 
