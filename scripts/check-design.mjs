@@ -166,7 +166,9 @@ export function styleBlocks(source) {
 /** An .astro file with its HTML comments and <style> and <script> blocks blanked, keeping line numbers. */
 function markupOnly(source) {
   const blank = text => text.replace(/[^\n]/g, ' ');
-  return source.replace(/<!--[\s\S]*?-->/g, blank).replace(/<(style|script)\b[\s\S]*?<\/\1>/g, blank);
+  // Astro frontmatter (the leading --- block) is code, not markup.
+  const body = source.replace(/^(\uFEFF?---\r?\n[\s\S]*?\r?\n---)(?=\r?\n|$)/, blank);
+  return body.replace(/<!--[\s\S]*?-->/g, blank).replace(/<(style|script)\b[\s\S]*?<\/\1>/g, blank);
 }
 
 /** Split at top-level commas or whitespace, keeping parentheses and quoted strings whole. */
@@ -237,7 +239,7 @@ const QUOTED_GENERIC = /(['"])\s*(serif|sans-serif|monospace|cursive|fantasy|sys
 const HEX = /#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})\b/gi;
 const MASK_PROP = /^(?:-webkit-)?mask(?:-image|-border(?:-source)?)?$/;
 const FOCUS_REPLACEMENT_PROP = /^(?:outline(?:-color|-style|-width)?|box-shadow|border(?:-color|-bottom|-bottom-color)?|background(?:-color)?|text-decoration(?:-color|-line)?)$/;
-const TRANSITION_ALL_UTILITY = /(?<![\w-])transition-all(?![\w-])/g;
+const TRANSITION_ALL_UTILITY = /(?<![\w-])transition-(?:all|\[all\])(?![\w-])/g;
 const OUTLINE_UTILITY = /(?<![\w-])((?:[\w-]+:)*)outline-(?:none|0)(?![\w-])/g;
 const OUTLINE_MARKUP_HINT = 'put a focus-visible: utility with a visible ring on the same element';
 

@@ -160,6 +160,9 @@ describe('gates', () => {
     const astro = 'src/pages/x.astro';
     // Another element's focus-visible: utility does not count, even on the same line.
     expect(gates(astro, '<a class="outline-none">x</a><b class="focus-visible:ring-2">y</b>')).toEqual(['outline-none']);
+    // Frontmatter is code, and transition-[all] compiles to transition-property: all.
+    expect(gates(astro, '---\nconst c = `<b class="transition-all">`;\n---\n<a class="p-2">x</a>')).toEqual([]);
+    expect(gates(astro, '<a class="transition-[all]">x</a>')).toEqual(['transition-all']);
     // A focus-visible: variant that draws nothing is not a replacement.
     expect(gates(astro, '<a class="outline-none focus-visible:block">x</a>')).toEqual(['outline-none']);
     expect(gates(astro, '<a class="outline-none focus-visible:ring-2">x</a>')).toEqual([]);
