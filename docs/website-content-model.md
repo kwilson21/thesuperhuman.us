@@ -394,6 +394,12 @@ three buttons are in the first screen at 1280 × 800. Between 801 and 999px the 
 stacks and its doors are the same ruled rows as Home. Phones keep the picture-left
 rows everywhere.
 
+The "Before we start." steps on `/services` are one numbered list in the
+right-hand column, beside the heading as on `/audio/services`: each numeral hangs
+in a narrow gutter beside its title and description, with a hairline between
+steps (owner pick D7.1-C, board `services-layout`, October 22). The one-page print
+sheet keeps its three columns.
+
 ### Project brief paths, October 19
 
 Approved by the owner on October 19, 2026 ([design study](design-concepts/2026-10-19/website-intake/index.html)).

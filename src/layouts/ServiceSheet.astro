@@ -99,17 +99,23 @@ h1 { font-size: clamp(2.75rem, 5.5vw, 4.5rem); line-height: 1.02; letter-spacing
   .path-evidence .history-link { font-size: .95rem; }
   .path-evidence .row-detail { margin: 0 0 1.5rem; }
   .row-button { display: flex; width: fit-content; margin-top: 1.5rem; }
-  .software-steps .step-number { margin-bottom: .5rem; }
   .services-page .service-before { margin-top: 2.5rem; }
-  .software-steps { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-block: 1px solid var(--rule); margin-top: 1rem; padding: 0; }
-  .software-steps li { padding: 1rem; border-left: 1px solid var(--rule); }
-  .software-steps li:first-child { border-left: 0; padding-left: 0; }
+  .software-steps { list-style: none; padding: 0; }
   .software-steps h3 { font-size: 1.2rem; line-height: 1.2; }
   .software-steps p { font-size: 1rem; line-height: 1.4; margin-top: .4rem; }
+  /* On screen the steps are one numbered list: each numeral hangs in a narrow gutter beside its title and description, with a hairline between steps. Beside the heading the list starts level with it, with no rule of its own. The print sheet keeps three columns (below). */
+  @media screen {
+    .software-steps { border-bottom: 1px solid var(--rule); }
+    .software-steps li { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 1rem; padding: 1rem 0; border-top: 1px solid var(--rule); }
+    .software-steps li:first-child { border-top: 0; padding-top: .7rem; }
+    .software-steps .step-number { grid-row: 1 / span 2; margin-top: -.2rem; }
+    .software-steps :is(h3, p) { grid-column: 2; }
+  }
   @media screen and (max-width: 800px) {
     .software-story { flex-direction: column; gap: .5rem; }
     .software-offer-body { gap: 1.5rem; }
     .services-page .service-before { grid-template-columns: 1fr; gap: .8rem; }
+    .software-steps li:first-child { border-top: 1px solid var(--rule); padding-top: 1rem; }
     .services-page .service-offer > summary { grid-template-columns: 1.3fr 1.2fr 20px; gap: 1rem; }
   }
   /* From 1000px wide the hub opens in two columns: the kicker, headline and introduction on the left, the three doors stacked on the right, so every door button shows in the first screen. Narrower, the hub stacks. */
@@ -119,14 +125,16 @@ h1 { font-size: clamp(2.75rem, 5.5vw, 4.5rem); line-height: 1.02; letter-spacing
     .service-sheet > .hub-intro { grid-column: 1; padding-bottom: 0; }
     .service-sheet > .hub-doors { grid-column: 2; padding-top: .9rem; }
   }
-  @media screen and (max-width: 700px) { .hub-intro { padding-block: .5rem 2rem; } }
+  @media screen and (max-width: 700px) {
+    .hub-intro { padding-block: .5rem 2rem; }
+    /* The step numerals shrink at this width (audio-intake.css), so the gutter tightens with them. */
+    .software-steps li { column-gap: .85rem; }
+    .software-steps .step-number { margin-top: -.05rem; }
+  }
   @media screen and (max-width: 650px) {
     .software-offer-body { grid-template-columns: 1fr; }
     .services-page .service-offer > summary { grid-template-columns: 1fr 18px; gap: .3rem 1rem; }
     .services-page .service-offer summary > b { grid-column: 2; grid-row: 1; }
-    .software-steps { grid-template-columns: 1fr; }
-    .software-steps li, .software-steps li:first-child { padding: 1rem 0; border-left: 0; }
-    .software-steps li + li { border-top: 1px solid var(--rule); }
   }
   @media print {
     @page { size: letter; margin: .5in; }
@@ -161,8 +169,9 @@ h1 { font-size: clamp(2.75rem, 5.5vw, 4.5rem); line-height: 1.02; letter-spacing
     .path-evidence p.page-kicker { font-size: 8pt; margin-bottom: 3pt; }
     .path-evidence .row-detail { margin-bottom: 3pt; }
     .sheet-software .service-before { grid-template-columns: 1fr; gap: 4pt; margin-top: 3pt; padding-top: 3pt; }
-    .software-steps { margin-top: 3pt; }
-    .software-steps li { padding: 4pt 4pt; }
+    .software-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-block: 1px solid var(--rule); margin-top: 3pt; }
+    .software-steps li { padding: 4pt 4pt; border-left: 1px solid var(--rule); }
+    .software-steps li:first-child { border-left: 0; padding-left: 0; }
     .software-steps h3 { font-size: 12pt; }
     .sheet-software .software-steps h3 { display: inline; }
     .sheet-software .software-steps .step-number { margin: 0 3pt 0 0; vertical-align: middle; }
