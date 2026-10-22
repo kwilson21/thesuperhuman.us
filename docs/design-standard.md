@@ -98,8 +98,9 @@ Triage each finding into one of three groups:
 
 `scripts/check-design.mjs` ports a few Hallmark gates that a script can judge without
 false alarms. It scans the stylesheets in `src/` (`.css` files, `<style>` blocks in
-`.astro` files, and `<style>` blocks inside the template strings of `.ts` route handlers
-under `src/pages/` that return HTML, such as `src/pages/api/resume-approve.ts`), including
+`.astro` files, and `<style>` blocks inside the string and template literals of `.ts`
+route handlers under `src/pages/` that return HTML, such as
+`src/pages/api/resume-approve.ts`; comments and code there are not read), including
 `@apply` lines, and the class attributes in `.astro` markup (`class="..."`, `class={...}`
 and `class:list={...}`, on one line or several). Markup is checked only for
 `transition-all`, `outline-none` and `outline-0`, and hex colours in Tailwind arbitrary
@@ -120,8 +121,10 @@ colours and faces because it cannot use the site's CSS variables.
   thing (gate 26). In a stylesheet that is a `:focus-visible` rule for the same selector
   (or for every element, or for the removal's ancestor scope, as in `.x :focus-visible`)
   that applies whenever the removal does: each `@media`, `@supports` or `@container`
-  condition around the replacement must also surround the removal, so a replacement only
-  inside `@media (min-width: 64rem)` does not cover an unconditional removal.
+  clause around the replacement must also surround the removal, so a replacement only
+  inside `@media (min-width: 64rem)` does not cover an unconditional removal. Clauses are
+  the parts of a condition joined by `and`, compared without regard to order or nesting;
+  keywords and feature names ignore case, container names do not.
   In a class list it is a `focus-visible:` utility on the same element.
 
 Existing exceptions are listed in the script's allowlist, each with its reason, the exact

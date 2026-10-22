@@ -179,6 +179,25 @@ describe('gates', () => {
     expect(css(`.a:focus { @apply outline-none; } ${wide} { .a:focus-visible ${ring} }`)).toEqual(['outline-none']);
   });
 
+  it('compares media clauses, not whole preludes: order, nesting and container-name case', () => {
+    const ring = '{ box-shadow: 0 0 0 2px var(--accent); }';
+    // The same two clauses in the opposite order are the same condition.
+    expect(css(`@media (min-width: 64rem) and (hover: hover) { .a:focus { outline: none; } } @media (hover: hover) and (min-width: 64rem) { .a:focus-visible ${ring} }`)).toEqual([]);
+    // Nested at-rules of one type join into one set of clauses.
+    expect(css(`@media (min-width: 64rem) { @media (hover: hover) { .a:focus { outline: none; } } } @media (hover: hover) and (min-width: 64rem) { .a:focus-visible ${ring} }`)).toEqual([]);
+    expect(css(`@media (min-width: 64rem) and (hover: hover) { .a:focus { outline: none; } } @media (hover: hover) { @media (min-width: 64rem) { .a:focus-visible ${ring} } }`)).toEqual([]);
+    // A replacement with a clause the removal lacks does not cover it, even sharing one.
+    expect(css(`@media (min-width: 64rem) { .a:focus { outline: none; } } @media (min-width: 64rem) and (hover: hover) { .a:focus-visible ${ring} }`)).toEqual(['outline-none']);
+    // A media type is a clause; a prelude with not, or or a comma is one whole clause.
+    expect(css(`@media screen and (min-width: 64rem) { .a:focus { outline: none; } } @media (min-width: 64rem) { .a:focus-visible ${ring} }`)).toEqual([]);
+    expect(css(`@media (min-width: 64rem) { .a:focus { outline: none; } } @media (min-width: 64rem), print { .a:focus-visible ${ring} }`)).toEqual(['outline-none']);
+    // Keywords and feature names ignore case; a container name is a case-sensitive custom ident.
+    expect(css(`@media SCREEN AND (MIN-WIDTH: 64rem) { .a:focus { outline: none; } } @media screen and (min-width:64rem) { .a:focus-visible ${ring} }`)).toEqual([]);
+    expect(css(`@container card (min-width: 20rem) { .a:focus { outline: none; } } @container card (min-width: 20rem) { .a:focus-visible ${ring} }`)).toEqual([]);
+    expect(css(`@container Card (min-width: 20rem) { .a:focus { outline: none; } } @container card (min-width: 20rem) { .a:focus-visible ${ring} }`)).toEqual(['outline-none']);
+    expect(css(`@container (min-width: 20rem) { .a:focus { outline: none; } } @container card (min-width: 20rem) { .a:focus-visible ${ring} }`)).toEqual(['outline-none']);
+  });
+
   it('judges a class-list outline removal per element, with its own hint', () => {
     const astro = 'src/pages/x.astro';
     // Another element's focus-visible: utility does not count, even on the same line.
@@ -243,6 +262,31 @@ describe('gates', () => {
     expect(hits[0]).toMatchObject({ path: 'src/pages/api/page.ts', line: 3, gate: 'raw-hex', match: '#123456' });
     expect(gates('src/pages/api/page.ts', '`<style>.a { transition: all 1s var(--ease-site); }</style>`')).toEqual(['transition-all']);
     expect(gates('src/pages/api/page.ts', '`<style>:root { --paper: #FBF8F2; } body { background: var(--paper); font-family: \'Libron\', Georgia, serif; }</style>`')).toEqual([]);
+  });
+
+  it('reads a .ts route only where it emits HTML: literals count, comments and bare code do not', () => {
+    const route = (body: string) => `export const GET = () => new Response(${body});`;
+    const hex = '<style>.a { color: #123456; }</style>';
+    // A <style> in a block or line comment is ignored; the real one after it keeps its line.
+    expect(gates('src/pages/api/page.ts', `/* ${hex} */\n// ${hex}\n${route(`\`${hex}\``)}`)).toEqual(['raw-hex']);
+    expect(gates('src/pages/api/page.ts', `/*\n${hex}\n*/\nconst a = 1;`)).toEqual([]);
+    const [hit] = fileViolations('src/pages/api/page.ts', `/* ${hex} */\n\n${route(`'<p></p>\\n${hex}'`)}`, { faces });
+    expect(hit).toMatchObject({ gate: 'raw-hex', line: 3 });
+    // `//` inside a string or template (a URL) does not start a comment.
+    const url = route(`\`<a href="https://example.com/">x</a><style>.a { color: #123456; }</style>\``);
+    expect(gates('src/pages/api/page.ts', url)).toEqual(['raw-hex']);
+    expect(gates('src/pages/api/page.ts', `const s = 'http://x.test/'; ${url}`)).toEqual(['raw-hex']);
+    // A regular expression with a quote does not swallow the rest of the file.
+    expect(gates('src/pages/api/page.ts', `const q = /'/g;\n${url}`)).toEqual(['raw-hex']);
+  });
+
+  it('keeps the string literals inside a template interpolation and blanks the rest', () => {
+    const route = (value: string) => `const html = \`<style>.a { color: ${value}; }</style>\`;`;
+    expect(gates('src/pages/api/page.ts', route("${dark ? '#fff' : '#000'}"))).toEqual(['raw-hex', 'raw-hex']);
+    expect(gates('src/pages/api/page.ts', route("${dark ? 'var(--ink)' : 'var(--paper)'}"))).toEqual([]);
+    // Braces and other code inside the interpolation do not read as CSS blocks.
+    expect(gates('src/pages/api/page.ts', route('${fn({ a: 1 })}'))).toEqual([]);
+    expect(gates('src/pages/api/page.ts', '`<style>${rules.map(r => `.a-${r} { color: #123456; }`).join("")}</style>`')).toEqual(['raw-hex']);
   });
 
   it('does not scan an email template, or TypeScript outside src/pages', () => {
