@@ -1,9 +1,9 @@
-import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 import rendered from '../../src/data/og-media.json';
 import { DEFAULT_OG_SCENE, OG_SCENES, ogMedia, ogSceneFor, serveOgVideo, type OgScene } from '~/lib/og-media';
+import { sourceHash } from '../../scripts/og-video/fingerprint.mjs';
 
 const scenes = Object.keys(OG_SCENES) as OgScene[];
 const sceneFiles = readdirSync('scripts/og-video/scenes').filter(name => name.endsWith('.html')).map(name => name.slice(0, -5));
@@ -114,9 +114,7 @@ describe('rendered scenes', () => {
   it.each(scenes)('%s was rendered from its current scene, kit and images', scene => {
     const entry = (rendered as Record<string, { inputs: string[]; source: string }>)[scene];
     expect(entry.inputs).toContain(`scripts/og-video/scenes/${scene}.html`);
-    const digest = createHash('sha256');
-    for (const input of entry.inputs) digest.update(`${input}\0`).update(readFileSync(input)).update('\0');
-    expect(digest.digest('hex').slice(0, 16), `re-render ${scene}: node scripts/og-video/render.mjs ${scene}`).toBe(entry.source);
+    expect(sourceHash('.', entry.inputs), `re-render ${scene}: node scripts/og-video/render.mjs ${scene}`).toBe(entry.source);
   });
 
   it('keeps no stale files beside the current ones', () => {
