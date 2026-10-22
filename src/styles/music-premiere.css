@@ -24,6 +24,8 @@ body:has(.premiere-page) .site-header{min-height:82px}
    audio menu (175px), the artist line (52px), the rule and its padding (25px) and 8px to spare. Long titles may take two
    lines. PR #204's long-word guard still caps the result. */
 @media(min-width:1024px) and (min-height:451px){.masthead-title{--masthead-room:calc(100svh - 16.25rem - (100cqi - var(--space-8)) / 2.94);--masthead-size:clamp(5rem,min(14.5vw,var(--masthead-room) / 1.08),12.5rem)}.masthead-title-long{--masthead-size:clamp(3rem,min(8vw,var(--masthead-room) / 2.15),7rem)}}
+/* Stacked platform links keep 16px between them, so their 44px tap areas (global.css .site-link) do not overlap. */
+@media(max-width:650px){.release-platform-links{gap:var(--space-4)}}
 @media(prefers-reduced-motion:reduce){.round-play{transition:none}.premiere-action:hover .round-play,.round-play:hover{transform:none}}
 
 .premiere-stage:has(.music-video:not([hidden]),.youtube-shell:not([hidden])) .hero-transport{margin:0;max-width:none}

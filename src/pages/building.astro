@@ -66,12 +66,11 @@ const prototypes = [
   .project-copy { min-width: 0; }.project-copy h2 { font-size: clamp(2rem,3.2vw,2.8rem); line-height: 1.15; letter-spacing: -.025em; }
   .project-status { margin-block: .5rem 1.1rem; }.project-subtitle { font-size: 1.25rem; line-height: 1.4; }
   .project-actions { display: grid; gap: .9rem; list-style: none; padding: 0; margin-block: 1.5rem; }.project-actions li { display: flex; gap: .85rem; align-items: flex-start; line-height: 1.45; }.project-actions svg { flex-shrink: 0; margin-top: .05rem; }
-  .project-context { border-top: 1px solid var(--rule); padding-top: 1rem; font-size: .9375rem; line-height: 1.55; color: var(--muted); }.project-links { margin-top: 1.3rem; gap: var(--space-3) 1.35rem; font-size: .9375rem; }
+  .project-context { border-top: 1px solid var(--rule); padding-top: 1rem; font-size: .9375rem; line-height: 1.55; color: var(--muted); }.project-links { margin-top: 1.3rem; gap: var(--space-5) 1.35rem; font-size: .9375rem; }
   .earlier-prototypes { margin-top: 3rem; }.prototype-intro { color: var(--muted); max-width: 40rem; margin-bottom: 1.5rem; }.prototype-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 2.5rem; }.prototype-list .page-kicker { margin-bottom: .4rem; }.prototype-list h3 { font-size: 1.5rem; margin-bottom: .65rem; }.prototype-list h3 span { color: var(--accent); }.prototype-list article > p:last-child { color: var(--muted); }
-  /* 44px-tall tap areas from a pseudo-element, so each underline sits where the house link puts it.
-     A link is about 33px tall, so a 12px row gap keeps wrapped neighbours' areas from overlapping. */
-  .project-links .site-link, .prototype-list h3 a { position: relative; }
-  .project-links .site-link::after, .prototype-list h3 a::after { content: ''; position: absolute; inset-inline: 0; top: 50%; height: 44px; transform: translateY(-50%); }
+  /* Prototype titles take the house link's 44px tap area (global.css .site-link), which the project links already have. */
+  .prototype-list h3 a { position: relative; }
+  .prototype-list h3 a::after { content: ''; position: absolute; inset-inline: 0; top: 50%; height: 44px; transform: translateY(-50%); }
   .journal-note { border-top: 1px solid var(--rule); margin-top: 3rem; padding-top: 1.5rem; font-size: 1.125rem; }
   @media(max-width: 800px) { .project-feature { grid-template-columns: 1fr; gap: 1.75rem; padding-block: 2.5rem; }.project-copy { grid-row: 1; }.prototype-list { grid-template-columns: 1fr; gap: 1.75rem; } }
 </style>
