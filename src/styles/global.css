@@ -294,7 +294,8 @@
   .site-form :is(input:not([type=checkbox], [type=radio]), textarea, select):not([aria-invalid=true]):hover { border-color: var(--muted); }
 }
 .site-form :is(input, textarea, select):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.site-form [aria-invalid=true] { border-color: var(--accent); }
+/* As specific as the field rule above, so an invalid input shows the accent edge (not only textareas). */
+.site-form [aria-invalid=true], .site-form input:not([type=checkbox]):not([type=radio]):not([type=hidden])[aria-invalid=true] { border-color: var(--accent); }
 .site-form [data-form-error] { color: var(--accent); font-size: .875rem; margin-top: .5rem; }
 .site-form [data-form-status] { font-size: .9rem; margin-top: .75rem; }
 .site-form .form-hint { font-size: .875rem; line-height: 1.6; overflow-wrap: anywhere; }

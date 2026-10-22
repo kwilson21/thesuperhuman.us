@@ -59,8 +59,8 @@ const partialSignOut = Astro.url.searchParams.get('signout') === 'partial';
     .studio-intro.small { margin: -.4rem 0 .4rem; font-size: 1rem; }
     .code-boxes { display: grid; grid-template-columns: repeat(8, minmax(0, 3rem)); gap: .45rem; margin: 0; padding: 0; border: 0; }
     .code-boxes legend { margin-bottom: .6rem; padding: 0; font: 500 .82rem/1.4 var(--font-sans); }
-    .code-box { width: 100%; aspect-ratio: 5 / 6; padding: 0; border: 1px solid var(--studio-line); border-radius: 2px; background: var(--studio-field); text-align: center; font: 500 1.35rem/1 var(--font-sans); font-variant-numeric: tabular-nums; }
-    .code-box:focus-visible { outline: none; border: 2px solid var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+    .code-box { width: 100%; aspect-ratio: 5 / 6; padding: 0; border: 1px solid var(--field-border); border-radius: 2px; background: var(--studio-field); text-align: center; font: 500 1.35rem/1 var(--font-sans); font-variant-numeric: tabular-nums; }
+    .code-box:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .studio-button { min-width: 12rem; }
     #studio-status { min-height: 2rem; margin-top: 1.5rem; font: .95rem/1.5 var(--font-sans); }
   </style>

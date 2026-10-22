@@ -30,3 +30,14 @@ it('keeps form field edges at 3:1 or better against paper (WCAG 1.4.11)', () => 
 it('draws the shared form fields with the field-border token, not the hairline', () => {
   expect(global).toMatch(/\.site-form input:not\(\[type=checkbox\]\)[^{]*\{[^}]*border: 1px solid var\(--field-border\)/);
 });
+
+it('shows the accent error edge on invalid inputs, not only on textareas', () => {
+  // The field rule's :not() chain outranks a bare [aria-invalid=true]; the error rule must match it.
+  expect(global).toContain('.site-form input:not([type=checkbox]):not([type=radio]):not([type=hidden])[aria-invalid=true] { border-color: var(--accent); }');
+});
+
+it('borders the studio sign-in code boxes with the field-border token and the shared focus outline', () => {
+  const signIn = readFileSync(new URL('../../src/pages/studio/sign-in.astro', import.meta.url), 'utf8');
+  expect(signIn).toMatch(/\.code-box \{[^}]*border: 1px solid var\(--field-border\)/);
+  expect(signIn).toContain('.code-box:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }');
+});
