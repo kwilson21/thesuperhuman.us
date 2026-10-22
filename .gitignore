@@ -47,3 +47,8 @@ __pycache__/
 
 # Link-preview contact sheets from scripts/og-video/render.mjs --sheet
 /.og-video/
+
+# Hallmark's run cache (.hallmark/preflight.json, log.json) and the root tokens.css it
+# would write. design.md is the system here and the tokens live in src/styles/global.css.
+/.hallmark/
+/tokens.css
