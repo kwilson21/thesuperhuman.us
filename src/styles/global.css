@@ -189,6 +189,9 @@
 :root {
   --site-gutter: clamp(1.5rem, 5vw, 3.5rem);
   --site-section-space: clamp(3rem, 6vw, 5.5rem);
+  /* Running prose stops near 65 characters; Libron's wide `ch` makes ch caps run long. */
+  --measure-prose: 34rem;
+  --ease-site: cubic-bezier(.2, .7, .2, 1);
 }
 @layer components {
   .site-shell { width: 100%; max-width: 1232px; margin-inline: auto; padding-inline: var(--site-gutter); }
