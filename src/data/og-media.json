@@ -20,7 +20,8 @@
       "src/assets/site/notebook-v1.webp",
       "src/assets/site/terrain-v1.webp"
     ],
-    "source": "d7cc1b9aa0360a6f"
+    "source": "d7cc1b9aa0360a6f",
+    "encoding": "5341c8ca6c6bf333"
   },
   "audio": {
     "image": "/og/audio-974d88de7f.png",
@@ -38,7 +39,8 @@
       "scripts/og-video/scenes/audio.html",
       "src/assets/site/headphones-v1.webp"
     ],
-    "source": "b07ead1841174ecd"
+    "source": "b07ead1841174ecd",
+    "encoding": "5341c8ca6c6bf333"
   },
   "audio-portfolio": {
     "image": "/og/audio-portfolio-7038000a78.png",
@@ -57,7 +59,8 @@
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/audio-portfolio.html"
     ],
-    "source": "33fdb3a348b1f7e0"
+    "source": "33fdb3a348b1f7e0",
+    "encoding": "5341c8ca6c6bf333"
   },
   "audio-releases": {
     "image": "/og/audio-releases-6c64bded1c.jpg",
@@ -78,7 +81,8 @@
       "scripts/og-video/scenes/audio-releases.html",
       "src/assets/site/music-skyline.webp"
     ],
-    "source": "f57349ed4c4b089e"
+    "source": "f57349ed4c4b089e",
+    "encoding": "5341c8ca6c6bf333"
   },
   "audio-services": {
     "image": "/og/audio-services-29bc40ffa2.png",
@@ -95,7 +99,8 @@
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/audio-services.html"
     ],
-    "source": "fafc5eab596448e9"
+    "source": "fafc5eab596448e9",
+    "encoding": "5341c8ca6c6bf333"
   },
   "audio-start": {
     "image": "/og/audio-start-345932f345.png",
@@ -112,7 +117,8 @@
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/audio-start.html"
     ],
-    "source": "ac2348eb56e969e8"
+    "source": "ac2348eb56e969e8",
+    "encoding": "5341c8ca6c6bf333"
   },
   "building": {
     "image": "/og/building-afef531d7e.png",
@@ -130,7 +136,8 @@
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/building.html"
     ],
-    "source": "a1c9d8037d640f03"
+    "source": "a1c9d8037d640f03",
+    "encoding": "5341c8ca6c6bf333"
   },
   "home": {
     "image": "/og/home-feaa0743d2.png",
@@ -151,7 +158,8 @@
       "src/assets/projects/tally/transactions-demo-2026-09-26.webp",
       "src/assets/site/studio-v1.webp"
     ],
-    "source": "3192c4a80bc84ad6"
+    "source": "3192c4a80bc84ad6",
+    "encoding": "5341c8ca6c6bf333"
   },
   "music-old-news": {
     "image": "/og/music-old-news-775f5c3865.jpg",
@@ -173,7 +181,8 @@
       "scripts/og-video/scenes/music-old-news.html",
       "src/assets/site/old-news-premiere.webp"
     ],
-    "source": "d361a74c731962d7"
+    "source": "d361a74c731962d7",
+    "encoding": "5341c8ca6c6bf333"
   },
   "not-found": {
     "image": "/og/not-found-3542b709fe.png",
@@ -191,7 +200,8 @@
       "scripts/og-video/scenes/not-found.html",
       "src/assets/site/quiet-coast-v2.webp"
     ],
-    "source": "559b25fb47d07cda"
+    "source": "559b25fb47d07cda",
+    "encoding": "5341c8ca6c6bf333"
   },
   "personal-website": {
     "image": "/og/personal-website-8b407f616e.png",
@@ -211,7 +221,8 @@
       "src/assets/projects/website/home-after.png",
       "src/assets/projects/website/home-before.png"
     ],
-    "source": "ea0d046ee2ce33c3"
+    "source": "ea0d046ee2ce33c3",
+    "encoding": "5341c8ca6c6bf333"
   },
   "personal-website-story": {
     "image": "/og/personal-website-story-af55f296e7.png",
@@ -232,7 +243,8 @@
       "src/assets/site/redesign-studies/c-project-gallery.webp",
       "src/assets/site/redesign-studies/d-open-landscape.webp"
     ],
-    "source": "7a7448634a44499d"
+    "source": "7a7448634a44499d",
+    "encoding": "5341c8ca6c6bf333"
   },
   "privacy": {
     "image": "/og/privacy-1734dee716.png",
@@ -249,7 +261,8 @@
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/privacy.html"
     ],
-    "source": "cf78e01ab443b8a1"
+    "source": "cf78e01ab443b8a1",
+    "encoding": "5341c8ca6c6bf333"
   },
   "project-kaillera-next": {
     "image": "/og/project-kaillera-next-111eb0973b.png",
@@ -267,7 +280,8 @@
       "scripts/og-video/scenes/project-kaillera-next.html",
       "src/assets/projects/kaillera-next/landing-2026-09-26.webp"
     ],
-    "source": "72be88deda88fbe1"
+    "source": "72be88deda88fbe1",
+    "encoding": "5341c8ca6c6bf333"
   },
   "project-tally": {
     "image": "/og/project-tally-29117b28f5.png",
@@ -285,7 +299,8 @@
       "scripts/og-video/scenes/project-tally.html",
       "src/assets/projects/tally/home-annotated.webp"
     ],
-    "source": "156b77f8b27f86a0"
+    "source": "156b77f8b27f86a0",
+    "encoding": "5341c8ca6c6bf333"
   },
   "project-threadline": {
     "image": "/og/project-threadline-8fdefa6291.jpg",
@@ -304,7 +319,8 @@
       "scripts/og-video/scenes/project-threadline.html",
       "src/assets/site/threadline-v1.webp"
     ],
-    "source": "85e4431785a4c14e"
+    "source": "85e4431785a4c14e",
+    "encoding": "5341c8ca6c6bf333"
   },
   "services": {
     "image": "/og/services-6518d2c6c8.png",
@@ -325,7 +341,8 @@
       "src/assets/site/work-with-me-software.webp",
       "src/assets/site/work-with-me-website.webp"
     ],
-    "source": "09b6e04003e326c2"
+    "source": "09b6e04003e326c2",
+    "encoding": "5341c8ca6c6bf333"
   },
   "software-start": {
     "image": "/og/software-start-24d1e7b824.png",
@@ -342,7 +359,8 @@
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/software-start.html"
     ],
-    "source": "2dbf70ef444bd7ec"
+    "source": "2dbf70ef444bd7ec",
+    "encoding": "5341c8ca6c6bf333"
   },
   "the-engineers-daily": {
     "image": "/og/the-engineers-daily-db4353dc77.png",
@@ -360,7 +378,8 @@
       "scripts/og-video/scenes/the-engineers-daily.html",
       "src/assets/projects/daily-preview.webp"
     ],
-    "source": "7336723b495f0313"
+    "source": "7336723b495f0313",
+    "encoding": "5341c8ca6c6bf333"
   },
   "work": {
     "image": "/og/work-31561924d0.png",
@@ -377,7 +396,8 @@
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/work.html"
     ],
-    "source": "9dbdd821c382355d"
+    "source": "9dbdd821c382355d",
+    "encoding": "5341c8ca6c6bf333"
   },
   "writing": {
     "image": "/og/writing-ffaaf86028.png",
@@ -395,7 +415,8 @@
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/writing.html"
     ],
-    "source": "4c3037d33324d965"
+    "source": "4c3037d33324d965",
+    "encoding": "5341c8ca6c6bf333"
   },
   "writing-ai-gives-you-speed": {
     "image": "/og/writing-ai-gives-you-speed-11e01623f0.png",
@@ -413,6 +434,7 @@
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/writing-ai-gives-you-speed.html"
     ],
-    "source": "87cdc863beaad785"
+    "source": "87cdc863beaad785",
+    "encoding": "5341c8ca6c6bf333"
   }
 }

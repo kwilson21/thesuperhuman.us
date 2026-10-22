@@ -52,6 +52,9 @@ const ENCODE = [
   '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
   '-movflags', '+faststart',
 ];
+// Recorded with each scene, so a change to these settings re-encodes without being taken for a
+// rendering difference.
+const ENCODING = createHash('sha256').update(JSON.stringify(ENCODE)).digest('hex').slice(0, 16);
 
 const args = process.argv.slice(2);
 const sheetOnly = args.includes('--sheet');
@@ -180,12 +183,13 @@ async function renderIn(browser, key, attempt) {
     const reviewed = !failed && previous?.image.endsWith(posterExtension) && [previous.image, previous.video.replace('/og/', '/og/raw/')].every(file => existsSync(join(ROOT, 'public', file)));
     if (reviewed && previous.frames === sameFrames) {
       console.log(`${key}: frames unchanged; keeping ${previous.video}`);
-      return { ...previous, inputs: source.inputs, source: source.hash };
+      return { ...previous, inputs: source.inputs, source: source.hash, encoding: ENCODING };
     }
     // Chromium can, very rarely, anti-alias a few pixels differently from one run to the next. When
-    // nothing the scene loads has changed, capture it once more before replacing a reviewed video.
-    if (reviewed && previous.source === source.hash && attempt === 1) {
-      console.log(`${key}: frames differ although its sources are unchanged; capturing again`);
+    // neither the scene's files nor the encoder settings have changed, capture it once more before
+    // replacing a reviewed video.
+    if (reviewed && previous.source === source.hash && previous.encoding === ENCODING && attempt === 1) {
+      console.log(`${key}: frames differ although its files and encoder settings are unchanged; capturing again`);
       return AGAIN;
     }
 
@@ -220,6 +224,7 @@ async function renderIn(browser, key, attempt) {
       frames: sameFrames,
       inputs: source.inputs,
       source: source.hash,
+      encoding: ENCODING,
     };
   } finally {
     rmSync(work, { recursive: true, force: true });
