@@ -110,7 +110,7 @@ const jsonLd = {
       <section class="site-section" aria-labelledby="writing-title">
         <div class="site-section-heading" data-reveal><h2 id="writing-title">Writing</h2></div>
         <article class="editorial-pair writing-preview" data-reveal>
-          <div class="editorial-art notebook-art" data-scene="notebook" data-start="1" data-end="0"><img src={notebook.src} width={notebook.width} height={notebook.height} alt="" loading="lazy" /></div>
+          <div class="editorial-art notebook-art"><img src={notebook.src} width={notebook.width} height={notebook.height} alt="" loading="lazy" /></div>
           <div class="editorial-copy">
             <h3>{essay.data.title}</h3>
             <svg class="pen-stroke" viewBox="0 0 300 14" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M3 9 C 60 3, 110 12, 170 7 S 262 4, 297 8" /></svg>
@@ -165,7 +165,7 @@ const jsonLd = {
     clip-path: inset(0 calc((1 - var(--grow)) * 21%) 0 round calc((1 - var(--grow)) * 28px) calc((1 - var(--grow)) * 28px) 0 0);
   }
   .screen-light { position: absolute; inset: 0 0 auto; height: 70vh; background: radial-gradient(55% 60% at 50% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%); pointer-events: none; }
-  .screen-code { position: absolute; top: clamp(2rem, 6vh, 3.5rem); left: 58%; width: min(500px, 70vw); opacity: .7; transform: translate(-50%, calc((1 - var(--grow)) * 40px)); mask-image: linear-gradient(to bottom, #000 50%, transparent 92%); pointer-events: none; }
+  .screen-code { position: absolute; top: clamp(2rem, 6vh, 3.5rem); left: 58%; width: min(500px, 70vw); opacity: .7; transform: translateX(-50%); mask-image: linear-gradient(to bottom, #000 50%, transparent 92%); pointer-events: none; }
 
   /* Subgrid keeps each card's art, kicker, title, line and link on shared rows, so both cards
      line up whatever wraps (WorkWithMe.astro's doors use the same pattern). */
@@ -211,7 +211,7 @@ const jsonLd = {
   .capacity-key > span { grid-column: 2 / -1; padding-left: .3rem; white-space: nowrap; }
 
   .editorial-pair { display: grid; grid-template-columns: 1.4fr 1fr; gap: 3rem; align-items: center; }
-  .editorial-art :global(img) { display: block; width: 100%; height: auto; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent); mask-composite: intersect; transform: translateY(calc((.5 - var(--p, .5)) * 36px)); }
+  .editorial-art :global(img) { display: block; width: 100%; height: auto; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent); mask-composite: intersect; }
   .editorial-copy h3 { max-width: 24ch; font-size: clamp(2rem, 3.4vw, 2.9rem); line-height: 1.08; letter-spacing: -.04em; margin: 0; text-wrap: balance; }
   .pen-stroke { display: block; width: min(15rem, 80%); height: 14px; margin: .9rem 0 1.6rem; overflow: visible; }
   /* No non-scaling-stroke here: with it, Chromium dashes in screen space and pathLength no longer lines up. */
@@ -251,7 +251,7 @@ const jsonLd = {
     :global(.motion) .writing-preview:not(.is-in) .pen-stroke path { stroke-dashoffset: 1; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .project-art, .editorial-art :global(img) { transform: none; transition: none; }
+    .project-art { transform: none; transition: none; }
   }
   @media print { .world-screen { clip-path: none; } }
 

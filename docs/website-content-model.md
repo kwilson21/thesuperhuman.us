@@ -258,23 +258,30 @@ The worlds follow the hero tagline, "Software, sound, and things worth exploring
   monitor re-types its last lines of code, the headphones give off three rings,
   and a terracotta trail is drawn on the notepad from the pen tip. It rests within
   five seconds and replays only when the visitor returns to the top or points at
-  the studio. Work with me stays on paper; its doors rise in turn.
+  the studio. The picture itself stays still: since October 22 it no longer lifts
+  with the scroll or leans toward the pointer. Work with me stays on paper; its
+  doors rise in turn.
 - **Screen (software, dark).** Currently building and the Lyft proof sit inside
   a dark screen that arrives as a rounded panel and widens to full width. The
   site's own tokens are inverted for that subtree, with the terracotta lifted for
   contrast. Project captures glow like screens and lean toward a fine pointer.
+  The code rows at the top of the screen stay put as it widens.
   The Lyft figure counts up beside one cell per 5,000 rows.
 - **Sound.** The screen ends in a waveform: paper peaks rise into the dark and
   dark peaks fall into the paper. It swells as it crosses the viewport and is
   silent at either edge. It is a picture of sound; nothing plays.
 - **Notebook and horizon (things worth exploring).** The essay title is inked in
-  and underlined with a pen stroke; a sun rises over the contact rule as the page
-  ends.
+  and underlined with a pen stroke. The notebook picture stays still. A sun rises
+  over the contact rule as the page ends.
 
 Rules the implementation keeps: every resting frame is in the HTML and CSS, so
 the page is complete without JavaScript and with reduced motion (the view CI
 screenshots use). Motion that plays by itself finishes within five seconds;
-everything else is tied to scroll or pointer. A keyboard user who lands inside a
+everything else is tied to scroll or pointer. Since October 22 only the
+crossings between worlds follow the scroll (the screen widening, the waveform
+swelling, the sun rising, and About's chapter path); the pictures that drifted
+at their own speed (the studio, the code rows, the notebook and About's terrain)
+stay still. A keyboard user who lands inside a
 block that has not revealed yet sees it at once. No new dependency, image or
 claim; the only new visible text is the capacity key (one cell = 5,000 rows).
 The script is about 2.4 KB gzipped. Three.js was not needed for this
@@ -290,7 +297,8 @@ its job, on the shared layer; content, copy and order are unchanged everywhere.
   (still hidden below 800 px, per the audit), and each chapter's object plays one
   short scene as it arrives: rings from the headphones, a glow and caret on the
   laptop's `</>`, the controller's buttons pressing in turn, a glow from the
-  notebook's sun. The terrain drifts slightly with scroll.
+  notebook's sun. The terrain stays still (it drifted with scroll until
+  October 22).
 - **Audio:** the hero headphones give off the same rings on arrival and the
   sections rise in. It stays light: this page sells, and playback is untouched.
 - **Building:** the feature and the project rows rise in; the Tally capture leans
