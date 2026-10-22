@@ -5,7 +5,7 @@ Repository: `kwilson21/thesuperhuman.us`
 Pull request: [#203](https://github.com/kwilson21/thesuperhuman.us/pull/203), "Link previews that play a video (og:video), one scene per page"  
 Branch: `og-video-preview`  
 Verified revision: `8e6e9cc` (`8e6e9ccdf7269f49b862f9c2c60ed52b4f6b8773`), the PR head. It is 12 commits on top of `main` at `26e764a`, which is also the merge base. This record is committed on top of it.  
-Merged revision: `75a88be`, squash-merged to `main` on October 22, 2026 at 10:52:12 UTC from the final record commit `5cc2227`. Its Workers Builds production build succeeded at 10:53:34 UTC (build `43d38176-4dcf-477b-a5b6-b1264b3c075d`, Worker Version ID `1d40ed4a-ffd7-42a5-9de3-db4a129a4486`), and production served the new tags from 10:53:41 UTC. Live results are under "Live checks after deploy".  
+Merged revision: `75a88be`, squash-merged to `main` on October 22, 2026 at 10:52:12 UTC from the final record commit `5cc2227`. Its Workers Builds production build succeeded at 10:53:34 UTC (build `43d38176-4dcf-477b-a5b6-b1264b3c075d`, Worker Version ID `1d40ed4a-ffd7-42a5-9de3-db4a129a4486`), and a polling `curl` of `https://thesuperhuman.us/` first saw the new home `og:video` tag at 10:53:41 UTC. The site shows no revision marker, so the serving revision is inferred from that build and the new tags. Live results are under "Live checks after deploy".  
 Target: production `https://thesuperhuman.us` and `audio.thesuperhuman.us`:
 - the link-preview tags in every page's `<head>` (`src/layouts/BaseLayout.astro`)
 - the posters at `/og/<scene>-<hash>.png` or `.jpg`, and the static videos at `/og/raw/<scene>-<hash>.mp4`
@@ -37,17 +37,17 @@ Scope:
   - `src/pages/building/the-engineers-daily.astro` (drops its `ogImage` prop, because its exact-route scene now applies)
 
 Rollback revision: `26e764a`, "Record the Turnstile result and the owner's header decisions (#202)".
-- It is `origin/main` (confirmed with `git ls-remote`) and the merge base of this PR.
+- Before the merge, it was `origin/main` (confirmed with `git ls-remote`) and the merge base of this PR. After the merge, `origin/main` is `75a88be`.
 - Its Workers Builds production build succeeded at 14:05:49 UTC on October 21, 2026 (10:05 America/New_York), with Worker Version ID `f480f1b0-603e-4987-8b21-06bff291a328`.
-- Whether that version is serving now was not observed: no live request was sent, and the site shows no revision marker.
+- Before the merge, whether that version was serving was not observed: no live request had been sent, and the site shows no revision marker.
 - No backup is needed, because this PR changes no migration, binding, secret or dependency.
 - `26e764a` has no `public/og/` (checked with `git ls-tree`). A rollback restores `/og-image.png` and the old single card. A preview that a platform scraped after the deploy would then point at poster and video paths that return 404 until the platform scrapes the page again.
 - A rollback would also undo anything merged to `main` after #203, so check what has merged since.
 
 Remaining work:
-- the sitemap fix the owner chose, in a separate PR (2.5)
-- a clean review pass and green CI on the final record commit (7.4)
-- the live checks after deploy, including the owner's remote `owner:health` run (8.15)
+- the sitemap fix the owner chose, in [#205](https://github.com/kwilson21/thesuperhuman.us/pull/205) (2.5)
+- the owner's remote `owner:health` run (8.15, live check 6)
+- live checks 3 and 4 (Messages, the preview debuggers) and 8 (the deployed branch preview)
 
 See Remaining work at the end.
 
@@ -108,18 +108,18 @@ Authorization:
 - **Media inspection:**
   - All 22 posters were viewed at full size and on a 600 × 315 contact sheet. Home, services and audio-services were also viewed singly at 600 × 315.
   - `identify`, `ffprobe` and ffmpeg (PSNR and `signalstats`) ran on every file.
+- **Not done before the merge:** no request was sent to production or to the branch preview. After the deploy, production was checked (live checks 1, 2 and 5); the branch preview was not.
 - **Not done:**
-  - No request was sent to production or to the branch preview.
   - No real device or preview app was tested (Messages, Discord, X, Slack, LinkedIn, Facebook).
   - No automated accessibility tool was run (none is installed). Performance was measured in the lab only (4.3).
 
-PASS means the evidence named here was observed. Production checks are listed under "Live checks still to run after deploy".
+PASS means the evidence named here was observed. Production checks and their results are under "Live checks after deploy".
 
 ## 1. Purpose and content
 
 - **PASS · 1.1 Project, branch, changes, instructions and deployment authorization.**
   - `git rev-parse HEAD` is `8e6e9ccdf7269f49b862f9c2c60ed52b4f6b8773` on `og-video-preview`, and `git status --short` shows a clean tracked tree.
-  - `origin/main` and the merge base are both `26e764a`.
+  - Before the merge, `origin/main` and the merge base were both `26e764a`.
   - `git diff --stat 26e764a..8e6e9cc` lists 90 files. They match the scope above, including the small related files and the new `/og/*` block in `public/_headers` (`Cache-Control: public, max-age=31536000, immutable`).
   - Read: CLAUDE.md, the README section "Link previews" and the PR description.
   - The PR is open and not a draft, with head `8e6e9cc` and base `main`.
@@ -527,7 +527,7 @@ PASS means the evidence named here was observed. Production checks are listed un
     - It was committed on October 21, 2026 at 13:52:24 UTC (09:52 America/New_York).
     - Its Validate run succeeded at 14:05:46 UTC.
     - "Workers Builds: thesuperhuman-us" succeeded at 14:05:49 UTC (10:05 America/New_York). This was a production build: Build ID `90cf578e-d398-4c1f-a28f-424acec88709`, Worker Version ID `f480f1b0-603e-4987-8b21-06bff291a328`. Unlike the PR head's preview build, it has no preview URL.
-  - Not observed: whether `f480f1b0` is serving now. No live request was sent, and the site shows no revision marker.
+  - Not observed before the merge: whether `f480f1b0` was serving. No live request had been sent, and the site shows no revision marker.
   - No backup is needed: there are no D1, KV, R2, migration or secret changes.
   - The rollback caveat about scraped previews is in the header.
   - Review and authorization rules:
@@ -537,12 +537,14 @@ PASS means the evidence named here was observed. Production checks are listed un
     - `mergeable_state` is clean, and Validate, capture and Workers Builds are green on `8e6e9cc`.
     - The owner gave the go-ahead to merge and deploy (answer 5; see 1.1).
   - Final record commit `5cc2227`: an independent review pass found nothing, and Validate (10:46:10 UTC), Screenshots capture (10:51:48 UTC) and Workers Builds (10:45:42 UTC) succeeded before the merge, which was pinned to that head.
-- **PASS with owner checks open · 7.5 Post-deployment verification.** The production revision, the main journeys' tags, posters, videos, the 404 page, the audio host, robots, the sitemap and `/owner` were checked live (live checks 1, 2 and 5). The owner's device and debugger checks and the remote `owner:health` run are still open (live checks 3, 4 and 6).
-- **PASS · 7.6 Receipt.** This record is the receipt. Status as of October 22, 2026, about 11:00 UTC:
+- **UNVERIFIED · 7.5 Post-deployment verification.**
+  - Observed live (live checks 1, 2 and 5): the main journeys' tags, posters, videos, the missing page, the audio host, robots, the sitemap and `/owner`. The production revision is inferred from the Workers Builds check on `75a88be` and the new tags; the site has no revision marker.
+  - Open: the sitemap FAIL, which predates #203 (2.5, fixed in #205); alerting on the video route (6.6); the remote `owner:health` run (8.15, live check 6); Messages and the preview debuggers (live checks 3 and 4); the deployed branch preview (live check 8). No form changed (section 5).
+- **UNVERIFIED · 7.6 Receipt.** This record is the receipt. Status as of October 22, 2026, about 11:00 UTC:
   - Implemented: yes (`8e6e9cc`; the final record commit `5cc2227`).
   - Verified locally: yes, against `wrangler dev` serving the `dist/` of `8e6e9cc`.
   - Deployed: yes, `75a88be`, Worker Version ID `1d40ed4a-ffd7-42a5-9de3-db4a129a4486`, from 10:53 UTC.
-  - Verified live: yes for live checks 1, 2 and 5; the owner's checks 3, 4 and 6 are open.
+  - Verified live: live checks 1, 2 and 5 passed; checks 3, 4, 6 and 8 are open (see 7.5).
 
 ## 8. Private owner center
 
@@ -628,10 +630,10 @@ These stay UNVERIFIED unless the owner records an exception with its impact and 
 - how each preview app shows the poster or video (3.7)
 - field performance (4.3)
 - production edge caching of the video route (4.2)
-- the owner's device, debugger and `owner:health` checks (live checks 3, 4 and 6)
+- live checks 3 and 4 (Messages and the preview debuggers) and 8 (the deployed branch preview)
 - a PEAT or localized flash analysis, and an automated accessibility audit (3.5)
 - alerting on the new video route's failure path (6.6)
-- a remote `owner:health` run, launch-blocking per 8.15
+- a remote `owner:health` run, launch-blocking per 8.15 (live check 6)
 
 ## Remaining work
 
@@ -641,7 +643,7 @@ These stay UNVERIFIED unless the owner records an exception with its impact and 
   - `/building/tally` and `/building/kaillera-next` are listed under URLs that redirect.
 
   This failure existed before PR #203 and is not caused by it.
-- **Owner, after deploy:** live checks 3 and 4 (Messages on an iPhone and a Mac; the Discord, Facebook and LinkedIn debuggers). Record the results in this file.
+- **Owner, after deploy:** live checks 3 and 4 (Messages on an iPhone and a Mac; the Discord, Facebook and LinkedIn debuggers) and 8 (the deployed branch preview's sign-in gate and headers, which needs the owner's sign-in). Record the results in this file.
 - **Low-severity findings from this pass, for the owner to decide.** This record does not fix them.
   - `mediaRange` (`src/lib/music-media.ts`, shared with the music route) answers 416 to an unknown unit (`items=0-1`), a valid multi-range (`bytes=0-1,5-6`) and whitespace variants (`bytes = 0-1`). RFC 9110 section 14.2 says to ignore an unknown unit and serve 200. Safari sends single byte ranges, so the impact is small.
   - `serveOgVideo` reads the whole file from ASSETS (up to 1,041,510 bytes) before slicing, even for HEAD and 2-byte ranges.

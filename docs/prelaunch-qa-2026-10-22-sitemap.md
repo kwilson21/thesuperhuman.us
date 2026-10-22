@@ -1,6 +1,6 @@
 # Sitemap and canonical journal URLs release gate
 
-Date: October 22, 2026 (UTC). Local checks ran between about 10:54 and 11:00 UTC.  
+Date: October 22, 2026 (UTC). Local checks ran between about 10:54 and 11:12 UTC on the same 10:55 build; the audio-host and missing-page observations in 4.6 ran at about 11:11.  
 Repository: `kwilson21/thesuperhuman.us`  
 Pull request: [#205](https://github.com/kwilson21/thesuperhuman.us/pull/205)  
 Branch: `sitemap-public-pages`  
@@ -17,7 +17,7 @@ Scope:
 - `src/pages/index.astro` and `src/pages/work.astro`: the Tally links point at `/building/tally` instead of `/building/tally/`.
 - `tests/lib/sitemap-pages.test.ts`: a test for the private sections.
 
-Rollback revision: `75a88be`, PR #203's squash merge. Its Workers Builds production build succeeded at 10:53:34 UTC on October 22, 2026 (build `43d38176-4dcf-477b-a5b6-b1264b3c075d`, Worker Version ID `1d40ed4a-ffd7-42a5-9de3-db4a129a4486`), and production served #203's tags from 10:53:41 UTC.  
+Rollback revision: `75a88be`, PR #203's squash merge. Its Workers Builds production build succeeded at 10:53:34 UTC on October 22, 2026 (build `43d38176-4dcf-477b-a5b6-b1264b3c075d`, Worker Version ID `1d40ed4a-ffd7-42a5-9de3-db4a129a4486`), and a polling `curl` of `https://thesuperhuman.us/` first saw #203's home `og:video` tag at 10:53:41 UTC.  
 No migration, binding, secret, dependency or copy change. A rollback restores the four private pages to the sitemap and the trailing-slash redirect.
 
 Remaining work:
