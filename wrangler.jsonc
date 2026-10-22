@@ -11,7 +11,10 @@
   ],
   "assets": {
     "binding": "ASSETS",
-    "directory": "./dist"
+    "directory": "./dist",
+    // Canonical URLs have no trailing slash, so serve prerendered pages (building/tally/index.html)
+    // at /building/tally and redirect /building/tally/ to it, instead of the reverse.
+    "html_handling": "drop-trailing-slash"
   },
   "observability": {
     "enabled": true
