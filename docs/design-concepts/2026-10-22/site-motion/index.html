@@ -1,0 +1,1036 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Site motion: alternatives</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" />
+<style>
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Regular.woff2) format('woff2'); font-weight: 400; }
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Bold.woff2) format('woff2'); font-weight: 700; }
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Italic.woff2) format('woff2'); font-style: italic; }
+
+  /* Site palette and curve (src/styles/global.css), plus the board tones the 2026-10-19 board used.
+     --accent-text darkens the accent for small text on the board background, where plain accent is 4.1:1. */
+  :root { --paper: #FBF8F2; --ink: #0E0E0E; --muted: #4A4A4A; --rule: #E8E3DA; --accent: #AE5534; --tint: #F5ECE5; --board: #ECE6DB; --edge: #d6cdbf;
+    --accent-text: color-mix(in srgb, var(--accent) 85%, var(--ink)); --ease-site: cubic-bezier(.2, .7, .2, 1);
+    --serif: Libron, 'Iowan Old Style', Georgia, serif; --sans: Inter, system-ui, -apple-system, sans-serif; --mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace; }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--board); color: var(--ink); font-family: var(--serif); -webkit-font-smoothing: antialiased; }
+  .board { max-width: 1280px; margin: 0 auto; padding: 56px clamp(16px, 4.4vw, 56px) 72px; }
+  .eyebrow { font: 500 11px/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent-text); margin: 0 0 14px; }
+  .board > header h1 { font-size: clamp(36px, 6vw, 52px); line-height: 1.04; letter-spacing: -.03em; margin: 0 0 16px; font-weight: 400; }
+  .board > header > p:not(.eyebrow) { font-size: clamp(17px, 2vw, 20px); line-height: 1.5; color: var(--muted); max-width: 60rem; margin: 0 0 12px; }
+  code { font: 12.5px var(--mono); background: #efe8dd; padding: 1px 4px; border-radius: 3px; overflow-wrap: anywhere; }
+  .panel { background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 14px 18px; font: 14px/1.55 var(--sans); color: #2b2b2b; }
+  .panel b { font-weight: 600; }
+  .panel ul, .panel ol { margin: 8px 0 0; padding-left: 18px; }
+  .panel li { margin-bottom: 5px; }
+  .glance { margin-top: 28px; }
+  .glance > p { margin: 10px 0 0; }
+  .glance h2 { font: 400 22px/1.2 var(--serif); margin: 0 0 6px; color: var(--ink); }
+  .glance a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+  .rm { margin-top: 18px; border: 1px dashed #c4ab92; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+  .rm[hidden] { display: none; }
+
+  section.study { margin-top: 64px; padding-top: 40px; border-top: 1px solid #d8d0c3; }
+  section.study > h2 { font-size: clamp(28px, 4vw, 36px); line-height: 1.12; letter-spacing: -.02em; font-weight: 400; margin: 0 0 12px; text-wrap: balance; }
+  section.study > p.lead { font-size: 18px; line-height: 1.55; color: var(--muted); max-width: 62rem; margin: 0 0 12px; }
+  .decided { font: 14px/1.55 var(--sans); color: #2b2b2b; max-width: 62rem; margin: 0 0 8px; }
+  .decided b { font-weight: 600; }
+
+  .option { margin-top: 40px; }
+  .option-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .option-head h3 { font-size: 26px; font-weight: 400; margin: 0; letter-spacing: -.01em; line-height: 1.2; }
+  .option-head h3 .id { font: 500 13px/1 var(--mono); color: var(--accent-text); letter-spacing: .04em; margin-right: 8px; vertical-align: 3px; }
+  .badge { font: 600 11px/1 var(--sans); letter-spacing: .04em; text-transform: uppercase; padding: 6px 9px; border-radius: 3px; white-space: nowrap; }
+  .badge.rec { background: var(--accent); color: var(--paper); }
+  .badge.no { background: transparent; color: var(--muted); border: 1px solid #b9ad9c; }
+  .why-rec { font: 14.5px/1.55 var(--sans); color: #2b2b2b; border-left: 3px solid var(--accent); background: var(--tint); padding: 10px 14px; margin: 0 0 14px; border-radius: 0 6px 6px 0; max-width: 62rem; }
+  .why-rec b { font-weight: 600; }
+
+  .opt-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px 32px; align-items: start; }
+  @media (min-width: 900px) {
+    .opt-body.side { grid-template-columns: minmax(0, 390px) minmax(0, 1fr); }
+    .opt-body.wide { grid-template-columns: minmax(0, 1fr) minmax(0, 360px); }
+  }
+  .demo { min-width: 0; }
+  .frame { margin: 0; background: var(--paper); border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; box-shadow: 0 10px 24px -20px #0e0e0e66; min-width: 0; }
+  .frame + .frame { margin-top: 14px; }
+  .frame-bar { font: 11px/1.3 var(--mono); color: var(--muted); padding: 9px 12px; border-bottom: 1px solid var(--rule); background: #f6f1e9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .frame-bar b { color: var(--ink); font-weight: 500; }
+  .frame.phone { max-width: 390px; width: 100%; }
+  .shot img { display: block; width: 100%; height: auto; }
+  .pair { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+  .pair .frame + .frame { margin-top: 0; }
+  @media (min-width: 900px) { .pair { grid-template-columns: minmax(0, 1fr) minmax(0, 390px); } }
+  .cap { font: 12.5px/1.5 var(--sans); color: var(--muted); margin: 8px 2px 0; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 12px 0 0; }
+  button { min-height: 44px; padding: 0 18px; border-radius: 3px; border: 1px solid var(--ink); background: var(--paper); color: var(--ink); font: 500 15px/1 var(--sans); cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-text); }
+  button:disabled { cursor: not-allowed; color: #5f5f5f; border-color: #9a9389; }
+  button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  dl.facts { margin: 0; font: 14px/1.55 var(--sans); color: #2b2b2b; }
+  dl.facts > div { padding: 9px 0; border-top: 1px solid #d8d0c3; }
+  dl.facts > div:first-child { border-top: 0; padding-top: 0; }
+  dl.facts dt { font: 600 11px/1.3 var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  dl.facts dd { margin: 3px 0 0; }
+  dl.facts dd b { font-weight: 600; }
+  dl.facts.stack-facts { margin-top: 24px; }
+  @media (min-width: 900px) {
+    .stack-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 28px; }
+    .stack-facts > div:nth-child(-n+3) { border-top: 0; padding-top: 0; }
+  }
+  pre.tokens { margin: 0 0 12px; font: 12.5px/1.6 var(--mono); background: #efe8dd; border-radius: 6px; padding: 10px 12px; white-space: pre-wrap; overflow-wrap: anywhere; color: #2b2b2b; }
+  .study-label { font: italic 13px/1.4 var(--serif); color: var(--muted); margin: 10px 2px 0; }
+
+  .lanes { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+  .lanes .frame + .frame { margin-top: 0; }
+  .lane .frame-bar { padding-inline: 10px; }
+  .calls { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  @media (min-width: 900px) { .calls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .calls li { position: relative; padding-left: 64px; }
+  .calls li .cid { position: absolute; left: 16px; top: 15px; font: 500 12px/1 var(--mono); color: var(--accent-text); }
+  .calls li b.q { display: block; font: 400 19px/1.3 var(--serif); color: var(--ink); margin-bottom: 4px; }
+  .calls li .def { display: block; margin-top: 6px; font-weight: 600; color: #2f5a3b; }
+
+  /* ============ Site replicas (values from src/styles/global.css, building.astro, index.astro and
+     BuildingIllustration.astro). Content is real site copy; links are inert. ============ */
+  .site { --dur: 900ms; --rise: 26px; background: var(--paper); color: var(--ink); font: 16px/1.6 var(--serif); -webkit-font-smoothing: antialiased; text-align: left; }
+  .site h1, .site h2, .site h3 { font-weight: 400; letter-spacing: -.01em; margin: 0; text-wrap: balance; color: var(--ink); }
+  .site p { margin: 0; text-wrap: pretty; }
+  .site ul { margin: 0; }
+  .site .kicker { font: 11px/1.6 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+  .site .link { display: inline-flex; align-items: baseline; gap: .65rem; padding: .35rem 0; border-bottom: 1px solid var(--accent); line-height: 1.45; }
+  .site .link > span { color: var(--accent); }
+  .site .sh { display: flex; align-items: center; gap: 1.5rem; margin-bottom: 1.5rem; }
+  .site .sh h2 { flex-shrink: 1; min-width: 0; font-size: 28px; line-height: 1.2; letter-spacing: -.035em; }
+  .site .sh::after { content: ''; height: 1px; flex: 1; background: var(--rule); }
+
+  /* Building, phone layout (below 800px), with the phone header (SiteNav.astro) and compact footer (Footer.astro) */
+  .sb { padding: 0 24px; }
+  .sb .snav { display: flex; align-items: center; justify-content: space-between; min-height: 90px; padding-block: 20px; }
+  .sb .snav-name { font-size: 24px; letter-spacing: -.04em; }
+  .sb .snav-menu { display: flex; align-items: center; gap: 14px; }
+  .sb .snav-mark { width: 25px; display: grid; gap: 7px; }
+  .sb .snav-mark i { height: 1px; background: var(--accent); }
+  .sb > header { padding-top: 32px; }
+  .sb .sfoot { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1rem; padding: 2rem 0 3rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: .875rem; }
+  .sb .sfoot-name { font-size: 1.25rem; letter-spacing: -.03em; color: var(--ink); }
+  .sb .sfoot-links { display: flex; flex-wrap: wrap; gap: calc(44px - 1lh) 1.5rem; color: var(--ink); }
+  .sb .sfoot p { width: 100%; }
+  .sb .title { font-size: 52px; line-height: 1.02; letter-spacing: -.045em; margin-top: 16px; }
+  .sb .lede { font-size: 20.8px; line-height: 1.35; margin-top: 20px; }
+  .sb .projects { margin-top: 48px; }
+  .sb .feature { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; padding-block: 40px; border-bottom: 1px solid var(--rule); }
+  .sb .feature:first-child { padding-top: 0; }
+  .sb .copy h2 { font-size: 32px; line-height: 1.15; letter-spacing: -.025em; }
+  .sb .status { margin: .5rem 0 1.1rem; }
+  .sb .subtitle { font-size: 20px; line-height: 1.4; }
+  .sb .actions { display: grid; gap: .9rem; list-style: none; padding: 0; margin-block: 1.5rem; }
+  .sb .actions li { display: flex; gap: .85rem; align-items: flex-start; line-height: 1.45; }
+  .sb .actions svg { flex-shrink: 0; margin-top: .05rem; }
+  .sb .context { border-top: 1px solid var(--rule); padding-top: 1rem; font-size: .9375rem; line-height: 1.55; color: var(--muted); }
+  .sb .links { display: flex; flex-wrap: wrap; align-items: center; margin-top: 1.3rem; gap: .75rem 1.35rem; font-size: .9375rem; }
+  .sb .protos { margin-top: 3rem; }
+  .sb .proto-intro { color: var(--muted); margin-bottom: 1.5rem; }
+  .sb .proto-list { display: grid; gap: 1.75rem; }
+  .sb .proto-list .kicker { margin-bottom: .4rem; }
+  .sb .proto-list h3 { font-size: 1.5rem; margin-bottom: .65rem; }
+  .sb .proto-list h3 span { border-bottom: 1px solid var(--accent); }
+  .sb .proto-list h3 i { font-style: normal; color: var(--accent); }
+  .sb .proto-list p:last-child { color: var(--muted); }
+  .sb .journal-note { border-top: 1px solid var(--rule); margin-top: 3rem; padding-top: 1.5rem; font-size: 1.125rem; }
+  .vp { height: 560px; overflow-y: auto; background: var(--paper); }
+  .vp:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  @media (max-width: 600px) { .vp { height: 500px; } }
+
+  /* Home headings (D3.2) */
+  .shd { padding: 28px 24px 32px; container-type: inline-size; }
+  .shd .sh h2 { font-size: 36px; }
+  .shd .wc { font-size: 32px; letter-spacing: -.04em; line-height: 1.1; margin-bottom: .65rem; }
+  .shd .wf { font-size: 33px; letter-spacing: -.04em; line-height: 1.2; margin-bottom: .6rem; }
+  .shd .wd { max-width: 33rem; }
+  .shd .lyft { margin-bottom: 40px; }
+  .shd .wt { max-width: 24ch; font-size: 38px; line-height: 1.08; letter-spacing: -.04em; }
+  .shd .pi { color: var(--muted); }
+  @container (max-width: 480px) { .shd .sh { gap: 1rem; } .shd .sh h2 { font-size: 28px; } .shd .wc { font-size: 26px; } .shd .wf { font-size: 26px; } .shd .wt { font-size: 30px; } }
+
+  /* D3.4 lanes */
+  .ln { padding: 18px 16px 22px; min-height: 250px; }
+  .ln .ln-h { font-size: 28px; line-height: 1.15; letter-spacing: -.025em; }
+  .ln .kicker { margin: .35rem 0 .9rem; font-size: 10px; }
+  .ln .ln-p { font-size: 16px; line-height: 1.45; margin-bottom: .8rem; }
+  .ln .link { font-size: 15px; }
+
+  /* Home writing copy column (D3.5): desktop 447px wide with a 43.5px title, phone 342px with 32px */
+  .wp { padding: 36px 0 34px; margin-inline: auto; }
+  .wp.dk { width: 447px; }
+  .wp.ph { width: 342px; }
+  .wp h3 { max-width: 24ch; font-size: 43.52px; line-height: 1.08; letter-spacing: -.04em; text-wrap: balance; position: relative; }
+  .wp.ph h3 { font-size: 32px; }
+  .wp .pen-stroke { display: block; width: min(15rem, 80%); height: 14px; margin: .9rem 0 1.6rem; overflow: visible; }
+  .wp.ph .pen-stroke { margin: .7rem 0 1.2rem; }
+  .wp .pen-stroke path { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; }
+  .wp .mark { position: relative; white-space: nowrap; }
+  .wp .mark svg { position: absolute; left: -1%; width: 103%; top: calc(100% - .2em + 1px); height: .16em; overflow: visible; }
+  .wp.ph .mark svg { top: calc(100% - .2em + 2px); }
+  .wp .mark path, .wp .link-pen path { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+  .wp .after-title { margin-top: 1.6rem; }
+  .wp.ph .after-title { margin-top: 1.2rem; }
+  .wp .link.pen { border-bottom: 0; position: relative; }
+  .wp .link-pen { position: absolute; left: -2px; right: -2px; bottom: -3px; width: calc(100% + 4px); height: 8px; overflow: visible; }
+  .fit-desktop { overflow: hidden; }
+  @media (max-width: 520px) { .fit-desktop .wp.dk { zoom: .7; } }
+
+  /* The Building drawings, copied from BuildingIllustration.astro */
+  .ill-host { min-width: 0; }
+  .ill { min-width: 0; margin: 0; container-type: inline-size; }
+  .ill-wide { max-width: 614px; padding: 22px 0 18px; }
+  .demo .ill-pad { padding: 0 18px; }
+  .drawing { color: var(--ink); --ill-line: #cbc5ba; --ill-slate: #7c9297; --ill-sage: #82927b; --ill-sand: #b6a48d; --ill-quiet-wave: #aaa399; font-family: var(--serif); }
+  .drawing p { margin: 0; }
+  .panels { display: grid; align-items: start; gap: 10.4px; }
+  .budget-panels { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr); align-items: center; }
+  .step { min-width: 0; }
+  .panel-label { font-size: 14px; line-height: 1.2; text-align: center; margin-bottom: 12.8px !important; }
+  .dpanel { border: 1px solid var(--ill-line); border-radius: 3px; background: var(--paper); }
+  .transactions, .categories, .budgets { min-height: 190px; padding: 14.4px 10.4px; font-size: 12px; line-height: 1.35; }
+  .transactions p, .categories p { display: flex; align-items: center; gap: 7.2px; padding-bottom: 16px; }
+  .transactions p span { color: var(--muted); font-size: 20px; line-height: .75; }
+  .transactions .ellipsis { font-size: 17.6px; margin-left: 16px; padding-bottom: 0; }
+  .category-dot { flex-shrink: 0; width: 9.6px; height: 9.6px; border-radius: 50%; background: var(--accent); }
+  .cd-home { background: var(--ill-slate); } .cd-transport { background: var(--ill-sage); } .cd-shopping { background: var(--ill-sand); }
+  .flow-arrow { color: var(--accent); font-size: 22.4px; padding-top: 25.6px; }
+  .budgets p { margin-bottom: 4.8px !important; }
+  .track { height: 7.2px; background: var(--rule); border-radius: 2px; margin-bottom: 16px; overflow: hidden; }
+  .track span { display: block; height: 100%; width: var(--amount); background: var(--color); transform-origin: left; }
+  .room-scene { position: relative; height: 340px; }
+  .connections { position: absolute; width: 100%; height: 100%; inset: 0; stroke-width: 1.4; }
+  .room-lines { stroke: var(--muted); stroke-dasharray: 5 6; }
+  .cover { stroke: none; }
+  .peer-line, .peer-heads { stroke: var(--accent); }
+  .room { position: absolute; top: 0; left: 32%; width: 36%; }
+  .room .panel-label { margin-bottom: 8px !important; }
+  .browser { border: 1.5px solid var(--ink); border-radius: 3px; background: var(--paper); overflow: hidden; }
+  .browser-bar { border-bottom: 1px solid var(--rule); height: 17.6px; line-height: .7; letter-spacing: 3.2px; padding-left: 5.6px; font-size: 12.8px; }
+  .room-members { padding: 10.4px 12px; font-size: 12px; }
+  .room-members p { display: flex; align-items: center; gap: 9.6px; margin-bottom: 7.2px !important; }
+  .member { width: 8.8px; height: 8.8px; border: 1px solid var(--ink); border-radius: 50%; background: var(--ink); }
+  .spectator-dot { background: var(--paper); }
+  .invite { border: 1px solid var(--accent); border-radius: 3px; padding: 4.8px; text-align: center; margin-top: 10.4px; font-size: 12px; }
+  .participant { position: absolute; width: 25%; top: 62%; }
+  .participant svg { display: block; width: 100%; height: 65px; }
+  .participant .panel-label { margin-top: 8.8px; margin-bottom: 0 !important; }
+  .player-one { left: 0; } .player-two { right: 0; }
+  .spectator { width: 22%; left: 39%; top: auto; bottom: 0; }
+  .spectator svg { height: 50px; transform: translateX(11%); }
+  .watch-only { text-align: center; font-size: 12px; color: var(--muted); }
+  .website-panels { grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10.4px; }
+  .web-panel { min-height: 225px; }
+  .web-panel > .panel-label { border-bottom: 1px solid var(--rule); padding: 11.2px 5.6px; margin-bottom: 0 !important; }
+  .work-timeline { padding: 16px 11.2px; }
+  .work-timeline > div { position: relative; margin-left: 4.8px; padding: 1.6px 0 23.2px 12.8px; border-left: 1px solid var(--ill-line); }
+  .work-timeline > div:last-child { padding-bottom: 0; }
+  .work-timeline i { position: absolute; width: 7.2px; height: 7.2px; left: -4px; top: 3.2px; border: 1px solid var(--accent); border-radius: 50%; background: var(--paper); }
+  .work-timeline span { display: block; height: 3px; background: var(--ill-line); margin-bottom: 7.2px; }
+  .work-timeline span:last-child { width: 70%; }
+  .sound { padding: 11.2px 8.8px; } .sound p { font-size: 12px; }
+  .wave { display: block; width: 100%; height: 57px; stroke-width: 1.4; stroke-linecap: round; }
+  .before-wave { stroke: var(--ill-quiet-wave); } .after-wave { stroke: var(--accent); }
+  .inquiry { padding: 12.8px 9.6px; font-size: 11.2px; color: var(--muted); }
+  .inquiry > div { border: 1px solid var(--ill-line); border-radius: 2px; padding: 7.2px; margin-bottom: 9.6px; }
+  .inquiry > div:nth-child(2) { min-height: 76px; }
+  .inquiry > span { display: block; padding: 7.2px 1.6px; background: var(--accent); color: var(--paper); text-align: center; border-radius: 2px; }
+  .ill figcaption { color: var(--muted); font-size: 12px; font-style: italic; margin-top: 12.8px; font-family: var(--serif); }
+  @container (max-width: 352px) {
+    .panels { gap: 5.6px; } .panel-label { font-size: 12px; }
+    .transactions, .categories, .budgets { padding: 10.4px 6.4px; font-size: 10.4px; min-height: 175px; }
+    .transactions p, .categories p { gap: 4px; } .flow-arrow { font-size: 16px; }
+    .room-scene { height: 310px; } .room { left: 29%; width: 42%; } .room-members { padding: 8.8px; font-size: 11.2px; }
+    .web-panel { min-height: 205px; } .inquiry { padding: 9.6px 5.6px; font-size: 10px; } .sound { padding: 9.6px 6.4px; } .work-timeline { padding: 13.6px 8px; }
+  }
+
+  /* ============ Motion. Every rule is gated on .m-on, which the script sets only when motion is welcome
+     (or when you press "Play the demos anyway"). Without it, every demo shows its resting frame. ============ */
+  .prep, .prep *, .prep *::before, .prep *::after { transition: none !important; }
+  /* The shared reveal (global.css:254-255) */
+  .m-on .vp [data-t], .m-on .seq .rv { transition: opacity var(--dur) var(--ease-site), transform var(--dur) var(--ease-site); }
+  .m-on .vp [data-t]:not(.is-in), .m-on .seq .rv:not(.is-in) { opacity: 0; transform: translateY(var(--rise)); }
+  /* The section rule drawing in (global.css:256-257) */
+  .m-on .rule-draw .sh::after { transform-origin: left; transition: transform 1100ms var(--ease-site) 200ms; }
+  .m-on .rule-draw :is([data-t], .rv):not(.is-in) .sh::after, .m-on .rule-draw .sh:is([data-t], .rv):not(.is-in)::after { transform: scaleX(0); }
+  /* The Building stagger and bars (BuildingIllustration.astro:58-65) */
+  .m-on .stagger .step { transition: opacity 700ms var(--ease-site), transform 700ms var(--ease-site); }
+  .m-on .stagger:not(.is-in) .step { opacity: 0; transform: translateY(12px); }
+  .m-on .stagger .step:nth-of-type(2) { transition-delay: 180ms; }
+  .m-on .stagger .step:nth-of-type(3) { transition-delay: 360ms; }
+  .m-on :is(.stagger, .bars) .track span { transition: transform 900ms var(--ease-site) 300ms; }
+  .m-on :is(.stagger, .bars):not(.is-in) .track span { transform: scaleX(0); }
+  /* D3.3-C: show the flow, in reading order, once */
+  .m-on .flow .flow-arrow { transition: opacity 400ms var(--ease-site), transform 400ms var(--ease-site); }
+  .m-on .flow:not(.is-in) .flow-arrow { opacity: 0; transform: translateX(-6px); }
+  .m-on .flow .a2 { transition-delay: 450ms; }
+  .m-on .flow .track span { transition: transform 700ms var(--ease-site); transition-delay: calc(900ms + var(--n) * 120ms); }
+  .m-on .flow:not(.is-in) .track span { transform: scaleX(0); }
+  /* Paper-coloured covers slide off the dashed lines, so each line appears from the room outward. */
+  .m-on .flow .cover { stroke: var(--paper); stroke-width: 4; stroke-dasharray: 1 1; stroke-dashoffset: -1; transition: stroke-dashoffset 650ms cubic-bezier(.45, .05, .3, 1); }
+  .m-on .flow:not(.is-in) .cover { stroke-dashoffset: 0; }
+  .m-on .flow .c2 { transition-delay: 250ms; }
+  .m-on .flow .c3 { transition-delay: 500ms; }
+  .m-on .flow .peer-line { stroke-dasharray: 1; transition: stroke-dashoffset 600ms var(--ease-site) 1300ms; }
+  .m-on .flow:not(.is-in) .peer-line { stroke-dashoffset: 1; }
+  .m-on .flow .peer-heads { transition: opacity 300ms var(--ease-site) 1800ms; }
+  .m-on .flow:not(.is-in) .peer-heads { opacity: 0; }
+  /* The website drawing: the After waveform plays in from left to right under the Before one. */
+  .m-on .flow .after-wave line { transform-box: fill-box; transform-origin: center; transition: transform 420ms var(--ease-site), opacity 420ms var(--ease-site); transition-delay: calc(300ms + var(--i) * 30ms); }
+  .m-on .flow:not(.is-in) .after-wave line { transform: scaleY(.2); opacity: 0; }
+  /* D3.5: the title inks in (index.astro:247-250) */
+  .m-on .wp h3 { transition: clip-path 1200ms cubic-bezier(.6, .1, .2, 1) 250ms; clip-path: inset(-10% 0 -20% 0); }
+  .m-on .wp:not(.is-in) h3 { clip-path: inset(-10% 100% -20% 0); }
+  .m-on .wp .pen-stroke path { stroke-dasharray: 1; stroke-dashoffset: 0; transition: stroke-dashoffset 900ms ease-in-out 1200ms; }
+  .m-on .wp:not(.is-in) .pen-stroke path { stroke-dashoffset: 1; }
+  .m-on .wp .mark svg, .m-on .wp .link-pen { transition: clip-path 520ms var(--ease-site) 1350ms; clip-path: inset(-60% -4% -60% 0); }
+  .m-on .wp:not(.is-in) .mark svg, .m-on .wp:not(.is-in) .link-pen { clip-path: inset(-60% 100% -60% 0); }
+</style>
+</head>
+<body>
+<main class="board">
+  <header>
+    <p class="eyebrow">Design study · Site motion · Hallmark audit follow-up · 2026-10-22</p>
+    <h1>Site motion: alternatives</h1>
+    <p>Hallmark flagged three motion choices that are yours to make: the fade-ups across the site (with the section rule that draws in and the Building drawing stagger), the reveal speed, and the pen stroke under the Home essay title. I split them into five decisions. Each one plays today’s motion live, rebuilt from the site’s real CSS values, then shows two or three alternatives. Press Replay to play a demo.</p>
+    <p>Nothing here is built yet. No option changes words on the site’s pages. D3.5-B adds emphasis to one word and D3.1-D may add one privacy line; both say so. Home’s scroll-linked worlds and parallax (Your call 2) and the project card tilt and glow (Your call 3) are separate decisions and stay as they are in every demo.</p>
+    <div class="panel rm" id="rm-notice" hidden>
+      <span>Your device asks for reduced motion, so every demo shows its resting frame, which is also what the site shows you.</span>
+      <button type="button" id="force-motion" aria-pressed="false">Play the demos anyway</button>
+    </div>
+    <div class="panel glance">
+      <h2>At a glance</h2>
+      <ol>
+        <li><a href="#d3-1">D3.1 Which blocks rise in</a>: recommended <b>A, keep as is</b>.</li>
+        <li><a href="#d3-2">D3.2 The section rule drawing in</a>: recommended <b>B, rule at rest</b>.</li>
+        <li><a href="#d3-3">D3.3 The Building drawing stagger</a>: recommended <b>B, arrive with the row</b>.</li>
+        <li><a href="#d3-4">D3.4 Reveal speed and tokens</a>: recommended <b>C, 600ms and 12px, named</b>.</li>
+        <li><a href="#d3-5">D3.5 The essay pen stroke</a>: recommended <b>B, underline “Direction”</b>.</li>
+      </ol>
+      <p>Together the recommended set keeps the life you asked for on every page, with one quieter movement per block and nothing stacked on top of it.</p>
+    </div>
+  </header>
+
+  <!-- ================= D3.1 ================= -->
+  <section class="study" id="d3-1">
+    <p class="eyebrow">D3.1 · Reveal scope · Your call 6</p>
+    <h2>Which blocks should rise in as you scroll?</h2>
+    <p class="lead">Hallmark flagged the universal fade-up (#13): <code>data-reveal</code> is written 25 times in 9 files (Home, About, Building, Services, Audio and the Work diagrams), and every one of those blocks fades in and rises the same way, which it reads as a template rather than a choice. The verifier marked it your call: the reveals play once and settle, and one entrance per page would reverse your September 27 request for “the same life across the site”.</p>
+    <p class="decided"><b>Decided in</b> <code>docs/website-content-model.md:286-298</code> (motion on the other pages, September 27), <code>docs/website-system-plan.md:37-49</code> (the shared motion layer) and <code>docs/prelaunch-qa-2026-09-27-motion.md</code>. <b>Code:</b> <code>src/styles/global.css:254-255</code> (:228-229 at 26e764a) and <code>src/scripts/scroll-scenes.ts:117-131</code>.</p>
+    <p class="decided">Each demo is the Building page at phone width, 1:1, with today’s timing (900ms, 26px). Replay scrolls it for you, about as fast as a quick skim; you can also scroll it yourself. Blocks already on screen appear at once, as on the site. D3.4 compares speeds.</p>
+
+    <div class="option">
+      <div class="option-head"><h3><span class="id">D3.1-A</span>Keep as is</h3><span class="badge rec">Recommended</span></div>
+      <p class="why-rec"><b>Why this one:</b> you asked for this life on every page on September 27, it plays once and settles, and D3.2 to D3.4 remove the stacking and the long travel that make it read as a template.</p>
+      <div class="opt-body side">
+        <div class="demo">
+          <div class="frame phone"><div class="frame-bar">thesuperhuman.us<b>/building</b> · phone · today</div>
+            <div class="vp rule-draw" id="d31a" data-tpl="tpl-building" data-mode="all" tabindex="0" role="region" aria-label="Building page replica at phone width, today. Scroll it, or press Replay below."></div></div>
+          <div class="controls"><button type="button" data-replay="d31a">Replay</button></div>
+        </div>
+        <dl class="facts">
+          <div><dt>What changes</dt><dd>Nothing. Each project row, the drawing inside it and the Earlier prototypes section fade in and rise 26px the first time they scroll into view. A keyboard user who tabs into a block sees it at once.</dd></div>
+          <div><dt>Why it could be better</dt><dd>It is the shared life you asked for, it costs nothing, and every page feels part of one site.</dd></div>
+          <div><dt>Trade-off</dt><dd>The same fade-up on every block is the pattern Hallmark calls a template. On Building the drawing also rises inside its rising row (D3.3).</dd></div>
+          <div><dt>Effort</dt><dd>None.</dd></div>
+          <div><dt>Files</dt><dd>None.</dd></div>
+          <div><dt>Guideline check</dt><dd>Copy: no change · Tokens: unchanged · A11y: focus reveals at once · Reduced motion, print and no JavaScript: full resting page · Image QA: not needed.</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="option">
+      <div class="option-head"><h3><span class="id">D3.1-B</span>Headings only</h3><span class="badge no">Calmer</span></div>
+      <div class="opt-body side">
+        <div class="demo">
+          <div class="frame phone"><div class="frame-bar">thesuperhuman.us<b>/building</b> · phone · headings</div>
+            <div class="vp rule-draw" id="d31b" data-tpl="tpl-building" data-mode="headings" tabindex="0" role="region" aria-label="Building page replica at phone width, headings only. Scroll it, or press Replay below."></div></div>
+          <div class="controls"><button type="button" data-replay="d31b">Replay</button></div>
+        </div>
+        <dl class="facts">
+          <div><dt>What changes</dt><dd>The reveal moves from whole blocks to their headings: each section title (“Work highlights”, “Earlier prototypes”) and each project’s title and status line. Text, pictures and links are in place from first paint. Scenes that start on a reveal (the Work diagrams, the Audio headphone rings) keep their trigger.</dd></div>
+          <div><dt>Why it could be better</dt><dd>Every section still arrives, so each page keeps some life, but nothing you read waits for the scroll, and far fewer things move at once.</dd></div>
+          <div><dt>Trade-off</dt><dd>Building, Services and Audio get much quieter. A heading moving above still content can look detached; it works best with the shorter travel in D3.4-C. The Building stagger loses its trigger and goes.</dd></div>
+          <div><dt>Effort</dt><dd>M</dd></div>
+          <div><dt>Files</dt><dd><code>src/pages/index.astro</code>, <code>src/pages/building.astro</code>, <code>src/pages/about.astro</code>, <code>src/pages/audio/index.astro</code>, <code>src/layouts/ServiceSheet.astro</code> (the <code>data-reveal</code> attributes move to headings), <code>src/components/BuildingIllustration.astro</code> (the stagger rules go), <code>docs/website-content-model.md:286-298</code>.</dd></div>
+          <div><dt>Guideline check</dt><dd>Copy: no change · Tokens: unchanged · A11y: content never waits behind a reveal · Reduced motion: unchanged · Image QA: not needed.</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="option">
+      <div class="option-head"><h3><span class="id">D3.1-C</span>Page scenes only</h3><span class="badge no">Hallmark’s fix</span></div>
+      <div class="opt-body side">
+        <div class="demo">
+          <div class="frame phone"><div class="frame-bar">thesuperhuman.us<b>/building</b> · phone · scenes</div>
+            <div class="vp" id="d31c" data-tpl="tpl-building" data-mode="scenes" tabindex="0" role="region" aria-label="Building page replica at phone width, page scenes only. Scroll it, or press Replay below."></div></div>
+          <div class="controls"><button type="button" data-replay="d31c">Replay</button></div>
+        </div>
+        <dl class="facts">
+          <div><dt>What changes</dt><dd>The shared fade-up and the rule drawing go. What still moves is each page’s own scene: Home’s worlds, About’s chapter objects, the Writing path, the Work diagrams, the Audio headphone rings and, on Building, the drawings (as D3.3 decides; the demo shows today’s panel build). Everything else is in place from the start.</dd></div>
+          <div><dt>Why it could be better</dt><dd>This is Hallmark’s own fix: no generic entrance. Every movement that remains says something about its page, so the motion reads as designed, not applied.</dd></div>
+          <div><dt>Trade-off</dt><dd>Reverses the September 27 request: Services and the Audio lists become still, and Building moves only in its drawings. <code>data-reveal</code> stays as the trigger the scenes listen for.</dd></div>
+          <div><dt>Effort</dt><dd>S</dd></div>
+          <div><dt>Files</dt><dd><code>src/styles/global.css:254-257</code> (the shared fade-up and rule rules), <code>src/pages/index.astro:239-245</code> (Home’s card and door reveals), <code>docs/website-system-plan.md:37-49</code>, <code>docs/website-content-model.md:286-298</code>.</dd></div>
+          <div><dt>Guideline check</dt><dd>Copy: no change · Tokens: unchanged · A11y: nothing hidden waiting for scroll · Reduced motion: scenes keep their resting frames and finish within five seconds · Image QA: not needed.</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="option">
+      <div class="option-head"><h3><span class="id">D3.1-D</span>Once per visit</h3><span class="badge no">Fewer repeats</span></div>
+      <div class="opt-body side">
+        <div class="demo">
+          <div class="frame phone"><div class="frame-bar">thesuperhuman.us<b>/building</b> · phone · per visit</div>
+            <div class="vp rule-draw" id="d31d" data-tpl="tpl-building" data-mode="all" tabindex="0" role="region" aria-label="Building page replica at phone width, once per visit. Scroll it, or press Replay below."></div></div>
+          <div class="controls"><button type="button" data-replay="d31d">Replay first visit</button><button type="button" data-replay="d31d" data-visit="return">Replay return visit</button></div>
+        </div>
+        <dl class="facts">
+          <div><dt>What changes</dt><dd>A page reveals as today the first time you open it in a browser tab. Open it again in that tab, from a nav link or a reload, and everything is already in place.</dd></div>
+          <div><dt>Why it could be better</dt><dd>Visitors move back and forth between Home, Work and Building; the reveal stays a first impression instead of a wait each time.</dd></div>
+          <div><dt>Trade-off</dt><dd>The first visit still has the full fade-up, so Hallmark’s tell stays where it counts most. Adds a small per-tab list of page paths seen (<code>sessionStorage</code>, read in try/catch; nothing personal). The privacy notice already describes the music pages’ tab storage; you may want a matching line.</dd></div>
+          <div><dt>Effort</dt><dd>S</dd></div>
+          <div><dt>Files</dt><dd><code>src/scripts/scroll-scenes.ts</code>, <code>docs/website-system-plan.md:37-49</code>, <code>src/pages/privacy.astro</code> (optional line, wording for your approval).</dd></div>
+          <div><dt>Guideline check</dt><dd>Copy: page copy unchanged; an optional privacy line needs your approval · Tokens: unchanged · A11y: unchanged · Reduced motion: unchanged · Storage blocked or empty: the page reveals as today · Image QA: not needed.</dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= D3.2 ================= -->
+  <section class="study" id="d3-2">
+    <p class="eyebrow">D3.2 · Section rule · Your call 6</p>
+    <h2>Should the hairline beside each section heading draw itself in?</h2>
+    <p class="lead">When a section reveals, the rule after its heading also grows from the left over 1.1 seconds, starting 200ms late. It is the longest timing in the shared layer and a second movement on every heading it touches: four on Home, one on Building. The audit names dropping it as the cheapest calming step (#13, #51).</p>
+    <p class="decided"><b>Where it lives:</b> <code>src/styles/global.css:256-257</code> (:230-231 at 26e764a). The shared-layer comment describes it, but no design doc or QA record asks for it; it shipped with the September 27 motion release (<code>docs/prelaunch-qa-2026-09-27-motion.md</code>).</p>
+
+    <div class="option">
+      <div class="option-head"><h3><span class="id">D3.2-A</span>Keep as is</h3><span class="badge no">Live now</span></div>
+      <div class="opt-body wide">
+        <div class="demo">
+          <figure class="frame shot"><div class="frame-bar">CI capture · 08e9b22 · <b>/building</b> 1280 · resting frame</div><img src="a-rule-desktop.webp" width="1160" height="110" alt="The Earlier prototypes heading on Building with its full-width hairline at rest." /></figure>
+          <div class="frame"><div class="frame-bar">Home · Work highlights and Writing · today</div>
+            <div class="seq rule-draw" id="d32a" data-tpl="tpl-heads" aria-hidden="true"></div></div>
+          <div class="controls"><button type="button" data-replay="d32a">Replay</button></div>
+        </div>
+        <dl class="facts">
+          <div><dt>What changes</dt><dd>Nothing. The heading rises with its block and the rule scales from nothing to full width over 1100ms, 200ms behind it.</dd></div>
+          <div><dt>Why it could be better</dt><dd>A quiet drawn detail that marks the start of a section.</dd></div>
+          <div><dt>Trade-off</dt><dd>Two movements on every heading, the slowest timing in the shared layer, and nothing in the record asked for it.</dd></div>
+          <div><dt>Effort</dt><dd>None.</dd></div>
+          <div><dt>Files</dt><dd>None.</dd></div>
+          <div><dt>Guideline check</dt><dd>Copy: no change · Tokens: unchanged · Reduced motion: rule shown at rest · Image QA: not needed.</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="option">
+      <div class="option-head"><h3><span class="id">D3.2-B</span>Rule at rest</h3><span class="badge rec">Recommended</span></div>
+      <p class="why-rec"><b>Why this one:</b> the hairline is structure, not news; letting it rest takes the second movement off every heading for the cost of deleting two CSS lines.</p>
+      <div class="opt-body wide">
+        <div class="demo">
+          <div class="frame"><div class="frame-bar">Home · Work highlights and Writing · rule at rest</div>
+            <div class="seq" id="d32b" data-tpl="tpl-heads" aria-hidden="true"></div></div>
+          <div class="controls"><button type="button" data-replay="d32b">Replay</button></div>
+        </div>
+        <dl class="facts">
+          <div><dt>What changes</dt><dd>The heading still arrives with its block; the rule is simply there.</dd></div>
+          <div><dt>Why it could be better</dt><dd>One movement per heading. The heading’s arrival already marks the new section.</dd></div>
+          <div><dt>Trade-off</dt><dd>Home loses a small drawn detail.</dd></div>
+          <div><dt>Effort</dt><dd>S</dd></div>
+          <div><dt>Files</dt><dd><code>src/styles/global.css</code> (delete :256-257, update the comment at :251-252).</dd></div>
+          <div><dt>Guideline check</dt><dd>Copy: no change · Tokens: unchanged · Reduced motion: unchanged · Image QA: not needed.</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="option">
+      <div class="option-head"><h3><span class="id">D3.2-C</span>Draw on Home only</h3><span class="badge no">Home stays expressive</span></div>
+      <div class="opt-body wide">
+        <div class="demo">
+          <div class="frame"><div class="frame-bar">Home · rule draws</div>
+            <div class="seq rule-draw" id="d32c" data-tpl="tpl-heads" aria-hidden="true"></div></div>
+          <div class="frame"><div class="frame-bar">Building · rule at rest</div>
+            <div class="seq" id="d32c2" data-tpl="tpl-heads-building" aria-hidden="true"></div></div>
+          <div class="controls"><button type="button" data-replay="d32c d32c2">Replay both</button></div>
+        </div>
+        <dl class="facts">
+          <div><dt>What changes</dt><dd>Home’s four section rules keep drawing; Building’s Earlier prototypes rule, and any later section rule outside Home, rests.</dd></div>
+          <div><dt>Why it could be better</dt><dd>The system plan lets Home be expressive while Work makes evidence easy to assess (<code>docs/website-system-plan.md:16-17</code>); this keeps the flourish where expression is the point.</dd></div>
+          <div><dt>Trade-off</dt><dd>Home already has the most motion, so the rule adds least there. One more page-specific rule to keep in step.</dd></div>
+          <div><dt>Effort</dt><dd>S</dd></div>
+          <div><dt>Files</dt><dd><code>src/styles/global.css:256-257</code> (remove), <code>src/pages/index.astro</code> (add under Home’s own reveals, :238).</dd></div>
+          <div><dt>Guideline check</dt><dd>Copy: no change · Tokens: unchanged · Reduced motion: unchanged · Image QA: not needed.</dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= D3.3 ================= -->
+  <section class="study" id="d3-3">
+    <p class="eyebrow">D3.3 · Building drawings · Your call 6</p>
+    <h2>Should each Building drawing build itself panel by panel, or arrive with its row?</h2>
+    <p class="lead">Each drawing on /building is a reveal block inside a reveal block. On desktop the row and the drawing both start 26px low and rise together, so the drawing travels 52px and fades in more slowly than the text beside it (I measured both at 26px on the dev server); then its panels rise another 12px at 0, 180 and 360ms, and Tally’s budget bars grow. On phones the drawing rises on its own when it scrolls in. The audit calls the stagger undocumented and names dropping it as a cheap calming step.</p>
+    <p class="decided"><b>Where it lives:</b> <code>src/components/BuildingIllustration.astro:6</code> and <code>:58-65</code> (:57-63 at 26e764a), inside the row reveal at <code>src/pages/building.astro:37</code>. The September 27 record for Building says only “the feature and the project rows rise in” (<code>docs/website-content-model.md:296</code>).</p>
+    <p class="decided">The demos show the drawings at the size they render on the page: 614px wide on desktop, phone layout on a phone.</p>
+
+    <div class="option">
+      <div class="option-head"><h3><span class="id">D3.3-A</span>Keep as is</h3><span class="badge no">Live now</span></div>
+      <div class="opt-body wide">
+        <div class="demo">
+          <figure class="frame shot"><div class="frame-bar">CI capture · 08e9b22 · <b>/building</b> 1280 · resting frame</div><img src="a-tally-desktop.webp" width="1160" height="470" alt="The Tally row on Building: the three-panel drawing on the left and the project copy on the right." /></figure>
+          <div class="frame"><div class="frame-bar">Tally · row and drawing rise, panels step in</div>
+            <div class="seq ill-pad" id="d33a"><div class="rv" data-at="0"><div class="ill-host ill-wide stagger rv" data-at="0" data-tpl="tpl-tally" aria-hidden="true"></div></div></div></div>
+          <div class="controls"><button type="button" data-replay="d33a">Replay</button></div>
+        </div>
+        <dl class="facts">
+          <div><dt>What changes</dt><dd>Nothing.</dd></div>
+          <div><dt>Why it could be better</dt><dd>The drawings assemble as you watch, which suits a page about making things.</dd></div>
+          <div><dt>Trade-off</dt><dd>Three movements on one figure (row, drawing, panels), the drawing lags the words beside it on desktop, and no doc asked for the build.</dd></div>
+          <div><dt>Effort</dt><dd>None.</dd></div>
+          <div><dt>Files</dt><dd>None.</dd></div>
+          <div><dt>Guideline check</dt><dd>Copy: no change · Tokens: unchanged · Reduced motion: finished drawing · Image QA: not needed.</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="option">
+      <div class="option-head"><h3><span class="id">D3.3-B</span>Arrive with the row</h3><span class="badge rec">Recommended</span></div>
+      <p class="why-rec"><b>Why this one:</b> it matches the September 27 record for Building (“the project rows rise in”), leaves one movement per row, and is a deletion.</p>
+      <div class="opt-body wide">
+        <div class="demo">
+          <div class="frame"><div class="frame-bar">Tally · moves with its row</div>
+            <div class="seq ill-pad" id="d33b"><div class="rv" data-at="0"><div class="ill-host ill-wide" data-tpl="tpl-tally" aria-hidden="true"></div></div></div></div>
+          <div class="controls"><button type="button" data-replay="d33b">Replay</button></div>
+        </div>
+        <dl class="facts">
+          <div><dt>What changes</dt><dd>The drawing loses its own reveal and the panel stagger, and moves with its row as one block. The budget bars rest at their values.</dd></div>
+          <div><dt>Why it could be better</dt><dd>One movement per row, and the drawing arrives with the words that explain it.</dd></div>
+          <div><dt>Trade-off</dt><dd>The drawings lose their small build; Building’s only entrance becomes the shared row reveal.</dd></div>
+          <div><dt>Effort</dt><dd>S</dd></div>
+          <div><dt>Files</dt><dd><code>src/components/BuildingIllustration.astro</code> (drop <code>data-reveal</code> at :6 and the rules at :58-65).</dd></div>
+          <div><dt>Guideline check</dt><dd>Copy: no change · Tokens: unchanged · Reduced motion: unchanged · Image QA: not needed.</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="option">
+      <div class="option-head"><h3><span class="id">D3.3-C</span>Show the flow</h3><span class="badge no">Motion that explains</span></div>
+      <div class="opt-body wide">
+        <div class="demo">
+          <div class="frame"><div class="frame-bar">Tally · arrows in turn, then budgets fill</div>
+            <div class="seq ill-pad" id="d33c"><div class="rv" data-at="0"><div class="ill-host ill-wide flow" data-at="900" data-tpl="tpl-tally" aria-hidden="true"></div></div></div></div>
+          <div class="frame"><div class="frame-bar">Kaillera-next · lines out, then the peer line</div>
+            <div class="seq ill-pad" id="d33c2"><div class="rv" data-at="0"><div class="ill-host ill-wide flow" data-at="900" data-tpl="tpl-kaillera" aria-hidden="true"></div></div></div></div>
+          <div class="frame"><div class="frame-bar">Personal website · the After waveform plays in</div>
+            <div class="seq ill-pad" id="d33c3"><div class="rv" data-at="0"><div class="ill-host ill-wide flow" data-at="900" data-tpl="tpl-website" aria-hidden="true"></div></div></div></div>
+          <div class="controls"><button type="button" data-replay="d33c d33c2 d33c3">Replay all three</button></div>
+        </div>
+        <dl class="facts">
+          <div><dt>What changes</dt><dd>The drawing arrives with its row (as B). When half of it is on screen it plays once, in reading order: Tally’s arrows light up in turn and the budgets fill; Kaillera’s dashed lines reach from the game room to each player, then the peer line joins Player 1 and Player 2; on the website drawing, the After waveform plays in from left to right under the Before one. It uses the existing play-once hook (<code>data-scene-play</code>).</dd></div>
+          <div><dt>Why it could be better</dt><dd>The motion shows what each project does, the “motion sized to its job” idea from September 27, instead of a generic build.</dd></div>
+          <div><dt>Trade-off</dt><dd>More motion than today on a page Hallmark already finds busy, three small scenes to maintain, and a new line in the content model.</dd></div>
+          <div><dt>Effort</dt><dd>M</dd></div>
+          <div><dt>Files</dt><dd><code>src/components/BuildingIllustration.astro</code>, <code>docs/website-content-model.md:296</code>.</dd></div>
+          <div><dt>Guideline check</dt><dd>Copy: no change · Tokens: house curve · A11y: drawings stay <code>aria-hidden</code> · Reduced motion: finished drawing; plays once and rests within five seconds (WCAG 2.2.2) · Image QA: not needed, the existing drawings only move.</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="option">
+      <div class="option-head"><h3><span class="id">D3.3-D</span>Only the budgets fill</h3><span class="badge no">One meaningful move</span></div>
+      <div class="opt-body wide">
+        <div class="demo">
+          <div class="frame"><div class="frame-bar">Tally · moves with its row, budgets fill</div>
+            <div class="seq ill-pad" id="d33d"><div class="rv" data-at="0"><div class="ill-host ill-wide bars" data-at="0" data-tpl="tpl-tally" aria-hidden="true"></div></div></div></div>
+          <div class="controls"><button type="button" data-replay="d33d">Replay</button></div>
+        </div>
+        <dl class="facts">
+          <div><dt>What changes</dt><dd>As B, but Tally’s four budget bars still fill once, from empty to their values.</dd></div>
+          <div><dt>Why it could be better</dt><dd>Keeps the one movement that shows Tally’s job, spending against a budget, without the stacked entrance.</dd></div>
+          <div><dt>Trade-off</dt><dd>One drawing moves and two don’t. Bars filling can read as data, though the figure is labelled Illustration.</dd></div>
+          <div><dt>Effort</dt><dd>S</dd></div>
+          <div><dt>Files</dt><dd><code>src/components/BuildingIllustration.astro</code>.</dd></div>
+          <div><dt>Guideline check</dt><dd>Copy: no change · Tokens: unchanged · Reduced motion: bars at rest · Image QA: not needed.</dd></div>
+        </dl>
+      </div>
+    </div>
+    <p class="decided" style="margin-top:28px"><b>If you pick D3.1-C</b> (page scenes only), C here becomes Building’s scene, and B or D leaves Building nearly still.</p>
+  </section>
+
+  <!-- ================= D3.4 ================= -->
+  <section class="study" id="d3-4">
+    <p class="eyebrow">D3.4 · Reveal speed and tokens · Your call 22</p>
+    <h2>How long and how far should a reveal move, and should the timings get names?</h2>
+    <p class="lead">Hallmark flagged the timings (#51): reveals take 900ms and the section rule 1.1 seconds, outside its 420ms limit, and each file writes its own numbers. The verifier kept 900ms as part of the calm feel and called duration tokens a maintenance win either way. One thing the numbers hide: the house curve front-loads the movement, so today’s reveal is 83% done after 300ms and moves less than 2px in its last 450ms. It reads as about half a second; what you notice is the 26px of travel.</p>
+    <p class="decided"><b>Decided in</b> <code>docs/website-system-plan.md:16</code> (“Peace is the atmosphere”) and <code>docs/prelaunch-qa-2026-09-27-motion.md:32-34</code> (the hero settles within about 1.5 seconds). <b>Today’s values:</b> reveal 900ms and 26px (<code>src/styles/global.css:254-255</code>), section rule 1100ms after 200ms (:256), Home doors 800ms and 24px (<code>src/pages/index.astro:242-243</code>), Building panels 700ms and 12px (<code>src/components/BuildingIllustration.astro:59-60</code>), link arrow 160ms, page cross-fade 180ms.</p>
+
+    <div class="option">
+      <div class="option-head"><h3>The options side by side</h3></div>
+      <div class="lanes">
+        <div class="frame lane"><div class="frame-bar"><b>A, B</b> · 900ms · 26px</div><div class="seq" id="d34a" data-tpl="tpl-lane" style="--dur:900ms;--rise:26px" aria-hidden="true"></div></div>
+        <div class="frame lane"><div class="frame-bar"><b>C</b> · 600ms · 12px</div><div class="seq" id="d34c" data-tpl="tpl-lane" style="--dur:600ms;--rise:12px" aria-hidden="true"></div></div>
+        <div class="frame lane"><div class="frame-bar"><b>D</b> · 900ms · 0px</div><div class="seq" id="d34d" data-tpl="tpl-lane" style="--dur:900ms;--rise:0px" aria-hidden="true"></div></div>
+        <div class="frame lane"><div class="frame-bar">Hallmark · 400ms · 8px</div><div class="seq" id="d34r" data-tpl="tpl-lane" style="--dur:400ms;--rise:8px" aria-hidden="true"></div></div>
+      </div>
+      <div class="controls"><button type="button" data-replay="d34a d34c d34d d34r">Replay all four together</button></div>
+      <p class="cap">Three blocks enter one after another, 320ms apart, as they would on a scroll. All four use the house curve. A and B look the same; B only names the values. The last lane is Hallmark’s own range (400ms, 8px), shown for reference; it is not an option.</p>
+    </div>
+
+    <div class="option">
+      <div class="option-head"><h3><span class="id">D3.4-A</span>Keep as is</h3><span class="badge no">Live now</span></div>
+      <dl class="facts stack-facts">
+        <div><dt>What changes</dt><dd>Nothing. 900ms and 26px, written in each file.</dd></div>
+        <div><dt>Why it could be better</dt><dd>The approved feel; the long tail adds calm.</dd></div>
+        <div><dt>Trade-off</dt><dd>Reveal timings written separately in each file drift apart as pages change, and Hallmark’s range check keeps flagging them.</dd></div>
+        <div><dt>Effort</dt><dd>None.</dd></div>
+        <div><dt>Files</dt><dd>None.</dd></div>
+        <div><dt>Guideline check</dt><dd>Copy: no change · Reduced motion: unchanged · Image QA: not needed.</dd></div>
+      </dl>
+    </div>
+
+    <div class="option">
+      <div class="option-head"><h3><span class="id">D3.4-B</span>Name today’s timings</h3><span class="badge no">No visible change</span></div>
+      <pre class="tokens">/* src/styles/global.css, beside --ease-site */
+--dur-hover: 160ms;   /* link arrow */
+--dur-page: 180ms;    /* page cross-fade */
+--dur-reveal: 900ms;  /* blocks rising in */
+--rise-reveal: 26px;
+--dur-draw: 1100ms;   /* only if D3.2 keeps the rule drawing */</pre>
+      <dl class="facts stack-facts">
+        <div><dt>What changes</dt><dd>The same timings, named once. The shared reveal, the Home doors and the Building panels use them. Scene choreography (Home’s worlds, the Writing path, About’s objects) keeps its own timings, the way illustration colours stay local.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Nothing visible changes, and one edit retunes every page.</dd></div>
+        <div><dt>Trade-off</dt><dd>The doors (800ms, 24px) and Building panels (700ms, 12px) join the shared values, a small change there. Hallmark still flags 900ms.</dd></div>
+        <div><dt>Effort</dt><dd>S</dd></div>
+        <div><dt>Files</dt><dd><code>src/styles/global.css</code>, <code>src/pages/index.astro</code>, <code>src/components/BuildingIllustration.astro</code>, <code>docs/website-system-plan.md:37-49</code>.</dd></div>
+        <div><dt>Guideline check</dt><dd>Copy: no change · Tokens: new names beside <code>--ease-site</code> · Reduced motion: unchanged, all inside the no-preference query · Image QA: not needed.</dd></div>
+      </dl>
+    </div>
+
+    <div class="option">
+      <div class="option-head"><h3><span class="id">D3.4-C</span>Quieter: 600ms and 12px, named</h3><span class="badge rec">Recommended</span></div>
+      <p class="why-rec"><b>Why this one:</b> it keeps the rise your September 27 records describe and the life on every page, but halves the travel that makes the fade-up look stock and settles sooner; the named timings keep every page in step.</p>
+      <pre class="tokens">--dur-hover: 160ms;
+--dur-page: 180ms;
+--dur-reveal: 600ms;
+--rise-reveal: 12px;
+--dur-draw: 700ms;    /* only if D3.2 keeps the rule drawing */</pre>
+      <dl class="facts stack-facts">
+        <div><dt>What changes</dt><dd>As B, with reveals a third shorter and half the travel. A block is 93% in place after 300ms.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Still calm, but closer to settling than arriving; a fast scroller reads text sooner.</dd></div>
+        <div><dt>Trade-off</dt><dd>A visible change to a feel you approved, and still outside Hallmark’s 420ms limit. Its own range (400ms and 8px, the reference lane) passes the check but reads as interface feedback rather than calm.</dd></div>
+        <div><dt>Effort</dt><dd>S</dd></div>
+        <div><dt>Files</dt><dd>As B.</dd></div>
+        <div><dt>Guideline check</dt><dd>Copy: no change · Tokens: as B · Reduced motion: unchanged · Image QA: not needed.</dd></div>
+      </dl>
+    </div>
+
+    <div class="option">
+      <div class="option-head"><h3><span class="id">D3.4-D</span>Fade in place: 900ms, no rise, named</h3><span class="badge no">No travel</span></div>
+      <pre class="tokens">--dur-reveal: 900ms;
+--rise-reveal: 0px;   /* the shared reveal fades only */
+--dur-draw: 1100ms;   /* only if D3.2 keeps the rule drawing */</pre>
+      <dl class="facts stack-facts">
+        <div><dt>What changes</dt><dd>As B, but blocks fade in where they will rest, at today’s length, with no travel. The Home doors and Building panels fade the same way.</dd></div>
+        <div><dt>Why it could be better</dt><dd>It drops the “up” from the fade-up, the part that reads as stock, and keeps the approved length. Nothing shifts, so the eye never follows a moving block.</dd></div>
+        <div><dt>Trade-off</dt><dd>With no travel, a fade can read as content loading late. Every block still has an entrance, so Hallmark’s #13 stays, and the September 27 records say the rows “rise in”.</dd></div>
+        <div><dt>Effort</dt><dd>S</dd></div>
+        <div><dt>Files</dt><dd>As B, plus <code>docs/website-content-model.md:286-298</code> (“rise in” becomes “fade in”).</dd></div>
+        <div><dt>Guideline check</dt><dd>Copy: no change · Tokens: as B · Reduced motion: unchanged · Image QA: not needed.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- ================= D3.5 ================= -->
+  <section class="study" id="d3-5">
+    <p class="eyebrow">D3.5 · Essay pen stroke · Your call 23</p>
+    <h2>Should the pen stroke under the Home essay title stay a free flourish, sit right under a word, or go?</h2>
+    <p class="lead">In Home’s Writing section a hand-drawn terracotta stroke, 240px wide, starts about 30px below the baseline of the title’s last line on desktop (23px on phones, both measured on the CI captures) and draws itself after the title inks in. Hallmark’s gate for decorative underlines (#57) asks for a line within a few pixels of its text, or none; at this distance it reads as a divider.</p>
+    <p class="decided"><b>Decided in</b> <code>docs/website-content-model.md:270-271</code> (“The essay title is inked in and underlined with a pen stroke”, September 27). <b>Code:</b> <code>src/pages/index.astro:116</code> (markup), :216-218 (style), :247-251 (motion).</p>
+
+    <div class="option">
+      <div class="option-head"><h3><span class="id">D3.5-A</span>Keep as is</h3><span class="badge no">Live now</span></div>
+      <div class="pair">
+        <figure class="frame shot"><div class="frame-bar">CI capture · 08e9b22 · <b>/</b> 1280 · resting frame</div><img src="a-writing-desktop.webp" width="1160" height="500" alt="Home’s Writing section on desktop: the notebook picture, the essay title, the pen stroke below it and the Read the essay link." /></figure>
+        <figure class="frame shot phone"><div class="frame-bar">CI capture · 08e9b22 · <b>/</b> 390</div><img src="a-writing-phone.webp" width="390" height="250" alt="Home’s Writing section on a phone: the essay title, the pen stroke and the link." /></figure>
+      </div>
+      <div class="pair" style="margin-top:14px">
+        <div class="frame fit-desktop"><div class="frame-bar">Desktop copy column · 447px · today</div><div class="seq" id="d35a" data-tpl="tpl-wp-a" data-w="dk" aria-hidden="true"></div></div>
+        <div class="frame phone"><div class="frame-bar">Phone · 342px · today</div><div class="seq" id="d35a2" data-tpl="tpl-wp-a" data-w="ph" aria-hidden="true"></div></div>
+      </div>
+      <div class="controls"><button type="button" data-replay="d35a d35a2">Replay</button></div>
+      <dl class="facts stack-facts">
+        <div><dt>What changes</dt><dd>Nothing.</dd></div>
+        <div><dt>Why it could be better</dt><dd>A free, hand-drawn mark echoes the notebook beside it.</dd></div>
+        <div><dt>Trade-off</dt><dd>It floats between the title and the link, so it reads as a divider rather than an underline. Its draw uses plain <code>ease-in-out</code> and starts before the ink finishes.</dd></div>
+        <div><dt>Effort</dt><dd>None.</dd></div>
+        <div><dt>Files</dt><dd>None.</dd></div>
+        <div><dt>Guideline check</dt><dd>Copy: no change · Reduced motion: stroke at rest · Image QA: not needed.</dd></div>
+      </dl>
+    </div>
+
+    <div class="option">
+      <div class="option-head"><h3><span class="id">D3.5-B</span>Underline “Direction”</h3><span class="badge rec">Recommended</span></div>
+      <p class="why-rec"><b>Why this one:</b> it keeps the hand-drawn mark your content model describes and makes it a real underline, on the word the essay argues for and the Writing page draws as a path.</p>
+      <div class="pair">
+        <div class="frame fit-desktop"><div class="frame-bar">Desktop copy column · 447px</div><div class="seq" id="d35b" data-tpl="tpl-wp-b" data-w="dk" aria-hidden="true"></div></div>
+        <div class="frame phone"><div class="frame-bar">Phone · 342px</div><div class="seq" id="d35b2" data-tpl="tpl-wp-b" data-w="ph" aria-hidden="true"></div></div>
+      </div>
+      <div class="controls"><button type="button" data-replay="d35b d35b2">Replay</button></div>
+      <p class="study-label">Study drawing: the stroke is redrawn shorter to fit the word. Production art would need image QA.</p>
+      <dl class="facts stack-facts">
+        <div><dt>What changes</dt><dd>A shorter stroke in the same hand sits right under “Direction”, 3 to 5px below the letters as the line waves, and draws once the ink has passed the word. The title’s words are unchanged; the page wraps the word in a span. Emphasis change, needs approval.</dd></div>
+        <div><dt>Why it could be better</dt><dd>It reads as emphasis instead of a divider, and it stays with the word at any width.</dd></div>
+        <div><dt>Trade-off</dt><dd>It stresses one word, an editorial choice. An accent line under a word can suggest a link; the wave and the heading size make that unlikely.</dd></div>
+        <div><dt>Effort</dt><dd>S</dd></div>
+        <div><dt>Files</dt><dd><code>src/pages/index.astro</code> (title markup, stroke style and motion on <code>--ease-site</code>), <code>docs/website-content-model.md:270-271</code>.</dd></div>
+        <div><dt>Guideline check</dt><dd>Copy: words unchanged, emphasis needs your approval · Tokens: house curve · A11y: stroke <code>aria-hidden</code>, title reads the same · Reduced motion: stroke at rest · Image QA: small SVG stroke, label it as a study until approved.</dd></div>
+      </dl>
+    </div>
+
+    <div class="option">
+      <div class="option-head"><h3><span class="id">D3.5-C</span>Pen line under the link</h3><span class="badge no">Points to the action</span></div>
+      <div class="pair">
+        <div class="frame fit-desktop"><div class="frame-bar">Desktop copy column · 447px</div><div class="seq" id="d35c" data-tpl="tpl-wp-c" data-w="dk" aria-hidden="true"></div></div>
+        <div class="frame phone"><div class="frame-bar">Phone · 342px</div><div class="seq" id="d35c2" data-tpl="tpl-wp-c" data-w="ph" aria-hidden="true"></div></div>
+      </div>
+      <div class="controls"><button type="button" data-replay="d35c d35c2">Replay</button></div>
+      <p class="study-label">Study drawing: the stroke is redrawn to the link’s width. Production art would need image QA.</p>
+      <dl class="facts stack-facts">
+        <div><dt>What changes</dt><dd>No stroke under the title. The straight accent rule under “Read the essay” becomes the hand-drawn stroke, drawn after the title inks in.</dd></div>
+        <div><dt>Why it could be better</dt><dd>The gesture moves to the action: the pen marks where to go next.</dd></div>
+        <div><dt>Trade-off</dt><dd>One link unlike every other house link (the house underline is Your call 24), and its hover and focus states need their own check.</dd></div>
+        <div><dt>Effort</dt><dd>S</dd></div>
+        <div><dt>Files</dt><dd><code>src/pages/index.astro</code>, <code>docs/website-content-model.md:270-271</code>.</dd></div>
+        <div><dt>Guideline check</dt><dd>Copy: no change · Tokens: house curve · A11y: link text, focus outline and tap height unchanged · Reduced motion: stroke at rest · Image QA: as B.</dd></div>
+      </dl>
+    </div>
+
+    <div class="option">
+      <div class="option-head"><h3><span class="id">D3.5-D</span>Ink only</h3><span class="badge no">Quietest</span></div>
+      <div class="pair">
+        <div class="frame fit-desktop"><div class="frame-bar">Desktop copy column · 447px</div><div class="seq" id="d35d" data-tpl="tpl-wp-d" data-w="dk" aria-hidden="true"></div></div>
+        <div class="frame phone"><div class="frame-bar">Phone · 342px</div><div class="seq" id="d35d2" data-tpl="tpl-wp-d" data-w="ph" aria-hidden="true"></div></div>
+      </div>
+      <div class="controls"><button type="button" data-replay="d35d d35d2">Replay</button></div>
+      <dl class="facts stack-facts">
+        <div><dt>What changes</dt><dd>The stroke goes. The title still inks in from the left, and the link moves up to sit 1.6rem below the title (1.2rem on phones).</dd></div>
+        <div><dt>Why it could be better</dt><dd>The ink-in already carries the notebook idea; this is the calmest version.</dd></div>
+        <div><dt>Trade-off</dt><dd>Home loses its only hand-drawn mark, and the content model line changes to “inked in”.</dd></div>
+        <div><dt>Effort</dt><dd>S</dd></div>
+        <div><dt>Files</dt><dd><code>src/pages/index.astro</code>, <code>docs/website-content-model.md:270-271</code>.</dd></div>
+        <div><dt>Guideline check</dt><dd>Copy: no change · Reduced motion: unchanged · Image QA: not needed.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- ================= Calls ================= -->
+  <section class="study" id="calls">
+    <p class="eyebrow">Your calls</p>
+    <h2>What I need from you</h2>
+    <p class="lead">Pick one option per decision; the recommended set is the default if you say “go with the recommendations”.</p>
+    <ol class="calls">
+      <li class="panel"><span class="cid">D3.1</span><b class="q">Which blocks rise in</b>A keep · B headings only · C page scenes only · D once per visit.<span class="def">Recommended: A</span></li>
+      <li class="panel"><span class="cid">D3.2</span><b class="q">The section rule</b>A keep drawing · B rule at rest · C draw on Home only.<span class="def">Recommended: B</span></li>
+      <li class="panel"><span class="cid">D3.3</span><b class="q">The Building drawings</b>A keep the build · B arrive with the row · C show the flow · D only the budgets fill.<span class="def">Recommended: B</span></li>
+      <li class="panel"><span class="cid">D3.4</span><b class="q">Reveal speed and tokens</b>A keep · B name today’s timings · C 600ms and 12px, named · D fade in place, no rise.<span class="def">Recommended: C</span></li>
+      <li class="panel"><span class="cid">D3.5</span><b class="q">The essay pen stroke</b>A keep · B underline “Direction” (emphasis needs your approval) · C pen line under the link · D ink only.<span class="def">Recommended: B</span></li>
+      <li class="panel"><span class="cid">Note</span><b class="q">How the picks combine</b>D3.4 applies to whatever D3.1 keeps. D3.1-C removes the rule drawing too, so D3.2 then only matters on Home. With D3.1-C, D3.3-C becomes Building’s scene. With D3.1-B, D3.2-A keeps the rule drawing beside each moving heading.</li>
+    </ol>
+    <p class="decided" style="margin-top:18px">After you choose: the picks go in one change with <code>npm run check</code> and <code>npm test</code>, a check of reduced motion, keyboard focus and print, and updated motion records in <code>docs/website-content-model.md</code> and <code>docs/website-system-plan.md</code>.</p>
+  </section>
+</main>
+
+<!-- ================= Replica templates ================= -->
+<template id="tpl-building">
+  <div class="site sb" aria-hidden="true">
+    <div class="snav"><span class="snav-name">Kazon Wilson</span><span class="snav-menu">Menu <span class="snav-mark"><i></i><i></i></span></span></div>
+    <header><p class="kicker">Building</p><h1 class="title">Things I’m making.</h1><p class="lede">What you can do with each project, and how I’m building it.</p></header>
+    <section class="projects">
+      <article class="feature" data-r>
+        <div class="copy">
+          <div data-h><h2>Tally</h2><p class="kicker status">In development · public demo</p></div>
+          <p class="subtitle">Review transactions, set monthly budgets and see what remains to spend.</p>
+          <ul class="actions">
+            <li><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="15" rx="2"/><path d="M8 6V3h8v3"/></svg><span>Organize purchases into categories.</span></li>
+            <li><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M6 7v10M12 4v16M18 7v10"/></svg><span>Set rules for repeat merchants.</span></li>
+            <li><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/></svg><span>Track spending against your budget.</span></li>
+          </ul>
+          <div class="context"><p>AI suggests categories. Code calculates the money.</p><p>I make the design decisions and review every change; Claude Code and Codex help with implementation.</p></div>
+          <div class="links"><span class="link">Try demo<span>→</span></span><span class="link">GitHub<span>→</span></span><span class="link">Development journal<span>→</span></span></div>
+        </div>
+        <div class="ill-host stagger" data-r data-tpl="tpl-tally"></div>
+      </article>
+      <article class="feature" data-r>
+        <div class="copy">
+          <div data-h><h2>Kaillera-next</h2><p class="kicker status">In development · playable demo build</p></div>
+          <p class="subtitle">Open a link and play supported retro games with friends.</p>
+          <ul class="actions">
+            <li><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="15" rx="2"/><path d="M8 6V3h8v3"/></svg><span>Create a room and invite friends.</span></li>
+            <li><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M6 7v10M12 4v16M18 7v10"/></svg><span>Play together or watch a game.</span></li>
+            <li><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/></svg><span>Use a controller or touch controls.</span></li>
+          </ul>
+          <div class="context"><p>Built on EmulatorJS, with rollback and host-streaming modes.</p></div>
+          <div class="links"><span class="link">Explore build<span>→</span></span><span class="link">GitHub<span>→</span></span><span class="link">Development journal<span>→</span></span></div>
+        </div>
+        <div class="ill-host stagger" data-r data-tpl="tpl-kaillera"></div>
+      </article>
+      <article class="feature" data-r>
+        <div class="copy">
+          <div data-h><h2>Personal website</h2><p class="kicker status">Live - evolving</p></div>
+          <p class="subtitle">See what I can build for you, hear what I can do for your music, and hire me.</p>
+          <ul class="actions">
+            <li><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="15" rx="2"/><path d="M8 6V3h8v3"/></svg><span>Explore my software work and hear my mixes.</span></li>
+            <li><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M6 7v10M12 4v16M18 7v10"/></svg><span>Tell me what you want to build or finish.</span></li>
+            <li><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/></svg><span>Start a paid software or audio project.</span></li>
+          </ul>
+          <div class="context"><p>I design the site and review every change; Claude Code helps with implementation.</p></div>
+          <div class="links"><span class="link">Work with me<span>→</span></span><span class="link">GitHub<span>→</span></span><span class="link">Development journal<span>→</span></span></div>
+        </div>
+        <div class="ill-host stagger" data-r data-tpl="tpl-website"></div>
+      </article>
+    </section>
+    <section class="protos" data-r>
+      <div class="sh" data-h><h2>Earlier prototypes</h2></div>
+      <p class="proto-intro">These projects are paused. Their pages and development journals remain available.</p>
+      <div class="proto-list">
+        <article><p class="kicker">Local prototype</p><h3><span>The Engineer’s Daily<i> →</i></span></h3><p>Practice coding through a story, alongside Scripture, prayer and reflection.</p></article>
+        <article><p class="kicker">Internal prototype</p><h3><span>Threadline<i> →</i></span></h3><p>Pick up interrupted development work with its context intact.</p></article>
+      </div>
+    </section>
+    <p class="journal-note">The journals show what changed, what I tested and what I’m working on next.</p>
+    <div class="sfoot"><span class="sfoot-name">Kazon Wilson</span><span class="sfoot-links"><span>GitHub</span><span>LinkedIn</span><span>Audio</span><span>Work with me</span><span>Support my work</span><span>Privacy</span></span><p>The Superhuman Group LLC · 2026</p></div>
+  </div>
+</template>
+
+<template id="tpl-tally">
+  <figure class="ill">
+    <div class="drawing">
+      <div class="panels budget-panels">
+        <div class="step"><p class="panel-label">Transactions</p><div class="dpanel transactions"><p><span>◦</span> Coffee</p><p><span>◦</span> Groceries</p><p><span>◦</span> Transit</p><p><span>◦</span> Restaurant</p><p class="ellipsis">…</p></div></div>
+        <span class="flow-arrow a1">→</span>
+        <div class="step"><p class="panel-label">Categories</p><div class="dpanel categories"><p><span class="category-dot"></span> Food</p><p><span class="category-dot cd-home"></span> Home</p><p><span class="category-dot cd-transport"></span> Transport</p><p><span class="category-dot cd-shopping"></span> Shopping</p></div></div>
+        <span class="flow-arrow a2">→</span>
+        <div class="step"><p class="panel-label">Monthly budget</p><div class="dpanel budgets"><p>Food</p><div class="track"><span style="--amount:72%;--color:var(--accent);--n:0"></span></div><p>Home</p><div class="track"><span style="--amount:40%;--color:var(--ill-slate);--n:1"></span></div><p>Transport</p><div class="track"><span style="--amount:57%;--color:var(--ill-sage);--n:2"></span></div><p>Shopping</p><div class="track"><span style="--amount:32%;--color:var(--ill-sand);--n:3"></span></div></div></div>
+      </div>
+    </div>
+    <figcaption>Illustration</figcaption>
+  </figure>
+</template>
+
+<template id="tpl-kaillera">
+  <figure class="ill">
+    <div class="drawing">
+      <div class="room-scene">
+        <svg class="connections" viewBox="0 0 540 320" preserveAspectRatio="none" fill="none">
+          <path class="room-lines" d="M270 82 L70 207 M270 82 L470 207 M270 150 L270 270"/>
+          <path class="cover c1" pathLength="1" d="M270 82 L70 207"/><path class="cover c2" pathLength="1" d="M270 82 L470 207"/><path class="cover c3" pathLength="1" d="M270 150 L270 270"/>
+          <path class="peer-line" pathLength="1" d="M139 227 H401"/>
+          <path class="peer-heads" d="m147 221 -8 6 8 6 m246 -12 8 6 -8 6"/>
+        </svg>
+        <div class="room step"><p class="panel-label">Game room</p><div class="browser"><div class="browser-bar">•••</div><div class="room-members"><p><span class="member"></span> Player 1</p><p><span class="member"></span> Player 2</p><p><span class="member spectator-dot"></span> Spectator</p><div class="invite">Invite friends</div></div></div></div>
+        <div class="participant step player-one"><div class="browser"><div class="browser-bar">•••</div><svg viewBox="0 0 100 55" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="38" cy="17" r="8"/><path d="M23 44v-4c0-17 30-17 30 0v4"/><path d="M68 21h13l5 17c1 4-2 5-5 2l-5-4-5 4c-3 3-6 2-5-2z"/><path d="M69 28h7m-3-3v6"/><circle cx="80" cy="29" r="1"/></svg></div><p class="panel-label">Player 1</p></div>
+        <div class="participant step player-two"><div class="browser"><div class="browser-bar">•••</div><svg viewBox="0 0 100 55" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="38" cy="17" r="8"/><path d="M23 44v-4c0-17 30-17 30 0v4"/><path d="M68 21h13l5 17c1 4-2 5-5 2l-5-4-5 4c-3 3-6 2-5-2z"/><path d="M69 28h7m-3-3v6"/><circle cx="80" cy="29" r="1"/></svg></div><p class="panel-label">Player 2</p></div>
+        <div class="participant step spectator"><div class="browser"><div class="browser-bar">•••</div><svg viewBox="0 0 100 55" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="38" cy="17" r="8"/><path d="M23 44v-4c0-17 30-17 30 0v4"/></svg></div><p class="panel-label">Spectator</p><p class="watch-only">Watch only</p></div>
+      </div>
+    </div>
+    <figcaption>Illustration</figcaption>
+  </figure>
+</template>
+
+<template id="tpl-website">
+  <figure class="ill">
+    <div class="drawing">
+      <div class="panels website-panels">
+        <div class="step dpanel web-panel"><p class="panel-label">Explore the work</p><div class="work-timeline"><div><i></i><span></span><span></span></div><div><i></i><span></span><span></span></div><div><i></i><span></span><span></span></div><div><i></i><span></span></div></div></div>
+        <div class="step dpanel web-panel"><p class="panel-label">Compare the sound</p><div class="sound"><p>Before</p><svg viewBox="0 0 100 48" class="wave before-wave"><line x1="3" x2="3" y1="20" y2="28"/><line x1="7" x2="7" y1="17" y2="31"/><line x1="11" x2="11" y1="12.5" y2="35.5"/><line x1="15" x2="15" y1="15.5" y2="32.5"/><line x1="19" x2="19" y1="9.5" y2="38.5"/><line x1="23" x2="23" y1="18.5" y2="29.5"/><line x1="27" x2="27" y1="11.5" y2="36.5"/><line x1="31" x2="31" y1="7" y2="41"/><line x1="35" x2="35" y1="14.5" y2="33.5"/><line x1="39" x2="39" y1="11" y2="37"/><line x1="43" x2="43" y1="17.5" y2="30.5"/><line x1="47" x2="47" y1="9" y2="39"/><line x1="51" x2="51" y1="13.5" y2="34.5"/><line x1="55" x2="55" y1="19" y2="29"/><line x1="59" x2="59" y1="10" y2="38"/><line x1="63" x2="63" y1="6" y2="42"/><line x1="67" x2="67" y1="15.5" y2="32.5"/><line x1="71" x2="71" y1="11.5" y2="36.5"/><line x1="75" x2="75" y1="18" y2="30"/><line x1="79" x2="79" y1="8.5" y2="39.5"/><line x1="83" x2="83" y1="13" y2="35"/><line x1="87" x2="87" y1="17" y2="31"/><line x1="91" x2="91" y1="10.5" y2="37.5"/><line x1="95" x2="95" y1="15" y2="33"/></svg><p>After</p><svg viewBox="0 0 100 48" class="wave after-wave"><line style="--i:0" x1="3" x2="3" y1="18" y2="30"/><line style="--i:1" x1="7" x2="7" y1="15" y2="33"/><line style="--i:2" x1="11" x2="11" y1="10.5" y2="37.5"/><line style="--i:3" x1="15" x2="15" y1="13.5" y2="34.5"/><line style="--i:4" x1="19" x2="19" y1="7.5" y2="40.5"/><line style="--i:5" x1="23" x2="23" y1="16.5" y2="31.5"/><line style="--i:6" x1="27" x2="27" y1="9.5" y2="38.5"/><line style="--i:7" x1="31" x2="31" y1="5" y2="43"/><line style="--i:8" x1="35" x2="35" y1="12.5" y2="35.5"/><line style="--i:9" x1="39" x2="39" y1="9" y2="39"/><line style="--i:10" x1="43" x2="43" y1="15.5" y2="32.5"/><line style="--i:11" x1="47" x2="47" y1="7" y2="41"/><line style="--i:12" x1="51" x2="51" y1="11.5" y2="36.5"/><line style="--i:13" x1="55" x2="55" y1="17" y2="31"/><line style="--i:14" x1="59" x2="59" y1="8" y2="40"/><line style="--i:15" x1="63" x2="63" y1="4" y2="44"/><line style="--i:16" x1="67" x2="67" y1="13.5" y2="34.5"/><line style="--i:17" x1="71" x2="71" y1="9.5" y2="38.5"/><line style="--i:18" x1="75" x2="75" y1="16" y2="32"/><line style="--i:19" x1="79" x2="79" y1="6.5" y2="41.5"/><line style="--i:20" x1="83" x2="83" y1="11" y2="37"/><line style="--i:21" x1="87" x2="87" y1="15" y2="33"/><line style="--i:22" x1="91" x2="91" y1="8.5" y2="39.5"/><line style="--i:23" x1="95" x2="95" y1="13" y2="35"/></svg></div></div>
+        <div class="step dpanel web-panel"><p class="panel-label">Start a conversation</p><div class="inquiry"><div>Your name</div><div>What do you want to make?</div><span>Send a message</span></div></div>
+      </div>
+    </div>
+    <figcaption>Illustration</figcaption>
+  </figure>
+</template>
+
+<template id="tpl-heads">
+  <div class="site shd">
+    <div class="sh rv" data-at="0"><h2>Work highlights</h2></div>
+    <div class="rv lyft" data-at="160"><p class="wc">Lyft</p><p class="wf">5,000 → 100,000+ rows per batch</p><p class="wd">I changed Lyft’s driver-bonus tool so support could run and monitor larger batches without handing the work to on-call engineers.</p></div>
+    <div class="sh rv" data-at="1500"><h2>Writing</h2></div>
+    <div class="rv" data-at="1660"><h3 class="wt">AI Gives You Speed. Engineering Gives It Direction.</h3></div>
+  </div>
+</template>
+
+<template id="tpl-heads-building">
+  <div class="site shd">
+    <div class="rv" data-at="0"><div class="sh"><h2>Earlier prototypes</h2></div><p class="pi">These projects are paused. Their pages and development journals remain available.</p></div>
+  </div>
+</template>
+
+<template id="tpl-lane">
+  <div class="site ln">
+    <div class="rv" data-at="0"><h2 class="ln-h">Tally</h2><p class="kicker">In development · public demo</p></div>
+    <div class="rv" data-at="320"><p class="ln-p">Review transactions, set monthly budgets and see what remains to spend.</p></div>
+    <div class="rv" data-at="640"><span class="link">Try demo<span>→</span></span></div>
+  </div>
+</template>
+
+<template id="tpl-wp-a">
+  <div class="site wp" data-at="0">
+    <h3>AI Gives You Speed. Engineering Gives It Direction.</h3>
+    <svg class="pen-stroke" viewBox="0 0 300 14" preserveAspectRatio="none"><path pathLength="1" d="M3 9 C 60 3, 110 12, 170 7 S 262 4, 297 8" /></svg>
+    <span class="link">Read the essay <span>→</span></span>
+  </div>
+</template>
+
+<template id="tpl-wp-b">
+  <div class="site wp" data-at="0">
+    <h3>AI Gives You Speed. Engineering Gives It <span class="mark">Direction<svg viewBox="0 0 200 10" preserveAspectRatio="none"><path d="M2 5 C 40 2, 76 8, 116 4.5 S 176 3, 198 5.5" /></svg></span>.</h3>
+    <div class="after-title"><span class="link">Read the essay <span>→</span></span></div>
+  </div>
+</template>
+
+<template id="tpl-wp-c">
+  <div class="site wp" data-at="0">
+    <h3>AI Gives You Speed. Engineering Gives It Direction.</h3>
+    <div class="after-title"><span class="link pen">Read the essay <span>→</span><svg class="link-pen" viewBox="0 0 120 8" preserveAspectRatio="none"><path d="M1 5 C 24 2, 46 7, 70 4 S 108 3, 119 5" /></svg></span></div>
+  </div>
+</template>
+
+<template id="tpl-wp-d">
+  <div class="site wp" data-at="0">
+    <h3>AI Gives You Speed. Engineering Gives It Direction.</h3>
+    <div class="after-title"><span class="link">Read the essay <span>→</span></span></div>
+  </div>
+</template>
+
+<script>
+  const root = document.documentElement;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+  let forced = false;
+  const motionOn = () => !reduce.matches || forced;
+
+  // Fill every [data-tpl] host from its template; hosts inside filled templates are filled too.
+  function build() {
+    let host;
+    while ((host = document.querySelector('[data-tpl]:not([data-built])'))) {
+      host.dataset.built = '';
+      const html = document.getElementById(host.dataset.tpl).innerHTML;
+      host.insertAdjacentHTML('beforeend', html);
+      if (host.dataset.w) host.querySelector('.wp').classList.add(host.dataset.w);
+    }
+  }
+  build();
+
+  // Sequence demos: [data-at] elements get .is-in that many ms after Replay.
+  function rest(seq) {
+    (seq.timers || []).forEach(clearTimeout);
+    seq.querySelectorAll('[data-at]').forEach(el => el.classList.add('is-in'));
+  }
+  function playSeq(seq) {
+    (seq.timers || []).forEach(clearTimeout);
+    seq.timers = [];
+    const items = [...seq.querySelectorAll('[data-at]')];
+    seq.classList.add('prep');
+    items.forEach(el => el.classList.remove('is-in'));
+    void seq.offsetWidth;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      seq.classList.remove('prep');
+      items.forEach(el => seq.timers.push(setTimeout(() => el.classList.add('is-in'), 300 + Number(el.dataset.at || 0))));
+    }));
+  }
+
+  // Scroll demos: a page in a frame, revealed by IntersectionObserver against the frame, as on the site.
+  class ScrollDemo {
+    constructor(vp) {
+      this.vp = vp;
+      this.mode = vp.dataset.mode;
+      const selector = this.mode === 'headings' ? '[data-h]' : this.mode === 'all' ? '[data-r]' : null;
+      this.targets = selector ? [...vp.querySelectorAll(selector)] : [];
+      this.targets.forEach(el => el.setAttribute('data-t', ''));
+      this.scenes = this.mode === 'scenes' ? [...vp.querySelectorAll('.ill-host')] : [];
+      if (this.mode === 'headings') vp.querySelectorAll('.ill-host').forEach(el => el.classList.remove('stagger'));
+      ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(type => vp.addEventListener(type, () => this.stop(), { passive: true }));
+      this.arm(false);
+    }
+    stop() { clearTimeout(this.wait); cancelAnimationFrame(this.raf); }
+    arm(returnVisit) {
+      this.stop();
+      this.io?.disconnect();
+      this.sceneIo?.disconnect();
+      const vp = this.vp, all = [...this.targets, ...this.scenes];
+      vp.classList.add('prep');
+      vp.scrollTop = 0;
+      all.forEach(el => el.classList.remove('is-in'));
+      if (!motionOn() || returnVisit) {
+        all.forEach(el => el.classList.add('is-in'));
+      } else {
+        const frame = vp.getBoundingClientRect();
+        this.targets.forEach(el => { const box = el.getBoundingClientRect(); if (box.top < frame.bottom && box.bottom > frame.top) el.classList.add('is-in'); });
+        this.io = new IntersectionObserver(entries => entries.forEach(entry => {
+          if (!entry.isIntersecting) return;
+          entry.target.classList.add('is-in');
+          this.io.unobserve(entry.target);
+        }), { root: vp, rootMargin: '0px 0px -12% 0px' });
+        this.targets.filter(el => !el.classList.contains('is-in')).forEach(el => this.io.observe(el));
+        this.sceneIo = new IntersectionObserver(entries => entries.forEach(entry => {
+          if (entry.intersectionRatio < 0.5) return;
+          entry.target.classList.add('is-in');
+          this.sceneIo.unobserve(entry.target);
+        }), { root: vp, threshold: 0.5 });
+        this.scenes.forEach(el => this.sceneIo.observe(el));
+      }
+      requestAnimationFrame(() => requestAnimationFrame(() => vp.classList.remove('prep')));
+    }
+    play(returnVisit) {
+      this.arm(returnVisit);
+      this.wait = setTimeout(() => {
+        const vp = this.vp, max = vp.scrollHeight - vp.clientHeight;
+        if (max <= 0) return;
+        const duration = Math.max(3000, max / 0.33);
+        const start = performance.now();
+        const ease = t => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+        const step = now => {
+          const t = Math.min(1, (now - start) / duration);
+          vp.scrollTop = max * ease(t);
+          if (t < 1) this.raf = requestAnimationFrame(step);
+        };
+        this.raf = requestAnimationFrame(step);
+      }, 700);
+    }
+  }
+  const scrollDemos = new Map([...document.querySelectorAll('.vp')].map(vp => [vp.id, new ScrollDemo(vp)]));
+
+  document.querySelectorAll('[data-replay]').forEach(button => button.addEventListener('click', () => {
+    if (!motionOn()) return;
+    button.dataset.replay.split(' ').forEach(id => {
+      if (scrollDemos.has(id)) scrollDemos.get(id).play(button.dataset.visit === 'return');
+      else playSeq(document.getElementById(id));
+    });
+  }));
+
+  const notice = document.getElementById('rm-notice');
+  const force = document.getElementById('force-motion');
+  force.addEventListener('click', () => { forced = !forced; sync(); });
+  function sync() {
+    root.classList.toggle('m-on', motionOn());
+    notice.hidden = !reduce.matches;
+    force.setAttribute('aria-pressed', String(forced));
+    force.textContent = forced ? 'Show resting frames again' : 'Play the demos anyway';
+    document.querySelectorAll('[data-replay]').forEach(button => { button.disabled = !motionOn(); });
+    document.querySelectorAll('.seq').forEach(rest);
+    scrollDemos.forEach(demo => demo.arm(false));
+  }
+  reduce.addEventListener('change', sync);
+  sync();
+</script>
+</body>
+</html>

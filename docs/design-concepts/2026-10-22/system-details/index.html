@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>System details: alternatives</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,400&display=swap" />
+<style>
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Regular.woff2) format('woff2'); font-weight: 400; font-style: normal; }
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Bold.woff2) format('woff2'); font-weight: 700; font-style: normal; }
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Italic.woff2) format('woff2'); font-weight: 400; font-style: italic; }
+  @font-face { font-family: 'Kazon Name Text'; src: url(../../../../public/fonts/kazon-name-text.woff2) format('woff2'); font-weight: 400; }
+
+  /* Site palette (src/styles/global.css) plus the board tones the 2026-10-19 board used.
+     --accent-text is the board's own label colour: the accent mixed 15% toward ink, so 11-13px labels clear 4.5:1 on the board tone (5.1:1). */
+  :root { --paper: #FBF8F2; --ink: #0E0E0E; --muted: #4A4A4A; --rule: #E8E3DA; --accent: #AE5534; --accent-text: #964a2e; --tint: #F5ECE5; --board: #ECE6DB; --edge: #d6cdbf;
+    --field-border: color-mix(in srgb, var(--muted) 65%, var(--paper)); --studio-muted: #66615a; --studio-field: #fffdf9; --ease-site: cubic-bezier(.2, .7, .2, 1);
+    --serif: Libron, 'Iowan Old Style', Georgia, serif; --sans: Inter, system-ui, -apple-system, sans-serif; --mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+    --news: Newsreader, Georgia, serif; }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--board); color: var(--ink); font-family: var(--serif); -webkit-font-smoothing: antialiased; }
+  .board { max-width: 1280px; margin: 0 auto; padding: 56px clamp(16px, 5vw - 4px, 56px) 72px; }
+  @media (max-width: 600px) { .board { padding-top: 40px; } }
+  .narrow-only { display: none; }
+  @media (max-width: 700px) { .narrow-only { display: block; } }
+  .eyebrow { font: 500 11px/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent-text); margin: 0 0 14px; }
+  .board > header h1 { font-size: clamp(36px, 6vw, 52px); line-height: 1.04; letter-spacing: -.03em; margin: 0 0 16px; font-weight: 400; text-wrap: balance; }
+  .board > header p:not(.eyebrow) { font-size: clamp(17px, 2vw, 20px); line-height: 1.5; color: var(--muted); max-width: 60rem; margin: 0 0 12px; }
+  code { font: 12.5px var(--mono); background: #efe8dd; padding: 1px 4px; border-radius: 3px; overflow-wrap: anywhere; }
+
+  .handled { margin-top: 28px; background: var(--paper); border: 1px dashed #c4ab92; border-radius: 8px; padding: 14px 18px; font: 14px/1.55 var(--sans); color: #2b2b2b; }
+  .handled b { font-weight: 600; }
+  .handled ul { margin: 8px 0 0; padding-left: 18px; }
+  .handled li { margin-bottom: 4px; }
+
+  section.study { margin-top: 64px; padding-top: 40px; border-top: 1px solid #d8d0c3; }
+  section.study > h2 { font-size: clamp(28px, 4vw, 36px); line-height: 1.12; letter-spacing: -.02em; font-weight: 400; margin: 0 0 12px; text-wrap: balance; }
+  section.study > p.lead { font-size: 18px; line-height: 1.55; color: var(--muted); max-width: 62rem; margin: 0 0 12px; }
+  .decided { font: 14px/1.55 var(--sans); color: #2b2b2b; max-width: 62rem; margin: 0 0 8px; }
+  .decided b { font-weight: 600; }
+
+  .option { margin-top: 40px; }
+  .option-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .option-head h3 { font-size: 26px; font-weight: 400; margin: 0; letter-spacing: -.01em; line-height: 1.2; }
+  .option-head h3 .id { font: 500 13px/1 var(--mono); color: var(--accent-text); letter-spacing: .04em; margin-right: 8px; vertical-align: 3px; }
+  .badge { font: 600 11px/1 var(--sans); letter-spacing: .04em; text-transform: uppercase; padding: 6px 9px; border-radius: 3px; white-space: nowrap; }
+  .badge.rec { background: var(--accent); color: var(--paper); }
+  .badge.no { background: transparent; color: var(--muted); border: 1px solid #b9ad9c; }
+  .why-rec { font: 14.5px/1.55 var(--sans); color: #2b2b2b; border-left: 3px solid var(--accent); background: var(--tint); padding: 10px 14px; margin: 0 0 14px; border-radius: 0 6px 6px 0; }
+  .why-rec b { font-weight: 600; }
+
+  .views { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (min-width: 900px) { .views.two { grid-template-columns: minmax(0, 1fr) minmax(0, 300px); } .views.half { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  .views + .views { margin-top: 20px; }
+  .frame { margin: 0; background: var(--paper); border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; box-shadow: 0 10px 24px -20px #0e0e0e66; min-width: 0; }
+  .frame-bar { font: 11px/1.3 var(--mono); color: var(--muted); padding: 9px 12px; border-bottom: 1px solid var(--rule); background: #f6f1e9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .frame-bar b { color: var(--ink); font-weight: 500; }
+  .frame.phone { max-width: 390px; width: 100%; justify-self: center; }
+  .shot img { display: block; width: 100%; height: auto; }
+  /* A fold line drawn over an unscaled CI capture; --at is the fold's share of the capture's height. */
+  .shot.folded { position: relative; }
+  .ci-fold { position: absolute; left: 0; right: 0; bottom: 0; top: var(--at); border-top: 2px dashed var(--accent); background: rgba(236, 230, 219, .55); pointer-events: none; }
+  .ci-fold span { position: absolute; right: 8px; top: 6px; font: 600 12px/1.3 var(--sans); color: var(--paper); background: var(--accent); padding: 2px 7px; border-radius: 3px; white-space: nowrap; }
+  .same { font: 14px/1.55 var(--sans); color: #2b2b2b; background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 12px 14px; margin: 0; }
+  .same b { font-weight: 600; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin: 12px 0 0; font: 14px/1.4 var(--sans); }
+  .controls button { min-height: 44px; padding: 0 18px; border-radius: 3px; border: 1px solid var(--ink); background: var(--paper); color: var(--ink); font: 500 15px/1 var(--sans); cursor: pointer; }
+  .controls button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  @media (hover: hover) and (pointer: fine) { .controls button:hover { background: var(--ink); color: var(--paper); } }
+  .controls label { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+  .controls input { width: 20px; height: 20px; accent-color: var(--accent); }
+  .controls .hint { color: var(--muted); }
+  :is(button, input, a, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .facts { margin: 16px 0 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  @media (min-width: 900px) { .facts { grid-template-columns: repeat(3, minmax(0, 1fr)); } .facts .wide { grid-column: 1 / -1; } }
+  .facts > div { background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+  .facts dt { font: 600 11px/1.3 var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  .facts dd { margin: 0; font: 14px/1.55 var(--sans); color: #2b2b2b; overflow-wrap: anywhere; }
+  .facts dd b { font-weight: 600; color: var(--ink); }
+
+  .ref { margin-top: 14px; font: 14px/1.55 var(--sans); color: #2b2b2b; }
+  .ref summary { cursor: pointer; min-height: 44px; display: inline-flex; align-items: center; font-weight: 600; }
+  .ref .views { margin-top: 8px; }
+
+  .decisions { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  @media (min-width: 900px) { .decisions { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .decisions li { background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 16px 18px; font: 14px/1.55 var(--sans); color: #2b2b2b; }
+  .decisions li b { display: block; font: 400 19px/1.3 var(--serif); color: var(--ink); margin-bottom: 4px; }
+  .decisions li .def { display: block; margin-top: 6px; font-weight: 600; color: var(--accent); }
+
+  /* ---------- Scaled stages: each recreation is laid out at its real width, then scaled to fit (never enlarged). ---------- */
+  .stage { position: relative; width: 100%; overflow: hidden; height: 240px; }
+  .stage > .site { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+  .fold { position: absolute; left: 0; right: 0; bottom: 0; border-top: 3px dashed var(--accent); background: rgba(236, 230, 219, .55); z-index: 3; pointer-events: none; }
+  .fold span { position: absolute; right: 16px; top: 10px; font: 600 22px/1.3 var(--sans); color: var(--paper); background: var(--accent); padding: 5px 11px; border-radius: 3px; white-space: nowrap; }
+  .w390 .fold span, .w816 .fold span { font-size: 13px; padding: 3px 8px; right: 8px; top: 6px; }
+
+  /* ---------- Recreation of the site, with the values from src/styles/global.css, SiteNav.astro and Footer.astro. ---------- */
+  .site { position: relative; background: var(--paper); color: var(--ink); font: 16px/1.6 var(--serif); text-align: left; overflow: hidden; }
+  .site * { box-sizing: border-box; margin: 0; padding: 0; }
+  .site :where(h1, h2, h3) { font-weight: 400; letter-spacing: -.01em; text-wrap: balance; }
+  .site p { text-wrap: pretty; }
+  .site.w1280 { width: 1280px; } .site.w390 { width: 390px; } .site.w816 { width: 816px; } .site.w612 { width: 612px; }
+  .s-shell { max-width: 1232px; margin-inline: auto; padding-inline: 56px; }
+  .w390 .s-shell { padding-inline: 24px; }
+  .s-hdr { display: flex; align-items: center; justify-content: space-between; gap: 2rem; min-height: 112px; }
+  .w390 .s-hdr { min-height: 90px; padding-block: 1.25rem; }
+  .s-name { font: 1.5rem/1.6 'Kazon Name Text', var(--serif); letter-spacing: -.04em; white-space: nowrap; }
+  .s-nav { display: flex; gap: 2rem; } .s-nav span { padding: .4rem 0; }
+  .s-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .55rem 1.35rem; background: var(--accent); color: var(--paper); border: 1px solid var(--accent); border-radius: 3px; line-height: 1.4; white-space: nowrap; }
+  .s-btn.out { background: transparent; color: var(--ink); }
+  .s-menu { display: flex; align-items: center; gap: 14px; min-height: 44px; }
+  .s-menu i { width: 25px; display: grid; gap: 7px; } .s-menu i::before, .s-menu i::after { content: ''; height: 1px; background: var(--accent); }
+  .s-link { color: var(--ink); border-bottom: 1px solid var(--accent); padding-bottom: 1px; }
+  .s-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1.5rem; padding-block: 2rem 3rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: .875rem; }
+  .s-foot .fn { font: 1.25rem/1.6 'Kazon Name Text', var(--serif); letter-spacing: -.03em; color: var(--ink); }
+  .s-foot .fnav { display: flex; flex-wrap: wrap; gap: calc(44px - 1lh) 1.5rem; color: var(--ink); }
+  .w390 .s-foot { gap: 1rem; } .w390 .s-foot p { width: 100%; }
+
+  /* D9.1 · src/pages/404.astro as it stands in PR #204 (picture 450px wide); the alternatives start from these values. */
+  .nf { display: grid; justify-items: center; gap: 2.5rem; padding-block: 1.5rem 4rem; }
+  .nf-art { width: 100%; max-width: 450px; margin-block: -2rem; }
+  .nf-art img { display: block; width: 100%; height: auto; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 12%, #000 85%, transparent); mask-composite: intersect; }
+  .nf-copy { width: 100%; max-width: 680px; text-align: center; }
+  .nf-status { color: var(--muted); font-size: .875rem; margin: 0 0 1rem; }
+  .nf-h1 { font-size: 60px; line-height: 1.12; letter-spacing: -.035em; margin: 0 0 1.5rem; }
+  .w390 .nf-h1 { font-size: 40px; }
+  .nf-desc { max-width: 36ch; margin: 0 auto 2rem; font-size: 1.125rem; line-height: 1.65; color: var(--muted); }
+  .nf-actions { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
+  .nf-actions .s-btn { min-height: 48px; padding-inline: 1.75rem; }
+  .nf-sec { color: var(--muted); border-bottom: 1px solid var(--accent); padding-bottom: 1px; }
+  .w390 .nf { padding-block: .5rem 3rem; gap: 2rem; }
+  .w390 .nf-art { margin-block: -.5rem; }
+  .w390 .nf-desc { max-width: 30ch; }
+  /* D9.1-B: words left, picture right */
+  .nf-b { grid-template-columns: minmax(0, 34rem) minmax(0, 1fr); align-items: center; justify-items: start; column-gap: 4rem; padding-block: 3rem 5rem; }
+  .nf-b .nf-art { order: 2; justify-self: end; max-width: 520px; margin: 0; }
+  .nf-b .nf-copy, .nf-c .nf-copy, .nf-d .nf-copy { text-align: left; }
+  .nf-b .nf-copy { max-width: none; }
+  .nf-b .nf-desc, .nf-c .nf-desc, .nf-d .nf-desc { margin: 0 0 2rem; }
+  .nf-b .nf-actions, .nf-c .nf-actions, .nf-d .nf-actions { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 1rem 2rem; }
+  .w390 .nf-b { grid-template-columns: minmax(0, 1fr); row-gap: 2rem; padding-block: .5rem 3rem; }
+  .w390 .nf-b .nf-art { order: 0; justify-self: stretch; max-width: none; margin-block: -.5rem; }
+  .w390 :is(.nf-b, .nf-c, .nf-d) .nf-actions { gap: 1rem 1.75rem; }
+  /* D9.1-C: words first, the same picture as a low horizon band */
+  .nf-c { display: block; justify-items: start; padding-block: 4rem 0; }
+  .nf-c .nf-copy { max-width: 40rem; }
+  .nf-c .nf-status { font: .6875rem/1.6 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+  .nf-c .nf-art { max-width: none; height: 260px; margin: 3.5rem 0 -1rem; }
+  .nf-c .nf-art img { height: 100%; object-fit: cover; object-position: 50% 45%; }
+  .w390 .nf-c { padding-top: 2rem; }
+  .w390 .nf-c .nf-art { height: 150px; margin-top: 2.5rem; }
+  /* D9.1-D: the words in the coast's sky. The picture spans the column and sits under the words, pulled up by a share of its
+     own width (a vertical % margin resolves against the column's width). Its sky is the top 29% of its height, about 19% of
+     its width, so pulling it up 17% (12% on phones) always leaves the words above the headland, at any width. */
+  .nf-d { justify-items: start; gap: 0; padding-block: 3rem 2rem; }
+  .nf-d .nf-copy { position: relative; z-index: 1; max-width: 40rem; }
+  .nf-d .nf-art { max-width: none; margin: -17% 0 0; }
+  .w390 .nf-d { padding-block: .5rem 2rem; }
+  .w390 .nf-d .nf-art { margin-top: -12%; }
+
+  /* D9.2 · the contact form (src/components/ContactForm.astro with the .site-form rules in global.css). */
+  .cf { padding: 24px; }
+  .cf-form > * + * { margin-top: 1.5rem; }
+  .cf-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
+  .w390 .cf-pair { grid-template-columns: minmax(0, 1fr); }
+  .cf-label { display: block; margin-bottom: .5rem; font-size: 1rem; }
+  .cf-label span, .cf-hint { color: var(--muted); }
+  .cf-input { display: block; width: 100%; height: calc(1.5rem + 1.3rem + 2px); border: 1px solid var(--field-border); background: var(--paper); border-radius: 3px; padding: .65rem .8rem; font: 1rem/1.5 var(--sans); }
+  .cf-input.ta { height: calc(9rem + 1.3rem + 2px); color: color-mix(in oklab, var(--ink) 50%, transparent); }
+  .cf-input[aria-invalid="true"] { border-color: var(--accent); }
+  .cf-err { color: var(--accent); font-size: .875rem; margin-top: .5rem; }
+  .cf-err.rsv { min-height: 1lh; }
+  .cf-status { font-size: .9rem; margin-top: .75rem; }
+  .cf-hint { font-size: .875rem; line-height: 1.6; }
+  .cf-ts { width: 300px; height: 65px; display: flex; align-items: center; padding: 0 14px; border: 1px solid #d9d9d9; background: #f7f7f7; border-radius: 3px; font: 12px/1.3 var(--sans); color: #555; }
+  /* D9.2-C: message on the label's line */
+  .cf-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 1rem; margin-bottom: .5rem; }
+  .cf-head .cf-label { margin-bottom: 0; }
+  .cf-head .cf-err { margin-top: 0; }
+  [hidden] { display: none !important; }
+
+  /* D9.2 · the brief's first screen (src/pages/software/start.astro with audio-intake.css and software-intake.css). */
+  .bf { padding-bottom: 2rem; }
+  .bf-return { margin: .75rem 0; line-height: 1.5; }
+  .bf-rlink { display: inline-flex; align-items: flex-end; gap: .65rem; min-height: 44px; padding: .35rem 0; border-bottom: 1px solid var(--accent); line-height: 1.45; }
+  .bf-rlink span { color: var(--accent); }
+  .bf-muted { color: var(--muted); font-size: .8rem; margin-top: .75rem; line-height: 1.5; }
+  .bf-dots { display: flex; align-items: center; list-style: none; gap: .75rem; margin: 1rem 0 2rem; padding: .9rem 0 1rem; border-bottom: 1px solid var(--rule); }
+  .bf-dots li { display: flex; } .bf-dots li i { width: .65rem; height: .65rem; border: 1px solid var(--rule); border-radius: 50%; }
+  .bf-dots li.on i { background: var(--accent); border-color: var(--accent); }
+  .bf-form { max-width: 42rem; }
+  .bf-form h1 { font-size: 56px; line-height: 1.07; letter-spacing: -.045em; margin-bottom: .65rem; }
+  .w390 .bf-form h1 { font-size: 38.4px; }
+  .bf-list { display: grid; gap: .6rem; }
+  .bf-offer { display: flex; gap: 1rem; align-items: flex-start; padding: 1rem; border: 1px solid var(--rule); border-radius: 3px; min-height: 64px; }
+  .bf-offer > i { flex: none; width: 1.1rem; height: 1.1rem; margin-top: .2rem; border: 1px solid #767676; border-radius: 50%; }
+  .bf-offer strong { display: block; font-size: 1.1rem; font-weight: 400; }
+  .bf-offer small { display: block; color: var(--muted); font-size: .9rem; line-height: 1.4; margin-top: .2rem; }
+  .bf-form p { line-height: 1.5; }
+  .bf-err, .bf-status:not(:empty) { color: var(--accent); margin-top: .65rem; }
+  .bf-err.rsv, .bf-status.rsv { min-height: 1lh; margin-top: .65rem; }
+  .bf-foot { color: var(--muted); font-size: .9rem; margin-top: 1.8rem; }
+  .bf-actions { display: flex; justify-content: flex-end; align-items: center; gap: 1rem; border-top: 1px solid var(--rule); margin-top: 1.25rem; padding-top: 1.1rem; }
+  .bf-actions .s-btn { min-width: 220px; }
+  .bf-contact { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 1.75rem; line-height: 1.5; }
+  .marker-line { position: absolute; left: 0; right: 0; height: 0; border-top: 2px solid var(--ink); z-index: 4; pointer-events: none; }
+  .marker-line span { position: absolute; left: 760px; top: -14px; font: 600 18px/1.3 var(--sans); background: var(--ink); color: var(--paper); padding: 2px 8px; border-radius: 3px; white-space: nowrap; }
+
+  /* D9.3 · the signing page (src/pages/offer/[token]/sign.astro, studio.css, SoftwareAgreedTerms.astro), fonts set per option. */
+  .ag { --ag-head: var(--serif); --ag-body: var(--serif); --ag-terms: var(--serif); --ag-sign: var(--serif); max-width: 72rem; margin-inline: auto; padding: 2rem 56px; font-family: var(--ag-body); }
+  .ag.news-body { --ag-body: var(--news); --ag-terms: var(--news); --ag-sign: var(--news); }
+  .ag.news-all { --ag-head: var(--news); --ag-body: var(--news); --ag-terms: var(--news); --ag-sign: var(--news); }
+  .ag-hdr { display: flex; justify-content: space-between; align-items: center; gap: 1rem; border-bottom: 1px solid var(--rule); padding-bottom: 1.5rem; margin-bottom: 2.5rem; }
+  .ag-kick { font: .6875rem/1.6 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+  .ag-kick.mb { margin-bottom: 1rem; }
+  .ag h1, .ag h2 { font-family: var(--ag-head); }
+  .ag h1 { font-size: 83.2px; line-height: 1.02; letter-spacing: -.045em; }
+  .ag-lede { font-size: 28.8px; line-height: 1.35; margin: 1.5rem 0 2.5rem; max-width: 40rem; }
+  .ag-cols { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr); gap: 2.5rem; margin-top: 1.5rem; }
+  .ag-card { border: 1px solid var(--rule); padding: 1.5rem; }
+  .ag h2 { font-size: 1.5rem; line-height: 1.2; margin-bottom: 1rem; }
+  .ag-meta { font: 400 .85rem/1.5 var(--sans); color: var(--studio-muted); }
+  .ag-a { color: var(--ink); border-bottom: 1px solid var(--accent); padding-bottom: 1px; }
+  .ag-terms { border-top: 1px solid var(--rule); padding: 1.5rem 0; margin-top: 2rem; }
+  .ag-terms p.sum { font: 400 1.5rem/1.4 var(--ag-terms); }
+  .ag-terms p.sum::before { content: '▶'; font: 16px/1 var(--sans); margin-right: .6rem; vertical-align: 3px; }
+  .ag-aside { padding-left: 2rem; border-left: 1px solid var(--rule); }
+  .ag-sign { font: italic 2.5rem/1.3 var(--ag-sign); border-bottom: 1px solid var(--ink); margin: 1rem 0 .4rem; }
+  .ag-quiet { font: 500 .82rem/1.3 var(--sans); color: var(--ink); border-bottom: 1px solid currentColor; padding: .35rem 0; }
+  .ag-check { display: flex; align-items: start; gap: .6rem; font: 400 .88rem/1.5 var(--sans); margin-top: .6rem; }
+  .ag-check i { flex: none; width: 13px; height: 13px; border: 1px solid #767676; border-radius: 2px; margin-top: .3rem; }
+  .ag-btn { display: inline-flex; align-items: center; min-height: 2.75rem; padding: .6rem 1.2rem; background: var(--accent); color: var(--paper); border-radius: 2px; font: 500 .88rem/1.2 var(--sans); margin-top: .6rem; }
+  .ag-hint { font: 400 .85rem/1.5 var(--sans); color: var(--studio-muted); }
+
+  /* D9.3 · the top of a signed statement of work, laid out as src/lib/agreement-pdf.ts draws it (612 × 792pt page, 48pt margin). */
+  .pdf { height: 336px; background: #fff; }
+  .pdf > * { position: absolute; left: 48px; white-space: nowrap; }
+  .pdf .ph { font: 9px/1 var(--sans); color: #000; }
+  .pdf .pt { font: 18px/1 var(--pdf-head, var(--news)); color: #000; }
+  .pdf .pb { height: 6px; background: #c9c4bc; border-radius: 1px; }
+  .pdf .pnote { left: auto; right: 14px; bottom: 10px; font: 600 11px/1.3 var(--sans); color: var(--muted); background: #f6f1e9; border: 1px solid var(--rule); border-radius: 3px; padding: 3px 7px; }
+  .facelist { margin: 0; padding: 0; list-style: none; font: 13.5px/1.5 var(--sans); color: #2b2b2b; }
+  .facelist li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--rule); }
+  .facelist li:first-child { border-top: 1px solid var(--rule); }
+  .facelist b { font-weight: 600; text-align: right; }
+  .facelist b.warn { color: #8a3b22; }
+  .faces { background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 12px 14px; }
+  .faces h4 { font: 600 11px/1.3 var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+</style>
+</head>
+<body>
+<main class="board">
+  <header>
+    <p class="eyebrow">Design study · Hallmark audit follow-up · 2026-10-22</p>
+    <h1>404 page, form errors and agreement type</h1>
+    <p>Three small, site-wide calls from the Hallmark audit, each beside what ships today. Nothing here is built. Pick one option per decision and reply with the IDs, for example “D9.1-B, D9.2-A, D9.3-B”.</p>
+    <p>“Keep as is” shows PR #204 as its CI run captured it at <code>f0abd1f</code>. The form-error demo under D9.2-A needs a live page, so it is a recreation of PR #204, and the capture sits beside it to compare. The alternatives are live recreations that use the site’s own CSS values, real copy and the approved coast picture. Every position quoted comes from a test page that loads the shipped stylesheets; it puts the 404’s “Back to home” and the brief’s Next button within a pixel of where the <code>f0abd1f</code> captures show them (681 and 768px at 1280).</p>
+    <p class="narrow-only">On a phone the 1280-wide previews are scaled down to fit. Pinch to zoom; they stay sharp.</p>
+    <div class="handled"><b>Already handled in PR #204, no decision needed.</b> These apply to every option below.
+      <ul>
+        <li>The 404 picture is 450 × 300px instead of 700px wide, so “Back to home” sits above a 1280 × 800 fold (<code>src/pages/404.astro:27</code>), and “Explore my projects” has a 44px tap area.</li>
+        <li>Headings balance their lines site-wide, so the phone 404 no longer leaves “here.” alone on a line (<code>src/styles/global.css:105</code>).</li>
+        <li>The software brief has its own smaller heading, so Next fits inside 1280 × 800 (<code>src/styles/software-intake.css:21</code>).</li>
+        <li>Field edges clear 3:1 with <code>--field-border</code>, and a field with a problem shows the accent edge (<code>global.css:77,298</code>).</li>
+        <li>Agreement fields use the site’s instant 2px focus outline, not the 1.2:1 halo (<code>studio.css:35-37</code>), and the /agreements heading clears the header rule (<code>studio.css:137</code>).</li>
+      </ul>
+    </div>
+  </header>
+
+  <!-- ================= D9.1 ================= -->
+  <section class="study" id="d9-1" aria-labelledby="d91-title">
+    <p class="eyebrow">D9.1 · Your call 8 · /404</p>
+    <h2 id="d91-title">Should the 404 page stay centred?</h2>
+    <p class="lead">Hallmark graded it major as “centred everything” (gate 6; #14, chrome-7): the picture, the status, the heading, the line and both links sit on one centre line, a common template look. The verifier called major overstated, because the page meets its approved goal and few people see it.</p>
+    <p class="decided"><b>Where it was decided:</b> <code>docs/prelaunch-qa-2026-09-15.md:32-34</code> records the approved goal (a peaceful, reassuring page with familiar type, generous space, a plain explanation and one primary way home) but not the alignment. The picture’s review: <code>docs/asset-reviews/quiet-coast-v2.md</code>.</p>
+
+    <article class="option" id="d91-a">
+      <div class="option-head"><h3><span class="id">D9.1-A</span>Keep as is</h3><span class="badge no">PR #204</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/404</b> · 1280 wide · CI capture at f0abd1f (PR #204)</div>
+          <div class="shot folded"><img src="a-404-pr204-desktop.webp" width="1280" height="911" alt="CI capture of the 404 in PR #204 at 1280 wide: the 450px coast picture centred at the top, then 404, the heading, the line, the Back to home button and the Explore my projects link, all centred. Back to home ends at 681px, above the 800px fold." /><span class="ci-fold" style="--at: 87.8%"><span>800px fold</span></span></div></figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · CI capture at f0abd1f</div>
+          <div class="shot folded"><img src="a-404-pr204-phone.webp" width="390" height="999" alt="CI capture of the 404 in PR #204 at 390 wide: the picture on top, then everything centred, with the heading balanced over two lines." /><span class="ci-fold" style="--at: 84.5%"><span>844px fold</span></span></div></figure>
+      </div>
+      <details class="ref"><summary>Before PR #204: the CI captures at 08e9b22 (picture 700px wide)</summary>
+        <div class="views two">
+          <figure class="frame"><div class="frame-bar">not-found-desktop.png · CI capture at 08e9b22</div><div class="shot"><img src="a-404-ci-desktop.webp" width="1280" height="1079" alt="CI capture of the 404 at 1280 wide before PR #204: a larger centred picture pushes Back to home to about 850px." /></div></figure>
+          <figure class="frame phone"><div class="frame-bar">not-found-phone.png · CI capture at 08e9b22</div><div class="shot"><img src="a-404-ci-phone.webp" width="390" height="994" alt="CI capture of the 404 at 390 wide before PR #204, with the heading wrapping to leave here. on its own line." /></div></figure>
+        </div>
+      </details>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Nothing beyond PR #204. Everything stacks on the centre line under the 450 × 300px picture.</dd></div>
+        <div><dt>Why it could be better</dt><dd>It is the look you approved, symmetric and quiet, and a centred stack is what most people expect from an error page.</dd></div>
+        <div><dt>Trade-off</dt><dd>Every other page starts its heading and links from the left, so the 404 is the one page that reads like a template.</dd></div>
+        <div class="wide"><dt>Effort · files · measured</dt><dd>None. “Back to home” ends 681px down at 1280 × 800 and 663px down at 390 × 844, measured on the <code>f0abd1f</code> captures.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · tokens unchanged · 48px button and a 44px link area · no motion · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option" id="d91-b">
+      <div class="option-head"><h3><span class="id">D9.1-B</span>Words left, picture right</h3><span class="badge rec">Recommended</span></div>
+      <p class="why-rec"><b>Why this one:</b> it reuses the composition of Home’s first screen (words left, picture right), puts the way home where the eye starts reading, and needs only CSS in one file.</p>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/404</b> · 1280 wide · recreation</div>
+          <div class="stage" data-w="1280" role="img" aria-label="Option B at 1280 wide: the words left-aligned on the left with the button and link side by side, the coast picture on the right."><div class="site w1280" data-nf="b"></div></div></figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · recreation</div>
+          <div class="stage" data-w="390" role="img" aria-label="Option B at 390 wide: the picture on top, the words left-aligned below, the button and link side by side."><div class="site w390" data-nf="b"></div></div></figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>On wide screens the words take the left column, left-aligned, with “Back to home” and “Explore my projects” side by side; the picture sits on the right, up to 520px wide. On phones the picture stays on top and the words below align left.</dd></div>
+        <div><dt>Why it could be better</dt><dd>It matches Home and the left-aligned headings on every other page, and on wide screens the button rises well up the first screen (measured below). Phones keep today’s height.</dd></div>
+        <div><dt>Trade-off</dt><dd>It changes a look you approved. The picture moves and grows (450 to about 510px), so its placement needs a fresh in-page check.</dd></div>
+        <div class="wide"><dt>Effort · files · measured</dt><dd><b>S.</b> <code>src/pages/404.astro</code> (styles only: the picture is hidden from screen readers, so the markup order can stay), <code>docs/asset-reviews/quiet-coast-v2.md</code> (in-page review of the new placement), <code>docs/website-content-model.md</code> (record the alignment). <span data-measure="nf-b"></span></dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No copy change · existing tokens · 48px button and 44px link area · no motion · needs image QA for the new placement (in-page review, section 3 of <code>docs/generated-image-qa.md</code>); no new art.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option" id="d91-c">
+      <div class="option-head"><h3><span class="id">D9.1-C</span>Words first, the coast as a horizon</h3><span class="badge no">Alternative</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/404</b> · 1280 wide · recreation</div>
+          <div class="stage" data-w="1280" role="img" aria-label="Option C at 1280 wide: 404 as a small accent label, the heading, the line and both links left-aligned at the top, and the coast as a wide low band above the footer."><div class="site w1280" data-nf="c"></div></div></figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · recreation</div>
+          <div class="stage" data-w="390" role="img" aria-label="Option C at 390 wide: the words and both links first, the coast band below them."><div class="site w390" data-nf="c"></div></div></figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>The page opens like every other page: “404” in the mono kicker style, then the heading, the line and both links, left-aligned. The same picture becomes a wide, low band under the links that fades into the footer rule.</dd></div>
+        <div><dt>Why it could be better</dt><dd>The message and the way home come first on every screen, and the band echoes the horizon that closes Home.</dd></div>
+        <div><dt>Trade-off</dt><dd>The picture is cropped to a band (shoreline and dune grass, less sky), a new crop of approved art. “404” turns accent-coloured and mono.</dd></div>
+        <div class="wide"><dt>Effort · files · measured</dt><dd><b>S.</b> <code>src/pages/404.astro</code> (markup order and styles), <code>docs/asset-reviews/quiet-coast-v2.md</code> (review of the new crop). <span data-measure="nf-c"></span></dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No copy change (“404” stays, in the <code>.page-kicker</code> style) · existing tokens · 48px button and 44px link area · no motion · needs image QA: a new crop of approved art, inspected in the page at 1280 and 390.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option" id="d91-d">
+      <div class="option-head"><h3><span class="id">D9.1-D</span>Words in the coast’s sky</h3><span class="badge no">Alternative</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/404</b> · 1280 wide · recreation</div>
+          <div class="stage" data-w="1280" role="img" aria-label="Option D at 1280 wide: the coast picture spans the column, and 404, the heading, the line and both links sit left-aligned in its empty sky, just above the headland."><div class="site w1280" data-nf="d"></div></div></figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · recreation</div>
+          <div class="stage" data-w="390" role="img" aria-label="Option D at 390 wide: the words and both links left-aligned at the top, with the whole picture tucked under the links."><div class="site w390" data-nf="d"></div></div></figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>The picture spans the whole column (1120px at 1280) and moves up under the words, so “404”, the heading, the line and both links sit left-aligned in its empty sky with the headland just below. Unlike C, nothing is cropped: the whole scene fills the first screen. One rule places it at every width: the picture is pulled up by 17% of its own width (12% on phones), and its sky is about 19.5% of its width, so the words always end above the land.</dd></div>
+        <div><dt>Why it could be better</dt><dd>One quiet scene instead of a stack, the way Home’s first screen sets its words in the open part of its picture. The way home sits high on the first screen at both widths (measured below), and the picture keeps its full 3:2 shape.</dd></div>
+        <div><dt>Trade-off</dt><dd>The picture is drawn about 2.5 times wider than PR #204’s 450px. The file is 1536px wide, so a 2x screen enlarges it about 1.5 times and it looks softer. The words sit on the picture’s sky, so its review has to confirm they stay clear of the land at every width. The footer moves below the 1280 × 800 fold. On phones the sky is too short to hold the words, so the phone looks close to C, with the whole picture instead of a band.</dd></div>
+        <div class="wide"><dt>Effort · files · measured</dt><dd><b>S.</b> <code>src/pages/404.astro</code> (styles only: a one-column grid with the picture placed after the words and a negative top margin; the picture is hidden from screen readers, so the markup order can stay), <code>docs/asset-reviews/quiet-coast-v2.md</code> (in-page review at the new size and placement). <span data-measure="nf-d"></span></dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No copy change · existing tokens · the sky under the words is paper-coloured, so the muted line keeps at least 7.6:1 (8.4:1 on plain paper) · 48px button and 44px link area · no motion · needs image QA: same art and full 3:2 shape, but a new size and the words over its sky (section 3 of <code>docs/generated-image-qa.md</code>, including sharpness at the display size and pixel density).</dd></div>
+      </dl>
+    </article>
+  </section>
+
+  <!-- ================= D9.2 ================= -->
+  <section class="study" id="d9-2" aria-labelledby="d92-title">
+    <p class="eyebrow">D9.2 · Your call 21 · every form</p>
+    <h2 id="d92-title">Should forms keep a line free for each error message?</h2>
+    <p class="lead">Hallmark asked forms to reserve a line under each field (gate 39; part of #47, chrome-18, ws-23) so nothing moves when a message appears; home-16 and audio-16 leaned the other way. Today a message appears only after Send or Next, takes a line under its field and pushes what is below it down, and focus moves to the first field with a problem.</p>
+    <p class="decided"><b>Where it was decided:</b> no doc covers where messages sit. <code>docs/prelaunch-qa-2026-09-29-software-brief.md:31</code> covers how they are announced (linked with <code>aria-describedby</code>, the summary announced with <code>role="status"</code>), and every option below keeps that.</p>
+    <p class="decided">Each option shows the Home contact form and the brief’s first screen. Press <b>Show the errors</b> to see what happens after Send or Next with nothing filled in. The messages are the site’s own (<code>src/lib/validation.ts</code>, <code>src/scripts/software-inquiry.ts:153</code>).</p>
+
+    <article class="option" id="d92-a" data-errdemo="a">
+      <div class="option-head"><h3><span class="id">D9.2-A</span>Keep as is</h3><span class="badge rec">Recommended</span></div>
+      <p class="why-rec"><b>Why this one:</b> the push only happens right after a press and focus goes with it to the first message, so it costs nothing the rest of the time; B gives up height on every form and puts the brief’s Next back below the fold that PR #204 just fixed.</p>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/#contact</b> · Send a message · desktop · recreation of PR #204</div>
+          <div class="stage" data-w="816" role="img" aria-label="Today’s contact form, desktop width."><div class="site w816" data-cf="a"></div></div></figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · recreation</div>
+          <div class="stage" data-w="390" role="img" aria-label="Today’s contact form, phone width."><div class="site w390" data-cf="a"></div></div></figure>
+      </div>
+      <div class="views"><figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/software/start</b> · first screen · 1280 wide, from the options to below the fold · recreation of PR #204</div>
+        <div class="stage" data-w="1280" data-top="520" data-h="400" role="img" aria-label="The brief’s first screen at 1280 wide around the 800px fold, with the Next button."><div class="site w1280" data-bf="a"></div></div></figure></div>
+      <div class="controls"><button type="button" data-toggle aria-pressed="false">Show the errors</button><span class="hint">Messages appear and everything below them moves down.</span></div>
+      <details class="ref"><summary>Compare: the same crop of the brief in the CI capture at f0abd1f</summary>
+        <div class="views"><figure class="frame"><div class="frame-bar">software-brief-question-1-desktop.png · 520 to 920px · CI capture at f0abd1f (PR #204)</div><div class="shot"><img src="a-brief-pr204-desktop.webp" width="1280" height="400" alt="CI capture of the brief’s first screen in PR #204 from 520 to 920px down: the last option, the hint, Next ending at 768px and the contact line." /></div></figure></div>
+      </details>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Nothing. Messages stay hidden until Send or Next; each then takes a line under its field, and “Please check the highlighted fields.” appears near the button.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Forms stay as short as they can be. The movement follows the visitor’s own press, which browsers leave out of their layout-shift score, and focus lands on the first message.</dd></div>
+        <div><dt>Trade-off</dt><dd>What sits below a message jumps. On the brief’s first screen the field message and the summary line push Next from 768 to 837px at 1280, past the 800 fold, and from 823 to 892px on a 390 × 844 phone. Choosing an option with a tap moves on by itself, so nobody has to find Next again.</dd></div>
+        <div class="wide"><dt>Effort · files · measured</dt><dd>None. Contact form 752px tall at 1280 wide (848 with three messages) and 874px at 390 (1001).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · tokens unchanged · accent messages at 4.78:1 · focus moves to the first message · no motion · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option" id="d92-b" data-errdemo="b">
+      <div class="option-head"><h3><span class="id">D9.2-B</span>Reserve a line for every message</h3><span class="badge no">Hallmark’s fix</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/#contact</b> · Send a message · desktop · recreation</div>
+          <div class="stage" data-w="816" role="img" aria-label="Contact form with an empty line kept under every field."><div class="site w816" data-cf="b"></div></div></figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · recreation</div>
+          <div class="stage" data-w="390" role="img" aria-label="The same at phone width."><div class="site w390" data-cf="b"></div></div></figure>
+      </div>
+      <div class="views"><figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/software/start</b> · first screen · 1280 wide · recreation</div>
+        <div class="stage" data-w="1280" data-top="520" data-h="400" role="img" aria-label="The brief’s first screen with two reserved lines, so Next sits below the 800px fold."><div class="site w1280" data-bf="b"></div></div></figure></div>
+      <div class="controls"><button type="button" data-toggle aria-pressed="false">Show the errors</button><span class="hint">Messages fill lines that were already there, so nothing moves.</span></div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Every message slot above a button keeps one empty line at rest (<code>min-height: 1lh</code>), and so does the brief’s summary line above Next. Nothing moves when messages appear.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Messages appear in place, and nothing under the pointer moves.</dd></div>
+        <div><dt>Trade-off</dt><dd>Every form is taller all the time, with gaps that read as uneven spacing: the contact form grows by 121px at 1280 (873) and 152px at 390 (1026). The brief’s Next sits at 837px at 1280 and 892px at 390, below the fold on both.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S.</b> <code>src/styles/global.css</code> and <code>src/styles/audio-intake.css</code> (reserve the line), <code>src/scripts/form-submission.ts:34,66</code> and <code>src/scripts/software-inquiry.ts:158</code> (empty the text instead of hiding it), and the forms that mark slots <code>hidden</code>: <code>ContactForm.astro</code>, <code>ResumeRequestForm.astro</code>, <code>audio/ReleaseInterest.astro</code>, <code>software/start.astro</code>, <code>audio/start.astro</code>.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · existing tokens · no motion · no new art · the brief’s Next falls below the 1280 × 800 fold again, undoing PR #204’s fix.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option" id="d92-c" data-errdemo="c">
+      <div class="option-head"><h3><span class="id">D9.2-C</span>Message on the label’s line</h3><span class="badge no">Alternative</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/#contact</b> · Send a message · desktop · recreation</div>
+          <div class="stage" data-w="816" role="img" aria-label="Contact form where each message appears at the right end of its label’s line."><div class="site w816" data-cf="c"></div></div></figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · recreation</div>
+          <div class="stage" data-w="390" role="img" aria-label="The same at phone width."><div class="site w390" data-cf="c"></div></div></figure>
+      </div>
+      <div class="views"><figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/software/start</b> · first screen · 1280 wide · recreation</div>
+        <div class="stage" data-w="1280" data-top="520" data-h="400" role="img" aria-label="The brief’s first screen with the summary line moved under Next."><div class="site w1280" data-bf="c"></div></div></figure></div>
+      <div class="controls"><button type="button" data-toggle aria-pressed="false">Show the errors</button><span class="hint">On the contact form nothing moves. On the brief, Next moves one line instead of two.</span></div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>A field’s message sits at the right end of its label’s line instead of under the field, so it adds no height. The summary line moves under the button. Brief screens whose question is the heading (no visible label) keep today’s line under the answer.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Nothing above the button moves and nothing grows at rest on the contact, resume and release forms or the brief’s contact step. On the brief’s first screen Next moves 34px (768 to 802) instead of 69.</dd></div>
+        <div><dt>Trade-off</dt><dd>A new pattern to keep consistent across six forms. On a wide field the message sits far from the label’s start, and a long label with a long message wraps on a phone and pushes as today.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>M.</b> Markup in <code>ContactForm.astro</code>, <code>ResumeRequestForm.astro</code>, <code>audio/ReleaseInterest.astro</code>, <code>audio/start.astro</code> and <code>software/start.astro</code> (label and message share a row; the summary line moves after the buttons), shared CSS in <code>global.css</code> and <code>audio-intake.css</code>. The scripts still find messages by <code>data-form-error</code>; tests that read the error markup need updating.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · existing tokens · accent messages at 4.78:1 · messages stay linked to their fields with <code>aria-describedby</code> · no motion · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option" id="d92-d" data-errdemo="d">
+      <div class="option-head"><h3><span class="id">D9.2-D</span>Slide the message open</h3><span class="badge no">Alternative · motion</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/#contact</b> · Send a message · desktop · recreation</div>
+          <div class="stage" data-w="816" role="img" aria-label="Contact form whose messages open smoothly."><div class="site w816" data-cf="d"></div></div></figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · recreation</div>
+          <div class="stage" data-w="390" role="img" aria-label="The same at phone width."><div class="site w390" data-cf="d"></div></div></figure>
+      </div>
+      <div class="views"><figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/software/start</b> · first screen · 1280 wide · recreation</div>
+        <div class="stage" data-w="1280" data-top="520" data-h="400" role="img" aria-label="The brief’s first screen; the messages open smoothly and Next glides down."><div class="site w1280" data-bf="d"></div></div></figure></div>
+      <div class="controls"><button type="button" data-toggle aria-pressed="false">Show the errors</button><button type="button" data-replay>Replay</button><label><input type="checkbox" data-still /> Preview with reduced motion</label><span class="hint">With reduced motion the messages appear at once, as today.</span></div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Messages still push, but each opens over 180ms on <code>--ease-site</code> and fades in, instead of appearing at once. With reduced motion they appear at once.</dd></div>
+        <div><dt>Why it could be better</dt><dd>The push reads as the form making room rather than a glitch, and nothing changes at rest.</dd></div>
+        <div><dt>Trade-off</dt><dd>The same distance still moves, a little later, right next to the control just pressed. CSS-only height animation (<code>interpolate-size</code>) runs in Chrome and Edge today; Safari and Firefox fade the message in and keep today’s jump.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S.</b> CSS only: <code>src/styles/global.css</code> and <code>src/styles/audio-intake.css</code> (<code>@starting-style</code>, a transition and a reduced-motion rule).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · <code>--ease-site</code> and existing tokens · reduced motion: messages appear at once · no new art.</dd></div>
+      </dl>
+    </article>
+  </section>
+
+  <!-- ================= D9.3 ================= -->
+  <section class="study" id="d9-3" aria-labelledby="d93-title">
+    <p class="eyebrow">D9.3 · Worth considering 5 · /agreements, /offer/…/sign and the signed PDF</p>
+    <h2 id="d93-title">Which serif should the agreement pages use?</h2>
+    <p class="lead">Hallmark counted four families on the agreement and offer pages (gate 37; #11, chrome-5, ws-15): Libron headings over a Newsreader body, plus Inter and JetBrains Mono. The October 4 switch to Libron (commit <code>9be434d</code>) never reached <code>src/styles/studio.css:143</code> or <code>src/layouts/AgreementLayout.astro:9</code>, and the signed PDF sets its headings in Newsreader (<code>src/lib/agreement-pdf.ts:4,67</code>).</p>
+    <p class="lead">Also found while checking: eleven more rules in five files still name Newsreader (the “What we agreed” headings, the typed signature, project updates and two owner screens). The client project page and the owner pages never load Newsreader, so those headings fall back to Georgia, or Times where Georgia is missing, as in the CI capture under A.</p>
+    <p class="decided"><b>Where it was decided:</b> commit <code>9be434d</code> (“Use Libron for site serif typography”, October 4) for the site; <code>docs/website-system-plan.md:26</code> still says “retain Newsreader”. No doc records the PDF’s fonts; they arrived with the signing feature. Emails (<code>src/lib/email-template.ts:24</code>) also name Newsreader and are not part of this decision.</p>
+
+    <article class="option" id="d93-a">
+      <div class="option-head"><h3><span class="id">D9.3-A</span>Keep as is</h3><span class="badge no">PR #204</span></div>
+      <div class="views">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/offer/…/sign</b> · 1280 wide · CI capture at f0abd1f (PR #204, demo data)</div><div class="shot"><img src="a-sign-desktop.webp" width="1280" height="800" alt="CI capture of the signing page: the Libron heading Ready to sign. over a Newsreader lede, the card with Newsreader links and the What we agreed summary, and the typed signature Example Signer in a slanted Newsreader." /></div></figure>
+      </div>
+      <div class="views">
+        <figure class="frame"><div class="frame-bar">/studio/software/… · client project page · CI capture at f0abd1f</div><div class="shot"><img src="a-portal-terms.webp" width="1232" height="200" alt="CI capture of the client project page: the headings All agreed terms and What you get render in a fallback Times face." /></div></figure>
+        <figure class="frame"><div class="frame-bar">/agreements · CI capture at f0abd1f</div><div class="shot"><img src="a-archive-desktop.webp" width="1280" height="380" alt="CI capture of the agreement archive: a Libron heading over a Newsreader lede." /></div></figure>
+      </div>
+      <div class="views half">
+        <figure class="frame"><div class="frame-bar">signed PDF · top of the statement of work · layout from agreement-pdf.ts</div><div class="stage" data-w="612" role="img" aria-label="Top of the signed PDF: a small Inter header, the title Statement of Work in Newsreader, grey bars for the agreement text, then Milestone 1 in Newsreader."><div class="site w612 pdf" data-pdf="news"></div></div></figure>
+        <div class="faces"><h4>Faces today</h4><ul class="facelist">
+          <li>Page headings <b>Libron</b></li>
+          <li>Lede, paragraphs and links <b class="warn">Newsreader</b></li>
+          <li>“What we agreed” headings <b class="warn">Newsreader</b></li>
+          <li>Typed signature <b class="warn">Newsreader, slant faked by the browser</b></li>
+          <li>Labels, buttons, agreement text <b>Inter</b></li>
+          <li>Client project page headings <b class="warn">Georgia or Times (Newsreader never loads)</b></li>
+          <li>PDF headings · PDF text <b>Newsreader · Inter</b></li>
+        </ul></div>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Nothing.</dd></div>
+        <div><dt>Why it could be better</dt><dd>The lede and links share a face with the PDF’s headings, and there is no work to do.</dd></div>
+        <div><dt>Trade-off</dt><dd>Two serifs on one screen, a faked italic for the signature (the page loads no Newsreader italic), a fallback serif on the client project page, and a second serif download only these pages need.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd>None.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · no motion · no new art · Hallmark gate 37 stays failed.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option" id="d93-b">
+      <div class="option-head"><h3><span class="id">D9.3-B</span>Libron on screen, the PDF keeps Newsreader</h3><span class="badge rec">Recommended</span></div>
+      <p class="why-rec"><b>Why this one:</b> one small change fixes every screen, including the Georgia fallback on the client project page, and drops a font download; the PDF’s 18pt headings are the only Newsreader left, and C can follow later if you want them to match.</p>
+      <div class="views">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/offer/…/sign</b> · 1280 wide · recreation (demo data)</div>
+          <div class="stage" data-w="1280" data-h="800" role="img" aria-label="Option B: the signing page with every serif line in Libron, including the lede, the links, What we agreed and the typed signature in Libron’s true italic."><div class="site w1280" data-ag="libron"></div></div></figure>
+      </div>
+      <div class="views half">
+        <figure class="frame"><div class="frame-bar">signed PDF · unchanged</div><div class="stage" data-w="612" role="img" aria-label="The PDF unchanged, with Newsreader headings."><div class="site w612 pdf" data-pdf="news"></div></div></figure>
+        <div class="faces"><h4>Faces with B</h4><ul class="facelist">
+          <li>Every serif line on screen <b>Libron</b></li>
+          <li>Typed signature <b>Libron Italic (a real italic)</b></li>
+          <li>Labels, buttons, agreement text <b>Inter</b></li>
+          <li>Client project page headings <b>Libron</b></li>
+          <li>PDF headings · PDF text <b>Newsreader · Inter</b></li>
+        </ul></div>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Agreement, offer, project and owner screens use Libron for every serif line, and the typed signature uses Libron’s italic file, which the site already loads. The agreement pages stop loading Newsreader. The signed PDF is unchanged, and the system plan records that its headings stay Newsreader.</dd></div>
+        <div><dt>Why it could be better</dt><dd>One serif everywhere a visitor looks, which finishes the October 4 switch; the signature becomes a true italic instead of a slanted roman.</dd></div>
+        <div><dt>Trade-off</dt><dd>The screens and the signed PDF use different heading faces; the PDF’s text (Inter) still matches the agreement text on screen. Libron runs wider than Newsreader, so the signing lede takes three lines at 1280 instead of two.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S.</b> <code>src/styles/studio.css:143</code>, <code>src/layouts/AgreementLayout.astro:9</code> (Newsreader out of the font link), <code>src/pages/offer/[token]/sign.astro:101</code>, <code>src/components/SoftwareAgreedTerms.astro:89,103,104,121</code>, <code>src/components/SoftwareProjectUpdate.astro:78,82,85</code>, <code>src/components/owner/SoftwareAgreementPanel.astro:86,90</code>, <code>src/pages/owner/requests/[id]/update.astro:134</code> (each to <code>var(--font-serif)</code>), <code>docs/website-system-plan.md:26</code>.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · uses the <code>--font-serif</code> token · contrast unchanged · no motion · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option" id="d93-c">
+      <div class="option-head"><h3><span class="id">D9.3-C</span>Libron everywhere, the signed PDF too</h3><span class="badge no">Alternative</span></div>
+      <p class="same"><b>Screens: the same as B.</b> Only the PDF differs.</p>
+      <div class="views half" style="margin-top:12px">
+        <figure class="frame"><div class="frame-bar">signed PDF · headings in Libron · recreation</div><div class="stage" data-w="612" role="img" aria-label="The PDF with its headings in Libron."><div class="site w612 pdf" data-pdf="libron"></div></div></figure>
+        <div class="faces"><h4>Faces with C</h4><ul class="facelist">
+          <li>Every serif line on screen <b>Libron</b></li>
+          <li>Typed signature <b>Libron Italic</b></li>
+          <li>PDF headings · PDF text <b>Libron · Inter</b></li>
+          <li>A returning client’s original MSA <b>Kept as signed (Newsreader)</b></li>
+        </ul></div>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Everything in B, and the PDF’s headings switch to Libron: a TTF built from the pinned Libron source replaces the embedded Newsreader file. PDF text stays Inter.</dd></div>
+        <div><dt>Why it could be better</dt><dd>The copy a client keeps matches the pages they signed on, and Newsreader leaves the codebase apart from emails.</dd></div>
+        <div><dt>Trade-off</dt><dd>Only agreements rendered after the change use it; stored PDFs stay byte for byte. A returning client’s packet copies their original signed MSA unchanged, so one packet can hold a Newsreader MSA beside a Libron statement of work. The new PDF needs a check by eye.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>M.</b> B’s files plus <code>src/lib/agreement-pdf.ts:4,67</code>, <code>src/assets/agreement-fonts/</code> (Libron TTF, its base64 copy and OFL text in place of Newsreader’s), <code>tests/lib/agreement-pdf.test.ts:3,91,172-174</code>, and a build step for the TTF beside <code>scripts/build-personal-name-fonts.py</code>.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · <code>--font-serif</code> on screen · the OFL allows embedding (<code>public/fonts/OFL-Libron.txt</code>) · no motion · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option" id="d93-d">
+      <div class="option-head"><h3><span class="id">D9.3-D</span>Newsreader for the private agreement pages</h3><span class="badge no">Alternative</span></div>
+      <div class="views">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/offer/…/sign</b> · 1280 wide · recreation (demo data)</div>
+          <div class="stage" data-w="1280" data-h="800" role="img" aria-label="Option D: the signing page with its headings in Newsreader too; only the name mark stays Libron-derived."><div class="site w1280" data-ag="news"></div></div></figure>
+      </div>
+      <div class="views half">
+        <figure class="frame"><div class="frame-bar">signed PDF · unchanged</div><div class="stage" data-w="612" role="img" aria-label="The PDF unchanged, with Newsreader headings."><div class="site w612 pdf" data-pdf="news"></div></div></figure>
+        <div class="faces"><h4>Faces with D</h4><ul class="facelist">
+          <li>Agreement page headings and text <b>Newsreader</b></li>
+          <li>Typed signature <b>Newsreader Italic (loaded)</b></li>
+          <li>Name mark in the header <b class="warn">Kazon Name (from Libron)</b></li>
+          <li>Client project page headings <b>Newsreader (now loaded)</b></li>
+          <li>PDF headings · PDF text <b>Newsreader · Inter</b></li>
+        </ul></div>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>The agreement pages set their headings in Newsreader too, and load its italic for the signature. The client project page loads Newsreader so its agreed-terms headings stop falling back.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Signing reads as one document set, apart from the public site, and the screen matches the PDF exactly.</dd></div>
+        <div><dt>Trade-off</dt><dd>It goes against the October 4 decision that Libron is the site serif. The name mark is cut from Libron, so the page still shows two serifs, and the client project page gains a font download.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S.</b> <code>src/styles/studio.css</code> (agreement headings), <code>src/layouts/AgreementLayout.astro:9</code> (add the italic), <code>src/pages/studio/software/[id].astro</code> (load Newsreader), the owner screens’ font link in <code>src/layouts/OwnerLayout.astro</code>, <code>docs/website-system-plan.md:26</code>.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · no new tokens · no motion · no new art · gate 37 still counts two serifs because of the name mark.</dd></div>
+      </dl>
+    </article>
+  </section>
+
+  <section class="study" id="decide" aria-labelledby="decide-title">
+    <p class="eyebrow">Your calls</p>
+    <h2 id="decide-title">What I need from you</h2>
+    <ol class="decisions">
+      <li><b>D9.1 · 404 alignment</b>A keep centred · B words left, picture right · C words first, coast as a horizon · D words in the coast’s sky.<span class="def">Recommended: D9.1-B</span></li>
+      <li><b>D9.2 · Form error messages</b>A keep · B reserve a line for every message · C message on the label’s line · D slide the message open.<span class="def">Recommended: D9.2-A</span></li>
+      <li><b>D9.3 · Agreement serif</b>A keep · B Libron on screen, PDF unchanged · C Libron, PDF too · D Newsreader for agreements.<span class="def">Recommended: D9.3-B</span></li>
+    </ol>
+    <p class="decided" style="margin-top:14px">The three are independent. If you pick D9.2-C or D, the brief’s first screen still gets PR #204’s smaller heading; if you pick D9.3-C, B’s screen changes come with it.</p>
+  </section>
+</main>
+
+<script>
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const ART = '../../../../src/assets/site/quiet-coast-v2.webp';
+
+  // ---------- Shared chrome: SiteNav and the compact footer ----------
+  const header = wide => wide
+    ? `<div class="s-shell s-hdr"><span class="s-name">Kazon Wilson</span><span class="s-nav"><span>Work</span><span>Building</span><span>Writing</span><span>Audio</span><span>About</span></span><span class="s-btn out">Work with me</span></div>`
+    : `<div class="s-shell s-hdr"><span class="s-name">Kazon Wilson</span><span class="s-menu">Menu <i></i></span></div>`;
+  const footer = `<div class="s-shell"><div class="s-foot"><span class="fn">Kazon Wilson</span><span class="fnav"><span>GitHub</span><span>LinkedIn</span><span>Audio</span><span>Work with me</span><span>Support my work</span><span>Privacy</span></span><p>The Superhuman Group LLC · 2026</p></div></div>`;
+
+  // ---------- D9.1: the 404 (copy from src/pages/404.astro) ----------
+  document.querySelectorAll('[data-nf]').forEach(el => {
+    const v = el.dataset.nf, wide = el.classList.contains('w1280');
+    const art = `<div class="nf-art"><img src="${ART}" width="1536" height="1024" alt=""></div>`;
+    const copy = `<div class="nf-copy"><p class="nf-status">404</p><h1 class="nf-h1">This page isn’t here.</h1><p class="nf-desc">The link may have changed. You can return home and find your way from there.</p><div class="nf-actions"><span class="s-btn" data-back>Back to home</span><span class="nf-sec">Explore my projects</span></div></div>`;
+    const body = v === 'c' || v === 'd' ? copy + art : art + copy;
+    const fold = wide ? 800 : 844;
+    el.innerHTML = header(wide) + `<section class="s-shell nf nf-${v}">${body}</section>` + footer + `<div class="fold" style="top:${fold}px"><span>${fold}px fold</span></div>`;
+  });
+
+  // ---------- D9.2: the contact form (src/components/ContactForm.astro) and the brief's first screen ----------
+  const cfErrors = { name: 'Name is required.', email: 'Email is required.', description: 'Please enter a message.' };
+  function field(v, key, label, input) {
+    const err = `<p class="cf-err${v === 'b' ? ' rsv' : ''}" data-err="${key}"${v === 'b' ? '' : ' hidden'}></p>`;
+    return v === 'c' ? `<div><div class="cf-head">${label}${err}</div>${input}</div>` : `<div>${label}${input}${err}</div>`;
+  }
+  document.querySelectorAll('[data-cf]').forEach(el => {
+    const v = el.dataset.cf;
+    const inp = (k, ta) => `<span class="cf-input${ta ? ' ta' : ''}" data-field="${k}">${ta ? 'What would you like to talk about?' : ''}</span>`;
+    el.innerHTML = `<div class="cf"><div class="cf-form">
+      <p class="cf-hint">All fields required unless marked optional.</p>
+      <div class="cf-pair">${field(v, 'name', '<span class="cf-label">Name</span>', inp('name'))}${field(v, 'email', '<span class="cf-label">Email</span>', inp('email'))}</div>
+      ${field(v, 'company', '<span class="cf-label">Company <span>(optional)</span></span>', inp('company'))}
+      ${field(v, 'description', '<span class="cf-label">Your message</span>', inp('description', true))}
+      <div class="cf-ts">Cloudflare security check (placeholder)</div>
+      <p class="cf-err${v === 'b' ? ' rsv' : ''}" data-err="turnstileToken"${v === 'b' ? '' : ' hidden'}></p>
+      <div><span class="s-btn">Send message</span><p class="cf-status" data-status></p></div>
+      <p class="cf-hint">Prefer email? <span class="s-link">kazon.wilson@thesuperhuman.us</span></p>
+      <p class="cf-hint">Looking for my resume? <span class="s-link">Request a copy.</span></p>
+      <p class="cf-hint">Read how your information is handled in the <span class="s-link">privacy notice</span>.</p>
+    </div></div>`;
+  });
+  document.querySelectorAll('[data-bf]').forEach(el => {
+    const v = el.dataset.bf;
+    const offer = (t, d) => `<div class="bf-offer"><i></i><span><strong>${t}</strong><small>${d}</small></span></div>`;
+    const status = `<p class="bf-status${v === 'b' ? ' rsv' : ''}" data-status></p>`;
+    const actions = `<div class="bf-actions"><span class="s-btn" data-next>Next</span></div>`;
+    el.innerHTML = header(true) + `<article class="s-shell bf">
+      <p class="bf-return"><span class="bf-rlink">Back to Work with me <span>←</span></span></p>
+      <p class="bf-muted">Project brief</p>
+      <ol class="bf-dots"><li class="on"><i></i></li><li><i></i></li><li><i></i></li><li><i></i></li><li><i></i></li><li><i></i></li><li><i></i></li></ol>
+      <div class="bf-form"><h1>What are you working on?</h1>
+        <div class="bf-list">${offer('Website design', 'A site people can read on a phone and act on.')}${offer('Web app', 'An app people open in a browser, on a phone or a computer.')}${offer('Workflow automation', 'A tool that takes manual steps out of a task your team repeats.')}</div>
+        <p class="bf-err${v === 'b' ? ' rsv' : ''}" data-err="path"${v === 'b' ? '' : ' hidden'}></p>
+        <p class="bf-foot">Not sure which? Pick the closest. I’ll suggest the right fit when I reply.</p>
+        ${v === 'c' ? actions + status : status + actions}
+      </div>
+      <p class="bf-contact">Not sure it fits? <span class="s-link">Get in touch</span>. Hiring for a role? <span class="s-link">Request my resume</span>.</p>
+    </article><div class="fold" style="top:800px"><span>800px fold</span></div>`;
+  });
+
+  const ease = 'cubic-bezier(.2, .7, .2, 1)';
+  function open(p, text, animate) {
+    p.textContent = text;
+    const wasHidden = p.hidden;
+    p.hidden = false;
+    if (!animate || !wasHidden) return;
+    const cs = getComputedStyle(p), h = p.offsetHeight;
+    p.style.overflow = 'hidden';
+    const a = p.animate([{ height: '0px', marginTop: '0px', opacity: 0 }, { height: h + 'px', marginTop: cs.marginTop, opacity: 1 }], { duration: 180, easing: ease });
+    a.onfinish = a.oncancel = () => { p.style.overflow = ''; };
+  }
+  function setErrors(article, on, animate) {
+    const v = article.dataset.errdemo, keep = v === 'b';
+    article.querySelectorAll('[data-err]').forEach(p => {
+      const key = p.dataset.err;
+      const msg = key === 'path' ? 'Choose a starting point.' : cfErrors[key];
+      if (on && msg) open(p, msg, animate);
+      else { p.getAnimations().forEach(a => a.cancel()); p.textContent = ''; p.hidden = !keep; }
+    });
+    article.querySelectorAll('[data-status]').forEach(p => {
+      p.getAnimations().forEach(a => a.cancel());
+      if (on) open(p, 'Please check the highlighted fields.', animate && !p.closest('.cf'));
+      else p.textContent = '';
+    });
+    article.querySelectorAll('[data-field]').forEach(f => {
+      if (on && cfErrors[f.dataset.field]) f.setAttribute('aria-invalid', 'true'); else f.removeAttribute('aria-invalid');
+    });
+    article.querySelectorAll('.stage[role="img"]').forEach(stage => {
+      stage.dataset.label ??= stage.getAttribute('aria-label');
+      stage.setAttribute('aria-label', stage.dataset.label + (on ? ' The error messages are shown.' : ''));
+    });
+    const t = article.querySelector('[data-toggle]');
+    t.setAttribute('aria-pressed', String(on));
+    t.textContent = on ? 'Hide the errors' : 'Show the errors';
+    fit();
+  }
+  document.querySelectorAll('[data-errdemo]').forEach(article => {
+    const still = article.querySelector('[data-still]');
+    const motion = () => article.dataset.errdemo === 'd' && !(still && still.checked) && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const toggle = article.querySelector('[data-toggle]');
+    toggle.addEventListener('click', () => setErrors(article, toggle.getAttribute('aria-pressed') !== 'true', motion()));
+    const replay = article.querySelector('[data-replay]');
+    if (replay) replay.addEventListener('click', () => { setErrors(article, false, false); setTimeout(() => setErrors(article, true, motion()), 350); });
+  });
+
+  // ---------- D9.3: the signing page (sign.astro, demo data from the CI scenario) ----------
+  document.querySelectorAll('[data-ag]').forEach(el => {
+    const cls = el.dataset.ag === 'news' ? 'news-all' : '';
+    el.innerHTML = `<div class="ag ${cls}"><div class="ag-hdr"><span class="s-name">Kazon Wilson</span><span class="ag-kick">Private agreement</span></div>
+      <p class="ag-kick mb">Fictional client tracker · Example Client LLC</p>
+      <h1>Ready to sign.</h1>
+      <p class="ag-lede">Here’s what we agreed. Check your details, make one choice, and sign. It takes about two minutes.</p>
+      <div class="ag-cols"><div><section class="ag-card"><h2>What you’re getting</h2><p>One shared view.</p>
+        <p class="ag-meta">1 milestone · $2,400 fixed · 50% deposit before each milestone · done by Oct 20, 2026</p>
+        <p><span class="ag-a">Read the agreement</span></p><p><span class="ag-a">Read the statement of work</span></p>
+        <div class="ag-terms"><p class="sum">What we agreed</p></div>
+        <p class="ag-meta">Agreement version v2026-09-30</p></section></div>
+      <aside class="ag-aside"><h2>Your signature</h2><p class="ag-sign">Example Signer</p>
+        <p class="ag-meta">Example Signer · Representative, Example Client LLC · <span class="ag-quiet">Edit</span></p>
+        <div class="ag-check"><i></i><span>I agree to sign and receive these documents electronically, and I’m authorized to sign for Example Client LLC, a business. I can download and keep a complete copy.</span></div>
+        <span class="ag-btn">Sign as Example Signer</span>
+        <p class="ag-hint" style="margin-top:.4rem">Signing applies your name above as your electronic signature on the agreement and statement of work linked above.</p>
+        <p class="ag-hint">Next, Kazon countersigns. You’ll get the signed PDF by email as soon as he does.</p></aside></div></div>`;
+  });
+
+  // ---------- D9.3: the PDF, laid out as agreement-pdf.ts draws it (y measured from the top of a 792pt page) ----------
+  document.querySelectorAll('[data-pdf]').forEach(el => {
+    el.style.setProperty('--pdf-head', el.dataset.pdf === 'libron' ? 'var(--serif)' : 'var(--news)');
+    const parts = [`<p class="ph" style="top:${37 - 7}px">Statement of Work · v2026-09-30</p>`];
+    let y = 72; // the first title's baseline (720pt from the bottom)
+    const title = t => { parts.push(`<p class="pt" style="top:${y - 14}px">${t}</p>`); y += 25 + 6; };
+    const para = widths => { widths.forEach(w => { parts.push(`<span class="pb" style="top:${y - 7}px;width:${w}px"></span>`); y += 16; }); y += 6; };
+    title('Statement of Work'); para([516, 509, 352]); para([516, 238]);
+    title('Milestone 1'); para([516, 497, 516, 180]); para([461]);
+    parts.push(`<span class="pnote">Agreement text shown as bars</span>`);
+    el.innerHTML = parts.join('');
+  });
+
+  // ---------- Scale each recreation to its frame, never above 100% ----------
+  function fit() {
+    document.querySelectorAll('.stage').forEach(stage => {
+      const canvas = stage.firstElementChild;
+      const w = +stage.dataset.w || 1280;
+      const s = Math.min(1, stage.clientWidth / w);
+      const top = +stage.dataset.top || 0;
+      const h = +stage.dataset.h || (canvas.offsetHeight - top);
+      canvas.style.left = Math.max(0, (stage.clientWidth - w * s) / 2) + 'px';
+      canvas.style.transform = `translateY(${-top * s}px) scale(${s})`;
+      stage.style.height = Math.ceil(h * s) + 'px';
+    });
+  }
+  fit();
+  const ro = new ResizeObserver(fit);
+  ro.observe(document.body);
+  document.querySelectorAll('.stage > .site').forEach(c => ro.observe(c));
+  document.fonts && document.fonts.ready.then(fit);
+  document.querySelectorAll('.stage img').forEach(img => img.complete || img.addEventListener('load', fit));
+
+  // ---------- Fill the measured positions from the recreations themselves ----------
+  function measure() {
+    document.querySelectorAll('[data-measure]').forEach(out => {
+      const v = out.dataset.measure.split('-')[1];
+      const at = w => {
+        const canvas = document.querySelector(`.site.w${w}[data-nf="${v}"]`);
+        if (!canvas) return null;
+        const b = canvas.querySelector('[data-back]');
+        let y = 0, n = b; while (n && n !== canvas) { y += n.offsetTop; n = n.offsetParent; }
+        return Math.round(y + b.offsetHeight);
+      };
+      const d = at(1280), p = at(390);
+      if (d === null) return;
+      out.textContent = `“Back to home” ends ${d}px down at 1280 × 800` + (p ? ` and ${p}px down at 390 × 844.` : '.');
+    });
+  }
+  (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => requestAnimationFrame(measure));
+</script>
+</body>
+</html>

@@ -1,0 +1,1331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Home motion: alternatives</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" />
+<style>
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Regular.woff2) format('woff2'); font-weight: 400; }
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Bold.woff2) format('woff2'); font-weight: 700; }
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Italic.woff2) format('woff2'); font-style: italic; }
+  @font-face { font-family: 'Kazon Name Text'; src: url(../../../../public/fonts/kazon-name-text.woff2) format('woff2'); font-weight: 400; }
+  @font-face { font-family: 'Kazon Name Display'; src: url(../../../../public/fonts/kazon-name-display.woff2) format('woff2'); font-weight: 400; }
+
+  /* Site palette (src/styles/global.css), the screen world's inverted tokens (src/pages/index.astro),
+     and the board tones the 2026-10-19 board used. */
+  :root { --paper: #FBF8F2; --ink: #0E0E0E; --muted: #4A4A4A; --rule: #E8E3DA; --accent: #AE5534; --tint: #F5ECE5; --board: #ECE6DB; --edge: #d6cdbf;
+    --screen: #14120f; --ease-site: cubic-bezier(.2, .7, .2, 1);
+    /* Small terracotta text on the darker board tone: the accent alone is 4.08:1 there, this mix is about 5:1. */
+    --accent-ink: color-mix(in srgb, var(--accent) 86%, var(--ink));
+    --serif: Libron, 'Iowan Old Style', Georgia, serif; --sans: Inter, system-ui, -apple-system, sans-serif; --mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace; }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--board); color: var(--ink); font-family: var(--serif); -webkit-font-smoothing: antialiased; }
+  .board { max-width: 1280px; margin: 0 auto; padding: 56px 56px 72px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  /* Frames and their tabs sit inside clipped windows: a tab's ring is drawn inside its edge, and a
+     focused frame rings its whole window (the scrolled page would paint over its own ring). */
+  .tab:focus-visible { outline-offset: -3px; }
+  .mframe:focus-visible { outline: none; }
+  .win:has(.mframe:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .eyebrow { font: 500 11px/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent-ink); margin: 0 0 14px; }
+  .board > header h1 { font-size: clamp(36px, 6vw, 52px); line-height: 1.04; letter-spacing: -.03em; margin: 0 0 16px; font-weight: 400; }
+  .board > header p.intro { font-size: clamp(17px, 2vw, 20px); line-height: 1.5; color: var(--muted); max-width: 60rem; margin: 0 0 12px; }
+  code { font: 12px var(--mono); background: #efe8dd; padding: 1px 4px; border-radius: 3px; overflow-wrap: anywhere; }
+  .legend { font: 14px/1.55 var(--sans); color: #2b2b2b; max-width: 62rem; margin: 0 0 8px; }
+  .legend b { font-weight: 600; }
+
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 22px 0 0; padding: 12px 14px; background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; }
+  .toolbar p { font: 13.5px/1.5 var(--sans); color: #2b2b2b; margin: 0; flex: 1 1 18rem; }
+  .jump { display: flex; flex-wrap: wrap; gap: 0 22px; margin-top: 14px; font: 14px var(--sans); }
+  .jump a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--accent); }
+  .jump a span { font: 500 12px var(--mono); color: var(--accent-ink); margin-right: 7px; }
+
+  section.study { margin-top: 64px; padding-top: 40px; border-top: 1px solid #d8d0c3; }
+  section.study > h2 { font-size: clamp(28px, 4vw, 36px); line-height: 1.12; letter-spacing: -.02em; font-weight: 400; margin: 0 0 12px; }
+  section.study > p.lead { font-size: 18px; line-height: 1.55; color: var(--muted); max-width: 62rem; margin: 0 0 12px; }
+  .decided { font: 14px/1.55 var(--sans); color: #2b2b2b; max-width: 62rem; margin: 0 0 8px; }
+  .decided b { font-weight: 600; }
+
+  /* What moves today: one row per layer. */
+  .inv { list-style: none; margin: 20px 0 0; padding: 0; background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; overflow: hidden; font: 14px/1.5 var(--sans); }
+  .inv li { display: grid; grid-template-columns: 88px 170px 190px minmax(0, 1fr); gap: 4px 16px; padding: 10px 16px; border-top: 1px solid var(--rule); align-items: baseline; }
+  .inv li:first-child { border-top: 0; background: #f6f1e9; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .inv b { font: 400 17px/1.3 var(--serif); }
+  .kind { justify-self: start; font: 600 11px/1 var(--sans); letter-spacing: .04em; text-transform: uppercase; padding: 5px 7px; border-radius: 3px; }
+  .kind.cross { background: var(--accent); color: var(--paper); }
+  .kind.drift { border: 1px solid #a59a8b; color: #3c3c3c; }
+  .inv .where { color: var(--muted); }
+
+  /* Options */
+  .opt { margin-top: 28px; background: var(--paper); border: 1px solid var(--edge); border-radius: 10px; padding: 22px 24px 24px; min-width: 0; }
+  .opt.is-rec { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 28px; }
+  .grid2 > .opt, .grid3 > .opt { margin-top: 0; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-top: 28px; align-items: start; }
+  .option-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .option-head h3 { font-size: 26px; font-weight: 400; margin: 0; letter-spacing: -.01em; line-height: 1.2; }
+  .option-head .id { font: 500 13px/1 var(--mono); color: var(--accent); letter-spacing: .04em; margin-right: 8px; vertical-align: 3px; }
+  .badge { font: 600 11px/1 var(--sans); letter-spacing: .04em; text-transform: uppercase; padding: 6px 9px; border-radius: 3px; white-space: nowrap; }
+  .badge.rec { background: var(--accent); color: var(--paper); }
+  .badge.no { background: transparent; color: var(--muted); border: 1px solid #b9ae9f; }
+  .rec-why { font: 14px/1.55 var(--sans); color: #2b2b2b; background: var(--tint); border-left: 3px solid var(--accent); padding: 10px 12px; margin: 4px 0 14px; }
+  .rec-why b { font-weight: 600; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 6px 0 14px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 3px; font: 500 15px/1 var(--sans); border: 1px solid var(--accent); background: var(--accent); color: var(--paper); cursor: pointer; }
+  .btn svg { width: 14px; height: 14px; fill: currentColor; }
+  @media (hover: hover) and (pointer: fine) { .btn:not(:disabled):hover { background: var(--ink); border-color: var(--ink); } }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.quiet { background: transparent; color: var(--ink); border-color: var(--muted); }
+  @media (hover: hover) and (pointer: fine) { .btn.quiet:hover { background: var(--ink); color: var(--paper); } }
+  .hint { font: 13px/1.5 var(--sans); color: var(--muted); margin: 0; }
+
+  /* Frames that hold a scaled copy of a page. */
+  .win { background: var(--paper); border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; box-shadow: 0 10px 24px -20px #0e0e0e66; min-width: 0; }
+  .frame-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 0 0 0 12px; border-bottom: 1px solid var(--rule); background: #f6f1e9; font: 11px/1.3 var(--mono); color: var(--muted); }
+  .frame-bar b { color: var(--ink); font-weight: 500; }
+  .frame-bar > span:first-child { padding-block: 8px; min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tabs { flex: none; }
+  .tabs { display: flex; align-self: stretch; }
+  .tab { min-height: 44px; min-width: 64px; padding: 0 14px; border: 0; border-left: 1px solid var(--rule); background: transparent; font: 500 12.5px var(--sans); color: var(--ink); cursor: pointer; }
+  .tab[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  .mframe { position: relative; display: block; width: 100%; background: var(--paper); }
+  .mframe.scroll { aspect-ratio: var(--ar, 1280 / 800); overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
+  .mframe.still { overflow: hidden; }
+  .mframe[hidden] { display: none; }
+  .msizer { position: relative; overflow: hidden; width: 100%; }
+  .d21-row { display: grid; grid-template-columns: minmax(0, 640px) 200px minmax(0, 1fr); gap: 20px; align-items: start; }
+  .look { font: 14px/1.55 var(--sans); color: #2b2b2b; background: #f6f1e9; border: 1px solid var(--rule); border-radius: 8px; padding: 12px 14px; }
+  .look b { display: block; font: 600 11px/1.3 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .look p { margin: 0; }
+  .label-study { font: 12px/1.45 var(--sans); color: #6b4a3a; margin: 8px 0 0; }
+
+  .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 28px; margin: 18px 0 0; padding-top: 16px; border-top: 1px solid var(--rule); font: 14px/1.55 var(--sans); color: #2b2b2b; }
+  .facts > div { min-width: 0; }
+  .facts dt { font: 600 11px/1.3 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .facts dd { margin: 0; }
+  .facts .wide { grid-column: 1 / -1; }
+  .facts .span2 { grid-column: span 2; }
+  .grid2 .facts .span2, .grid3 .facts .span2 { grid-column: auto; }
+  .grid2 .facts, .grid3 .facts { grid-template-columns: minmax(0, 1fr); }
+  .effort { display: inline-block; font: 600 12px/1 var(--mono); border: 1px solid var(--accent); color: var(--accent); border-radius: 3px; padding: 4px 7px; margin-right: 6px; }
+
+  /* Summary */
+  .decisions { list-style: none; padding: 0; margin: 24px 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .decisions li { background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 16px 18px; font: 14px/1.55 var(--sans); color: #2b2b2b; }
+  .decisions li b { display: block; font: 400 19px/1.3 var(--serif); color: var(--ink); margin-bottom: 4px; }
+  .decisions li .def { display: block; margin-top: 8px; font-weight: 600; color: #3E6B4A; }
+  .decisions li .id { font: 500 12px var(--mono); color: var(--accent); margin-right: 6px; }
+  .together { margin-top: 20px; background: var(--paper); border: 1px dashed #c4ab92; border-radius: 8px; padding: 14px 18px; font: 14px/1.6 var(--sans); color: #2b2b2b; }
+  .together b { font-weight: 600; }
+
+  /* ---------- D2.2: one project card on the dark screen, at its real size ---------- */
+  .dark-stage { --paper: #14120f; --ink: #f2ede4; --muted: #b0a799; --rule: #3a342d; --accent: #e08a62; --well: #1d1b18;
+    position: relative; overflow: hidden; background: var(--paper); color: var(--ink); border-radius: 8px; padding: 30px 26px 22px; font-family: var(--serif); }
+  .pc { position: relative; }
+  .pc-art { display: block; margin-bottom: 1.2rem; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; background: var(--well); aspect-ratio: 3 / 2;
+    box-shadow: 0 28px 70px -34px color-mix(in srgb, var(--accent) 45%, transparent), 0 14px 30px -18px #000c; }
+  .pc-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .pc-kicker { font-family: var(--mono); color: var(--accent); font-size: .6875rem; letter-spacing: .1em; text-transform: uppercase; margin: 0 0 1rem; }
+  .pc-title { font-size: clamp(1.7rem, 2.6vw, 2.3rem); letter-spacing: -.035em; line-height: 1.1; margin: 0 0 .4rem; }
+  .pc-sub { font-size: 1.125rem; color: var(--muted); line-height: 1.45; margin: 0 0 1rem; text-wrap: pretty; }
+  .pc-link { display: inline-flex; align-items: baseline; gap: .65rem; padding: .35rem 0; border-bottom: 1px solid var(--accent); line-height: 1.45; color: var(--ink); text-decoration: none; }
+  .pc-link span[aria-hidden] { color: var(--accent); transition: transform 160ms var(--ease-site); }
+  .pc-link::after { content: ''; position: absolute; inset: 0; }
+  .pc:is(:hover, .is-hover) .pc-link { color: var(--accent); }
+  .pc:is(:hover, .is-hover) .pc-link span[aria-hidden] { transform: translateX(3px); }
+  .pc-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  /* A and B lean toward the pointer, as the site does. */
+  .pc[data-tilt="on"] .pc-art { transform: perspective(1100px) rotateX(calc(var(--rx, 0) * 3deg)) rotateY(calc(var(--ry, 0) * 4deg)); transition: transform 500ms var(--ease-site), box-shadow 500ms var(--ease-site); }
+  .pc.vA:is(:hover, .is-hover, :focus-within) .pc-art { box-shadow: 0 34px 90px -30px color-mix(in srgb, var(--accent) 65%, transparent), 0 18px 36px -18px #000e; }
+  /* C: the glow stays at today's resting strength; only the screen's brightness answers the pointer or focus. */
+  .pc.vC .pc-art img { filter: brightness(.86); transition: filter 500ms var(--ease-site); }
+  .pc.vC:is(:hover, .is-hover, :focus-within) .pc-art img { filter: none; }
+  .pc.vD .pc-art { box-shadow: none; }
+  .ghost { position: absolute; left: 0; top: 0; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: #fbf8f2e6; box-shadow: 0 0 0 2px #14120f, 0 0 0 3px #fbf8f2; opacity: 0; pointer-events: none; z-index: 3; }
+  .ghost.on { opacity: 1; }
+  html:not(.motion-on) .pc-art, html:not(.motion-on) .pc-art img, html:not(.motion-on) .pc-link span { transition: none !important; }
+  html:not(.motion-on) .pc[data-tilt="on"] .pc-art { transform: none !important; }
+
+  /* ---------- D2.4: the About laptop, cropped at about its real size ---------- */
+  .lap-stage { background: var(--paper); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+  .lap { display: block; width: 100%; height: auto; }
+  .lap image { mix-blend-mode: multiply; }
+  .lap .glow, .lap .caret, .lap .mask { opacity: 0; }
+  .lap .caret { fill: #eadfca; }
+  html.motion-on .lap .is-playing .glow { animation: glyph-glow 2.6s ease-in-out .3s both; }
+  html.motion-on .lap .is-playing .caret-a { animation: caret-blink 1.6s steps(1, end) 1.2s forwards; }
+  html.motion-on .lap .is-playing .mask { animation: mask-hide 1ms linear var(--at) both; }
+  html.motion-on .lap .is-playing .caret-c { animation: caret-type 3.1s linear both; }
+  @keyframes glyph-glow { 0%, 100% { opacity: 0; } 45% { opacity: 1; } }
+  @keyframes caret-blink { 0%, 50% { opacity: 1; } 25%, 75%, 100% { opacity: 0; } }
+  @keyframes mask-hide { from { opacity: 1; } to { opacity: 0; } }
+  /* Typed: the caret jumps after each character as it appears, then blinks twice and leaves. */
+  @keyframes caret-type {
+    0% { opacity: 1; transform: translateX(0); animation-timing-function: step-end; }
+    29.03% { opacity: 1; transform: translateX(56px); animation-timing-function: step-end; }
+    38.71% { opacity: 1; transform: translateX(106px); animation-timing-function: step-end; }
+    48.39% { opacity: 1; transform: translateX(167px); animation-timing-function: step-end; }
+    61.29% { opacity: 0; transform: translateX(167px); animation-timing-function: step-end; }
+    74.19% { opacity: 1; transform: translateX(167px); animation-timing-function: step-end; }
+    87.1% { opacity: 0; transform: translateX(167px); animation-timing-function: step-end; }
+    100% { opacity: 0; transform: translateX(167px); }
+  }
+  .ci { margin-top: 14px; font: 13px/1.5 var(--sans); color: var(--muted); }
+  .ci summary { display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--ink); border-bottom: 1px solid var(--accent); }
+  .ci img { display: block; width: 100%; max-width: 640px; height: auto; margin-top: 10px; border: 1px solid var(--edge); border-radius: 6px; }
+  .ci p { margin: 6px 0 0; }
+  .zoom-note { font: 12px/1.45 var(--sans); color: var(--muted); margin: 8px 0 0; }
+
+  /* ---------- Mini pages: the site's own values at 1280 × 800 (desktop) and 390 × 844 (phone) ---------- */
+  .mpage { position: absolute; left: 0; top: 0; transform-origin: 0 0; background: var(--paper); color: var(--ink); font: 400 16px/1.6 var(--serif); overflow: clip;
+    --gutter: 56px; --space: 76.8px; --page-paper: #FBF8F2; --signal-h: 140.8px; --well: #f3eee5; }
+  .mpage.is-phone { --gutter: 24px; --space: 48px; --signal-h: 88px; }
+  :where(.mpage p) { margin: 0; }
+  :where(.mpage img) { max-width: 100%; height: auto; }
+  .m-pn { font-family: 'Kazon Name Text', var(--serif); }
+  .m-shell { width: 100%; max-width: 1232px; margin-inline: auto; padding-inline: var(--gutter); }
+  .m-nav { display: flex; align-items: center; justify-content: space-between; gap: 32px; min-height: 112px; }
+  .m-name { font-family: 'Kazon Name Text', var(--serif); font-size: 24px; letter-spacing: -.04em; white-space: nowrap; }
+  .m-navlinks { display: flex; gap: 32px; }
+  .m-navbtn { display: inline-flex; align-items: center; min-height: 44px; padding: 8.8px 21.6px; border: 1px solid var(--accent); border-radius: 3px; }
+  .m-menu { display: none; align-items: center; gap: 14px; font-size: 17px; }
+  .m-menu i { width: 25px; display: grid; gap: 7px; }
+  .m-menu i::before, .m-menu i::after { content: ''; height: 1px; background: var(--accent); }
+  .is-phone .m-nav { min-height: 90px; }
+  .is-phone .m-navlinks, .is-phone .m-navbtn { display: none; }
+  .is-phone .m-menu { display: flex; }
+  .m-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8.8px 21.6px; background: var(--accent); color: var(--paper); border-radius: 3px; line-height: 1.4; }
+  .m-link { display: inline-flex; align-items: baseline; gap: 10.4px; padding: 5.6px 0; border-bottom: 1px solid var(--accent); line-height: 1.45; }
+  .m-link i { font-style: normal; color: var(--accent); }
+  .m-row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 28px; }
+
+  .m-hero { position: relative; min-height: 610px; padding-block: 48px 80px; isolation: isolate; }
+  .m-hero-copy { position: relative; z-index: 1; max-width: 440px; }
+  .m-h1 { font-family: 'Kazon Name Display', var(--serif); font-size: 112.64px; line-height: .88; letter-spacing: -.065em; margin: 0 0 26.4px; }
+  .m-tagline { font-size: 35.84px; line-height: 1.14; letter-spacing: -.025em; max-width: 420px; margin: 0 0 17.6px; }
+  .m-intro { max-width: 340px; color: var(--muted); font-size: 18px; line-height: 1.5; margin: 0 0 27.2px; }
+  .m-studio-art { position: absolute; z-index: -1; width: 84%; right: -5%; top: 0; pointer-events: none; }
+  .m-studio-scene { position: relative; transform: translate3d(calc(var(--mx, 0) * -10px), calc(var(--my, 0) * -6px + var(--lift, 0px)), 0); transition: transform 600ms var(--ease-site); }
+  .m-studio-scene img { display: block; width: 100%; height: auto; mix-blend-mode: multiply; }
+  .m-studio-scene svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .m-studio-scene img, .m-studio-scene svg { mask-image: linear-gradient(to right, transparent, #000 18%, #000 94%, transparent), linear-gradient(to bottom, transparent, #000 12%, #000 80%, transparent); mask-composite: intersect; }
+  .m-sketch { fill: none; stroke: var(--accent); stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
+  .m-sketch-sun { fill: var(--accent); fill-opacity: .85; }
+  .is-phone .m-hero { min-height: 0; padding-top: 24px; padding-bottom: 0; }
+  .is-phone .m-hero-copy { max-width: 480px; }
+  .is-phone .m-h1 { font-size: 75.2px; margin-bottom: 20px; }
+  .is-phone .m-tagline { font-size: 27.2px; max-width: 410px; }
+  .is-phone .m-intro { font-size: 17.6px; max-width: 350px; }
+  .is-phone .m-studio-art { position: relative; top: auto; right: auto; width: calc(100% + 48px); margin: -16px -24px -16px; }
+  .is-phone .m-studio-scene img, .is-phone .m-studio-scene svg { mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 85%, transparent); }
+
+  .m-section { margin-top: var(--space); }
+  /* Work highlights (src/pages/index.astro .work-proof-grid; ComparisonPlayer.astro compact), at the current values. */
+  .m-proof { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .m-company { font-size: 32px; letter-spacing: -.04em; line-height: 1.1; margin-bottom: 10.4px; }
+  .m-figure { font-size: 33.28px; letter-spacing: -.04em; line-height: 1.2; margin-bottom: 5.6px; }
+  .m-cap { margin: 11.2px 0 14.4px; }
+  .m-cells, .m-key { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 3px; max-width: 416px; }
+  .m-cell { display: block; height: 12px; border-radius: 2px; background: var(--accent); }
+  .m-key { align-items: center; margin-top: 8.8px; font-family: var(--mono); font-size: 11.2px; line-height: 1.6; color: var(--muted); }
+  .m-key > span { grid-column: 2 / -1; padding-left: 4.8px; white-space: nowrap; }
+  .m-desc { max-width: 528px; text-wrap: pretty; }
+  .m-source { color: var(--muted); font-size: 13.6px; margin-top: 6.4px; }
+  .m-music { min-width: 0; border-top: 1px solid var(--rule); padding-top: 21.6px; }
+  .m-music-h { font-size: 17.6px; line-height: 1.3; margin: -4px 0 10.4px; }
+  .m-player { border: 1px solid var(--rule); border-radius: 4px; padding: 8px 9.6px; font-family: var(--sans); }
+  .m-pstage { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center; gap: 10.4px; }
+  .m-play { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--accent); }
+  .m-play::before { content: ''; margin-left: 4px; border-left: 13px solid var(--paper); border-block: 8px solid transparent; }
+  .m-plabel { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 10.88px; line-height: 1.2; }
+  .m-pcol svg { display: block; width: 100%; height: 38px; color: color-mix(in srgb, var(--muted) 65%, var(--paper)); }
+  .m-seek { position: relative; display: block; height: 44px; }
+  .m-seek::before { content: ''; position: absolute; inset: 21px 0 auto; height: 2px; background: color-mix(in srgb, var(--muted) 65%, var(--paper)); }
+  .m-seek::after { content: ''; position: absolute; left: 0; top: 16px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
+  .m-choice { display: flex; flex-wrap: wrap; align-items: center; gap: 0 9.6px; margin-top: 3.2px; }
+  .m-switch { display: flex; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; font-size: 12.8px; }
+  .m-switch > span { display: inline-flex; align-items: center; min-height: 40px; padding: 6.4px 9.6px; }
+  .m-switch > span.on { background: var(--ink); color: var(--paper); }
+  .m-switch span span { margin-left: 4.8px; }
+  .m-match { display: flex; align-items: center; gap: 6.4px; margin-left: auto; min-height: 44px; font-size: 11.52px; white-space: nowrap; }
+  .m-match i { width: 13px; height: 13px; border: 1px solid #767676; border-radius: 2px; background: #fff; }
+  .m-about { min-height: 44px; line-height: 44px; margin-top: 8px; font-size: 12.8px; color: var(--muted); }
+  .m-more { min-height: 44px; line-height: 44px; margin-top: 10.4px; font-size: 13.6px; color: var(--muted); }
+  .m-hire { margin-top: 8px; }
+  .is-phone .m-company { font-size: 24px; }
+  .is-phone .m-figure { font-size: 26.4px; }
+  .is-phone .m-source { margin-bottom: 19.2px; }
+  .m-sh { display: flex; align-items: center; gap: 24px; margin-bottom: 24px; }
+  .m-h2 { flex-shrink: 1; min-width: 0; font-size: 36px; line-height: 1.2; letter-spacing: -.035em; }
+  .is-phone .m-h2 { font-size: 28px; }
+  .m-sh::after { content: ''; height: 1px; flex: 1; background: var(--rule); }
+  .m-headlink { order: 1; margin-left: auto; font-size: 15.2px; white-space: nowrap; }
+  .is-phone .m-headlink { display: none; }
+  .m-doors { display: grid; grid-template-columns: repeat(3, 1fr); column-gap: 40px; }
+  .m-door-art { aspect-ratio: 3 / 2; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: #f3eee5; }
+  .m-door-art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+  .m-door-cap { font-family: var(--sans); font-size: 12.48px; color: var(--muted); margin: 11.2px 0 12.8px; }
+  .m-door-title { font-size: 24.8px; line-height: 1.2; letter-spacing: -.02em; margin: 0 0 5.6px; }
+  .m-door-line { font-size: 16.8px; line-height: 1.5; color: var(--muted); max-width: 30ch; margin: 0 0 14.4px; }
+  .m-door .m-button { min-height: 42px; padding: 7.2px 18.4px; }
+  .is-phone .m-doors { grid-template-columns: 1fr; row-gap: 28px; }
+  .is-phone .m-door { display: grid; grid-template-columns: 104px 1fr; column-gap: 16px; align-items: start; grid-template-areas: "art cap" "art title" "art line" "art btn"; }
+  .is-phone .m-door-art { grid-area: art; } .is-phone .m-door-cap { grid-area: cap; margin: 0 0 6.4px; }
+  .is-phone .m-door-title { grid-area: title; font-size: 22.4px; } .is-phone .m-door-line { grid-area: line; } .is-phone .m-door .m-button { grid-area: btn; justify-self: start; }
+
+  /* The screen world: tokens inverted for the subtree, arriving as a panel that widens. */
+  .m-screen { --paper: var(--screen); --ink: #f2ede4; --muted: #b0a799; --rule: #3a342d; --accent: #e08a62; --well: #1d1b18;
+    position: relative; margin-top: var(--space); padding-top: 288px; color: var(--ink);
+    background: linear-gradient(var(--screen), var(--screen)) top / 100% calc(100% - var(--signal-h) / 2 + 1px) no-repeat;
+    clip-path: inset(0 calc((1 - var(--grow, 1)) * 21%) 0 round calc((1 - var(--grow, 1)) * 28px) calc((1 - var(--grow, 1)) * 28px) 0 0); }
+  .is-phone .m-screen { padding-top: 200px; clip-path: inset(0 calc((1 - var(--grow, 1)) * 7%) 0 round calc((1 - var(--grow, 1)) * 22px) calc((1 - var(--grow, 1)) * 22px) 0 0); }
+  .m-screen-light { position: absolute; inset: 0 0 auto; height: 560px; background: radial-gradient(55% 60% at 50% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%); pointer-events: none; }
+  .is-phone .m-screen-light { height: 591px; }
+  .m-code { position: absolute; top: 48px; left: 58%; width: 500px; opacity: .7; transform: translate(-50%, calc((1 - var(--grow, 1)) * 40px * var(--slide, 1))); mask-image: linear-gradient(to bottom, #000 50%, transparent 92%); pointer-events: none; }
+  .is-phone .m-code { top: 28px; left: 50%; width: 335px; }
+  .code-field { display: block; width: 100%; height: auto; overflow: visible; }
+  .code-gutter { font-family: var(--mono); font-size: 10px; fill: #5a534a; text-anchor: end; }
+  .tone-0 { fill: #6f8fb5; } .tone-1 { fill: #d17f59; } .tone-2 { fill: #8fa66b; } .tone-3 { fill: #c9a95a; } .tone-4 { fill: #5c564e; }
+  .m-projects { display: grid; grid-template-columns: repeat(2, 1fr); column-gap: 40px; }
+  .m-card-art { margin-bottom: 19.2px; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; background: var(--well); aspect-ratio: 3 / 2;
+    box-shadow: 0 28px 70px -34px color-mix(in srgb, var(--accent) 45%, transparent), 0 14px 30px -18px #000c; }
+  .m-card-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .m-kicker { font-family: var(--mono); color: var(--accent); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 16px; }
+  .m-card-title { font-size: 33.28px; letter-spacing: -.035em; line-height: 1.1; margin: 0 0 6.4px; }
+  .m-card-sub { font-size: 18px; color: var(--muted); line-height: 1.45; margin: 0 0 16px; }
+  .is-phone .m-projects { grid-template-columns: 1fr; row-gap: 36px; }
+  .is-phone .m-card-title { font-size: 27.2px; } .is-phone .m-card-sub { font-size: 16.8px; }
+  .m-signal { height: var(--signal-h); margin-top: var(--space); }
+  .m-signal svg { display: block; width: 100%; height: 100%; }
+  .m-signal .sp { fill: var(--page-paper); } .m-signal .ss { fill: var(--screen); }
+
+  .m-editorial { display: grid; grid-template-columns: 1.4fr 1fr; gap: 48px; align-items: center; }
+  .m-notebook img { display: block; width: 100%; height: auto; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent); mask-composite: intersect; transform: translateY(calc((.5 - var(--p, .5)) * 36px)); }
+  .m-ed-title { max-width: 24ch; font-size: 43.52px; line-height: 1.08; letter-spacing: -.04em; text-wrap: balance; }
+  .m-pen { display: block; width: min(240px, 80%); height: 14px; margin: 14.4px 0 25.6px; overflow: visible; }
+  .m-pen path { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; }
+  .is-phone .m-editorial { grid-template-columns: 1fr; gap: 12px; }
+  .is-phone .m-ed-copy { order: -1; }
+  .is-phone .m-ed-title { font-size: 32px; }
+  .is-phone .m-pen { margin: 11.2px 0 19.2px; }
+  .is-phone .m-notebook { margin-inline: -24px; }
+
+  .m-contact { position: relative; border-top: 1px solid var(--rule); padding-block: 48px; margin-top: calc(var(--space) + 64px); }
+  .m-horizon { position: absolute; left: calc(var(--gutter) * -1); right: calc(var(--gutter) * -1); bottom: 100%; height: 150px; overflow: hidden; pointer-events: none; }
+  .m-horizon::before { content: ''; position: absolute; inset: 0; background: radial-gradient(36% 90% at 74% 100%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%); opacity: var(--p, 1); }
+  .m-horizon::after { content: ''; position: absolute; left: var(--gutter); right: var(--gutter); bottom: 0; height: 1px; background: linear-gradient(to right, transparent, var(--accent) 74%, transparent); opacity: calc(var(--p, 1) * .7); }
+  .m-sun { position: absolute; bottom: 0; left: 74%; width: 84px; height: 84px; margin-left: -42px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 72%, var(--paper)); box-shadow: 0 0 50px 14px color-mix(in srgb, var(--accent) 14%, transparent); transform: translateY(calc((1 - var(--p, 1)) * 100% + 30%)); }
+  .m-inksun { display: none; position: absolute; bottom: 0; left: 74%; width: 84px; height: 84px; margin-left: -42px; overflow: visible; transform: translateY(calc((1 - var(--p, 1)) * 100% + 30%)); }
+  .m-inksun path { fill: var(--paper); stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: calc(1 - min(1, var(--p, 1) * 1.3)); }
+  .m-contact-intro { display: flex; justify-content: space-between; gap: 32px; align-items: center; }
+  .m-contact-h { max-width: 24ch; font-size: 43.2px; line-height: 1.07; letter-spacing: -.035em; margin: 0 0 11.2px; }
+  .m-contact-p { font-size: 17.6px; color: var(--muted); }
+  .m-disc { margin-top: 20px; color: var(--muted); font-size: 15.2px; min-height: 44px; line-height: 44px; }
+  .is-phone .m-contact { padding-block: 32px; margin-top: calc(var(--space) + 48px); }
+  .is-phone .m-contact-intro { flex-direction: column; align-items: flex-start; gap: 19.2px; }
+  .is-phone .m-contact-h { font-size: 32px; }
+  .is-phone .m-horizon { height: 110px; }
+  .is-phone .m-sun, .is-phone .m-inksun { width: 60px; height: 60px; margin-left: -30px; left: 76%; }
+  .m-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 24px; padding-block: 32px 48px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 14.4px; }
+  .m-fname { font-family: 'Kazon Name Text', var(--serif); font-size: 20px; letter-spacing: -.03em; color: var(--ink); }
+  .m-flinks { display: flex; flex-wrap: wrap; gap: 12px 24px; color: var(--ink); }
+  .is-phone .m-footer { gap: 16px; }
+
+  /* D2.3 variants on the horizon frame. */
+  .h-screen { clip-path: none; margin-top: 0; padding-top: 288px; padding-bottom: 36px; overflow: hidden; background: var(--screen); }
+  .is-phone .h-screen { padding-top: 200px; }
+  .h-skip { display: flex; align-items: center; justify-content: center; height: 64px; background: repeating-linear-gradient(135deg, #f3eee5 0 10px, #efe9de 10px 20px); font-family: var(--sans); font-weight: 500; color: var(--muted); letter-spacing: .02em; }
+  .v-B .m-horizon::before, .v-C .m-horizon::before, .v-D .m-horizon::before { display: none; }
+  .v-B .m-sun, .v-D .m-sun { box-shadow: none; }
+  .v-C .m-sun { display: none; }
+  .v-C .m-inksun { display: block; }
+  .v-D .m-screen-light { display: none; }
+  .v-D .m-sun { transform: translateY(50%); }
+
+  /* Real-size close-up of the horizon under each D2.3 frame (wide screens; phones already see it near real size). */
+  .hz-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 12px; align-items: start; margin-top: 12px; }
+  .hz-close { --gutter: 0px; position: relative; height: 178px; margin-top: 0; background: var(--paper); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+  .hz-close .hz-contact { position: absolute; left: 24px; right: 24px; top: 160px; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+  .hz-tag { position: absolute; left: 12px; top: 10px; font: 500 11px/1.3 var(--mono); color: var(--muted); }
+  .h-skip { font-size: 24px; }
+  .is-phone .h-skip { font-size: 15px; }
+
+  /* About. */
+  .a-intro { position: relative; padding-top: 64px; min-height: 640px; }
+  .a-copy { position: relative; z-index: 1; max-width: 544px; }
+  .m-pkicker { font-family: var(--mono); color: var(--accent); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 16px; }
+  .a-title { font-size: 83.2px; line-height: 1.02; letter-spacing: -.045em; }
+  .a-lede { font-size: 28.8px; line-height: 1.35; margin-top: 20px; max-width: 480px; }
+  .a-terrain { position: absolute; width: 90%; max-width: none; right: -16%; top: -16px; z-index: 0; transform: translateY(calc(var(--p, 0) * -28px)); mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 28%, #000 85%, transparent), linear-gradient(to bottom, #000 75%, transparent); mask-composite: intersect; pointer-events: none; }
+  .a-chapter { position: relative; display: grid; grid-template-columns: 1fr 1.2fr; align-items: center; gap: 32px; min-height: 465px; padding-bottom: 100px; }
+  .a-chapter.rev { grid-template-columns: 1.2fr 1fr; }
+  .a-chapter.rev .a-ccopy { grid-column: 2; grid-row: 1; } .a-chapter.rev .a-cart { grid-column: 1; grid-row: 1; }
+  .a-ccopy { position: relative; z-index: 2; max-width: 480px; }
+  .a-ch2 { font-size: 47.36px; line-height: 1.1; letter-spacing: -.035em; }
+  .a-ctext { font-size: 19.2px; line-height: 1.5; color: var(--muted); margin-top: 16px; }
+  .a-ctext.x { font-size: 16.8px; }
+  .a-ccopy .m-link { margin-top: 24px; }
+  .a-cart { position: relative; z-index: 1; }
+  .a-scene { position: relative; width: 115%; margin-left: -5%; }
+  .a-scene img { display: block; width: 100%; max-width: none; height: auto; mix-blend-mode: multiply; mask-image: radial-gradient(ellipse at center, #000 40%, transparent 72%); }
+  .a-path { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: .6; pointer-events: none; }
+  .a-path path { fill: none; stroke: var(--accent); stroke-width: 1.3; stroke-dasharray: 1; stroke-dashoffset: calc(1 - var(--p, 1)); }
+  .a-connect { display: flex; justify-content: space-between; align-items: center; gap: 32px; margin-top: var(--space); padding-block: 40px; border-top: 1px solid var(--rule); }
+  .a-connect-h { font-size: 36px; line-height: 1.15; letter-spacing: -.025em; }
+  .a-connect-p { color: var(--muted); font-size: 18px; margin-top: 9.6px; }
+  .a-connect .m-button { flex-shrink: 0; }
+  .a-resume { margin: 0 0 48px; padding-top: 24px; border-top: 1px solid var(--rule); }
+  .a-resume-s { display: inline-flex; align-items: baseline; gap: 12.8px; min-height: 32px; border-bottom: 1px solid var(--accent); }
+  .a-resume-s i { font-style: normal; color: var(--accent); }
+  .m-here { padding-block: 6.4px; border-bottom: 1px solid var(--accent); }
+
+  /* ---------- Responsive board ---------- */
+  @media (max-width: 1180px) {
+    .d21-row { grid-template-columns: minmax(0, 1fr) 200px; }
+    .d21-row .look { grid-column: 1 / -1; }
+  }
+  @media (max-width: 1000px) {
+    .grid3 { grid-template-columns: minmax(0, 1fr); }
+    .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .inv li { grid-template-columns: 88px minmax(0, 1fr); }
+    .inv li:first-child { display: none; }
+    .inv .where, .inv .what { grid-column: 2; }
+  }
+  @media (max-width: 860px) {
+    .grid2 { grid-template-columns: minmax(0, 1fr); }
+    .decisions { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 700px) {
+    .board { padding: 32px 16px 56px; }
+    .opt { padding: 18px 14px 18px; }
+    .d21-row { grid-template-columns: minmax(0, 1fr); }
+    .d21-row .phone-win { order: -1; width: min(260px, 100%); justify-self: center; }
+    .facts { grid-template-columns: minmax(0, 1fr); }
+    .facts .span2 { grid-column: auto; }
+    .dark-stage { padding: 24px 16px 16px; }
+    .pc-sub { font-size: 1.05rem; }
+    .option-head h3 { font-size: 23px; }
+    .inv li { padding: 10px 12px; gap: 4px 12px; }
+    .hz-row { display: none; }
+  }
+</style>
+</head>
+<body>
+<main class="board">
+  <header>
+    <p class="eyebrow">Design study · Hallmark audit follow-up · 2026-10-22 · Board D2</p>
+    <h1>Home motion: alternatives</h1>
+    <p class="intro">Hallmark flagged four pieces of motion on Home and About. All four are choices you made on September 27 and recorded in <code>docs/website-content-model.md</code>, so nothing changes until you pick. For each one, option A shows the site as it is today and the other options are alternatives built from the site’s own colours, type, art and copy. Scroll inside a frame to feel it, or press Replay.</p>
+    <p class="legend"><b>Effort:</b> S is a small edit, mostly CSS or deletions, plus the matching doc lines; M adds or rewrites logic, with a test or two and the docs. Line numbers are at PR #204’s head <code>f0abd1f</code> (the audit cites <code>26e764a</code>; some lines have moved since). Every option keeps the copy, the palette and the reviewed art. Section reveals (fade up as you scroll) belong to another decision and are left out of these demos, so only the motion in question shows.</p>
+    <div class="toolbar">
+      <button type="button" class="btn quiet" id="motion-toggle" aria-pressed="true">Demo motion: on</button>
+      <p id="motion-note">The demos follow your device’s motion setting. With motion off they show the resting frames, which is exactly what reduced-motion visitors see on the site.</p>
+    </div>
+    <nav class="jump" aria-label="Decisions on this board">
+      <a href="#d2-1"><span>D2.1</span>Scroll-linked worlds</a>
+      <a href="#d2-2"><span>D2.2</span>Project card hover</a>
+      <a href="#d2-3"><span>D2.3</span>Blooms and the horizon sun</a>
+      <a href="#d2-4"><span>D2.4</span>The About laptop caret</a>
+      <a href="#calls"><span>·</span>Your calls</a>
+    </nav>
+    <noscript><p class="legend"><b>The demos need JavaScript.</b> The option texts below still read on their own.</p></noscript>
+  </header>
+
+  <!-- ===================== D2.1 ===================== -->
+  <section class="study" id="d2-1" aria-labelledby="d2-1-title">
+    <p class="eyebrow">D2.1 · Your call 2 · Home and About</p>
+    <h2 id="d2-1-title">How much of Home and About should move with the scroll, on desktop and on phones?</h2>
+    <p class="lead">Hallmark flagged the scroll-scrubbed and parallax layers as its most serious motion tell (its verifiers rated it major at most, not critical). Its fix is to remove them, or at least keep nothing scroll-linked below 40rem, because motion tied to the scroll bar reads as decoration, keeps a scroll listener running and makes phones busy.</p>
+    <p class="decided"><b>Where you decided it:</b> <code>docs/website-content-model.md:246-282</code> (Home motion, September 27) and <code>:284-293</code> (About), with the drift recorded in <code>docs/asset-reviews/studio-v1.md:12</code>. Code: <code>src/scripts/scroll-scenes.ts:57-85</code>, <code>src/scripts/home-worlds.ts</code>, <code>src/components/Hero.astro</code>, <code>src/pages/index.astro</code>, <code>src/pages/about.astro</code>.</p>
+    <ul class="inv" aria-label="What moves with the scroll today">
+      <li aria-hidden="true"><span>Kind</span><span>Layer</span><span>Where</span><span>What it does today</span></li>
+      <li><span class="kind cross">Crossing</span><b>Dark screen</b><span class="where">Home, Currently building</span><span class="what">Arrives as a rounded panel and widens to full width as you scroll.</span></li>
+      <li><span class="kind cross">Crossing</span><b>Waveform edge</b><span class="where">Home, end of the screen</span><span class="what">Bars swell as it crosses the middle of the window and fall silent at the edges.</span></li>
+      <li><span class="kind cross">Crossing</span><b>Horizon sun</b><span class="where">Home, Contact</span><span class="what">Rises over the contact rule as the page ends; its glow fades in.</span></li>
+      <li><span class="kind cross">Crossing</span><b>Chapter path</b><span class="where">About, between chapters</span><span class="what">Draws as far as you have scrolled (already hidden on phones).</span></li>
+      <li><span class="kind drift">Drift</span><b>Studio picture</b><span class="where">Home hero</span><span class="what">Lifts up to 32px as you scroll (16px on phones) and leans up to 10px toward a mouse pointer.</span></li>
+      <li><span class="kind drift">Drift</span><b>Code rows</b><span class="where">Home, top of the screen</span><span class="what">Slide 40px as the screen widens.</span></li>
+      <li><span class="kind drift">Drift</span><b>Notebook</b><span class="where">Home, Writing</span><span class="what">Floats 18px up or down with the scroll.</span></li>
+      <li><span class="kind drift">Drift</span><b>Terrain</b><span class="where">About, introduction</span><span class="what">Lifts up to 28px with the scroll.</span></li>
+    </ul>
+    <p class="legend" style="margin-top:12px"><b>Crossing:</b> carries you from one world to the next. <b>Drift:</b> a picture moving at a different speed from the page, which is the classic parallax Hallmark describes.</p>
+
+    <!-- D2.1-A -->
+    <article class="opt" id="d2-1-a" data-option="D2.1-A">
+      <div class="option-head"><h3><span class="id">D2.1-A</span>Keep as is</h3><span class="badge no">Today</span></div>
+      <div class="controls"><button type="button" class="btn" data-replay="D2.1-A"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z"/></svg>Replay<span class="sr-only"> option A: scroll through from the top</span></button><p class="hint">Replay scrolls each frame from the top, like a visitor. Scroll inside a frame to stop it and steer.</p></div>
+      <div class="d21-row">
+        <div class="win desk-win">
+          <div class="frame-bar"><span>thesuperhuman.us<b data-label>/</b> · desktop 1280 × 800</span><span class="tabs"><button type="button" class="tab" aria-pressed="true" data-show="home">Home</button><button type="button" class="tab" aria-pressed="false" data-show="about">About</button></span></div>
+          <div class="mframe scroll" data-tpl="home" data-device="desktop" data-mode="keep" tabindex="0" role="region" aria-label="Option A, Home on desktop. Scroll inside to play."></div>
+          <div class="mframe scroll" data-tpl="about" data-device="desktop" data-mode="keep" tabindex="0" role="region" aria-label="Option A, About on desktop. Scroll inside to play." hidden></div>
+        </div>
+        <div class="win phone-win">
+          <div class="frame-bar"><span>Home · phone 390 × 844</span></div>
+          <div class="mframe scroll" data-tpl="home" data-device="phone" data-mode="keep" tabindex="0" role="region" aria-label="Option A, Home on a phone. Scroll inside to play."></div>
+        </div>
+        <div class="look"><b>What to look for</b><p>Scroll slowly. The screen widens with you, the bars swell in the middle of the window and the sun rises as the page ends. Point at the studio to see it lean. On About, the path draws as you go and the terrain lifts.</p></div>
+      </div>
+      <details class="ci"><summary>Compare with today’s CI capture</summary><img src="ci-home-screen-08e9b22.webp" width="960" height="848" alt="CI capture of Home at 1280 wide: the dark screen world with code rows, Currently building with Tally and Kaillera Next, and the waveform edge." loading="lazy" /><p>Home at 1280 wide, CI capture pr-199/08e9b22 (reduced motion, so every layer is at rest).</p></details>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Nothing. Four crossings and four drift layers follow the scroll on every screen size; phones get a smaller studio lift and a narrower screen arrival.</dd></div>
+        <div><dt>Why keep it</dt><dd>It is the idea you asked for on September 27: scrolling moves you through the studio, the screen, sound and the horizon. It passed the motion release gate (<code>docs/prelaunch-qa-2026-09-27-motion.md</code>), and reduced motion already shows every resting frame.</dd></div>
+        <div><dt>Trade-off</dt><dd>Hallmark’s strongest motion flag stays. A scroll listener runs on Home and About, and phones get motion that tracks the thumb.</dd></div>
+        <div><dt>Effort</dt><dd><span class="effort">None</span></dd></div>
+        <div class="span2"><dt>Files</dt><dd>None.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>As built and gated on September 27. Copy, tokens and art unchanged; reduced motion shows the resting frames; nothing that plays by itself runs longer than five seconds.</dd></div>
+      </dl>
+    </article>
+
+    <!-- D2.1-B -->
+    <article class="opt" id="d2-1-b" data-option="D2.1-B">
+      <div class="option-head"><h3><span class="id">D2.1-B</span>Worlds arrive once</h3><span class="badge no">Calmest</span></div>
+      <div class="controls"><button type="button" class="btn" data-replay="D2.1-B"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z"/></svg>Replay<span class="sr-only"> option B: scroll through from the top</span></button><p class="hint">Scroll back up and down after a replay: nothing plays twice.</p></div>
+      <div class="d21-row">
+        <div class="win desk-win">
+          <div class="frame-bar"><span>thesuperhuman.us<b data-label>/</b> · desktop 1280 × 800</span><span class="tabs"><button type="button" class="tab" aria-pressed="true" data-show="home">Home</button><button type="button" class="tab" aria-pressed="false" data-show="about">About</button></span></div>
+          <div class="mframe scroll" data-tpl="home" data-device="desktop" data-mode="once" tabindex="0" role="region" aria-label="Option B, Home on desktop. Scroll inside to play."></div>
+          <div class="mframe scroll" data-tpl="about" data-device="desktop" data-mode="once" tabindex="0" role="region" aria-label="Option B, About on desktop. Scroll inside to play." hidden></div>
+        </div>
+        <div class="win phone-win">
+          <div class="frame-bar"><span>Home · phone 390 × 844</span></div>
+          <div class="mframe scroll" data-tpl="home" data-device="phone" data-mode="once" tabindex="0" role="region" aria-label="Option B, Home on a phone. Scroll inside to play."></div>
+        </div>
+        <div class="look"><b>What to look for</b><p>Each crossing plays by itself once it is in view: the screen widens, the bars swell to rest, the sun rises, each About path draws. The studio, code rows, notebook and terrain stay put.</p></div>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Each crossing plays once, in about a second and a half, when it comes into view, then rests. All four drift layers stop. The scroll listener goes; an IntersectionObserver starts each scene, like the reveals elsewhere on the site.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Calmest on phones and the most consistent with the rest of the site, where things reveal once. Hallmark would have nothing scroll-linked left to flag.</dd></div>
+        <div><dt>Trade-off</dt><dd>Loses the feeling of moving through the worlds with your own scroll, which was the point of the September 27 request. A fast scroller sees the screen finish widening after it has already arrived.</dd></div>
+        <div><dt>Effort</dt><dd><span class="effort">M</span>The progress loop becomes a one-time play, with tests and docs.</dd></div>
+        <div class="span2"><dt>Files</dt><dd><code>src/scripts/scroll-scenes.ts</code> (progress loop at :57-85), <code>src/scripts/home-worlds.ts</code>, <code>src/components/home/SignalEdge.astro</code>, <code>src/pages/index.astro</code>, <code>src/components/Hero.astro</code>, <code>src/pages/about.astro</code>, <code>tests/lib/scroll-scenes.test.ts</code>, <code>docs/website-content-model.md:246-293</code>, <code>docs/website-system-plan.md</code> (motion paragraph), <code>docs/asset-reviews/studio-v1.md</code>, <code>notebook-v1.md</code>, <code>terrain-v1.md</code>.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy, tokens and art unchanged. Each scene rests within two seconds (WCAG 2.2.2 allows five). Reduced motion keeps today’s resting frames; a keyboard user who lands in a block still sees it at once.</dd></div>
+      </dl>
+    </article>
+
+    <!-- D2.1-C -->
+    <article class="opt" id="d2-1-c" data-option="D2.1-C">
+      <div class="option-head"><h3><span class="id">D2.1-C</span>Scrub on desktop, still on phones</h3><span class="badge no">Hallmark’s fallback</span></div>
+      <div class="controls"><button type="button" class="btn" data-replay="D2.1-C"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z"/></svg>Replay<span class="sr-only"> option C: scroll through from the top</span></button><p class="hint">Compare the two frames side by side.</p></div>
+      <div class="d21-row">
+        <div class="win desk-win">
+          <div class="frame-bar"><span>thesuperhuman.us<b data-label>/</b> · desktop 1280 × 800</span><span class="tabs"><button type="button" class="tab" aria-pressed="true" data-show="home">Home</button><button type="button" class="tab" aria-pressed="false" data-show="about">About</button></span></div>
+          <div class="mframe scroll" data-tpl="home" data-device="desktop" data-mode="split" tabindex="0" role="region" aria-label="Option C, Home on desktop. Scroll inside to play."></div>
+          <div class="mframe scroll" data-tpl="about" data-device="desktop" data-mode="split" tabindex="0" role="region" aria-label="Option C, About on desktop. Scroll inside to play." hidden></div>
+        </div>
+        <div class="win phone-win">
+          <div class="frame-bar"><span>Home · phone 390 × 844</span></div>
+          <div class="mframe scroll" data-tpl="home" data-device="phone" data-mode="split" tabindex="0" role="region" aria-label="Option C, Home on a phone. Scroll inside to play."></div>
+        </div>
+        <div class="look"><b>What to look for</b><p>The desktop frame behaves exactly like A. The phone frame behaves like B: each crossing plays once and nothing drifts.</p></div>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>At the phone layout (800px and narrower) the crossings play once, as in B, and the drift stops. Wider screens stay as they are today.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Keeps the idea where there is room for it and a mouse or trackpad to steer it. Phones, where a thumb flick moves the page fast, get a calm page.</dd></div>
+        <div><dt>Trade-off</dt><dd>Two behaviours to maintain and test at every width. Phone visitors never see the worlds move with the scroll. Hallmark asked for 40rem (640px); 800px matches the site’s existing phone layout, so most tablets held upright get the phone behaviour.</dd></div>
+        <div><dt>Effort</dt><dd><span class="effort">M</span>A width check beside the reduced-motion check, plus phone rules.</dd></div>
+        <div class="span2"><dt>Files</dt><dd><code>src/scripts/scroll-scenes.ts</code> (width check in <code>runMotion</code>), <code>src/scripts/home-worlds.ts</code>, <code>src/pages/index.astro</code> and <code>src/components/Hero.astro</code> (phone rules), <code>src/pages/about.astro</code> (terrain on phones), <code>tests/lib/scroll-scenes.test.ts</code>, <code>docs/website-content-model.md:246-293</code>, the three asset reviews.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy, tokens and art unchanged; reduced motion unchanged. Resizing across 800px must switch behaviour cleanly, which becomes a release QA check.</dd></div>
+      </dl>
+    </article>
+
+    <!-- D2.1-D -->
+    <article class="opt is-rec" id="d2-1-d" data-option="D2.1-D">
+      <div class="option-head"><h3><span class="id">D2.1-D</span>Keep the crossings, drop the drift</h3><span class="badge rec">Recommended</span></div>
+      <p class="rec-why"><b>Recommended because</b> it keeps the worlds you asked for and removes only the motion that carries no meaning, in the smallest change.</p>
+      <div class="controls"><button type="button" class="btn" data-replay="D2.1-D"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z"/></svg>Replay<span class="sr-only"> option D: scroll through from the top</span></button><p class="hint">Watch the studio and the notebook: they no longer float.</p></div>
+      <div class="d21-row">
+        <div class="win desk-win">
+          <div class="frame-bar"><span>thesuperhuman.us<b data-label>/</b> · desktop 1280 × 800</span><span class="tabs"><button type="button" class="tab" aria-pressed="true" data-show="home">Home</button><button type="button" class="tab" aria-pressed="false" data-show="about">About</button></span></div>
+          <div class="mframe scroll" data-tpl="home" data-device="desktop" data-mode="crossings" tabindex="0" role="region" aria-label="Option D, Home on desktop. Scroll inside to play."></div>
+          <div class="mframe scroll" data-tpl="about" data-device="desktop" data-mode="crossings" tabindex="0" role="region" aria-label="Option D, About on desktop. Scroll inside to play." hidden></div>
+        </div>
+        <div class="win phone-win">
+          <div class="frame-bar"><span>Home · phone 390 × 844</span></div>
+          <div class="mframe scroll" data-tpl="home" data-device="phone" data-mode="crossings" tabindex="0" role="region" aria-label="Option D, Home on a phone. Scroll inside to play."></div>
+        </div>
+        <div class="look"><b>What to look for</b><p>The screen still widens with your scroll, the bars still swell and the sun still rises. The studio, code rows, notebook and About terrain sit still.</p></div>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>The three Home crossings and the About path still follow the scroll on every screen. The four drift layers stop: the studio no longer lifts or leans toward the pointer (pointing at it still replays its scene), and the code rows, notebook and terrain sit still.</dd></div>
+        <div><dt>Why it could be better</dt><dd>The crossings are what make scrolling change worlds. The drift is the generic parallax Hallmark describes, and 18 to 32 pixels of float is not something a visitor would miss. It removes the parallax half of the flag with the smallest edit.</dd></div>
+        <div><dt>Trade-off</dt><dd>Still a scroll listener, and still scroll-linked on phones, so a strict Hallmark pass would flag the crossings again. If phones still feel busy afterwards, C’s phone rule can be added on top.</dd></div>
+        <div><dt>Effort</dt><dd><span class="effort">S</span>Mostly deletions.</dd></div>
+        <div class="span2"><dt>Files</dt><dd><code>src/components/Hero.astro</code> (<code>--lift</code> and the pointer transform, <code>data-scene="studio"</code>), <code>src/scripts/home-worlds.ts</code> (pointer drift handler; the replay on pointing stays), <code>src/pages/index.astro</code> (notebook transform and <code>data-scene="notebook"</code>, the code-row slide), <code>src/pages/about.astro</code> (terrain transform and <code>data-scene="terrain"</code>), <code>docs/website-content-model.md:257-293</code>, <code>docs/asset-reviews/studio-v1.md:12</code>, <code>notebook-v1.md:12</code>, <code>terrain-v1.md:11</code>.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy, tokens and art unchanged. Less motion than today; reduced motion and the resting frames are identical to today; no new dependency.</dd></div>
+      </dl>
+    </article>
+  </section>
+
+  <!-- ===================== D2.2 ===================== -->
+  <section class="study" id="d2-2" aria-labelledby="d2-2-title">
+    <p class="eyebrow">D2.2 · Your call 3 · Home, Currently building</p>
+    <h2 id="d2-2-title">What should a project card do when you point at it?</h2>
+    <p class="lead">Hallmark counted four hover signals firing at once on each card (the capture leans, its terracotta glow grows, the link turns terracotta and its arrow nudges) and separately flagged a coloured shadow that grows on a dark ground. Its fix keeps only the link colour. The link’s colour and arrow are the shared <code>.site-link</code> style, which the audit treats as one gesture, so they stay in every option.</p>
+    <p class="decided"><b>Where you decided it:</b> <code>docs/website-content-model.md:265</code>, “Project captures glow like screens and lean toward a fine pointer.” Code: <code>src/pages/index.astro:174-178</code> and the tilt in <code>src/scripts/scroll-scenes.ts:147-157</code>. Shown at real size on the screen world’s tokens. With a mouse, point at a card or Tab to its link; on touch, press Replay to watch a simulated pointer pass over it.</p>
+    <div class="grid2">
+      <article class="opt" id="d2-2-a" data-option="D2.2-A">
+        <div class="option-head"><h3><span class="id">D2.2-A</span>Keep as is</h3><span class="badge no">Today</span></div>
+        <div class="controls"><button type="button" class="btn" data-replay="D2.2-A"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z"/></svg>Replay<span class="sr-only"> option A: simulated pointer</span></button></div>
+        <div class="dark-stage"><article class="pc vA" data-tilt="on"><div class="pc-art"><img src="../../../../src/assets/projects/tally/transactions-demo-2026-09-26.webp" width="1200" height="800" alt="Tally’s Transactions screen on demo data, a CI capture from September 2026, with the demo data banner." loading="lazy" /></div><p class="pc-kicker">In development · public demo</p><p class="pc-title">Tally</p><p class="pc-sub">Review your transactions, set monthly budgets and see how much remains to spend.</p><a class="pc-link" href="#d2-2-a">Development journal <span aria-hidden="true">→</span><span class="sr-only"> (demo link to option A)</span></a></article><span class="ghost" aria-hidden="true"></span></div>
+        <dl class="facts">
+          <div><dt>What changes</dt><dd>Nothing. With a mouse or trackpad, pointing at a card leans the capture toward the pointer, grows its glow, turns the link terracotta and nudges its arrow.</dd></div>
+          <div><dt>Why keep it</dt><dd>The glow and the lean are the screen world’s idea, and touch screens already see only the resting glow.</dd></div>
+          <div><dt>Trade-off</dt><dd>Four signals at once is Hallmark’s gate 13, and the growing coloured shadow is its glow-on-dark tell.</dd></div>
+          <div><dt>Effort</dt><dd><span class="effort">None</span></dd></div>
+          <div class="span2"><dt>Files</dt><dd>None.</dd></div>
+          <div class="wide"><dt>Guideline check</dt><dd>As built. Tilt only with a fine pointer and off under reduced motion; focus ring unchanged.</dd></div>
+        </dl>
+      </article>
+      <article class="opt is-rec" id="d2-2-b" data-option="D2.2-B">
+        <div class="option-head"><h3><span class="id">D2.2-B</span>Lean, steady glow</h3><span class="badge rec">Recommended</span></div>
+        <p class="rec-why"><b>Recommended because</b> it removes the animated coloured shadow while keeping both halves of the idea you recorded: the screens still glow and still lean.</p>
+        <div class="controls"><button type="button" class="btn" data-replay="D2.2-B"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z"/></svg>Replay<span class="sr-only"> option B: simulated pointer</span></button></div>
+        <div class="dark-stage"><article class="pc vB" data-tilt="on"><div class="pc-art"><img src="../../../../src/assets/projects/tally/transactions-demo-2026-09-26.webp" width="1200" height="800" alt="Tally’s Transactions screen on demo data, a CI capture from September 2026, with the demo data banner." loading="lazy" /></div><p class="pc-kicker">In development · public demo</p><p class="pc-title">Tally</p><p class="pc-sub">Review your transactions, set monthly budgets and see how much remains to spend.</p><a class="pc-link" href="#d2-2-b">Development journal <span aria-hidden="true">→</span><span class="sr-only"> (demo link to option B)</span></a></article><span class="ghost" aria-hidden="true"></span></div>
+        <dl class="facts">
+          <div><dt>What changes</dt><dd>The glow stays exactly as it rests today and no longer grows on hover or focus. The lean and the link stay.</dd></div>
+          <div><dt>Why it could be better</dt><dd>Drops the one signal Hallmark flagged twice (gate 13 and glow on dark) with a two-line edit.</dd></div>
+          <div><dt>Trade-off</dt><dd>The capture still leans while the link changes, so a strict “one hover signal” reading is not met.</dd></div>
+          <div><dt>Effort</dt><dd><span class="effort">S</span></dd></div>
+          <div class="span2"><dt>Files</dt><dd><code>src/pages/index.astro</code> (delete the hover <code>box-shadow</code> rule at :176-178 and the <code>box-shadow</code> transition at :175).</dd></div>
+          <div class="wide"><dt>Guideline check</dt><dd>No copy, token or art change. Tilt still fine pointer only and off under reduced motion; focus ring unchanged.</dd></div>
+        </dl>
+      </article>
+      <article class="opt" id="d2-2-c" data-option="D2.2-C">
+        <div class="option-head"><h3><span class="id">D2.2-C</span>Screen wakes</h3><span class="badge no">One gesture</span></div>
+        <div class="controls"><button type="button" class="btn" data-replay="D2.2-C"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z"/></svg>Replay<span class="sr-only"> option C: simulated pointer</span></button></div>
+        <div class="dark-stage"><article class="pc vC" data-tilt="off"><div class="pc-art"><img src="../../../../src/assets/projects/tally/transactions-demo-2026-09-26.webp" width="1200" height="800" alt="Tally’s Transactions screen on demo data, a CI capture from September 2026, with the demo data banner." loading="lazy" /></div><p class="pc-kicker">In development · public demo</p><p class="pc-title">Tally</p><p class="pc-sub">Review your transactions, set monthly budgets and see how much remains to spend.</p><a class="pc-link" href="#d2-2-c">Development journal <span aria-hidden="true">→</span><span class="sr-only"> (demo link to option C)</span></a></article><span class="ghost" aria-hidden="true"></span></div>
+        <dl class="facts">
+          <div><dt>What changes</dt><dd>No lean, and the glow stays at today’s resting strength. With a mouse or trackpad the capture rests slightly dimmed (86% brightness); pointing at the card, or focusing its link, brings it to full brightness, like a monitor waking.</dd></div>
+          <div><dt>Why it could be better</dt><dd>One signal on the picture, with a meaning (the screen turning on), and it works the same for keyboard focus. No coloured shadow animates and no 3D transform softens the screenshot text.</dd></div>
+          <div><dt>Trade-off</dt><dd>Captures read a little darker at rest with a mouse (touch screens keep full brightness; this demo dims on every device so you can see it). The lean goes, so the content model line changes.</dd></div>
+          <div><dt>Effort</dt><dd><span class="effort">S</span></dd></div>
+          <div class="span2"><dt>Files</dt><dd><code>src/pages/index.astro</code> (<code>.project-art</code> transform and hover shadow out, a brightness filter in the hover query; <code>data-tilt</code> off both cards), <code>src/scripts/scroll-scenes.ts</code> (the tilt handler at :147-157 and its note at :12: these two cards are its only users), <code>docs/website-content-model.md:265</code> and <code>:296-297</code> (that Building line still describes a Tally lean the Building page no longer has).</dd></div>
+          <div class="wide"><dt>Guideline check</dt><dd>No copy change and no new token (a brightness filter only). Image alt text unchanged; no shadow transition; the brightness change is instant under reduced motion; the dimming applies only on devices that can hover.</dd></div>
+        </dl>
+      </article>
+      <article class="opt" id="d2-2-d" data-option="D2.2-D">
+        <div class="option-head"><h3><span class="id">D2.2-D</span>Flat on the well</h3><span class="badge no">Hallmark’s fix</span></div>
+        <div class="controls"><button type="button" class="btn" data-replay="D2.2-D"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z"/></svg>Replay<span class="sr-only"> option D: simulated pointer</span></button></div>
+        <div class="dark-stage"><article class="pc vD" data-tilt="off"><div class="pc-art"><img src="../../../../src/assets/projects/tally/transactions-demo-2026-09-26.webp" width="1200" height="800" alt="Tally’s Transactions screen on demo data, a CI capture from September 2026, with the demo data banner." loading="lazy" /></div><p class="pc-kicker">In development · public demo</p><p class="pc-title">Tally</p><p class="pc-sub">Review your transactions, set monthly budgets and see how much remains to spend.</p><a class="pc-link" href="#d2-2-d">Development journal <span aria-hidden="true">→</span><span class="sr-only"> (demo link to option D)</span></a></article><span class="ghost" aria-hidden="true"></span></div>
+        <dl class="facts">
+          <div><dt>What changes</dt><dd>No lean and no coloured shadow. Each capture sits on the screen’s <code>--well</code> surface inside its hairline, and only the link responds.</dd></div>
+          <div><dt>Why it could be better</dt><dd>The cleanest result for Hallmark, nothing animated around the picture, and the screenshots read most plainly.</dd></div>
+          <div><dt>Trade-off</dt><dd>The “screens in the dark” glow goes, so the dark world looks like any card grid on a dark page.</dd></div>
+          <div><dt>Effort</dt><dd><span class="effort">S</span></dd></div>
+          <div class="span2"><dt>Files</dt><dd><code>src/pages/index.astro</code> (<code>.project-art</code> shadow, transform and transition; <code>data-tilt</code> off both cards), <code>src/scripts/scroll-scenes.ts</code> (the now unused tilt handler at :147-157 and its note at :12), <code>docs/website-content-model.md:265</code> and <code>:296-297</code>.</dd></div>
+          <div class="wide"><dt>Guideline check</dt><dd>Uses the existing <code>--well</code> and <code>--rule</code> tokens; no copy change; less motion.</dd></div>
+        </dl>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== D2.3 ===================== -->
+  <section class="study" id="d2-3" aria-labelledby="d2-3-title">
+    <p class="eyebrow">D2.3 · Your call 9 · Home</p>
+    <h2 id="d2-3-title">How should the screen light and the horizon sun be drawn?</h2>
+    <p class="lead">Hallmark flagged the soft terracotta blooms (the light at the top of the dark screen and the wash over the contact rule) as floating-orb decoration, and the sun’s blurred halo with them. Its fix is to drop the blooms or keep one still, and to draw the sun as a flat disc. Its verifier rated this minor and called the sun a meaningful motif, not decoration.</p>
+    <p class="decided"><b>Where you decided it:</b> <code>docs/website-content-model.md:270-272</code>, “a sun rises over the contact rule as the page ends.” Code: <code>src/pages/index.astro:78</code>, <code>:122</code>, <code>:167</code> and <code>:222-225</code>. In these demos the sun rises over two seconds when you press Replay; on the site its timing follows your D2.1 choice. Each option shows Home at 1280 wide, a real-size close-up of the desktop horizon, and Home at 390 wide beside it; on a narrow screen the large frame switches to the phone layout.</p>
+    <div class="grid2">
+    <article class="opt" id="d2-3-a" data-option="D2.3-A">
+      <div class="option-head"><h3><span class="id">D2.3-A</span>Keep as is</h3><span class="badge no">Today</span></div>
+      <div class="controls"><button type="button" class="btn" data-replay="D2.3-A"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z"/></svg>Replay<span class="sr-only"> option A: the sun rises</span></button></div>
+      <div class="win"><div class="frame-bar"><span>Home · top of the screen world, then the page end</span></div><div class="mframe still" data-tpl="horizon" data-device="auto" data-mode="replay" data-variant="A" role="img" aria-label="Option A: terracotta light at the top of the dark screen; at the page end a warm wash over the contact rule and a sun with a blurred halo."></div></div>
+      <div class="hz-row">
+        <div class="hz-close v-A" aria-hidden="true"><span class="hz-tag">Desktop horizon at real size</span><div class="m-contact hz-contact"><div class="m-horizon"><span class="m-sun"></span><svg class="m-inksun" viewBox="0 0 84 84"><path pathLength="1" d="M1.5 42 A40.5 40.5 0 1 1 82.5 42 A40.5 40.5 0 1 1 1.5 42" /></svg></div></div></div>
+        <div class="win phone-only"><div class="frame-bar"><span>Phone · 390</span></div><div class="mframe still" data-tpl="horizon" data-device="phone" data-mode="replay" data-variant="A" role="img" aria-label="Option A on a phone at 390 wide: the same light, wash and haloed sun, with the smaller 60px phone sun."></div></div>
+      </div>
+      <details class="ci"><summary>Compare with today’s CI capture</summary><img src="ci-home-horizon-08e9b22.webp" width="960" height="300" alt="CI capture of Home's contact section at 1280 wide: the sun with its halo and the warm wash over the contact rule." loading="lazy" /><p>Home at 1280 wide, CI capture pr-199/08e9b22 (reduced motion, so the sun has fully risen).</p></details>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Nothing. A terracotta light (14%) sits at the top of the dark screen. At the page end a second wash fades in over the contact rule while a sun with a 50px blurred halo rises.</dd></div>
+        <div><dt>Why keep it</dt><dd>The sun closes the tagline’s last world, “things worth exploring”, and the light makes the dark screen read as lit.</dd></div>
+        <div><dt>Trade-off</dt><dd>Two soft blooms plus a haloed disc is exactly the floating-orb pattern Hallmark lists.</dd></div>
+        <div><dt>Effort</dt><dd><span class="effort">None</span></dd></div>
+        <div class="span2"><dt>Files</dt><dd>None.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>As built; colours come from <code>--accent</code> and <code>--paper</code> through <code>color-mix</code>.</dd></div>
+      </dl>
+    </article>
+
+    <article class="opt is-rec" id="d2-3-b" data-option="D2.3-B">
+      <div class="option-head"><h3><span class="id">D2.3-B</span>One still light, flat sun</h3><span class="badge rec">Recommended</span></div>
+      <p class="rec-why"><b>Recommended because</b> it is Hallmark’s own fix at the smallest cost: the sun and the lit screen stay, and the two orb-like effects go.</p>
+      <div class="controls"><button type="button" class="btn" data-replay="D2.3-B"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z"/></svg>Replay<span class="sr-only"> option B: the sun rises</span></button></div>
+      <div class="win"><div class="frame-bar"><span>Home · top of the screen world, then the page end</span></div><div class="mframe still" data-tpl="horizon" data-device="auto" data-mode="replay" data-variant="B" role="img" aria-label="Option B: the same light at the top of the dark screen; at the page end no wash, and a flat terracotta sun without a halo."></div></div>
+      <div class="hz-row">
+        <div class="hz-close v-B" aria-hidden="true"><span class="hz-tag">Desktop horizon at real size</span><div class="m-contact hz-contact"><div class="m-horizon"><span class="m-sun"></span><svg class="m-inksun" viewBox="0 0 84 84"><path pathLength="1" d="M1.5 42 A40.5 40.5 0 1 1 82.5 42 A40.5 40.5 0 1 1 1.5 42" /></svg></div></div></div>
+        <div class="win phone-only"><div class="frame-bar"><span>Phone · 390</span></div><div class="mframe still" data-tpl="horizon" data-device="phone" data-mode="replay" data-variant="B" role="img" aria-label="Option B on a phone at 390 wide: the same screen light and a flat 60px sun without a halo or wash."></div></div>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>The screen light stays; it never moved. The wash over the contact rule goes, and the sun loses its halo: a flat terracotta disc that still rises.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Keeps the motif and the screen’s light while removing both things Hallmark reads as orbs.</dd></div>
+        <div><dt>Trade-off</dt><dd>The page ending is a little cooler without the warm wash.</dd></div>
+        <div><dt>Effort</dt><dd><span class="effort">S</span>Two CSS rules.</dd></div>
+        <div class="span2"><dt>Files</dt><dd><code>src/pages/index.astro</code> (<code>.horizon::before</code> at :223, the <code>box-shadow</code> on <code>.horizon-sun</code> at :225).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No copy change; colours unchanged; motion unchanged in kind; reduced motion shows the risen sun.</dd></div>
+      </dl>
+    </article>
+
+    <article class="opt" id="d2-3-c" data-option="D2.3-C">
+      <div class="option-head"><h3><span class="id">D2.3-C</span>Inked sun</h3><span class="badge no">Notebook line</span></div>
+      <div class="controls"><button type="button" class="btn" data-replay="D2.3-C"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z"/></svg>Replay<span class="sr-only"> option C: the sun inks in as it rises</span></button></div>
+      <div class="win"><div class="frame-bar"><span>Home · top of the screen world, then the page end</span></div><div class="mframe still" data-tpl="horizon" data-device="auto" data-mode="replay" data-variant="C" role="img" aria-label="Option C: the same light at the top of the dark screen; at the page end no wash, and the sun drawn as a terracotta ink outline."></div></div>
+      <div class="hz-row">
+        <div class="hz-close v-C" aria-hidden="true"><span class="hz-tag">Desktop horizon at real size</span><div class="m-contact hz-contact"><div class="m-horizon"><span class="m-sun"></span><svg class="m-inksun" viewBox="0 0 84 84"><path pathLength="1" d="M1.5 42 A40.5 40.5 0 1 1 82.5 42 A40.5 40.5 0 1 1 1.5 42" /></svg></div></div></div>
+        <div class="win phone-only"><div class="frame-bar"><span>Phone · 390</span></div><div class="mframe still" data-tpl="horizon" data-device="phone" data-mode="replay" data-variant="C" role="img" aria-label="Option C on a phone at 390 wide: the 60px sun drawn as a terracotta ink outline, with no wash."></div></div>
+      </div>
+      <p class="label-study">Study drawing. Production art would need image QA.</p>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>No wash over the contact rule. The sun becomes a terracotta ink outline that draws itself as it rises, in the same stroke weight as the essay’s pen underline just above, so the last world reads as one notebook drawing. The screen light stays.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Ties the ending to the Writing section’s pen stroke, with no blur anywhere on the page.</dd></div>
+        <div><dt>Trade-off</dt><dd>A different sun from the filled suns in the studio sketch and the notebook art, and a thin outline is quieter at 60px on phones.</dd></div>
+        <div><dt>Effort</dt><dd><span class="effort">S</span>The sun becomes a small inline SVG.</dd></div>
+        <div class="span2"><dt>Files</dt><dd><code>src/pages/index.astro</code> (horizon markup at :122 and its CSS at :222-225, phone sizes at :276-277).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No copy change; stroke uses <code>--accent</code> (4.78:1 on paper, though it is decorative). Reduced motion shows it fully drawn and risen. New drawn element, so it goes through image QA.</dd></div>
+      </dl>
+    </article>
+
+    <article class="opt" id="d2-3-d" data-option="D2.3-D">
+      <div class="option-head"><h3><span class="id">D2.3-D</span>Still horizon</h3><span class="badge no">No motion</span></div>
+      <div class="controls"><p class="hint">Still: nothing moves in this option, so there is nothing to replay.</p></div>
+      <div class="win"><div class="frame-bar"><span>Home · top of the screen world, then the page end</span></div><div class="mframe still" data-tpl="horizon" data-device="auto" data-mode="still" data-variant="D" role="img" aria-label="Option D: the dark screen without its light; at the page end a flat sun resting half set on the contact rule."></div></div>
+      <div class="hz-row">
+        <div class="hz-close v-D" aria-hidden="true"><span class="hz-tag">Desktop horizon at real size</span><div class="m-contact hz-contact"><div class="m-horizon"><span class="m-sun"></span><svg class="m-inksun" viewBox="0 0 84 84"><path pathLength="1" d="M1.5 42 A40.5 40.5 0 1 1 82.5 42 A40.5 40.5 0 1 1 1.5 42" /></svg></div></div></div>
+        <div class="win phone-only"><div class="frame-bar"><span>Phone · 390</span></div><div class="mframe still" data-tpl="horizon" data-device="phone" data-mode="still" data-variant="D" role="img" aria-label="Option D on a phone at 390 wide: no light, and a flat sun resting half set on the contact rule."></div></div>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>No light, no wash and no rising: the dark screen is flat, and a flat sun rests half set on the contact rule.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Nothing left for Hallmark to flag and nothing to maintain; the page ends on a quiet picture.</dd></div>
+        <div><dt>Trade-off</dt><dd>The ending no longer moves, which undoes part of the September 27 request for a Home that feels alive, and the screen world loses its lit look.</dd></div>
+        <div><dt>Effort</dt><dd><span class="effort">S</span></dd></div>
+        <div class="span2"><dt>Files</dt><dd><code>src/pages/index.astro</code> (screen-light element and CSS, horizon CSS, <code>data-scene="horizon"</code>), <code>docs/website-content-model.md:270-272</code>.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No copy change; less motion; every visitor, with or without reduced motion, sees the same still picture. The half-set sun is a new resting frame, so the content model line and the CI screenshot change.</dd></div>
+      </dl>
+    </article>
+    </div>
+  </section>
+
+  <!-- ===================== D2.4 ===================== -->
+  <section class="study" id="d2-4" aria-labelledby="d2-4-title">
+    <p class="eyebrow">D2.4 · Missed by the auditors 13 · About, Software chapter</p>
+    <h2 id="d2-4-title">Should the About laptop keep its blinking caret?</h2>
+    <p class="lead">When the Software chapter arrives, a soft glow rises behind the laptop’s “&lt;/&gt;” and a caret beside it blinks twice. Hallmark’s rules allow a caret only inside something being typed, so a caret blinking beside a finished glyph reads as decoration.</p>
+    <p class="decided"><b>Where you decided it:</b> <code>docs/website-content-model.md:290-292</code> (“a glow and caret on the laptop’s &lt;/&gt;”) and <code>docs/asset-reviews/laptop-v1.md:36-38</code>. Code: <code>src/components/ObjectLife.astro:23,44,50</code>. Each frame plays once when it is half on screen; Replay plays it again. Cropped to the laptop at about the size it shows on About at 1280 wide.</p>
+    <div class="grid3">
+      <article class="opt" id="d2-4-a" data-option="D2.4-A">
+        <div class="option-head"><h3><span class="id">D2.4-A</span>Keep as is</h3><span class="badge no">Today</span></div>
+        <div class="controls"><button type="button" class="btn" data-replay="D2.4-A"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z"/></svg>Replay<span class="sr-only"> option A: laptop scene</span></button></div>
+        <div class="lap-stage">
+          <svg class="lap" viewBox="400 210 760 528" role="img" aria-label="Option A: the laptop with a glow behind the code glyph and a caret that blinks twice beside it.">
+            <defs><radialGradient id="gg-a"><stop offset="0" stop-color="#f6e8d2" stop-opacity=".55" /><stop offset="1" stop-color="#f6e8d2" stop-opacity="0" /></radialGradient></defs>
+            <image href="../../../../src/assets/site/laptop-v1.webp" x="0" y="0" width="1536" height="1024" />
+            <g class="life"><ellipse class="glow" cx="712" cy="427" rx="150" ry="100" fill="url(#gg-a)" /><rect class="caret caret-a" x="812" y="402" width="5" height="52" rx="1" /></g>
+          </svg>
+        </div>
+        <dl class="facts">
+          <div><dt>What changes</dt><dd>Nothing. A cream glow rises behind the “&lt;/&gt;”, a caret to its right blinks twice, then the art rests.</dd></div>
+          <div><dt>Why keep it</dt><dd>Recorded and reviewed; it plays once and is gone in about three seconds.</dd></div>
+          <div><dt>Trade-off</dt><dd>A caret beside a finished glyph is the standalone blinking caret Hallmark’s microinteraction rules reject.</dd></div>
+          <div><dt>Effort</dt><dd><span class="effort">None</span></dd></div>
+          <div><dt>Files</dt><dd>None.</dd></div>
+          <div><dt>Guideline check</dt><dd>As built and recorded in the laptop asset review; nothing drawn in the resting frame; plays once and rests in about three seconds.</dd></div>
+        </dl>
+      </article>
+      <article class="opt" id="d2-4-b" data-option="D2.4-B">
+        <div class="option-head"><h3><span class="id">D2.4-B</span>Glow only</h3><span class="badge no">Simplest</span></div>
+        <div class="controls"><button type="button" class="btn" data-replay="D2.4-B"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z"/></svg>Replay<span class="sr-only"> option B: laptop scene</span></button></div>
+        <div class="lap-stage">
+          <svg class="lap" viewBox="400 210 760 528" role="img" aria-label="Option B: the laptop with only a glow behind the code glyph.">
+            <defs><radialGradient id="gg-b"><stop offset="0" stop-color="#f6e8d2" stop-opacity=".55" /><stop offset="1" stop-color="#f6e8d2" stop-opacity="0" /></radialGradient></defs>
+            <image href="../../../../src/assets/site/laptop-v1.webp" x="0" y="0" width="1536" height="1024" />
+            <g class="life"><ellipse class="glow" cx="712" cy="427" rx="150" ry="100" fill="url(#gg-b)" /></g>
+          </svg>
+        </div>
+        <dl class="facts">
+          <div><dt>What changes</dt><dd>The caret goes; the glow still rises and fades.</dd></div>
+          <div><dt>Why it could be better</dt><dd>One quiet gesture, and nothing pretends to be typing.</dd></div>
+          <div><dt>Trade-off</dt><dd>The laptop becomes the faintest of the four chapter scenes.</dd></div>
+          <div><dt>Effort</dt><dd><span class="effort">S</span></dd></div>
+          <div><dt>Files</dt><dd><code>src/components/ObjectLife.astro</code> (caret rect and its animation), <code>docs/website-content-model.md:291</code>, <code>docs/asset-reviews/laptop-v1.md:38</code>.</dd></div>
+          <div><dt>Guideline check</dt><dd>No copy, token or art change; removes motion; reduced motion unchanged. The laptop review’s animated layer line is updated, with no new image QA.</dd></div>
+        </dl>
+      </article>
+      <article class="opt is-rec" id="d2-4-c" data-option="D2.4-C">
+        <div class="option-head"><h3><span class="id">D2.4-C</span>Re-type the glyph</h3><span class="badge rec">Recommended</span></div>
+        <p class="rec-why"><b>Recommended because</b> it keeps the chapter’s life and makes the caret mean something, matching the Home monitor that re-types its last lines.</p>
+        <div class="controls"><button type="button" class="btn" data-replay="D2.4-C"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z"/></svg>Replay<span class="sr-only"> option C: laptop scene</span></button></div>
+        <div class="lap-stage">
+          <svg class="lap" viewBox="400 210 760 528" role="img" aria-label="Option C: the code glyph is typed again one character at a time with a caret after it, which then blinks twice and leaves.">
+            <defs>
+              <radialGradient id="gg-c"><stop offset="0" stop-color="#f6e8d2" stop-opacity=".55" /><stop offset="1" stop-color="#f6e8d2" stop-opacity="0" /></radialGradient>
+              <!-- The screen behind the glyph, sampled from laptop-v1.webp: darker at lower left, lighter at upper right. -->
+              <linearGradient id="scr-c" gradientUnits="userSpaceOnUse" x1="625" y1="490" x2="809" y2="335"><stop offset="0" stop-color="#262520" /><stop offset="1" stop-color="#383632" /></linearGradient>
+            </defs>
+            <image href="../../../../src/assets/site/laptop-v1.webp" x="0" y="0" width="1536" height="1024" />
+            <g class="life">
+              <rect class="mask" x="630" y="368" width="57" height="118" fill="url(#scr-c)" style="--at:.9s" />
+              <rect class="mask" x="687" y="368" width="50" height="118" fill="url(#scr-c)" style="--at:1.2s" />
+              <rect class="mask" x="737" y="368" width="57" height="118" fill="url(#scr-c)" style="--at:1.5s" />
+              <ellipse class="glow" cx="712" cy="427" rx="150" ry="100" fill="url(#gg-c)" />
+              <rect class="caret caret-c" x="630" y="402" width="5" height="52" rx="1" />
+            </g>
+          </svg>
+        </div>
+        <p class="label-study">Study drawing. Production art would need image QA.</p>
+        <p class="zoom-note">An overlay on the reviewed laptop art; the covers use colours sampled from it.</p>
+        <dl class="facts">
+          <div><dt>What changes</dt><dd>The “&lt;/&gt;” is typed again, one character at a time, with the caret riding after it; then the caret blinks twice and leaves. The glow plays as today.</dd></div>
+          <div><dt>Why it could be better</dt><dd>The caret now belongs to something being typed, which is what Hallmark allows.</dd></div>
+          <div><dt>Trade-off</dt><dd>More parts on a raster image: the covers must match the screen’s gradient at every size, so it needs a 2x check on desktop and phone.</dd></div>
+          <div><dt>Effort</dt><dd><span class="effort">M</span></dd></div>
+          <div><dt>Files</dt><dd><code>src/components/ObjectLife.astro</code>, <code>docs/asset-reviews/laptop-v1.md:36-38</code> (animated layer record and in-page inspection), <code>docs/website-content-model.md:291</code>.</dd></div>
+          <div><dt>Guideline check</dt><dd>No new text, glyph or interface, and no new raster. Rests in about three seconds; reduced motion, no-JS and print show the untouched art. Needs image QA: a new animated layer on generated art gets the in-page check in <code>docs/generated-image-qa.md</code> (resting state, motion extremes, phone placement, reduced motion), recorded in the laptop asset review.</dd></div>
+        </dl>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== Summary ===================== -->
+  <section class="study" id="calls" aria-labelledby="calls-title">
+    <p class="eyebrow">Your calls</p>
+    <h2 id="calls-title">What I need from you</h2>
+    <p class="lead">Pick one option per decision. If you say “recommended” I will build the four defaults below; any other choice is just its ID.</p>
+    <ol class="decisions">
+      <li><b><span class="id">D2.1</span>Scroll-linked worlds</b>Keep everything (A), play each world once (B), still on phones only (C), or keep the crossings and drop the drift (D).<span class="def">Recommended: D2.1-D</span></li>
+      <li><b><span class="id">D2.2</span>Project card hover</b>Keep all four signals (A), lean with a steady glow (B), screen wakes (C), or flat on the well (D).<span class="def">Recommended: D2.2-B</span></li>
+      <li><b><span class="id">D2.3</span>Blooms and the horizon sun</b>Keep (A), one still light and a flat sun (B), inked sun (C), or a still horizon (D).<span class="def">Recommended: D2.3-B</span></li>
+      <li><b><span class="id">D2.4</span>The About laptop caret</b>Keep (A), glow only (B), or re-type the glyph (C).<span class="def">Recommended: D2.4-C</span></li>
+    </ol>
+    <p class="together"><b>Together:</b> the four recommended options make one small change set: <code>src/pages/index.astro</code>, <code>src/components/Hero.astro</code>, <code>src/scripts/home-worlds.ts</code>, <code>src/pages/about.astro</code> and <code>src/components/ObjectLife.astro</code>, plus the motion lines in <code>docs/website-content-model.md</code> and four asset reviews. Home keeps its four worlds, its screen light and its rising sun; what goes is the drift, the growing glow, the two blurs and the standalone caret. Nothing new is generated, and copy is untouched. CI screenshots use reduced motion, so they will look the same apart from the sun’s halo and the contact wash.</p>
+  </section>
+</main>
+
+<!-- ===================== Page templates for the frames ===================== -->
+<template id="tpl-home">
+  <div class="m-shell m-nav"><span class="m-name">Kazon Wilson</span><span class="m-navlinks"><span>Work</span><span>Building</span><span>Writing</span><span>Audio</span><span>About</span></span><span class="m-navbtn">Work with me</span><span class="m-menu">Menu <i></i></span></div>
+  <section class="m-hero m-shell" data-s="studio" data-start="0.25" data-end="-0.75">
+    <div class="m-hero-copy">
+      <p class="m-h1">Kazon<br />Wilson</p>
+      <p class="m-tagline">Software, sound, and things worth exploring.</p>
+      <p class="m-intro">I build software, design websites, and mix and master music.</p>
+      <div class="m-row"><span class="m-button">Start a project</span><span class="m-link">Explore what I’m building <i>→</i></span></div>
+    </div>
+    <div class="m-studio-art"><div class="m-studio-scene">
+      <img src="../../../../src/assets/site/studio-v1.webp" width="1536" height="1024" alt="" />
+      <svg viewBox="0 0 1536 1024" preserveAspectRatio="xMidYMid meet"><g transform="matrix(2.2 -0.88 2.75 0.95 815 840)"><path class="m-sketch" d="M18 55 C 25 50, 22 44, 30 41 S 43 43, 48 36 S 55 27, 64 28 S 76 25, 80 17" /><ellipse class="m-sketch-sun" cx="84" cy="36" rx="4.6" ry="4.6" /></g></svg>
+    </div></div>
+  </section>
+  <div class="m-shell"><section class="m-section">
+    <div class="m-sh"><p class="m-h2">Work highlights</p></div>
+    <div class="m-proof">
+      <div class="m-lyft">
+        <p class="m-company">Lyft</p>
+        <p class="m-figure">5,000 → 100,000+ rows per batch</p>
+        <div class="m-cap"><span class="m-cells" data-build="cells"></span><span class="m-key"><i class="m-cell"></i><span>= 5,000 rows</span></span></div>
+        <p class="m-desc">I changed Lyft’s driver-bonus tool so support could run and monitor larger batches without handing the work to on-call engineers.</p>
+        <p class="m-source">Owner-reported batch capacity</p>
+        <span class="m-link">Explore my work <i>→</i></span>
+      </div>
+      <div class="m-music">
+        <p class="m-company">Old News</p>
+        <p class="m-music-h">Vocal mix → final master</p>
+        <div class="m-player">
+          <div class="m-pstage"><span class="m-play"></span><div class="m-pcol"><p class="m-plabel"><span>Mix</span><span>0:00 / 2:40</span></p><svg data-build="wave"></svg><span class="m-seek"></span></div></div>
+          <div class="m-choice"><span class="m-switch"><span class="on">A <span>Mix</span></span><span>B <span>Master</span></span></span><span class="m-match"><i></i>Match loudness</span></div>
+          <p class="m-about">▸ About this A/B</p>
+        </div>
+        <p class="m-more">▸ Credits and full comparison</p>
+      </div>
+    </div>
+  </section>
+  <section class="m-hire">
+    <div class="m-sh"><p class="m-h2">Work with me</p></div>
+    <div class="m-doors">
+      <div class="m-door"><div class="m-door-art"><img src="../../../../src/assets/site/work-with-me-mixing.webp" width="900" height="600" alt="" /></div><p class="m-door-cap">Old News · recorded, mixed and mastered by <span class="m-pn">Kazon</span></p><p class="m-door-title">Mixing &amp; mastering</p><p class="m-door-line">Send your recorded vocals and beat for mixing, or your finished mix for mastering. Vocal mixing from $150, mastering from $75.</p><span class="m-button">Start your song</span></div>
+      <div class="m-door"><div class="m-door-art"><img src="../../../../src/assets/site/work-with-me-website.webp" width="900" height="600" alt="" /></div><p class="m-door-cap">This site, redesigned September 2026</p><p class="m-door-title">Website design</p><p class="m-door-line">I design and build your website, from the page plan to a site that works on phones and computers.</p><span class="m-button">Plan your website</span></div>
+      <div class="m-door"><div class="m-door-art"><img src="../../../../src/assets/site/work-with-me-software.webp" width="900" height="600" alt="" /></div><p class="m-door-cap">Tally · a budgeting app, public demo</p><p class="m-door-title">Software engineering</p><p class="m-door-line">I build web apps people can try, or a tool that makes a task your team repeats easier.</p><span class="m-button">Discuss your project</span></div>
+    </div>
+  </section></div>
+  <div class="m-screen" data-s="screen" data-start="1" data-end="0.55">
+    <div class="m-screen-light"></div>
+    <div class="m-code"><svg data-build="code"></svg></div>
+    <div class="m-shell"><section>
+      <div class="m-sh"><p class="m-h2">Currently building</p><span class="m-link m-headlink">All projects <i>→</i></span></div>
+      <div class="m-projects">
+        <div class="m-card"><div class="m-card-art"><img src="../../../../src/assets/projects/tally/transactions-demo-2026-09-26.webp" width="1200" height="800" alt="" /></div><p class="m-kicker">In development · public demo</p><p class="m-card-title">Tally</p><p class="m-card-sub">Review your transactions, set monthly budgets and see how much remains to spend.</p><span class="m-link">Development journal <i>→</i></span></div>
+        <div class="m-card"><div class="m-card-art"><img src="../../../../src/assets/projects/kaillera-next/landing-2026-09-26.webp" width="1252" height="835" alt="" /></div><p class="m-kicker">In development · playable demo build</p><p class="m-card-title">Kaillera Next</p><p class="m-card-sub">Open a link and play supported N64 games with friends, nothing to install.</p><span class="m-link">Development journal <i>→</i></span></div>
+      </div>
+    </section></div>
+    <div class="m-signal" data-s="signal" data-start="1.05" data-end="-0.1"><svg data-build="signal"></svg></div>
+  </div>
+  <div class="m-shell">
+    <section class="m-section">
+      <div class="m-sh"><p class="m-h2">Writing</p></div>
+      <div class="m-editorial">
+        <div class="m-notebook" data-s="notebook" data-start="1" data-end="0"><img src="../../../../src/assets/site/notebook-v1.webp" width="1536" height="1024" alt="" /></div>
+        <div class="m-ed-copy"><p class="m-ed-title">AI Gives You Speed. Engineering Gives It Direction.</p><svg class="m-pen" viewBox="0 0 300 14" preserveAspectRatio="none"><path pathLength="1" d="M3 9 C 60 3, 110 12, 170 7 S 262 4, 297 8" /></svg><span class="m-link">Read the essay <i>→</i></span></div>
+      </div>
+    </section>
+    <section class="m-contact" data-s="horizon" data-start="1" data-end="0.3">
+      <div class="m-horizon"><span class="m-sun"></span></div>
+      <div class="m-contact-intro"><div><p class="m-contact-h">Have something in mind?<br />Let’s talk.</p><p class="m-contact-p">Ideas, opportunities, or a conversation worth having.</p></div><span class="m-button">Email me</span></div>
+      <p class="m-disc">▸ Send a message</p>
+    </section>
+    <div class="m-footer"><span class="m-fname">Kazon Wilson</span><span class="m-flinks"><span>GitHub</span><span>LinkedIn</span><span>Audio</span><span>Work with me</span><span>Support my work</span><span>Privacy</span></span><span>The Superhuman Group LLC · 2026</span></div>
+  </div>
+</template>
+
+<template id="tpl-about">
+  <div class="m-shell m-nav"><span class="m-name">Kazon Wilson</span><span class="m-navlinks"><span>Work</span><span>Building</span><span>Writing</span><span>Audio</span><span class="m-here">About</span></span><span class="m-navbtn">Work with me</span><span class="m-menu">Menu <i></i></span></div>
+  <div class="m-shell a-intro">
+    <div class="a-copy"><p class="m-pkicker">About</p><p class="a-title">A little more<br />about me.</p><p class="a-lede">I’m <span class="m-pn">Kazon</span>. Software engineer, audio engineer, and a person who likes figuring things out.</p></div>
+    <img class="a-terrain" data-s="terrain" data-start="0.2" data-end="-0.8" src="../../../../src/assets/site/terrain-v1.webp" width="1536" height="1024" alt="" />
+  </div>
+  <div class="m-shell">
+    <section class="a-chapter">
+      <div class="a-ccopy"><p class="m-pkicker">Audio</p><p class="a-ch2">I started with sound.</p><p class="a-ctext">I studied audio production at Middle Tennessee State, with a minor in computer science. I still record, mix and master music.</p><span class="m-link">Explore audio engineering <i>→</i></span></div>
+      <div class="a-cart"><div class="a-scene"><img src="../../../../src/assets/site/headphones-v1.webp" width="1536" height="1024" alt="" /></div></div>
+      <svg class="a-path" data-s="path" data-start="0.72" data-end="-0.2" viewBox="0 0 1000 500" preserveAspectRatio="none"><path pathLength="1" d="M780 0C780 120 930 260 780 330C630 400 280 340 280 500" /></svg>
+    </section>
+    <section class="a-chapter rev">
+      <div class="a-ccopy"><p class="m-pkicker">Software</p><p class="a-ch2">Finding my way into software.</p><p class="a-ctext">I joined Skupos as an intern hoping to become a software engineer. Adding to coworkers’ Python scripts grew into leading the automation work, building an internal application and mentoring other interns.</p><p class="a-ctext x">At Lyft, I grew from junior to mid-level engineer, taking on features across Rentals, Associate Tools and Comms Platform.</p><span class="m-link">See my professional work <i>→</i></span></div>
+      <div class="a-cart"><div class="a-scene"><img src="../../../../src/assets/site/laptop-v1.webp" width="1536" height="1024" alt="" /></div></div>
+      <svg class="a-path" data-s="path" data-start="0.72" data-end="-0.2" viewBox="0 0 1000 500" preserveAspectRatio="none"><path pathLength="1" d="M280 0C280 120 130 260 280 330C430 400 780 340 780 500" /></svg>
+    </section>
+    <section class="a-chapter">
+      <div class="a-ccopy"><p class="m-pkicker">Play</p><p class="a-ch2">Room for play.</p><p class="a-ctext">Retro games, emulation, and experimental tools keep giving me new things to explore. I’m building Kaillera Next so friends can play supported N64 games together in a browser.</p><span class="m-link">See what I’m building <i>→</i></span></div>
+      <div class="a-cart"><div class="a-scene"><img src="../../../../src/assets/site/controller-v1.webp" width="1536" height="1024" alt="" /></div></div>
+      <svg class="a-path" data-s="path" data-start="0.72" data-end="-0.2" viewBox="0 0 1000 500" preserveAspectRatio="none"><path pathLength="1" d="M780 0C780 120 930 260 780 330C630 400 280 340 280 500" /></svg>
+    </section>
+    <section class="a-chapter rev">
+      <div class="a-ccopy"><p class="m-pkicker">What’s next</p><p class="a-ch2">Making room for what comes next.</p><p class="a-ctext">Product engineering at Sure and data engineering at Axuall and Scotch helped me understand what I enjoy most: shaping an idea, building it and seeing how people use it. I’m pursuing that through my own projects, while keeping up with how the tools are changing.</p><p class="a-ctext x">I work independently, through contracts and projects. I’ll consider full-time roles where I’d own a system end to end, either fully remotely or in person near Roanoke, Virginia. If that isn’t your role, a contract is probably the better fit, and I’m glad to talk about that too.</p><span class="m-link">Explore The Engineer’s Daily prototype <i>→</i></span></div>
+      <div class="a-cart"><div class="a-scene"><img src="../../../../src/assets/site/notebook-v1.webp" width="1536" height="1024" alt="" /></div></div>
+    </section>
+    <section class="a-connect"><div><p class="m-pkicker">Let’s connect</p><p class="a-connect-h">Let’s talk.</p><p class="a-connect-p">An idea, a shared interest, or an opportunity worth discussing.</p></div><span class="m-button">Get in touch</span></section>
+    <div class="a-resume"><span class="a-resume-s">Request my resume <i>+</i></span></div>
+    <div class="m-footer"><span class="m-fname">Kazon Wilson</span><span class="m-flinks"><span>GitHub</span><span>LinkedIn</span><span>Audio</span><span>Work with me</span><span>Support my work</span><span>Privacy</span></span><span>The Superhuman Group LLC · 2026</span></div>
+  </div>
+</template>
+
+<template id="tpl-horizon">
+  <div class="m-screen h-screen">
+    <div class="m-screen-light"></div>
+    <div class="m-code"><svg data-build="code"></svg></div>
+    <div class="m-shell"><div class="m-sh"><p class="m-h2">Currently building</p><span class="m-link m-headlink">All projects <i>→</i></span></div></div>
+  </div>
+  <div class="h-skip"><span>Projects, waveform and Writing left out</span></div>
+  <div class="m-shell">
+    <section class="m-contact" data-s="horizon">
+      <div class="m-horizon"><span class="m-sun"></span><svg class="m-inksun" viewBox="0 0 84 84"><path pathLength="1" d="M1.5 42 A40.5 40.5 0 1 1 82.5 42 A40.5 40.5 0 1 1 1.5 42" /></svg></div>
+      <div class="m-contact-intro"><div><p class="m-contact-h">Have something in mind?<br />Let’s talk.</p><p class="m-contact-p">Ideas, opportunities, or a conversation worth having.</p></div><span class="m-button">Email me</span></div>
+      <p class="m-disc">▸ Send a message</p>
+    </section>
+  </div>
+</template>
+
+<script>
+(() => {
+  // ---------- Pure helpers, ported from src/lib/home-motion.ts and src/lib/scroll-scenes.ts ----------
+  const clamp01 = v => Math.min(1, Math.max(0, v));
+  function seeded(seed) { let s = seed >>> 0; return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 2 ** 32; }; }
+  function waveformPeaks(count, seed = 7) {
+    const random = seeded(seed);
+    return Array.from({ length: count }, (_, i) => {
+      const x = count > 1 ? i / (count - 1) : .5;
+      const taper = Math.sin(Math.PI * x) ** .7;
+      const swells = .62 + .38 * Math.sin(Math.PI * (x * 4 - .35));
+      return clamp01(taper * swells * (.42 + .58 * random()));
+    });
+  }
+  function signalFrame(peaks, progress) {
+    const level = Math.sin(Math.PI * clamp01(progress));
+    return peaks.map((peak, i) => peak * level * (.78 + .22 * Math.sin(i * .55 - progress * 16)));
+  }
+  function barsPath(heights, { width, mid, depth, direction, fill = .58 }) {
+    const slot = width / heights.length, bar = +(slot * fill).toFixed(2);
+    return heights.map((h, i) => {
+      const size = +(clamp01(h) * depth).toFixed(2);
+      if (size < .05) return '';
+      const x = +(i * slot + (slot - bar) / 2).toFixed(2);
+      const y = direction === 'up' ? +(mid - size).toFixed(2) : mid;
+      return `M${x} ${y}h${bar}v${size}h${-bar}z`;
+    }).join('');
+  }
+  function codeRows(count, seed = 3, tones = 5) {
+    const random = seeded(seed); let indent = 0;
+    return Array.from({ length: count }, () => {
+      const step = random();
+      indent = step < .3 ? Math.min(indent + 1, 4) : step < .55 ? Math.max(indent - 1, 0) : indent;
+      const segments = Array.from({ length: 1 + Math.floor(random() * 4) }, () => ({ width: 4 + Math.floor(random() * 14), tone: Math.floor(random() * tones) }));
+      return { indent, segments };
+    });
+  }
+  function sceneProgress({ top, viewport, start, end, topAtMaxScroll }) {
+    const from = viewport * start, to = Math.max(viewport * end, topAtMaxScroll);
+    if (from - to < 1) return 1;
+    return clamp01((from - top) / (from - to));
+  }
+  // The house curve, cubic-bezier(.2, .7, .2, 1).
+  const easeSite = (() => {
+    const x1 = .2, y1 = .7, x2 = .2, y2 = 1;
+    const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx, cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+    const sx = t => ((ax * t + bx) * t + cx) * t, sy = t => ((ay * t + by) * t + cy) * t, dx = t => (3 * ax * t + 2 * bx) * t + cx;
+    return x => {
+      if (x <= 0) return 0; if (x >= 1) return 1;
+      let t = x;
+      for (let i = 0; i < 8; i++) { const e = sx(t) - x, d = dx(t); if (Math.abs(e) < 1e-5 || Math.abs(d) < 1e-6) break; t -= e / d; }
+      return sy(clamp01(t));
+    };
+  })();
+
+  const PEAKS = waveformPeaks(110);
+  const CODE = (() => {
+    const rows = codeRows(11), pitch = 22, unit = 7, width = 560;
+    let s = `<svg class="code-field" viewBox="0 0 ${width} ${rows.length * pitch + 12}" aria-hidden="true">`;
+    rows.forEach((row, i) => {
+      let x = 40 + row.indent * 22;
+      s += `<g><text class="code-gutter" x="18" y="${i * pitch + 16}">${i + 1}</text>`;
+      row.segments.forEach(seg => { s += `<rect class="tone-${seg.tone}" x="${x}" y="${i * pitch + 9.5}" width="${seg.width * unit}" height="6" rx="3"/>`; x += seg.width * unit + 8; });
+      s += '</g>';
+    });
+    return s + '</svg>';
+  })();
+  const SIGNAL = (() => {
+    const rest = signalFrame(PEAKS, .5);
+    return `<svg viewBox="0 0 1200 120" preserveAspectRatio="none" aria-hidden="true"><rect class="sp" x="0" y="60" width="1200" height="60"/><path class="sp" data-sig="up" d="${barsPath(rest, { width: 1200, mid: 60, depth: 60, direction: 'up' })}"/><path class="ss" data-sig="down" d="${barsPath(rest, { width: 1200, mid: 60, depth: 60, direction: 'down' })}"/></svg>`;
+  })();
+
+  // The Old News player's resting waveform (a stand-in shape: the frame never plays audio).
+  const WAVE = (() => {
+    const peaks = waveformPeaks(140, 11);
+    return `<svg viewBox="0 0 560 64" preserveAspectRatio="none" aria-hidden="true">${peaks.map((h, i) => `<line x1="${i * 4 + 2}" x2="${i * 4 + 2}" y1="${(32 - 3 - h * 25).toFixed(1)}" y2="${(32 + 3 + h * 25).toFixed(1)}" stroke="currentColor" stroke-width="2"/>`).join('')}</svg>`;
+  })();
+
+  // ---------- Motion setting ----------
+  const reduceQuery = matchMedia('(prefers-reduced-motion: reduce)');
+  const finePointer = matchMedia('(hover: hover) and (pointer: fine)').matches;
+  const narrowQuery = matchMedia('(max-width: 700px)');
+  const state = { motion: !reduceQuery.matches };
+  const root = document.documentElement;
+  const toggle = document.getElementById('motion-toggle');
+  const note = document.getElementById('motion-note');
+
+  // ---------- Scaled page frames (D2.1 and D2.3) ----------
+  const MODES = {
+    keep: { drift: true, pointer: true, crossing: 'scrub' },
+    once: { drift: false, pointer: false, crossing: 'once' },
+    crossings: { drift: false, pointer: false, crossing: 'scrub' },
+    split: { desktop: 'keep', phone: 'once' },
+  };
+  const DRIFT = new Set(['studio', 'notebook', 'terrain']);
+  const REST = { studio: 0, notebook: .5, terrain: 0, screen: 1, signal: .5, horizon: 1, path: 1 };
+  const ONCE_MS = { screen: 1100, signal: 1600, horizon: 1600, path: 1400 };
+  const TEMPLATES = { home: 'tpl-home', about: 'tpl-about', horizon: 'tpl-horizon' };
+
+  class Frame {
+    constructor(el) {
+      this.el = el; this.tpl = el.dataset.tpl; this.auto = el.dataset.device === 'auto';
+      this.modeName = el.dataset.mode; this.variant = el.dataset.variant || '';
+      this.scrolls = el.classList.contains('scroll');
+      // Only the main frame drives the real-size close-up, so the phone frame never replays it a second time.
+      this.mirror = this.tpl === 'horizon' && this.auto ? el.closest('.opt')?.querySelector('.hz-close .m-contact') : null;
+      this.armed = false; this.didInitial = false; this.autoOn = false; this.autoRaf = 0; this.pending = 0; this.lastWidth = 0;
+      if (this.scrolls) {
+        const stop = () => this.stopAuto();
+        ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(type => el.addEventListener(type, stop, { passive: true }));
+        el.addEventListener('scroll', () => { this.pending ||= requestAnimationFrame(() => { this.pending = 0; this.measure(); }); }, { passive: true });
+        el.addEventListener('pointermove', event => this.pointer(event));
+        el.addEventListener('pointerleave', () => this.pointer(null));
+      }
+      this.build();
+    }
+    get device() { return this.auto ? (narrowQuery.matches ? 'phone' : 'desktop') : this.el.dataset.device; }
+    build() {
+      const device = this.device; this.builtDevice = device;
+      this.vw = device === 'phone' ? 390 : 1280; this.vh = device === 'phone' ? 844 : 800;
+      if (this.scrolls) this.el.style.setProperty('--ar', `${this.vw} / ${this.vh}`);
+      const mode = MODES[this.modeName];
+      this.mode = mode && mode[device] ? MODES[mode[device]] : (mode || { drift: false, pointer: false, crossing: 'scrub' });
+      this.el.textContent = '';
+      const sizer = document.createElement('div'); sizer.className = 'msizer';
+      const page = document.createElement('div');
+      page.className = `mpage is-${device} v-${this.variant}`;
+      page.style.width = this.vw + 'px';
+      page.setAttribute('aria-hidden', 'true');
+      page.append(document.getElementById(TEMPLATES[this.tpl]).content.cloneNode(true));
+      page.querySelectorAll('[data-build="code"]').forEach(node => { node.outerHTML = CODE; });
+      page.querySelectorAll('[data-build="signal"]').forEach(node => { node.outerHTML = SIGNAL; });
+      page.querySelectorAll('[data-build="wave"]').forEach(node => { node.outerHTML = WAVE; });
+      page.querySelectorAll('[data-build="cells"]').forEach(node => { node.innerHTML = '<i class="m-cell"></i>'.repeat(20); });
+      if (!this.mode.drift) page.style.setProperty('--slide', '0');
+      sizer.append(page); this.el.append(sizer);
+      this.page = page; this.sizer = sizer; this.studio = page.querySelector('.m-studio-scene'); this.hero = page.querySelector('.m-hero');
+      this.scenes = [...page.querySelectorAll('[data-s]')].map(node => ({
+        node, kind: node.dataset.s, start: Number(node.dataset.start ?? 1), end: Number(node.dataset.end ?? 0),
+        behaviour: this.behaviourFor(node.dataset.s), played: false, raf: 0,
+        up: node.querySelector('[data-sig="up"]'), down: node.querySelector('[data-sig="down"]'),
+      }));
+      this.startState();
+    }
+    behaviourFor(kind) {
+      if (this.tpl === 'horizon') return this.modeName === 'still' ? 'rest' : 'replay';
+      if (DRIFT.has(kind)) return this.mode.drift ? 'scrub' : 'rest';
+      return this.mode.crossing;
+    }
+    layout() {
+      const width = this.el.clientWidth;
+      if (!width) return;
+      const ratio = this.scrolls && this.el.scrollHeight > this.el.clientHeight ? this.el.scrollTop / (this.el.scrollHeight - this.el.clientHeight) : 0;
+      this.scale = width / this.vw;
+      this.page.style.transform = `scale(${this.scale})`;
+      const height = this.page.offsetHeight * this.scale;
+      this.sizer.style.height = height + 'px';
+      if (!this.scrolls) this.el.style.height = height + 'px';
+      else if (this.didInitial && this.lastWidth && this.lastWidth !== width) this.el.scrollTop = ratio * (this.el.scrollHeight - this.el.clientHeight);
+      this.lastWidth = width;
+      if (this.scrolls && !this.didInitial) this.initialScroll();
+      this.measure();
+    }
+    // Start each frame where the options differ most: the screen arriving, or About's first path.
+    initialScroll() {
+      const target = this.tpl === 'home' ? this.page.querySelector('.m-screen') : this.page.querySelector('.a-chapter');
+      if (!target) return;
+      const frac = this.tpl === 'home' ? (this.builtDevice === 'phone' ? .82 : .7) : .26;
+      const top = target.getBoundingClientRect().top - this.el.getBoundingClientRect().top + this.el.scrollTop;
+      this.el.scrollTop = Math.max(0, top - frac * this.el.clientHeight);
+      this.didInitial = true;
+    }
+    apply(scene, p) {
+      const phone = this.builtDevice === 'phone';
+      switch (scene.kind) {
+        case 'studio': this.studio?.style.setProperty('--lift', (p * (phone ? -16 : -32)).toFixed(2) + 'px'); break;
+        case 'screen': scene.node.style.setProperty('--grow', (phone ? clamp01(p * 1.5) : clamp01(p)).toFixed(4)); break;
+        case 'signal': {
+          const heights = signalFrame(PEAKS, p);
+          scene.up?.setAttribute('d', barsPath(heights, { width: 1200, mid: 60, depth: 60, direction: 'up' }));
+          scene.down?.setAttribute('d', barsPath(heights, { width: 1200, mid: 60, depth: 60, direction: 'down' }));
+          break;
+        }
+        default:
+          scene.node.style.setProperty('--p', p.toFixed(4));
+          if (scene.kind === 'horizon') this.mirror?.style.setProperty('--p', p.toFixed(4));
+      }
+    }
+    // Before a frame is seen, a scene that plays by itself waits at its start, so it plays when seen.
+    startState() {
+      this.stopAuto();
+      this.scenes.forEach(scene => {
+        cancelAnimationFrame(scene.raf); scene.played = false;
+        this.apply(scene, state.motion && (scene.behaviour === 'once' || scene.behaviour === 'replay') ? 0 : REST[scene.kind]);
+      });
+    }
+    restAll() {
+      this.stopAuto();
+      this.scenes.forEach(scene => { cancelAnimationFrame(scene.raf); scene.played = false; this.apply(scene, REST[scene.kind]); });
+      this.studio?.style.setProperty('--mx', '0'); this.studio?.style.setProperty('--my', '0');
+    }
+    measure() {
+      if (!this.scrolls || !state.motion) return;
+      const frame = this.el.getBoundingClientRect(), viewport = this.el.clientHeight, max = this.el.scrollHeight - viewport;
+      for (const scene of this.scenes) {
+        const box = scene.node.getBoundingClientRect();
+        const top = box.top - frame.top, bottom = box.bottom - frame.top;
+        if (scene.behaviour === 'scrub') {
+          this.apply(scene, sceneProgress({ top, viewport, start: scene.start, end: scene.end, topAtMaxScroll: top + this.el.scrollTop - max }));
+        } else if (scene.behaviour === 'once' && !scene.played && this.armed) {
+          if (bottom < 0) { scene.played = true; this.apply(scene, REST[scene.kind]); }
+          else if (top < viewport * Math.min(scene.start, .8) || (this.el.scrollTop >= max - 2 && top < viewport)) this.playOnce(scene);
+        }
+      }
+    }
+    playOnce(scene, ms = ONCE_MS[scene.kind] || 1400) {
+      scene.played = true; cancelAnimationFrame(scene.raf);
+      if (!state.motion) { this.apply(scene, REST[scene.kind]); return; }
+      const to = REST[scene.kind], began = performance.now();
+      const tick = now => {
+        const t = clamp01((now - began) / ms);
+        this.apply(scene, to * easeSite(t));
+        if (t < 1) scene.raf = requestAnimationFrame(tick);
+      };
+      this.apply(scene, 0);
+      scene.raf = requestAnimationFrame(tick);
+    }
+    arm() {
+      if (this.armed) return;
+      this.armed = true;
+      if (!state.motion) return;
+      if (this.scrolls) this.measure();
+      else this.replay();
+    }
+    replay() {
+      if (!state.motion) return;
+      if (this.scrolls) {
+        if (!this.el.clientWidth) return;
+        this.armed = true; this.startState(); this.el.scrollTop = 0; this.measure(); this.startAuto();
+      } else {
+        this.scenes.filter(scene => scene.behaviour === 'replay').forEach(scene => this.playOnce(scene, 2200));
+      }
+    }
+    startAuto(duration = 10000) {
+      this.stopAuto();
+      const max = this.el.scrollHeight - this.el.clientHeight, began = performance.now();
+      this.autoOn = true;
+      const step = now => {
+        if (!this.autoOn) return;
+        const t = clamp01((now - began) / duration);
+        const eased = t < .5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+        this.el.scrollTop = max * eased;
+        if (t < 1) this.autoRaf = requestAnimationFrame(step); else this.autoOn = false;
+      };
+      this.autoRaf = requestAnimationFrame(step);
+    }
+    stopAuto() { this.autoOn = false; cancelAnimationFrame(this.autoRaf); }
+    // The studio leans toward a fine pointer only where the option keeps the drift.
+    pointer(event) {
+      if (!this.studio || !this.mode.pointer || !finePointer || !state.motion || this.builtDevice !== 'desktop') return;
+      if (!event) { this.studio.style.setProperty('--mx', '0'); this.studio.style.setProperty('--my', '0'); return; }
+      const hero = this.hero.getBoundingClientRect();
+      if (event.clientY < hero.top || event.clientY > hero.bottom) { this.pointer(null); return; }
+      const box = this.studio.getBoundingClientRect();
+      this.studio.style.setProperty('--mx', (((event.clientX - box.left) / box.width) * 2 - 1).toFixed(3));
+      this.studio.style.setProperty('--my', (((event.clientY - box.top) / box.height) * 2 - 1).toFixed(3));
+    }
+  }
+
+  const frames = [...document.querySelectorAll('.mframe')].map(el => new Frame(el));
+  const byEl = new Map(frames.map(frame => [frame.el, frame]));
+  const resize = new ResizeObserver(entries => entries.forEach(entry => {
+    const frame = byEl.get(entry.target);
+    if (frame && entry.contentRect.width !== frame.lastWidth) frame.layout();
+  }));
+  frames.forEach(frame => { resize.observe(frame.el); frame.layout(); });
+  const armWatch = new IntersectionObserver(entries => entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    const frame = byEl.get(entry.target);
+    if (!frame) return;
+    if (entry.intersectionRatio < (frame.scrolls ? .6 : .5)) return;
+    frame.arm();
+    armWatch.unobserve(entry.target);
+  }), { threshold: [.5, .6] });
+  frames.forEach(frame => armWatch.observe(frame.el));
+  document.fonts?.ready.then(() => frames.forEach(frame => frame.layout()));
+  narrowQuery.addEventListener('change', () => frames.filter(frame => frame.auto).forEach(frame => { frame.build(); frame.layout(); if (frame.armed) frame.replay(); }));
+
+  // Home / About tabs on each desktop frame.
+  document.querySelectorAll('.desk-win').forEach(win => {
+    const tabs = [...win.querySelectorAll('.tab')];
+    const label = win.querySelector('[data-label]');
+    tabs.forEach(tab => tab.addEventListener('click', () => {
+      tabs.forEach(other => other.setAttribute('aria-pressed', String(other === tab)));
+      win.querySelectorAll('.mframe').forEach(el => { el.hidden = el.dataset.tpl !== tab.dataset.show; });
+      label.textContent = tab.dataset.show === 'about' ? '/about' : '/';
+      const frame = frames.find(item => item.el.parentElement === win && item.tpl === tab.dataset.show);
+      if (frame) { frame.layout(); frame.arm(); }
+    }));
+  });
+
+  // ---------- D2.2: cards ----------
+  const ghostRuns = new Map();
+  function cardStage(option) { return document.querySelector(`[data-option="${option}"] .dark-stage`); }
+  function ghostPass(stage) {
+    const card = stage.querySelector('.pc'), art = card.querySelector('.pc-art'), ghost = stage.querySelector('.ghost');
+    cancelAnimationFrame(ghostRuns.get(stage));
+    const tilt = card.dataset.tilt === 'on';
+    if (!state.motion) {
+      card.classList.add('is-hover');
+      setTimeout(() => card.classList.remove('is-hover'), 1600);
+      return;
+    }
+    const s = stage.getBoundingClientRect(), a = art.getBoundingClientRect(), c = card.getBoundingClientRect();
+    const at = (fx, fy) => [a.left - s.left + a.width * fx, a.top - s.top + a.height * fy];
+    const points = [[-20, a.bottom - s.top + 30], at(.22, .72), at(.82, .26), at(.55, .58), [s.width + 20, a.top - s.top + a.height * .5]];
+    const lengths = [520, 900, 700, 620], total = lengths.reduce((sum, value) => sum + value, 0);
+    const began = performance.now();
+    ghost.classList.add('on');
+    const step = now => {
+      let elapsed = now - began, index = 0;
+      while (index < lengths.length - 1 && elapsed > lengths[index]) { elapsed -= lengths[index]; index++; }
+      const t = easeSite(clamp01(elapsed / lengths[index]));
+      const [x0, y0] = points[index], [x1, y1] = points[index + 1];
+      const x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t;
+      ghost.style.transform = `translate(${x}px, ${y}px)`;
+      const cx = x + s.left - c.left, cy = y + s.top - c.top;
+      const inside = cx >= 0 && cy >= 0 && cx <= c.width && cy <= c.height;
+      card.classList.toggle('is-hover', inside);
+      if (tilt && inside) { card.style.setProperty('--rx', ((cy / c.height) * -2 + 1).toFixed(3)); card.style.setProperty('--ry', ((cx / c.width) * 2 - 1).toFixed(3)); }
+      else { card.style.removeProperty('--rx'); card.style.removeProperty('--ry'); }
+      if (now - began < total) ghostRuns.set(stage, requestAnimationFrame(step));
+      else { ghost.classList.remove('on'); card.classList.remove('is-hover'); card.style.removeProperty('--rx'); card.style.removeProperty('--ry'); }
+    };
+    ghostRuns.set(stage, requestAnimationFrame(step));
+  }
+  if (finePointer) {
+    document.querySelectorAll('.pc[data-tilt="on"]').forEach(card => {
+      card.addEventListener('pointermove', event => {
+        if (!state.motion) return;
+        const box = card.getBoundingClientRect();
+        card.style.setProperty('--rx', (((event.clientY - box.top) / box.height) * -2 + 1).toFixed(3));
+        card.style.setProperty('--ry', (((event.clientX - box.left) / box.width) * 2 - 1).toFixed(3));
+      });
+      card.addEventListener('pointerleave', () => { card.style.removeProperty('--rx'); card.style.removeProperty('--ry'); });
+    });
+  }
+
+  // ---------- D2.4: laptop scenes ----------
+  function playLaptop(svg) {
+    const life = svg.querySelector('.life');
+    clearTimeout(life._timer);
+    life.classList.remove('is-playing');
+    if (!state.motion) return;
+    void svg.getBoundingClientRect();
+    life.classList.add('is-playing');
+    life._timer = setTimeout(() => life.classList.remove('is-playing'), 4200);
+  }
+
+  // ---------- Replay buttons and first views ----------
+  function replay(option) {
+    const block = document.querySelector(`[data-option="${option}"]`);
+    if (!block) return;
+    if (option.startsWith('D2.1') || option.startsWith('D2.3')) {
+      frames.filter(frame => block.contains(frame.el) && !frame.el.hidden).forEach(frame => frame.replay());
+    } else if (option.startsWith('D2.2')) ghostPass(cardStage(option));
+    else if (option.startsWith('D2.4')) playLaptop(block.querySelector('svg.lap'));
+  }
+  document.querySelectorAll('[data-replay]').forEach(button => button.addEventListener('click', () => replay(button.dataset.replay)));
+  const firstView = new IntersectionObserver(entries => entries.forEach(entry => {
+    if (entry.intersectionRatio < .5) return;
+    firstView.unobserve(entry.target);
+    if (!state.motion) return;
+    if (entry.target.matches('.dark-stage')) ghostPass(entry.target);
+    else playLaptop(entry.target);
+  }), { threshold: [.5] });
+  document.querySelectorAll('.dark-stage, svg.lap').forEach(el => firstView.observe(el));
+
+  // ---------- Motion toggle ----------
+  function setMotion(on, fromDevice) {
+    state.motion = on;
+    root.classList.toggle('motion-on', on);
+    toggle.setAttribute('aria-pressed', String(on));
+    toggle.textContent = `Demo motion: ${on ? 'on' : 'off'}`;
+    document.querySelectorAll('[data-replay]').forEach(button => { button.disabled = !on; });
+    note.textContent = on
+      ? 'The demos are moving. Turn motion off to see the resting frames, which is exactly what reduced-motion visitors see on the site.'
+      : (fromDevice && reduceQuery.matches
+        ? 'Your device asks for reduced motion, so the demos start still. That still view is what reduced-motion visitors see on the site. Turn demo motion on to compare the options.'
+        : 'Demo motion is off: every frame shows its resting state, as reduced-motion visitors see the site.');
+    frames.forEach(frame => {
+      if (!on) { frame.restAll(); return; }
+      frame.startState(); frame.measure();
+      if (!frame.scrolls && frame.armed) frame.replay();
+    });
+    if (!on) document.querySelectorAll('.lap .life').forEach(life => life.classList.remove('is-playing'));
+  }
+  toggle.addEventListener('click', () => setMotion(!state.motion, false));
+  reduceQuery.addEventListener('change', () => setMotion(!reduceQuery.matches, true));
+  setMotion(state.motion, true);
+})();
+</script>
+</body>
+</html>

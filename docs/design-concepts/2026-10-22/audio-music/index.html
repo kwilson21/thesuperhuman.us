@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Release pages: alternatives</title>
+<meta name="description" content="Decision board D8: the Old News premiere masthead, its first screen, the house link rule and the Releases closing line, with alternatives.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Gelasio:wght@700&display=swap">
+<style>
+@font-face{font-family:Libron;src:url(../../../../public/fonts/libron-v0.25/Libron-Regular.woff2) format('woff2');font-weight:400;font-style:normal}
+@font-face{font-family:Libron;src:url(../../../../public/fonts/libron-v0.25/Libron-Italic.woff2) format('woff2');font-weight:400;font-style:italic}
+@font-face{font-family:Libron;src:url(../../../../public/fonts/libron-v0.25/Libron-Bold.woff2) format('woff2');font-weight:700;font-style:normal}
+@font-face{font-family:Libron;src:url(../../../../public/fonts/libron-v0.25/Libron-BoldItalic.woff2) format('woff2');font-weight:700;font-style:italic}
+@font-face{font-family:'Kazon Name Text';src:url(../../../../public/fonts/kazon-name-text.woff2) format('woff2');font-weight:400}
+/* Site palette (src/styles/global.css). --board, --frame and --accent-text are board-only:
+   --accent-text darkens the accent for small text on the board background (5.3:1). */
+:root{--paper:#FBF8F2;--ink:#0E0E0E;--muted:#4A4A4A;--rule:#E8E3DA;--accent:#AE5534;--board:#ECE6DB;--frame:#d6cdbf;--accent-text:#93472B;--ease-site:cubic-bezier(.2,.7,.2,1);color-scheme:light}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{margin:0;background:var(--board);color:var(--ink);font-family:Libron,Georgia,serif;-webkit-font-smoothing:antialiased;line-height:1.5}
+code{font:12px/1.4 'JetBrains Mono',monospace;background:#efe8dd;padding:1px 4px;border-radius:3px;overflow-wrap:anywhere}
+.board{max-width:1280px;margin:0 auto;padding:56px 56px 72px}
+.eyebrow{font:500 11px/1.4 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-text);margin:0 0 14px}
+.board>header h1{font-size:52px;line-height:1.02;letter-spacing:-.03em;margin:0 0 16px;font-weight:400}
+.board>header .intro{font-size:20px;line-height:1.5;color:var(--muted);max-width:60rem;margin:0 0 12px}
+.board>header .meta{font:14px/1.6 Inter,system-ui,sans-serif;color:var(--muted);max-width:60rem;margin:0 0 28px}
+.glance{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:12px}
+.glance a{display:grid;gap:6px;height:100%;background:var(--paper);border:1px solid var(--frame);border-radius:8px;padding:14px 16px;color:var(--ink);text-decoration:none}
+.glance a:hover{border-color:var(--accent)}
+.glance a:focus-visible,.toggle input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.g-id{font:600 11px/1 Inter,sans-serif;letter-spacing:.06em;color:var(--accent-text)}
+.g-q{font-size:18px;line-height:1.3}
+.g-pick{font:13px/1.45 Inter,sans-serif;color:var(--muted)}.g-pick b{color:var(--ink);font-weight:600}
+.together{margin:20px 0 0;background:var(--paper);border:1px dashed #c4ab92;border-radius:8px;padding:14px 18px;font:14px/1.6 Inter,sans-serif;color:#2b2b2b}
+.together b{font-weight:600}
+section.study{margin-top:64px;padding-top:40px;border-top:1px solid #d8d0c3}
+section.study>h2{font-size:34px;line-height:1.15;letter-spacing:-.02em;font-weight:400;margin:0 0 16px}
+.flag{background:var(--paper);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:14px 18px;margin:0 0 24px;font:14px/1.6 Inter,sans-serif;color:#2b2b2b;max-width:62rem}
+.flag p{margin:0}.flag p+p{margin-top:8px}.flag b{font-weight:600;color:var(--ink)}
+.opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start}
+.opt{min-width:0;background:var(--paper);border:1px solid var(--frame);border-radius:10px;padding:18px}
+.opt.is-rec{border:2px solid var(--accent);padding:17px}
+.option-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.option-head h3{font-size:24px;font-weight:400;margin:0;letter-spacing:-.01em;line-height:1.2}
+.oid{display:block;font:600 11px/1 Inter,sans-serif;letter-spacing:.06em;color:var(--accent-text);margin-bottom:6px}
+.badge{font:600 11px/1 Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;padding:6px 9px;border-radius:3px;white-space:nowrap}
+.badge.rec{background:var(--accent);color:var(--paper)}
+.badge.no{color:var(--muted);border:1px solid #b9b0a2}
+.visual{display:grid;gap:14px}
+.visual figure{margin:0}
+.frame{background:var(--paper);border:1px solid var(--frame);border-radius:8px;overflow:hidden}
+.frame-bar{font:11px/1.4 'JetBrains Mono',monospace;color:var(--muted);padding:8px 12px;border-bottom:1px solid var(--rule);background:#f6f1e9}
+.frame-bar b{color:var(--ink);font-weight:500}
+img.fill{display:block;width:100%;height:auto}
+.mock figcaption{font:12px/1.4 Inter,sans-serif;color:var(--muted);margin-top:6px}
+.vpw{overflow:hidden;border:1px solid var(--frame);border-radius:6px;background:var(--paper)}
+.phone-mock{max-width:230px}
+.same{font:13px/1.5 Inter,sans-serif;color:var(--muted);margin:0;padding:10px 12px;border:1px dashed var(--frame);border-radius:6px}
+.why-rec{font:14px/1.55 Inter,sans-serif;margin:14px 0 0;padding:10px 12px;background:#f5ece5;border-radius:6px;color:#2b2b2b}
+.why-rec b{font-weight:600}
+.facts{margin:14px 0 0;font:13.5px/1.55 Inter,sans-serif;color:#2b2b2b;display:grid;grid-template-columns:9.5rem minmax(0,1fr);gap:7px 14px}
+.facts dt{font-weight:600;color:var(--ink)}
+.facts dd{margin:0;min-width:0}
+.facts dd.check{color:#3E5B47}
+.detect{font:12.5px/1.5 Inter,sans-serif;color:var(--muted);margin:0;padding:8px 12px;border-top:1px solid var(--rule)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* D8.1 masthead specimen: the 1280 desktop values scaled to the frame (1168px content = 100cqi). */
+.spec{background:var(--paper)}
+.spec-in{container-type:inline-size;text-align:center;padding:14px 16px 10px}
+.s-artist{display:flex;gap:1.7cqi;align-items:center;font-size:max(2.055cqi,9px);letter-spacing:.45em;line-height:1.6;padding:.34cqi 0 .82cqi}
+.s-artist::before,.s-artist::after,.s-credit::before,.s-credit::after{content:"";height:1px;background:var(--ink);flex:1}
+.s-artist>span{padding-left:.45em}
+.pn{font-family:'Kazon Name Text',Libron,serif;text-transform:none}
+.s-title{font-size:15.89cqi;line-height:.93;letter-spacing:-.065em;text-transform:uppercase;margin:0;padding-bottom:.15em;word-spacing:.06em}
+.s-credit{display:flex;justify-content:center;gap:.34cqi 2.05cqi;align-items:center;font-size:max(1.37cqi,8px);letter-spacing:.16em;line-height:1.7;margin:0}
+.f-georgia .s-title{font-family:Georgia,'Times New Roman',serif;font-weight:900}
+.f-libron .s-title{font-family:Libron,serif;font-weight:700}
+.f-gelasio .s-title{font-family:Gelasio,Georgia,serif;font-weight:700}
+.f-sleeve .s-title{font-family:Libron,serif;font-weight:700;font-style:italic;text-transform:none;letter-spacing:-.04em}
+
+/* Premiere recreations: real values from music-premiere.css at a 1280 x 800 viewport. */
+.pm{width:1280px;height:800px;position:relative;overflow:hidden;background:var(--paper);font-family:Libron,serif;color:var(--ink);zoom:.42;line-height:1.6}
+.pm .chrome,.pp .chrome{display:block;width:100%;height:auto}
+.pm img.ci,.pp img.ci{display:block;width:100%;height:auto}
+.pm .shell{padding:0 56px}
+.pm p{margin:0}
+.m-artist{display:flex;align-items:center;letter-spacing:.45em;line-height:1.6}
+.m-artist::before,.m-artist::after{content:"";height:1px;background:var(--ink);flex:1}
+.m-artist>span{padding-left:.45em}
+.pm .m-artist{gap:20px;font-size:24px;padding:4px 0 9.6px}
+.m-title{font-family:Georgia,'Times New Roman',serif;font-weight:900;text-transform:uppercase;text-align:center;line-height:.93;word-spacing:.06em}
+.pm .m-title{font-size:185.6px;letter-spacing:-.065em;padding-bottom:.15em}
+.m-credit,.m-folio{display:flex;align-items:center;line-height:1.7}
+.pm .m-credit{flex-wrap:wrap;justify-content:center;gap:4px 24px;font-size:16px;letter-spacing:.16em}
+.pm .m-credit::before,.pm .m-credit::after{content:"";flex:1;height:1px;background:var(--ink)}
+.m-folio{justify-content:space-between;border-top:1px solid var(--ink);border-bottom:1px solid var(--ink)}
+.pm .m-folio{font-size:16px;letter-spacing:.16em;padding:3px 0}
+.m-actions{display:flex;align-items:center}
+.pm .m-actions{justify-content:center;gap:40px;padding:16px 0 19.2px}
+.pm .m-actions.rail{justify-content:flex-start}
+.pm .m-actions.rail::after{content:"";flex:1;height:1px;background:var(--ink)}
+.m-act{display:flex;align-items:center}
+.pm .m-act{gap:12px;font-size:19.2px;min-height:48px}
+.rp{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:var(--accent);border:1px solid var(--accent);color:var(--paper);flex-shrink:0}
+.rp.out{background:transparent;color:var(--accent)}
+.pm .rp{width:48px;height:48px}.pm .rp svg{width:24px;height:24px}
+.poster{position:relative;overflow:hidden}
+.poster>img{display:block;width:100%;height:100%;object-fit:cover}
+.pm .poster{aspect-ratio:1.96}
+.vbtn{position:absolute;left:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;color:var(--paper);text-shadow:0 1px 7px var(--ink);white-space:nowrap}
+.vbtn .rp{border:1px solid var(--paper)}
+.pm .vbtn{top:52%;gap:9.6px;font-size:17.6px}
+.pm .vbtn .rp{width:76px;height:76px}.pm .vbtn svg{width:34px;height:34px}
+.transport{position:relative;z-index:2}
+.pm .transport{margin:-90px 3% 0;max-width:760px}
+.pc{display:flex;align-items:center;background:var(--paper);border:1px solid var(--rule)}
+.pc>img{object-fit:cover;display:block}
+.pc .prog{display:flex;align-items:center;flex:1}
+.pc .track{flex:1;height:4px;border-radius:2px;background:#d9d4cc;position:relative}
+.pc .track::before{content:"";position:absolute;left:0;top:50%;width:14px;height:14px;border-radius:50%;background:#c9c3ba;transform:translateY(-50%)}
+.pc .time{font-family:Inter,sans-serif;white-space:nowrap;font-variant-numeric:tabular-nums}
+.pc .vol{display:grid;place-items:center;color:var(--accent)}
+.pm .pc{gap:16px;padding:12px}.pm .pc>img{width:52px;height:52px}.pm .pc .pt{font-size:16px;max-width:12rem;flex:1}
+.pm .pc .rp{width:40px;height:40px}.pm .pc .rp svg{width:21px;height:21px}
+.pm .pc .prog{gap:16px;min-width:90px}.pm .pc .time{font-size:12px}.pm .pc .vol{width:44px;height:44px}.pm .pc .vol svg{width:22px;height:22px}
+/* D8.3-B: short-screen masthead at 1280 x 800 (15svh = 120px). */
+.pm.short .m-artist{font-size:19.2px}
+.pm.short .m-title{font-size:120px}
+.pm.short .m-actions{padding:9.6px 0 12.8px}
+/* D8.3-C: cinema crop. */
+.pm.cine .poster{aspect-ratio:2.4}
+/* D8.2-D / D8.3-D: lead column. */
+.lead{display:grid;grid-template-columns:1fr 2fr;gap:32px;border-top:1px solid var(--ink);padding-top:24px}
+.pm .lc-credit{display:grid;font-size:16px;letter-spacing:.16em;line-height:1.7;border-bottom:1px solid var(--rule);padding-bottom:16px;margin:0 0 22px}
+.pm .m-actions.stack{flex-direction:column;align-items:flex-start;gap:14px;padding:0}
+.lc-links{display:grid;gap:14px;justify-items:start;margin-top:30px}
+.sl{display:inline-flex;align-items:baseline;gap:.65rem;padding:.35rem 0;border-bottom:1px solid var(--accent);line-height:1.45;color:var(--ink)}
+.lead .sl{font-size:17px}
+.lead-media{min-width:0}
+.fold{position:absolute;left:0;right:0;top:800px;bottom:0;background:color-mix(in srgb,var(--paper) 64%,transparent);border-top:4px dashed var(--accent);z-index:5}
+.fold span{position:absolute;right:28px;top:14px;font:600 28px/1 Inter,sans-serif;color:var(--accent-text);background:var(--paper);padding:8px 12px;border-radius:4px}
+
+/* Phone recreations at 390 wide (rules at max-width 650px). */
+.pp{width:390px;height:700px;position:relative;overflow:hidden;background:var(--paper);font-family:Libron,serif;color:var(--ink);zoom:.58;line-height:1.6}
+.pp .shell{padding:0 16px}
+.pp p{margin:0}
+.pp .m-artist{font-size:16.8px;padding:4px 0 8.8px;gap:14.4px}
+.pp .m-title{font-size:58.5px;letter-spacing:-.075em;padding-bottom:.2em}
+.pp .m-credit{flex-wrap:wrap;justify-content:center;gap:3.2px 12.8px;font-size:11.84px;letter-spacing:.07em}
+.pp .m-folio{font-size:11.84px;letter-spacing:.07em;padding:2px 0}
+.pp .m-actions{gap:17.6px;padding:13.6px 0 16px;justify-content:space-evenly}
+.pp .m-act{font-size:16px;gap:7.2px;line-height:1.2;min-height:44px}
+.pp .rp{width:40px;height:40px}.pp .rp svg{width:21px;height:21px}
+.pp .poster{aspect-ratio:1.55}.pp .poster>img{object-position:38% center}
+.pp .vbtn{top:60%;font-size:12.8px;gap:4.8px}.pp .vbtn .rp{width:52px;height:52px}.pp .vbtn svg{width:25px;height:25px}
+.pp .transport{margin:-1px 0 0}
+.pp .pc{padding:8px;gap:7.2px}.pp .pc>img{width:38px;height:38px}.pp .pc .pt{font-size:13.6px;max-width:72px}
+.pp .pc .rp{width:34px;height:34px}.pp .pc .rp svg{width:18px;height:18px}
+.pp .pc .prog{flex-wrap:wrap;gap:5.6px;min-width:95px}.pp .pc .track{flex-basis:100%}.pp .pc .time{font-size:10.4px}.pp .pc .vol{width:32px;height:44px}.pp .pc .vol svg{width:20px}
+.pp-foot{height:auto;padding:8px 0 4px}
+
+/* D8.3 fold table */
+.tablewrap{background:var(--paper);border:1px solid var(--frame);border-radius:8px;padding:6px 14px 10px;margin:0 0 12px;max-width:62rem}
+.fold-table{width:100%;border-collapse:collapse;font:13.5px/1.4 Inter,sans-serif}
+.fold-table caption{caption-side:top;text-align:left;font-size:12.5px;line-height:1.5;color:var(--muted);padding:8px 0 10px}
+.fold-table th,.fold-table td{padding:8px 6px;border-top:1px solid var(--rule);text-align:left;vertical-align:top}
+.fold-table thead th{font-weight:600;font-size:12px;color:var(--muted);border-top:0}
+.fold-table tbody th{font-weight:500;white-space:nowrap}
+.fold-table td b{display:block;font-weight:600}
+.marks{display:flex;gap:6px;font-size:13px}.ok{color:#3E6B4A}.cut{color:#9b3b22}
+.phones{font:13.5px/1.6 Inter,sans-serif;color:#2b2b2b;margin:0 0 24px;max-width:62rem}
+
+/* D8.4 link samples, real size, values from global.css. */
+.toggle-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:0 0 20px}
+.toggle{display:inline-flex;align-items:center;gap:10px;min-height:44px;padding:0 14px;background:var(--paper);border:1px solid #8b8378;border-radius:6px;font:500 14px Inter,sans-serif;cursor:pointer}
+.toggle input{width:18px;height:18px;accent-color:var(--accent);margin:0}
+.toggle-note{font:13px/1.5 Inter,sans-serif;color:var(--muted)}
+.ls{padding:16px 18px 18px;font-size:16px;line-height:1.6;display:grid;gap:18px}
+.ls p{margin:0}
+.ls-meta{font:.72rem/1.6 Inter,sans-serif;color:var(--muted)}
+.ls .ls-h{font-size:2rem;line-height:1.1;margin:.2rem 0 0}
+.ls .ls-sub{color:var(--muted);margin:0 0 .6rem}
+.ls-pair{display:flex;flex-wrap:wrap;gap:1rem 1.5rem;align-items:center}
+.ls-fh{font-size:1.4rem;line-height:1.5}
+.mread{display:block;font:12px/1.5 Inter,sans-serif;color:var(--muted);margin-top:8px}
+.bl{display:inline-block;width:0;height:0}
+.sl-a{display:inline-flex;align-items:baseline;gap:.65rem;padding:.35rem 0;border-bottom:1px solid var(--accent);line-height:1.45}
+.sl-b{display:inline;border:0;padding:.35rem 0;line-height:1.45;text-decoration:underline 1px var(--accent);text-underline-offset:.2em;text-decoration-skip-ink:auto}
+.sl-b .arr{display:inline-block;margin-left:.65rem}
+.sl-c{display:inline-flex;align-items:baseline;gap:.65rem;padding:.55rem 0 0;border-bottom:1px solid var(--accent);line-height:1.15;position:relative}
+.sl-c::after{content:"";position:absolute;inset-inline:0;top:50%;height:max(100%,44px);transform:translateY(-50%)}
+.sl .arr{color:var(--accent)}
+.show-taps .ls .sl-a,.show-taps .ls .sl-b{outline:1px dashed #3E6B4A;outline-offset:0;background:color-mix(in srgb,#3E6B4A 10%,transparent)}
+.show-taps .ls .sl-c::after{outline:1px dashed #3E6B4A;background:color-mix(in srgb,#3E6B4A 10%,transparent)}
+
+/* D8.5 releases footer, values from music-hubs.css. */
+.rfw{overflow:hidden}
+.rfz{width:1124px;padding:0 18px}
+.rf{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;border-top:1px solid var(--rule);padding:24px 0;font-size:16px;line-height:1.6;color:var(--ink)}
+.opts.one{grid-template-columns:minmax(0,1fr)}
+.opts.one .facts,.opts.one .why-rec{max-width:62rem}
+.rf p{margin:0}
+.rf-h{font-size:1.65rem;line-height:1.6;text-wrap:balance}
+.rf-p{font-style:italic;color:var(--muted);text-align:right}
+.rf-b .rf-p{font-style:normal}
+.rf-c .rf-p{font-size:1.15rem;color:var(--ink);display:flex;align-items:center;gap:12px}
+.rf-c .rf-p::before{content:"";width:48px;height:2px;background:var(--accent);flex-shrink:0}
+.rf-d{justify-content:flex-start}
+.rf-d .rf-p{font-style:normal;text-align:left;margin-bottom:4px}
+.pp-foot .rf{padding:22px 0 20px}
+.pp-foot .shell{padding:0 24px} /* /audio/releases uses the 24px site gutter at 390, not the premiere's 16px */
+
+.foot-notes{margin-top:64px;padding-top:28px;border-top:1px solid #d8d0c3;font:13.5px/1.6 Inter,sans-serif;color:#2b2b2b;max-width:62rem}
+.foot-notes h2{font:400 24px/1.2 Libron,serif;margin:0 0 10px}
+.foot-notes ul{margin:0;padding-left:18px}.foot-notes li{margin-bottom:6px}
+
+@media (max-width:980px){
+  .opts{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:700px){
+  .board{padding:28px 16px 48px}
+  .board>header h1{font-size:36px}
+  .board>header .intro{font-size:17px}
+  section.study{margin-top:44px;padding-top:28px}
+  section.study>h2{font-size:26px}
+  .opt{padding:14px}.opt.is-rec{padding:13px}
+  .option-head h3{font-size:21px}
+  .facts{grid-template-columns:minmax(0,1fr);gap:2px}
+  .facts dd{margin-bottom:8px}
+  .pm{zoom:.25}.pp{zoom:.5}
+  .phone-mock{max-width:200px}
+  .tablewrap{padding:4px 8px 8px}
+  .fold-table{font-size:12px}
+  .fold-table th,.fold-table td{padding:7px 3px}
+  .fold-table tbody th{white-space:normal}
+  .ls{padding:14px}
+  .rfz .rf{flex-wrap:wrap}
+}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<main class="board">
+  <header>
+    <p class="eyebrow">Design study · D8 · Audio and music · 2026-10-22</p>
+    <h1>Release pages: alternatives</h1>
+    <p class="intro">Five calls from the Hallmark audit about the Old News premiere (/music/old-news) and the Releases page (/audio/releases). Each shows what ships today, then two or three alternatives built from the site’s own fonts, colours and copy. One option per decision is marked Recommended, and Keep as is counts as a real choice.</p>
+    <p class="meta">Today’s renders are crops of the CI captures for PR #204 (f0abd1f) at 1280 and 390 wide. PR #204 keeps the Georgia face and the .93 line height and adds only a long-word size guard, so these regions match the PR 199 captures. Alternatives are live HTML recreations using the values in <code>music-premiere.css</code>, <code>music-hubs.css</code> and <code>global.css</code> as of PR #204, with the real poster and cover art. The premiere recreations keep the production masthead font stack, so their title face depends on your device (D8.1 is that choice). Nothing here changes the site, adds copy or adds motion. Gelasio loads from Google Fonts for this preview only; every other face is the site’s own self-hosted file.</p>
+  </header>
+  <nav aria-label="Decisions"><ol class="glance"><li><a href="#d8-1"><span class="g-id">D8.1</span><span class="g-q">Which typeface should set the release masthead?</span><span class="g-pick">Recommended: <b>B · Libron Bold</b> · effort S</span></a></li><li><a href="#d8-2"><span class="g-id">D8.2</span><span class="g-q">Should anything in the premiere masthead move off the centre line?</span><span class="g-pick">Recommended: <b>A · Keep the symmetric front page</b> · effort None</span></a></li><li><a href="#d8-3"><span class="g-id">D8.3</span><span class="g-q">Should more of the premiere poster fit on a laptop’s first screen?</span><span class="g-pick">Recommended: <b>B · Shorter masthead on short screens</b> · effort S</span></a></li><li><a href="#d8-4"><span class="g-id">D8.4</span><span class="g-q">Should the accent rule under action links sit closer to the text?</span><span class="g-pick">Recommended: <b>C · Close rule, 44px tap area</b> · effort M</span></a></li><li><a href="#d8-5"><span class="g-id">D8.5</span><span class="g-q">Should “One song. A beginning.” on /audio/releases stay italic?</span><span class="g-pick">Recommended: <b>A · Keep the italic sign-off</b> · effort None</span></a></li></ol></nav>
+  <p class="together"><b>How the picks fit together.</b> D8.1 changes the masthead’s face, not its size or line height, so the D8.3 numbers hold for any face. D8.3-B sets the size through PR #204’s <code>--masthead-size</code>, so the long-word guard keeps working with whichever face D8.1 picks. Picking D8.2-D (lead column) also answers D8.3, so D8.3-B wouldn’t be needed. D8.4 is the only sitewide change; the rest stay on the two release pages.</p>
+<section class="study" id="d8-1" aria-labelledby="d8-1-q">
+<p class="eyebrow">D8.1 · Worth considering 10 · punch list #39 · audio-3</p>
+<h2 id="d8-1-q">Which typeface should set the release masthead?</h2>
+<div class="flag"><p><b>What Hallmark flagged.</b> The largest type on <code>/music/old-news</code> is set in system Georgia at weight 900, outside the site’s type tokens. Georgia ships with Mac, Windows and iPhone but not Android or Linux, so the masthead changes by platform. Georgia has no 900 weight either, so where it exists the browser draws Georgia Bold.</p><p><b>Where today’s choice was decided.</b> No doc records the face. It arrived with the approved editorial premiere (<code>src/styles/music-premiere.css:1</code> and <code>:7</code>; <code>docs/asset-reviews/old-news-premiere.md:6</code>). The audit asks you to confirm whether the heavy newspaper weight was deliberate. Every option below keeps a heavy weight, the size, the .93 line height and PR #204’s long-word size guard. B and C change only the face; D also changes the case and the tracking.</p></div>
+
+<div class="opts "><article class="opt" id="d8-1-a">
+<div class="option-head"><h3><span class="oid">D8.1-A</span>Keep Georgia 900</h3><span class="badge no">Today</span></div>
+<div class="visual"><figure class="frame"><div class="frame-bar"><b>CI capture</b> · Linux runner · 1280 wide</div><img class="fill" src="masthead-ci-1280.webp" width="1168" height="290" alt="CI capture of the masthead: Kazon, OLD NEWS, Prod. Lexi Banks, single, drawn in a substitute serif because the runner has no Georgia."></figure>
+<figure class="frame"><div class="frame-bar"><b>Live</b> · the production font stack in your browser</div><div class="spec f-georgia"><div class="spec-in"><div class="s-artist"><span><span class="pn">Kazon</span></span></div><p class="s-title">Old News</p><p class="s-credit"><span>Prod. Lexi Banks</span><span>single</span></p></div></div><p class="detect" id="georgia-status">Checking whether this browser has Georgia…</p></figure></div>
+
+<dl class="facts">
+<dt>What changes</dt><dd>Nothing.</dd>
+<dt>Why it could be better</dt><dd>Mac, Windows and iPhone visitors keep the Georgia Bold the premiere shipped with. No work, and nothing new to review.</dd>
+<dt>Trade-off</dt><dd>At least three looks in the wild: Georgia Bold on Mac, Windows and iPhone, and different substitutes on Android and Linux (the CI capture above is one of them). The 900 asks for a weight Georgia doesn’t have. The family stays outside the type tokens.</dd>
+<dt>Effort</dt><dd>None</dd>
+<dt>Files</dt><dd>None</dd>
+<dt>Guideline check</dt><dd class="check">Copy unchanged · Tokens: outside them (a named family in a page stylesheet) · Licence: Georgia is a Microsoft system font; the site doesn’t self-host it and can’t, so the face depends on the visitor’s device · Contrast: ink on paper 18.2:1 · Motion: none · Image QA: not needed</dd>
+</dl>
+</article>
+<article class="opt is-rec" id="d8-1-b">
+<div class="option-head"><h3><span class="oid">D8.1-B</span>Libron Bold</h3><span class="badge rec">Recommended</span></div>
+<div class="visual"><figure class="frame"><div class="frame-bar"><b>Live</b> · Libron 700 · same size, tracking and line height</div><div class="spec f-libron"><div class="spec-in"><div class="s-artist"><span><span class="pn">Kazon</span></span></div><p class="s-title">Old News</p><p class="s-credit"><span>Prod. Lexi Banks</span><span>single</span></p></div></div></figure></div>
+<p class="why-rec"><b>Why this one:</b> It fixes both findings with a font file the site already ships, and keeps a heavy front-page weight on every device.</p>
+<dl class="facts">
+<dt>What changes</dt><dd><code>.masthead-title</code> uses <code>font-family: var(--font-serif)</code> at <code>font-weight: 700</code>. Nothing else changes.</dd>
+<dt>Why it could be better</dt><dd>The same masthead on every device, inside the type tokens. <code>Libron-Bold.woff2</code> is already in <code>public/fonts/libron-v0.25/</code> and declared in <code>global.css</code>, so there’s no new font or licence. At this size it still reads as a newspaper headline.</dd>
+<dt>Trade-off</dt><dd>A little rounder and lighter than Georgia Bold. If nothing else on the page uses bold Libron, the page fetches one more font file (about 80 KB). Libron is wider, so recheck PR #204’s long-word size guard at 320px.</dd>
+<dt>Effort</dt><dd>S</dd>
+<dt>Files</dt><dd><code>src/styles/music-premiere.css</code> (one rule)</dd>
+<dt>Guideline check</dt><dd class="check">Copy unchanged · Tokens: var(--font-serif) · Licence: Libron, SIL Open Font License 1.1, already self-hosted (<code>public/fonts/OFL-Libron.txt</code>) · Contrast: 18.2:1 · Motion: none · Image QA: not needed</dd>
+</dl>
+</article>
+<article class="opt" id="d8-1-c">
+<div class="option-head"><h3><span class="oid">D8.1-C</span>Gelasio Bold, self-hosted</h3><span class="badge no">Keeps today’s Georgia look</span></div>
+<div class="visual"><figure class="frame"><div class="frame-bar"><b>Live</b> · Gelasio 700 · preview loaded from Google Fonts</div><div class="spec f-gelasio"><div class="spec-in"><div class="s-artist"><span><span class="pn">Kazon</span></span></div><p class="s-title">Old News</p><p class="s-credit"><span>Prod. Lexi Banks</span><span>single</span></p></div></div></figure></div>
+
+<dl class="facts">
+<dt>What changes</dt><dd>Self-host Gelasio Bold (Latin WOFF2, about 20 KB) with its licence, add a <code>--font-masthead</code> token (<code>'Gelasio', Georgia, serif</code>) and use it on the masthead at 700.</dd>
+<dt>Why it could be better</dt><dd>Gelasio was drawn to match Georgia’s metrics, so the masthead keeps the proportions Mac, Windows and iPhone show today, now on Android and Linux too.</dd>
+<dt>Trade-off</dt><dd>A third serif on the site (Libron, Newsreader on the agreement pages and the signed PDF, Gelasio) for one line of type, while Worth considering 5 is about cutting serifs, not adding them. Close to Georgia, not identical. One more file and licence to maintain.</dd>
+<dt>Effort</dt><dd>S</dd>
+<dt>Files</dt><dd><code>public/fonts/gelasio/Gelasio-Bold.woff2</code> (new), <code>public/fonts/OFL-Gelasio.txt</code> (new), <code>public/fonts/README.md</code>, <code>src/styles/global.css</code> (@font-face and token), <code>src/styles/music-premiere.css</code></dd>
+<dt>Guideline check</dt><dd class="check">Copy unchanged · Tokens: new --font-masthead · Licence: SIL Open Font License 1.1 (Sorkin Type, github.com/SorkinType/Gelasio) · Contrast: 18.2:1 · Motion: none · Image QA: not needed</dd>
+</dl>
+</article>
+<article class="opt" id="d8-1-d">
+<div class="option-head"><h3><span class="oid">D8.1-D</span>Record-sleeve italic</h3><span class="badge no">New voice, no new file</span></div>
+<div class="visual"><figure class="frame"><div class="frame-bar"><b>Live</b> · Libron Bold Italic · the title’s own case · tracking <code>-.04em</code></div><div class="spec f-sleeve"><div class="spec-in"><div class="s-artist"><span><span class="pn">Kazon</span></span></div><p class="s-title">Old News</p><p class="s-credit"><span>Prod. Lexi Banks</span><span>single</span></p></div></div></figure></div>
+
+<dl class="facts">
+<dt>What changes</dt><dd><code>.masthead-title</code> uses <code>var(--font-serif)</code> at 700 italic, drops <code>text-transform: uppercase</code> so the title shows in its own case, and tracks at <code>-.04em</code>. Size, line height and the size guard stay. The artist and credit lines keep their capitals and rules.</dd>
+<dt>Why it could be better</dt><dd>The nameplate reads like the title on a record sleeve rather than a newspaper headline, so the poster carries the newspaper idea and the type carries the music. Same on every device and inside the type tokens. <code>Libron-BoldItalic.woff2</code> is already in <code>public/fonts/libron-v0.25/</code> and declared in <code>global.css</code>, so there’s no new font or licence.</dd>
+<dt>Trade-off</dt><dd>It steps away from the capitals the cover art and the poster’s newspaper share. Title case brings descenders, so a two-line title needs its .93 line height checked. The page may fetch one more font file (about 85 KB). Hallmark already questions one italic line on the music pages (D8.5).</dd>
+<dt>Effort</dt><dd>S</dd>
+<dt>Files</dt><dd><code>src/styles/music-premiere.css</code> (the title rule and its phone tracking), <code>tests/pages/music-release-details.test.ts</code> (its name says “all-caps”)</dd>
+<dt>Guideline check</dt><dd class="check">Copy unchanged (the title’s own text and case) · Tokens: var(--font-serif) · Licence: Libron, SIL Open Font License 1.1, already self-hosted · Contrast: 18.2:1 · Motion: none · Image QA: not needed</dd>
+</dl>
+</article></div>
+</section>
+<section class="study" id="d8-2" aria-labelledby="d8-2-q">
+<p class="eyebrow">D8.2 · Your call 16 · punch list #38 · audio-2</p>
+<h2 id="d8-2-q">Should anything in the premiere masthead move off the centre line?</h2>
+<div class="flag"><p><b>What Hallmark flagged.</b> “Centred everything” (gate 6): the artist line, title, credit and both buttons share one centre line. Hallmark’s fix keeps the title centred and moves the button row or the artist line off centre. The verifier called it overstated, because the symmetry is a newspaper front page.</p><p><b>Where today’s choice was decided.</b> <code>docs/asset-reviews/old-news-premiere.md:6,8</code> (the approved editorial premiere mockup) and <code>src/styles/music-premiere.css:1,6-9</code>. A test that PR #204 adds pins the centred masthead (<code>tests/pages/music-release-details.test.ts:23</code>).</p></div>
+
+<div class="opts "><article class="opt is-rec" id="d8-2-a">
+<div class="option-head"><h3><span class="oid">D8.2-A</span>Keep the symmetric front page</h3><span class="badge rec">Recommended</span></div>
+<div class="visual"><figure class="mock"><div class="vpw"><div class="pm" data-vw="1280" style="height:800px"><img class="ci" src="premiere-ci-1280.webp" width="1280" height="1000" alt="The premiere as shipped: artist line, OLD NEWS, credit and both buttons on one centre line above the full-width poster."></div></div><figcaption>Today at 1280 × 800 (CI capture)</figcaption></figure><figure class="mock phone-mock"><div class="vpw"><div class="pp" data-vw="390" style="height:700px"><img class="ci" src="premiere-ci-390.webp" width="390" height="844" alt="The premiere on a phone: centred masthead, a spread-out button row, then the poster and player bar."></div></div><figcaption>Today at 390 wide (CI capture)</figcaption></figure></div>
+<p class="why-rec"><b>Why this one:</b> The symmetry is the approved newspaper idea, and the buttons are already the first thing under the title. The audit’s own verifier called this flag overstated for a front-page nameplate.</p>
+<dl class="facts">
+<dt>What changes</dt><dd>Nothing.</dd>
+<dt>Why it could be better</dt><dd>A nameplate is centred on a real front page. Artist, title, credit and buttons read as one stack, and the poster’s play button sits on the same line.</dd>
+<dt>Trade-off</dt><dd>Five centred rows in a stack. Hallmark’s gate will keep flagging it.</dd>
+<dt>Effort</dt><dd>None</dd>
+<dt>Files</dt><dd>None</dd>
+<dt>Guideline check</dt><dd class="check">Copy unchanged · Tokens unchanged · Buttons 48px (44px on phones) · Motion: none · Image QA: not needed</dd>
+</dl>
+</article>
+<article class="opt" id="d8-2-b">
+<div class="option-head"><h3><span class="oid">D8.2-B</span>Folio line</h3><span class="badge no">Newspaper device</span></div>
+<div class="visual"><figure class="mock"><div class="vpw"><div class="pm " data-vw="1280" style="height:800px" role="img" aria-label="Folio line at 1280 × 800 (live recreation)"><img class="chrome" src="premiere-chrome-1280.webp" alt="" width="1280" height="174"><div class="shell"><div class="m-artist"><span><span class="pn">Kazon</span></span></div><p class="m-title">Old News</p><p class="m-folio"><span>Prod. Lexi Banks</span><span>single</span></p><div class="m-actions "><span class="m-act"><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Play song</span></span><span class="m-act"><span class="rp out"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Watch lyric video</span></span></div><div class="poster"><img src="../../../../src/assets/site/old-news-premiere.webp" alt="" width="1672" height="941"><span class="vbtn"><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Watch the lyric video</span></span></div><div class="transport"><div class="pc"><img src="../../../../public/music/old-news-single-0db5fc05dca4ee79.webp" alt="" width="52" height="52"><span class="pt">Old News</span><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span class="prog"><span class="track"></span><span class="time">0:00 / 2:40</span></span><span class="vol"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9h4l5-4v14l-5-4H3z"/><path d="M16 8q4 4 0 8M19 5q7 7 0 14"/></svg></span></div></div></div></div></div><figcaption>Folio line at 1280 × 800 (live recreation)</figcaption></figure><figure class="mock phone-mock"><div class="vpw"><div class="pp" data-vw="390" style="height:700px" role="img" aria-label="Folio line at 390 wide"><img class="chrome" src="premiere-chrome-390.webp" alt="" width="390" height="168"><div class="shell"><div class="m-artist"><span><span class="pn">Kazon</span></span></div><p class="m-title">Old News</p><p class="m-folio"><span>Prod. Lexi Banks</span><span>single</span></p><div class="m-actions "><span class="m-act"><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Play song</span></span><span class="m-act"><span class="rp out"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Watch lyric video</span></span></div><div class="poster"><img src="../../../../src/assets/site/old-news-premiere.webp" alt="" width="1672" height="941"><span class="vbtn"><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Watch the lyric video</span></span></div><div class="transport"><div class="pc"><img src="../../../../public/music/old-news-single-0db5fc05dca4ee79.webp" alt="" width="52" height="52"><span class="pt">Old News</span><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span class="prog"><span class="track"></span><span class="time">0:00 / 2:40</span></span><span class="vol"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9h4l5-4v14l-5-4H3z"/><path d="M16 8q4 4 0 8M19 5q7 7 0 14"/></svg></span></div></div></div></div></div><figcaption>Folio line at 390 wide</figcaption></figure></div>
+
+<dl class="facts">
+<dt>What changes</dt><dd>The credit row becomes a folio line between two ink rules: “Prod. Lexi Banks” at the left end, “single” at the right. Artist line, title and buttons stay centred.</dd>
+<dt>Why it could be better</dt><dd>Front pages run a dateline like this under the nameplate. It breaks the centre stack with a newspaper device rather than a web pattern, and needs no new copy.</dd>
+<dt>Trade-off</dt><dd>The credit loses its centred emphasis. A release with no producer would show one item at the left end only.</dd>
+<dt>Effort</dt><dd>S</dd>
+<dt>Files</dt><dd><code>src/styles/music-premiere.css</code> (credit rules at both breakpoints)</dd>
+<dt>Guideline check</dt><dd class="check">Copy unchanged · Tokens: --ink rules · Contrast 18.2:1 · Motion: none · Image QA: not needed</dd>
+</dl>
+</article>
+<article class="opt" id="d8-2-c">
+<div class="option-head"><h3><span class="oid">D8.2-C</span>Action rail</h3><span class="badge no">Smallest shift</span></div>
+<div class="visual"><figure class="mock"><div class="vpw"><div class="pm " data-vw="1280" style="height:800px" role="img" aria-label="Action rail at 1280 × 800 (live recreation)"><img class="chrome" src="premiere-chrome-1280.webp" alt="" width="1280" height="174"><div class="shell"><div class="m-artist"><span><span class="pn">Kazon</span></span></div><p class="m-title">Old News</p><p class="m-credit"><span>Prod. Lexi Banks</span><span>single</span></p><div class="m-actions rail"><span class="m-act"><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Play song</span></span><span class="m-act"><span class="rp out"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Watch lyric video</span></span></div><div class="poster"><img src="../../../../src/assets/site/old-news-premiere.webp" alt="" width="1672" height="941"><span class="vbtn"><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Watch the lyric video</span></span></div><div class="transport"><div class="pc"><img src="../../../../public/music/old-news-single-0db5fc05dca4ee79.webp" alt="" width="52" height="52"><span class="pt">Old News</span><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span class="prog"><span class="track"></span><span class="time">0:00 / 2:40</span></span><span class="vol"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9h4l5-4v14l-5-4H3z"/><path d="M16 8q4 4 0 8M19 5q7 7 0 14"/></svg></span></div></div></div></div></div><figcaption>Action rail at 1280 × 800 (live recreation)</figcaption></figure><p class="same">Phones keep today’s spread-out button row.</p></div>
+
+<dl class="facts">
+<dt>What changes</dt><dd>Play song and Watch lyric video sit at the left edge, with a rule running from them to the right margin. The masthead above stays centred. Phones keep today’s row.</dd>
+<dt>Why it could be better</dt><dd>The nameplate keeps its symmetry while the buttons read as page controls. It borrows the section-heading pattern, a label followed by a rule to the margin (<code>.site-section-heading::after</code> in <code>global.css</code>), drawn in ink like the masthead’s other rules.</dd>
+<dt>Trade-off</dt><dd>The buttons leave the line the eye follows down from the title, above a poster whose own play button is still centred.</dd>
+<dt>Effort</dt><dd>S</dd>
+<dt>Files</dt><dd><code>src/styles/music-premiere.css</code> (<code>.premiere-actions</code>)</dd>
+<dt>Guideline check</dt><dd class="check">Copy unchanged · Tokens unchanged · Buttons stay 48px · Motion: none · Image QA: not needed</dd>
+</dl>
+</article>
+<article class="opt" id="d8-2-d">
+<div class="option-head"><h3><span class="oid">D8.2-D</span>Lead column</h3><span class="badge no">Biggest change</span></div>
+<div class="visual"><figure class="mock"><div class="vpw"><div class="pm " data-vw="1280" style="height:800px" role="img" aria-label="Lead column at 1280 × 800 (live recreation)"><img class="chrome" src="premiere-chrome-1280.webp" alt="" width="1280" height="174"><div class="shell"><div class="m-artist"><span><span class="pn">Kazon</span></span></div><p class="m-title">Old News</p><div class="lead"><div class="lead-col"><p class="lc-credit"><span>Prod. Lexi Banks</span><span>single</span></p><div class="lc-acts"><div class="m-actions stack"><span class="m-act"><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Play song</span></span><span class="m-act"><span class="rp out"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Watch lyric video</span></span></div></div><div class="lc-links"><span class="sl">Watch on YouTube <span class="arr">↗</span></span><span class="sl">Listen on SoundCloud <span class="arr">↗</span></span></div></div><div class="lead-media"><div class="poster"><img src="../../../../src/assets/site/old-news-premiere.webp" alt="" width="1672" height="941"><span class="vbtn"><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Watch the lyric video</span></span></div><div class="transport"><div class="pc"><img src="../../../../public/music/old-news-single-0db5fc05dca4ee79.webp" alt="" width="52" height="52"><span class="pt">Old News</span><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span class="prog"><span class="track"></span><span class="time">0:00 / 2:40</span></span><span class="vol"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9h4l5-4v14l-5-4H3z"/><path d="M16 8q4 4 0 8M19 5q7 7 0 14"/></svg></span></div></div></div></div></div></div></div><figcaption>Lead column at 1280 × 800 (live recreation)</figcaption></figure><p class="same">Phones keep today’s single-column stack.</p></div>
+
+<dl class="facts">
+<dt>What changes</dt><dd>Artist line and title stay centred over a full-width rule. Below, a one-third column holds the credit, both buttons and the YouTube and SoundCloud links (moved up from under the poster). The poster takes the other two thirds.</dd>
+<dt>Why it could be better</dt><dd>It’s how a front page sets a lead story beside its photo. Actions and credits read as one block, and the shorter poster fits almost entirely on a 1280 × 800 first screen (see D8.3).</dd>
+<dt>Trade-off</dt><dd>The poster loses its full width and some drama. Moving the platform links changes the reading order. The poster renders at a new size, so its placement needs rechecking.</dd>
+<dt>Effort</dt><dd>M</dd>
+<dt>Files</dt><dd><code>src/pages/music/[slug].astro</code> (order), <code>src/styles/music-premiere.css</code>, <code>tests/pages/music-release-details.test.ts</code>, <code>docs/asset-reviews/old-news-premiere.md</code></dd>
+<dt>Guideline check</dt><dd class="check">Copy unchanged · Tokens unchanged · Buttons 48px, links keep their tap areas · Motion: none · Image QA: placement check of the existing poster at its new size (no new art)</dd>
+</dl>
+</article></div>
+</section>
+<section class="study" id="d8-3" aria-labelledby="d8-3-q">
+<p class="eyebrow">D8.3 · Your call 17 · punch list #62 · audio-10</p>
+<h2 id="d8-3-q">Should more of the premiere poster fit on a laptop’s first screen?</h2>
+<div class="flag"><p><b>What Hallmark flagged.</b> Hero fit (gate 44): at 1280 × 800 the fold cuts through the poster. The cut lands on the newspaper name in the poster and hides the poster’s play button and the player bar. The masthead buttons stay on the first screen at every size.</p><p><b>Where today’s choice was decided.</b> <code>src/styles/music-premiere.css:7,10</code> (masthead size, 1.96:1 poster) and <code>src/components/audio/LyricVideo.astro</code>. The asset review only checked 1440 and 390 wide (<code>docs/asset-reviews/old-news-premiere.md:11</code>).</p></div>
+<div class="tablewrap"><table class="fold-table">
+<caption>How much of the poster is on the first screen. First mark: the newspaper name in the poster. Second: the poster’s play button. ✓ visible, ✗ cut by the fold. Computed from <code>music-premiere.css</code>; 1280 and 390 match the CI captures.</caption>
+<thead><tr><th scope="col">Screen</th><th scope="col">A · Today</th><th scope="col">B · Short</th><th scope="col">C · Cinema</th><th scope="col">D · Lead</th></tr></thead>
+<tbody><tr><th scope="row">1024 × 768</th><td><b>58%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="cut" aria-hidden="true">✗</span></span><span class="sr">name visible, play button cut</span></td><td><b>70%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="ok" aria-hidden="true">✓</span></span><span class="sr">name visible, play button visible</span></td><td><b>71%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="ok" aria-hidden="true">✓</span></span><span class="sr">name visible, play button visible</span></td><td><b>100%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="ok" aria-hidden="true">✓</span></span><span class="sr">name visible, play button visible</span></td></tr><tr><th scope="row">1280 × 800</th><td><b>44%</b><span class="marks"><span class="cut" aria-hidden="true">✗</span><span class="cut" aria-hidden="true">✗</span></span><span class="sr">name cut, play button cut</span></td><td><b>59%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="ok" aria-hidden="true">✓</span></span><span class="sr">name visible, play button visible</span></td><td><b>54%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="cut" aria-hidden="true">✗</span></span><span class="sr">name visible, play button cut</span></td><td><b>90%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="ok" aria-hidden="true">✓</span></span><span class="sr">name visible, play button visible</span></td></tr><tr><th scope="row">1366 × 768</th><td><b>34%</b><span class="marks"><span class="cut" aria-hidden="true">✗</span><span class="cut" aria-hidden="true">✗</span></span><span class="sr">name cut, play button cut</span></td><td><b>51%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="cut" aria-hidden="true">✗</span></span><span class="sr">name visible, play button cut</span></td><td><b>42%</b><span class="marks"><span class="cut" aria-hidden="true">✗</span><span class="cut" aria-hidden="true">✗</span></span><span class="sr">name cut, play button cut</span></td><td><b>73%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="ok" aria-hidden="true">✓</span></span><span class="sr">name visible, play button visible</span></td></tr><tr><th scope="row">1440 × 900 · QA’d</th><td><b>54%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="cut" aria-hidden="true">✗</span></span><span class="sr">name visible, play button cut</span></td><td><b>54%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="cut" aria-hidden="true">✗</span></span><span class="sr">name visible, play button cut</span></td><td><b>66%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="ok" aria-hidden="true">✓</span></span><span class="sr">name visible, play button visible</span></td><td><b>100%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="ok" aria-hidden="true">✓</span></span><span class="sr">name visible, play button visible</span></td></tr><tr><th scope="row">1536 × 864</th><td><b>48%</b><span class="marks"><span class="cut" aria-hidden="true">✗</span><span class="cut" aria-hidden="true">✗</span></span><span class="sr">name cut, play button cut</span></td><td><b>63%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="ok" aria-hidden="true">✓</span></span><span class="sr">name visible, play button visible</span></td><td><b>59%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="cut" aria-hidden="true">✗</span></span><span class="sr">name visible, play button cut</span></td><td><b>95%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="ok" aria-hidden="true">✓</span></span><span class="sr">name visible, play button visible</span></td></tr><tr><th scope="row">1920 × 1080</th><td><b>82%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="ok" aria-hidden="true">✓</span></span><span class="sr">name visible, play button visible</span></td><td><b>82%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="ok" aria-hidden="true">✓</span></span><span class="sr">name visible, play button visible</span></td><td><b>100%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="ok" aria-hidden="true">✓</span></span><span class="sr">name visible, play button visible</span></td><td><b>100%</b><span class="marks"><span class="ok" aria-hidden="true">✓</span><span class="ok" aria-hidden="true">✓</span></span><span class="sr">name visible, play button visible</span></td></tr></tbody></table></div>
+<p class="phones">Phones are fine today: at 390 × 844 and 375 × 667 the whole poster and the player bar are on the first screen. No option changes phones. The masthead buttons are on the first screen at every size above.</p>
+<div class="opts "><article class="opt" id="d8-3-a">
+<div class="option-head"><h3><span class="oid">D8.3-A</span>Keep, and record the missing sizes</h3><span class="badge no">Today</span></div>
+<div class="visual"><figure class="mock"><div class="vpw"><div class="pm" data-vw="1280" style="height:1000px"><img class="ci" src="premiere-ci-1280.webp" width="1280" height="1000" alt="The premiere as shipped at 1280 wide. The 800px fold line crosses the newspaper name in the poster and the poster’s play button."><div class="fold" aria-hidden="true"><span>Fold at 1280 × 800</span></div></div></div><figcaption>Today at 1280 wide, fold at 800 (CI capture)</figcaption></figure></div>
+
+<dl class="facts">
+<dt>What changes</dt><dd>Nothing on the page. Add the 1280 × 800, 1366 × 768 and 1536 × 864 checks to the asset review so the QA gap is closed.</dd>
+<dt>Why it could be better</dt><dd>The headline and both buttons are above the fold everywhere, like a folded newspaper. The poster is decoration (empty alt) that rewards a scroll.</dd>
+<dt>Trade-off</dt><dd>On the most common laptop sizes the fold slices through the newspaper’s “Kazon” in the poster, which can look accidental.</dd>
+<dt>Effort</dt><dd>S (docs only)</dd>
+<dt>Files</dt><dd><code>docs/asset-reviews/old-news-premiere.md</code></dd>
+<dt>Guideline check</dt><dd class="check">Copy unchanged · Tokens unchanged · Buttons above the fold at every size · Motion: none · Image QA: record the extra placement checks</dd>
+</dl>
+</article>
+<article class="opt is-rec" id="d8-3-b">
+<div class="option-head"><h3><span class="oid">D8.3-B</span>Shorter masthead on short screens</h3><span class="badge rec">Recommended</span></div>
+<div class="visual"><figure class="mock"><div class="vpw"><div class="pm short" data-vw="1280" style="height:1000px" role="img" aria-label="Short-screen masthead at 1280 × 800 (live recreation)"><img class="chrome" src="premiere-chrome-1280.webp" alt="" width="1280" height="174"><div class="shell"><div class="m-artist"><span><span class="pn">Kazon</span></span></div><p class="m-title">Old News</p><p class="m-credit"><span>Prod. Lexi Banks</span><span>single</span></p><div class="m-actions "><span class="m-act"><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Play song</span></span><span class="m-act"><span class="rp out"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Watch lyric video</span></span></div><div class="poster"><img src="../../../../src/assets/site/old-news-premiere.webp" alt="" width="1672" height="941"><span class="vbtn"><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Watch the lyric video</span></span></div><div class="transport"><div class="pc"><img src="../../../../public/music/old-news-single-0db5fc05dca4ee79.webp" alt="" width="52" height="52"><span class="pt">Old News</span><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span class="prog"><span class="track"></span><span class="time">0:00 / 2:40</span></span><span class="vol"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9h4l5-4v14l-5-4H3z"/><path d="M16 8q4 4 0 8M19 5q7 7 0 14"/></svg></span></div></div></div><div class="fold" aria-hidden="true"><span>Fold at 1280 × 800</span></div></div></div><figcaption>Short-screen masthead at 1280 × 800 (live recreation)</figcaption></figure></div>
+<p class="why-rec"><b>Why this one:</b> It fixes the cut where it happens with one media query, and leaves the approved scale untouched at 1440 × 900, on large screens and on phones.</p>
+<dl class="facts">
+<dt>What changes</dt><dd>One media query for screens wider than 800px and 880px tall or less: the title size follows the screen height (<code>--masthead-size: clamp(5rem, min(14.5vw, 15svh), 12.5rem)</code>, so PR #204’s long-word guard still caps it), the artist line uses its tablet size (1.2rem) and the button row padding tightens.</dd>
+<dt>Why it could be better</dt><dd>The newspaper name and the poster’s play button land on the first screen at 1024 × 768, 1280 × 800 and 1536 × 864. The rule only applies where the problem is.</dd>
+<dt>Trade-off</dt><dd>On short laptops the title is about a third smaller (186px to 120px at 1280 × 800), so the masthead dominates less there. At 1366 × 768 the poster’s play button is still 43px below the fold.</dd>
+<dt>Effort</dt><dd>S</dd>
+<dt>Files</dt><dd><code>src/styles/music-premiere.css</code> (beside the existing <code>max-height:450px</code> block), <code>tests/pages/music-release-details.test.ts</code>, <code>docs/asset-reviews/old-news-premiere.md</code></dd>
+<dt>Guideline check</dt><dd class="check">Copy unchanged · Tokens unchanged · Buttons stay 48px · Motion: none · Image QA: placement check at the new sizes (no new art)</dd>
+</dl>
+</article>
+<article class="opt" id="d8-3-c">
+<div class="option-head"><h3><span class="oid">D8.3-C</span>Cinema crop on wide screens</h3><span class="badge no">Keeps the headline size</span></div>
+<div class="visual"><figure class="mock"><div class="vpw"><div class="pm cine" data-vw="1280" style="height:1000px" role="img" aria-label="Poster at 2.4:1 above 800px wide (live recreation)"><img class="chrome" src="premiere-chrome-1280.webp" alt="" width="1280" height="174"><div class="shell"><div class="m-artist"><span><span class="pn">Kazon</span></span></div><p class="m-title">Old News</p><p class="m-credit"><span>Prod. Lexi Banks</span><span>single</span></p><div class="m-actions "><span class="m-act"><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Play song</span></span><span class="m-act"><span class="rp out"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Watch lyric video</span></span></div><div class="poster"><img src="../../../../src/assets/site/old-news-premiere.webp" alt="" width="1672" height="941"><span class="vbtn"><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Watch the lyric video</span></span></div><div class="transport"><div class="pc"><img src="../../../../public/music/old-news-single-0db5fc05dca4ee79.webp" alt="" width="52" height="52"><span class="pt">Old News</span><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span class="prog"><span class="track"></span><span class="time">0:00 / 2:40</span></span><span class="vol"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9h4l5-4v14l-5-4H3z"/><path d="M16 8q4 4 0 8M19 5q7 7 0 14"/></svg></span></div></div></div><div class="fold" aria-hidden="true"><span>Fold at 1280 × 800</span></div></div></div><figcaption>Poster at 2.4:1 above 800px wide (live recreation)</figcaption></figure></div>
+
+<dl class="facts">
+<dt>What changes</dt><dd>Above 800px wide the poster crops to 2.4:1 instead of 1.96:1 (<code>object-fit: cover</code> keeps the centre). The masthead keeps its size.</dd>
+<dt>Why it could be better</dt><dd>The full-size headline stays. The crop trims sky and stone, so the poster ends about 110px sooner and the newspaper name clears the fold at 1280 × 800.</dd>
+<dt>Trade-off</dt><dd>The poster’s play button is still below the fold at 1280 × 800 and 1366 × 768. The player bar covers more of the newspaper. A tighter crop of approved art needs a crop check.</dd>
+<dt>Effort</dt><dd>S</dd>
+<dt>Files</dt><dd><code>src/styles/music-premiere.css</code> (<code>.premiere-poster</code>), <code>docs/asset-reviews/old-news-premiere.md</code></dd>
+<dt>Guideline check</dt><dd class="check">Copy unchanged · Tokens unchanged · Motion: none · Image QA: crop check of the existing poster (no new art)</dd>
+</dl>
+</article>
+<article class="opt" id="d8-3-d">
+<div class="option-head"><h3><span class="oid">D8.3-D</span>Lead column (D8.2-D)</h3><span class="badge no">Answers both</span></div>
+<div class="visual"><figure class="mock"><div class="vpw"><div class="pm " data-vw="1280" style="height:1000px" role="img" aria-label="Lead column at 1280 wide, fold at 800 (live recreation)"><img class="chrome" src="premiere-chrome-1280.webp" alt="" width="1280" height="174"><div class="shell"><div class="m-artist"><span><span class="pn">Kazon</span></span></div><p class="m-title">Old News</p><div class="lead"><div class="lead-col"><p class="lc-credit"><span>Prod. Lexi Banks</span><span>single</span></p><div class="lc-acts"><div class="m-actions stack"><span class="m-act"><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Play song</span></span><span class="m-act"><span class="rp out"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Watch lyric video</span></span></div></div><div class="lc-links"><span class="sl">Watch on YouTube <span class="arr">↗</span></span><span class="sl">Listen on SoundCloud <span class="arr">↗</span></span></div></div><div class="lead-media"><div class="poster"><img src="../../../../src/assets/site/old-news-premiere.webp" alt="" width="1672" height="941"><span class="vbtn"><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span>Watch the lyric video</span></span></div><div class="transport"><div class="pc"><img src="../../../../public/music/old-news-single-0db5fc05dca4ee79.webp" alt="" width="52" height="52"><span class="pt">Old News</span><span class="rp"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z"/></svg></span><span class="prog"><span class="track"></span><span class="time">0:00 / 2:40</span></span><span class="vol"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9h4l5-4v14l-5-4H3z"/><path d="M16 8q4 4 0 8M19 5q7 7 0 14"/></svg></span></div></div></div></div></div><div class="fold" aria-hidden="true"><span>Fold at 1280 × 800</span></div></div></div><figcaption>Lead column at 1280 wide, fold at 800 (live recreation)</figcaption></figure></div>
+
+<dl class="facts">
+<dt>What changes</dt><dd>The D8.2-D layout: the poster sits beside a column with the credit, buttons and platform links.</dd>
+<dt>Why it could be better</dt><dd>The best fit by far: 73% to 100% of the poster and its play button on the first screen at every size in the table.</dd>
+<dt>Trade-off</dt><dd>All of D8.2-D’s costs: the poster loses its full width, the reading order changes and the placement needs rechecking.</dd>
+<dt>Effort</dt><dd>M</dd>
+<dt>Files</dt><dd>As D8.2-D</dd>
+<dt>Guideline check</dt><dd class="check">Copy unchanged · Tokens unchanged · Motion: none · Image QA: placement check of the existing poster at its new size</dd>
+</dl>
+</article></div>
+</section>
+<section class="study" id="d8-4" aria-labelledby="d8-4-q">
+<p class="eyebrow">D8.4 · Your call 24 · punch list #58 · audio-21</p>
+<h2 id="d8-4-q">Should the accent rule under action links sit closer to the text?</h2>
+<div class="flag"><p><b>What Hallmark flagged.</b> Decorative underlines 5px or more below the baseline (gate 35). Measured with Libron at 16px: action links (<code>.site-link</code>, such as “Explore release →”) draw their rule about 13px below the baseline, and their box is about 35px tall. Links inside paragraphs sit about 4px below and already pass.</p><p><b>Where today’s choice was decided.</b> <code>src/styles/global.css:108-113</code> (links) and <code>:225</code> (<code>.site-link</code>) in PR #204; the audit cited <code>:99-104</code> and <code>:200</code> at 26e764a. The approved concepts draw one rule under the words and the arrow (<code>docs/design-reviews/audio-2026-09-15/releases-approved.png</code>, <code>portfolio-approved.png</code>). PR #204 already moves the /building tap areas onto a pseudo-element (Worth considering 24); this decision is about the house link everywhere else.</p></div>
+<div class="toggle-row"><label class="toggle"><input type="checkbox" id="show-taps"> Show tap areas</label><span class="toggle-note">Outlines what a finger can hit. The figures under each sample are measured live in your browser.</span></div>
+<div class="opts "><article class="opt" id="d8-4-a">
+<div class="option-head"><h3><span class="oid">D8.4-A</span>Keep the ruled link</h3><span class="badge no">Today</span></div>
+<div class="visual"><figure class="frame"><div class="frame-bar"><b>CI capture</b> · /audio/releases · 1280 wide</div><img class="fill" src="releases-foot-ci-1280.webp" width="1168" height="220" alt="CI capture of the Releases page footer: Explore release and Audio portfolio links, each with an accent rule well below the text."></figure>
+<figure class="frame"><div class="frame-bar"><b>Live</b> · global.css values · Libron 16px · arrows as in the markup</div><div class="ls ls-a">
+  <div class="ls-card"><p class="ls-meta">Single · Released</p><p class="ls-h">Old News</p><p class="ls-sub">Prod. Lexi Banks</p><span class="sl sl-a" data-measure><span class="lbl">Explore release<i class="bl"></i> →</span></span><output class="mread"></output></div>
+  <div class="ls-pair"><span class="sl sl-a"><span class="lbl">Watch on YouTube</span><span class="arr">↗</span></span><span class="sl sl-a"><span class="lbl">Listen on SoundCloud</span><span class="arr">↗</span></span></div>
+  <div class="ls-foot"><p class="ls-fh">The work behind the sound.</p><span class="sl sl-a"><span class="lbl">Audio portfolio →</span></span></div>
+</div></figure></div>
+
+<dl class="facts">
+<dt>What changes</dt><dd>Nothing.</dd>
+<dt>Why it could be better</dt><dd>One rule under the words and the arrow is what both approved concepts show. It reads as a quiet button rather than a hyperlink.</dd>
+<dt>Trade-off</dt><dd>At about 13px the rule reads as a separate line, not an underline. The box is about 35px tall, short of the 44px target for main actions.</dd>
+<dt>Effort</dt><dd>None</dd>
+<dt>Files</dt><dd>None</dd>
+<dt>Guideline check</dt><dd class="check">Copy unchanged · Tokens unchanged · Tap area about 35px · Motion: unchanged (arrow nudge on hover) · Image QA: not needed</dd>
+</dl>
+</article>
+<article class="opt" id="d8-4-b">
+<div class="option-head"><h3><span class="oid">D8.4-B</span>Text underline</h3><span class="badge no">Sitewide restyle</span></div>
+<div class="visual"><figure class="frame"><div class="frame-bar"><b>Live</b> · text-decoration · offset .2em</div><div class="ls ls-b">
+  <div class="ls-card"><p class="ls-meta">Single · Released</p><p class="ls-h">Old News</p><p class="ls-sub">Prod. Lexi Banks</p><span class="sl sl-b" data-measure><span class="lbl">Explore release<i class="bl"></i></span><span class="arr">→</span></span><output class="mread"></output></div>
+  <div class="ls-pair"><span class="sl sl-b"><span class="lbl">Watch on YouTube</span><span class="arr">↗</span></span><span class="sl sl-b"><span class="lbl">Listen on SoundCloud</span><span class="arr">↗</span></span></div>
+  <div class="ls-foot"><p class="ls-fh">The work behind the sound.</p><span class="sl sl-b"><span class="lbl">Audio portfolio</span><span class="arr">→</span></span></div>
+</div></figure></div>
+
+<dl class="facts">
+<dt>What changes</dt><dd>Links and <code>.site-link</code> use <code>text-decoration: underline 1px var(--accent)</code> with <code>text-underline-offset: .2em</code> (about 3px). The border goes. Arrows in a span sit outside the underline. The two bare arrows on /audio/releases would need a span.</dd>
+<dt>Why it could be better</dt><dd>The line belongs to the words. It breaks around descenders like typeset text, which is what Hallmark’s gate asks for.</dd>
+<dt>Trade-off</dt><dd>Restyles every link on the site (about 60 action links in the markup, plus every link in running text). The arrow loses the shared rule from the concepts. To keep the arrow out of the underline the link becomes inline, and its tap area drops from about 35px to 27px.</dd>
+<dt>Effort</dt><dd>M</dd>
+<dt>Files</dt><dd><code>src/styles/global.css</code> (<code>a</code>, <code>.site-link</code>), <code>src/pages/audio/releases.astro</code> (arrow spans), <code>src/styles/music-hubs.css</code> and <code>src/styles/music.css</code> (inline-block overrides), screenshot review of every page</dd>
+<dt>Guideline check</dt><dd class="check">Copy unchanged · Tokens: --accent · Underline still marks links without relying on colour · Tap area about 27px (smaller) · Motion: unchanged · Image QA: not needed</dd>
+</dl>
+</article>
+<article class="opt is-rec" id="d8-4-c">
+<div class="option-head"><h3><span class="oid">D8.4-C</span>Close rule, 44px tap area</h3><span class="badge rec">Recommended</span></div>
+<div class="visual"><figure class="frame"><div class="frame-bar"><b>Live</b> · border rule · padding on top only · ::after tap area</div><div class="ls ls-c">
+  <div class="ls-card"><p class="ls-meta">Single · Released</p><p class="ls-h">Old News</p><p class="ls-sub">Prod. Lexi Banks</p><span class="sl sl-c" data-measure><span class="lbl">Explore release<i class="bl"></i> →</span></span><output class="mread"></output></div>
+  <div class="ls-pair"><span class="sl sl-c"><span class="lbl">Watch on YouTube</span><span class="arr">↗</span></span><span class="sl sl-c"><span class="lbl">Listen on SoundCloud</span><span class="arr">↗</span></span></div>
+  <div class="ls-foot"><p class="ls-fh">The work behind the sound.</p><span class="sl sl-c"><span class="lbl">Audio portfolio →</span></span></div>
+</div></figure></div>
+<p class="why-rec"><b>Why this one:</b> It keeps the approved rule under the words and the arrow, closes the gap Hallmark measured, and makes action links 44px tap targets with the pattern PR #204 adds on /building.</p>
+<dl class="facts">
+<dt>What changes</dt><dd><code>.site-link</code> keeps its border rule across text and arrow, moves its padding to the top (<code>.55rem 0 0</code>) and tightens the line height to 1.15, so the rule sits about 4px under the baseline, like links in paragraphs. A transparent <code>::after</code> gives a 44px-tall tap area, the pattern PR #204 adds on /building (<code>src/pages/building.astro:73-74</code>). Tab indicators keep their gap.</dd>
+<dt>Why it could be better</dt><dd>Closest to the portfolio concept, where the rule hugs the words. Answers the gate, and raises the tap area from about 35px to 44px.</dd>
+<dt>Trade-off</dt><dd>Sitewide. Each action link’s box gets about 7px shorter, so spacing around links shifts a little and every page needs a screenshot check. Tap areas mustn’t overlap where links wrap onto two rows.</dd>
+<dt>Effort</dt><dd>M</dd>
+<dt>Files</dt><dd><code>src/styles/global.css</code> (<code>.site-link</code>), <code>src/pages/building.astro:73-74</code> (fold its local copy into the shared rule), screenshot review of every page</dd>
+<dt>Guideline check</dt><dd class="check">Copy unchanged · Tokens: --accent · Tap area 44px · Focus ring unchanged · Motion: unchanged · Image QA: not needed</dd>
+</dl>
+</article></div>
+</section>
+<section class="study" id="d8-5" aria-labelledby="d8-5-q">
+<p class="eyebrow">D8.5 · Your call 27 · punch list #67 · audio-23</p>
+<h2 id="d8-5-q">Should “One song. A beginning.” on /audio/releases stay italic?</h2>
+<div class="flag"><p><b>What Hallmark flagged.</b> An italic statement in a closing row (gate 38a, borderline). The line only renders while the catalogue has one release, and phones already hide it (<code>music-hubs.css</code>, max-width 700px).</p><p><b>Where today’s choice was decided.</b> The approved concept sets it in italic at the right end of the footer row (<code>docs/design-reviews/audio-2026-09-15/releases-approved.png</code>). Code: <code>src/styles/music-hubs.css:1</code> (<code>.collection-footer>p</code>) and <code>src/pages/audio/releases.astro:27</code>.</p></div>
+
+<div class="opts one"><article class="opt is-rec" id="d8-5-a">
+<div class="option-head"><h3><span class="oid">D8.5-A</span>Keep the italic sign-off</h3><span class="badge rec">Recommended</span></div>
+<div class="visual"><figure class="frame"><div class="frame-bar"><b>CI capture</b> · /audio/releases · 1280 wide</div><img class="fill" src="releases-foot-ci-1280.webp" width="1168" height="220" alt="CI capture of the Releases footer: The work behind the sound, the Audio portfolio link, and One song. A beginning. in muted italic at the right."></figure>
+<figure class="frame"><div class="frame-bar"><b>Live</b> · desktop footer · music-hubs.css values · real size (phones hide the line)</div><div class="rfw"><div class="rfz" data-vw="1124" data-fluid><div class="rf rf-a"><div><p class="rf-h">The work behind the sound.</p><span class="sl sl-a">Audio portfolio →</span></div><p class="rf-p">One song. A beginning.</p></div></div></div></figure></div>
+<p class="why-rec"><b>Why this one:</b> It’s the approved sign-off in a real Libron italic, and it goes away by itself when the second release arrives. A borderline gate isn’t a reason to restyle it.</p>
+<dl class="facts">
+<dt>What changes</dt><dd>Nothing.</dd>
+<dt>Why it could be better</dt><dd>Matches the concept. It’s Libron’s own italic, not a slanted roman, in muted ink (8.4:1).</dd>
+<dt>Trade-off</dt><dd>Hallmark’s gate keeps flagging it. Phone visitors never see it.</dd>
+<dt>Effort</dt><dd>None</dd>
+<dt>Files</dt><dd>None</dd>
+<dt>Guideline check</dt><dd class="check">Copy unchanged · Tokens: --muted · Contrast 8.4:1 · Motion: none · Image QA: not needed</dd>
+</dl>
+</article>
+<article class="opt" id="d8-5-b">
+<div class="option-head"><h3><span class="oid">D8.5-B</span>Roman, muted</h3><span class="badge no">Hallmark’s fix</span></div>
+<div class="visual"><figure class="frame"><div class="frame-bar"><b>Live</b> · italic removed</div><div class="rfw"><div class="rfz" data-vw="1124" data-fluid><div class="rf rf-b"><div><p class="rf-h">The work behind the sound.</p><span class="sl sl-a">Audio portfolio →</span></div><p class="rf-p">One song. A beginning.</p></div></div></div></figure></div>
+
+<dl class="facts">
+<dt>What changes</dt><dd>Drop <code>font-style: italic</code>. Colour and position stay.</dd>
+<dt>Why it could be better</dt><dd>Matches the premiere’s closing line (“Two versions. Hear the difference.”), which is roman and muted. Answers the gate.</dd>
+<dt>Trade-off</dt><dd>Reads as a caption rather than a sign-off. Departs from the concept.</dd>
+<dt>Effort</dt><dd>S</dd>
+<dt>Files</dt><dd><code>src/styles/music-hubs.css</code></dd>
+<dt>Guideline check</dt><dd class="check">Copy unchanged · Tokens: --muted · Contrast 8.4:1 · Motion: none · Image QA: not needed</dd>
+</dl>
+</article>
+<article class="opt" id="d8-5-c">
+<div class="option-head"><h3><span class="oid">D8.5-C</span>Italic with an end mark</h3><span class="badge no">Leans in</span></div>
+<div class="visual"><figure class="frame"><div class="frame-bar"><b>Live</b> · accent mark before the line · 1.15rem ink</div><div class="rfw"><div class="rfz" data-vw="1124" data-fluid><div class="rf rf-c"><div><p class="rf-h">The work behind the sound.</p><span class="sl sl-a">Audio portfolio →</span></div><p class="rf-p">One song. A beginning.</p></div></div></div></figure></div>
+
+<dl class="facts">
+<dt>What changes</dt><dd>Keep the italic, set it at 1.15rem in ink, and add a short accent rule before it, the mark the premiere already uses under its lyric quote (<code>.lyric-spread blockquote:after</code>).</dd>
+<dt>Why it could be better</dt><dd>The italic reads as a deliberate sign-off with a mark the music pages already use.</dd>
+<dt>Trade-off</dt><dd>Adds decoration to a quiet footer, and one more accent mark on the page.</dd>
+<dt>Effort</dt><dd>S</dd>
+<dt>Files</dt><dd><code>src/styles/music-hubs.css</code></dd>
+<dt>Guideline check</dt><dd class="check">Copy unchanged · Tokens: --ink, --accent · Contrast 18.2:1 · Motion: none · Image QA: not needed</dd>
+</dl>
+</article>
+<article class="opt" id="d8-5-d">
+<div class="option-head"><h3><span class="oid">D8.5-D</span>Lead-in, shown on phones</h3><span class="badge no">Reaches phones</span></div>
+<div class="visual"><figure class="frame"><div class="frame-bar"><b>Live</b> · desktop footer · real size</div><div class="rfw"><div class="rfz" data-vw="1124" data-fluid><div class="rf rf-d"><div><p class="rf-p">One song. A beginning.</p><p class="rf-h">The work behind the sound.</p><span class="sl sl-a">Audio portfolio →</span></div></div></div></div></figure>
+<figure class="mock phone-mock"><div class="vpw"><div class="pp pp-foot" data-vw="390" role="img" aria-label="Phone footer with the lead-in line"><div class="shell"><div class="rf rf-d"><div><p class="rf-p">One song. A beginning.</p><p class="rf-h">The work behind the sound.</p><span class="sl sl-a">Audio portfolio →</span></div></div></div></div></div><figcaption>Phone, 390 wide (live recreation)</figcaption></figure></div>
+
+<dl class="facts">
+<dt>What changes</dt><dd>The line moves above “The work behind the sound.” as a roman, muted lead-in in the footer’s left column, and phones show it too.</dd>
+<dt>Why it could be better</dt><dd>Phone visitors see the sign-off. The footer reads top to bottom, like the premiere’s outro.</dd>
+<dt>Trade-off</dt><dd>Changes the approved footer layout and leaves the right side of the desktop footer empty. The line now introduces the portfolio link, which shifts its meaning a little.</dd>
+<dt>Effort</dt><dd>S</dd>
+<dt>Files</dt><dd><code>src/pages/audio/releases.astro</code> (order), <code>src/styles/music-hubs.css</code> (remove the phone hide)</dd>
+<dt>Guideline check</dt><dd class="check">Copy unchanged · Tokens: --muted · Contrast 8.4:1 · Motion: none · Image QA: not needed</dd>
+</dl>
+</article></div>
+</section>
+  <section class="foot-notes" aria-labelledby="evidence">
+    <h2 id="evidence">Evidence</h2>
+    <ul>
+      <li>Audit report: “Worth considering” 10, “Your call” 16, 17, 24 and 27, with punch-list items #38, #39, #58, #62 and #67.</li>
+      <li>CI captures: <code>origin/screenshots:pr-204/f0abd1f/music-old-news-*.png</code> and <code>audio-releases-*.png</code>. The crops beside this file come from them; the same regions in <code>pr-199/08e9b22</code> match, apart from the phone player’s slider styling.</li>
+      <li>Decisions: <code>docs/asset-reviews/old-news-premiere.md</code>, <code>docs/design-reviews/audio-2026-09-15/releases-approved.png</code> and <code>portfolio-approved.png</code>.</li>
+      <li>Fold numbers: computed from <code>music-premiere.css</code> (masthead sizes, 1.96:1 poster, 174px of header and audio menu above the masthead). At 1280 × 800 the model puts the poster top at 537px; the CI capture shows 538px.</li>
+      <li>Link gaps: measured in Chromium with Libron at 16px. Action links about 13px below the baseline in a 35px box; links in paragraphs 4px.</li>
+    </ul>
+  </section>
+</main>
+<script>
+// Scale each 1280 or 390 recreation to its frame.
+(function(){
+  var els=[].slice.call(document.querySelectorAll('[data-vw]'));
+  function fit(){els.forEach(function(el){var w=+el.dataset.vw;var box=el.parentElement;if(!box.clientWidth)return;var z=Math.min(1,box.clientWidth/w);
+    if(el.hasAttribute('data-fluid')&&z<.6){el.style.zoom=1;el.style.width='auto';return;}el.style.width='';el.style.zoom=z.toFixed(4);});}
+  fit();
+  if('ResizeObserver' in window){var ro=new ResizeObserver(fit);els.forEach(function(el){ro.observe(el.parentElement);});}else{window.addEventListener('resize',fit);}
+})();
+// D8.1-A: report whether this browser has Georgia.
+(function(){
+  var out=document.getElementById('georgia-status');if(!out)return;
+  try{var c=document.createElement('canvas').getContext('2d');var t='OLD NEWS wmW 0123';
+    c.font='900 40px monospace';var a=c.measureText(t).width;c.font='900 40px Georgia, monospace';var b=c.measureText(t).width;
+    out.textContent=a!==b?'This browser has Georgia, so the live line above is Georgia Bold (as on Mac, Windows and iPhone).':'This browser has no Georgia, so the live line above is a substitute serif (as on Android and Linux).';
+  }catch(e){out.textContent='Could not check for Georgia in this browser.';}
+})();
+// D8.4: measure each sample's rule-to-baseline gap and tap height.
+function measureLinks(){
+  document.querySelectorAll('[data-measure]').forEach(function(a){
+    var bl=a.querySelector('.bl');if(!bl)return;
+    var r=a.getBoundingClientRect();var b=bl.getBoundingClientRect();
+    var z=1;var gap,tap;
+    if(a.classList.contains('sl-b')){var fs=parseFloat(getComputedStyle(a).fontSize);gap=fs*.2;tap=a.getClientRects()[0].height;}
+    else{gap=r.bottom-1-b.bottom;tap=a.classList.contains('sl-c')?Math.max(r.height,44):r.height;}
+    var out=a.parentElement.querySelector('.mread');
+    if(!out){out=document.createElement('output');out.className='mread';a.insertAdjacentElement('afterend',out);}
+    out.textContent='Line sits '+Math.round(gap)+'px below the baseline · tap area '+Math.round(tap)+'px tall';
+  });
+}
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(measureLinks);}else{measureLinks();}
+window.addEventListener('load',measureLinks);
+var tg=document.getElementById('show-taps');
+if(tg){tg.addEventListener('change',function(){document.body.classList.toggle('show-taps',tg.checked);});}
+</script>
+</body>
+</html>

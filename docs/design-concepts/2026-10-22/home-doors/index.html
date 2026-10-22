@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Home doors: alternatives</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" />
+<style>
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Regular.woff2) format('woff2'); font-weight: 400; }
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Bold.woff2) format('woff2'); font-weight: 700; }
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Italic.woff2) format('woff2'); font-style: italic; }
+  @font-face { font-family: 'Kazon Name Text'; src: url(../../../../public/fonts/kazon-name-text.woff2) format('woff2'); font-weight: 400; }
+
+  /* Site palette (src/styles/global.css) plus the board tones the 2026-10-19 board used. */
+  /* --accent-text is board chrome only: the accent darkened so small labels on the board tone pass 4.5:1 (the plain accent is 4.08:1 there). */
+  :root { --paper: #FBF8F2; --ink: #0E0E0E; --muted: #4A4A4A; --rule: #E8E3DA; --accent: #AE5534; --tint: #F5ECE5; --board: #ECE6DB; --edge: #d6cdbf; --ease-site: cubic-bezier(.2, .7, .2, 1);
+    --accent-text: color-mix(in srgb, var(--accent) 88%, var(--ink));
+    --serif: Libron, 'Iowan Old Style', Georgia, serif; --sans: Inter, system-ui, -apple-system, sans-serif; --mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace; }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--board); color: var(--ink); font-family: var(--serif); -webkit-font-smoothing: antialiased; }
+  .board { max-width: 1280px; margin: 0 auto; padding: 56px clamp(16px, 5vw - 4px, 56px) 72px; }
+  @media (max-width: 600px) { .board { padding-top: 40px; } }
+  .marker { display: inline-block; font: 600 11px/1.3 var(--sans); color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 2px 8px; letter-spacing: .02em; white-space: nowrap; }
+  .narrow-only { display: none; }
+  @media (max-width: 700px) { .narrow-only { display: block; } }
+  .eyebrow { font: 500 11px/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent-text); margin: 0 0 14px; }
+  .board > header h1 { font-size: clamp(36px, 6vw, 52px); line-height: 1.04; letter-spacing: -.03em; margin: 0 0 16px; font-weight: 400; }
+  .board > header p:not(.eyebrow) { font-size: clamp(17px, 2vw, 20px); line-height: 1.5; color: var(--muted); max-width: 60rem; margin: 0 0 12px; }
+  code { font: 12.5px var(--mono); background: #efe8dd; padding: 1px 4px; border-radius: 3px; overflow-wrap: anywhere; }
+
+  .handled { margin-top: 28px; background: var(--paper); border: 1px dashed #c4ab92; border-radius: 8px; padding: 14px 18px; font: 14px/1.55 var(--sans); color: #2b2b2b; }
+  .handled b { font-weight: 600; }
+  .handled ul { margin: 8px 0 0; padding-left: 18px; }
+  .handled li { margin-bottom: 4px; }
+
+  section.study { margin-top: 64px; padding-top: 40px; border-top: 1px solid #d8d0c3; }
+  section.study > h2 { font-size: clamp(28px, 4vw, 36px); line-height: 1.12; letter-spacing: -.02em; font-weight: 400; margin: 0 0 12px; }
+  section.study > p.lead { font-size: 18px; line-height: 1.55; color: var(--muted); max-width: 62rem; margin: 0 0 12px; }
+  .decided { font: 14px/1.55 var(--sans); color: #2b2b2b; max-width: 62rem; margin: 0 0 8px; }
+  .decided b { font-weight: 600; }
+
+  .option { margin-top: 40px; }
+  .option-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .option-head h3 { font-size: 26px; font-weight: 400; margin: 0; letter-spacing: -.01em; line-height: 1.2; }
+  .option-head h3 .id { font: 500 13px/1 var(--mono); color: var(--accent-text); letter-spacing: .04em; margin-right: 8px; vertical-align: 3px; }
+  .badge { font: 600 11px/1 var(--sans); letter-spacing: .04em; text-transform: uppercase; padding: 6px 9px; border-radius: 3px; white-space: nowrap; }
+  .badge.rec { background: var(--accent); color: var(--paper); }
+  .badge.no { background: transparent; color: var(--muted); border: 1px solid #b9ad9c; }
+  .why-rec { font: 14.5px/1.55 var(--sans); color: #2b2b2b; border-left: 3px solid var(--accent); background: var(--tint); padding: 10px 14px; margin: 0 0 14px; border-radius: 0 6px 6px 0; }
+  .why-rec b { font-weight: 600; }
+
+  .views { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (min-width: 900px) { .views.two { grid-template-columns: minmax(0, 1fr) minmax(0, 300px); } }
+  .frame { margin: 0; background: var(--paper); border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; box-shadow: 0 10px 24px -20px #0e0e0e66; min-width: 0; }
+  .frame-bar { font: 11px/1.3 var(--mono); color: var(--muted); padding: 9px 12px; border-bottom: 1px solid var(--rule); background: #f6f1e9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .frame-bar b { color: var(--ink); font-weight: 500; }
+  @media (max-width: 600px) { .frame-bar { white-space: normal; } }
+  .frame.phone { max-width: 390px; width: 100%; justify-self: center; }
+  .shot { position: relative; }
+  .shot img { display: block; width: 100%; height: auto; }
+  .shot .fold-mark { position: absolute; left: 0; right: 0; bottom: 0; border-top: 2px dashed var(--accent); background: rgba(236, 230, 219, .6); }
+  .shot .fold-mark span, .fold span { position: absolute; right: 8px; top: 6px; font: 600 11px/1.3 var(--sans); color: var(--paper); background: var(--accent); padding: 3px 7px; border-radius: 3px; white-space: nowrap; }
+  .same { font: 14px/1.55 var(--sans); color: #2b2b2b; background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 12px 14px; margin: 0; }
+  .same b { font-weight: 600; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin: 12px 0 0; font: 14px/1.4 var(--sans); }
+  .controls button { min-height: 44px; padding: 0 18px; border-radius: 3px; border: 1px solid var(--ink); background: var(--paper); color: var(--ink); font: 500 15px/1 var(--sans); cursor: pointer; }
+  .controls button:hover { background: var(--ink); color: var(--paper); }
+  .controls label { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+  .controls input { width: 20px; height: 20px; accent-color: var(--accent); }
+  .controls .hint { color: var(--muted); }
+  :is(button, input, a):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .facts { margin: 16px 0 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  @media (min-width: 900px) { .facts { grid-template-columns: repeat(3, minmax(0, 1fr)); } .facts .wide { grid-column: 1 / -1; } }
+  .facts > div { background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+  .facts dt { font: 600 11px/1.3 var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  .facts dd { margin: 0; font: 14px/1.55 var(--sans); color: #2b2b2b; overflow-wrap: anywhere; }
+  .facts dd b { font-weight: 600; color: var(--ink); }
+  .facts dd ul { margin: 0; padding-left: 18px; }
+
+  .combine { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  @media (min-width: 900px) { .combine { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .combine li { background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 14px 16px; font: 14px/1.55 var(--sans); color: #2b2b2b; }
+  .combine li b { display: block; font: 400 19px/1.3 var(--serif); color: var(--ink); margin-bottom: 4px; }
+  .combine li.flag { border-color: var(--accent); }
+  .decisions { counter-reset: d; list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  @media (min-width: 900px) { .decisions { grid-template-columns: 1fr 1fr; } }
+  .decisions li { background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 16px 18px; font: 14px/1.55 var(--sans); color: #2b2b2b; }
+  .decisions li b { display: block; font: 400 19px/1.3 var(--serif); color: var(--ink); margin-bottom: 4px; }
+  .decisions li .def { display: block; margin-top: 6px; font-weight: 600; color: var(--accent); }
+
+  /* ---------- Scaled stages: each recreation is laid out at its real width, then scaled to fit. ---------- */
+  .stage { position: relative; width: 100%; overflow: hidden; height: 240px; }
+  .stage > .site { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+  .fold { position: absolute; left: 0; right: 0; bottom: 0; border-top: 3px dashed var(--accent); background: rgba(236, 230, 219, .6); z-index: 3; }
+  .fold span { font-size: 24px; padding: 6px 12px; right: 16px; top: 12px; }
+
+  /* ---------- Recreation of the site, with the values from src/styles/global.css, WorkWithMe.astro and ServiceSheet.astro at 1280 wide. ---------- */
+  .site { background: var(--paper); color: var(--ink); font: 16px/1.6 var(--serif); text-align: left; overflow: hidden; }
+  .site * { box-sizing: border-box; }
+  :where(.site) :where(h1, h2, h3, h4, p) { margin: 0; font-weight: 400; }
+  :where(.site) :where(h1, h2, h3, h4) { letter-spacing: -.01em; text-wrap: balance; }
+  .site p { text-wrap: pretty; }
+  .site.w1280 { width: 1280px; }
+  .site.w390 { width: 390px; }
+  .s-shell { max-width: 1232px; margin-inline: auto; padding-inline: 56px; }
+  .w390 .s-shell { padding-inline: 24px; }
+  .s-hdr { display: flex; align-items: center; justify-content: space-between; gap: 2rem; min-height: 112px; }
+  .s-name { font: 1.5rem/1.6 'Kazon Name Text', var(--serif); letter-spacing: -.04em; white-space: nowrap; }
+  .s-nav { display: flex; gap: 2rem; } .s-nav span { padding: .4rem 0; }
+  .s-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .55rem 1.35rem; background: var(--accent); color: var(--paper); border: 1px solid var(--accent); border-radius: 3px; font: inherit; line-height: 1.4; white-space: nowrap; }
+  .s-btn.out { background: transparent; color: var(--ink); }
+  button.s-btn { cursor: pointer; }
+  .s-kicker { font: .6875rem/1.6 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 1rem; }
+
+  /* Home section */
+  .s-home { padding-block: 40px 48px; }
+  .s-sec-head { display: flex; align-items: center; gap: 1.5rem; margin-bottom: 1.5rem; }
+  .s-sec-head h2 { font-size: 36px; line-height: 1.2; letter-spacing: -.035em; }
+  .w390 .s-sec-head h2 { font-size: 28px; }
+  .s-sec-head::after { content: ''; height: 1px; flex: 1; background: var(--rule); }
+
+  /* Doors, as WorkWithMe.astro ships them */
+  .s-doors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 2.5rem; }
+  .s-door { display: grid; grid-template-rows: subgrid; grid-row: span 5; }
+  .s-art { display: block; aspect-ratio: 3 / 2; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--rule) 50%, var(--paper)); }
+  .s-art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+  .s-cap { font: .78rem/1.6 var(--sans); color: var(--muted); margin: .7rem 0 .8rem; }
+  .s-title { font-size: 1.55rem; line-height: 1.2; letter-spacing: -.02em; margin: 0 0 .35rem !important; }
+  .s-line { font-size: 1.05rem; line-height: 1.5; color: var(--muted); max-width: 30ch; margin: 0 0 .9rem !important; }
+  .s-door .s-btn { justify-self: start; align-self: start; padding: .45rem 1.15rem; }
+
+  /* Phone doors (WorkWithMe.astro at 800px and below) */
+  .phone-doors { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 1.75rem; }
+  .phone-doors .s-door { grid-template-columns: 104px minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "art caption" "art title" "art line" "art button"; grid-row: auto; column-gap: 1rem; align-items: start; }
+  .phone-doors .s-art { grid-area: art; } .phone-doors .s-cap { grid-area: caption; margin: 0 0 .4rem; } .phone-doors .s-title { grid-area: title; font-size: 1.4rem; } .phone-doors .s-line { grid-area: line; } .phone-doors .s-btn { grid-area: button; }
+
+  /* D1.1-B: ruled rows */
+  /* The rows share one set of columns (subgrid), so lines and buttons align from row to row. */
+  .rows { grid-template-columns: 216px minmax(0, 1fr) minmax(0, 1.15fr) auto; column-gap: 2rem; row-gap: 0; border-bottom: 1px solid var(--rule); }
+  .rows .s-door { grid-column: 1 / -1; grid-template-columns: subgrid; grid-template-rows: none; grid-template-areas: "art caption line button" "art title line button"; grid-row: auto; align-items: start; align-content: center; padding-block: 1.25rem; border-top: 1px solid var(--rule); }
+  .rows .s-art { grid-area: art; } .rows .s-cap { grid-area: caption; margin: 0 0 .3rem; align-self: end; } .rows .s-title { grid-area: title; margin: 0 !important; } .rows .s-line { grid-area: line; margin: 0 !important; align-self: center; max-width: 34ch; } .rows .s-btn { grid-area: button; align-self: center; justify-self: end; }
+
+  /* D1.1-C: lead door and a side column */
+  .lead { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); grid-template-rows: auto 1fr; column-gap: 3rem; align-items: start; }
+  .lead .s-door { grid-row: auto; grid-template-rows: none; }
+  .lead .is-lead { grid-column: 1; grid-row: 1 / span 2; }
+  .lead .is-lead .s-title { font-size: 2rem; }
+  .lead .is-lead .s-line { max-width: 34ch; }
+  .lead .is-side { grid-column: 2; grid-template-columns: 148px minmax(0, 1fr); grid-template-areas: "art caption" "art title" "art line" "art button"; column-gap: 1.25rem; align-items: start; align-content: start; padding-bottom: 1.25rem; }
+  .lead .is-side + .is-side { border-top: 1px solid var(--rule); padding-top: 1.25rem; }
+  .lead .is-side .s-art { grid-area: art; } .lead .is-side .s-cap { grid-area: caption; margin: 0 0 .25rem; } .lead .is-side .s-title { grid-area: title; font-size: 1.35rem; } .lead .is-side .s-line { grid-area: line; margin-bottom: .6rem !important; } .lead .is-side .s-btn { grid-area: button; }
+  .lead-phone .is-lead { display: block; }
+  .lead-phone .is-lead .s-cap { margin: .7rem 0 .4rem; }
+  .lead-phone .is-lead .s-art { width: 100%; }
+  .lead-phone .is-lead .s-title { font-size: 1.6rem; }
+
+  /* D1.1-D: one picture window */
+  .win { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); column-gap: 3rem; align-items: start; }
+  .win-list { border-bottom: 1px solid var(--rule); }
+  .win-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 1.5rem; align-items: center; padding: 1.1rem 1rem 1.1rem 1.25rem; border-top: 1px solid var(--rule); box-shadow: inset 0 0 0 0 var(--accent); transition: box-shadow 300ms var(--ease-site); }
+  .win-row.is-on { box-shadow: inset 3px 0 0 0 var(--accent); }
+  .win-row .s-line { max-width: 40ch; margin: 0 !important; }
+  .win-frame { position: relative; aspect-ratio: 3 / 2; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--rule) 50%, var(--paper)); }
+  .win-frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; clip-path: inset(0 100% 0 0); }
+  .win-frame img.is-under { clip-path: inset(0); }
+  .win-frame img.is-on { clip-path: inset(0); z-index: 1; transition: clip-path 600ms var(--ease-site); }
+  .win.still .win-frame img.is-on, .win.still .win-row { transition: none; }
+  @media (prefers-reduced-motion: reduce) { .win-frame img.is-on, .win-row { transition: none; } }
+  .win-cap { margin: .7rem 0 0 !important; }
+
+  /* /services first screen */
+  .s-sheet { max-width: 1100px; margin-inline: auto; padding: 2rem 56px 3rem; }
+  .s-hub { padding-block: 1rem 2.5rem; }
+  .s-hub h1 { font-size: 70.4px; line-height: 1.02; letter-spacing: -.04em; max-width: 14ch; margin-bottom: 1.25rem !important; }
+  .s-intro { font-size: 27.2px; line-height: 1.3; color: var(--ink); max-width: 34ch; }
+  .s-next { margin-top: 76.8px; border-top: 1px solid var(--rule); padding-top: 2rem; }
+  .s-next-hero { display: grid; grid-template-columns: 1fr 1.1fr; gap: 2.5rem; padding: 1rem 0 2rem; }
+  .s-next-hero .s-kicker { margin: 0 0 .75rem; }
+  .s-next-hero h2 { font-size: 58.88px; line-height: 1.06; letter-spacing: -.04em; }
+  .s-next-hero .ev { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+  .s-next-hero .ev h2 { font-size: 2rem; line-height: 1.1; letter-spacing: -.01em; }
+  .s-next-hero .ev p { font-size: .85rem; color: var(--muted); }
+  /* D1.2-B */
+  .hub-b .s-hub { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 2.5rem; align-items: end; padding-block: .5rem 2rem; }
+  .hub-b .s-hub h1 { margin-bottom: 0 !important; }
+  .hub-b .s-intro { font-size: 24.3px; line-height: 1.35; max-width: 30ch; }
+  /* D1.2-C */
+  .hub-c .s-sheet { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); column-gap: 3.5rem; align-items: start; }
+  .hub-c .s-sheet > * { grid-column: 1 / -1; }
+  .hub-c .s-sheet > .s-hub { grid-column: 1; padding-bottom: 0; }
+  .hub-c .s-sheet > .s-hubdoors { grid-column: 2; padding-top: .9rem; }
+  .hub-c .s-doors { grid-template-columns: minmax(0, 1fr); row-gap: 0; }
+  .hub-c .s-door { grid-template-columns: 156px minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "art caption" "art title" "art line" "art button"; grid-row: auto; column-gap: 1.25rem; align-items: start; padding-block: .9rem; border-top: 1px solid var(--rule); }
+  .hub-c .s-door:first-child { border-top: 0; padding-top: 0; }
+  .hub-c .s-art { grid-area: art; } .hub-c .s-cap { grid-area: caption; margin: 0 0 .2rem; } .hub-c .s-title { grid-area: title; font-size: 1.4rem; } .hub-c .s-line { grid-area: line; margin-bottom: .5rem !important; max-width: none; } .hub-c .s-btn { grid-area: button; }
+  /* D1.2-D: one-line headline at today's size, introduction after the doors */
+  .hub-d .s-hub { padding-bottom: 2rem; }
+  .hub-d .s-hub h1 { max-width: none; }
+  .hub-d .s-intro-after { margin-top: 2rem; }
+</style>
+</head>
+<body>
+<main class="board">
+  <header>
+    <p class="eyebrow">Design study · Hallmark audit follow-up · 2026-10-22</p>
+    <h1>Home doors: alternatives</h1>
+    <p>Two of your calls from the Hallmark audit, each beside what ships today. Nothing here is built. Pick one option per decision and reply with the IDs, for example “D1.1-B, D1.2-C”.</p>
+    <p>Today’s state is cropped from the CI captures of pull request 199 at <code>08e9b22</code>. The alternatives are live recreations that use the site’s own CSS values, its real copy and the three approved door pictures. Positions were measured with each change applied, at 1280 × 800, 1440 × 900, 1024 × 768 and 390 × 844, with reduced motion: in the development preview, and for D1.2-D in a static copy of today’s /services first screen that reproduces the live button positions to the pixel (999, 1002, 936 and 739).</p>
+    <p class="narrow-only">On a phone the 1280-wide previews are scaled down to fit. Pinch to zoom; they stay sharp.</p>
+    <div class="handled"><b>Already handled in this pass, no decision needed.</b> These are in PR #204 and apply to every option below.
+      <ul>
+        <li>/services loads the door pictures eagerly, with high fetch priority on the first one (Hallmark #6). Home keeps them lazy.</li>
+        <li>Door buttons are at least 44px tall, and below 370px wide the button moves under the picture (#20).</li>
+        <li>The “Kazon” in the Old News caption now uses the caption’s own face (missed-by-auditors 14).</li>
+      </ul>
+    </div>
+  </header>
+
+  <!-- ================= D1.1 ================= -->
+  <section class="study" id="d1-1" aria-labelledby="d11-title">
+    <p class="eyebrow">D1.1 · Your call 1 · Home and /services</p>
+    <h2 id="d11-title">How should the three “Work with me” doors sit on a wide screen?</h2>
+    <p class="lead">Hallmark graded the doors critical as a “3-column feature grid” (home-1, ws-1): three equal columns of picture, title, line and button read like a template feature row. Both verifiers called critical overstated, because the pictures are real, verifiable work rather than icons. Only the wide-screen layout is in question; phones already show picture-left rows.</p>
+    <p class="decided"><b>Where it was decided:</b> <code>docs/audits/2026-09-26/website-simplification-audit.md:223-239</code> (real work, one image each, chosen from four rendered treatments on September 26) and <code>:509</code> (the hub’s three doors). Pictures and crops: <code>docs/asset-reviews/work-with-me-doors.md</code>.</p>
+
+    <!-- D1.1-A -->
+    <article class="option" id="d11-a">
+      <div class="option-head"><h3><span class="id">D1.1-A</span>Keep as is</h3><span class="badge no">Live now</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/</b> · Work with me · 1280 wide · CI capture</div>
+          <div class="shot"><img src="a-home-desktop.webp" width="1280" height="580" alt="Today’s Home section: Work with me heading, then three equal columns, each with a picture, caption, title, line and button." /></div>
+        </figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · CI capture</div>
+          <div class="shot"><img src="a-home-phone.webp" width="390" height="870" alt="Today’s phone layout: three rows, each with a small picture on the left and caption, title, line and button on the right." /></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Nothing. Three equal columns on a shared subgrid, so captions, titles, lines and buttons line up whatever wraps.</dd></div>
+        <div><dt>Why keep it</dt><dd>It is the treatment you picked from rendered options, the pictures are at their largest (345px wide on Home), and the aligned rows make the three offers easy to compare.</dd></div>
+        <div><dt>Trade-off</dt><dd>It keeps the shape Hallmark reads as a template feature row, and on /services it is what pushes the buttons below the first screen (D1.2).</dd></div>
+        <div class="wide"><dt>Effort · files · measured</dt><dd>None. Home section 537px tall at 1280 (the doors 470px).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · tokens unchanged · 44px buttons · reduced motion: the doors rise in turn only when motion is welcome and show at once otherwise · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <!-- D1.1-B -->
+    <article class="option" id="d11-b">
+      <div class="option-head"><h3><span class="id">D1.1-B</span>Ruled rows</h3><span class="badge rec">Recommended</span></div>
+      <p class="why-rec"><b>Why this one:</b> it keeps every picture, caption, line and button, drops the feature-row shape with the smallest change, and matches the ruled offer rows on /services and /audio/services and the picture-left shape the phone doors already use.</p>
+      <div class="views">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/</b> · Work with me · 1280 wide · recreation</div>
+          <div class="stage" data-w="1280" role="img" aria-label="Recreation of D1.1-B at 1280 wide: the Work with me heading, then three rows between hairline rules, each with the picture on the left, the caption over the title, the line, and the button at the right edge."><div class="site w1280"><div class="s-shell s-home">
+            <div class="s-sec-head"><h2>Work with me</h2></div>
+            <div class="s-doors rows" data-doors></div>
+          </div></div></div>
+        </figure>
+      </div>
+      <p class="same" style="margin-top:12px"><b>Phone: unchanged.</b> Today’s phone doors already put the picture left and the words right (see D1.1-A), so every screen size gets the same door shape; the wide rows add the hairline rules between doors.</p>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>On wide screens each door becomes one row between hairline rules: the picture (216 × 144), the caption over the title, the line, and the button at the right edge.</dd></div>
+        <div><dt>Why it could be better</dt><dd>It reads as a list of three ways in, not a product feature grid. The three buttons line up in one column, so the eye finds them without hunting.</dd></div>
+        <div><dt>Trade-off</dt><dd>Pictures render smaller on desktop (216px wide instead of 345px), and the Home section grows by about 86px at 1280 (623px against 537px). Some of the gallery feel goes.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S.</b> <code>src/components/WorkWithMe.astro</code> (the wide-screen grid: the subgrid shares columns instead of rows, so lines and buttons still align from door to door; the phone rules stay), <code>docs/asset-reviews/work-with-me-doors.md</code> (new render size, re-inspect), <code>docs/website-content-model.md</code> (record the layout). The hub follows unless D1.2-C gives it its own column.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No copy change · existing tokens only (<code>--rule</code>, <code>--muted</code>, <code>--accent</code>) · buttons stay 44px · Home’s rise-in-turn works unchanged and nothing new moves · no new art: the approved crops render smaller, so the asset record needs a re-inspection line.</dd></div>
+      </dl>
+    </article>
+
+    <!-- D1.1-C -->
+    <article class="option" id="d11-c">
+      <div class="option-head"><h3><span class="id">D1.1-C</span>Lead door and a side column</h3><span class="badge no">Alternative</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/</b> · Work with me · 1280 wide · recreation</div>
+          <div class="stage" data-w="1280" role="img" aria-label="Recreation of D1.1-C at 1280 wide: Software engineering leads with a large Tally picture on the left; Mixing and mastering and Website design sit beside it as two picture-left rows."><div class="site w1280"><div class="s-shell s-home">
+            <div class="s-sec-head"><h2>Work with me</h2></div>
+            <div class="s-doors lead" data-doors data-lead="software"></div>
+          </div></div></div>
+        </figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · recreation</div>
+          <div class="stage" data-w="390" role="img" aria-label="Recreation of D1.1-C at 390 wide: the Software engineering picture full width with its words and button, then two picture-left rows."><div class="site w390"><div class="s-shell s-home">
+            <div class="s-sec-head"><h2>Work with me</h2></div>
+            <div class="phone-doors lead-phone" data-doors data-lead="software"></div>
+          </div></div></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>One door leads at about 625px wide; the other two sit beside it as picture-left rows. Shown with Software engineering leading because CLAUDE.md names software as your current direction; any door can lead. On phones the lead door shows its picture full width above the two rows.</dd></div>
+        <div><dt>Why it could be better</dt><dd>The strongest break from symmetry: a front-page hierarchy, like the Old News masthead. The Tally demo becomes readable at the larger size.</dd></div>
+        <div><dt>Trade-off</dt><dd>It ranks the offers, which is a positioning call as much as a layout one. The Home section grows by about 169px at 1280 (706px against 537px), and the phone doors by about 190px (1018px against 827px in the recreations). The door order changes from today’s mixing, website, software.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>M.</b> <code>src/components/WorkWithMe.astro</code> (lead layout), <code>src/data/work-with-me.ts</code> (order), <code>src/pages/index.astro</code> (rise-in-turn order), <code>docs/asset-reviews/work-with-me-doors.md</code>. The lead picture shows at 625px from a 900px file, so 2× screens need a larger export of the same approved crop.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No new words; the order change needs your approval · existing tokens · 44px buttons · reduced motion unchanged · no new art, but the larger export of an approved crop needs the asset record updated and re-inspected.</dd></div>
+      </dl>
+    </article>
+
+    <!-- D1.1-D -->
+    <article class="option" id="d11-d">
+      <div class="option-head"><h3><span class="id">D1.1-D</span>One picture window</h3><span class="badge no">Alternative · motion</span></div>
+      <div class="views">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/</b> · Work with me · 1280 wide · live recreation: point at, tap or tab to a row</div>
+          <div class="stage" data-w="1280"><div class="site w1280"><div class="s-shell s-home">
+            <div class="s-sec-head" aria-hidden="true"><h2>Work with me</h2></div>
+            <div class="win" id="win">
+              <div class="win-list" data-win-rows></div>
+              <div><div class="win-frame" data-win-frame></div><p class="s-cap win-cap" data-win-cap aria-live="polite"></p></div>
+            </div>
+          </div></div></div>
+        </figure>
+      </div>
+      <div class="controls">
+        <button type="button" id="win-replay">Replay</button>
+        <label><input type="checkbox" id="win-still" /> Preview with reduced motion</label>
+        <span class="hint">Replay steps through the three rows. With reduced motion the picture swaps at once.</span>
+      </div>
+      <p class="same" style="margin-top:12px"><b>Phone: unchanged.</b> Each row keeps its own small picture, as today; there is no window on touch screens.</p>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>The offers become text rows on the left. One large window on the right shows the picture of the row you point at or tab to, wiping in from the left over 600ms on the house curve (<code>--ease-site</code>). The caption follows the picture.</dd></div>
+        <div><dt>Why it could be better</dt><dd>A calm list, one big picture, and a little life that answers the visitor instead of playing by itself.</dd></div>
+        <div><dt>Trade-off</dt><dd>Two of the three pictures are hidden at rest on wide screens, which weakens the “real work, one image each” proof you chose. It also adds a hover-driven reveal and a small script, and the window (487 × 325 at 1280) is wider than the 370px the asset record covers, so the 900px files fall just short of 2× there.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>M.</b> <code>src/components/WorkWithMe.astro</code>, a small script on the shared layer beside <code>src/scripts/scroll-scenes.ts</code>, <code>src/pages/index.astro</code>, <code>src/layouts/ServiceSheet.astro</code>, <code>docs/asset-reviews/work-with-me-doors.md</code> (window size).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No copy change · existing tokens and <code>--ease-site</code> · 44px buttons; keyboard focus swaps the picture too · reduced motion: the picture swaps at once with no wipe · no new art.</dd></div>
+      </dl>
+    </article>
+  </section>
+
+  <!-- ================= D1.2 ================= -->
+  <section class="study" id="d1-2" aria-labelledby="d12-title">
+    <p class="eyebrow">D1.2 · Your call 15 · /services first screen</p>
+    <h2 id="d12-title">Should the door buttons fit the first screen at 1280 × 800?</h2>
+    <p class="lead">Hallmark’s hero-fit gate (ws-10) found the three door buttons below the fold on a 1280 × 800 screen (with today’s 44px buttons they run from y 955 to 999). The first screen shows the pictures and their captions; the titles start at 804 and no button shows. The audit’s suggested trim (a two-line lede, less top padding) is not enough on its own: the buttons need to rise about 200px. Phones are fine: the first button ends at 739 of 844.</p>
+    <p class="decided">In each frame the dashed line marks the bottom of the first screen (800px on a computer, 844px on the phone); everything under it is dimmed.</p>
+    <p class="decided"><b>Where it was decided:</b> <code>docs/audits/2026-09-26/website-simplification-audit.md:509</code> (the hub at /services: three doors, then the software offerings) and <code>:235-239</code> (the hub’s doors use Home’s picture-and-button treatment).</p>
+
+    <!-- D1.2-A -->
+    <article class="option" id="d12-a">
+      <div class="option-head"><h3><span class="id">D1.2-A</span>Keep as is</h3><span class="badge no">Live now</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/services</b> · 1280 × 800 · CI capture</div>
+          <div class="shot"><img src="a-services-desktop.webp" width="1280" height="1060" alt="Today’s /services first screen: kicker, two-line headline, four-line introduction, then three door pictures and captions; the titles and buttons sit below the 800px line." /><div class="fold-mark" style="top:75.47%"><span>800px</span></div></div>
+        </figure>
+        <figure class="frame phone"><div class="frame-bar">390 × 844 · CI capture</div>
+          <div class="shot"><img src="a-services-phone.webp" width="390" height="900" alt="Today’s /services on a phone: headline, introduction and the first door with its button inside the first screen." /><div class="fold-mark" style="top:93.78%"><span>844px</span></div></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Nothing. The kicker, a two-line 70px headline and a four-line introduction, then the three doors.</dd></div>
+        <div><dt>Why keep it</dt><dd>The big headline and the full sentence set the tone. The pictures and captions already show in the first screen, and the titles and buttons are one short scroll away.</dd></div>
+        <div><dt>Trade-off</dt><dd>At 1280 × 800 no button shows until the visitor scrolls. Buttons end at 999 (1280 × 800), 1002 (1440 × 900) and 936 (1024 × 768).</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd>None.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Unchanged. The eager loading above already gets the pictures on screen sooner.</dd></div>
+      </dl>
+    </article>
+
+    <!-- D1.2-B -->
+    <article class="option" id="d12-b">
+      <div class="option-head"><h3><span class="id">D1.2-B</span>Headline beside the introduction</h3><span class="badge no">Alternative</span></div>
+      <div class="views">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/services</b> · 1280 × 800 · recreation</div>
+          <div class="stage" data-w="1280" role="img" aria-label="Recreation of D1.2-B at 1280 by 800: no kicker, the headline on the left and the introduction on the right, then the three doors in columns with their buttons just above the 800px line."><div class="site w1280 hub-b" style="height:1040px" data-hub="b"></div></div>
+        </figure>
+      </div>
+      <p class="same" style="margin-top:12px"><b>Phone: same layout</b> (the side-by-side header applies from 900px wide). The kicker goes at every width, so the phone’s first button rises from 739 to 706.</p>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>From 900px wide the headline sits on the left and the introduction on the right, at 24px instead of 27px, bottom-aligned. The “Work with me” kicker goes, since it repeats the header button and the headline; the eyebrow entry (Your call 4) lists it as an easy cut. <span class="marker">copy change, needs approval</span></dd></div>
+        <div><dt>Why it could be better</dt><dd>A small CSS change that keeps the large headline and the three-column doors. Buttons end at 788 (1280 × 800), 791 (1440 × 900) and 744 (1024 × 768).</dd></div>
+        <div><dt>Trade-off</dt><dd>It depends on cutting the kicker. With the kicker kept, the buttons end at 821; a 2:1 picture window would bring them to 771, but it hides the bottom quarter of each picture and needs a crop re-check. Only 12px to spare at 1280 × 800. It needs the hub’s doors to stay in three columns (D1.1-A, or the hub keeping them if Home changes).</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S.</b> <code>src/layouts/ServiceSheet.astro</code> (the <code>.hub-intro</code> grid and introduction size; the kicker line).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy change, needs approval: removes the “Work with me” kicker (overlaps Your call 4); no new words · existing tokens · 44px buttons · reduced motion unaffected · no new art (the 2:1 fallback would need the asset record re-checked).</dd></div>
+      </dl>
+    </article>
+
+    <!-- D1.2-C -->
+    <article class="option" id="d12-c">
+      <div class="option-head"><h3><span class="id">D1.2-C</span>Doors beside the headline</h3><span class="badge rec">Recommended</span></div>
+      <p class="why-rec"><b>Why this one:</b> it puts all three buttons in the first screen at 1280 × 800 and 1440 × 900 while keeping every word in today’s order: the kicker, the full-size headline and the fixed-price introduction all stay in the first screen. It is also the only option that works whichever D1.1 layout you choose, because the hub gets its own column of doors.</p>
+      <div class="views">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/services</b> · 1280 × 800 · recreation</div>
+          <div class="stage" data-w="1280" role="img" aria-label="Recreation of D1.2-C at 1280 by 800: the kicker, a three-line headline and the introduction on the left; on the right the three doors stacked as picture-left rows, all three buttons above the 800px line."><div class="site w1280 hub-c" style="height:1040px" data-hub="c"></div></div>
+        </figure>
+      </div>
+      <p class="same" style="margin-top:12px"><b>Phone and tablet: unchanged</b> (applies from 1000px wide; below that the hub stacks as today).</p>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>From 1000px wide the hub opens in two columns: the kicker, headline and introduction on the left as today, and the three doors stacked on the right as picture-left rows, the phone layout with 156px pictures.</dd></div>
+        <div><dt>Why it could be better</dt><dd>The first screen becomes a complete menu: what the page is, three ways in, and each button. Buttons end at 367, 580 and 793 at 1280 × 800 and at 1440 × 900. Same door shape as on phones.</dd></div>
+        <div><dt>Trade-off</dt><dd>The hub doors look different from Home unless D1.1-B or C is chosen. Hub pictures get smaller (156 × 104). The headline runs to three lines. At 1024 × 768 the third button ends at 813, just under the fold (the first two show).</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>M.</b> <code>src/layouts/ServiceSheet.astro</code> (two-column first screen), <code>src/components/WorkWithMe.astro</code> (a layout prop for stacked rows), <code>docs/asset-reviews/work-with-me-doors.md</code> (hub render size), <code>docs/website-content-model.md</code> (record the hub layout).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No copy change · existing tokens · 44px buttons · reduced motion unaffected · no new art: the approved crops render smaller, so the asset record needs a re-inspection line.</dd></div>
+      </dl>
+    </article>
+
+    <!-- D1.2-D -->
+    <article class="option" id="d12-d">
+      <div class="option-head"><h3><span class="id">D1.2-D</span>Introduction after the doors</h3><span class="badge no">Alternative</span></div>
+      <div class="views">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/services</b> · 1280 × 800 · recreation</div>
+          <div class="stage" data-w="1280" role="img" aria-label="Recreation of D1.2-D at 1280 by 800: the kicker, the full-size headline on one line, then the three doors in columns with their buttons above the 800px line; the introduction follows the doors, below the line."><div class="site w1280 hub-d" style="height:1040px" data-hub="d"></div></div>
+        </figure>
+      </div>
+      <p class="same" style="margin-top:12px"><b>Phone: same order.</b> The paragraph moves in the page itself, so phones also show it after the doors: the first button rises from 739 to 594, and the fixed-price sentence moves from the first screen to about y 1164.</p>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>The headline runs on one line at today’s size (its 14-character cap goes), and the introduction moves from above the doors to just below them, where it closes the three offers. The kicker and the doors stay as they are. <span class="marker">order change, needs approval</span></dd></div>
+        <div><dt>Why it could be better</dt><dd>The doors move up into the space the introduction held, with no word cut and nothing made smaller: the h1 stays the largest type on the page. Buttons end at 778 (1280 × 800), 779 (1440 × 900) and 748 (1024 × 768), and Home and the hub keep one door shape.</dd></div>
+        <div><dt>Trade-off</dt><dd>The fixed-price sentence leaves the first screen (it sits at y 810 to 951 at 1280 × 800), and the stacked two-line headline becomes one long line. It needs the hub’s doors to stay in three columns: with D1.1-B’s ruled rows on the hub, the third button ends at 802.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S.</b> <code>src/layouts/ServiceSheet.astro</code> (move the <code>.sheet-introduction</code> paragraph after <code>.hub-doors</code>, drop the h1’s <code>max-width: 14ch</code>, and keep the paragraph out of the printed sheet, as the hub introduction is today).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No new or cut words; the order change needs your approval · existing tokens · 44px buttons · reduced motion unaffected · no new art · heading sizes keep their order (h1 largest).</dd></div>
+      </dl>
+    </article>
+  </section>
+
+  <!-- ================= Combine and decide ================= -->
+  <section class="study" id="combine" aria-labelledby="combine-title">
+    <p class="eyebrow">How they combine</p>
+    <h2 id="combine-title">The two choices work together</h2>
+    <ul class="combine">
+      <li class="flag"><b>D1.1-B with D1.2-C</b>The recommendation. One door shape everywhere: full-width rows on Home, a column of rows beside the headline on /services, and today’s rows on phones.</li>
+      <li><b>D1.1-A with D1.2-B or D</b>Home and the hub keep today’s three columns, and the hub’s introduction makes room for the buttons: beside the headline (B) or after the doors (D). Both need the hub in three columns.</li>
+      <li><b>D1.1-C or D with D1.2-C</b>Home gets the lead door or the picture window; the hub uses the stacked rows, which suit a narrow column better than either.</li>
+    </ul>
+  </section>
+
+  <section class="study" id="decide" aria-labelledby="decide-title">
+    <p class="eyebrow">Your calls</p>
+    <h2 id="decide-title">What I need from you</h2>
+    <ol class="decisions">
+      <li><b>D1.1 · Doors on wide screens</b>A keep three equal columns · B ruled rows · C lead door and a side column · D one picture window.<span class="def">Recommended: D1.1-B</span></li>
+      <li><b>D1.2 · /services first screen</b>A keep · B headline beside the introduction (cuts the kicker) · C doors beside the headline · D introduction after the doors.<span class="def">Recommended: D1.2-C</span></li>
+    </ol>
+    <p class="decided" style="margin-top:14px">If you pick D1.1-C, also say which door leads. Shown with Software engineering; today’s order starts with Mixing &amp; mastering.</p>
+  </section>
+</main>
+
+<script>
+  // Real copy from src/data/work-with-me.ts; pictures are the approved door crops.
+  const IMG = '../../../../src/assets/site/';
+  const doors = [
+    { id: 'mixing', title: 'Mixing & mastering', line: 'Send your recorded vocals and beat for mixing, or your finished mix for mastering. Vocal mixing from $150, mastering from $75.', label: 'Start your song', caption: 'Old News · recorded, mixed and mastered by Kazon', img: IMG + 'work-with-me-mixing.webp' },
+    { id: 'website', title: 'Website design', line: 'I design and build your website, from the page plan to a site that works on phones and computers.', label: 'Plan your website', caption: 'This site, redesigned September 2026', img: IMG + 'work-with-me-website.webp' },
+    { id: 'software', title: 'Software engineering', line: 'I build web apps people can try, or a tool that makes a task your team repeats easier.', label: 'Discuss your project', caption: 'Tally · a budgeting app, public demo', img: IMG + 'work-with-me-software.webp' },
+  ];
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const door = (d, cls = '', tag = 'h3') => `<article class="s-door ${cls}"><span class="s-art"><img src="${d.img}" width="900" height="600" alt=""></span><p class="s-cap">${esc(d.caption)}</p><${tag} class="s-title">${esc(d.title)}</${tag}><p class="s-line">${esc(d.line)}</p><span class="s-btn">${esc(d.label)}</span></article>`;
+
+  document.querySelectorAll('[data-doors]').forEach(el => {
+    const lead = el.dataset.lead;
+    if (lead) {
+      const first = doors.find(d => d.id === lead);
+      const rest = doors.filter(d => d.id !== lead);
+      el.innerHTML = door(first, 'is-lead') + rest.map(d => door(d, 'is-side')).join('');
+    } else el.innerHTML = doors.map(d => door(d)).join('');
+  });
+
+  // The /services first screen, header to the start of the software section.
+  const header = `<div class="s-shell s-hdr"><span class="s-name">Kazon Wilson</span><span class="s-nav"><span>Work</span><span>Building</span><span>Writing</span><span>Audio</span><span>About</span></span><span class="s-btn">Work with me</span></div>`;
+  const next = `<div class="s-next"><div class="s-next-hero"><div><p class="s-kicker">Websites &amp; software</p><h2>Let’s build something useful.</h2></div><div class="ev"><h2>See the difference.</h2><p>Lyft · Associate Tools</p></div></div></div>`;
+  document.querySelectorAll('[data-hub]').forEach(el => {
+    const v = el.dataset.hub;
+    const kicker = v === 'b' ? '' : '<p class="s-kicker">Work with me</p>';
+    const intro = '<p class="s-intro">Mixing and mastering, website design, and software engineering. Every project is fixed price and agreed in writing before work begins.</p>';
+    // D1.2-D moves the same paragraph from the header to just after the doors.
+    const introAfter = v === 'd' ? intro.replace('s-intro', 's-intro s-intro-after') : '';
+    el.innerHTML = header + `<div class="s-sheet"><header class="s-hub">${kicker}<h1>Three ways to work with me.</h1>${v === 'd' ? '' : intro}</header><div class="s-hubdoors"><div class="s-doors">${doors.map(d => door(d, '', 'h2')).join('')}</div></div>${introAfter}${next}</div>` + `<div class="fold" style="top:800px"><span>800px</span></div>`;
+  });
+
+  // D1.1-D: one picture window.
+  const rowsEl = document.querySelector('[data-win-rows]');
+  const frameEl = document.querySelector('[data-win-frame]');
+  const capEl = document.querySelector('[data-win-cap]');
+  const winEl = document.getElementById('win');
+  rowsEl.innerHTML = doors.map((d, i) => `<div class="win-row" data-i="${i}"><div><h4 class="s-title">${esc(d.title)}</h4><p class="s-line">${esc(d.line)}</p></div><button type="button" class="s-btn">${esc(d.label)}</button></div>`).join('');
+  frameEl.innerHTML = doors.map(d => `<img src="${d.img}" width="900" height="600" alt="">`).join('');
+  const rows = [...rowsEl.children];
+  const pics = [...frameEl.children];
+  let current = -1;
+  const reduced = () => document.getElementById('win-still').checked || matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function show(i) {
+    if (i === current) return;
+    winEl.classList.toggle('still', reduced());
+    pics.forEach(p => p.classList.remove('is-under'));
+    if (current >= 0) { pics[current].classList.remove('is-on'); pics[current].classList.add('is-under'); }
+    const p = pics[i];
+    p.classList.remove('is-on');
+    void p.offsetWidth;
+    p.classList.add('is-on');
+    rows.forEach((r, j) => r.classList.toggle('is-on', j === i));
+    capEl.textContent = doors[i].caption;
+    current = i;
+  }
+  // Pointer, keyboard focus and a tap (for the scaled preview on phones) all choose the row.
+  // A visitor's own choice stops a running Replay.
+  let timers = [];
+  const pick = i => { timers.forEach(clearTimeout); timers = []; show(i); };
+  rows.forEach((r, i) => { r.addEventListener('mouseenter', () => pick(i)); r.addEventListener('focusin', () => pick(i)); r.addEventListener('click', () => pick(i)); });
+  show(0);
+  document.getElementById('win-replay').addEventListener('click', () => {
+    timers.forEach(clearTimeout); timers = [];
+    current = -1; pics.forEach(p => p.classList.remove('is-on', 'is-under'));
+    [0, 1, 2, 0].forEach((i, k) => timers.push(setTimeout(() => show(i), 120 + k * 1500)));
+  });
+
+  // Scale each recreation to its frame.
+  function fit() {
+    document.querySelectorAll('.stage').forEach(stage => {
+      const canvas = stage.firstElementChild;
+      const s = stage.clientWidth / (+stage.dataset.w || 1280);
+      canvas.style.transform = `scale(${s})`;
+      stage.style.height = Math.ceil(canvas.offsetHeight * s) + 'px';
+    });
+  }
+  fit();
+  new ResizeObserver(fit).observe(document.body);
+  document.fonts && document.fonts.ready.then(fit);
+  document.querySelectorAll('.stage img').forEach(img => img.complete || img.addEventListener('load', fit));
+</script>
+</body>
+</html>
