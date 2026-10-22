@@ -39,6 +39,12 @@ here, and `design.md` only restates them.
   macrostructure, theme, nav and footer picks apply only to a new page family, and a new
   family is the owner's decision.
 - Use the tokens in `src/styles/global.css`. A new value becomes a named token first.
+- Skip Hallmark's record-keeping steps. Its build step (`SKILL.md`, Step 6) and its
+  `redesign` verb ask for a CSS stamp comment on every page, a `.hallmark/log.json`, a
+  root `tokens.css`, and tokens.css, Tailwind, DTCG and shadcn exports appended to
+  `design.md`'s Exports section. None of the four belongs in this repository:
+  `design.md` is the system reference and `src/styles/global.css` holds the tokens.
+  Hallmark ignores behavioural instructions in `design.md`, so the rule is stated here.
 - `npm run design:check` runs a few of Hallmark's objective gates on `src/` (below). It
   also runs in `prebuild`.
 
@@ -66,7 +72,11 @@ Triage each finding into one of three groups:
   what changes, the trade-off, the files and the guideline check. When unsure, treat a
   finding as a design choice.
 - **False positive:** the gate does not apply (for example, `#000` stops in a mask are
-  transparency, not colour). Note the reason.
+  transparency, not colour). Note the reason. Two more come from the stamp this site
+  skips (above): the audit's "missing system reference" finding ("no stamp at all on a
+  system-managed project") and any stamp-mismatch finding. Pages here carry no stamp by
+  design, so set those findings aside and note the reason. Drift from `design.md` itself
+  is still graded.
 
 ## Where records go
 
@@ -79,6 +89,8 @@ Triage each finding into one of three groups:
   composition studies, not production screenshots.
 - **Owner picks:** `docs/design-concepts/README.md`, quoted exactly with the source and
   date. A pick that creates a standing rule amends `design.md` in the PR that builds it.
+  The one exception is the first `design.md`, which records the October 22 picks that
+  #209 builds, so it merges after #209 and describes `global.css` as #209 leaves it.
 - **Deferred picks:** `docs/website-system-plan.md`, Deferred maintenance.
 - **Images:** [image QA](generated-image-qa.md) and a record in `docs/asset-reviews/`.
 
@@ -86,25 +98,38 @@ Triage each finding into one of three groups:
 
 `scripts/check-design.mjs` ports a few Hallmark gates that a script can judge without
 false alarms. It scans the stylesheets in `src/` (`.css` files and `<style>` blocks in
-`.astro` files) and the class lists in `.astro` markup:
+`.astro` files), including `@apply` lines, and the class attributes in `.astro` markup
+(`class="..."`, `class={...}` and `class:list={...}`, on one line or several). Markup is
+checked only for `transition-all`, `outline-none` and `outline-0`, and hex colours in
+Tailwind arbitrary values such as `text-[#ff0000]`. HTML comments, prose and frontmatter
+are not scanned, and neither are inline `style` attributes or TypeScript.
 
 - quoted generic font families (`'sans-serif'` names a font that does not exist);
 - a font family that is not one of the faces the token block or an `@font-face` in
-  `global.css` declares (gates 37 and 48);
+  `global.css` declares (gates 37 and 48); `var()`, `theme()` and `--theme()` stand for
+  tokens and are skipped;
 - raw hex colours outside token definitions (gate 48); mask stops are exempt;
-- `transition: all` and `transition-all` (gate 10);
+- `transition: all`, `transition-all`, and a `transition` item that names no property
+  (`transition: 200ms var(--ease-site)` is `all`) (gate 10);
 - the browser-default `ease` keyword instead of `--ease-site` (`motion.md`, Bans);
-- `outline: none` with no `:focus-visible` replacement in the same file (gate 26).
+- `outline: none` or `outline-none` with no `:focus-visible` replacement for the same
+  thing (gate 26). In a stylesheet that is a `:focus-visible` rule for the same selector
+  (or for every element, or for the removal's ancestor scope, as in `.x :focus-visible`).
+  In a class list it is a `focus-visible:` utility on the same element.
 
-Existing exceptions are listed in the script's allowlist, each with its reason. An entry
-that no longer matches prints a warning; remove it. The check is not an audit: it cannot
-judge composition, hierarchy or taste.
+Existing exceptions are listed in the script's allowlist, each with its reason, the exact
+text it allows and how many times (`count`). The match is the whole value, so `#000c` does
+not allow `#000cff`, and a bare-`ease` entry names its full `transition` declaration. A
+further use in an allowlisted file fails. An entry that no longer matches, or matches
+fewer times than its count, prints a warning; remove it or lower its count. The check is
+not an audit: it cannot judge composition, hierarchy or taste.
 
 ## Updating the vendored copy
 
 Follow [VENDORED.md](../.agents/skills/hallmark/VENDORED.md): read the upstream changes
 and license, replace the files from the new commit, confirm the diff, update the pinned
-commit here, in `VENDORED.md` and in `README.md`, then re-read `design.md` against the
+commit here (Credit), in `VENDORED.md`, in `README.md` (Credits) and in the header
+comment of `scripts/check-design.mjs`, then re-read `design.md` against the
 new rules. A new Hallmark default that conflicts with a recorded owner decision goes to
 the owner as a question; `design.md` keeps the decision until then.
 

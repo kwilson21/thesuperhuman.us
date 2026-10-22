@@ -23,6 +23,6 @@ This folder is a third-party copy, not this site's own writing. Do not edit it h
 1. Read the upstream changes since the pinned commit, including `LICENSE`. Stop and ask the owner if the license changes.
 2. Clone the new commit and replace every upstream file here with `skills/hallmark/` from it. Keep this file and copy `LICENSE` from the new commit.
 3. Confirm the copy: `diff -r <clone>/skills/hallmark .agents/skills/hallmark` lists only `LICENSE` and `VENDORED.md`.
-4. Update the commit, its date, the tree hash (`git -C <clone> rev-parse <commit>:skills/hallmark`), the vendored date and the version above, and the pinned commit in `README.md` (Credits).
+4. Update the commit, its date, the tree hash (`git -C <clone> rev-parse <commit>:skills/hallmark`), the vendored date and the version above, and the pinned commit in `README.md` (Credits), in `docs/design-standard.md` (Credit) and in the header comment of `scripts/check-design.mjs`.
 5. Re-read `design.md` against the new rules. Where a new default conflicts with a recorded owner decision, `design.md` keeps the decision; list the conflict for the owner instead of changing the site.
 6. Run `npm run design:check` and its tests, then audit one changed page to confirm the skill still reads `design.md` first.

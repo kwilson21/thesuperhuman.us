@@ -6,6 +6,18 @@ the system instead of varying. Amend it on purpose, after an owner decision; the
 file is the rule. Process rules (audits, triage, image QA, copy) live in
 `CLAUDE.md`, `AGENTS.md` and `docs/design-standard.md`, and they take precedence.
 
+## Merge order and what arrives with it
+This file records the system as it stands after PR #206, then PR #209, then the pull
+request that adds this file. Until the first two merge, parts of it point at things a
+checkout does not have yet:
+- #206 adds the picks record, `docs/design-concepts/README.md` ("Owner's picks"), and
+  the boards in `docs/design-concepts/2026-10-22/`.
+- #209 builds the picks in `src/styles/global.css`: the `--dur-hover`, `--dur-page`,
+  `--dur-reveal`, `--rise-reveal`, `--site-rule-space` and `--site-chapter-space`
+  tokens, and the rules that read differently on `main` today (reveal timing, label type
+  and tracking, the section rule, the link rule and its tap area). Before #209, do not
+  reference those tokens.
+
 ## Context
 - Audience · curious visitors, potential collaborators, recruiters and hiring managers.
 - Use case · meet the person, assess the evidence of work, get in touch. Each page's
@@ -45,9 +57,10 @@ file is the rule. Process rules (audits, triage, image QA, copy) live in
   --tracking-eyebrow: 0.1em;   /* labels move to .12em with D4.2-C */
 
   --ease-site: cubic-bezier(.2, .7, .2, 1);  /* the one easing */
-  /* Added with the October 22 picks: --dur-hover 160ms, --dur-page 180ms,
-     --dur-reveal 600ms, --rise-reveal 12px (D3.4-C); --site-chapter-space,
-     128px on a computer and 112px on a phone (D6.5-C). */
+  /* Arrive with the October 22 picks (#209), not in global.css before it:
+     --dur-hover 160ms, --dur-page 180ms, --dur-reveal 600ms, --rise-reveal 12px
+     (D3.4-C); --site-rule-space, 48px on a computer and 40px on a phone, and
+     --site-chapter-space, 128px on a computer and 112px on a phone (D6.5-C). */
 }
 ```
 New colours are named tokens. Illustrations may keep local colour tokens in their own
@@ -111,8 +124,10 @@ component (`--ill-*`, `--code-*`); declarations reference tokens, never raw hex.
   every page shows its finished frame. Motion lives inside
   `prefers-reduced-motion: no-preference`.
 - `[data-reveal]` blocks rise in once (D3.1-A), 600ms and 12px (D3.4-C).
-- Home's three crossings and the About path follow the scroll; no drift, pointer
-  lean or parallax beyond them (D2.1-D).
+- Home's three crossings and the About path follow the scroll. The four drift layers
+  stop: the studio picture no longer lifts or leans toward the pointer, and the code
+  rows, notebook and terrain sit still (D2.1-D). Nothing else drifts or parallaxes.
+  The project-card lean on Home is a hover state, kept by D2.2-B (see States).
 - Building drawings arrive with their row, then play once in reading order (D3.3-C).
 - A caret appears only after typed text (D2.4-C). The essay pen stroke sits 3 to
   5px under "Direction" (D3.5-B).
@@ -120,10 +135,12 @@ component (`--ill-*`, `--code-*`); declarations reference tokens, never raw hex.
 
 ## Page families
 From `docs/website-system-plan.md` (Templates and explanations): Home, Work,
-Building, Writing and About indexes · project detail · work story · article · audio ·
-the Work with me hub and service sheets · project briefs and intake · private
-owner, studio and agreement pages. A new page reuses the nearest family. A new
-family is a design choice for the owner.
+Building, Writing and About indexes · project detail · work story · article · audio.
+Built since: the service sheets (the plan, Implemented boundaries) and the Work with me
+hub (`docs/website-content-model.md`). This file records the rest, which the system plan
+does not list: project briefs and intake, and the private owner, studio and agreement
+pages. A new page reuses the nearest family. A new family is a design choice for the
+owner.
 
 ## What pages MUST share
 The palette, the three faces and the name mark, the header and footer, the CTA
@@ -169,11 +186,13 @@ timings and local colour tokens.
 
 ## Owner decisions (October 22, 2026)
 All picks are quoted in `docs/design-concepts/README.md` ("Owner's picks"), with
-the boards in `docs/design-concepts/2026-10-22/`. Standing rules from them are above.
+the boards in `docs/design-concepts/2026-10-22/`; both arrive with #206. Standing rules
+from them are above, and #209 builds them.
 One-time changes with no standing rule: D1.1-B and D1.2-C (door layout on Home and
 /services), D2.3-A, D5.2 (the 404 shows B or D at random; B without JavaScript),
 D5.4-B, D8.5-D, D9.1-B, D10.1-C, D10.4-A, D10.6-B. Deferred: D5.1-D (photographs
-of the owner's own objects, `docs/website-system-plan.md` Deferred maintenance).
+of the owner's own objects; #206 records it in `docs/website-system-plan.md`, Deferred
+maintenance).
 
 ## Variants
 None. A page that needs something this file does not allow gets an owner decision
