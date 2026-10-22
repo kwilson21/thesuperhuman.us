@@ -31,7 +31,7 @@ Scope: fixes for the defects a read-only Hallmark design audit of the public pag
   - `scripts/screenshots/scenarios/software-signing.mjs`: its step now waits for the curly-apostrophe text.
   - Private pages: `src/styles/owner.css` (owner filter, request notes and payment field edges), `src/styles/studio.css` (studio and agreement fields and buttons), and the styles of `src/pages/studio/sign-in.astro` and `src/pages/offer/[token]/sign.astro`.
 
-Rollback revision: `0ab273da`, `main` before this PR after PR #205 merged at 14:13 UTC on October 22, 2026. Its `validate` run succeeded (completed 14:20:32 UTC), and production served its trailing-slash redirect for `/building/tally/` when checked at 15:20 UTC. Rolling back further, to `75a88be4`, would also remove #205's sitemap fix. This PR writes no data and changes no schema, so a rollback has no stored-data caveat. Check what has merged since before any rollback.
+Rollback revision: `0ab273da`, `main` before this PR after PR #205 merged at 14:13 UTC on October 22, 2026. Its `validate` check succeeded at 14:14:43 UTC and its production Workers Builds at 14:15:33 UTC, and production served its trailing-slash redirect for `/building/tally/` when checked at 15:20 UTC. Rolling back further, to `75a88be4`, would also remove #205's sitemap fix. This PR writes no data and changes no schema, so a rollback has no stored-data caveat. Check what has merged since before any rollback.
 Evidence: CI captures under `pr-204/f0abd1f/` on the `screenshots` branch (325 files, counted through the GitHub API). Branch preview: `https://claude-hallmark-audit-fixes-thesuperhuman-us.cloudflare-rxi8d.workers.dev`, which returned 302 to the Cloudflare Access login when requested at about 10:41 UTC.
 
 ## Owner decisions and authorization
@@ -39,7 +39,7 @@ Evidence: CI captures under `pr-204/f0abd1f/` on the `screenshots` branch (325 f
 - On October 22, 2026, in conversation, the owner asked to address every issue from the Hallmark audit, and to receive alternatives for the items that are his design choices. This is as relayed to this agent by the coordinating Claude session. No owner wording was passed on, so none is quoted here.
 - The commit message of `ab4dae0` says the PR fixes the defects and leaves the owner's design choices as they were, with alternatives for those going to the owner separately. `a3c2f56` reverts visible changes that an independent UI review found the fixes did not need.
 - The PR still changes how pages look (see Scope). Merge and deployment wait on the owner's approval of the look, the same process as the previous record (`docs/prelaunch-qa-2026-10-20-website-design-intake.md`: "The PR merges only after the owner approves the look, following this gate."). Merging to `main` deploys production. The owner gave that approval later the same day (next line).
-- Owner, in conversation, October 22, 2026, after reviewing the before and after captures: "#204 looks great". The owner did not report a second-browser or real-device check; those stay UNVERIFIED, as in the previous record.
+- Owner, in conversation, October 22, 2026, after the coordinating session shared side-by-side before and after captures of every public page: "#204 looks great". Under the process above, that approval of the look clears the merge. The owner did not report a second-browser, real-device, zoom or performance check and has not accepted those gaps as exceptions, so they stay UNVERIFIED and this record does not claim the release launch-ready, as in the previous record, which shipped with the same gaps.
 
 ## Evidence and limits
 
@@ -55,7 +55,7 @@ Evidence: CI captures under `pr-204/f0abd1f/` on the `screenshots` branch (325 f
   - Independent Claude reviewers: a code review and a UI, copy and rules review of `ab4dae0`, both addressed in `a3c2f56` and `b771231`; a delta review of `ab4dae0..b771231`, clean apart from three nits, fixed in `f0abd1f`.
   - Codex code and security reviews of `ab4dae0`: no findings (the Codex summary comment on the PR names `ab4dae0` for both). Codex did not review later commits.
   - Greptile: no review on the PR (the PR's review list is empty).
-  - No review of `f0abd1f` itself is recorded (see section 7).
+  - Later heads, including `f0abd1f`: see "Review of the final head" in section 7.
 - **Overflow sweep, earlier in this session:** 24 public pages at 320, 375, 390, 768, 1024, 1215, 1280 and 1440px, with no horizontal overflow and no console errors after the studio sign-in fix (`d0d26dd`).
 - **Browser checks by this agent at `f0abd1f`:** Playwright's Chromium against `astro dev` with the screenshot preview config on port 4361, from about 10:26 to 10:43 UTC. The working tree was clean at `f0abd1f`. Results are in sections 1 to 4.
 - **Contrast measurements, earlier in this session:** `--field-border` about 3.39:1 on paper; the waveform's unplayed bars from 1.90:1 to 3.39:1; the code boxes from about 1.6:1 to 3.58:1. This agent's own figures are in section 3.
@@ -65,8 +65,8 @@ Evidence: CI captures under `pr-204/f0abd1f/` on the `screenshots` branch (325 f
 ## 1. Purpose and content
 
 - **PASS · Project, branch and local changes.** At the browser checks the PR head and base matched the API (`f0abd1f` on `claude/hallmark-audit-fixes`, base `main` at `26e764a`); the branch has since merged `main` at `75a88be4` and then `0ab273da`. The working tree was clean. The site instructions (`CLAUDE.md`, `AGENTS.md`) and the audience are unchanged.
-- **PASS · Deployment authorization (owner).** The owner approved the look on October 22, 2026 (see Owner decisions), which under this record's process authorizes merge and deployment.
-- **PASS · Approved design: the owner's approval of the look (owner).** The owner reviewed the side-by-side before and after captures of every public page and wrote, in conversation on October 22, 2026: "#204 looks great".
+- **PASS · Deployment authorization (owner).** This record's process, the same as the previous record's, is that the PR merges after the owner approves the look, and merging deploys production. The owner approved the look on October 22, 2026 (see Owner decisions). That clears the merge; it does not make the release launch-ready while the items listed under Known unknowns stay open.
+- **PASS · Approved design: the owner's approval of the look (owner).** After the coordinating session shared side-by-side before and after captures of every public page, the owner wrote, in conversation on October 22, 2026: "#204 looks great".
 - **PASS · Claims, placeholders and media.**
   - No professional claim changes. The Tally sentence on `/work` keeps its wording and only moves below the links. The deleted `LyftWorkStory` was not rendered on any page at `26e764a`, so no rendered claim is removed.
   - Added lines contain no placeholder text (searched for TODO, FIXME, lorem, TBD), no rates, clearance, exclusivity or buzzwords, and no em dashes.
@@ -91,7 +91,7 @@ Evidence: CI captures under `pr-204/f0abd1f/` on the `screenshots` branch (325 f
 - **N/A · Open Graph.** `BaseLayout` and the card image are unchanged.
 - **N/A · Icons.** `public/` is unchanged.
 - **PASS · Robots and sitemap, built.**
-  - The built `dist/sitemap-0.xml` has 26 URLs, the same count production served in the previous record. It has no `/owner`, `/api` or `/offer` URLs.
+  - The built `dist/sitemap-0.xml` from the code merged with `0ab273da` has 22 URLs, the count #205's record gives after it removed the private sections. It has no `/owner`, `/api`, `/offer`, `/studio` or `/agreements` URLs.
   - No page is added or removed, and `public/robots.txt` and `astro.config.mjs` are unchanged.
   - Live check follows in section 7.
 - **PASS · Preview indexing.** The branch preview returned 302 to the Cloudflare Access login before any page rendered (about 10:41 UTC).
@@ -184,12 +184,12 @@ Evidence: CI captures under `pr-204/f0abd1f/` on the `screenshots` branch (325 f
   - The built `dist/_headers` from the merged code equals `public/_headers` at `0ab273da` (which includes #203's `/og/*` cache block), and this PR changes nothing under `public/`.
   - Live headers, HTTPS and routing follow in the post-deployment item.
 - **PASS · Rollback.** `0ab273da`, `main` when this branch last merged it; its `validate` run succeeded and production served its redirect at 15:20 UTC on October 22, 2026. No backup is needed: this PR writes no data and changes no schema. Check what has merged since before any rollback.
-- **UNVERIFIED · Post-deployment QA (not deployed).** After the owner approves the look and the PR merges, check on production:
+- **UNVERIFIED · Post-deployment QA (not deployed).** After the PR merges, check on production:
   - The production revision. The site shows no revision marker, so use Cloudflare's deployment history or a change visible only in this PR (for example, the `/privacy` heading).
   - The four `/*` security headers and `strict-transport-security` on an HTML page and on the 404 response (unchanged by this PR; checklist item 7.3).
   - Home; `/work` (links in the first screen); `/services` (door pictures and buttons); `/about` (resume form field edges, invalid edge and focus, without sending); `/privacy` (heading and anchor); `/audio/releases` at 701 to 1247px (no sideways scroll); `/music/old-news` (masthead); the 404 page.
   - The `/audio` pages on `audio.thesuperhuman.us`, which share the stylesheets.
-  - `robots.txt` and the sitemap (26 URLs).
+  - `robots.txt` and the sitemap (22 URLs).
   - Metadata, the Open Graph card and the icons, as a spot check (unchanged).
 - **UNVERIFIED · Receipt (not deployed).** Implemented: yes, at `f0abd1f`. Verified locally: yes, with the checks and Chromium measurements above. Deployed: no. Verified live: no.
 
@@ -219,7 +219,7 @@ Evidence: CI captures under `pr-204/f0abd1f/` on the `screenshots` branch (325 f
 | Software agreement signing | 1 | 0 | 0 | 1 |
 | Total | 29 | 0 | 5 | 23 |
 
-Approved for deployment by the owner. Still UNVERIFIED, as in the previous record's known unknowns: a second browser and a real device, browser zoom, lab performance, and the post-deployment checks and receipt, which follow the merge.
+Not launch-ready. The owner approved the look, which clears the merge under this record's process. Still UNVERIFIED, with no owner-accepted exception, as in the previous record: a second browser, a real device, browser zoom and lab performance. The post-deployment checks and the receipt follow the merge.
 
 ## Known unknowns
 
@@ -239,8 +239,7 @@ After deployment:
 
 ## Remaining work
 
-- Owner: review the look in the CI captures under `pr-204/f0abd1f/` on the `screenshots` branch, or on the branch preview (behind Cloudflare Access), and approve it or ask for changes. Merge waits on this.
 - Owner: check a second browser, a real phone and 200% browser zoom, or accept each gap as an exception with its impact and follow-up in this record.
-- Agent: run an independent review of the final head and a lab performance pass; view the signing captures and check keyboard use and overflow on a seeded signing page. Record the results here.
+- Agent: run a lab performance pass and record it here.
 - After merge: run the post-deployment checks in section 7 and complete the receipt.
 - Optional: point the stale `LyftWorkStory` link in `docs/audits/2026-09-09/website-audit.md` at a note, if dated audits are kept current. Not done here.
