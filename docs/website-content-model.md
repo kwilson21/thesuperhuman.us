@@ -296,9 +296,11 @@ its job, on the shared layer; content, copy and order are unchanged everywhere.
 
 - **About:** the path between chapters draws as far as the reader has scrolled
   (still hidden below 800 px, per the audit), and each chapter's object plays one
-  short scene as it arrives: rings from the headphones, a glow and caret on the
-  laptop's `</>`, the controller's buttons pressing in turn, a glow from the
-  notebook's sun. The terrain stays still (it drifted with scroll until
+  short scene as it arrives: rings from the headphones, the laptop's `</>` typed
+  again one character at a time behind a caret, which then blinks twice and
+  leaves, while a glow rises behind it (October 22; before, a caret blinked
+  beside the finished glyph), the controller's buttons pressing in turn, a glow
+  from the notebook's sun. The terrain stays still (it drifted with scroll until
   October 22).
 - **Audio:** the hero headphones give off the same rings on arrival and the
   sections rise in. It stays light: this page sells, and playback is untouched.
