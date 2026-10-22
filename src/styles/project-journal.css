@@ -1,17 +1,27 @@
 .project-shell { padding-bottom: 2rem; }
-.project-intro { padding-block: clamp(3rem, 6vw, 5rem) 2.5rem; }
+/* The breadcrumb lands where /building's kicker does (the .primary-page top), with about as much
+   space under the title block: 72px to the picture on a computer, 48 on a phone. */
+.project-intro { padding-block: clamp(2rem, 5vw, 4rem) clamp(2.5rem, 5vw, 4rem); }
 .project-intro .page-title { max-width: 18ch; }
 .project-subtitle { font-size: clamp(1.65rem, 3vw, 2.35rem); line-height: 1.25; margin-top: 1rem; }
 .project-description { max-width: 54ch; margin-top: 1rem; color: var(--muted); font-size: 1.2rem; line-height: 1.55; }
 .project-current { margin-block: .5rem 3rem; }
 .project-current img { display: block; width: 100%; height: auto; border: 1px solid var(--rule); border-radius: 3px; }
 .project-current figcaption, .project-caption { font-size: .8rem; color: var(--muted); line-height: 1.65; margin-top: .75rem; }
-.project-section { margin-block: 3.5rem; }
+.project-section { margin-block: var(--site-section-space); }
+/* The one larger break on a project page, before the part that changes job: its journal. */
+.project-chapter { margin-top: var(--site-chapter-space); }
+/* Whatever comes first under the title block (a picture, a section or the journal) sits .5rem below the
+   intro's padding, as the pictures do: one gap under every project title. */
+.project-intro + .project-section { margin-top: .5rem; }
+.project-intro + .project-timeline, .project-intro + [data-project-updates] { --project-timeline-top: .5rem; }
 .project-pair { display: grid; grid-template-columns: 1fr 1.15fr; gap: clamp(2rem, 5vw, 4rem); align-items: center; margin-top: 1.5rem; }
 .project-pair img { display: block; width: 100%; height: auto; border-radius: 3px; }
 .project-pair h3 { font-size: clamp(1.55rem, 2.6vw, 2rem); line-height: 1.2; }
 .project-pair p { font-size: 1.1rem; line-height: 1.6; color: var(--muted); margin-top: .6rem; max-width: 45ch; }
 .project-pair h3:not(:first-child) { margin-top: 2rem; }
+/* Two short ideas side by side, each a heading and its line (Behind the idea on Threadline and the Daily). */
+.project-ideas { grid-template-columns: 1fr 1fr; align-items: start; }
 .project-state { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem; margin-top: 1.5rem; }
 .project-state > div + div { border-left: 1px solid var(--rule); padding-left: 2rem; }
 .project-state p:not(.page-kicker) { font-size: 1.15rem; line-height: 1.5; }

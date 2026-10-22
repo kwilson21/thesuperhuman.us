@@ -1,7 +1,6 @@
 ---
 export const prerender = false;
 import ProjectLayout from '~/layouts/ProjectLayout.astro';
-import notebook from '~/assets/site/notebook-v1.webp';
 import preview from '~/assets/projects/daily-preview.webp';
 import ProjectUpdates from '~/components/ProjectUpdates.astro';
 import { websiteFeed } from '~/lib/publication/website';
@@ -21,9 +20,9 @@ Astro.response.headers.set('Cache-Control', 'no-store');
   </figure>
   <section class="project-section" aria-labelledby="daily-idea">
     <div class="site-section-heading"><h2 id="daily-idea">Behind the idea</h2></div>
-    <div class="project-pair">
-      <div><h3>A practice I want to return to.</h3><p>I’m designing the daily ritual I want to use myself. One meaningful change, with space for reflection.</p><h3>Let the work shape the story.</h3><p>Over a series, your changes grow a real application and matter to the unfolding life of a fantasy harbor.</p></div>
-      <figure><img src={notebook.src} alt="An open notebook with a sketched path through a landscape." width={notebook.width} height={notebook.height} loading="lazy" /><figcaption class="project-caption">Illustration</figcaption></figure>
+    <div class="project-pair project-ideas">
+      <div><h3>A practice I want to return to.</h3><p>I’m designing the daily ritual I want to use myself. One meaningful change, with space for reflection.</p></div>
+      <div><h3>Let the work shape the story.</h3><p>Over a series, your changes grow a real application and matter to the unfolding life of a fantasy harbor.</p></div>
     </div>
   </section>
   <section class="project-section" aria-labelledby="daily-state">
@@ -34,7 +33,9 @@ Astro.response.headers.set('Cache-Control', 'no-store');
       <div><p class="page-kicker">Next</p><p>{story.next}</p></div>
     </div>
   </section>
-  <span id="design-history-title" aria-hidden="true"></span>
-  <p class="project-note">I make the product decisions and review every change; AI tools help with exploration and implementation. Concepts are visual studies, not working features. Dates record the supported day, not time spent.</p>
-  <ProjectUpdates feed={feed} projectId={story.projectId} milestones={entries} />
+  <div class="project-chapter">
+    <span id="design-history-title" aria-hidden="true"></span>
+    <p class="project-note">I make the product decisions and review every change; AI tools help with exploration and implementation. Concepts are visual studies, not working features. Dates record the supported day, not time spent.</p>
+    <ProjectUpdates feed={feed} projectId={story.projectId} milestones={entries} />
+  </div>
 </ProjectLayout>
