@@ -5,7 +5,7 @@ Repository: `kwilson21/thesuperhuman.us`
 Pull request: [#203](https://github.com/kwilson21/thesuperhuman.us/pull/203), "Link previews that play a video (og:video), one scene per page"  
 Branch: `og-video-preview`  
 Verified revision: `8e6e9cc` (`8e6e9ccdf7269f49b862f9c2c60ed52b4f6b8773`), the PR head. It is 12 commits on top of `main` at `26e764a`, which is also the merge base. This record is committed on top of it.  
-Merged revision: `75a88be`, squash-merged to `main` on October 22, 2026 at 10:52:12 UTC from the final record commit `5cc2227`. Its Workers Builds production build succeeded at 10:53:34 UTC (build `43d38176-4dcf-477b-a5b6-b1264b3c075d`, Worker Version ID `1d40ed4a-ffd7-42a5-9de3-db4a129a4486`), and a polling `curl` of `https://thesuperhuman.us/` first saw the new home `og:video` tag at 10:53:41 UTC. The site shows no revision marker, so the serving revision is inferred from that build and the new tags. Live results are under "Live checks after deploy".  
+Merged revision: `75a88be`, squash-merged to `main` on October 22, 2026 at 10:52:12 UTC from the final record commit `5cc2227`. Its Workers Builds production build succeeded at 10:53:34 UTC (build `43d38176-4dcf-477b-a5b6-b1264b3c075d`, Worker Version ID `1d40ed4a-ffd7-42a5-9de3-db4a129a4486`), and a polling `curl` of `https://thesuperhuman.us/` first saw the new home `og:video` tag at 10:53:41 UTC. The site shows no revision marker, so the serving version was read from Cloudflare: at 14:45 UTC, `wrangler deployments list` (read-only) showed that version deployed at 100% from 10:53:30 UTC until PR #205's deployment at 14:15:25 UTC, which covers the live checks. Live results are under "Live checks after deploy".  
 Target: production `https://thesuperhuman.us` and `audio.thesuperhuman.us`:
 - the link-preview tags in every page's `<head>` (`src/layouts/BaseLayout.astro`)
 - the posters at `/og/<scene>-<hash>.png` or `.jpg`, and the static videos at `/og/raw/<scene>-<hash>.mp4`
@@ -538,7 +538,7 @@ PASS means the evidence named here was observed. Production checks and their res
     - The owner gave the go-ahead to merge and deploy (answer 5; see 1.1).
   - Final record commit `5cc2227`: an independent review pass found nothing, and Validate (10:46:10 UTC), Screenshots capture (10:51:48 UTC) and Workers Builds (10:45:42 UTC) succeeded before the merge, which was pinned to that head.
 - **UNVERIFIED · 7.5 Post-deployment verification.**
-  - Observed live (live checks 1, 2 and 5): the main journeys' tags, posters, videos, the missing page, the audio host, robots, the sitemap and `/owner`. The production revision is inferred from the Workers Builds check on `75a88be` and the new tags; the site has no revision marker.
+  - Observed live (live checks 1, 2 and 5): the main journeys' tags, posters, videos, the missing page, the audio host, robots, the sitemap and `/owner`. Production revision: Cloudflare's deployment history shows Worker Version `1d40ed4a-ffd7-42a5-9de3-db4a129a4486` at 100% from 10:53:30 UTC until 14:15:25 UTC, the version the Workers Builds check on `75a88be` produced.
   - Open: alerting on the video route (6.6); the remote `owner:health` run (8.15, live check 6); Messages and the preview debuggers (live checks 3 and 4); the deployed branch preview (live check 8). No form changed (section 5).
 - **UNVERIFIED · 7.6 Receipt.** This record is the receipt. Status as of October 22, 2026, about 11:00 UTC:
   - Implemented: yes (`8e6e9cc`; the final record commit `5cc2227`).

@@ -5,7 +5,7 @@ Repository: `kwilson21/thesuperhuman.us`
 Pull request: [#205](https://github.com/kwilson21/thesuperhuman.us/pull/205)  
 Branch: `sitemap-public-pages`  
 Verified revision: `8944be6`, one commit on top of `main` at `75a88be` (PR #203's squash merge). This record is committed on top of it.  
-Merged revision: `0ab273d`, squash-merged to `main` on October 22, 2026 at 14:13:02 UTC from the final head `ba62e84`. Its Workers Builds production build succeeded at 14:15:33 UTC (build `18847ceb-9c2f-46eb-97e5-06b9a717a457`, Worker Version ID `2df7d5f1-385c-46c0-b6b5-a0a1693f21a9`), and a polling `curl` first saw `/building/tally` answer 200 with no `/studio` in the sitemap at 14:15:37 UTC. The site shows no revision marker, so the serving revision is inferred from that build and the changed behavior.  
+Merged revision: `0ab273d`, squash-merged to `main` on October 22, 2026 at 14:13:02 UTC from the final head `ba62e84`. Its Workers Builds production build succeeded at 14:15:33 UTC (build `18847ceb-9c2f-46eb-97e5-06b9a717a457`, Worker Version ID `2df7d5f1-385c-46c0-b6b5-a0a1693f21a9`), and a polling `curl` first saw `/building/tally` answer 200 with no `/studio` in the sitemap at 14:15:37 UTC. The site shows no revision marker, so the serving version was read from Cloudflare: at 14:45 UTC, `wrangler deployments status` (read-only) showed Worker Version `2df7d5f1-385c-46c0-b6b5-a0a1693f21a9` serving 100% of traffic, deployed at 14:15:25 UTC.  
 Target: production `https://thesuperhuman.us` and `audio.thesuperhuman.us`:
 - `/sitemap-0.xml` (through `/sitemap-index.xml`, which `robots.txt` names)
 - the static-asset trailing-slash behavior for the two prerendered pages, `/building/tally` and `/building/kaillera-next`. Static assets are served before the Worker's host routing, so the setting applies on both hosts.
@@ -92,7 +92,7 @@ PASS means the evidence named here was observed.
 - **PASS · 7.2 Diff review.** Five files; no secrets, private paths, generated files, dependency changes or copy changes.
 - **PASS · 7.3 Headers and routing (locally).** See 2.2, 4.1 and 4.6.
 - **PASS · 7.4 Rollback, review and authorization.** Rollback revision above; no backup needed. Independent review agents ran on each new head until a pass found nothing; the final head `ba62e84` had a clean pass, and its Validate (11:43:29 UTC), Screenshots capture (11:43:16 UTC) and Workers Builds (11:42:55 UTC) succeeded before the merge, which was pinned to that head. Codex's code review of `8944be6` found nothing. The owner gave the go-ahead.
-- **PASS, with one gap · 7.5 Post-deployment verification.** All seven live checks below passed on both hosts, with the main journeys' tags, a poster, a video, robots and `/owner` checked for regressions. No form or monitoring code changed. The gap: the production revision is inferred, not read from the site (see Merged revision).
+- **PASS · 7.5 Post-deployment verification.** All seven live checks below passed on both hosts, with the main journeys' tags, a poster, a video, robots and `/owner` checked for regressions. No form or monitoring code changed. Production revision: Cloudflare's deployment record shows Worker Version `2df7d5f1-385c-46c0-b6b5-a0a1693f21a9` at 100% since 14:15:25 UTC, the version the Workers Builds check on `0ab273d` produced (see Merged revision).
 - **PASS · 7.6 Receipt.** Implemented at `8944be6`, verified locally, deployed as `0ab273d` (Worker Version ID `2df7d5f1-385c-46c0-b6b5-a0a1693f21a9`) from 14:15 UTC, and verified live between 14:16 and 14:20 UTC.
 
 ## 8. Private owner center
