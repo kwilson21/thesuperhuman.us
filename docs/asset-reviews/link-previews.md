@@ -94,6 +94,7 @@
 - Physical logic: Not applicable. The scene has no drawn physical objects, artwork, captures or generated imagery; its only drawn parts are the page's own form controls (radios drawn the way a native accent-colour radio draws, the offer cards, the progress dots and a placeholder-grey answer box), redrawn to match the page. They behave like a real radio group: only one choice reads as checked at a time.
 - Lead edit after QA: the first reviewer’s two remaining findings were outside the scene: its alt text in src/lib/og-media.ts still described the old cards, and this record still described the previous render. Both are fixed: the alt text describes the new poster, and this entry is regenerated.
 - Re-checked after those edits by another separate reviewer, who rendered and inspected every beat again: passed.
+- October 22 apostrophe change (owner pick D10.5-B): the brief's Website question now reads “What’s the website for?” with a curly apostrophe, as on the page, and the scene was re-rendered. The poster is unchanged (the question first shows at about 600 ms); only the video changed. The coordinating Claude Code session inspected full-size frames at 2 s (Website design open, the curly apostrophe rendered in Libron) and 4 s (Web app open).
 - Outcome: ready for production.
 
 ## personal-website
@@ -316,7 +317,7 @@
     {"path": "public/og/raw/project-tally-c18ee5d442.mp4", "sha256": "c18ee5d4427c9eee0772f8fce3ba0d1e3035a95afc47cbebe2e4467a1dc7cbb8", "width": 1200, "height": 630, "bytes": 341690},
     {"path": "public/og/raw/project-threadline-b1a846e489.mp4", "sha256": "b1a846e489504fac75683ab537c38845b85b47c46cd307735b2822095d2bb767", "width": 1200, "height": 630, "bytes": 429175},
     {"path": "public/og/raw/services-ee2799b652.mp4", "sha256": "ee2799b6524f39aa9d776922790913f6c0063bce73e6b33bc1e8a74349bd00a2", "width": 1200, "height": 630, "bytes": 767628},
-    {"path": "public/og/raw/software-start-2da6d1c6e7.mp4", "sha256": "2da6d1c6e7568172374c1eafc500460021af375b473d99529e8e3ff5ad5f41b5", "width": 1200, "height": 630, "bytes": 346924},
+    {"path": "public/og/raw/software-start-db737f7218.mp4", "sha256": "db737f721897a46a406fc1ab89d7d65c8889fe67d9b76d67c2756e1329d9f430", "width": 1200, "height": 630, "bytes": 346669},
     {"path": "public/og/raw/the-engineers-daily-4c7b5e3928.mp4", "sha256": "4c7b5e3928eb3cc2e81c398129ae87dcf5b06e9259f591c5204be8c6ecc5f436", "width": 1200, "height": 630, "bytes": 558818},
     {"path": "public/og/raw/work-0b6bbe9f4e.mp4", "sha256": "0b6bbe9f4e42cbda713502539369b35fd45d91f8ad454f4b52a4f7639784ed96", "width": 1200, "height": 630, "bytes": 300277},
     {"path": "public/og/raw/writing-09fed73375.mp4", "sha256": "09fed733750192e2465ea71453bd28a608cfcc19704ebfe874825474694943e6", "width": 1200, "height": 630, "bytes": 147052},

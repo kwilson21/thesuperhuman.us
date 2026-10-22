@@ -345,20 +345,20 @@
   },
   "software-start": {
     "image": "/og/software-start-24d1e7b824.png",
-    "video": "/og/software-start-2da6d1c6e7.mp4",
+    "video": "/og/software-start-db737f7218.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 7200,
     "imageBytes": 142640,
-    "videoBytes": 346924,
-    "frames": "31742e68b034431d",
+    "videoBytes": 346669,
+    "frames": "e4227e41d2c852df",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/software-start.html"
     ],
-    "source": "2dbf70ef444bd7ec",
+    "source": "ca4174f68a768c11",
     "encoding": "5341c8ca6c6bf333"
   },
   "the-engineers-daily": {
