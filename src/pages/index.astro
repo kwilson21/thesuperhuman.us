@@ -168,7 +168,7 @@ const jsonLd = {
   .screen-code { position: absolute; top: clamp(2rem, 6vh, 3.5rem); left: 58%; width: min(500px, 70vw); opacity: .7; transform: translate(-50%, calc((1 - var(--grow)) * 40px)); mask-image: linear-gradient(to bottom, #000 50%, transparent 92%); pointer-events: none; }
 
   /* Subgrid keeps each card's art, kicker, title, line and link on shared rows, so both cards
-     line up whatever wraps (WorkWithMe.astro's doors use the same pattern). */
+     line up whatever wraps (WorkWithMe.astro's door rows share columns the same way). */
   .project-grid { display: grid; grid-template-columns: repeat(2, 1fr); column-gap: 2.5rem; }
   .project-card { display: grid; grid-template-rows: subgrid; grid-row: span 5; position: relative; }
   /* Each project glows like a screen in the dark and leans toward a fine pointer. */
