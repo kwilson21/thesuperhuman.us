@@ -3,7 +3,7 @@
 .project-intro .page-title { max-width: 18ch; }
 .project-subtitle { font-size: clamp(1.65rem, 3vw, 2.35rem); line-height: 1.25; margin-top: 1rem; }
 .project-description { max-width: 54ch; margin-top: 1rem; color: var(--muted); font-size: 1.2rem; line-height: 1.55; }
-.project-status { display: flex; align-items: baseline; gap: .65rem; font: .75rem/1.7 'JetBrains Mono', monospace; margin-block: 1.5rem; }
+.project-status { display: flex; align-items: baseline; gap: .65rem; font: .75rem/1.7 var(--font-mono); margin-block: 1.5rem; }
 .project-status::before { content: ''; width: .65rem; height: .65rem; border-radius: 50%; flex-shrink: 0; background: var(--accent); }
 .project-current { margin-block: .5rem 3rem; }
 .project-current img { display: block; width: 100%; height: auto; border: 1px solid var(--rule); border-radius: 3px; }
@@ -17,7 +17,7 @@
 .project-state { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem; margin-top: 1.5rem; }
 .project-state > div + div { border-left: 1px solid var(--rule); padding-left: 2rem; }
 .project-state p:not(.page-kicker) { font-size: 1.15rem; line-height: 1.5; }
-.project-note { color: var(--muted); font-size: .85rem; line-height: 1.7; max-width: 80ch; }
+.project-note { color: var(--muted); font-size: .85rem; line-height: 1.7; max-width: var(--measure-prose); }
 .project-close { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1.5rem; padding-block: 2rem; border-top: 1px solid var(--rule); margin-top: 3rem; }
 /* An entry moved to the project story or archive keeps a small anchor at its old fragment ID, so an
    existing link still lands somewhere useful without JavaScript. Fully removed from the page (not

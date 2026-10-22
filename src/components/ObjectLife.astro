@@ -18,7 +18,7 @@ const buttons = [
     {[0.35, 0.9, 1.45].map(at => <ellipse rx="172" ry="150" style={`--at:${at}s`} />)}
   </g>}
   {kind === 'software' && <g class="life-screen">
-    <defs><radialGradient id="glyph-glow"><stop offset="0" stop-color="#f6e8d2" stop-opacity=".55" /><stop offset="1" stop-color="#f6e8d2" stop-opacity="0" /></radialGradient></defs>
+    <defs><radialGradient id="glyph-glow"><stop offset="0" stop-opacity=".55" /><stop offset="1" stop-opacity="0" /></radialGradient></defs>
     <ellipse class="glyph-glow" cx="712" cy="427" rx="150" ry="100" fill="url(#glyph-glow)" />
     <rect class="glyph-caret" x="812" y="402" width="5" height="52" rx="1" />
   </g>}
@@ -29,16 +29,20 @@ const buttons = [
     </g>)}
   </g>}
   {kind === 'whats-next' && <g class="life-sun" transform="translate(1053 266)">
-    <defs><radialGradient id="sun-glow"><stop offset=".45" stop-color="#e08a62" stop-opacity=".5" /><stop offset="1" stop-color="#e08a62" stop-opacity="0" /></radialGradient></defs>
+    <defs><radialGradient id="sun-glow"><stop offset=".45" stop-opacity=".5" /><stop offset="1" stop-opacity="0" /></radialGradient></defs>
     {[0.4, 1.3].map(at => <circle r="70" fill="url(#sun-glow)" style={`--at:${at}s`} />)}
   </g>}
 </svg>
 <style>
-  .chapter-life { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  /* Illustration colours, sampled from the object art (the laptop screen's glow and glyph, the
+     controller's buttons) plus the lifted terracotta of Home's dark screen. Local to these scenes. */
+  .chapter-life { --life-screen-glow: #f6e8d2; --life-glyph: #eadfca; --life-press: #3b1206; --life-sun: #e08a62; position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  #glyph-glow stop { stop-color: var(--life-screen-glow); }
+  #sun-glow stop { stop-color: var(--life-sun); }
   .chapter-life :is(ellipse, circle, rect) { opacity: 0; }
   .life-rings ellipse { fill: none; stroke: var(--accent); stroke-width: 2.4; vector-effect: non-scaling-stroke; }
-  .glyph-caret { fill: #eadfca; }
-  .life-buttons .press { fill: #3b1206; }
+  .glyph-caret { fill: var(--life-glyph); }
+  .life-buttons .press { fill: var(--life-press); }
   .life-buttons .press-ring { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
   @media screen and (prefers-reduced-motion: no-preference) {
     :global(.is-playing) .life-rings ellipse { transform-box: fill-box; transform-origin: center; animation: ring-out 2.2s cubic-bezier(.2, .6, .3, 1) var(--at) both; }

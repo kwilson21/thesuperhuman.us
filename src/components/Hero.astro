@@ -28,15 +28,15 @@ import StudioLife from '~/components/home/StudioLife.astro';
   .studio-intro { max-width: 340px; color: var(--muted); font-size: 1.125rem; line-height: 1.5; margin: 0 0 1.7rem; }
   .studio-art { position: absolute; z-index: -1; width: 84%; right: -5%; top: 0; pointer-events: none; --lift: calc(var(--p, 0) * -32px); }
   /* The overlay shares the image's box and mask, so it fades out exactly where the picture does. */
-  .studio-scene { position: relative; transform: translate3d(calc(var(--mx, 0) * -10px), calc(var(--my, 0) * -6px + var(--lift)), 0); transition: transform 600ms cubic-bezier(.2, .7, .2, 1); }
+  .studio-scene { position: relative; transform: translate3d(calc(var(--mx, 0) * -10px), calc(var(--my, 0) * -6px + var(--lift)), 0); transition: transform 600ms var(--ease-site); }
   .studio-scene :global(img) { display: block; width: 100%; height: auto; mix-blend-mode: multiply; }
   .studio-scene :global(img), .studio-scene :global(.studio-life) { mask-image: linear-gradient(to right, transparent, #000 18%, #000 94%, transparent), linear-gradient(to bottom, transparent, #000 12%, #000 80%, transparent); mask-composite: intersect; }
   @media (prefers-reduced-motion: no-preference) {
-    .studio-copy > * { animation: studio-rise 900ms cubic-bezier(.2, .7, .2, 1) both; }
+    .studio-copy > * { animation: studio-rise 900ms var(--ease-site) both; }
     .studio-copy > :nth-child(2) { animation-delay: 110ms; }
     .studio-copy > :nth-child(3) { animation-delay: 220ms; }
     .studio-copy > :nth-child(4) { animation-delay: 330ms; }
-    .studio-art { animation: studio-settle 1400ms cubic-bezier(.2, .7, .2, 1) 120ms both; }
+    .studio-art { animation: studio-settle 1400ms var(--ease-site) 120ms both; }
   }
   @media (prefers-reduced-motion: reduce) { .studio-scene { transition: none; } }
   @keyframes studio-rise { from { opacity: 0; transform: translateY(18px); } }

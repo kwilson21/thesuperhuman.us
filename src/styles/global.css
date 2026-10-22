@@ -39,15 +39,16 @@
   --color-rule: var(--rule);
   --color-accent: var(--accent);
 
-  --font-serif: 'Libron', 'Iowan Old Style', 'Georgia', serif;
-  --font-sans: 'Inter', 'system-ui', '-apple-system', 'sans-serif';
-  --font-mono: 'JetBrains Mono', 'SF Mono', 'Menlo', 'monospace';
+  /* Generic families and system keywords stay unquoted: quoted, they name fonts that do not exist. */
+  --font-serif: 'Libron', 'Iowan Old Style', Georgia, serif;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
 
   --container-measure: 38rem;
   --container-content: 42.5rem;
   --container-page: 64rem;
 
-  --tracking-eyebrow: 0.12em;
+  --tracking-eyebrow: 0.1em;
 }
 
 @font-face {
@@ -72,6 +73,8 @@
   --muted: #4A4A4A;
   --rule: #E8E3DA;
   --accent: #AE5534;
+  /* Form field edges need 3:1 against paper (WCAG 1.4.11); --rule stays for hairlines. About 3.4:1. */
+  --field-border: color-mix(in srgb, var(--muted) 65%, var(--paper));
 }
 
 @layer base {
@@ -87,6 +90,7 @@
 
   body {
     min-height: 100vh;
+    min-height: 100svh;
   }
 
   h1, h2, h3 {
@@ -94,7 +98,12 @@
     color: var(--ink);
     letter-spacing: -0.01em;
     font-weight: 400;
+    overflow-wrap: break-word;
   }
+
+  /* Headings balance their lines; running text avoids one-word last lines. Components can override. */
+  h1, h2, h3, h4 { text-wrap: balance; }
+  p, li, dd, figcaption, blockquote { text-wrap: pretty; }
 
   a {
     color: var(--ink);
@@ -124,14 +133,14 @@
 
 @layer components {
   .personal-name {
-    font-family: 'Kazon Name Text', 'Libron', Georgia, serif;
+    font-family: 'Kazon Name Text', var(--font-serif);
     font-style: normal;
     font-synthesis: none;
     font-weight: 400;
   }
 
   .personal-name--display {
-    font-family: 'Kazon Name Display', 'Libron', Georgia, serif;
+    font-family: 'Kazon Name Display', var(--font-serif);
   }
 
   .personal-name--inherit {
@@ -140,12 +149,12 @@
     text-transform: inherit;
   }
 
+  /* Legacy muted label; set in the same mono face and size as .page-kicker so kickers share one face. */
   .eyebrow {
-    font-family: var(--font-sans);
-    font-size: 11px;
+    font-family: var(--font-mono);
+    font-size: .6875rem;
     letter-spacing: var(--tracking-eyebrow);
     text-transform: uppercase;
-    font-weight: 500;
     color: var(--muted);
   }
 
@@ -189,6 +198,22 @@
 :root {
   --site-gutter: clamp(1.5rem, 5vw, 3.5rem);
   --site-section-space: clamp(3rem, 6vw, 5.5rem);
+  /* Running prose stops near 65 characters; Libron's wide `ch` makes ch caps run long.
+     33rem measures 63-66 characters a line (median) for 16px Libron body text. */
+  --measure-prose: 33rem;
+  --ease-site: cubic-bezier(.2, .7, .2, 1);
+  /* Named spacing steps, numbered like Tailwind's 4px scale (--space-4 is 1rem, the same as p-4).
+     Adopt them as rules are touched; illustrations can keep spacing that follows their content. */
+  --space-1: .25rem;
+  --space-2: .5rem;
+  --space-3: .75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
 }
 @layer components {
   .site-shell { width: 100%; max-width: 1232px; margin-inline: auto; padding-inline: var(--site-gutter); }
@@ -198,13 +223,14 @@
   .site-section-heading::after { content: ''; height: 1px; flex: 1; background: var(--rule); }
   .site-links { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.75rem; }
   .site-link { display: inline-flex; align-items: baseline; gap: .65rem; padding: .35rem 0; border-bottom: 1px solid var(--accent); line-height: 1.45; }
-  .site-link span { color: var(--accent); transition: transform 160ms ease; }
+  .site-link span { color: var(--accent); transition: transform 160ms var(--ease-site); }
   @media (hover: hover) and (pointer: fine) {
     .site-link:hover span { transform: translateX(3px); }
   }
   .site-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .55rem 1.35rem; background: var(--accent); color: var(--paper); border: 1px solid var(--accent); border-radius: 3px; line-height: 1.4; }
   @media (hover: hover) and (pointer: fine) {
-    .site-button:hover { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+    .site-button:hover:not(:disabled) { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+    .context-disclosure > summary:hover { color: var(--accent); }
   }
   .site-button-outline { background: transparent; color: var(--ink); }
   @media (prefers-reduced-motion: reduce) {
@@ -215,7 +241,7 @@
     @view-transition { navigation: auto; }
     ::view-transition-old(root), ::view-transition-new(root) {
       animation-duration: 180ms;
-      animation-timing-function: ease-out;
+      animation-timing-function: var(--ease-site);
     }
     ::view-transition-old(root) { animation-name: page-fade-out; }
     ::view-transition-new(root) { animation-name: page-fade-in; }
@@ -225,9 +251,9 @@
   /* Motion layer (src/scripts/scroll-scenes.ts adds .motion only when motion is welcome):
      [data-reveal] blocks rise in once, and a section heading's rule draws in with them. */
   @media screen and (prefers-reduced-motion: no-preference) {
-    .motion [data-reveal] { transition: opacity 900ms cubic-bezier(.2, .7, .2, 1), transform 900ms cubic-bezier(.2, .7, .2, 1); }
+    .motion [data-reveal] { transition: opacity 900ms var(--ease-site), transform 900ms var(--ease-site); }
     .motion [data-reveal]:not(.is-in) { opacity: 0; transform: translateY(26px); }
-    .motion .site-section-heading::after { transform-origin: left; transition: transform 1100ms cubic-bezier(.2, .7, .2, 1) 200ms; }
+    .motion .site-section-heading::after { transform-origin: left; transition: transform 1100ms var(--ease-site) 200ms; }
     .motion [data-reveal]:not(.is-in) .site-section-heading::after, .motion .site-section-heading[data-reveal]:not(.is-in)::after { transform: scaleX(0); }
     /* A block revealed by keyboard focus appears at once, children included. */
     .motion .is-instant, .motion .is-instant *, .motion .is-instant *::after { transition-duration: 0s !important; transition-delay: 0s !important; }
@@ -238,7 +264,7 @@
 
 @layer components {
   .primary-page { padding-top: clamp(2rem, 5vw, 4rem); padding-bottom: 1rem; }
-  .page-kicker { font-family: var(--font-mono); color: var(--accent); font-size: .6875rem; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 1rem; }
+  .page-kicker { font-family: var(--font-mono); color: var(--accent); font-size: .6875rem; letter-spacing: var(--tracking-eyebrow); text-transform: uppercase; margin-bottom: 1rem; }
   .page-title { font-size: clamp(3.25rem, 6.5vw, 5.4rem); line-height: 1.02; letter-spacing: -.045em; }
   .page-lede { font-size: clamp(1.3rem, 2.5vw, 1.8rem); line-height: 1.35; margin-top: 1.25rem; max-width: 40rem; }
   .page-connect { border-top: 1px solid var(--rule); padding-block: 2.5rem; margin-top: var(--site-section-space); display: flex; justify-content: space-between; align-items: center; gap: 2rem; }
@@ -260,10 +286,13 @@
 .site-form { max-width: 48rem; }
 .site-form > * + * { margin-top: 1.5rem; }
 .site-form .form-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
-.site-form label:not(:has(input)), .site-form legend { display: block; margin-bottom: .5rem; font-size: 1rem; }
+.site-form label:not(:has(input)), .site-form legend { display: block; margin-bottom: var(--space-2); font-size: 1rem; }
 .site-form label > span, .site-form .form-hint { color: var(--muted); }
-.site-form input:not([type=checkbox]):not([type=radio]):not([type=hidden]), .site-form textarea, .site-form select { display: block; width: 100%; min-width: 0; border: 1px solid var(--rule); background: var(--paper); padding: .65rem .8rem; border-radius: 3px; font: 1rem/1.5 Inter, sans-serif; }
+.site-form input:not([type=checkbox]):not([type=radio]):not([type=hidden]), .site-form textarea, .site-form select { display: block; width: 100%; min-width: 0; border: 1px solid var(--field-border); background: var(--paper); padding: .65rem .8rem; border-radius: 3px; font: 1rem/1.5 var(--font-sans); }
 .site-form textarea { resize: vertical; }
+@media (hover: hover) and (pointer: fine) {
+  .site-form :is(input:not([type=checkbox], [type=radio]), textarea, select):not([aria-invalid=true]):hover { border-color: var(--muted); }
+}
 .site-form :is(input, textarea, select):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .site-form [aria-invalid=true] { border-color: var(--accent); }
 .site-form [data-form-error] { color: var(--accent); font-size: .875rem; margin-top: .5rem; }

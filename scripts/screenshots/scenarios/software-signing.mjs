@@ -281,7 +281,7 @@ export default {
       `/offer/${token}/sign`,
       { cookie,prepare:async page=>{
         if(await page.getByRole('link',{name:'Open your project page'}).count())throw new Error('Project link must wait for project creation.');
-        await page.getByText("I'll email you the link to your project page when work starts.").waitFor();
+        await page.getByText("I’ll email you the link to your project page when work starts.").waitFor();
       } },
     );
     sql(

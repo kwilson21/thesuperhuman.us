@@ -172,7 +172,7 @@ const jsonLd = {
   .project-grid { display: grid; grid-template-columns: repeat(2, 1fr); column-gap: 2.5rem; }
   .project-card { display: grid; grid-template-rows: subgrid; grid-row: span 5; position: relative; }
   /* Each project glows like a screen in the dark and leans toward a fine pointer. */
-  .project-art { display: block; margin-bottom: 1.2rem; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; background: var(--well); aspect-ratio: 3 / 2; box-shadow: 0 28px 70px -34px color-mix(in srgb, var(--accent) 45%, transparent), 0 14px 30px -18px #000c; transform: perspective(1100px) rotateX(calc(var(--rx, 0) * 3deg)) rotateY(calc(var(--ry, 0) * 4deg)); transition: transform 500ms cubic-bezier(.2, .7, .2, 1), box-shadow 500ms ease; }
+  .project-art { display: block; margin-bottom: 1.2rem; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; background: var(--well); aspect-ratio: 3 / 2; box-shadow: 0 28px 70px -34px color-mix(in srgb, var(--accent) 45%, transparent), 0 14px 30px -18px #000c; transform: perspective(1100px) rotateX(calc(var(--rx, 0) * 3deg)) rotateY(calc(var(--ry, 0) * 4deg)); transition: transform 500ms var(--ease-site), box-shadow 500ms var(--ease-site); }
   @media (hover: hover) and (pointer: fine) {
     .project-card:hover .project-art, .project-card:focus-within .project-art { box-shadow: 0 34px 90px -30px color-mix(in srgb, var(--accent) 65%, transparent), 0 18px 36px -18px #000e; }
   }
@@ -185,7 +185,8 @@ const jsonLd = {
 
   .work-proof-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.75rem; }
   .work-preview { display: block; }
-  .work-company { font-size: 2rem; letter-spacing: -.04em; line-height: 1.1; margin: 0 0 .65rem; }
+  /* The Lyft and Old News labels scale with the section heading (h2: clamp(1.75rem, 3vw, 2.25rem)) and stay below it at every width. */
+  .work-company { font-size: clamp(1.5rem, 2.6vw, 2rem); letter-spacing: -.04em; line-height: 1.1; margin: 0 0 .65rem; }
   .work-outcome { flex: 1; }
   .work-outcome p { max-width: 65ch; margin: 0; text-wrap: pretty; }
   .work-outcome .work-figure { font-size: clamp(1.5rem, 2.6vw, 2.2rem); letter-spacing: -.04em; line-height: 1.2; margin-bottom: .35rem; }
@@ -204,7 +205,7 @@ const jsonLd = {
   .capacity { margin: .7rem 0 .9rem; }
   .capacity-cells, .capacity-key { display: grid; grid-template-columns: repeat(var(--cells), minmax(0, 1fr)); gap: 3px; max-width: 26rem; }
   .cell { display: block; height: 12px; border-radius: 2px; background: var(--accent); }
-  .capacity-cells .cell { opacity: clamp(.16, (var(--lit, 999) - var(--i)) * 10, 1); transition: opacity 180ms ease; }
+  .capacity-cells .cell { opacity: clamp(.16, (var(--lit, 999) - var(--i)) * 10, 1); transition: opacity 180ms var(--ease-site); }
   .capacity-key { align-items: center; margin-top: .55rem; font-family: var(--font-mono); font-size: .7rem; color: var(--muted); }
   .capacity-key > span { grid-column: 2 / -1; padding-left: .3rem; white-space: nowrap; }
 
@@ -227,6 +228,10 @@ const jsonLd = {
   .contact-intro p { max-width: 65ch; font-size: 1.1rem; color: var(--muted); margin: 0; text-wrap: pretty; }
   .contact-disclosure { margin-top: 1.25rem; color: var(--muted); }
   .contact-disclosure summary { width: fit-content; min-height: 44px; line-height: 44px; margin-inline: -.4rem; padding-inline: .4rem; cursor: pointer; font-size: .95rem; }
+  /* The two disclosures answer a mouse the way links do. */
+  @media (hover: hover) and (pointer: fine) {
+    .music-proof-more summary:hover, .contact-disclosure summary:hover { color: var(--accent); }
+  }
   .contact-form-content { padding-block: 2rem; color: var(--ink); }
 
   /* Home's own reveals; the shared ones (fade up, heading rule drawing in) are in global.css. */
@@ -234,7 +239,7 @@ const jsonLd = {
     :global(.motion) .project-card[data-reveal]:nth-child(2) { transition-delay: 140ms; }
     /* Work with me: the heading stays put and the three doors rise in turn. */
     :global(.motion) .hire-section[data-reveal]:not(.is-in) { opacity: 1; transform: none; }
-    :global(.motion) .hire-section :global(.door) { transition: opacity 800ms cubic-bezier(.2, .7, .2, 1), transform 800ms cubic-bezier(.2, .7, .2, 1); }
+    :global(.motion) .hire-section :global(.door) { transition: opacity 800ms var(--ease-site), transform 800ms var(--ease-site); }
     :global(.motion) .hire-section:not(.is-in) :global(.door) { opacity: 0; transform: translateY(24px); }
     :global(.motion) .hire-section :global(.door:nth-child(2)) { transition-delay: 120ms; }
     :global(.motion) .hire-section :global(.door:nth-child(3)) { transition-delay: 240ms; }
@@ -257,7 +262,7 @@ const jsonLd = {
     .site-section-heading { gap: 1rem; }
     .site-section-heading .heading-link { font-size: .85rem; }
     .work-proof-grid { gap: 1.5rem; }
-    .work-company { border: 0; font-size: 3rem; padding: 0; margin: 0 0 .65rem; }
+    .work-company { border: 0; padding: 0; margin: 0 0 .65rem; }
     .work-outcome { margin-bottom: 1.2rem; }
     .work-outcome .work-figure { font-size: clamp(1.65rem, 6vw, 2.1rem); }
     .editorial-pair { grid-template-columns: 1fr; gap: .75rem; }

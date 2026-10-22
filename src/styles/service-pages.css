@@ -50,4 +50,4 @@
 .services-page .service-before{grid-template-columns:1fr;gap:.8rem}
 .services-page .service-bottom .site-button{width:100%;justify-content:center}
 }
-
+@media (hover:hover) and (pointer:fine){.services-page .service-offer>summary:hover h3,.services-page .service-offer>summary:hover>b{color:var(--accent)}}

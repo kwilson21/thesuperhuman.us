@@ -50,7 +50,7 @@ it('places compact playback beside the waveform and seeks from both the track an
 });
 
 it('fills the played part of every A/B waveform in the accent over neutral unplayed bars', () => {
-  expect(component).toContain('.comparison-player{border:1px solid var(--rule);border-radius:4px;padding:1rem;--wave-unplayed:#BDB6AA}');
+  expect(component).toMatch(/\.comparison-player\{border:1px solid var\(--rule\);border-radius:4px;padding:1rem;--wave-unplayed:color-mix\(in srgb,var\(--muted\) \d+%,var\(--paper\)\)\}/);
   expect(component).toContain('.comparison-waveform{height:44px;color:var(--wave-unplayed)}');
   expect(component).toContain('.comparison-waveform-played{position:absolute;top:0;left:0;width:100%;height:100%;color:var(--accent);pointer-events:none;clip-path:inset(0 calc(100% - var(--position,0%)) 0 0)}');
   expect(component).toContain('.comparison-player--compact .compact-waveform{display:block;width:100%;height:38px;color:var(--wave-unplayed)}');
@@ -98,4 +98,30 @@ it('seeks only when the target time changes, so pen pressure and clamped drags c
   expect(script).toContain('if (seconds === gesture.lastSeconds) return;');
   expect(script).toContain('gesture.lastSeconds = seconds;');
   expect(script.indexOf('if (seconds === gesture.lastSeconds) return;')).toBeLessThan(script.indexOf('seekTo(seconds);'));
+});
+
+it('draws the unplayed bars and both seek tracks at 3:1 or better against paper (WCAG 1.4.11)', () => {
+  const global = readFileSync(new URL('../../src/styles/global.css', import.meta.url), 'utf8');
+  const hex = (name: string) => {
+    const match = global.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`));
+    if (!match) throw new Error(`--${name} not found in global.css`);
+    return [1, 3, 5].map(i => parseInt(match[1].slice(i, i + 2), 16));
+  };
+  const luminance = (channels: number[]) => {
+    const [r, g, b] = channels.map(c => { const s = c / 255; return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const share = Number(component.match(/--wave-unplayed:color-mix\(in srgb,var\(--muted\) (\d+)%,var\(--paper\)\)/)![1]) / 100;
+  const paper = hex('paper');
+  const wave = hex('muted').map((c, i) => c * share + paper[i] * (1 - share));
+  const [light, dark] = [luminance(paper), luminance(wave)].sort((x, y) => y - x);
+  expect((light + 0.05) / (dark + 0.05)).toBeGreaterThanOrEqual(3);
+  // Every seek and volume track uses the same grey for its unplayed part, never the --rule hairline.
+  expect(component.match(/var\(--wave-unplayed\) var\(--fill,var\(--position,0%\)\) 100%/g)).toHaveLength(2);
+  expect(component).not.toMatch(/var\(--rule\) var\(--position/);
+});
+
+it('sets every player control in one face, the shared sans token', () => {
+  expect(component).toContain('.comparison-match{display:flex;align-items:center;gap:.4rem;font:.8rem var(--font-sans)}');
+  expect(component).not.toMatch(/Inter,\s*sans-serif/);
 });
