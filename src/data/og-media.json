@@ -122,13 +122,13 @@
   },
   "building": {
     "image": "/og/building-da7fd56eb0.png",
-    "video": "/og/building-07e49778d7.mp4",
+    "video": "/og/building-9eb94e9662.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6000,
     "imageBytes": 128102,
-    "videoBytes": 373543,
-    "frames": "825892bf7c5bf687",
+    "videoBytes": 374640,
+    "frames": "adf1d9ab666744d3",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Italic.woff2",
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
@@ -136,7 +136,7 @@
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/building.html"
     ],
-    "source": "a105a71fb4835a60",
+    "source": "df3a14acb4070d2c",
     "encoding": "5341c8ca6c6bf333"
   },
   "home": {

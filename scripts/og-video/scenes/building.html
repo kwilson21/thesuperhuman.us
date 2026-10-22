@@ -7,7 +7,8 @@
      Copy is verbatim: headline and kicker from src/pages/building.astro:35; names from
      building.astro:12, 17, 22; statuses from src/data/project-stories/tally.ts:49,
      kaillera-next.ts:29 and personal-website.ts:54 (re-render when they change); drawing labels
-     from src/components/BuildingIllustration.astro:9-26. Tally's drawing is trimmed to two rows per
+     from src/components/BuildingIllustration.astro; the players' controller drawing
+     follows that file's redraw (D6.1, October 22). Tally's drawing is trimmed to two rows per
      panel (Groceries and Transit; Food and Transport; two unlabelled budget tracks whose colours match the
      category dots row for row) to keep the poster near 25 words; its bars are drawn widths. -->
 <html lang="en" data-duration="6000">
@@ -64,6 +65,9 @@
   .invite { margin-top: 8px; padding: 4px; border: 1px solid var(--accent); border-radius: 3px; font: 400 20px/24px var(--serif); text-align: center; white-space: nowrap; }
   .who { position: absolute; width: 150px; }
   .who svg { display: block; width: 100%; height: 66px; }
+  /* Each player's controller (rounded body, two grips, a d-pad and two filled face buttons) and its viewBox
+     shift, which centres the person and controller in the window, are BuildingIllustration.astro's. */
+  .pad-button { fill: currentColor; stroke: none; }
   .who .plabel { margin-top: 8px; }
   .p1 { left: 0; top: 226px; } .p2 { right: 0; top: 226px; }
   .spec { left: 220px; top: 306px; width: 124px; }
@@ -126,8 +130,8 @@
         <path class="peer" d="M150 268 H414 M160 261 L150 268 L160 275 M404 261 L414 268 L404 275" />
       </svg>
       <div class="room step"><p class="plabel">Game room</p><div class="browser"><div class="browser-bar"><i></i><i></i><i></i></div><div class="members"><p><span class="member"></span>Player 1</p><p><span class="member"></span>Player 2</p><p><span class="member hollow"></span>Spectator</p><div class="invite">Invite friends</div></div></div></div>
-      <div class="who p1 step"><div class="browser"><div class="browser-bar"><i></i><i></i><i></i></div><svg viewBox="0 0 100 55" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="38" cy="17" r="8" /><path d="M23 44v-4c0-17 30-17 30 0v4" /><path d="M68 21h13l5 17c1 4-2 5-5 2l-5-4-5 4c-3 3-6 2-5-2z" /><path d="M69 28h7m-3-3v6" /><circle cx="80" cy="29" r="1" /></svg></div><p class="plabel">Player 1</p></div>
-      <div class="who p2 step"><div class="browser"><div class="browser-bar"><i></i><i></i><i></i></div><svg viewBox="0 0 100 55" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="38" cy="17" r="8" /><path d="M23 44v-4c0-17 30-17 30 0v4" /><path d="M68 21h13l5 17c1 4-2 5-5 2l-5-4-5 4c-3 3-6 2-5-2z" /><path d="M69 28h7m-3-3v6" /><circle cx="80" cy="29" r="1" /></svg></div><p class="plabel">Player 2</p></div>
+      <div class="who p1 step"><div class="browser"><div class="browser-bar"><i></i><i></i><i></i></div><svg viewBox="9.5 0 100 55" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="38" cy="17" r="8" /><path d="M23 44v-4c0-17 30-17 30 0v4" /><path d="M69.5 22.5h18c3.6 0 5.6 1.9 6.4 5.5l1.5 7.4c.7 3.2-.9 5.6-3.5 5.6-1.6 0-2.6-.9-3.4-2.3l-1.9-3.3H70.4l-1.9 3.3c-.8 1.4-1.8 2.3-3.4 2.3-2.6 0-4.2-2.4-3.5-5.6l1.5-7.4c.8-3.6 2.8-5.5 6.4-5.5z" /><path d="M67.5 29.6h6.4m-3.2-3.2v6.4" /><circle class="pad-button" cx="85.1" cy="31" r="1.8" /><circle class="pad-button" cx="89.1" cy="27.6" r="1.8" /></svg></div><p class="plabel">Player 1</p></div>
+      <div class="who p2 step"><div class="browser"><div class="browser-bar"><i></i><i></i><i></i></div><svg viewBox="9.5 0 100 55" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="38" cy="17" r="8" /><path d="M23 44v-4c0-17 30-17 30 0v4" /><path d="M69.5 22.5h18c3.6 0 5.6 1.9 6.4 5.5l1.5 7.4c.7 3.2-.9 5.6-3.5 5.6-1.6 0-2.6-.9-3.4-2.3l-1.9-3.3H70.4l-1.9 3.3c-.8 1.4-1.8 2.3-3.4 2.3-2.6 0-4.2-2.4-3.5-5.6l1.5-7.4c.8-3.6 2.8-5.5 6.4-5.5z" /><path d="M67.5 29.6h6.4m-3.2-3.2v6.4" /><circle class="pad-button" cx="85.1" cy="31" r="1.8" /><circle class="pad-button" cx="89.1" cy="27.6" r="1.8" /></svg></div><p class="plabel">Player 2</p></div>
       <div class="who spec step"><div class="browser"><div class="browser-bar"><i></i><i></i><i></i></div><svg viewBox="0 0 100 55" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(12 0)"><circle cx="38" cy="17" r="8" /><path d="M23 44v-4c0-17 30-17 30 0v4" /></g></svg></div><p class="plabel">Spectator</p><p class="watch">Watch only</p></div>
     </div>
 
