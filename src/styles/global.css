@@ -48,7 +48,7 @@
   --container-content: 42.5rem;
   --container-page: 64rem;
 
-  --tracking-eyebrow: 0.1em;
+  --tracking-eyebrow: 0.12em;
 }
 
 @font-face {
@@ -149,9 +149,10 @@
     text-transform: inherit;
   }
 
-  /* Legacy muted label; set in the same mono face and size as .page-kicker so kickers share one face. */
+  /* Legacy muted label; set in the same face and size as .page-kicker so labels share one face. */
   .eyebrow {
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
+    font-weight: 500;
     font-size: .6875rem;
     letter-spacing: var(--tracking-eyebrow);
     text-transform: uppercase;
@@ -264,9 +265,10 @@
 
 @layer components {
   .primary-page { padding-top: clamp(2rem, 5vw, 4rem); padding-bottom: 1rem; }
-  .page-kicker { font-family: var(--font-mono); color: var(--accent); font-size: .6875rem; letter-spacing: var(--tracking-eyebrow); text-transform: uppercase; margin-bottom: 1rem; }
+  /* Labels are Inter 500 capitals at 11px; JetBrains Mono is kept for code and data (Home's code field and capacity key). */
+  .page-kicker { font-family: var(--font-sans); font-weight: 500; color: var(--accent); font-size: .6875rem; letter-spacing: var(--tracking-eyebrow); text-transform: uppercase; margin-bottom: 1rem; }
   /* A project's state, set under its name in the case it is stored in: the same dot line on Home, /building and each project page. */
-  .project-status { display: flex; align-items: baseline; gap: .65rem; font: .75rem/1.7 var(--font-mono); margin-block: 1.5rem; }
+  .project-status { display: flex; align-items: baseline; gap: .65rem; font: .78rem/1.7 var(--font-sans); margin-block: 1.5rem; }
   .project-status::before { content: ''; width: .65rem; height: .65rem; border-radius: 50%; flex-shrink: 0; background: var(--accent); }
   .page-title { font-size: clamp(3.25rem, 6.5vw, 5.4rem); line-height: 1.02; letter-spacing: -.045em; }
   .page-lede { font-size: clamp(1.3rem, 2.5vw, 1.8rem); line-height: 1.35; margin-top: 1.25rem; max-width: 40rem; }

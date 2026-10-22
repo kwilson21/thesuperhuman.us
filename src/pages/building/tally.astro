@@ -52,7 +52,7 @@ const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('e
   .decision-steps { display: grid; }
   .decision-step { position: relative; border-left: 1px solid var(--rule); padding: 0 0 1.25rem 1.25rem; }
   .decision-step::before { content: ''; position: absolute; width: 8px; height: 8px; border: 1px solid var(--muted); border-radius: 50%; background: var(--paper); left: -5px; top: .4rem; }
-  .decision-step span { display: block; color: var(--muted); font: .68rem/1.5 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+  .decision-step span { display: block; color: var(--muted); font: 500 .68rem/1.5 var(--font-sans); letter-spacing: var(--tracking-eyebrow); text-transform: uppercase; }
   .decision-step p { max-width: 58ch; color: var(--muted); font-size: .98rem; line-height: 1.6; margin: .25rem 0 0; }
   .decision-step-primary::before { background: var(--accent); border-color: var(--accent); }
   /* The decision has no label of its own, so its filled dot sits on the first line of the text. */
