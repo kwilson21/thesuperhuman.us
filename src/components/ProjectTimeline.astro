@@ -96,7 +96,7 @@ const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('e
   });
 </script>
 <style>
-  .project-timeline { margin: 64px 0; min-width: 0; } h2 { font-size: clamp(30px,4vw,44px); } .timeline-hint,.meta { color: var(--muted); font-size: 13px; line-height: 1.6; } .timeline-hint { margin: 10px 0 22px; }
+  .project-timeline { margin: var(--project-timeline-top, var(--site-section-space)) 0 var(--site-section-space); min-width: 0; } h2 { font-size: clamp(30px,4vw,44px); } .timeline-hint,.meta { color: var(--muted); font-size: 13px; line-height: 1.6; } .timeline-hint { margin: 10px 0 22px; }
   .timeline-lead { color: var(--muted); font-size: 15px; line-height: 1.6; margin: -.5rem 0 1.5rem; }
   .milestone-strip { display: flex; overflow-x: auto; gap: 12px; padding: 4px 4px 18px; position: relative; scrollbar-color: var(--accent) var(--rule); }
   button { font: inherit; cursor: pointer; } button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; } .milestone-strip button { flex: 0 0 190px; text-align: left; padding: 9px; border: 1px solid var(--rule); background: transparent; border-radius: 5px; } .milestone-strip button[aria-pressed=true] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--paper)); }

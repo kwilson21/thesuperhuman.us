@@ -89,10 +89,12 @@ const jsonLd = {
 
 <style>
   .audio-page :global(.audio-art), .audio-page :global(.audio-scene .chapter-life) { mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent); mask-composite: intersect; }
-  .audio-section { border-top: 1px solid var(--rule); padding-block: 2.5rem; scroll-margin-top: 2rem; }
+  .audio-section { border-top: 1px solid var(--rule); padding-block: var(--site-rule-space); scroll-margin-top: 2rem; }
+  /* The page's one chapter break, under Start's rule. */
+  .audio-start { padding-top: calc(var(--site-chapter-space) - var(--site-rule-space)); }
   .audio-section h2 { font-size: clamp(2rem, 3.5vw, 2.75rem); line-height: 1.15; }
   .audio-listen { display: grid; grid-template-columns: .85fr 1.15fr; gap: 3rem; align-items: start; margin-top: 1.5rem; }
-  /* The shared mono .page-kicker sets the face; these sit close to what they label. */
+  /* The shared .page-kicker sets the face; these sit close to what they label. */
   .listen-kicker { margin: 0 0 .5rem; }
   .listen-release { display: block; border: 0; }
   .listen-release img { width: 100%; height: auto; display: block; box-shadow: 0 7px 15px color-mix(in srgb, var(--ink) 12%, transparent); margin-bottom: 1rem; }

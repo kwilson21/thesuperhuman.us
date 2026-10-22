@@ -9,6 +9,7 @@
 - Publication check: no private content, secrets, home address or real money. Merchant names are the demo's fictional transactions; no third-party logos. No claim of production readiness; the caption says it's the public demo on demo data.
 - Placement update, October 19, 2026 (pull request 188): the "Bring an idea to life" row is now the Web app row (`/services#web-app`), and the picture sits beside the Tally and Kaillera Next evidence. It renders about 464 px wide on a 1280 px desktop and full width (324 px) on a 390 px phone, with the same alternative text and caption. Page inspection by the Claude Code agent (not the owner) in CI's 1× captures of head `7881963`: pass at 1280 px and 390 px, with the "Demo data" banner visible and no text cut along the edges. The file and its hash are unchanged.
 - Outcome: ready for production asset use. Deployment is separate.
+- Reads as generated (one-time check of the current files, October 22, 2026, owner pick D5.3-B): pass. Claude Code agent, not a fresh viewer, so judged by the listed tells, at 464 × 309 in the /services Web app row at 1280px wide. It is a real screenshot of the public demo and reads as one.
 
 ```json
 {

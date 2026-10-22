@@ -18,14 +18,14 @@ const chapters = [
   { id: 'audio' as const, label: 'Audio', title: 'I started with sound.', text: 'I studied audio production at Middle Tennessee State, with a minor in computer science. I still record, mix and master music.', image: headphones, href: '/audio/', link: 'Explore audio engineering' },
   { id: 'software' as const, label: 'Software', title: 'Finding my way into software.', text: 'I joined Skupos as an intern hoping to become a software engineer. Adding to coworkers’ Python scripts grew into leading the automation work, building an internal application and mentoring other interns.', extra: 'At Lyft, I grew from junior to mid-level engineer, taking on features across Rentals, Associate Tools and Comms Platform.', image: laptop, href: '/work', link: 'See my professional work' },
   { id: 'play' as const, label: 'Play', title: 'Room for play.', text: 'Retro games, emulation, and experimental tools keep giving me new things to explore. I’m building Kaillera Next so friends can play supported N64 games together in a browser.', image: controller, href: '/building', link: 'See what I’m building' },
-  { id: 'whats-next' as const, label: 'What’s next', title: 'Making room for what comes next.', text: 'Product engineering at Sure and data engineering at Axuall and Scotch helped me understand what I enjoy most: shaping an idea, building it and seeing how people use it. I’m pursuing that through my own projects, while keeping up with how the tools are changing.', image: notebook, extra: workingPreferenceDetail, href: '/building/the-engineers-daily', link: 'Explore The Engineer’s Daily prototype' },
+  { id: 'whats-next' as const, label: 'What’s next', title: 'Making room for what comes next.', text: 'Product engineering at Sure and data engineering at Axuall and Scotch helped me understand what I enjoy most: shaping an idea, building it and seeing how people use it. I’m pursuing that through my own projects, while keeping up with how the tools are changing.', image: notebook, extra: workingPreferenceDetail, href: '/building/the-engineers-daily', link: 'Explore the Daily prototype' },
 ];
 ---
 <BaseLayout jsonLd={personJsonLd} title={entry.data.title} description={entry.data.description}>
   <div class="about-page">
     <header class="site-shell about-intro">
       <div class="about-intro-copy"><p class="page-kicker">About</p><h1 class="page-title">A little more<br />about me.</h1><div class="page-lede"><Content /></div></div>
-      <img class="terrain" src={terrain.src} width={terrain.width} height={terrain.height} alt="" fetchpriority="high" data-scene="terrain" data-start="0.2" data-end="-0.8" />
+      <img class="terrain" src={terrain.src} width={terrain.width} height={terrain.height} alt="" fetchpriority="high" />
     </header>
     <div class="site-shell path-chapters">
       {chapters.map((chapter, index) => <section id={chapter.id} class:list={['path-chapter', { reverse: index % 2 === 1 }]}>
@@ -33,7 +33,7 @@ const chapters = [
         <div class="chapter-art" data-reveal data-scene-play="4200"><div class="chapter-scene"><img src={chapter.image.src} width={chapter.image.width} height={chapter.image.height} alt="" loading="lazy" /><ObjectLife kind={chapter.id} /></div></div>
         {index < chapters.length - 1 && <svg class="chapter-path" viewBox="0 0 1000 500" preserveAspectRatio="none" aria-hidden="true" data-scene="path" data-start="0.72" data-end="-0.2"><path pathLength="1" d={index % 2 === 0 ? 'M780 0C780 120 930 260 780 330C630 400 280 340 280 500' : 'M280 0C280 120 130 260 280 330C430 400 780 340 780 500'} fill="none" stroke="var(--accent)" stroke-width="1.3" /></svg>}
       </section>)}
-      <section id="contact" class="page-connect"><div><p class="page-kicker">Let’s connect</p><h2>Let’s talk.</h2><p>An idea, a shared interest, or an opportunity worth discussing.</p></div><a class="site-button" href="/#contact">Get in touch</a></section>
+      <section id="contact" class="page-connect"><div><h2>Let’s talk.</h2><p>An idea, a shared interest, or an opportunity worth discussing.</p></div><a class="site-button" href="/#contact">Get in touch</a></section>
       <details id="resumes" class="resume-section context-disclosure"><summary>Request my resume <span aria-hidden="true">+</span></summary><div><h2>My professional background.</h2><p class="resume-description">One general resume, covering my work history and technical experience.</p><ResumeRequestForm /></div></details>
     </div>
   </div><Footer compact slot="footer" />
@@ -52,7 +52,7 @@ const chapters = [
   window.addEventListener('hashchange', revealResume);
 
   // The path between chapters follows the reader, and each chapter's object plays once as it
-  // arrives (ObjectLife); all of it rests fully drawn without motion.
+  // arrives (ObjectLife); the terrain stays still. All of it rests fully drawn without motion.
   runMotion();
 </script>
 <style>
@@ -60,7 +60,7 @@ const chapters = [
   .about-intro { position: relative; padding-top: 4rem; min-height: 640px; }
   .about-intro-copy { position: relative; z-index: 1; max-width: 34rem; }
   .about-intro .page-lede { max-width: 30rem; }
-  .terrain { position: absolute; width: 90%; max-width: none; right: -16%; top: -1rem; z-index: 0; transform: translateY(calc(var(--p, 0) * -28px)); mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 28%, #000 85%, transparent), linear-gradient(to bottom, #000 75%, transparent); mask-composite: intersect; pointer-events: none; }
+  .terrain { position: absolute; width: 90%; max-width: none; right: -16%; top: -1rem; z-index: 0; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 28%, #000 85%, transparent), linear-gradient(to bottom, #000 75%, transparent); mask-composite: intersect; pointer-events: none; }
   .path-chapter { position: relative; display: grid; grid-template-columns: 1fr 1.2fr; align-items: center; gap: 2rem; min-height: 465px; padding-bottom: 100px; scroll-margin-top: 3rem; }
   .chapter-copy { position: relative; z-index: 2; max-width: 30rem; }.chapter-copy h2 { font-size: clamp(2.2rem, 3.7vw, 3.2rem); line-height: 1.1; letter-spacing: -.035em; }.chapter-copy > p:not(.page-kicker) { font-size: 1.2rem; line-height: 1.5; color: var(--muted); margin-top: 1rem; }.chapter-copy .site-link { margin-top: 1.5rem; }.chapter-copy > p.chapter-extra { font-size: 1.05rem; }
   .chapter-art { position: relative; z-index: 1; }
@@ -72,7 +72,6 @@ const chapters = [
   /* Drawn as far as the reader has scrolled; fully drawn without motion (no --p). No
      non-scaling-stroke: with it Chromium dashes in screen space and pathLength stops lining up. */
   .chapter-path path { stroke-dasharray: 1; stroke-dashoffset: calc(1 - var(--p, 1)); }
-  @media (prefers-reduced-motion: reduce) { .terrain { transform: none; } }
   .resume-section { margin: 0 0 3rem; border-top: 1px solid var(--rule); padding-top: 1.5rem; }.resume-section > div { max-width: 46rem; padding-top: 1rem; }.resume-section h2 { font-size: 2rem; }.resume-description { margin-block: .5rem 2rem; color: var(--muted); }
   @media(min-width: 801px) and (max-width: 1100px) { .about-intro { min-height: 590px; }.terrain { top: 6rem; }.path-chapter { min-height: 430px; }.about-intro-copy { max-width: 30rem; } }
   @media(max-width: 800px) {
@@ -81,7 +80,4 @@ const chapters = [
     .chapter-copy { max-width: 36rem; }.chapter-scene { width: 110%; margin-left: -5%; }.chapter-art { margin-top: -.25rem; }
     .chapter-path { display: none; }.path-chapter + .path-chapter { padding-top: 1rem; }
   }
-  /* Narrow phones: one step down keeps the longest chapter link (The Engineer's Daily) on one line
-     from 358px; below that it wraps, with the arrow at the end of its last line. */
-  @media(max-width: 380px) { .chapter-copy .site-link { font-size: .9375rem; align-items: last baseline; } }
 </style>

@@ -6,18 +6,6 @@ the system instead of varying. Amend it on purpose, after an owner decision; the
 file is the rule. Process rules (audits, triage, image QA, copy) live in
 `CLAUDE.md`, `AGENTS.md` and `docs/design-standard.md`, and they take precedence.
 
-## Merge order and what arrives with it
-This file records the system as it stands after PR #206, then PR #209, then the pull
-request that adds this file. Until the first two merge, parts of it point at things a
-checkout does not have yet:
-- #206 adds the picks record, `docs/design-concepts/README.md` ("Owner's picks"), and
-  the boards in `docs/design-concepts/2026-10-22/`.
-- #209 builds the picks in `src/styles/global.css`: the `--dur-hover`, `--dur-page`,
-  `--dur-reveal`, `--rise-reveal`, `--site-rule-space` and `--site-chapter-space`
-  tokens, and the rules that read differently on `main` today (reveal timing, label type
-  and tracking, the section rule, the link rule and its tap area). Before #209, do not
-  reference those tokens.
-
 ## Context
 - Audience · curious visitors, potential collaborators, recruiters and hiring managers.
 - Use case · meet the person, assess the evidence of work, get in touch. Each page's
@@ -57,7 +45,7 @@ checkout does not have yet:
   --tracking-eyebrow: 0.1em;   /* labels move to .12em with D4.2-C */
 
   --ease-site: cubic-bezier(.2, .7, .2, 1);  /* the one easing */
-  /* Arrive with the October 22 picks (#209), not in global.css before it:
+  /* From the October 22 picks (#209):
      --dur-hover 160ms, --dur-page 180ms, --dur-reveal 600ms, --rise-reveal 12px
      (D3.4-C); --site-rule-space, 48px on a computer and 40px on a phone, and
      --site-chapter-space, 128px on a computer and 112px on a phone (D6.5-C). */
@@ -186,12 +174,12 @@ timings and local colour tokens.
 
 ## Owner decisions (October 22, 2026)
 All picks are quoted in `docs/design-concepts/README.md` ("Owner's picks"), with
-the boards in `docs/design-concepts/2026-10-22/`; both arrive with #206. Standing rules
-from them are above, and #209 builds them.
+the boards in `docs/design-concepts/2026-10-22/` (#206). Standing rules from them are
+above; #209 built them.
 One-time changes with no standing rule: D1.1-B and D1.2-C (door layout on Home and
 /services), D2.3-A, D5.2 (the 404 shows B or D at random; B without JavaScript),
 D5.4-B, D8.5-D, D9.1-B, D10.1-C, D10.4-A, D10.6-B. Deferred: D5.1-D (photographs
-of the owner's own objects; #206 records it in `docs/website-system-plan.md`, Deferred
+of the owner's own objects; recorded in `docs/website-system-plan.md`, Deferred
 maintenance).
 
 ## Variants

@@ -256,11 +256,11 @@ describe('allowlist', () => {
   });
 
   it('allows an entry only as many times as its count, and calls a looser count stale', () => {
-    const entry = { gate: 'font-outside-system', file: 'src/styles/studio.css', match: 'Newsreader', count: 1, reason: 'r' };
-    const twice = fileViolations('src/styles/studio.css', '.a { font-family: Newsreader; } .b { font-family: Newsreader; }', { faces });
+    const entry = { gate: 'raw-hex', file: 'src/styles/studio.css', match: '#4a5639', count: 1, reason: 'r' };
+    const twice = fileViolations('src/styles/studio.css', '.a { color: #4a5639; } .b { color: #4a5639; }', { faces });
     const split = applyAllowlist(twice, [entry]);
     expect(split.failures).toHaveLength(1);
-    expect(split.failures[0]).toMatchObject({ line: 1, match: 'Newsreader' });
+    expect(split.failures[0]).toMatchObject({ line: 1, match: '#4a5639' });
     expect(split.failures[0].hint).toContain('allowlist covers 1');
     expect(applyAllowlist(twice).failures).toHaveLength(1);
     const loose = applyAllowlist(twice.slice(0, 1), [{ ...entry, count: 2 }]);
@@ -315,9 +315,10 @@ describe('runner', () => {
   });
 
   it('fails when an allowlisted file gains another use, and passes on the listed ones', () => {
-    const result = run(fixture({ 'src/styles/studio.css': '.a { font-family: Newsreader; } .b { font-family: Newsreader; }' }));
+    const result = run(fixture({ 'src/styles/studio.css': '.a { color: #4a5639; } .b { color: #4a5639; }' }));
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain('src/styles/studio.css:1: font family outside the design system: "Newsreader"');
+    expect(result.stderr).toContain('src/styles/studio.css:1:');
+    expect(result.stderr).toContain('"#4a5639"');
     expect(result.stderr).toContain('allowlist covers 1');
   });
 });

@@ -89,8 +89,8 @@ Triage each finding into one of three groups:
   composition studies, not production screenshots.
 - **Owner picks:** `docs/design-concepts/README.md`, quoted exactly with the source and
   date. A pick that creates a standing rule amends `design.md` in the PR that builds it.
-  The one exception is the first `design.md`, which records the October 22 picks that
-  #209 builds, so it merges after #209 and describes `global.css` as #209 leaves it.
+  The first `design.md` recorded the October 22 picks that #209 built, and describes
+  `global.css` as #209 left it.
 - **Deferred picks:** `docs/website-system-plan.md`, Deferred maintenance.
 - **Images:** [image QA](generated-image-qa.md) and a record in `docs/asset-reviews/`.
 

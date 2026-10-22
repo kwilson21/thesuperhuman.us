@@ -1,5 +1,6 @@
 import { consentText } from "~/lib/agreement-fields";
 import { resolveClientDetails, states } from "~/lib/agreement-draft";
+import { openMessages } from "./form-messages";
 export function setupAgreementAccess() {
   for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-document-link], a[href="#executed-agreement"]')) {
     link.addEventListener('click', (event) => {
@@ -74,7 +75,11 @@ export function setupAgreementAccess() {
       ),
     );
   const email = form.dataset.email!;
-  function errors(fields: Record<string, string>) {
+  // Messages slide open and keep the Sign button in view (form-messages.ts); `focus` moves focus to the summary.
+  function errors(fields: Record<string, string>, focus = false) {
+    openMessages(document, signButton, () => showErrorMessages(fields, focus));
+  }
+  function showErrorMessages(fields: Record<string, string>, focus: boolean) {
     summary.replaceChildren();
     summary.hidden = !Object.keys(fields).length;
     const list = document.createElement("ul");
@@ -125,6 +130,7 @@ export function setupAgreementAccess() {
       )
     )
       form!.querySelector<HTMLElement>("[data-other-contacts]")!.hidden = false;
+    if (focus && Object.keys(fields).length) summary.focus();
   }
   async function post(action: string, body: unknown) {
     const response = await fetch(`/api/offer/${token}/${action}`, {
@@ -278,11 +284,8 @@ export function setupAgreementAccess() {
         fields = resolved.ok ? {} : resolved.errors;
       if (!root.querySelector<HTMLInputElement>('[name="consent"]')!.checked)
         fields.consent = "Agree to sign electronically";
-      errors(fields);
-      if (Object.keys(fields).length) {
-        summary.focus();
-        return;
-      }
+      errors(fields, true);
+      if (Object.keys(fields).length) return;
       if (reviewedRevision !== revision)
         throw new Error("Review your agreement again before signing.");
       await post("sign", {

@@ -48,7 +48,7 @@
   --container-content: 42.5rem;
   --container-page: 64rem;
 
-  --tracking-eyebrow: 0.1em;
+  --tracking-eyebrow: 0.12em;
 }
 
 @font-face {
@@ -149,9 +149,10 @@
     text-transform: inherit;
   }
 
-  /* Legacy muted label; set in the same mono face and size as .page-kicker so kickers share one face. */
+  /* Legacy muted label; set in the same face and size as .page-kicker so labels share one face. */
   .eyebrow {
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
+    font-weight: 500;
     font-size: .6875rem;
     letter-spacing: var(--tracking-eyebrow);
     text-transform: uppercase;
@@ -198,10 +199,22 @@
 :root {
   --site-gutter: clamp(1.5rem, 5vw, 3.5rem);
   --site-section-space: clamp(3rem, 6vw, 5.5rem);
+  /* A ruled division (a hairline between rows or sections) keeps this much space on each side of the
+     rule: 48px on a computer, 40 on a phone. */
+  --site-rule-space: 3rem;
+  /* One larger break per page, before the part that changes job: a project's journal, Building's
+     earlier prototypes, Audio's Start. 128px on a computer, 112 on a phone. Use it once per page. */
+  --site-chapter-space: clamp(7rem, 10vw, 8rem);
   /* Running prose stops near 65 characters; Libron's wide `ch` makes ch caps run long.
      33rem measures 63-66 characters a line (median) for 16px Libron body text. */
   --measure-prose: 33rem;
   --ease-site: cubic-bezier(.2, .7, .2, 1);
+  /* Named motion timings, on the house curve. Page scenes (Home's worlds, About's objects, the
+     Writing path, the Work diagrams, the Building drawings) keep their own choreography. */
+  --dur-hover: 160ms;   /* link arrow */
+  --dur-page: 180ms;    /* page cross-fade */
+  --dur-reveal: 600ms;  /* blocks rising in, and Home's Work with me doors */
+  --rise-reveal: 12px;
   /* Named spacing steps, numbered like Tailwind's 4px scale (--space-4 is 1rem, the same as p-4).
      Adopt them as rules are touched; illustrations can keep spacing that follows their content. */
   --space-1: .25rem;
@@ -215,6 +228,7 @@
   --space-12: 3rem;
   --space-16: 4rem;
 }
+@media (max-width: 800px) { :root { --site-rule-space: 2.5rem; } }
 @layer components {
   .site-shell { width: 100%; max-width: 1232px; margin-inline: auto; padding-inline: var(--site-gutter); }
   .site-section { margin-top: var(--site-section-space); }
@@ -222,8 +236,11 @@
   .site-section-heading h2 { flex-shrink: 1; min-width: 0; font-size: clamp(1.75rem, 3vw, 2.25rem); line-height: 1.2; letter-spacing: -.035em; margin: 0; }
   .site-section-heading::after { content: ''; height: 1px; flex: 1; background: var(--rule); }
   .site-links { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.75rem; }
-  .site-link { display: inline-flex; align-items: baseline; gap: .65rem; padding: .35rem 0; border-bottom: 1px solid var(--accent); line-height: 1.45; }
-  .site-link span { color: var(--accent); transition: transform 160ms var(--ease-site); }
+  /* The rule sits about 4px under the baseline, like a link in a paragraph, while a transparent ::after keeps a 44px-tall
+     tap area. A link is about 28px tall, so wrapped rows need a 16px gap to keep neighbours' areas apart. */
+  .site-link { position: relative; display: inline-flex; align-items: baseline; gap: .65rem; padding: .55rem 0 0; border-bottom: 1px solid var(--accent); line-height: 1.15; }
+  .site-link::after { content: ''; position: absolute; inset-inline: 0; top: 50%; height: max(100%, 44px); transform: translateY(-50%); }
+  .site-link span { color: var(--accent); transition: transform var(--dur-hover) var(--ease-site); }
   @media (hover: hover) and (pointer: fine) {
     .site-link:hover span { transform: translateX(3px); }
   }
@@ -240,7 +257,7 @@
   @media (prefers-reduced-motion: no-preference) {
     @view-transition { navigation: auto; }
     ::view-transition-old(root), ::view-transition-new(root) {
-      animation-duration: 180ms;
+      animation-duration: var(--dur-page);
       animation-timing-function: var(--ease-site);
     }
     ::view-transition-old(root) { animation-name: page-fade-out; }
@@ -249,12 +266,10 @@
     @keyframes page-fade-in { from { opacity: 0; } }
   }
   /* Motion layer (src/scripts/scroll-scenes.ts adds .motion only when motion is welcome):
-     [data-reveal] blocks rise in once, and a section heading's rule draws in with them. */
+     [data-reveal] blocks rise in once. A section heading's rule is structure and stays at rest. */
   @media screen and (prefers-reduced-motion: no-preference) {
-    .motion [data-reveal] { transition: opacity 900ms var(--ease-site), transform 900ms var(--ease-site); }
-    .motion [data-reveal]:not(.is-in) { opacity: 0; transform: translateY(26px); }
-    .motion .site-section-heading::after { transform-origin: left; transition: transform 1100ms var(--ease-site) 200ms; }
-    .motion [data-reveal]:not(.is-in) .site-section-heading::after, .motion .site-section-heading[data-reveal]:not(.is-in)::after { transform: scaleX(0); }
+    .motion [data-reveal] { transition: opacity var(--dur-reveal) var(--ease-site), transform var(--dur-reveal) var(--ease-site); }
+    .motion [data-reveal]:not(.is-in) { opacity: 0; transform: translateY(var(--rise-reveal)); }
     /* A block revealed by keyboard focus appears at once, children included. */
     .motion .is-instant, .motion .is-instant *, .motion .is-instant *::after { transition-duration: 0s !important; transition-delay: 0s !important; }
     .motion-starting [data-reveal], .motion-starting [data-reveal] * { transition: none !important; }
@@ -264,7 +279,11 @@
 
 @layer components {
   .primary-page { padding-top: clamp(2rem, 5vw, 4rem); padding-bottom: 1rem; }
-  .page-kicker { font-family: var(--font-mono); color: var(--accent); font-size: .6875rem; letter-spacing: var(--tracking-eyebrow); text-transform: uppercase; margin-bottom: 1rem; }
+  /* Labels are Inter 500 capitals at 11px; JetBrains Mono is kept for code and data (Home's code field and capacity key). */
+  .page-kicker { font-family: var(--font-sans); font-weight: 500; color: var(--accent); font-size: .6875rem; letter-spacing: var(--tracking-eyebrow); text-transform: uppercase; margin-bottom: 1rem; }
+  /* A project's state, set under its name in the case it is stored in: the same dot line on Home, /building and each project page. */
+  .project-status { display: flex; align-items: baseline; gap: .65rem; font: .78rem/1.7 var(--font-sans); margin-block: 1.5rem; }
+  .project-status::before { content: ''; width: .65rem; height: .65rem; border-radius: 50%; flex-shrink: 0; background: var(--accent); }
   .page-title { font-size: clamp(3.25rem, 6.5vw, 5.4rem); line-height: 1.02; letter-spacing: -.045em; }
   .page-lede { font-size: clamp(1.3rem, 2.5vw, 1.8rem); line-height: 1.35; margin-top: 1.25rem; max-width: 40rem; }
   .page-connect { border-top: 1px solid var(--rule); padding-block: 2.5rem; margin-top: var(--site-section-space); display: flex; justify-content: space-between; align-items: center; gap: 2rem; }
@@ -288,7 +307,7 @@
 .site-form .form-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
 .site-form label:not(:has(input)), .site-form legend { display: block; margin-bottom: var(--space-2); font-size: 1rem; }
 .site-form label > span, .site-form .form-hint { color: var(--muted); }
-.site-form input:not([type=checkbox]):not([type=radio]):not([type=hidden]), .site-form textarea, .site-form select { display: block; width: 100%; min-width: 0; border: 1px solid var(--field-border); background: var(--paper); padding: .65rem .8rem; border-radius: 3px; font: 1rem/1.5 var(--font-sans); }
+.site-form input:not([type=checkbox]):not([type=radio]):not([type=hidden]), .site-form textarea, .site-form select { display: block; width: 100%; min-width: 0; border: 1px solid var(--field-border); background: var(--paper); padding: .65rem .8rem; border-radius: 3px; font: 1rem/1.5 var(--font-serif); }
 .site-form textarea { resize: vertical; }
 @media (hover: hover) and (pointer: fine) {
   .site-form :is(input:not([type=checkbox], [type=radio]), textarea, select):not([aria-invalid=true]):hover { border-color: var(--muted); }

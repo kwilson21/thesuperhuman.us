@@ -81,15 +81,7 @@ export const GATES = {
  * reason the owner or a reviewer could check.
  */
 export const ALLOWLIST = [
-  { gate: 'font-outside-system', file: 'src/styles/studio.css', match: 'Newsreader', count: 1, reason: 'Agreement page serif before D9.3-C moves agreement and offer pages to Libron.' },
-  { gate: 'font-outside-system', file: 'src/components/SoftwareAgreedTerms.astro', match: 'Newsreader', count: 4, reason: '"What we agreed" headings, retired with Newsreader under D9.3-C.' },
-  { gate: 'font-outside-system', file: 'src/components/SoftwareProjectUpdate.astro', match: 'Newsreader', count: 3, reason: 'Client project updates, retired with Newsreader under D9.3-C.' },
-  { gate: 'font-outside-system', file: 'src/components/owner/SoftwareAgreementPanel.astro', match: 'Newsreader', count: 2, reason: 'Owner agreement screen, retired with Newsreader under D9.3-C.' },
-  { gate: 'font-outside-system', file: 'src/pages/offer/[token]/sign.astro', match: 'Newsreader', count: 1, reason: 'Typed signature on the offer signing page, moving to Libron Italic under D9.3-C.' },
-  { gate: 'font-outside-system', file: 'src/pages/owner/requests/[id]/update.astro', match: 'Newsreader', count: 1, reason: 'Owner project update screen, retired with Newsreader under D9.3-C.' },
-  { gate: 'font-outside-system', file: 'src/styles/music-premiere.css', match: 'Times New Roman', count: 1, reason: 'Old News masthead fallback stack, replaced by Libron Bold under D8.1-B.' },
   { gate: 'raw-hex', file: 'src/pages/index.astro', match: '#000c', count: 1, reason: 'Drop shadow of the resting glow on Home\'s dark project cards (D2.2-B keeps the resting glow).' },
-  { gate: 'raw-hex', file: 'src/pages/index.astro', match: '#000e', count: 1, reason: 'Hover drop shadow on Home\'s project cards, deleted with the hover glow under D2.2-B.' },
   { gate: 'raw-hex', file: 'src/styles/owner.css', match: '#526d4d', count: 3, reason: 'Private owner pages: the green for paid and confirmed states predates the token block; not part of the public design picks.' },
   { gate: 'raw-hex', file: 'src/styles/studio.css', match: '#514d47', count: 1, reason: 'Private studio pages: secondary text colour that predates the studio tokens.' },
   { gate: 'raw-hex', file: 'src/styles/studio.css', match: '#4a5639', count: 1, reason: 'Private studio pages: done-state text that predates the studio tokens.' },

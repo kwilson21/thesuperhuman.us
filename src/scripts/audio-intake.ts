@@ -1,5 +1,6 @@
 import { audioOffers, directionFields, describePreferences, validateIntake, type IntakeService, type Direction, type IntakeInput } from '../lib/audio-intake';
 import { setupFormSubmission } from './form-submission';
+import { openMessages } from './form-messages';
 
 const form = document.querySelector<HTMLFormElement>('#song-intake');
 if (form) {
@@ -68,18 +69,20 @@ if (form) {
     const validation = validateIntake({ ...input, name: 'Preview', email: 'preview@example.com', permission: true, turnstileToken: 'pending' });
     const fields = step === 0 ? ['service'] : ['title','fileLink','referenceUrl','referenceNote','preserve','preferences'];
     const errors: Record<string, string> = validation.ok ? {} : validation.errors;
-    let first: HTMLElement | null = null;
-    for (const field of fields) {
-      const error = form!.querySelector<HTMLElement>(`[data-form-error="${field}"]`);
-      const control = form!.elements.namedItem(field);
-      if (error) { error.textContent = errors[field] ?? ''; error.hidden = !errors[field]; }
-      if (control instanceof HTMLElement) {
-        control.toggleAttribute('aria-invalid', Boolean(errors[field]));
-        if (errors[field]) { control.closest('details')?.setAttribute('open', ''); control.setAttribute('aria-invalid','true'); first ??= control; }
+    return openMessages(form!, step === 2 ? submit : next, () => {
+      let first: HTMLElement | null = null;
+      for (const field of fields) {
+        const error = form!.querySelector<HTMLElement>(`[data-form-error="${field}"]`);
+        const control = form!.elements.namedItem(field);
+        if (error) { error.textContent = errors[field] ?? ''; error.hidden = !errors[field]; }
+        if (control instanceof HTMLElement) {
+          control.toggleAttribute('aria-invalid', Boolean(errors[field]));
+          if (errors[field]) { control.closest('details')?.setAttribute('open', ''); control.setAttribute('aria-invalid','true'); first ??= control; }
+        }
       }
-    }
-    if (fields.some(field => errors[field])) { status.textContent = 'Please check the highlighted fields.'; (first ?? status).focus(); return false; }
-    status.textContent = ''; return true;
+      if (fields.some(field => errors[field])) { status.textContent = 'Please check the highlighted fields.'; (first ?? status).focus(); return false; }
+      status.textContent = ''; return true;
+    });
   }
   form.addEventListener('change', renderService);
   next.addEventListener('click', () => { if (validateStep()) showStep(step + 1); });

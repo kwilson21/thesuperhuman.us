@@ -11,7 +11,7 @@ const brief = {
   existing: 'A logo and about 30 class photos. The About and Pricing pages are still accurate.',
   timingDate: '2026-12-01',
 };
-const receiptFirstStep = "I'll look at what you have and reply with a fixed-price first milestone, or a question or two.";
+const receiptFirstStep = "I’ll look at what you have and reply with a fixed-price first milestone, or a question or two.";
 const quote = value => `'${String(value).replaceAll("'", "''")}'`;
 
 // The screens after the path, in the order the website path shows them (data-step values). Each screen

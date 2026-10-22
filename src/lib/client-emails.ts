@@ -84,8 +84,8 @@ export const softwareHandoffEmail = (origin?: string) => renderEmail({
 export function softwareBriefEmail(name: string, brief: Record<string, string>) {
   const paragraphs = [
     `Hi ${name.trim().split(/\s+/)[0] || 'there'},`,
-    "Thanks for sending this. I'll read it myself and reply within two business days with a fixed-price first milestone, or a question or two.",
-    "Here's what you sent:",
+    "Thanks for sending this. I’ll read it myself and reply within two business days with a fixed-price first milestone, or a question or two.",
+    "Here’s what you sent:",
     ...Object.entries(brief).map(([key, answer]) => `${clientSoftwareLabels[key]}\n${answer}`),
     'Kazon',
     'Reply to this email if you want to add anything.',
