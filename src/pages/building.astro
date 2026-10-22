@@ -60,7 +60,7 @@ const prototypes = [
 <style>
   .building-intro { max-width: 48rem; }
   .building-intro .page-title { overflow-wrap: anywhere; }
-  .selected-projects { margin-top: 3rem; }
+  .selected-projects { margin-top: clamp(3rem, 5vw, 4rem); }
   .project-feature { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1fr); gap: clamp(2rem,4vw,3.5rem); align-items: center; padding-block: 3rem; border-bottom: 1px solid var(--rule); }
   .project-feature:first-child { padding-top: 0; }
   .project-copy { min-width: 0; }.project-copy h2 { font-size: clamp(2rem,3.2vw,2.8rem); line-height: 1.15; letter-spacing: -.025em; }

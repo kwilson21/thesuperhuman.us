@@ -1,5 +1,7 @@
 .project-shell { padding-bottom: 2rem; }
-.project-intro { padding-block: clamp(3rem, 6vw, 5rem) 2.5rem; }
+/* The breadcrumb lands where /building's kicker does (the .primary-page top), with about as much
+   space under the title block: 72px to the picture on a computer, 48 on a phone. */
+.project-intro { padding-block: clamp(2rem, 5vw, 4rem) clamp(2.5rem, 5vw, 4rem); }
 .project-intro .page-title { max-width: 18ch; }
 .project-subtitle { font-size: clamp(1.65rem, 3vw, 2.35rem); line-height: 1.25; margin-top: 1rem; }
 .project-description { max-width: 54ch; margin-top: 1rem; color: var(--muted); font-size: 1.2rem; line-height: 1.55; }
