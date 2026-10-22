@@ -45,7 +45,7 @@ Rollback revision: `26e764a`, "Record the Turnstile result and the owner's heade
 
 Remaining work:
 - the sitemap fix the owner chose, in a separate PR (2.5)
-- an independent review pass on this record's commit (7.4)
+- a clean review pass and green CI on the final record commit (7.4)
 - the live checks after deploy, including the owner's remote `owner:health` run (8.15)
 
 See Remaining work at the end.
@@ -74,7 +74,7 @@ After this record was drafted, the owner answered two more questions in conversa
 Authorization:
 - Answers 1 to 4 settle the two design calls and agree to this record and to the post-deploy live checks.
 - Answer 5 is the owner's explicit go-ahead to merge, which deploys production (AGENTS.md).
-- Answer 6 accepts the sitemap FAIL in 2.5, which existed before this PR, for this release, with a separate fix PR as its follow-up. Impact: the deploy leaves the sitemap exactly as it is in production now.
+- Answer 6 accepts the sitemap FAIL in 2.5, which existed before this PR, for this release, with a separate fix PR as its follow-up. Impact: #203 changes no sitemap input (2.5), so the sitemap keeps listing the private, noindex, error and redirecting URLs in 2.5 until the separate fix merges.
 - The PR's reviews by `kwilson21` are all COMMENTED. There is no APPROVED review.
 
 ## Evidence and limits
@@ -523,7 +523,7 @@ PASS means the evidence named here was observed. Production checks are listed un
 - **UNVERIFIED · 7.3 (live) HTTPS, the Worker's ASSETS fetch, Range and headers on the deployed production Worker.**
   - This needs the deployed site. No request was sent to production in this run.
   - The Workers Builds check on `8e6e9cc` uploaded only a branch preview version (`4d55f91a`). According to the PR description, that preview sits behind a sign-in.
-- **PASS · 7.4 Rollback version and backup; review and authorization rules.**
+- **UNVERIFIED · 7.4 Rollback version and backup; review and authorization rules.**
   - Rollback revision: `main` at `26e764a`. `git ls-remote` shows `origin/main` still at `26e764a`, and it is the PR's merge base.
     - It was committed on October 21, 2026 at 13:52:24 UTC (09:52 America/New_York).
     - Its Validate run succeeded at 14:05:46 UTC.
@@ -537,7 +537,7 @@ PASS means the evidence named here was observed. Production checks are listed un
     - The coordinating session ran independent review agents on each new head until a pass found nothing; the fifth pass, on `8e6e9cc`, found nothing (see Evidence and limits). This record's commits had their own passes: 7 corrections in `f1f0d5a`, 3 in `4e67e87`, then a clean pass on `4e67e87`.
     - `mergeable_state` is clean, and Validate, capture and Workers Builds are green on `8e6e9cc`.
     - The owner gave the go-ahead to merge and deploy (answer 5; see 1.1).
-  - The commit that records answers 5 and 6 gets its own review pass before merge.
+  - Remaining: a clean review pass and green CI on the final record commit, the one that records answers 5 and 6 and any fix after it. The merge waits for both, and the post-deploy update of this record notes them here.
 - **UNVERIFIED · 7.5 Post-deployment verification.** Not deployed: PR #203 is open and unmerged. The owner agreed to the live checks ("Ok"). They are listed under "Live checks still to run after deploy".
 - **UNVERIFIED · 7.6 Receipt.** This record is the receipt for the local evidence. Status as of October 22, 2026, about 07:55 UTC:
   - Implemented: yes (`8e6e9cc`).
@@ -637,7 +637,7 @@ These stay UNVERIFIED unless the owner records an exception with its impact and 
   - `/building/tally` and `/building/kaillera-next` are listed under URLs that redirect.
 
   This failure existed before PR #203 and is not caused by it.
-- **Review:** this record's commit gets its own independent review pass before merge (7.4).
+- **Review:** the final record commit gets a clean review pass and green CI before merge (7.4).
 - **After deploy:** run the live checks above and record the results in this file. The Messages checks need the owner's iPhone and Mac.
 - **Low-severity findings from this pass, for the owner to decide.** This record does not fix them.
   - `mediaRange` (`src/lib/music-media.ts`, shared with the music route) answers 416 to an unknown unit (`items=0-1`), a valid multi-range (`bytes=0-1,5-6`) and whitespace variants (`bytes = 0-1`). RFC 9110 section 14.2 says to ignore an unknown unit and serve 200. Safari sends single byte ranges, so the impact is small.
