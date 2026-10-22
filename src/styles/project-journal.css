@@ -10,7 +10,13 @@
 .project-current { margin-block: .5rem 3rem; }
 .project-current img { display: block; width: 100%; height: auto; border: 1px solid var(--rule); border-radius: 3px; }
 .project-current figcaption, .project-caption { font-size: .8rem; color: var(--muted); line-height: 1.65; margin-top: .75rem; }
-.project-section { margin-block: 3.5rem; }
+.project-section { margin-block: var(--site-section-space); }
+/* The one larger break on a project page, before the part that changes job: its journal. */
+.project-chapter { margin-top: var(--site-chapter-space); }
+/* Whatever comes first under the title block (a picture, a section or the journal) sits .5rem below the
+   intro's padding, as the pictures do: one gap under every project title. */
+.project-intro + .project-section { margin-top: .5rem; }
+.project-intro + .project-timeline, .project-intro + [data-project-updates] { --project-timeline-top: .5rem; }
 .project-pair { display: grid; grid-template-columns: 1fr 1.15fr; gap: clamp(2rem, 5vw, 4rem); align-items: center; margin-top: 1.5rem; }
 .project-pair img { display: block; width: 100%; height: auto; border-radius: 3px; }
 .project-pair h3 { font-size: clamp(1.55rem, 2.6vw, 2rem); line-height: 1.2; }

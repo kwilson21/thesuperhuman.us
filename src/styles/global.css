@@ -198,6 +198,12 @@
 :root {
   --site-gutter: clamp(1.5rem, 5vw, 3.5rem);
   --site-section-space: clamp(3rem, 6vw, 5.5rem);
+  /* A ruled division (a hairline between rows or sections) keeps this much space on each side of the
+     rule: 48px on a computer, 40 on a phone. */
+  --site-rule-space: 3rem;
+  /* One larger break per page, before the part that changes job: a project's journal, Building's
+     earlier prototypes, Audio's Start. 128px on a computer, 112 on a phone. Use it once per page. */
+  --site-chapter-space: clamp(7rem, 10vw, 8rem);
   /* Running prose stops near 65 characters; Libron's wide `ch` makes ch caps run long.
      33rem measures 63-66 characters a line (median) for 16px Libron body text. */
   --measure-prose: 33rem;
@@ -215,6 +221,7 @@
   --space-12: 3rem;
   --space-16: 4rem;
 }
+@media (max-width: 800px) { :root { --site-rule-space: 2.5rem; } }
 @layer components {
   .site-shell { width: 100%; max-width: 1232px; margin-inline: auto; padding-inline: var(--site-gutter); }
   .site-section { margin-top: var(--site-section-space); }
