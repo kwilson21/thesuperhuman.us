@@ -160,6 +160,9 @@ describe('gates', () => {
     const astro = 'src/pages/x.astro';
     // Another element's focus-visible: utility does not count, even on the same line.
     expect(gates(astro, '<a class="outline-none">x</a><b class="focus-visible:ring-2">y</b>')).toEqual(['outline-none']);
+    // A focus-visible: variant that draws nothing is not a replacement.
+    expect(gates(astro, '<a class="outline-none focus-visible:block">x</a>')).toEqual(['outline-none']);
+    expect(gates(astro, '<a class="outline-none focus-visible:ring-2">x</a>')).toEqual([]);
     // A focus-visible: utility that removes the outline is not a replacement.
     expect(gates(astro, '<a class="focus-visible:outline-none">x</a>')).toEqual(['outline-none']);
     // The hint names what clears a markup hit: a utility on the element, not a style block.

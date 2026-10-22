@@ -263,10 +263,14 @@ export function arbitraryHex(text) {
   return found;
 }
 
-/** True when a class list or @apply value has a focus-visible: utility that is not itself an outline removal. */
+/** True when a class list or @apply value has a focus-visible: utility that draws a visible indicator
+ * (an outline, ring, border, background, shadow or underline), not a removal or an unrelated variant
+ * such as focus-visible:block. */
 function hasFocusVisibleUtility(text) {
   for (const found of text.matchAll(/(?<![\w-])(?:[\w-]+:)*focus-visible:(?:[\w-]+:)*([\w-]+)/g)) {
-    if (!/^outline-(?:none|0)$/.test(found[1])) return true;
+    const utility = found[1];
+    if (/^outline-(?:none|0)$/.test(utility)) continue;
+    if (/^(?:outline|ring|border|bg|shadow|underline|decoration)(?:-|$)/.test(utility)) return true;
   }
   return false;
 }
