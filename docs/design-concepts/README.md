@@ -97,7 +97,7 @@ How the notes are read for the build (the owner can correct any of these):
 - D8.2 and D8.3: these picks overlap. D8.3-D is D8.2-D's layout, so only the artist line and title keep D8.2-A's centred stack; the credit, buttons and platform links move into a lead column beside the poster, off that centre line. Toward the owner's note ("If we could make it fit completely that'd be even better"), the build also sizes the masthead to the screen's height, so the whole poster fits the first screen at common laptop and desktop sizes. The board's lead column alone measured 73% to 100%. Both points are for the owner to confirm in the build's pull request.
 - D9.2: messages slide open without pushing the form's primary button off a screen it was on.
 - D10.4: the 404 picture is replaced under D5.2, so its size follows the new layout (D9.1-B).
-- D5.1-A with D5.3-B: the board says D5.3-B pairs with a D5.1 change or an exception line in each current record. The build adds the check and records the current files' results honestly, without exception lines; whether each failing file gets an exception citing D5.1-A, or is replaced, is for the owner to decide.
+- D5.1-A with D5.3-B: the board says D5.3-B pairs with a D5.1 change or an exception line in each current record. The build (#209) adds the check and records the current files' results. Asked whether the failing files should be recorded as exceptions, the owner answered "I guess? I'm not sure what you're asking"; after a plain-words explanation, each failing file's review records the exception, which the owner can withdraw.
 
 ## Resume and contact
 
