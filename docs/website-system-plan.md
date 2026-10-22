@@ -140,8 +140,12 @@ Audio notes become optional so empty prose is not required to publish a recordin
 - Photograph the owner's own objects for the studio and the About chapters
   (Hallmark board D5.1-D, deferred by the owner on October 22, 2026: "I think
   we should defer D5.1-D as a future task to do later, what we have works for
-  now though."). Each photo needs an asset review record; the home, about and
-  audio link previews follow.
+  now though."; [board](design-concepts/2026-10-22/imagery/index.html)). Every
+  frame needs a privacy check: nothing that shows the home or where it is (no
+  room, window, reflection, mail or address), no screen with private data, and
+  location metadata stripped on export. The About terrain stays drawn or
+  printed. Each photo needs an asset review record; the home, about and audio
+  link previews follow.
 
 ## Implementation sequence
 

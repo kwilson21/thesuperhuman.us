@@ -26,6 +26,16 @@ A read-only Hallmark design audit flagged several choices the owner made on purp
 - [D8 Audio and music](2026-10-22/audio-music/index.html)
 - [D9 System details](2026-10-22/system-details/index.html)
 
+D10, follow-ups from the fixes in PR #204, was asked on the private decision page rather than a board. Its questions, as that page words them:
+
+- D10.1: How should the About link “Explore The Engineer’s Daily prototype” fit on small phones?
+- D10.2: On /work, how wide should the opened experience rows run?
+- D10.3: Should the footer name match the header wordmark size?
+- D10.4: How large should the 404 coast picture be?
+- D10.5: Should the software brief and the signing pages use curly apostrophes everywhere?
+- D10.6: Should four unused components be deleted? (ProjectCard, LiveWorkFeed, ResumeCard and DesignStoryPreview)
+- D10.7: Should the personal website's status use the middle dot, “Live · evolving”?
+
 Recreations on the boards are composition studies, not production screenshots. Any option that implies new art still needs [image QA](../generated-image-qa.md).
 
 ### Owner's picks (October 22, 2026)
@@ -84,9 +94,10 @@ How the notes are read for the build (the owner can correct any of these):
 - D5.1-D (photograph your own objects) is deferred, recorded in [the system plan](../website-system-plan.md#deferred-maintenance).
 - D5.2: the 404 shows B or D at random on each visit; without JavaScript it shows B, and its static link preview uses B.
 - D6.1: the Kaillera-next drawing keeps its browser windows, and its controller marks are redrawn.
-- D8.2 and D8.3: the nameplate stays centred and symmetric; below it, the lead column holds the credit, buttons and platform links beside the poster, sized so the whole poster fits the first screen on common laptop and desktop sizes.
+- D8.2 and D8.3: these picks overlap. D8.3-D is D8.2-D's layout, so only the artist line and title keep D8.2-A's centred stack; the credit, buttons and platform links move into a lead column beside the poster, off that centre line. Toward the owner's note ("If we could make it fit completely that'd be even better"), the build also sizes the masthead to the screen's height, so the whole poster fits the first screen at common laptop and desktop sizes. The board's lead column alone measured 73% to 100%. Both points are for the owner to confirm in the build's pull request.
 - D9.2: messages slide open without pushing the form's primary button off a screen it was on.
 - D10.4: the 404 picture is replaced under D5.2, so its size follows the new layout (D9.1-B).
+- D5.1-A with D5.3-B: the board says D5.3-B pairs with a D5.1 change or an exception line in each current record. The build adds the check and records the current files' results honestly, without exception lines; whether each failing file gets an exception citing D5.1-A, or is replaced, is for the owner to decide.
 
 ## Resume and contact
 

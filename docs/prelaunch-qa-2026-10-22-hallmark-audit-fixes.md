@@ -1,6 +1,6 @@
 # Hallmark audit fixes release gate
 
-Date: October 22, 2026 (UTC; this agent's checks ran from about 10:20 to 10:45 UTC, 6:20 to 6:45 AM in America/New_York)  
+Date: October 22, 2026 (UTC; this agent's checks ran from about 10:20 to 10:45 UTC, 6:20 to 6:45 AM in America/New_York; the coordinating Claude Code session ran the post-deployment checks on production from 15:45 to 15:50 UTC)  
 Repository: `kwilson21/thesuperhuman.us`  
 Pull request: [#204](https://github.com/kwilson21/thesuperhuman.us/pull/204), "Fix the defects found by the Hallmark design audit", squash-merged to `main` as `b4350907` at 15:39:06 UTC on October 22, 2026, pinned to head `f1c2989` (the merged tree equals that head's tree)  
 Branch: `claude/hallmark-audit-fixes`  
@@ -60,7 +60,7 @@ Evidence: CI captures under `pr-204/f0abd1f/` on the `screenshots` branch (325 f
 - **Browser checks by this agent at `f0abd1f`:** Playwright's Chromium against `astro dev` with the screenshot preview config on port 4361, from about 10:26 to 10:43 UTC. The working tree was clean at `f0abd1f`. Results are in sections 1 to 4.
 - **Contrast measurements, earlier in this session:** `--field-border` about 3.39:1 on paper; the waveform's unplayed bars from 1.90:1 to 3.39:1; the code boxes from about 1.6:1 to 3.58:1. This agent's own figures are in section 3.
 - **CI captures viewed by this agent**, at reduced display scale: `work-desktop.png`, `work-phone.png`, `services-phone.png` and `privacy-desktop.png` from `pr-204/f0abd1f/`. The other 321 were not viewed.
-- **Limits:** Chromium only. The dev server is not the Workers runtime. `axe-core` is not a repo dependency; the automated check in section 3 used a scratch install. Nothing was checked in production.
+- **Limits:** Chromium only. The dev server is not the Workers runtime. `axe-core` is not a repo dependency; the automated check in section 3 used a scratch install. Nothing was checked in production before the merge. After the deploy, the coordinating session checked production with a read-only Playwright script (section 7, Post-deployment QA); everything else above ran on the dev server.
 
 ## 1. Purpose and content
 
@@ -184,17 +184,17 @@ Evidence: CI captures under `pr-204/f0abd1f/` on the `screenshots` branch (325 f
   - The built `dist/_headers` from the merged code equals `public/_headers` at `0ab273da` (which includes #203's `/og/*` cache block), and this PR changes nothing under `public/`.
   - Live headers, HTTPS and routing follow in the post-deployment item.
 - **PASS · Rollback.** `0ab273da`, `main` when this branch last merged it; its `validate` run succeeded and production served its redirect at 15:20 UTC on October 22, 2026. No backup is needed: this PR writes no data and changes no schema. Check what has merged since before any rollback.
-- **PASS · Post-deployment QA.** Before the merge, the head's `validate` (15:25:49 UTC), Screenshots `capture` (15:38:26 UTC) and Workers Builds preview succeeded, with no open review threads. On `b4350907`, `validate` succeeded at 15:42:18 UTC and the production Workers Builds at 15:45:14 UTC. A read-only Playwright script (Chromium, no form sent) then checked production. Its first full run at 15:45 UTC passed 40 of 44 checks. The four misses were the script's, not the site's: three were the known Turnstile console lines in a new wording (a connect-src refusal for `data:,`), and one tried to focus the resume email field while its disclosure was closed. With both fixed, the affected checks and then the full set passed: 44 of 44 at 15:48 to 15:50 UTC. The same script, run against production before the merge, failed the checks this PR fixes (the `/audio/releases` overflow, the `/work` links below the fold, the faint field edge and the missing privacy heading). It covered:
+- **PASS · Post-deployment QA.** Before the merge, the head's `validate` (15:25:49 UTC), Screenshots `capture` (15:38:26 UTC) and Workers Builds preview succeeded, with no open review threads. On `b4350907`, `validate` succeeded at 15:42:18 UTC and the production Workers Builds at 15:45:14 UTC. The coordinating Claude Code session then checked production with a read-only Playwright script (Chromium, no form sent). Its first full run at 15:45 UTC passed 40 of 44 checks. The four misses were the script's, not the site's: three were the known Turnstile console lines in a new wording (a connect-src refusal for `data:,`), and one tried to focus the resume email field while its disclosure was closed. With both fixed, the affected checks and then the full set passed: 44 of 44 at 15:48 to 15:50 UTC. The same script, run against production before the merge, failed the checks this PR fixes (the `/audio/releases` overflow, the `/work` links below the fold, the faint field edge and the missing privacy heading). It covered:
   - Production revision: the `/privacy` h2 "Software project briefs and pages", which only this PR adds, is served. Cloudflare's deployment history was not read here, so the Worker version is not recorded. `main` moved to `97321a6c` (#207, docs only, no site change) at 15:48:39 UTC, during the final run.
   - The four `/*` security headers and `strict-transport-security` on `/`, `/privacy` and the 404 response.
-  - No horizontal overflow and no console errors, apart from the Turnstile lines that predate this PR, on `/`, `/work`, `/services`, `/about`, `/privacy`, `/building`, `/writing/ai-gives-you-speed`, `/music/old-news` and the 404 page, at 1280x800, 390x844 and 320x640.
+  - No horizontal overflow and no console errors, apart from the Turnstile lines that predate this PR and, on the 404 page, its own 404 status line, on `/`, `/work`, `/services`, `/about`, `/privacy`, `/building`, `/writing/ai-gives-you-speed`, `/music/old-news` and the 404 page, at 1280x800, 390x844 and 320x640.
   - The `/work` resume and hire links end inside the first screen at 1280x800 (781px) and 390x844 (676 and 727px).
   - The `/about` resume email field: the `--field-border` edge at rest, a solid 2px outline on focus, and the accent edge when marked invalid (nothing sent).
   - `/audio/releases` at 701, 900, 1100 and 1247px: no sideways scroll.
   - `audio.thesuperhuman.us/` and `/releases` at 390: no overflow or errors.
   - `robots.txt` names the sitemap; the sitemap has 22 URLs and no private sections.
   - Home's title, description, canonical and icon are present, and its `og:image` returns 200.
-- **PASS, with gaps · Receipt.** Implemented: yes. Verified locally: yes, with the checks and Chromium measurements above. Deployed: yes, by the production Workers Builds check on `b4350907` (15:45:14 UTC). Verified live: yes, for the checks listed above. Not verified live: a second browser, a real device, browser zoom and performance (Known unknowns).
+- **PASS, with gaps · Receipt.** Implemented: yes. Verified locally: yes, with the checks and Chromium measurements above. Deployed: yes, by the production Workers Builds check on `b4350907` (15:45:14 UTC). Verified live: yes, for the checks listed above. Not verified live: a second browser, a real device, browser zoom and performance (Known unknowns). On `/services`, `/music/old-news` and the 404 page, production was checked for overflow and console errors only, not the door pictures and buttons, the masthead or the place of the 404's "Back to home" link in the first screen; on `/privacy` only the new h2 was checked, not its anchor.
 
 ## 8. Private owner center
 
