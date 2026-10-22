@@ -1636,6 +1636,8 @@ it('retains both verbatim statements and verification method in signatures and c
   for(const party of ['client','contractor']) {
     const row=sql.prepare('SELECT * FROM software_agreement_signatures WHERE party=? LIMIT 1').get(party);
     expect(row.consent_text).toBe(consentText(client.legal_name,party==='contractor'));
+    // New signatures record the curly apostrophe the page shows (D10.5-B).
+    expect(row.consent_text).toContain('and I’m authorized to sign for ');expect(row.consent_text).not.toContain("'");
     expect(row.intent_text).toBe(intentText(party==='contractor'));
     expect(row.consent_version).toBe('website-signing-v3');
     expect(row.verification_method).toBe(party==='client'?'verified by one-time email link':'verified by owner authentication');
@@ -1741,7 +1743,7 @@ it('masks link receipts and refunds definite token-scoped email rejection withou
     const response=await issueAgreementLink(env,request(),{turnstileToken:'test'},token);
     expect(response.status).toBe(502);
     expect(sql.prepare("SELECT used_at FROM software_agreement_links WHERE id='challenge'").get().used_at).toBeNull();
-    expect(await response.json()).toMatchObject({error:"That email didn't go through. Please try again."});
+    expect(await response.json()).toMatchObject({error:"That email didn’t go through. Please try again."});
     expect(sql.prepare('SELECT COALESCE(sum(uses),0) n FROM audio_client_allowances').get().n).toBe(0);
     expect(sql.prepare("SELECT count(*) n FROM software_agreement_links WHERE id<>'challenge'").get().n).toBe(0);
   }
@@ -1769,7 +1771,7 @@ it('verifies the attachment bytes against the offer hash before client download'
   expect(new Uint8Array(await (await call()).arrayBuffer())).toEqual(bytes);
   bucketData.set(key,new TextEncoder().encode('%PDF-altered'));
   const refused=await call();expect(refused.status).toBe(503);
-  expect(await refused.text()).toBe("This file couldn't be verified, so I've held it back. Please let me know before you sign.");
+  expect(await refused.text()).toBe("This file couldn’t be verified, so I’ve held it back. Please let me know before you sign.");
 });
 
 it.each(['resolve','withdraw'])('retires unsigned signing atomically when request is closed (%s)',async action=>{

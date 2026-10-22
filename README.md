@@ -282,7 +282,9 @@ pin immutable template versions. Private source templates are excluded from Git;
 a one-shot private seed refuses to overwrite existing versions.
 
 PDF preparation uses `pdf-lib`, `@pdf-lib/fontkit`, and licensed local Inter and
-Newsreader fonts. Agreement PDFs and certificates belong in private storage.
+Libron fonts. Rebuild the Libron heading TTF with
+`python3 scripts/build-agreement-heading-font.py`. Agreement PDFs and
+certificates belong in private storage.
 Signed copy downloads remain available when new website signing is switched off.
 Code completion does not establish deployment or live signing readiness.
 
