@@ -45,7 +45,6 @@ Rollback revision: `26e764a`, "Record the Turnstile result and the owner's heade
 - A rollback would also undo anything merged to `main` after #203, so check what has merged since.
 
 Remaining work:
-- the sitemap fix the owner chose, in [#205](https://github.com/kwilson21/thesuperhuman.us/pull/205) (2.5)
 - the owner's remote `owner:health` run (8.15, live check 6)
 - live checks 3 and 4 (Messages, the preview debuggers) and 8 (the deployed branch preview)
 
@@ -254,6 +253,7 @@ PASS means the evidence named here was observed. Production checks and their res
     - `/agreements/verify`: 404 "This link has expired" without a key, noindex, nofollow
     - `/building/tally` and `/building/kaillera-next`: 307 to `/building/tally/` and `/building/kaillera-next/`. Their canonical and `og:url` name the slashless URL that redirects.
   - The owner accepted this for this release and chose a fix in a separate PR as the follow-up (answer 6). Merging #203 does not change the sitemap.
+  - Follow-up done: [#205](https://github.com/kwilson21/thesuperhuman.us/pull/205) merged as `0ab273d` and was live by 14:15:37 UTC on October 22, 2026. On production the sitemap then listed 22 URLs with none of the private pages, and `/building/tally` and `/building/kaillera-next` answered 200 (see `docs/prelaunch-qa-2026-10-22-sitemap.md`).
 - **UNVERIFIED · 2.6 Preview indexing and access control.**
   - The PR head's Workers Builds summary lists two preview URLs. Both are shaped `<prefix>-thesuperhuman-us.<account>.workers.dev`, with two labels before `workers.dev`.
   - With a Host header of that shape, every response tested locally carried `x-robots-tag: noindex, nofollow`:
@@ -539,7 +539,7 @@ PASS means the evidence named here was observed. Production checks and their res
   - Final record commit `5cc2227`: an independent review pass found nothing, and Validate (10:46:10 UTC), Screenshots capture (10:51:48 UTC) and Workers Builds (10:45:42 UTC) succeeded before the merge, which was pinned to that head.
 - **UNVERIFIED · 7.5 Post-deployment verification.**
   - Observed live (live checks 1, 2 and 5): the main journeys' tags, posters, videos, the missing page, the audio host, robots, the sitemap and `/owner`. The production revision is inferred from the Workers Builds check on `75a88be` and the new tags; the site has no revision marker.
-  - Open: the sitemap FAIL, which predates #203 (2.5, fixed in #205); alerting on the video route (6.6); the remote `owner:health` run (8.15, live check 6); Messages and the preview debuggers (live checks 3 and 4); the deployed branch preview (live check 8). No form changed (section 5).
+  - Open: alerting on the video route (6.6); the remote `owner:health` run (8.15, live check 6); Messages and the preview debuggers (live checks 3 and 4); the deployed branch preview (live check 8). No form changed (section 5).
 - **UNVERIFIED · 7.6 Receipt.** This record is the receipt. Status as of October 22, 2026, about 11:00 UTC:
   - Implemented: yes (`8e6e9cc`; the final record commit `5cc2227`).
   - Verified locally: yes, against `wrangler dev` serving the `dist/` of `8e6e9cc`.
@@ -637,11 +637,6 @@ These stay UNVERIFIED unless the owner records an exception with its impact and 
 ## Remaining work
 
 - **Owner:** run `npm run owner:health -- --remote --post-deploy`, or accept it as an exception with its impact and follow-up (8.15).
-- **Sitemap (2.5), owner's choice: a fix in a separate PR, [#205](https://github.com/kwilson21/thesuperhuman.us/pull/205).** It covers both parts:
-  - `/studio`, `/studio/sign-in`, `/agreements` and `/agreements/verify` are listed in the sitemap.
-  - `/building/tally` and `/building/kaillera-next` are listed under URLs that redirect.
-
-  This failure existed before PR #203 and is not caused by it.
 - **Owner, after deploy:** live checks 3 and 4 (Messages on an iPhone and a Mac; the Discord, Facebook and LinkedIn debuggers) and 8 (the deployed branch preview's sign-in gate and headers, which needs the owner's sign-in). Record the results in this file.
 - **Low-severity findings from this pass, for the owner to decide.** This record does not fix them.
   - `mediaRange` (`src/lib/music-media.ts`, shared with the music route) answers 416 to an unknown unit (`items=0-1`), a valid multi-range (`bytes=0-1,5-6`) and whitespace variants (`bytes = 0-1`). RFC 9110 section 14.2 says to ignore an unknown unit and serve 200. Safari sends single byte ranges, so the impact is small.
