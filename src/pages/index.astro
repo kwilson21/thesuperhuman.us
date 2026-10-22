@@ -25,6 +25,9 @@ const oldNewsRecording = oldNewsExample && musicCatalog.recordings.find(recordin
 const host = Astro.request.headers.get('host') ?? Astro.url.host;
 const essay = await getEntry('pages', 'ai-gives-you-speed');
 if (!essay) throw new Error('AI essay content missing');
+// The pen stroke underlines the word the essay argues for; the title's words are unchanged.
+const penWord = 'Direction';
+const penAt = essay.data.title.lastIndexOf(penWord);
 const before = parseFigure(lyftBonus.before);
 const after = parseFigure(lyftBonus.after);
 const cells = before && after ? capacityCells(before, after) : 0;
@@ -86,8 +89,8 @@ const jsonLd = {
               <div class="project-art">
                 <img src={tallyTransactions.src} width={tallyTransactions.width} height={tallyTransactions.height} alt="Tally’s Transactions screen on demo data, a CI capture from September 2026, with the demo data banner." loading="lazy" />
               </div>
-              <p class="page-kicker">{tallyStory.status}</p>
               <h3>Tally</h3>
+              <p class="project-status">{tallyStory.status}</p>
               <p>{tallyStory.subtitle}</p>
               <a class="site-link project-link" href="/building/tally">Development journal <span aria-hidden="true">→</span><span class="sr-only">Tally</span></a>
             </article>
@@ -95,8 +98,8 @@ const jsonLd = {
               <div class="project-art">
                 <img src={kailleraLanding.src} width={kailleraLanding.width} height={kailleraLanding.height} alt="Kaillera Next’s landing page, September 2026, with no open rooms." loading="lazy" />
               </div>
-              <p class="page-kicker">{kailleraStory.status}</p>
               <h3>Kaillera Next</h3>
+              <p class="project-status">{kailleraStory.status}</p>
               <p>{kailleraStory.subtitle}</p>
               <a class="site-link project-link" href="/building/kaillera-next#kaillera-next-updates-title">Development journal <span aria-hidden="true">→</span><span class="sr-only">Kaillera Next</span></a>
             </article>
@@ -110,10 +113,9 @@ const jsonLd = {
       <section class="site-section" aria-labelledby="writing-title">
         <div class="site-section-heading" data-reveal><h2 id="writing-title">Writing</h2></div>
         <article class="editorial-pair writing-preview" data-reveal>
-          <div class="editorial-art notebook-art" data-scene="notebook" data-start="1" data-end="0"><img src={notebook.src} width={notebook.width} height={notebook.height} alt="" loading="lazy" /></div>
+          <div class="editorial-art notebook-art"><img src={notebook.src} width={notebook.width} height={notebook.height} alt="" loading="lazy" /></div>
           <div class="editorial-copy">
-            <h3>{essay.data.title}</h3>
-            <svg class="pen-stroke" viewBox="0 0 300 14" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M3 9 C 60 3, 110 12, 170 7 S 262 4, 297 8" /></svg>
+            <h3>{penAt < 0 ? essay.data.title : <>{essay.data.title.slice(0, penAt)}<span class="pen-mark">{penWord}<svg class="pen-stroke" viewBox="0 0 200 10" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M2 5 C 40 2, 76 8, 116 4.5 S 176 3, 198 5.5" /></svg></span>{essay.data.title.slice(penAt + penWord.length)}</>}</h3>
             <a class="site-link" href="/writing/ai-gives-you-speed">Read the essay <span aria-hidden="true">→</span></a>
           </div>
         </article>
@@ -165,23 +167,22 @@ const jsonLd = {
     clip-path: inset(0 calc((1 - var(--grow)) * 21%) 0 round calc((1 - var(--grow)) * 28px) calc((1 - var(--grow)) * 28px) 0 0);
   }
   .screen-light { position: absolute; inset: 0 0 auto; height: 70vh; background: radial-gradient(55% 60% at 50% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%); pointer-events: none; }
-  .screen-code { position: absolute; top: clamp(2rem, 6vh, 3.5rem); left: 58%; width: min(500px, 70vw); opacity: .7; transform: translate(-50%, calc((1 - var(--grow)) * 40px)); mask-image: linear-gradient(to bottom, #000 50%, transparent 92%); pointer-events: none; }
+  .screen-code { position: absolute; top: clamp(2rem, 6vh, 3.5rem); left: 58%; width: min(500px, 70vw); opacity: .7; transform: translateX(-50%); mask-image: linear-gradient(to bottom, #000 50%, transparent 92%); pointer-events: none; }
 
-  /* Subgrid keeps each card's art, kicker, title, line and link on shared rows, so both cards
-     line up whatever wraps (WorkWithMe.astro's doors use the same pattern). */
+  /* Subgrid keeps each card's art, title, status, line and link on shared rows, so both cards
+     line up whatever wraps (WorkWithMe.astro's door rows share columns the same way). */
   .project-grid { display: grid; grid-template-columns: repeat(2, 1fr); column-gap: 2.5rem; }
   .project-card { display: grid; grid-template-rows: subgrid; grid-row: span 5; position: relative; }
-  /* Each project glows like a screen in the dark and leans toward a fine pointer. */
-  .project-art { display: block; margin-bottom: 1.2rem; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; background: var(--well); aspect-ratio: 3 / 2; box-shadow: 0 28px 70px -34px color-mix(in srgb, var(--accent) 45%, transparent), 0 14px 30px -18px #000c; transform: perspective(1100px) rotateX(calc(var(--rx, 0) * 3deg)) rotateY(calc(var(--ry, 0) * 4deg)); transition: transform 500ms var(--ease-site), box-shadow 500ms var(--ease-site); }
-  @media (hover: hover) and (pointer: fine) {
-    .project-card:hover .project-art, .project-card:focus-within .project-art { box-shadow: 0 34px 90px -30px color-mix(in srgb, var(--accent) 65%, transparent), 0 18px 36px -18px #000e; }
-  }
+  /* Each project glows like a screen in the dark, steadily (the glow does not grow on hover or
+     focus), and leans toward a fine pointer. */
+  .project-art { display: block; margin-bottom: 1.2rem; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; background: var(--well); aspect-ratio: 3 / 2; box-shadow: 0 28px 70px -34px color-mix(in srgb, var(--accent) 45%, transparent), 0 14px 30px -18px #000c; transform: perspective(1100px) rotateX(calc(var(--rx, 0) * 3deg)) rotateY(calc(var(--ry, 0) * 4deg)); transition: transform 500ms var(--ease-site); }
   .project-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
   .project-card h3 { font-size: clamp(1.7rem, 2.6vw, 2.3rem); letter-spacing: -.035em; line-height: 1.1; margin: 0 0 .4rem; }
-  .project-card p:not(.page-kicker) { font-size: 1.125rem; color: var(--muted); line-height: 1.45; max-width: 65ch; margin: 0 0 1rem; text-wrap: pretty; }
-  .project-link { justify-self: start; align-self: start; }
+  .project-card .project-status { margin: 0 0 .65rem; }
+  .project-card p:not(.project-status) { font-size: 1.125rem; color: var(--muted); line-height: 1.45; max-width: 65ch; margin: 0 0 1rem; text-wrap: pretty; }
+  .project-link { justify-self: start; align-self: start; position: static; }
   /* The picture stays a plain image; this link (with the visible arrow) is the card's only tab stop. */
-  .project-link::after { content: ''; position: absolute; inset: 0; }
+  .project-link::after { content: ''; position: absolute; inset: 0; height: auto; transform: none; }
 
   .work-proof-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.75rem; }
   .work-preview { display: block; }
@@ -211,11 +212,14 @@ const jsonLd = {
   .capacity-key > span { grid-column: 2 / -1; padding-left: .3rem; white-space: nowrap; }
 
   .editorial-pair { display: grid; grid-template-columns: 1.4fr 1fr; gap: 3rem; align-items: center; }
-  .editorial-art :global(img) { display: block; width: 100%; height: auto; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent); mask-composite: intersect; transform: translateY(calc((.5 - var(--p, .5)) * 36px)); }
+  .editorial-art :global(img) { display: block; width: 100%; height: auto; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent); mask-composite: intersect; }
   .editorial-copy h3 { max-width: 24ch; font-size: clamp(2rem, 3.4vw, 2.9rem); line-height: 1.08; letter-spacing: -.04em; margin: 0; text-wrap: balance; }
-  .pen-stroke { display: block; width: min(15rem, 80%); height: 14px; margin: .9rem 0 1.6rem; overflow: visible; }
-  /* No non-scaling-stroke here: with it, Chromium dashes in screen space and pathLength no longer lines up. */
-  .pen-stroke path { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; }
+  /* The pen stroke is a real underline: it sits 3 to 5px under "Direction" as it waves, and stays
+     with the word at any width. */
+  .pen-mark { position: relative; white-space: nowrap; }
+  .pen-stroke { position: absolute; left: -1%; width: 103%; top: calc(100% - .2em + 1px); height: .16em; overflow: visible; pointer-events: none; }
+  .pen-stroke path { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+  .writing-preview .site-link { margin-top: 1.6rem; }
 
   /* The horizon: the contact rule, with a sun that rises over it as the page ends. */
   .contact-section { position: relative; border-top: 1px solid var(--rule); padding-block: 3rem; margin-top: calc(var(--site-section-space) + 4rem); scroll-margin-top: 2rem; }
@@ -235,23 +239,24 @@ const jsonLd = {
   }
   .contact-form-content { padding-block: 2rem; color: var(--ink); }
 
-  /* Home's own reveals; the shared ones (fade up, heading rule drawing in) are in global.css. */
+  /* Home's own reveals; the shared fade up is in global.css. */
   @media screen and (prefers-reduced-motion: no-preference) {
     :global(.motion) .project-card[data-reveal]:nth-child(2) { transition-delay: 140ms; }
     /* Work with me: the heading stays put and the three doors rise in turn. */
     :global(.motion) .hire-section[data-reveal]:not(.is-in) { opacity: 1; transform: none; }
-    :global(.motion) .hire-section :global(.door) { transition: opacity 800ms var(--ease-site), transform 800ms var(--ease-site); }
-    :global(.motion) .hire-section:not(.is-in) :global(.door) { opacity: 0; transform: translateY(24px); }
+    :global(.motion) .hire-section :global(.door) { transition: opacity var(--dur-reveal) var(--ease-site), transform var(--dur-reveal) var(--ease-site); }
+    :global(.motion) .hire-section:not(.is-in) :global(.door) { opacity: 0; transform: translateY(var(--rise-reveal)); }
     :global(.motion) .hire-section :global(.door:nth-child(2)) { transition-delay: 120ms; }
     :global(.motion) .hire-section :global(.door:nth-child(3)) { transition-delay: 240ms; }
-    /* Writing: the title is inked in from the left and the pen stroke follows. */
+    /* Writing: the title is inked in from the left, and once the ink has passed "Direction" the pen
+       underlines it. */
     :global(.motion) .writing-preview h3 { transition: clip-path 1200ms cubic-bezier(.6, .1, .2, 1) 250ms; clip-path: inset(-10% 0 -20% 0); }
     :global(.motion) .writing-preview:not(.is-in) h3 { clip-path: inset(-10% 100% -20% 0); }
-    :global(.motion) .writing-preview .pen-stroke path { stroke-dasharray: 1; stroke-dashoffset: 0; transition: stroke-dashoffset 900ms ease-in-out 1200ms; }
-    :global(.motion) .writing-preview:not(.is-in) .pen-stroke path { stroke-dashoffset: 1; }
+    :global(.motion) .writing-preview .pen-stroke { transition: clip-path 520ms var(--ease-site) 1350ms; clip-path: inset(-60% -4% -60% 0); }
+    :global(.motion) .writing-preview:not(.is-in) .pen-stroke { clip-path: inset(-60% 100% -60% 0); }
   }
   @media (prefers-reduced-motion: reduce) {
-    .project-art, .editorial-art :global(img) { transform: none; transition: none; }
+    .project-art { transform: none; transition: none; }
   }
   @media print { .world-screen { clip-path: none; } }
 
@@ -269,7 +274,8 @@ const jsonLd = {
     .editorial-pair { grid-template-columns: 1fr; gap: .75rem; }
     .writing-preview .editorial-copy { order: -1; }
     .editorial-copy h3 { font-size: clamp(2rem, 7.4vw, 2.6rem); }
-    .pen-stroke { margin: .7rem 0 1.2rem; }
+    .pen-stroke { top: calc(100% - .2em + 2px); }
+    .writing-preview .site-link { margin-top: 1.2rem; }
     .notebook-art { margin-inline: -1.5rem; }
     .contact-intro { align-items: flex-start; flex-direction: column; gap: 1.2rem; }
     .contact-section { padding-block: 2rem; margin-top: calc(var(--site-section-space) + 3rem); }
@@ -278,6 +284,6 @@ const jsonLd = {
   }
   @media (max-width: 420px) {
     .site-section-heading .heading-link { display: none; }
-    .project-card p:not(.page-kicker) { font-size: 1.05rem; }
+    .project-card p:not(.project-status) { font-size: 1.05rem; }
   }
 </style>

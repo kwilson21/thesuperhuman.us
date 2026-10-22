@@ -247,7 +247,7 @@ export async function issueAgreementLink(
   const intro = token ? `Tap below to review and sign the agreement for ${project}.` : "Tap below to open your signed agreement documents.";
   const action = token ? "Review and sign" : "Open your documents";
   const expiry =
-    "This link works once and expires in an hour. If you didn't ask for it, you can ignore this email.";
+    "This link works once and expires in an hour. If you didn’t ask for it, you can ignore this email.";
   const sent = await sendAudioMessage({
     apiKey: env.RESEND_API_KEY,
     payload: {
@@ -265,7 +265,7 @@ export async function issueAgreementLink(
         db.prepare('DELETE FROM software_agreement_links WHERE id=?').bind(id),
         ...allowances.flatMap(allowance=>[db.prepare('DELETE FROM audio_client_allowances WHERE key=? AND window_start=? AND uses=1').bind(allowance.key,allowance.windowStart),db.prepare('UPDATE audio_client_allowances SET uses=uses-1 WHERE key=? AND window_start=? AND uses>1').bind(allowance.key,allowance.windowStart)]),
       ]);
-      return agreementJson({ok:false,error:"That email didn't go through. Please try again."},502);
+      return agreementJson({ok:false,error:"That email didn’t go through. Please try again."},502);
     }
     await db.prepare('UPDATE software_agreement_links SET used_at=? WHERE id=?').bind(at.toISOString(),id).run();
   }

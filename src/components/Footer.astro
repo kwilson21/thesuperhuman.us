@@ -26,7 +26,8 @@ interface Props { compact?: boolean; }
      Wrapped rows sit 44px apart (row gap = 44px minus one line), so neighbouring areas never overlap. */
   .compact-footer a { position: relative; border: 0; }
   .compact-footer a::after { content: ''; position: absolute; inset-inline: calc(var(--space-3) * -1); top: 50%; height: 44px; transform: translateY(-50%); }
-  .footer-name { font-size: 1.25rem; letter-spacing: -.03em; }
+  /* The same 24px as the header wordmark (SiteNav .site-name). */
+  .footer-name { font-size: 1.5rem; letter-spacing: -.03em; }
   nav { display: flex; flex-wrap: wrap; gap: calc(44px - 1lh) var(--space-6); }
   .compact-footer p { margin: 0; }
   @media (max-width: 600px) { .compact-footer-inner { gap: var(--space-4); } .compact-footer p { width: 100%; } }

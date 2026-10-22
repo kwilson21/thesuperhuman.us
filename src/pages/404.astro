@@ -2,12 +2,42 @@
 export const prerender = false;
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import Footer from '~/components/Footer.astro';
-import coast from '~/assets/site/quiet-coast-v2.webp';
+import { waveformPeaks } from '~/lib/home-motion';
+
+// Two drawn scenes; each page view shows one, chosen in the browser below. Without JavaScript the
+// horizon shows. The waveform quotes Home's waveform edge (src/components/home/SignalEdge.astro):
+// the same phrase, its bars resting on a faint reflection, like light on still water.
+const bars = 48;
+const width = 560;
+const rest = 84; // the waterline the bars stand on
+const depth = 56; // the loudest bar
+const slot = width / bars;
+const bar = +(slot / 2).toFixed(2);
+const peaks = waveformPeaks(bars);
+const loudest = Math.max(...peaks);
+const wave = peaks.map((peak, index) => {
+  const height = Math.max(3.1, (peak / loudest) * depth);
+  return { x: +(index * slot + (slot - bar) / 2).toFixed(2), up: +height.toFixed(1), down: +(height * 0.42).toFixed(1) };
+});
+const reflection = rest + 6;
+const viewHeight = reflection + 37;
 ---
 <BaseLayout title="Page not found · Kazon Wilson" description="This page could not be found. Explore Kazon Wilson’s projects or return to the homepage." ogScene="not-found" noindex>
   <section class="missing-page site-shell" aria-labelledby="missing-title">
-    <div class="missing-landscape" aria-hidden="true">
-      <img src={coast.src} width={coast.width} height={coast.height} alt="" loading="eager" fetchpriority="high" />
+    <div class="missing-scene" data-scene="horizon" aria-hidden="true">
+      <div class="scene-horizon">
+        <div class="horizon-sky"><span class="horizon-sun"></span></div>
+        <div class="horizon-water"><i></i><i></i><i></i></div>
+      </div>
+      <svg class="scene-wave" viewBox={`0 0 ${width} ${viewHeight}`} focusable="false">
+        <defs>
+          <linearGradient id="missing-wave-fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" /><stop offset="1" stop-color="#fff" stop-opacity="0" /></linearGradient>
+          <mask id="missing-wave-mask" maskContentUnits="userSpaceOnUse"><rect x="0" y={reflection} width={width} height={viewHeight - reflection} fill="url(#missing-wave-fade)" /></mask>
+        </defs>
+        <g>{wave.map(({ x, up }, index) => <rect class="wave-up" style={`--i:${index}`} x={x} y={+(rest - up).toFixed(1)} width={bar} height={up} rx={bar / 2} />)}</g>
+        <g mask="url(#missing-wave-mask)">{wave.map(({ x, down }, index) => <rect class="wave-down" style={`--i:${index}`} x={x} y={reflection} width={bar} height={down} rx={bar / 2} />)}</g>
+      </svg>
+      <script is:inline>document.currentScript.parentElement.dataset.scene = Math.random() < .5 ? 'horizon' : 'wave';</script>
     </div>
     <div class="missing-copy">
       <p class="missing-status">404</p>
@@ -22,15 +52,15 @@ import coast from '~/assets/site/quiet-coast-v2.webp';
   <Footer compact slot="footer" />
 </BaseLayout>
 <style>
-  .missing-page { display: grid; justify-items: center; gap: 2.5rem; padding-block: 1.5rem 4rem; }
-  /* 450px wide keeps the full 3:2 artwork at 300px tall, so "Back to home" sits above a 1280x800 fold. */
-  .missing-landscape { width: 100%; max-width: 450px; margin-block: calc(var(--space-8) * -1); }
-  .missing-landscape img { display: block; width: 100%; height: auto; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 12%, #000 85%, transparent); mask-composite: intersect; }
-  .missing-copy { width: 100%; max-width: 680px; text-align: center; }
+  /* Home's first-screen composition: the words on the left, the picture on the right. The scene is
+     hidden from screen readers, so the markup can keep it first and phones show it on top. */
+  .missing-page { display: grid; grid-template-columns: minmax(0, 34rem) minmax(0, 520px); justify-content: space-between; align-items: center; column-gap: var(--space-16); padding-block: var(--space-12) 5rem; }
+  .missing-scene { order: 2; width: 100%; }
+  .missing-copy { min-width: 0; }
   .missing-status { color: var(--muted); font-size: .875rem; margin: 0 0 var(--space-4); }
   h1 { font-size: clamp(2.5rem, 4.7vw, 3.75rem); line-height: 1.12; letter-spacing: -.035em; margin: 0 0 1.5rem; }
-  .missing-description { max-width: 36ch; margin: 0 auto 2rem; font-size: 1.125rem; line-height: 1.65; color: var(--muted); }
-  .missing-actions { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
+  .missing-description { max-width: 36ch; margin: 0 0 var(--space-8); font-size: 1.125rem; line-height: 1.65; color: var(--muted); }
+  .missing-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4) var(--space-8); }
   .missing-actions .site-button { min-height: 48px; padding-inline: 1.75rem; }
   /* A 44px-tall tap area around the text link, without changing its look or the layout. */
   .missing-secondary { position: relative; color: var(--muted); }
@@ -38,9 +68,52 @@ import coast from '~/assets/site/quiet-coast-v2.webp';
   @media (hover: hover) and (pointer: fine) {
     .missing-secondary:hover { color: var(--accent); }
   }
-  @media (max-width: 600px) {
-    .missing-page { padding-block: .5rem 3rem; gap: 2rem; }
-    .missing-landscape { margin-block: -.5rem; }
+
+  /* One scene shows at a time; the horizon is the default. */
+  .missing-scene[data-scene="wave"] .scene-horizon, .missing-scene:not([data-scene="wave"]) .scene-wave { display: none; }
+
+  /* Horizon over water: Home's contact-rule horizon (src/pages/index.astro), with the sun centred
+     over three short strokes of water. */
+  .horizon-sky { position: relative; height: 150px; overflow: hidden; }
+  .horizon-sky::before { content: ''; position: absolute; inset: 0; background: radial-gradient(36% 90% at 50% 100%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%); }
+  .horizon-sky::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: linear-gradient(to right, transparent, var(--accent) 50%, transparent); opacity: .7; }
+  .horizon-sun { position: absolute; bottom: 0; left: 50%; width: 84px; height: 84px; margin-left: -42px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 72%, var(--paper)); box-shadow: 0 0 50px 14px color-mix(in srgb, var(--accent) 14%, transparent); transform: translateY(30%); }
+  .horizon-water { display: grid; justify-items: center; gap: 7px; padding-top: 9px; }
+  .horizon-water i { display: block; width: 120px; height: 2px; border-radius: 1px; background: var(--accent); opacity: .34; }
+  .horizon-water i:nth-child(2) { width: 76px; opacity: .24; }
+  .horizon-water i:nth-child(3) { width: 40px; opacity: .16; }
+
+  /* A waveform on still water: the bars in the accent, their reflection fainter and fading. */
+  .scene-wave { display: block; width: 100%; height: auto; overflow: visible; }
+  .scene-wave rect { transform-box: fill-box; }
+  .wave-up { fill: var(--accent); fill-opacity: .82; transform-origin: center bottom; }
+  .wave-down { fill: var(--accent); fill-opacity: .34; transform-origin: center top; }
+
+  /* Each scene plays once on arrival and rests within about two seconds. With reduced motion it is
+     drawn at rest: the sun risen, the bars standing. */
+  @media (prefers-reduced-motion: no-preference) {
+    .horizon-sun { animation: missing-sun-rise 1.6s var(--ease-site) .2s backwards; }
+    .horizon-sky::before { animation: missing-fade 1.6s ease-out .2s backwards; }
+    .horizon-water i { animation: missing-fade .8s ease-out 1.2s backwards; }
+    .horizon-water i:nth-child(2) { animation-delay: 1.35s; }
+    .horizon-water i:nth-child(3) { animation-delay: 1.5s; }
+    .wave-up { animation: missing-bar-rise .9s var(--ease-site) calc(var(--i) * 14ms + .15s) backwards; }
+    .wave-down { animation: missing-bar-rise .9s var(--ease-site) calc(var(--i) * 14ms + .3s) backwards; }
+  }
+  @keyframes missing-sun-rise { from { transform: translateY(130%); } }
+  @keyframes missing-fade { from { opacity: 0; } }
+  @keyframes missing-bar-rise { from { transform: scaleY(.04); opacity: 0; } }
+
+  /* Phones and narrow windows: the scene on top, the words below, still left-aligned. */
+  @media (max-width: 800px) {
+    .missing-page { grid-template-columns: minmax(0, 1fr); row-gap: var(--space-8); padding-block: var(--space-2) var(--space-12); }
+    .missing-scene { order: 0; max-width: 520px; }
+    .horizon-sky { height: 110px; }
+    .horizon-sun { width: 60px; height: 60px; margin-left: -30px; }
+    .horizon-water i { width: 86px; }
+    .horizon-water i:nth-child(2) { width: 54px; }
+    .horizon-water i:nth-child(3) { width: 28px; }
     .missing-description { max-width: 30ch; }
+    .missing-actions { gap: var(--space-4) 1.75rem; }
   }
 </style>

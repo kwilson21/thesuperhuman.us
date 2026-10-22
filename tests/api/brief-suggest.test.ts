@@ -52,14 +52,18 @@ it.each([
   expect(run).not.toHaveBeenCalled();
 });
 it.each([
-  ["What's the website for?", { path: 'website', purpose: 'A pottery studio site for classes.' }],
+  ['What’s the website for?', { path: 'website', purpose: 'A pottery studio site for classes.' }],
   ['What should the app let people do?', { path: 'webapp' }],
   ['Have a first version in mind?', { path: 'webapp', appGoal: 'Let students book and pay for lessons.' }],
-  ["What's the idea?", { path: 'idea' }],
+  ['What’s the idea?', { path: 'idea' }],
   ['What happens today?', { path: 'workflow', today: 'We track clients in a spreadsheet.' }],
 ])('accepts the brief question %s with its earlier answers', async (question, earlier) => {
   expect(await (await POST(context({ question, text: 'We track new clients', earlier }))).json()).toEqual({ suggestion: ' in a shared spreadsheet' });
   expect(run).toHaveBeenCalledOnce();
+});
+it.each(["What's the website for?", "What's the idea?"])('accepts %s with a straight apostrophe from a page opened before the curly questions', async question => {
+  expect(await (await POST(context({ question, text: 'We track new clients', earlier: { path: 'website' } }))).json()).toEqual({ suggestion: ' in a shared spreadsheet' });
+  expect(JSON.parse(run.mock.calls[0][1].messages[1].content).question).toBe(question.replace("'", '’'));
 });
 it.each([{ AI: undefined }, { MUSIC_DB: undefined }, { BRIEF_SUGGEST_RATE_LIMIT: undefined }, { SOFTWARE_SUGGESTIONS_ENABLED: 'false' }])('silently disables unavailable suggestions', async env => {
   expect(await (await POST(context(input, env))).json()).toEqual({ suggestion: '' });

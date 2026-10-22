@@ -23,15 +23,29 @@ nothing useful to put in them.
 - **Colors:** retain the existing `--paper`, `--ink`, `--muted`, `--rule`, and
   `--accent` values in `src/styles/global.css`. Tailwind continues to reference
   them rather than defining a second palette.
-- **Type:** retain Newsreader, Inter, and the existing monospace role. Refine the
-  existing display, heading, lede, and eyebrow styles against the approved studies.
-  Keep a small set of named roles instead of per-page type scales.
+- **Type:** Libron (the serif since October 4, 2026, in place of Newsreader) sets
+  headings, text and public interface text: captions, the audio players and music
+  menu, chart labels and public form fields, at 14px or more (type board D4.4-B,
+  October 22, 2026). Small capital labels (`.page-kicker`, `.eyebrow`, step and phase
+  labels) and the project status line use Inter (D4.2-C); the owner, studio and
+  agreement pages keep Inter for their interface text. Agreement, offer, studio and
+  owner screens use Libron for every serif line, and the signed agreement PDF sets
+  its headings in a TTF built from the pinned Libron source
+  (`scripts/build-agreement-heading-font.py`) over Inter text (D9.3-C). Emails still
+  name Newsreader. JetBrains Mono is kept for code and data: Home's code field and
+  capacity key. Refine the existing display, heading, lede, and eyebrow styles
+  against the approved studies. Keep a small set of named roles instead of per-page
+  type scales.
 - **Layout:** retain the measure/content/page width roles in `tailwind.config.mjs`.
   Establish shared page gutters and section spacing there; keep deliberate art
   compositions local to the page. Mobile Home is one continuous paper surface.
 - **Controls:** share navigation, links, buttons, focus treatment, form fields,
   validation, and disclosure styling. Begin with existing components and native
   elements. A matching appearance must not hide different form requirements.
+  Form messages open through `src/scripts/form-messages.ts` (D9.2-D): they slide
+  open over 180ms on `--ease-site`, or appear at once with reduced motion, and a
+  primary action that was on screen stays above the fold unless focus has to move
+  further.
 - **Icons:** use lightweight SVG with common stroke, size, and color rules. The
   four Audio service icons are symbolic markers beside visible headings.
 - **Motion:** start with the static composition. Enhance a specific interaction
@@ -43,10 +57,17 @@ nothing useful to put in them.
   each `[data-scene]`, `[data-reveal]` blocks reveal once (at once on keyboard
   focus), a `[data-scene-play="ms"]` scene plays once when half of it is on screen, a
   `[data-scene-arrive]` CSS entrance that the page first shows off screen waits
-  until half of it is on screen or it fills half the screen, `[data-tilt]` leans toward a fine
+  until half of it is on screen or it fills half the screen (the Building drawings
+  show their flow this way), `[data-tilt]` leans toward a fine
   pointer, and anything that plays on its own rests within
   five seconds. Printing stops it. Home's worlds (content model, "Home motion")
   are the fullest example; page-specific scenes plug in through `runMotion()`.
+  Shared timings are named once in `src/styles/global.css`, beside `--ease-site`:
+  a reveal fades in and rises 12px over 600ms (`--dur-reveal`, `--rise-reveal`,
+  also used by Home's Work with me doors), the link arrow moves in 160ms
+  (`--dur-hover`) and pages cross-fade in 180ms (`--dur-page`). A section
+  heading's rule is structure and does not draw in. Page scenes keep their own
+  choreography, the way illustration colours stay local (October 22).
 
 `BaseLayout.astro` retains document structure, metadata, canonical URLs, and the
 skip link. Add one shared navigation component used by main-site pages, and
@@ -68,9 +89,11 @@ language for arranging arbitrary page blocks. Extract components when two real
 uses share behavior or markup, or one substantial interactive explanation needs
 its own boundary. Do not require every section to become a component.
 
-Reuse `ProjectCard`, `ExperienceRow`, `ProjectUpdates`, and
-`ProjectTimeline` where their responsibilities fit. Keep the publication adapter
-in `src/lib/project-story.ts`. Reuse the existing contact/resume forms and Audio
+Reuse `ExperienceRow`, `ProjectUpdates`, and `ProjectTimeline` where their
+responsibilities fit. Delete unused components rather than keeping them for
+later: git history holds `ProjectCard`, `LiveWorkFeed`, `ResumeCard` and
+`DesignStoryPreview` (removed 2026-10-22, D10.6-B) if one is needed again.
+Keep the publication adapter in `src/lib/project-story.ts`. Reuse the existing contact/resume forms and Audio
 `TrackRow`/booking flow, modifying their real caller-to-result behavior where the
 approved design changes it.
 
@@ -137,6 +160,8 @@ Audio notes become optional so empty prose is not required to publish a recordin
   typeface that needs the horizontal mark over the `z`, including Inter and
   JetBrains Mono. Until a matching derivative exists, render the plain name in
   the surrounding typeface instead of inserting a differently styled glyph.
+  Public captions are Libron, so the door captions and the services footnote
+  show the name mark from Kazon Name Text, which is cut from Libron.
 - Photograph the owner's own objects for the studio and the About chapters
   (Hallmark board D5.1-D, deferred by the owner on October 22, 2026: "I think
   we should defer D5.1-D as a future task to do later, what we have works for

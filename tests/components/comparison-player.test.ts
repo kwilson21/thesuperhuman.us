@@ -121,7 +121,16 @@ it('draws the unplayed bars and both seek tracks at 3:1 or better against paper 
   expect(component).not.toMatch(/var\(--rule\) var\(--position/);
 });
 
-it('sets every player control in one face, the shared sans token', () => {
-  expect(component).toContain('.comparison-match{display:flex;align-items:center;gap:.4rem;font:.8rem var(--font-sans)}');
+it('sets every player control in Libron at 14px or more (type board D4.4-B)', () => {
+  expect(component).toContain('.comparison-match{display:flex;align-items:center;gap:.4rem;font:.875rem var(--font-serif)}');
+  expect(component).not.toContain('var(--font-sans)');
   expect(component).not.toMatch(/Inter,\s*sans-serif/);
+  // The only size under 14px is the visually hidden seek label (font-size:0).
+  const sizes = [...component.matchAll(/font(?:-size)?:([\d.]+)rem/g)].map(match => Number(match[1]));
+  expect(sizes.length).toBeGreaterThan(10);
+  expect(sizes.filter(size => size < .875)).toEqual([]);
+  // The dimmed version letter stays at full opacity on the accent button (paper at 75% on the accent is 3.4:1).
+  expect(component).toContain('.comparison-player--compact .comparison-switch button[data-select-version="after"][aria-pressed="true"] span:first-child{opacity:1}');
+  // At 14px, Match loudness takes its own row on the smallest phones so it never meets the volume slider.
+  expect(component).toContain('@media(max-width:370px){.comparison-match{grid-column:1/-1;grid-row:3;justify-self:start}.comparison-seek{grid-row:4}}');
 });

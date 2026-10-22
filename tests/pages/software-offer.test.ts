@@ -504,7 +504,7 @@ it('renders one signing page, returning details, waiting and both-signed actions
     html = await render();
     expect(html).toContain('Signed by both of you.');
     expect(html).not.toContain('Open your project page');
-    expect(html).toContain("I'll email you the link to your project page when work starts.");
+    expect(html).toContain("I’ll email you the link to your project page when work starts.");
     sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('r','current',?,'standard','now','now','now','owner','now','now')").run(JSON.stringify(terms));
     html=await render();expect(html).toContain('Open your project page');
     sql.exec("INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,created_by,created_at,updated_at) VALUES('signing-deposit','r','current',0,'deposit',120000,7,'open','https://example.com/deposit','owner','now','now')");
@@ -1353,13 +1353,13 @@ it('renders all four personalized receipt outcomes into the rendered page', asyn
   try {
     const {renderSoftwareReceipt} = await import('~/scripts/software-inquiry');
     for (const [status,line,note] of [
-      ['sent','A copy is on its way to alex@example.com.',"It has everything you wrote, so you don't need to save this page."],
-      ['uncertain','Your copy should arrive shortly.',"If it doesn't, your brief is still saved and I'll still reply."],
-      [undefined,"I couldn't send your copy just now, but your brief is saved and I'll still reply.",null],
-      ['failed',"I couldn't send your copy just now, but your brief is saved and I'll still reply.",null],
+      ['sent','A copy is on its way to alex@example.com.',"It has everything you wrote, so you don’t need to save this page."],
+      ['uncertain','Your copy should arrive shortly.',"If it doesn’t, your brief is still saved and I’ll still reply."],
+      [undefined,"I couldn’t send your copy just now, but your brief is saved and I’ll still reply.",null],
+      ['failed',"I couldn’t send your copy just now, but your brief is saved and I’ll still reply.",null],
     ] as const) {
       renderSoftwareReceipt({brief:{name:'Alex Example',email:'alex@example.com'},clientCopyStatus:status});
-      expect(serialize(find(dom,'data-receipt-thanks'))).toBe("Thanks, Alex. I'll read it myself and reply within two business days.");
+      expect(serialize(find(dom,'data-receipt-thanks'))).toBe("Thanks, Alex. I’ll read it myself and reply within two business days.");
       expect(serialize(find(dom,'data-copy-status'))).toBe(line);
       const card = find(dom,'data-copy-card');
       expect(serialize(card).split(line)).toHaveLength(2);
@@ -1386,7 +1386,7 @@ it('renders the AI disclosure beside both answer boxes and the dated retention n
   visit(document); expect(sections).toHaveLength(2);
   for (const section of sections) {
     const output = serialize(section);
-    expect(output).toContain("Suggestions come from Cloudflare's AI, which sees only what you type in the answer boxes.");
+    expect(output).toContain("Suggestions come from Cloudflare’s AI, which sees only what you type in the answer boxes.");
     expect(output).toContain('Please leave out passwords, access details and real customer data.');
     expect(output).not.toContain('Leave out passwords and customer data.');
     expect(output).toContain('href="/privacy#software-briefs"'); expect(output).toContain('Suggestions are off.'); expect(output).toContain('Turn off');
