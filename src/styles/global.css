@@ -249,12 +249,10 @@
     @keyframes page-fade-in { from { opacity: 0; } }
   }
   /* Motion layer (src/scripts/scroll-scenes.ts adds .motion only when motion is welcome):
-     [data-reveal] blocks rise in once, and a section heading's rule draws in with them. */
+     [data-reveal] blocks rise in once. A section heading's rule is structure and stays at rest. */
   @media screen and (prefers-reduced-motion: no-preference) {
     .motion [data-reveal] { transition: opacity 900ms var(--ease-site), transform 900ms var(--ease-site); }
     .motion [data-reveal]:not(.is-in) { opacity: 0; transform: translateY(26px); }
-    .motion .site-section-heading::after { transform-origin: left; transition: transform 1100ms var(--ease-site) 200ms; }
-    .motion [data-reveal]:not(.is-in) .site-section-heading::after, .motion .site-section-heading[data-reveal]:not(.is-in)::after { transform: scaleX(0); }
     /* A block revealed by keyboard focus appears at once, children included. */
     .motion .is-instant, .motion .is-instant *, .motion .is-instant *::after { transition-duration: 0s !important; transition-delay: 0s !important; }
     .motion-starting [data-reveal], .motion-starting [data-reveal] * { transition: none !important; }
