@@ -1394,8 +1394,8 @@ it('renders the AI disclosure beside both answer boxes and the dated retention n
   const notice = await container.renderToString(privacy, { request:new Request('https://thesuperhuman.us/privacy') });
   expect(notice).toContain('Updated October 19, 2026'); expect(notice).toContain('id="software-briefs"');
   expect(notice).toContain('a counter derived from your IP address, kept for up to two days');
-  expect(notice).toContain("Neither are a website brief's link and notes on what you already have; those boxes show no suggestions.");
-  expect(notice).toContain("Anything you type in a box that shows suggestions is sent, even if you don't accept one.");
+  expect(notice).toContain('Neither are a website brief’s link and notes on what you already have; those boxes show no suggestions.');
+  expect(notice).toContain('Anything you type in a box that shows suggestions is sent, even if you don’t accept one.');
   expect(notice).not.toContain('Anything you type in an answer box is sent for suggestions.');
 });
 

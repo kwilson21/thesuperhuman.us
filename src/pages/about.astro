@@ -81,4 +81,7 @@ const chapters = [
     .chapter-copy { max-width: 36rem; }.chapter-scene { width: 110%; margin-left: -5%; }.chapter-art { margin-top: -.25rem; }
     .chapter-path { display: none; }.path-chapter + .path-chapter { padding-top: 1rem; }
   }
+  /* Narrow phones: one step down keeps the longest chapter link (The Engineer's Daily) on one line
+     from 358px; below that it wraps, with the arrow at the end of its last line. */
+  @media(max-width: 380px) { .chapter-copy .site-link { font-size: .9375rem; align-items: last baseline; } }
 </style>

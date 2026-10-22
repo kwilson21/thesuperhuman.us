@@ -157,7 +157,10 @@ export function setupComparisonPlayers() {
         seekFromPointer(event);
       });
     });
-    volume?.addEventListener('input', applyVolume);
+    // The volume track fills to its value in the accent, like the seek track.
+    const showVolume = () => volume?.style.setProperty('--fill', `${Number(volume.value) * 100}%`);
+    volume?.addEventListener('input', () => { showVolume(); applyVolume(); });
+    showVolume();
     match?.addEventListener('change', applyVolume);
     root.addEventListener('music-pause', pause);
     window.addEventListener('pagehide', pause);

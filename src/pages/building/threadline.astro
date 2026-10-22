@@ -36,11 +36,11 @@ Astro.response.headers.set('Cache-Control', 'no-store');
   .thread-experience > img { display: block; width: 100%; height: auto;  border-radius: 3px; }
   .thread-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; gap: 2rem; padding: 2rem 0 1rem; }
   .thread-steps li { display: flex; gap: 1rem; align-items: baseline; }
-  .thread-steps li > span { font: .8rem 'JetBrains Mono', monospace; color: var(--accent); }
+  .thread-steps li > span { font: .8rem var(--font-mono); color: var(--accent); }
   .thread-steps h2 { font-size: 1.6rem; line-height: 1.25; }
   .thread-steps p { font-size: 1rem; color: var(--muted); margin-top: .5rem; line-height: 1.6; }
   .thread-principles { align-items: start; grid-template-columns: 1fr 1fr; }
-  .thread-state { margin-top: 1.5rem; font-size: 1.15rem; line-height: 1.6; max-width: 65ch; }
+  .thread-state { margin-top: 1.5rem; font-size: 1.15rem; line-height: 1.6; max-width: var(--measure-prose); }
   @media(max-width: 700px) {
     .thread-experience > img { max-height: none; }
     .thread-steps, .thread-principles { grid-template-columns: 1fr; }

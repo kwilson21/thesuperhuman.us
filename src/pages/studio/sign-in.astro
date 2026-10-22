@@ -43,24 +43,26 @@ const partialSignOut = Astro.url.searchParams.get('signout') === 'partial';
   {!software && <img class="studio-corner" src={studioCorner.src} width={studioCorner.width} height={studioCorner.height} alt="" loading="lazy" decoding="async" />}
   <style>
     .studio-sign-in { max-width: 58rem; margin: 0 auto; padding: clamp(4rem, 12vw, 9rem) 1.5rem 3rem; }
+    /* The Turnstile widget is a fixed 300px; at 336px and below the side padding shrinks so it fits a 320px screen. */
+    @media (max-width: 21rem) { .studio-sign-in { padding-inline: 10px; } }
     /* Decorative. The top and side edges fade into the page so no image edge shows. */
     .studio-corner { display: block; width: min(100%, 72rem); height: auto; margin: 0 auto; pointer-events: none; user-select: none;
       mask-image: linear-gradient(to bottom, transparent, #000 18%), linear-gradient(to right, transparent, #000 3%, #000 82%, transparent);
       mask-composite: intersect; -webkit-mask-composite: source-in; }
     @media (max-width: 45rem) { .studio-corner { aspect-ratio: 1.45; object-fit: cover; object-position: left bottom; } }
-    .studio-kicker { color: var(--accent); font: 500 .78rem/1.4 Inter, sans-serif; letter-spacing: .18em; text-transform: uppercase; }
-    h1 { font-family: Libron, Georgia, serif; font-size: clamp(3.8rem, 10vw, 7.5rem); font-weight: 400; line-height: .95; margin: 1.5rem 0 2rem; }
-    .studio-intro { max-width: 36rem; font: 1.2rem/1.6 Inter, sans-serif; color: #4d4b47; margin-bottom: 3rem; }
+    .studio-kicker { color: var(--accent); font: 500 .78rem/1.4 var(--font-sans); letter-spacing: .18em; text-transform: uppercase; }
+    h1 { font-family: var(--font-serif); font-size: clamp(3.8rem, 10vw, 7.5rem); font-weight: 400; line-height: .95; margin: 1.5rem 0 2rem; }
+    .studio-intro { max-width: 36rem; font: 1.2rem/1.6 var(--font-sans); color: var(--muted); margin-bottom: 3rem; }
     form { border-top: 1px solid var(--rule); padding-top: 1.75rem; max-width: 31rem; display: grid; gap: 1rem; }
     form[hidden] { display: none; }
-    h2 { margin: 0; font: 400 clamp(2rem, 5vw, 2.8rem)/1.1 Libron, Georgia, serif; }
+    h2 { margin: 0; font: 400 clamp(2rem, 5vw, 2.8rem)/1.1 var(--font-serif); }
     .studio-intro.small { margin: -.4rem 0 .4rem; font-size: 1rem; }
     .code-boxes { display: grid; grid-template-columns: repeat(8, minmax(0, 3rem)); gap: .45rem; margin: 0; padding: 0; border: 0; }
-    .code-boxes legend { margin-bottom: .6rem; padding: 0; font: 500 .82rem/1.4 Inter, sans-serif; }
-    .code-box { width: 100%; aspect-ratio: 5 / 6; padding: 0; border: 1px solid var(--studio-line); border-radius: 2px; background: var(--studio-field); text-align: center; font: 500 1.35rem/1 Inter, sans-serif; font-variant-numeric: tabular-nums; }
-    .code-box:focus-visible { outline: none; border: 2px solid var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+    .code-boxes legend { margin-bottom: .6rem; padding: 0; font: 500 .82rem/1.4 var(--font-sans); }
+    .code-box { width: 100%; aspect-ratio: 5 / 6; padding: 0; border: 1px solid var(--field-border); border-radius: 2px; background: var(--studio-field); text-align: center; font: 500 1.35rem/1 var(--font-sans); font-variant-numeric: tabular-nums; }
+    .code-box:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .studio-button { min-width: 12rem; }
-    #studio-status { min-height: 2rem; margin-top: 1.5rem; font: .95rem/1.5 Inter, sans-serif; }
+    #studio-status { min-height: 2rem; margin-top: 1.5rem; font: .95rem/1.5 var(--font-sans); }
   </style>
   {siteKey && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>}
   {siteKey && <script>

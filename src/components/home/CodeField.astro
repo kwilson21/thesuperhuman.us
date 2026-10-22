@@ -26,14 +26,18 @@ const width = 560;
   <rect class="code-caret" x="40" y={(rows.length - 1) * pitch + 7} width="2" height="11" />
 </svg>
 <style>
-  .code-field { display: block; width: 100%; height: auto; overflow: visible; }
-  .code-gutter { font-family: var(--font-mono); font-size: 10px; fill: #5a534a; text-anchor: end; }
-  .tone-0 { fill: #6f8fb5; }
-  .tone-1 { fill: #d17f59; }
-  .tone-2 { fill: #8fa66b; }
-  .tone-3 { fill: #c9a95a; }
-  .tone-4 { fill: #5c564e; }
-  .code-caret { fill: #e8e1d5; opacity: 0; }
+  /* Illustration colours, matched to the code on the studio monitor; local to this drawing. */
+  .code-field {
+    --code-gutter: #5a534a; --code-blue: #6f8fb5; --code-orange: #d17f59; --code-green: #8fa66b; --code-gold: #c9a95a; --code-dim: #5c564e; --code-caret: #e8e1d5;
+    display: block; width: 100%; height: auto; overflow: visible;
+  }
+  .code-gutter { font-family: var(--font-mono); font-size: 10px; fill: var(--code-gutter); text-anchor: end; }
+  .tone-0 { fill: var(--code-blue); }
+  .tone-1 { fill: var(--code-orange); }
+  .tone-2 { fill: var(--code-green); }
+  .tone-3 { fill: var(--code-gold); }
+  .tone-4 { fill: var(--code-dim); }
+  .code-caret { fill: var(--code-caret); opacity: 0; }
   @media screen and (prefers-reduced-motion: no-preference) {
     :global(.motion) .code-field:not(.is-in) .code-row rect { transform: scaleX(0); }
     :global(.motion) .code-field .code-row rect { transform-box: fill-box; transform-origin: left; transition: transform 380ms steps(6, end); transition-delay: calc(var(--i) * 90ms + 150ms); }

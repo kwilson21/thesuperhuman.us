@@ -21,10 +21,13 @@ interface Props { compact?: boolean; }
   </div>
 </footer>
 <style>
-  .compact-footer-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1.5rem; padding-block: 2rem 3rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: .9rem; }
-  .compact-footer a { border: 0; }
+  .compact-footer-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-6); padding-block: var(--space-8) var(--space-12); border-top: 1px solid var(--rule); color: var(--muted); font-size: .875rem; }
+  /* Each link gets a 44px-tall tap area from a pseudo-element, so the text and layout keep their look.
+     Wrapped rows sit 44px apart (row gap = 44px minus one line), so neighbouring areas never overlap. */
+  .compact-footer a { position: relative; border: 0; }
+  .compact-footer a::after { content: ''; position: absolute; inset-inline: calc(var(--space-3) * -1); top: 50%; height: 44px; transform: translateY(-50%); }
   .footer-name { font-size: 1.25rem; letter-spacing: -.03em; }
-  nav { display: flex; flex-wrap: wrap; gap: .75rem 1.5rem; }
+  nav { display: flex; flex-wrap: wrap; gap: calc(44px - 1lh) var(--space-6); }
   .compact-footer p { margin: 0; }
-  @media (max-width: 600px) { .compact-footer-inner { gap: 1rem; } .compact-footer p { width: 100%; } }
+  @media (max-width: 600px) { .compact-footer-inner { gap: var(--space-4); } .compact-footer p { width: 100%; } }
 </style>

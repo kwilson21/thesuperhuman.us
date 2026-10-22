@@ -23,6 +23,8 @@ if (!release) {
 const tracks = release.tracks.map(id => catalog.recordings.find(r => r.id === id)!);
 const first = tracks[0];
 const mainTitle = release.displayTitle ?? release.title;
+// The masthead never sets a word larger than its column can hold, so a long one-word title cannot overflow a phone.
+const longestWord = Math.max(...mainTitle.split(/\s+/).map(word => word.length));
 const heroImages = import.meta.glob<{ default: ImageMetadata }>('../../assets/site/*.webp', { eager: true });
 const hero = release.hero ? heroImages[`../../assets/site/${release.hero}.webp`]?.default : undefined;
 const poster = hero?.src ?? release.artwork;
@@ -36,7 +38,7 @@ const videoId = `video-${first.id}`;
     <MusicNav />
     <header class="premiere-masthead">
       <div class="masthead-artist"><span><PersonalNameText text={release.artist} /></span></div>
-      <h1 class:list={['masthead-title', { 'masthead-title-long': mainTitle.length > 12 }]}>{mainTitle}</h1>
+      <h1 class:list={['masthead-title', { 'masthead-title-long': mainTitle.length > 12 }]} style={`--masthead-word:${longestWord}`}>{mainTitle}</h1>
       <p class="masthead-credit">{release.producer && <span>Prod. {release.producer}</span>}<span>{release.status === 'preview' ? 'Streaming preview' : release.type === 'ep' ? 'EP' : release.type}</span></p>
       <div class="premiere-actions">
         <button type="button" class="premiere-action" data-audio-toggle={playerId} data-play-label="Play song" data-pause-label="Pause song" aria-label="Play song" disabled><span class="round-play"><PlayIcon /></span><span data-action-label>Play song</span></button>
