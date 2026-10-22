@@ -25,7 +25,7 @@ const chapters = [
   <div class="about-page">
     <header class="site-shell about-intro">
       <div class="about-intro-copy"><p class="page-kicker">About</p><h1 class="page-title">A little more<br />about me.</h1><div class="page-lede"><Content /></div></div>
-      <img class="terrain" src={terrain.src} width={terrain.width} height={terrain.height} alt="" fetchpriority="high" data-scene="terrain" data-start="0.2" data-end="-0.8" />
+      <img class="terrain" src={terrain.src} width={terrain.width} height={terrain.height} alt="" fetchpriority="high" />
     </header>
     <div class="site-shell path-chapters">
       {chapters.map((chapter, index) => <section id={chapter.id} class:list={['path-chapter', { reverse: index % 2 === 1 }]}>
@@ -52,7 +52,7 @@ const chapters = [
   window.addEventListener('hashchange', revealResume);
 
   // The path between chapters follows the reader, and each chapter's object plays once as it
-  // arrives (ObjectLife); all of it rests fully drawn without motion.
+  // arrives (ObjectLife); the terrain stays still. All of it rests fully drawn without motion.
   runMotion();
 </script>
 <style>
@@ -60,7 +60,7 @@ const chapters = [
   .about-intro { position: relative; padding-top: 4rem; min-height: 640px; }
   .about-intro-copy { position: relative; z-index: 1; max-width: 34rem; }
   .about-intro .page-lede { max-width: 30rem; }
-  .terrain { position: absolute; width: 90%; max-width: none; right: -16%; top: -1rem; z-index: 0; transform: translateY(calc(var(--p, 0) * -28px)); mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 28%, #000 85%, transparent), linear-gradient(to bottom, #000 75%, transparent); mask-composite: intersect; pointer-events: none; }
+  .terrain { position: absolute; width: 90%; max-width: none; right: -16%; top: -1rem; z-index: 0; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 28%, #000 85%, transparent), linear-gradient(to bottom, #000 75%, transparent); mask-composite: intersect; pointer-events: none; }
   .path-chapter { position: relative; display: grid; grid-template-columns: 1fr 1.2fr; align-items: center; gap: 2rem; min-height: 465px; padding-bottom: 100px; scroll-margin-top: 3rem; }
   .chapter-copy { position: relative; z-index: 2; max-width: 30rem; }.chapter-copy h2 { font-size: clamp(2.2rem, 3.7vw, 3.2rem); line-height: 1.1; letter-spacing: -.035em; }.chapter-copy > p:not(.page-kicker) { font-size: 1.2rem; line-height: 1.5; color: var(--muted); margin-top: 1rem; }.chapter-copy .site-link { margin-top: 1.5rem; }.chapter-copy > p.chapter-extra { font-size: 1.05rem; }
   .chapter-art { position: relative; z-index: 1; }
@@ -72,7 +72,6 @@ const chapters = [
   /* Drawn as far as the reader has scrolled; fully drawn without motion (no --p). No
      non-scaling-stroke: with it Chromium dashes in screen space and pathLength stops lining up. */
   .chapter-path path { stroke-dasharray: 1; stroke-dashoffset: calc(1 - var(--p, 1)); }
-  @media (prefers-reduced-motion: reduce) { .terrain { transform: none; } }
   .resume-section { margin: 0 0 3rem; border-top: 1px solid var(--rule); padding-top: 1.5rem; }.resume-section > div { max-width: 46rem; padding-top: 1rem; }.resume-section h2 { font-size: 2rem; }.resume-description { margin-block: .5rem 2rem; color: var(--muted); }
   @media(min-width: 801px) and (max-width: 1100px) { .about-intro { min-height: 590px; }.terrain { top: 6rem; }.path-chapter { min-height: 430px; }.about-intro-copy { max-width: 30rem; } }
   @media(max-width: 800px) {

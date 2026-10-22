@@ -1,6 +1,7 @@
 // Home's scenes on top of the shared motion layer (scroll-scenes.ts): the studio plays
-// once on arrival and again when the visitor comes back to it or points at it, the
-// waveform edge follows scroll, and the capacity figure counts up when it reveals.
+// once on arrival and again when the visitor comes back to it or points at it (the picture
+// itself stays still), the waveform edge follows scroll, and the capacity figure counts up
+// when it reveals.
 import {
   barsPath, capacityCells, easeOutCubic, formatFigure, parseFigure, signalFrame, waveformPeaks,
 } from '~/lib/home-motion';
@@ -29,16 +30,14 @@ runMotion(({ signal, finePointer, onScene, onReveal, cleanup }) => {
         cancelAnimationFrame(frame);
         frame = requestAnimationFrame(() => {
           const box = scene.getBoundingClientRect();
-          scene.style.setProperty('--mx', (((event.clientX - box.left) / box.width) * 2 - 1).toFixed(3));
-          scene.style.setProperty('--my', (((event.clientY - box.top) / box.height) * 2 - 1).toFixed(3));
           const over = event.clientX > box.left + box.width * 0.3 && event.clientX < box.right && event.clientY > box.top && event.clientY < box.bottom;
           // Replays when the pointer arrives over the studio, not continuously while it stays.
           if (over && !inside) player.play();
           inside = over;
         });
       }, { signal });
-      studio.addEventListener('pointerleave', () => { inside = false; scene.style.setProperty('--mx', '0'); scene.style.setProperty('--my', '0'); }, { signal });
-      cleanup(() => { cancelAnimationFrame(frame); scene.style.removeProperty('--mx'); scene.style.removeProperty('--my'); });
+      studio.addEventListener('pointerleave', () => { inside = false; }, { signal });
+      cleanup(() => cancelAnimationFrame(frame));
     }
   }
 

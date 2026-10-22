@@ -12,15 +12,23 @@ const buttons = [
   { x: 1128, y: 413, at: 0.5 }, { x: 1214, y: 489, at: 0.8 }, { x: 1097, y: 536, at: 1.1 },
   { x: 1011, y: 459, at: 1.4 }, { x: 1128, y: 413, at: 2.05 }, { x: 1214, y: 489, at: 2.05 },
 ];
+// Covers over the laptop's "</>", one per character, measured on laptop-v1 ("<" 633-682,
+// "/" 693-731, ">" 743-790; all within y 373-480), lifted in typing order.
+const glyphCovers = [{ x: 630, width: 57, at: 0.9 }, { x: 687, width: 50, at: 1.2 }, { x: 737, width: 57, at: 1.5 }];
 ---
 <svg class="chapter-life" viewBox="0 0 1536 1024" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
   {kind === 'audio' && <g class="life-rings" transform="translate(700 585)">
     {[0.35, 0.9, 1.45].map(at => <ellipse rx="172" ry="150" style={`--at:${at}s`} />)}
   </g>}
   {kind === 'software' && <g class="life-screen">
-    <defs><radialGradient id="glyph-glow"><stop offset="0" stop-opacity=".55" /><stop offset="1" stop-opacity="0" /></radialGradient></defs>
+    <defs>
+      <radialGradient id="glyph-glow"><stop offset="0" stop-opacity=".55" /><stop offset="1" stop-opacity="0" /></radialGradient>
+      {/* The screen behind the glyph: darker at lower left, lighter at upper right. */}
+      <linearGradient id="glyph-screen" gradientUnits="userSpaceOnUse" x1="625" y1="490" x2="809" y2="335"><stop offset="0" /><stop offset="1" /></linearGradient>
+    </defs>
+    {glyphCovers.map(cover => <rect class="glyph-cover" x={cover.x} y="368" width={cover.width} height="118" fill="url(#glyph-screen)" style={`--at:${cover.at}s`} />)}
     <ellipse class="glyph-glow" cx="712" cy="427" rx="150" ry="100" fill="url(#glyph-glow)" />
-    <rect class="glyph-caret" x="812" y="402" width="5" height="52" rx="1" />
+    <rect class="glyph-caret" x="630" y="402" width="5" height="52" rx="1" />
   </g>}
   {kind === 'play' && <g class="life-buttons">
     {buttons.map(button => <g style={`--at:${button.at}s`}>
@@ -34,10 +42,13 @@ const buttons = [
   </g>}
 </svg>
 <style>
-  /* Illustration colours, sampled from the object art (the laptop screen's glow and glyph, the
-     controller's buttons) plus the lifted terracotta of Home's dark screen. Local to these scenes. */
-  .chapter-life { --life-screen-glow: #f6e8d2; --life-glyph: #eadfca; --life-press: #3b1206; --life-sun: #e08a62; position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  /* Illustration colours, sampled from the object art (the laptop screen's glow, glyph and screen,
+     the controller's buttons) plus the lifted terracotta of Home's dark screen. Local to these
+     scenes. The screen colours are as the page shows the art, multiplied with the paper. */
+  .chapter-life { --life-screen-glow: #f6e8d2; --life-glyph: #eadfca; --life-screen-low: #26241f; --life-screen-high: #37342f; --life-press: #3b1206; --life-sun: #e08a62; position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
   #glyph-glow stop { stop-color: var(--life-screen-glow); }
+  #glyph-screen stop:first-child { stop-color: var(--life-screen-low); }
+  #glyph-screen stop:last-child { stop-color: var(--life-screen-high); }
   #sun-glow stop { stop-color: var(--life-sun); }
   .chapter-life :is(ellipse, circle, rect) { opacity: 0; }
   .life-rings ellipse { fill: none; stroke: var(--accent); stroke-width: 2.4; vector-effect: non-scaling-stroke; }
@@ -47,7 +58,10 @@ const buttons = [
   @media screen and (prefers-reduced-motion: no-preference) {
     :global(.is-playing) .life-rings ellipse { transform-box: fill-box; transform-origin: center; animation: ring-out 2.2s cubic-bezier(.2, .6, .3, 1) var(--at) both; }
     :global(.is-playing) .glyph-glow { animation: glyph-glow 2.6s ease-in-out .3s both; }
-    :global(.is-playing) .glyph-caret { animation: caret-blink 1.6s steps(1, end) 1.2s forwards; }
+    /* The "</>" is typed again: each cover lifts as the caret moves past its character, then the
+       caret blinks twice and leaves. */
+    :global(.is-playing) .glyph-cover { animation: glyph-cover 1ms linear var(--at) both; }
+    :global(.is-playing) .glyph-caret { animation: glyph-type 3.1s linear both; }
     :global(.is-playing) .life-buttons .press { animation: button-press 380ms ease-out var(--at) both; }
     :global(.is-playing) .life-buttons .press-ring { transform-box: fill-box; transform-origin: center; animation: press-ring 700ms ease-out var(--at) both; }
     :global(.is-playing) .life-sun circle { transform-box: fill-box; transform-origin: center; animation: sun-glow 2.4s ease-out var(--at) both; }
@@ -55,7 +69,17 @@ const buttons = [
   /* Each keyframe starts invisible, so nothing shows during a scene's start delay. */
   @keyframes ring-out { 0% { transform: scale(1); opacity: 0; } 4% { opacity: .55; } 100% { transform: scale(1.7); opacity: 0; } }
   @keyframes glyph-glow { 0%, 100% { opacity: 0; } 45% { opacity: 1; } }
-  @keyframes caret-blink { 0%, 50% { opacity: 1; } 25%, 75%, 100% { opacity: 0; } }
+  @keyframes glyph-cover { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes glyph-type {
+    0% { opacity: 1; transform: translateX(0); animation-timing-function: step-end; }
+    29.03% { opacity: 1; transform: translateX(56px); animation-timing-function: step-end; }
+    38.71% { opacity: 1; transform: translateX(106px); animation-timing-function: step-end; }
+    48.39% { opacity: 1; transform: translateX(167px); animation-timing-function: step-end; }
+    61.29% { opacity: 0; transform: translateX(167px); animation-timing-function: step-end; }
+    74.19% { opacity: 1; transform: translateX(167px); animation-timing-function: step-end; }
+    87.1% { opacity: 0; transform: translateX(167px); animation-timing-function: step-end; }
+    100% { opacity: 0; transform: translateX(167px); }
+  }
   @keyframes button-press { 0%, 100% { opacity: 0; } 25% { opacity: .55; } }
   @keyframes press-ring { 0% { transform: scale(1); opacity: 0; } 6% { opacity: .7; } 100% { transform: scale(1.7); opacity: 0; } }
   @keyframes sun-glow { 0% { transform: scale(.6); opacity: 0; } 5% { opacity: .9; } 100% { transform: scale(1.9); opacity: 0; } }
