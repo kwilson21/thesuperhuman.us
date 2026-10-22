@@ -39,20 +39,24 @@ const videoId = `video-${first.id}`;
     <header class="premiere-masthead">
       <div class="masthead-artist"><span><PersonalNameText text={release.artist} /></span></div>
       <h1 class:list={['masthead-title', { 'masthead-title-long': mainTitle.length > 12 }]} style={`--masthead-word:${longestWord}`}>{mainTitle}</h1>
-      <p class="masthead-credit">{release.producer && <span>Prod. {release.producer}</span>}<span>{release.status === 'preview' ? 'Streaming preview' : release.type === 'ep' ? 'EP' : release.type}</span></p>
-      <div class="premiere-actions">
-        <button type="button" class="premiere-action" data-audio-toggle={playerId} data-play-label="Play song" data-pause-label="Pause song" aria-label="Play song" disabled><span class="round-play"><PlayIcon /></span><span data-action-label>Play song</span></button>
-        {hasVideo && <button type="button" class="premiere-action video-action" data-video-trigger={videoId} aria-label="Watch lyric video" disabled><span class="round-play outlined"><PlayIcon /></span><span data-action-label>Watch lyric video</span></button>}
-      </div>
-      <noscript><p class="music-note">Use the listening and video controls below.</p></noscript>
     </header>
-    <LyricVideo recording={first} releaseId={release.id} poster={poster} quote={release.heroQuote}>
-      <div class="hero-transport"><AudioPlayer id={playerId} src={musicFile(first.id, releaseVersion(first))} title={mainTitle} duration={first.duration} artwork={release.artwork} releaseId={release.id} recordingId={first.id} /></div>
-    </LyricVideo>
-    {(first.youtubeUrl || first.soundcloudUrl) && <nav class="release-platform-links" aria-label="Listen and watch elsewhere">
-      {first.youtubeUrl && <a class="site-link" href={first.youtubeUrl} target="_blank" rel="noreferrer">Watch on YouTube <span aria-hidden="true">↗</span></a>}
-      {first.soundcloudUrl && <a class="site-link" href={first.soundcloudUrl} target="_blank" rel="noreferrer">Listen on SoundCloud <span aria-hidden="true">↗</span></a>}
-    </nav>}
+    <div class="premiere-lead">
+      <div class="premiere-lead-copy">
+        <p class="masthead-credit">{release.producer && <span>Prod. {release.producer}</span>}<span>{release.status === 'preview' ? 'Streaming preview' : release.type === 'ep' ? 'EP' : release.type}</span></p>
+        <div class="premiere-actions">
+          <button type="button" class="premiere-action" data-audio-toggle={playerId} data-play-label="Play song" data-pause-label="Pause song" aria-label="Play song" disabled><span class="round-play"><PlayIcon /></span><span data-action-label>Play song</span></button>
+          {hasVideo && <button type="button" class="premiere-action video-action" data-video-trigger={videoId} aria-label="Watch lyric video" disabled><span class="round-play outlined"><PlayIcon /></span><span data-action-label>Watch lyric video</span></button>}
+        </div>
+        <noscript><p class="music-note">Use the listening and video controls below.</p></noscript>
+      </div>
+      <LyricVideo recording={first} releaseId={release.id} poster={poster} quote={release.heroQuote}>
+        <div class="hero-transport"><AudioPlayer id={playerId} src={musicFile(first.id, releaseVersion(first))} title={mainTitle} duration={first.duration} artwork={release.artwork} releaseId={release.id} recordingId={first.id} /></div>
+      </LyricVideo>
+      {(first.youtubeUrl || first.soundcloudUrl) && <nav class="release-platform-links" aria-label="Listen and watch elsewhere">
+        {first.youtubeUrl && <a class="site-link" href={first.youtubeUrl} target="_blank" rel="noreferrer">Watch on YouTube <span aria-hidden="true">↗</span></a>}
+        {first.soundcloudUrl && <a class="site-link" href={first.soundcloudUrl} target="_blank" rel="noreferrer">Listen on SoundCloud <span aria-hidden="true">↗</span></a>}
+      </nav>}
+    </div>
     {tracks.length > 1 && <section class="music-section album-tracks" aria-label="Track list">{tracks.slice(1).map((track, index) => <div><h2>{index + 2}. {track.title}</h2><AudioPlayer id={`listen-${track.id}`} src={musicFile(track.id, releaseVersion(track))} title={track.title} duration={track.duration} releaseId={release.id} recordingId={track.id} />{(track.youtubeUrl || track.soundcloudUrl) && <nav class="release-platform-links" aria-label={`${track.title} on other platforms`}>{track.youtubeUrl && <a class="site-link" href={track.youtubeUrl} target="_blank" rel="noreferrer">Watch on YouTube <span aria-hidden="true">↗</span></a>}{track.soundcloudUrl && <a class="site-link" href={track.soundcloudUrl} target="_blank" rel="noreferrer">Listen on SoundCloud <span aria-hidden="true">↗</span></a>}</nav>}</div>)}</section>}
     <section class="lyric-spread" aria-label="Lyrics and contributors">
       <div>{release.lyricQuote && <blockquote>“{release.lyricQuote}”</blockquote>}{first.lyrics && <a class="site-link" href="#lyrics">Read the lyrics <span aria-hidden="true">→</span></a>}</div>

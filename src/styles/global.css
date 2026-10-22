@@ -236,7 +236,10 @@
   .site-section-heading h2 { flex-shrink: 1; min-width: 0; font-size: clamp(1.75rem, 3vw, 2.25rem); line-height: 1.2; letter-spacing: -.035em; margin: 0; }
   .site-section-heading::after { content: ''; height: 1px; flex: 1; background: var(--rule); }
   .site-links { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.75rem; }
-  .site-link { display: inline-flex; align-items: baseline; gap: .65rem; padding: .35rem 0; border-bottom: 1px solid var(--accent); line-height: 1.45; }
+  /* The rule sits about 4px under the baseline, like a link in a paragraph, while a transparent ::after keeps a 44px-tall
+     tap area. A link is about 28px tall, so wrapped rows need a 16px gap to keep neighbours' areas apart. */
+  .site-link { position: relative; display: inline-flex; align-items: baseline; gap: .65rem; padding: .55rem 0 0; border-bottom: 1px solid var(--accent); line-height: 1.15; }
+  .site-link::after { content: ''; position: absolute; inset-inline: 0; top: 50%; height: max(100%, 44px); transform: translateY(-50%); }
   .site-link span { color: var(--accent); transition: transform var(--dur-hover) var(--ease-site); }
   @media (hover: hover) and (pointer: fine) {
     .site-link:hover span { transform: translateX(3px); }

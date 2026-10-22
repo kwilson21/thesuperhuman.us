@@ -180,9 +180,9 @@ const jsonLd = {
   .project-card h3 { font-size: clamp(1.7rem, 2.6vw, 2.3rem); letter-spacing: -.035em; line-height: 1.1; margin: 0 0 .4rem; }
   .project-card .project-status { margin: 0 0 .65rem; }
   .project-card p:not(.project-status) { font-size: 1.125rem; color: var(--muted); line-height: 1.45; max-width: 65ch; margin: 0 0 1rem; text-wrap: pretty; }
-  .project-link { justify-self: start; align-self: start; }
+  .project-link { justify-self: start; align-self: start; position: static; }
   /* The picture stays a plain image; this link (with the visible arrow) is the card's only tab stop. */
-  .project-link::after { content: ''; position: absolute; inset: 0; }
+  .project-link::after { content: ''; position: absolute; inset: 0; height: auto; transform: none; }
 
   .work-proof-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.75rem; }
   .work-preview { display: block; }

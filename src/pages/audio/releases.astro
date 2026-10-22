@@ -24,7 +24,7 @@ const types = [...new Set(releases.map(release => release.type))];
  return <article data-release-type={release.type}><a class="collection-cover" href={mainSitePath(host, `/music/${release.slug}`)}><img src={release.artwork} alt={`${release.title} cover artwork`} width="1254" height="1254" /></a><p class="release-meta">{release.type === 'ep' ? 'EP' : release.type} · {release.status === 'preview' ? 'Streaming preview' : 'Released'}</p><h2>{release.displayTitle ?? release.title}</h2>{release.producer && <p class="collection-credit">Prod. {release.producer}</p>}<AudioPlayer id={`collection-${release.id}`} src={musicFile(track.id, releaseVersion(track))} title={release.displayTitle ?? release.title} duration={track.duration} releaseId={release.id} recordingId={track.id} /><a class="site-link" href={mainSitePath(host, `/music/${release.slug}`)}>Explore release →</a></article>;
 })}</div>
 {!releases.length && <p class="collection-empty">New music is on its way.</p>}
-<section class="collection-footer"><div><h2>The work behind the sound.</h2><a class="site-link" href={audioPath(host, '/portfolio')}>Audio portfolio →</a></div>{releases.length === 1 && <p>One song. A beginning.</p>}</section>
+<section class="collection-footer"><div>{releases.length === 1 && <p>One song. A beginning.</p>}<h2>The work behind the sound.</h2><a class="site-link" href={audioPath(host, '/portfolio')}>Audio portfolio →</a></div></section>
 </div><AudioFooter slot="footer" />
 <script>
 import { setupMusicPlayback } from '~/scripts/music-playback'; setupMusicPlayback();

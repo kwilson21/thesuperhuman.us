@@ -6,7 +6,6 @@ import MusicNav from '~/components/audio/MusicNav.astro';
 import ComparisonPlayer from '~/components/audio/ComparisonPlayer.astro';
 import ServiceIcon from '~/components/audio/ServiceIcon.astro';
 import PersonalNameText from '~/components/PersonalNameText.astro';
-import notebook from '~/assets/site/notebook-v1.webp';
 import { loadMusicCatalog } from '~/lib/music-content';
 import { methodologies } from '~/lib/music-catalog';
 import { audioPath } from '~/lib/host-routing';
@@ -32,7 +31,7 @@ const host = Astro.request.headers.get('host') ?? Astro.url.host;
 <p class="methodology-empty" data-no-examples hidden>A listening example for this approach is still to come. <a href={audioPath(host, '/services')}>Explore the services</a>.</p>
 {!catalog.examples.length && <p class="collection-empty">Selected recordings will appear here as they become available.</p>}
 <nav class="explore-services" aria-label="Explore audio services"><h3>Explore the services</h3>{Object.entries(methodologies).map(([key,method]) => <a href={audioPath(host, `/services#${key}`)}>{method.label}<span>About the service →</span></a>)}</nav>
-<section class="hub-outro"><div><h2>Let’s work on your song.</h2><p>Careful listening. Purposeful choices.</p><a class="site-button" href={audioPath(host, '/start')}>Start your song</a></div><img src={notebook.src} alt="" width={notebook.width} height={notebook.height} /></section>
+<section class="hub-outro"><div><h2>Let’s work on your song.</h2><p>Careful listening. Purposeful choices.</p><a class="site-button" href={audioPath(host, '/start')}>Start your song</a></div></section>
 </div><AudioFooter slot="footer" />
 <script>
 import { setupMusicPlayback } from '~/scripts/music-playback'; import { setupComparisonPlayers } from '~/scripts/comparison-player'; setupMusicPlayback(); setupComparisonPlayers();
