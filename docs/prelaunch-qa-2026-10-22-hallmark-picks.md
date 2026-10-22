@@ -2,13 +2,13 @@
 
 Date: October 22, 2026 (UTC)  
 Repository: `kwilson21/thesuperhuman.us`  
-Pull request: [#209](https://github.com/kwilson21/thesuperhuman.us/pull/209), "Build the owner's picks from the Hallmark decision boards"  
+Pull request: [#209](https://github.com/kwilson21/thesuperhuman.us/pull/209), "Build the owner's picks from the Hallmark decision boards", squash-merged to `main` as `ab5704f5` at 16:49:31 UTC on October 22, 2026, pinned to head `5d433349`  
 Branch: `claude/hallmark-picks`, from `main` at `97321a6c`  
 Target: production `https://thesuperhuman.us` after merge, including the audio pages on `audio.thesuperhuman.us`, which share the stylesheets.  
 Reviewer: Claude Code agents, collecting evidence for owner Kazon Wilson. Claude subagents wrote the code in seven groups; the coordinating session merged them. This record is evidence collection, not owner certification.  
 Scope: the owner's 42 picks from the Hallmark decision boards (#206). The PR description lists each change and the calls made to fit the boards.
 
-Rollback revision: `main` as it stands immediately before this PR merges. That is `97321a6c` unless #206 (docs only) merges first, in which case it is #206's merge commit. This PR adds no migration and writes no stored data, so a rollback has no stored-data caveat; signatures made after the deploy keep the curly consent text they recorded.
+Rollback revision: `97321a6c`, `main` immediately before this PR merged (#206 had not merged). This PR adds no migration and writes no stored data, so a rollback has no stored-data caveat; signatures made after the deploy keep the curly consent text they recorded.
 
 ## Owner decisions and authorization
 
@@ -30,7 +30,7 @@ Rollback revision: `main` as it stands immediately before this PR merges. That i
 - Later commits change only records (`docs/asset-reviews/*`, this file). Asset QA and `tests/scripts` (35 files) pass after them. CI runs the full suite on the final head.
 - The design check from #208 passes on this tree.
 - Each group's agent checked its pages in Chromium against `astro dev` with the screenshot preview config, at 320, 390 and 1280 at least and at the widths its board names, with motion and reduced motion. They found no horizontal overflow and no console errors. Their screenshots are in the session's scratchpad, not the repository.
-- Limits: Chromium only. The dev server is not the Workers runtime. Nothing was checked in production.
+- Limits: Chromium only. The dev server is not the Workers runtime. Nothing was checked in production before the merge; the production checks after the deploy are in section 7.
 
 ## 1. Purpose and content
 
@@ -132,13 +132,13 @@ Rollback revision: `main` as it stands immediately before this PR merges. That i
   - No secrets, dependencies or private data in the diff.
 - **PASS · Production configuration.** `wrangler.jsonc`, `public/_headers`, `src/middleware.ts`, `astro.config.mjs`, `package.json`, the lockfile and the migrations are unchanged.
 - **PASS · Rollback and authorization.** Rollback revision above; no backup needed; the owner approved the look.
-- **UNVERIFIED · Post-deployment verification.** After the merge, check on production:
-  - Home, `/work`, `/about`, `/services`, `/building` and a project page;
-  - `/audio/releases` and `/music/old-news`;
-  - `/software/start`;
-  - the 404, for its 404 status and both scenes;
-  - the headers, robots and sitemap.
-- **UNVERIFIED · Receipt.** Implemented: yes. Verified locally: yes. Deployed: no. Verified live: no.
+- **PASS · Post-deployment verification.** On `ab5704f5`, `validate` succeeded at 16:51:32 UTC and the production Workers Builds at 16:53:04 UTC. The coordinating Claude Code session then checked production with a read-only Playwright script (Chromium, no form sent) from 16:53 to 16:55 UTC:
+  - Production revision: `/about` serves "Explore the Daily prototype" (D10.1-C), which only this PR adds. Cloudflare's deployment history was not read.
+  - The four `/*` security headers and `strict-transport-security` on `/`, `/privacy` and the 404 response; `robots.txt` names the sitemap, which has 22 URLs and no private sections.
+  - No horizontal overflow and no console errors, apart from the Turnstile lines that predate this PR and the 404 page's own status line, on `/`, `/work`, `/services`, `/about`, `/privacy`, `/building`, `/writing/ai-gives-you-speed`, `/music/old-news` and the 404, at 1280x800, 390x844 and 320x640; `/audio/releases` at 701 to 1247px; the audio host at 390.
+  - The `/work` links end inside the first screen; the `/about` resume field shows its edge, a 2px focus outline and the accent edge when invalid; Home's metadata and `og:image` resolve.
+  - The 404 returns a 404 status. The script's first check expected both scenes in the page, but the inline script keeps only the chosen one; a follow-up run that fixed the random value showed the horizon scene at 0.1 and the waveform at 0.9, each with "Back to home" ending at 429px on a 1280x800 screen.
+- **PASS, with gaps · Receipt.** Implemented: yes. Verified locally: yes. Deployed: yes, by the production Workers Builds check on `ab5704f5` (16:53:04 UTC). Verified live: yes, for the checks above. Not verified live: the items under "Not claimed launch-ready", and on the pages above only overflow, console errors and the listed details were checked, not every pick's appearance.
 
 ## 8. Private owner center
 
@@ -169,10 +169,10 @@ Rollback revision: `main` as it stands immediately before this PR merges. That i
 | 4. Performance and resilience | 3 | 0 | 1 | 2 |
 | 5. Forms and sensitive flows | 3 | 0 | 2 | 1 |
 | 6. Privacy, legal and measurement | 0 | 0 | 0 | 6 |
-| 7. Release and final QA | 4 | 0 | 2 | 0 |
+| 7. Release and final QA | 6 | 0 | 0 | 0 |
 | 8. Private owner center | 0 | 0 | 0 | 15 |
 | Software agreement signing | 1 | 0 | 3 | 8 |
-| Total | 22 | 0 | 10 | 38 |
+| Total | 24 | 0 | 8 | 38 |
 
 Not claimed launch-ready. Still UNVERIFIED, with no owner-accepted exception:
 - 200% zoom, a second browser and a real device;
@@ -180,12 +180,9 @@ Not claimed launch-ready. Still UNVERIFIED, with no owner-accepted exception:
 - browser failure states;
 - real email delivery;
 - counsel review of the punctuation change;
-- PDF rendering in the Workers runtime and a signed packet's text extraction and certificates;
-- the post-deployment checks and receipt, which follow the merge.
+- PDF rendering in the Workers runtime and a signed packet's text extraction and certificates.
 
 ## Remaining work
 
-- Before merge: Codex's security review and a review of the final head; CI green on the final head.
-- After merge: the post-deployment checks in section 7, and the receipt.
 - Owner, optional: a second browser, a real phone and 200% zoom; a signed test agreement in production to see the Libron headings in the Workers runtime.
 - Follow-ups offered: re-render the link previews with the new label face and the new premiere and releases layouts.

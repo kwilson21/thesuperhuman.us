@@ -302,3 +302,7 @@ the required schema is applied.
 ### Agreement template labels
 
 Apply music migration `0026_agreement_template_labels.sql` after `0025_brief_suggestion_budget.sql` and before deploying code that reads template version labels. It is additive only: it adds nullable `version_label` and `source_revision` columns to `software_agreement_templates` and a partial unique index on `(kind, version_label)`. Existing template rows keep NULL values and show a `v` plus published-date fallback label. Deploying this code first breaks the owner request page for any request with an offer (even with signing off), the owner Agreements page, the client signing page after email verification and template publishing. `npm run owner:health -- --remote` reports `software_agreement_templates.version_label (migration 0026)` as missing until the migration is applied. Do not edit previously applied migrations.
+
+## Credits
+
+- **[Hallmark](https://github.com/nutlope/hallmark)**, the design standard this site is checked against, is made by Together AI and the Hallmark contributors and published under the MIT license. It is vendored unmodified at `.agents/skills/hallmark/` from commit `13ac0ec7e148655948100b6396439e481361d690` (August 6, 2026), with its `LICENSE` and a `VENDORED.md`. The site's own system, which overrides Hallmark's defaults, is in [design.md](design.md); [docs/design-standard.md](docs/design-standard.md) says how it is used. `npm run design:check`, part of `prebuild`, runs a few of its gates on `src/`.

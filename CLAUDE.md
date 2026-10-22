@@ -90,13 +90,25 @@ Publicizing Tally, Kaillera-next and website work follows the design in
 
 @.agents/skills/publicist/SKILL.md
 
+## Design standard
+
+[Hallmark](https://github.com/nutlope/hallmark) (MIT, by Together AI and the Hallmark
+contributors) is the standard for UI work. It is vendored unmodified at
+`.agents/skills/hallmark/`, credited in README.md, and reached through the
+`.claude/skills/hallmark/` pointer. The root [design.md](design.md) is this site's locked
+system and overrides Hallmark's defaults. Before asking for review of a UI PR, run
+`hallmark audit` read-only on the changed pages and fix the defects it finds.
+Design-choice findings go to Kazon as alternatives; never change them silently.
+[docs/design-standard.md](docs/design-standard.md) has the triage, where records go and
+how to update the vendored copy.
+
 ## Things to Never Do
 
 - Never display Kazon's personal home address anywhere on the site
 - Never display software rates publicly; audio starting prices above are approved
 - Never imply contract exclusivity or a blanket rejection of full-time opportunities; follow the agreed personal-site direction
 - Never use buzzwords: *passionate*, *innovative*, *guru*, *ninja*, *rockstar*
-- Never use em-dashes (` — `) in user-facing prose, email bodies, subjects, or any new copy. They read as AI-generated. Use periods, colons, commas, semicolons, or parentheses instead. The middle-dot (` · `) is fine as a separator in metadata lines. This rule applies to `src/`, `public/`, README.md, and CLAUDE.md. Historical design specs in `docs/superpowers/specs/` are frozen and exempt.
+- Never use em-dashes (` — `) in user-facing prose, email bodies, subjects, or any new copy. They read as AI-generated. Use periods, colons, commas, semicolons, or parentheses instead. The middle-dot (` · `) is fine as a separator in metadata lines. This rule applies to `src/`, `public/`, README.md, and CLAUDE.md. Historical design specs in `docs/superpowers/specs/` are frozen and exempt, and so is the vendored third-party Hallmark skill in `.agents/skills/hallmark/`, which stays byte for byte as upstream.
 - Never add hourly rates; all engagements are fixed price
 - Never add non-compete or exclusivity language to any copy
 - Never commit resume PDFs to the repository; they live in KV only
