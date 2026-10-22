@@ -265,6 +265,9 @@
 @layer components {
   .primary-page { padding-top: clamp(2rem, 5vw, 4rem); padding-bottom: 1rem; }
   .page-kicker { font-family: var(--font-mono); color: var(--accent); font-size: .6875rem; letter-spacing: var(--tracking-eyebrow); text-transform: uppercase; margin-bottom: 1rem; }
+  /* A project's state, set under its name in the case it is stored in: the same dot line on Home, /building and each project page. */
+  .project-status { display: flex; align-items: baseline; gap: .65rem; font: .75rem/1.7 var(--font-mono); margin-block: 1.5rem; }
+  .project-status::before { content: ''; width: .65rem; height: .65rem; border-radius: 50%; flex-shrink: 0; background: var(--accent); }
   .page-title { font-size: clamp(3.25rem, 6.5vw, 5.4rem); line-height: 1.02; letter-spacing: -.045em; }
   .page-lede { font-size: clamp(1.3rem, 2.5vw, 1.8rem); line-height: 1.35; margin-top: 1.25rem; max-width: 40rem; }
   .page-connect { border-top: 1px solid var(--rule); padding-block: 2.5rem; margin-top: var(--site-section-space); display: flex; justify-content: space-between; align-items: center; gap: 2rem; }

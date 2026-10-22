@@ -3,8 +3,6 @@
 .project-intro .page-title { max-width: 18ch; }
 .project-subtitle { font-size: clamp(1.65rem, 3vw, 2.35rem); line-height: 1.25; margin-top: 1rem; }
 .project-description { max-width: 54ch; margin-top: 1rem; color: var(--muted); font-size: 1.2rem; line-height: 1.55; }
-.project-status { display: flex; align-items: baseline; gap: .65rem; font: .75rem/1.7 var(--font-mono); margin-block: 1.5rem; }
-.project-status::before { content: ''; width: .65rem; height: .65rem; border-radius: 50%; flex-shrink: 0; background: var(--accent); }
 .project-current { margin-block: .5rem 3rem; }
 .project-current img { display: block; width: 100%; height: auto; border: 1px solid var(--rule); border-radius: 3px; }
 .project-current figcaption, .project-caption { font-size: .8rem; color: var(--muted); line-height: 1.65; margin-top: .75rem; }
