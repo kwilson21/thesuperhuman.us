@@ -23,9 +23,14 @@ nothing useful to put in them.
 - **Colors:** retain the existing `--paper`, `--ink`, `--muted`, `--rule`, and
   `--accent` values in `src/styles/global.css`. Tailwind continues to reference
   them rather than defining a second palette.
-- **Type:** retain Newsreader, Inter, and the existing monospace role. Refine the
-  existing display, heading, lede, and eyebrow styles against the approved studies.
-  Keep a small set of named roles instead of per-page type scales.
+- **Type:** Libron sets headings, text and public interface text: captions, the
+  audio players and music menu, chart labels and public form fields, at 14px or
+  more (type board D4.4-B, October 22, 2026). Small capital labels (`.page-kicker`,
+  `.eyebrow`, step and phase labels) and the project status line use Inter (D4.2-C);
+  the owner, studio and agreement pages keep Inter for their interface text.
+  JetBrains Mono is kept for code and data: Home's code field and capacity key.
+  Refine the existing display, heading, lede, and eyebrow styles against the
+  approved studies. Keep a small set of named roles instead of per-page type scales.
 - **Layout:** retain the measure/content/page width roles in `tailwind.config.mjs`.
   Establish shared page gutters and section spacing there; keep deliberate art
   compositions local to the page. Mobile Home is one continuous paper surface.
@@ -137,6 +142,8 @@ Audio notes become optional so empty prose is not required to publish a recordin
   typeface that needs the horizontal mark over the `z`, including Inter and
   JetBrains Mono. Until a matching derivative exists, render the plain name in
   the surrounding typeface instead of inserting a differently styled glyph.
+  Public captions are Libron, so the door captions and the services footnote
+  show the name mark from Kazon Name Text, which is cut from Libron.
 
 ## Implementation sequence
 

@@ -293,7 +293,7 @@
 .site-form .form-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
 .site-form label:not(:has(input)), .site-form legend { display: block; margin-bottom: var(--space-2); font-size: 1rem; }
 .site-form label > span, .site-form .form-hint { color: var(--muted); }
-.site-form input:not([type=checkbox]):not([type=radio]):not([type=hidden]), .site-form textarea, .site-form select { display: block; width: 100%; min-width: 0; border: 1px solid var(--field-border); background: var(--paper); padding: .65rem .8rem; border-radius: 3px; font: 1rem/1.5 var(--font-sans); }
+.site-form input:not([type=checkbox]):not([type=radio]):not([type=hidden]), .site-form textarea, .site-form select { display: block; width: 100%; min-width: 0; border: 1px solid var(--field-border); background: var(--paper); padding: .65rem .8rem; border-radius: 3px; font: 1rem/1.5 var(--font-serif); }
 .site-form textarea { resize: vertical; }
 @media (hover: hover) and (pointer: fine) {
   .site-form :is(input:not([type=checkbox], [type=radio]), textarea, select):not([aria-invalid=true]):hover { border-color: var(--muted); }

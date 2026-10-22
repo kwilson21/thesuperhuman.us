@@ -16,8 +16,8 @@ const { headingLevel = 'h3', overrides = {}, loading = 'lazy' } = Astro.props;
     const label = overrides[door.id]?.label ?? door.label;
     return <article class="door" id={`door-${door.id}`}>
     <a class="door-art" href={href} tabindex="-1" aria-hidden="true"><img src={door.picture.src} width={door.picture.width} height={door.picture.height} alt="" loading={loading} fetchpriority={loading === 'eager' && index === 0 ? 'high' : undefined} /></a>
-    {/* The caption is Inter, which has no name-mark cut yet, so the name inherits the caption face (website-system-plan.md, Deferred maintenance). */}
-    <p class="door-caption">{personalNameSegments(door.caption).map(part => part.variant ? <PersonalName variant={part.variant} style="inherit" /> : part.text)}</p>
+    {/* The caption is Libron, so the name takes the name mark: Kazon Name Text is cut from Libron. */}
+    <p class="door-caption">{personalNameSegments(door.caption).map(part => part.variant ? <PersonalName variant={part.variant} /> : part.text)}</p>
     {headingLevel === 'h2' ? <h2 class="door-title">{door.title}</h2> : <h3 class="door-title">{door.title}</h3>}
     <p class="door-line">{door.line}</p>
     <a class="door-button site-button" href={href}>{label}</a>
@@ -30,7 +30,7 @@ const { headingLevel = 'h3', overrides = {}, loading = 'lazy' } = Astro.props;
   .door { scroll-margin-top: 1.5rem; display: grid; grid-template-rows: subgrid; grid-row: span 5; }
   .door-art { display: block; aspect-ratio: 3 / 2; border: 1px solid var(--rule); border-radius: 3px; padding: 0; overflow: hidden; background: color-mix(in srgb, var(--rule) 50%, var(--paper)); }
   .door-art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
-  .door-caption { font-family: var(--font-sans); font-size: .78rem; color: var(--muted); margin: .7rem 0 .8rem; text-wrap: pretty; }
+  .door-caption { font-family: var(--font-serif); font-size: .875rem; line-height: 1.5; color: var(--muted); margin: .7rem 0 .8rem; text-wrap: pretty; }
   .door-title { font-size: 1.55rem; line-height: 1.2; letter-spacing: -.02em; margin: 0 0 .35rem; }
   .door-line { font-size: 1.05rem; line-height: 1.5; color: var(--muted); max-width: 30ch; margin: 0 0 .9rem; text-wrap: pretty; }
   .door-button { justify-self: start; align-self: start; min-height: 44px; padding: .45rem 1.15rem; }
