@@ -10,6 +10,10 @@ UI pull requests follow the screenshot rule in [CLAUDE.md](CLAUDE.md): review th
 
 Every pull request follows the review rule in [CLAUDE.md](CLAUDE.md): without a Greptile review of the current head, run independent review agents on the diff. Whichever reviewer ran, fix each verified finding and review the new head again until a pass finds nothing, then merge with CI green. Never merge publicist pull requests (hard rule 1 below), and follow the Website deployment gate, because merging to `main` deploys production. Findings that need a product or design decision go to the owner.
 
+## Design standard
+
+UI work follows [Hallmark](https://github.com/nutlope/hallmark) (MIT, by Together AI and the Hallmark contributors), vendored unmodified at `.agents/skills/hallmark/` with its `VENDORED.md`. The root [design.md](design.md) overrides its defaults. Before asking for review of a UI pull request, run `hallmark audit` read-only on the changed pages and fix the defects it finds; design-choice findings go to the owner as alternatives. Follow [docs/design-standard.md](docs/design-standard.md). For future projects, copy this approach and add this instruction to their existing agent guidance.
+
 ## Website deployment gate
 
 Before deploying a website, follow [the reusable pre-launch Definition of Done](docs/prelaunch-checklist.md). Record PASS, FAIL, UNVERIFIED, or justified N/A for every applicable check. Code completion is separate from deployment and live verification. For future website projects, copy this checklist and add this instruction to their existing agent guidance.
