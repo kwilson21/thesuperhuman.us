@@ -1,0 +1,88 @@
+name: Link previews
+
+# Renders the link-preview scenes a pull request makes stale, and only those. Runs the pull
+# request's own code, so it gets a read-only token: it uploads the new files and contact sheets,
+# and link-previews-publish.yml (always main's copy) commits them to the pull request.
+# Most runs end after the stale check, which needs no install and takes seconds. A stale scene is
+# one whose scene file, kit, site tokens (generated from global.css), fonts or images changed.
+# Run it by hand with scenes ("home about" or "all") to render scenes that are not stale.
+on:
+  pull_request:
+    paths:
+      - 'scripts/og-video/**'
+      - 'src/styles/global.css'
+      - 'src/assets/**'
+      - 'src/data/og-media.json'
+      - 'public/fonts/**'
+      - 'public/og/**'
+      - '.github/workflows/link-previews.yml'
+  workflow_dispatch:
+    inputs:
+      scenes:
+        description: Scenes to render even if current, separated by spaces, or "all"
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: link-previews-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Find stale scenes
+        id: stale
+        env:
+          FORCE: ${{ inputs.scenes }}
+        run: |
+          node scripts/og-video/site-tokens.mjs
+          node scripts/og-video/stale.mjs $FORCE
+      - if: steps.stale.outputs.scenes != ''
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.19.0
+          cache: npm
+      - if: steps.stale.outputs.scenes != ''
+        run: npm ci
+      # The runner's Chrome and ffmpeg save a download; Playwright's Chromium and Ubuntu's ffmpeg
+      # stand in when the image lacks them.
+      - if: steps.stale.outputs.scenes != ''
+        name: Chrome and ffmpeg
+        run: |
+          if [ -x /usr/bin/google-chrome ]; then echo "CHROMIUM_PATH=/usr/bin/google-chrome" >> "$GITHUB_ENV"; else npx playwright install --with-deps chromium; fi
+          if ! ffmpeg -hide_banner -encoders 2>/dev/null | grep -q libx264; then sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg; fi
+      - if: steps.stale.outputs.scenes != ''
+        name: Render
+        env:
+          SCENES: ${{ steps.stale.outputs.scenes }}
+        run: |
+          node scripts/og-video/render.mjs $SCENES
+          node scripts/og-video/render.mjs --sheet $SCENES
+      - if: steps.stale.outputs.scenes != ''
+        name: Collect the changed files
+        env:
+          SCENES: ${{ steps.stale.outputs.scenes }}
+        run: |
+          mkdir -p out/files out/sheets
+          git status --porcelain=v1 --untracked-files=all -- public/og src/data/og-media.json scripts/og-video/site-tokens.css > "$RUNNER_TEMP/status"
+          deleted=$(awk '$1 == "D" { print $2 }' "$RUNNER_TEMP/status" | jq -R . | jq -s .)
+          awk '$1 != "D" { print $2 }' "$RUNNER_TEMP/status" | while IFS= read -r path; do
+            mkdir -p "out/files/$(dirname "$path")" && cp "$path" "out/files/$path"
+          done
+          for scene in $SCENES; do cp ".og-video/$scene-sheet.png" out/sheets/; done
+          jq -n --arg scenes "$SCENES" --argjson deleted "$deleted" '{scenes: ($scenes | split(" ")), deleted: $deleted}' > out/changes.json
+          cat out/changes.json
+      - if: steps.stale.outputs.scenes != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: link-previews
+          path: out
+          retention-days: 7

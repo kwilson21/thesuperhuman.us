@@ -14,13 +14,14 @@
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/about.html",
+      "scripts/og-video/site-tokens.css",
       "src/assets/site/controller-v1.webp",
       "src/assets/site/headphones-v1.webp",
       "src/assets/site/laptop-v1.webp",
       "src/assets/site/notebook-v1.webp",
       "src/assets/site/terrain-v1.webp"
     ],
-    "source": "e1a2a9cc22290b60",
+    "source": "f13aaea3128d65b5",
     "encoding": "5341c8ca6c6bf333"
   },
   "audio": {
@@ -37,9 +38,10 @@
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/audio.html",
+      "scripts/og-video/site-tokens.css",
       "src/assets/site/headphones-v1.webp"
     ],
-    "source": "df85cde47f49be35",
+    "source": "ae174c8fd924f019",
     "encoding": "5341c8ca6c6bf333"
   },
   "audio-portfolio": {
@@ -57,9 +59,10 @@
       "public/music/old-news-single-0db5fc05dca4ee79.webp",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
-      "scripts/og-video/scenes/audio-portfolio.html"
+      "scripts/og-video/scenes/audio-portfolio.html",
+      "scripts/og-video/site-tokens.css"
     ],
-    "source": "18e63b1d5ac81daa",
+    "source": "ecc5a8afcdf55be8",
     "encoding": "5341c8ca6c6bf333"
   },
   "audio-releases": {
@@ -79,9 +82,10 @@
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/audio-releases.html",
+      "scripts/og-video/site-tokens.css",
       "src/assets/site/music-skyline.webp"
     ],
-    "source": "8335d1642eeb6153",
+    "source": "296e7f46908bce78",
     "encoding": "5341c8ca6c6bf333"
   },
   "audio-services": {
@@ -97,9 +101,10 @@
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
-      "scripts/og-video/scenes/audio-services.html"
+      "scripts/og-video/scenes/audio-services.html",
+      "scripts/og-video/site-tokens.css"
     ],
-    "source": "dea969aaf636456b",
+    "source": "cb5f4c67f933d211",
     "encoding": "5341c8ca6c6bf333"
   },
   "audio-start": {
@@ -115,9 +120,10 @@
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
-      "scripts/og-video/scenes/audio-start.html"
+      "scripts/og-video/scenes/audio-start.html",
+      "scripts/og-video/site-tokens.css"
     ],
-    "source": "a935fc359250105e",
+    "source": "60675d85cff430a6",
     "encoding": "5341c8ca6c6bf333"
   },
   "building": {
@@ -134,9 +140,10 @@
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
-      "scripts/og-video/scenes/building.html"
+      "scripts/og-video/scenes/building.html",
+      "scripts/og-video/site-tokens.css"
     ],
-    "source": "a4b90bba138bf4dc",
+    "source": "345a63028f6cc279",
     "encoding": "5341c8ca6c6bf333"
   },
   "home": {
@@ -154,11 +161,12 @@
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/home.html",
+      "scripts/og-video/site-tokens.css",
       "src/assets/projects/kaillera-next/landing-2026-09-26.webp",
       "src/assets/projects/tally/transactions-demo-2026-09-26.webp",
       "src/assets/site/studio-v1.webp"
     ],
-    "source": "0844ed7d24a9a538",
+    "source": "0aa22b89af6ecdd8",
     "encoding": "5341c8ca6c6bf333"
   },
   "music-old-news": {
@@ -179,9 +187,10 @@
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/music-old-news.html",
+      "scripts/og-video/site-tokens.css",
       "src/assets/site/old-news-premiere.webp"
     ],
-    "source": "666f95f9c6e5b978",
+    "source": "53378f3971e44c00",
     "encoding": "5341c8ca6c6bf333"
   },
   "not-found": {
@@ -197,9 +206,10 @@
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
-      "scripts/og-video/scenes/not-found.html"
+      "scripts/og-video/scenes/not-found.html",
+      "scripts/og-video/site-tokens.css"
     ],
-    "source": "91fdc2a38173b438",
+    "source": "a484c50a51f0cd9b",
     "encoding": "5341c8ca6c6bf333"
   },
   "personal-website": {
@@ -217,10 +227,11 @@
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/personal-website.html",
+      "scripts/og-video/site-tokens.css",
       "src/assets/projects/website/home-after.png",
       "src/assets/projects/website/home-before.png"
     ],
-    "source": "ecd7a109c49eaddc",
+    "source": "a4ca1e2a94235648",
     "encoding": "5341c8ca6c6bf333"
   },
   "personal-website-story": {
@@ -237,12 +248,13 @@
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/personal-website-story.html",
+      "scripts/og-video/site-tokens.css",
       "src/assets/site/redesign-studies/a-quiet-studio.webp",
       "src/assets/site/redesign-studies/b-living-editorial.webp",
       "src/assets/site/redesign-studies/c-project-gallery.webp",
       "src/assets/site/redesign-studies/d-open-landscape.webp"
     ],
-    "source": "5d9c12de5ca519bb",
+    "source": "50769409fee0346c",
     "encoding": "5341c8ca6c6bf333"
   },
   "privacy": {
@@ -258,9 +270,10 @@
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
-      "scripts/og-video/scenes/privacy.html"
+      "scripts/og-video/scenes/privacy.html",
+      "scripts/og-video/site-tokens.css"
     ],
-    "source": "f4d1c624b48312df",
+    "source": "0e8114a9bad28fe6",
     "encoding": "5341c8ca6c6bf333"
   },
   "project-kaillera-next": {
@@ -277,9 +290,10 @@
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/project-kaillera-next.html",
+      "scripts/og-video/site-tokens.css",
       "src/assets/projects/kaillera-next/landing-2026-09-26.webp"
     ],
-    "source": "61aa51377e7a4ffe",
+    "source": "6d88057b1aaa292d",
     "encoding": "5341c8ca6c6bf333"
   },
   "project-tally": {
@@ -296,9 +310,10 @@
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/project-tally.html",
+      "scripts/og-video/site-tokens.css",
       "src/assets/projects/tally/home-annotated.webp"
     ],
-    "source": "637cb6aca1b85697",
+    "source": "20aa7a182389ee3d",
     "encoding": "5341c8ca6c6bf333"
   },
   "project-threadline": {
@@ -316,9 +331,10 @@
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/project-threadline.html",
+      "scripts/og-video/site-tokens.css",
       "src/assets/site/threadline-v1.webp"
     ],
-    "source": "a539235b77dbb212",
+    "source": "cfdb77618b52ab95",
     "encoding": "5341c8ca6c6bf333"
   },
   "services": {
@@ -336,11 +352,12 @@
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/services.html",
+      "scripts/og-video/site-tokens.css",
       "src/assets/site/work-with-me-mixing.webp",
       "src/assets/site/work-with-me-software.webp",
       "src/assets/site/work-with-me-website.webp"
     ],
-    "source": "1c4c1ab5448c642f",
+    "source": "213f87316a63788a",
     "encoding": "5341c8ca6c6bf333"
   },
   "software-start": {
@@ -356,9 +373,10 @@
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
-      "scripts/og-video/scenes/software-start.html"
+      "scripts/og-video/scenes/software-start.html",
+      "scripts/og-video/site-tokens.css"
     ],
-    "source": "33d732ab453606be",
+    "source": "a7761398c5cb8c70",
     "encoding": "5341c8ca6c6bf333"
   },
   "the-engineers-daily": {
@@ -375,9 +393,10 @@
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/the-engineers-daily.html",
+      "scripts/og-video/site-tokens.css",
       "src/assets/projects/daily-preview.webp"
     ],
-    "source": "a2aa84e0f051bb31",
+    "source": "e82535786c293e96",
     "encoding": "5341c8ca6c6bf333"
   },
   "work": {
@@ -393,9 +412,10 @@
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
-      "scripts/og-video/scenes/work.html"
+      "scripts/og-video/scenes/work.html",
+      "scripts/og-video/site-tokens.css"
     ],
-    "source": "cf6d695b5c1b4ece",
+    "source": "e11656586706746f",
     "encoding": "5341c8ca6c6bf333"
   },
   "writing": {
@@ -412,9 +432,10 @@
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
-      "scripts/og-video/scenes/writing.html"
+      "scripts/og-video/scenes/writing.html",
+      "scripts/og-video/site-tokens.css"
     ],
-    "source": "42d6519f044e7a30",
+    "source": "b62050e504d110c8",
     "encoding": "5341c8ca6c6bf333"
   },
   "writing-ai-gives-you-speed": {
@@ -431,9 +452,10 @@
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
-      "scripts/og-video/scenes/writing-ai-gives-you-speed.html"
+      "scripts/og-video/scenes/writing-ai-gives-you-speed.html",
+      "scripts/og-video/site-tokens.css"
     ],
-    "source": "062c1e184fa6725d",
+    "source": "f87400f8a14650f2",
     "encoding": "5341c8ca6c6bf333"
   }
 }

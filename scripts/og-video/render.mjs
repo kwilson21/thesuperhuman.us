@@ -26,6 +26,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { ENCODE, ENCODING, FPS, HEIGHT, WIDTH, sourceHash as digestInputs } from './fingerprint.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SCENES = join(ROOT, 'scripts/og-video/scenes');
@@ -33,28 +34,11 @@ const PUBLIC = join(ROOT, 'public/og');
 const RAW = join(PUBLIC, 'raw');
 const MANIFEST = join(ROOT, 'src/data/og-media.json');
 const SHEETS = join(ROOT, '.og-video');
-const WIDTH = 1200;
-const HEIGHT = 630;
 const SCALE = 2;
-const FPS = 30;
 // Messages allows 10 MB for the whole preview; Discord measures the file within a 10 s budget.
 const MAX_VIDEO_BYTES = 2.5 * 1024 * 1024;
 // WhatsApp documents 600 KB as its og:image ceiling.
 const MAX_POSTER_BYTES = 600 * 1024;
-const ENCODE = [
-  '-map', '0:v:0', '-an', '-sn', '-dn', '-map_metadata', '-1', '-map_chapters', '-1',
-  '-vf', `scale=${WIDTH}:${HEIGHT}:flags=lanczos:out_color_matrix=bt709:out_range=tv,format=yuv420p`,
-  // Scenes are flat colour and type: tune for animation, and spend more bits on flat areas so the
-  // paper and soft artwork masks do not band in predicted frames. x264's output depends on its
-  // thread count, so pin it rather than let it follow the CPU count.
-  '-c:v', 'libx264', '-threads', '6', '-preset', 'slow', '-tune', 'animation', '-x264-params', 'aq-mode=3', '-crf', '20', '-maxrate', '3M', '-bufsize', '6M',
-  '-profile:v', 'high', '-g', String(FPS * 2),
-  '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
-  '-movflags', '+faststart',
-];
-// Recorded with each scene, so a change to these settings re-encodes without being taken for a
-// rendering difference.
-const ENCODING = createHash('sha256').update(JSON.stringify(ENCODE)).digest('hex').slice(0, 16);
 
 const args = process.argv.slice(2);
 const sheetOnly = args.includes('--sheet');
@@ -275,11 +259,9 @@ function hash(bytes) {
   return createHash('sha256').update(bytes).digest('hex').slice(0, 10);
 }
 
-// The same digest tests/lib/og-media.test.ts recomputes from each entry's inputs.
+// The same digest tests/lib/og-media.test.ts and stale.mjs recompute from each entry's inputs.
 function sourceHash(inputs) {
-  const digest = createHash('sha256');
-  for (const input of inputs) digest.update(`${input}\0`).update(readFileSync(join(ROOT, input))).update('\0');
-  return { inputs, hash: digest.digest('hex').slice(0, 16) };
+  return { inputs, hash: digestInputs(ROOT, inputs) };
 }
 
 function readManifest() {

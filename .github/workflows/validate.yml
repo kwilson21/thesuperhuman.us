@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # link-previews-publish.yml runs it on the commits it pushes, which start no workflow by themselves.
+  workflow_dispatch:
 
 permissions:
   contents: read
