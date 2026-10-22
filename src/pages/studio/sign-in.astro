@@ -43,7 +43,7 @@ const partialSignOut = Astro.url.searchParams.get('signout') === 'partial';
   {!software && <img class="studio-corner" src={studioCorner.src} width={studioCorner.width} height={studioCorner.height} alt="" loading="lazy" decoding="async" />}
   <style>
     .studio-sign-in { max-width: 58rem; margin: 0 auto; padding: clamp(4rem, 12vw, 9rem) 1.5rem 3rem; }
-    /* The Turnstile widget is a fixed 300px; below 336px the side padding shrinks so it fits a 320px screen. */
+    /* The Turnstile widget is a fixed 300px; at 336px and below the side padding shrinks so it fits a 320px screen. */
     @media (max-width: 21rem) { .studio-sign-in { padding-inline: 10px; } }
     /* Decorative. The top and side edges fade into the page so no image edge shows. */
     .studio-corner { display: block; width: min(100%, 72rem); height: auto; margin: 0 auto; pointer-events: none; user-select: none;
