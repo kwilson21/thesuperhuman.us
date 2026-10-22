@@ -12,6 +12,22 @@ The September 2026 redesign keeps the existing palette and changes the reading o
 - Services: [software and audio selection](2026-09-10/audio-services-studies/README.md), [implementation review](2026-09-10/audio-services-studies/implementation-review.md).
 - Project brief paths: [Website design, Web app and Workflow automation](2026-10-19/website-intake/index.html), approved October 19, 2026.
 
+## Open studies: Hallmark audit follow-up (October 22, 2026)
+
+A read-only Hallmark design audit flagged several choices the owner made on purpose. Defects it found are fixed in [PR #204](https://github.com/kwilson21/thesuperhuman.us/pull/204). These boards show each owner choice beside two or three alternatives that follow the site's direction, with one marked Recommended. Option A on each board shows the site as PR #204 leaves it. Nothing on these boards is built or selected yet; record the owner's picks here once made.
+
+- [D1 Home doors](2026-10-22/home-doors/index.html)
+- [D2 Home motion](2026-10-22/home-motion/index.html)
+- [D3 Site motion](2026-10-22/site-motion/index.html)
+- [D4 Type and labels](2026-10-22/type-and-labels/index.html)
+- [D5 Scene art](2026-10-22/imagery/index.html)
+- [D6 Project pages](2026-10-22/project-pages/index.html)
+- [D7 Service pages](2026-10-22/services-layout/index.html)
+- [D8 Audio and music](2026-10-22/audio-music/index.html)
+- [D9 System details](2026-10-22/system-details/index.html)
+
+Recreations on the boards are composition studies, not production screenshots. Any option that implies new art still needs [image QA](../generated-image-qa.md).
+
 ## Resume and contact
 
 The selected direction uses one general resume with operator approval and a short contact form. Stored legacy DoD approvals retain their original delivery behavior. The [revised resume study](../../src/assets/site/redesign-studies/resume-flow-v2.webp) is historical evidence; functional behavior belongs to the HTML forms and tests.
