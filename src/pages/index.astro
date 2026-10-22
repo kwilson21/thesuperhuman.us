@@ -188,7 +188,7 @@ const jsonLd = {
   /* The Lyft and Old News labels scale with the section heading (h2: clamp(1.75rem, 3vw, 2.25rem)) and stay below it at every width. */
   .work-company { font-size: clamp(1.5rem, 2.6vw, 2rem); letter-spacing: -.04em; line-height: 1.1; margin: 0 0 .65rem; }
   .work-outcome { flex: 1; }
-  .work-outcome p { max-width: 65ch; margin: 0; text-wrap: pretty; }
+  .work-outcome p { max-width: var(--measure-prose); margin: 0; text-wrap: pretty; }
   .work-outcome .work-figure { font-size: clamp(1.5rem, 2.6vw, 2.2rem); letter-spacing: -.04em; line-height: 1.2; margin-bottom: .35rem; }
   .work-outcome .source-note { color: var(--muted); font-size: .85rem; max-width: 65ch; margin-top: .4rem; }
   .music-proof-preview { min-width: 0; border-top: 1px solid var(--rule); padding-top: 1.35rem; }
@@ -225,7 +225,7 @@ const jsonLd = {
 
   .contact-intro { display: flex; justify-content: space-between; gap: 2rem; align-items: center; }
   .contact-intro h2 { max-width: 24ch; font-size: clamp(2rem, 3.5vw, 2.7rem); line-height: 1.07; letter-spacing: -.035em; margin: 0 0 .7rem; text-wrap: balance; }
-  .contact-intro p { max-width: 65ch; font-size: 1.1rem; color: var(--muted); margin: 0; text-wrap: pretty; }
+  .contact-intro p { max-width: var(--measure-prose); font-size: 1.1rem; color: var(--muted); margin: 0; text-wrap: pretty; }
   .contact-disclosure { margin-top: 1.25rem; color: var(--muted); }
   .contact-disclosure summary { width: fit-content; min-height: 44px; line-height: 44px; margin-inline: -.4rem; padding-inline: .4rem; cursor: pointer; font-size: .95rem; }
   /* The two disclosures answer a mouse the way links do. */

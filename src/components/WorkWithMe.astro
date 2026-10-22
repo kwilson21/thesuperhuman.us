@@ -43,8 +43,8 @@ const { headingLevel = 'h3', overrides = {}, loading = 'lazy' } = Astro.props;
     .door-line { grid-area: line; }
     .door-button { grid-area: button; }
   }
-  /* Below 380px the button no longer fits beside the picture on one line, so it moves under the picture. */
-  @media (max-width: 380px) {
+  /* At 362px and below the button no longer fits beside the picture on one line, so it moves under the picture. */
+  @media (max-width: 362px) {
     .door { grid-template-areas: "art caption" "art title" "art line" "button button"; }
   }
 </style>

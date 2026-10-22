@@ -37,7 +37,7 @@ if (!essay) throw new Error('AI essay content missing');
   .writing-page header { padding-bottom: 2.5rem; }
   .writing-page header h1 { font-size: clamp(4.5rem, 8vw, 7rem); }
   .essay-feature { display: grid; grid-template-columns: 1fr 1.2fr; gap: 3rem; align-items: center; padding-block: 3rem; border-top: 1px solid var(--rule); }
-  .essay-feature h2 { font-size: clamp(2rem, 3.8vw, 3.15rem); line-height: 1.14; letter-spacing: -.035em; }
+  .essay-feature h2 { font-size: clamp(2rem, 3.8vw, 3.15rem); line-height: 1.14; letter-spacing: -.035em; text-wrap: pretty; }
   .essay-feature p:not(.page-kicker) { font-size: 1.25rem; line-height: 1.5; color: var(--muted); margin-block: 1.25rem 2.5rem; }
   /* Illustration colours stay local to the drawing (website-system-plan.md, Layout). */
   .direction { --dir-panel: #f3eee5; --dir-branch: #aaa18f; --dir-grass: #9a967e; }
