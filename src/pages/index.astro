@@ -89,8 +89,8 @@ const jsonLd = {
               <div class="project-art">
                 <img src={tallyTransactions.src} width={tallyTransactions.width} height={tallyTransactions.height} alt="Tally’s Transactions screen on demo data, a CI capture from September 2026, with the demo data banner." loading="lazy" />
               </div>
-              <p class="page-kicker">{tallyStory.status}</p>
               <h3>Tally</h3>
+              <p class="project-status">{tallyStory.status}</p>
               <p>{tallyStory.subtitle}</p>
               <a class="site-link project-link" href="/building/tally">Development journal <span aria-hidden="true">→</span><span class="sr-only">Tally</span></a>
             </article>
@@ -98,8 +98,8 @@ const jsonLd = {
               <div class="project-art">
                 <img src={kailleraLanding.src} width={kailleraLanding.width} height={kailleraLanding.height} alt="Kaillera Next’s landing page, September 2026, with no open rooms." loading="lazy" />
               </div>
-              <p class="page-kicker">{kailleraStory.status}</p>
               <h3>Kaillera Next</h3>
+              <p class="project-status">{kailleraStory.status}</p>
               <p>{kailleraStory.subtitle}</p>
               <a class="site-link project-link" href="/building/kaillera-next#kaillera-next-updates-title">Development journal <span aria-hidden="true">→</span><span class="sr-only">Kaillera Next</span></a>
             </article>
@@ -169,7 +169,7 @@ const jsonLd = {
   .screen-light { position: absolute; inset: 0 0 auto; height: 70vh; background: radial-gradient(55% 60% at 50% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%); pointer-events: none; }
   .screen-code { position: absolute; top: clamp(2rem, 6vh, 3.5rem); left: 58%; width: min(500px, 70vw); opacity: .7; transform: translateX(-50%); mask-image: linear-gradient(to bottom, #000 50%, transparent 92%); pointer-events: none; }
 
-  /* Subgrid keeps each card's art, kicker, title, line and link on shared rows, so both cards
+  /* Subgrid keeps each card's art, title, status, line and link on shared rows, so both cards
      line up whatever wraps (WorkWithMe.astro's door rows share columns the same way). */
   .project-grid { display: grid; grid-template-columns: repeat(2, 1fr); column-gap: 2.5rem; }
   .project-card { display: grid; grid-template-rows: subgrid; grid-row: span 5; position: relative; }
@@ -178,7 +178,8 @@ const jsonLd = {
   .project-art { display: block; margin-bottom: 1.2rem; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; background: var(--well); aspect-ratio: 3 / 2; box-shadow: 0 28px 70px -34px color-mix(in srgb, var(--accent) 45%, transparent), 0 14px 30px -18px #000c; transform: perspective(1100px) rotateX(calc(var(--rx, 0) * 3deg)) rotateY(calc(var(--ry, 0) * 4deg)); transition: transform 500ms var(--ease-site); }
   .project-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
   .project-card h3 { font-size: clamp(1.7rem, 2.6vw, 2.3rem); letter-spacing: -.035em; line-height: 1.1; margin: 0 0 .4rem; }
-  .project-card p:not(.page-kicker) { font-size: 1.125rem; color: var(--muted); line-height: 1.45; max-width: 65ch; margin: 0 0 1rem; text-wrap: pretty; }
+  .project-card .project-status { margin: 0 0 .65rem; }
+  .project-card p:not(.project-status) { font-size: 1.125rem; color: var(--muted); line-height: 1.45; max-width: 65ch; margin: 0 0 1rem; text-wrap: pretty; }
   .project-link { justify-self: start; align-self: start; }
   /* The picture stays a plain image; this link (with the visible arrow) is the card's only tab stop. */
   .project-link::after { content: ''; position: absolute; inset: 0; }
@@ -283,6 +284,6 @@ const jsonLd = {
   }
   @media (max-width: 420px) {
     .site-section-heading .heading-link { display: none; }
-    .project-card p:not(.page-kicker) { font-size: 1.05rem; }
+    .project-card p:not(.project-status) { font-size: 1.05rem; }
   }
 </style>

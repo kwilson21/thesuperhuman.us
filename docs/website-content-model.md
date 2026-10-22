@@ -497,6 +497,15 @@ what happens without translating a label or guessing a missing step? Keep only
 supported detail, and check the rendered paragraph and next-step link on phone
 and desktop sizes.
 
+### Small labels, October 22
+
+A small capital label above a heading must say something the heading, a button
+beside it or the navigation does not: a place (a breadcrumb), a date, a company, a
+topic or a turn in the story. Closing bands open with their heading. A project's
+state is not a label: it is the dot line under the project's name
+(`.project-status`), in the case it is stored in, on Home, /building and the
+project pages alike.
+
 ### Keep website and resume facts consistent
 
 Factual parity means compatible claims, not identical wording or length.
