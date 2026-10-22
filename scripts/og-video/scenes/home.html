@@ -40,12 +40,12 @@
   .heading { position: absolute; left: 64px; right: 64px; top: 60px; display: flex; align-items: center; gap: 24px; }
   .heading h2 { margin: 0; font: 400 56px/1.1 var(--serif); letter-spacing: -.035em; white-space: nowrap; }
   .heading .rule { flex: 1; height: 1px; background: var(--rule); transform-origin: left; }
-  /* Project cards (index.astro:172-181): the capture glows like a screen; status in the page kicker. */
+  /* Project cards (index.astro:88-103): the capture glows like a screen; the status is the dot line under the name, in the screen world's ink. */
   .project { position: absolute; top: 150px; width: 504px; }
   .p1 { left: 64px; } .p2 { left: 632px; }
   .project .capture { width: 504px; height: 270px; }
-  .project .kicker { position: static; display: block; margin: 18px 0 0; }
-  .project h3 { margin: 6px 0 0; font: 400 40px/44px var(--serif); letter-spacing: -.035em; white-space: nowrap; }
+  .project h3 { margin: 18px 0 0; font: 400 40px/44px var(--serif); letter-spacing: -.035em; white-space: nowrap; }
+  .project .status { display: flex; margin: 6px 0 0; color: var(--ink); }
   .edge { position: absolute; left: 0; top: 630px; width: 1200px; height: 140px; overflow: visible; will-change: transform; }
   .edge path { fill: var(--paper); fill-rule: evenodd; }
 
@@ -80,13 +80,13 @@
         <div class="heading"><h2>Currently building</h2><i class="rule"></i></div>
         <div class="project p1">
           <div class="capture"><img src="../../../src/assets/projects/tally/transactions-demo-2026-09-26.webp" alt="" width="1200" height="800" /></div>
-          <p class="kicker tight">In development · public demo</p>
           <h3>Tally</h3>
+          <p class="status">In development · public demo</p>
         </div>
         <div class="project p2">
           <div class="capture"><img src="../../../src/assets/projects/kaillera-next/landing-2026-09-26.webp" alt="" width="1252" height="835" /></div>
-          <p class="kicker tight">In development · playable demo build</p>
           <h3>Kaillera Next</h3>
+          <p class="status">In development · playable demo build</p>
         </div>
       </div>
       <!-- SignalEdge.astro, mid-phrase: paper peaks cut up into the dark, dark peaks hang into the paper. -->
