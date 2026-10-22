@@ -141,6 +141,8 @@
 label.confirmation { display: flex; align-items: start; gap: .6rem; font: 400 .88rem/1.5 var(--font-sans); }
 label.confirmation input { flex: none; width: auto; min-height: 0; margin: .3rem 0 0; accent-color: var(--accent); }
 .agreement-page { font-family: Newsreader, Georgia, serif; }
+/* Jumping from the error summary keeps the field's label in view. */
+.agreement-page :is(input, select, textarea) { scroll-margin-top: 5rem; }
 .agreement-shell { max-width: 72rem; padding-inline: clamp(1.5rem, 4.375vw, 3.5rem); padding-block: 2rem; overflow-wrap: anywhere; }
 .agreement-kicker { margin-top: 2.5rem; margin-bottom: 1rem; }
 .agreement-page .page-lede { margin: 1.5rem 0 2.5rem; }

@@ -9,13 +9,13 @@ Target: production `https://thesuperhuman.us`, after merge. The stylesheets are 
 Reviewer: Claude Code agent, collecting evidence for owner Kazon Wilson. Claude subagents wrote the code; independent Claude reviewers and Codex reviewed it. This record is evidence collection, not owner certification.  
 Scope: fixes for the defects a read-only Hallmark design audit of the public pages found (`ab4dae0`), plus review follow-ups (`d0d26dd`, `a3c2f56`, `b771231`, `f0abd1f`):
 - Form field edges, the A/B player's unplayed waveform and tracks, and the studio sign-in code boxes reach 3:1 against their background (new `--field-border` token). Studio and agreement fields use the site's 2px focus outline instead of a border swap and halo.
-- Invalid inputs show the accent edge. Before, only textareas did.
+- Invalid inputs in the shared `.site-form` forms show the accent edge. Before, only textareas did. Signing fields keep the field-border edge when invalid, as before; their errors still have text and a linked summary.
 - `/audio/releases` no longer scrolls sideways at 701 to 1247px. The studio sign-in fits a 320px screen. Door buttons move under their picture at 370px and below instead of wrapping.
 - The `/work` resume and hire links and the 404 "Back to home" link sit in the first screen.
 - Running prose stops near 65 characters (`--measure-prose`). Headings balance and prose wraps `pretty` site-wide.
 - Type and token cleanup: generic font families unquoted, one mono kicker face (`.eyebrow` moves from Inter to JetBrains Mono), tokens in place of stray hex values, `Inter` literals and easing curves, and a named spacing scale.
 - 44px tap areas for the footer, 404 and review-illustration links and controls; hover feedback limited to mouse and trackpad; a crossed-speaker muted icon and a disabled seek style on the release player.
-- Copy: a "Software project briefs and pages" heading on `/privacy`; curly apostrophes on `/privacy`, the resume receipt and offer signing.
+- Copy: a "Software project briefs and pages" heading on `/privacy`; curly apostrophes on `/privacy` and the resume receipt. The offer signing page keeps straight apostrophes: its consent text, which is recorded with each signature (`src/lib/software-agreements.ts:377`), is straight, and changing that wording is the owner's call.
 - Removal of the unused `LyftWorkStory` component.
 
 **What changes, checked against "CSS, markup and tests only".** `git diff --stat 26e764a f0abd1f` lists 60 files, 483 insertions and 355 deletions: 56 modified, 3 test files added and 1 component deleted. This agent read the whole diff, comparing the minified stylesheets rule by rule.
@@ -31,7 +31,7 @@ Scope: fixes for the defects a read-only Hallmark design audit of the public pag
   - `scripts/screenshots/scenarios/software-signing.mjs`: its step now waits for the curly-apostrophe text.
   - Private pages: `src/styles/owner.css` (owner filter, request notes and payment field edges), `src/styles/studio.css` (studio and agreement fields and buttons), and the styles of `src/pages/studio/sign-in.astro` and `src/pages/offer/[token]/sign.astro`.
 
-Rollback revision: `26e764a`, `main` before this PR. Its Workers Builds check run succeeded on October 21, 2026 at 14:05:49 UTC, and `validate` at 14:05:46 UTC. This PR writes no data and changes no schema, so a rollback has no stored-data caveat. A rollback after later merges would also undo those merges.  
+Rollback revision: `75a88be4`, `main` before this PR after PR #203 merged at 10:52 UTC on October 22, 2026. Its `validate` check succeeded at 10:54:14 UTC and its production Workers Builds at 10:53:34 UTC. Rolling back to `26e764a` instead would also remove #203's link previews. This PR writes no data and changes no schema, so a rollback has no stored-data caveat. Check what has merged since before any rollback.
 Evidence: CI captures under `pr-204/f0abd1f/` on the `screenshots` branch (325 files, counted through the GitHub API). Branch preview: `https://claude-hallmark-audit-fixes-thesuperhuman-us.cloudflare-rxi8d.workers.dev`, which returned 302 to the Cloudflare Access login when requested at about 10:41 UTC.
 
 ## Owner decisions and authorization
@@ -63,7 +63,7 @@ Evidence: CI captures under `pr-204/f0abd1f/` on the `screenshots` branch (325 f
 
 ## 1. Purpose and content
 
-- **PASS · Project, branch and local changes.** The PR head and base match the API (`f0abd1f` on `claude/hallmark-audit-fixes`, base `main` at `26e764a`). The working tree was clean. The site instructions (`CLAUDE.md`, `AGENTS.md`) and the audience are unchanged.
+- **PASS · Project, branch and local changes.** At the browser checks the PR head and base matched the API (`f0abd1f` on `claude/hallmark-audit-fixes`, base `main` at `26e764a`); the branch has since merged `main` at `75a88be4`. The working tree was clean. The site instructions (`CLAUDE.md`, `AGENTS.md`) and the audience are unchanged.
 - **UNVERIFIED · Deployment authorization (owner).** Merging deploys production, and merge waits on the owner's approval of the look (see Owner decisions).
 - **UNVERIFIED · Approved design: the owner's approval of the look (owner).** The PR changes the look site-wide: kicker face, heading and prose wrapping, prose width, the 404 picture's size, the name's face in door captions, field edges, hover feedback and the muted icon. Whether these keep the approved design is the owner's call, from the CI captures or the branch preview.
 - **PASS · Claims, placeholders and media.**
@@ -165,7 +165,7 @@ Evidence: CI captures under `pr-204/f0abd1f/` on the `screenshots` branch (325 f
   - It stays linked from the footer, and `#software-briefs` still resolves. Its date, "Updated October 19, 2026", is unchanged, since the notice says the same thing.
   - The CI capture `privacy-desktop.png` shows the new heading.
 - **N/A · Consent.** No new cookies or optional processing.
-- **N/A · Commerce disclosures.** No terms, address or commerce changes. The offer signing page changes only apostrophes and styles.
+- **N/A · Commerce disclosures.** No terms, address or commerce changes. The offer signing page changes only styles.
 - **N/A · Analytics.** No analytics changes.
 - **N/A · Monitoring.** No error logging or monitoring changes.
 
@@ -180,9 +180,9 @@ Evidence: CI captures under `pr-204/f0abd1f/` on the `screenshots` branch (325 f
 - **UNVERIFIED · Review of the final head `f0abd1f`.** The repository rule asks for a review of each new head until a pass finds nothing. The last recorded pass covered `ab4dae0..b771231`; its three nits were fixed in `f0abd1f`, which no recorded pass covers. This agent read its 5-line diff and measured its door-button breakpoint (section 3), but that is evidence collection, not that review. An independent reviewer can close this; it needs no owner.
 - **PASS · Production configuration, by source.**
   - `wrangler.jsonc`, bindings, secrets, migrations, `public/_headers`, `src/middleware.ts`, `src/lib/` (including `security-headers.ts` and `host-routing.ts`), `astro.config.mjs`, `package.json` and the lockfile are unchanged.
-  - The built `dist/_headers` equals `public/_headers` at `26e764a`.
+  - The built `dist/_headers` from the merged code equals `public/_headers` at `75a88be4` (which includes #203's `/og/*` cache block), and this PR changes nothing under `public/`.
   - Live headers, HTTPS and routing follow in the post-deployment item.
-- **PASS · Rollback.** `26e764a`, deployed by a successful Workers Builds run on October 21, 2026 at 14:05:49 UTC, and still `main` at about 10:40 UTC on October 22. No backup is needed: this PR writes no data and changes no schema. Check what has merged since before any rollback.
+- **PASS · Rollback.** `75a88be4`, deployed by a successful Workers Builds run on October 22, 2026 at 10:53:34 UTC, and `main` when this branch merged it. No backup is needed: this PR writes no data and changes no schema. Check what has merged since before any rollback.
 - **UNVERIFIED · Post-deployment QA (not deployed).** After the owner approves the look and the PR merges, check on production:
   - The production revision. The site shows no revision marker, so use Cloudflare's deployment history or a change visible only in this PR (for example, the `/privacy` heading).
   - The four `/*` security headers and `strict-transport-security` on an HTML page and on the 404 response (unchanged by this PR; checklist item 7.3).

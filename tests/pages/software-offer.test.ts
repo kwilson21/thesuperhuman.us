@@ -504,7 +504,7 @@ it('renders one signing page, returning details, waiting and both-signed actions
     html = await render();
     expect(html).toContain('Signed by both of you.');
     expect(html).not.toContain('Open your project page');
-    expect(html).toContain('I’ll email you the link to your project page when work starts.');
+    expect(html).toContain("I'll email you the link to your project page when work starts.");
     sql.prepare("INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('r','current',?,'standard','now','now','now','owner','now','now')").run(JSON.stringify(terms));
     html=await render();expect(html).toContain('Open your project page');
     sql.exec("INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,created_by,created_at,updated_at) VALUES('signing-deposit','r','current',0,'deposit',120000,7,'open','https://example.com/deposit','owner','now','now')");

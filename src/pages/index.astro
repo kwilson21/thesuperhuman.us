@@ -188,7 +188,7 @@ const jsonLd = {
   /* The Lyft and Old News labels scale with the section heading (h2: clamp(1.75rem, 3vw, 2.25rem)) and stay below it at every width. */
   .work-company { font-size: clamp(1.5rem, 2.6vw, 2rem); letter-spacing: -.04em; line-height: 1.1; margin: 0 0 .65rem; }
   .work-outcome { flex: 1; }
-  .work-outcome p:not(.work-figure) { max-width: var(--measure-prose); }
+  .work-outcome p:not(.work-figure, .source-note) { max-width: var(--measure-prose); }
   .work-outcome p { margin: 0; text-wrap: pretty; }
   .work-outcome .work-figure { font-size: clamp(1.5rem, 2.6vw, 2.2rem); letter-spacing: -.04em; line-height: 1.2; margin-bottom: .35rem; }
   .work-outcome .source-note { color: var(--muted); font-size: .85rem; max-width: 65ch; margin-top: .4rem; }
