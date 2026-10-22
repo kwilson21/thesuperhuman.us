@@ -19,7 +19,7 @@ export const GET: APIRoute = async ({ locals, request, params }) => {
   const object = await env.AUDIO.get(row.object_key);
   if (!object) return new Response('Unavailable', {status:503,headers:agreementHeaders});
   const bytes=await object.arrayBuffer();
-  if (await hashBytes(bytes)!==row.sha256) return new Response("This file couldn't be verified, so I've held it back. Please let me know before you sign.", {status:503,headers:agreementHeaders});
+  if (await hashBytes(bytes)!==row.sha256) return new Response("This file couldn’t be verified, so I’ve held it back. Please let me know before you sign.", {status:503,headers:agreementHeaders});
   return new Response(bytes, {
         headers: {
           ...agreementHeaders,

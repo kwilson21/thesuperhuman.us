@@ -10,7 +10,7 @@ const questionLimits: Record<string, number> = { today: 2000, firstResult: 2000,
 export function renderSoftwareReceipt(result: Record<string, unknown>, path?: string) {
   const brief = result.brief && typeof result.brief === 'object' && !Array.isArray(result.brief) ? result.brief as Record<string, string> : {};
   const firstName = brief.name?.trim().split(/\s+/)[0] || 'there';
-  document.querySelector<HTMLElement>('[data-receipt-thanks]')!.textContent = `Thanks, ${firstName}. I'll read it myself and reply within two business days.`;
+  document.querySelector<HTMLElement>('[data-receipt-thanks]')!.textContent = `Thanks, ${firstName}. I’ll read it myself and reply within two business days.`;
   document.querySelector<HTMLElement>('[data-intake-progress]')!.hidden = true;
   const kicker = document.querySelector<HTMLElement>('[data-brief-kicker]'); if (kicker) kicker.hidden = true;
   const sent = result.clientCopyStatus === 'sent';
@@ -18,12 +18,12 @@ export function renderSoftwareReceipt(result: Record<string, unknown>, path?: st
   document.querySelector<HTMLElement>('[data-copy-status]')!.textContent = sent
     ? `A copy is on its way to ${brief.email}.`
     : uncertain ? 'Your copy should arrive shortly.'
-    : "I couldn't send your copy just now, but your brief is saved and I'll still reply.";
+    : "I couldn’t send your copy just now, but your brief is saved and I’ll still reply.";
   document.querySelector<HTMLElement>('[data-copy-icon]')!.hidden = !sent && !uncertain;
   const note = document.querySelector<HTMLElement>('[data-copy-note]')!;
   note.hidden = !sent && !uncertain;
-  note.textContent = uncertain ? "If it doesn't, your brief is still saved and I'll still reply." : "It has everything you wrote, so you don't need to save this page.";
-  if (path === 'website') document.querySelector<HTMLElement>('[data-receipt-first-step]')!.textContent = "I'll look at what you have and reply with a fixed-price first milestone, or a question or two.";
+  note.textContent = uncertain ? "If it doesn’t, your brief is still saved and I’ll still reply." : "It has everything you wrote, so you don’t need to save this page.";
+  if (path === 'website') document.querySelector<HTMLElement>('[data-receipt-first-step]')!.textContent = "I’ll look at what you have and reply with a fixed-price first milestone, or a question or two.";
 }
 
 export function setupSoftwareInquiry(form: HTMLFormElement) {
@@ -64,13 +64,13 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
   }
   function configureQuestions() {
     const questions = path() === 'website' ? [
-      ['purpose', "What's the website for?", "Who it's for, and what you want visitors to do when they get there.", 'A site for my pottery studio. People should see upcoming classes and sign up without messaging me first.', 2000],
+      ['purpose', "What’s the website for?", "Who it’s for, and what you want visitors to do when they get there.", 'A site for my pottery studio. People should see upcoming classes and sign up without messaging me first.', 2000],
     ] : path() === 'webapp' ? [
-      ['appGoal', 'What should the app let people do?', "Who it's for, and the one thing they'd come back for.", 'Let my students book and pay for lessons without emailing me.', 1000],
-      ['firstVersion', 'Have a first version in mind?', "If you have a hunch, or a spreadsheet or prototype it should replace. Otherwise I'll propose one.", '', 1000],
+      ['appGoal', 'What should the app let people do?', "Who it’s for, and the one thing they’d come back for.", 'Let my students book and pay for lessons without emailing me.', 1000],
+      ['firstVersion', 'Have a first version in mind?', "If you have a hunch, or a spreadsheet or prototype it should replace. Otherwise I’ll propose one.", '', 1000],
     ] : [
-      ['today', 'What happens today?', "Who does it, what's slow or error-prone, and what it costs you.", 'We track new clients in a shared spreadsheet. Three of us update it, and follow-ups slip through the cracks.', 2000],
-      ['firstResult', 'Have a first result in mind?', "If you have a hunch. Otherwise I'll propose one.", '', 2000],
+      ['today', 'What happens today?', "Who does it, what’s slow or error-prone, and what it costs you.", 'We track new clients in a shared spreadsheet. Three of us update it, and follow-ups slip through the cracks.', 2000],
+      ['firstResult', 'Have a first result in mind?', "If you have a hunch. Otherwise I’ll propose one.", '', 2000],
     ];
     const footnote = path() === 'website' ? 'Plain language is fine. We’ll work out the design and technical details together. Please leave out passwords and access details.' : 'Plain language is fine. We’ll work out the technical details together. Please leave out passwords, access details and real customer data.';
     questions.forEach(([key, title, hint, placeholder, max], i) => {

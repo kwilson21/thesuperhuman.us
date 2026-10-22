@@ -181,9 +181,9 @@ export default {
     await shot('email-rejected','Definite link email rejection allows retry',`/offer/${token}/sign`,{
       expectedResponses:[{path:`/api/offer/${token}/link`,status:502}],
       prepare:async page=>{
-        await page.route(`**/api/offer/${token}/link`,route=>route.fulfill({status:502,contentType:'application/json',body:JSON.stringify({ok:false,error:"That email didn't go through. Please try again."})}));
+        await page.route(`**/api/offer/${token}/link`,route=>route.fulfill({status:502,contentType:'application/json',body:JSON.stringify({ok:false,error:"That email didn’t go through. Please try again."})}));
         await page.locator('[data-agreement-link] button').click();
-        await page.locator('[role=status]').filter({hasText:"That email didn't go through. Please try again."}).waitFor();
+        await page.locator('[role=status]').filter({hasText:"That email didn’t go through. Please try again."}).waitFor();
         if(await page.locator('[data-agreement-link] button').isDisabled())throw new Error('Definite rejection must permit immediate retry.');
       },
     });
@@ -281,7 +281,7 @@ export default {
       `/offer/${token}/sign`,
       { cookie,prepare:async page=>{
         if(await page.getByRole('link',{name:'Open your project page'}).count())throw new Error('Project link must wait for project creation.');
-        await page.getByText("I'll email you the link to your project page when work starts.").waitFor();
+        await page.getByText("I’ll email you the link to your project page when work starts.").waitFor();
       } },
     );
     sql(

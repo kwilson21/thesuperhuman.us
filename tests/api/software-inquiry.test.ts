@@ -281,7 +281,7 @@ it('emails only answered fields to the client with the saved title and configure
   const copy = emails.find(email => email.to[0] === 'alex@example.com');
   expect(copy).toMatchObject({ from: 'from@example.com', subject: 'Your brief: <script>first</script> Second line', reply_to: 'inbox@example.com' });
   expect(copy.text).toContain('Hi Alex,');
-  expect(copy.text).toContain("I'll read it myself and reply within two business days with a fixed-price first milestone, or a question or two.");
+  expect(copy.text).toContain("I’ll read it myself and reply within two business days with a fixed-price first milestone, or a question or two.");
   expect(copy.text).toContain('What happens today?\n<script>first</script>\nSecond line');
   expect(copy.text).not.toMatch(/Not provided|Why this timing|Budget amount|Their role/);
   expect(copy.html).toContain('&lt;script&gt;first&lt;/script&gt;');
