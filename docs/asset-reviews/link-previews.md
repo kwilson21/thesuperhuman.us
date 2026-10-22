@@ -42,6 +42,7 @@
   under 600 KB.
 - Device check: unverified. Messages playback, Discord and the Facebook and
   LinkedIn debuggers need the deployed site; see the README's post-deploy checks.
+- Reads as generated (one-time check of the current files, October 22, 2026, owner pick D5.3-B): fail for 5 scenes, pass for 17. Claude Code agent, not a fresh viewer, so judged by the listed tells, on every poster at 480 × 252, close to sharing size, and on the not-found, building, personal-website and the-engineers-daily posters at 900px wide or more. Fail, because a generated picture's tells come first: audio (the headphones' glossy render finish and leaf shadows), home (the studio's leaf shadows and the monitor's colored bars), music-old-news (the golden-hour glow over the premiere art), personal-website-story (generated design studies, labelled as such in the frame) and project-threadline (leaf shadows across the wall). Pass: about, audio-portfolio, audio-releases, audio-services, audio-start, building, not-found, personal-website, privacy, project-kaillera-next, project-tally, services, software-start, the-engineers-daily, work, writing and writing-ai-gives-you-speed. Loops were not re-judged frame by frame; a loop that shows a file failing on its own (about's chapter objects, for example; see each file's record) carries that result too. The failing scenes inherit the owner's decision on their source art (board D5.3-B: a D5.1 change or an exception line); their recorded outcome is left unchanged until then.
 
 ## home
 

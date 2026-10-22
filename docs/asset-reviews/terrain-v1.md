@@ -11,6 +11,7 @@
 - Accessibility and motion: empty alternative text, with meaning in adjacent HTML. Static artwork; link feedback respects reduced motion. No autoplay. (About, September 27: the unchanged image drifts up to 28px with scroll; still under reduced motion.)
 - Publication check: no private content, generated factual labels, claims about a real studio photograph, or unsupported product evidence.
 - Outcome: ready for production asset use in the local prototype. Deployment is separate.
+- Reads as generated (one-time check of the current files, October 22, 2026, owner pick D5.3-B): pass. Claude Code agent, not a fresh viewer, so judged by the listed tells, at 1109 × 739 in About's introduction at 1280px wide. First noticed: the terracotta path winding through layered, paper-like terrain; no gloss, leaf shadows, screens or staged objects. Borderline: the two small trees and stones have a smooth, rendered look, and the board that added this check rated the terrain a maybe, so a fresh viewer could still read it as generated.
 
 ```json
 {

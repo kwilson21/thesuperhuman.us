@@ -13,6 +13,7 @@
 - Publication: no private information, personal portrait, false product evidence, or generated credit. The illustration does not claim a real studio photograph.
 - Delivery verification: production HTTP response SHA-256 matches this exact source file. See `docs/design-concepts/2026-09-10/home-prototype/production-results.json`.
 - Outcome: ready for production asset use within this prototype. Deployment is a separate step.
+- Reads as generated (one-time check of the current files, October 22, 2026, owner pick D5.3-B): fail. Claude Code agent, not a fresh viewer, so judged by the listed tells, at 1120 × 747 on /building/threadline at 1280px wide. First noticed: dappled leaf shadows across the wall, over three new, blank cards. This required check fails, which by section 4 of docs/generated-image-qa.md keeps the image out of production. The recorded outcome is left unchanged for the owner to decide (board D5.3-B: replace the file through a D5.1 change, or add an exception line here).
 
 Exact delivered-file record:
 

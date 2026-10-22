@@ -11,6 +11,7 @@
 - Accessibility and motion: empty alternative text, with meaning in adjacent HTML. Static artwork; link feedback respects reduced motion. No autoplay. (Superseded by the animated layer recorded below, September 27.)
 - Publication check: no private content, generated factual labels, claims about a real studio photograph, or unsupported product evidence.
 - Outcome: ready for production asset use in the local prototype. Deployment is separate.
+- Reads as generated (one-time check of the current files, October 22, 2026, owner pick D5.3-B): fail. Claude Code agent, not a fresh viewer, so judged by the listed tells, at 682 × 455 in About's software chapter at 1280px wide. First noticed: the screen shows a "</>" symbol where content belongs, on a new, centered, unused laptop with a render finish. This required check fails, which by section 4 of docs/generated-image-qa.md keeps the image out of production. The recorded outcome is left unchanged for the owner to decide (board D5.3-B: replace the file through a D5.1 change, or add an exception line here).
 
 ```json
 {
