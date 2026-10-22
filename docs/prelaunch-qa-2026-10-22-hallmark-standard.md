@@ -2,7 +2,7 @@
 
 Date: October 22, 2026 (UTC)  
 Repository: `kwilson21/thesuperhuman.us`  
-Pull request: [#208](https://github.com/kwilson21/thesuperhuman.us/pull/208), "Make Hallmark the site's design standard, with credit"  
+Pull request: [#208](https://github.com/kwilson21/thesuperhuman.us/pull/208), "Make Hallmark the site's design standard, with credit", squash-merged to `main` as `362dac5f` on October 22, 2026, pinned to head `3c247304`  
 Branch: `claude/hallmark-design-standard`, with `main` merged in after #209 (`ab5704f5`)  
 Target: production `https://thesuperhuman.us` after merge  
 Reviewer: Claude Code agents, collecting evidence for owner Kazon Wilson. This record is evidence collection, not owner certification.  
@@ -13,7 +13,7 @@ Scope: tooling and docs that make Hallmark the design standard, plus one public 
 - `npm run design:check` in `prebuild`, with its tests;
 - the credit sentence on `/building/personal-website`.
 
-Rollback revision: `main` immediately before this PR merges. No migration and no stored data.
+Rollback revision: `4a0ef9b8` (#206), `main` immediately before this PR merged. No migration and no stored data.
 
 ## Owner decisions and authorization
 
@@ -43,7 +43,7 @@ Rollback revision: `main` immediately before this PR merges. No migration and no
 - **N/A · Search, accessibility, performance, forms, privacy, owner center and signing.**
   - Only one sentence changes on one page.
   - No route, metadata, form, data flow, header, binding or dependency changes. The vendored skill is not served.
-- **UNVERIFIED · Post-deployment verification.** After the merge, check that `/building/personal-website` serves the credit sentence, with no overflow at 320, 390 and 1280.
-- **UNVERIFIED · Receipt.** Implemented: yes. Verified locally: yes. Deployed: no. Verified live: no.
+- **PASS · Post-deployment verification.** Before the merge, `validate`, Screenshots `capture` and Workers Builds succeeded on `3c247304`. The production Workers Builds check on `362dac5f` succeeded at 17:18:20 UTC. At 17:18 UTC the coordinating Claude Code session loaded `/building/personal-website` on production with Playwright (Chromium) at 1280x800, 390x844 and 320x640: status 200, the credit sentence and its Hallmark link present, no horizontal overflow and no page errors.
+- **PASS · Receipt.** Implemented: yes. Verified locally: yes. Deployed: yes (`362dac5f`, 17:18:20 UTC). Verified live: yes, for the check above.
 
-Not claimed launch-ready until the post-deployment check is recorded.
+Deployed and verified live on October 22, 2026.
