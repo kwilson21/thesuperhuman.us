@@ -47,7 +47,7 @@ Remaining work:
 - an explicit owner go-ahead to merge, because merging deploys production (1.1)
 - a fix or an owner-recorded exception for the sitemap FAIL, which existed before this PR (2.5)
 - an independent review pass on this record's commit (7.4)
-- the live checks after deploy
+- the live checks after deploy, including the owner's remote `owner:health` run (8.15)
 
 See Remaining work at the end.
 
@@ -228,7 +228,7 @@ PASS means the evidence named here was observed. Production checks are listed un
     - An out-of-range request gives 416 with `bytes */642380` (home).
     - An unknown hash gives 404.
     - `ffprobe` shows H.264 High, 1200 × 630, yuv420p, 30 fps and no audio, with `moov` before `mdat`.
-  - Each poster differs from its video's frame 0 by a mean absolute RGB difference of 1.4 to 2.1 out of 255, which is consistent with encoding.
+  - Each poster differs from its video's frame 0 by a mean absolute RGB difference of about 1.4 to 2.3 out of 255, with frame 0 decoded by ffmpeg's default conversion. That is consistent with encoding.
   - All 22 posters were inspected at full size and three at 600 × 315. All are legible and unclipped.
   - `/og-image.png` now returns 404. `src`, `public`, `scripts`, README and tests no longer reference it.
   - How real apps show these previews needs the deployed site (see Live checks).
@@ -375,7 +375,7 @@ PASS means the evidence named here was observed. Production checks are listed un
   - It serves a name only if the manifest lists it (an unknown hash returned 404).
   - Range goes through the existing `mediaRange` parser (invalid ranges return 416).
   - POST returned 403 from the existing cross-site form guard.
-- **N/A · 5.2 Failure matrix.** No form or client script changed. The diff adds no `<script>`, and no file under `src/components`, `src/scripts` or `src/pages/api` changed.
+- **N/A · 5.2 Failure matrix.** No form or client script changed. The diff adds no `<script>` to any site page, layout or component (the scene files' scripts run only in the renderer), and no file under `src/components`, `src/scripts` or `src/pages/api` changed.
 - **N/A · 5.3 No-JS and verification fallback.** No form markup or Turnstile code changed. The existing `challenges.cloudflare.com` origin on `/` is unchanged.
 - **N/A · 5.4 Delivery and receipt.** No email, Resend or notification code changed.
 - **N/A · 5.5 Approval-gated flows and sensitive files.**
@@ -405,9 +405,10 @@ PASS means the evidence named here was observed. Production checks are listed un
 - **N/A · 6.5 Analytics.**
   - No analytics code changed.
   - Note: `src/lib/cloudflare-analytics.ts` counts every eyeball request on `thesuperhuman.us`. The owner's "requests" figure will now include preview apps fetching posters and videos, which can mean several Range requests per video.
-- **N/A · 6.6 Monitoring.**
-  - No logging or monitoring code changed, and Workers observability was already enabled.
-  - If the ASSETS fetch fails, the new route returns a 404 without logging anything. The post-deploy `curl` checks are what would catch that.
+- **UNVERIFIED · 6.6 Monitoring.**
+  - No logging or monitoring code changed, and Workers observability was already enabled, so each request to the new route is recorded with its status.
+  - The new route adds a failure path that nothing alerts on: if the ASSETS fetch fails, `serveOgVideo` returns a 404 and logs nothing. Previews would stop playing in Messages without a log line or alert.
+  - The post-deploy `curl` (live check 2) is a one-time check, not monitoring. Who would notice a later failure, and how, is not established; see Known unknowns.
 
 ## 7. Release and final QA
 
@@ -458,7 +459,7 @@ PASS means the evidence named here was observed. Production checks are listed un
   - Dynamic pages:
     - `/`, with GET and HEAD, returns 200 `text/html` with `permissions-policy`, `referrer-policy: strict-origin-when-cross-origin`, `x-content-type-options: nosniff` and `x-frame-options: DENY`. It has no Cache-Control, same as before.
     - `/services` and `/privacy` (HEAD) return the same.
-    - The `/building` journal pages keep their existing `no-store`.
+    - The server-rendered journal pages (`/building/personal-website`, its story and archive, `/building/the-engineers-daily` and `/building/threadline`) keep their existing `no-store`. The static Tally and Kaillera Next journals keep `public, max-age=0, must-revalidate`, also unchanged.
   - Video route, `/og/home-85175dfd8c.mp4`:
     - HEAD and GET return 200, Content-Length 642,380, `video/mp4`, `accept-ranges: bytes`, `Cache-Control: public, max-age=31536000, immutable` and all four security headers.
     - `bytes=0-1` returns 206 with `content-range: bytes 0-1/642380`. `bytes=642370-` and `bytes=-5` also return 206 with the correct ranges.
@@ -537,7 +538,7 @@ PASS means the evidence named here was observed. Production checks are listed un
 - **UNVERIFIED · 7.6 Receipt.** This record is the receipt for the local evidence. Status as of October 22, 2026, about 07:55 UTC:
   - Implemented: yes (`8e6e9cc`).
   - Verified locally: yes, against `wrangler dev` serving the `dist/` of `8e6e9cc`.
-  - Deployed: no. Only a branch preview version, `4d55f91a`, exists.
+  - Deployed: no production deploy. Workers Builds uploaded preview versions only, for each pushed commit; the one for `8e6e9cc` is `4d55f91a`, and the branch preview alias now serves this record's commit.
   - Verified live: no.
 
 ## 8. Private owner center
@@ -562,9 +563,11 @@ PASS means the evidence named here was observed. Production checks are listed un
 - **N/A · 8.12 Stripe signatures, webhooks and invoices.** No Stripe or webhook code changed.
 - **N/A · 8.13 Owner Payment section.** No owner Payment code changed.
 - **N/A · 8.14 Rollback and recovery rehearsals.** None of these procedures or their code are touched. The website rollback for this PR is covered in 7.4.
-- **N/A · 8.15 `owner:health`.**
-  - `scripts/owner-health.mjs` checks D1 tables, configuration and the signing route, none of which this diff touches.
-  - Separately, the remote `owner:health` run that the #188 record left UNVERIFIED is still open.
+- **UNVERIFIED · 8.15 `owner:health`.**
+  - No remote run was made for this PR. The run needs the owner's Cloudflare credentials.
+  - This diff touches nothing `scripts/owner-health.mjs` checks directly, but the checklist asks for a run against the target environment before a launch claim.
+  - The remote run that the #188 record left UNVERIFIED is still open as well.
+  - As in the #188 record, this stays a launch-blocking UNVERIFIED item until `npm run owner:health -- --remote --post-deploy` is recorded (live check 6), unless the owner accepts it as an exception with its impact and follow-up.
 
 ## Software agreement signing
 
@@ -598,6 +601,7 @@ The owner agreed to these on October 22, 2026 ("Ok"). Record each result here af
    - The four security headers are on the video route.
    - HTTPS, robots and the sitemap are unchanged.
    - `/owner*` still redirects to Access.
+6. Owner: run `npm run owner:health -- --remote --post-deploy` and record the result (8.15).
 6. Optional:
    - static-asset Range behavior in production
    - whether repeated video route requests are served from Cloudflare's cache (not verified locally)
@@ -619,10 +623,13 @@ These stay UNVERIFIED unless the owner records an exception with its impact and 
 - the live Worker's ASSETS fetch, Range handling and headers (7.3)
 - the production revision and the post-deploy checks (7.5)
 - a PEAT or localized flash analysis, and an automated accessibility audit (3.5)
+- alerting on the new video route's failure path (6.6)
+- a remote `owner:health` run, launch-blocking per 8.15
 
 ## Remaining work
 
 - **Owner:** give an explicit go-ahead to merge #203. Merging to `main` deploys production (1.1).
+- **Owner:** run `npm run owner:health -- --remote --post-deploy`, or accept it as an exception with its impact and follow-up (8.15).
 - **Owner:** decide the sitemap FAIL (2.5). The options are a fix in a separate PR, or an exception with its impact and follow-up. Two things need deciding:
   - `/studio`, `/studio/sign-in`, `/agreements` and `/agreements/verify` are listed in the sitemap.
   - `/building/tally` and `/building/kaillera-next` are listed under URLs that redirect.
