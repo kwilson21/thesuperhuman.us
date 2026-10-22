@@ -10,12 +10,15 @@ import { pathToFileURL } from 'node:url';
 // Hallmark rule it ports. Only gates a script can judge without false alarms are here.
 // Composition, hierarchy and contrast in context stay with `hallmark audit` and review.
 //
-// Scope: stylesheets under src/ (.css files and <style> blocks in .astro files), plus the
-// class attributes (class="..." and class:list={...}, single or multi-line) in .astro
-// markup, which are checked for transition-all, outline-none and Tailwind arbitrary hex
-// values, and @apply lines, which get the same three checks. Prose, HTML comments and
-// frontmatter are not scanned. SVG files are images, covered by image QA. TypeScript is
-// out of scope: email templates need literal colours and faces.
+// Scope: stylesheets under src/ (.css files, <style> blocks in .astro files, and <style>
+// blocks in the string and template literals of .ts route handlers under src/pages/ that
+// return HTML; comments and bare code there are not read), plus the class attributes
+// (class="..." and class:list={...}, single or multi-line) in .astro markup, which are
+// checked for transition-all, outline-none and Tailwind arbitrary hex values, and @apply
+// lines, which get the same three checks. Prose, HTML comments and frontmatter are not
+// scanned. SVG files are images, covered by image QA. Other TypeScript is out of scope,
+// src/lib/ above all: email HTML is built there with inline styles, and email needs
+// literal colours and faces because it cannot use the site's CSS variables.
 //
 // The faces a stylesheet may name come from src/styles/global.css: the families in its
 // --font-* tokens and its @font-face rules. A known exception goes in ALLOWLIST with a
@@ -67,9 +70,10 @@ export const GATES = {
     label: 'outline removed without a :focus-visible replacement',
     // Gate 26 (interactive elements need :focus-visible) and interaction-and-states.md,
     // "Focus rings": "Never `outline: none` without a replacement." A stylesheet removal
-    // needs a :focus-visible rule for the same selector; a class-list removal needs a
-    // focus-visible: utility in the same class attribute (OUTLINE_MARKUP_HINT).
-    hint: 'add a :focus-visible rule with a visible ring for the same selector',
+    // needs a :focus-visible rule for the same selector that applies whenever the removal
+    // does (no @media, @supports or @container condition the removal lacks); a class-list
+    // removal needs a focus-visible: utility in the same class attribute (OUTLINE_MARKUP_HINT).
+    hint: 'add a :focus-visible rule with a visible ring for the same selector, under the same @media, @supports and @container conditions (or none)',
   },
 };
 
@@ -145,7 +149,7 @@ export function cssDeclarations(css, firstLine = 1) {
   return out;
 }
 
-/** The <style> blocks of an .astro file, with the line each block's CSS starts on. */
+/** The <style> blocks of an .astro file or a .ts route's HTML, with the line each block's CSS starts on. */
 export function styleBlocks(source) {
   const blocks = [];
   for (const match of source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/g)) {
@@ -153,6 +157,83 @@ export function styleBlocks(source) {
     blocks.push({ css: match[1], line: source.slice(0, offset).split('\n').length });
   }
   return blocks;
+}
+
+/** Words after which a `/` starts a regular expression, not a division. */
+const REGEX_AFTER_WORD = /(?:^|[^\w$.])(?:return|typeof|case|void|delete|throw|in|of|else|do|yield|await|new)\s*$/;
+
+/**
+ * The text a TypeScript file puts in string and template literals, for finding the HTML a
+ * route emits. The result has the same length and line breaks as `source`: comments, code
+ * and the quotes themselves are blanked, so a <style> inside a comment or bare code is
+ * never found, and `//` inside a literal (a URL) is kept. A template's `${...}`
+ * interpolation is code, except that the string literals inside it stay, so
+ * `color: ${dark ? '#fff' : '#000'}` still shows both colours. Escapes such as \' keep
+ * their character. Regular expressions are skipped by a heuristic (what precedes the `/`).
+ */
+export function literalText(source) {
+  const view = source.replace(/[^\n]/g, ' ').split('');
+  const n = source.length;
+  const escape = at => {
+    // Backslash plus the next character: a quote, backtick, $ or backslash keeps that character; others (\n, \t) are not CSS text.
+    if (at + 1 < n && '\'"`$\\{}'.includes(source[at + 1])) view[at + 1] = source[at + 1];
+    else if (source[at + 1] === '\n') view[at + 1] = '\n';
+    return at + 2;
+  };
+  const scanString = at => {
+    const quote = source[at];
+    let i = at + 1;
+    while (i < n && source[i] !== quote && source[i] !== '\n') {
+      if (source[i] === '\\') { i = escape(i); continue; }
+      view[i] = source[i]; i += 1;
+    }
+    return i + 1;
+  };
+  const scanTemplate = at => {
+    let i = at + 1;
+    while (i < n && source[i] !== '`') {
+      if (source[i] === '\\') { i = escape(i); continue; }
+      if (source[i] === '$' && source[i + 1] === '{') { i = scanCode(i + 2, true); continue; }
+      view[i] = source[i]; i += 1;
+    }
+    return i + 1;
+  };
+  const scanRegex = at => {
+    let i = at + 1;
+    let inClass = false;
+    while (i < n && source[i] !== '\n' && (inClass || source[i] !== '/')) {
+      if (source[i] === '\\') i += 1;
+      else if (source[i] === '[') inClass = true;
+      else if (source[i] === ']') inClass = false;
+      i += 1;
+    }
+    return i + 1;
+  };
+  function scanCode(at, inTemplate) {
+    let i = at;
+    let depth = 0;
+    let previous = '';
+    while (i < n) {
+      const ch = source[i];
+      if (ch === '/' && source[i + 1] === '/') { while (i < n && source[i] !== '\n') i += 1; continue; }
+      if (ch === '/' && source[i + 1] === '*') { const close = source.indexOf('*/', i + 2); i = close === -1 ? n : close + 2; continue; }
+      if (ch === '"' || ch === "'") { i = scanString(i); previous = ch; continue; }
+      if (ch === '`') { i = scanTemplate(i); previous = ch; continue; }
+      if (ch === '/' && (!previous || /[(,=:[!&|?{};+\-*%<>~^]/.test(previous) || REGEX_AFTER_WORD.test(source.slice(Math.max(0, i - 12), i)))) { i = scanRegex(i); previous = ')'; continue; }
+      if (ch === '{') depth += 1;
+      if (ch === '}') { if (depth === 0 && inTemplate) return i + 1; depth -= 1; }
+      if (!/\s/.test(ch)) previous = ch;
+      i += 1;
+    }
+    return i;
+  }
+  scanCode(0, false);
+  return view.join('');
+}
+
+/** Files the check reads: .css and .astro under src/, and the .ts route handlers under src/pages/ (they return HTML pages with a <style> block). src/lib/ builds email, which needs literal colours. */
+export function isScanned(path) {
+  return /\.(?:css|astro)$/.test(path) || (/\.ts$/.test(path) && !path.endsWith('.d.ts') && path.startsWith('src/pages/'));
 }
 
 /** An .astro file with its HTML comments and <style> and <script> blocks blanked, keeping line numbers. */
@@ -299,6 +380,75 @@ function resolvedSelectors(context) {
   }
   return parents.map(selector => selector.replace(/\s+/g, ' ').trim()).filter(Boolean);
 }
+/** At-rules that decide whether the rules inside them apply at all. */
+const CONDITION_AT_RULE = /^@(media|supports|container)\b/i;
+
+/** Split at the top-level matches of `separator` (a sticky regex), keeping parenthesized groups whole. */
+function splitAtTopLevel(text, separator) {
+  const parts = [];
+  let buffer = '';
+  let depth = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] === '(') depth += 1;
+    else if (text[i] === ')') depth = Math.max(0, depth - 1);
+    if (depth === 0) {
+      separator.lastIndex = i;
+      const found = separator.exec(text);
+      if (found) { parts.push(buffer); buffer = ''; i += found[0].length - 1; continue; }
+    }
+    buffer += text[i];
+  }
+  parts.push(buffer);
+  return parts;
+}
+
+/**
+ * One condition clause with whitespace squeezed and only its keywords lower-cased: words outside
+ * parentheses (`screen`, `not`, `selector`) and the feature name that opens a group (`(MIN-WIDTH: 1px)`).
+ * Custom idents (`--name`) and values keep their case.
+ */
+function normalizeClause(clause) {
+  const squeezed = clause.replace(/\s+/g, ' ').replace(/\s*([():,<>=/])\s*/g, '$1').trim();
+  let depth = 0;
+  let afterOpen = false;
+  let out = '';
+  for (const token of squeezed.match(/[()]|[^()]+/g) ?? []) {
+    if (token === '(') { depth += 1; out += token; afterOpen = true; continue; }
+    if (token === ')') { depth = Math.max(0, depth - 1); out += token; afterOpen = false; continue; }
+    if (depth === 0) out += token.toLowerCase();
+    else if (afterOpen) out += token.replace(/^(?!--)[a-z][\w-]*/i, word => word.toLowerCase());
+    else out += token;
+    afterOpen = false;
+  }
+  return out;
+}
+
+/**
+ * The @media, @supports and @container conditions enclosing a declaration, as one flat list of
+ * clauses ("@media (min-width:64rem)"). A prelude splits at its top-level `and`, and nested
+ * at-rules of one type join, so `@media (a) and (b)` equals `@media (b) and (a)` and
+ * `@media (a) { @media (b) { ... } }`. A prelude with `not`, `or` or a comma stays one clause.
+ * A container name is a case-sensitive custom ident, kept as written and attached to each clause.
+ */
+function conditionsOf(context) {
+  const clauses = new Set();
+  for (const prelude of context) {
+    const at = CONDITION_AT_RULE.exec(prelude);
+    if (!at) continue;
+    const type = `@${at[1].toLowerCase()}`;
+    let rest = prelude.slice(at[0].length).replace(/\s+/g, ' ').trim();
+    let name = '';
+    if (type === '@container') {
+      const named = /^([^\s()]+)\s(?=\S)/.exec(rest);
+      if (named && named[1].toLowerCase() !== 'not') { name = `${named[1]} `; rest = rest.slice(named[0].length); }
+    }
+    const opaque = /^not\b/i.test(rest) || splitAtTopLevel(rest, /\s*,\s*|\s+or\s+/iy).length > 1;
+    for (const clause of opaque ? [rest] : splitAtTopLevel(rest, /\s+and\s+/iy)) clauses.add(`${type} ${name}${normalizeClause(clause)}`);
+  }
+  return [...clauses];
+}
+/** A replacement applies whenever a removal does when each of its clauses is also one of the removal's. No conditions is always. */
+const appliesWhenever = (replacement, removal) => replacement.every(clause => removal.includes(clause));
 const NOT_FOCUS_VISIBLE = /:not\(\s*:focus-visible\s*\)/g;
 const hasFocusVisible = selector => /:focus-visible\b/.test(selector.replace(NOT_FOCUS_VISIBLE, ''));
 /** The element a selector styles, without its focus pseudo-classes. A bare `:focus-visible` is `*:focus-visible`, so `.a :focus-visible` has the base `.a *`. */
@@ -321,7 +471,7 @@ export function declarationViolations(decls, { faces = new Set() } = {}) {
       for (const found of value.matchAll(TRANSITION_ALL_UTILITY)) hit('transition-all', decl, found[0]);
       for (const found of arbitraryHex(value)) hit('raw-hex', decl, found.match);
       for (const found of value.matchAll(OUTLINE_UTILITY)) {
-        if (!found[1].includes('not-focus-visible:')) removals.push({ decl, match: found[0], selectors: resolvedSelectors(context), covered: hasFocusVisibleUtility(value) });
+        if (!found[1].includes('not-focus-visible:')) removals.push({ decl, match: found[0], selectors: resolvedSelectors(context), conditions: conditionsOf(context), covered: hasFocusVisibleUtility(value) });
       }
       continue;
     }
@@ -348,16 +498,19 @@ export function declarationViolations(decls, { faces = new Set() } = {}) {
     const selectors = resolvedSelectors(context);
     if (removesOutline(decl)) {
       const onlyUnfocused = selectors.length > 0 && selectors.every(selector => selector.replace(/\s+/g, '').includes(':not(:focus-visible)'));
-      if (!onlyUnfocused) removals.push({ decl, match: `${prop}: ${value}`, selectors, covered: false });
+      if (!onlyUnfocused) removals.push({ decl, match: `${prop}: ${value}`, selectors, conditions: conditionsOf(context), covered: false });
     } else if (FOCUS_REPLACEMENT_PROP.test(prop)) {
       const focused = selectors.filter(hasFocusVisible).map(focusBase);
-      if (focused.length) replacements.push(focused);
+      if (focused.length) replacements.push({ bases: focused, conditions: conditionsOf(context) });
     }
   }
   // A removal is replaced by a :focus-visible rule for the same selector (or for every
-  // element), not by one for another selector in the file.
+  // element), not by one for another selector in the file. The rule must also apply
+  // whenever the removal does: a replacement inside `@media (min-width: 64rem)` leaves an
+  // unconditional removal bare at narrower widths.
   const isCovered = removal => removal.covered
-    || replacements.some(bases => bases.some(base => removal.selectors.some(selector => covers(base, focusBase(selector)))));
+    || replacements.some(({ bases, conditions }) => appliesWhenever(conditions, removal.conditions)
+      && bases.some(base => removal.selectors.some(selector => covers(base, focusBase(selector)))));
   for (const removal of removals) if (!isCovered(removal)) hit('outline-none', removal.decl, removal.match);
   return hits;
 }
@@ -414,12 +567,15 @@ export function markupViolations(markup) {
 
 /** Every gate hit in one source file, as { path, line, gate, label, hint, match }. */
 export function fileViolations(path, source, { faces } = {}) {
-  let hits;
-  if (path.endsWith('.css')) hits = declarationViolations(cssDeclarations(source), { faces });
-  else if (path.endsWith('.astro')) {
-    const decls = styleBlocks(source).flatMap(block => cssDeclarations(block.css, block.line));
-    hits = [...declarationViolations(decls, { faces }), ...markupViolations(markupOnly(source))];
-  } else hits = [];
+  let hits = [];
+  if (!isScanned(path)) hits = [];
+  else if (path.endsWith('.css')) hits = declarationViolations(cssDeclarations(source), { faces });
+  else {
+    // A .ts route's CSS is whatever its string and template literals hold, not its comments or code.
+    const decls = styleBlocks(path.endsWith('.ts') ? literalText(source) : source).flatMap(block => cssDeclarations(block.css, block.line));
+    hits = declarationViolations(decls, { faces });
+    if (path.endsWith('.astro')) hits.push(...markupViolations(markupOnly(source)));
+  }
   return hits.map(h => ({ path, ...h, label: GATES[h.gate].label, hint: h.hint ?? GATES[h.gate].hint }));
 }
 
@@ -447,7 +603,7 @@ export function applyAllowlist(violations, allowlist = ALLOWLIST) {
 function collectFiles(root) {
   const stats = statSync(root, { throwIfNoEntry: false });
   if (!stats) return [];
-  if (stats.isFile()) return /\.(?:css|astro)$/.test(root) ? [root] : [];
+  if (stats.isFile()) return isScanned(root.split(sep).join('/')) ? [root] : [];
   return readdirSync(root, { withFileTypes: true }).flatMap(entry => collectFiles(join(root, entry.name)));
 }
 

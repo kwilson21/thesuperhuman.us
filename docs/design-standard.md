@@ -97,12 +97,17 @@ Triage each finding into one of three groups:
 ## The mechanical check
 
 `scripts/check-design.mjs` ports a few Hallmark gates that a script can judge without
-false alarms. It scans the stylesheets in `src/` (`.css` files and `<style>` blocks in
-`.astro` files), including `@apply` lines, and the class attributes in `.astro` markup
-(`class="..."`, `class={...}` and `class:list={...}`, on one line or several). Markup is
-checked only for `transition-all`, `outline-none` and `outline-0`, and hex colours in
-Tailwind arbitrary values such as `text-[#ff0000]`. HTML comments, prose and frontmatter
-are not scanned, and neither are inline `style` attributes or TypeScript.
+false alarms. It scans the stylesheets in `src/` (`.css` files, `<style>` blocks in
+`.astro` files, and `<style>` blocks inside the string and template literals of `.ts`
+route handlers under `src/pages/` that return HTML, such as
+`src/pages/api/resume-approve.ts`; comments and code there are not read), including
+`@apply` lines, and the class attributes in `.astro` markup (`class="..."`, `class={...}`
+and `class:list={...}`, on one line or several). Markup is checked only for
+`transition-all`, `outline-none` and `outline-0`, and hex colours in Tailwind arbitrary
+values such as `text-[#ff0000]`. HTML comments, prose and frontmatter are not scanned,
+and neither are inline `style` attributes or other TypeScript. In particular `src/lib/`
+is left out: email HTML is built there with inline styles, and email needs literal
+colours and faces because it cannot use the site's CSS variables.
 
 - quoted generic font families (`'sans-serif'` names a font that does not exist);
 - a font family that is not one of the faces the token block or an `@font-face` in
@@ -114,7 +119,12 @@ are not scanned, and neither are inline `style` attributes or TypeScript.
 - the browser-default `ease` keyword instead of `--ease-site` (`motion.md`, Bans);
 - `outline: none` or `outline-none` with no `:focus-visible` replacement for the same
   thing (gate 26). In a stylesheet that is a `:focus-visible` rule for the same selector
-  (or for every element, or for the removal's ancestor scope, as in `.x :focus-visible`).
+  (or for every element, or for the removal's ancestor scope, as in `.x :focus-visible`)
+  that applies whenever the removal does: each `@media`, `@supports` or `@container`
+  clause around the replacement must also surround the removal, so a replacement only
+  inside `@media (min-width: 64rem)` does not cover an unconditional removal. Clauses are
+  the parts of a condition joined by `and`, compared without regard to order or nesting;
+  keywords and feature names ignore case, container names do not.
   In a class list it is a `focus-visible:` utility on the same element.
 
 Existing exceptions are listed in the script's allowlist, each with its reason, the exact
