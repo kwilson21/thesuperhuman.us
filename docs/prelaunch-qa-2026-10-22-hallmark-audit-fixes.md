@@ -4,7 +4,7 @@ Date: October 22, 2026 (UTC; this agent's checks ran from about 10:20 to 10:45 U
 Repository: `kwilson21/thesuperhuman.us`  
 Pull request: [#204](https://github.com/kwilson21/thesuperhuman.us/pull/204), "Fix the defects found by the Hallmark design audit" (open, not merged)  
 Branch: `claude/hallmark-audit-fixes`  
-Verified revision: `f0abd1f`, the PR head. Base: `main` at `26e764a`, still the head of `main` when read through the GitHub API at about 10:40 UTC. This record is a new file drafted on top of `f0abd1f`; it is not part of the verified revision.  
+Verified revision: `f0abd1f` for the browser checks below. Base at that time: `main` at `26e764a`. `main` then moved to `75a88be4` (PR #203, link-preview videos), which this branch merged after `4726df39`. On the merged code the coordinating session ran the full suite (138 files, 1706 passed, 1 skipped), `astro check` (0 errors, 0 warnings) and `npm run build` (asset QA 80 files, copy check and publicist gate pass). Later CI results for the merged head are in the PR.  
 Target: production `https://thesuperhuman.us`, after merge. The stylesheets are shared, so the audio pages served on `audio.thesuperhuman.us` change too. Pages with visible changes include Home, `/work`, `/services`, `/about`, `/privacy`, `/building` and its project pages, `/writing` and its essay, `/audio`, `/audio/services`, `/audio/releases`, `/music/old-news`, `/software/start`, `/audio/start` and the 404 page. The private studio sign-in, offer signing, studio and owner pages change their field, focus and type styles.  
 Reviewer: Claude Code agent, collecting evidence for owner Kazon Wilson. Claude subagents wrote the code; independent Claude reviewers and Codex reviewed it. This record is evidence collection, not owner certification.  
 Scope: fixes for the defects a read-only Hallmark design audit of the public pages found (`ab4dae0`), plus review follow-ups (`d0d26dd`, `a3c2f56`, `b771231`, `f0abd1f`):
@@ -15,7 +15,7 @@ Scope: fixes for the defects a read-only Hallmark design audit of the public pag
 - Running prose stops near 65 characters (`--measure-prose`). Headings balance and prose wraps `pretty` site-wide.
 - Type and token cleanup: generic font families unquoted, one mono kicker face (`.eyebrow` moves from Inter to JetBrains Mono), tokens in place of stray hex values, `Inter` literals and easing curves, and a named spacing scale.
 - 44px tap areas for the footer, 404 and review-illustration links and controls; hover feedback limited to mouse and trackpad; a crossed-speaker muted icon and a disabled seek style on the release player.
-- Copy: a "Software project briefs and pages" heading on `/privacy`; curly apostrophes on `/privacy`, the resume receipt and offer signing; "Live · evolving" as the website project's status.
+- Copy: a "Software project briefs and pages" heading on `/privacy`; curly apostrophes on `/privacy`, the resume receipt and offer signing.
 - Removal of the unused `LyftWorkStory` component.
 
 **What changes, checked against "CSS, markup and tests only".** `git diff --stat 26e764a f0abd1f` lists 60 files, 483 insertions and 355 deletions: 56 modified, 3 test files added and 1 component deleted. This agent read the whole diff, comparing the minified stylesheets rule by rule.
@@ -27,7 +27,7 @@ Scope: fixes for the defects a read-only Hallmark design audit of the public pag
   - `src/components/ProjectTimeline.astro`: an inline `--position-digits` style that reserves room for the milestone count.
   - `src/components/LyftWorkStory.astro`, deleted (114 lines, including a client script). At `26e764a` nothing in `src/` imported it (`git grep`). `docs/website-system-plan.md` drops it from the reuse list in this PR. `docs/audits/2026-09-09/website-audit.md` line 137, a dated audit, still links to the deleted file.
   - Copy, as listed in Scope. `/work` also moves the Tally paragraph below the two links; its text is unchanged.
-  - `src/data/project-stories/personal-website.ts`: the website story's `status` label, from "Live - evolving" to "Live · evolving". `ProjectLayout` shows it on `/building/personal-website`. It is page metadata, not a journal entry; the publicist gate passed (84 entries checked).
+  - `src/data/project-stories/personal-website.ts`: unchanged in the end. `f0abd1f` changed the status label from "Live - evolving" to "Live · evolving", but PR #203 (merged to `main` as `75a88be4` while this PR was open) shows "Live - evolving" in two reviewed link-preview videos, and its copy test failed on the merge. The separator went back to "Live - evolving" in the commit that merges `main`; switching both the page and the videos is left to the owner as a follow-up.
   - `scripts/screenshots/scenarios/software-signing.mjs`: its step now waits for the curly-apostrophe text.
   - Private pages: `src/styles/owner.css` (owner filter, request notes and payment field edges), `src/styles/studio.css` (studio and agreement fields and buttons), and the styles of `src/pages/studio/sign-in.astro` and `src/pages/offer/[token]/sign.astro`.
 
