@@ -36,7 +36,7 @@ Later on October 22, shortly before the 14:13:02 UTC merge, asked "PR #205 (the 
   - `npm test`: 135 files, 1,696 passed, 1 skipped (the agreement PDF test that needs a private file).
   - `npm run check`: 0 errors, 0 warnings.
   - `npm run build`: passed. `npm run assets:check` and `npm run copy:check` passed.
-- **Not done:** no request to production or to a branch preview; no real device.
+- **Not done before the merge:** no request to production or to a branch preview; no real device. After the deploy, production was checked over HTTPS (Live checks after deploy); no branch preview or real device was used.
 
 PASS means the evidence named here was observed.
 
