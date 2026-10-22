@@ -68,9 +68,11 @@ language for arranging arbitrary page blocks. Extract components when two real
 uses share behavior or markup, or one substantial interactive explanation needs
 its own boundary. Do not require every section to become a component.
 
-Reuse `ProjectCard`, `ExperienceRow`, `ProjectUpdates`, and
-`ProjectTimeline` where their responsibilities fit. Keep the publication adapter
-in `src/lib/project-story.ts`. Reuse the existing contact/resume forms and Audio
+Reuse `ExperienceRow`, `ProjectUpdates`, and `ProjectTimeline` where their
+responsibilities fit. Delete unused components rather than keeping them for
+later: git history holds `ProjectCard`, `LiveWorkFeed`, `ResumeCard` and
+`DesignStoryPreview` (removed 2026-10-22, D10.6-B) if one is needed again.
+Keep the publication adapter in `src/lib/project-story.ts`. Reuse the existing contact/resume forms and Audio
 `TrackRow`/booking flow, modifying their real caller-to-result behavior where the
 approved design changes it.
 
