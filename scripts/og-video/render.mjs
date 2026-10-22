@@ -64,7 +64,12 @@ if (unknown.length) fail(`Unknown scene: ${unknown.join(', ')}. Scenes: ${availa
 const keys = requested.length ? requested : available;
 if (!spawnSync('ffmpeg', ['-version']).stdout?.length) fail('ffmpeg is required.');
 
-const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+// Every switch headless Chromium's --deterministic-mode sets except begin-frame control (Playwright
+// cannot drive that): each frame finishes raster and image decodes before it draws, so a screenshot
+// never catches tiles or images from an earlier state, however busy the machine is.
+const DETERMINISTIC = ['--run-all-compositor-stages-before-draw', '--disable-checker-imaging', '--disable-threaded-animation',
+  '--disable-threaded-scrolling', '--disable-image-animation-resync', '--disable-new-content-rendering-timeout'];
+const AGAIN = Symbol('capture again');
 const manifest = readManifest();
 const problems = [];
 try {
@@ -81,13 +86,25 @@ try {
   };
   await Promise.all(Array.from({ length: Math.min(3, keys.length) }, worker));
 } finally {
-  await browser.close();
   // Scenes that finished have already replaced their files, so record them even if others failed.
   if (!sheetOnly) writeManifest(manifest);
 }
 if (problems.length) fail(problems.join('\n'));
 
+// Each scene gets its own browser, so nothing an earlier scene left in Chromium's caches reaches it.
 async function renderScene(key) {
+  for (let attempt = 1; ; attempt++) {
+    const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, args: DETERMINISTIC });
+    try {
+      const result = await renderIn(browser, key, attempt);
+      if (result !== AGAIN) return result;
+    } finally {
+      await browser.close();
+    }
+  }
+}
+
+async function renderIn(browser, key, attempt) {
   const page = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT }, deviceScaleFactor: SCALE });
   const errors = [];
   const inputs = new Set();
@@ -130,8 +147,13 @@ async function renderScene(key) {
   const frames = Math.round(setup.duration * FPS / 1000);
   const work = mkdtempSync(join(tmpdir(), `og-${key}-`));
   try {
+    // Wait two animation frames after moving the clock so the screenshot shows the new time, not the
+    // frame already in flight.
     const capture = async (time, file) => {
-      await page.evaluate(t => { for (const animation of document.getAnimations()) animation.currentTime = t; }, time);
+      await page.evaluate(t => {
+        for (const animation of document.getAnimations()) animation.currentTime = t;
+        return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      }, time);
       await page.screenshot({ path: file });
     };
     // An infinite animation wraps back to frame 0 at exactly data-duration, so look 1 ms earlier.
@@ -154,9 +176,17 @@ async function renderScene(key) {
     framesHash.update(JSON.stringify(ENCODE));
     const sameFrames = framesHash.digest('hex').slice(0, 16);
     const previous = manifest[key];
-    if (!failed && previous?.frames === sameFrames && [previous.image, previous.video.replace('/og/', '/og/raw/')].every(file => existsSync(join(ROOT, 'public', file)))) {
+    const posterExtension = setup.poster === 'jpeg' ? '.jpg' : '.png';
+    const reviewed = !failed && previous?.image.endsWith(posterExtension) && [previous.image, previous.video.replace('/og/', '/og/raw/')].every(file => existsSync(join(ROOT, 'public', file)));
+    if (reviewed && previous.frames === sameFrames) {
       console.log(`${key}: frames unchanged; keeping ${previous.video}`);
       return { ...previous, inputs: source.inputs, source: source.hash };
+    }
+    // Chromium can, very rarely, anti-alias a few pixels differently from one run to the next. When
+    // nothing the scene loads has changed, capture it once more before replacing a reviewed video.
+    if (reviewed && previous.source === source.hash && attempt === 1) {
+      console.log(`${key}: frames differ although its sources are unchanged; capturing again`);
+      return AGAIN;
     }
 
     const video = join(work, 'video.mp4');
@@ -171,7 +201,7 @@ async function renderScene(key) {
     if (poster.length > MAX_POSTER_BYTES) problem(`poster is ${poster.length} bytes; keep it under ${MAX_POSTER_BYTES}`);
     if (failed) return null;
 
-    const imageName = `${key}-${hash(poster)}.${setup.poster === 'jpeg' ? 'jpg' : 'png'}`;
+    const imageName = `${key}-${hash(poster)}${posterExtension}`;
     const videoName = `${key}-${hash(videoBytes)}.mp4`;
     mkdirSync(RAW, { recursive: true });
     removeStale(PUBLIC, key, imageName);

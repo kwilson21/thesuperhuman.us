@@ -6,7 +6,7 @@ import { audioOffers } from '~/lib/audio-intake';
 import { OG_SCENES, type OgScene } from '~/lib/og-media';
 
 // Link-preview scenes copy the site's own words, prices and statuses into public videos. Any line of
-// four or more words must still appear verbatim in src/, so a change to the page fails here and names
+// two or more words must still appear verbatim in src/, so a change to the page fails here and names
 // the scene to re-render (node scripts/og-video/render.mjs <scene>). Lines the page composes from data
 // are rebuilt from that data below; the rest are short composite labels or text read from a reviewed image.
 const SCENES = 'scripts/og-video/scenes';
@@ -17,15 +17,44 @@ const corpus = readdirSync('src', { recursive: true })
   .join('\n')
   .replace(/&amp;/g, '&')
   .replace(/\s+/g, ' ');
+const publicReleases = readdirSync('src/content/releases').filter(file => file.endsWith('.json'))
+  .filter(file => JSON.parse(readFileSync(join('src/content/releases', file), 'utf8')).visibility === 'public').length;
 const composed = new Set([
   // src/components/audio/AudioHero.astro builds its price lede from audioOffers.
   `From $${audioOffers['vocal-mix'].price} per song for two-track vocal mixing.`,
+  // Price rows, as the services sheet and intake show them.
+  ...Object.values(audioOffers).filter(offer => offer.price != null).map(offer => `From $${offer.price}`),
+  // src/pages/audio/releases.astro counts the public releases.
+  `${publicReleases} ${publicReleases === 1 ? 'release' : 'releases'}`,
 ]);
 const labels: Record<string, Record<string, string>> = {
-  'audio-portfolio': { '· Prod. Lexi Banks': 'credit from src/content/recordings/old-news-recording.json after a separator' },
+  'audio-portfolio': {
+    '· Prod. Lexi Banks': 'credit from src/content/recordings/old-news-recording.json after a separator',
+    'Audio / Portfolio': 'composite kicker: section and page',
+    'A Mix': 'the comparison player’s switch, src/components/audio/ComparisonPlayer.astro',
+    'B Master': 'the comparison player’s switch, src/components/audio/ComparisonPlayer.astro',
+  },
+  'audio-releases': {
+    'Audio / Releases': 'composite kicker: section and page',
+    'Single · Released': 'release type and status as src/pages/audio/releases.astro composes them',
+  },
+  'audio-services': { 'Audio / Services': 'composite kicker: section and page' },
   'audio-start': { 'Audio / Start your song': 'composite kicker: section and page' },
-  'personal-website': { 'Building / Personal website': 'breadcrumb, src/layouts/ProjectLayout.astro' },
-  'project-kaillera-next': { 'Guess a late input, keep playing,': 'src/data/project-stories/kaillera-next.ts:110, first letter capitalized to open the caption' },
+  'music-old-news': { '0:00 / 2:40': 'the player’s time readout for the recording’s duration' },
+  'personal-website': {
+    'Building / Personal website': 'breadcrumb, src/layouts/ProjectLayout.astro',
+    '· September 10': 'capture date after its label',
+    '· September 9': 'capture date after its label',
+  },
+  'privacy': {
+    'Expires after': 'column heading for the retention rows',
+    'Form rate-limit records': 'src/pages/privacy.astro:20 (“form rate-limit records”), capitalized as a row label',
+  },
+  'work': { '= 5,000 rows': 'the capacity key, from lyftBonus.before (src/data/profile.ts)' },
+  'project-kaillera-next': {
+    'Guess a late input, keep playing,': 'src/data/project-stories/kaillera-next.ts:110, first letter capitalized to open the caption',
+    'Rollback · Diagram': 'label marking the strip as a diagram',
+  },
   'personal-website-story': {
     'Building / Personal website': 'breadcrumb, src/layouts/ProjectLayout.astro',
     'Sep 9, 2026 · Alternatives': 'the story entry’s date and label',
@@ -35,6 +64,7 @@ const labels: Record<string, Record<string, string>> = {
     'Written by code from the numbers, not by AI.': 'legend of the reviewed annotated capture src/assets/projects/tally/home-annotated.webp',
     'How many transactions are uncategorized; opens that filtered list.': 'legend of the reviewed annotated capture src/assets/projects/tally/home-annotated.webp',
     'Spent of budget for each category, drawn as SVG.': 'legend of the reviewed annotated capture src/assets/projects/tally/home-annotated.webp',
+    'Status sentence': 'legend of the reviewed annotated capture src/assets/projects/tally/home-annotated.webp',
   },
   'writing-ai-gives-you-speed': { 'Writing / AI-assisted engineering': 'composite kicker: section and essay topic' },
 };
@@ -47,7 +77,7 @@ function lines(node: Node, out: string[] = []): string[] {
   if (node.nodeName === 'script' || node.nodeName === 'style') return out;
   if (node.nodeName === '#text') {
     const text = node.value!.replace(/\s+/g, ' ').trim();
-    if (text.split(' ').length >= 4) out.push(text);
+    if (text.split(' ').length >= 2) out.push(text);
   }
   for (const child of node.childNodes ?? []) lines(child, out);
   if (node.content) lines(node.content, out);

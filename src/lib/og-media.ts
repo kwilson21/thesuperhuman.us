@@ -124,9 +124,9 @@ interface Rendered {
 const renderedScenes: Record<string, Rendered | undefined> = rendered;
 
 /** The scene for a canonical path: an exact route, otherwise the longest matching `/*` family. */
-export function ogSceneFor(pathname: string): { scene: OgScene; exact: boolean } | null {
+export function ogSceneFor(pathname: string, table: Record<string, { routes: readonly string[] }> = OG_SCENES): { scene: OgScene; exact: boolean } | null {
   let family: { scene: OgScene; length: number } | null = null;
-  for (const [scene, { routes }] of Object.entries(OG_SCENES) as [OgScene, { routes: string[] }][]) {
+  for (const [scene, { routes }] of Object.entries(table) as [OgScene, { routes: readonly string[] }][]) {
     for (const route of routes) {
       if (route === pathname) return { scene, exact: true };
       if (route.endsWith('/*')) {

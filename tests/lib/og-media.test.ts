@@ -71,6 +71,15 @@ describe('scene routing', () => {
     expect(ogSceneFor('/no-such-section/page')).toBeNull();
   });
 
+  it('picks the longest family whatever order the scenes are declared in', () => {
+    const parent = { routes: ['/building/*'] };
+    const child = { routes: ['/building/personal-website/*'] };
+    for (const table of [{ building: parent, 'personal-website': child }, { 'personal-website': child, building: parent }]) {
+      expect(ogSceneFor('/building/personal-website/archive', table)).toEqual({ scene: 'personal-website', exact: false });
+      expect(ogSceneFor('/building/another-project', table)).toEqual({ scene: 'building', exact: false });
+    }
+  });
+
   it('gives each route to one scene', () => {
     const routes = scenes.flatMap(scene => OG_SCENES[scene].routes);
     expect(new Set(routes).size).toBe(routes.length);
