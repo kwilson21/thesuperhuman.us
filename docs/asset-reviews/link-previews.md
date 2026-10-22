@@ -22,20 +22,21 @@
 - October 22 re-render and capture fix: every scene was rendered again to record its input
   and frame fingerprints, with x264 pinned to six threads. Every poster and fifteen videos
   matched the reviewed files byte for byte. Building and project-kaillera-next had changed
-  on purpose (their lead edits, below). Comparing the other five (about, audio-portfolio,
-  home, work, writing-ai-gives-you-speed) frame by frame showed that the earlier capture
-  sometimes took a screenshot before Chromium had finished drawing the new moment. Each of
-  those reviewed videos had one or two frames with part of the picture missing or behind,
-  such as audio-portfolio's Master lane half drawn for one frame. The renderer now waits
-  two animation frames per step and runs Chromium with the switches of its deterministic
-  mode, so every frame finishes drawing before its screenshot. Captured that way, three
-  scenes at a time with the machine under extra load, all 22 scenes gave exactly the
-  frames of the current files. In one of the next two full renders, privacy's frames
-  differed once (a poster about 100 bytes larger), so each scene now renders in its own
-  browser, and a scene whose files and encoder settings are unchanged is captured again
-  before its reviewed video is replaced. Two more full renders, one under extra load, then
-  kept every file without a second capture. The files listed below contain only fully
-  drawn frames.
+  on purpose (the notes applied after their re-checks, below: building's dash pattern and
+  project-kaillera-next's caption cross-fade). Comparing the other five (about,
+  audio-portfolio, home, work, writing-ai-gives-you-speed) frame by frame showed that the
+  earlier capture sometimes took a screenshot before Chromium had finished drawing the new
+  moment. Each of those reviewed videos had one or two frames with part of the picture
+  missing or behind, such as audio-portfolio's Master lane half drawn for one frame. The
+  renderer now waits two animation frames per step and runs Chromium with the switches of
+  its deterministic mode, so every frame finishes drawing before its screenshot. Captured
+  that way, three scenes at a time with the machine under extra load, all 22 scenes gave
+  exactly the frames of the current files. In one of the next two full renders, privacy's
+  frames differed once (a poster about 100 bytes larger), so each scene now renders in its
+  own browser, and a scene whose files and encoder settings are unchanged is captured
+  again before its reviewed video is replaced. Three more full renders, one under extra
+  load, then kept every file without a second capture. The files listed below contain only
+  fully drawn frames.
 - Automatic checks on every render: fonts loaded, nothing overflows the frame, the
   last frame matches the first (no jump at the loop), video under 2.5 MB, poster
   under 600 KB.
