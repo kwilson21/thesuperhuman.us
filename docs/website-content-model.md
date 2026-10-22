@@ -398,7 +398,9 @@ The "Before we start." steps on `/services` are one numbered list in the
 right-hand column, beside the heading as on `/audio/services`: each numeral hangs
 in a narrow gutter beside its title and description, with a hairline between
 steps (owner pick D7.1-C, board `services-layout`, October 22). The one-page print
-sheet keeps its three columns.
+sheet keeps its three columns. On `/services` and `/audio/services` each section
+heading's small label (the evidence title and the price note) sits directly under
+its heading at every width (owner pick D7.2-C).
 
 ### Project brief paths, October 19
 
