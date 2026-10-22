@@ -96,7 +96,7 @@ Authorization:
   - Validate succeeded at 04:19:02 UTC. It runs `npm ci`, check, test and build. The build's prebuild step runs the asset, copy and publicist gates.
   - Workers Builds succeeded at 04:18:54 UTC (build `7a75db40`). It uploaded only a branch preview version, `4d55f91a`.
   - Screenshots capture succeeded at 04:30:35 UTC.
-  - GitHub reports `mergeable_state` clean.
+  - Before the merge, GitHub reported `mergeable_state` clean.
 - **Reviews:**
   - Both GitHub review threads, on `render.mjs` and the README, are resolved.
   - Codex reviewed only the first commit, `1e97193`. Greptile has not reviewed the PR.
@@ -122,7 +122,7 @@ PASS means the evidence named here was observed. Production checks and their res
   - Before the merge, `origin/main` and the merge base were both `26e764a`.
   - `git diff --stat 26e764a..8e6e9cc` lists 90 files. They match the scope above, including the small related files and the new `/og/*` block in `public/_headers` (`Cache-Control: public, max-age=31536000, immutable`).
   - Read: CLAUDE.md, the README section "Link previews" and the PR description.
-  - The PR is open and not a draft, with head `8e6e9cc` and base `main`.
+  - Before the merge, the PR was open and not a draft, with head `8e6e9cc` and base `main`.
   - Authorization: the owner's go-ahead to merge and deploy (answer 5 under Owner decisions and authorization).
 - **PASS · 1.2 Approved design, truthful claims, no placeholders, media rights.**
   - Copy:
@@ -523,7 +523,7 @@ PASS means the evidence named here was observed. Production checks and their res
       - All are under the README's 2.5 MB and 600 KB limits, and the sizes match `imageBytes` and `videoBytes` in `src/data/og-media.json`.
 - **PASS · 7.3 (live) HTTPS, the Worker's ASSETS fetch, Range and headers on the deployed production Worker.** Observed on production between 10:55 and 11:00 UTC on October 22, 2026, after the deploy; see live check 2.
 - **PASS · 7.4 Rollback version and backup; review and authorization rules.**
-  - Rollback revision: `main` at `26e764a`. `git ls-remote` shows `origin/main` still at `26e764a`, and it is the PR's merge base.
+  - Rollback revision: `main` at `26e764a`. Before the merge, `git ls-remote` showed `origin/main` still at `26e764a`, and it was the PR's merge base.
     - It was committed on October 21, 2026 at 13:52:24 UTC (09:52 America/New_York).
     - Its Validate run succeeded at 14:05:46 UTC.
     - "Workers Builds: thesuperhuman-us" succeeded at 14:05:49 UTC (10:05 America/New_York). This was a production build: Build ID `90cf578e-d398-4c1f-a28f-424acec88709`, Worker Version ID `f480f1b0-603e-4987-8b21-06bff291a328`. Unlike the PR head's preview build, it has no preview URL.
@@ -534,7 +534,7 @@ PASS means the evidence named here was observed. Production checks and their res
     - Both GitHub review threads are resolved.
     - Codex reviewed only `1e97193`, and Greptile has not reviewed. CLAUDE.md therefore requires independent review agents on the current head until a pass finds nothing.
     - The coordinating session ran independent review agents on each new head until a pass found nothing; the fifth pass, on `8e6e9cc`, found nothing (see Evidence and limits). This record's commits had their own passes: 7 corrections in `f1f0d5a`, 3 in `4e67e87`, then a clean pass on `4e67e87`.
-    - `mergeable_state` is clean, and Validate, capture and Workers Builds are green on `8e6e9cc`.
+    - Before the merge, `mergeable_state` was clean, and Validate, capture and Workers Builds were green on `8e6e9cc`.
     - The owner gave the go-ahead to merge and deploy (answer 5; see 1.1).
   - Final record commit `5cc2227`: an independent review pass found nothing, and Validate (10:46:10 UTC), Screenshots capture (10:51:48 UTC) and Workers Builds (10:45:42 UTC) succeeded before the merge, which was pinned to that head.
 - **UNVERIFIED · 7.5 Post-deployment verification.**
@@ -625,12 +625,11 @@ The owner agreed to the live checks on October 22, 2026 ("Ok"); item 6, the remo
 
 These stay UNVERIFIED unless the owner records an exception with its impact and follow-up in this record:
 
-- the deployed preview's headers and sign-in gate (2.6)
-- Messages behavior, including Reduce Motion and Auto-Play Video Previews off (3.5, 3.7)
-- how each preview app shows the poster or video (3.7)
+- the deployed preview's headers and sign-in gate (2.6, live check 8)
+- Messages behavior, including Reduce Motion and Auto-Play Video Previews off (3.5, 3.7, live check 3)
+- how each preview app shows the poster or video (3.7, live check 4)
 - field performance (4.3)
 - production edge caching of the video route (4.2)
-- live checks 3 and 4 (Messages and the preview debuggers) and 8 (the deployed branch preview)
 - a PEAT or localized flash analysis, and an automated accessibility audit (3.5)
 - alerting on the new video route's failure path (6.6)
 - a remote `owner:health` run, launch-blocking per 8.15 (live check 6)
