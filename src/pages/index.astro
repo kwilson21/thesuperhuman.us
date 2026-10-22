@@ -238,8 +238,8 @@ const jsonLd = {
     :global(.motion) .project-card[data-reveal]:nth-child(2) { transition-delay: 140ms; }
     /* Work with me: the heading stays put and the three doors rise in turn. */
     :global(.motion) .hire-section[data-reveal]:not(.is-in) { opacity: 1; transform: none; }
-    :global(.motion) .hire-section :global(.door) { transition: opacity 800ms var(--ease-site), transform 800ms var(--ease-site); }
-    :global(.motion) .hire-section:not(.is-in) :global(.door) { opacity: 0; transform: translateY(24px); }
+    :global(.motion) .hire-section :global(.door) { transition: opacity var(--dur-reveal) var(--ease-site), transform var(--dur-reveal) var(--ease-site); }
+    :global(.motion) .hire-section:not(.is-in) :global(.door) { opacity: 0; transform: translateY(var(--rise-reveal)); }
     :global(.motion) .hire-section :global(.door:nth-child(2)) { transition-delay: 120ms; }
     :global(.motion) .hire-section :global(.door:nth-child(3)) { transition-delay: 240ms; }
     /* Writing: the title is inked in from the left and the pen stroke follows. */

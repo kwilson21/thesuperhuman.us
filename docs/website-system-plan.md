@@ -43,10 +43,17 @@ nothing useful to put in them.
   each `[data-scene]`, `[data-reveal]` blocks reveal once (at once on keyboard
   focus), a `[data-scene-play="ms"]` scene plays once when half of it is on screen, a
   `[data-scene-arrive]` CSS entrance that the page first shows off screen waits
-  until half of it is on screen or it fills half the screen, `[data-tilt]` leans toward a fine
+  until half of it is on screen or it fills half the screen (the Building drawings
+  show their flow this way), `[data-tilt]` leans toward a fine
   pointer, and anything that plays on its own rests within
   five seconds. Printing stops it. Home's worlds (content model, "Home motion")
   are the fullest example; page-specific scenes plug in through `runMotion()`.
+  Shared timings are named once in `src/styles/global.css`, beside `--ease-site`:
+  a reveal fades in and rises 12px over 600ms (`--dur-reveal`, `--rise-reveal`,
+  also used by Home's Work with me doors), the link arrow moves in 160ms
+  (`--dur-hover`) and pages cross-fade in 180ms (`--dur-page`). A section
+  heading's rule is structure and does not draw in. Page scenes keep their own
+  choreography, the way illustration colours stay local (October 22).
 
 `BaseLayout.astro` retains document structure, metadata, canonical URLs, and the
 skip link. Add one shared navigation component used by main-site pages, and

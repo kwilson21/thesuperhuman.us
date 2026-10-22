@@ -202,6 +202,12 @@
      33rem measures 63-66 characters a line (median) for 16px Libron body text. */
   --measure-prose: 33rem;
   --ease-site: cubic-bezier(.2, .7, .2, 1);
+  /* Named motion timings, on the house curve. Page scenes (Home's worlds, About's objects, the
+     Writing path, the Work diagrams, the Building drawings) keep their own choreography. */
+  --dur-hover: 160ms;   /* link arrow */
+  --dur-page: 180ms;    /* page cross-fade */
+  --dur-reveal: 600ms;  /* blocks rising in, and Home's Work with me doors */
+  --rise-reveal: 12px;
   /* Named spacing steps, numbered like Tailwind's 4px scale (--space-4 is 1rem, the same as p-4).
      Adopt them as rules are touched; illustrations can keep spacing that follows their content. */
   --space-1: .25rem;
@@ -223,7 +229,7 @@
   .site-section-heading::after { content: ''; height: 1px; flex: 1; background: var(--rule); }
   .site-links { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.75rem; }
   .site-link { display: inline-flex; align-items: baseline; gap: .65rem; padding: .35rem 0; border-bottom: 1px solid var(--accent); line-height: 1.45; }
-  .site-link span { color: var(--accent); transition: transform 160ms var(--ease-site); }
+  .site-link span { color: var(--accent); transition: transform var(--dur-hover) var(--ease-site); }
   @media (hover: hover) and (pointer: fine) {
     .site-link:hover span { transform: translateX(3px); }
   }
@@ -240,7 +246,7 @@
   @media (prefers-reduced-motion: no-preference) {
     @view-transition { navigation: auto; }
     ::view-transition-old(root), ::view-transition-new(root) {
-      animation-duration: 180ms;
+      animation-duration: var(--dur-page);
       animation-timing-function: var(--ease-site);
     }
     ::view-transition-old(root) { animation-name: page-fade-out; }
@@ -251,8 +257,8 @@
   /* Motion layer (src/scripts/scroll-scenes.ts adds .motion only when motion is welcome):
      [data-reveal] blocks rise in once. A section heading's rule is structure and stays at rest. */
   @media screen and (prefers-reduced-motion: no-preference) {
-    .motion [data-reveal] { transition: opacity 900ms var(--ease-site), transform 900ms var(--ease-site); }
-    .motion [data-reveal]:not(.is-in) { opacity: 0; transform: translateY(26px); }
+    .motion [data-reveal] { transition: opacity var(--dur-reveal) var(--ease-site), transform var(--dur-reveal) var(--ease-site); }
+    .motion [data-reveal]:not(.is-in) { opacity: 0; transform: translateY(var(--rise-reveal)); }
     /* A block revealed by keyboard focus appears at once, children included. */
     .motion .is-instant, .motion .is-instant *, .motion .is-instant *::after { transition-duration: 0s !important; transition-delay: 0s !important; }
     .motion-starting [data-reveal], .motion-starting [data-reveal] * { transition: none !important; }
