@@ -10,12 +10,14 @@ import { pathToFileURL } from 'node:url';
 // Hallmark rule it ports. Only gates a script can judge without false alarms are here.
 // Composition, hierarchy and contrast in context stay with `hallmark audit` and review.
 //
-// Scope: stylesheets under src/ (.css files and <style> blocks in .astro files), plus the
-// class attributes (class="..." and class:list={...}, single or multi-line) in .astro
-// markup, which are checked for transition-all, outline-none and Tailwind arbitrary hex
-// values, and @apply lines, which get the same three checks. Prose, HTML comments and
-// frontmatter are not scanned. SVG files are images, covered by image QA. TypeScript is
-// out of scope: email templates need literal colours and faces.
+// Scope: stylesheets under src/ (.css files, <style> blocks in .astro files, and <style>
+// blocks in the template strings of .ts route handlers under src/pages/ that return HTML),
+// plus the class attributes (class="..." and class:list={...}, single or multi-line) in
+// .astro markup, which are checked for transition-all, outline-none and Tailwind arbitrary
+// hex values, and @apply lines, which get the same three checks. Prose, HTML comments and
+// frontmatter are not scanned. SVG files are images, covered by image QA. Other TypeScript
+// is out of scope, src/lib/ above all: email HTML is built there with inline styles, and
+// email needs literal colours and faces because it cannot use the site's CSS variables.
 //
 // The faces a stylesheet may name come from src/styles/global.css: the families in its
 // --font-* tokens and its @font-face rules. A known exception goes in ALLOWLIST with a
@@ -67,9 +69,10 @@ export const GATES = {
     label: 'outline removed without a :focus-visible replacement',
     // Gate 26 (interactive elements need :focus-visible) and interaction-and-states.md,
     // "Focus rings": "Never `outline: none` without a replacement." A stylesheet removal
-    // needs a :focus-visible rule for the same selector; a class-list removal needs a
-    // focus-visible: utility in the same class attribute (OUTLINE_MARKUP_HINT).
-    hint: 'add a :focus-visible rule with a visible ring for the same selector',
+    // needs a :focus-visible rule for the same selector that applies whenever the removal
+    // does (no @media, @supports or @container condition the removal lacks); a class-list
+    // removal needs a focus-visible: utility in the same class attribute (OUTLINE_MARKUP_HINT).
+    hint: 'add a :focus-visible rule with a visible ring for the same selector, under the same @media, @supports and @container conditions (or none)',
   },
 };
 
@@ -145,7 +148,7 @@ export function cssDeclarations(css, firstLine = 1) {
   return out;
 }
 
-/** The <style> blocks of an .astro file, with the line each block's CSS starts on. */
+/** The <style> blocks of an .astro file or a .ts route's HTML, with the line each block's CSS starts on. */
 export function styleBlocks(source) {
   const blocks = [];
   for (const match of source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/g)) {
@@ -153,6 +156,22 @@ export function styleBlocks(source) {
     blocks.push({ css: match[1], line: source.slice(0, offset).split('\n').length });
   }
   return blocks;
+}
+
+/** A template string's `${...}` interpolations blanked (innermost first), keeping newlines, so their braces do not read as CSS blocks. */
+function blankInterpolations(css) {
+  let previous;
+  let text = css;
+  do {
+    previous = text;
+    text = text.replace(/\$\{[^{}]*\}/g, run => run.replace(/[^\n]/g, ' '));
+  } while (text !== previous);
+  return text;
+}
+
+/** Files the check reads: .css and .astro under src/, and the .ts route handlers under src/pages/ (they return HTML pages with a <style> block). src/lib/ builds email, which needs literal colours. */
+export function isScanned(path) {
+  return /\.(?:css|astro)$/.test(path) || (/\.ts$/.test(path) && !path.endsWith('.d.ts') && path.startsWith('src/pages/'));
 }
 
 /** An .astro file with its HTML comments and <style> and <script> blocks blanked, keeping line numbers. */
@@ -299,6 +318,14 @@ function resolvedSelectors(context) {
   }
   return parents.map(selector => selector.replace(/\s+/g, ' ').trim()).filter(Boolean);
 }
+/** At-rules that decide whether the rules inside them apply at all. */
+const CONDITION_AT_RULE = /^@(?:media|supports|container)\b/i;
+/** A condition prelude with case and whitespace normalized, so `@media (min-width: 64rem)` equals `@MEDIA(min-width:64rem)`. */
+const normalizeCondition = prelude => prelude.toLowerCase().replace(/\s+/g, ' ').replace(/\s*([():,])\s*/g, '$1').trim();
+/** The @media, @supports and @container conditions enclosing a declaration, normalized and without repeats. */
+const conditionsOf = context => [...new Set(context.filter(prelude => CONDITION_AT_RULE.test(prelude)).map(normalizeCondition))];
+/** A replacement applies whenever a removal does when each of its conditions is also one of the removal's. No conditions is always. */
+const appliesWhenever = (replacement, removal) => replacement.every(condition => removal.includes(condition));
 const NOT_FOCUS_VISIBLE = /:not\(\s*:focus-visible\s*\)/g;
 const hasFocusVisible = selector => /:focus-visible\b/.test(selector.replace(NOT_FOCUS_VISIBLE, ''));
 /** The element a selector styles, without its focus pseudo-classes. A bare `:focus-visible` is `*:focus-visible`, so `.a :focus-visible` has the base `.a *`. */
@@ -321,7 +348,7 @@ export function declarationViolations(decls, { faces = new Set() } = {}) {
       for (const found of value.matchAll(TRANSITION_ALL_UTILITY)) hit('transition-all', decl, found[0]);
       for (const found of arbitraryHex(value)) hit('raw-hex', decl, found.match);
       for (const found of value.matchAll(OUTLINE_UTILITY)) {
-        if (!found[1].includes('not-focus-visible:')) removals.push({ decl, match: found[0], selectors: resolvedSelectors(context), covered: hasFocusVisibleUtility(value) });
+        if (!found[1].includes('not-focus-visible:')) removals.push({ decl, match: found[0], selectors: resolvedSelectors(context), conditions: conditionsOf(context), covered: hasFocusVisibleUtility(value) });
       }
       continue;
     }
@@ -348,16 +375,19 @@ export function declarationViolations(decls, { faces = new Set() } = {}) {
     const selectors = resolvedSelectors(context);
     if (removesOutline(decl)) {
       const onlyUnfocused = selectors.length > 0 && selectors.every(selector => selector.replace(/\s+/g, '').includes(':not(:focus-visible)'));
-      if (!onlyUnfocused) removals.push({ decl, match: `${prop}: ${value}`, selectors, covered: false });
+      if (!onlyUnfocused) removals.push({ decl, match: `${prop}: ${value}`, selectors, conditions: conditionsOf(context), covered: false });
     } else if (FOCUS_REPLACEMENT_PROP.test(prop)) {
       const focused = selectors.filter(hasFocusVisible).map(focusBase);
-      if (focused.length) replacements.push(focused);
+      if (focused.length) replacements.push({ bases: focused, conditions: conditionsOf(context) });
     }
   }
   // A removal is replaced by a :focus-visible rule for the same selector (or for every
-  // element), not by one for another selector in the file.
+  // element), not by one for another selector in the file. The rule must also apply
+  // whenever the removal does: a replacement inside `@media (min-width: 64rem)` leaves an
+  // unconditional removal bare at narrower widths.
   const isCovered = removal => removal.covered
-    || replacements.some(bases => bases.some(base => removal.selectors.some(selector => covers(base, focusBase(selector)))));
+    || replacements.some(({ bases, conditions }) => appliesWhenever(conditions, removal.conditions)
+      && bases.some(base => removal.selectors.some(selector => covers(base, focusBase(selector)))));
   for (const removal of removals) if (!isCovered(removal)) hit('outline-none', removal.decl, removal.match);
   return hits;
 }
@@ -414,12 +444,14 @@ export function markupViolations(markup) {
 
 /** Every gate hit in one source file, as { path, line, gate, label, hint, match }. */
 export function fileViolations(path, source, { faces } = {}) {
-  let hits;
-  if (path.endsWith('.css')) hits = declarationViolations(cssDeclarations(source), { faces });
-  else if (path.endsWith('.astro')) {
-    const decls = styleBlocks(source).flatMap(block => cssDeclarations(block.css, block.line));
-    hits = [...declarationViolations(decls, { faces }), ...markupViolations(markupOnly(source))];
-  } else hits = [];
+  let hits = [];
+  if (!isScanned(path)) hits = [];
+  else if (path.endsWith('.css')) hits = declarationViolations(cssDeclarations(source), { faces });
+  else {
+    const decls = styleBlocks(source).flatMap(block => cssDeclarations(path.endsWith('.ts') ? blankInterpolations(block.css) : block.css, block.line));
+    hits = declarationViolations(decls, { faces });
+    if (path.endsWith('.astro')) hits.push(...markupViolations(markupOnly(source)));
+  }
   return hits.map(h => ({ path, ...h, label: GATES[h.gate].label, hint: h.hint ?? GATES[h.gate].hint }));
 }
 
@@ -447,7 +479,7 @@ export function applyAllowlist(violations, allowlist = ALLOWLIST) {
 function collectFiles(root) {
   const stats = statSync(root, { throwIfNoEntry: false });
   if (!stats) return [];
-  if (stats.isFile()) return /\.(?:css|astro)$/.test(root) ? [root] : [];
+  if (stats.isFile()) return isScanned(root.split(sep).join('/')) ? [root] : [];
   return readdirSync(root, { withFileTypes: true }).flatMap(entry => collectFiles(join(root, entry.name)));
 }
 

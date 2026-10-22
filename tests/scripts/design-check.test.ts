@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
-  ALLOWLIST, GATES, applyAllowlist, cssDeclarations, fileViolations, fontFamilies, styleBlocks, systemFamilies,
+  ALLOWLIST, GATES, applyAllowlist, cssDeclarations, fileViolations, fontFamilies, isScanned, styleBlocks, systemFamilies,
 } from '../../scripts/check-design.mjs';
 
 const GLOBAL = `@font-face { font-family: 'Libron'; src: url('/fonts/libron.woff2') format('woff2'); }
@@ -156,6 +156,29 @@ describe('gates', () => {
     expect(css('.a { &:focus { outline: none; } .b:focus-visible { box-shadow: 0 0 0 2px var(--accent); } }')).toEqual(['outline-none']);
   });
 
+  it('counts a :focus-visible replacement only when it applies whenever the removal does', () => {
+    const ring = '{ box-shadow: 0 0 0 2px var(--accent); }';
+    const wide = '@media (min-width: 64rem)';
+    // An unconditional removal stays bare at narrow widths when the replacement is media-only.
+    expect(css(`.a:focus { outline: none; } ${wide} { .a:focus-visible ${ring} }`)).toEqual(['outline-none']);
+    // The same media on both, whatever its spacing or case.
+    expect(css(`${wide} { .a:focus { outline: none; } .a:focus-visible ${ring} }`)).toEqual([]);
+    expect(css(`${wide} { .a:focus { outline: none; } } @MEDIA(min-width:64rem) { .a:focus-visible ${ring} }`)).toEqual([]);
+    // A removal inside a media query, with an unconditional replacement, is covered.
+    expect(css(`${wide} { .a:focus { outline: none; } } .a:focus-visible ${ring}`)).toEqual([]);
+    // A different media query does not cover it.
+    expect(css(`${wide} { .a:focus { outline: none; } } @media (min-width: 40rem) { .a:focus-visible ${ring} }`)).toEqual(['outline-none']);
+    // Every condition on the replacement must be on the removal; extra conditions on the removal are fine.
+    expect(css(`${wide} { @supports (display: grid) { .a:focus { outline: none; } } .a:focus-visible ${ring} }`)).toEqual([]);
+    expect(css(`${wide} { .a:focus { outline: none; } @supports (display: grid) { .a:focus-visible ${ring} } }`)).toEqual(['outline-none']);
+    expect(css(`.a:focus { outline: none; } @container card (min-width: 20rem) { .a:focus-visible ${ring} }`)).toEqual(['outline-none']);
+    // Nesting keeps working: a media block inside the rule resolves & the same way.
+    expect(css(`.a { &:focus { outline: none; } ${wide} { &:focus-visible ${ring} } }`)).toEqual(['outline-none']);
+    expect(css(`.a { ${wide} { &:focus { outline: none; } &:focus-visible ${ring} } }`)).toEqual([]);
+    // An @apply removal is judged the same way.
+    expect(css(`.a:focus { @apply outline-none; } ${wide} { .a:focus-visible ${ring} }`)).toEqual(['outline-none']);
+  });
+
   it('judges a class-list outline removal per element, with its own hint', () => {
     const astro = 'src/pages/x.astro';
     // Another element's focus-visible: utility does not count, even on the same line.
@@ -211,6 +234,24 @@ describe('gates', () => {
   it('reports the line inside an .astro style block', () => {
     const [hit] = fileViolations('src/pages/x.astro', '<div />\n<style>\n.a {\n  color: #123456;\n}\n</style>', { faces });
     expect(hit).toMatchObject({ path: 'src/pages/x.astro', line: 4, gate: 'raw-hex', match: '#123456' });
+  });
+
+  it('scans the <style> block of a .ts route under src/pages, reporting the .ts line', () => {
+    const route = 'export const GET = () => new Response(`<!doctype html>\n<style>\n  body { color: #123456; font-family: ${family}; }\n  @media (min-width: 40rem) { h1 { margin: 0; } }\n</style>`);';
+    const hits = fileViolations('src/pages/api/page.ts', route, { faces });
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({ path: 'src/pages/api/page.ts', line: 3, gate: 'raw-hex', match: '#123456' });
+    expect(gates('src/pages/api/page.ts', '`<style>.a { transition: all 1s var(--ease-site); }</style>`')).toEqual(['transition-all']);
+    expect(gates('src/pages/api/page.ts', '`<style>:root { --paper: #FBF8F2; } body { background: var(--paper); font-family: \'Libron\', Georgia, serif; }</style>`')).toEqual([]);
+  });
+
+  it('does not scan an email template, or TypeScript outside src/pages', () => {
+    const email = '`<html><head><style>.btn { color: #ffffff; background: #AE5534; font-family: Arial; transition: all 1s ease; }</style></head></html>`';
+    expect(gates('src/lib/email-template.ts', email)).toEqual([]);
+    expect(gates('src/lib/client-emails.ts', email)).toEqual([]);
+    expect(gates('src/pages/api/page.ts', email)).not.toEqual([]);
+    expect(isScanned('src/pages/api/resume-approve.ts')).toBe(true);
+    expect(isScanned('src/lib/email-template.ts')).toBe(false);
   });
 
   it('names a Hallmark rule for every gate', () => {
@@ -304,6 +345,15 @@ describe('runner', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('src/components/B.astro:3: transition: all');
     expect(result.stderr).toContain('src/components/B.astro:3: browser-default ease');
+  });
+
+  it('reads a .ts route under src/pages and leaves an email template in src/lib alone', () => {
+    const page = '<style>\nbody { color: #123456; }\n</style>';
+    const route = `export const GET = () => new Response(\`\n${page}\`);`;
+    const result = run(fixture({ 'src/pages/api/page.ts': route, 'src/lib/email-template.ts': `export const html = \`${page}\`;` }));
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('src/pages/api/page.ts:3: raw hex colour outside a token: "#123456"');
+    expect(result.stderr).not.toContain('src/lib/');
   });
 
   it('points a multi-line class:list hit at its line and names the element-level fix', () => {
