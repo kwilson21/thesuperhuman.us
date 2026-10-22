@@ -13,6 +13,7 @@
 - Accessibility and optimization: static WebP; no motion. Poster is decorative with empty alt because title, artist and video controls are real HTML. Merchandise has descriptive alt and a visible concept label. Native dimensions retained in markup.
 - Corrections made: none required after optimization.
 - Outcome: ready for production
+- Reads as generated (one-time check of the current files, October 22, 2026, owner pick D5.3-B): fail. Claude Code agent, not a fresh viewer, so judged by the listed tells, at 1168 × 596 on /music/old-news at 1280px wide. First noticed: a warm golden-hour glow over the whole scene, around a crisp newspaper whose columns are defocused texture. This required check fails, which by section 4 of docs/generated-image-qa.md keeps the image out of production. The recorded outcome is left unchanged for the owner to decide (board D5.3-B: replace the file through a D5.1 change, or add an exception line here).
 
 ```json
 {

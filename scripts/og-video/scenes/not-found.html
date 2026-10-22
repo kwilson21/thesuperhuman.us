@@ -1,20 +1,22 @@
 <!doctype html>
 <!-- Not found (every 404 response, through ogScene in src/pages/404.astro; it has no route): the
-     404 page's own words beside its own coast. The poster is the page at rest. In the loop the
-     headline is washed out from the water side with a soft edge, like writing in wet sand, and
-     for a moment the page really is not there. The line inks back in from the left
+     404 page's own words beside its horizon over water, the scene every visitor sees without
+     JavaScript (the page picks this or a waveform at random in the browser; a preview cannot be
+     random, so it always shows the horizon). The poster is the page at rest, the sun risen. In the
+     loop the headline is washed out from the water side with a soft edge, like writing in wet sand,
+     and for a moment the page really is not there. The line inks back in from the left
      (the home page's Writing-title reveal, index.astro:242-243, shortened to 700 ms), then
      "Back to home" is pressed. The headline is partly or fully absent for 1.5 s (1350-2850): the
      soft erase is fully transparent by about 1.8 s and the ink reveal starts at 2.15 s, so the
      empty beat is about 350 ms. The url shows the host only: the missing path is unknown when this renders.
-     Copy is verbatim from src/pages/404.astro:13-17 (the description's first sentence only). -->
+     Copy is verbatim from src/pages/404.astro:43-48 (the description's first sentence only). -->
 <html lang="en" data-duration="6000">
 <head>
 <meta charset="utf-8" />
 <link rel="stylesheet" href="../kit.css" />
 <style>
   /* Padding keeps the glyphs inside the box the erase mask is drawn on. */
-  /* line-height 1.12 as on the 404 page's h1 (404.astro:30): at the kit's 1.02 the "p" of "page" meets the "h" of "here." */
+  /* line-height 1.12 as on the 404 page's h1 (404.astro:61): at the kit's 1.02 the "p" of "page" meets the "h" of "here." */
   .head { position: absolute; left: 64px; top: 88px; padding: 16px 28px 20px 0; white-space: nowrap; line-height: 1.12;
     mask-image: linear-gradient(to right, #000 40%, transparent 55%);
     mask-size: 250% 100%; mask-repeat: no-repeat; mask-position: 0% 0%;
@@ -24,10 +26,19 @@
   .back { position: relative; white-space: nowrap; transform-origin: center; will-change: transform; }
   .back-ring { inset: -6px; border-radius: 6px; }
 
-  /* quiet-coast-v2 (1536 × 1024) at 0.520833: frame x = 480 + 0.521 × art x, frame y = 52 + 0.521 × art y.
-     The 404 page's mask stops (404.astro:27) with the left fade widened from 8% to 18%, so the first
-     grasses stay faint and clear of "changed."; the water bleeds off the right edge. */
-  .coast { left: 480px; top: 52px; width: 800px; height: 533.33px; --fx0: 18%; --fx1: 92%; --fy0: 12%; --fy1: 85%; }
+  /* The 404 page's horizon (404.astro, from Home's contact rule) at 1.5 times its desktop size, so
+     the sun and the water read at Messages size; the rule and strokes are a little heavier for the
+     same reason. The sun stands risen, as on the page at rest. Its centre is at x 840, in the open
+     paper right of the words, and the rule runs out to the frame's right edge. */
+  .horizon { position: absolute; left: 480px; top: 150px; width: 720px; }
+  .sky { position: relative; height: 225px; overflow: hidden; }
+  .sky::before { content: ''; position: absolute; inset: 0; background: radial-gradient(36% 90% at 50% 100%, var(--glow), transparent 70%); }
+  .sky::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: linear-gradient(to right, transparent, var(--accent) 50%, transparent); opacity: .7; }
+  .sun { position: absolute; bottom: 0; left: 50%; width: 126px; height: 126px; margin-left: -63px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 72%, var(--paper)); box-shadow: 0 0 75px 21px var(--glow); transform: translateY(30%); }
+  .water { display: grid; justify-items: center; gap: 10px; padding-top: 13px; }
+  .water i { display: block; width: 180px; height: 3px; border-radius: 2px; background: var(--accent); opacity: .34; }
+  .water i:nth-child(2) { width: 114px; opacity: .24; }
+  .water i:nth-child(3) { width: 60px; opacity: .16; }
 </style>
 </head>
 <body>
@@ -36,7 +47,7 @@
   <h1 class="h-84 head">This page<br />isn’t here.</h1>
   <p class="lede desc">The link may have changed.</p>
   <div class="way"><span class="btn back">Back to home</span><i class="press-ring back-ring"></i></div>
-  <div class="art coast"><img src="../../../src/assets/site/quiet-coast-v2.webp" alt="" width="1536" height="1024" /></div>
+  <div class="horizon" aria-hidden="true"><div class="sky"><span class="sun"></span></div><div class="water"><i></i><i></i><i></i></div></div>
   <p class="url">thesuperhuman.us</p>
 </main>
 <script src="../kit.js"></script>
