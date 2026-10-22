@@ -36,6 +36,10 @@ nothing useful to put in them.
 - **Controls:** share navigation, links, buttons, focus treatment, form fields,
   validation, and disclosure styling. Begin with existing components and native
   elements. A matching appearance must not hide different form requirements.
+  Form messages open through `src/scripts/form-messages.ts` (D9.2-D): they slide
+  open over 180ms on `--ease-site`, or appear at once with reduced motion, and a
+  primary action that was on screen stays above the fold unless focus has to move
+  further.
 - **Icons:** use lightweight SVG with common stroke, size, and color rules. The
   four Audio service icons are symbolic markers beside visible headings.
 - **Motion:** start with the static composition. Enhance a specific interaction

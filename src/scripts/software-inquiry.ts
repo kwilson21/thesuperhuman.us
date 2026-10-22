@@ -1,6 +1,7 @@
 import { setupBriefAutocomplete } from './brief-autocomplete';
 import { clientSoftwareLabels, softwareBriefKickers, softwarePaths, timingLabels, updateLabels, validateSoftwareInquiry, type SoftwarePath } from '../lib/software-inquiry';
 import { setupFormSubmission } from './form-submission';
+import { openMessages } from './form-messages';
 
 // Each path's screens in order, by data-step. Website adds two screens after its first question.
 const plans = { website: [0, 1, 7, 8, 3, 4, 5, 6], webapp: [0, 1, 2, 3, 4, 5, 6], workflow: [0, 1, 2, 3, 4, 5, 6] } as const;
@@ -151,15 +152,19 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
     const errors = result.ok ? {} : result.errors;
     const keys = sectionFields(plan()[step]);
     if (step === 0 && !new FormData(form).get('path')) errors.path = 'Choose a starting point.';
-    let first: HTMLElement | undefined;
-    for (const key of keys) {
-      const control = [...form.elements].find(node => node.getAttribute('name') === key) as HTMLInputElement | HTMLTextAreaElement | undefined;
-      const message = errors[key] || (control && !control.checkValidity() ? 'Please check this answer.' : '');
-      const error = form.querySelector<HTMLElement>(`[data-form-error="${key}"]`);
-      if (error) { error.textContent = message; error.hidden = !message; }
-      if (control) { if (message) { control.setAttribute('aria-invalid', 'true'); first ??= control; } else control.removeAttribute('aria-invalid'); }
-    }
-    if (first) { status.textContent = 'Please check the highlighted fields.'; first.focus(); return; }
+    const first = openMessages(form, step === last() ? submit : next, () => {
+      let first: HTMLElement | undefined;
+      for (const key of keys) {
+        const control = [...form.elements].find(node => node.getAttribute('name') === key) as HTMLInputElement | HTMLTextAreaElement | undefined;
+        const message = errors[key] || (control && !control.checkValidity() ? 'Please check this answer.' : '');
+        const error = form.querySelector<HTMLElement>(`[data-form-error="${key}"]`);
+        if (error) { error.textContent = message; error.hidden = !message; }
+        if (control) { if (message) { control.setAttribute('aria-invalid', 'true'); first ??= control; } else control.removeAttribute('aria-invalid'); }
+      }
+      if (first) { status.textContent = 'Please check the highlighted fields.'; first.focus(); }
+      return first;
+    });
+    if (first) return;
     if (step < last()) showStep(step + 1);
   }
   form.addEventListener('input', save);
