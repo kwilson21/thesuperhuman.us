@@ -25,6 +25,9 @@ const oldNewsRecording = oldNewsExample && musicCatalog.recordings.find(recordin
 const host = Astro.request.headers.get('host') ?? Astro.url.host;
 const essay = await getEntry('pages', 'ai-gives-you-speed');
 if (!essay) throw new Error('AI essay content missing');
+// The pen stroke underlines the word the essay argues for; the title's words are unchanged.
+const penWord = 'Direction';
+const penAt = essay.data.title.lastIndexOf(penWord);
 const before = parseFigure(lyftBonus.before);
 const after = parseFigure(lyftBonus.after);
 const cells = before && after ? capacityCells(before, after) : 0;
@@ -112,8 +115,7 @@ const jsonLd = {
         <article class="editorial-pair writing-preview" data-reveal>
           <div class="editorial-art notebook-art"><img src={notebook.src} width={notebook.width} height={notebook.height} alt="" loading="lazy" /></div>
           <div class="editorial-copy">
-            <h3>{essay.data.title}</h3>
-            <svg class="pen-stroke" viewBox="0 0 300 14" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M3 9 C 60 3, 110 12, 170 7 S 262 4, 297 8" /></svg>
+            <h3>{penAt < 0 ? essay.data.title : <>{essay.data.title.slice(0, penAt)}<span class="pen-mark">{penWord}<svg class="pen-stroke" viewBox="0 0 200 10" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M2 5 C 40 2, 76 8, 116 4.5 S 176 3, 198 5.5" /></svg></span>{essay.data.title.slice(penAt + penWord.length)}</>}</h3>
             <a class="site-link" href="/writing/ai-gives-you-speed">Read the essay <span aria-hidden="true">→</span></a>
           </div>
         </article>
@@ -211,9 +213,12 @@ const jsonLd = {
   .editorial-pair { display: grid; grid-template-columns: 1.4fr 1fr; gap: 3rem; align-items: center; }
   .editorial-art :global(img) { display: block; width: 100%; height: auto; mix-blend-mode: multiply; mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent); mask-composite: intersect; }
   .editorial-copy h3 { max-width: 24ch; font-size: clamp(2rem, 3.4vw, 2.9rem); line-height: 1.08; letter-spacing: -.04em; margin: 0; text-wrap: balance; }
-  .pen-stroke { display: block; width: min(15rem, 80%); height: 14px; margin: .9rem 0 1.6rem; overflow: visible; }
-  /* No non-scaling-stroke here: with it, Chromium dashes in screen space and pathLength no longer lines up. */
-  .pen-stroke path { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; }
+  /* The pen stroke is a real underline: it sits 3 to 5px under "Direction" as it waves, and stays
+     with the word at any width. */
+  .pen-mark { position: relative; white-space: nowrap; }
+  .pen-stroke { position: absolute; left: -1%; width: 103%; top: calc(100% - .2em + 1px); height: .16em; overflow: visible; pointer-events: none; }
+  .pen-stroke path { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+  .writing-preview .site-link { margin-top: 1.6rem; }
 
   /* The horizon: the contact rule, with a sun that rises over it as the page ends. */
   .contact-section { position: relative; border-top: 1px solid var(--rule); padding-block: 3rem; margin-top: calc(var(--site-section-space) + 4rem); scroll-margin-top: 2rem; }
@@ -242,11 +247,12 @@ const jsonLd = {
     :global(.motion) .hire-section:not(.is-in) :global(.door) { opacity: 0; transform: translateY(var(--rise-reveal)); }
     :global(.motion) .hire-section :global(.door:nth-child(2)) { transition-delay: 120ms; }
     :global(.motion) .hire-section :global(.door:nth-child(3)) { transition-delay: 240ms; }
-    /* Writing: the title is inked in from the left and the pen stroke follows. */
+    /* Writing: the title is inked in from the left, and once the ink has passed "Direction" the pen
+       underlines it. */
     :global(.motion) .writing-preview h3 { transition: clip-path 1200ms cubic-bezier(.6, .1, .2, 1) 250ms; clip-path: inset(-10% 0 -20% 0); }
     :global(.motion) .writing-preview:not(.is-in) h3 { clip-path: inset(-10% 100% -20% 0); }
-    :global(.motion) .writing-preview .pen-stroke path { stroke-dasharray: 1; stroke-dashoffset: 0; transition: stroke-dashoffset 900ms ease-in-out 1200ms; }
-    :global(.motion) .writing-preview:not(.is-in) .pen-stroke path { stroke-dashoffset: 1; }
+    :global(.motion) .writing-preview .pen-stroke { transition: clip-path 520ms var(--ease-site) 1350ms; clip-path: inset(-60% -4% -60% 0); }
+    :global(.motion) .writing-preview:not(.is-in) .pen-stroke { clip-path: inset(-60% 100% -60% 0); }
   }
   @media (prefers-reduced-motion: reduce) {
     .project-art { transform: none; transition: none; }
@@ -267,7 +273,8 @@ const jsonLd = {
     .editorial-pair { grid-template-columns: 1fr; gap: .75rem; }
     .writing-preview .editorial-copy { order: -1; }
     .editorial-copy h3 { font-size: clamp(2rem, 7.4vw, 2.6rem); }
-    .pen-stroke { margin: .7rem 0 1.2rem; }
+    .pen-stroke { top: calc(100% - .2em + 2px); }
+    .writing-preview .site-link { margin-top: 1.2rem; }
     .notebook-art { margin-inline: -1.5rem; }
     .contact-intro { align-items: flex-start; flex-direction: column; gap: 1.2rem; }
     .contact-section { padding-block: 2rem; margin-top: calc(var(--site-section-space) + 3rem); }

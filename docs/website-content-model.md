@@ -271,9 +271,11 @@ The worlds follow the hero tagline, "Software, sound, and things worth exploring
 - **Sound.** The screen ends in a waveform: paper peaks rise into the dark and
   dark peaks fall into the paper. It swells as it crosses the viewport and is
   silent at either edge. It is a picture of sound; nothing plays.
-- **Notebook and horizon (things worth exploring).** The essay title is inked in
-  and underlined with a pen stroke. The notebook picture stays still. A sun rises
-  over the contact rule as the page ends.
+- **Notebook and horizon (things worth exploring).** The essay title is inked in,
+  then a pen stroke underlines its last word, “Direction”, sitting just under the
+  letters (October 22: the owner picked this emphasis; the title's words are
+  unchanged). The notebook picture stays still. A sun rises over the contact rule
+  as the page ends.
 
 Rules the implementation keeps: every resting frame is in the HTML and CSS, so
 the page is complete without JavaScript and with reduced motion (the view CI
