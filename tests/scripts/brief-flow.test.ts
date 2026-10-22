@@ -459,7 +459,7 @@ it('walks a website brief through its own screens, the link and notes, updates, 
   expect(kicker.textContent).toBe('Website brief'); expect(visibleDots()).toEqual(Array(8).fill(false));
   expect(dots[0].nodes['.sr-only'].textContent).toBe('Question 1 of 8'); expect(dots[1].attrs['aria-current']).toBe('step'); expect(dots[0].attrs['aria-current']).toBeUndefined();
   expect(current()).toBe(1);
-  expect(steps[1].nodes.h1.textContent).toBe("What's the website for?");
+  expect(steps[1].nodes.h1.textContent).toBe("What’s the website for?");
   expect(steps[1].nodes['[data-question-footnote]'].textContent).toBe('Plain language is fine. We’ll work out the design and technical details together. Please leave out passwords and access details.');
   click('[data-next]'); expect(current()).toBe(1);
   expect(steps[1].nodes['[data-form-error]'].textContent).toBe('This answer is required.');
@@ -558,7 +558,7 @@ it('restores an old idea draft as a web app brief with its idea as the first ans
   expect(current()).toBe(1); expect(kicker.textContent).toBe('Web app brief');
 });
 it.each([
-  ['website', "I'll look at what you have and reply with a fixed-price first milestone, or a question or two."],
+  ['website', "I’ll look at what you have and reply with a fixed-price first milestone, or a question or two."],
   ['workflow', 'I reply with a fixed-price first milestone, or a question or two.'],
 ])('sets the receipt first step for a %s brief', async (path, line) => {
   const firstStep = new Node(); firstStep.textContent = 'I reply with a fixed-price first milestone, or a question or two.';

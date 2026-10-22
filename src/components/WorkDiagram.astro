@@ -40,7 +40,7 @@ const { kind } = Astro.props;
   .timeline li::before { content: ''; position: absolute; left: -1.625rem; top: .3125rem; width: .625rem; height: .625rem; border: 1.5px solid var(--accent); background: var(--diagram-panel); border-radius: 50%; z-index: 1; }
   .timeline li:last-child::before { background: var(--accent); }
   .timeline li:first-child::after { content: ''; position: absolute; left: -1.34375rem; top: .9375rem; bottom: -.3125rem; width: 1px; background: var(--diagram-edge); }
-  .phase { display: block; font: .625rem/1.5 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: .5rem; }
+  .phase { display: block; font: 500 .625rem/1.5 var(--font-sans); letter-spacing: var(--tracking-eyebrow); text-transform: uppercase; color: var(--muted); margin-bottom: .5rem; }
   .timeline h4 { font-size: 1.4375rem; font-weight: 400; line-height: 1.2; margin-bottom: .5rem; }
   .timeline p { font-size: 1.0625rem; line-height: 1.45; color: var(--muted); }
   .continuity { border-top: 1px solid var(--diagram-rule); margin-top: 1.5625rem; padding-top: 1.25rem; font-size: .9375rem; line-height: 1.5; color: var(--muted); }

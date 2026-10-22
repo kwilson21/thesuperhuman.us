@@ -43,6 +43,7 @@ applicable. A successful generation call is not a successful review.
 | Image integrity | No accidental duplicates, warped edges, stray parts, gibberish, false logos, unintended marks, broken transparency, halos, or conspicuous generation artifacts. |
 | Site consistency | Repeated objects preserve identity; lighting, palette, texture, detail, and icon strokes belong to the same visual family. |
 | Meaning | The image helps the page. It does not imply an unsupported capability, real recording, product state, measured result, or employer artifact. |
+| Reads as generated | Shown at its page size for about five seconds, someone who has not seen the site calls it a drawing, a print or a photo, not AI art. Without a fresh viewer, none of these is the first thing you notice: a glossy, evenly lit product-render finish; dappled leaf shadows or a soft glow over everything; screens showing colored bars or a symbol where content belongs; objects that are all new, centered and unused. |
 
 For explanatory diagrams, verify the relationships, direction of arrows, and
 quantities against their source. Prefer HTML or SVG for labels and exact
@@ -87,6 +88,7 @@ private source material stays with its owner. Use this template:
 - Physical logic and reference comparison: pass / fail / not applicable, with reason
 - Desktop/mobile page inspection: pass / fail, with viewport sizes
 - Accessibility, optimization, and optional motion inspection:
+- Reads as generated: pass / fail, who looked, at what size
 - Corrections made and rechecked:
 - Outcome: needs revision / ready for production
 ```

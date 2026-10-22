@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import interBase64 from '~/assets/agreement-fonts/Inter-400.base64?raw';
-import newsreaderBase64 from '~/assets/agreement-fonts/Newsreader-400.base64?raw';
+import libronBase64 from '~/assets/agreement-fonts/Libron-400.base64?raw';
 import { agreementDetailsSchema, contractorSchema, agreementValues } from '~/lib/agreement-fields';
 import { templateFields, renderAgreement, type AgreementTemplate } from '~/lib/agreement-templates';
 import type { OfferTerms } from '~/lib/software-offers';
@@ -88,9 +88,24 @@ it('preflights exact attachment merge inputs and rejects a missing original MSA 
 }, 30000);
 
 it('bundles exactly the licensed source font bytes', () => {
-  for (const [name, encoded] of [['Inter-400', interBase64], ['Newsreader-400', newsreaderBase64]]) {
+  for (const [name, encoded] of [['Inter-400', interBase64], ['Libron-400', libronBase64]]) {
     expect(Buffer.from(encoded, 'base64')).toEqual(readFileSync(new URL(`../../src/assets/agreement-fonts/${name}.ttf`, import.meta.url)));
+    expect(existsSync(new URL(`../../src/assets/agreement-fonts/${name.split('-')[0]}-OFL.txt`, import.meta.url))).toBe(true);
   }
+  // The heading font is the pinned Libron v0.25 Regular, unchanged apart from leaving WOFF2.
+  expect(readFileSync(new URL('../../src/assets/agreement-fonts/Libron-OFL.txt', import.meta.url))).toEqual(readFileSync(new URL('../../public/fonts/OFL-Libron.txt', import.meta.url)));
+});
+
+it('sets headings in Libron and agreement text in Inter', async () => {
+  const pdf = await PDFDocument.load(await renderAgreementPacket({ ASSETS: assets } as unknown as Env, [document('sow', 'Statement of Work\n1 Engagement details\nMilestone 1\nThe client’s plain clause text.')], [{}]));
+  const page = pdf.getPage(0);
+  const fonts = page.node.Resources()!.lookup(PDFName.of('Font'), PDFDict);
+  const content = inflateSync((pdf.context.lookup((page.node.Contents() as PDFArray).get(0)) as PDFRawStream).contents).toString();
+  const faces = [...content.matchAll(/\/(\S+) ([\d.]+) Tf/g)].map(match => [String(fonts.lookup(PDFName.of(match[1]), PDFDict).lookup(PDFName.of('BaseFont'))), match[2]]);
+  // Three 18pt headings in Libron; the clause (11pt), page header (9pt) and page number (8pt) in Inter.
+  expect(faces.slice(0, 3)).toEqual(Array(3).fill([expect.stringMatching(/^\/Libron-Regular-/), '18']));
+  expect(faces.slice(3)).toEqual([[expect.stringMatching(/^\/Inter/), '11'], [expect.stringMatching(/^\/Inter/), '9'], [expect.stringMatching(/^\/Inter/), '8']]);
+  expect(extract(pdf)).toContain('The client’s plain clause text.');
 });
 
 it('formats PDF certificate dates in New York without changing source evidence', async () => {
@@ -169,9 +184,9 @@ it.runIf(existsSync(privateTemplateFile))('renders the real v1 agreements and em
   await checkTemplatePacket(privateTemplateFile, ['1 Parties and scope', '14 Signatures', '1 Engagement details', '9 Exceptions attachments and signatures']);
 }, 30000);
 
-it('preserves heading characters absent from Newsreader using Inter', async () => {
+it('preserves heading characters absent from Libron using Inter', async () => {
   const { default: fontkit } = await import('@pdf-lib/fontkit');
-  const heading = fontkit.create(Buffer.from(newsreaderBase64,'base64'));
+  const heading = fontkit.create(Buffer.from(libronBase64,'base64'));
   const inter = fontkit.create(Buffer.from(interBase64,'base64'));
   const character = String.fromCodePoint(inter.characterSet.find((point:number)=>point>1024 && !heading.characterSet.includes(point))!);
   const text = '1 Client '+character;
@@ -182,7 +197,7 @@ it('preserves heading characters absent from Newsreader using Inter', async () =
 it.each([false,true])('prints stored statement versions unchanged in the PDF (SOW only: %s)',async sowOnly=>{
   const {intentText,consentText}=await import('~/lib/agreement-fields');
   const signatures=['client','contractor'].map(party=>({party,typed_name:'Example Signer',consent_version:'website-signing-v3',consent_text:consentText('Example LLC',party==='contractor'),intent_text:intentText(party==='contractor',sowOnly)}));
-  signatures.push({party:'client',typed_name:'Earlier Signer',consent_version:'website-signing-v2',consent_text:'Earlier stored consent',intent_text:'Earlier stored intent'});
+  signatures.push({party:'client',typed_name:'Earlier Signer',consent_version:'website-signing-v2',consent_text:"Earlier stored consent: I'm authorized to sign for Example LLC.",intent_text:'Earlier stored intent'});
   const certificate={signatures};
   const original=JSON.stringify(certificate);
   const pdf=await PDFDocument.load(await renderAgreementPacket({ASSETS:assets} as unknown as Env,[document('sow','Exact retained agreement')],[certificate]));

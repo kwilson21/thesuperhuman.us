@@ -1,3 +1,5 @@
+import { openMessages } from './form-messages';
+
 /** Shared interaction states; each form retains its own payload and server rules. */
 export function setupFormSubmission({ form, endpoint, payload, success, onSuccess, onConflict, onSendingChange }: {
   form: HTMLFormElement;
@@ -33,7 +35,7 @@ export function setupFormSubmission({ form, endpoint, payload, success, onSucces
     form.setAttribute('aria-busy', 'true');
     errors.forEach(error => { error.textContent = ''; error.hidden = true; });
     form.querySelectorAll('[aria-invalid]').forEach(control => control.removeAttribute('aria-invalid'));
-    status.textContent = 'Sending…';
+    openMessages(form, button, () => { status.textContent = 'Sending…'; });
 
     try {
       const data = new FormData(form);
@@ -55,27 +57,31 @@ export function setupFormSubmission({ form, endpoint, payload, success, onSucces
         return;
       }
       if (response.status === 409) onConflict?.();
-      let firstInvalid: HTMLElement | undefined;
-      let hasDisplayedErrors = false;
-      const generalErrors: string[] = [];
-      for (const [field, message] of Object.entries(result.errors ?? {})) {
-        const error = errors.find(element => element.dataset.formError === field);
-        const controls = controlsFor(field);
-        if (error) {
-          error.textContent = message;
-          error.hidden = false;
-          hasDisplayedErrors = true;
-          if (!controls.length) error.tabIndex = -1;
+      openMessages(form, button, () => {
+        let firstInvalid: HTMLElement | undefined;
+        let hasDisplayedErrors = false;
+        const generalErrors: string[] = [];
+        for (const [field, message] of Object.entries(result.errors ?? {})) {
+          const error = errors.find(element => element.dataset.formError === field);
+          const controls = controlsFor(field);
+          if (error) {
+            error.textContent = message;
+            error.hidden = false;
+            hasDisplayedErrors = true;
+            if (!controls.length) error.tabIndex = -1;
+          }
+          controls.forEach(control => control.setAttribute('aria-invalid', 'true'));
+          firstInvalid ??= controls[0] ?? error;
+          if (!error && !controls.length) generalErrors.push(message);
         }
-        controls.forEach(control => control.setAttribute('aria-invalid', 'true'));
-        firstInvalid ??= controls[0] ?? error;
-        if (!error && !controls.length) generalErrors.push(message);
-      }
-      status.textContent = generalErrors.join(' ') || result.error || (hasDisplayedErrors ? 'Please check the highlighted fields.' : 'We couldn’t confirm your message was sent. Try again or use email.');
-      (firstInvalid ?? status).focus();
+        status.textContent = generalErrors.join(' ') || result.error || (hasDisplayedErrors ? 'Please check the highlighted fields.' : 'We couldn’t confirm your message was sent. Try again or use email.');
+        (firstInvalid ?? status).focus();
+      });
     } catch {
-      status.textContent = 'We couldn’t confirm your message was sent. Your text is still here. Try again or use email.';
-      status.focus();
+      openMessages(form, button, () => {
+        status.textContent = 'We couldn’t confirm your message was sent. Your text is still here. Try again or use email.';
+        status.focus();
+      });
     } finally {
       onSendingChange?.(false);
       pending = false;

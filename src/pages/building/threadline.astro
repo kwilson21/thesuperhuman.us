@@ -12,15 +12,15 @@ Astro.response.headers.set('Cache-Control', 'no-store');
   <figure class="thread-experience">
     <img src={threadline.src} alt="Notes connected by a terracotta thread, gathered beside a spool." width={threadline.width} height={threadline.height} fetchpriority="high" />
     <ol class="thread-steps">
-      <li><span aria-hidden="true">01</span><div><h2>Work</h2><p>A task, its code, and the context that belongs to it.</p></div></li>
-      <li><span aria-hidden="true">02</span><div><h2>Switch</h2><p>Something else needs your attention.</p></div></li>
-      <li><span aria-hidden="true">03</span><div><h2>Return</h2><p>Pick up the related work inside your editor.</p></div></li>
+      <li><div class="step-head"><span class="step-number" aria-hidden="true">1</span><h2>Work</h2><span class="step-line" aria-hidden="true"></span></div><p>A task, its code, and the context that belongs to it.</p></li>
+      <li><div class="step-head"><span class="step-number" aria-hidden="true">2</span><h2>Switch</h2><span class="step-line" aria-hidden="true"></span></div><p>Something else needs your attention.</p></li>
+      <li><div class="step-head"><span class="step-number" aria-hidden="true">3</span><h2>Return</h2><span class="step-line" aria-hidden="true"></span></div><p>Pick up the related work inside your editor.</p></li>
     </ol>
     <figcaption class="project-caption">Illustration of the intended experience.</figcaption>
   </figure>
   <section class="project-section" aria-labelledby="threadline-idea">
     <div class="site-section-heading"><h2 id="threadline-idea">Behind the idea</h2></div>
-    <div class="project-pair thread-principles">
+    <div class="project-pair project-ideas">
       <div><h3>Less reconstructing.</h3><p>Returning to a task should feel familiar. I’m exploring how to keep its context close to the code.</p></div>
       <div><h3>You keep the final say.</h3><p>Suggestions should be inspectable and correctable. The developer decides what belongs together.</p></div>
     </div>
@@ -29,22 +29,29 @@ Astro.response.headers.set('Cache-Control', 'no-store');
     <div class="site-section-heading"><h2 id="threadline-state">Where it stands</h2></div>
     <p class="thread-state">This is an internal prototype. The journal below distinguishes plans, built pieces, checks and availability as the work develops.</p>
   </section>
-  <ProjectUpdates feed={feed} projectId="threadline" />
+  <div class="project-chapter"><ProjectUpdates feed={feed} projectId="threadline" /></div>
 </ProjectLayout>
 <style>
   .thread-experience { position: relative; margin-top: .5rem; }
   .thread-experience > img { display: block; width: 100%; height: auto;  border-radius: 3px; }
-  .thread-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; gap: 2rem; padding: 2rem 0 1rem; }
-  .thread-steps li { display: flex; gap: 1rem; align-items: baseline; }
-  .thread-steps li > span { font: .8rem var(--font-mono); color: var(--accent); }
+  /* The stepper from the selected study: each number in a small accent circle, and a hairline from
+     each heading to the next circle. On phones the circles run down one vertical hairline. */
+  .thread-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; padding: 2rem 0 1rem; }
+  .step-head { display: flex; align-items: center; gap: .75rem; }
+  .step-number { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--accent); border-radius: 50%; font: 500 13px/1 var(--font-sans); color: var(--accent); }
+  .step-line { flex: 1; height: 1px; margin-right: 1rem; background: var(--rule); }
+  .thread-steps li:last-child .step-line { visibility: hidden; }
   .thread-steps h2 { font-size: 1.6rem; line-height: 1.25; }
-  .thread-steps p { font-size: 1rem; color: var(--muted); margin-top: .5rem; line-height: 1.6; }
-  .thread-principles { align-items: start; grid-template-columns: 1fr 1fr; }
+  .thread-steps p { font-size: 1rem; color: var(--muted); margin-top: .5rem; padding-inline: 42px 2rem; line-height: 1.6; }
   .thread-state { margin-top: 1.5rem; font-size: 1.15rem; line-height: 1.6; max-width: var(--measure-prose); }
   @media(max-width: 700px) {
     .thread-experience > img { max-height: none; }
-    .thread-steps, .thread-principles { grid-template-columns: 1fr; }
-    .thread-steps { gap: 1.5rem; }
-    .thread-steps li { border-left: 1px solid var(--rule); padding-left: 1rem; }
+    .thread-steps { grid-template-columns: 1fr; gap: 1.5rem; }
+    .thread-steps li { position: relative; padding-left: 42px; }
+    .step-head { display: block; }
+    .step-number { position: absolute; left: 0; top: 1px; }
+    .step-line { display: none; }
+    .thread-steps li:not(:last-child)::before { content: ''; position: absolute; left: 15px; top: 35px; bottom: calc(-1.5rem + 4px); width: 1px; background: var(--rule); }
+    .thread-steps p { padding: 0; }
   }
 </style>

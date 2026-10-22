@@ -258,23 +258,33 @@ The worlds follow the hero tagline, "Software, sound, and things worth exploring
   monitor re-types its last lines of code, the headphones give off three rings,
   and a terracotta trail is drawn on the notepad from the pen tip. It rests within
   five seconds and replays only when the visitor returns to the top or points at
-  the studio. Work with me stays on paper; its doors rise in turn.
+  the studio. The picture itself stays still: since October 22 it no longer lifts
+  with the scroll or leans toward the pointer. Work with me stays on paper; its
+  doors rise in turn.
 - **Screen (software, dark).** Currently building and the Lyft proof sit inside
   a dark screen that arrives as a rounded panel and widens to full width. The
   site's own tokens are inverted for that subtree, with the terracotta lifted for
-  contrast. Project captures glow like screens and lean toward a fine pointer.
+  contrast. Project captures glow like screens and lean toward a fine pointer;
+  the glow is steady and no longer grows on hover or focus (October 22). The
+  code rows at the top of the screen stay put as it widens.
   The Lyft figure counts up beside one cell per 5,000 rows.
 - **Sound.** The screen ends in a waveform: paper peaks rise into the dark and
   dark peaks fall into the paper. It swells as it crosses the viewport and is
   silent at either edge. It is a picture of sound; nothing plays.
-- **Notebook and horizon (things worth exploring).** The essay title is inked in
-  and underlined with a pen stroke; a sun rises over the contact rule as the page
-  ends.
+- **Notebook and horizon (things worth exploring).** The essay title is inked in,
+  then a pen stroke underlines its last word, “Direction”, sitting just under the
+  letters (October 22: the owner picked this emphasis; the title's words are
+  unchanged). The notebook picture stays still. A sun rises over the contact rule
+  as the page ends.
 
 Rules the implementation keeps: every resting frame is in the HTML and CSS, so
 the page is complete without JavaScript and with reduced motion (the view CI
 screenshots use). Motion that plays by itself finishes within five seconds;
-everything else is tied to scroll or pointer. A keyboard user who lands inside a
+everything else is tied to scroll or pointer. Since October 22 only the
+crossings between worlds follow the scroll (the screen widening, the waveform
+swelling, the sun rising, and About's chapter path); the pictures that drifted
+at their own speed (the studio, the code rows, the notebook and About's terrain)
+stay still. A keyboard user who lands inside a
 block that has not revealed yet sees it at once. No new dependency, image or
 claim; the only new visible text is the capacity key (one cell = 5,000 rows).
 The script is about 2.4 KB gzipped. Three.js was not needed for this
@@ -288,19 +298,57 @@ its job, on the shared layer; content, copy and order are unchanged everywhere.
 
 - **About:** the path between chapters draws as far as the reader has scrolled
   (still hidden below 800 px, per the audit), and each chapter's object plays one
-  short scene as it arrives: rings from the headphones, a glow and caret on the
-  laptop's `</>`, the controller's buttons pressing in turn, a glow from the
-  notebook's sun. The terrain drifts slightly with scroll.
+  short scene as it arrives: rings from the headphones, the laptop's `</>` typed
+  again one character at a time behind a caret, which then blinks twice and
+  leaves, while a glow rises behind it (October 22; before, a caret blinked
+  beside the finished glyph), the controller's buttons pressing in turn, a glow
+  from the notebook's sun. The terrain stays still (it drifted with scroll until
+  October 22).
 - **Audio:** the hero headphones give off the same rings on arrival and the
   sections rise in. It stays light: this page sells, and playback is untouched.
-- **Building:** the feature and the project rows rise in; the Tally capture leans
-  toward a fine pointer and the row pictures lift on hover.
+- **Building:** the project rows rise in, each drawing with its row. As each
+  drawing is seen, it shows its flow once, in reading order: Tally's arrows light
+  up in turn and the budgets fill; Kaillera-next's dashed lines reach from the
+  game room to each player, then the peer line joins Player 1 and Player 2; on the
+  website drawing the After waveform plays in from left to right under the Before
+  one. It rests within about two and a half seconds; reduced motion shows the
+  finished drawings (October 22, replacing the drawings' own rise-in and panel
+  build; the page no longer has a Tally capture or hover lift).
 - **Work:** restrained for recruiters. Only the two evidence diagrams build as
   they arrive (before, then after; each timeline step in turn).
 - **Writing:** the direction illustration draws its path through the checkpoints
   on arrival, once. It starts on load; where the page first shows it off screen
   (small or landscape phones, or a link to a piece further down), it waits until
   half of it is on screen or it fills half the screen. The essay page itself is unchanged.
+
+### The 404 page, October 22
+
+The owner's picks D9.1-B and D5.2 (B, with D chosen at random) on the Hallmark
+boards. The copy is unchanged.
+
+- **Alignment.** Home's first-screen composition: from 801px wide the words sit
+  left-aligned in the left column with "Back to home" and "Explore my projects"
+  side by side, and the scene sits on the right, up to 520px wide. At 800px and
+  below the scene sits on top (up to 520px) and the words follow, still
+  left-aligned. "Back to home" stays in the first screen at 1280 × 800,
+  390 × 844 and 375 × 667.
+- **Scene.** The generated coast is retired. Each page view shows one of two
+  drawn scenes, chosen by a one-line inline script: B, "Horizon over water"
+  (Home's contact-rule sun risen over a terracotta rule, with three short
+  strokes of water), or D, "A waveform on still water" (Home's waveform phrase
+  from `waveformPeaks` in `src/lib/home-motion.ts`, its bars standing on a faint,
+  fading reflection). Without JavaScript the page shows B. Both are CSS or
+  inline SVG, use only `--accent` and `--paper`, and are hidden from screen
+  readers. The sun rises once in 1.6s and the bars rise once in about 1.9s; with
+  reduced motion neither moves. The 404 link preview always shows B, because a
+  preview cannot be random.
+- **Image QA (section 3, in-page inspection).** Claude Code agent, October 22:
+  both scenes inspected in the page at 1440, 1280, 1024, 800, 390, 375 and 320px
+  wide, with JavaScript off and with reduced motion, and through their motion at
+  0, 0.4, 0.9, 1.4 and 2.4s. No horizontal overflow, no clipped sun, glow or
+  reflection, clear of the heading and links, and crisp at 2x because nothing is
+  a raster. Reads as generated: pass (drawn shapes in the site's own motifs; none
+  of the listed tells). No asset record, because there is no image file.
 
 ## Implemented content locations, September 10
 
@@ -382,6 +430,26 @@ live at `/audio/services`. The old `/services.html` address redirects to the hub
 Audio belongs within the personal site, with its existing hostname retained as an
 alternate entry and main-site canonicals.
 
+Layout, October 22 (owner picks D1.1-B and D1.2-C from the Hallmark follow-up
+board `home-doors`): on wide screens the doors are ruled rows, one door per row
+between hairlines, with the picture on the left, the caption over the title, the
+line, and the button at the right edge. The rows share their columns, so the lines
+and buttons line up from door to door; below 1200px wide the line sits under the
+title instead of in its own column. Home shows the rows from 801px wide. From
+1000px wide the hub opens in two columns: the kicker, headline and introduction
+on the left and the three doors stacked on the right as picture-left rows, so all
+three buttons are in the first screen at 1280 × 800. Between 801 and 999px the hub
+stacks and its doors are the same ruled rows as Home. Phones keep the picture-left
+rows everywhere.
+
+The "Before we start." steps on `/services` are one numbered list in the
+right-hand column, beside the heading as on `/audio/services`: each numeral hangs
+in a narrow gutter beside its title and description, with a hairline between
+steps (owner pick D7.1-C, board `services-layout`, October 22). The one-page print
+sheet keeps its three columns. On `/services` and `/audio/services` each section
+heading's small label (the evidence title and the price note) sits directly under
+its heading at every width (owner pick D7.2-C).
+
 ### Project brief paths, October 19
 
 Approved by the owner on October 19, 2026 ([design study](design-concepts/2026-10-19/website-intake/index.html)).
@@ -457,6 +525,15 @@ Before accepting explanatory copy, read it as a first-time visitor: can you say
 what happens without translating a label or guessing a missing step? Keep only
 supported detail, and check the rendered paragraph and next-step link on phone
 and desktop sizes.
+
+### Small labels, October 22
+
+A small capital label above a heading must say something the heading, a button
+beside it or the navigation does not: a place (a breadcrumb), a date, a company, a
+topic or a turn in the story. Closing bands open with their heading. A project's
+state is not a label: it is the dot line under the project's name
+(`.project-status`), in the case it is stored in, on Home, /building and the
+project pages alike.
 
 ### Keep website and resume facts consistent
 

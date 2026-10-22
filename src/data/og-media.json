@@ -121,14 +121,14 @@
     "encoding": "5341c8ca6c6bf333"
   },
   "building": {
-    "image": "/og/building-afef531d7e.png",
-    "video": "/og/building-934508c564.mp4",
+    "image": "/og/building-da7fd56eb0.png",
+    "video": "/og/building-9eb94e9662.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6000,
-    "imageBytes": 128086,
-    "videoBytes": 373506,
-    "frames": "96c4ae62d74fb923",
+    "imageBytes": 128102,
+    "videoBytes": 374640,
+    "frames": "adf1d9ab666744d3",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Italic.woff2",
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
@@ -136,7 +136,7 @@
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/building.html"
     ],
-    "source": "a1c9d8037d640f03",
+    "source": "df3a14acb4070d2c",
     "encoding": "5341c8ca6c6bf333"
   },
   "home": {
@@ -185,33 +185,32 @@
     "encoding": "5341c8ca6c6bf333"
   },
   "not-found": {
-    "image": "/og/not-found-3542b709fe.png",
-    "video": "/og/not-found-2b82690d2f.mp4",
+    "image": "/og/not-found-683fc38030.png",
+    "video": "/og/not-found-26be4859d7.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6000,
-    "imageBytes": 327295,
-    "videoBytes": 225603,
-    "frames": "5a6570835a836689",
+    "imageBytes": 97540,
+    "videoBytes": 99829,
+    "frames": "bb96d016c1da3c1e",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
-      "scripts/og-video/scenes/not-found.html",
-      "src/assets/site/quiet-coast-v2.webp"
+      "scripts/og-video/scenes/not-found.html"
     ],
-    "source": "559b25fb47d07cda",
+    "source": "7069b0e7f9b2f337",
     "encoding": "5341c8ca6c6bf333"
   },
   "personal-website": {
-    "image": "/og/personal-website-8b407f616e.png",
-    "video": "/og/personal-website-b492ac2c98.mp4",
+    "image": "/og/personal-website-c4fefc439c.png",
+    "video": "/og/personal-website-7d1e11a6d2.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6000,
-    "imageBytes": 332958,
-    "videoBytes": 273977,
-    "frames": "e15b0f2c6d17f96e",
+    "imageBytes": 332938,
+    "videoBytes": 273771,
+    "frames": "4d6053651d7dc58a",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Italic.woff2",
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
@@ -221,7 +220,7 @@
       "src/assets/projects/website/home-after.png",
       "src/assets/projects/website/home-before.png"
     ],
-    "source": "ea0d046ee2ce33c3",
+    "source": "b4f1297198057803",
     "encoding": "5341c8ca6c6bf333"
   },
   "personal-website-story": {
@@ -346,20 +345,20 @@
   },
   "software-start": {
     "image": "/og/software-start-24d1e7b824.png",
-    "video": "/og/software-start-2da6d1c6e7.mp4",
+    "video": "/og/software-start-db737f7218.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 7200,
     "imageBytes": 142640,
-    "videoBytes": 346924,
-    "frames": "31742e68b034431d",
+    "videoBytes": 346669,
+    "frames": "e4227e41d2c852df",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
       "scripts/og-video/scenes/software-start.html"
     ],
-    "source": "2dbf70ef444bd7ec",
+    "source": "ca4174f68a768c11",
     "encoding": "5341c8ca6c6bf333"
   },
   "the-engineers-daily": {

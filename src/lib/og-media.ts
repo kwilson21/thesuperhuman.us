@@ -73,7 +73,7 @@ export const OG_SCENES = {
   },
   'not-found': {
     routes: [],
-    alt: '404: “This page isn’t here.” and “The link may have changed.” with a Back to home button, beside a painted coast with grassy dunes, a curved beach and calm water.',
+    alt: '404: “This page isn’t here.” and “The link may have changed.” with a Back to home button, beside a terracotta sun risen over a horizon line, with three short strokes of water below it.',
   },
   building: {
     routes: ['/building', '/building/*'],
