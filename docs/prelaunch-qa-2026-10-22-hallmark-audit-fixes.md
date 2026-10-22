@@ -38,7 +38,8 @@ Evidence: CI captures under `pr-204/f0abd1f/` on the `screenshots` branch (325 f
 
 - On October 22, 2026, in conversation, the owner asked to address every issue from the Hallmark audit, and to receive alternatives for the items that are his design choices. This is as relayed to this agent by the coordinating Claude session. No owner wording was passed on, so none is quoted here.
 - The commit message of `ab4dae0` says the PR fixes the defects and leaves the owner's design choices as they were, with alternatives for those going to the owner separately. `a3c2f56` reverts visible changes that an independent UI review found the fixes did not need.
-- The PR still changes how pages look (see Scope). Merge and deployment wait on the owner's approval of the look, the same process as the previous record (`docs/prelaunch-qa-2026-10-20-website-design-intake.md`: "The PR merges only after the owner approves the look, following this gate."). Merging to `main` deploys production. The owner has not given that approval, and this record does not claim it.
+- The PR still changes how pages look (see Scope). Merge and deployment wait on the owner's approval of the look, the same process as the previous record (`docs/prelaunch-qa-2026-10-20-website-design-intake.md`: "The PR merges only after the owner approves the look, following this gate."). Merging to `main` deploys production. The owner gave that approval later the same day (next line).
+- Owner, in conversation, October 22, 2026, after reviewing the before and after captures: "#204 looks great". The owner did not report a second-browser or real-device check; those stay UNVERIFIED, as in the previous record.
 
 ## Evidence and limits
 
@@ -64,8 +65,8 @@ Evidence: CI captures under `pr-204/f0abd1f/` on the `screenshots` branch (325 f
 ## 1. Purpose and content
 
 - **PASS · Project, branch and local changes.** At the browser checks the PR head and base matched the API (`f0abd1f` on `claude/hallmark-audit-fixes`, base `main` at `26e764a`); the branch has since merged `main` at `75a88be4`. The working tree was clean. The site instructions (`CLAUDE.md`, `AGENTS.md`) and the audience are unchanged.
-- **UNVERIFIED · Deployment authorization (owner).** Merging deploys production, and merge waits on the owner's approval of the look (see Owner decisions).
-- **UNVERIFIED · Approved design: the owner's approval of the look (owner).** The PR changes the look site-wide: kicker face, heading and prose wrapping, prose width, the 404 picture's size, the name's face in door captions, field edges, hover feedback and the muted icon. Whether these keep the approved design is the owner's call, from the CI captures or the branch preview.
+- **PASS · Deployment authorization (owner).** The owner approved the look on October 22, 2026 (see Owner decisions), which under this record's process authorizes merge and deployment.
+- **PASS · Approved design: the owner's approval of the look (owner).** The owner reviewed the side-by-side before and after captures of every public page and wrote, in conversation on October 22, 2026: "#204 looks great".
 - **PASS · Claims, placeholders and media.**
   - No professional claim changes. The Tally sentence on `/work` keeps its wording and only moves below the links. The deleted `LyftWorkStory` was not rendered on any page at `26e764a`, so no rendered claim is removed.
   - Added lines contain no placeholder text (searched for TODO, FIXME, lorem, TBD), no rates, clearance, exclusivity or buzzwords, and no em dashes.
@@ -177,7 +178,7 @@ Evidence: CI captures under `pr-204/f0abd1f/` on the `screenshots` branch (325 f
   - No dependencies, generated files, images, secrets or private data. The added lines contain no tokens, keys or private URLs; the only URL is the existing Cloudflare terms link.
   - The `docs/website-system-plan.md` edit follows the deleted component. The stale link in `docs/audits/2026-09-09/website-audit.md` is left as it is in that dated record.
   - The four CI captures viewed render without visible breakage at the displayed scale. The other captures were not viewed by this agent; the owner's look review uses them.
-- **UNVERIFIED · Review of the final head `f0abd1f`.** The repository rule asks for a review of each new head until a pass finds nothing. The last recorded pass covered `ab4dae0..b771231`; its three nits were fixed in `f0abd1f`, which no recorded pass covers. This agent read its 5-line diff and measured its door-button breakpoint (section 3), but that is evidence collection, not that review. An independent reviewer can close this; it needs no owner.
+- **PASS · Review of the final head.** An independent review covered `b771231..4726df39` (including the merge of `main`), ran the tests and `astro check`, and checked the signing pages live; its findings are fixed in `27e4d3b9`. The coordinating session verified `27e4d3b9` with the full suite (138 files, 1706 passed), `astro check` (0 errors) and CI on that head (`validate`, Screenshots `capture` and Workers Builds succeeded).
 - **PASS · Production configuration, by source.**
   - `wrangler.jsonc`, bindings, secrets, migrations, `public/_headers`, `src/middleware.ts`, `src/lib/` (including `security-headers.ts` and `host-routing.ts`), `astro.config.mjs`, `package.json` and the lockfile are unchanged.
   - The built `dist/_headers` from the merged code equals `public/_headers` at `75a88be4` (which includes #203's `/og/*` cache block), and this PR changes nothing under `public/`.
@@ -200,40 +201,37 @@ Evidence: CI captures under `pr-204/f0abd1f/` on the `screenshots` branch (325 f
 
 ## Software agreement signing
 
-- **UNVERIFIED · Signing pages: CI captures, keyboard and overflow.** The signing page changes apostrophes, field edges, the focus outline, the agreement header's spacing and font tokens. The `software-signing` capture scenario ran at `f0abd1f` (capture succeeded), and its step waits for the new "I’ll email you the link to your project page when work starts." text. Those captures were not viewed for this record, and keyboard and overflow were not measured on signing pages. An agent can close this; it needs no owner.
+- **PASS · Signing pages: CI captures, keyboard and overflow (client-facing pages).** The `software-signing` scenario ran fresh at `f0abd1f` and its overflow check passes at 320, 390, 768 and 1280. An independent reviewer pixel-diffed all 74 before and after captures (only change: +40px header spacing on 12 signing-form captures, as intended), viewed a representative set, and on a seeded local copy checked focus outlines, the error summary by keyboard, and no overflow from 320 to 1280 on the offer, sign, verify and `/agreements` pages. Owner signing pages and the waiting and executed states were covered by CI captures only. Signing-page apostrophes stay straight (see Copy).
 - **N/A · The other signing checks.** Counsel review, contractor configuration, template previews, the signing setting, email authentication, PDF rendering, certificates, failures, downloads, restore and retention are untouched by this PR.
 
 ## Summary
 
 | Section | PASS | FAIL | UNVERIFIED | N/A |
 | --- | --- | --- | --- | --- |
-| 1. Purpose and content | 5 | 0 | 2 | 1 |
+| 1. Purpose and content | 7 | 0 | 0 | 1 |
 | 2. Search and sharing | 2 | 0 | 0 | 5 |
 | 3. Accessibility and responsive behavior | 10 | 0 | 2 | 0 |
 | 4. Performance and resilience | 3 | 0 | 1 | 2 |
 | 5. Forms and sensitive flows | 0 | 0 | 0 | 6 |
 | 6. Privacy, legal and measurement | 1 | 0 | 0 | 5 |
-| 7. Release and final QA | 4 | 0 | 3 | 0 |
+| 7. Release and final QA | 5 | 0 | 2 | 0 |
 | 8. Private owner center | 0 | 0 | 0 | 3 |
-| Software agreement signing | 0 | 0 | 1 | 1 |
-| Total | 25 | 0 | 9 | 23 |
+| Software agreement signing | 1 | 0 | 0 | 1 |
+| Total | 29 | 0 | 5 | 23 |
 
-Not launch-ready: the owner's approval of the look and the deployment authorization are open, and the other UNVERIFIED items need closing or an owner-accepted exception with its impact and follow-up recorded here.
+Approved for deployment by the owner. Still UNVERIFIED, as in the previous record's known unknowns: a second browser and a real device, browser zoom, lab performance, and the post-deployment checks and receipt, which follow the merge.
 
 ## Known unknowns
 
 For the owner to check or accept:
 
-- the owner's approval of the look, and with it the deployment authorization
 - 200% zoom in a real browser, including text-only zoom
 - a second browser (Safari or Firefox)
 - a real mobile device
 
 An agent can close these, or the owner can accept them as exceptions:
 
-- an independent review of the final head
 - lab performance measurement (field data needs a deployed site)
-- the signing pages' CI captures, keyboard use and overflow
 
 After deployment:
 
