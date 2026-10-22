@@ -53,6 +53,15 @@
     "imageBytes": 139513,
     "videoBytes": 552784
   },
+  "building": {
+    "image": "/og/building-afef531d7e.png",
+    "video": "/og/building-31092fb04e.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 6000,
+    "imageBytes": 128086,
+    "videoBytes": 372612
+  },
   "home": {
     "image": "/og/home-feaa0743d2.png",
     "video": "/og/home-b2de7f5328.mp4",
@@ -107,6 +116,33 @@
     "imageBytes": 140594,
     "videoBytes": 170404
   },
+  "project-kaillera-next": {
+    "image": "/og/project-kaillera-next-111eb0973b.png",
+    "video": "/og/project-kaillera-next-7c2880b54d.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 6000,
+    "imageBytes": 198191,
+    "videoBytes": 206932
+  },
+  "project-tally": {
+    "image": "/og/project-tally-29117b28f5.png",
+    "video": "/og/project-tally-c18ee5d442.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 7200,
+    "imageBytes": 174102,
+    "videoBytes": 341690
+  },
+  "project-threadline": {
+    "image": "/og/project-threadline-8fdefa6291.jpg",
+    "video": "/og/project-threadline-b1a846e489.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 6000,
+    "imageBytes": 69381,
+    "videoBytes": 429175
+  },
   "services": {
     "image": "/og/services-6518d2c6c8.png",
     "video": "/og/services-ee2799b652.mp4",
@@ -117,13 +153,22 @@
     "videoBytes": 767628
   },
   "software-start": {
-    "image": "/og/software-start-ca3244d4c1.png",
-    "video": "/og/software-start-65d389073b.mp4",
+    "image": "/og/software-start-24d1e7b824.png",
+    "video": "/og/software-start-2da6d1c6e7.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 7200,
-    "imageBytes": 192409,
-    "videoBytes": 471341
+    "imageBytes": 142640,
+    "videoBytes": 346924
+  },
+  "the-engineers-daily": {
+    "image": "/og/the-engineers-daily-db4353dc77.png",
+    "video": "/og/the-engineers-daily-4c7b5e3928.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 6000,
+    "imageBytes": 292181,
+    "videoBytes": 558818
   },
   "work": {
     "image": "/og/work-31561924d0.png",
@@ -142,5 +187,14 @@
     "durationMs": 5000,
     "imageBytes": 130411,
     "videoBytes": 147052
+  },
+  "writing-ai-gives-you-speed": {
+    "image": "/og/writing-ai-gives-you-speed-11e01623f0.png",
+    "video": "/og/writing-ai-gives-you-speed-68e6f82d0b.mp4",
+    "width": 1200,
+    "height": 630,
+    "durationMs": 6000,
+    "imageBytes": 162593,
+    "videoBytes": 185344
   }
 }

@@ -29,7 +29,7 @@ export const OG_SCENES = {
   },
   'software-start': {
     routes: ['/software/start'],
-    alt: 'Project brief: “What are you working on?” Three choices: Website design, a site people can read on a phone and act on; Web app, an app people open in a browser, on a phone or a computer; and Workflow automation, a tool that takes manual steps out of a task your team repeats.',
+    alt: 'Project brief: “What are you working on?” Three choices, Website design, Web app and Workflow automation, beside “Not sure which? Pick the closest. I’ll suggest the right fit when I reply.” and a note that nothing is booked or paid yet.',
   },
   'personal-website': {
     routes: ['/building/personal-website', '/building/personal-website/*'],
@@ -74,6 +74,30 @@ export const OG_SCENES = {
   'not-found': {
     routes: [],
     alt: '404: “This page isn’t here.” and “The link may have changed.” with a Back to home button, beside a painted coast with grassy dunes, a curved beach and calm water.',
+  },
+  building: {
+    routes: ['/building', '/building/*'],
+    alt: 'Building: “Things I’m making.” beside the projects Tally, Kaillera-next and the personal website with their statuses, and an illustration of Tally’s flow from transactions to categories to a monthly budget.',
+  },
+  'project-tally': {
+    routes: ['/building/tally'],
+    alt: 'Tally: “Review your transactions, set monthly budgets and see how much remains to spend.” beside Tally’s home screen on demo data, with its demo data banner along the top and the Safe to spend figure, $283, ringed and labelled.',
+  },
+  'project-kaillera-next': {
+    routes: ['/building/kaillera-next'],
+    alt: 'Kaillera Next: “Open a link and play supported N64 games with friends, nothing to install.” In development, playable demo build. Beside it, the landing page and a rollback diagram of frames under a playhead, an arc back to a wrong guess, and “Guess a late input, keep playing, and rewind if the guess was wrong.”',
+  },
+  'project-threadline': {
+    routes: ['/building/threadline'],
+    alt: 'Threadline: “Pick up where you left off.” and “Pick up interrupted development work with its context intact.” Internal prototype. Beside it, an illustration of three paper notes, Work, Switch and Return, pinned to a sunlit wall and joined by one terracotta thread from a spool.',
+  },
+  'the-engineers-daily': {
+    routes: ['/building/the-engineers-daily'],
+    alt: 'The Engineer’s Daily: “A daily practice of faith and craft.” Arrive, Practice, Reflect. Local prototype. Beside it, a screenshot of the Day 12 lesson “An honest default.” with its illustrated harbor-view desk.',
+  },
+  'writing-ai-gives-you-speed': {
+    routes: ['/writing/ai-gives-you-speed'],
+    alt: '“AI Gives You Speed. Engineering Gives It Direction.” above an illustration of course correction: without checkpoints a dashed path drifts away from the intended outcome; with checkpoints a terracotta path passes three checkpoints and reaches it.',
   },
 } satisfies Record<string, { routes: string[]; alt: string }>;
 

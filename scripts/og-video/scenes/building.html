@@ -1,0 +1,200 @@
+<!doctype html>
+<!-- Building (/building and /building/*): the Building index as a project selector. The poster shows all
+     three current projects at full strength with Tally's drawing; then the accent marker steps to
+     Kaillera-next and Personal website, and each project's drawing from BuildingIllustration.astro
+     builds in its place before Tally's returns. The drawings are illustrations, captioned as the
+     page captions them.
+     Copy is verbatim: headline and kicker from src/pages/building.astro:35; names from
+     building.astro:12, 17, 22; statuses from src/data/project-stories/tally.ts:49,
+     kaillera-next.ts:29 and personal-website.ts:54 (re-render when they change); drawing labels
+     from src/components/BuildingIllustration.astro:9-26. Tally's drawing is trimmed to two rows per
+     panel (Groceries and Transit; Food and Transport; two unlabelled budget tracks whose colours match the
+     category dots row for row) to keep the poster near 25 words; its bars are drawn widths. -->
+<html lang="en" data-duration="6000">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../kit.css" />
+<style>
+  h1 { position: absolute; left: 64px; top: 104px; width: 440px; }
+  /* Selector: the accent marker is the nav's current-page rule turned upright (SiteNav.astro). */
+  .bar { position: absolute; left: 64px; top: 300px; width: 3px; height: 62px; background: var(--accent); will-change: transform; }
+  .rows { position: absolute; left: 64px; top: 300px; width: 480px; }
+  .row { height: 76px; padding-left: 20px; }
+  .row h2 { font: 400 34px/1.1 var(--serif); letter-spacing: -.02em; white-space: nowrap; }
+  /* Status sits tight under its name (61.4px pair) so the list reads as three projects, not six lines. */
+  .row p { margin: 0; font: 400 20px/24px var(--mono); letter-spacing: .02em; text-transform: uppercase; color: var(--accent); white-space: nowrap; }
+
+  /* Stage: 40px clear of the longest status line (x 530). */
+  .stage { position: absolute; left: 572px; top: 92px; width: 564px; height: 446px; }
+  .scene { position: absolute; left: 0; width: 564px; }
+  .plabel { margin: 0; font: 400 20px/24px var(--serif); text-align: center; white-space: nowrap; }
+  /* BuildingIllustration's panel: paper fill, #cbc5ba border. */
+  .pane { border: 1px solid var(--panel-border); border-radius: 3px; background: var(--paper); }
+
+  /* Tally: Transactions -> Categories -> Monthly budget. Rows line up across the three panels;
+     the scene (178px) is centred in the stage. */
+  .s-tally { top: 134px; }
+  .flow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: center; }
+  .flow .plabel { margin-bottom: 14px; }
+  .flow .pane { padding: 28px 14px 0; height: 140px; }
+  .flow .pane p { display: flex; align-items: center; gap: 10px; height: 56px; margin: 0; font: 400 20px/27px var(--serif); white-space: nowrap; align-items: flex-start; }
+  .ci { width: 12px; flex: none; color: var(--muted); font-size: 26px; line-height: 24px; }
+  .dot { width: 12px; height: 12px; margin-top: 8px; border-radius: 50%; flex: none; }
+  .arrow { padding-top: 38px; color: var(--accent); font: 400 28px/1 var(--serif); }
+  /* Each track is centred on its row's text line in the other two panels. */
+  .budgets .b { height: 56px; padding-top: 9px; }
+  .track { height: 9px; background: var(--rule); border-radius: 2px; overflow: hidden; }
+  .track span { display: block; height: 100%; transform-origin: left; will-change: transform; }
+
+  /* Kaillera-next: a game room, two players linked peer to peer, and a spectator. */
+  .s-kaillera { top: 6px; height: 434px; }
+  .links { position: absolute; inset: 0; width: 564px; height: 434px; overflow: visible; fill: none; }
+  .room-lines { stroke: var(--muted); stroke-width: 1.6; stroke-dasharray: 6 7; }
+  .peer { stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .browser { border: 1.5px solid var(--ink); border-radius: 3px; background: var(--paper); overflow: hidden; }
+  .browser-bar { position: relative; height: 20px; border-bottom: 1px solid var(--rule); }
+  .browser-bar i { position: absolute; top: 7px; width: 5px; height: 5px; border-radius: 50%; background: var(--ink); }
+  .browser-bar i:nth-child(1) { left: 8px; } .browser-bar i:nth-child(2) { left: 17px; } .browser-bar i:nth-child(3) { left: 26px; }
+  .room { position: absolute; left: 172px; top: 0; width: 220px; }
+  .room .plabel { margin-bottom: 8px; }
+  .members { padding: 10px 14px 12px; }
+  .members p { display: flex; align-items: center; gap: 11px; margin: 0 0 4px; font: 400 20px/26px var(--serif); white-space: nowrap; }
+  .member { width: 11px; height: 11px; border: 1px solid var(--ink); border-radius: 50%; background: var(--ink); flex: none; }
+  .member.hollow { background: var(--paper); }
+  .invite { margin-top: 8px; padding: 4px; border: 1px solid var(--accent); border-radius: 3px; font: 400 20px/24px var(--serif); text-align: center; white-space: nowrap; }
+  .who { position: absolute; width: 150px; }
+  .who svg { display: block; width: 100%; height: 66px; }
+  .who .plabel { margin-top: 8px; }
+  .p1 { left: 0; top: 226px; } .p2 { right: 0; top: 226px; }
+  .spec { left: 220px; top: 306px; width: 124px; }
+  .spec svg { height: 48px; }
+  .spec .plabel { margin-top: 6px; }
+  .watch { margin: 0; font: 400 20px/24px var(--serif); text-align: center; color: var(--muted); white-space: nowrap; }
+
+  /* Personal website: explore the work, compare the sound, start a conversation. */
+  .s-web { top: 68px; }
+  .web { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .web .pane { height: 310px; }
+  .web .pane > .plabel { display: grid; place-items: center; height: 66px; padding: 0 6px; border-bottom: 1px solid var(--rule); white-space: normal; }
+  .timeline { padding: 24px 16px; }
+  .timeline > div { position: relative; margin-left: 6px; padding: 2px 0 30px 18px; border-left: 1px solid var(--panel-border); }
+  .timeline > div:last-child { padding-bottom: 0; }
+  .timeline i { position: absolute; left: -6px; top: 2px; width: 11px; height: 11px; border: 1.5px solid var(--accent); border-radius: 50%; background: var(--paper); }
+  .timeline span { display: block; height: 4px; margin-bottom: 10px; background: var(--panel-border); }
+  .timeline span:last-child { width: 70%; margin-bottom: 0; }
+  .sound { padding: 14px 12px; }
+  .sound p { margin: 0; font: 400 20px/24px var(--serif); }
+  .wave { display: block; width: 100%; height: 72px; margin-bottom: 8px; stroke-width: 1.6; stroke-linecap: round; overflow: visible; }
+  .wave line { transform-box: fill-box; transform-origin: center; }
+  .before-wave { stroke: #aaa399; } .after-wave { stroke: var(--accent); }
+  .inquiry { padding: 16px 10px; color: var(--muted); font: 400 20px/24px var(--serif); }
+  .inquiry > div { padding: 8px; margin-bottom: 10px; border: 1px solid var(--panel-border); border-radius: 2px; }
+  .inquiry > div:nth-child(2) { min-height: 98px; }
+  .inquiry > span { display: block; padding: 8px 2px; border-radius: 2px; background: var(--accent); color: var(--paper); text-align: center; white-space: nowrap; }
+
+  .step, .arrow, .links path { will-change: opacity, transform; }
+</style>
+</head>
+<body>
+<main class="frame card">
+  <p class="kicker">Building</p>
+  <h1 class="h-76">Things I’m making.</h1>
+  <div class="bar"></div>
+  <div class="rows">
+    <div class="row r1"><h2>Tally</h2><p>In development · public demo</p></div>
+    <div class="row r2"><h2>Kaillera-next</h2><p>In development · playable demo build</p></div>
+    <div class="row r3"><h2>Personal website</h2><p>Live - evolving</p></div>
+  </div>
+
+  <div class="stage">
+    <div class="scene s-tally"><div class="flow">
+      <div class="step g0"><p class="plabel">Transactions</p><div class="pane"><p><span class="ci">◦</span>Groceries</p><p><span class="ci">◦</span>Transit</p></div></div>
+      <span class="arrow g1">→</span>
+      <div class="step g1"><p class="plabel">Categories</p><div class="pane"><p><i class="dot" style="background: var(--accent)"></i>Food</p><p><i class="dot" style="background: #82927b"></i>Transport</p></div></div>
+      <span class="arrow g2">→</span>
+      <div class="step g2"><p class="plabel">Monthly budget</p><div class="pane budgets">
+        <div class="b"><div class="track"><span style="width: 72%; background: var(--accent)"></span></div></div>
+        <div class="b"><div class="track"><span style="width: 57%; background: #82927b"></span></div></div>
+      </div></div>
+    </div></div>
+
+    <div class="scene s-kaillera">
+      <svg class="links" viewBox="0 0 564 434" aria-hidden="true">
+        <!-- Dashed links leave the room from behind its browser; the peer line joins the two players directly, above the spectator.
+             Each dashed link is drawn from the box it joins, so its pattern starts with a dash that touches that box. -->
+        <path class="room-lines" d="M75 226 L282 150 M489 226 L282 150 M282 306 L282 150" />
+        <path class="peer" d="M150 268 H414 M160 261 L150 268 L160 275 M404 261 L414 268 L404 275" />
+      </svg>
+      <div class="room step"><p class="plabel">Game room</p><div class="browser"><div class="browser-bar"><i></i><i></i><i></i></div><div class="members"><p><span class="member"></span>Player 1</p><p><span class="member"></span>Player 2</p><p><span class="member hollow"></span>Spectator</p><div class="invite">Invite friends</div></div></div></div>
+      <div class="who p1 step"><div class="browser"><div class="browser-bar"><i></i><i></i><i></i></div><svg viewBox="0 0 100 55" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="38" cy="17" r="8" /><path d="M23 44v-4c0-17 30-17 30 0v4" /><path d="M68 21h13l5 17c1 4-2 5-5 2l-5-4-5 4c-3 3-6 2-5-2z" /><path d="M69 28h7m-3-3v6" /><circle cx="80" cy="29" r="1" /></svg></div><p class="plabel">Player 1</p></div>
+      <div class="who p2 step"><div class="browser"><div class="browser-bar"><i></i><i></i><i></i></div><svg viewBox="0 0 100 55" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="38" cy="17" r="8" /><path d="M23 44v-4c0-17 30-17 30 0v4" /><path d="M68 21h13l5 17c1 4-2 5-5 2l-5-4-5 4c-3 3-6 2-5-2z" /><path d="M69 28h7m-3-3v6" /><circle cx="80" cy="29" r="1" /></svg></div><p class="plabel">Player 2</p></div>
+      <div class="who spec step"><div class="browser"><div class="browser-bar"><i></i><i></i><i></i></div><svg viewBox="0 0 100 55" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(12 0)"><circle cx="38" cy="17" r="8" /><path d="M23 44v-4c0-17 30-17 30 0v4" /></g></svg></div><p class="plabel">Spectator</p><p class="watch">Watch only</p></div>
+    </div>
+
+    <div class="scene s-web"><div class="web">
+      <div class="step pane"><p class="plabel">Explore the work</p><div class="timeline"><div><i></i><span></span><span></span></div><div><i></i><span></span><span></span></div><div><i></i><span></span><span></span></div><div><i></i><span></span></div></div></div>
+      <div class="step pane"><p class="plabel">Compare the sound</p><div class="sound"><p>Before</p><svg viewBox="0 0 100 48" preserveAspectRatio="none" class="wave before-wave"></svg><p>After</p><svg viewBox="0 0 100 48" preserveAspectRatio="none" class="wave after-wave"></svg></div></div>
+      <div class="step pane"><p class="plabel">Start a conversation</p><div class="inquiry"><div>Your name</div><div>What do you want to make?</div><span>Send a message</span></div></div>
+    </div></div>
+  </div>
+
+  <p class="url">thesuperhuman.us/building</p>
+  <p class="aside caption">Illustration</p>
+</main>
+<script src="../kit.js"></script>
+<script>
+  // The page's illustrative mini-wave (BuildingIllustration.astro:4, 22): After is drawn 2px taller.
+  const bars = [8, 14, 23, 17, 29, 11, 25, 34, 19, 26, 13, 30, 21, 10, 28, 36, 17, 25, 12, 31, 22, 14, 27, 18];
+  const ns = 'http://www.w3.org/2000/svg';
+  for (const [sel, pad] of [['.before-wave', 0], ['.after-wave', 2]]) {
+    const svg = document.querySelector(sel);
+    bars.forEach((h, i) => {
+      const line = document.createElementNS(ns, 'line');
+      line.setAttribute('x1', 3 + i * 4); line.setAttribute('x2', 3 + i * 4);
+      line.setAttribute('y1', 24 - h / 2 - pad); line.setAttribute('y2', 24 + h / 2 + pad);
+      line.setAttribute('vector-effect', 'non-scaling-stroke');
+      svg.append(line);
+    });
+  }
+
+  const { play, ease } = og;
+  // 0-900 poster. Each drawing leaves in 200 ms before the next one rises, so two never overlap.
+  // Kaillera-next is in focus 900-2860 and complete 1860-2760; Personal website is in focus 2860-4650
+  // and complete 3744-4650. Tally's drawing returns and rests from 5670, so the seam sits inside a
+  // 1.23 s hold of the poster.
+  const K = 900, W = 2860, T = 4650, OUT = 200;
+  const shown = { opacity: 1, transform: 'translateY(0)' };
+  const below = { opacity: 0, transform: 'translateY(12px)' };
+  const above = { opacity: 0, transform: 'translateY(-10px)' };
+  // Rise (12px, 400 ms, the illustration's panel-step, 120 ms apart) and exit (200 ms, ease in).
+  const visit = (sel, rise, leave) => play(sel, [[0, below], [rise, { ...below, easing: ease.out }], [rise + 400, shown], [leave, { ...shown, easing: ease.in }], [leave + OUT, above], [leave + OUT + 1, below]]);
+
+  // Tally: leaves at K, rises again in three groups, and its budget fills grow while it settles.
+  ['.g0', '.g1', '.g2'].forEach((group, i) => {
+    const rise = T + OUT + i * 120;
+    play(`.s-tally ${group}`, [[0, shown], [K, { ...shown, easing: ease.in }], [K + OUT, above], [K + OUT + 1, below], [rise, { ...below, easing: ease.out }], [rise + 400, shown]]);
+  });
+  play('.s-tally .track span', [[0, { transform: 'scaleX(1)' }], [K + OUT + 10, { transform: 'scaleX(1)' }], [K + OUT + 11, { transform: 'scaleX(0)' }], [T + 400, { transform: 'scaleX(0)', easing: ease.out }], [T + 900, { transform: 'scaleX(1)' }]], { stagger: 60 });
+
+  // Kaillera-next: room, Player 1, Player 2, Spectator; then its links fade in. The links start
+  // behind the room's browser, so they appear once it is opaque, and the dashed lines wait until
+  // the Spectator (risen by K+940) is nearly in place so no line ends in mid-air.
+  document.querySelectorAll('.s-kaillera .step').forEach((step, i) => visit(step, K + OUT + i * 120, W));
+  play('.room-lines', [[0, { opacity: 0 }], [K + 700, { opacity: 0 }], [K + 950, { opacity: 1 }], [W - 100, { opacity: 1, easing: ease.in }], [W + 50, { opacity: 0 }]]);
+  play('.peer', [[0, { opacity: 0 }], [K + 650, { opacity: 0 }], [K + 900, { opacity: 1 }], [W - 100, { opacity: 1, easing: ease.in }], [W + 50, { opacity: 0 }]]);
+
+  // Personal website: three panels; the After waveform grows about its centre line.
+  document.querySelectorAll('.s-web .step').forEach((step, i) => visit(step, W + OUT + i * 120, T));
+  play('.after-wave line', [[0, { transform: 'scaleY(.15)' }], [W + 400, { transform: 'scaleY(.15)', easing: ease.out }], [W + 700, { transform: 'scaleY(1)' }], [T + OUT + 10, { transform: 'scaleY(1)' }], [T + OUT + 11, { transform: 'scaleY(.15)' }]], { stagger: 8 });
+
+  // Selector: the marker steps down a row per project and back; the rows not in focus dim only
+  // while a project is in focus, so the poster shows all three at full strength.
+  play('.bar', [[0, { transform: 'translateY(0)' }], [K, { transform: 'translateY(0)', easing: ease.inOut }], [K + 300, { transform: 'translateY(76px)' }], [W, { transform: 'translateY(76px)', easing: ease.inOut }], [W + 300, { transform: 'translateY(152px)' }], [T, { transform: 'translateY(152px)', easing: ease.inOut }], [T + 350, { transform: 'translateY(0)' }]]);
+  const dim = .42;
+  const focus = active => { const at = [0, K, W, T]; const level = [1, active === 0 ? 1 : dim, active === 1 ? 1 : dim, 1]; return at.flatMap((t, i) => i ? [[t, { opacity: level[i - 1] }], [t + 300, { opacity: level[i] }]] : [[0, { opacity: 1 }]]); };
+  play('.r1', focus(-1));
+  play('.r2', focus(0));
+  play('.r3', focus(1));
+</script>
+</body>
+</html>

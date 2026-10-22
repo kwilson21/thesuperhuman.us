@@ -1,100 +1,110 @@
 <!doctype html>
 <!-- Software brief (/software/start): the first screen of the project brief. Each path is chosen in
-     turn, the kicker and progress dots change as they do on the page (Website adds an eighth step),
-     and the path's first question opens with the form's own example answer in placeholder grey.
+     turn, like a radio group: choosing the next path clears the last one. The kicker and progress
+     dots change as they do on the page (Website adds an eighth step), and the path's first question
+     opens with the form's own example answer in placeholder grey, a line at a time, no caret.
      Copy is verbatim from src/pages/software/start.astro, src/lib/software-inquiry.ts and
      src/scripts/software-inquiry.ts. On the page the question is the next screen; here it opens in
-     place so all three paths fit one loop. -->
+     place so all three paths fit one loop. The poster keeps to the heading, the three choices and the
+     footnote (about 25 words); the examples carry what each path means.
+     7.2 s rather than 6 s: three paths, each needing its example answer held for 800 ms or more. -->
 <html lang="en" data-duration="7200">
 <head>
 <meta charset="utf-8" />
 <link rel="stylesheet" href="../kit.css" />
 <style>
-  .card { padding: 60px 64px; }
-  .eyebrow { position: relative; height: 24px; font: 20px var(--sans); color: var(--accent); letter-spacing: .06em; margin: 0; }
-  .eyebrow span { position: absolute; left: 0; top: 0; white-space: nowrap; opacity: 0; }
-  .eyebrow .k0 { opacity: 1; }
-  /* Brief dots (software-intake.css): the current step is filled with the accent. */
+  /* The kicker swaps between stacked spans; the box is sized so its spans have room. */
+  .kicker { width: 480px; height: 24px; }
+  .kicker span { position: absolute; left: 0; top: 0; opacity: 0; }
+  .kicker .k0 { opacity: 1; }
+  /* Brief dots (software-intake.css:19): the current step is filled with the accent. */
   .dots { position: absolute; left: 64px; top: 100px; display: flex; gap: 12px; }
-  .dots i { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #D9D0C2; }
+  .dots i { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--well-divider); }
   .dots i:first-child { background: var(--accent); border-color: var(--accent); }
   .dots i:last-child { opacity: 0; }
   .rule { position: absolute; left: 64px; right: 64px; top: 130px; height: 1px; background: var(--rule); }
   h1 { position: absolute; left: 64px; top: 156px; margin: 0; font: 400 84px/84px var(--serif); letter-spacing: -.045em; }
   .foot { position: absolute; left: 64px; top: 348px; width: 470px; margin: 0; font: 400 22px/30px var(--serif); color: var(--muted); }
-  .cards { position: absolute; left: 604px; top: 152px; width: 532px; display: flex; flex-direction: column; gap: 12px; }
-  /* .intake-offer (audio-intake.css): rule border; when checked, accent border on a 5% accent tint. */
-  .offer { position: relative; height: 118px; border: 1.5px solid var(--rule); border-radius: 3px; background: var(--paper); overflow: hidden; }
-  .radio { position: absolute; left: 24px; top: 21px; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #8F877B; background: var(--paper); }
-  .label { position: absolute; left: 68px; top: 13px; margin: 0; font: 400 32px/40px var(--serif); white-space: nowrap; }
-  .desc { position: absolute; left: 68px; top: 56px; width: 440px; margin: 0; font: 400 20px/26px var(--serif); color: var(--muted); }
-  .q { position: absolute; left: 68px; top: 58px; margin: 0; font: 400 26px/32px var(--serif); white-space: nowrap; opacity: 0; }
-  .box { position: absolute; left: 68px; top: 100px; width: 440px; padding: 10px 14px; border: 1.5px solid #D9D0C2; border-radius: 3px; background: var(--paper); opacity: 0; }
+  /* Column: three 76 px choices (y 148-396); an open choice is 216 px, so the column ends by y 540. */
+  .cards { position: absolute; left: 604px; top: 148px; width: 532px; display: flex; flex-direction: column; gap: 12px; }
+  /* .intake-offer (audio-intake.css:1): rule border; when checked, accent border on a 5% accent tint. */
+  .offer { position: relative; height: 76px; border: 1.5px solid var(--rule); border-radius: 3px; background: var(--paper); overflow: hidden; }
+  /* Radio as Chromium draws a native accent-color radio (compare audio-start): a thin ring on white;
+     when checked the ring turns accent and a filled accent dot grows in, with a white gap between. */
+  .radio { position: absolute; left: 24px; top: 23.5px; width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid #8F877B; background: #fff; }
+  .radio .dot { position: absolute; inset: 4px; border-radius: 50%; background: var(--accent); transform: scale(0); }
+  .choice { position: absolute; left: 68px; top: 16.5px; margin: 0; font: 400 32px/40px var(--serif); white-space: nowrap; }
+  .q { position: absolute; left: 68px; top: 60px; margin: 0; font: 400 26px/32px var(--serif); white-space: nowrap; opacity: 0; }
+  .box { position: absolute; left: 68px; top: 98px; width: 440px; padding: 8px 14px; border: 1.5px solid var(--well-divider); border-radius: 3px; background: var(--paper); opacity: 0; }
   /* Placeholder colour: color-mix(in srgb, var(--muted) 80%, var(--paper)) from audio-intake.css. */
-  .ph { position: relative; min-height: 84px; margin: 0; font: 400 20px/28px var(--serif); color: #6D6D6C; }
-  .cover { position: absolute; left: -2px; right: -2px; height: 28px; background: var(--paper); transform-origin: right; }
-  .bottom { position: absolute; bottom: 48px; margin: 0; font: 20px var(--sans); color: var(--muted); }
-  .url { left: 64px; } .reassure { right: 64px; }
+  .ph { position: relative; min-height: 84px; margin: 0; font: 400 22px/28px var(--serif); color: var(--placeholder); }
+  .cover { position: absolute; left: -2px; right: -2px; height: 28px; background: var(--paper); }
 </style>
 </head>
 <body>
 <main class="frame card">
-  <p class="eyebrow"><span class="k0">Project brief</span><span class="k1">Website brief</span><span class="k2">Web app brief</span><span class="k3">Workflow brief</span></p>
+  <p class="kicker"><span class="k0">Project brief</span><span class="k1">Website brief</span><span class="k2">Web app brief</span><span class="k3">Workflow brief</span></p>
   <div class="dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
   <div class="rule"></div>
   <h1>What are you<br />working on?</h1>
   <p class="foot">Not sure which? Pick the closest. I’ll suggest the right fit when I reply.</p>
   <div class="cards">
-    <div class="offer o0"><i class="radio"></i><p class="label">Website design</p><p class="desc">A site people can read on a phone and act on.</p>
+    <div class="offer o0"><i class="radio"><i class="dot"></i></i><p class="choice">Website design</p>
       <p class="q">What's the website for?</p><div class="box"><p class="ph">A site for my pottery studio. People should see upcoming classes and sign up without messaging me first.<i class="cover"></i><i class="cover"></i><i class="cover"></i></p></div></div>
-    <div class="offer o1"><i class="radio"></i><p class="label">Web app</p><p class="desc">An app people open in a browser, on a phone or a computer.</p>
+    <div class="offer o1"><i class="radio"><i class="dot"></i></i><p class="choice">Web app</p>
       <p class="q">What should the app let people do?</p><div class="box"><p class="ph">Let my students book and pay for lessons without emailing me.<i class="cover"></i><i class="cover"></i></p></div></div>
-    <div class="offer o2"><i class="radio"></i><p class="label">Workflow automation</p><p class="desc">A tool that takes manual steps out of a task your team repeats.</p>
+    <div class="offer o2"><i class="radio"><i class="dot"></i></i><p class="choice">Workflow automation</p>
       <p class="q">What happens today?</p><div class="box"><p class="ph">We track new clients in a shared spreadsheet. Three of us update it, and follow-ups slip through the cracks.<i class="cover"></i><i class="cover"></i><i class="cover"></i></p></div></div>
   </div>
-  <p class="bottom url">thesuperhuman.us/software/start</p>
-  <p class="bottom reassure">No booking or payment at this stage.</p>
+  <p class="url">thesuperhuman.us/software/start</p>
+  <p class="aside">No booking or payment at this stage.</p>
 </main>
 <script src="../kit.js"></script>
 <script>
   const { play, ease } = og;
-  // Each path holds for 2 s: 600-2600 Website design, 2600-4600 Web app, 4600-6600 Workflow automation.
-  const T = [600, 2600, 4600];
-  const H = { poster: 118, other: 68, open: 218 };
+  // 0-600 poster. Paths start at T; each example answer is whole by T + 940 (three lines) and holds
+  // at least 950 ms before the next path takes over. CLOSE returns to the poster; 6650-7200 rests.
+  const T = [600, 2500, 4300], CLOSE = 6200;
+  const ends = [T[1], T[2], CLOSE];
+  const H = { rest: 76, open: 216 };
+  const paper = '#FBF8F2', rule = '#E8E3DA', checked = '#F7F0E9', accent = '#AE5534', ring = '#8F877B';
   document.querySelectorAll('.ph').forEach(ph => ph.querySelectorAll('.cover').forEach((cover, line) => { cover.style.top = `${line * 28}px`; }));
 
   [0, 1, 2].forEach(i => {
-    const offer = `.o${i}`;
-    // Heights: the chosen path opens, the other two close to their labels; the column stays 378 px tall.
-    const heights = [[0, { height: `${H.poster}px` }]];
-    T.forEach((t, k) => { const h = i === k ? H.open : H.other; heights.push([t + 200, { height: `${H.poster}px`, easing: ease.out }], [t + 600, { height: `${h}px` }], [t + 1700, { height: `${h}px`, easing: ease.out }], [t + 2000, { height: `${H.poster}px` }]); });
-    play(offer, heights);
-    const t = T[i];
-    play(offer, [[t, { borderColor: '#E8E3DA', backgroundColor: '#FBF8F2' }], [t + 250, { borderColor: '#AE5534', backgroundColor: '#F7F0E9' }], [t + 1700, { borderColor: '#AE5534', backgroundColor: '#F7F0E9' }], [t + 1900, { borderColor: '#E8E3DA', backgroundColor: '#FBF8F2' }]]);
-    // A checked radio drawn the way Chromium draws accent-color: accent ring and fill, paper centre.
-    play(`${offer} .radio`, [[t, { borderColor: '#8F877B', boxShadow: 'inset 0 0 0 0 #AE5534' }], [t + 250, { borderColor: '#AE5534', boxShadow: 'inset 0 0 0 6px #AE5534' }], [t + 1700, { borderColor: '#AE5534', boxShadow: 'inset 0 0 0 6px #AE5534' }], [t + 1900, { borderColor: '#8F877B', boxShadow: 'inset 0 0 0 0 #AE5534' }]]);
-    play(`${offer} .q`, [[t + 400, { opacity: 0, transform: 'translateY(8px)', easing: ease.out }], [t + 600, { opacity: 1, transform: 'translateY(0)' }], [t + 1650, { opacity: 1, transform: 'translateY(0)' }], [t + 1800, { opacity: 0, transform: 'translateY(0)' }]]);
-    play(`${offer} .box`, [[t + 450, { opacity: 0, transform: 'translateY(10px)', easing: ease.out }], [t + 650, { opacity: 1, transform: 'translateY(0)' }], [t + 1650, { opacity: 1, transform: 'translateY(0)' }], [t + 1800, { opacity: 0, transform: 'translateY(0)' }]]);
-    // The example answer appears a line at a time (paper covers slide off to the right) in 800 ms.
-    const covers = [...document.querySelectorAll(`${offer} .cover`)];
-    const step = 800 / covers.length;
-    covers.forEach((cover, line) => play(cover, [[t + 650 + step * line, { transform: 'scaleX(1)' }], [t + 650 + step * (line + 1), { transform: 'scaleX(0)' }], [t + 1800, { transform: 'scaleX(0)' }], [t + 1801, { transform: 'scaleX(1)' }]]));
-    // Kicker: "Project brief" gives way to the path's brief, as softwareBriefKickers does on the page.
-    play(`.k${i + 1}`, [[t + 150, { opacity: 0 }], [t + 300, { opacity: 1 }], [t + 1600, { opacity: 1 }], [t + 1750, { opacity: 0 }]]);
+    const offer = `.o${i}`, on = T[i], off = ends[i];
+    // The chosen card opens while the last one closes, so after the first path the column holds its height.
+    play(offer, [[on + 50, { height: `${H.rest}px`, easing: ease.inOut }], [on + 450, { height: `${H.open}px` }], [off + 50, { height: `${H.open}px`, easing: ease.inOut }], [off + 450, { height: `${H.rest}px` }]]);
+    // Checked: accent border on the 5% tint. The radio ring turns accent and its dot grows in, as a
+    // native accent-color radio draws checked (thin ring, white gap, filled dot).
+    // The page clears the last choice instantly, so the outgoing state leaves in 100 ms and the
+    // incoming one waits 60 ms: the old dot is gone before the new one passes half scale, and two
+    // radios never read as checked at once.
+    const IN = on + 60;
+    play(offer, [[IN, { borderColor: rule, backgroundColor: paper }], [IN + 250, { borderColor: accent, backgroundColor: checked }], [off, { borderColor: accent, backgroundColor: checked, easing: ease.in }], [off + 100, { borderColor: rule, backgroundColor: paper }]]);
+    play(`${offer} .radio`, [[IN, { borderColor: ring }], [IN + 200, { borderColor: accent }], [off, { borderColor: accent, easing: ease.in }], [off + 100, { borderColor: ring }]]);
+    play(`${offer} .radio .dot`, [[IN, { transform: 'scale(0)', easing: ease.out }], [IN + 200, { transform: 'scale(1)' }], [off, { transform: 'scale(1)', easing: ease.in }], [off + 100, { transform: 'scale(0)' }]]);
+    // The question and its answer box rise in (data-reveal, shortened) and leave with the check.
+    play(`${offer} .q`, [[on + 250, { opacity: 0, transform: 'translateY(8px)', easing: ease.out }], [on + 450, { opacity: 1, transform: 'translateY(0)' }], [off, { opacity: 1, transform: 'translateY(0)', easing: ease.in }], [off + 100, { opacity: 0, transform: 'translateY(-6px)' }]]);
+    play(`${offer} .box`, [[on + 300, { opacity: 0, transform: 'translateY(10px)', easing: ease.out }], [on + 500, { opacity: 1, transform: 'translateY(0)' }], [off, { opacity: 1, transform: 'translateY(0)', easing: ease.in }], [off + 100, { opacity: 0, transform: 'translateY(-6px)' }]]);
+    // The example answer fades in a line at a time (paper covers lift, 120 ms apart); covers return
+    // only once the box is invisible.
+    [...document.querySelectorAll(`${offer} .cover`)].forEach((cover, line) => play(cover, [[on + 500 + 120 * line, { opacity: 1 }], [on + 700 + 120 * line, { opacity: 0 }], [off + 100, { opacity: 0 }], [off + 101, { opacity: 1 }]]));
   });
-  // Descriptions step aside while any path is open.
-  const desc = [[0, { opacity: 1 }]];
-  T.forEach(t => desc.push([t + 200, { opacity: 1 }], [t + 350, { opacity: 0 }], [t + 1850, { opacity: 0 }], [t + 2000, { opacity: 1 }]));
-  play('.desc', desc);
-  const k0 = [[0, { opacity: 1 }]];
-  T.forEach(t => k0.push([t, { opacity: 1 }], [t + 150, { opacity: 0 }], [t + 1750, { opacity: 0 }], [t + 1900, { opacity: 1 }]));
-  play('.k0', k0);
-  // Dots: question 1 of 7 becomes question 2; the Website brief has eight steps, so its eighth dot appears.
-  const on = { backgroundColor: '#AE5534', borderColor: '#AE5534' }, off = { backgroundColor: 'rgba(174, 85, 52, 0)', borderColor: '#D9D0C2' };
-  const dot = (a, b) => { const steps = [[0, a]]; T.forEach(t => steps.push([t + 100, a], [t + 300, b], [t + 1700, b], [t + 1900, a])); return steps; };
-  play('.dots i:nth-child(1)', dot(on, off));
-  play('.dots i:nth-child(2)', dot(off, on));
-  play('.dots i:nth-child(8)', [[T[0] + 100, { opacity: 0 }], [T[0] + 300, { opacity: 1 }], [T[0] + 1700, { opacity: 1 }], [T[0] + 1900, { opacity: 0 }]]);
+  // Kicker: "Project brief" gives way to each path's brief name, as softwareBriefKickers does on the
+  // page. The old name leaves upward before the new one rises in, so the mono letters never overlap.
+  const shown = { opacity: 1, transform: 'translateY(0)' };
+  const enter = t => [[t + 200, { opacity: 0, transform: 'translateY(6px)', easing: ease.out }], [t + 380, shown]];
+  const leave = t => [[t + 100, { ...shown, easing: ease.in }], [t + 220, { opacity: 0, transform: 'translateY(-6px)' }]];
+  play('.k0', [[0, shown], ...leave(T[0]), ...enter(CLOSE)]);
+  play('.k1', [...enter(T[0]), ...leave(T[1])]);
+  play('.k2', [...enter(T[1]), ...leave(T[2])]);
+  play('.k3', [...enter(T[2]), ...leave(CLOSE)]);
+  // Dots: question 1 becomes question 2 for the whole demonstration; only the Website brief has an
+  // eighth step, so that dot shows while Website design is chosen.
+  const dotOn = { backgroundColor: accent, borderColor: accent }, dotOff = { backgroundColor: 'rgba(174, 85, 52, 0)', borderColor: '#D9D0C2' };
+  play('.dots i:nth-child(1)', [[T[0] + 100, dotOn], [T[0] + 300, dotOff], [CLOSE + 100, dotOff], [CLOSE + 300, dotOn]]);
+  play('.dots i:nth-child(2)', [[T[0] + 100, dotOff], [T[0] + 300, dotOn], [CLOSE + 100, dotOn], [CLOSE + 300, dotOff]]);
+  play('.dots i:nth-child(8)', [[T[0] + 100, { opacity: 0 }], [T[0] + 300, { opacity: 1 }], [T[1] + 100, { opacity: 1 }], [T[1] + 300, { opacity: 0 }]]);
 </script>
 </body>
 </html>
