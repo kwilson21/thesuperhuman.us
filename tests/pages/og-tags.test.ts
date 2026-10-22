@@ -62,6 +62,24 @@ describe('link-preview tags', () => {
     expect(tags.some(([name]) => name.startsWith('og:video') || name.startsWith('og:image:'))).toBe(false);
   });
 
+  it('prefer the longest matching family', async () => {
+    const tags = await head('/building/personal-website/archive');
+    expect(value(tags, 'og:video')).toBe(`https://thesuperhuman.us${ogMedia('personal-website').video}`);
+  });
+
+  it('keep a page’s own image under a family route, but not under its own exact route', async () => {
+    const family = await head('/writing/a-future-essay', { ogImage: '/cover.webp' });
+    expect(value(family, 'og:image')).toBe('https://thesuperhuman.us/cover.webp');
+    expect(value(family, 'og:video')).toBeUndefined();
+    const exact = await head('/music/old-news', { ogImage: '/artwork.webp' });
+    expect(value(exact, 'og:video')).toBe(`https://thesuperhuman.us${ogMedia('music-old-news').video}`);
+  });
+
+  it('let ogScene override even an exact route', async () => {
+    const tags = await head('/work', { ogScene: 'not-found' });
+    expect(value(tags, 'og:video')).toBe(`https://thesuperhuman.us${ogMedia('not-found').video}`);
+  });
+
   it('let a page choose its scene when its URL cannot', async () => {
     const scene = (Object.keys(OG_SCENES) as OgScene[]).at(-1)!;
     const tags = await head('/this-page-does-not-exist', { ogScene: scene });

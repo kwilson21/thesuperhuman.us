@@ -21,7 +21,7 @@ export const OG_SCENES = {
   },
   work: {
     routes: ['/work'],
-    alt: 'Work: “Software engineer. I build useful software.” and “7+ years in production engineering”, above a Lyft panel reading 5,000 → 100,000+ rows per batch, drawn as twenty terracotta cells and labelled owner-reported batch capacity.',
+    alt: 'Work: “Software engineer. I build useful software.” and “7+ years in production engineering”, above a Lyft panel reading 5,000 to 100,000+ rows per batch, drawn as twenty terracotta cells and labelled owner-reported batch capacity.',
   },
   services: {
     routes: ['/services'],

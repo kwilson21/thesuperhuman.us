@@ -128,8 +128,9 @@
   play('.arc-b .head', [[4400, { opacity: 0 }], [4500, { opacity: 1 }]]);
 
   // Captions narrate the tape: the guess and the play that follows it, then the rewind.
-  play('.s-wrong', [[0, { opacity: 1 }], [1250, { opacity: 1, easing: ease.in }], [1400, { opacity: .45 }], [LATE + 40, { opacity: .45, easing: ease.out }], [LATE + 200, { opacity: 1 }]]);
-  play('.s-guess', [[2420, { opacity: .45, easing: ease.out }], [2560, { opacity: 1 }], [LATE - 60, { opacity: 1, easing: ease.in }], [LATE + 40, { opacity: .45 }]]);
+  // The two halves cross-fade: "keep playing" lights while the tape plays, "rewind" when it rewinds.
+  play('.s-wrong', [[0, { opacity: 1 }], [1250, { opacity: 1, easing: ease.in }], [1400, { opacity: .45 }], [LATE, { opacity: .45, easing: ease.out }], [LATE + 160, { opacity: 1 }]]);
+  play('.s-guess', [[1250, { opacity: .45, easing: ease.out }], [1400, { opacity: 1 }], [LATE, { opacity: 1, easing: ease.in }], [LATE + 160, { opacity: .45 }]]);
 </script>
 </body>
 </html>

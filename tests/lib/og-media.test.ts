@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
@@ -101,9 +102,17 @@ describe('rendered scenes', () => {
     expect(boxes.indexOf('moov')).toBeLessThan(boxes.indexOf('mdat'));
   });
 
+  it.each(scenes)('%s was rendered from its current scene, kit and images', scene => {
+    const entry = (rendered as Record<string, { inputs: string[]; source: string }>)[scene];
+    expect(entry.inputs).toContain(`scripts/og-video/scenes/${scene}.html`);
+    const digest = createHash('sha256');
+    for (const input of entry.inputs) digest.update(`${input}\0`).update(readFileSync(input)).update('\0');
+    expect(digest.digest('hex').slice(0, 16), `re-render ${scene}: node scripts/og-video/render.mjs ${scene}`).toBe(entry.source);
+  });
+
   it('keeps no stale files beside the current ones', () => {
     const current = new Set(scenes.flatMap(scene => [ogMedia(scene).image.slice('/og/'.length), ogMedia(scene).video.slice('/og/'.length)]));
-    const files = [...readdirSync('public/og').filter(file => file !== 'raw'), ...readdirSync('public/og/raw')];
+    const files = [...readdirSync('public/og'), ...readdirSync('public/og/raw')].filter(file => /\.(png|jpg|mp4)$/.test(file));
     expect(files.filter(file => !current.has(file))).toEqual([]);
   });
 });

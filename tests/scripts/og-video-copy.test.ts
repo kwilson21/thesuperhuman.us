@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { parse } from 'parse5';
 import { describe, expect, it } from 'vitest';
 import { audioOffers } from '~/lib/audio-intake';
+import { OG_SCENES, type OgScene } from '~/lib/og-media';
 
 // Link-preview scenes copy the site's own words, prices and statuses into public videos. Any line of
 // four or more words must still appear verbatim in src/, so a change to the page fails here and names
@@ -38,6 +39,9 @@ const labels: Record<string, Record<string, string>> = {
   'writing-ai-gives-you-speed': { 'Writing / AI-assisted engineering': 'composite kicker: section and essay topic' },
 };
 
+// Amounts that are not prices: the Tally demo's Safe to spend figure, shown on its demo-data capture.
+const demoAmounts: Record<string, string[]> = { 'project-tally': ['$283'] };
+
 type Node = { nodeName: string; value?: string; childNodes?: Node[]; content?: Node };
 function lines(node: Node, out: string[] = []): string[] {
   if (node.nodeName === 'script' || node.nodeName === 'style') return out;
@@ -67,10 +71,11 @@ describe('link-preview scene copy', () => {
     expect(stale, `re-render ${scene} after updating it`).toEqual([]);
   });
 
-  it.each(scenes)('%s shows only current audio starting prices', scene => {
+  it.each(scenes)('%s and its alt text show only current audio starting prices', scene => {
     const prices = new Set(Object.values(audioOffers).map(offer => offer.price).filter(price => price != null).map(String));
-    const shown = allText(parse(readFileSync(join(SCENES, `${scene}.html`), 'utf8')) as Node).join(' ').match(/\$\d[\d,]*/g) ?? [];
-    expect(shown.filter(amount => !prices.has(amount.slice(1).replace(/,/g, ''))), `re-render ${scene} after updating it`).toEqual([]);
+    const text = [...allText(parse(readFileSync(join(SCENES, `${scene}.html`), 'utf8')) as Node), OG_SCENES[scene as OgScene].alt].join(' ');
+    const shown = (text.match(/\$\d[\d,]*\d|\$\d/g) ?? []).filter(amount => !demoAmounts[scene]?.includes(amount));
+    expect(shown.filter(amount => !prices.has(amount.slice(1).replace(/,/g, ''))), `update ${scene} and its alt in src/lib/og-media.ts, then re-render it`).toEqual([]);
   });
 
   it('lists only labels a scene still shows', () => {

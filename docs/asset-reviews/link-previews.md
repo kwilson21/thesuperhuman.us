@@ -6,7 +6,7 @@
   `scripts/og-video/scenes/`, rendered by `scripts/og-video/render.mjs` (see
   README, "Link previews").
 - Final files: listed with dimensions, bytes and SHA-256 in the JSON record below.
-  Every poster is 1200 × 630 PNG; every video is 1200 × 630 H.264 High, yuv420p,
+  Every poster is 1200 × 630, PNG or (for photographic scenes) JPEG; every video is 1200 × 630 H.264 High, yuv420p,
   BT.709, 30 fps, silent, with the index (`moov`) before the media data.
 - Reference basis and reuse: only existing reviewed site artwork
   (`src/assets/site/*`), real screenshots already on the site
@@ -19,6 +19,12 @@
   builder inspected its own frames, then a separate agent rendered every beat and
   reviewed it against these rules, for up to three rounds of fixes. Not human
   production approval.
+- October 22 re-render: every scene was rendered once more to record its input and
+  frame fingerprints, with x264 pinned to six threads. Every poster came out byte-identical
+  to the reviewed one. Sixteen videos were byte-identical; six (about, audio-portfolio,
+  building, home, work, writing-ai-gives-you-speed) differed only by encoder noise, with a
+  structural similarity of 0.9995 or higher against the reviewed video, so their review
+  stands. Later renders keep a scene's video when its frames are unchanged.
 - Automatic checks on every render: fonts loaded, nothing overflows the frame, the
   last frame matches the first (no jump at the loop), video under 2.5 MB, poster
   under 600 KB.
@@ -71,9 +77,11 @@
 - Composition: Frame 0 hasn't changed. It shows the page's own heading, the three choices with empty radios, the footnote, the URL and the aside. That is about 25 words beyond the chrome, and the left column and the choice column are balanced. The poster is 142,640 bytes as PNG. Round 3, finding 1 (should-fix) is for the lead, and I made no edits to src/ or docs/. The alt in this output is the one the reviewer proposed, written from the final poster: heading, three choices with empty radios, footnote and aside, with no per-choice descriptions. In src/lib/og-media.ts the lead should set OG_SCENES['software-start'].alt to the alt string above. In docs/asset-reviews/link-previews.md the Composition line should read 'the page's own heading, choices, footnote, questions and example answers' (with 'descriptions' removed), and the timings should be recorded: 7.2 s, paths at 600/2500/4300, back to the poster by 6650. Hashes should be added once the scene is rendered for real. Finding 2 (nit) is applied: .ph is now 400 22px/28px var(--serif).
 - Motion: Timings are unchanged. The poster holds 0 to 600 ms. Each path starts at T = 600, 2500 and 4300, and its example answer is whole by about T + 940 and holds at least 950 ms before the next path takes over. The final card closes at CLOSE = 6200, the scene is back to the poster by 6650 and rests until 7200. The contact sheet confirms one radio checked at a time, the kicker swaps (Project, Website, Web app, Workflow, then Project again), the eighth dot appears only while Website design is chosen, and 6.60 s matches 0.00 s for the loop seam.
 - Detail inspection: Rendered with --sheet --at=1250,2100,3900,5700. The renderer reported no problems (fonts, overflow, text wider than its box or loop seam), only the poster size. At 22px the placeholders wrap to 3 lines (pottery studio, t2100), 2 lines (lessons, t3900) and 3 lines (spreadsheet, t5700), the same counts as at 20px. That means the 28px cover strips still match each line, no line is uncovered, and the text stays inside the 84px min-height box, the 216px open card and the column ending at y 540. The mid-reveal frame at t1250 shows line 1 whole, line 2 lifting and line 3 still covered, with the covers aligned to the 28px line grid. All text is 22px or larger (example answers 22, footnote 22, URL and aside per kit). The headline is 84px.
-- Independent visual QA (a separate reviewer rendered and inspected every beat): NOT PASSED.
+- Independent visual QA (a separate reviewer rendered and inspected every beat): not passed at first; see the lead edit and re-check below.
 - Physical logic: The illustrative UI matches the page's own form: native-style accent radios (thin ring, white gap, filled dot), the intake-offer border and 5% accent tint when checked, the brief dots and the placeholder grey. Choosing a new path clears the old one first, so two radios never read as checked at once, as in a real radio group. The scene has no captures, so there is no superseded copy, no Tally or game imagery, no rates, no em-dashes and no buzzwords. All copy is verbatim from src/pages/software/start.astro, src/lib/software-inquiry.ts and src/scripts/software-inquiry.ts.
-- Outcome: needs revision.
+- Lead edit after QA: the first reviewer’s two remaining findings were outside the scene: its alt text in src/lib/og-media.ts still described the old cards, and this record still described the previous render. Both are fixed: the alt text describes the new poster, and this entry is regenerated.
+- Re-checked after those edits by another separate reviewer, who rendered and inspected every beat again: passed.
+- Outcome: ready for production.
 
 ## personal-website
 
@@ -194,6 +202,7 @@
 - Independent visual QA (a separate reviewer rendered and inspected every beat): passed; 4 minor notes left as they are.
 - Physical logic: Everything is an illustration, captioned 'Illustration' as on the page, with no captures, Tally demo-data screenshots or game imagery. The budget tracks have plausible fills (72% and 40%) inside 9px rails that match the Categories colours. The dashed room links now physically meet every box they connect to, and the accent peer line joins the two player browsers with arrowheads at both ends. Spectator has no controller and is labelled 'Watch only', as on the page.
 - Lead edit after QA: the drawing now pairs the source rows Groceries and Transit with Food and Transport (BuildingIllustration.astro), with the Transport colour and its 57% budget fill, because Coffee and Groceries beside Food and Home read as groceries filed under Home. Re-rendered and re-inspected on the contact sheet.
+- Re-checked after those edits by another separate reviewer, who rendered and inspected every beat again: passed. Its note that the dashed room links stopped a few pixels short of the room was then applied (dash pattern 6 / 7.86, so every link ends on a dash). Re-rendered and inspected at full size.
 - Outcome: ready for production.
 
 ## project-tally
@@ -215,6 +224,7 @@
 - Independent visual QA (a separate reviewer rendered and inspected every beat): passed; 3 minor notes left as they are.
 - Physical logic: The diagram still reads as illustration. It is labelled "Rollback · Diagram", and the label now clearly belongs to the drawn strip, not to the real screenshot, which addresses the strip-reads-as-UI concern. The playhead stays fixed while the tape moves by whole 40px frames. The arc joins the frame the playhead left to the wrong guess, and the rewind lands that frame back under the playhead before the replay burst.
 - Lead edit after QA: the caption is now the page sentence verbatim on two lines, “Guess a late input, keep playing,” over “and rewind if the guess was wrong.” (kaillera-next.ts:110), with the half the tape is showing at full strength and the other at 45%; it had shortened the sentence. Re-rendered; the poster was inspected at full size.
+- Re-checked after those edits by another separate reviewer, who rendered and inspected every beat again: passed. Its note that both caption halves sat dimmed for about a second while the tape played was then applied: the halves cross-fade, “keep playing” lit while the tape plays and “rewind” lit as it rewinds. Re-rendered and inspected at 1.7 s and 3.65 s.
 - Outcome: ready for production.
 
 ## project-threadline
@@ -273,28 +283,28 @@
     {"path": "public/og/work-31561924d0.png", "sha256": "31561924d0446d32b90001fd2596e86d1569ac0738ff99eef0ea79bad769c533", "width": 1200, "height": 630, "bytes": 142618},
     {"path": "public/og/writing-ai-gives-you-speed-11e01623f0.png", "sha256": "11e01623f0b980f136943580e670db6c333e407343d3b2fbaf25c5320a22b951", "width": 1200, "height": 630, "bytes": 162593},
     {"path": "public/og/writing-ffaaf86028.png", "sha256": "ffaaf86028bf712f6a5e0d66c4630da9066502a6d3025508412feb132afa5961", "width": 1200, "height": 630, "bytes": 130411},
-    {"path": "public/og/raw/about-ad416d9fa4.mp4", "sha256": "ad416d9fa4ac1d3fae35dc6a4d191209af2ef648245100c41edb831491377647", "width": 1200, "height": 630, "bytes": 1042683},
+    {"path": "public/og/raw/about-b4419b2ca3.mp4", "sha256": "b4419b2ca3ecfc5f77deb93577b4fbca2fe05bfa623521e9a489ba45e1e09364", "width": 1200, "height": 630, "bytes": 1041510},
     {"path": "public/og/raw/audio-b01c9e59c6.mp4", "sha256": "b01c9e59c62e48858209912d70febc9cbdd8bff76ed0543f14ecae71d23a7915", "width": 1200, "height": 630, "bytes": 313078},
-    {"path": "public/og/raw/audio-portfolio-07e6d16c09.mp4", "sha256": "07e6d16c09c987e1f252526bcc6c4e0447532a9c966dd9be42fb9a6cc694c5f7", "width": 1200, "height": 630, "bytes": 259763},
+    {"path": "public/og/raw/audio-portfolio-91605da64d.mp4", "sha256": "91605da64d276557a3cc94d3d694c202a0bf85283cced63725eac27441096cf0", "width": 1200, "height": 630, "bytes": 259825},
     {"path": "public/og/raw/audio-releases-fb5742a5f2.mp4", "sha256": "fb5742a5f258434c50be727018290e12c471efbc237c4a3c71c21640cf5a5352", "width": 1200, "height": 630, "bytes": 516004},
     {"path": "public/og/raw/audio-services-0f7a6ff561.mp4", "sha256": "0f7a6ff561b953a47621527b4205a11407dad73165ef56852e23d5bd7ce453fe", "width": 1200, "height": 630, "bytes": 182624},
     {"path": "public/og/raw/audio-start-66de1174cf.mp4", "sha256": "66de1174cff6ebf7909c5dc551e014859e6bb9b7462503d013dd5a094385d270", "width": 1200, "height": 630, "bytes": 552784},
-    {"path": "public/og/raw/building-31092fb04e.mp4", "sha256": "31092fb04e29e21cd66982c43f27744f94eb31e82633b655418af8e1930ef5f3", "width": 1200, "height": 630, "bytes": 372612},
-    {"path": "public/og/raw/home-b2de7f5328.mp4", "sha256": "b2de7f5328e4e7970b43b3a3706d6b5ab6493767766e9fa6f3a3e3d3db0bd7b2", "width": 1200, "height": 630, "bytes": 642613},
+    {"path": "public/og/raw/building-934508c564.mp4", "sha256": "934508c564dc120996bea5326afbc47184c021827d54590591119bfa79bd29b2", "width": 1200, "height": 630, "bytes": 373506},
+    {"path": "public/og/raw/home-85175dfd8c.mp4", "sha256": "85175dfd8cfe235ca549a256da2d045ecf818dd6c4b0d3fce57bd4fb345ac34b", "width": 1200, "height": 630, "bytes": 642380},
     {"path": "public/og/raw/music-old-news-acf3446117.mp4", "sha256": "acf344611755f69ce66042016436fcf98fa0f51fabc01f7f60f8b9e4ec66465c", "width": 1200, "height": 630, "bytes": 736236},
     {"path": "public/og/raw/not-found-2b82690d2f.mp4", "sha256": "2b82690d2fea5a5e2de4f6e42a0383bfe83b99281143b0fdbd347311310c0885", "width": 1200, "height": 630, "bytes": 225603},
     {"path": "public/og/raw/personal-website-b492ac2c98.mp4", "sha256": "b492ac2c9896b819b7fadadfe7e9d4ca6b88238427233763778db07ba83204ae", "width": 1200, "height": 630, "bytes": 273977},
     {"path": "public/og/raw/personal-website-story-28eb14e2fc.mp4", "sha256": "28eb14e2fc947ab8439c5633643054c3d377c93a17baf8714f8510dce164039b", "width": 1200, "height": 630, "bytes": 607369},
     {"path": "public/og/raw/privacy-661ffc0046.mp4", "sha256": "661ffc004627a36b376edb1fc646d66a061a88f0a45b84faee10eb2e42980172", "width": 1200, "height": 630, "bytes": 170404},
-    {"path": "public/og/raw/project-kaillera-next-7c2880b54d.mp4", "sha256": "7c2880b54d2f8e40049ec5d6a4e3896d55216c43bf1538be55862fbda8b8fb7d", "width": 1200, "height": 630, "bytes": 206932},
+    {"path": "public/og/raw/project-kaillera-next-259db6aaf4.mp4", "sha256": "259db6aaf458155fad89e71baace62d624e7e63316ca019b435735bb55856d14", "width": 1200, "height": 630, "bytes": 207400},
     {"path": "public/og/raw/project-tally-c18ee5d442.mp4", "sha256": "c18ee5d4427c9eee0772f8fce3ba0d1e3035a95afc47cbebe2e4467a1dc7cbb8", "width": 1200, "height": 630, "bytes": 341690},
     {"path": "public/og/raw/project-threadline-b1a846e489.mp4", "sha256": "b1a846e489504fac75683ab537c38845b85b47c46cd307735b2822095d2bb767", "width": 1200, "height": 630, "bytes": 429175},
     {"path": "public/og/raw/services-ee2799b652.mp4", "sha256": "ee2799b6524f39aa9d776922790913f6c0063bce73e6b33bc1e8a74349bd00a2", "width": 1200, "height": 630, "bytes": 767628},
     {"path": "public/og/raw/software-start-2da6d1c6e7.mp4", "sha256": "2da6d1c6e7568172374c1eafc500460021af375b473d99529e8e3ff5ad5f41b5", "width": 1200, "height": 630, "bytes": 346924},
     {"path": "public/og/raw/the-engineers-daily-4c7b5e3928.mp4", "sha256": "4c7b5e3928eb3cc2e81c398129ae87dcf5b06e9259f591c5204be8c6ecc5f436", "width": 1200, "height": 630, "bytes": 558818},
-    {"path": "public/og/raw/work-df5988c269.mp4", "sha256": "df5988c2692c70fc636f93e5f4daf559c008112a2ff454ff627de2d068ed2092", "width": 1200, "height": 630, "bytes": 299833},
+    {"path": "public/og/raw/work-0b6bbe9f4e.mp4", "sha256": "0b6bbe9f4e42cbda713502539369b35fd45d91f8ad454f4b52a4f7639784ed96", "width": 1200, "height": 630, "bytes": 300277},
     {"path": "public/og/raw/writing-09fed73375.mp4", "sha256": "09fed733750192e2465ea71453bd28a608cfcc19704ebfe874825474694943e6", "width": 1200, "height": 630, "bytes": 147052},
-    {"path": "public/og/raw/writing-ai-gives-you-speed-68e6f82d0b.mp4", "sha256": "68e6f82d0bce5ea8c58a9f0fc241c9f87132b284c1e96c33311191e39585c74b", "width": 1200, "height": 630, "bytes": 185344}
+    {"path": "public/og/raw/writing-ai-gives-you-speed-a04f7166f7.mp4", "sha256": "a04f7166f798da69ffbdf53bc6617bb857fbcfafa49f5977a6142705c0995f46", "width": 1200, "height": 630, "bytes": 185233}
   ]
 }
 ```

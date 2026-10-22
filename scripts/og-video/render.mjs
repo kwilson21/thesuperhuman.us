@@ -8,18 +8,23 @@
 //
 // A scene is a 1200×630 HTML page whose <html> carries data-duration (ms). All motion must be CSS
 // animations or Web Animations: the renderer pauses every animation and steps currentTime frame by
-// frame, so the output is the same on every run. Frame 0 is the poster: a PNG, or a JPEG when
-// <html> carries data-poster="jpeg" (photographs, which PNG cannot keep under the size limit). The
-// frame at data-duration must match frame 0, so the clip loops without a jump.
+// frame, so frames and posters come out the same on every run. MP4 bytes also depend on the ffmpeg
+// build and the CPU, so a scene whose frames have not changed keeps its committed, reviewed video.
+// Frame 0 is the poster: a PNG, or a JPEG when <html> carries data-poster="jpeg" (photographs,
+// which PNG cannot keep under the size limit). The frame at data-duration must match frame 0, so
+// the clip loops without a jump.
+//
+// Each manifest entry records the local files the scene loaded and a hash of them, so a test can
+// tell when a scene, the kit or an image changed without a new render.
 //
 // Needs ffmpeg with libx264. Set CHROMIUM_PATH when Playwright's bundled Chromium is unavailable.
 import { chromium } from 'playwright';
 import sharp from 'sharp';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -36,6 +41,17 @@ const FPS = 30;
 const MAX_VIDEO_BYTES = 2.5 * 1024 * 1024;
 // WhatsApp documents 600 KB as its og:image ceiling.
 const MAX_POSTER_BYTES = 600 * 1024;
+const ENCODE = [
+  '-map', '0:v:0', '-an', '-sn', '-dn', '-map_metadata', '-1', '-map_chapters', '-1',
+  '-vf', `scale=${WIDTH}:${HEIGHT}:flags=lanczos:out_color_matrix=bt709:out_range=tv,format=yuv420p`,
+  // Scenes are flat colour and type: tune for animation, and spend more bits on flat areas so the
+  // paper and soft artwork masks do not band in predicted frames. x264's output depends on its
+  // thread count, so pin it rather than let it follow the CPU count.
+  '-c:v', 'libx264', '-threads', '6', '-preset', 'slow', '-tune', 'animation', '-x264-params', 'aq-mode=3', '-crf', '20', '-maxrate', '3M', '-bufsize', '6M',
+  '-profile:v', 'high', '-g', String(FPS * 2),
+  '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
+  '-movflags', '+faststart',
+];
 
 const args = process.argv.slice(2);
 const sheetOnly = args.includes('--sheet');
@@ -55,20 +71,27 @@ try {
   const queue = [...keys];
   const worker = async () => {
     for (let key = queue.shift(); key; key = queue.shift()) {
-      const result = await renderScene(key);
-      if (result) manifest[key] = result;
+      try {
+        const result = await renderScene(key);
+        if (result) manifest[key] = result;
+      } catch (error) {
+        problems.push(`${key}: ${error.message}`);
+      }
     }
   };
   await Promise.all(Array.from({ length: Math.min(3, keys.length) }, worker));
 } finally {
   await browser.close();
+  // Scenes that finished have already replaced their files, so record them even if others failed.
+  if (!sheetOnly) writeManifest(manifest);
 }
-if (!sheetOnly) writeManifest(manifest);
 if (problems.length) fail(problems.join('\n'));
 
 async function renderScene(key) {
   const page = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT }, deviceScaleFactor: SCALE });
   const errors = [];
+  const inputs = new Set();
+  page.on('requestfinished', request => { if (request.url().startsWith('file:')) inputs.add(relative(ROOT, fileURLToPath(request.url()))); });
   page.on('pageerror', error => errors.push(error.message));
   page.on('requestfailed', request => errors.push(`${request.url()} failed to load`));
   await page.goto(pathToFileURL(join(SCENES, `${key}.html`)).href, { waitUntil: 'load' });
@@ -125,18 +148,21 @@ async function renderScene(key) {
       return null;
     }
     for (let frame = 1; frame < frames; frame++) await capture(frame * 1000 / FPS, join(work, `${String(frame).padStart(4, '0')}.png`));
+    const source = sourceHash([...inputs].sort());
+    const framesHash = createHash('sha256');
+    for (let frame = 0; frame < frames; frame++) framesHash.update(readFileSync(join(work, `${String(frame).padStart(4, '0')}.png`)));
+    framesHash.update(JSON.stringify(ENCODE));
+    const sameFrames = framesHash.digest('hex').slice(0, 16);
+    const previous = manifest[key];
+    if (!failed && previous?.frames === sameFrames && [previous.image, previous.video.replace('/og/', '/og/raw/')].every(file => existsSync(join(ROOT, 'public', file)))) {
+      console.log(`${key}: frames unchanged; keeping ${previous.video}`);
+      return { ...previous, inputs: source.inputs, source: source.hash };
+    }
 
     const video = join(work, 'video.mp4');
     const encode = spawnSync('ffmpeg', [
       '-y', '-v', 'error', '-framerate', String(FPS), '-i', join(work, '%04d.png'),
-      '-map', '0:v:0', '-an', '-sn', '-dn', '-map_metadata', '-1', '-map_chapters', '-1',
-      '-vf', `scale=${WIDTH}:${HEIGHT}:flags=lanczos:out_color_matrix=bt709:out_range=tv,format=yuv420p`,
-      // Scenes are flat colour and type: tune for animation, and spend more bits on flat areas so
-      // the paper and soft artwork masks do not band in predicted frames.
-      '-c:v', 'libx264', '-preset', 'slow', '-tune', 'animation', '-x264-params', 'aq-mode=3', '-crf', '20', '-maxrate', '3M', '-bufsize', '6M',
-      '-profile:v', 'high', '-g', String(FPS * 2),
-      '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
-      '-movflags', '+faststart', video,
+      ...ENCODE, video,
     ], { encoding: 'utf8' });
     if (encode.status !== 0) { problem(`ffmpeg failed: ${encode.stderr}`); return null; }
     const poster = await posterOf(join(work, '0000.png'), setup.poster);
@@ -161,6 +187,9 @@ async function renderScene(key) {
       durationMs: setup.duration,
       imageBytes: poster.length,
       videoBytes: videoBytes.length,
+      frames: sameFrames,
+      inputs: source.inputs,
+      source: source.hash,
     };
   } finally {
     rmSync(work, { recursive: true, force: true });
@@ -211,8 +240,18 @@ function hash(bytes) {
   return createHash('sha256').update(bytes).digest('hex').slice(0, 10);
 }
 
+// The same digest tests/lib/og-media.test.ts recomputes from each entry's inputs.
+function sourceHash(inputs) {
+  const digest = createHash('sha256');
+  for (const input of inputs) digest.update(`${input}\0`).update(readFileSync(join(ROOT, input))).update('\0');
+  return { inputs, hash: digest.digest('hex').slice(0, 16) };
+}
+
 function readManifest() {
-  try { return JSON.parse(readFileSync(MANIFEST, 'utf8')); } catch { return {}; }
+  try { return JSON.parse(readFileSync(MANIFEST, 'utf8')); } catch (error) {
+    if (error.code === 'ENOENT') return {};
+    throw error;
+  }
 }
 
 function writeManifest(entries) {
