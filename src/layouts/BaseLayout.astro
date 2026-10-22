@@ -1,20 +1,28 @@
 ---
 import '~/styles/global.css';
 import { publicCanonicalFor } from '~/lib/canonical';
+import { DEFAULT_OG_SCENE, ogMedia, ogSceneFor, type OgScene } from '~/lib/og-media';
 import SiteNav from '~/components/SiteNav.astro';
 
 interface Props {
   title: string;
   description: string;
+  /** Image-only preview for a page without a scene of its own, such as a music release's artwork. */
   ogImage?: string;
+  /** Forces a link-preview scene, for pages whose URL does not identify them (the 404 page). */
+  ogScene?: OgScene;
   noindex?: boolean;
   jsonLd?: Record<string, unknown>;
 }
 
-const { title, description, ogImage = '/og-image.png', noindex = false, jsonLd } = Astro.props;
+const { title, description, ogImage, ogScene, noindex = false, jsonLd } = Astro.props;
 const hostHeader = (Astro.isPrerendered ? null : Astro.request.headers.get('host'));
 const canonical = publicCanonicalFor(Astro.url, hostHeader);
-const ogImageUrl = new URL(ogImage, canonical).toString();
+const match = ogSceneFor(new URL(canonical).pathname);
+const scene = ogScene ?? (match?.exact || !ogImage ? match?.scene ?? DEFAULT_OG_SCENE : null);
+const preview = scene ? ogMedia(scene) : null;
+const ogImageUrl = new URL(preview?.image ?? ogImage!, canonical).toString();
+const ogVideoUrl = preview && new URL(preview.video, canonical).toString();
 
 function jsonLdString(data: object): string {
   return JSON.stringify(data)
@@ -38,6 +46,18 @@ function jsonLdString(data: object): string {
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:image" content={ogImageUrl} />
+    {preview && <>
+      <meta property="og:image:width" content={String(preview.width)} />
+      <meta property="og:image:height" content={String(preview.height)} />
+      <meta property="og:image:alt" content={preview.alt} />
+      {/* Apple's preview reader starts a new video at each URL tag that follows a type or size tag,
+          so both URL tags come first. Messages plays the video; most other apps show og:image. */}
+      <meta property="og:video" content={ogVideoUrl} />
+      <meta property="og:video:secure_url" content={ogVideoUrl} />
+      <meta property="og:video:type" content="video/mp4" />
+      <meta property="og:video:width" content={String(preview.width)} />
+      <meta property="og:video:height" content={String(preview.height)} />
+    </>}
     <meta name="twitter:card" content="summary_large_image" />
 
     <link rel="icon" href="/favicon.ico" sizes="32x32" />

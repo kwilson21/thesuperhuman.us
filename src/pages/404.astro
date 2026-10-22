@@ -4,7 +4,7 @@ import BaseLayout from '~/layouts/BaseLayout.astro';
 import Footer from '~/components/Footer.astro';
 import coast from '~/assets/site/quiet-coast-v2.webp';
 ---
-<BaseLayout title="Page not found · Kazon Wilson" description="This page could not be found. Explore Kazon Wilson’s projects or return to the homepage." noindex>
+<BaseLayout title="Page not found · Kazon Wilson" description="This page could not be found. Explore Kazon Wilson’s projects or return to the homepage." ogScene="not-found" noindex>
   <section class="missing-page site-shell" aria-labelledby="missing-title">
     <div class="missing-landscape" aria-hidden="true">
       <img src={coast.src} width={coast.width} height={coast.height} alt="" loading="eager" fetchpriority="high" />

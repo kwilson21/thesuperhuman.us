@@ -210,15 +210,24 @@ See plan Task 24 for full detail. The short list:
 2. Bind `audio.thesuperhuman.us` to the existing Worker via the Cloudflare dashboard, using a Custom Domain or Workers Route. Match how `thesuperhuman.us` is already bound.
 3. Add `audio.thesuperhuman.us` to the hostname allowlist of the existing Turnstile widget in the Cloudflare dashboard.
 
-## Regenerating the OG image
+## Link previews
 
-The `/og-image.png` social-share card is rendered from `scripts/og.html` via headless Chrome at 1200×630.
+Each page's link preview is a short silent looping video plus a poster image, both 1200×630. Apple Messages plays the video in place of the image (looped and muted); Discord, X, Slack, LinkedIn, Bluesky and most other apps show the poster, so the poster is the video's first frame and works on its own.
+
+Each scene is an HTML page in `scripts/og-video/scenes/`, styled by `scripts/og-video/kit.css` and timed by `scripts/og-video/kit.js`, built from the site's fonts, reviewed artwork and real screenshots. `OG_SCENES` in `src/lib/og-media.ts` assigns scenes to pages and holds each poster's alt text: an exact route first, then a page's own `ogImage` (a music release's artwork), then a `/*` family, then the home scene. `BaseLayout` writes the tags; the 404 page names its scene with `ogScene`.
 
 ```bash
-./scripts/build-og.sh
+node scripts/og-video/render.mjs                  # every scene
+node scripts/og-video/render.mjs services work    # only these
+node scripts/og-video/render.mjs --sheet services # contact sheet in .og-video/ for review; writes nothing else
+node scripts/og-video/render.mjs --sheet --at=0,2500 services  # also saves those moments (ms) at full size
 ```
 
-Editing `scripts/og.html` updates the layout and copy. The card reuses the reviewed studio artwork at `src/assets/site/studio-v1.webp`; the renderer reads that local asset directly. Inspect the regenerated card before sharing.
+Rendering needs ffmpeg with libx264 and Chromium (set `CHROMIUM_PATH` if Playwright's own build is missing). The renderer pauses every animation, steps one clock at 30 fps and renders each scene in its own Chromium with the switches of Chromium's deterministic mode, so each frame finishes drawing before its screenshot and frames and posters repeat from run to run, even on a busy machine. MP4 bytes also depend on the ffmpeg build and the CPU, so a scene whose frames and encoder settings have not changed keeps its committed video. Chromium very rarely anti-aliases a few pixels differently, so when a scene's files and the encoder settings are unchanged but its frames differ, it is captured once more before its video is replaced. Render only the scenes you changed. Each manifest entry records the local files its scene loaded and a hash of them, and `tests/lib/og-media.test.ts` fails when a scene, the kit or an image changes without a new render. `tests/scripts/og-video-copy.test.ts` fails when any line of two or more words in a scene (statuses included), or a price in a scene or its alt text, no longer matches the site; a short list of composite labels in that test is exempt. The renderer refuses a scene whose fonts did not load, whose content overflows the frame, whose unwrapped text is wider than its box, or whose last frame does not match its first (the loop would jump), and it keeps videos under 2.5 MB and posters under 600 KB. Posters are PNG; a photographic scene sets `data-poster="jpeg"` on `<html>` for a JPEG poster instead. Files are named by content hash (`public/og/<scene>-<hash>.png` or `.jpg`, and `public/og/raw/<scene>-<hash>.mp4`), which lets caches keep them for a year; the hashed names are recorded in `src/data/og-media.json` and stale files are deleted.
+
+Static assets ignore `Range` requests and Safari's media stack expects them, so `/og/<scene>-<hash>.mp4` is served by `src/pages/og/[name].mp4.ts`, which reads the bytes from `/og/raw/` and answers 200, 206 or 416. Every rendered poster and video needs a review record in `docs/asset-reviews/` (`npm run assets:check` fails otherwise; see `docs/generated-image-qa.md`), so inspect each new render's frames and update the record with its hashes.
+
+After deploying, check the video from outside: `curl -sI https://thesuperhuman.us/og/<file>.mp4` should give 200, `video/mp4` and `accept-ranges: bytes`, and `curl -s -o /dev/null -D - -H 'Range: bytes=0-1' https://thesuperhuman.us/og/<file>.mp4` should give 206 with `content-range: bytes 0-1/<size>`. (A HEAD request ignores `Range`, so the second check needs GET.) Then send a link in Messages on an iPhone and a Mac, and paste one into Discord's embed debugger and the Facebook Sharing Debugger.
 
 ## Email signature
 

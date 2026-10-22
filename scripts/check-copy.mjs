@@ -7,15 +7,16 @@ import { pathToFileURL } from 'node:url';
 // "Clearance posture"). This cannot judge tone or whether copy is true; it
 // only catches the specific banned characters and phrases below.
 //
-// Scope: text files under src/ and public/, plus README.md, limited to the
-// copy-bearing extensions in EXTENSIONS below. Code comments are scanned
-// along with everything else in a file; there is no special carve-out for
-// them. CLAUDE.md and AGENTS.md are excluded because they document these
-// rules and so legitimately contain the banned words themselves. A line
-// containing the marker "copy-check: allow" is skipped entirely; use it
-// sparingly and only for a real, reviewed exception.
+// Scope: text files under src/ and public/, the link-preview scenes in
+// scripts/og-video/scenes/ (their text is rendered into public videos), plus
+// README.md, limited to the copy-bearing extensions in EXTENSIONS below.
+// Code comments are scanned along with everything else in a file; there is
+// no special carve-out for them. CLAUDE.md and AGENTS.md are excluded because
+// they document these rules and so legitimately contain the banned words
+// themselves. A line containing the marker "copy-check: allow" is skipped
+// entirely; use it sparingly and only for a real, reviewed exception.
 
-const ROOTS = ['src', 'public', 'README.md'];
+const ROOTS = ['src', 'public', 'scripts/og-video/scenes', 'README.md'];
 const EXTENSIONS = new Set(['.astro', '.ts', '.tsx', '.js', '.mjs', '.json', '.md', '.mdx', '.html', '.txt', '.svg']);
 const SKIP_BASENAMES = new Set(['CLAUDE.md', 'AGENTS.md']);
 const ALLOW_MARKER = 'copy-check: allow';

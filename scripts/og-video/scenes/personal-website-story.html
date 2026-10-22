@@ -1,0 +1,112 @@
+<!doctype html>
+<!-- Personal website project story (/building/personal-website/story): its "Four ways the same
+     palette could feel." chapter. The four generated design studies sit in a 2 × 2 grid, and the
+     selection steps A, B, C, D and back to A while the caption gives each study's verdict, in the
+     page's figure-caption order (kind, title, caption).
+     Copy is verbatim: the breadcrumb from src/layouts/ProjectLayout.astro; the headline, kind,
+     titles and the first sentence of each caption from src/data/project-stories/personal-website.ts
+     (website-four-directions); the date and status line as ProjectTimeline.astro renders it.
+     Crops: every card shows only a study's artwork. Each study's generated hero lines (its name,
+     tagline and the superseded "Backend & data engineer" line) and its navigation stay outside
+     the card at every frame, including during the push. Visible source regions (793 × 1983 px):
+     A x 310-790, y 97-457; B x 374-788, y 88-398; C x 310-672, y 266-537; D x 420-790, y 99-376.
+     The images are unedited; the crops are position and scale only.
+     6800 ms, not 6000: four studies each hold their verdict for at least a second. -->
+<html lang="en" data-duration="6800">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../kit.css" />
+<style>
+  h1 { position: absolute; left: 64px; top: 104px; width: 392px; white-space: nowrap; }
+  .cap { position: absolute; left: 64px; top: 396px; width: 400px; margin: 0; }
+  .kind { font: 400 20px/24px var(--sans); color: var(--muted); }
+  .swap { position: relative; }
+  .swap span { position: absolute; left: 0; top: 0; white-space: nowrap; opacity: 0; }
+  .swap span:first-child { opacity: 1; }
+  .ttl { height: 46px; margin-top: 8px; font: 400 40px/46px var(--serif); letter-spacing: -.02em; }
+  .vrd { height: 32px; margin-top: 8px; font: 400 26px/32px var(--sans); color: var(--accent); }
+
+  /* The page's figures: a 1px rule border, the study pinned inside. */
+  .grid { position: absolute; left: 496px; top: 60px; width: 640px; height: 482px; }
+  .study { position: absolute; width: 314px; height: 235px; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--well); }
+  .s0 { left: 0; top: 0; } .s1 { left: 326px; top: 0; } .s2 { left: 0; top: 247px; } .s3 { left: 326px; top: 247px; }
+  .push { position: absolute; inset: 0; will-change: transform; transform-origin: 50% 50%; }
+  .push img { position: absolute; max-width: none; }
+  .veil { position: absolute; inset: 0; background: var(--paper); opacity: .36; }
+  .s0 .veil { opacity: 0; }
+  .tag { position: absolute; left: 8px; top: 8px; margin: 0; padding: 0 8px; font: 500 20px/28px var(--mono); background: var(--paper); color: var(--ink); border: 1px solid var(--rule); border-radius: 3px; }
+  .s0 .tag { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+  /* The selection: a 3px accent ring that travels between figures, like a pressed milestone. */
+  .sel { position: absolute; left: 0; top: 0; width: 314px; height: 235px; border: 3px solid var(--accent); border-radius: 3px; box-shadow: 0 0 0 5px var(--glow); will-change: transform; }
+</style>
+</head>
+<body>
+<main class="frame">
+  <p class="kicker">Building / Personal website</p>
+  <h1 class="h-60">Four ways the<br />same palette<br />could feel.</h1>
+  <div class="cap">
+    <p class="kind">Generated design study</p>
+    <p class="swap ttl"><span class="t0">A · Quiet studio</span><span class="t1">B · Living editorial</span><span class="t2">C · Project gallery</span><span class="t3">D · Open landscape</span></p>
+    <p class="swap vrd"><span class="v0">Chosen for Home.</span><span class="v1">Explored, not selected.</span><span class="v2">Explored, not selected.</span><span class="v3">Redirected toward About.</span></p>
+  </div>
+  <div class="grid">
+    <div class="study s0"><div class="push"><img src="../../../src/assets/site/redesign-studies/a-quiet-studio.webp" alt="" width="793" height="1983" /></div><i class="veil"></i><p class="tag">A</p></div>
+    <div class="study s1"><div class="push"><img src="../../../src/assets/site/redesign-studies/b-living-editorial.webp" alt="" width="793" height="1983" /></div><i class="veil"></i><p class="tag">B</p></div>
+    <div class="study s2"><div class="push"><img src="../../../src/assets/site/redesign-studies/c-project-gallery.webp" alt="" width="793" height="1983" /></div><i class="veil"></i><p class="tag">C</p></div>
+    <div class="study s3"><div class="push"><img src="../../../src/assets/site/redesign-studies/d-open-landscape.webp" alt="" width="793" height="1983" /></div><i class="veil"></i><p class="tag">D</p></div>
+    <i class="sel"></i>
+  </div>
+  <p class="url">thesuperhuman.us/building/personal-website/story</p>
+  <p class="aside">Sep 9, 2026 · Alternatives</p>
+</main>
+<script src="../kit.js"></script>
+<script>
+  const { play, ease } = og;
+  const CARD = { w: 314, h: 235 };
+  // Each card covers its focus region of the source (x0, y0, x1, y1), centred, scaled to cover.
+  const FOCUS = [[310, 92, 790, 462], [374, 88, 788, 398], [310, 262, 672, 540], [420, 99, 790, 376]];
+  document.querySelectorAll('.study img').forEach((img, k) => {
+    const [x0, y0, x1, y1] = FOCUS[k];
+    const s = Math.max(CARD.w / (x1 - x0), CARD.h / (y1 - y0));
+    const left = x0 + ((x1 - x0) - CARD.w / s) / 2, top = y0 + ((y1 - y0) - CARD.h / s) / 2;
+    Object.assign(img.style, { width: `${793 * s}px`, height: `${1983 * s}px`, left: `${-left * s}px`, top: `${-top * s}px` });
+  });
+
+  // The selection visits A, B, C, D and returns to A. Each move takes 300 ms.
+  const M = [1300, 2650, 4000, 5350], MOVE = 300, END = 6800;
+  const ORDER = [0, 1, 2, 3, 0];
+  const POS = [[0, 0], [326, 0], [0, 247], [326, 247]];
+  const at = k => `translate(${POS[k][0]}px, ${POS[k][1]}px)`;
+  const ring = [[0, { transform: at(0) }]];
+  M.forEach((t, i) => ring.push([t, { transform: at(ORDER[i]), easing: ease.inOut }], [t + MOVE, { transform: at(ORDER[i + 1]) }]));
+  play('.sel', ring);
+
+  // Windows in which card k holds the selection: [arrives, leaves]; null at the loop's ends.
+  const windows = k => ORDER.flatMap((c, i) => c === k ? [[i ? M[i - 1] : null, i < M.length ? M[i] : null]] : []);
+  // Off and on states for one element of card k, switched as the selection arrives and leaves.
+  function toggle(target, k, off, on, { inAt = 0, inFor = MOVE, outAt = 0, outFor = MOVE, inEase = ease.inOut, outEase = ease.inOut } = {}) {
+    const steps = [[0, k === 0 ? on : off]];
+    for (const [arrive, leave] of windows(k)) {
+      if (arrive !== null) steps.push([arrive + inAt, { ...off, easing: inEase }], [arrive + inAt + inFor, on]);
+      if (leave !== null) steps.push([leave + outAt, { ...on, easing: outEase }], [leave + outAt + outFor, off]);
+    }
+    play(target, steps);
+  }
+  [0, 1, 2, 3].forEach(k => {
+    toggle(`.s${k} .veil`, k, { opacity: .36 }, { opacity: 0 });
+    toggle(`.s${k} .tag`, k, { backgroundColor: '#FBF8F2', borderColor: '#E8E3DA', color: '#0E0E0E' }, { backgroundColor: '#AE5534', borderColor: '#AE5534', color: '#FBF8F2' });
+    // Captions: the old one leaves in 150 ms, the new one rises in over the next 150 ms.
+    for (const sel of [`.t${k}`, `.v${k}`]) {
+      toggle(sel, k, { opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'translateY(0)' }, { inAt: 150, inFor: 150, outFor: 150, inEase: ease.out, outEase: ease.in });
+    }
+  });
+
+  // A slow push (at most 1.03) on the chosen study while it holds; it settles as the selection leaves.
+  // A's push runs across the loop seam at one constant rate, so the end matches frame 0.
+  const P = 1.03, rate = (P - 1) / (M[0] + END - M[3] - MOVE);
+  const a0 = 1 + rate * (END - M[3] - MOVE);
+  play('.s0 .push', [[0, { transform: `scale(${a0})` }], [M[0], { transform: `scale(${P})`, easing: ease.inOut }], [M[0] + MOVE, { transform: 'scale(1)' }], [M[3] + MOVE, { transform: 'scale(1)' }], [END, { transform: `scale(${a0})` }]]);
+  [1, 2, 3].forEach(k => play(`.s${k} .push`, [[M[k - 1] + MOVE, { transform: 'scale(1)' }], [M[k], { transform: `scale(${1 + rate * (M[k] - M[k - 1] - MOVE)})`, easing: ease.inOut }], [M[k] + MOVE, { transform: 'scale(1)' }]]));
+</script>
+</body>
+</html>

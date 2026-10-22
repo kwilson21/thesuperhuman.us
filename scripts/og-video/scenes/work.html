@@ -1,0 +1,132 @@
+<!doctype html>
+<!-- Work (/work): the Lyft evidence card, restrained like the page (work.astro:46). The poster is the
+     capacity figure with its twenty cells and its evidence label. The card then shows the page's own
+     responsibility diagram, Before becoming After (WorkDiagram.astro), and returns to count from 5,000
+     to 100,000+ as the cells light, the way Home counts it (home-worlds.ts:63-94).
+     Copy is verbatim from src/pages/work.astro:12-14,21, src/data/profile.ts:4 (lyftBonus),
+     src/components/WorkDiagram.astro:7-8,24 and src/pages/index.astro:54 ("= 5,000 rows"). The
+     in-between counts are computed below with the formulas of src/lib/home-motion.ts. -->
+<html lang="en" data-duration="6000">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../kit.css" />
+<style>
+  .head { position: absolute; left: 64px; top: 100px; white-space: nowrap; }
+  .sub { position: absolute; left: 64px; top: 250px; margin: 0; font: 400 28px/34px var(--serif); color: var(--muted); white-space: nowrap; }
+
+  /* The evidence card: the diagram well (WorkDiagram.astro:27). */
+  .evidence { position: absolute; left: 64px; top: 300px; width: 1072px; height: 232px; overflow: hidden; }
+  .state { position: absolute; inset: 0; will-change: opacity, transform; }
+  .state .kicker { left: 32px; top: 26px; }
+
+  /* State A: the capacity figure (work.astro:21,74-75) with Home's cells (index.astro:48-55,200-209). */
+  .figure { position: absolute; left: 32px; top: 60px; margin: 0; font: 400 76px/1 var(--serif); letter-spacing: -.025em; white-space: nowrap; }
+  .figure .to { color: var(--accent); }
+  .figure .unit { font-size: 34px; letter-spacing: -.01em; }
+  .slot { position: relative; display: inline-block; font-variant-numeric: tabular-nums; }
+  .slot .ghost { visibility: hidden; }
+  .slot .v { position: absolute; right: 0; top: 0; white-space: nowrap; opacity: 0; }
+  .slot .v:last-child { opacity: 1; }
+  .cells, .key { position: absolute; left: 32px; width: 1008px; display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 6px; }
+  .cells { top: 156px; }
+  .cell { display: block; height: 22px; border-radius: 3px; background: var(--accent); }
+  .key { top: 190px; align-items: center; }
+  .key .mono { grid-column: 2 / 9; padding-left: 4px; color: var(--muted); white-space: nowrap; }
+  .key .label { grid-column: 9 / -1; text-align: right; color: var(--muted); white-space: nowrap; }
+
+  /* State B: the responsibility diagram (WorkDiagram.astro:29-34). */
+  .b { opacity: 0; }
+  .phase { position: absolute; left: 32px; top: 22px; width: 1008px; height: 32px; margin: 0; font: 400 26px/32px var(--serif); color: var(--muted); }
+  .phase span { position: absolute; left: 0; top: 0; white-space: nowrap; }
+  .phase b { font-weight: 400; color: var(--ink); }
+  .phase .after { opacity: 0; }
+  .flow { position: absolute; left: 32px; top: 75px; width: 1008px; height: 104px; display: grid; grid-template-columns: 1fr 44px 1.2fr; gap: 20px; }
+  .box { position: relative; border: 1.5px solid var(--diagram-border); border-radius: 3px; font: 400 38px/1 var(--serif); letter-spacing: -.02em; }
+  .box span { position: absolute; inset: 0; display: grid; place-items: center; white-space: nowrap; }
+  .flow .arrow { display: grid; place-items: center; font: 400 40px/1 var(--serif); color: var(--accent); }
+  .box .self { opacity: 0; }
+  .b .cap { position: absolute; left: 32px; top: 191px; margin: 0; color: var(--muted); white-space: nowrap; }
+</style>
+</head>
+<body>
+<main class="frame card">
+  <p class="kicker">Work</p>
+  <h1 class="h-68 head">Software engineer.<br />I build useful software.</h1>
+  <p class="sub">7+ years in production engineering</p>
+  <div class="panel evidence">
+    <div class="state a">
+      <p class="kicker">Lyft - Associate Tools team</p>
+      <p class="figure">5,000 <span class="to">→</span> <span class="slot"><span class="ghost">100,000+</span></span><span class="unit"> rows per batch</span></p>
+      <div class="cells"></div>
+      <div class="key"><i class="cell"></i><span class="mono">= 5,000 rows</span><span class="label">Owner-reported batch capacity</span></div>
+    </div>
+    <div class="state b">
+      <p class="phase"><span class="before"><b>Before</b> · A handoff to engineering</span><span class="after"><b>After</b> · Support can run the work</span></p>
+      <div class="flow"><span class="box"><span>Support</span></span><span class="arrow">→</span><span class="box two"><span class="oncall">On-call engineer</span><span class="self">Self-service</span></span></div>
+      <p class="label cap">Illustrated change in responsibility</p>
+    </div>
+  </div>
+  <p class="url">thesuperhuman.us/work</p>
+</main>
+<script src="../kit.js"></script>
+<script>
+  const { play, ease } = og;
+
+  // The count, as src/lib/home-motion.ts and src/scripts/home-worlds.ts compute it on Home:
+  // lyftBonus 5,000 to 100,000+ (profile.ts:4), capacityCells = 20, easeOutCubic over 1600 ms,
+  // in-between values without the "+", lit cells = max(1, round(value / 100,000 × 20)).
+  const FROM = 5000, TO = 100000;
+  const CELLS = Math.max(1, Math.min(40, Math.round(TO / FROM)));
+  const easeOutCubic = t => 1 - (1 - Math.min(1, Math.max(0, t))) ** 3;
+  const STEPS = 48;              // one value per video frame: 1600 ms at 30 fps
+  const COUNT = 3800, RUN = 1600; // frame 114; the count starts as the card rises back in (after State B has left at 3760), so it never rests on 5,000 → 5,000
+  const at = k => COUNT + k * RUN / STEPS;
+  // Value k is on screen from half a frame before its frame to half a frame before the next, so every
+  // video frame (at 33.3 ms steps) lands mid-hold and never between two stacked values.
+  const sw = k => at(k) - RUN / STEPS / 2;
+  const values = Array.from({ length: STEPS + 1 }, (_, k) => FROM + (TO - FROM) * easeOutCubic(k / STEPS));
+  const slot = document.querySelector('.slot');
+  values.forEach((value, k) => {
+    const span = document.createElement('span');
+    span.className = 'v';
+    span.textContent = k < STEPS ? Math.round(value).toLocaleString('en-US') : '100,000+';
+    slot.append(span);
+  });
+  const cellRow = document.querySelector('.cells');
+  for (let i = 0; i < CELLS; i++) cellRow.append(Object.assign(document.createElement('i'), { className: 'cell' }));
+
+  // Rest on the poster, 0-700. State A leaves 700-1000 and, while hidden, resets to the old capacity.
+  const HIDE = 1000, RESET = 1016; // reset between video frames, while State A is invisible
+  play('.a', [[700, { opacity: 1, transform: 'translateY(0)', easing: ease.in }], [HIDE, { opacity: 0, transform: 'translateY(-12px)' }],
+    [RESET, { opacity: 0, transform: 'translateY(-12px)' }], [RESET + 1, { opacity: 0, transform: 'translateY(12px)' }], [COUNT, { opacity: 0, transform: 'translateY(12px)', easing: ease.out }], [COUNT + 300, { opacity: 1, transform: 'translateY(0)' }]]);
+
+  // The figure: one stacked value shows at a time. "5,000" waits while hidden; each later value takes
+  // over on its frame; "100,000+" lands about 5383 ms and holds through the loop until State A leaves (700-1000).
+  const spans = [...document.querySelectorAll('.slot .v')];
+  spans.forEach((span, k) => {
+    if (k === 0) return play(span, [[RESET, { opacity: 0 }], [RESET + 1, { opacity: 1 }], [sw(1) - 1, { opacity: 1 }], [sw(1), { opacity: 0 }]]);
+    if (k === STEPS) return play(span, [[RESET, { opacity: 1 }], [RESET + 1, { opacity: 0 }], [sw(k) - 1, { opacity: 0 }], [sw(k), { opacity: 1 }]]);
+    play(span, [[sw(k) - 1, { opacity: 0 }], [sw(k), { opacity: 1 }], [sw(k + 1) - 1, { opacity: 1 }], [sw(k + 1), { opacity: 0 }]]);
+  });
+  // Cells: the first stays lit; each other cell drops to .16 while hidden and lights (180 ms ease,
+  // index.astro:207) on the frame the count reaches it.
+  const cells = [...document.querySelectorAll('.cells .cell')];
+  cells.forEach((cell, i) => {
+    if (i === 0) return;
+    const k = values.findIndex(value => Math.max(1, Math.round(value / TO * CELLS)) > i);
+    play(cell, [[RESET, { opacity: 1 }], [RESET + 1, { opacity: .16 }], [sw(k), { opacity: .16, easing: 'ease' }], [sw(k) + 180, { opacity: 1 }]]);
+  });
+
+  // State B rises in at Before (WorkDiagram.astro:49-50), holds, becomes After, holds, and leaves.
+  // It rises only once State A has fully gone (1000), and leaves (3760) before State A returns (3800): one state per frame.
+  play('.b', [[1000, { opacity: 0, transform: 'translateY(12px)', easing: ease.out }], [1400, { opacity: 1, transform: 'translateY(0)' }],
+    [3450, { opacity: 1, transform: 'translateY(0)', easing: ease.in }], [3760, { opacity: 0, transform: 'translateY(-12px)' }], [3761, { opacity: 0, transform: 'translateY(12px)' }]]);
+  play('.phase .before', [[2250, { opacity: 1 }], [2400, { opacity: 0 }], [3761, { opacity: 0 }], [3762, { opacity: 1 }]]);
+  play('.phase .after', [[2400, { opacity: 0 }], [2600, { opacity: 1 }], [3761, { opacity: 1 }], [3762, { opacity: 0 }]]);
+  play('.oncall', [[2250, { opacity: 1, transform: 'translateY(0)', easing: ease.in }], [2450, { opacity: 0, transform: 'translateY(-12px)' }], [3761, { opacity: 0, transform: 'translateY(-12px)' }], [3762, { opacity: 1, transform: 'translateY(0)' }]]);
+  play('.self', [[2400, { opacity: 0, transform: 'translateY(12px)', easing: ease.out }], [2650, { opacity: 1, transform: 'translateY(0)' }], [3761, { opacity: 1, transform: 'translateY(0)' }], [3762, { opacity: 0, transform: 'translateY(12px)' }]]);
+  // Self-service takes the accent border (.self-serve, WorkDiagram.astro:33).
+  play('.two', [[2400, { borderColor: '#c5b9a7' }], [2650, { borderColor: '#AE5534' }], [3761, { borderColor: '#AE5534' }], [3762, { borderColor: '#c5b9a7' }]]);
+</script>
+</body>
+</html>
