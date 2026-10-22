@@ -1,0 +1,60 @@
+<!doctype html>
+<!-- Not found (every 404 response, through ogScene in src/pages/404.astro; it has no route): the
+     404 page's own words beside its own coast. The poster is the page at rest. In the loop the
+     headline is washed out from the water side with a soft edge, like writing in wet sand, and
+     for a moment the page really is not there. The line inks back in from the left
+     (the home page's Writing-title reveal, index.astro:242-243, shortened to 700 ms), then
+     "Back to home" is pressed. The headline is partly or fully absent for 1.5 s (1350-2850): the
+     soft erase is fully transparent by about 1.8 s and the ink reveal starts at 2.15 s, so the
+     empty beat is about 350 ms. The url shows the host only: the missing path is unknown when this renders.
+     Copy is verbatim from src/pages/404.astro:13-17 (the description's first sentence only). -->
+<html lang="en" data-duration="6000">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../kit.css" />
+<style>
+  /* Padding keeps the glyphs inside the box the erase mask is drawn on. */
+  /* line-height 1.12 as on the 404 page's h1 (404.astro:30): at the kit's 1.02 the "p" of "page" meets the "h" of "here." */
+  .head { position: absolute; left: 64px; top: 88px; padding: 16px 28px 20px 0; white-space: nowrap; line-height: 1.12;
+    mask-image: linear-gradient(to right, #000 40%, transparent 55%);
+    mask-size: 250% 100%; mask-repeat: no-repeat; mask-position: 0% 0%;
+    clip-path: inset(-10% -2% -20% -2%); will-change: mask-position, clip-path; }
+  .desc { position: absolute; left: 64px; top: 309px; color: var(--muted); white-space: nowrap; }
+  .way { position: absolute; left: 64px; top: 383px; }
+  .back { position: relative; white-space: nowrap; transform-origin: center; will-change: transform; }
+  .back-ring { inset: -6px; border-radius: 6px; }
+
+  /* quiet-coast-v2 (1536 × 1024) at 0.520833: frame x = 480 + 0.521 × art x, frame y = 52 + 0.521 × art y.
+     The 404 page's mask stops (404.astro:27) with the left fade widened from 8% to 18%, so the first
+     grasses stay faint and clear of "changed."; the water bleeds off the right edge. */
+  .coast { left: 480px; top: 52px; width: 800px; height: 533.33px; --fx0: 18%; --fx1: 92%; --fy0: 12%; --fy1: 85%; }
+</style>
+</head>
+<body>
+<main class="frame card">
+  <p class="kicker">404</p>
+  <h1 class="h-84 head">This page<br />isn’t here.</h1>
+  <p class="lede desc">The link may have changed.</p>
+  <div class="way"><span class="btn back">Back to home</span><i class="press-ring back-ring"></i></div>
+  <div class="art coast"><img src="../../../src/assets/site/quiet-coast-v2.webp" alt="" width="1536" height="1024" /></div>
+  <p class="url">thesuperhuman.us</p>
+</main>
+<script src="../kit.js"></script>
+<script>
+  const { play, ease } = og;
+
+  // 0-1350 poster. The headline is washed out from the water side with a soft edge (1350-1950; the
+  // inOut tail leaves it fully gone from about 1780), stays away until the ink starts at 2150, and inks
+  // back in from the left (2150-2850). The mask resets at 2010 and the clip closes at 2005, both while
+  // the line is invisible.
+  play('.head', [[1350, { maskPosition: '0% 0%', easing: ease.inOut }], [1950, { maskPosition: '100% 0%' }], [2010, { maskPosition: '100% 0%' }], [2011, { maskPosition: '0% 0%' }]]);
+  play('.head', [[2005, { clipPath: 'inset(-10% -2% -20% -2%)' }], [2006, { clipPath: 'inset(-10% 100% -20% -2%)' }], [2150, { clipPath: 'inset(-10% 100% -20% -2%)', easing: ease.ink }], [2850, { clipPath: 'inset(-10% -2% -20% -2%)' }]]);
+
+  // The way back: the .site-button press (ink at +120, accent again by +350) and the press ring.
+  const T = 3600;
+  play('.back', [[T, { transform: 'scale(1)', backgroundColor: '#AE5534', borderColor: '#AE5534', easing: ease.out }], [T + 120, { transform: 'scale(.96)', backgroundColor: '#0E0E0E', borderColor: '#0E0E0E', easing: ease.out }], [T + 350, { transform: 'scale(1)', backgroundColor: '#AE5534', borderColor: '#AE5534' }]]);
+  play('.back-ring', [[T, { opacity: 0, transform: 'scale(1)', easing: ease.out }], [T + 42, { opacity: .7, transform: 'scale(1.009)', easing: ease.out }], [T + 700, { opacity: 0, transform: 'scale(1.15)' }]]);
+  // Rest 4300-6000 on the poster.
+</script>
+</body>
+</html>

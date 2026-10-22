@@ -1,0 +1,68 @@
+<!doctype html>
+<!-- Audio services (/audio/services): the page's three priced offers as a paper price sheet. Two rows
+     open like the page's <details> (the "+" turns to a cross and the scope drops in), then the
+     page's promise is underlined like a .site-link. Copy is verbatim from src/pages/audio/services.astro
+     and src/lib/audio-intake.ts (audioOffers); the prices are the owner-approved audio starting
+     prices; data-offer names each row's audioOffers key so a test can check prices and scope against
+     the source. The custom row ("Full mixing, production & recording", By inquiry) and the list's
+     "Introductory prices" header are left out: the poster carries about 29 words (headline 5, promise 10,
+     rows 14), and every row already reads "From $...". The /audio scene carries production and recording. -->
+<html lang="en" data-duration="6000">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../kit.css" />
+<style>
+  /* .h-84 matched to .service-display (service-pages.css:3): line-height 1.06, tracking -.04em. */
+  h1.h-84 { position: absolute; left: 64px; top: 104px; margin: 0; line-height: 1.06; letter-spacing: -.04em; white-space: nowrap; }
+  /* .lede at the page's 26px/1.35 in muted. */
+  .promise { position: absolute; left: 64px; top: 404px; width: 400px; margin: 0; font-size: 26px; line-height: 1.35; color: var(--muted); }
+  .promise .u { position: relative; display: inline-block; }
+  .promise .u i { position: absolute; left: 0; right: 0; bottom: -3px; height: 3px; background: var(--accent); transform: scaleX(0); transform-origin: left; }
+  /* The offer list (services.astro:27; service-pages.css:13-20) set on a paper sheet. */
+  .sheet { position: absolute; left: 496px; top: 108px; width: 640px; padding: 22px 26px; background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; box-shadow: 0 7px 15px #38261514; }
+  .row { border-top: 1px solid var(--rule); }
+  .row:last-child { border-bottom: 1px solid var(--rule); }
+  .sum { display: grid; grid-template-columns: minmax(0, 1fr) 140px 20px; column-gap: 14px; align-items: baseline; padding: 30px 2px; }
+  .nm { margin: 0; font: 400 26px/32px var(--serif); letter-spacing: -.01em; white-space: nowrap; }
+  .pr { margin: 0; font: 400 26px/32px var(--serif); text-align: right; white-space: nowrap; }
+  .plus { display: block; font: 400 30px/32px var(--serif); color: var(--accent); text-align: center; transform-origin: 50% 55%; }
+  /* .service-scope: body text in ink, indented 1rem; it opens under the summary, clipped by the wrapper's height. */
+  .scope { height: 14px; margin-top: -14px; overflow: hidden; }
+  .scope p { margin: 0; padding: 0 2px 0 18px; font: 400 21px/28px var(--serif); white-space: nowrap; opacity: 0; }
+</style>
+</head>
+<body>
+<main class="frame card">
+  <p class="kicker">Audio / Services</p>
+  <h1 class="h-84">Your song.<br />My full<br />attention.</h1>
+  <p class="promise lede">We agree on the work and price <span class="u">before you book.<i></i></span></p>
+  <div class="sheet">
+    <div class="row r1" data-offer="vocal-mix"><div class="sum"><p class="nm">Two-track vocal mixing</p><p class="pr">From $150</p><b class="plus">+</b></div>
+      <div class="scope"><p>Cleanup, light tuning and timing. Two revision rounds.</p></div></div>
+    <div class="row r2" data-offer="mastering"><div class="sum"><p class="nm">Mastering</p><p class="pr">From $75</p><b class="plus">+</b></div>
+      <div class="scope"><p>Overall tone, dynamics and level. Two revision rounds.</p></div></div>
+    <div class="row r3" data-offer="bundle"><div class="sum"><p class="nm">Two-track vocal mix + master</p><p class="pr">From $200</p><b class="plus">+</b></div></div>
+  </div>
+  <p class="url">thesuperhuman.us/audio/services</p>
+</main>
+<script src="../kit.js"></script>
+<script>
+  const { play, ease } = og;
+  // The wrapper starts 14 px tall and pulled up 14 px (inside the summary's 30 px padding), so it takes no room;
+  // open, it pushes the rows below 36 px and its line sits nearer its own row than the next rule.
+  const SHUT = 14, OPEN = 50;
+  // A row opens like the page's <details>: the "+" turns 45 degrees, the scope wrapper grows (pushing
+  // the rows below and the sheet's foot down), and the scope line fades in as its clip opens.
+  const row = (sel, on, off) => {
+    play(`${sel} .plus`, [[on, { transform: 'rotate(0deg)', easing: ease.out }], [on + 400, { transform: 'rotate(45deg)' }], [off, { transform: 'rotate(45deg)', easing: ease.in }], [off + 350, { transform: 'rotate(0deg)' }]]);
+    play(`${sel} .scope`, [[on, { height: `${SHUT}px`, easing: ease.out }], [on + 400, { height: `${OPEN}px` }], [off, { height: `${OPEN}px`, easing: ease.in }], [off + 350, { height: `${SHUT}px` }]]);
+    play(`${sel} .scope p`, [[on + 100, { opacity: 0, easing: ease.out }], [on + 400, { opacity: 1 }], [off, { opacity: 1, easing: ease.in }], [off + 250, { opacity: 0 }]]);
+  };
+  // Hold the poster 600 ms; each row stays open 1150 ms; rest 350 ms before the loop.
+  row('.r1', 600, 2150);
+  row('.r2', 2400, 3950);
+  // The promise is underlined like a .site-link: the rule draws from the left, holds, then fades.
+  play('.promise .u i', [[4350, { transform: 'scaleX(0)', opacity: 1, easing: ease.inOut }], [4850, { transform: 'scaleX(1)', opacity: 1 }], [5300, { transform: 'scaleX(1)', opacity: 1, easing: ease.in }], [5650, { transform: 'scaleX(1)', opacity: 0 }], [5651, { transform: 'scaleX(0)', opacity: 1 }]]);
+</script>
+</body>
+</html>

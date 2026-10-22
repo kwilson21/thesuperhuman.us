@@ -96,3 +96,10 @@ mask. No raster edit and no new generated object; the hash above still applies.
   the trail in the resting frame (September 27). Deployment is a separate step.
 
 Archive note: source PNGs, prompts and raw browser-evidence paths above refer to the private recovery archive. The committed production file and hash record are authoritative for the asset gate; see [the evidence index](../design-concepts/README.md).
+
+## Derived social card retired, October 21
+
+`scripts/og.html`, `scripts/build-og.sh` and `public/og-image.png` are removed. Their
+card carried the superseded line "Software engineer. Building with AI." The home
+link preview in [link-previews.md](link-previews.md) replaces it with the same
+layout and studio-v1 artwork.

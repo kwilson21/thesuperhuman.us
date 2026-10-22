@@ -1,0 +1,192 @@
+<!doctype html>
+<!-- Home (/ and every page without a scene of its own): the front door in the order of its
+     tagline. The poster is the hero (src/components/Hero.astro): the name, the tagline under it
+     at the page's size, the introduction small and muted, and the studio art. Software: the
+     camera dives into the monitor and the dark screen world opens from its glass to the frame
+     (src/pages/index.astro .world-screen), where "Currently building" and its two real project
+     captures rise in and hold. Sound: the SignalEdge waveform carries the viewer back to paper
+     and the headphones give off rings (StudioLife). Things worth exploring: the notebook sketch
+     redraws and its sun returns. 7 s, above the 6 s default, because it has three acts and the
+     project cards need a readable hold. Copy is verbatim from Hero.astro, index.astro and
+     src/data/project-stories/{tally,kaillera-next}.ts. -->
+<html lang="en" data-duration="7000">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../kit.css" />
+<style>
+  /* Paper: the hero copy at video scale (Hero.astro:26-28). Home has no kicker; the name is the eyebrow. */
+  .name { position: absolute; left: 64px; top: 78px; }
+  .tagline { position: absolute; left: 64px; top: 312px; width: 430px; font: 400 34px/1.14 var(--serif); letter-spacing: -.025em; }
+  .intro { position: absolute; left: 64px; top: 410px; width: 400px; font: 400 24px/1.4 var(--serif); color: var(--muted); }
+  /* studio-v1 (1536 × 1024) at 0.5599: frame x = 380 + 0.5599 × art x, frame y = 52 + 0.5599 × art y. Hero mask stops. */
+  .studio { left: 380px; top: 52px; width: 860px; height: 573.33px; --fx0: 18%; --fx1: 94%; --fy0: 10%; --fy1: 86%; transform-origin: 586px 185px; will-change: transform; }
+  .studio svg { overflow: visible; }
+  .sound ellipse { fill: none; stroke: var(--accent); stroke-width: 3; vector-effect: non-scaling-stroke; transform-box: fill-box; transform-origin: center; opacity: 0; }
+  .sketch-path { fill: none; stroke: var(--accent); stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; }
+  .sketch-sun { fill: var(--accent); fill-opacity: .85; transform-box: fill-box; transform-origin: center; }
+
+  /* The screen world. The container only clips; the panel carries the dark ground, so the
+     waveform's paper peaks show the real paper scene through them. */
+  .screen { position: absolute; inset: 0; z-index: 1; background: none; opacity: 0;
+    clip-path: polygon(808.9px 124.8px, 1123px 136.5px, 1123px 338.1px, 808.9px 301.7px); }
+  .strip { position: absolute; left: 0; top: 0; width: 1200px; height: 770px; }
+  .panel { position: absolute; left: 0; top: 0; width: 1200px; height: 630px; background: var(--paper); overflow: hidden; will-change: transform; }
+  .light { position: absolute; left: 0; top: 0; width: 1200px; height: 441px; background: radial-gradient(55% 60% at 50% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%); }
+  .code { position: absolute; left: 676px; top: 17px; width: 460px; height: auto; opacity: .45; mask-image: linear-gradient(to bottom, #000 50%, transparent 92%); overflow: visible; }
+  .code rect { transform-box: fill-box; transform-origin: left; }
+  .tone-0 { fill: #6f8fb5; } .tone-1 { fill: #d17f59; } .tone-2 { fill: #8fa66b; } .tone-3 { fill: #c9a95a; } .tone-4 { fill: #5c564e; }
+  .code .caret { fill: #e8e1d5; opacity: 0; transform: none; }
+  /* Section heading with its rule drawn after the text (global.css:196-198). */
+  .heading { position: absolute; left: 64px; right: 64px; top: 60px; display: flex; align-items: center; gap: 24px; }
+  .heading h2 { margin: 0; font: 400 56px/1.1 var(--serif); letter-spacing: -.035em; white-space: nowrap; }
+  .heading .rule { flex: 1; height: 1px; background: var(--rule); transform-origin: left; }
+  /* Project cards (index.astro:172-181): the capture glows like a screen; status in the page kicker. */
+  .project { position: absolute; top: 150px; width: 504px; }
+  .p1 { left: 64px; } .p2 { left: 632px; }
+  .project .capture { width: 504px; height: 270px; }
+  .project .kicker { position: static; display: block; margin: 18px 0 0; }
+  .project h3 { margin: 6px 0 0; font: 400 40px/44px var(--serif); letter-spacing: -.035em; white-space: nowrap; }
+  .edge { position: absolute; left: 0; top: 630px; width: 1200px; height: 140px; overflow: visible; will-change: transform; }
+  .edge path { fill: var(--paper); fill-rule: evenodd; }
+
+  /* The url stays put above both worlds and takes each world's muted colour. */
+  .url { z-index: 2; }
+</style>
+</head>
+<body>
+<main class="frame">
+  <h1 class="name name-display">Kazon<br /> Wilson</h1>
+  <p class="tagline">Software, sound, and things worth exploring.</p>
+  <p class="intro">I build software, design websites, and mix and master music.</p>
+  <div class="art studio">
+    <img src="../../../src/assets/site/studio-v1.webp" alt="" width="1536" height="1024" />
+    <!-- Same coordinates as StudioLife.astro: the artwork's own 1536 × 1024 pixels. -->
+    <svg viewBox="0 0 1536 1024" aria-hidden="true">
+      <g class="sound" transform="translate(1230 735)">
+        <ellipse rx="96" ry="84" /><ellipse rx="96" ry="84" /><ellipse rx="96" ry="84" />
+      </g>
+      <g transform="matrix(2.2 -0.88 2.75 0.95 815 840)">
+        <path class="sketch-path" pathLength="1" d="M18 55 C 25 50, 22 44, 30 41 S 43 43, 48 36 S 55 27, 64 28 S 76 25, 80 17" />
+        <ellipse class="sketch-sun" cx="84" cy="36" rx="4.6" ry="4.6" />
+      </g>
+    </svg>
+  </div>
+
+  <div class="screen world-screen">
+    <div class="strip">
+      <div class="panel">
+        <div class="light"></div>
+        <svg class="code" viewBox="0 0 560 254" aria-hidden="true"></svg>
+        <div class="heading"><h2>Currently building</h2><i class="rule"></i></div>
+        <div class="project p1">
+          <div class="capture"><img src="../../../src/assets/projects/tally/transactions-demo-2026-09-26.webp" alt="" width="1200" height="800" /></div>
+          <p class="kicker tight">In development · public demo</p>
+          <h3>Tally</h3>
+        </div>
+        <div class="project p2">
+          <div class="capture"><img src="../../../src/assets/projects/kaillera-next/landing-2026-09-26.webp" alt="" width="1252" height="835" /></div>
+          <p class="kicker tight">In development · playable demo build</p>
+          <h3>Kaillera Next</h3>
+        </div>
+      </div>
+      <!-- SignalEdge.astro, mid-phrase: paper peaks cut up into the dark, dark peaks hang into the paper. -->
+      <svg class="edge" viewBox="0 0 1200 140" aria-hidden="true"><path /></svg>
+    </div>
+  </div>
+
+  <p class="url">thesuperhuman.us</p>
+</main>
+<script src="../kit.js"></script>
+<script>
+  const { play, ease } = og;
+
+  // home-motion.ts, pasted as-is: seeded rows of code bars and the sung-phrase waveform.
+  const clamp01 = v => Math.min(1, Math.max(0, v));
+  function seeded(seed) { let s = seed >>> 0; return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 2 ** 32; }; }
+  function codeRows(count, seed = 3, tones = 5) {
+    const r = seeded(seed); let indent = 0;
+    return Array.from({ length: count }, () => {
+      const step = r();
+      indent = step < 0.3 ? Math.min(indent + 1, 4) : step < 0.55 ? Math.max(indent - 1, 0) : indent;
+      const segments = Array.from({ length: 1 + Math.floor(r() * 4) }, () => ({ width: 4 + Math.floor(r() * 14), tone: Math.floor(r() * tones) }));
+      return { indent, segments };
+    });
+  }
+  function waveformPeaks(count, seed = 7) {
+    const r = seeded(seed);
+    return Array.from({ length: count }, (_, i) => {
+      const x = count > 1 ? i / (count - 1) : 0.5;
+      const taper = Math.sin(Math.PI * x) ** 0.7;
+      const swells = 0.62 + 0.38 * Math.sin(Math.PI * (x * 4 - 0.35));
+      return clamp01(taper * swells * (0.42 + 0.58 * r()));
+    });
+  }
+  const signalFrame = (peaks, p) => { const level = Math.sin(Math.PI * clamp01(p)); return peaks.map((pk, i) => pk * level * (0.78 + 0.22 * Math.sin(i * 0.55 - p * 16))); };
+  function barsPath(heights, { width, mid, depth, direction, fill = 0.58 }) {
+    const slot = width / heights.length, bar = +(slot * fill).toFixed(2);
+    return heights.map((h, i) => {
+      const size = +(clamp01(h) * depth).toFixed(2);
+      if (size < 0.05) return '';
+      const x = +(i * slot + (slot - bar) / 2).toFixed(2), y = direction === 'up' ? +(mid - size).toFixed(2) : mid;
+      return `M${x} ${y}h${bar}v${size}h${-bar}z`;
+    }).join('');
+  }
+
+  // CodeField.astro geometry (pitch 22, unit 7). The 10px gutter numbers are left out: too small to read here.
+  // At top 17 the heading rule falls between rows 3 and 4. Rows 7-10 sit behind the Kaillera card, so the
+  // caret blinks after row 6, the last row in view.
+  const rows = codeRows(11);
+  document.querySelector('.code').innerHTML = rows.map((row, i) => {
+    let x = 40 + row.indent * 22;
+    return `<g class="code-row">${row.segments.map(s => { const bar = `<rect class="tone-${s.tone}" x="${x}" y="${i * 22 + 9.5}" width="${s.width * 7}" height="6" rx="3"/>`; x += s.width * 7 + 8; return bar; }).join('')}</g>`;
+  }).join('') + `<rect class="caret" x="190" y="${6 * 22 + 7}" width="2" height="11"/>`;
+  // SignalEdge with the 70px mid line: the dark band, its paper peaks as holes (even-odd), and the dark peaks below.
+  // The band starts 8px inside the panel and runs 4px past each side: the panel's antialiased bottom corners
+  // otherwise leave a light dot at the frame edge while the panel moves.
+  const h = signalFrame(waveformPeaks(110), 0.5), lay = { width: 1200, mid: 70, depth: 70 };
+  document.querySelector('.edge path').setAttribute('d', `M-4 -8H1204V70H-4Z${barsPath(h, { ...lay, direction: 'up' })}${barsPath(h, { ...lay, direction: 'down' })}`);
+
+  // Act 1, software (600-1400): the camera pushes into the monitor while the screen world opens
+  // from the measured glass (studio-v1 art px 766,130 / 1327,151 / 1327,511 / 766,446) to the frame.
+  // Both polygons have four vertices, so the clip interpolates. The copy stays still until covered.
+  const glass = 'polygon(808.9px 124.8px, 1123px 136.5px, 1123px 338.1px, 808.9px 301.7px)';
+  // The target overshoots the frame by 48px, so the slow end of the ink curve leaves no paper sliver at the edges.
+  const full = 'polygon(-48px -48px, 1248px -48px, 1248px 678px, -48px 678px)';
+  const DIVE = 600, OPEN = 1400, BACK = 3800, HOME = 4900;
+  play('.screen', [[DIVE, { clipPath: glass, easing: ease.ink }], [OPEN, { clipPath: full }], [HOME + 50, { clipPath: full }], [HOME + 51, { clipPath: glass }]]);
+  play('.screen', [[DIVE, { opacity: 0, easing: 'linear' }], [DIVE + 150, { opacity: 1 }], [HOME + 50, { opacity: 1 }], [HOME + 51, { opacity: 0 }]]);
+  play('.studio', [[DIVE, { transform: 'scale(1)', easing: ease.ink }], [OPEN, { transform: 'scale(1.12)' }], [OPEN + 50, { transform: 'scale(1.12)' }], [OPEN + 51, { transform: 'scale(1)' }]]);
+
+  // The screen world builds: code rows type in steps, the heading rises and its rule draws, then
+  // the two cards rise 140 ms apart (global.css:226-231, index.astro:234).
+  document.querySelectorAll('.code-row').forEach((row, i) => play([...row.querySelectorAll('rect')], [
+    [0, { transform: 'scaleX(0)' }], [900 + 60 * i, { transform: 'scaleX(0)', easing: 'steps(6, end)' }], [1200 + 60 * i, { transform: 'scaleX(1)' }],
+    [HOME + 50, { transform: 'scaleX(1)' }], [HOME + 51, { transform: 'scaleX(0)' }],
+  ]));
+  play('.code .caret', [[1900, { opacity: 0 }], [1901, { opacity: 1 }], [2250, { opacity: 1 }], [2251, { opacity: 0 }], [2600, { opacity: 0 }], [2601, { opacity: 1 }], [2950, { opacity: 1 }], [2951, { opacity: 0 }], [3300, { opacity: 0 }], [3301, { opacity: 1 }], [3650, { opacity: 1 }], [3651, { opacity: 0 }]]);
+  const rise = (sel, at, ms) => play(sel, [[at, { opacity: 0, transform: 'translateY(26px)', easing: ease.out }], [at + ms, { opacity: 1, transform: 'translateY(0)' }], [HOME + 50, { opacity: 1, transform: 'translateY(0)' }], [HOME + 51, { opacity: 0, transform: 'translateY(26px)' }]]);
+  rise('.heading h2', 1150, 600);
+  rise('.p1', 1250, 700);
+  rise('.p2', 1390, 700);
+  play('.heading .rule', [[1350, { transform: 'scaleX(0)', easing: ease.out }], [2150, { transform: 'scaleX(1)' }], [HOME + 50, { transform: 'scaleX(1)' }], [HOME + 51, { transform: 'scaleX(0)' }]]);
+
+  // Act 2, sound (3800-4900): the SignalEdge waveform carries the viewer back down to paper.
+  // The edge rises the whole 770px; the content above it scrolls only 150px, a parallax, and the panel is
+  // clipped at the edge (inset 620 = 770 - 150), so the edge overtakes each card from the bottom. Tally's
+  // "Demo data" banner, at the top of its capture, is the last of it to go and never leaves the frame first.
+  // All three share one easing and span, so they stay in step.
+  const back = (sel, from, to) => play(sel, [[BACK, { ...from, easing: ease.inOut }], [HOME, to], [HOME + 50, to], [HOME + 51, from]]);
+  back('.edge', { transform: 'translateY(0)' }, { transform: 'translateY(-770px)' });
+  back('.panel', { transform: 'translateY(0)', clipPath: 'inset(0px 0px 0px 0px)' }, { transform: 'translateY(-150px)', clipPath: 'inset(0px 0px 620px 0px)' });
+  // The url keeps its place and changes colour as each world's edge crosses it.
+  play('.url', [[1010, { color: '#4A4A4A', easing: 'linear' }], [1070, { color: '#b0a799' }], [4040, { color: '#b0a799', easing: 'linear' }], [4100, { color: '#4A4A4A' }]]);
+  // The headphones give off three rings once the edge has uncovered them (StudioLife life-sound).
+  play('.sound ellipse', [[4400, { opacity: 0, transform: 'scale(1)' }], [4452, { opacity: .55, transform: 'scale(1.03)', easing: ease.ring }], [5700, { opacity: 0, transform: 'scale(1.75)' }]], { stagger: 280 });
+
+  // Act 3, things worth exploring: the notebook sketch draws itself again and the sun pops back.
+  // Both are reset at 1451 ms, while the screen world covers the paper, so the notebook returns blank.
+  play('.sketch-path', [[OPEN + 50, { strokeDashoffset: 0 }], [OPEN + 51, { strokeDashoffset: 1 }], [4900, { strokeDashoffset: 1, easing: ease.inOut }], [6000, { strokeDashoffset: 0 }]]);
+  play('.sketch-sun', [[OPEN + 50, { transform: 'scale(1)' }], [OPEN + 51, { transform: 'scale(0)' }], [5900, { transform: 'scale(0)', easing: ease.spring }], [6350, { transform: 'scale(1)' }]]);
+</script>
+</body>
+</html>

@@ -1,0 +1,110 @@
+<!doctype html>
+<!-- Old News (/music/old-news): the release's editorial premiere, the link Kazon shares for the single.
+     The page's masthead (src/styles/music-premiere.css: the artist line between rules, the title, the
+     credit line between rules) sits over its own video poster, old-news-premiere.webp (a generated
+     illustration, LyricVideo.astro), with the Watch the lyric video button. The motion: a slow push on
+     the picture only, the Watch button presses and sends out two paper rings, then the hero transport
+     (AudioPlayer.astro, which overlaps the poster's foot on the page) rises into the corner with the
+     song's real length, holds, and drops away. Nothing plays and no progress is shown, so the time
+     stays at 0:00. Only the Watch button presses (the press belongs to the page's main action).
+     Copy is verbatim: the masthead from src/pages/music/[slug].astro:38-40 with the values in
+     src/content/releases/old-news-single.json (artist, displayTitle, producer, type), the button label
+     from src/components/audio/LyricVideo.astro:13, and the transport from [slug].astro:48 and
+     AudioPlayer.astro:5, :11, :13 (duration 160 s in src/content/recordings/old-news-recording.json).
+     Re-render when those values change. Libron Bold stands in for the title's Georgia 900, which the
+     renderer does not have. The picture's grain keeps a PNG poster over 600 KB, so the poster is a JPEG. -->
+<html lang="en" data-duration="6000" data-poster="jpeg">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../kit.css" />
+<style>
+  /* Masthead variant: the page's masthead replaces the kicker. */
+  .masthead { position: absolute; left: 64px; right: 64px; top: 0; height: 231px; text-align: center; }
+  .artist, .credit { position: absolute; left: 0; right: 0; display: flex; align-items: center; margin: 0; }
+  .artist::before, .artist::after, .credit::before, .credit::after { content: ''; flex: 1; height: 1px; background: var(--ink); }
+  /* .masthead-artist: the name in Kazon Name Text, tracked .45em, balanced by .45em on its left. */
+  .artist { top: 51px; gap: 28px; }
+  .artist span { font: 400 34px/1.4 var(--name-text); letter-spacing: .45em; padding-left: .45em; white-space: nowrap; }
+  /* .masthead-title: uppercase, line-height .93; Libron Bold in place of Georgia 900. */
+  .title { position: absolute; left: 0; right: 0; top: 97px; font: 700 112px/.93 var(--serif); letter-spacing: -.04em; word-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+  /* .masthead-credit: tracked .16em between rules, 1.5em apart. */
+  .credit { top: 203px; gap: 30px; font: 400 20px/1 var(--serif); letter-spacing: .16em; }
+  .credit span { white-space: nowrap; }
+
+  /* The premiere poster at 1200 × 675 (scale .7177), its top at frame y 17 so the masthead sits inside
+     the safe area: source rows 298-854, the folded newspaper on the ledge, the river and the skyline
+     at sunset. */
+  .picture { position: absolute; left: 0; top: 231px; width: 1200px; height: 399px; overflow: hidden; background: #150f0c; }
+  .push { position: absolute; inset: 0; transform-origin: 62% 45%; will-change: transform; }
+  .push img { position: absolute; left: 0; top: -214px; width: 1200px; height: 675px; }
+  .scrim { position: absolute; left: 0; right: 0; bottom: 0; height: 150px; background: linear-gradient(transparent, rgba(14, 14, 14, .45)); }
+
+  /* .video-poster-button: an accent circle with a paper border and play symbol, the label in white. */
+  .watch { position: absolute; left: 600px; top: 344px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .round { width: 84px; height: 84px; border-radius: 50%; background: var(--accent); border: 1px solid var(--paper); display: grid; place-items: center; will-change: transform; }
+  .round svg { width: 36px; height: 36px; color: var(--paper); }
+  .watch-label { margin: 0; font: 400 26px/1.4 var(--serif); color: #fff; text-shadow: 0 1px 7px #000; white-space: nowrap; }
+  /* Paper rings with a soft shadow, as the label has, so they read over the light newsprint too. */
+  .press-ring { left: 558px; top: 344px; width: 84px; height: 84px; border: 4px solid var(--paper); border-radius: 50%; box-shadow: 0 0 8px rgba(0, 0, 0, .5), inset 0 0 8px rgba(0, 0, 0, .5); }
+
+  /* The hero transport (.player-controls in music-premiere.css): paper, a rule border, the cover,
+     the title, the accent play button, the seek track at 0, the time, and the volume button. */
+  .transport { position: absolute; right: 64px; bottom: 48px; width: 560px; display: flex; align-items: center; gap: 14px; padding: 12px; background: var(--paper); border: 1px solid var(--rule); opacity: 0; transform: translateY(110px); will-change: transform; }
+  .transport .cover { width: 52px; height: 52px; object-fit: cover; flex: none; }
+  .transport .song { margin: 0; font: 400 24px/1.2 var(--serif); white-space: nowrap; }
+  .transport .play { width: 46px; height: 46px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; flex: none; }
+  .transport .play svg { width: 22px; height: 22px; color: var(--paper); }
+  .progress { flex: 1; min-width: 0; display: flex; align-items: center; gap: 16px; }
+  /* A range input drawn with accent-color at value 0: a light track and the accent thumb at its start. */
+  .track { position: relative; flex: 1; height: 6px; border-radius: 3px; background: var(--well-divider); }
+  .track::before { content: ''; position: absolute; left: -2px; top: 50%; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); transform: translateY(-50%); }
+  .time { margin: 0; font: 400 20px/24px var(--sans); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .volume { width: 26px; height: 26px; color: var(--accent); flex: none; }
+</style>
+</head>
+<body>
+<main class="frame on-photo">
+  <header class="masthead">
+    <p class="artist"><span>Kazon</span></p>
+    <h1 class="title">Old News</h1>
+    <p class="credit"><span>Prod. Lexi Banks</span><span>single</span></p>
+  </header>
+  <div class="picture">
+    <div class="push"><img src="../../../src/assets/site/old-news-premiere.webp" alt="" width="1672" height="941" /></div>
+    <div class="scrim"></div>
+  </div>
+  <i class="press-ring"></i><i class="press-ring"></i>
+  <div class="watch">
+    <span class="round"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z" /></svg></span>
+    <p class="watch-label">Watch the lyric video</p>
+  </div>
+  <p class="url">thesuperhuman.us/music/old-news</p>
+  <div class="transport">
+    <img class="cover" src="../../../public/music/old-news-single-0db5fc05dca4ee79.webp" alt="" width="1254" height="1254" />
+    <p class="song">Old News</p>
+    <span class="play"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z" /></svg></span>
+    <div class="progress"><i class="track"></i><p class="time">0:00 / 2:40</p></div>
+    <svg class="volume" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9h4l5-4v14l-5-4H3zM16 8q4 4 0 8M19 5q7 7 0 14" /></svg>
+  </div>
+</main>
+<script src="../kit.js"></script>
+<script>
+  const { play, ease } = og;
+  // A slow push on the picture only, out and back across the whole loop.
+  play('.push', [[0, { transform: 'scale(1)', easing: ease.inOut }], [3000, { transform: 'scale(1.03)', easing: ease.inOut }], [6000, { transform: 'scale(1)' }]]);
+  // The Watch button presses at 900 ms; two paper rings leave it at 900 and 1500 ms (700 ms each).
+  play('.round', [[900, { transform: 'scale(1)', easing: ease.out }], [1020, { transform: 'scale(.95)', easing: ease.out }], [1300, { transform: 'scale(1)' }]]);
+  const ring = at => [[at, { opacity: 0, transform: 'scale(1)' }], [at + 42, { opacity: .9, transform: 'scale(1.04)', easing: ease.ring }], [at + 700, { opacity: 0, transform: 'scale(1.7)' }], [at + 701, { opacity: 0, transform: 'scale(1)' }]];
+  const rings = document.querySelectorAll('.press-ring');
+  play(rings[0], ring(900));
+  play(rings[1], ring(1500));
+  // The transport rises into the corner (2200-2700), holds 1.7 s, and drops away (4400-4850).
+  play('.transport', [
+    [2200, { transform: 'translateY(110px)', opacity: 0, easing: ease.out }],
+    [2700, { transform: 'translateY(0)', opacity: 1 }],
+    [4400, { transform: 'translateY(0)', opacity: 1, easing: ease.in }],
+    [4850, { transform: 'translateY(110px)', opacity: 0 }],
+  ]);
+</script>
+</body>
+</html>

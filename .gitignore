@@ -44,3 +44,6 @@ __pycache__/
 # Local screenshot runs (CI publishes them to the screenshots branch)
 /screenshots/
 .screenshots/
+
+# Link-preview contact sheets from scripts/og-video/render.mjs --sheet
+/.og-video/
