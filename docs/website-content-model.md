@@ -304,8 +304,14 @@ its job, on the shared layer; content, copy and order are unchanged everywhere.
   October 22).
 - **Audio:** the hero headphones give off the same rings on arrival and the
   sections rise in. It stays light: this page sells, and playback is untouched.
-- **Building:** the feature and the project rows rise in; the Tally capture leans
-  toward a fine pointer and the row pictures lift on hover.
+- **Building:** the project rows rise in, each drawing with its row. As each
+  drawing is seen, it shows its flow once, in reading order: Tally's arrows light
+  up in turn and the budgets fill; Kaillera-next's dashed lines reach from the
+  game room to each player, then the peer line joins Player 1 and Player 2; on the
+  website drawing the After waveform plays in from left to right under the Before
+  one. It rests within about two and a half seconds; reduced motion shows the
+  finished drawings (October 22, replacing the drawings' own rise-in and panel
+  build; the page no longer has a Tally capture or hover lift).
 - **Work:** restrained for recruiters. Only the two evidence diagrams build as
   they arrive (before, then after; each timeline step in turn).
 - **Writing:** the direction illustration draws its path through the checkpoints

@@ -2,24 +2,29 @@
 interface Props { kind: 'tally' | 'kaillera' | 'website'; }
 const { kind } = Astro.props;
 const bars = [8, 14, 23, 17, 29, 11, 25, 34, 19, 26, 13, 30, 21, 10, 28, 36, 17, 25, 12, 31, 22, 14, 27, 18];
+// The three dashed lines from the game room: to Player 1, to Player 2 and down to the spectator.
+const roomLines = ['M270 82 L70 207', 'M270 82 L470 207', 'M270 150 L270 270'];
 ---
-<figure class="building-illustration" data-reveal>
+{/* Each drawing arrives with its project row (building.astro). Where motion is welcome it then
+    shows its flow once, in reading order, as it is seen ([data-scene-arrive] in
+    src/scripts/scroll-scenes.ts); the resting frame is the finished drawing. */}
+<figure class="building-illustration" data-scene-arrive>
   <div class:list={['drawing', kind]} aria-hidden="true">
     {kind === 'tally' && <div class="panels budget-panels">
       <div class="panel-step"><p class="panel-label">Transactions</p><div class="panel transactions"><p><span>◦</span> Coffee</p><p><span>◦</span> Groceries</p><p><span>◦</span> Transit</p><p><span>◦</span> Restaurant</p><p class="ellipsis">…</p></div></div>
-      <span class="flow-arrow">→</span>
+      <span class="flow-arrow" style="--at: 0ms">→</span>
       <div class="panel-step"><p class="panel-label">Categories</p><div class="panel categories"><p><span class="category-dot food"></span> Food</p><p><span class="category-dot home"></span> Home</p><p><span class="category-dot transport"></span> Transport</p><p><span class="category-dot shopping"></span> Shopping</p></div></div>
-      <span class="flow-arrow">→</span>
-      <div class="panel-step"><p class="panel-label">Monthly budget</p><div class="panel budgets"><p>Food</p><div class="budget-track"><span style="--amount: 72%; --color: var(--accent)"></span></div><p>Home</p><div class="budget-track"><span style="--amount: 40%; --color: var(--ill-slate)"></span></div><p>Transport</p><div class="budget-track"><span style="--amount: 57%; --color: var(--ill-sage)"></span></div><p>Shopping</p><div class="budget-track"><span style="--amount: 32%; --color: var(--ill-sand)"></span></div></div></div>
+      <span class="flow-arrow" style="--at: 450ms">→</span>
+      <div class="panel-step"><p class="panel-label">Monthly budget</p><div class="panel budgets"><p>Food</p><div class="budget-track"><span style="--amount: 72%; --color: var(--accent); --n: 0"></span></div><p>Home</p><div class="budget-track"><span style="--amount: 40%; --color: var(--ill-slate); --n: 1"></span></div><p>Transport</p><div class="budget-track"><span style="--amount: 57%; --color: var(--ill-sage); --n: 2"></span></div><p>Shopping</p><div class="budget-track"><span style="--amount: 32%; --color: var(--ill-sand); --n: 3"></span></div></div></div>
     </div>}
     {kind === 'kaillera' && <div class="room-scene">
-      <svg class="connections" viewBox="0 0 540 320" preserveAspectRatio="none" fill="none"><path class="room-lines" d="M270 82 L70 207 M270 82 L470 207 M270 150 L270 270"/><path class="peer-line" d="M139 227 H401"/><path class="peer-heads" d="m147 221 -8 6 8 6 m246 -12 8 6 -8 6"/></svg>
+      <svg class="connections" viewBox="0 0 540 320" preserveAspectRatio="none" fill="none"><path class="room-lines" d={roomLines.join(' ')}/>{roomLines.map((line, index) => <path class="cover" pathLength="1" d={line} style={`--at: ${index * 250}ms`}/>)}<path class="peer-line" pathLength="1" d="M139 227 H401"/><path class="peer-heads" d="m147 221 -8 6 8 6 m246 -12 8 6 -8 6"/></svg>
       <div class="room panel-step"><p class="panel-label">Game room</p><div class="browser room-browser"><div class="browser-bar">•••</div><div class="room-members"><p><span class="member"></span> Player 1</p><p><span class="member"></span> Player 2</p><p><span class="member spectator-dot"></span> Spectator</p><div class="invite">Invite friends</div></div></div></div>
       {[{name:'Player 1',className:'player-one'},{name:'Player 2',className:'player-two'},{name:'Spectator',className:'spectator'}].map(({name,className}) => <div class:list={['participant','panel-step',className]}><div class="browser"><div class="browser-bar">•••</div><svg viewBox="0 0 100 55" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="38" cy="17" r="8"/><path d="M23 44v-4c0-17 30-17 30 0v4"/>{name !== 'Spectator' && <><path d="M68 21h13l5 17c1 4-2 5-5 2l-5-4-5 4c-3 3-6 2-5-2z"/><path d="M69 28h7m-3-3v6"/><circle cx="80" cy="29" r="1"/></>}</svg></div><p class="panel-label">{name}</p>{name === 'Spectator' && <p class="watch-only">Watch only</p>}</div>)}
     </div>}
     {kind === 'website' && <div class="panels website-panels">
       <div class="panel-step panel web-panel"><p class="panel-label">Explore the work</p><div class="work-timeline"><div><i></i><span></span><span></span></div><div><i></i><span></span><span></span></div><div><i></i><span></span><span></span></div><div><i></i><span></span></div></div></div>
-      <div class="panel-step panel web-panel"><p class="panel-label">Compare the sound</p><div class="sound"><p>Before</p><svg viewBox="0 0 100 48" class="wave before-wave">{bars.map((height,i)=><line x1={3+i*4} x2={3+i*4} y1={24-height/2} y2={24+height/2} />)}</svg><p>After</p><svg viewBox="0 0 100 48" class="wave after-wave">{bars.map((height,i)=><line x1={3+i*4} x2={3+i*4} y1={24-height/2-2} y2={24+height/2+2} />)}</svg></div></div>
+      <div class="panel-step panel web-panel"><p class="panel-label">Compare the sound</p><div class="sound"><p>Before</p><svg viewBox="0 0 100 48" class="wave before-wave">{bars.map((height,i)=><line x1={3+i*4} x2={3+i*4} y1={24-height/2} y2={24+height/2} />)}</svg><p>After</p><svg viewBox="0 0 100 48" class="wave after-wave">{bars.map((height,i)=><line x1={3+i*4} x2={3+i*4} y1={24-height/2-2} y2={24+height/2+2} style={`--i: ${i}`} />)}</svg></div></div>
       <div class="panel-step panel web-panel"><p class="panel-label">Start a conversation</p><div class="inquiry"><div>Your name</div><div>What do you want to make?</div><span>Send a message</span></div></div>
     </div>}
   </div>
@@ -43,7 +48,7 @@ const bars = [8, 14, 23, 17, 29, 11, 25, 34, 19, 26, 13, 30, 21, 10, 28, 36, 17,
   .budgets p { margin-bottom: 4.8px; }.budget-track { height: 7.2px; background: var(--rule); border-radius: 2px; margin-bottom: 16px; overflow: hidden; }.budget-track span { display: block; height: 100%; width: var(--amount); background: var(--color); transform-origin: left; }
   .room-scene { position: relative; height: 340px; }
   .connections { position: absolute; width: 100%; height: 100%; inset: 0; stroke-width: 1.4; }
-  .room-lines { stroke: var(--muted); stroke-dasharray: 5 6; }.peer-line, .peer-heads { stroke: var(--accent); }
+  .room-lines { stroke: var(--muted); stroke-dasharray: 5 6; }.cover { stroke: none; }.peer-line, .peer-heads { stroke: var(--accent); }
   .room { position: absolute; top: 0; left: 32%; width: 36%; }.room .panel-label { margin-bottom: 8px; }
   .browser { border: 1.5px solid var(--ink); border-radius: 3px; background: var(--paper); overflow: hidden; }.browser-bar { border-bottom: 1px solid var(--rule); height: 17.6px; line-height: .7; letter-spacing: 3.2px; padding-left: 5.6px; font-size: 12.8px; }
   .room-members { padding: 10.4px 12px; font-size: 12px; }.room-members p { display: flex; align-items: center; gap: 9.6px; margin-bottom: 7.2px; }.member { width: 8.8px; height: 8.8px; border: 1px solid var(--ink); border-radius: 50%; background: var(--ink); }.spectator-dot { background: var(--paper); }
@@ -55,12 +60,24 @@ const bars = [8, 14, 23, 17, 29, 11, 25, 34, 19, 26, 13, 30, 21, 10, 28, 36, 17,
   .inquiry { padding: 12.8px 9.6px; font-size: 11.2px; color: var(--muted); }.inquiry > div { border: 1px solid var(--ill-line); border-radius: 2px; padding: 7.2px; margin-bottom: 9.6px; }.inquiry > div:nth-child(2) { min-height: 76px; }.inquiry > span { display: block; padding: 7.2px 1.6px; background: var(--accent); color: var(--paper); text-align: center; border-radius: 2px; }
   figcaption { color: var(--muted); font-size: 12px; font-style: italic; margin-top: 12.8px; }
   @media (max-width: 400px) { .panels { gap: 5.6px; }.panel-label { font-size: 12px; }.transactions, .categories, .budgets { padding: 10.4px 6.4px; font-size: 10.4px; min-height: 175px; }.transactions p, .categories p { gap: 4px; }.flow-arrow { font-size: 16px; }.room-scene { height: 310px; }.room { left: 29%; width: 42%; }.room-members { padding: 8.8px; font-size: 11.2px; }.web-panel { min-height: 205px; }.inquiry { padding: 9.6px 5.6px; font-size: 10px; }.sound { padding: 9.6px 6.4px; }.work-timeline { padding: 13.6px 8px; } }
+  /* The flow, once, in reading order (rests within about two and a half seconds). Every keyframe
+     starts from the drawing's opening state, so nothing shows mid-way while the scene waits. */
   @media screen and (prefers-reduced-motion: no-preference) {
-    :global(.motion) .building-illustration .panel-step { transition: opacity 700ms var(--ease-site), transform 700ms var(--ease-site); }
-    :global(.motion) .building-illustration:not(.is-in) .panel-step { opacity: 0; transform: translateY(12px); }
-    :global(.motion) .building-illustration .panel-step:nth-of-type(2) { transition-delay: 180ms; }
-    :global(.motion) .building-illustration .panel-step:nth-of-type(3) { transition-delay: 360ms; }
-    :global(.motion) .building-illustration .budget-track span { transition: transform 900ms var(--ease-site) 300ms; }
-    :global(.motion) .building-illustration:not(.is-in) .budget-track span { transform: scaleX(0); }
+    /* Tally: the arrows light up in turn, then the budgets fill. */
+    :global(.motion) .building-illustration .flow-arrow { animation: ill-arrow 400ms var(--ease-site) calc(200ms + var(--at)) both; }
+    :global(.motion) .building-illustration .budget-track span { animation: ill-fill 700ms var(--ease-site) calc(1100ms + var(--n) * 120ms) both; }
+    /* Kaillera-next: paper covers slide off the dashed lines from the room out to each player in
+       turn, then the peer line joins Player 1 and Player 2. */
+    :global(.motion) .building-illustration .cover { stroke: var(--paper); stroke-width: 4; stroke-dasharray: 1 1; stroke-dashoffset: -1; animation: ill-uncover 650ms cubic-bezier(.45, .05, .3, 1) calc(200ms + var(--at)) both; }
+    :global(.motion) .building-illustration .peer-line { stroke-dasharray: 1; animation: ill-draw 600ms var(--ease-site) 1500ms both; }
+    :global(.motion) .building-illustration .peer-heads { animation: ill-in 300ms var(--ease-site) 2000ms both; }
+    /* Personal website: the After waveform plays in from left to right under the Before one. */
+    :global(.motion) .building-illustration .after-wave line { transform-box: fill-box; transform-origin: center; animation: ill-bar 420ms var(--ease-site) calc(500ms + var(--i) * 30ms) both; }
   }
+  @keyframes ill-arrow { from { opacity: 0; transform: translateX(-6px); } }
+  @keyframes ill-fill { from { transform: scaleX(0); } }
+  @keyframes ill-uncover { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -1; } }
+  @keyframes ill-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+  @keyframes ill-in { from { opacity: 0; } }
+  @keyframes ill-bar { from { opacity: 0; transform: scaleY(.2); } }
 </style>
