@@ -7,10 +7,12 @@ interface Props {
   overrides?: Partial<Record<(typeof doors)[number]['id'], Partial<Pick<(typeof doors)[number], 'href' | 'label'>>>>;
   /* 'eager' where the doors render in the first screen (the Work with me hub); Home keeps them lazy. */
   loading?: 'lazy' | 'eager';
+  /* 'column' stacks the doors as picture-left rows from 1000px wide, where the Work with me hub sets them beside its headline (ServiceSheet.astro); below that they are ruled rows, as on Home. */
+  layout?: 'rows' | 'column';
 }
-const { headingLevel = 'h3', overrides = {}, loading = 'lazy' } = Astro.props;
+const { headingLevel = 'h3', overrides = {}, loading = 'lazy', layout = 'rows' } = Astro.props;
 ---
-<div class="doors">
+<div class:list={['doors', { 'doors-column': layout === 'column' }]}>
   {doors.map((door, index) => {
     const href = overrides[door.id]?.href ?? door.href;
     const label = overrides[door.id]?.label ?? door.label;
@@ -25,18 +27,44 @@ const { headingLevel = 'h3', overrides = {}, loading = 'lazy' } = Astro.props;
   })}
 </div>
 <style>
-  /* Subgrid keeps the captions, titles, lines and buttons on shared rows, so the three doors line up whatever wraps. */
-  .doors { display: grid; grid-template-columns: repeat(3, 1fr); column-gap: 2.5rem; }
-  .door { scroll-margin-top: 1.5rem; display: grid; grid-template-rows: subgrid; grid-row: span 5; }
+  .doors { display: grid; }
+  .door { scroll-margin-top: 1.5rem; display: grid; }
   .door-art { display: block; aspect-ratio: 3 / 2; border: 1px solid var(--rule); border-radius: 3px; padding: 0; overflow: hidden; background: color-mix(in srgb, var(--rule) 50%, var(--paper)); }
   .door-art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
   .door-caption { font-family: var(--font-sans); font-size: .78rem; color: var(--muted); margin: .7rem 0 .8rem; text-wrap: pretty; }
   .door-title { font-size: 1.55rem; line-height: 1.2; letter-spacing: -.02em; margin: 0 0 .35rem; }
   .door-line { font-size: 1.05rem; line-height: 1.5; color: var(--muted); max-width: 30ch; margin: 0 0 .9rem; text-wrap: pretty; }
   .door-button { justify-self: start; align-self: start; min-height: 44px; padding: .45rem 1.15rem; }
+  /* Wide screens: each door is one row between hairline rules. The rows share one set of columns (subgrid), so the lines and buttons line up from door to door whatever wraps. */
+  @media (min-width: 801px) {
+    .doors { grid-template-columns: 216px minmax(0, 1fr) minmax(0, 1.15fr) auto; column-gap: 2rem; border-bottom: 1px solid var(--rule); }
+    .door { grid-column: 1 / -1; grid-template-columns: subgrid; grid-template-areas: "art caption line button" "art title line button"; align-items: start; align-content: center; padding-block: 1.25rem; border-top: 1px solid var(--rule); }
+    .door-art { grid-area: art; }
+    .door-caption { grid-area: caption; margin: 0 0 .3rem; align-self: end; }
+    .door-title { grid-area: title; margin: 0; }
+    .door-line { grid-area: line; margin: 0; align-self: center; max-width: 34ch; }
+    .door-button { grid-area: button; align-self: center; justify-self: end; }
+  }
+  /* Until the line has room for its own column, it sits under the title, so it does not wrap to a few words a line. */
+  @media (min-width: 801px) and (max-width: 1199px) {
+    .doors { grid-template-columns: 216px minmax(0, 1fr) auto; }
+    .door { grid-template-rows: auto auto 1fr; grid-template-areas: "art caption button" "art title button" "art line button"; align-content: start; }
+    .door-caption { align-self: start; }
+    .door-line { align-self: start; margin-top: .35rem; }
+  }
+  /* The hub's first screen, from 1000px wide: the doors stack beside the headline as the phone's picture-left rows, with hairlines between them. */
+  @media (min-width: 1000px) {
+    .doors-column { grid-template-columns: minmax(0, 1fr); border-bottom: 0; }
+    .doors-column .door { grid-template-columns: 156px minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "art caption" "art title" "art line" "art button"; column-gap: 1.25rem; align-content: start; padding-block: .9rem; }
+    .doors-column .door:first-child { border-top: 0; padding-top: 0; }
+    .doors-column .door-caption { margin: 0 0 .2rem; align-self: start; }
+    .doors-column .door-title { font-size: 1.4rem; margin: 0 0 .35rem; }
+    .doors-column .door-line { margin: 0 0 .5rem; max-width: none; align-self: start; }
+    .doors-column .door-button { align-self: start; justify-self: start; }
+  }
   @media (max-width: 800px) {
     .doors { grid-template-columns: 1fr; row-gap: 1.75rem; }
-    .door { grid-template-columns: 104px 1fr; grid-template-rows: none; grid-template-areas: "art caption" "art title" "art line" "art button"; grid-row: auto; column-gap: 1rem; align-items: start; }
+    .door { grid-template-columns: 104px 1fr; grid-template-areas: "art caption" "art title" "art line" "art button"; column-gap: 1rem; align-items: start; }
     .door-art { grid-area: art; }
     .door-caption { grid-area: caption; margin: 0 0 .4rem; }
     .door-title { grid-area: title; font-size: 1.4rem; }

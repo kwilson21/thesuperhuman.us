@@ -382,6 +382,26 @@ live at `/audio/services`. The old `/services.html` address redirects to the hub
 Audio belongs within the personal site, with its existing hostname retained as an
 alternate entry and main-site canonicals.
 
+Layout, October 22 (owner picks D1.1-B and D1.2-C from the Hallmark follow-up
+board `home-doors`): on wide screens the doors are ruled rows, one door per row
+between hairlines, with the picture on the left, the caption over the title, the
+line, and the button at the right edge. The rows share their columns, so the lines
+and buttons line up from door to door; below 1200px wide the line sits under the
+title instead of in its own column. Home shows the rows from 801px wide. From
+1000px wide the hub opens in two columns: the kicker, headline and introduction
+on the left and the three doors stacked on the right as picture-left rows, so all
+three buttons are in the first screen at 1280 × 800. Between 801 and 999px the hub
+stacks and its doors are the same ruled rows as Home. Phones keep the picture-left
+rows everywhere.
+
+The "Before we start." steps on `/services` are one numbered list in the
+right-hand column, beside the heading as on `/audio/services`: each numeral hangs
+in a narrow gutter beside its title and description, with a hairline between
+steps (owner pick D7.1-C, board `services-layout`, October 22). The one-page print
+sheet keeps its three columns. On `/services` and `/audio/services` each section
+heading's small label (the evidence title and the price note) sits directly under
+its heading at every width (owner pick D7.2-C).
+
 ### Project brief paths, October 19
 
 Approved by the owner on October 19, 2026 ([design study](design-concepts/2026-10-19/website-intake/index.html)).
