@@ -302,6 +302,35 @@ its job, on the shared layer; content, copy and order are unchanged everywhere.
   (small or landscape phones, or a link to a piece further down), it waits until
   half of it is on screen or it fills half the screen. The essay page itself is unchanged.
 
+### The 404 page, October 22
+
+The owner's picks D9.1-B and D5.2 (B, with D chosen at random) on the Hallmark
+boards. The copy is unchanged.
+
+- **Alignment.** Home's first-screen composition: from 801px wide the words sit
+  left-aligned in the left column with "Back to home" and "Explore my projects"
+  side by side, and the scene sits on the right, up to 520px wide. At 800px and
+  below the scene sits on top (up to 520px) and the words follow, still
+  left-aligned. "Back to home" stays in the first screen at 1280 × 800,
+  390 × 844 and 375 × 667.
+- **Scene.** The generated coast is retired. Each page view shows one of two
+  drawn scenes, chosen by a one-line inline script: B, "Horizon over water"
+  (Home's contact-rule sun risen over a terracotta rule, with three short
+  strokes of water), or D, "A waveform on still water" (Home's waveform phrase
+  from `waveformPeaks` in `src/lib/home-motion.ts`, its bars standing on a faint,
+  fading reflection). Without JavaScript the page shows B. Both are CSS or
+  inline SVG, use only `--accent` and `--paper`, and are hidden from screen
+  readers. The sun rises once in 1.6s and the bars rise once in about 1.9s; with
+  reduced motion neither moves. The 404 link preview always shows B, because a
+  preview cannot be random.
+- **Image QA (section 3, in-page inspection).** Claude Code agent, October 22:
+  both scenes inspected in the page at 1440, 1280, 1024, 800, 390, 375 and 320px
+  wide, with JavaScript off and with reduced motion, and through their motion at
+  0, 0.4, 0.9, 1.4 and 2.4s. No horizontal overflow, no clipped sun, glow or
+  reflection, clear of the heading and links, and crisp at 2x because nothing is
+  a raster. Reads as generated: pass (drawn shapes in the site's own motifs; none
+  of the listed tells). No asset record, because there is no image file.
+
 ## Implemented content locations, September 10
 
 - Shared career chronology, dates, working preference, and Lyft capacity values: `src/data/profile.ts`.

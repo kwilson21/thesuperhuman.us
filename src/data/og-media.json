@@ -185,22 +185,21 @@
     "encoding": "5341c8ca6c6bf333"
   },
   "not-found": {
-    "image": "/og/not-found-3542b709fe.png",
-    "video": "/og/not-found-2b82690d2f.mp4",
+    "image": "/og/not-found-683fc38030.png",
+    "video": "/og/not-found-26be4859d7.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 6000,
-    "imageBytes": 327295,
-    "videoBytes": 225603,
-    "frames": "5a6570835a836689",
+    "imageBytes": 97540,
+    "videoBytes": 99829,
+    "frames": "bb96d016c1da3c1e",
     "inputs": [
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
       "scripts/og-video/kit.css",
       "scripts/og-video/kit.js",
-      "scripts/og-video/scenes/not-found.html",
-      "src/assets/site/quiet-coast-v2.webp"
+      "scripts/og-video/scenes/not-found.html"
     ],
-    "source": "559b25fb47d07cda",
+    "source": "7069b0e7f9b2f337",
     "encoding": "5341c8ca6c6bf333"
   },
   "personal-website": {
