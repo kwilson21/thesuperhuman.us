@@ -5,9 +5,9 @@ Repository: `kwilson21/thesuperhuman.us`
 Pull request: [#205](https://github.com/kwilson21/thesuperhuman.us/pull/205)  
 Branch: `sitemap-public-pages`  
 Verified revision: `8944be6`, one commit on top of `main` at `75a88be` (PR #203's squash merge). This record is committed on top of it.  
-Target: production `https://thesuperhuman.us`:
+Target: production `https://thesuperhuman.us` and `audio.thesuperhuman.us`:
 - `/sitemap-0.xml` (through `/sitemap-index.xml`, which `robots.txt` names)
-- the static-asset trailing-slash behavior for the two prerendered pages, `/building/tally` and `/building/kaillera-next`
+- the static-asset trailing-slash behavior for the two prerendered pages, `/building/tally` and `/building/kaillera-next`. Static assets are served before the Worker's host routing, so the setting applies on both hosts.
 - the Tally links on Home and `/work`
 
 Reviewer: Claude Code agent, collecting evidence for owner Kazon Wilson. This record is evidence collection, not owner certification.  
@@ -73,7 +73,10 @@ PASS means the evidence named here was observed.
 - **PASS · 4.1 and 4.2 Assets and caching.** Unchanged headers observed locally: posters and videos keep `public, max-age=31536000, immutable`; the two journals keep `public, max-age=0, must-revalidate`; `/building/the-engineers-daily` keeps `no-store`.
 - **N/A · 4.3 Measurements.** No page content changes. One redirect hop is removed for visitors who follow the canonical URL or the Home and `/work` links.
 - **N/A · 4.4 and 4.5.** No async UI or media change.
-- **PASS · 4.6 404, redirects and errors.** The trailing-slash forms of the two journals now redirect (307) to the slashless canonical URL, and `/email/signature.html` still redirects to `/email/signature` (200), as before. `html_handling` applies only to static assets; server-rendered routes, including the 404 page, are unaffected.
+- **PASS · 4.6 404, redirects and errors.**
+  - The trailing-slash forms of the two journals now redirect (307) to the slashless canonical URL, and `/email/signature.html` still redirects to `/email/signature` (200), as before.
+  - Missing paths still return the branded 404 locally, on both hosts: `/no-such-page` and `/building/tally/no-such-page` returned 404 with "Page not found · Kazon Wilson", with `Host: thesuperhuman.us` and with `Host: audio.thesuperhuman.us`.
+  - With `Host: audio.thesuperhuman.us`, `/building/tally` returned 200 with its canonical on `https://thesuperhuman.us/building/tally`, and `/building/tally/` returned 307 to `/building/tally`, the same as the main host. `/robots.txt` returned 200 on both hosts.
 
 ## 5. Forms and sensitive flows
 
@@ -107,3 +110,5 @@ PASS means the evidence named here was observed.
 3. `curl -sI https://thesuperhuman.us/building/tally` and `/building/kaillera-next` give 200; with a trailing slash they redirect to the slashless URL.
 4. Home and `/work` link to `/building/tally`.
 5. A server-rendered page (`/about`) and a poster still answer as before.
+6. On `https://audio.thesuperhuman.us`: `/building/tally` gives 200 with its canonical on the main host, `/building/tally/` redirects to it, and `/robots.txt` gives 200.
+7. On both hosts, `/no-such-page` and `/building/tally/no-such-page` give 404 with the branded not-found page.
