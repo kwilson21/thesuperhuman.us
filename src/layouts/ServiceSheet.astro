@@ -20,7 +20,7 @@ const lyft = sheet.hero;
       <h1>Three ways to work with me.</h1>
       <p class="sheet-introduction">Mixing and mastering, website design, and software engineering. Every project is fixed price and agreed in writing before work begins.</p>
     </header>
-    <div class="hub-doors"><WorkWithMe headingLevel="h2" loading="eager" /></div>
+    <div class="hub-doors"><WorkWithMe headingLevel="h2" loading="eager" layout="column" /></div>
     <section id="software" class="sheet-software services-page" aria-labelledby="software-title">
       <div class="services-hero">
         <header><p class="page-kicker">{sheet.kicker}</p><h2 id="software-title" class="service-display">{sheet.title}</h2><p>{sheet.introduction}</p><p class="sheet-approach">{sheet.approach}</p></header>
@@ -111,6 +111,13 @@ h1 { font-size: clamp(2.75rem, 5.5vw, 4.5rem); line-height: 1.02; letter-spacing
     .software-offer-body { gap: 1.5rem; }
     .services-page .service-before { grid-template-columns: 1fr; gap: .8rem; }
     .services-page .service-offer > summary { grid-template-columns: 1.3fr 1.2fr 20px; gap: 1rem; }
+  }
+  /* From 1000px wide the hub opens in two columns: the kicker, headline and introduction on the left, the three doors stacked on the right, so every door button shows in the first screen. Narrower, the hub stacks. */
+  @media screen and (min-width: 1000px) {
+    .service-sheet { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); column-gap: 3.5rem; align-items: start; }
+    .service-sheet > * { grid-column: 1 / -1; }
+    .service-sheet > .hub-intro { grid-column: 1; padding-bottom: 0; }
+    .service-sheet > .hub-doors { grid-column: 2; padding-top: .9rem; }
   }
   @media screen and (max-width: 700px) { .hub-intro { padding-block: .5rem 2rem; } }
   @media screen and (max-width: 650px) {

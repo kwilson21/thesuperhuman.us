@@ -7,10 +7,12 @@ interface Props {
   overrides?: Partial<Record<(typeof doors)[number]['id'], Partial<Pick<(typeof doors)[number], 'href' | 'label'>>>>;
   /* 'eager' where the doors render in the first screen (the Work with me hub); Home keeps them lazy. */
   loading?: 'lazy' | 'eager';
+  /* 'column' stacks the doors as picture-left rows from 1000px wide, where the Work with me hub sets them beside its headline (ServiceSheet.astro); below that they are ruled rows, as on Home. */
+  layout?: 'rows' | 'column';
 }
-const { headingLevel = 'h3', overrides = {}, loading = 'lazy' } = Astro.props;
+const { headingLevel = 'h3', overrides = {}, loading = 'lazy', layout = 'rows' } = Astro.props;
 ---
-<div class="doors">
+<div class:list={['doors', { 'doors-column': layout === 'column' }]}>
   {doors.map((door, index) => {
     const href = overrides[door.id]?.href ?? door.href;
     const label = overrides[door.id]?.label ?? door.label;
@@ -49,6 +51,16 @@ const { headingLevel = 'h3', overrides = {}, loading = 'lazy' } = Astro.props;
     .door { grid-template-rows: auto auto 1fr; grid-template-areas: "art caption button" "art title button" "art line button"; align-content: start; }
     .door-caption { align-self: start; }
     .door-line { align-self: start; margin-top: .35rem; }
+  }
+  /* The hub's first screen, from 1000px wide: the doors stack beside the headline as the phone's picture-left rows, with hairlines between them. */
+  @media (min-width: 1000px) {
+    .doors-column { grid-template-columns: minmax(0, 1fr); border-bottom: 0; }
+    .doors-column .door { grid-template-columns: 156px minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "art caption" "art title" "art line" "art button"; column-gap: 1.25rem; align-content: start; padding-block: .9rem; }
+    .doors-column .door:first-child { border-top: 0; padding-top: 0; }
+    .doors-column .door-caption { margin: 0 0 .2rem; align-self: start; }
+    .doors-column .door-title { font-size: 1.4rem; margin: 0 0 .35rem; }
+    .doors-column .door-line { margin: 0 0 .5rem; max-width: none; align-self: start; }
+    .doors-column .door-button { align-self: start; justify-self: start; }
   }
   @media (max-width: 800px) {
     .doors { grid-template-columns: 1fr; row-gap: 1.75rem; }
