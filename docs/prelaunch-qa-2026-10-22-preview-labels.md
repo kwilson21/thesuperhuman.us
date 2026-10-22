@@ -4,6 +4,7 @@ Date: October 22, 2026 (UTC). Local checks ran between about 17:38 and 17:56 UTC
 Repository: `kwilson21/thesuperhuman.us`  
 Branch: `previews-after-hallmark`  
 Verified revision: `2b319b12`, one commit on top of `main` at `6c51010c`. This record is committed on top of it.  
+Merged revision: `bdf17fe`, squash-merged to `main` on October 22, 2026 from the final head `21df610`. Its Workers Builds production build succeeded at 18:22:40 UTC (build `a2895a5d-f8cb-4003-b1fe-be7d9c417edd`), and `wrangler deployments status` showed Worker Version `dd0b4365-fcaa-4cba-b821-890fe29e7fc7` serving 100% of traffic since 18:22:31 UTC.  
 Target: production `https://thesuperhuman.us` and `audio.thesuperhuman.us`: the link-preview posters at `/og/<scene>-<hash>.png` or `.jpg`, the videos at `/og/raw/<scene>-<hash>.mp4`, and the `og:image` and `og:video` tags that point at them.
 
 Scope:
@@ -14,18 +15,18 @@ Scope:
 
 Rollback revision: `6c51010c` (`main`, PR #210's squash merge), serving as Worker Version `a333392a-2aa1-48da-a64d-5901c582f541` at 100% since 17:25:29 UTC (read with `wrangler deployments status`). No migration, binding, secret, dependency, route or copy change. A rollback restores the previous posters and videos. A preview an app scraped after the deploy would then point at files that no longer exist until the app scrapes the page again.
 
-Remaining work: the deploy, and the live checks at the end. The owner-side checks that the #203 record leaves open (Messages, the preview debuggers, the branch preview's gate and headers, alerting on the video route, the remote `owner:health` run) still apply.
+Remaining work: the live checks at the end passed. The owner-side checks that the #203 record leaves open (Messages, the preview debuggers, the branch preview's gate and headers, alerting on the video route, the remote `owner:health` run) still apply.
 
 ## Owner decisions and authorization
 
-On October 22, 2026, the owner asked for this work once the Hallmark feedback work finished ("We may need to update this after the hallmark website feedback work finishes"), then, at about 17:27 UTC, "Check now, then cancel if you can begin now" (in conversation). When the owner later said "We can't do unnecessary reviews here I don't have the usage for this", the multi-agent audit was stopped before any agent finished, and the coordinating session did the comparison itself. There is no go-ahead to merge yet; merging deploys production.
+On October 22, 2026, the owner asked for this work once the Hallmark feedback work finished ("We may need to update this after the hallmark website feedback work finishes"), then, at about 17:27 UTC, "Check now, then cancel if you can begin now" (in conversation). When the owner later said "We can't do unnecessary reviews here I don't have the usage for this", the multi-agent audit was stopped before any agent finished, and the coordinating session did the comparison itself. Later on October 22, shortly before the merge, the owner wrote "No need to make this a ci job right this moment, just update the live videos for now" (in conversation), the go-ahead to merge and deploy. The Screenshots `capture` check on `21df610` was cancelled at its 20-minute limit: every page imports `src/data/og-media.json`, so the capture treated every page as changed. No visible page changed; Validate and Workers Builds passed. No independent review agents ran, per the owner's usage instruction.
 
 ## Evidence and limits
 
 - **Checks at `2b319b12`:** `npm test`: 141 files, 1,757 passed, 1 skipped (the agreement PDF test that needs a private file). `npm run build` passed, including `assets:check` (79 files match their review records), `copy:check`, `design:check` (6 gates) and the publicist gate. The build's warnings (the `SESSION` binding note, two empty content folders, a zod comment) predate this change.
 - **Renders:** `node scripts/og-video/render.mjs` with `CHROMIUM_PATH=/opt/pw-browsers/chromium`. For every scene the renderer reported fonts loaded, no overflow, no text wider than its box and a last frame matching the first.
 - **Visual check:** the coordinating Claude Code session compared every new poster with a 1280 × 800 screenshot of its live page, and inspected the building and project-kaillera-next posters and home's frame at 2.6 s at full size. Other moments of each loop, where only the label face changed, were not inspected frame by frame. No separate review agents ran, per the owner's instruction above.
-- **Not done before the merge:** no request to a branch preview; no real device.
+- **Not done before the merge:** no request to a branch preview; no real device. After the deploy, production was checked (Live checks after deploy).
 
 PASS means the evidence named here was observed.
 
@@ -64,9 +65,9 @@ PASS means the evidence named here was observed.
 - **PASS · 7.1 Required checks.** See Evidence and limits.
 - **PASS · 7.2 Diff review.** Scene, kit, manifest, media and record files only; no secrets, private paths or dependency changes. The old files are removed and the new ones listed with their hashes.
 - **N/A · 7.3 Headers and routing.** Unchanged.
-- **PASS · 7.4 Rollback, review and authorization.** Rollback revision above. Review before merge follows `CLAUDE.md`; the owner's go-ahead is still needed.
-- **UNVERIFIED · 7.5 Post-deployment verification.** Not deployed yet; see the live checks below. Monitoring (6.6) and `owner:health` (8.15) stay open as in the #203 record.
-- **UNVERIFIED · 7.6 Receipt.** Implemented at `2b319b12` and verified locally; not deployed.
+- **PASS · 7.4 Rollback, review and authorization.** Rollback revision above. The owner gave the go-ahead (Owner decisions and authorization). No independent review agents ran, at the owner's instruction.
+- **UNVERIFIED · 7.5 Post-deployment verification.** The serving version is read from Cloudflare (Merged revision), and live checks 1 to 3 passed on both hosts. Monitoring (6.6) and `owner:health` (8.15) stay open as in the #203 record.
+- **UNVERIFIED · 7.6 Receipt.** Implemented at `2b319b12`, verified locally, deployed as `bdf17fe` (Worker Version `dd0b4365-fcaa-4cba-b821-890fe29e7fc7`) from 18:22 UTC, and live checks 1 to 3 passed at 18:23 UTC; monitoring (6.6) and the remote `owner:health` run (8.15) are open.
 
 ## 8. Private owner center
 
@@ -80,6 +81,9 @@ PASS means the evidence named here was observed.
 ## Live checks after deploy
 
 1. Workers Builds on the merge commit succeeds, and `wrangler deployments status` shows its version serving.
+   - **PASS.** See Merged revision.
 2. On `/`, `/services`, `/building` and `/building/kaillera-next`, `og:image` and `og:video` name the files in `src/data/og-media.json`; each poster answers 200 and each video answers HEAD 200 and `Range: bytes=0-1` 206.
+   - **PASS** at 18:22:58 to 18:23:08 UTC, plain `curl` over HTTPS by the coordinating Claude Code session, matched against `src/data/og-media.json` at `bdf17fe`.
 3. On `https://audio.thesuperhuman.us/`, the same holds for the audio scene's tags.
+   - **PASS**, in the same run.
 4. Owner, when convenient: share one link in Messages and check the new labels read clearly.
