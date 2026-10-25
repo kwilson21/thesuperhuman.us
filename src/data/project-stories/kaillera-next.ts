@@ -21,6 +21,7 @@ import graphicsFixes from '~/assets/projects/kaillera-next/graphics-fixes-diagra
 import matchLogsDiagram from '~/assets/projects/kaillera-next/match-logs-diagram.webp';
 import netplayReliability from '~/assets/projects/kaillera-next/netplay-reliability-diagram.webp';
 import switch2Diagram from '~/assets/projects/kaillera-next/switch2-controller-diagram.webp';
+import reconnectsDiagram from '~/assets/projects/kaillera-next/reconnects-diagram.webp';
 
 export const kailleraStory = {
   title: 'Kaillera Next',
@@ -215,5 +216,11 @@ export const kailleraMilestones: Milestone[] = [
     title: 'Switch 2 Pro Controller over USB-C',
     summary: 'The Nintendo Switch 2 Pro Controller stays silent to a browser until it gets a vendor handshake over USB, and on a Mac nothing sends it, so it never showed up as a gamepad. Claude Code added a small WebUSB module that sends the handshake after one click on "Connect Switch 2 Pro" in the room. After that first permission, it re-enables the controller on every page load and replug. A built-in profile maps its buttons and sticks, using numbers measured on the hardware. It’s experimental: wired USB-C in Chrome, tested on macOS only. Bluetooth, Safari and Firefox aren’t supported. A Codex review caught a stalled write being reported as success. Released in v0.64.0.',
     artifacts: [artifact(switch2Diagram, 'Kaillera Next · Switch 2 Pro Controller over USB-C', 'The handshake, the profile choice and the stick mapping. Drawn from the code.', 'Diagram')],
+  },
+  {
+    id: 'kaillera-next-reconnects-and-input-audit', day: '2026-10-19',
+    title: 'Keeping a match together through a server restart',
+    summary: 'When the room server restarted mid-match, each player’s browser got a new server ID while the game and the direct connection between players kept running. The game took that new ID for a stale player, closed the working connection and waited for a new one that never came, so both players played on alone. Now it keeps a live connection and sends messages to the player’s new ID. The restart itself came from running out of memory: a burst of desync logs, each carrying the whole match’s input record, piled up on the server. Now each player queues just one upload, and uploads carry only new input records. Claude Code built the fixes, and I reviewed them. Released in v0.64.1 to v0.65.1.',
+    artifacts: [artifact(reconnectsDiagram, 'Kaillera Next · Keeping a match together through a server restart', 'A reconnect mid-match before and after, why the server ran out of memory, and the input audit sent as deltas and compared by frame. Drawn from the code.', 'Diagram')],
   },
 ];
