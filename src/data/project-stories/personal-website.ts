@@ -283,16 +283,16 @@ export const websiteMilestones: Milestone[] = [
     artifacts: [artifact(abWaveforms, 'Website · Fill the A/B waveforms as they play', 'The A/B player on the audio page before and after, from CI captures, with numbered pointers. Track title and artwork left out.', 'Annotated page captures')],
   },
   {
-    id: 'website-hallmark-design', day: '2026-10-22',
-    title: 'Holding the site to Hallmark',
-    summary: 'I had my site’s public pages audited against Hallmark, an open-source design standard by Together AI and the Hallmark contributors (MIT license). The audit only reported. Its real defects were fixed: faint form field edges, pages that scrolled sideways, and key links below the first screen. Where it flagged choices I had made on purpose, I compared each with a few alternatives and made 42 picks, such as service doors beside the headline and a 404 page with its words first. Hallmark is now the design standard for my UI work, and every build checks six of its rules. Claude Code built it to my design, and I reviewed it. Live on the site.',
-    artifacts: [artifact(hallmarkDesign, 'Website · Holding the site to Hallmark', 'The services page and the 404 page before and after my picks, from CI captures at 1280 by 800, with numbered pointers.', 'Annotated page captures')],
-  },
-  {
     id: 'website-project-brief-paths', day: '2026-10-20',
     title: 'Naming the project brief’s paths',
     summary: 'A website lead had no brief to fill in: the website button opened the contact form, and the brief only offered "a workflow that should be easier" or "an idea to bring to life". Now its first screen names three paths: Website design, Web app and Workflow automation. A website brief asks what the site is for, what you already have, with an optional link to your current site, and who will keep it up to date. Every path still leads to the same review and fixed-price offer. New paths open only once I have a personal project to show for them, so mobile apps wait. Claude Code built it to my design, and I reviewed it.',
     artifacts: [artifact(briefPaths, 'Website · Naming the project brief’s paths', 'The project brief\'s first screen with its three named paths, from the PR\'s CI capture with a fictional brief, with numbered pointers.', 'Annotated page capture')],
+  },
+  {
+    id: 'website-hallmark-design', day: '2026-10-22',
+    title: 'Holding the site to Hallmark',
+    summary: 'I had my site’s public pages audited against Hallmark, an open-source design standard by Together AI and the Hallmark contributors (MIT license). The audit only reported. Its real defects were fixed: faint form field edges, pages that scrolled sideways, and key links below the first screen. Where it flagged choices I had made on purpose, I compared each with a few alternatives and made 42 picks, such as service doors beside the headline and a 404 page with its words first. Hallmark is now the design standard for my UI work, and every build checks six of its rules. Claude Code built it to my design, and I reviewed it. Live on the site.',
+    artifacts: [artifact(hallmarkDesign, 'Website · Holding the site to Hallmark', 'The services page and the 404 page before and after my picks, from CI captures at 1280 by 800, with numbered pointers.', 'Annotated page captures')],
   },
   {
     id: 'website-video-link-previews', day: '2026-10-22',
