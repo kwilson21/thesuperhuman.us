@@ -286,7 +286,7 @@ export const websiteMilestones: Milestone[] = [
     id: 'website-hallmark-design', day: '2026-10-22',
     title: 'Holding the site to Hallmark',
     summary: 'I had my site’s public pages audited against Hallmark, an open-source design standard by Together AI and the Hallmark contributors (MIT license). The audit only reported. Its real defects were fixed: faint form field edges, pages that scrolled sideways, and key links below the first screen. Where it flagged choices I had made on purpose, I compared each with a few alternatives and made 42 picks, such as service doors beside the headline and a 404 page with its words first. Hallmark is now the design standard for my UI work, and every build checks six of its rules. Claude Code built it to my design, and I reviewed it. Live on the site.',
-    artifacts: [artifact(hallmarkDesign, 'Website · Holding the site to Hallmark', 'The services page and the 404 page before and after the owner\'s picks, from CI captures at 1280 by 800, with numbered pointers.', 'Annotated page captures')],
+    artifacts: [artifact(hallmarkDesign, 'Website · Holding the site to Hallmark', 'The services page and the 404 page before and after my picks, from CI captures at 1280 by 800, with numbered pointers.', 'Annotated page captures')],
   },
   {
     id: 'website-project-brief-paths', day: '2026-10-20',
