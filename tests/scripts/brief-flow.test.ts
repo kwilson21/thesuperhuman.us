@@ -140,7 +140,7 @@ it('discloses browser drafts and Workers AI accurately, with reassurance only at
     'Neither are a website brief’s link and notes on what you already have; those boxes show no suggestions.',
     'Anything you type in a box that shows suggestions is sent, even if you don’t accept one.',
     'You can turn suggestions off', 'in your browser', 'strictly necessary security cookie that expires after 30 minutes',
-    'Updated October 19, 2026', 'kept for up to two days',
+    'Updated October 29, 2026', 'kept for up to two days',
     'Project brief suggestions use', 'While you write a project brief,',
     'Project briefs, including website briefs, include the project answers you enter, an optional link to your current website, your name, email and optional company, and the timing and optional budget you choose to share. I use them to review your project, including any current site you link to, and reply to you.',
   ]) expect(privacy).toContain(sentence);
