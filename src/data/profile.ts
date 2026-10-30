@@ -87,7 +87,8 @@ export const experience = [
     outcome: 'I kept the systems that process retail transaction data running and fixed bugs that triggered recurring alarms.',
     context: [
       'Maintained and operated inherited ETL pipelines in a Ruby on Rails platform, using GoodJob and S3 to transform legacy store transaction data and bulk-load results.',
-      'Handled on-call issues and deployed fixes for bugs causing recurring alarms. Prototyped an MCP-driven store-onboarding pipeline and a PII-stripping debug tool; both remained internal prototypes and were not shipped.',
+      'Handled on-call issues and deployed fixes for bugs causing recurring alarms.',
+      'Fixed a recurring Postgres deadlock between concurrent jobs by batching a long-running delete into short transactions.',
       'Conducted scenario-based senior engineering interviews and contributed to hiring decisions.',
     ],
   },
@@ -100,9 +101,9 @@ export const experience = [
   {
     id: 'sure', company: 'Sure', role: 'Software Engineer',
     dates: 'December 2023 – February 2025', location: 'Remote',
-    outcome: 'I built and maintained the systems that generated insurance documents and connected to insurance carriers.',
+    outcome: 'I built document templates for the Django system that generates homeowners-insurance documents.',
     context: [
-      'Added document types to the insurance pipeline, adapting HTML and CSS to carrier reference PDFs and generating application documents with Jinja.',
+      'Built new document templates in HTML/CSS and Jinja for the Django system that generates homeowners-insurance documents.',
       'Stored documents in S3 with versioned metadata in MongoDB, and maintained document generation in Django and third-party carrier integrations.',
       'The role ended in a company-wide layoff in early 2025.',
     ],
