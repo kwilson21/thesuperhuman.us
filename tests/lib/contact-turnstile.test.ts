@@ -9,3 +9,7 @@ it('loads the Contact Turnstile SDK only after the collapsed disclosure opens', 
 	expect(home).toContain('message.addEventListener(\'toggle\'');
 	expect(home).toContain('https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit');
 });
+
+it('clears the retry warning when the widget successfully renders', () => {
+  expect(home).toContain("if (error) { error.textContent = ''; error.hidden = true; }");
+});

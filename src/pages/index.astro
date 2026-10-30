@@ -143,6 +143,8 @@ const jsonLd = {
     const api = (window as Window & { turnstile?: { render: (container: HTMLElement, options: { sitekey: string }) => string } }).turnstile;
     if (turnstileWidget || !api || !turnstileContainer) return;
     turnstileWidget = api.render(turnstileContainer, { sitekey: turnstileContainer.dataset.sitekey! });
+    const error = contact.querySelector<HTMLElement>('[data-form-error="turnstileToken"]');
+    if (error) { error.textContent = ''; error.hidden = true; }
   }
   async function loadContactTurnstile(): Promise<void> {
     if (!turnstileContainer || turnstileWidget) return;

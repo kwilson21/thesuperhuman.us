@@ -163,9 +163,9 @@ These render to `/tmp/services-overview.pdf` and `/tmp/audio-services-overview.p
 
 ### Security headers
 
-`public/_headers` overrides Cloudflare's default `Permissions-Policy` with an explicit policy that doesn't reference Chrome-only features (which other browsers log as "Unrecognized feature" warnings). Also sets `Referrer-Policy: strict-origin-when-cross-origin`, `X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY`.
+`public/_headers` overrides Cloudflare's default `Permissions-Policy` with an explicit policy that doesn't reference Chrome-only features (which other browsers log as "Unrecognized feature" warnings). It also sets `Referrer-Policy: strict-origin-when-cross-origin`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and a general `Content-Security-Policy-Report-Only` policy. The CSP is report-only; it does not block scripts, and no report collector is configured, so violations are not centrally collected.
 
-Cloudflare applies `_headers` only to static assets, so `src/middleware.ts` adds the same four headers, listed in `src/lib/security-headers.ts`, to every response that passes through it. A header already set by the route, or by the middleware's studio and agreement rules, is kept, so those pages keep `Referrer-Policy: no-referrer`. Astro's redirects for repeated trailing slashes and its bare 500 after a thrown error skip the middleware and carry none of the four. `tests/lib/security-headers.test.ts` fails if that list and the `/*` block of `public/_headers` differ.
+Cloudflare applies `_headers` to static assets, so `src/middleware.ts` adds the same five headers, listed in `src/lib/security-headers.ts`, to every response that passes through it. A header already set by the route, or by the middleware's studio and agreement rules, is kept, so those pages keep `Referrer-Policy: no-referrer`. Astro's redirects for repeated trailing slashes and its bare 500 after a thrown error skip the middleware and carry none of the five. Before enforcing the CSP, configure an approved reporting destination, triage reports, audit routes and inline scripts/handlers, and then change the directive in both locations. `tests/lib/security-headers.test.ts` fails if that list and the `/*` block of `public/_headers` differ.
 
 ## Resume request flow
 
