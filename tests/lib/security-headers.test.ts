@@ -26,6 +26,18 @@ function headersFor(path: string) {
 }
 
 describe('security headers', () => {
+	it('adds a general report-only CSP while leaving route enforcement policies untouched', () => {
+		expect(securityHeaders['content-security-policy-report-only']).toContain("script-src 'self'");
+		expect(securityHeaders['content-security-policy-report-only']).toContain('https://challenges.cloudflare.com');
+		expect(withSecurityHeaders(new Response('x')).headers.get('content-security-policy-report-only')).toBe(
+			securityHeaders['content-security-policy-report-only'],
+		);
+		const oauth = withSecurityHeaders(new Response('x', {
+			headers: { 'content-security-policy': "default-src 'none'; form-action 'self' https://github.com/login/oauth/authorize" },
+		}));
+		expect(oauth.headers.get('content-security-policy')).toBe("default-src 'none'; form-action 'self' https://github.com/login/oauth/authorize");
+	});
+
   it('matches the /* block in public/_headers and ignores the workers.dev block', () => {
     expect(headersFor('/*')).toEqual(securityHeaders);
   });
@@ -34,7 +46,7 @@ describe('security headers', () => {
     expect(securityHeaders['permissions-policy']).not.toContain('interest-cohort');
   });
 
-  it('adds all four headers to a plain response', () => {
+	it('adds all security headers to a plain response', () => {
     const response = withSecurityHeaders(new Response('x'));
     expect(Object.fromEntries(response.headers)).toMatchObject(securityHeaders);
   });
