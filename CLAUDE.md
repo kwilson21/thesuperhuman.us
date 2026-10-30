@@ -20,7 +20,7 @@ pass [image QA](docs/generated-image-qa.md).
 - **Professional background:** Python, ETL pipelines, data engineering, backend API development. This establishes credibility; do not advertise data engineering as his desired next specialization.
 - **Regulated industry experience:** Healthcare credentialing, insurance document systems
 - **Website design:** Page structure, visual storytelling and responsive implementation. The personal website redesign is the current portfolio example; do not imply a history of client design projects.
-- **Also works in:** Ruby on Rails, TypeScript, Django, Flask, Dagster, PostgreSQL, AWS
+- **Also works in:** Ruby on Rails, TypeScript, Django, Flask, PostgreSQL, AWS
 - **Infrastructure depth:** Docker Swarm, Traefik, Tailscale, Cloudflare, OPNsense, self-hosted everything
 - **Side projects:** Kaillera-next (retro gaming netplay platform), Kova (custom ETL programming language), Frigate NVR, personal home cluster
 - **Audio engineering:** Undergraduate degree in audio production from MTSU, still actively practiced (RME Babyface Pro, Sennheiser HD 650s, UAD Luna + Pro Tools)
@@ -68,7 +68,7 @@ Software rate context lives in `CLAUDE.local.md` (gitignored). Keep software rat
 
 These describe prior capabilities, not a service menu to promote. Lead with the current building direction and preserve specific experience as supporting evidence.
 
-1. **ETL Pipeline Architecture & Development**: Dagster, Python, multi-source ingestion
+1. **ETL Pipeline Architecture & Development**: Python, multi-source ingestion
 2. **Backend API Development**: Django, Flask, Python, REST, gRPC
 3. **Data Systems & Infrastructure**: PostgreSQL, MySQL, AWS, data platform builds
 4. **Healthcare & Regulated Industry Systems**: credentialing pipelines, insurance document systems
