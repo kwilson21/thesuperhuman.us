@@ -1,6 +1,10 @@
-// Mirrors the /* block in public/_headers, which Cloudflare applies only to static assets.
+// Mirrors the /* block in public/_headers, which Cloudflare applies to static assets.
 // tests/lib/security-headers.test.ts fails if the two drift.
 export const securityHeaders = {
+  // Keep report-only during route and inline-script review. No violation collector is configured yet;
+  // before enforcement, add one and triage reports, then move this value to Content-Security-Policy.
+  // The publication OAuth route keeps its own stricter enforced policy.
+  'content-security-policy-report-only': "default-src 'self'; script-src 'self' https://challenges.cloudflare.com https://www.youtube.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://i.ytimg.com https://img.youtube.com; connect-src 'self' https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com https://www.youtube-nocookie.com https://www.youtube.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
   'permissions-policy': 'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()',
   'referrer-policy': 'strict-origin-when-cross-origin',
   'x-content-type-options': 'nosniff',
