@@ -44,6 +44,10 @@ import libronType from '~/assets/projects/website/libron-typography-annotated.we
 import homepageReading from '~/assets/projects/website/homepage-reading-annotated.webp';
 import tallyStory from '~/assets/projects/website/tally-story-annotated.webp';
 import briefConversation from '~/assets/projects/website/brief-conversation-annotated.webp';
+import abWaveforms from '~/assets/projects/website/ab-waveforms-annotated.webp';
+import hallmarkDesign from '~/assets/projects/website/hallmark-services-404-annotated.webp';
+import briefPaths from '~/assets/projects/website/brief-paths-annotated.webp';
+import linkPreviews from '~/assets/projects/website/link-preview-frames-annotated.webp';
 
 export const websiteStory = {
   title: 'Personal website',
@@ -271,5 +275,29 @@ export const websiteMilestones: Milestone[] = [
     title: 'A software brief as a conversation',
     summary: 'A software brief used to be a three-step form and a page to print or save. Now it is a short conversation, one question at a time, and Cloudflare’s Workers AI suggests your next few words in light grey as you type. Tab accepts; you can turn it off. Only what you type in the answer boxes is sent, never your name, email or company. Afterwards you get an email copy and a reply time. Codex built it from options I picked.',
     artifacts: [artifact(briefConversation, 'Software brief · A conversation', 'A brief question with a suggestion in the answer box, from PR #172 with fictional text, with numbered pointers.', 'Annotated page capture')],
+  },
+  {
+    id: 'website-ab-waveforms', day: '2026-10-19',
+    title: 'Fill the A/B waveforms as they play',
+    summary: 'I asked for two changes to the A/B players: seek Home’s compact player from its waveform, and fill each waveform as the song plays. The bars now start neutral gray for both versions and fill with the accent color from the left, while the labels and the A/B switch name the version. A mouse or pen drags across the waveform to scrub. On a phone, a tap seeks and only a clear sideways drag scrubs, so scrolling past the player never jumps the song. I picked the colors and asked for drag-scrub. Claude Code built it and fixed two edge cases a Codex review caught, and I reviewed it.',
+    artifacts: [artifact(abWaveforms, 'Website · Fill the A/B waveforms as they play', 'The A/B player on the audio page before and after, from CI captures, with numbered pointers. Track title and artwork left out.', 'Annotated page captures')],
+  },
+  {
+    id: 'website-project-brief-paths', day: '2026-10-20',
+    title: 'Naming the project brief’s paths',
+    summary: 'A website lead had no brief to fill in: the website button opened the contact form, and the brief only offered "a workflow that should be easier" or "an idea to bring to life". Now its first screen names three paths: Website design, Web app and Workflow automation. A website brief asks what the site is for, what you already have, with an optional link to your current site, and who will keep it up to date. Every path still leads to the same review and fixed-price offer. New paths open only once I have a personal project to show for them, so mobile apps wait. Claude Code built it to my design, and I reviewed it.',
+    artifacts: [artifact(briefPaths, 'Website · Naming the project brief’s paths', 'The project brief\'s first screen with its three named paths, from the PR\'s CI capture with a fictional brief, with numbered pointers.', 'Annotated page capture')],
+  },
+  {
+    id: 'website-hallmark-design', day: '2026-10-22',
+    title: 'Holding the site to Hallmark',
+    summary: 'I had my site’s public pages audited against Hallmark, an open-source design standard by Together AI and the Hallmark contributors (MIT license). The audit only reported. Its real defects were fixed: faint form field edges, pages that scrolled sideways, and key links below the first screen. Where it flagged choices I had made on purpose, I compared each with a few alternatives and made 42 picks, such as service doors beside the headline and a 404 page with its words first. Hallmark is now the design standard for my UI work, and every build checks six of its rules. Claude Code built it to my design, and I reviewed it. Live on the site.',
+    artifacts: [artifact(hallmarkDesign, 'Website · Holding the site to Hallmark', 'The services page and the 404 page before and after my picks, from CI captures at 1280 by 800, with numbered pointers.', 'Annotated page captures')],
+  },
+  {
+    id: 'website-video-link-previews', day: '2026-10-22',
+    title: 'Link previews that move',
+    summary: 'Most links to my site shared one card, and it still said "Building with AI", a line I no longer use. Now each page has its own preview: a short silent loop built from that page’s own words, artwork and screenshots, plus a poster of its first frame. Apps that play preview videos, such as Apple Messages, show the loop; the rest show the poster. There are 22 scenes, and checks fail if a scene’s text stops matching its page or a scene changes without a new render. The same day, the previews’ labels moved to the site’s new label face. Claude Code built it to my design, and I reviewed it. Live on the site.',
+    artifacts: [artifact(linkPreviews, 'Website · Link previews that move', 'Still frames from Home\'s silent preview loop, from the poster to the last frame, with numbered pointers.', 'Annotated video stills')],
   },
 ];
