@@ -1,7 +1,7 @@
 import type { ResumeAudience } from './resume-requests';
 
 export const RESUME_FILENAMES: Record<ResumeAudience, string> = {
-  general: 'kazon-wilson-resume.pdf',
+  general: 'Kazon-Wilson-Resume.pdf',
   dod: 'kazon-wilson-resume-dod.pdf',
 };
 
