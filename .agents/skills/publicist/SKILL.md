@@ -159,6 +159,8 @@ Stage 2, publish (public):
 4. Add media: CI screenshots at the PR's final head (phone at viewport height), or
    a short Playwright recording of a changed flow on demo data. Convert stills to
    WebP. Label each asset's kind, build and date. Inspect every image yourself.
+   Explainer videos meet `docs/publicist/video-standard.md`: outline first, and
+   render only through `scripts/publicist/video/render.mjs`, whose check must pass.
 5. Draft posts into `publicist/queue/` only for entries drafted in this stage,
    saying no more than the entry says. Posts pass the quality standards and spacing
    rules in the design doc, section 8 (per network: at least 1 a day when an
