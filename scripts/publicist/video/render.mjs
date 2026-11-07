@@ -92,7 +92,17 @@ function readScene(sceneId) {
   let visual = false;
   const SHAPES = new Set(['path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'image', 'use']);
   // a stroked shape whose dash still hides the whole line (a line about to draw) paints nothing yet
-  const undrawn = (el, cs) => cs.fill === 'none' && cs.strokeDasharray !== 'none' && typeof el.getTotalLength === 'function' && parseFloat(cs.strokeDashoffset) >= el.getTotalLength() - 1;
+  // (one dash and one gap, each at least the path's length, offset so the whole path sits in the gap)
+  const undrawn = (el, cs) => {
+    if (cs.fill !== 'none' || cs.strokeDasharray === 'none' || typeof el.getTotalLength !== 'function') return false;
+    let d = cs.strokeDasharray.split(/[\s,]+/).map(parseFloat).filter(Number.isFinite);
+    if (d.length === 1) d = [d[0], d[0]];
+    if (d.length !== 2) return false;
+    const L = el.getTotalLength(), [dash, gap] = d, period = dash + gap;
+    if (period <= 0) return false;
+    const o = ((parseFloat(cs.strokeDashoffset) || 0) % period + period) % period;
+    return o >= dash - 1 && o + L <= period + 1;
+  };
   if (scene) for (const el of scene.querySelectorAll('*')) {
     if (el.closest('[data-role="headline"]') || el.querySelector('[data-role="headline"]')) continue;
     if (el instanceof SVGElement && !SHAPES.has(el.tagName)) continue; // svg and g only group shapes
