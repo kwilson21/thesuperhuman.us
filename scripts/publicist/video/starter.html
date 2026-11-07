@@ -43,8 +43,8 @@ run({
   // build: seconds the picture takes to assemble after the headline's lead.
   // lead (default 0.6s) and hold (default 2s) can be raised per scene.
   plan: [
-    { id: 'ask', build: 2.8, lead: 0 }, // the opener draws its own line under the headline
-    { id: 'compare', build: 2.4 },
+    { id: 'ask', build: 2.8, lead: 0, hold: 2.5 }, // the opener draws its own line under the headline
+    { id: 'compare', build: 2.4, hold: 3 },
     { id: 'close', build: 1.1, lead: 0, hold: 2.5 },
   ],
   draw(id, t) {

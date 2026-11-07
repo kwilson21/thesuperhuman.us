@@ -36,3 +36,18 @@ describe('publicist video timeline', () => {
     expect(kit.DEFAULTS).toEqual({ lead: 0.6, hold: 2 });
   });
 });
+
+describe('publicist video check', () => {
+  it('counts every word on screen, headline included, toward the hold', async () => {
+    const { requiredHold, LIMITS } = await import('../../scripts/publicist/video/render.mjs');
+    expect(requiredHold(4)).toBe(LIMITS.minHold);
+    // a 7-word headline plus 7 labels needs 14 × 0.3 s, not 7 × 0.3 s
+    expect(requiredHold(14)).toBeCloseTo(4.2);
+  });
+});
+
+describe('publicist video plan', () => {
+  it('names the field when a scene has no build time', () => {
+    expect(() => kit.timeline([{ id: 'a' }])).toThrow('scene "a": build must be a number of seconds, got undefined');
+  });
+});

@@ -14,6 +14,7 @@
     let at = 0;
     const scenes = plan.map((s, index) => {
       const lead = s.lead ?? DEFAULTS.lead, hold = s.hold ?? DEFAULTS.hold;
+      for (const [k, v] of [['build', s.build], ['lead', lead], ['hold', hold]]) if (!(Number.isFinite(v) && v >= 0)) throw new Error(`scene "${s.id}": ${k} must be a number of seconds, got ${v}`);
       const o = { id: s.id, index, lead, build: s.build, hold, start: at, end: at + lead + s.build + hold };
       at = o.end;
       return o;

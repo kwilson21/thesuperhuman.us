@@ -28,6 +28,9 @@ export const LIMITS = {
   safeMargin: 24, // text keeps this far from the frame's edges
 };
 
+// How long a finished frame with this many words on screen must hold still.
+export const requiredHold = (words) => Math.max(LIMITS.minHold, LIMITS.secondsPerWord * words);
+
 function args(argv) {
   const o = { size: '1920x1080', fps: 30 };
   const rest = [];
@@ -63,43 +66,49 @@ export async function openScene(file, { w, h }) {
   return { browser, page, video };
 }
 
-// Everything the viewer can read in one scene at time t: words, and where text sits.
+// Everything the viewer can read at time t, in the scene or around it (the corner tag
+// counts too): words, and where text sits. inScene marks the current scene's own text.
 function readScene(sceneId) {
   const scene = document.getElementById(sceneId);
   const visible = (el) => { let o = 1; for (let e = el; e && e !== document.body; e = e.parentElement) { const cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden') return 0; o *= Number(cs.opacity); } return o; };
   const items = [];
-  const walk = document.createTreeWalker(scene, NodeFilter.SHOW_TEXT);
+  const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let n = walk.nextNode(); n; n = walk.nextNode()) {
     const text = n.textContent.trim();
+    if (!text || n.parentElement.closest('script, style')) continue;
     const o = visible(n.parentElement);
-    if (!text || o < 0.05) continue;
+    if (o < 0.05) continue;
+    const inScene = !!scene && scene.contains(n);
     const r = document.createRange(); r.selectNodeContents(n);
     const rects = [...r.getClientRects()].filter((x) => x.width > 1 && x.height > 1).map((x) => ({ l: x.left, t: x.top, r: x.right, b: x.bottom }));
-    items.push({ text, o, words: text.split(/\s+/).filter((x) => /[\p{L}\p{N}]/u.test(x)).length, headline: !!n.parentElement.closest('[data-role="headline"]'), rects });
+    items.push({ text, o, words: text.split(/\s+/).filter((x) => /[\p{L}\p{N}]/u.test(x)).length, headline: inScene && !!n.parentElement.closest('[data-role="headline"]'), inScene, rects });
   }
   const headlines = scene ? scene.querySelectorAll('[data-role="headline"]').length : 0;
   return { found: !!scene, headlines, items, fontOk: document.fonts.check('700 84px Libron') };
 }
 
-export async function check(page, video, { w, h }) {
+export async function check(page, video, { w, h, fps = 30 }) {
   const problems = [];
   const say = (s, msg) => problems.push(`${s.id}: ${msg}`);
   for (const s of video.plan) {
     if (s.hold < LIMITS.minHold) say(s, `holds ${s.hold}s; hold the finished frame at least ${LIMITS.minHold}s`);
     // the headline must be readable on its own before any other text appears
     let headAt = null, otherAt = null, found = true, fontOk = true, headlines = 0;
-    for (let t = s.start; t < s.end && otherAt === null; t += 0.1) {
+    // frame by frame, so a lead shorter than minLead can't round up to it
+    const step = 1 / fps;
+    for (let k = 0, t = s.start; t < s.end && otherAt === null; k++, t = s.start + k * step) {
       await page.evaluate((x) => window.render(x), t);
       const r = await page.evaluate(readScene, s.id);
       if (!r.found) { found = false; break; }
       fontOk = r.fontOk; headlines = r.headlines;
       if (headAt === null && r.items.some((x) => x.headline && x.o >= 0.6)) headAt = t;
-      if (r.items.some((x) => !x.headline)) otherAt = t;
+      if (r.items.some((x) => x.inScene && !x.headline)) otherAt = t;
     }
     if (!found) { say(s, 'no element with this id'); continue; }
     if (!fontOk) say(s, 'Libron did not load');
     if (headlines !== 1) say(s, headlines ? `${headlines} headlines; a scene has one takeaway` : 'no headline (data-role="headline"); every scene states its takeaway');
-    else if (otherAt !== null && (headAt === null || otherAt - headAt < LIMITS.minLead - 1e-6)) say(s, `other text appears ${headAt === null ? 'before the headline' : `${(otherAt - headAt).toFixed(1)}s after the headline`}; show the headline alone for at least ${LIMITS.minLead}s first`);
+    else if (headAt === null) say(s, otherAt === null ? 'the headline never becomes readable' : 'other text appears before the headline is readable; show the headline alone first');
+    else if (otherAt !== null && otherAt - headAt < LIMITS.minLead - 1e-6) say(s, `other text appears ${(otherAt - headAt).toFixed(1)}s after the headline; show the headline alone for at least ${LIMITS.minLead}s first`);
     // the finished frame
     await page.evaluate((t) => window.render(t), s.end - 0.05);
     const fin = await page.evaluate(readScene, s.id);
@@ -107,8 +116,8 @@ export async function check(page, video, { w, h }) {
     const hw = fin.items.filter((x) => x.headline).reduce((n, x) => n + x.words, 0);
     if (hw > LIMITS.headlineWords) say(s, `headline has ${hw} words; keep it to ${LIMITS.headlineWords}`);
     if (words > LIMITS.sceneWords) say(s, `${words} words on screen; keep a scene to ${LIMITS.sceneWords}`);
-    const needHold = Math.max(LIMITS.minHold, LIMITS.secondsPerWord * (words - hw));
-    if (s.hold + 1e-9 < needHold) say(s, `${words - hw} words besides the headline need a ${needHold.toFixed(1)}s hold; it has ${s.hold}s`);
+    const needHold = requiredHold(words);
+    if (s.hold + 1e-9 < needHold) say(s, `${words} words on screen need a ${needHold.toFixed(1)}s hold; it has ${s.hold}s`);
     const m = LIMITS.safeMargin;
     for (const x of fin.items) for (const r of x.rects) if (r.l < m || r.t < m || r.r > w - m || r.b > h - m) { say(s, `"${x.text}" runs outside the frame's safe area`); break; }
     for (let i = 0; i < fin.items.length; i++) for (let j = i + 1; j < fin.items.length; j++) {
@@ -136,14 +145,22 @@ async function main() {
     if (o.check) return;
     const out = resolve(o.out || `${basename(o.scene, '.html')}.mp4`);
     const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(o.fps), '-i', '-', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20', '-movflags', '+faststart', out], { stdio: ['pipe', 'inherit', 'inherit'] });
+    let failed = null;
+    const done = new Promise((r, j) => {
+      ff.on('error', (e) => { failed = new Error(`ffmpeg could not start: ${e.message}`); j(failed); });
+      ff.on('close', (c) => { if (c) { failed = failed || new Error(`ffmpeg exited ${c}`); j(failed); } else r(); });
+    });
+    done.catch(() => {});
+    ff.stdin.on('error', (e) => { failed = failed || new Error(`ffmpeg input closed: ${e.message}`); });
     const n = Math.round(video.total * o.fps);
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < n && !failed; i++) {
       await page.evaluate((x) => window.render(x), i / o.fps);
       const buf = await page.screenshot({ type: 'jpeg', quality: 92 });
-      if (!ff.stdin.write(buf)) await new Promise((r) => ff.stdin.once('drain', r));
+      if (!ff.stdin.write(buf)) await Promise.race([new Promise((r) => ff.stdin.once('drain', r)), done.catch(() => {})]);
     }
+    if (failed) throw failed;
     ff.stdin.end();
-    await new Promise((r, j) => ff.on('close', (c) => (c ? j(new Error(`ffmpeg exited ${c}`)) : r())));
+    await done;
     console.log(`${out} · ${n} frames`);
   } finally {
     await browser.close();
