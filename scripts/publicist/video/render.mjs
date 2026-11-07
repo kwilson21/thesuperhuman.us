@@ -84,7 +84,22 @@ function readScene(sceneId) {
     items.push({ text, o, words: text.split(/\s+/).filter((x) => /[\p{L}\p{N}]/u.test(x)).length, headline: inScene && !!n.parentElement.closest('[data-role="headline"]'), inScene, rects });
   }
   const headlines = scene ? scene.querySelectorAll('[data-role="headline"]').length : 0;
-  return { found: !!scene, headlines, items, fontOk: document.fonts.check('700 84px Libron') };
+  // Inter is a system font here; if it is missing, its metrics equal the fallback's
+  const ctx = document.createElement('canvas').getContext('2d');
+  const width = (f) => { ctx.font = f; return ctx.measureText('Hamburgefonstiv 0123').width; };
+  const interOk = width('600 40px Inter, monospace') !== width('600 40px monospace');
+  // non-text pictures (boxes, bars, shapes) that are visible, outside the headline
+  let visual = false;
+  if (scene) for (const el of scene.querySelectorAll('*')) {
+    if (el.closest('[data-role="headline"]') || el.querySelector('[data-role="headline"]')) continue;
+    if (el.children.length && !(el instanceof SVGElement)) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2 || visible(el) < 0.05) continue;
+    if (el instanceof SVGGraphicsElement && el.tagName !== 'svg') { visual = true; break; }
+    const cs = getComputedStyle(el);
+    if (cs.backgroundColor !== 'rgba(0, 0, 0, 0)' || parseFloat(cs.borderTopWidth) > 0 || el.tagName === 'IMG' || el.tagName === 'VIDEO' || el.tagName === 'CANVAS') { visual = true; break; }
+  }
+  return { found: !!scene, headlines, items, visual, fontOk: document.fonts.check('700 84px Libron'), interOk };
 }
 
 export async function check(page, video, { w, h, fps = 30 }) {
@@ -92,23 +107,24 @@ export async function check(page, video, { w, h, fps = 30 }) {
   const say = (s, msg) => problems.push(`${s.id}: ${msg}`);
   for (const s of video.plan) {
     if (s.hold < LIMITS.minHold) say(s, `holds ${s.hold}s; hold the finished frame at least ${LIMITS.minHold}s`);
-    // the headline must be readable on its own before any other text appears
-    let headAt = null, otherAt = null, found = true, fontOk = true, headlines = 0;
+    // the headline must be readable on its own before any other text or picture appears
+    let headAt = null, otherAt = null, found = true, fontOk = true, interOk = true, headlines = 0;
     // frame by frame, so a lead shorter than minLead can't round up to it
     const step = 1 / fps;
     for (let k = 0, t = s.start; t < s.end && otherAt === null; k++, t = s.start + k * step) {
       await page.evaluate((x) => window.render(x), t);
       const r = await page.evaluate(readScene, s.id);
       if (!r.found) { found = false; break; }
-      fontOk = r.fontOk; headlines = r.headlines;
+      fontOk = r.fontOk; interOk = r.interOk; headlines = r.headlines;
       if (headAt === null && r.items.some((x) => x.headline && x.o >= 0.6)) headAt = t;
-      if (r.items.some((x) => x.inScene && !x.headline)) otherAt = t;
+      if (r.visual || r.items.some((x) => x.inScene && !x.headline)) otherAt = t;
     }
     if (!found) { say(s, 'no element with this id'); continue; }
     if (!fontOk) say(s, 'Libron did not load');
+    if (!interOk) say(s, 'Inter is not installed, so text would render in a fallback font');
     if (headlines !== 1) say(s, headlines ? `${headlines} headlines; a scene has one takeaway` : 'no headline (data-role="headline"); every scene states its takeaway');
-    else if (headAt === null) say(s, otherAt === null ? 'the headline never becomes readable' : 'other text appears before the headline is readable; show the headline alone first');
-    else if (otherAt !== null && otherAt - headAt < LIMITS.minLead - 1e-6) say(s, `other text appears ${(otherAt - headAt).toFixed(1)}s after the headline; show the headline alone for at least ${LIMITS.minLead}s first`);
+    else if (headAt === null) say(s, otherAt === null ? 'the headline never becomes readable' : 'other text or a picture appears before the headline is readable; show the headline alone first');
+    else if (otherAt !== null && otherAt - headAt < LIMITS.minLead - 1e-6) say(s, `other text or a picture appears ${(otherAt - headAt).toFixed(1)}s after the headline; show the headline alone for at least ${LIMITS.minLead}s first`);
     // the finished frame
     await page.evaluate((t) => window.render(t), s.end - 0.05);
     const fin = await page.evaluate(readScene, s.id);
@@ -134,7 +150,7 @@ async function main() {
   const { browser, page, video } = await openScene(o.scene, o);
   try {
     if (o.stills) {
-      const dir = resolve(o.outDir || '.');
+      const dir = resolve(o.outDir || dirname(resolve(o.scene)));
       for (const t of o.stills.split(',')) { await page.evaluate((x) => window.render(x), Number(t)); const f = join(dir, `${basename(o.scene, '.html')}-${t}.png`); await page.screenshot({ path: f }); console.log(f); }
       return;
     }
@@ -143,7 +159,7 @@ async function main() {
     if (problems.length) { console.error(`Not ready (${problems.length}):\n- ${problems.join('\n- ')}`); process.exitCode = 1; return; }
     console.log('Check passed.');
     if (o.check) return;
-    const out = resolve(o.out || `${basename(o.scene, '.html')}.mp4`);
+    const out = resolve(o.out || join(dirname(resolve(o.scene)), `${basename(o.scene, '.html')}.mp4`));
     const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(o.fps), '-i', '-', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20', '-movflags', '+faststart', out], { stdio: ['pipe', 'inherit', 'inherit'] });
     let failed = null;
     const done = new Promise((r, j) => {

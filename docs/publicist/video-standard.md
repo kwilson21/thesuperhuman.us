@@ -25,7 +25,9 @@ repository under `videos/<entry-id>/`.
    labels the picture needs and nothing more. No caption sentences on screen. The
    full numbers and reasons belong in the post text that goes out with the video.
 5. **Headline first.** The headline shows alone for at least half a second before
-   anything else moves, so the viewer knows what to look for.
+   any other text or picture appears, so the viewer knows what to look for. The one
+   exception is the channel's opening ink line, which plays before the first
+   headline and settles into it.
 6. **One thing at a time, in reading order.** Build the picture left to right and top
    to bottom. Dim what has been read when the next part starts.
 7. **Hold the finished frame.** At least 2 seconds, and 0.3 seconds per word on
@@ -69,7 +71,9 @@ change.
 - `render.mjs`: injects the kit and the site's Libron font, checks the page and
   renders it. `--check` only checks; `--stills t1,t2` writes frames for a look
   (without the check); otherwise it checks, then writes an H.264 mp4 with no audio.
-  It refuses to render a page that fails the check.
+  It refuses to render a page that fails the check. Stills and the mp4 are written
+  beside the scene file unless you name another path, so previews of an unreleased
+  video stay in the private repository even when the command runs from this one.
 - `starter.html`: a three-scene example to copy into `videos/<entry-id>/` in the
   private repository.
 
@@ -82,9 +86,12 @@ node scripts/publicist/video/render.mjs <scene.html> out.mp4
 ### What the check enforces
 
 From the bar above: one headline per scene and at most 7 words in it; at most 14
-words on screen; the headline readable alone for 0.5 s before other text; a hold of
-at least 2 s (more for wordier scenes); no text overlapping other text; no text in
-the outer 24 pixels; the font loaded. The limits live in `LIMITS` in `render.mjs`;
+words on screen, counting text outside the scene such as the corner tag; the
+headline readable alone for 0.5 s, measured frame by frame, before other text or a
+picture (a box, bar, shape or image) in the scene appears; a hold of at least 2 s
+and 0.3 s per word on screen; no text overlapping other text; no text in the outer
+24 pixels; Libron loaded and Inter installed. The opening ink line sits outside the
+scenes, so the check leaves it alone. The limits live in `LIMITS` in `render.mjs`;
 change them here and there together.
 
 ### What a person still checks
