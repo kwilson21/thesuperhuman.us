@@ -32,18 +32,22 @@ repository under `videos/<entry-id>/`.
    screen when that is longer.
 8. **Explain the rule before the result.** If a result depends on a threshold, a
    definition or a constraint, a scene shows it before the scene that relies on it.
-9. **Label examples.** A made-up example that explains how something works says
+9. **One condition per scene, each subject once.** A scene compares things under one
+   condition. If the same subject has a result under another condition (another
+   setting, list size or version), that result gets its own scene with the condition
+   as its headline, rather than a second row naming the same subject.
+10. **Label examples.** A made-up example that explains how something works says
    "Example". Measured results never use made-up numbers.
-10. **Numbers mean what they look like.** Don't show "out of N" unless every one of the
+11. **Numbers mean what they look like.** Don't show "out of N" unless every one of the
     N had a right answer; don't present a test as a ranking it wasn't.
-11. **A steady frame.** No jumps in size or position except at a cut. Camera drift
+12. **A steady frame.** No jumps in size or position except at a cut. Camera drift
     restarts only at scene changes.
-12. **Nothing overlaps, nothing is cut off.** Text keeps clear of other text and 24
+13. **Nothing overlaps, nothing is cut off.** Text keeps clear of other text and 24
     pixels from the frame's edges.
-13. **Sound is optional, and silent is the default.** Videos must work muted. Generated
+14. **Sound is optional, and silent is the default.** Videos must work muted. Generated
     music and a sound effect for every on-screen event read as cheap; use sound only
     when the owner provides music or a voiceover (music rights per hard rule 12).
-14. **Close with the honest scope and the credit.** What it was measured or built on,
+15. **Close with the honest scope and the credit.** What it was measured or built on,
     and the approved credit line.
 
 ## Free to change: everything else
