@@ -58,6 +58,101 @@ export const FLOWS = {
       await pause(page, 2200);
     },
   },
+  // tally-rules-ask-first: Organize files Costco as Groceries, then asks before making a rule; "Not now" makes none.
+  'organize-ask': {
+    device: PHONE,
+    async run(page) {
+      await page.goto(`${DEMO}/transactions/organize?skip=Banfield+Pet+Hospital`);
+      await pause(page, 1800);
+      await page.getByText('Groceries', { exact: true }).first().click();
+      await pause(page, 900);
+      await page.getByRole('button', { name: 'Save and next' }).click();
+      await pause(page, 3200);
+      await page.getByRole('button', { name: 'Not now' }).click();
+      await pause(page, 1500);
+    },
+  },
+  // tally-bill-payments: Bills, Rent "Part paid: $600 of $1,200", then November on the bill's page.
+  'bill-parts': {
+    device: PHONE,
+    async run(page) {
+      await page.goto(`${DEMO}/bills`);
+      await pause(page, 2000);
+      await page.getByRole('link', { name: /^Rent Part paid/ }).click();
+      await pause(page, 2500);
+      await page.getByText(/Part paid: \$600 of \$1,200/).first().click();
+      await pause(page, 3000);
+    },
+  },
+  // tally-finding-your-way: the banner's Start here opens the short story, then More as a contents page.
+  'start-here': {
+    device: PHONE,
+    async run(page) {
+      await page.goto(`${DEMO}/`);
+      await pause(page, 1500);
+      await page.getByRole('link', { name: 'Start here' }).first().click();
+      await pause(page, 2500);
+      for (let i = 0; i < 6; i += 1) { await page.evaluate(() => window.scrollBy({ top: 110, behavior: 'smooth' })); await pause(page, 450); }
+      await pause(page, 1500);
+      await page.getByRole('link', { name: 'More', exact: true }).last().click();
+      await pause(page, 2800);
+    },
+  },
+  // tally-adjust-budgets: Adjust budgets on Home, + twice on Groceries (each tap saves at the next round $10), then − twice back.
+  adjust: {
+    device: PHONE,
+    async run(page) {
+      await page.goto(`${DEMO}/`);
+      await pause(page, 1200);
+      await page.evaluate(() => window.scrollTo({ top: 520, behavior: 'smooth' }));
+      await pause(page, 1200);
+      await page.getByRole('link', { name: 'Adjust budgets' }).click();
+      await pause(page, 1500);
+      const plus = page.locator('button', { hasText: '+' }).first();
+      const minus = page.locator('button', { hasText: '−' }).first();
+      await plus.click(); await pause(page, 1300);
+      await plus.click(); await pause(page, 1500);
+      await minus.click(); await pause(page, 1300);
+      await minus.click(); await pause(page, 1800);
+    },
+  },
+  // tally-exclusions: a transaction's Exclude from budget switch, saved, then counted again with the same switch.
+  exclude: {
+    device: PHONE,
+    async run(page) {
+      await page.goto(`${DEMO}/transactions`);
+      await pause(page, 1500);
+      const row = page.getByRole('link', { name: /^Blue Bottle Coffee/ }).first();
+      await row.scrollIntoViewIfNeeded();
+      await pause(page, 800);
+      await row.click();
+      await pause(page, 1800);
+      await page.locator('label[for="edit-exclude"], #edit-exclude-label').first().click();
+      await pause(page, 1200);
+      await page.getByRole('button', { name: 'Save', exact: true }).click();
+      await pause(page, 2000);
+      await page.getByRole('link', { name: /^Blue Bottle Coffee/ }).first().scrollIntoViewIfNeeded();
+      await pause(page, 1500);
+      await page.getByRole('link', { name: /^Blue Bottle Coffee/ }).first().click();
+      await pause(page, 1500);
+      await page.locator('label[for="edit-exclude"], #edit-exclude-label').first().click();
+      await pause(page, 1000);
+      await page.getByRole('button', { name: 'Save', exact: true }).click();
+      await pause(page, 2000);
+    },
+  },
+  // tally-how-diagrams: How Tally works, scrolling through the Budget, Transactions and Excluding diagrams.
+  'how-diagrams': {
+    device: PHONE,
+    async run(page) {
+      await page.goto(`${DEMO}/how-it-works`);
+      await pause(page, 1800);
+      await page.evaluate(() => document.getElementById('budget')?.scrollIntoView({ behavior: 'smooth' }));
+      await pause(page, 2200);
+      for (let i = 0; i < 12; i += 1) { await page.evaluate(() => window.scrollBy({ top: 140, behavior: 'smooth' })); await pause(page, 650); }
+      await pause(page, 1200);
+    },
+  },
 };
 
 async function record(name, outDir) {
