@@ -90,14 +90,20 @@ function readScene(sceneId) {
   const interOk = width('600 40px Inter, monospace') !== width('600 40px monospace');
   // non-text pictures (boxes, bars, shapes) that are visible, outside the headline
   let visual = false;
+  const SHAPES = new Set(['path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'image', 'use']);
+  // a stroked shape whose dash still hides the whole line (a line about to draw) paints nothing yet
+  const undrawn = (el, cs) => cs.fill === 'none' && cs.strokeDasharray !== 'none' && typeof el.getTotalLength === 'function' && parseFloat(cs.strokeDashoffset) >= el.getTotalLength() - 1;
   if (scene) for (const el of scene.querySelectorAll('*')) {
     if (el.closest('[data-role="headline"]') || el.querySelector('[data-role="headline"]')) continue;
-    if (el.children.length && !(el instanceof SVGElement)) continue;
+    if (el instanceof SVGElement && !SHAPES.has(el.tagName)) continue; // svg and g only group shapes
     const r = el.getBoundingClientRect();
-    if (r.width < 2 || r.height < 2 || visible(el) < 0.05) continue;
-    if (el instanceof SVGGraphicsElement && el.tagName !== 'svg') { visual = true; break; }
+    if (r.width < 2 && r.height < 2) continue;
+    if (visible(el) < 0.05) continue;
     const cs = getComputedStyle(el);
-    if (cs.backgroundColor !== 'rgba(0, 0, 0, 0)' || parseFloat(cs.borderTopWidth) > 0 || el.tagName === 'IMG' || el.tagName === 'VIDEO' || el.tagName === 'CANVAS') { visual = true; break; }
+    if (el instanceof SVGElement) { if (!undrawn(el, cs)) { visual = true; break; } continue; }
+    if (r.width < 2 || r.height < 2) continue;
+    const paints = cs.backgroundColor !== 'rgba(0, 0, 0, 0)' || cs.backgroundImage !== 'none' || ['Top', 'Right', 'Bottom', 'Left'].some((k) => parseFloat(cs[`border${k}Width`]) > 0 && cs[`border${k}Style`] !== 'none') || ['IMG', 'VIDEO', 'CANVAS'].includes(el.tagName);
+    if (paints) { visual = true; break; }
   }
   return { found: !!scene, headlines, items, visual, fontOk: document.fonts.check('700 84px Libron'), interOk };
 }
