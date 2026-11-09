@@ -12,6 +12,27 @@ never relaxes the publicist's hard rules. A video says no more than its approved
 draft, and an unreleased video's outline, script and source stay in the private
 repository under `videos/<entry-id>/`.
 
+## When a video is made (owner, 2026-11-09)
+
+No schedule, no quota and no judgment of what is "newsworthy": chasing news invites
+hot takes and overclaiming. The owner does not decide videos one by one either.
+Each review note's Draft entry names its media (none, a still, a short clip or an
+explainer), and the owner's usual approval of the draft covers it. An explainer is
+proposed only when all of these hold:
+
+- the approved text already tells a clear story: a test, a decision or a visible
+  before and after;
+- it can be shown plainly from that text alone, with no new number or claim;
+- it is about the owner's own work.
+
+Refactors, test-only work and process changes get a still or nothing. The owner
+still releases every video by posting or uploading it.
+
+**Never, whatever the draft says:** a verdict on, or ranking of, another company's
+product (no red X or "fail" over its result; show the number and the scope); a hook
+on someone else's news; a claim the approved text doesn't make. Every explainer
+shows its honest scope on screen (for example "on 36 invented demo transactions").
+
 ## Consistent: the understandability bar
 
 1. **One message.** Write it as one or two plain sentences before anything else. Every
@@ -102,8 +123,10 @@ of every scene's finished frame, then the full render, before showing the owner.
 
 ## Review flow
 
-1. Outline in the private repository, shown to the owner.
-2. Stills of every scene, then the render, shown to the owner; fix and repeat.
-3. The owner's approval and release follow `channels/youtube.md`.
+1. The note's Draft entry names the media; the owner's approval of the draft covers
+   it. An explainer's outline goes in the private repository with the note.
+2. Stills of every scene, then the render, go with the note for the owner to look at
+   whenever they like; fix and repeat on any feedback.
+3. Release follows `channels/youtube.md`: the owner posts or uploads it.
 4. After each video, add anything the owner's feedback taught to this standard, so
    the next video starts from it.
