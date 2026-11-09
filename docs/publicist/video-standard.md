@@ -61,16 +61,19 @@ shows its honest scope on screen (for example "on 36 invented demo transactions"
    as its headline, rather than a second row naming the same subject.
 10. **Label examples.** A made-up example that explains how something works says
    "Example". Measured results never use made-up numbers.
-11. **Numbers mean what they look like.** Don't show "out of N" unless every one of the
+11. **Name every chart's axis, and size like with like.** A bar chart says what its bars
+    measure ("Confidence"), and numbers that are compared share one size and style, so
+    none looks louder than the data says.
+12. **Numbers mean what they look like.** Don't show "out of N" unless every one of the
     N had a right answer; don't present a test as a ranking it wasn't.
-12. **A steady frame.** No jumps in size or position except at a cut. Camera drift
+13. **A steady frame.** No jumps in size or position except at a cut. Camera drift
     restarts only at scene changes.
-13. **Nothing overlaps, nothing is cut off.** Text keeps clear of other text and 24
+14. **Nothing overlaps, nothing is cut off.** Text keeps clear of other text and 24
     pixels from the frame's edges.
-14. **Sound is optional, and silent is the default.** Videos must work muted. Generated
+15. **Sound is optional, and silent is the default.** Videos must work muted. Generated
     music and a sound effect for every on-screen event read as cheap; use sound only
     when the owner provides music or a voiceover (music rights per hard rule 12).
-15. **Close with the honest scope and the credit.** What it was measured or built on,
+16. **Close with the honest scope and the credit.** What it was measured or built on,
     and the approved credit line.
 
 ## Free to change: everything else
@@ -130,3 +133,8 @@ of every scene's finished frame, then the full render, before showing the owner.
 3. Release follows `channels/youtube.md`: the owner posts or uploads it.
 4. After each video, add anything the owner's feedback taught to this standard, so
    the next video starts from it.
+
+The first video made this way, `tally-clef-vs-jev`, is the worked example: its
+outline, scene page and cue times are in the private repository under
+`videos/tally-clef-vs-jev/`. New videos start from `starter.html` and the kit, so the
+check enforces the bar from the first draft.
