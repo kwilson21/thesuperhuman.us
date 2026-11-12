@@ -2,6 +2,7 @@
 import BaseLayout from "./BaseLayout.astro";
 import Footer from "~/components/Footer.astro";
 import "~/styles/project-journal.css";
+
 interface Props {
 	title: string;
 	subtitle: string;
@@ -18,6 +19,7 @@ interface Props {
 	 * omitted on that main page itself, where the segment names the current page. */
 	crumbHref?: string;
 }
+
 const {
 	title,
 	subtitle,
@@ -28,6 +30,7 @@ const {
 	pageTitle,
 	crumbHref,
 } = Astro.props;
+
 // A same-page jump gets a down arrow; a link to another page gets a forward arrow.
 const journalArrow = journalHref.startsWith("#") ? "↓" : "→";
 ---

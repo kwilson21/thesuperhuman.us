@@ -6,17 +6,21 @@ import {
 	templateVersionLabel,
 } from "~/lib/agreement-templates";
 import type { SoftwareOffer, OfferTerms } from "~/lib/software-offers";
+
 interface Props {
 	requestId: string;
 	offer: SoftwareOffer | null | undefined;
 	terms: OfferTerms | null;
 }
+
 const { requestId, offer, terms } = Astro.props,
 	db = Astro.locals.runtime?.env.MUSIC_DB,
 	enabled = db ? await signingEnabled(db) : false;
+
 const details = offer?.agreement_details_json
 	? JSON.parse(offer.agreement_details_json)
 	: {};
+
 const candidates =
 	db && offer?.request_id
 		? (
@@ -36,10 +40,12 @@ const candidates =
 					}>()
 			).results
 		: [];
+
 const reusedMsa = candidates.find((a) => a.id === offer?.reused_msa_id);
 const theirMsa = reusedMsa ? templateVersionLabel(reusedMsa) : "";
 const currentMsa = reusedMsa && db ? await currentTemplate(db, "msa") : null;
 const currentLabel = currentMsa ? templateVersionLabel(currentMsa) : theirMsa;
+
 const continuity =
 	currentLabel === theirMsa
 		? `Uses their signed MSA ${theirMsa}.`

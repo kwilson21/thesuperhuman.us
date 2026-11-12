@@ -1,5 +1,6 @@
 ---
 export const prerender = false;
+
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import MusicNav from "~/components/audio/MusicNav.astro";
 import AudioFooter from "~/components/audio/AudioFooter.astro";
@@ -11,15 +12,20 @@ import { audioPath, mainSitePath } from "~/lib/host-routing";
 import "~/styles/music.css";
 import "~/styles/music-hubs.css";
 import "~/styles/service-pages.css";
+
 const host = Astro.request.headers.get("host") ?? Astro.url.host;
 const catalog = await loadMusicCatalog();
+
 const example = catalog.examples.find(
 	(example) => example.service === "mastering",
 );
+
 const recording =
 	example &&
 	catalog.recordings.find((track) => track.id === example.recordingId);
+
 const start = audioPath(host, "/start");
+
 const anchors = {
 	"vocal-mix": "two-track-vocals",
 	mastering: "mastering",
@@ -42,8 +48,11 @@ const anchors = {
   import { setupMusicPlayback } from '~/scripts/music-playback';
   import { setupComparisonPlayers } from '~/scripts/comparison-player';
   import { setupAudioServicesLinks } from '~/scripts/audio-services-links';
+
   setupMusicPlayback();
+
   setupComparisonPlayers();
+
   setupAudioServicesLinks();
 </script>
 </BaseLayout>

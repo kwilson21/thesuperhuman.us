@@ -1,5 +1,6 @@
 ---
 export const prerender = false;
+
 import OwnerLayout from "~/layouts/OwnerLayout.astro";
 import RequestList from "~/components/owner/RequestList.astro";
 import { listOwnerRequests } from "~/lib/owner-requests";
@@ -9,21 +10,27 @@ import {
 	type OwnerRequestKind,
 	type OwnerRequestStatus,
 } from "~/lib/owner-model";
+
 const db = Astro.locals.runtime.env.MUSIC_DB;
+
 if (!db)
 	return new Response("Owner reporting is unavailable.", { status: 503 });
+
 const kind = ownerRequestKinds.includes(
 	Astro.url.searchParams.get("kind") as OwnerRequestKind,
 )
 	? (Astro.url.searchParams.get("kind") as OwnerRequestKind)
 	: undefined;
+
 const status = ownerRequestStatuses.includes(
 	Astro.url.searchParams.get("status") as OwnerRequestStatus,
 )
 	? (Astro.url.searchParams.get("status") as OwnerRequestStatus)
 	: undefined;
+
 const requests = await listOwnerRequests(db, { kind, status });
 const newRequestCount = (await listOwnerRequests(db, { status: "new" })).length;
+
 const kinds = [
 	{ value: "", label: "All kinds" },
 	{ value: "purchase", label: "Purchase" },

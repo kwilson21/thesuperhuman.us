@@ -6,6 +6,7 @@ import {
 	type SoftwareOffer,
 	type OfferTerms,
 } from "~/lib/software-offers";
+
 interface Props {
 	requestId: string;
 	email: string;
@@ -17,6 +18,7 @@ interface Props {
 	startedVersion?: number;
 	path?: string;
 }
+
 const {
 	requestId,
 	email,
@@ -28,8 +30,10 @@ const {
 	startedVersion,
 	path,
 } = Astro.props;
+
 const closed = resolved || withdrawn || Boolean(startedVersion);
 const website = path === "website";
+
 const fields: [
 	name: "clientInputs" | "exclusions" | "timing",
 	label: string,
@@ -67,12 +71,16 @@ const fields: [
 			: "About 3 weeks from the start date.",
 	],
 ];
+
 const draft = offers.find((offer) => offer.status === "draft"),
 	sent = offers.find((offer) => offer.status === "sent");
+
 const current = draft ?? sent;
+
 const terms: OfferTerms | null = current
 	? JSON.parse(current.terms_json)
 	: null;
+
 const date = (value: string) =>
 	new Date(value).toLocaleDateString("en-US", {
 		month: "short",

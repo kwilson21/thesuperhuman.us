@@ -1,5 +1,6 @@
 ---
 export const prerender = false;
+
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Footer from "~/components/Footer.astro";
 import BuildingIllustration from "~/components/BuildingIllustration.astro";
@@ -8,6 +9,7 @@ import { tallyStory } from "~/data/project-stories/tally";
 import { kailleraStory } from "~/data/project-stories/kaillera-next";
 import { websiteStory } from "~/data/project-stories/personal-website";
 import { threadlineStory } from "~/data/project-stories/threadline";
+
 const projects = [
 	{
 		kind: "tally" as const,
@@ -81,6 +83,7 @@ const projects = [
 		],
 	},
 ];
+
 const prototypes = [
 	{
 		title: dailyStory.title,
@@ -123,6 +126,7 @@ const prototypes = [
 </BaseLayout>
 <script>
   import { runMotion } from '~/scripts/scroll-scenes';
+
   runMotion();
 </script>
 <style>

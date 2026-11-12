@@ -4,6 +4,7 @@ export function setupResumeRequestForm() {
 	const form = document.getElementById(
 		"resume-request-form",
 	) as HTMLFormElement;
+
 	setupFormSubmission({
 		form,
 		endpoint: "/api/resume-request",

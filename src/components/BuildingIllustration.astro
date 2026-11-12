@@ -2,11 +2,14 @@
 interface Props {
 	kind: "tally" | "kaillera" | "website";
 }
+
 const { kind } = Astro.props;
+
 const bars = [
 	8, 14, 23, 17, 29, 11, 25, 34, 19, 26, 13, 30, 21, 10, 28, 36, 17, 25, 12, 31,
 	22, 14, 27, 18,
 ];
+
 // The three dashed lines from the game room: to Player 1, to Player 2 and down to the spectator.
 // Each player is a person and a game controller (rounded body, two grips, a d-pad and two face
 // buttons) in the person's line weight; the spectator has no controller. Reviewed in

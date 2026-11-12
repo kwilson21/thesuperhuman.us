@@ -15,21 +15,26 @@ import { groupTracksByService, type AudioTrack } from "~/lib/audio-tracks";
 import { loadMusicCatalog } from "~/lib/music-content";
 
 const entries = await getCollection("audio-tracks");
+
 const tracks: AudioTrack[] = entries.map((e) => ({
 	slug: e.id,
 	...(e.data as Omit<AudioTrack, "slug">),
 }));
+
 const groups = groupTracksByService(tracks);
 const host = Astro.request.headers.get("host") ?? Astro.url.host;
 const audioHref = (path: string) => audioPath(host, path);
 
 const catalog = await loadMusicCatalog();
+
 const example = catalog.examples.find(
 	(example) => example.service === "mastering",
 );
+
 const recording =
 	example &&
 	catalog.recordings.find((track) => track.id === example.recordingId);
+
 const release =
 	recording &&
 	catalog.releases.find((release) => release.tracks.includes(recording.id));
@@ -85,7 +90,9 @@ const jsonLd = {
     import '~/scripts/audio-player-coordinator';
     import { setupComparisonPlayers } from '~/scripts/comparison-player';
     import { runMotion } from '~/scripts/scroll-scenes';
+
     setupComparisonPlayers();
+
     // The headphones give off a few rings on arrival and the sections rise in; nothing plays sound.
     runMotion();
   </script>

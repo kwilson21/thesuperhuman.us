@@ -3,6 +3,7 @@ import PayloadReviewIllustration from "./PayloadReviewIllustration.astro";
 import PersonalName from "./PersonalName.astro";
 import { personalNameSegments } from "~/lib/personal-name";
 import type { Milestone } from "~/lib/project-story";
+
 interface Props {
 	id: string;
 	title: string;
@@ -21,6 +22,7 @@ interface Props {
 	/** How many milestones the picker lists at once; the rest are reached by paging. */
 	pageSize?: number;
 }
+
 const {
 	id,
 	title,
@@ -34,11 +36,14 @@ const {
 	chronological = false,
 	pageSize = 6,
 } = Astro.props;
+
 const entries = chronological
 	? given
 	: given.slice().sort((a, b) => b.day.localeCompare(a.day));
+
 const pageCount = Math.ceil(entries.length / pageSize);
 const hasHighlights = Astro.slots.has("highlights");
+
 const date = (day: string) =>
 	new Date(day + "T12:00:00Z").toLocaleDateString("en-US", {
 		month: "short",
@@ -88,6 +93,7 @@ const date = (day: string) =>
 </section>
 <script>
   import { setupProjectTimeline } from '~/scripts/project-timeline';
+
   setupProjectTimeline();
 </script>
 <style>

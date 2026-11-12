@@ -8,6 +8,7 @@ import {
 } from "~/lib/software-offers";
 import "~/styles/global.css";
 import "~/styles/studio.css";
+
 interface Props {
 	signed?: boolean;
 	waiting?: boolean;
@@ -18,6 +19,7 @@ interface Props {
 	signingUrl?: string;
 	turnstileSiteKey?: string;
 }
+
 const {
 	signed = false,
 	waiting = false,
@@ -28,6 +30,7 @@ const {
 	signingUrl,
 	turnstileSiteKey,
 } = Astro.props;
+
 const terms = offer?.terms;
 ---
 <!doctype html><html lang="en"><head>
@@ -90,7 +93,9 @@ const terms = offer?.terms;
   <script>
     import { setupAgreementAccess } from '~/scripts/agreement-access';
     import { setupSoftwareOfferPrint } from '~/scripts/software-offer-print';
+
     setupAgreementAccess();
+
     setupSoftwareOfferPrint();
   </script>
 <style>

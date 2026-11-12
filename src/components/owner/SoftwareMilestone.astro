@@ -1,11 +1,14 @@
 ---
 import type { OfferTerms } from "~/lib/software-offers";
+
 interface Props {
 	number?: number;
 	milestone?: OfferTerms["milestones"][number];
 	path?: string;
 }
+
 const { milestone, number = 1, path } = Astro.props;
+
 const examples = {
 	default: {
 		name: "Client onboarding tracker",
@@ -26,6 +29,7 @@ const examples = {
 		acceptance: "",
 	},
 };
+
 const placeholders =
 	path !== "website"
 		? examples.default

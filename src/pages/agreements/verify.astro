@@ -1,21 +1,29 @@
 ---
 export const prerender = false;
+
 import AgreementLayout from "~/layouts/AgreementLayout.astro";
 import { completeAgreementLink } from "~/lib/agreement-access";
+
 const key =
 	Astro.request.method === "POST"
 		? String((await Astro.request.formData()).get("key") ?? "")
 		: (Astro.url.searchParams.get("key") ?? "");
+
 const response = await completeAgreementLink(
 	Astro.locals.runtime.env,
 	Astro.request,
 	key,
 	undefined,
 );
+
 if (response.status === 303) return response;
+
 Astro.response.status = response.status;
+
 Astro.response.headers.set("Referrer-Policy", "no-referrer");
+
 Astro.response.headers.set("Cache-Control", "no-store");
+
 const valid = response.status === 200;
 ---
 <AgreementLayout title={valid ? "Your documents are ready" : "This link has expired"}>

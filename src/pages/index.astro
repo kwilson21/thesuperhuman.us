@@ -1,5 +1,6 @@
 ---
 export const prerender = false;
+
 import { getEntry } from "astro:content";
 import { lyftBonus } from "~/data/profile";
 import BaseLayout from "~/layouts/BaseLayout.astro";
@@ -19,24 +20,31 @@ import { kailleraStory } from "~/data/project-stories/kaillera-next";
 import { capacityCells, parseFigure } from "~/lib/home-motion";
 import { loadMusicCatalog } from "~/lib/music-content";
 import { audioPath } from "~/lib/host-routing";
+
 const musicCatalog = await loadMusicCatalog();
+
 const oldNewsExample = musicCatalog.examples.find(
 	(example) => example.id === "old-news-mastering",
 );
+
 const oldNewsRecording =
 	oldNewsExample &&
 	musicCatalog.recordings.find(
 		(recording) => recording.id === oldNewsExample.recordingId,
 	);
+
 const host = Astro.request.headers.get("host") ?? Astro.url.host;
 const essay = await getEntry("pages", "ai-gives-you-speed");
+
 if (!essay) throw new Error("AI essay content missing");
+
 // The pen stroke underlines the word the essay argues for; the title's words are unchanged.
 const penWord = "Direction";
 const penAt = essay.data.title.lastIndexOf(penWord);
 const before = parseFigure(lyftBonus.before);
 const after = parseFigure(lyftBonus.after);
 const cells = before && after ? capacityCells(before, after) : 0;
+
 const jsonLd = {
 	"@context": "https://schema.org",
 	"@type": "Person",
@@ -147,7 +155,9 @@ const jsonLd = {
   import '~/scripts/audio-player-coordinator';
   import { setupComparisonPlayers } from '~/scripts/comparison-player';
   import { setupHomeContact } from '~/scripts/home-contact';
+
   setupComparisonPlayers();
+
   setupHomeContact();
 </script>
 <style>

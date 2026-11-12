@@ -1,5 +1,6 @@
 ---
 export const prerender = false;
+
 import { getEntry } from "astro:content";
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Footer from "~/components/Footer.astro";
@@ -11,9 +12,13 @@ import headphones from "~/assets/site/headphones-v1.webp";
 import laptop from "~/assets/site/laptop-v1.webp";
 import controller from "~/assets/site/controller-v1.webp";
 import notebook from "~/assets/site/notebook-v1.webp";
+
 const entry = await getEntry("pages", "about");
+
 if (!entry) throw new Error("About content missing");
+
 const { Content } = await entry.render();
+
 const chapters = [
 	{
 		id: "audio" as const,
@@ -75,6 +80,7 @@ const chapters = [
 </BaseLayout>
 <script>
   import { setupAboutResume } from '~/scripts/about-resume';
+
   setupAboutResume();
 </script>
 <style>

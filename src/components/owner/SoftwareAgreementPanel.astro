@@ -6,15 +6,19 @@ import {
 } from "~/lib/agreement-artifacts";
 import { offerAgreements } from "~/lib/software-agreements";
 import { consentText, intentText } from "~/lib/agreement-fields";
+
 interface Props {
 	requestId: string;
 	offerId?: string;
 }
+
 const { requestId, offerId } = Astro.props,
 	db = Astro.locals.runtime.env.MUSIC_DB!;
+
 const docs = offerId ? await offerAgreements(db, offerId) : [],
 	sow = docs.find((d) => d.kind === "sow"),
 	pending = docs.filter((d) => d.status === "client_signed");
+
 const artifact = sow
 	? await db
 			.prepare(
@@ -23,6 +27,7 @@ const artifact = sow
 			.bind(sow.id)
 			.first<{ status: string; attempt_id: string | null }>()
 	: null;
+
 const deliveries = sow
 	? (
 			await db
@@ -37,6 +42,7 @@ const deliveries = sow
 				}>()
 		).results
 	: [];
+
 const notifications = sow
 	? (
 			await db
@@ -47,14 +53,17 @@ const notifications = sow
 				.all<{ kind: string; status: string; retryable: number }>()
 		).results
 	: [];
+
 const retryCount =
 	notifications.filter((n) => n.retryable && n.status !== "sent").length +
 	(sow?.status === "executed"
 		? deliveries.filter((d) => d.status !== "sent" && !d.alternate_delivered_at)
 				.length
 		: 0);
+
 const values = sow ? JSON.parse(sow.values_json) : null,
 	endpoint = `/api/owner/requests/${requestId}/agreement`;
+
 const signatures = (
 	await db
 		.prepare(
@@ -69,6 +78,7 @@ const signatures = (
 			signed_at: string;
 		}>()
 ).results;
+
 const abandoned = (
 	await db
 		.prepare(
@@ -130,10 +140,12 @@ details {
 
 <script>
   import { setupSoftwareAgreementReviewLinks } from '~/scripts/software-agreement-review-links';
+
   setupSoftwareAgreementReviewLinks();
 </script>
 
 <script>
   import { setupCountersignName } from '~/scripts/countersign-name';
+
   setupCountersignName();
 </script>

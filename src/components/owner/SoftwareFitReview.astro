@@ -5,8 +5,10 @@ interface Props {
 	closed?: boolean;
 	path?: string;
 }
+
 const { requestId, fit, closed = false, path } = Astro.props;
 const website = path === "website";
+
 const fitLabels: Record<string, string> = {
 	"potential-fit": "Potential fit",
 	"needs-clarification": "Needs clarification",

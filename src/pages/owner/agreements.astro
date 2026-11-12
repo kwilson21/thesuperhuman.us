@@ -1,6 +1,8 @@
 ---
 import { newYorkTime } from "~/lib/agreement-artifacts";
+
 export const prerender = false;
+
 import OwnerLayout from "~/layouts/OwnerLayout.astro";
 import {
 	currentTemplate,
@@ -10,16 +12,20 @@ import {
 } from "~/lib/agreement-templates";
 import { signingEnabled } from "~/lib/agreement-access";
 import { projectToday } from "~/lib/audio-project-updates";
+
 const db = Astro.locals.runtime.env.MUSIC_DB!;
+
 const enabled = await signingEnabled(db),
 	templates = await Promise.all(
 		["msa", "sow"].map((kind) => currentTemplate(db, kind as "msa" | "sow")),
 	);
+
 const config = await db
 	.prepare(
 		"SELECT version,values_json FROM software_contractor_config ORDER BY version DESC LIMIT 1",
 	)
 	.first<{ version: number; values_json: string }>();
+
 const histories = await Promise.all(
 	["msa", "sow"].map((kind) =>
 		db
@@ -34,10 +40,12 @@ const histories = await Promise.all(
 			}>(),
 	),
 );
+
 const currentVersionText = (template: AgreementTemplate | null) =>
 	template
 		? `${template.version} · ${templateVersionLabel(template)}`
 		: "not published";
+
 const values = config ? JSON.parse(config.values_json) : {};
 ---
 <OwnerLayout title="Agreements" current="agreements" newRequestCount={0} ownerEmail={Astro.locals.owner!.email}>
@@ -95,5 +103,6 @@ form > button {
 </style>
 <script>
   import { setupOwnerAgreements } from '~/scripts/owner-agreements';
+
   setupOwnerAgreements();
 </script>

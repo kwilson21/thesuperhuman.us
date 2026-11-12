@@ -17,6 +17,7 @@ type Props = {
 	/** The owner's next step, shown above the actions. */
 	nextStep?: NextStep | null;
 };
+
 const {
 	updates,
 	currentDueAt,
@@ -28,32 +29,41 @@ const {
 	firstUpdate = "",
 	nextStep = null,
 } = Astro.props;
+
 const owner = Boolean(endpoint);
+
 const active =
 	stage !== "complete" && requestStatus !== "withdrawn" && !revoked;
+
 const reasonLabels = {
 	protect_song: "More time to protect the song",
 	client_clarification: "Waiting on client clarification",
 	schedule_conflict: "Scheduling conflict",
 };
+
 const shortDate = (value: string) =>
 	new Date(`${value}T12:00:00`).toLocaleDateString("en-US", {
 		month: "short",
 		day: "numeric",
 	});
+
 const dateLabel = (value: string) =>
 	new Date(`${value}T12:00:00`).toLocaleDateString("en-US", {
 		month: "long",
 		day: "numeric",
 		year: "numeric",
 	});
+
 const today = projectToday();
+
 const nextDay = currentDueAt
 	? new Date(Date.parse(`${currentDueAt}T12:00:00Z`) + 86_400_000)
 			.toISOString()
 			.slice(0, 10)
 	: today;
+
 const laterDate = nextDay > today ? nextDay : today;
+
 // Each kind of event gets its own node shape, so the line reads at a glance.
 const node = (update: ProjectUpdate) =>
 	update.file_version === "final"
@@ -69,6 +79,7 @@ const node = (update: ProjectUpdate) =>
 							update.milestone
 						? "milestone"
 						: "note";
+
 const title = (update: ProjectUpdate) =>
 	update.file_version === "review"
 		? "Review ready"
@@ -85,9 +96,11 @@ const title = (update: ProjectUpdate) =>
 							: update.kind === "date_changed"
 								? "Date moved"
 								: "Studio update";
+
 // After the final delivery, the date that matters is the file's availability, not the due date.
 const upcoming =
 	active && currentDueAt && stage !== "final_files_ready" ? currentDueAt : null;
+
 const stamp = (value: string) =>
 	new Date(value).toLocaleString("en-US", {
 		month: "short",

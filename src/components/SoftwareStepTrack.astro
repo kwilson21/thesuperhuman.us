@@ -1,5 +1,6 @@
 ---
 import { projectSteps } from "~/lib/software-projects";
+
 const { step } = Astro.props as { step: string };
 const current = projectSteps.indexOf(step as (typeof projectSteps)[number]);
 ---

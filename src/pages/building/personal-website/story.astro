@@ -1,5 +1,6 @@
 ---
 export const prerender = false;
+
 import ProjectLayout from "~/layouts/ProjectLayout.astro";
 import ProjectUpdates from "~/components/ProjectUpdates.astro";
 import { websiteFeed } from "~/lib/publication/website";
@@ -7,7 +8,9 @@ import {
 	websiteStory,
 	websiteMilestones,
 } from "~/data/project-stories/personal-website";
+
 const feed = await websiteFeed(Astro.locals.runtime.env, "personal-website");
+
 Astro.response.headers.set("Cache-Control", "no-store");
 ---
 <ProjectLayout

@@ -1,5 +1,6 @@
 ---
 export const prerender = false;
+
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Footer from "~/components/Footer.astro";
 import { mainSitePath } from "~/lib/host-routing";
@@ -12,12 +13,16 @@ import {
 } from "~/lib/software-inquiry";
 import "~/styles/audio-intake.css";
 import "~/styles/software-intake.css";
+
 const env = Astro.locals.runtime?.env;
 const siteKey = env?.PUBLIC_TURNSTILE_SITE_KEY ?? "";
+
 const available = Boolean(
 	siteKey && env?.MUSIC_DB && env.TURNSTILE_SECRET_KEY && env.RATE_LIMIT,
 );
+
 const requested = Astro.url.searchParams.get("path");
+
 // Old links keep working: ?path=idea opens Web app.
 const selected =
 	requested === "idea"
@@ -25,7 +30,9 @@ const selected =
 		: requested && Object.hasOwn(softwarePaths, requested)
 			? (requested as SoftwarePath)
 			: null;
+
 const count = selected === "website" ? 8 : 7;
+
 const href = (path: string) =>
 	mainSitePath(Astro.request.headers.get("host") ?? Astro.url.host, path);
 ---

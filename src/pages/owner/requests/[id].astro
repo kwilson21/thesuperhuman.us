@@ -1,5 +1,6 @@
 ---
 export const prerender = false;
+
 import SoftwareProjectPanel from "~/components/owner/SoftwareProjectPanel.astro";
 import SoftwareAgreementPanel from "~/components/owner/SoftwareAgreementPanel.astro";
 import {
@@ -44,19 +45,26 @@ import {
 	softwareBrief,
 	softwareLabels,
 } from "~/lib/software-inquiry";
+
 const db = Astro.locals.runtime.env.MUSIC_DB;
+
 if (!db)
 	return new Response("Owner reporting is unavailable.", { status: 503 });
+
 const request = Astro.params.id
 	? await getOwnerRequest(db, Astro.params.id)
 	: null;
+
 if (!request) return new Response("Request not found.", { status: 404 });
+
 const [audit, newRequests] = await Promise.all([
 	listOwnerRequestAudit(db, request.id),
 	listOwnerRequests(db, { status: "new" }),
 ]);
+
 const payment =
 	request.kind === "service" ? await getAudioPayment(db, request.id) : null;
+
 const portalProject =
 	request.kind === "service" && clientPortalEnabled(Astro.locals.runtime.env)
 		? await db
@@ -72,11 +80,14 @@ const portalProject =
 					} & ProjectInvitation
 				>()
 		: null;
+
 const stripeEnabled = stripeAvailable(Astro.locals.runtime.env);
+
 const reviewDecision =
 	portalProject?.stage === "review_ready"
 		? await latestReviewDecision(db, request.id)
 		: null;
+
 const nextStep = portalProject
 	? ownerNextStep({
 			stage: portalProject.stage,
@@ -87,12 +98,15 @@ const nextStep = portalProject
 			reviewDecision,
 		})
 	: null;
+
 const projectMessages = portalProject
 	? await listProjectMessages(db, request.id)
 	: [];
+
 const projectUpdates = portalProject
 	? await listProjectUpdates(db, request.id)
 	: [];
+
 const projectFiles = portalProject
 	? (
 			await db
@@ -111,6 +125,7 @@ const projectFiles = portalProject
 				}>()
 		).results
 	: [];
+
 const pendingUploads = portalProject
 	? (
 			await db
@@ -125,6 +140,7 @@ const pendingUploads = portalProject
 				}>()
 		).results
 	: [];
+
 const pendingSignature =
 	request.kind === "software" &&
 	Boolean(
@@ -135,6 +151,7 @@ const pendingSignature =
 			.bind(request.id)
 			.first(),
 	);
+
 const allowed =
 	request.status === "new"
 		? ["review", "resolve", "withdraw"]
@@ -143,10 +160,12 @@ const allowed =
 			: request.status === "resolved"
 				? ["reopen", "withdraw"]
 				: [];
+
 const label = (key: string) =>
 	key
 		.replace(/([a-z])([A-Z])/g, "$1 $2")
 		.replace(/^./, (character) => character.toUpperCase());
+
 const detailRows = Object.entries(request.details).filter(
 	([, value]) =>
 		value !== "" &&
@@ -154,6 +173,7 @@ const detailRows = Object.entries(request.details).filter(
 		value !== false &&
 		(!Array.isArray(value) || value.length),
 );
+
 const detailValue = (value: unknown) =>
 	Array.isArray(value)
 		? value.join(", ")
@@ -162,16 +182,21 @@ const detailValue = (value: unknown) =>
 					.map(([key, item]) => `${label(key)}: ${String(item)}`)
 					.join(" · ")
 			: String(value);
+
 const offers =
 	request.kind === "software" ? await listSoftwareOffers(db, request.id) : [];
+
 const softwareProject =
 	request.kind === "software" ? await getSoftwareProject(db, request.id) : null;
+
 const softwareUpdates = softwareProject
 	? await listSoftwareUpdates(db, request.id)
 	: [];
+
 const softwareMessageRows = softwareProject
 	? await listSoftwareProjectMessages(db, request.id)
 	: [];
+
 const softwareMessages = softwareProject
 	? readableSoftwareProjectMessages(
 			softwareMessageRows,
@@ -179,6 +204,7 @@ const softwareMessages = softwareProject
 			projectTerms(softwareProject),
 		)
 	: [];
+
 if (softwareProject) {
 	const projectAudit = (
 		await db
@@ -188,11 +214,13 @@ if (softwareProject) {
 			.bind(request.id)
 			.all<(typeof audit)[number]>()
 	).results;
+
 	audit.push(...projectAudit);
 	audit.sort((first, second) =>
 		second.occurredAt.localeCompare(first.occurredAt),
 	);
 }
+
 const fit =
 	request.kind === "software"
 		? await db
@@ -202,6 +230,7 @@ const fit =
 				.bind(request.id)
 				.first<{ label: string; note: string }>()
 		: null;
+
 const offerLink =
 	request.kind === "software"
 		? await db
@@ -211,6 +240,7 @@ const offerLink =
 				.bind(request.id)
 				.first<{ revoked_at: string | null; created_at: string }>()
 		: null;
+
 const auditLabel = (item: (typeof audit)[number]) =>
 	({
 		"fit-reviewed": "Fit review saved",
@@ -220,11 +250,14 @@ const auditLabel = (item: (typeof audit)[number]) =>
 		"offer-sent": item.note || "Offer sent",
 		"offer-link-revoked": "Client link revoked",
 	})[item.action] ?? item.action.replaceAll("-", " ");
+
 const closed = ["resolved", "withdrawn"].includes(request.status);
 const clientCopyStatus = request.details.clientCopyStatus ?? "failed";
 const brief = request.kind === "software" ? softwareBrief(request) : null;
+
 const softwarePath =
 	request.kind === "software" ? (request.serviceId ?? "") : "";
+
 // Each software path's row on the services page. Earlier web app briefs keep the idea path name.
 const softwareServiceRows: Record<string, string> = {
 	website: "website",
@@ -232,6 +265,7 @@ const softwareServiceRows: Record<string, string> = {
 	idea: "web-app",
 	workflow: "workflow",
 };
+
 const serviceRow = (serviceId: string) =>
 	Object.hasOwn(softwareServiceRows, serviceId)
 		? softwareServiceRows[serviceId]

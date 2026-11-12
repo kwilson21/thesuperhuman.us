@@ -10,6 +10,7 @@ import {
 	type Milestone,
 } from "~/lib/project-story";
 import type { ProjectFeed } from "~/lib/publication/read";
+
 interface Props {
 	feed: ProjectFeed | null;
 	projectId: string;
@@ -23,6 +24,7 @@ interface Props {
 	/** A short line rendered under the heading, always visible (with or without JavaScript). */
 	lead?: string;
 }
+
 const {
 	feed,
 	projectId,
@@ -32,6 +34,7 @@ const {
 	view,
 	lead,
 } = Astro.props;
+
 const project = (entries: Milestone[]) =>
 	view === "latest"
 		? latestJournalMilestones(entries)
@@ -40,10 +43,12 @@ const project = (entries: Milestone[]) =>
 			: view === "archive"
 				? archiveMilestones(entries)
 				: entries;
+
 const merged = journalMilestones(feed, milestones);
 const visible = project(merged);
 const fallbackVisible = project(milestones);
 const bounded = view === "latest";
+
 // Keep the anchor stable for existing cross-page links to Personal Website's Latest work section.
 const domId =
 	view === "story"
@@ -51,17 +56,21 @@ const domId =
 		: view === "archive"
 			? `${projectId}-archive`
 			: `${projectId}-updates`;
+
 const storyHref = bounded ? `/building/${projectId}/story` : undefined;
 const archiveHref = bounded ? `/building/${projectId}/archive` : undefined;
+
 const selectedIdForTimeline = journalSelection(
 	view,
 	visible,
 	feed?.current?.entryId,
 	selectedId,
 );
+
 // Published entries never carry placement: 'story', so Story never needs the live-feed apparatus:
 // no correction or withdrawal can ever reach it.
 const showFeedNotices = view !== "story";
+
 // Latest work only: everything that no longer shows inline keeps a small "moved" anchor, rendered
 // inside [data-update-content] (and the curated-only fallback) so a live withdrawal or correction
 // replaces it along with the rest, instead of leaving a stale, duplicate-ID anchor behind.
@@ -72,11 +81,13 @@ const movedEntry = (entry: Milestone) => ({
 		| "story"
 		| "archive",
 });
+
 const moved = bounded
 	? merged
 			.filter((entry) => !visible.some((v) => v.id === entry.id))
 			.map(movedEntry)
 	: [];
+
 const movedFallback = bounded
 	? milestones
 			.filter((entry) => !fallbackVisible.some((v) => v.id === entry.id))
@@ -97,6 +108,7 @@ const movedFallback = bounded
 </div>
 <script>
   import { setupProjectUpdatesFeed } from '~/scripts/project-updates-feed';
+
   setupProjectUpdatesFeed();
 </script>
 <style>.update-notice { padding: 16px; border: 1px solid var(--rule); margin-bottom: var(--space-6); font-size: 14px; line-height: 1.6; } .update-notice[hidden] { display: none; } a { color: var(--accent); }</style>

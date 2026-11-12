@@ -9,6 +9,7 @@ type Props = {
 	peaks: string | null;
 	downloadHref?: string;
 };
+
 const { src, name, label, peaks, downloadHref } = Astro.props;
 const bars = parsePeaks(peaks);
 const wave = bars ? waveformRects(bars) : "";

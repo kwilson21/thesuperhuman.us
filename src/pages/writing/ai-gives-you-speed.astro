@@ -1,12 +1,15 @@
 ---
 export const prerender = false;
+
 import { getEntry } from "astro:content";
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Footer from "~/components/Footer.astro";
 import PersonalName from "~/components/PersonalName.astro";
 
 const entry = await getEntry("pages", "ai-gives-you-speed");
+
 if (!entry) throw new Error("AI essay content missing");
+
 const { Content, headings } = await entry.render();
 const sections = headings.filter((heading) => heading.depth === 2);
 ---

@@ -1,8 +1,10 @@
 export function setupMusicDetailLinks() {
 	function openLinkedDetail() {
 		const target = document.getElementById(location.hash.slice(1));
+
 		if (target instanceof HTMLDetailsElement) target.open = true;
 	}
+
 	openLinkedDetail();
 	window.addEventListener("hashchange", openLinkedDetail);
 	document
@@ -12,6 +14,7 @@ export function setupMusicDetailLinks() {
 				const target = document.getElementById(
 					link.getAttribute("href")!.slice(1),
 				);
+
 				if (target instanceof HTMLDetailsElement) target.open = true;
 			}),
 		);

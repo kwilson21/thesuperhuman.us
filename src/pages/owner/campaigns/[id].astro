@@ -1,5 +1,6 @@
 ---
 export const prerender = false;
+
 import OwnerLayout from "~/layouts/OwnerLayout.astro";
 import AttentionIndex from "~/components/owner/AttentionIndex.astro";
 import ListeningPath from "~/components/owner/ListeningPath.astro";
@@ -8,13 +9,18 @@ import MetricDefinition from "~/components/owner/MetricDefinition.astro";
 import { loadCampaignDesk } from "~/lib/owner-reporting";
 import { listOwnerRequests } from "~/lib/owner-requests";
 import { loadTrafficSummary } from "~/lib/cloudflare-analytics";
+
 const db = Astro.locals.runtime.env.MUSIC_DB;
+
 if (!db)
 	return new Response("Owner reporting is unavailable.", { status: 503 });
+
 const campaign = Astro.params.id
 	? await loadCampaignDesk(db, Astro.params.id, new Date())
 	: null;
+
 if (!campaign) return new Response("Campaign not found.", { status: 404 });
+
 const [newRequests, traffic] = await Promise.all([
 	listOwnerRequests(db, { status: "new" }),
 	loadTrafficSummary(Astro.locals.runtime.env, {

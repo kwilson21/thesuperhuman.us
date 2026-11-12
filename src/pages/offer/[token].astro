@@ -1,5 +1,6 @@
 ---
 export const prerender = false;
+
 import { signingEnabled } from "~/lib/agreement-access";
 import SoftwareOffer from "~/components/SoftwareOffer.astro";
 import {
@@ -8,16 +9,21 @@ import {
 	listSoftwareOffers,
 } from "~/lib/software-offers";
 import { getOwnerRequest } from "~/lib/owner-requests";
+
 const db = Astro.locals.runtime.env.MUSIC_DB;
+
 const sent =
 	db && Astro.params.token
 		? await getLinkedOffer(db, Astro.params.token)
 		: null;
+
 const request = sent && db ? await getOwnerRequest(db, sent.request_id) : null;
+
 const offer =
 	sent && request
 		? clientOffer(request, sent, await listSoftwareOffers(db!, request.id))
 		: null;
+
 const project =
 	sent && db
 		? await db
@@ -25,6 +31,7 @@ const project =
 				.bind(sent.request_id)
 				.first<{ request_id: string }>()
 		: null;
+
 const agreement =
 	sent && db
 		? await db
@@ -34,10 +41,14 @@ const agreement =
 				.bind(sent.id)
 				.first<{ status: string }>()
 		: null;
+
 if (!db) Astro.response.status = 503;
 else if (!offer) Astro.response.status = 404;
+
 Astro.response.headers.set("cache-control", "private, no-store");
+
 Astro.response.headers.set("x-robots-tag", "noindex, nofollow");
+
 Astro.response.headers.set("referrer-policy", "no-referrer");
 ---
 <SoftwareOffer signed={Boolean(project) || agreement?.status==='executed'} waiting={agreement?.status==='client_signed'} projectUrl={project ? `/studio/software/${project.request_id}` : undefined} turnstileSiteKey={Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY??import.meta.env.PUBLIC_TURNSTILE_SITE_KEY} offer={offer} temporarilyUnavailable={!db} signingUrl={!project && !agreement && sent?.msa_template_id && db && await signingEnabled(db) ? `/offer/${Astro.params.token}/sign` : undefined} />

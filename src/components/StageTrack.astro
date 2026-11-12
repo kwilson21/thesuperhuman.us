@@ -2,7 +2,9 @@
 import "~/styles/studio.css";
 
 type Props = { stage: string; bookingPaid?: boolean; size?: "full" | "mini" };
+
 const { stage, bookingPaid = false, size = "full" } = Astro.props;
+
 // "Booking paid" is derived from Stripe while the stored stage stays Accepted.
 const stages = [
 	["files_under_review", "Files under review"],
@@ -14,11 +16,14 @@ const stages = [
 	["final_files_ready", "Final files ready"],
 	["complete", "Complete"],
 ] as const;
+
 const shown = stage === "accepted" && bookingPaid ? "booking_paid" : stage;
+
 const current = Math.max(
 	0,
 	stages.findIndex(([key]) => key === shown),
 );
+
 const state = (index: number) =>
 	index < current || shown === "complete"
 		? "done"

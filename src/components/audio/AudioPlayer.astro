@@ -1,5 +1,6 @@
 ---
 import PlayIcon from "./PlayIcon.astro";
+
 interface Props {
 	id: string;
 	src: string;
@@ -9,6 +10,7 @@ interface Props {
 	releaseId?: string;
 	recordingId?: string;
 }
+
 const {
 	id,
 	src,
@@ -18,6 +20,7 @@ const {
 	releaseId,
 	recordingId,
 } = Astro.props;
+
 const time = `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, "0")}`;
 ---
 <div class="listening-player" data-player={id}>

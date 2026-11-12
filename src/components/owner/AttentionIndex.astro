@@ -3,6 +3,7 @@ interface Props {
 	number: "01" | "02";
 	label: string;
 }
+
 const { number, label } = Astro.props;
 ---
 <div class="attention-index" aria-label={label}>

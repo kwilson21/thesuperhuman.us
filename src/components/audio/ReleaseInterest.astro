@@ -2,11 +2,13 @@
 import { MERCHANDISE } from "~/lib/music-demand";
 import PersonalName from "~/components/PersonalName.astro";
 import merchConcepts from "~/assets/site/old-news-merch-concepts.webp";
+
 interface Props {
 	releaseId: string;
 	artwork?: string;
 	merchandiseConcept?: boolean;
 }
+
 const { releaseId, merchandiseConcept = false } = Astro.props;
 const env = Astro.locals.runtime.env;
 const key = env.PUBLIC_TURNSTILE_SITE_KEY ?? "";
@@ -62,5 +64,6 @@ const available = Boolean(key && env.MUSIC_DB && env.TURNSTILE_SECRET_KEY);
 {available && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>}
 <script>
   import { setupReleaseInterest } from '~/scripts/release-interest';
+
   setupReleaseInterest();
 </script>

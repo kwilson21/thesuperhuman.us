@@ -5,6 +5,7 @@ export function setupOpenDetailsLinks() {
 			link.addEventListener("click", () => {
 				const target = document.getElementById(link.hash.slice(1));
 				const details = target?.closest("details");
+
 				if (details) details.open = true;
 			}),
 		);

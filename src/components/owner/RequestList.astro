@@ -1,11 +1,14 @@
 ---
 import type { OwnerRequest } from "~/lib/owner-model";
 import { softwarePathLabel } from "~/lib/software-inquiry";
+
 interface Props {
 	requests: OwnerRequest[];
 	empty?: string;
 }
+
 const { requests, empty = "No requests need attention." } = Astro.props;
+
 const labels = {
 	purchase: "Purchase",
 	merchandise: "Merchandise",

@@ -5,6 +5,7 @@ import { personalNameSegments } from "~/lib/personal-name";
 interface Props {
 	text: string;
 }
+
 const { text } = Astro.props;
 ---
 {personalNameSegments(text).map(segment =>

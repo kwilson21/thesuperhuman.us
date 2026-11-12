@@ -1,10 +1,13 @@
 ---
 import MetricDefinition from "./MetricDefinition.astro";
 import type { ListeningSummary } from "~/lib/owner-reporting";
+
 interface Props {
 	listening: ListeningSummary;
 }
+
 const { listening } = Astro.props;
+
 const steps = [
 	{
 		label: "Started",

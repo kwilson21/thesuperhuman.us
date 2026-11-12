@@ -7,9 +7,11 @@ import "~/styles/service-pages.css";
 import "~/styles/audio-intake.css";
 import { audioPath, mainSitePath } from "~/lib/host-routing";
 import type { ServiceSheet } from "~/data/services";
+
 interface Props {
 	sheet: ServiceSheet;
 }
+
 const { sheet } = Astro.props;
 const host = Astro.request.headers.get("host") ?? Astro.url.host;
 const href = (path: string) => mainSitePath(host, path);
@@ -49,7 +51,9 @@ const lyft = sheet.hero;
 <script>
   import { runMotion } from '~/scripts/scroll-scenes';
   import { setupServiceSheet } from '~/scripts/service-sheet';
+
   runMotion();
+
   setupServiceSheet();
 </script>
 <style>

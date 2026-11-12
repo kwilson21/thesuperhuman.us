@@ -8,6 +8,7 @@ import {
 import { formatUSD } from "~/lib/software-offers";
 import type { ClientSoftwareInvoice } from "~/lib/software-invoices";
 import type { ClientSoftwareUpdate } from "~/lib/software-projects";
+
 type Props = {
 	update: ClientSoftwareUpdate;
 	checks: string[];
@@ -21,6 +22,7 @@ type Props = {
 	paymentLine?: string;
 	invoice?: ClientSoftwareInvoice;
 };
+
 const {
 	update,
 	checks,
@@ -34,19 +36,24 @@ const {
 	paymentLine,
 	invoice,
 } = Astro.props;
+
 const version = softwareVersionLabel(update);
 const direction = update.kind === "direction_review";
 const evidence: string[] = JSON.parse(update.criteria_json ?? "[]");
+
 const checkEvidence = checks.map((check, index) => {
 	const text = evidence[index] ?? "";
+
 	if (!text.startsWith(check)) return text;
 	const remainder = text.slice(check.length);
+
 	return remainder.startsWith(": ")
 		? remainder.slice(2).trim()
 		: /[.!?]$/.test(check) && /^\s/.test(remainder)
 			? remainder.trim()
 			: text;
 });
+
 const decisionBody = softwareClientRevisionBody(
 	update.decision_body,
 	checks,

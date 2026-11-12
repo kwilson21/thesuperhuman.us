@@ -2,6 +2,7 @@ export function setupAudioPortfolioFilter() {
 	const examples = [
 		...document.querySelectorAll<HTMLElement>("[data-example-method]"),
 	];
+
 	document
 		.querySelectorAll<HTMLButtonElement>("[data-method]")
 		.forEach((button) =>
@@ -15,6 +16,7 @@ export function setupAudioPortfolioFilter() {
 					example.hidden =
 						button.dataset.method !== "all" &&
 						example.dataset.exampleMethod !== button.dataset.method;
+
 					if (example.hidden) {
 						example.querySelectorAll("audio").forEach((audio) => audio.pause());
 						example

@@ -3,11 +3,13 @@ import { runMotion } from "~/scripts/scroll-scenes";
 export function setupAboutResume() {
 	function openResume() {
 		const section = document.getElementById("resumes");
+
 		if (section instanceof HTMLDetailsElement) {
 			section.open = true;
 			section.scrollIntoView();
 		}
 	}
+
 	function revealResume() {
 		if (
 			location.hash === "#resumes" ||
@@ -15,6 +17,7 @@ export function setupAboutResume() {
 		)
 			openResume();
 	}
+
 	document
 		.querySelectorAll('a[href="#resumes"]')
 		.forEach((link) => link.addEventListener("click", openResume));

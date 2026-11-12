@@ -2,6 +2,7 @@ export function setupAudioReleasesFilter() {
 	const cards = [
 		...document.querySelectorAll<HTMLElement>("[data-release-type]"),
 	];
+
 	document
 		.querySelectorAll<HTMLButtonElement>("[data-filter]")
 		.forEach((button) =>
@@ -15,6 +16,7 @@ export function setupAudioReleasesFilter() {
 					card.hidden =
 						button.dataset.filter !== "all" &&
 						card.dataset.releaseType !== button.dataset.filter;
+
 					if (card.hidden) card.querySelector("audio")?.pause();
 				});
 				const count = cards.filter((card) => !card.hidden).length;

@@ -10,10 +10,12 @@ interface MovedEntry {
 	title: string;
 	destination: "story" | "archive";
 }
+
 interface Props {
 	entries: MovedEntry[];
 	projectId: string;
 }
+
 const { entries, projectId } = Astro.props;
 ---
 {entries.length > 0 && <div class="moved-entries">{entries.map(entry => (

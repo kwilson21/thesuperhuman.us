@@ -13,6 +13,7 @@ type Props = {
 	placeholder?: string;
 	hint?: string;
 };
+
 const {
 	messages,
 	endpoint,
@@ -22,22 +23,28 @@ const {
 	placeholder = "Write a message…",
 	hint = "Questions, direction, or an updated HTTPS link to your files. Files stay in your Drive, Dropbox, or WeTransfer account.",
 } = Astro.props;
+
 const unread = messages.some(
 	(message) => message.actor !== reader && !message.read_at,
 );
+
 function parts(body: string) {
 	const result: { text: string; href?: string }[] = [];
 	const links = /https:\/\/[^\s<>"']+/gi;
 	let cursor = 0;
+
 	for (const match of body.matchAll(links)) {
 		const start = match.index ?? 0;
+
 		if (start > cursor) result.push({ text: body.slice(cursor, start) });
 		const link = match[0].replace(/[.,!?;:)\]]+$/, "");
 		const href = safeExternalUrl(link);
 		result.push(href ? { text: link, href } : { text: link });
 		cursor = start + link.length;
 	}
+
 	if (cursor < body.length) result.push({ text: body.slice(cursor) });
+
 	return result;
 }
 ---

@@ -1,5 +1,6 @@
 ---
 export const prerender = false;
+
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Footer from "~/components/Footer.astro";
 import { waveformPeaks } from "~/lib/home-motion";
@@ -15,14 +16,17 @@ const slot = width / bars;
 const bar = +(slot / 2).toFixed(2);
 const peaks = waveformPeaks(bars);
 const loudest = Math.max(...peaks);
+
 const wave = peaks.map((peak, index) => {
 	const height = Math.max(3.1, (peak / loudest) * depth);
+
 	return {
 		x: +(index * slot + (slot - bar) / 2).toFixed(2),
 		up: +height.toFixed(1),
 		down: +(height * 0.42).toFixed(1),
 	};
 });
+
 const reflection = rest + 6;
 const viewHeight = reflection + 37;
 ---

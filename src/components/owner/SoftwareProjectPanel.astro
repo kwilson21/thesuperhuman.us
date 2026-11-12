@@ -25,6 +25,7 @@ import {
 import { addBusinessDays } from "~/lib/business-days";
 import type { SoftwareProject, SoftwareUpdate } from "~/lib/software-projects";
 import type { SoftwareOffer } from "~/lib/software-offers";
+
 type Props = {
 	requestId: string;
 	requestUpdatedAt: string;
@@ -33,8 +34,10 @@ type Props = {
 	updates: SoftwareUpdate[];
 	closed: boolean;
 };
+
 const { requestId, requestUpdatedAt, project, sentOffer, updates, closed } =
 	Astro.props;
+
 const terms = project?.content_deleted_at
 	? null
 	: project
@@ -42,34 +45,43 @@ const terms = project?.content_deleted_at
 		: sentOffer
 			? projectTerms(sentOffer)
 			: null;
+
 const executed = sentOffer
 	? await executedOfferAgreement(
 			Astro.locals.runtime.env.MUSIC_DB!,
 			sentOffer.id,
 		)
 	: null;
+
 const websiteSigned =
 	sentOffer &&
 	(
 		await offerAgreements(Astro.locals.runtime.env.MUSIC_DB!, sentOffer.id)
 	).some((d) => d.status === "client_signed" || d.status === "executed");
+
 const startDetails = sentOffer?.agreement_details_json
 	? JSON.parse(sentOffer.agreement_details_json)
 	: null;
+
 const today = new Intl.DateTimeFormat("en-CA", {
 	timeZone: "America/New_York",
 	year: "numeric",
 	month: "2-digit",
 	day: "2-digit",
 }).format(new Date());
+
 const retryCutoff = Date.now() - 60_000;
+
 const retryReady = (attemptedAt: string | null) =>
 	Boolean(attemptedAt && Date.parse(attemptedAt) <= retryCutoff);
+
 const draft = updates.find((update) => update.status === "draft");
+
 const shared =
 	project && terms
 		? await sharedSoftwareUpdates(Astro.locals.runtime.env.MUSIC_DB!, requestId)
 		: [];
+
 const pendingRevision = project
 	? shared.find(
 			(update) =>
@@ -79,19 +91,23 @@ const pendingRevision = project
 				update.decision === "changes_requested",
 		)
 	: undefined;
+
 const revisionDraft = Boolean(
 	pendingRevision &&
 		draft &&
 		draft.kind === "delivery_review" &&
 		draft.milestone_index === pendingRevision.milestone_index,
 );
+
 const canRespondToRevision = Boolean(
 	pendingRevision && (!draft || revisionDraft),
 );
+
 const payments =
 	project && terms
 		? await milestonePayments(Astro.locals.runtime.env.MUSIC_DB!, requestId)
 		: [];
+
 const deposits =
 	project && terms
 		? (
@@ -103,7 +119,9 @@ const deposits =
 					.all<{ milestone_index: number; paid_recorded_at: string }>()
 			).results
 		: [];
+
 const offerId = project?.offer_id ?? sentOffer?.id;
+
 const invoices =
 	offerId && terms
 		? await listSoftwareInvoices(
@@ -112,8 +130,10 @@ const invoices =
 				offerId,
 			)
 		: [];
+
 const depositBlocked = payableSoftwareInvoice(invoices, 0, ["deposit"]);
 const deposit = offerId ? paidFirstDeposit(invoices, offerId) : undefined;
+
 const unmatched = (
 	await Astro.locals.runtime.env
 		.MUSIC_DB!.prepare(
@@ -122,6 +142,7 @@ const unmatched = (
 		.bind(requestId)
 		.all<{ event_id: string; event_type: string; status: string }>()
 ).results;
+
 const lastDelivery =
 	terms &&
 	shared.find(
@@ -130,6 +151,7 @@ const lastDelivery =
 			update.status === "shared" &&
 			update.milestone_index === terms.milestones.length - 1,
 	);
+
 const canComplete =
 	lastDelivery?.decision === "milestone_accepted" &&
 	shared.some(

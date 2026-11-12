@@ -1,5 +1,6 @@
 ---
 export const prerender = false;
+
 import OwnerLayout from "~/layouts/OwnerLayout.astro";
 import AttentionIndex from "~/components/owner/AttentionIndex.astro";
 import ListeningPath from "~/components/owner/ListeningPath.astro";
@@ -15,22 +16,29 @@ import {
 } from "~/lib/owner-reporting";
 import { projectStates } from "~/lib/software-projects";
 import StageTrack from "~/components/StageTrack.astro";
+
 const db = Astro.locals.runtime.env.MUSIC_DB;
+
 if (!db)
 	return new Response("Owner reporting is unavailable.", { status: 503 });
+
 const ledger = await loadStudioLedger(db, new Date());
+
 const signInFailures = clientPortalEnabled(Astro.locals.runtime.env)
 	? await listStudioSignInFailures(db)
 	: [];
+
 const studioAttention = clientPortalEnabled(Astro.locals.runtime.env)
 	? await listStudioProjectAttention(db, new Date())
 	: [];
+
 const stageName = (stage: string, bookingPaid: boolean) =>
 	stage === "accepted" && bookingPaid
 		? "Booking paid"
 		: stage
 				.replaceAll("_", " ")
 				.replace(/^./, (letter) => letter.toUpperCase());
+
 const dueLabel = (days: number) =>
 	days > 1
 		? `Due in ${days} days`
@@ -39,6 +47,7 @@ const dueLabel = (days: number) =>
 			: days === 0
 				? "Due today"
 				: `Past due by ${-days} ${days === -1 ? "day" : "days"}`;
+
 const agreementAttention = Astro.locals.runtime.env.MUSIC_DB
 	? (
 			await Astro.locals.runtime.env.MUSIC_DB.prepare(

@@ -4,10 +4,12 @@ import { formatUSD, offerTotal, paymentSchedules } from "~/lib/software-offers";
 import type { Agreement } from "~/lib/software-agreements";
 import type { AgreementDetails, agreementValues } from "~/lib/agreement-fields";
 import { softwareDate } from "~/lib/software-projects";
+
 type Document = Pick<
 	Agreement,
 	"id" | "kind" | "canonical_text" | "effective_on" | "text_sha256"
 >;
+
 interface Props {
 	terms: OfferTerms;
 	values?: ReturnType<typeof agreementValues> | null;
@@ -17,17 +19,21 @@ interface Props {
 	signing?: boolean;
 	agreementDetails?: AgreementDetails;
 }
+
 const { terms, values, documents, websiteSigned, conversationOpen } =
 	Astro.props;
+
 const signing = Astro.props.signing ?? false;
 const details = values?.owner ?? Astro.props.agreementDetails;
 const packet = documents.find((document) => document.kind === "sow");
+
 const stages = [
 	"What you get",
 	"Milestones & timing",
 	"Cost & responsibilities",
 	"Review agreed terms",
 ];
+
 const workingTerms = details
 	? [
 			["Update channel", details.update_channel],

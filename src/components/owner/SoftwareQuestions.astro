@@ -3,8 +3,10 @@ interface Props {
 	requestId: string;
 	path?: string;
 }
+
 const { requestId, path } = Astro.props;
 const website = path === "website";
+
 const questionPlaceholder = website
 	? "Could you send the page text and photos you have so far?"
 	: "Could you share an example of the export you use today?";

@@ -1,11 +1,15 @@
 ---
 import { softwareDate } from "~/lib/software-projects";
+
 export const prerender = false;
+
 import AgreementLayout from "~/layouts/AgreementLayout.astro";
 import { agreementSession } from "~/lib/agreement-access";
+
 const env = Astro.locals.runtime.env,
 	db = env.MUSIC_DB,
 	session = db ? await agreementSession(db, Astro.request, "archive") : null;
+
 const agreements = session
 	? (
 			await db!
@@ -27,5 +31,6 @@ const agreements = session
 </AgreementLayout>
 <script>
 import { setupAgreementAccess } from '~/scripts/agreement-access';
+
 setupAgreementAccess();
 </script>

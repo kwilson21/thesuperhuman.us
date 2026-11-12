@@ -2,6 +2,7 @@
 import PersonalName from "~/components/PersonalName.astro";
 import { doors } from "~/data/work-with-me";
 import { personalNameSegments } from "~/lib/personal-name";
+
 interface Props {
 	headingLevel?: "h2" | "h3";
 	overrides?: Partial<
@@ -15,6 +16,7 @@ interface Props {
 	/* 'column' stacks the doors as picture-left rows from 1000px wide, where the Work with me hub sets them beside its headline (ServiceSheet.astro); below that they are ruled rows, as on Home. */
 	layout?: "rows" | "column";
 }
+
 const {
 	headingLevel = "h3",
 	overrides = {},

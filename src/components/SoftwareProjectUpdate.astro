@@ -9,6 +9,7 @@ import {
 	softwareDate,
 } from "~/lib/software-projects";
 import type { ClientSoftwareUpdate } from "~/lib/software-projects";
+
 type Props = {
 	update: ClientSoftwareUpdate;
 	visualUrl?: string;
@@ -21,6 +22,7 @@ type Props = {
 	hideChecks?: boolean;
 	projectName?: string;
 };
+
 const {
 	update,
 	visualUrl,
@@ -33,23 +35,29 @@ const {
 	hideChecks = false,
 	projectName = update.title,
 } = Astro.props;
+
 const historyLabel = update.artifact_version
 	? softwareVersionLabel(update)
 	: "Update";
+
 const evidence: string[] = JSON.parse(update.criteria_json ?? "[]");
 const includedDeliverables = deliveredScope(update, deliverables);
 const includedIndexes = deliveredIndexes(update, deliverables);
+
 const partialDelivery =
 	update.kind === "delivery_review" &&
 	deliverables.some((_, index) => !includedIndexes.includes(index));
+
 const references: { label: string; url: string }[] = JSON.parse(
 	update.links_json ?? "[]",
 );
+
 const deliveryReferences =
 	update.kind === "delivery_review"
 		? references.filter((reference) => {
 				try {
 					const url = new URL(reference.url);
+
 					return (
 						url.protocol === "https:" &&
 						!url.username &&

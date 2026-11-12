@@ -1,5 +1,6 @@
 ---
 export const prerender = false;
+
 import SoftwareAgreedTerms from "~/components/SoftwareAgreedTerms.astro";
 import { validateAgreementDetails } from "~/lib/agreement-fields";
 import AgreementLayout from "~/layouts/AgreementLayout.astro";
@@ -26,21 +27,29 @@ import {
 	prefillAgreementDraft,
 } from "~/lib/agreement-draft";
 import { softwareDate } from "~/lib/software-projects";
+
 const env = Astro.locals.runtime.env,
 	db = env.MUSIC_DB,
 	token = Astro.params.token!;
+
 const offer =
 	db && (await signingEnabled(db)) ? await getLinkedOffer(db, token) : null;
+
 const session = offer
 	? await agreementSession(db!, Astro.request, "agreement", offer.id)
 	: null;
+
 const docs = session ? await offerAgreements(db!, offer!.id) : [];
+
 const sow = docs.find((d) => d.kind === "sow"),
 	signed = sow && sow.status !== "review";
+
 const terms = offer
 	? offerTermsSchema.parse(JSON.parse(offer.terms_json))
 	: null;
+
 const request = offer ? await getOwnerRequest(db!, offer.request_id) : null;
+
 const reused =
 	offer?.reused_msa_id && session
 		? await db!
@@ -56,6 +65,7 @@ const reused =
 					template_id: string;
 				}>()
 		: null;
+
 const templateLabel = async (id?: string | null) => {
 	const row = id
 		? await db!
@@ -65,18 +75,23 @@ const templateLabel = async (id?: string | null) => {
 				.bind(id)
 				.first<{ version_label: string | null; published_at: string }>()
 		: null;
+
 	return row ? templateVersionLabel(row) : null;
 };
+
 const msaLabel = session
 		? await templateLabel(reused?.template_id ?? offer?.msa_template_id)
 		: null,
 	sowLabel = session ? await templateLabel(offer?.sow_template_id) : null;
+
 const previous = reused ? JSON.parse(reused.values_json).client : undefined;
+
 const draft =
 	session && request
 		? ((await loadAgreementDraft(db!, offer!.id, session.recipient_email)) ??
 			prefillAgreementDraft(request, previous))
 		: null;
+
 const sameAsPrevious = Boolean(
 	previous &&
 		draft &&
@@ -86,6 +101,7 @@ const sameAsPrevious = Boolean(
 			(draft.state === "Outside the US" ? draft.country : draft.state) &&
 		previous.business_address === draft.business_address,
 );
+
 const artifact =
 	sow?.status === "executed"
 		? await db!
@@ -95,6 +111,7 @@ const artifact =
 				.bind(sow.id)
 				.first<{ status: string }>()
 		: null;
+
 const invoice =
 	sow?.status === "executed"
 		? await db!
@@ -104,11 +121,13 @@ const invoice =
 				.bind(offer!.id)
 				.first<{ hosted_invoice_url: string }>()
 		: null;
+
 const recipient = offer?.recipient_email_snapshot
 	? session
 		? offer.recipient_email_snapshot
 		: maskedAgreementEmail(offer.recipient_email_snapshot)
 	: "";
+
 const project =
 	sow?.status === "executed"
 		? await db!
@@ -116,20 +135,25 @@ const project =
 				.bind(offer!.id)
 				.first()
 		: null;
+
 const resolvedDraft =
 	draft && session
 		? resolveClientDetails(draft, session.recipient_email)
 		: null;
+
 const reviewedClient = sow ? JSON.parse(sow.values_json).client : null;
+
 const draftMatchesReview =
 	resolvedDraft?.ok &&
 	reviewedClient &&
 	Object.entries(resolvedDraft.client).every(
 		([key, value]) => reviewedClient[key] === value,
 	);
+
 const readyDocs = docs.filter(
 	(d) => d.status === "review" && d.review_session_hash === session?.token_hash,
 );
+
 if (!offer?.msa_template_id) Astro.response.status = 404;
 ---
 <AgreementLayout title="Review and sign">
@@ -189,6 +213,7 @@ if (!offer?.msa_template_id) Astro.response.status = 404;
 </AgreementLayout>
 <script>
 import { setupAgreementAccess } from '~/scripts/agreement-access';
+
 setupAgreementAccess();
 </script>
 <style>
