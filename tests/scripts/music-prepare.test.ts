@@ -11,6 +11,13 @@ import { join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import sharp from "sharp";
 
+/** The package input the prepare script takes: an artwork file, its recordings and its release. */
+type PrepareInput = {
+	artworkFile: string;
+	recordings: unknown[];
+	release: unknown;
+};
+
 it("prepares an album using a previously imported recording and rejects duplicate routes before writing", async () => {
 	const dir = mkdtempSync(join(tmpdir(), "music-catalog-"));
 	const script = resolve("scripts/prepare-music.mjs");
@@ -44,7 +51,7 @@ it("prepares an album using a previously imported recording and rejects duplicat
 			tracks: ["song-recording"],
 		};
 
-		const run = (input: unknown, flags: string[] = []) => {
+		const run = (input: PrepareInput, flags: string[] = []) => {
 			writeFileSync(join(dir, "package.json"), JSON.stringify(input));
 
 			return execFileSync(

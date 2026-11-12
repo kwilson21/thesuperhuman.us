@@ -99,7 +99,15 @@ const make = (name = "", type = "", value = "") => {
 	return node;
 };
 
-function fire(node: Node, event: string, props: Record<string, unknown> = {}) {
+function fire(
+	node: Node,
+	event: string,
+	props: Partial<
+		Pick<KeyboardEvent, "ctrlKey" | "isComposing" | "key" | "keyCode">
+	> & {
+		pointerType?: string;
+	} = {},
+) {
 	const message = new Event(event, { cancelable: true });
 	Object.assign(message, props);
 	node.dispatchEvent(message);
@@ -153,7 +161,7 @@ const backToStart = () => {
 const visibleDots = () => dots.map((item) => item.hidden);
 
 async function setup(requestedPath?: string) {
-	form = new Node() as any;
+	form = Object.assign(new Node(), { elements: [] });
 	form.dataset.available = "false";
 	steps = Array.from({ length: 9 }, () => new Node());
 	controls = [];
@@ -372,7 +380,8 @@ async function setup(requestedPath?: string) {
 		vi.fn(async () => Response.json({ suggestion: " in a spreadsheet" })),
 	);
 	const { setupSoftwareInquiry } = await import("~/scripts/software-inquiry");
-	setupSoftwareInquiry(form as any);
+	// SAFETY: setupSoftwareInquiry reads from form only dataset, elements, and the listeners the test drives, and the fake supplies each of them.
+	setupSoftwareInquiry(form as never);
 }
 
 // Every flow can schedule suggestions; keep old forms from calling the next test's fetch.
@@ -501,18 +510,16 @@ it("never sends contact fields, and only supplies earlier project answers for qu
 	fill("company", "Private");
 	fill("today", "We track new clients");
 	await vi.advanceTimersByTimeAsync(400);
-	expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string)).toEqual(
-		{
-			question: "What happens today?",
-			text: "We track new clients",
-			earlier: { path: "workflow" },
-		},
-	);
+	expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]!.body))).toEqual({
+		question: "What happens today?",
+		text: "We track new clients",
+		earlier: { path: "workflow" },
+	});
 	click("[data-next]");
 	fill("firstResult", "A simpler way to");
 	await vi.advanceTimersByTimeAsync(400);
 	expect(
-		JSON.parse(vi.mocked(fetch).mock.calls[1][1]!.body as string).earlier,
+		JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]!.body)).earlier,
 	).toEqual({ path: "workflow", today: "We track new clients" });
 });
 
@@ -639,7 +646,7 @@ it("preserves both paths across switching and refresh, but sends only the select
 	form.nodes["[type=submit]"].disabled = false;
 	fire(form, "submit");
 	await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
-	const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
+	const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]!.body));
 	expect(body.appGoal).toBe("Web app writing");
 	expect(body.firstVersion).toBe("Web app version");
 	expect(body).not.toHaveProperty("today");
@@ -676,8 +683,7 @@ it.each(["storage", "submit"])(
 		fire(form, "submit");
 		await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
 		expect(
-			JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string)
-				.submissionId,
+			JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]!.body)).submissionId,
 		).not.toBe(oldId);
 	},
 );
@@ -1147,7 +1153,7 @@ it.each(["success", "server failure", "network failure"])(
 		expect(form.nodes["[type=submit]"].disabled).toBe(true);
 		expect(form.nodes["[type=submit]"].textContent).toBe("Sending…");
 		expect(
-			JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string).today,
+			JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]!.body)).today,
 		).toBe("We track clients");
 		expect(store.get("software-brief-draft")).toBe(draft);
 		vi.stubGlobal("document", {
@@ -1331,7 +1337,7 @@ it("sends only the answers for the chosen path, website answers for a website br
 	form.nodes["[type=submit]"].disabled = false;
 	fire(form, "submit");
 	await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
-	const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
+	const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]!.body));
 	expect(body).toMatchObject({
 		path: "website",
 		purpose: "A site for my pottery studio.",
@@ -1367,7 +1373,7 @@ it("sends no website answers for a workflow brief, even after website answers we
 	form.nodes["[type=submit]"].disabled = false;
 	fire(form, "submit");
 	await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
-	const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
+	const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]!.body));
 	expect(body).toMatchObject({
 		path: "workflow",
 		today: "We track clients in a spreadsheet.",
@@ -1499,16 +1505,14 @@ it("sends the web app first answer as earlier context for the second question", 
 	click("[data-next]");
 	fill("firstVersion", "A booking page with a calendar");
 	await vi.advanceTimersByTimeAsync(400);
-	expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string)).toEqual(
-		{
-			question: "Have a first version in mind?",
-			text: "A booking page with a calendar",
-			earlier: {
-				path: "webapp",
-				appGoal: "Let my students book and pay for lessons.",
-			},
+	expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]!.body))).toEqual({
+		question: "Have a first version in mind?",
+		text: "A booking page with a calendar",
+		earlier: {
+			path: "webapp",
+			appGoal: "Let my students book and pay for lessons.",
 		},
-	);
+	});
 });
 
 // Keyboard and screen-reader choices wait for Next, so arrow keys reach every starting point.

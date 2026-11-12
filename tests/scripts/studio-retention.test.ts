@@ -1,6 +1,8 @@
 import { createRequire } from "node:module";
+import type { SqliteRow } from "../helpers/tests-other-fakes";
 import { readFileSync } from "node:fs";
 import { expect, it, vi } from "vitest";
+import { sqliteD1 } from "../helpers/tests-other-fakes";
 import {
 	applyStudioRetention,
 	studioRetentionCompletion,
@@ -60,7 +62,7 @@ function fixture() {
 			sql
 				.prepare(query)
 				.all()
-				.map((row: Record<string, unknown>) => ({ ...row })),
+				.map((row: SqliteRow) => ({ ...row })),
 		batch: async (statements: string[]) => {
 			sql.exec("BEGIN");
 
@@ -701,13 +703,7 @@ it.each([
 				"../../src/lib/software-projects"
 			);
 
-			const adapter = {
-				prepare: (query: string) => ({
-					bind: (...args: unknown[]) => ({
-						first: async () => sql.prepare(query).get(...args),
-					}),
-				}),
-			} as unknown as D1Database;
+			const adapter = sqliteD1(sql);
 
 			expect(
 				await queueSoftwareNotice(adapter, "software", false, "update"),
@@ -767,13 +763,7 @@ it.each(["invitation_status", "invitation_attempted_at", "invitation_sent_at"])(
 				"../../src/lib/software-projects"
 			);
 
-			const adapter = {
-				prepare: (query: string) => ({
-					bind: (...args: unknown[]) => ({
-						first: async () => sql.prepare(query).get(...args),
-					}),
-				}),
-			} as unknown as D1Database;
+			const adapter = sqliteD1(sql);
 
 			expect(await queueSoftwareNotice(adapter, "software", false)).toBe(true);
 		} else

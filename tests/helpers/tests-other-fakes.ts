@@ -1,6 +1,9 @@
 import { double, fakeD1 } from "./doubles";
 
-type SqliteValue = string | number | bigint | null | Uint8Array;
+export type SqliteValue = string | number | bigint | null | Uint8Array;
+
+/** One sqlite row, keyed by column name. */
+export type SqliteRow = Record<string, SqliteValue>;
 
 /** The node:sqlite database members that sqliteD1 calls. */
 export interface SqliteDatabase {

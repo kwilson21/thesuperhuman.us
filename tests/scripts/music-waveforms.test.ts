@@ -40,6 +40,7 @@ it("measures each aligned playback window for both waveform and loudness", async
 
 		for (const [index, offset] of [4, 2].entries()) {
 			for (const call of calls.slice(index * 2, index * 2 + 2)) {
+				// SAFETY: the waveform script calls spawnSync(command, args), so every recorded call carries its argument array at index 1.
 				const args = call[1] as string[];
 				expect(args[args.indexOf("-ss") + 1]).toBe(String(offset));
 				expect(args[args.indexOf("-t") + 1]).toBe("12");

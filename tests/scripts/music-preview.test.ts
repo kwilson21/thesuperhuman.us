@@ -39,6 +39,7 @@ it("sets up an empty checkout without any imported music assets", async () => {
 			(await stat(join(root, ".private/music-assets"))).isDirectory(),
 		).toBe(true);
 		expect(spawnSync).toHaveBeenCalledOnce();
+		// SAFETY: the preview script calls spawnSync(command, args), so the mock records its argument array at index 1.
 		const args = spawnSync.mock.calls[0]?.[1] as string[];
 		expect(args.slice(1, 6)).toEqual([
 			"d1",
