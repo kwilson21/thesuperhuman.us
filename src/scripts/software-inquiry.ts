@@ -43,13 +43,15 @@ function isString(value: unknown): value is string {
 	return typeof value === "string";
 }
 
-// The API sends back the brief it built from the form (a flat string record). This only rules out non-objects and arrays.
+// The API sends back the brief it built from the form. softwareBrief() in src/lib/software-inquiry.ts returns Record<string, string>, but this only rules out non-objects and arrays; the receipt reads the fields it shows with optional chaining.
 function isBriefRecord(value: unknown): value is Record<string, string> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// A saved draft's answers object. Values are read back through isString before use.
-function isDraftAnswers(value: unknown): value is Record<string, string> {
+// What a saved draft's answers can hold. This script writes strings only, but the object is read back from localStorage, so every value is read through isString (or compared with ===) before use.
+type DraftAnswers = Partial<Record<string, string | number | boolean | null>>;
+
+function isDraftAnswers(value: unknown): value is DraftAnswers {
 	return typeof value === "object" && value !== null;
 }
 
@@ -549,12 +551,13 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 				control.value !== "date";
 
 			if (control.value !== "date") {
+				// src/pages/software/start.astro renders exactly one timingDate input; a missing one throws here, as it did before.
 				const date = form.elements.namedItem("timingDate");
 
-				if (date instanceof HTMLInputElement) {
-					date.value = "";
-					date.removeAttribute("aria-invalid");
-				}
+				if (!(date instanceof HTMLInputElement))
+					throw new TypeError("The timingDate input is missing.");
+				date.value = "";
+				date.removeAttribute("aria-invalid");
 
 				const error = form.querySelector<HTMLElement>(
 					'[data-form-error="timingDate"]',

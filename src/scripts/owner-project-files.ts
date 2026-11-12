@@ -33,6 +33,11 @@ async function measurePeaks(
 	}
 }
 
+async function readError(response: Response) {
+	// SAFETY: the file publish route (src/pages/api/owner/projects/[id]/files/[fileId].ts) and the access route (src/pages/api/owner/projects/[id]/access.ts) answer with JSON, except a plain-text 404 ("Not found") when the client portal is off, which makes json() throw into the caller's catch. error is optional, and callers read it only after their !response.ok check.
+	return (await response.json()) as { error?: string };
+}
+
 export function setupOwnerProjectFiles() {
 	document
 		.querySelectorAll<HTMLElement>("[data-owner-project-files]")
@@ -87,8 +92,7 @@ export function setupOwnerProjectFiles() {
 									},
 								);
 
-								// SAFETY: The revoke request (action revoke, with note) answers with JSON; error is optional and read only after the !response.ok check below.
-								const result = (await response.json()) as { error?: string };
+								const result = await readError(response);
 
 								if (!response.ok)
 									throw new Error(
@@ -148,8 +152,7 @@ export function setupOwnerProjectFiles() {
 									},
 								);
 
-								// SAFETY: The publish request (action publish) answers with JSON; error is optional and read only after the !response.ok check below.
-								const result = (await response.json()) as { error?: string };
+								const result = await readError(response);
 
 								if (!response.ok)
 									throw new Error(
@@ -418,8 +421,7 @@ export function setupOwnerProjectFiles() {
 						body: JSON.stringify({ action: "revoke" }),
 					});
 
-					// SAFETY: The revoke request (action revoke) answers with JSON; error is optional and read only after the !response.ok check below.
-					const result = (await response.json()) as { error?: string };
+					const result = await readError(response);
 
 					if (!response.ok)
 						throw new Error(result.error ?? "Could not close client access.");

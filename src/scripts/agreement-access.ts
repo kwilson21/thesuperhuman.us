@@ -1,6 +1,7 @@
 import { consentText } from "~/lib/agreement-fields";
 import { resolveClientDetails, states } from "~/lib/agreement-draft";
 import { openMessages } from "./form-messages";
+import type { JsonBody } from "./json-body";
 
 export function setupAgreementAccess() {
 	for (const link of document.querySelectorAll<HTMLAnchorElement>(
@@ -47,12 +48,8 @@ export function setupAgreementAccess() {
 					}),
 				});
 
-				// SAFETY: the intake request answers with JSON; error is read only in the !response.ok branch below, so a successful response is never read through it.
-				const result = (await response.json()) as {
-					error: string;
-					errors?: Record<string, string>;
-					documents: { id: string; kind: string; hash: string; text: string }[];
-				};
+				// SAFETY: form.action is /api/agreements/link or /api/offer/[token]/link (src/pages/api/agreements/link.ts and src/pages/api/offer/[token]/link.ts), which answer with JSON; some failure bodies are a bare { ok: false }, so error is optional here (an absent one becomes an empty message, as before). Only error is read, and only in the !response.ok branch below.
+				const result = (await response.json()) as { error?: string };
 
 				if (!response.ok) throw new Error(result.error);
 				location.href =
@@ -62,10 +59,7 @@ export function setupAgreementAccess() {
 					status.textContent =
 						error instanceof Error ? error.message : String(error);
 			} finally {
-				// SAFETY: adds the optional turnstile property that Cloudflare's Turnstile script sets on window. The type marks it optional, and turnstile?.reset() below handles the script not having loaded.
-				const turnstile = (
-					window as Window & { turnstile?: { reset: () => void } }
-				).turnstile;
+				const turnstile = window.turnstile;
 
 				try {
 					turnstile?.reset();
@@ -186,16 +180,16 @@ export function setupAgreementAccess() {
 		if (focus && Object.keys(fields).length) summary.focus();
 	}
 
-	async function post<T>(action: string, body: T) {
+	async function post(action: string, body: JsonBody) {
 		const response = await fetch(`/api/offer/${token}/${action}`, {
 			method: "POST",
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify(body),
 		});
 
-		// SAFETY: the offer endpoints answer with JSON; error is read only in the !response.ok branch below, and documents is returned to callers only after that check passes.
+		// SAFETY: post() calls the draft, review and sign routes under src/pages/api/offer/[token]/, which answer with JSON; some failure bodies are a bare { ok: false }, so error is optional here (an absent one becomes an empty message, as before). error and errors are read only in the !response.ok branch below. documents is on the review route's success body only; it is typed as present because saveAndReview, the only reader, calls post("review") and the draft and sign callers ignore it.
 		const result = (await response.json()) as {
-			error: string;
+			error?: string;
 			errors?: Record<string, string>;
 			documents: { id: string; kind: string; hash: string; text: string }[];
 		};

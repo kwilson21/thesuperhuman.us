@@ -1,6 +1,7 @@
 import { setupFormSubmission } from "~/scripts/form-submission";
 
 export function setupResumeRequestForm() {
+	// ResumeRequestForm.astro, which loads this script, always renders #resume-request-form; a missing form still fails later, as before.
 	const form = document.querySelector<HTMLFormElement>("#resume-request-form")!;
 
 	setupFormSubmission({

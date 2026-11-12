@@ -47,6 +47,7 @@ export function setupProjectUpdatesFeed() {
 					}
 
 					if (!response.ok) throw new Error("Feed unavailable");
+					// SAFETY: src/pages/api/work-feed.ts answers a successful GET with a ProjectFeed (src/lib/publication/read.ts); its other statuses (404 with { error }, 503) are handled above, and projectId, history and revision are re-checked below before use.
 					const next = (await response.json()) as ProjectFeed;
 
 					if (

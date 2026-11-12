@@ -13,7 +13,7 @@ export function setupStudioSignOut() {
 					body: "{}",
 				});
 
-				// SAFETY: the sign-out endpoint answers with JSON; localSignedOut is optional and read only after the response.ok branch has returned.
+				// SAFETY: src/pages/api/studio/sign-out.ts answers with JSON except a plain-text 404 ("Not found") when the client portal is off, which makes json() throw into the catch below. localSignedOut is optional and read only after the response.ok branch has returned.
 				const result = (await response.json()) as { localSignedOut?: boolean };
 
 				if (response.ok) {
