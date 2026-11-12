@@ -275,6 +275,7 @@ const PAGE_NAMES_BY_FILE = {
 	"src/scripts/site-nav.ts": SHARED_SITE_PAGES,
 	"src/scripts/payload-review-illustration.ts": TIMELINE_PAGES,
 	"src/scripts/project-timeline.ts": TIMELINE_PAGES,
+	"src/components/ProjectTimeline.astro": TIMELINE_PAGES,
 	"src/scripts/project-updates-feed.ts": BUILDING_PROJECT_PAGES,
 	"src/scripts/studio-sign-in.ts": ["studio-sign-in"],
 	"src/scripts/work-experience.ts": ["work"],
