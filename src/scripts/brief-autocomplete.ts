@@ -1,5 +1,9 @@
 import { setupSuggestionPass } from "./brief-suggestion-pass";
 
+function isSuggestionText(value: unknown): value is string {
+	return typeof value === "string";
+}
+
 export function setupBriefAutocomplete(
 	form: HTMLFormElement,
 	earlier: () => Record<string, string>,
@@ -169,7 +173,7 @@ export function setupBriefAutocomplete(
 			if (
 				!enabled ||
 				unavailable ||
-				(event as InputEvent).isComposing ||
+				event.isComposing ||
 				!atEnd() ||
 				box.value.trim().split(/\s+/).length < 3
 			)
@@ -212,6 +216,7 @@ export function setupBriefAutocomplete(
 
 					let response = await suggest();
 
+					// SAFETY: the suggest endpoint answers with JSON; suggestion is optional and typed unknown, and the typeof check below rejects anything that is not a string before use.
 					let result = (await response.json()) as {
 						suggestion?: unknown;
 						passRequired?: boolean;
@@ -232,6 +237,7 @@ export function setupBriefAutocomplete(
 
 						renewedRetry = requestController;
 						response = await suggest();
+						// SAFETY: the same suggest endpoint and response shape as the first request above; suggestion is checked as a string before use.
 						result = (await response.json()) as typeof result;
 
 						if (!response.ok || result.passRequired === true) return;
@@ -245,7 +251,7 @@ export function setupBriefAutocomplete(
 						section.hidden ||
 						box.value !== text ||
 						!atEnd() ||
-						typeof result.suggestion !== "string" ||
+						!isSuggestionText(result.suggestion) ||
 						!result.suggestion.trim()
 					)
 						return;

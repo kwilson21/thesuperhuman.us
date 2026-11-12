@@ -34,6 +34,7 @@ export function setupProjectUpdates() {
 								}),
 							});
 
+							// SAFETY: the update endpoint answers with JSON; error is optional and read only when response.ok is false (the success branch returns first).
 							const result = (await response.json()) as { error?: string };
 
 							if (response.ok) {

@@ -14,7 +14,8 @@ export function setupReviewResponse() {
 	if (!form || !status || !endpoint || !reviewId) return;
 	form.addEventListener("submit", async (event) => {
 		event.preventDefault();
-		const button = (event as SubmitEvent).submitter as HTMLButtonElement | null;
+		// SAFETY: submitter is the review form's button that was pressed (its value names the decision), or null when the form was submitted without a button; the optional chains below handle null.
+		const button = event.submitter as HTMLButtonElement | null;
 
 		const decision =
 			button?.value === "changes"
@@ -61,6 +62,7 @@ export function setupReviewResponse() {
 				body: JSON.stringify({ action: "respond", reviewId, decision, body }),
 			});
 
+			// SAFETY: the respond endpoint answers with JSON, or {} when the body is not JSON; error is optional and read only when response.ok is false.
 			const result = (await response.json().catch(() => ({}))) as {
 				error?: string;
 			};

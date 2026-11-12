@@ -22,6 +22,11 @@ type Before = {
 	marginBottom: string;
 };
 
+// Feature detection: true when a browser API exists as a callable value.
+function isCallable(value: unknown): value is (...args: never[]) => void {
+	return typeof value === "function";
+}
+
 export function openMessages<T>(
 	scope: Document | HTMLElement,
 	action: HTMLElement | null | undefined,
@@ -29,10 +34,10 @@ export function openMessages<T>(
 ): T {
 	// Without a browser layout (unit tests use stand-in elements), only the update runs.
 	if (
-		typeof window === "undefined" ||
-		typeof window.matchMedia !== "function" ||
-		typeof getComputedStyle !== "function" ||
-		typeof Node === "undefined" ||
+		!("window" in globalThis) ||
+		!isCallable(window.matchMedia) ||
+		!isCallable(globalThis.getComputedStyle) ||
+		!("Node" in globalThis) ||
 		!(scope instanceof Node)
 	) {
 		return update();
@@ -69,7 +74,7 @@ export function openMessages<T>(
 
 	const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-	if (reduce || !opened.length || typeof opened[0].animate !== "function") {
+	if (reduce || !opened.length || !isCallable(opened[0].animate)) {
 		if (shift) window.scrollBy({ top: shift, behavior: "instant" });
 
 		return result;

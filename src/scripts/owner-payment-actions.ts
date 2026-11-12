@@ -5,8 +5,8 @@ export function setupOwnerPaymentActions() {
 
 	if (!panel || !status || !requestId) return;
 
-	async function send(
-		payload: Record<string, unknown>,
+	async function send<T extends { action?: string }>(
+		payload: T,
 		button: HTMLButtonElement,
 	) {
 		button.disabled = true;
@@ -20,6 +20,7 @@ export function setupOwnerPaymentActions() {
 			});
 
 			if (!response.ok) {
+				// SAFETY: the payment endpoint answers errors with JSON, or {} when the body is not JSON (catch above); recoveryPending is optional and read only in this !response.ok branch.
 				const result = (await response
 					.clone()
 					.json()
@@ -48,61 +49,68 @@ export function setupOwnerPaymentActions() {
 		}
 	}
 
-	panel
-		.querySelector<HTMLFormElement>("[data-payment-approval]")
-		?.addEventListener("submit", (event) => {
-			event.preventDefault();
-			const form = event.currentTarget as HTMLFormElement;
-			const data = new FormData(form);
-			const amount = String(data.get("totalAmount") ?? "").trim();
+	const approval = panel.querySelector<HTMLFormElement>(
+		"[data-payment-approval]",
+	);
 
-			if (!/^\d+(\.\d{1,2})?$/.test(amount)) {
-				status.textContent =
-					"Enter the fixed project price with no more than two decimal places.";
+	approval?.addEventListener("submit", (event) => {
+		event.preventDefault();
+		const form = approval;
 
-				return;
-			}
+		const data = new FormData(form);
+		const amount = String(data.get("totalAmount") ?? "").trim();
 
-			const [dollars, decimal = ""] = amount.split(".");
+		if (!/^\d+(\.\d{1,2})?$/.test(amount)) {
+			status.textContent =
+				"Enter the fixed project price with no more than two decimal places.";
 
-			const totalAmountCents =
-				Number(dollars) * 100 + Number(decimal.padEnd(2, "0"));
+			return;
+		}
 
-			void send(
-				{
-					action: "approve",
-					approvedService: String(data.get("approvedService") ?? ""),
-					totalAmountCents,
-					offerAccepted: data.get("offerAccepted") === "on",
-				},
-				form.querySelector<HTMLButtonElement>('button[type="submit"]')!,
-			);
-		});
-	panel
-		.querySelector<HTMLFormElement>("[data-payment-received]")
-		?.addEventListener("submit", (event) => {
-			event.preventDefault();
-			const form = event.currentTarget as HTMLFormElement;
-			const data = new FormData(form);
-			const installment = form.dataset.installment;
+		const [dollars, decimal = ""] = amount.split(".");
 
-			if (
-				!confirm(
-					`Record the ${installment} as paid outside Stripe? This cannot be undone.`,
-				)
+		const totalAmountCents =
+			Number(dollars) * 100 + Number(decimal.padEnd(2, "0"));
+
+		void send(
+			{
+				action: "approve",
+				approvedService: String(data.get("approvedService") ?? ""),
+				totalAmountCents,
+				offerAccepted: data.get("offerAccepted") === "on",
+			},
+			form.querySelector<HTMLButtonElement>('button[type="submit"]')!,
+		);
+	});
+
+	const received = panel.querySelector<HTMLFormElement>(
+		"[data-payment-received]",
+	);
+
+	received?.addEventListener("submit", (event) => {
+		event.preventDefault();
+		const form = received;
+
+		const data = new FormData(form);
+		const installment = form.dataset.installment;
+
+		if (
+			!confirm(
+				`Record the ${installment} as paid outside Stripe? This cannot be undone.`,
 			)
-				return;
-			void send(
-				{
-					action: "record-payment-received",
-					installment,
-					method: String(data.get("method") ?? ""),
-					reference: String(data.get("reference") ?? "").trim() || undefined,
-					received: data.get("received") === "on",
-				},
-				form.querySelector<HTMLButtonElement>('button[type="submit"]')!,
-			);
-		});
+		)
+			return;
+		void send(
+			{
+				action: "record-payment-received",
+				installment,
+				method: String(data.get("method") ?? ""),
+				reference: String(data.get("reference") ?? "").trim() || undefined,
+				received: data.get("received") === "on",
+			},
+			form.querySelector<HTMLButtonElement>('button[type="submit"]')!,
+		);
+	});
 	panel
 		.querySelectorAll<HTMLButtonElement>("[data-payment-action]")
 		.forEach((button) =>

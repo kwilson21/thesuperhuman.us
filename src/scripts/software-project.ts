@@ -4,7 +4,7 @@ export function setupSoftwareProject() {
 		.forEach((root) => {
 			const status = root.querySelector<HTMLElement>("[data-software-status]")!;
 
-			async function send(body: unknown, endpoint = root.dataset.endpoint!) {
+			async function send<T>(body: T, endpoint = root.dataset.endpoint!) {
 				const buttons = root.querySelectorAll<HTMLButtonElement>("button");
 				const disabled = Array.from(buttons, (button) => button.disabled);
 				buttons.forEach((button) => (button.disabled = true));
@@ -16,6 +16,7 @@ export function setupSoftwareProject() {
 						body: JSON.stringify(body),
 					});
 
+					// SAFETY: the project endpoint answers with JSON; error is optional and read only when response.ok is false (the success branch reloads and returns).
 					const result = (await response.json()) as { error?: string };
 
 					if (response.ok) {

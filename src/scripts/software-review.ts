@@ -1,3 +1,10 @@
+// A saved review draft is a JSON object. Its values are checked against the two saved marks before use.
+function isSavedDraft(
+	value: unknown,
+): value is Partial<Record<string, string>> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export function setupSoftwareReviews() {
 	document
 		.querySelectorAll<HTMLFormElement>("[data-software-review]")
@@ -21,7 +28,7 @@ export function setupSoftwareReviews() {
 			try {
 				const value = JSON.parse(localStorage.getItem(storageKey) ?? "{}");
 
-				if (value && typeof value === "object" && !Array.isArray(value)) {
+				if (isSavedDraft(value)) {
 					for (const button of marks) {
 						const index = button.dataset.reviewCheck!;
 
@@ -94,9 +101,11 @@ export function setupSoftwareReviews() {
 					}
 				}),
 			);
+
 			form
 				.querySelector<HTMLDetailsElement>("[data-request-changes]")
 				?.addEventListener("toggle", (event) => {
+					// SAFETY: currentTarget is the request-changes details element this listener is attached to.
 					if (!(event.currentTarget as HTMLDetailsElement).open) return;
 					syncCriteria();
 				});
@@ -104,6 +113,7 @@ export function setupSoftwareReviews() {
 				event.preventDefault();
 
 				if (busy) return;
+				// SAFETY: submitter is the review form's button that was pressed (its value is the decision), or null when submitted without one; the check below handles null.
 				const submitter = event.submitter as HTMLButtonElement | null;
 
 				if (!submitter || submitter.disabled) return;
@@ -160,6 +170,7 @@ export function setupSoftwareReviews() {
 						}),
 					});
 
+					// SAFETY: the review endpoint answers with JSON; error is optional and read only when response.ok is false (the success branch reloads and returns).
 					const result = (await response.json()) as { error?: string };
 
 					if (response.ok) {

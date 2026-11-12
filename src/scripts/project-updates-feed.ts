@@ -5,6 +5,7 @@ export function setupProjectUpdatesFeed() {
 	document
 		.querySelectorAll<HTMLElement>("[data-project-updates]")
 		.forEach((root) => {
+			// SAFETY: data-snapshot is JSON.stringify(feed) from src/components/ProjectUpdates.astro (line 97) when notices show. When the attribute is absent, the "null" fallback parses to null, which the type allows.
 			let previous = JSON.parse(
 				root.dataset.snapshot || "null",
 			) as ProjectFeed | null;

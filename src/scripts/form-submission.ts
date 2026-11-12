@@ -83,6 +83,7 @@ export function setupFormSubmission({
 				signal: AbortSignal.timeout(30_000),
 			});
 
+			// SAFETY: the endpoint answers with JSON carrying ok, errors and error. Every field is optional here, and onSuccess and the message code below read them only after checks.
 			const result = (await response.json()) as {
 				ok?: boolean;
 				errors?: Record<string, string>;
@@ -151,6 +152,7 @@ export function setupFormSubmission({
 			form.removeAttribute("aria-busy");
 
 			// A token may have been consumed even when the response was lost.
+			// SAFETY: adds the optional turnstile property that Cloudflare's Turnstile script sets on window. The type marks it optional, and turnstile?.reset() handles the script not having loaded.
 			const turnstile = (
 				window as Window & { turnstile?: { reset: () => void } }
 			).turnstile;

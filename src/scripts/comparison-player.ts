@@ -22,9 +22,12 @@ export function getAudioContextConstructor(scope: {
 	return scope.AudioContext ?? scope.webkitAudioContext;
 }
 
-export function setPlaybackAudioSession(scope: object) {
-	const audioSession = (scope as { audioSession?: { type: string } })
-		.audioSession;
+// navigator exposes audioSession only where the browser provides it; tests pass a stand-in with the same member.
+type AudioSessionScope = { audioSession?: { type: string } };
+
+export function setPlaybackAudioSession(scope: Navigator | AudioSessionScope) {
+	// SAFETY: scope is navigator or a stand-in with the same optional audioSession member; reading audioSession through AudioSessionScope is valid for both.
+	const audioSession = (scope as AudioSessionScope).audioSession;
 
 	if (!audioSession) return false;
 
@@ -137,6 +140,7 @@ export function setupComparisonPlayers() {
 				const side =
 					media[selected].dataset.version === "after" ? "after" : "before";
 
+				// SAFETY: data-waveform-before and data-waveform-after are JSON.stringify of example.waveforms (src/components/audio/ComparisonPlayer.astro, line 55), and the schema in src/lib/music-catalog.ts (line 145) validates both as number arrays.
 				const amplitudes = JSON.parse(
 					compactWaveform.dataset[
 						`waveform${side === "before" ? "Before" : "After"}`

@@ -173,12 +173,12 @@ function start(setup?: (context: MotionContext) => void): () => void {
 		arrivals.forEach((element) => element.classList.remove("is-waiting"));
 	});
 
-	const reveals = [
-		...new Set([
+	const reveals: Element[] = [
+		...new Set<Element>([
 			...document.querySelectorAll<HTMLElement>("[data-reveal]"),
 			...onRevealRuns.keys(),
 		]),
-	] as HTMLElement[];
+	];
 
 	const revealed = (element: Element) => {
 		if (element.classList.contains("is-in")) return;
@@ -206,6 +206,7 @@ function start(setup?: (context: MotionContext) => void): () => void {
 	document.addEventListener(
 		"focusin",
 		(event) => {
+			// SAFETY: a focusin event targets the focused element, which is an Element in the document and therefore a Node.
 			const block = reveals.find((element) =>
 				element.contains(event.target as Node),
 			);
