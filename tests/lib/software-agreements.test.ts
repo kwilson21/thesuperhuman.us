@@ -310,6 +310,26 @@ const offer = () =>
 		.prepare("SELECT * FROM software_offers WHERE id='o'")
 		.first<SoftwareOffer>();
 
+/** The certificates prepareAgreementArtifact hands its PDF renderer for agreement `id`, one per document. */
+async function renderedCertificates(
+	id: string,
+): Promise<{ versions: unknown }[]> {
+	let certificates: { versions: unknown }[] = [];
+
+	await prepareAgreementArtifact(
+		env,
+		id,
+		async (_env, _documents, received) => {
+			// SAFETY: src/lib/agreement-artifacts.ts builds each certificate with a versions field (line 159) and then maps it into displayCertificates by spreading it, so every object the renderer receives keeps versions; this test reads only versions.
+			certificates = received as { versions: unknown }[];
+
+			return new TextEncoder().encode("%PDF-synthetic");
+		},
+	);
+
+	return certificates;
+}
+
 async function review() {
 	return reviewAgreements(
 		db,
@@ -5445,17 +5465,7 @@ it("certificates carry each document's own version label when the MSA and SOW la
 		request(),
 	);
 
-	let certificates: { versions: unknown }[] = [];
-	await prepareAgreementArtifact(
-		env,
-		id,
-		async (_env, _documents, received) => {
-			// SAFETY: prepareAgreementArtifact passes the certificates it builds in src/lib/agreement-artifacts.ts, one object per document with a versions field.
-			certificates = received as typeof certificates;
-
-			return new TextEncoder().encode("%PDF-synthetic");
-		},
-	);
+	const certificates = await renderedCertificates(id);
 	expect(certificates.map((c) => c.versions)).toEqual([
 		expect.objectContaining({ version_label: "v1", source_revision: "" }),
 		expect.objectContaining({
@@ -5500,17 +5510,7 @@ it("certificates carry each document's own source revision, not the MSA's", asyn
 		request(),
 	);
 
-	let certificates: { versions: unknown }[] = [];
-	await prepareAgreementArtifact(
-		env,
-		id,
-		async (_env, _documents, received) => {
-			// SAFETY: prepareAgreementArtifact passes the certificates it builds in src/lib/agreement-artifacts.ts, one object per document with a versions field.
-			certificates = received as typeof certificates;
-
-			return new TextEncoder().encode("%PDF-synthetic");
-		},
-	);
+	const certificates = await renderedCertificates(id);
 	expect(certificates.map((c) => c.versions)).toEqual([
 		expect.objectContaining({ source_revision: "MSA rev 7" }),
 		expect.objectContaining({ source_revision: "SOW rev 2" }),
@@ -5567,17 +5567,7 @@ it("certificates read older stored values from the template rows, and blank sour
 		request(),
 	);
 
-	let certificates: { versions: unknown }[] = [];
-	await prepareAgreementArtifact(
-		env,
-		id,
-		async (_env, _documents, received) => {
-			// SAFETY: prepareAgreementArtifact passes the certificates it builds in src/lib/agreement-artifacts.ts, one object per document with a versions field.
-			certificates = received as typeof certificates;
-
-			return new TextEncoder().encode("%PDF-synthetic");
-		},
-	);
+	const certificates = await renderedCertificates(id);
 	expect(
 		sql
 			.prepare(

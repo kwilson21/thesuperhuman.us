@@ -32,6 +32,7 @@ export function sqliteD1(database: DatabaseSync): D1Database {
 				results: [],
 			}),
 		});
+
 		statements.set(prepared, { query, args });
 
 		return prepared;

@@ -57,10 +57,30 @@ import {
 } from "~/lib/software-projects";
 import { softwareReviewEmail, softwareHandoffEmail } from "~/lib/client-emails";
 import { sqliteD1 } from "../helpers/tests-lib-b-d1";
+import { readJson } from "../helpers/tests-lib-b-json";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
 type TestRuntime = APIContext["locals"]["runtime"];
+
 type TestEnv = TestRuntime["env"];
+
+/** A JSON object as the tests send it: an undefined field is left out of the request, as JSON.stringify does. */
+type JsonObject = { [field: string]: JsonValue | undefined };
+
+type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
+
+/** A request body the tests send as JSON. */
+type JsonBody = JsonObject;
+
+type OfferTerms = Parameters<typeof invoiceLib.invoiceAvailable>[0];
+
+type ProjectMessage = Parameters<
+	typeof readableSoftwareProjectMessages
+>[0][number];
+
+type ProjectTerms = Parameters<typeof readableSoftwareProjectMessages>[2];
+
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database, env: TestEnv;
 
 const terms = {
@@ -78,7 +98,7 @@ const terms = {
 	exclusions: "Live rollout",
 	timing: "",
 	paymentMode: "standard",
-};
+} satisfies OfferTerms;
 
 const termsJson = JSON.stringify(terms, null, 2),
 	secret = "studio-code-key-for-tests-32-characters";
@@ -145,11 +165,11 @@ afterEach(() => {
 
 async function call(
 	route: typeof projectPost,
-	body: unknown,
+	body: JsonBody,
 	owner = true,
 	id = "software",
 ) {
-	if (route === projectPost && (body as { action?: string }).action === "start")
+	if (route === projectPost && body.action === "start")
 		body = {
 			signature_source: "external",
 			external_signed_on: "2026-09-30",
@@ -157,7 +177,7 @@ async function call(
 			external_kept_copy: true,
 			external_copy_reference: "Owner retained signed copy",
 			inputs_ready: true,
-			...(body as object),
+			...body,
 		};
 
 	if (route === updatePost)
@@ -168,27 +188,29 @@ async function call(
 						"SELECT updated_at FROM software_projects WHERE request_id=?",
 					)
 					.get(id)?.updated_at ?? "missing",
-			...(body as object),
+			...body,
 		};
 
-	return route({
-		params: { id },
-		request: new Request(
-			`https://example.com/api/owner/requests/${id}/project`,
-			{
-				method: "POST",
-				headers: {
-					"content-type": "application/json",
-					origin: "https://example.com",
+	return route(
+		double<APIContext>({
+			params: { id },
+			request: new Request(
+				`https://example.com/api/owner/requests/${id}/project`,
+				{
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						origin: "https://example.com",
+					},
+					body: JSON.stringify(body),
 				},
-				body: JSON.stringify(body),
+			),
+			locals: {
+				owner: owner ? { email: "owner@example.com" } : undefined,
+				runtime: double<TestRuntime>({ env }),
 			},
-		),
-		locals: {
-			owner: owner ? { email: "owner@example.com" } : undefined,
-			runtime: double<TestRuntime>({ env }),
-		},
-	} as never);
+		}),
+	);
 }
 
 const start = () =>
@@ -301,7 +323,7 @@ async function draft() {
 
 	expect(response.status).toBe(200);
 
-	return response.json() as Promise<{ id: string; updatedAt: string }>;
+	return readJson<{ id: string; updatedAt: string }>(response);
 }
 
 async function session(email = "alex@example.com") {
@@ -328,31 +350,33 @@ async function shareReview(
 
 	expect(response.status).toBe(200);
 
-	return response.json() as Promise<{ id: string }>;
+	return readJson<{ id: string }>(response);
 }
 
 async function decide(
 	updateId: string,
-	body: unknown,
+	body: JsonBody,
 	token: string,
 	id = "software",
 ) {
-	return reviewPost({
-		params: { id, updateId },
-		request: new Request(
-			`https://example.com/api/studio/software/${id}/reviews/${updateId}`,
-			{
-				method: "POST",
-				headers: {
-					origin: "https://example.com",
-					"content-type": "application/json",
-					cookie: token ? `studio_session=${token}` : "",
+	return reviewPost(
+		double<APIContext>({
+			params: { id, updateId },
+			request: new Request(
+				`https://example.com/api/studio/software/${id}/reviews/${updateId}`,
+				{
+					method: "POST",
+					headers: {
+						origin: "https://example.com",
+						"content-type": "application/json",
+						cookie: token ? `studio_session=${token}` : "",
+					},
+					body: JSON.stringify(body),
 				},
-				body: JSON.stringify(body),
-			},
-		),
-		locals: { runtime: double<TestRuntime>({ env }) },
-	} as never);
+			),
+			locals: { runtime: double<TestRuntime>({ env }) },
+		}),
+	);
 }
 
 it("requires a named review version, evidence for every check and a bounded review window", async () => {
@@ -406,7 +430,7 @@ it("snapshots selected deliverables but blocks acceptance until the full milesto
 	});
 
 	expect(response.status).toBe(200);
-	const { id } = (await response.json()) as { id: string };
+	const { id } = await readJson<{ id: string }>(response);
 
 	const row = sql
 		.prepare(
@@ -433,7 +457,7 @@ it("snapshots selected deliverables but blocks acceptance until the full milesto
 	);
 
 	expect(partial.status).toBe(400);
-	expect(((await partial.json()) as { error: string }).error).toMatch(
+	expect((await readJson<{ error: string }>(partial)).error).toMatch(
 		/only part of the milestone/i,
 	);
 
@@ -451,7 +475,7 @@ it("snapshots selected deliverables but blocks acceptance until the full milesto
 	});
 
 	expect(full.status).toBe(200);
-	const revised = (await full.json()) as { id: string };
+	const revised = await readJson<{ id: string }>(full);
 	expect(
 		(
 			await decide(
@@ -488,7 +512,7 @@ it("lets clients report a missing planned deliverable even when every included c
 	});
 
 	expect(response.status).toBe(200);
-	const { id } = (await response.json()) as { id: string };
+	const { id } = await readJson<{ id: string }>(response);
 	expect(
 		(
 			await decide(
@@ -529,7 +553,7 @@ it("lets clients report an included deliverable they cannot open without misclas
 	});
 
 	expect(response.status).toBe(200);
-	const { id } = (await response.json()) as { id: string };
+	const { id } = await readJson<{ id: string }>(response);
 	expect(
 		(
 			await decide(
@@ -581,7 +605,7 @@ it("rejects mismatching omitted and inaccessible delivery selections", async () 
 	});
 
 	expect(response.status).toBe(200);
-	const { id } = (await response.json()) as { id: string };
+	const { id } = await readJson<{ id: string }>(response);
 	expect(
 		(
 			await decide(
@@ -762,7 +786,7 @@ it("lets the owner save an unfinished reference in a private draft and requires 
 	});
 
 	expect(saved.status).toBe(200);
-	const draftInfo = (await saved.json()) as { id: string; updatedAt: string };
+	const draftInfo = await readJson<{ id: string; updatedAt: string }>(saved);
 	expect(
 		sql
 			.prepare(
@@ -786,7 +810,7 @@ it("lets the owner save an unfinished reference in a private draft and requires 
 	});
 
 	expect(shared.status).toBe(400);
-	expect(((await shared.json()) as { error: string }).error).toContain(
+	expect((await readJson<{ error: string }>(shared)).error).toContain(
 		"Finish each reference",
 	);
 });
@@ -804,7 +828,7 @@ it("records one version-specific decision and audit together, without confusing 
 	);
 
 	expect(mismatch.status).toBe(400);
-	expect(((await mismatch.json()) as { error: string }).error).toBe(
+	expect((await readJson<{ error: string }>(mismatch)).error).toBe(
 		"This decision doesn’t apply to this review.",
 	);
 	expect(
@@ -937,7 +961,7 @@ it("keeps client note text out of the machine-readable change header", async () 
 
 	const body = sql
 		.prepare("SELECT body FROM software_project_messages WHERE update_id=?")
-		.get(review.id).body as string;
+		.get(review.id).body;
 
 	expect(body.split("\n", 1)[0]).toBe(
 		"Requested changes to Delivery v1 for milestone 1. Checks reported unmet: [1]. Deliverables unavailable: []. Included but inaccessible: [].",
@@ -984,7 +1008,7 @@ it("saves revised check evidence so the revision draft can be reopened without l
 	});
 
 	expect(first.status).toBe(200);
-	const saved = (await first.json()) as { id: string; updatedAt: string };
+	const saved = await readJson<{ id: string; updatedAt: string }>(first);
 	expect(
 		sql
 			.prepare("SELECT criteria_json FROM software_project_updates WHERE id=?")
@@ -1332,9 +1356,9 @@ it("queues the correct review and handoff notice subjects using mocked email tra
 	});
 
 	expect(response.status).toBe(200);
-	const review = (await response.json()) as { id: string };
+	const review = await readJson<{ id: string }>(response);
 	expect(
-		JSON.parse(vi.mocked(fetch).mock.calls.at(-1)![1]!.body as string).subject,
+		JSON.parse(String(vi.mocked(fetch).mock.calls.at(-1)![1]!.body)).subject,
 	).toBe("Your project is ready for review");
 	await decide(
 		review.id,
@@ -1357,7 +1381,7 @@ it("queues the correct review and handoff notice subjects using mocked email tra
 
 	expect(handoff.status).toBe(200);
 	expect(
-		JSON.parse(vi.mocked(fetch).mock.calls.at(-1)![1]!.body as string).subject,
+		JSON.parse(String(vi.mocked(fetch).mock.calls.at(-1)![1]!.body)).subject,
 	).toBe("Your project handoff is ready");
 });
 
@@ -1670,13 +1694,13 @@ it("saves one draft, rejects stale forms, shares only with required content and 
 		).status,
 	).toBe(400);
 
-	const changed = (await (
+	const changed = await readJson<{ id: string; updatedAt: string }>(
 		await call(updatePost, {
 			action: "draft",
 			update: { ...update, title: "Changed" },
 			expectedUpdatedAt: saved.updatedAt,
-		})
-	).json()) as { id: string; updatedAt: string };
+		}),
+	);
 
 	expect(
 		(
@@ -1754,26 +1778,29 @@ async function visualCall(
 		version?: string;
 	} = {},
 ) {
-	return route({
-		params: { id: "software", updateId: id },
-		request: new Request("https://example.com/visual", {
-			method: route === uploadVisual ? "PUT" : "GET",
-			headers: {
-				origin: "https://example.com",
-				"content-type": options.type ?? "image/png",
-				"if-unmodified-since": options.version ?? "",
-				cookie: options.token ? `studio_session=${options.token}` : "",
+	return route(
+		double<APIContext>({
+			params: { id: "software", updateId: id },
+			request: new Request("https://example.com/visual", {
+				method: route === uploadVisual ? "PUT" : "GET",
+				headers: {
+					origin: "https://example.com",
+					"content-type": options.type ?? "image/png",
+					"if-unmodified-since": options.version ?? "",
+					cookie: options.token ? `studio_session=${options.token}` : "",
+				},
+				body:
+					route === uploadVisual
+						? new Uint8Array(options.bytes ?? visualBytes).buffer
+						: undefined,
+			}),
+			locals: {
+				owner:
+					options.owner === false ? undefined : { email: "owner@example.com" },
+				runtime: double<TestRuntime>({ env }),
 			},
-			...(route === uploadVisual
-				? { body: new Uint8Array(options.bytes ?? visualBytes).buffer }
-				: {}),
 		}),
-		locals: {
-			owner:
-				options.owner === false ? undefined : { email: "owner@example.com" },
-			runtime: double<TestRuntime>({ env }),
-		},
-	} as never);
+	);
 }
 
 it("limits visual uploads, guards replacement, deletes old objects and restricts client reads to shared own updates", async () => {
@@ -1804,17 +1831,17 @@ it("limits visual uploads, guards replacement, deletes old objects and restricts
 		(await visualCall(uploadVisual, saved.id, { version: "stale" })).status,
 	).toBe(409);
 
-	const first = (await (
-		await visualCall(uploadVisual, saved.id, { version: saved.updatedAt })
-	).json()) as { id: string; updatedAt: string };
+	const first = await readJson<{ id: string; updatedAt: string }>(
+		await visualCall(uploadVisual, saved.id, { version: saved.updatedAt }),
+	);
 
 	const oldKey = sql
 		.prepare("SELECT visual_key FROM software_project_updates WHERE id=?")
 		.get(saved.id).visual_key;
 
-	const second = (await (
-		await visualCall(uploadVisual, saved.id, { version: first.updatedAt })
-	).json()) as { id: string; updatedAt: string };
+	const second = await readJson<{ id: string; updatedAt: string }>(
+		await visualCall(uploadVisual, saved.id, { version: first.updatedAt }),
+	);
 
 	expect(bucket.delete).toHaveBeenCalledWith(oldKey);
 	expect((await visualCall(clientVisual, saved.id, { token })).status).toBe(
@@ -2136,22 +2163,24 @@ it("scopes the client message route to an active own session", async () => {
 	const token = await session();
 
 	const send = (id: string, cookie = token) =>
-		messagesPost({
-			params: { id },
-			request: new Request(
-				"https://example.com/api/studio/software/" + id + "/messages",
-				{
-					method: "POST",
-					headers: {
-						origin: "https://example.com",
-						"content-type": "application/json",
-						cookie: cookie ? `studio_session=${cookie}` : "",
+		messagesPost(
+			double<APIContext>({
+				params: { id },
+				request: new Request(
+					"https://example.com/api/studio/software/" + id + "/messages",
+					{
+						method: "POST",
+						headers: {
+							origin: "https://example.com",
+							"content-type": "application/json",
+							cookie: cookie ? `studio_session=${cookie}` : "",
+						},
+						body: JSON.stringify({ action: "send", body: "Hello" }),
 					},
-					body: JSON.stringify({ action: "send", body: "Hello" }),
-				},
-			),
-			locals: { runtime: double<TestRuntime>({ env }) },
-		} as never);
+				),
+				locals: { runtime: double<TestRuntime>({ env }) },
+			}),
+		);
 
 	expect((await send("software", "")).status).toBe(401);
 	request("foreign", "other@example.com");
@@ -2319,7 +2348,7 @@ it("keeps newer undecided review state and never moves the milestone backwards",
 	});
 
 	expect(response.status).toBe(200);
-	const newer = (await response.json()) as { id: string };
+	const newer = await readJson<{ id: string }>(response);
 
 	const before = sql
 		.prepare(
@@ -2870,7 +2899,7 @@ it("blocks sending new terms for open, failed, creating or paid deposits and blo
 		expectedUpdatedAt: null,
 	});
 
-	const value = (await saved.json()) as { version: number; updatedAt: string };
+	const value = await readJson<{ version: number; updatedAt: string }>(saved);
 
 	for (const status of [
 		"creating",
@@ -2888,7 +2917,7 @@ it("blocks sending new terms for open, failed, creating or paid deposits and blo
 		});
 
 		expect(sent.status).toBe(409);
-		expect(((await sent.json()) as { message: string }).message).toContain(
+		expect((await readJson<{ message: string }>(sent)).message).toContain(
 			status === "paid" ? "already paid" : "Void the open deposit",
 		);
 
@@ -3559,10 +3588,7 @@ it.each([false, true])(
 			expectedUpdatedAt: null,
 		});
 
-		const draft = (await saved.json()) as {
-			version: number;
-			updatedAt: string;
-		};
+		const draft = await readJson<{ version: number; updatedAt: string }>(saved);
 
 		const original = db.batch.bind(db);
 		db.batch = async (items) => {
@@ -3639,10 +3665,10 @@ it.each(["manual", "stripe"])(
 		).toBe(409);
 		expect(
 			invoiceLib.invoiceAvailable(
-				{
+				double<OfferTerms>({
 					...terms,
 					milestones: [terms.milestones[0], terms.milestones[0]],
-				} as never,
+				}),
 				1,
 				"deposit",
 				{ milestone_index: 0, completed_at: null },
@@ -4203,8 +4229,12 @@ it("shows client revision events as sentences while preserving stored target par
 	).toBe("Release candidate");
 
 	const messages = [
-		{ body, decision: "changes_requested", update_id: "v2" },
-	] as any;
+		double<ProjectMessage>({
+			body,
+			decision: "changes_requested",
+			update_id: "v2",
+		}),
+	];
 
 	const updates = [
 		{
@@ -4215,14 +4245,14 @@ it("shows client revision events as sentences while preserving stored target par
 		},
 	];
 
-	const terms = {
+	const terms = double<ProjectTerms>({
 		milestones: [
-			{
+			double<ProjectTerms["milestones"][number]>({
 				acceptance: ["Add a client"],
 				deliverables: ["Status view", "Sample import"],
-			},
+			}),
 		],
-	} as any;
+	});
 
 	expect(
 		readableSoftwareProjectMessages(messages, updates, terms)[0].body,
@@ -4260,7 +4290,7 @@ it("stores stable deliverable indexes and cannot accept one repeated label as tw
 	});
 
 	expect(response.status).toBe(200);
-	const { id } = (await response.json()) as { id: string };
+	const { id } = await readJson<{ id: string }>(response);
 	expect(
 		sql
 			.prepare(

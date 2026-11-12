@@ -7,6 +7,7 @@ import {
 	type SoftwareInvoice,
 } from "~/lib/software-invoices";
 import type { OfferTerms } from "~/lib/software-offers";
+import { double, fakeD1 } from "../helpers/doubles";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -396,19 +397,27 @@ it("blocks partial latest delivery and scope changes during invoice reservation"
 	const sql = new DatabaseSync(":memory:");
 	sql.exec(readFileSync("db/music.sql", "utf8"));
 
-	const statement = (query: string, args: unknown[] = []) => ({
-		query,
-		args,
-		bind: (...values: unknown[]) => statement(query, values),
-		first: async () => sql.prepare(query).get(...args) ?? null,
-		all: async () => ({ results: sql.prepare(query).all(...args) }),
-	});
+	/** A statement the fake records, so that a batch can replay its SQL and bound arguments. */
+	type RecordedStatement = D1PreparedStatement & {
+		query: string;
+		args: unknown[];
+	};
+
+	const statement = (query: string, args: unknown[] = []): RecordedStatement =>
+		double<RecordedStatement>({
+			query,
+			args,
+			bind: (...values: unknown[]) => statement(query, values),
+			first: async () => sql.prepare(query).get(...args) ?? null,
+			all: async <T>() =>
+				double<D1Result<T>>({ results: sql.prepare(query).all(...args) }),
+		});
 
 	let race = false;
 
-	const db = {
+	const db = fakeD1({
 		prepare: statement,
-		batch: async (items: ReturnType<typeof statement>[]) => {
+		batch: async (items: RecordedStatement[]) => {
 			if (race)
 				sql.exec(
 					"UPDATE software_project_updates SET delivered_deliverables_json='[0]' WHERE id='latest'",
@@ -418,12 +427,14 @@ it("blocks partial latest delivery and scope changes during invoice reservation"
 			try {
 				for (const item of items) sql.prepare(item.query).all(...item.args);
 				sql.exec("COMMIT");
+
+				return [];
 			} catch (error) {
 				sql.exec("ROLLBACK");
 				throw error;
 			}
 		},
-	} as unknown as D1Database;
+	});
 
 	sql.exec(
 		"INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES('r','software','client@example.com','Tool','reviewed','now','now')",
