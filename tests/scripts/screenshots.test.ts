@@ -161,26 +161,29 @@ it("seeds a completed send so missing details reach the real agreement validatio
 
 		const send = () =>
 			sendOffer(
-			double<APIContext>({
-				params: { id: "screenshot-signing" },
-				request: new Request(
-					"https://example.com/api/owner/requests/screenshot-signing/software",
-					{
-						method: "POST",
-						headers: {
-							origin: "https://example.com",
-							"content-type": "application/json",
+				double<APIContext>({
+					params: { id: "screenshot-signing" },
+					request: new Request(
+						"https://example.com/api/owner/requests/screenshot-signing/software",
+						{
+							method: "POST",
+							headers: {
+								origin: "https://example.com",
+								"content-type": "application/json",
+							},
+							body: JSON.stringify({
+								action: "send",
+								version: 2,
+								expectedUpdatedAt: draft.updated_at,
+							}),
 						},
-						body: JSON.stringify({
-							action: "send",
-							version: 2,
-							expectedUpdatedAt: draft.updated_at,
-						}),
-					},
-				),
-				locals: fakeLocals({ MUSIC_DB: sqliteD1(sql) }, { email: "owner@example.com" }),
-			}),
-		);
+					),
+					locals: fakeLocals(
+						{ MUSIC_DB: sqliteD1(sql) },
+						{ email: "owner@example.com" },
+					),
+				}),
+			);
 
 		const response = await send();
 		expect(response.status).toBe(400);

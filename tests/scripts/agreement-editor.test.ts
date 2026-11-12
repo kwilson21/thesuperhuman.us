@@ -48,7 +48,10 @@ class FakeElement {
 		this.kids = nodes;
 		this.text = "";
 	}
-	addEventListener(type: string, handler: (event: FakeEvent) => void | Promise<void>) {
+	addEventListener(
+		type: string,
+		handler: (event: FakeEvent) => void | Promise<void>,
+	) {
 		this.handlers.set(type, handler);
 	}
 }

@@ -5,11 +5,7 @@ import { build } from "esbuild";
 import { transform } from "@astrojs/compiler";
 import { experimental_AstroContainer as AstroContainer } from "astro/container";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-	DEFAULT_OG_SCENE,
-	OG_SCENES,
-	ogMedia,
-} from "~/lib/og-media";
+import { DEFAULT_OG_SCENE, OG_SCENES, ogMedia } from "~/lib/og-media";
 
 let layout: any, directory: string;
 

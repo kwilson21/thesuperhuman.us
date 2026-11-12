@@ -25,13 +25,12 @@ it("measures each aligned playback window for both waveform and loudness", async
 				versions: { mix: { key: "mix.mp3" }, master: { key: "master.mp3" } },
 			}),
 		);
-	vi.mocked(spawnSync).mockImplementation(
-		(_command, args) =>
-			double<ReturnType<typeof spawnSync>>({
-				status: 0,
-				stdout: Buffer.alloc(640),
-				stderr: Buffer.from(args?.includes("null") ? '{"input_i":"-18"}' : ""),
-			}),
+	vi.mocked(spawnSync).mockImplementation((_command, args) =>
+		double<ReturnType<typeof spawnSync>>({
+			status: 0,
+			stdout: Buffer.alloc(640),
+			stderr: Buffer.from(args?.includes("null") ? '{"input_i":"-18"}' : ""),
+		}),
 	);
 
 	try {

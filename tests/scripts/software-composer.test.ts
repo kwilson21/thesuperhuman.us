@@ -103,17 +103,17 @@ function fixture(
 		if (existing) return existing;
 
 		const created: FakeElement = {
-				hidden: false,
-				textContent: "",
-				addEventListener: (event: string, handler: FakeHandler) =>
-					handlers.set(`${selector}:${event}`, handler),
-				replaceChildren: vi.fn(),
-				querySelectorAll: () => [],
-				dataset: { accepted: "[true]", paymentBlocked },
-				classList: { toggle: vi.fn() },
-				getAttribute: () =>
-					selector === "[data-preview-image]" ? savedVisual : null,
-				removeAttribute: vi.fn(),
+			hidden: false,
+			textContent: "",
+			addEventListener: (event: string, handler: FakeHandler) =>
+				handlers.set(`${selector}:${event}`, handler),
+			replaceChildren: vi.fn(),
+			querySelectorAll: () => [],
+			dataset: { accepted: "[true]", paymentBlocked },
+			classList: { toggle: vi.fn() },
+			getAttribute: () =>
+				selector === "[data-preview-image]" ? savedVisual : null,
+			removeAttribute: vi.fn(),
 		};
 
 		elements.set(selector, created);
@@ -159,8 +159,7 @@ function fixture(
 		milestoneOptions,
 		saveDraft: () => handlers.get("[data-save-draft]:click")!(),
 		fileChange: () => handlers.get("visual:change")!(),
-		submit: () =>
-			handlers.get("form:submit")!({ preventDefault: () => {} }),
+		submit: () => handlers.get("form:submit")!({ preventDefault: () => {} }),
 		change: (kind: string) => {
 			fields.kind.value = kind;
 			handlers.get("kind:change")!();

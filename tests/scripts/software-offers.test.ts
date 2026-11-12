@@ -32,10 +32,7 @@ type FakeElement = {
 	nextElementSibling?: FakeElement | null;
 	previousElementSibling?: FakeElement | null;
 	remove?: () => void;
-	addEventListener: (
-		name: string,
-		handler: FakeHandler,
-	) => void;
+	addEventListener: (name: string, handler: FakeHandler) => void;
 	emit: (name: string, target?: FakeTarget) => Promise<void>;
 	querySelector: (selector: string) => FakeElement | null;
 	querySelectorAll: (selector: string) => FakeElement[];
@@ -82,7 +79,9 @@ function element<E extends object>(extra: E): FakeElement & E {
 /** The unload listener setupSoftwareOffers registers on window, the first window listener it adds. */
 function unloadHandler(): (event: FakeEvent) => void {
 	// SAFETY: setupSoftwareOffers adds its beforeunload listener as the first window listener, and that listener takes the event, so mock.calls[0][1] is the function these tests call.
-	return vi.mocked(window.addEventListener).mock.calls[0][1] as (event: FakeEvent) => void;
+	return vi.mocked(window.addEventListener).mock.calls[0][1] as (
+		event: FakeEvent,
+	) => void;
 }
 
 // Small DOM stand-in for the two async editor races; actual routes render in page tests.
@@ -132,17 +131,19 @@ function fixture(action = "fit") {
 
 	const children: FakeElement[] = [row];
 
-	const list: FakeElement & { children: FakeElement[]; lastElementChild: FakeElement } =
-		element({
-			children,
-			lastElementChild: row,
-			appendChild: (child: FakeElement) => {
-				children.push(child);
-				list.lastElementChild = child;
-			},
-			querySelectorAll: (selector: string) =>
-				selector === "[data-milestone]" ? children : [],
-		});
+	const list: FakeElement & {
+		children: FakeElement[];
+		lastElementChild: FakeElement;
+	} = element({
+		children,
+		lastElementChild: row,
+		appendChild: (child: FakeElement) => {
+			children.push(child);
+			list.lastElementChild = child;
+		},
+		querySelectorAll: (selector: string) =>
+			selector === "[data-milestone]" ? children : [],
+	});
 
 	const submit = element({});
 
@@ -681,7 +682,8 @@ it.each(["fit", "question", "decline", "revoke"])(
 			),
 		);
 
-		if (action === "revoke") await targets.get("[data-revoke-link]")!.emit("click");
+		if (action === "revoke")
+			await targets.get("[data-revoke-link]")!.emit("click");
 		else await actionForm.emit("submit");
 		expect(confirm).toHaveBeenCalledWith(
 			"You have unsaved changes in another section. Continue and lose them?",
@@ -801,7 +803,9 @@ it("updates revoked controls before a canceled reload and permits reissue", asyn
 	await targets.get("[data-revoke-link]")!.emit("click");
 	expect(location.reload).not.toHaveBeenCalled();
 	expect(root.dataset.revoked).toBe("true");
-	expect(targets.get("[data-link-state]")!.textContent).toBe("Client link revoked.");
+	expect(targets.get("[data-link-state]")!.textContent).toBe(
+		"Client link revoked.",
+	);
 	expect(targets.get("[data-client-link]")!.value).toBe("");
 	expect(targets.get("[data-client-link-field]")!.hidden).toBe(true);
 	expect(targets.get("[data-revoke-link]")!.disabled).toBe(true);
@@ -924,7 +928,10 @@ it.each([0, 1, 2])(
 
 it("marks and names the full agreement field path returned by send validation", async () => {
 	const { inputs, form, status } = fixture();
-	inputs["agreement.environment"] = element({ value: "", setAttribute: vi.fn() });
+	inputs["agreement.environment"] = element({
+		value: "",
+		setAttribute: vi.fn(),
+	});
 	vi.stubGlobal(
 		"fetch",
 		vi.fn(async () =>
