@@ -21,9 +21,8 @@ it("keeps each comparison playhead within its waveform and reveals both markers"
 		".comparison-waveform-stage{position:relative;margin-top:.4rem}",
 	);
 	expectSource(script).toContain(
-		"root.querySelectorAll<HTMLElement>('.comparison-playhead')",
+		'root.querySelectorAll<HTMLElement>(".comparison-playhead").forEach((playhead) => (playhead.hidden = false));',
 	);
-	expect(script).toContain("playhead.hidden = false");
 });
 
 it("keeps the compact A/B selector from stretching across the mobile controls grid", () => {
