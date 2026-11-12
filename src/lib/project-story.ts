@@ -55,6 +55,7 @@ export function publicationMilestones(feed: ProjectFeed | null): Milestone[] {
 				.trim();
 
 			const storyFields = new Map<string, unknown>(Object.entries(entry.story));
+
 			const reviewed =
 				feed.projectId === approvedReview.projectId &&
 				entry.entryId === approvedReview.entryId &&

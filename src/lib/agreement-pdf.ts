@@ -84,7 +84,7 @@ export async function renderAgreementPacket(
 	documents: Agreement[],
 	certificates: unknown[],
 ): Promise<Uint8Array> {
-	// SAFETY: prepareAgreementArtifact (agreement-artifacts.ts) and preflightAgreementPacket (this file) build each certificate with the fields SigningCertificate lists; tests pass partial certificates, which the packet reads with ?? and optional access.
+	// SAFETY: prepareAgreementArtifact (agreement-artifacts.ts) and preflightAgreementPacket (this file) build each certificate with the fields SigningCertificate lists; tests pass partial certificates, which the packet tolerates through ?? and undefined reads.
 	const records = certificates as SigningCertificate[];
 	const pdf = await PDFDocument.create();
 	pdf.registerFontkit(fontkit);

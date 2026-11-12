@@ -104,7 +104,7 @@ export async function previewAgreementRetention(
 			cursor = listed.truncated ? listed.cursor : undefined;
 		} while (cursor);
 
-		// SAFETY: the same manifest as the loop above, so each item has the key and sha256 strings that the attachment upload recorded.
+		// SAFETY: the same manifest as the loop above, so each item is a validated attachment from software-agreements.ts with a key and a sha256 string.
 		for (const attachment of JSON.parse(row.attachment_manifest_json) as {
 			key: string;
 			sha256: string;

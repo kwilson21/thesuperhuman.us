@@ -28,17 +28,39 @@ export type AgreementKind = keyof typeof templateFields;
 
 const bytes = (s: string) => new TextEncoder().encode(s).length;
 
+/** A value the template engine fills in: text, a list of milestone groups, or a named group of values. */
+export type TemplateValue =
+	| string
+	| number
+	| boolean
+	| null
+	| undefined
+	| TemplateValue[]
+	| { [key: string]: TemplateValue };
+
+/** The values renderAgreement fills, keyed by namespace (client, contractor, msa, sow, ...). */
+export type TemplateValues = { [namespace: string]: TemplateValue };
+
+function isText<T>(value: T): value is T & string {
+	return typeof value === "string";
+}
+
+function isTemplateGroup(
+	value: TemplateValue,
+): value is { [key: string]: TemplateValue } {
+	return value !== null && typeof value === "object";
+}
+
 export function sampleAgreementValues(
 	kind: AgreementKind,
 	text: string,
 	versionLabel = "Sample version label",
 ) {
-	const values: Record<string, Record<string, string> | unknown> = {};
+	const groups: Partial<Record<string, Record<string, string>>> = {};
 
 	const addSample = (field: string) => {
 		const [namespace, key] = field.split(".");
-		values[namespace] ??= {};
-		const group = values[namespace] as Record<string, string>;
+		const group = (groups[namespace] ??= {});
 		group[key] ??= `Sample ${key.replaceAll("_", " ")}`;
 	};
 
@@ -47,10 +69,16 @@ export function sampleAgreementValues(
 	for (const match of text.matchAll(/{{([a-z_]+\.[a-z_0-9]+)}}/g))
 		addSample(match[1]);
 
-	if (kind === "sow") values.milestones = [values.milestone];
+	const values: TemplateValues = {};
+
+	for (const [namespace, group] of Object.entries(groups))
+		values[namespace] = group;
+
+	if (kind === "sow") values.milestones = [groups.milestone];
 	// Previews show the label the owner typed, as clients will see it.
-	const msa = (values.msa ??= {}) as Record<string, string>;
+	const msa = (groups.msa ??= {});
 	msa.version_label = versionLabel;
+	values.msa = msa;
 
 	return values;
 }
@@ -65,7 +93,7 @@ export const agreementCharacterSupported = (character: string) =>
 export function agreementCertificateText(json: string) {
 	// Format certificate display only. Stored evidence and its canonical hash stay exact.
 	const display = JSON.stringify(JSON.parse(json), (key, value) =>
-		typeof value === "string" &&
+		isText(value) &&
 		/(?:_at|_on|date)$/.test(key) &&
 		/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)?$/.test(value)
 			? value.length === 10
@@ -139,6 +167,7 @@ export function validateTemplate(kind: AgreementKind, text: string) {
 			continue;
 		}
 
+		// SAFETY: templateFields[kind] is a readonly tuple of string literals, and this is an upcast to readonly string[], so includes sees every field name it held.
 		if (
 			(!(templateFields[kind] as readonly string[]).includes(field) &&
 				!optionalFields.includes(field)) ||
@@ -159,18 +188,15 @@ export function validateTemplate(kind: AgreementKind, text: string) {
 	return text.replace(/\r\n?/g, "\n");
 }
 
-function lookup(values: Record<string, unknown>, path: string): string {
+function lookup(values: TemplateValues, path: string): string {
 	// {{msa.source_revision}} prints the MSA's client-visible label; the internal revision stays in the signing record.
 	const key = path === "msa.source_revision" ? "msa.version_label" : path;
-	let value: unknown = values;
+	let value: TemplateValue = values;
 
 	for (const part of key.split("."))
-		value =
-			typeof value === "object" && value !== null
-				? (value as Record<string, unknown>)[part]
-				: undefined;
+		value = isTemplateGroup(value) ? value[part] : undefined;
 
-	if (typeof value !== "string" || !value.trim())
+	if (!isText(value) || !value.trim())
 		throw new Error(`Missing value: ${path}.`);
 
 	return value.normalize("NFC");
@@ -179,11 +205,11 @@ function lookup(values: Record<string, unknown>, path: string): string {
 export function renderAgreement(
 	kind: AgreementKind,
 	template: string,
-	values: Record<string, unknown>,
+	values: TemplateValues,
 ): string {
 	validateTemplate(kind, template);
 
-	const fill = (t: string, v: Record<string, unknown>) =>
+	const fill = (t: string, v: TemplateValues) =>
 		t.replace(/{{([a-z_]+\.[a-z_0-9]+)}}/g, (_, p) => lookup(v, p));
 
 	const rendered = template.replace(
