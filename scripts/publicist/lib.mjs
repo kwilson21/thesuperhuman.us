@@ -26,7 +26,7 @@ export function syncAgents(agents, skill) {
 
 /** Entry IDs in a curated project-story data file. */
 export function entryIds(source) {
-  return [...source.matchAll(/\bid:\s*'([a-z0-9-]+)'/g)].map(m => m[1]);
+  return [...source.matchAll(/\bid:\s*(['"])([a-z0-9-]+)\1/g)].map(m => m[2]);
 }
 
 /**
@@ -97,6 +97,6 @@ export function queueBodyProblems(text) {
 
 /** Tally captures must be labeled as demo data. */
 export function captureProblems(source) {
-  const kinds = [...source.matchAll(/'((?:[^'\\]|\\.)*capture(?:[^'\\]|\\.)*)'\s*\)/gi)].map(m => m[1]);
+  const kinds = [...source.matchAll(/(['"])((?:(?!\1)[^\\]|\\.)*capture(?:(?!\1)[^\\]|\\.)*)\1\s*\)/gi)].map(m => m[2]);
   return kinds.filter(kind => !/demo data/i.test(kind)).map(kind => `capture not labeled demo data: ${kind}`);
 }

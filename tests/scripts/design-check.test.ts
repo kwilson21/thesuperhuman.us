@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import {
   ALLOWLIST, GATES, applyAllowlist, cssDeclarations, fileViolations, fontFamilies, isScanned, styleBlocks, systemFamilies,
 } from '../../scripts/check-design.mjs';
+import { sourceText } from '../helpers/source-text';
 
 const GLOBAL = `@font-face { font-family: 'Libron'; src: url('/fonts/libron.woff2') format('woff2'); }
 @font-face { font-family: 'Kazon Name Text'; src: url('/fonts/name.woff2') format('woff2'); }
@@ -299,10 +300,11 @@ describe('gates', () => {
   });
 
   it('names a Hallmark rule for every gate', () => {
-    const source = readFileSync('scripts/check-design.mjs', 'utf8');
+    const source = sourceText(readFileSync('scripts/check-design.mjs', 'utf8'));
     for (const id of Object.keys(GATES)) {
-      const block = source.slice(source.indexOf(`'${id}': {`), source.indexOf('},', source.indexOf(`'${id}': {`)));
-      expect(block).toMatch(/Hallmark|[Gg]ate \d+|motion\.md|interaction-and-states\.md/);
+      const start = source.indexOf(sourceText(`'${id}': {`));
+      const block = source.slice(start, source.indexOf('},', start));
+      expect(block).toMatch(/Hallmark|[Gg]ate\d+|motion\.md|interaction-and-states\.md/);
     }
   });
 });

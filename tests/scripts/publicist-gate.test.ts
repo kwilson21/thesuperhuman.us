@@ -97,6 +97,10 @@ describe('text checks', () => {
     expect(captureProblems("artifact(a, 'Home', 'Caption.', 'Browser capture · demo data')")).toEqual([]);
     expect(captureProblems("artifact(a, 'Home', 'Caption.', 'Browser capture')")).toHaveLength(1);
   });
+  it('checks Tally capture labels in double quotes too', () => {
+    expect(captureProblems('artifact(a, "Home", "Caption.", "Browser capture · demo data")')).toEqual([]);
+    expect(captureProblems('artifact(a, "Home", "Caption.", "Browser capture")')).toHaveLength(1);
+  });
   it('keeps URLs out of queued post text but allows the link field', () => {
     const post = (body: string) => `---\nsource: tally-home-screen\nlink: https://thesuperhuman.us/building/tally\n---\n${body}\n`;
     expect(queueBodyProblems(post('Tally has a new Home screen.'))).toEqual([]);
@@ -111,6 +115,18 @@ describe('text checks', () => {
   it('reads entry IDs and queue front matter', () => {
     expect(entryIds("{ id: 'tally-home-screen', day: '2026-09-23' }, { id: 'tally-phase-0' }")).toEqual(['tally-home-screen', 'tally-phase-0']);
     expect(frontMatter('---\nsource: tally-home-screen   # comment\nplatform: x\n---\nBody')).toEqual({ source: 'tally-home-screen', platform: 'x' });
+  });
+  it('reads entry IDs in double quotes and at any indentation', () => {
+    expect(entryIds('[\n\t{ id: "tally-home-screen", day: "2026-09-23" },\n    {\n      id: "tally-phase-0",\n    },\n]')).toEqual(['tally-home-screen', 'tally-phase-0']);
+    expect(entryIds("[{ id: 'site-one' }, { id: \"site-two\" }]")).toEqual(['site-one', 'site-two']);
+  });
+  it('still rejects IDs it rejected before', () => {
+    expect(entryIds("[{ id: 'Not-Lower' }]")).toEqual([]);
+    expect(entryIds('[{ id: "Not-Lower" }]')).toEqual([]);
+    expect(entryIds("[{ id: \"mixed' }]")).toEqual([]);
+    expect(entryIds("[{ id: 'mixed\" }]")).toEqual([]);
+    expect(entryIds("[{ paid: 'site-one' }]")).toEqual([]);
+    expect(entryIds('[{ id: `site-one` }]')).toEqual([]);
   });
 });
 

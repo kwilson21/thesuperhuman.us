@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { expect, it } from 'vitest';
+import { it } from 'vitest';
+import { expectSource } from '../helpers/source-text';
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -10,14 +11,14 @@ it('routes the homepage hero CTA to the software intake and preserves other CTAs
   const siteNav = read('../../src/components/SiteNav.astro');
   const footer = read('../../src/components/Footer.astro');
 
-  expect(hero).toContain('<a class="site-button" href="/software/start">Start a project</a>');
-  expect(home).toContain('<WorkWithMe />');
-  expect(workWithMe).toContain("href: '/software/start?path=website', label: 'Plan your website'");
-  expect(workWithMe).toContain("href: '/software/start', label: 'Discuss your project'");
-  expect(workWithMe).toContain("line: 'I build web apps people can try, or a tool that makes a task your team repeats easier.'");
-  expect(workWithMe).toContain('Each button starts the relevant intake.');
-  expect(workWithMe).not.toContain('Each button starts the relevant intake or contact path.');
-  expect(siteNav).toContain('href={mainHref(\'/services\')} aria-current={onHub ? \'page\' : undefined}>Work with me</a>');
-  expect(footer).toContain('const hireHref = mainHref(\'/services\');');
-  expect(footer).toContain('<a href={hireHref}>Work with me</a>');
+  expectSource(hero).toContain('<a class="site-button" href="/software/start">Start a project</a>');
+  expectSource(home).toContain('<WorkWithMe />');
+  expectSource(workWithMe).toContain("href: '/software/start?path=website', label: 'Plan your website'");
+  expectSource(workWithMe).toContain("href: '/software/start', label: 'Discuss your project'");
+  expectSource(workWithMe).toContain("line: 'I build web apps people can try, or a tool that makes a task your team repeats easier.'");
+  expectSource(workWithMe).toContain('Each button starts the relevant intake.');
+  expectSource(workWithMe).not.toContain('Each button starts the relevant intake or contact path.');
+  expectSource(siteNav).toContain('href={mainHref(\'/services\')} aria-current={onHub ? \'page\' : undefined}>Work with me</a>');
+  expectSource(footer).toContain('const hireHref = mainHref(\'/services\');');
+  expectSource(footer).toContain('<a href={hireHref}>Work with me</a>');
 });

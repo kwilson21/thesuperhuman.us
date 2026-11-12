@@ -15,7 +15,7 @@ it.each(['sent', 'not_requested'])('hides %s notice actions', notification_statu
 
 it('limits redelivery prompts to delivery invoices',()=>{
   const line=readFileSync(new URL('../../src/components/owner/SoftwareInvoiceLine.astro',import.meta.url),'utf8');
-  const condition=line.match(/const redeliveryPrompt=(.+);/)![1];
+  const condition=line.match(/const redeliveryPrompt\s*=\s*([^;]+);/)![1];
   const prompt=new Function('kind','redeliveryAt','latest',`return ${condition}`);
   expect(prompt('deposit','2026-10-02',{status:'open',created_at:'2026-10-01'})).toBe(false);
   expect(prompt('balance','2026-10-02',{status:'open',created_at:'2026-10-01'})).toBe(true);

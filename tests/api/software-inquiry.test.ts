@@ -5,6 +5,7 @@ import { POST } from '~/pages/api/software-inquiry';
 import { softwareBriefEmail } from '~/lib/client-emails';
 import { clientSoftwareLabels, currentSiteHref, currentUrlMessage, softwareBrief, softwareLabels, softwarePathLabel, softwarePaths, softwareRequest, updateLabels, validateSoftwareInquiry } from '~/lib/software-inquiry';
 import { RequestDetailsTooLargeError } from '~/lib/owner-requests';
+import { expectSource } from '../helpers/source-text';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 const id = '00000000-0000-4000-8000-000000000001';
@@ -57,8 +58,8 @@ it('stores and returns only the selected idea questions, including the optional 
 
 it('gives the updates choice a plain message without an error map, which some zod builds ignore', () => {
   const lib = readFileSync('src/lib/software-inquiry.ts', 'utf8');
-  expect(lib).toContain("updates: z.enum(['self', 'help', 'unsure'], { message: 'Choose one.' })");
-  expect(lib).not.toMatch(/updates: z\.enum\([^)]*errorMap/);
+  expectSource(lib).toContain("updates: z.enum(['self', 'help', 'unsure'], { message: 'Choose one.' })");
+  expectSource(lib).not.toMatch(/updates:z\.enum\([^)]*errorMap/);
   const site = { ...base, path: 'website', purpose: 'A site for my pottery studio.', currentUrl: '', existing: '' };
   for (const updates of [undefined, 'nobody']) {
     const result = validateSoftwareInquiry({ ...site, updates });

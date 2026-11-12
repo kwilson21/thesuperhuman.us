@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
+import { expectSource } from '../helpers/source-text';
 
 const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
@@ -33,6 +34,6 @@ it('keeps intake placeholders at WCAG AA contrast on paper', () => {
 
 it('loads the shared placeholder rule on both intake forms', () => {
   for (const page of ['src/pages/audio/start.astro', 'src/pages/software/start.astro']) {
-    expect(read(page)).toContain("import '~/styles/audio-intake.css';");
+    expectSource(read(page)).toContain("import '~/styles/audio-intake.css';");
   }
 });
