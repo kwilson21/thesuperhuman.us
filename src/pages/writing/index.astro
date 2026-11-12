@@ -44,6 +44,7 @@ if (!essay) throw new Error('AI essay content missing');
   figure svg { display: block; width: 100%; background: var(--dir-panel); border-radius: 3px; }
   figcaption { text-align: right; color: var(--muted); font-size: .8rem; margin-top: .5rem; }
   .writing-invitation { padding-block: 2.5rem; border-top: 1px solid var(--rule); }
+  .writing-invitation:last-of-type { padding-bottom: 0; }
   .writing-invitation h2 { font-size: 2rem; line-height: 1.2; }
   /* Kickers keep the shared .page-kicker style; running text stops near 65 characters. */
   .writing-invitation p:not(.page-kicker) { font-size: 1.2rem; color: var(--muted); margin-block: .5rem 1rem; max-width: var(--measure-prose); }

@@ -101,6 +101,17 @@ it('does not stack bottom padding above the panel on Privacy', () => {
   expect(privacy).not.toContain('py-16');
 });
 
+it('drops the essay close bottom padding so the footer owns the space', () => {
+  expect(read('src/pages/writing/ai-gives-you-speed.astro')).toContain('.essay-close { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1.5rem; padding-block: 2rem 0;');
+  expect(read('src/pages/writing/index.astro')).toContain('.writing-invitation { padding-block: 2.5rem; border-top: 1px solid var(--rule); }\n  .writing-invitation:last-of-type { padding-bottom: 0; }');
+});
+
+it('keeps the link and large button arrows still under reduced motion', () => {
+  expect(global).toContain('.site-link span, .site-link:hover span { transition: none; transform: none; }');
+  expect(global).toContain('.site-button-large span, .site-button-large:hover span { transition: none; transform: none; }');
+  expect(global).not.toContain('.site-link span { transform: none; }');
+});
+
 it('uses ink for readable footer link hover text on the panel', () => {
   expect(footer).toMatch(/\.compact-footer nav a:hover \{ color: var\(--ink\); \}/);
   expect(footer).not.toMatch(/nav a:hover \{ color: var\(--accent\)/);

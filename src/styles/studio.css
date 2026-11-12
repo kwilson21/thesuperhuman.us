@@ -52,7 +52,7 @@
   justify-content: center;
   gap: .6rem;
   justify-self: start;
-  white-space: nowrap;
+  max-width: 100%;
   min-height: 2.75rem;
   padding: .6rem 1.2rem;
   border: 1px solid var(--accent);

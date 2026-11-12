@@ -69,8 +69,16 @@ it('raises the inline padding on pill rows whose label touched the curve', () =>
   expect(read('src/components/WorkWithMe.astro')).toMatch(/\.door-button \{[^}]*padding: \.45rem 1\.5rem;/);
 });
 
+it('lets studio button labels wrap, because some are typed by the owner', () => {
+  const match = read('src/styles/studio.css').match(/\.studio-button \{[^}]*\}/);
+  expect(match, '.studio-button rule').not.toBeNull();
+  expect(match![0]).toContain('max-width: 100%;');
+  expect(match![0]).toContain('border-radius: var(--radius-button);');
+  expect(match![0]).not.toContain('white-space: nowrap');
+  expect(read('docs/design-concepts/2026-11-12/button-inventory.md')).toContain('Labels may wrap, because some are typed by the owner; the rule sets `max-width: 100%`.');
+});
+
 it('keeps pill labels on one line', () => {
-  expect(read('src/styles/studio.css')).toMatch(/\.studio-button \{[^}]*white-space: nowrap;/);
   expect(read('src/styles/owner.css')).toMatch(/\.owner-filters button,[^{]*\{[^}]*white-space:nowrap/);
   expect(read('src/pages/owner/requests/[id].astro')).toMatch(/\.rail-actions button \{[^}]*white-space: nowrap;/);
   expect(read('src/styles/audio-intake.css')).toMatch(/\.intake-actions \[data-back\]\{[^}]*white-space:nowrap/);

@@ -8,7 +8,7 @@ This is the list of every button style in `src/` that was checked for the pill s
 | --- | --- | --- | --- |
 | `.site-button`, `.site-button-outline` | `src/styles/global.css` | Shared button used on headers, doors, forms, 404, intake and audio pages | Pill through `--radius-button` in `src/styles/global.css`. |
 | `.door-button` (on `.site-button`) | `src/components/WorkWithMe.astro` | Leads to each work door | Pill through `.site-button`; side padding raised from 1.15rem to 1.5rem |
-| `.studio-button` (and its `.secondary` and `-outline` variants) | `src/styles/studio.css` | Submits or sends on studio, owner, sign-in, offer and agreement pages | Corners changed from 2px to the pill |
+| `.studio-button` (and its `.secondary` and `-outline` variants) | `src/styles/studio.css` | Submits or sends on studio, owner, sign-in, offer and agreement pages | Corners changed from 2px to the pill. Labels may wrap, because some are typed by the owner; the rule sets `max-width: 100%`. |
 | `.owner-primary-action` | `src/styles/owner.css` | Main action in owner payment and project panels | Pill; side padding raised to 1.25rem. Labels may wrap; the rule sets `max-width: 100%`. |
 | `.owner-filters button` (shared rule with `.request-work button` and `.audience-list button`) | `src/styles/owner.css` | Submits the request filters | Pill; side padding raised to 1.25rem. The other two selectors have no markup in `src/` |
 | `.intake-actions [data-back]` | `src/styles/audio-intake.css` | Goes back a step on the audio and software intake forms | Pill |

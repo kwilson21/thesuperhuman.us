@@ -262,9 +262,8 @@
   }
   .site-button-outline { background: transparent; color: var(--ink); }
   @media (prefers-reduced-motion: reduce) {
-    .site-link span { transition: none; }
-    .site-link span { transform: none; }
-    .site-button-large span { transition: none; transform: none; }
+    .site-link span, .site-link:hover span { transition: none; transform: none; }
+    .site-button-large span, .site-button-large:hover span { transition: none; transform: none; }
   }
   @media (prefers-reduced-motion: no-preference) {
     @view-transition { navigation: auto; }
