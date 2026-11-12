@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
+import type { APIContext } from "astro";
 import { templateFields } from "../../src/lib/agreement-template-fields.mjs";
 
 const signingTemplates = Object.fromEntries(
-	["msa", "sow"].map((kind) => [
+	(["msa", "sow"] as const).map((kind) => [
 		kind,
-		templateFields[kind as keyof typeof templateFields]
+		templateFields[kind]
 			.filter((field) => !field.startsWith("milestone."))
 			.map((field) => `${field}: {{${field}}}`)
 			.join("\n") +
@@ -30,6 +31,8 @@ import { createRequire } from "node:module";
 import { prepareWithDiagnostics } from "../../scripts/screenshots/prepare.mjs";
 import { POST as sendOffer } from "../../src/pages/api/owner/requests/[id]/software";
 import { contractorSchema } from "../../src/lib/agreement-fields";
+import { double } from "../helpers/doubles";
+import { fakeLocals, sqliteD1 } from "../helpers/tests-other-fakes";
 import {
 	BARE_LINK_LANDINGS,
 	expectedResourceError,
@@ -125,12 +128,6 @@ it("seeds a completed send so missing details reach the real agreement validatio
 	sql.exec(readFileSync("db/music.sql", "utf8"));
 	const stop = new Error("fixture ready");
 
-	const statement = (query: string, args: any[] = []): any => ({
-		bind: (...values: any[]) => statement(query, values),
-		first: async () => sql.prepare(query).get(...args) ?? null,
-		all: async () => ({ results: sql.prepare(query).all(...args) }),
-	});
-
 	try {
 		const scenario = await import(
 			"../../scripts/screenshots/scenarios/software-signing.mjs"
@@ -163,7 +160,8 @@ it("seeds a completed send so missing details reach the real agreement validatio
 			.get();
 
 		const send = () =>
-			sendOffer({
+			sendOffer(
+			double<APIContext>({
 				params: { id: "screenshot-signing" },
 				request: new Request(
 					"https://example.com/api/owner/requests/screenshot-signing/software",
@@ -180,11 +178,9 @@ it("seeds a completed send so missing details reach the real agreement validatio
 						}),
 					},
 				),
-				locals: {
-					owner: { email: "owner@example.com" },
-					runtime: { env: { MUSIC_DB: { prepare: statement } } },
-				},
-			} as any) as Promise<Response>;
+				locals: fakeLocals({ MUSIC_DB: sqliteD1(sql) }, { email: "owner@example.com" }),
+			}),
+		);
 
 		const response = await send();
 		expect(response.status).toBe(400);
@@ -277,9 +273,9 @@ describe("screenshot coverage", () => {
 
 		const missing = pageFiles("src/pages").filter(
 			(file) =>
-				!NOT_PAGES[file as keyof typeof NOT_PAGES] &&
-				!SCENARIO_PAGES[file as keyof typeof SCENARIO_PAGES] &&
-				!REDIRECTS[file as keyof typeof REDIRECTS] &&
+				!(file in NOT_PAGES) &&
+				!(file in SCENARIO_PAGES) &&
+				!(file in REDIRECTS) &&
 				!captured.has(routeFor(file)),
 		);
 
@@ -1429,11 +1425,8 @@ it("holds the sending request whether fetch gets a string, a URL, a Request or a
 		route: async () => {},
 		reload: async () => {},
 		waitForFunction: async () => {},
-		addInitScript: async (fn: unknown) => {
-			if (
-				typeof fn === "function" &&
-				fn.toString().includes("/api/software-inquiry")
-			)
+		addInitScript: async (fn: () => void) => {
+			if (fn.toString().includes("/api/software-inquiry"))
 				script = fn.toString();
 		},
 		locator: () => ({
@@ -1466,7 +1459,7 @@ it("holds the sending request whether fetch gets a string, a URL, a Request or a
 
 	const sandbox: any = {
 		window: {
-			fetch: vi.fn(async (input: unknown) => {
+			fetch: vi.fn(async (input: RequestInfo | URL) => {
 				passed.push(String(input));
 
 				return "passed";

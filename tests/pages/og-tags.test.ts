@@ -9,7 +9,6 @@ import {
 	DEFAULT_OG_SCENE,
 	OG_SCENES,
 	ogMedia,
-	type OgScene,
 } from "~/lib/og-media";
 
 let layout: any, directory: string;
@@ -87,8 +86,13 @@ async function head(
 const value = (tags: (readonly [string, string])[], key: string) =>
 	tags.find(([name]) => name === key)?.[1];
 
-// SAFETY: Object.keys of OG_SCENES returns exactly its own keys, and OgScene is keyof typeof OG_SCENES.
-const exactRoute = (Object.keys(OG_SCENES) as OgScene[]).flatMap((scene) =>
+/** The keys of o, typed as keyof T. Callers pass OG_SCENES, a literal whose own keys are exactly its scene names. */
+function keysOf<T extends object>(o: T): (keyof T)[] {
+	// SAFETY: OG_SCENES is an object literal, so Object.keys returns exactly its scene names, which are keyof typeof OG_SCENES.
+	return Object.keys(o) as (keyof T)[];
+}
+
+const exactRoute = keysOf(OG_SCENES).flatMap((scene) =>
 	OG_SCENES[scene].routes
 		.filter((route) => !route.endsWith("/*"))
 		.map((route) => ({ scene, route })),
@@ -179,8 +183,7 @@ describe("link-preview tags", () => {
 	});
 
 	it("let a page choose its scene when its URL cannot", async () => {
-		// SAFETY: Object.keys of OG_SCENES returns exactly its own keys, and OgScene is keyof typeof OG_SCENES.
-		const scene = (Object.keys(OG_SCENES) as OgScene[]).at(-1)!;
+		const scene = keysOf(OG_SCENES).at(-1)!;
 		const tags = await head("/this-page-does-not-exist", { ogScene: scene });
 		expect(value(tags, "og:video")).toBe(
 			`https://thesuperhuman.us${ogMedia(scene).video}`,

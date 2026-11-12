@@ -1,39 +1,83 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi, type Mock } from "vitest";
 import { setupOwnerRequestActions } from "~/scripts/owner-request-actions";
 import { setupSoftwareOffers } from "~/scripts/software-offers";
+import { double } from "../helpers/doubles";
+
+/** The event a fake element passes to its listeners: emit supplies preventDefault, target and currentTarget. */
+type FakeEvent = {
+	preventDefault: Mock;
+	target?: FakeElement;
+	currentTarget?: FakeElement;
+};
+
+/** A listener a fake element runs for an event. */
+type FakeHandler = (event: FakeEvent) => void | Promise<void>;
+
+/** The members of the fake DOM element that the software offer scripts and these tests touch. */
+type FakeElement = {
+	dataset: Record<string, string>;
+	disabled: boolean;
+	hidden: boolean;
+	textContent: string;
+	value: string;
+	checked: boolean;
+	focus: Mock;
+	addEventListener: (
+		name: string,
+		handler: FakeHandler,
+	) => void;
+	emit: (name: string, target?: FakeElement) => Promise<void>;
+	querySelector: (selector: string) => FakeElement | null;
+	querySelectorAll: (selector: string) => FakeElement[];
+	setAttribute: Mock;
+	removeAttribute: Mock;
+};
+
+/**
+ * A fake element with the FakeElement members and the extra members given. Listeners registered
+ * with addEventListener are run by emit; emit passes currentTarget as the element itself.
+ */
+function element<E extends object>(extra: E): FakeElement & E {
+	const events = new Map<string, FakeHandler>();
+
+	const base: FakeElement = {
+		dataset: {},
+		disabled: false,
+		hidden: false,
+		textContent: "",
+		value: "",
+		checked: false,
+		focus: vi.fn(),
+		addEventListener: (name, handler) => {
+			events.set(name, handler);
+		},
+		emit: async (name, target) => {
+			await events.get(name)?.({
+				preventDefault: vi.fn(),
+				target,
+				currentTarget: el,
+			});
+		},
+		querySelector: () => null,
+		querySelectorAll: () => [],
+		setAttribute: vi.fn(),
+		removeAttribute: vi.fn(),
+	};
+
+	const el: FakeElement & E = Object.assign(base, extra);
+
+	return el;
+}
+
+/** The unload listener setupSoftwareOffers registers on window, the first window listener it adds. */
+function unloadHandler(): (event: FakeEvent) => void {
+	// SAFETY: setupSoftwareOffers adds its beforeunload listener as the first window listener, and that listener takes the event, so mock.calls[0][1] is the function these tests call.
+	return vi.mocked(window.addEventListener).mock.calls[0][1] as (event: FakeEvent) => void;
+}
 
 // Small DOM stand-in for the two async editor races; actual routes render in page tests.
 function fixture(action = "fit") {
-	const element = (extra: Record<string, any> = {}) => {
-		const events: Record<string, Function> = {};
-
-		return {
-			dataset: {} as Record<string, string>,
-			disabled: false,
-			hidden: false,
-			textContent: "",
-			value: "",
-			checked: false,
-			focus: vi.fn(),
-			addEventListener: (name: string, handler: Function) => {
-				events[name] = handler;
-			},
-			emit: async function (name: string, target?: any) {
-				return events[name]?.({
-					preventDefault: vi.fn(),
-					target,
-					currentTarget: this,
-				});
-			},
-			querySelector: () => null,
-			querySelectorAll: () => [],
-			setAttribute: vi.fn(),
-			removeAttribute: vi.fn(),
-			...extra,
-		};
-	};
-
-	const inputs: Record<string, any> = Object.fromEntries(
+	const inputs: Record<string, FakeElement> = Object.fromEntries(
 		Object.entries({
 			outcome: "Tracker",
 			summary: "Shared view",
@@ -47,17 +91,20 @@ function fixture(action = "fit") {
 			acceptance: "Add a client",
 			fee: "2400",
 			hasCheckpoint: "",
-		}).map(([name, value]) => [name, element({ value })]),
+		}).map(([name, value]): [string, FakeElement] => [
+			name,
+			element({ value }),
+		]),
 	);
 
-	const send = element(),
-		preview = element(),
-		status = element(),
-		state = element(),
-		range = element(),
-		checkpoint = element();
+	const send = element({}),
+		preview = element({}),
+		status = element({}),
+		state = element({}),
+		range = element({}),
+		checkpoint = element({});
 
-	const row: any = element({
+	const row = element({
 		querySelectorAll: (selector: string) => {
 			const input = inputs[selector.match(/name="([^"]+)"/)?.[1] ?? ""];
 
@@ -67,25 +114,27 @@ function fixture(action = "fit") {
 			selector === "input"
 				? inputs.milestoneName
 				: selector === "legend"
-					? element()
+					? element({})
 					: selector === "[data-checkpoint]"
 						? checkpoint
 						: inputs[selector.match(/name="([^"]+)"/)?.[1] ?? ""],
 	});
 
-	const list: any = element({
-		children: [row],
-		lastElementChild: row,
-		appendChild: function (child: any) {
-			this.children.push(child);
-			this.lastElementChild = child;
-		},
-		querySelectorAll: function (selector: string) {
-			return selector === "[data-milestone]" ? this.children : [];
-		},
-	});
+	const children: FakeElement[] = [row];
 
-	const submit = element();
+	const list: FakeElement & { children: FakeElement[]; lastElementChild: FakeElement } =
+		element({
+			children,
+			lastElementChild: row,
+			appendChild: (child: FakeElement) => {
+				children.push(child);
+				list.lastElementChild = child;
+			},
+			querySelectorAll: (selector: string) =>
+				selector === "[data-milestone]" ? children : [],
+		});
+
+	const submit = element({});
 
 	const form = element({
 		querySelector: (selector: string) =>
@@ -99,51 +148,58 @@ function fixture(action = "fit") {
 		},
 	});
 
-	const targets: Record<string, any> = {
-		"[data-offer-form]": form,
-		"[data-milestones]": list,
-		"[data-software-status]": status,
-		"[data-send-offer]": send,
-		"[data-preview-offer]": preview,
-		"[data-add-milestone]": element(),
-		"[data-range]": range,
-		"[data-copy-link]": element(),
-		"[data-revoke-link]": element({
-			dataset: { linkCreatedAt: "displayed-link" },
-		}),
-		"[data-offer-state]": state,
-		"[data-link-actions]": element(),
-		"[data-link-state]": element(),
-		"[data-client-link]": element({ select: vi.fn() }),
-		"[data-client-link-field]": element(),
-	};
+	const targets = new Map<string, FakeElement>([
+		["[data-offer-form]", form],
+		["[data-milestones]", list],
+		["[data-software-status]", status],
+		["[data-send-offer]", send],
+		["[data-preview-offer]", preview],
+		["[data-add-milestone]", element({})],
+		["[data-range]", range],
+		["[data-copy-link]", element({})],
+		[
+			"[data-revoke-link]",
+			element({ dataset: { linkCreatedAt: "displayed-link" } }),
+		],
+		["[data-offer-state]", state],
+		["[data-link-actions]", element({})],
+		["[data-link-state]", element({})],
+		["[data-client-link]", element({ select: vi.fn() })],
+		["[data-client-link-field]", element({})],
+	]);
 
-	targets["[data-milestone-template]"] = {
-		content: {
-			cloneNode: () => {
-				const first = element({ focus: vi.fn() });
+	targets.set(
+		"[data-milestone-template]",
+		element({
+			content: {
+				cloneNode: () => {
+					const first = element({ focus: vi.fn() });
 
-				return element({
-					first,
-					querySelector: (selector: string) =>
-						selector === "input" ? first : row.querySelector(selector),
-				});
+					return element({
+						first,
+						querySelector: (selector: string) =>
+							selector === "input" ? first : row.querySelector(selector),
+					});
+				},
 			},
-		},
-	};
+		}),
+	);
 
 	const versionState = element({ textContent: "sent" }),
 		versionEntry = element({ querySelector: () => versionState });
 
-	targets["[data-offer-versions]"] = element();
-	targets["[data-version-list]"] = element({
-		querySelector: () => versionEntry,
-		querySelectorAll: () => [versionState],
-	});
+	targets.set("[data-offer-versions]", element({}));
+	targets.set(
+		"[data-version-list]",
+		element({
+			querySelector: () => versionEntry,
+			querySelectorAll: () => [versionState],
+		}),
+	);
 
-	const actionStatus = element(),
-		siblingForm = element(),
-		privateNote = element();
+	const actionStatus = element({}),
+		siblingForm = element({}),
+		privateNote = element({});
 
 	const actionButton = element({ textContent: "Send" });
 
@@ -168,7 +224,7 @@ function fixture(action = "fit") {
 			revoked: "false",
 			email: "alex@example.com",
 		},
-		querySelector: (selector: string) => targets[selector],
+		querySelector: (selector: string) => targets.get(selector) ?? null,
 	});
 
 	vi.stubGlobal("document", {
@@ -283,24 +339,24 @@ it("keeps a sent link only in this page view and refreshes versions without relo
 	expect(sessionStorage.setItem).not.toHaveBeenCalled();
 	expect(location.reload).not.toHaveBeenCalled();
 	expect(root.dataset.busy).toBe("false");
-	expect(targets["[data-copy-link]"].hidden).toBe(false);
-	expect(targets["[data-client-link]"].value).toBe(
+	expect(targets.get("[data-copy-link]")!.hidden).toBe(false);
+	expect(targets.get("[data-client-link]")!.value).toBe(
 		"https://thesuperhuman.us/offer/fictional",
 	);
-	expect(targets["[data-client-link-field]"].hidden).toBe(false);
-	await targets["[data-client-link]"].emit("focus");
-	expect(targets["[data-client-link]"].select).toHaveBeenCalledOnce();
-	expect(targets["[data-offer-state]"].textContent).toBe(
+	expect(targets.get("[data-client-link-field]")!.hidden).toBe(false);
+	await targets.get("[data-client-link]")!.emit("focus");
+	expect(targets.get("[data-client-link]")!.select).toHaveBeenCalledOnce();
+	expect(targets.get("[data-offer-state]")!.textContent).toBe(
 		"v1 sent Sep 29 · no changes since",
 	);
 	vi.stubGlobal("navigator", {
 		clipboard: { writeText: vi.fn().mockRejectedValue(new Error("blocked")) },
 	});
-	await targets["[data-copy-link]"].emit("click");
-	expect(targets["[data-software-status]"].textContent).toContain(
+	await targets.get("[data-copy-link]")!.emit("click");
+	expect(targets.get("[data-software-status]")!.textContent).toContain(
 		"Select and copy the link in the Client link field.",
 	);
-	expect(targets["[data-offer-versions]"].hidden).toBe(false);
+	expect(targets.get("[data-offer-versions]")!.hidden).toBe(false);
 });
 
 it("labels field validation errors and marks inputs until edited", async () => {
@@ -417,14 +473,14 @@ it("reports confirmed offer email rejection", async () => {
 
 it("keeps revoke working when the resolved editor form is absent", async () => {
 	const { root, targets } = fixture();
-	delete targets["[data-offer-form]"];
+	targets.delete("[data-offer-form]");
 	vi.stubGlobal("window", { addEventListener: vi.fn() });
 	setupSoftwareOffers();
 	vi.stubGlobal(
 		"fetch",
 		vi.fn(async () => Response.json({ ok: true })),
 	);
-	await targets["[data-revoke-link]"].emit("click");
+	await targets.get("[data-revoke-link]")!.emit("click");
 	expect(fetch).toHaveBeenCalledWith(
 		root.dataset.endpoint,
 		expect.objectContaining({
@@ -503,9 +559,7 @@ it.each([true, false])(
 it("prompts before unloading only while offer edits are dirty", async () => {
 	const { form } = fixture();
 
-	const handler = vi.mocked(window.addEventListener).mock.calls[0][1] as (
-		event: any,
-	) => void;
+	const handler = unloadHandler();
 
 	const event = { preventDefault: vi.fn(), returnValue: undefined };
 	handler(event);
@@ -533,7 +587,7 @@ it.each([401, 403, 500])(
 			if (action === "send") await send.emit("click");
 
 			if (action === "revoke")
-				await targets["[data-revoke-link]"].emit("click");
+				await targets.get("[data-revoke-link]")!.emit("click");
 			expect(status.textContent).toBe(
 				code === 500
 					? "Something went wrong. Nothing was saved. Try again."
@@ -542,7 +596,7 @@ it.each([401, 403, 500])(
 			expect(inputs.outcome.value).toBe("Keep this title");
 			expect(submit.disabled).toBe(false);
 			expect(send.disabled).toBe(false);
-			expect(targets["[data-revoke-link]"].disabled).toBe(false);
+			expect(targets.get("[data-revoke-link]")!.disabled).toBe(false);
 			expect(root.dataset.busy).not.toBe("true");
 			expect(location.reload).not.toHaveBeenCalled();
 		}
@@ -617,7 +671,7 @@ it.each(["fit", "question", "decline", "revoke"])(
 			),
 		);
 
-		if (action === "revoke") await targets["[data-revoke-link]"].emit("click");
+		if (action === "revoke") await targets.get("[data-revoke-link]")!.emit("click");
 		else await actionForm.emit("submit");
 		expect(confirm).toHaveBeenCalledWith(
 			"You have unsaved changes in another section. Continue and lose them?",
@@ -674,9 +728,7 @@ it("does not prompt on unload after a generic action marks the shared page clean
 	await form.emit("input");
 	await siblingForm.emit("input");
 
-	const handler = vi.mocked(window.addEventListener).mock.calls[0][1] as (
-		event: any,
-	) => void;
+	const handler = unloadHandler();
 
 	const event = { preventDefault: vi.fn() };
 	handler(event);
@@ -705,7 +757,7 @@ it("revokes the link returned by an in-page send", async () => {
 			.mockResolvedValueOnce(Response.json({ ok: true })),
 	);
 	await send.emit("click");
-	await targets["[data-revoke-link]"].emit("click");
+	await targets.get("[data-revoke-link]")!.emit("click");
 	expect(JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body))).toEqual({
 		action: "revoke",
 		expectedLinkCreatedAt: "replacement-link",
@@ -736,14 +788,14 @@ it("updates revoked controls before a canceled reload and permits reissue", asyn
 			message !==
 			"You have unsaved changes in another section. Continue and lose them?",
 	);
-	await targets["[data-revoke-link]"].emit("click");
+	await targets.get("[data-revoke-link]")!.emit("click");
 	expect(location.reload).not.toHaveBeenCalled();
 	expect(root.dataset.revoked).toBe("true");
-	expect(targets["[data-link-state]"].textContent).toBe("Client link revoked.");
-	expect(targets["[data-client-link]"].value).toBe("");
-	expect(targets["[data-client-link-field]"].hidden).toBe(true);
-	expect(targets["[data-revoke-link]"].disabled).toBe(true);
-	expect(targets["[data-revoke-link]"].hidden).toBe(true);
+	expect(targets.get("[data-link-state]")!.textContent).toBe("Client link revoked.");
+	expect(targets.get("[data-client-link]")!.value).toBe("");
+	expect(targets.get("[data-client-link-field]")!.hidden).toBe(true);
+	expect(targets.get("[data-revoke-link]")!.disabled).toBe(true);
+	expect(targets.get("[data-revoke-link]")!.hidden).toBe(true);
 	expect(send.disabled).toBe(false);
 	vi.stubGlobal(
 		"fetch",
@@ -757,8 +809,8 @@ it("updates revoked controls before a canceled reload and permits reissue", asyn
 		),
 	);
 	await send.emit("click");
-	expect(targets["[data-revoke-link]"].hidden).toBe(false);
-	expect(targets["[data-revoke-link]"].disabled).toBe(false);
+	expect(targets.get("[data-revoke-link]")!.hidden).toBe(false);
+	expect(targets.get("[data-revoke-link]")!.disabled).toBe(false);
 });
 
 it.each(["question", "decline"])(
@@ -794,13 +846,13 @@ it("focuses and announces each added milestone, including the third", async () =
 	const { list, targets, status } = fixture();
 
 	for (const count of [2, 3]) {
-		await targets["[data-add-milestone]"].emit("click");
+		await targets.get("[data-add-milestone]")!.emit("click");
 		expect(list.children).toHaveLength(count);
 		expect(list.lastElementChild.first.focus).toHaveBeenCalledOnce();
 		expect(status.textContent).toBe(`Milestone ${count} added.`);
 	}
 
-	expect(targets["[data-add-milestone]"].disabled).toBe(true);
+	expect(targets.get("[data-add-milestone]")!.disabled).toBe(true);
 });
 
 it.each(["question", "decline"])(
@@ -839,8 +891,8 @@ it.each([0, 1, 2])(
 	"focuses the next milestone or previous one after removing row %s",
 	async (index) => {
 		const { list, targets, status } = fixture();
-		await targets["[data-add-milestone]"].emit("click");
-		await targets["[data-add-milestone]"].emit("click");
+		await targets.get("[data-add-milestone]")!.emit("click");
+		await targets.get("[data-add-milestone]")!.emit("click");
 		const rows = [...list.children];
 		rows.forEach((row, position) => {
 			row.nextElementSibling = rows[position + 1] ?? null;
@@ -901,16 +953,16 @@ it("drops a removed attachment from the manifest and queues its key for draft cl
 	const row = { remove: vi.fn() },
 		button = { dataset: { removeAttachment: "first" }, closest: () => row };
 
-	const block = {
-		dataset: {} as Record<string, string>,
+	const block = double<HTMLElement>({
+		dataset: {},
 		addEventListener: (_name: string, fn: Function) => (remove = fn),
 		querySelector: (selector: string) =>
 			selector.includes("agreement.attachments")
 				? field
 				: { addEventListener: vi.fn() },
-	};
+	});
 
-	setupAgreementAttachments(block as never);
+	setupAgreementAttachments(block);
 	remove({ target: { closest: () => button } });
 	expect(JSON.parse(field.value)).toEqual([
 		{ key: "second", filename: "Two.pdf" },
