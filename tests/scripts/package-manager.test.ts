@@ -38,7 +38,11 @@ describe('package manager and Node pin', () => {
   it.each(workflows)('%s installs pnpm before setup-node', path => {
     // setup-node's `cache: pnpm` needs pnpm installed first.
     const workflow = read(path);
-    expect(workflow.indexOf('pnpm/action-setup@')).toBeLessThan(workflow.indexOf('actions/setup-node@'));
+    const pnpmStep = workflow.indexOf('pnpm/action-setup@');
+    const setupNodeStep = workflow.indexOf('actions/setup-node@');
+    expect(pnpmStep).toBeGreaterThanOrEqual(0);
+    expect(setupNodeStep).toBeGreaterThanOrEqual(0);
+    expect(pnpmStep).toBeLessThan(setupNodeStep);
   });
 
   it.each(workflows)('%s checks out without persisting credentials', path => {
