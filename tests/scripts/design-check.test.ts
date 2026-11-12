@@ -239,7 +239,8 @@ describe('gates', () => {
     const astro = 'src/pages/x.astro';
     expect(gates(astro, '<p class="text-[#ff0000] border-[#123] bg-[#123456]/50 hover:shadow-[0_0_0_1px_#abc]">x</p>')).toEqual(['raw-hex', 'raw-hex', 'raw-hex', 'raw-hex']);
     expect(gates(astro, '<p class:list={[\n  \'p-2\',\n  \'bg-[#123456]\',\n]}>x</p>')).toEqual(['raw-hex']);
-    expect(gates(astro, '<p class="bg-[var(--paper)] [--accent:#fff] bg-[url(/a.svg#abc)] [&[href=\'#abc\']]:underline w-[calc(100%-2rem)]">x</p>')).toEqual([]);
+    // Template literal: the formatter rewrites escaped single quotes in a quoted string, and Tailwind scans this file for class candidates, so the built CSS would change.
+    expect(gates(astro, `<p class="bg-[var(--paper)] [--accent:#fff] bg-[url(/a.svg#abc)] [&[href=\'#abc\']]:underline w-[calc(100%-2rem)]">x</p>`)).toEqual([]);
     expect(css('.a { @apply bg-[#123456]; }')).toEqual(['raw-hex']);
   });
 
