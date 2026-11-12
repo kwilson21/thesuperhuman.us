@@ -6,6 +6,12 @@ import {
 	deliverProjectInvitation,
 	queueProjectInvitation,
 } from "~/lib/audio-project-invitations";
+import { double } from "../helpers/doubles";
+import {
+	d1Meta,
+	fakeFirst,
+	fakeResult,
+} from "../helpers/tests-lib-a-bindings";
 
 vi.mock("~/lib/audio-resend", () => ({
 	sendStudioSignInNotice: vi.fn(async () => ({ ok: true })),
@@ -23,17 +29,23 @@ function fixture() {
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(baseline);
 
-	const statement = (query: string, args: unknown[] = []) => ({
-		bind: (...values: unknown[]) => statement(query, values),
-		run: async () => ({
-			meta: { changes: sql.prepare(query).run(...args).changes },
-		}),
-		first: async () => sql.prepare(query).get(...args) ?? null,
-	});
+	const statement = (
+		query: string,
+		args: unknown[] = [],
+	): D1PreparedStatement =>
+		double<D1PreparedStatement>({
+			bind: (...values: unknown[]) => statement(query, values),
+			run: fakeResult(() =>
+				double<D1Result>({
+					meta: d1Meta(sql.prepare(query).run(...args).changes),
+				}),
+			),
+			first: fakeFirst(() => sql.prepare(query).get(...args) ?? null),
+		});
 
-	const db = {
+	const db = double<D1Database>({
 		prepare: (query: string) => statement(query),
-	} as unknown as D1Database;
+	});
 
 	sql
 		.prepare(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
@@ -49,10 +61,10 @@ describe("project invitations", () => {
 	it("sends one sign-in notice and records success", async () => {
 		const { sql, db } = fixture();
 
-		const env = {
+		const env = double<Env>({
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "studio@example.com",
-		} as Env;
+		});
 
 		await Promise.all([
 			deliverProjectInvitation(db, "song-1", env),
@@ -81,10 +93,10 @@ describe("project invitations", () => {
 	it("retains a failed invitation for an explicit retry", async () => {
 		const { sql, db } = fixture();
 
-		const env = {
+		const env = double<Env>({
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "studio@example.com",
-		} as Env;
+		});
 
 		vi.mocked(sendStudioSignInNotice).mockResolvedValueOnce({ ok: false });
 		await deliverProjectInvitation(db, "song-1", env);
@@ -104,10 +116,10 @@ describe("project invitations", () => {
 	it("requires checking Resend before retrying an uncertain invitation", async () => {
 		const { sql, db } = fixture();
 
-		const env = {
+		const env = double<Env>({
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "studio@example.com",
-		} as Env;
+		});
 
 		vi.mocked(sendStudioSignInNotice).mockResolvedValueOnce({
 			ok: false,
@@ -145,10 +157,10 @@ describe("project invitations", () => {
 	it("does not invite a withdrawn or revoked project", async () => {
 		const { sql, db } = fixture();
 
-		const env = {
+		const env = double<Env>({
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "studio@example.com",
-		} as Env;
+		});
 
 		sql
 			.prepare("UPDATE owner_requests SET status='withdrawn' WHERE id='song-1'")
@@ -162,24 +174,24 @@ describe("project invitations", () => {
 	it("does not send an invitation when access closes after the delivery claim", async () => {
 		const { sql, db } = fixture();
 
-		const env = {
+		const env = double<Env>({
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "studio@example.com",
-		} as Env;
+		});
 
-		const interleavedDb = {
+		const interleavedDb = double<D1Database>({
 			prepare(query: string) {
 				const statement = db.prepare(query);
 
 				if (!query.includes("SELECT r.email FROM owner_requests"))
 					return statement;
 
-				return {
+				return double<D1PreparedStatement>({
 					bind(...values: unknown[]) {
 						const bound = statement.bind(...values);
 
-						return {
-							first: async () => {
+						return double<D1PreparedStatement>({
+							first: fakeFirst(async () => {
 								sql
 									.prepare(
 										"UPDATE audio_projects SET revoked_at='2026-09-22' WHERE request_id='song-1'",
@@ -187,12 +199,12 @@ describe("project invitations", () => {
 									.run();
 
 								return bound.first();
-							},
-						};
+							}),
+						});
 					},
-				};
+				});
 			},
-		} as unknown as D1Database;
+		});
 
 		await deliverProjectInvitation(interleavedDb, "song-1", env);
 		expect(sendStudioSignInNotice).not.toHaveBeenCalled();

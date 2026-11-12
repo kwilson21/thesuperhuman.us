@@ -5,6 +5,7 @@ import {
 	sendStudioSignInNotice,
 } from "~/lib/audio-resend";
 import type { IntakeInput } from "~/lib/audio-intake";
+import { double } from "../helpers/doubles";
 
 const intake: IntakeInput = {
 	service: "vocal-mix",
@@ -21,17 +22,17 @@ const intake: IntakeInput = {
 	fileLink: "https://drive.google.com/example",
 };
 
+let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
+
 beforeEach(() => {
-	vi.stubGlobal(
-		"fetch",
-		vi.fn(
-			async () => ({ ok: true, json: async () => ({ id: "em_1" }) }) as any,
-		),
+	fetchMock = vi.fn<typeof fetch>(async () =>
+		double<Response>({ ok: true, json: async () => ({ id: "em_1" }) }),
 	);
+	vi.stubGlobal("fetch", fetchMock);
 });
 
 it("keeps a timed-out email delivery unconfirmed", async () => {
-	vi.mocked(fetch).mockRejectedValueOnce(new Error("request timed out"));
+	fetchMock.mockRejectedValueOnce(new Error("request timed out"));
 	expect(
 		await sendAudioMessage({
 			apiKey: "k",
@@ -56,9 +57,9 @@ describe("sendOwnerRequestNotice", () => {
 		});
 
 		expect(res.ok).toBe(true);
-		const calls = (fetch as any).mock.calls;
+		const calls = fetchMock.mock.calls;
 		expect(calls.length).toBe(1);
-		const body = JSON.parse(calls[0][1].body);
+		const body = JSON.parse(String(calls[0][1]?.body));
 		expect(body.from).toBe("noreply@notifs.x");
 		expect(body.to).toEqual(["kazon@x"]);
 		expect(body.subject).toContain("Jane");
@@ -94,7 +95,7 @@ describe("sendOwnerRequestNotice", () => {
 			from: "a",
 			to: "b",
 		});
-		const body = JSON.parse((fetch as any).mock.calls[0][1].body);
+		const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
 		expect(body.text).toContain("Files: none provided yet.");
 	});
 
@@ -115,7 +116,7 @@ describe("sendOwnerRequestNotice", () => {
 			from: "a",
 			to: "b",
 		});
-		const body = JSON.parse((fetch as any).mock.calls[0][1].body);
+		const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
 		expect(body.text).toContain("Direction: Use your judgment");
 
 		for (const label of [
@@ -128,8 +129,8 @@ describe("sendOwnerRequestNotice", () => {
 	});
 
 	it("reports failure when Resend returns non-ok", async () => {
-		(fetch as any).mockImplementation(
-			async () => ({ ok: false, json: async () => ({}) }) as any,
+		fetchMock.mockImplementation(async () =>
+			double<Response>({ ok: false, json: async () => ({}) }),
 		);
 
 		const res = await sendOwnerRequestNotice({
@@ -153,7 +154,7 @@ describe("sendOwnerRequestNotice", () => {
 		});
 
 		expect(res).toEqual({ ok: false });
-		expect(fetch).not.toHaveBeenCalled();
+		expect(fetchMock).not.toHaveBeenCalled();
 	});
 });
 
@@ -164,7 +165,7 @@ it("sends only a sign-in link for private project notices, as HTML with a plain-
 		"artist@example.com",
 		"Your private studio project",
 	);
-	const body = JSON.parse((fetch as any).mock.calls[0][1].body);
+	const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
 	expect(body.to).toEqual(["artist@example.com"]);
 	expect(body.text).toContain("https://thesuperhuman.us/studio/sign-in");
 	expect(body.html).toContain('href="https://thesuperhuman.us/studio/sign-in"');
@@ -184,7 +185,7 @@ it("opens a first invitation without calling it an update", async () => {
 		"Your private studio project",
 		"invitation",
 	);
-	const body = JSON.parse((fetch as any).mock.calls.at(-1)[1].body);
+	const body = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
 	expect(body.text).toMatch(/^Your song has a private studio\./);
 	expect(body.text).not.toContain("update");
 	expect(body.html).toContain("Open your studio");
@@ -201,10 +202,10 @@ it("keeps owner and client notification links in the configured environment", as
 		origin,
 	});
 	expect(
-		JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string).text,
+		JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).text,
 	).toContain(`${origin}/owner/requests/req-1`);
 	await sendStudioSignInNotice("k", "a", "b", "Update", "update", origin);
 	expect(
-		JSON.parse(vi.mocked(fetch).mock.calls[1][1]!.body as string).text,
+		JSON.parse(String(fetchMock.mock.calls[1][1]?.body)).text,
 	).toContain(`${origin}/studio/sign-in`);
 });

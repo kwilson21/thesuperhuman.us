@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { sendResumeApprovalRequest, sendResumeDelivery } from "~/lib/resend";
 import type { StoredResumeRequest } from "~/lib/resume-requests";
+import { double } from "../helpers/doubles";
 
 const storedRequest: StoredResumeRequest = {
 	name: "Jane Doe",
@@ -11,14 +12,18 @@ const storedRequest: StoredResumeRequest = {
 	ts: 1700000000000,
 };
 
+let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
+
 describe("sendResumeApprovalRequest", () => {
 	beforeEach(() => {
-		vi.stubGlobal("fetch", vi.fn());
+		fetchMock = vi.fn<typeof fetch>();
+		vi.stubGlobal("fetch", fetchMock);
 	});
 
 	it("emails the operator with the approval link", async () => {
-		const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
-		fetchMock.mockResolvedValue({ ok: true, json: async () => ({ id: "em" }) });
+		fetchMock.mockResolvedValue(
+			double<Response>({ ok: true, json: async () => ({ id: "em" }) }),
+		);
 
 		const result = await sendResumeApprovalRequest({
 			request: storedRequest,
@@ -30,9 +35,7 @@ describe("sendResumeApprovalRequest", () => {
 
 		expect(result.ok).toBe(true);
 
-		const body = JSON.parse(
-			(fetchMock.mock.calls[0][1] as RequestInit).body as string,
-		);
+		const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
 
 		expect(body.to).toEqual(["kazon.wilson@thesuperhuman.us"]);
 		expect(body.subject).toContain("Jane Doe");
@@ -47,12 +50,13 @@ describe("sendResumeApprovalRequest", () => {
 	});
 
 	it("returns ok=false when send fails", async () => {
-		const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
-		fetchMock.mockResolvedValue({
-			ok: false,
-			status: 500,
-			json: async () => ({}),
-		});
+		fetchMock.mockResolvedValue(
+			double<Response>({
+				ok: false,
+				status: 500,
+				json: async () => ({}),
+			}),
+		);
 
 		const result = await sendResumeApprovalRequest({
 			request: storedRequest,
@@ -66,8 +70,9 @@ describe("sendResumeApprovalRequest", () => {
 	});
 
 	it("omits company and note lines when those fields are empty", async () => {
-		const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
-		fetchMock.mockResolvedValue({ ok: true, json: async () => ({ id: "em" }) });
+		fetchMock.mockResolvedValue(
+			double<Response>({ ok: true, json: async () => ({ id: "em" }) }),
+		);
 
 		const lean: StoredResumeRequest = {
 			...storedRequest,
@@ -83,9 +88,7 @@ describe("sendResumeApprovalRequest", () => {
 			approvalUrl: "https://thesuperhuman.us/api/resume-approve?id=abc",
 		});
 
-		const body = JSON.parse(
-			(fetchMock.mock.calls[0][1] as RequestInit).body as string,
-		);
+		const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
 
 		expect(body.text).not.toContain("Company:");
 		expect(body.text).not.toContain("Note:");
@@ -94,12 +97,14 @@ describe("sendResumeApprovalRequest", () => {
 
 describe("sendResumeDelivery", () => {
 	beforeEach(() => {
-		vi.stubGlobal("fetch", vi.fn());
+		fetchMock = vi.fn<typeof fetch>();
+		vi.stubGlobal("fetch", fetchMock);
 	});
 
 	it("emails the requester with the PDF attached", async () => {
-		const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
-		fetchMock.mockResolvedValue({ ok: true, json: async () => ({ id: "em" }) });
+		fetchMock.mockResolvedValue(
+			double<Response>({ ok: true, json: async () => ({ id: "em" }) }),
+		);
 
 		const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]).buffer; // "%PDF"
 
@@ -115,9 +120,7 @@ describe("sendResumeDelivery", () => {
 
 		expect(result.ok).toBe(true);
 
-		const body = JSON.parse(
-			(fetchMock.mock.calls[0][1] as RequestInit).body as string,
-		);
+		const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
 
 		expect(body.to).toEqual(["jane@example.com"]);
 		expect(body.subject).toContain("resume");
@@ -130,12 +133,13 @@ describe("sendResumeDelivery", () => {
 	});
 
 	it("returns ok=false when send fails", async () => {
-		const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
-		fetchMock.mockResolvedValue({
-			ok: false,
-			status: 500,
-			json: async () => ({}),
-		});
+		fetchMock.mockResolvedValue(
+			double<Response>({
+				ok: false,
+				status: 500,
+				json: async () => ({}),
+			}),
+		);
 
 		const result = await sendResumeDelivery({
 			apiKey: "key",
