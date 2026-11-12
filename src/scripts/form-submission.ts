@@ -1,7 +1,7 @@
 import { openMessages } from "./form-messages";
 
 /** Shared interaction states; each form retains its own payload and server rules. */
-export function setupFormSubmission({
+export function setupFormSubmission<Payload, Result>({
 	form,
 	endpoint,
 	payload,
@@ -12,9 +12,9 @@ export function setupFormSubmission({
 }: {
 	form: HTMLFormElement;
 	endpoint: string;
-	payload: (data: FormData) => Record<string, unknown>;
+	payload: (data: FormData) => Payload;
 	success: HTMLElement;
-	onSuccess?: (result: Record<string, unknown>) => void;
+	onSuccess?: (result: Result) => void;
 	onConflict?: () => void;
 	onSendingChange?: (sending: boolean) => void;
 }) {
@@ -93,7 +93,8 @@ export function setupFormSubmission({
 			onSendingChange?.(false);
 
 			if (response.ok && result.ok === true) {
-				onSuccess?.(result);
+				// SAFETY: a response with ok true is the caller's success body: the caller declares Result for its endpoint (software-inquiry reads brief and clientCopyStatus, which /api/software-inquiry returns on success), and this file does not validate it.
+				onSuccess?.(result as Result);
 				form.hidden = true;
 				success.hidden = false;
 				success.focus();

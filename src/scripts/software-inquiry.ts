@@ -32,6 +32,9 @@ const questionLimits = {
 	firstVersion: 1000,
 };
 
+// The success body of /api/software-inquiry, as renderSoftwareReceipt reads it.
+type SoftwareReceiptResult = { brief?: unknown; clientCopyStatus?: unknown };
+
 function isSoftwarePath(value: unknown): value is SoftwarePath {
 	return typeof value === "string" && Object.hasOwn(softwarePaths, value);
 }
@@ -56,7 +59,7 @@ function ownLabel(table: Record<string, string>, key: string) {
 }
 
 export function renderSoftwareReceipt(
-	result: { brief?: unknown; clientCopyStatus?: unknown },
+	result: SoftwareReceiptResult,
 	path?: string,
 ) {
 	const brief = isBriefRecord(result.brief) ? result.brief : {};
@@ -638,7 +641,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 				disabledControls.clear();
 			}
 		},
-		onSuccess: (result) => {
+		onSuccess: (result: SoftwareReceiptResult) => {
 			suggestions.clear();
 
 			try {
