@@ -176,6 +176,22 @@ Details:
   independent review subagents review each round; Greptile and Codex review on the PR.
   Merging to `main` deploys, so the deployment gate in `AGENTS.md` applies.
 
+## Amendments from review (November 12, 2026)
+
+Reviews of the built pages changed four points in this brief. They wait for the
+owner's yes or no on the pull request.
+
+1. "A label never wraps inside a pill" holds above 380px wide. At 380px and below a
+   `.site-button` label may wrap, because "Discuss your project" pushed past the page
+   gutter at 360px and 320px (WCAG 1.4.10, reflow).
+2. Buttons whose label is typed or stored text may wrap at any width:
+   `.studio-button` (the countersign label copies a typed name), `.owner-primary-action`
+   and `.next-step-link`.
+3. Footer links turn ink on hover, not accent. Accent on `--panel` is 4.3:1, under
+   4.5:1 for small text.
+4. `.next-step-link` (the owner's next step on an audio project) was missing from the
+   known members and is a pill.
+
 ## Calls made by the designer, for the owner to check
 
 1. The default line reuses the hub's live sentence instead of new copy.

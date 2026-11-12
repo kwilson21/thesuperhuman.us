@@ -73,6 +73,7 @@ it('lets studio button labels wrap, because some are typed by the owner', () => 
   const match = read('src/styles/studio.css').match(/\.studio-button \{[^}]*\}/);
   expect(match, '.studio-button rule').not.toBeNull();
   expect(match![0]).toContain('max-width: 100%;');
+  expect(match![0]).toContain('overflow-wrap: anywhere;');
   expect(match![0]).toContain('border-radius: var(--radius-button);');
   expect(match![0]).not.toContain('white-space: nowrap');
   expect(read('docs/design-concepts/2026-11-12/button-inventory.md')).toContain('Labels may wrap, because some are typed by the owner; the rule sets `max-width: 100%`.');
@@ -120,6 +121,7 @@ it('gives the owner next-step link the pill shape and lets its stored label wrap
   expect(match, '.next-step-link rule').not.toBeNull();
   expect(match![0]).toContain('border-radius: var(--radius-button);');
   expect(match![0]).toContain('max-width: 100%;');
+  expect(match![0]).toContain('overflow-wrap: anywhere;');
   expect(match![0]).toContain('padding: .5rem 1.25rem;');
   expect(match![0]).not.toContain('white-space: nowrap');
 });
