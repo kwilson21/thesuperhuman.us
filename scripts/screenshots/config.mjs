@@ -273,8 +273,6 @@ const PAGE_NAMES_BY_FILE = {
 	"src/scripts/resume-request-form.ts": ["about"],
 	"src/scripts/service-sheet.ts": ["services"],
 	"src/scripts/site-nav.ts": SHARED_SITE_PAGES,
-	"src/scripts/countersign-name.ts": ["owner-requests"],
-	"src/scripts/software-agreement-review-links.ts": ["owner-requests"],
 	"src/scripts/payload-review-illustration.ts": TIMELINE_PAGES,
 	"src/scripts/project-timeline.ts": TIMELINE_PAGES,
 	"src/scripts/project-updates-feed.ts": BUILDING_PROJECT_PAGES,
@@ -382,6 +380,8 @@ const SCENARIO_NAMES_BY_FILE = {
 	"src/scripts/software-offer-print.ts": ["software-offer"],
 	"src/scripts/studio-sign-in.ts": ["software-project"],
 	"src/scripts/studio-sign-out.ts": ["studio-client", "software-project"],
+	"src/scripts/project-timeline.ts": ["journal-pagination"],
+	"src/components/ProjectTimeline.astro": ["journal-pagination"],
 };
 
 function routeForPageFile(file) {

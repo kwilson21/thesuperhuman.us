@@ -38,4 +38,11 @@ export default defineConfig({
 		"anti-slop/require-readable-spacing": "error",
 		"anti-slop/require-safety-comment-for-type-assertion": "error",
 	},
+	overrides: [
+		{
+			// Plain JavaScript has no type predicates, so a typeof check is the only way it can tell what it was given.
+			files: ["scripts/**/*.mjs", "tests/browser/**/*.cjs"],
+			rules: { "anti-slop/no-runtime-typeof": "off" },
+		},
+	],
 });
