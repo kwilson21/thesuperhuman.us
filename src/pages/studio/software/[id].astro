@@ -330,11 +330,13 @@ const agreementDocuments = [
     </div></div>
     <div id="conversation"><ProjectMessages messages={messages} endpoint={`/api/studio/software/${project.request_id}/messages`} reader="client" closed={conversationClosed} heading="Ask a question" placeholder="Ask about a screen, a step or a date." hint="" /></div>
 
-  </article><script>import { setupProjectMessages } from '~/scripts/project-messages'; import { setupSoftwareReviews } from '~/scripts/software-review'; setupProjectMessages(); setupSoftwareReviews();
-    document.querySelectorAll<HTMLAnchorElement>('[data-open-details]').forEach(link=>link.addEventListener('click',()=>{
-      const target=document.getElementById(link.hash.slice(1));
-      const details=target?.closest('details');if(details) details.open=true;
-    }));
+  </article><script>
+    import { setupProjectMessages } from '~/scripts/project-messages';
+    import { setupSoftwareReviews } from '~/scripts/software-review';
+    import { setupOpenDetailsLinks } from '~/scripts/open-details-links';
+    setupProjectMessages();
+    setupSoftwareReviews();
+    setupOpenDetailsLinks();
   </script>
 </BaseLayout>}
 <style>
