@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { mediaRange, streamMusic } from "~/lib/music-media";
 import { double } from "../helpers/doubles";
+import { bytesStream } from "../helpers/tests-api-r2";
 
 it("resolves full, bounded, open and suffix ranges without overrunning the file", () => {
 	expect(mediaRange(null, 100)).toBeNull();
@@ -17,7 +18,7 @@ it("allows public media responses to use shared caching", async () => {
 		head: async () => double<R2Object>({ size: 4 }),
 		get: async () =>
 			double<R2ObjectBody>({
-				body: new Response(new Uint8Array([1, 2, 3, 4])).body,
+				body: bytesStream(new Uint8Array([1, 2, 3, 4])),
 			}),
 	});
 

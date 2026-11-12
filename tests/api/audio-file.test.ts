@@ -1,6 +1,7 @@
 import type { APIContext } from "astro";
 import { describe, it, expect, vi } from "vitest";
 import { double } from "../helpers/doubles";
+import { byteRange, bytesStream } from "../helpers/tests-api-r2";
 
 vi.mock("astro:content", () => {
 	return {
@@ -22,20 +23,20 @@ function makeR2(body = new Uint8Array([1, 2, 3, 4, 5]), size = 5) {
 	return double<R2Bucket>({
 		head: vi.fn(async (_key: string) => double<R2Object>({ size })),
 		get: vi.fn(async (_key: string, opts?: R2GetOptions) => {
-			const range = opts?.range;
+			const range = byteRange(opts?.range);
 
-			if (range && range.offset !== undefined && range.length !== undefined) {
+			if (range) {
 				const slice = body.slice(range.offset, range.offset + range.length);
 
 				return double<R2ObjectBody>({
-					body: new Response(slice).body,
+					body: bytesStream(slice),
 					size,
 					range,
 				});
 			}
 
 			return double<R2ObjectBody>({
-				body: new Response(body).body,
+				body: bytesStream(body),
 				size,
 			});
 		}),

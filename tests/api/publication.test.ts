@@ -1,4 +1,9 @@
+import type { APIContext } from "astro";
 import { describe, it, expect, vi } from "vitest";
+import { double } from "../helpers/doubles";
+import { testRuntime } from "../helpers/tests-api-runtime";
+import type { JsonValue } from "../helpers/tests-api-json";
+import type { TestRuntime } from "../helpers/tests-api-runtime";
 
 const { commit, read } = vi.hoisted(() => ({ commit: vi.fn(), read: vi.fn() }));
 
@@ -27,20 +32,18 @@ const body = {
 };
 
 function ctx(
-	value: unknown = body,
-	env: Record<string, unknown> = {},
+	value: JsonValue = body,
+	env: Partial<TestRuntime["env"]> = {},
 	token = "secret",
-) {
-	return {
+): APIContext {
+	return double<APIContext>({
 		locals: {
-			runtime: {
-				env: {
-					PUBLICATION_DB: {},
-					PUBLICATION_PROJECTS: "threadline",
-					PUBLICATION_TOKEN: "secret",
-					...env,
-				},
-			},
+			runtime: testRuntime({
+				PUBLICATION_DB: double<D1Database>({}),
+				PUBLICATION_PROJECTS: "threadline",
+				PUBLICATION_TOKEN: "secret",
+				...env,
+			}),
 		},
 		url: new URL("https://example.com/api/work-feed?project=threadline"),
 		request: new Request("https://example.com/api/work-feed", {
@@ -48,7 +51,7 @@ function ctx(
 			headers: { authorization: `Bearer ${token}` },
 			body: JSON.stringify(value),
 		}),
-	} as any;
+	});
 }
 
 describe("publication receiver", () => {

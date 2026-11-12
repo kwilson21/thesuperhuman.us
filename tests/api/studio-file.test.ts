@@ -1,6 +1,10 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
+import type { APIContext } from "astro";
 import { beforeEach, expect, it } from "vitest";
+import { double } from "../helpers/doubles";
+import { byteRange, bytesStream } from "../helpers/tests-api-r2";
+import { sqliteD1 } from "../helpers/tests-api-d1";
 import { GET, HEAD } from "~/pages/api/studio/projects/[id]/files/[fileId]";
 import { completeClientCode, issueClientCode } from "~/lib/audio-client-access";
 import {
@@ -18,6 +22,9 @@ const baseline = readFileSync(
 const secret = "studio-code-key-for-tests-32-characters";
 const now = new Date();
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database, token: string;
+
+type TestRuntime = APIContext["locals"]["runtime"];
+
 let bucket: R2Bucket;
 
 beforeEach(async () => {
@@ -25,38 +32,7 @@ beforeEach(async () => {
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(baseline);
 
-	const statement = (query: string, args: unknown[] = []) => ({
-		query,
-		args,
-		bind: (...values: unknown[]) => statement(query, values),
-		run: async () => ({
-			meta: { changes: sql.prepare(query).run(...args).changes },
-		}),
-		first: async () => sql.prepare(query).get(...args) ?? null,
-		all: async () => ({ results: sql.prepare(query).all(...args) }),
-	});
-
-	db = {
-		prepare: (query: string) => statement(query),
-		batch: async (items: ReturnType<typeof statement>[]) => {
-			sql.exec("BEGIN");
-
-			try {
-				const results = items.map((item) => ({
-					results: /\bRETURNING\b/i.test(item.query)
-						? sql.prepare(item.query).all(...item.args)
-						: (sql.prepare(item.query).run(...item.args), []),
-				}));
-
-				sql.exec("COMMIT");
-
-				return results;
-			} catch (error) {
-				sql.exec("ROLLBACK");
-				throw error;
-			}
-		},
-	} as unknown as D1Database;
+	db = sqliteD1(sql);
 
 	const insertRequest =
 		sql.prepare(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
@@ -125,22 +101,20 @@ beforeEach(async () => {
 		null,
 	);
 	const bytes = new Uint8Array([1, 2, 3, 4, 5]);
-	bucket = {
-		head: async () => ({ size: bytes.length }),
-		get: async (
-			_key: string,
-			options?: { range?: { offset: number; length: number } },
-		) => ({
-			body: new Response(
-				options?.range
-					? bytes.slice(
-							options.range.offset,
-							options.range.offset + options.range.length,
-						)
-					: bytes,
-			).body,
-		}),
-	} as unknown as R2Bucket;
+	bucket = double<R2Bucket>({
+		head: async () => double<R2Object>({ size: bytes.length }),
+		get: async (_key: string, options?: R2GetOptions) => {
+			const range = byteRange(options?.range);
+
+			return double<R2ObjectBody>({
+				body: bytesStream(
+					range
+						? bytes.slice(range.offset, range.offset + range.length)
+						: bytes,
+				),
+			});
+		},
+	});
 });
 
 function context(
@@ -156,27 +130,29 @@ function context(
 	const project = options.project ?? "song-1";
 	const url = `https://thesuperhuman.us/api/studio/projects/${project}/files/${fileId}${options.download ? "?download=1" : ""}`;
 
-	return {
+	const headers = new Headers();
+
+	if (options.cookie !== false)
+		headers.set("cookie", `studio_session=${token}`);
+
+	if (options.range) headers.set("range", options.range);
+
+	return double<APIContext>({
 		params: { id: project, fileId },
 		request: new Request(url, {
 			method: options.method ?? "GET",
-			headers: {
-				...(options.cookie === false
-					? {}
-					: { cookie: `studio_session=${token}` }),
-				...(options.range ? { range: options.range } : {}),
-			},
+			headers,
 		}),
 		locals: {
-			runtime: {
-				env: {
+			runtime: double<TestRuntime>({
+				env: double<TestRuntime["env"]>({
 					AUDIO_CLIENT_PORTAL_ENABLED: "true",
 					MUSIC_DB: db,
 					AUDIO: bucket,
-				},
-			},
+				}),
+			}),
 		},
-	} as any;
+	});
 }
 
 it("streams only the active client review file with private caching and one audit row", async () => {

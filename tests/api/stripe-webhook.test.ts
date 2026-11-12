@@ -1,6 +1,10 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { beforeEach, expect, it, vi } from "vitest";
+import type { APIContext } from "astro";
+import { double } from "../helpers/doubles";
+import { sqliteD1 } from "../helpers/tests-api-d1";
+import { testRuntime } from "../helpers/tests-api-runtime";
 
 const verify = vi.hoisted(() => vi.fn());
 
@@ -24,42 +28,12 @@ beforeEach(() => {
       offer_accepted_at,stripe_customer_id,booking_invoice_id,booking_invoice_url,booking_status,created_at,updated_at)
     VALUES ('request-1','Mix',20000,10000,10000,'2026-09-20T12:00:00Z','cus_1','in_booking','https://invoice.stripe.com/booking','open','2026-09-20T12:00:00Z','2026-09-20T12:00:00Z')`);
 
-	const statement = (query: string, args: unknown[] = []) => ({
-		query,
-		args,
-		bind: (...values: unknown[]) => statement(query, values),
-		run: async () => {
-			const result = sql.prepare(query).run(...args);
-
-			return { meta: { changes: result.changes }, results: [] };
-		},
-		first: async () => sql.prepare(query).get(...args) ?? null,
-		all: async () => ({ results: sql.prepare(query).all(...args) }),
-	});
-
-	db = {
-		prepare: (query: string) => statement(query),
-		batch: async (items: ReturnType<typeof statement>[]) => {
-			sql.exec("BEGIN");
-
-			try {
-				const results = items.map((item) => ({
-					results: (sql.prepare(item.query).run(...item.args), []),
-				}));
-
-				sql.exec("COMMIT");
-
-				return results;
-			} catch (error) {
-				sql.exec("ROLLBACK");
-				throw error;
-			}
-		},
-	} as unknown as D1Database;
+	// This fake runs every batch statement for effect and never returns its rows, as the webhook test expects.
+	db = sqliteD1(sql, /(?!)/);
 });
 
-function context(signature = "valid") {
-	return {
+function context(signature = "valid"): APIContext {
+	return double<APIContext>({
 		request: new Request("https://thesuperhuman.us/api/stripe/webhook", {
 			method: "POST",
 			headers: {
@@ -69,9 +43,9 @@ function context(signature = "valid") {
 			body: '{"raw":true}',
 		}),
 		locals: {
-			runtime: { env: { MUSIC_DB: db, STRIPE_PAYMENTS_ENABLED: "true" } },
+			runtime: testRuntime({ MUSIC_DB: db, STRIPE_PAYMENTS_ENABLED: "true" }),
 		},
-	} as any;
+	});
 }
 
 function event(type: string, id = "evt_1") {

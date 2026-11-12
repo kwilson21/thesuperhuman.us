@@ -100,3 +100,22 @@ export function sqliteD1(
 		},
 	});
 }
+
+/**
+ * A D1 binding whose first() answers with the row that rowFor gives for the SQL. A route that reads one row by column
+ * name is served by it; a column the row does not carry is undefined to that route.
+ */
+export function rowD1(
+	rowFor: (query: string) => Record<string, string | number | null>,
+): D1Database {
+	const statement = (query: string): D1PreparedStatement =>
+		double<D1PreparedStatement>({
+			bind: () => statement(query),
+			first: async <T>() => {
+				// SAFETY: rowFor returns the columns the route's query selects for this SQL, and the route reads each one by name; T is the row shape that route expects.
+				return rowFor(query) as T;
+			},
+		});
+
+	return double<D1Database>({ prepare: (query: string) => statement(query) });
+}

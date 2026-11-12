@@ -1,5 +1,8 @@
+import type { APIContext } from "astro";
 import { expect, it } from "vitest";
 import { POST } from "~/pages/api/owner/projects/[id]/files/[fileId]";
+import { double } from "../helpers/doubles";
+import { testRuntime } from "../helpers/tests-api-runtime";
 
 it("keeps file publication behind owner access and the disabled portal gate", async () => {
 	const request = new Request(
@@ -15,11 +18,11 @@ it("keeps file publication behind owner access and the disabled portal gate", as
 		},
 	);
 
-	const context = {
+	const context = double<APIContext>({
 		params: { id: "song-1", fileId: "review-1" },
 		request,
-		locals: { runtime: { env: { AUDIO_CLIENT_PORTAL_ENABLED: "false" } } },
-	} as any;
+		locals: { runtime: testRuntime({ AUDIO_CLIENT_PORTAL_ENABLED: "false" }) },
+	});
 
 	expect((await POST(context)).status).toBe(403);
 	context.locals.owner = { email: "owner@example.com" };

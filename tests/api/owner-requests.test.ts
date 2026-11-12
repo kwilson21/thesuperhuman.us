@@ -1,9 +1,16 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
+import type { APIContext } from "astro";
 import { beforeEach, expect, it } from "vitest";
+import { double } from "../helpers/doubles";
+import { sqliteD1 } from "../helpers/tests-api-d1";
+import type { JsonObject } from "../helpers/tests-api-json";
 import { POST } from "~/pages/api/owner/requests/[id]";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
+type TestRuntime = APIContext["locals"]["runtime"];
+
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database;
 
 beforeEach(() => {
@@ -15,39 +22,11 @@ beforeEach(() => {
 		`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES ('request-1','purchase','fan@example.com','Wants Old News','new','2026-09-19T12:00:00Z','2026-09-19T12:00:00Z')`,
 	);
 
-	const statement = (query: string, args: unknown[] = []) => ({
-		query,
-		args,
-		bind: (...values: unknown[]) => statement(query, values),
-		first: async () => sql.prepare(query).get(...args) ?? null,
-		all: async () => ({ results: sql.prepare(query).all(...args) }),
-	});
-
-	db = {
-		prepare: (query: string) => statement(query),
-		batch: async (items: ReturnType<typeof statement>[]) => {
-			sql.exec("BEGIN");
-
-			try {
-				const result = items.map((item) => ({
-					results: /RETURNING/i.test(item.query)
-						? sql.prepare(item.query).all(...item.args)
-						: (sql.prepare(item.query).run(...item.args), []),
-				}));
-
-				sql.exec("COMMIT");
-
-				return result;
-			} catch (error) {
-				sql.exec("ROLLBACK");
-				throw error;
-			}
-		},
-	} as unknown as D1Database;
+	db = sqliteD1(sql);
 });
 
-function context(owner: boolean, body: unknown) {
-	return {
+function context(owner: boolean, body: JsonObject): APIContext {
+	return double<APIContext>({
 		params: { id: "request-1" },
 		request: new Request(
 			"https://thesuperhuman.us/api/owner/requests/request-1",
@@ -59,9 +38,11 @@ function context(owner: boolean, body: unknown) {
 		),
 		locals: {
 			owner: owner ? { email: "owner@example.com" } : undefined,
-			runtime: { env: { MUSIC_DB: db } },
+			runtime: double<TestRuntime>({
+				env: double<TestRuntime["env"]>({ MUSIC_DB: db }),
+			}),
 		},
-	} as any;
+	});
 }
 
 it("updates a request only for an authenticated owner and records the actor", async () => {

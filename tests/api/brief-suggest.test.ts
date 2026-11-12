@@ -34,6 +34,7 @@ function context(
 	body: JsonObject = input,
 	env: Partial<TestRuntime["env"]> = {},
 ): APIContext {
+	// SAFETY: run is the vi.fn that stands in for the Workers AI binding; the route calls it with a model name and inputs and reads only its response field, which the fake returns.
 	return double<APIContext>({
 		request: new Request("https://example.com/api/software/brief/suggest", {
 			method: "POST",
@@ -48,7 +49,7 @@ function context(
 		locals: double<APIContext["locals"]>({
 			runtime: double<TestRuntime>({
 				env: double<TestRuntime["env"]>({
-					AI: double<Ai>({ run }),
+					AI: double<Ai>({ run: run as Ai["run"] }),
 					MUSIC_DB: database,
 					BRIEF_SUGGEST_RATE_LIMIT: limiter,
 					BRIEF_SUGGEST_SITE_LIMIT: siteLimiter,
@@ -414,7 +415,7 @@ it.each(["pending", "rejected", "unsuccessful", "throws"])(
 		});
 		const ctx = context();
 		const waitUntil = vi.fn();
-		ctx.locals.runtime.ctx = { waitUntil };
+		ctx.locals.runtime.ctx = double<ExecutionContext>({ waitUntil });
 		expect(await (await POST(ctx)).json()).toEqual({
 			suggestion: " in a shared spreadsheet",
 		});

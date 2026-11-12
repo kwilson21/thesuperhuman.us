@@ -878,8 +878,10 @@ it("accepts and stores a short new brief without removed or optional answers", a
 	);
 
 	expect(response.status).toBe(200);
+
 	const brief = (await jsonBody<{ brief: Record<string, string> }>(response))
 		.brief;
+
 	expect(brief).not.toHaveProperty("audience");
 	expect(brief).not.toHaveProperty("firstResult");
 	expect(sql.prepare("SELECT summary FROM owner_requests").get().summary).toBe(

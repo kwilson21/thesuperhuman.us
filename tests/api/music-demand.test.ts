@@ -43,10 +43,10 @@ function context(
 			double<D1PreparedStatement>({
 				bind: () =>
 					double<D1PreparedStatement>({
-						run: async () => {
+						run: async <T>() => {
 							if (options.fail) throw new Error("unavailable");
 
-							return double<D1Result<unknown>>({ success: true });
+							return double<D1Result<T>>({ success: true });
 						},
 						first: async () => null,
 					}),
@@ -155,15 +155,15 @@ it("allows the same event to retry after a temporary database failure", async ()
 
 	const stored = new Map<string, string>();
 	const ctx = context(data, { fail: true });
-	ctx.locals.runtime.env.RATE_LIMIT = {
-		get: async (k: string) => stored.get(k),
+	ctx.locals.runtime.env.RATE_LIMIT = fakeKv({
+		get: async (k: string) => stored.get(k) ?? null,
 		put: async (k: string, v: string) => {
 			stored.set(k, v);
 		},
 		delete: async (k: string) => {
 			stored.delete(k);
 		},
-	};
+	});
 	expect((await event(ctx)).status).toBe(503);
 	const retry = context(data);
 	retry.locals.runtime.env.RATE_LIMIT = ctx.locals.runtime.env.RATE_LIMIT;
