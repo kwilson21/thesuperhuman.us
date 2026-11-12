@@ -6,38 +6,6 @@ interface Playable {
 	pause: () => void;
 }
 
-interface YoutubePlayer {
-	seekTo(seconds: number, allowSeekAhead: boolean): void;
-	playVideo(): void;
-	pauseVideo(): void;
-	getCurrentTime(): number;
-	getDuration(): number;
-	getPlayerState(): number;
-	isMuted(): boolean;
-	getVolume(): number;
-	getPlaybackRate(): number;
-	getIframe(): HTMLIFrameElement;
-}
-
-// The options this file passes to the YouTube IFrame API constructor.
-interface YoutubePlayerOptions {
-	videoId?: string;
-	host: string;
-	playerVars: { playsinline: number; origin: string };
-	events: {
-		onReady: () => void;
-		onStateChange: (event: { data: number }) => void;
-		onError: () => void;
-	};
-}
-
-interface YoutubeAPI {
-	Player: new (
-		element: HTMLElement,
-		options: YoutubePlayerOptions,
-	) => YoutubePlayer;
-}
-
 // Anything registered for single playback: the page's own players and the YouTube player.
 type PlaybackKey = HTMLElement | YoutubePlayer;
 
@@ -310,11 +278,7 @@ function engagement(element: HTMLElement, medium: PlaybackMedium) {
 function youtubeAPI(): Promise<YoutubeAPI> {
 	if (youtubeReady) return youtubeReady;
 
-	// SAFETY: adds the optional YT and onYouTubeIframeAPIReady properties that the YouTube IFrame API script sets on window. Both are optional in this type, and the loader below checks for YT before use.
-	const win = window as Window & {
-		YT?: YoutubeAPI;
-		onYouTubeIframeAPIReady?: () => void;
-	};
+	const win = window;
 
 	youtubeReady = new Promise((resolve, reject) => {
 		if (win.YT?.Player) {

@@ -53,6 +53,67 @@ interface Env {
 	AUDIO: R2Bucket;
 }
 
+// The options the site's scripts pass to Turnstile's render call.
+interface TurnstileOptions {
+	sitekey: string;
+	appearance?: string;
+	"response-field"?: boolean;
+	retry?: string;
+	"refresh-expired"?: string;
+	"before-interactive-callback"?: () => void;
+	"error-callback"?: () => void;
+	"unsupported-callback"?: () => void;
+	callback?: (token: string) => void;
+}
+
+// The members of Cloudflare's Turnstile API that the site's scripts call.
+interface TurnstileApi {
+	ready(callback: () => void): void;
+	render(container: HTMLElement, options: TurnstileOptions): string;
+	remove(id: string): void;
+	reset(): void;
+}
+
+interface YoutubePlayer {
+	seekTo(seconds: number, allowSeekAhead: boolean): void;
+	playVideo(): void;
+	pauseVideo(): void;
+	getCurrentTime(): number;
+	getDuration(): number;
+	getPlayerState(): number;
+	isMuted(): boolean;
+	getVolume(): number;
+	getPlaybackRate(): number;
+	getIframe(): HTMLIFrameElement;
+}
+
+// The options the site's scripts pass to the YouTube IFrame API constructor.
+interface YoutubePlayerOptions {
+	videoId?: string;
+	host: string;
+	playerVars: { playsinline: number; origin: string };
+	events: {
+		onReady: () => void;
+		onStateChange: (event: { data: number }) => void;
+		onError: () => void;
+	};
+}
+
+interface YoutubeAPI {
+	Player: new (
+		element: HTMLElement,
+		options: YoutubePlayerOptions,
+	) => YoutubePlayer;
+}
+
+// Properties that Cloudflare's Turnstile script and the YouTube IFrame API
+// script set on window once they load. Each is absent until then.
+interface Window {
+	turnstile?: TurnstileApi;
+	YT?: YoutubeAPI;
+	onYouTubeIframeAPIReady?: () => void;
+}
+
 interface ImportMetaEnv {
 	readonly PUBLIC_TURNSTILE_SITE_KEY: string;
 }

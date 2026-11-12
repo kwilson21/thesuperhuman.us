@@ -13,17 +13,7 @@ export function setupHomeContact() {
 	let turnstileWidget: string | undefined;
 
 	function renderContactTurnstile() {
-		// SAFETY: adds the optional turnstile property that Cloudflare's Turnstile script sets on window. The type marks it optional, and the code checks for the API before calling it.
-		const api = (
-			window as Window & {
-				turnstile?: {
-					render: (
-						container: HTMLElement,
-						options: { sitekey: string },
-					) => string;
-				};
-			}
-		).turnstile;
+		const api = window.turnstile;
 
 		if (turnstileWidget || !api || !turnstileContainer) return;
 		turnstileWidget = api.render(turnstileContainer, {
@@ -43,17 +33,7 @@ export function setupHomeContact() {
 	async function loadContactTurnstile(): Promise<void> {
 		if (!turnstileContainer || turnstileWidget) return;
 
-		// SAFETY: adds the optional turnstile property that Cloudflare's Turnstile script sets on window, read after the script's onload check. The type marks it optional.
-		const api = (
-			window as Window & {
-				turnstile?: {
-					render: (
-						container: HTMLElement,
-						options: { sitekey: string },
-					) => string;
-				};
-			}
-		).turnstile;
+		const api = window.turnstile;
 
 		if (api) {
 			renderContactTurnstile();
@@ -70,9 +50,7 @@ export function setupHomeContact() {
 			script.defer = true;
 			script.onload = () => {
 				try {
-					// SAFETY: adds the optional turnstile property that Cloudflare's Turnstile script sets on window. The type marks it optional, and this check finds it missing.
-					if (!(window as Window & { turnstile?: unknown }).turnstile)
-						throw new Error("Turnstile API unavailable");
+					if (!window.turnstile) throw new Error("Turnstile API unavailable");
 					renderContactTurnstile();
 					resolve();
 				} catch (error) {

@@ -153,10 +153,7 @@ export function setupFormSubmission<Payload, Result>({
 			form.removeAttribute("aria-busy");
 
 			// A token may have been consumed even when the response was lost.
-			// SAFETY: adds the optional turnstile property that Cloudflare's Turnstile script sets on window. The type marks it optional, and turnstile?.reset() handles the script not having loaded.
-			const turnstile = (
-				window as Window & { turnstile?: { reset: () => void } }
-			).turnstile;
+			const turnstile = window.turnstile;
 
 			try {
 				turnstile?.reset();
