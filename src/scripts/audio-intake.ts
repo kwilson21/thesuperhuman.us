@@ -25,7 +25,7 @@ if (form) {
 	): Omit<IntakeInput, "turnstileToken" | "permission"> & {
 		permission: boolean;
 	} => {
-		// SAFETY: the service radios in src/pages/audio/start.astro (line 31) are rendered from Object.entries(audioOffers), so the value is an IntakeService key. The direction radios (line 37) carry the three Direction values.
+		// SAFETY: src/pages/audio/start.astro (line 31) renders the service radios from Object.entries(audioOffers), so a checked one carries an IntakeService key.
 		const service = String(data.get("service")) as IntakeService;
 		// SAFETY: the direction radios in src/pages/audio/start.astro (line 37) carry exactly the three Direction values.
 		const direction = String(data.get("direction")) as Direction;
@@ -57,7 +57,7 @@ if (form) {
 
 	function renderService() {
 		const data = new FormData(form!);
-		// SAFETY: the service radios in src/pages/audio/start.astro (line 31) are rendered from Object.entries(audioOffers), so the value is an IntakeService key.
+		// SAFETY: renderService reads the same service radio group as payload() above, whose values are the keys of audioOffers.
 		const service = String(data.get("service")) as IntakeService;
 		const offer = audioOffers[service];
 		const direction = data.get("direction");

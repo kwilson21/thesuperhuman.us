@@ -1,3 +1,5 @@
+import { readPortalJson } from "./portal-response";
+
 export function setupStudioSignIn() {
 	const requestForm = document.querySelector<HTMLFormElement>(
 		"#studio-code-request",
@@ -35,11 +37,9 @@ export function setupStudioSignIn() {
 				body: JSON.stringify({ email, turnstileToken }),
 			});
 
-			// SAFETY: src/pages/api/studio/code.ts answers with JSON carrying message or error except a plain-text 404 ("Not found") when the client portal is off, which makes json() throw into the catch below. Both fields are optional here and read with ??, so either shape is handled.
-			const result = (await response.json()) as {
-				message?: string;
-				error?: string;
-			};
+			const result = await readPortalJson<{ message?: string; error?: string }>(
+				response,
+			);
 
 			status.textContent =
 				result.message ?? result.error ?? "Please try again.";
@@ -139,8 +139,7 @@ export function setupStudioSignIn() {
 				body: JSON.stringify({ email, code }),
 			});
 
-			// SAFETY: src/pages/api/studio/session.ts answers with JSON except a plain-text 404 ("Not found") when the client portal is off, which makes json() throw into the catch below. error is optional and read only when response.ok is false (the success branch returns first).
-			const result = (await response.json()) as { error?: string };
+			const result = await readPortalJson(response);
 
 			if (response.ok) {
 				location.assign("/studio");

@@ -32,7 +32,7 @@ export function setupSoftwareComposer() {
 	let objectUrl: string | undefined,
 		busy = false;
 
-	// SAFETY: field() receives names of controls that src/pages/owner/requests/[id]/update.astro renders with that name attribute, exactly once each: inputs (artifact_version, review_window_days, paid_confirmed), textareas (checks_limitations, next_step, client_request) and selects (kind, milestone_index, evidence_type). This file reads only value, disabled, required, dataset, setCustomValidity and reportValidity from them, which all three control types have.
+	// SAFETY: field() receives names of controls that src/pages/owner/requests/[id]/update.astro renders with that name attribute, exactly once each: inputs (artifact_version, review_window_days, paid_confirmed, title, preview_url, next_update_on), textareas (what_changed, checks_limitations, next_step, client_request) and selects (kind, milestone_index, evidence_type). Through it this file reads value, disabled and required, and on milestone_index only dataset, setCustomValidity and reportValidity; all three control types have each of them.
 	const field = (name: string) =>
 		form.elements.namedItem(name) as
 			| HTMLInputElement
@@ -204,7 +204,7 @@ export function setupSoftwareComposer() {
 		)!;
 
 		handoffFields.hidden = !handoff;
-		// SAFETY: data-accepted is JSON.stringify(accepted) from src/pages/owner/requests/[id]/update.astro (section data-handoff-fields), an array of booleans, one per milestone.
+		// SAFETY: the data-handoff-fields section of src/pages/owner/requests/[id]/update.astro sets data-accepted to JSON.stringify(accepted), which is one boolean per milestone.
 		const accepted = JSON.parse(handoffFields.dataset.accepted!) as boolean[];
 		form.querySelector<HTMLOptionElement>(
 			"[name=kind] option[value=handoff]",
@@ -213,7 +213,7 @@ export function setupSoftwareComposer() {
 			!handoff || accepted[Number(milestone)];
 
 		const paymentBlocked =
-			// SAFETY: data-payment-blocked is JSON.stringify(paymentBlocked) from src/pages/owner/requests/[id]/update.astro (section data-handoff-fields), an array of booleans, one per milestone.
+			// SAFETY: the same section sets data-payment-blocked to JSON.stringify(paymentBlocked), also one boolean per milestone, and "[]" stands in for an absent attribute.
 			(JSON.parse(handoffFields.dataset.paymentBlocked ?? "[]") as boolean[])[
 				Number(milestone)
 			] ?? false;

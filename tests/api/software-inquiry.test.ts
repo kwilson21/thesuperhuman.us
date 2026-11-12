@@ -1594,6 +1594,28 @@ it("labels stored briefs by the path they were sent with", () => {
 	expect(fallback.today).toBe("Fallback");
 });
 
+it("labels a stored timing that coerces to a known key, as before", () => {
+	// Shapes a stored timing can have that still coerce to a label key.
+	const brief = (timing: string | string[] | { toString(): string }) =>
+		softwareBrief(
+			partial<OwnerRequest>({
+				name: "Alex",
+				email: "alex@example.com",
+				details: { ...base, timing },
+			}),
+		);
+
+	expect(brief(["flexible"]).timing).toBe("Flexible");
+
+	expect(
+		brief({
+			toString() {
+				return "flexible";
+			},
+		}).timing,
+	).toBe("Flexible");
+});
+
 it("words the client copy of a website brief in the client’s voice", () => {
 	const copy = softwareBriefEmail("Jordan Clay", {
 		path: "Website design",

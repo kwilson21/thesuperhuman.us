@@ -278,32 +278,30 @@ function engagement(element: HTMLElement, medium: PlaybackMedium) {
 function youtubeAPI(): Promise<YoutubeAPI> {
 	if (youtubeReady) return youtubeReady;
 
-	const win = window;
-
 	youtubeReady = new Promise((resolve, reject) => {
-		if (win.YT?.Player) {
-			resolve(win.YT);
+		if (window.YT?.Player) {
+			resolve(window.YT);
 
 			return;
 		}
 
-		const previous = win.onYouTubeIframeAPIReady;
+		const previous = window.onYouTubeIframeAPIReady;
 		const script = document.createElement("script");
 
 		const fail = () => {
 			clearTimeout(timeout);
 			script.remove();
 			youtubeReady = undefined;
-			win.onYouTubeIframeAPIReady = previous;
+			window.onYouTubeIframeAPIReady = previous;
 			reject(new Error("YouTube could not load"));
 		};
 
 		const timeout = window.setTimeout(fail, 15_000);
-		win.onYouTubeIframeAPIReady = () => {
+		window.onYouTubeIframeAPIReady = () => {
 			clearTimeout(timeout);
 			previous?.();
 
-			if (win.YT) resolve(win.YT);
+			if (window.YT) resolve(window.YT);
 		};
 
 		script.src = "https://www.youtube.com/iframe_api";

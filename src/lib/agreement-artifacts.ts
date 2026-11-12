@@ -6,7 +6,7 @@ import { templateVersionLabel } from "./agreement-version-label";
 import type { StoredAgreementValues } from "./agreement-fields";
 import { isText } from "./type-guards";
 
-// SAFETY: digest accepts any ArrayBuffer or view at runtime; the cast only removes SharedArrayBuffer from TypeScript's ArrayBufferLike, and the callers pass R2 arrayBuffer() results, Uint8Array copies of them, or pdf-lib save() output from render, none of which is shared memory.
+// SAFETY: digest accepts any ArrayBuffer or view at runtime; the cast only removes SharedArrayBuffer from TypeScript's ArrayBufferLike, and the callers pass R2 arrayBuffer() results, Uint8Array copies of them, pdf-lib save() output from render, or readBodyWithin output of an upload request (src/pages/api/owner/requests/[id]/agreement-attachments.ts), none of which is shared memory.
 export const hashBytes = async (bytes: ArrayBuffer | Uint8Array) =>
 	[
 		...new Uint8Array(
@@ -106,7 +106,7 @@ export const newYorkTime = (value: string | null | undefined) =>
 
 // Each document's own label. Older stored values lack it, so the pinned template row supplies it.
 async function documentVersionLabel(db: D1Database, d: Agreement) {
-	// SAFETY: values_json is written by agreementValues (agreement-fields.ts) with msa and sow objects that carry version_label when the row is new enough to have one.
+	// SAFETY: agreementValues (agreement-fields.ts) writes values_json with msa and sow objects that include version_label for rows new enough to have one.
 	const values: StoredAgreementValues = JSON.parse(d.values_json);
 
 	const stored =
@@ -126,7 +126,7 @@ async function documentVersionLabel(db: D1Database, d: Agreement) {
 
 // Each document prints its own template's source revision. Older stored SOW values lack it, so the pinned template row supplies it.
 async function documentSourceRevision(db: D1Database, d: Agreement) {
-	// SAFETY: values_json is written by agreementValues (agreement-fields.ts) with msa and sow objects that carry source_revision when the row is new enough to have one.
+	// SAFETY: agreementValues (agreement-fields.ts) also stores source_revision on those msa and sow objects, for rows new enough to have one.
 	const values: StoredAgreementValues = JSON.parse(d.values_json);
 
 	if (d.kind === "msa") return values.msa?.source_revision ?? "";

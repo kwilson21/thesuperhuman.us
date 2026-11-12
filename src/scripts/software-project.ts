@@ -18,7 +18,7 @@ export function setupSoftwareProject() {
 						body: JSON.stringify(body),
 					});
 
-					// SAFETY: the project endpoint answers with JSON; error is optional and read only when response.ok is false (the success branch reloads and returns).
+					// SAFETY: send() reads the body as JSON and declares only error, optional, because the code after the reload branch uses it for failed responses alone.
 					const result = (await response.json()) as { error?: string };
 
 					if (response.ok) {

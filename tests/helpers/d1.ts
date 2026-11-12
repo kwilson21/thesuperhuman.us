@@ -57,7 +57,7 @@ export function boundStatement(statement: D1PreparedStatement): BoundStatement {
 export function fakeFirst<Row>(
 	read: () => Row | null | Promise<Row | null>,
 ): D1PreparedStatement["first"] {
-	// SAFETY: first() is generic, so a non-generic async function cannot be typed as D1PreparedStatement["first"]; each test's read() returns a row in the shape the code under test names in its own first<Row>() call.
+	// SAFETY: first() is generic, so a non-generic async function cannot be typed as D1PreparedStatement["first"]; the fake returns whatever read() yields and never checks it against the caller's Row, so a mismatched row shows up as a failed expectation in that test.
 	return (async () => read()) as D1PreparedStatement["first"];
 }
 
@@ -68,7 +68,7 @@ export function fakeFirst<Row>(
 export function fakeBatch(
 	run: (statements: D1PreparedStatement[]) => D1Result[] | Promise<D1Result[]>,
 ): D1Database["batch"] {
-	// SAFETY: batch() is generic over the row type, so a non-generic function cannot be typed as D1Database["batch"]; run() returns results for the statements the test wrote, in the shape each statement's SQL selects.
+	// SAFETY: batch() is generic over the row type, so a non-generic function cannot be typed as D1Database["batch"]; the fake returns whatever run() yields and never checks it against the statements passed, so a wrongly shaped result shows up as a failed expectation in that test.
 	return (async (statements: D1PreparedStatement[]) =>
 		run(statements)) as D1Database["batch"];
 }

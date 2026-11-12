@@ -170,7 +170,7 @@ export function setupSoftwareReviews() {
 						}),
 					});
 
-					// SAFETY: the review endpoint answers with JSON; error is optional and read only when response.ok is false (the success branch reloads and returns).
+					// SAFETY: form.dataset.endpoint is the review route; its body is read as JSON with only an optional error declared, which the submit handler uses once the reload branch has returned.
 					const result = (await response.json()) as { error?: string };
 
 					if (response.ok) {

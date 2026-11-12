@@ -1118,6 +1118,41 @@ it.each(["flexible", "asap"])(
 	},
 );
 
+it("throws a TypeError when the form has no timingDate control as timing moves off a date", async () => {
+	const changeListeners = new Map<EventTarget, EventListener>();
+	const addEventListener = EventTarget.prototype.addEventListener;
+
+	vi.spyOn(EventTarget.prototype, "addEventListener").mockImplementation(
+		function (
+			this: EventTarget,
+			type: string,
+			listener: EventListenerOrEventListenerObject | null,
+			options?: boolean | AddEventListenerOptions,
+		) {
+			if (type === "change" && listener instanceof Function)
+				changeListeners.set(this, listener);
+
+			return addEventListener.call(this, type, listener, options);
+		},
+	);
+
+	await setup();
+	controls.splice(
+		controls.findIndex((node) => node.name === "timingDate"),
+		1,
+	);
+
+	const change = new Event("change");
+
+	Object.defineProperty(change, "target", {
+		value: controls.find(
+			(node) => node.name === "timing" && node.value === "flexible",
+		),
+	});
+
+	expect(() => changeListeners.get(form)!(change)).toThrow(TypeError);
+});
+
 it.each(["success", "server failure", "network failure"])(
 	"locks editing during delivery and restores controls after %s",
 	async (outcome) => {

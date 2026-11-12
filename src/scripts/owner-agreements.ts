@@ -1,5 +1,10 @@
 import { unchangedLabel, type DiffRow } from "~/lib/line-diff";
 
+async function readAgreementsJson<Fields extends object>(response: Response) {
+	// SAFETY: src/pages/api/owner/agreements.ts answers with JSON, and its 403 and 503 failure bodies are a bare { ok: false }; each caller declares error as optional and reads its other fields only after its own !ok check has thrown.
+	return (await response.json()) as Fields;
+}
+
 export function setupOwnerAgreements() {
 	type Comparison = { label: string; rows: DiffRow[] } | null;
 
@@ -51,11 +56,10 @@ export function setupOwnerAgreements() {
 					headers: { "content-type": "application/json" },
 					body: JSON.stringify({ action: "retention-preview" }),
 				}),
-				// SAFETY: src/pages/api/owner/agreements.ts answers with JSON; its 403 and 503 bodies are a bare { ok: false }, so error is optional here (an absent one becomes an empty message, as before). error is read only in the !response.ok branch, and manifest only after that throw.
-				result = (await response.json()) as {
+				result = await readAgreementsJson<{
 					error?: string;
 					manifest: unknown;
-				};
+				}>(response);
 
 			if (!response.ok) throw new Error(result.error);
 			form.querySelector<HTMLElement>(
@@ -117,17 +121,16 @@ export function setupOwnerAgreements() {
 			}
 
 			try {
-				// SAFETY: src/pages/api/owner/agreements.ts answers with JSON; its 403 and 503 bodies are a bare { ok: false }, so error is optional here (an absent one becomes an empty message, as before). error is read only in the !r.ok branch, and text and compare only after that throw.
 				const r = await fetch(form.getAttribute("action")!, {
 						method: "POST",
 						headers: { "content-type": "application/json" },
 						body: JSON.stringify(payload),
 					}),
-					result = (await r.json()) as {
+					result = await readAgreementsJson<{
 						error?: string;
 						text?: string;
 						compare?: Comparison;
-					};
+					}>(r);
 
 				if (!r.ok) throw new Error(result.error);
 
@@ -162,12 +165,11 @@ export function setupOwnerAgreements() {
 							version: Number(button.dataset.version),
 						}),
 					}),
-					// SAFETY: src/pages/api/owner/agreements.ts answers with JSON; its 403 and 503 bodies are a bare { ok: false }, so error is optional here (an absent one becomes an empty message, as before). error is read only in the !response.ok branch, and text and compare only after that throw.
-					result = (await response.json()) as {
+					result = await readAgreementsJson<{
 						error?: string;
 						text?: string;
 						compare?: Comparison;
-					};
+					}>(response);
 
 				if (!response.ok) throw new Error(result.error);
 

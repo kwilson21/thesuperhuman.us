@@ -62,7 +62,6 @@ type Capture = {
 	prepare: (page: FakePage) => Promise<void>;
 };
 
-/** A route handler registered on the fake page. */
 /** The window the stub script runs against: the onload callback it calls, and the API it installs. */
 type FakeWindow = { loaded: Mock; turnstile?: TurnstileApi };
 
@@ -100,6 +99,7 @@ type TurnstileApi = {
 	remove(id: string): void;
 };
 
+/** A route handler registered on the fake page. */
 type RouteHandler = (route: {
 	fulfill: (response: never) => void;
 }) => Promise<void>;

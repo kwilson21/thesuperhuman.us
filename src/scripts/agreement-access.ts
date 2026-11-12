@@ -48,7 +48,7 @@ export function setupAgreementAccess() {
 					}),
 				});
 
-				// SAFETY: form.action is /api/agreements/link or /api/offer/[token]/link (src/pages/api/agreements/link.ts and src/pages/api/offer/[token]/link.ts), which answer with JSON; some failure bodies are a bare { ok: false }, so error is optional here (an absent one becomes an empty message, as before). Only error is read, and only in the !response.ok branch below.
+				// SAFETY: form.action is /api/agreements/link or /api/offer/[token]/link (src/pages/api/agreements/link.ts and src/pages/api/offer/[token]/link.ts), which answer with JSON. A failure body can be a bare { ok: false } with no error, so error is typed optional and an absent one gives an empty message; it is the only field read, and only in the !response.ok branch below.
 				const result = (await response.json()) as { error?: string };
 
 				if (!response.ok) throw new Error(result.error);
@@ -187,7 +187,7 @@ export function setupAgreementAccess() {
 			body: JSON.stringify(body),
 		});
 
-		// SAFETY: post() calls the draft, review and sign routes under src/pages/api/offer/[token]/, which answer with JSON; some failure bodies are a bare { ok: false }, so error is optional here (an absent one becomes an empty message, as before). error and errors are read only in the !response.ok branch below. documents is on the review route's success body only; it is typed as present because saveAndReview, the only reader, calls post("review") and the draft and sign callers ignore it.
+		// SAFETY: post() calls the draft, review and sign routes under src/pages/api/offer/[token]/, which answer with JSON. Their failure bodies can omit error and errors, so both are typed optional; post() reads them inside its !response.ok branch alone. documents is on the review route's success body only; it is typed as present because saveAndReview, the only reader, calls post("review") and the draft and sign callers ignore it.
 		const result = (await response.json()) as {
 			error?: string;
 			errors?: Record<string, string>;

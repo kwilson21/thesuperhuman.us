@@ -270,7 +270,7 @@ const agreementRecord = project
 			>()
 	: null;
 
-// SAFETY: values_json is stored only as JSON.stringify of the agreementValues(...) result (src/lib/software-agreements.ts), so it parses to that type. Rows signed before version labels existed keep the shape of their signing date; SoftwareAgreedTerms reads only owner, details.*, milestones[i].checkpoint and system.amount1-3, which every version has.
+// SAFETY: values_json is stored only as JSON.stringify of the agreementValues(...) result (src/lib/software-agreements.ts), so it parses to that type. agreementValues has returned owner, milestones[i].checkpoint and system.amount1 to amount3 since its first version (commit 672be1bc); SoftwareAgreedTerms reads details through optional chaining (values?.details?.data_retention and handoff_access), so a row without details is handled.
 const agreementSnapshot = agreementRecord?.id
 	? (JSON.parse(agreementRecord.values_json) as ReturnType<
 			typeof agreementValues

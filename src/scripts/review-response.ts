@@ -62,7 +62,7 @@ export function setupReviewResponse() {
 				body: JSON.stringify({ action: "respond", reviewId, decision, body }),
 			});
 
-			// SAFETY: the respond endpoint answers with JSON, or {} when the body is not JSON; error is optional and read only when response.ok is false.
+			// SAFETY: the respond endpoint answers with JSON, or {} when the body is not JSON (the catch on this expression); only an optional error is declared, and it is used for failed responses.
 			const result = (await response.json().catch(() => ({}))) as {
 				error?: string;
 			};

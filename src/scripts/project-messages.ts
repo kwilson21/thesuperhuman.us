@@ -1,3 +1,5 @@
+import { readPortalJson } from "./portal-response";
+
 export function setupProjectMessages() {
 	document
 		.querySelectorAll<HTMLElement>("[data-project-messages]")
@@ -36,8 +38,7 @@ export function setupProjectMessages() {
 						body: JSON.stringify({ action: "send", body }),
 					});
 
-					// SAFETY: the owner and studio message routes (src/pages/api/owner/projects/[id]/messages.ts, src/pages/api/studio/projects/[id]/messages.ts) answer with JSON except a plain-text 404 ("Not found") when the client portal is off, which makes json() throw into the catch below. error is optional and read only when response.ok is false (the success branch returns first).
-					const result = (await response.json()) as { error?: string };
+					const result = await readPortalJson(response);
 
 					if (response.ok) {
 						location.reload();

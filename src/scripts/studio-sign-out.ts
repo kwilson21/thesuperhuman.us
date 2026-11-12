@@ -1,3 +1,5 @@
+import { readPortalJson } from "./portal-response";
+
 export function setupStudioSignOut() {
 	document
 		.querySelector("#studio-sign-out")
@@ -13,8 +15,9 @@ export function setupStudioSignOut() {
 					body: "{}",
 				});
 
-				// SAFETY: src/pages/api/studio/sign-out.ts answers with JSON except a plain-text 404 ("Not found") when the client portal is off, which makes json() throw into the catch below. localSignedOut is optional and read only after the response.ok branch has returned.
-				const result = (await response.json()) as { localSignedOut?: boolean };
+				const result = await readPortalJson<{ localSignedOut?: boolean }>(
+					response,
+				);
 
 				if (response.ok) {
 					location.assign("/studio/sign-in");

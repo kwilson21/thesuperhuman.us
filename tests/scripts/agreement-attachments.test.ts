@@ -44,7 +44,7 @@ it("blocks overlapping uploads and merges into the current attachment manifest",
 				}),
 		),
 	);
-	// SAFETY: setupAgreementAttachments reads only dataset, addEventListener and querySelector from block, all supplied above, and it queries only selectors that nodes holds; querySelector is generic over the element type, so the fake's object-or-null return cannot be typed as an HTMLElement.
+	// SAFETY: In this test block supplies dataset, addEventListener and querySelector and nothing else, and the queried selectors are all keys of nodes; the fake querySelector returns an object or null, which is not an HTMLElement.
 	setupAgreementAttachments(block as never);
 	const pending = click();
 	expect(upload.disabled).toBe(true);

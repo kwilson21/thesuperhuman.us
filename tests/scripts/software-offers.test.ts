@@ -1003,7 +1003,7 @@ it("drops a removed attachment from the manifest and queues its key for draft cl
 				: { addEventListener: vi.fn() },
 	};
 
-	// SAFETY: setupAgreementAttachments reads from block only dataset, addEventListener and querySelector, all supplied above; the test drives only the listener it registers; querySelector is generic over the element type, so the plain object cannot be typed as an HTMLElement.
+	// SAFETY: This block is a plain object with dataset, addEventListener and querySelector, and the test calls only the listener it captures; the object is not an HTMLElement.
 	setupAgreementAttachments(block as never);
 	remove({ target: { closest: () => button } });
 	expect(JSON.parse(field.value)).toEqual([

@@ -1,4 +1,5 @@
 import { peaksFromChannels, peaksFromWav } from "~/lib/audio-peaks";
+import { readPortalJson } from "./portal-response";
 
 type UploadPart = { partNumber: number; etag: string };
 
@@ -31,11 +32,6 @@ async function measurePeaks(
 	} catch {
 		return null;
 	}
-}
-
-async function readError(response: Response) {
-	// SAFETY: the file publish route (src/pages/api/owner/projects/[id]/files/[fileId].ts) and the access route (src/pages/api/owner/projects/[id]/access.ts) answer with JSON, except a plain-text 404 ("Not found") when the client portal is off, which makes json() throw into the caller's catch. error is optional, and callers read it only after their !response.ok check.
-	return (await response.json()) as { error?: string };
 }
 
 export function setupOwnerProjectFiles() {
@@ -92,7 +88,7 @@ export function setupOwnerProjectFiles() {
 									},
 								);
 
-								const result = await readError(response);
+								const result = await readPortalJson(response);
 
 								if (!response.ok)
 									throw new Error(
@@ -152,7 +148,7 @@ export function setupOwnerProjectFiles() {
 									},
 								);
 
-								const result = await readError(response);
+								const result = await readPortalJson(response);
 
 								if (!response.ok)
 									throw new Error(
@@ -421,7 +417,7 @@ export function setupOwnerProjectFiles() {
 						body: JSON.stringify({ action: "revoke" }),
 					});
 
-					const result = await readError(response);
+					const result = await readPortalJson(response);
 
 					if (!response.ok)
 						throw new Error(result.error ?? "Could not close client access.");

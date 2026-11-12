@@ -10,7 +10,7 @@ export function double<T>(members: Partial<T>): T {
 
 /** A data fixture typed as `T`: the fields given and no others. Every other field reads undefined. */
 export function partial<T>(fields: Partial<T>): T {
-	// SAFETY: the function under test reads only the supplied fields; every other field reads undefined.
+	// SAFETY: an unsupplied field is simply absent, so it reads undefined; a test that depends on one fails at its own expectation.
 	return fields as T;
 }
 

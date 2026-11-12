@@ -397,7 +397,7 @@ export async function changeOwnerRequest(
 			closingSoftware ? 3 : resolvingSoftware ? 2 : reopeningSoftware ? 1 : 0
 		];
 
-	// SAFETY: the batch has exactly one UPDATE owner_requests ... RETURNING ${requestColumns}, placed after the guards: withdraw has 3 (countersign, offer-sending, deposit), resolve has 2 (countersign, project), reopen has 1, every other command 0, which is the index chosen above; requestColumns lists every OwnerRequestRow field.
+	// SAFETY: the batch has exactly one UPDATE owner_requests ... RETURNING ${requestColumns}, placed after the guards: a software withdraw has 3 (countersign, offer-sending, deposit), a software resolve 2 (countersign, project), a software reopen 1, and any other request or command 0, which is the index chosen above; requestColumns lists every OwnerRequestRow field.
 	const row = update.results[0] as OwnerRequestRow | undefined;
 
 	if (!row) throw new Error("Request changed while it was being updated.");
