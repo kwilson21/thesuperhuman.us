@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import type { SqliteRow } from "../helpers/tests-other-fakes";
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import {
@@ -126,7 +127,7 @@ function fixture() {
 			db
 				.prepare(sql)
 				.all()
-				.map((row: Record<string, unknown>) => ({ ...row })),
+				.map((row: SqliteRow) => ({ ...row })),
 		batch: async (statements: string[]) => {
 			db.exec("BEGIN");
 

@@ -4,9 +4,26 @@ import { runInNewContext } from "node:vm";
 import ts from "typescript";
 import { createPlaybackTracker } from "~/scripts/music-playback";
 
+/** The window members the compiled YouTube loader reads and writes. */
+type FakeWindow = {
+	YT?: { Player: () => void };
+	onYouTubeIframeAPIReady?: () => void;
+	setTimeout: typeof setTimeout;
+	clearTimeout: typeof clearTimeout;
+};
+
+/** The exports the compiled module assigns: loadYoutube resolves to the YouTube player API. */
+type CompiledExports = {
+	loadYoutube?: () => Promise<{ Player: () => void }>;
+};
+
+type PlaybackPayload = Parameters<
+	Parameters<typeof createPlaybackTracker>[0]["submit"]
+>[0];
+
 it("counts actual playback across media while seeking adds no listening time", async () => {
 	let clock = 0;
-	const events: Record<string, unknown>[] = [];
+	const events: PlaybackPayload[] = [];
 
 	const tracker = createPlaybackTracker({
 		releaseId: "old-news-single",
@@ -35,9 +52,9 @@ it("counts actual playback across media while seeking adds no listening time", a
 		"listen30",
 	]);
 	expect(
-		events
-			.filter((event) => event.event === "progress")
-			.map((event) => event.accumulatedSeconds),
+		events.flatMap((event) =>
+			event.event === "progress" ? [event.accumulatedSeconds] : [],
+		),
 	).toEqual([10, 20, 30]);
 	expect(events.at(-1)).toMatchObject({
 		accumulatedSeconds: 30,
@@ -50,7 +67,7 @@ it("counts actual playback across media while seeking adds no listening time", a
 
 it("reports completion after genuine playback and starts a replay as a new playthrough", async () => {
 	let clock = 0;
-	const events: Record<string, unknown>[] = [];
+	const events: PlaybackPayload[] = [];
 
 	const tracker = createPlaybackTracker({
 		releaseId: "old-news-single",
@@ -82,7 +99,7 @@ it("reports completion after genuine playback and starts a replay as a new playt
 
 it("continues submitting later events after one submission throws", async () => {
 	let clock = 0;
-	const events: Record<string, unknown>[] = [];
+	const events: PlaybackPayload[] = [];
 	let attempts = 0;
 
 	const tracker = createPlaybackTracker({
@@ -124,17 +141,17 @@ it("retries loading the YouTube API after a temporary script failure", async () 
 	const scripts: Array<{ onerror?: (error: Error) => void; remove(): void }> =
 		[];
 
-	const window: {
-		YT?: { Player: () => void };
-		onYouTubeIframeAPIReady?: () => void;
-		setTimeout: typeof setTimeout;
-		clearTimeout: typeof clearTimeout;
-	} = {
+	const window: FakeWindow = {
 		setTimeout,
 		clearTimeout,
 	};
 
-	const exports = {} as { loadYoutube: () => Promise<unknown> };
+	const exports: CompiledExports = {};
+
+	const loadYoutube = () =>
+		exports.loadYoutube?.() ??
+		Promise.reject(new Error("the compiled module exports no loadYoutube"));
+
 	runInNewContext(compiled, {
 		exports,
 		window,
@@ -149,12 +166,12 @@ it("retries loading the YouTube API after a temporary script failure", async () 
 		},
 	});
 
-	const first = exports.loadYoutube();
+	const first = loadYoutube();
 	const rejection = expect(first).rejects.toThrow();
 	scripts[0].onerror!(new Error("Temporary network failure"));
 	await rejection;
 
-	const retry = exports.loadYoutube();
+	const retry = loadYoutube();
 	// Consume a stale rejection too, so regression failures have no unhandled promise.
 	void retry.catch(() => {});
 	expect(scripts).toHaveLength(2);

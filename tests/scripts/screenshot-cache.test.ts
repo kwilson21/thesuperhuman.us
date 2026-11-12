@@ -155,6 +155,7 @@ describe("scenarioPlanner", () => {
 		for (const name of names) {
 			if (!planner.shouldRun(name)) continue;
 			ran.push(name);
+			// SAFETY: names is the list of keys of reference above, so reference[name] is one of its writer entries.
 			planner.ran(
 				name,
 				wrote[name] ?? reference[name as keyof typeof reference].writer,
@@ -303,7 +304,7 @@ describe("explaining a miss", () => {
 		day: "2026-10-21",
 		script: "s",
 		sources: { "src/a.ts": "1", "src/b.ts": "2" },
-		assets: [["/x.css", "*/*", "200 h1"]] as [string, string, string][],
+		assets: [["/x.css", "*/*", "200 h1"]] satisfies [string, string, string][],
 	};
 
 	it("finds nothing when every input matches", () => {

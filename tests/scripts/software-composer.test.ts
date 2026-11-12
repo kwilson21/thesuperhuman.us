@@ -1,5 +1,39 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi, type Mock } from "vitest";
 import { setupSoftwareComposer } from "~/scripts/software-composer";
+
+/** The event a fake form passes to its submit listener. */
+type FakeEvent = { preventDefault: () => void };
+
+/** A listener a fake element runs; the script calls some with no event. */
+type FakeHandler = (event?: FakeEvent) => void;
+
+/** A fake form field: the members the composer script reads and writes on a field. */
+type FakeField = {
+	value: string;
+	checked: boolean;
+	files: { name: string; size: number; type: string }[];
+	disabled?: boolean;
+	required?: boolean;
+	reportValidity: Mock;
+	setCustomValidity: Mock;
+	addEventListener: (event: string, handler: FakeHandler) => void;
+	closest: () => null;
+	dataset?: { currentMilestone: string };
+};
+
+/** A fake preview or form element: the members the composer script reads and writes on it. */
+type FakeElement = {
+	hidden: boolean;
+	textContent: string;
+	src?: string;
+	addEventListener: (event: string, handler: FakeHandler) => void;
+	replaceChildren: Mock;
+	querySelectorAll: () => never[];
+	dataset: { accepted: string; paymentBlocked: string };
+	classList: { toggle: Mock };
+	getAttribute: (name: string) => string | null;
+	removeAttribute: Mock;
+};
 
 // Exercise the actual composer render and kind-change handlers without a browser service.
 function fixture(
@@ -9,8 +43,8 @@ function fixture(
 	currentMilestone = 0,
 	savedMilestone = 0,
 ) {
-	const handlers = new Map<string, (event?: any) => void>();
-	const fields: Record<string, any> = {};
+	const handlers = new Map<string, FakeHandler>();
+	const fields: Record<string, FakeField> = {};
 
 	for (const name of [
 		"what_changed",
@@ -45,7 +79,7 @@ function fixture(
 			setCustomValidity: vi.fn(),
 			checked: false,
 			files: [],
-			addEventListener: (event: string, handler: () => void) =>
+			addEventListener: (event: string, handler: FakeHandler) =>
 				handlers.set(`${name}:${event}`, handler),
 			closest: () => null,
 		};
@@ -61,25 +95,30 @@ function fixture(
 		hidden: false,
 	}));
 
-	const elements = new Map<string, any>();
+	const elements = new Map<string, FakeElement>();
 
-	const element = (selector: string) => {
-		if (!elements.has(selector))
-			elements.set(selector, {
-				hidden: false,
-				textContent: "",
-				addEventListener: (event: string, handler: () => void) =>
-					handlers.set(`${selector}:${event}`, handler),
-				replaceChildren: vi.fn(),
-				querySelectorAll: () => [],
-				dataset: { accepted: "[true]", paymentBlocked },
-				classList: { toggle: vi.fn() },
-				getAttribute: () =>
-					selector === "[data-preview-image]" ? savedVisual : null,
-				removeAttribute: vi.fn(),
-			});
+	const element = (selector: string): FakeElement => {
+		const existing = elements.get(selector);
 
-		return elements.get(selector);
+		if (existing) return existing;
+
+		const created: FakeElement = {
+			hidden: false,
+			textContent: "",
+			addEventListener: (event: string, handler: FakeHandler) =>
+				handlers.set(`${selector}:${event}`, handler),
+			replaceChildren: vi.fn(),
+			querySelectorAll: () => [],
+			dataset: { accepted: "[true]", paymentBlocked },
+			classList: { toggle: vi.fn() },
+			getAttribute: () =>
+				selector === "[data-preview-image]" ? savedVisual : null,
+			removeAttribute: vi.fn(),
+		};
+
+		elements.set(selector, created);
+
+		return created;
 	};
 
 	const form = {
@@ -91,7 +130,7 @@ function fixture(
 				: element(selector),
 		querySelectorAll: (selector: string) =>
 			selector === "[name=milestone_index] option" ? milestoneOptions : [],
-		addEventListener: (event: string, handler: (event?: any) => void) =>
+		addEventListener: (event: string, handler: FakeHandler) =>
 			handlers.set(`form:${event}`, handler),
 	};
 
@@ -120,8 +159,7 @@ function fixture(
 		milestoneOptions,
 		saveDraft: () => handlers.get("[data-save-draft]:click")!(),
 		fileChange: () => handlers.get("visual:change")!(),
-		submit: () =>
-			handlers.get("form:submit")!({ preventDefault: () => {} } as never),
+		submit: () => handlers.get("form:submit")!({ preventDefault: () => {} }),
 		change: (kind: string) => {
 			fields.kind.value = kind;
 			handlers.get("kind:change")!();
@@ -218,7 +256,7 @@ it.each(["", "/saved-visual"])(
 			{ name: "valid.png", size: 100, type: "image/png" },
 		];
 		page.fileChange();
-		expect(page.elements.get("[data-preview-image]").src).toBe("blob:staged");
+		expect(page.elements.get("[data-preview-image]")!.src).toBe("blob:staged");
 		Object.defineProperty(page.fields.visual, "value", {
 			set: () => {
 				page.fields.visual.files = [];
@@ -230,16 +268,16 @@ it.each(["", "/saved-visual"])(
 		];
 		page.fileChange();
 		expect(revoke).toHaveBeenCalledWith("blob:staged");
-		expect(page.elements.get("[data-visual-name]").textContent).toBe("");
-		expect(page.elements.get("[data-preview-figure]").hidden).toBe(
+		expect(page.elements.get("[data-visual-name]")!.textContent).toBe("");
+		expect(page.elements.get("[data-preview-figure]")!.hidden).toBe(
 			!savedVisual,
 		);
 
 		if (savedVisual)
-			expect(page.elements.get("[data-preview-image]").src).toBe(savedVisual);
+			expect(page.elements.get("[data-preview-image]")!.src).toBe(savedVisual);
 		else
 			expect(
-				page.elements.get("[data-preview-image]").removeAttribute,
+				page.elements.get("[data-preview-image]")!.removeAttribute,
 			).toHaveBeenCalledWith("src");
 		expect(page.fields.visual.value).toBe("");
 		expect(page.fields.visual_alt.required).toBe(Boolean(savedVisual));
@@ -304,10 +342,10 @@ it("restores the saved endpoint after uploading and then rejecting another repla
 		{ name: "rejected.png", size: 6 * 1024 * 1024, type: "image/png" },
 	];
 	page.fileChange();
-	expect(page.elements.get("[data-preview-image]").src).toBe(
+	expect(page.elements.get("[data-preview-image]")!.src).toBe(
 		"/api/owner/requests/r/updates/draft/visual",
 	);
-	expect(page.elements.get("[data-preview-figure]").hidden).toBe(false);
+	expect(page.elements.get("[data-preview-figure]")!.hidden).toBe(false);
 	expect(revoke).toHaveBeenCalledWith("blob:first");
 	expect(revoke).toHaveBeenCalledWith("blob:second");
 	revoke.mockRestore();
@@ -380,15 +418,15 @@ it("hides manual handoff payment and blocks sharing while the selected installme
 	vi.stubGlobal("fetch", send);
 	const page = fixture(false, "", "[true,false]");
 	page.change("handoff");
-	expect(page.elements.get("[data-handoff-payment]").hidden).toBe(true);
-	expect(page.elements.get("[data-payment-reminder]").hidden).toBe(false);
+	expect(page.elements.get("[data-handoff-payment]")!.hidden).toBe(true);
+	expect(page.elements.get("[data-payment-reminder]")!.hidden).toBe(false);
 	expect(page.fields.paid_confirmed.disabled).toBe(true);
 	page.submit();
 	page.saveDraft();
 	expect(send).not.toHaveBeenCalled();
 	page.fields.milestone_index.value = "1";
 	page.choose();
-	expect(page.elements.get("[data-handoff-payment]").hidden).toBe(false);
+	expect(page.elements.get("[data-handoff-payment]")!.hidden).toBe(false);
 	expect(page.fields.paid_confirmed.disabled).toBe(false);
 	expect(page.fields.paid_confirmed.required).toBe(true);
 });

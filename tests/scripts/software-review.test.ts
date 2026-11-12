@@ -2,7 +2,10 @@ import { afterEach, expect, it, vi } from "vitest";
 import { setupSoftwareReviews } from "~/scripts/software-review";
 
 function fixture(direction = false, partial = false) {
-	let submit: (event: unknown) => Promise<void>;
+	let submit: (event: {
+		preventDefault(): void;
+		submitter: { value: string; disabled: boolean };
+	}) => Promise<void>;
 
 	const note = { value: "", focus: vi.fn() },
 		status = { textContent: "" },
@@ -94,16 +97,14 @@ it("requires delivery criteria and reproduction notes without sending an invalid
 	expect(fetch).not.toHaveBeenCalled();
 	page.select(["0"]);
 	await page.submit("changes_requested");
-	expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string)).toEqual(
-		{
-			decision: "changes_requested",
-			confirm: false,
-			criteria: [0],
-			missing_deliverables: [],
-			inaccessible_deliverables: [],
-			note: "Try the fictional sample.",
-		},
-	);
+	expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]!.body))).toEqual({
+		decision: "changes_requested",
+		confirm: false,
+		criteria: [0],
+		missing_deliverables: [],
+		inaccessible_deliverables: [],
+		note: "Try the fictional sample.",
+	});
 });
 
 it("requires identified-version confirmation for acceptance and leaves cancel unsent", async () => {
@@ -116,7 +117,7 @@ it("requires identified-version confirmation for acceptance and leaves cancel un
 		"Accept Delivery v1 of Tracker? This confirms it meets the agreed checks. New features are scoped separately.",
 	);
 	expect(
-		JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string).confirm,
+		JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]!.body)).confirm,
 	).toBe(true);
 	expect(location.reload).toHaveBeenCalled();
 });
@@ -139,7 +140,7 @@ it("permits reporting a missing deliverable without incorrectly marking a passin
 	page.selectMissing(["1"]);
 	await page.submit("changes_requested");
 	expect(
-		JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string),
+		JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]!.body)),
 	).toMatchObject({
 		decision: "changes_requested",
 		criteria: [],
@@ -155,7 +156,7 @@ it("sends included but inaccessible items through a separate selection", async (
 	page.selectInaccessible(["0"]);
 	await page.submit("changes_requested");
 	expect(
-		JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string),
+		JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]!.body)),
 	).toMatchObject({
 		decision: "changes_requested",
 		criteria: [],

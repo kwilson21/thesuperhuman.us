@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { parse } from "parse5";
 import { describe, expect, it } from "vitest";
 import { audioOffers } from "~/lib/audio-intake";
-import { OG_SCENES, type OgScene } from "~/lib/og-media";
+import { OG_SCENES } from "~/lib/og-media";
 
 // Link-preview scenes copy the site's own words, prices and statuses into public videos. Any line of
 // two or more words must still appear verbatim in src/, so a change to the page fails here and names
@@ -43,7 +43,7 @@ const composed = new Set([
 	`${publicReleases} ${publicReleases === 1 ? "release" : "releases"}`,
 ]);
 
-const labels: Record<string, Record<string, string>> = {
+const labels = {
 	"audio-portfolio": {
 		"· Prod. Lexi Banks":
 			"credit from src/content/recordings/old-news-recording.json after a separator",
@@ -108,10 +108,39 @@ const labels: Record<string, Record<string, string>> = {
 		"Writing / AI-assisted engineering":
 			"composite kicker: section and essay topic",
 	},
-};
+} satisfies Record<string, Record<string, string>>;
+
+/** The labels a scene is expected to show, keyed by line. */
+function labelsFor(scene: string): Partial<Record<string, string>> {
+	return Object.entries(labels).find(([name]) => name === scene)?.[1] ?? {};
+}
 
 // Amounts that are not prices: the Tally demo's Safe to spend figure, shown on its demo-data capture.
-const demoAmounts: Record<string, string[]> = { "project-tally": ["$283"] };
+const demoAmounts = { "project-tally": ["$283"] } satisfies Record<
+	string,
+	string[]
+>;
+
+function demoAmountsFor(scene: string): readonly string[] {
+	return (
+		Object.entries(demoAmounts).find(([name]) => name === scene)?.[1] ?? []
+	);
+}
+
+/** The scene page as a tree of Node, the members the walkers below read. */
+function parseScene(scene: string): Node {
+	// SAFETY: parse5 returns a document tree whose nodes have nodeName, value and childNodes, the only members the lines and allText walkers read from a Node.
+	return parse(readFileSync(join(SCENES, `${scene}.html`), "utf8")) as Node;
+}
+
+/** The link-preview alt text for a scene file, which must have an OG_SCENES entry. */
+function ogSceneAlt(scene: string): string {
+	const entry = Object.entries(OG_SCENES).find(([name]) => name === scene);
+
+	if (!entry) throw new Error(`no link-preview scene named ${scene}`);
+
+	return entry[1].alt;
+}
 
 type Node = {
 	nodeName: string;
@@ -154,17 +183,13 @@ const scenes = readdirSync(SCENES)
 
 describe("link-preview scene copy", () => {
 	it.each(scenes)("%s shows only the site’s current words", (scene) => {
-		const text = [
-			...new Set(
-				lines(
-					parse(readFileSync(join(SCENES, `${scene}.html`), "utf8")) as Node,
-				),
-			),
-		];
+		const text = [...new Set(lines(parseScene(scene)))];
 
 		const stale = text.filter(
 			(line) =>
-				!corpus.includes(line) && !composed.has(line) && !labels[scene]?.[line],
+				!corpus.includes(line) &&
+				!composed.has(line) &&
+				!labelsFor(scene)[line],
 		);
 
 		expect(stale, `re-render ${scene} after updating it`).toEqual([]);
@@ -180,15 +205,10 @@ describe("link-preview scene copy", () => {
 					.map(String),
 			);
 
-			const text = [
-				...allText(
-					parse(readFileSync(join(SCENES, `${scene}.html`), "utf8")) as Node,
-				),
-				OG_SCENES[scene as OgScene].alt,
-			].join(" ");
+			const text = [...allText(parseScene(scene)), ogSceneAlt(scene)].join(" ");
 
 			const shown = (text.match(/\$\d[\d,]*\d|\$\d/g) ?? []).filter(
-				(amount) => !demoAmounts[scene]?.includes(amount),
+				(amount) => !demoAmountsFor(scene).includes(amount),
 			);
 
 			expect(
@@ -202,9 +222,7 @@ describe("link-preview scene copy", () => {
 
 	it("lists only labels a scene still shows", () => {
 		for (const [scene, entries] of Object.entries(labels)) {
-			const text = lines(
-				parse(readFileSync(join(SCENES, `${scene}.html`), "utf8")) as Node,
-			);
+			const text = lines(parseScene(scene));
 
 			for (const label of Object.keys(entries))
 				expect(text, scene).toContain(label);

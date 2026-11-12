@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { double } from "../helpers/doubles";
 import {
 	getAudioContextConstructor,
 	isWaveformScrub,
@@ -10,7 +11,7 @@ import { TOUCH_SCRUB_MIN_DISTANCE } from "../../src/lib/waveform";
 
 describe("getAudioContextConstructor", () => {
 	it("uses the prefixed Web Audio constructor exposed by mobile Safari", () => {
-		const MobileSafariAudioContext = class {} as unknown as typeof AudioContext;
+		const MobileSafariAudioContext = double<typeof AudioContext>({});
 
 		expect(
 			getAudioContextConstructor({

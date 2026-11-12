@@ -1,4 +1,5 @@
 import { test } from "vitest";
+import type { SqliteRow } from "../helpers/tests-other-fakes";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
@@ -75,7 +76,7 @@ function setup() {
 			db
 				.prepare(sql)
 				.all()
-				.map((row: Record<string, unknown>) => ({ ...row })),
+				.map((row: SqliteRow) => ({ ...row })),
 	};
 }
 

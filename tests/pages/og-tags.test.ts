@@ -5,12 +5,7 @@ import { build } from "esbuild";
 import { transform } from "@astrojs/compiler";
 import { experimental_AstroContainer as AstroContainer } from "astro/container";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-	DEFAULT_OG_SCENE,
-	OG_SCENES,
-	ogMedia,
-	type OgScene,
-} from "~/lib/og-media";
+import { DEFAULT_OG_SCENE, OG_SCENES, ogMedia } from "~/lib/og-media";
 
 let layout: any, directory: string;
 
@@ -68,7 +63,10 @@ afterAll(async () => {
 	if (directory) await rm(directory, { recursive: true, force: true });
 });
 
-async function head(path: string, props: Record<string, unknown> = {}) {
+async function head(
+	path: string,
+	props: { ogImage?: string; ogScene?: string } = {},
+) {
 	const container = await AstroContainer.create();
 
 	const html = await container.renderToString(layout, {
@@ -84,7 +82,13 @@ async function head(path: string, props: Record<string, unknown> = {}) {
 const value = (tags: (readonly [string, string])[], key: string) =>
 	tags.find(([name]) => name === key)?.[1];
 
-const exactRoute = (Object.keys(OG_SCENES) as OgScene[]).flatMap((scene) =>
+/** The keys of o, typed as keyof T. Callers pass OG_SCENES, a literal whose own keys are exactly its scene names. */
+function keysOf<T extends object>(o: T): (keyof T)[] {
+	// SAFETY: OG_SCENES is an object literal, so Object.keys returns exactly its scene names, which are keyof typeof OG_SCENES.
+	return Object.keys(o) as (keyof T)[];
+}
+
+const exactRoute = keysOf(OG_SCENES).flatMap((scene) =>
 	OG_SCENES[scene].routes
 		.filter((route) => !route.endsWith("/*"))
 		.map((route) => ({ scene, route })),
@@ -175,7 +179,7 @@ describe("link-preview tags", () => {
 	});
 
 	it("let a page choose its scene when its URL cannot", async () => {
-		const scene = (Object.keys(OG_SCENES) as OgScene[]).at(-1)!;
+		const scene = keysOf(OG_SCENES).at(-1)!;
 		const tags = await head("/this-page-does-not-exist", { ogScene: scene });
 		expect(value(tags, "og:video")).toBe(
 			`https://thesuperhuman.us${ogMedia(scene).video}`,

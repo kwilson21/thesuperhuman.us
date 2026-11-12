@@ -2,9 +2,15 @@ import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { ModuleKind, transpileModule } from "typescript";
 import type { APIContext } from "astro";
+import type * as LineDiff from "~/lib/line-diff";
 import { expect, it, vi } from "vitest";
 import { POST } from "~/pages/api/owner/agreements";
 import { templateFields } from "~/lib/agreement-templates";
+import { double, fakeD1 } from "../helpers/doubles";
+import { fakeLocals } from "../helpers/tests-other-fakes";
+
+/** The event a fake element passes to a listener: a submit carries preventDefault and its submitter, a click carries neither. */
+type FakeEvent = { preventDefault?: () => void; submitter?: { value: string } };
 
 interface OwnerAgreementsExports {
 	setupOwnerAgreements?: () => void;
@@ -18,7 +24,7 @@ class FakeElement {
 	tabIndex = 0;
 	focus = vi.fn();
 	dataset: Record<string, string> = {};
-	handlers = new Map<string, (event: unknown) => unknown>();
+	handlers = new Map<string, (event: FakeEvent) => void | Promise<void>>();
 	kids: FakeElement[] = [];
 	private text = "";
 	get textContent(): string {
@@ -42,7 +48,10 @@ class FakeElement {
 		this.kids = nodes;
 		this.text = "";
 	}
-	addEventListener(type: string, handler: (event: unknown) => unknown) {
+	addEventListener(
+		type: string,
+		handler: (event: FakeEvent) => void | Promise<void>,
+	) {
 		this.handlers.set(type, handler);
 	}
 }
@@ -50,7 +59,7 @@ class FakeElement {
 const createElement = (tagName: string) =>
 	Object.assign(new FakeElement(), { tagName: tagName.toUpperCase() });
 
-const lineDiffExports: Record<string, unknown> = {};
+const lineDiffExports: Partial<typeof LineDiff> = {};
 
 runInNewContext(
 	transpileModule(readFileSync("src/lib/line-diff.ts", "utf8"), {
@@ -78,29 +87,36 @@ type TemplateRow = {
 };
 
 // Serves the two queries the agreement endpoint makes: the current version of a kind, and one version by number.
-const templateDb = (rows: TemplateRow[]) => ({
-	prepare: () => ({
-		bind: (...args: unknown[]) => ({
-			first: async () =>
-				rows
-					.filter(
-						(row) =>
-							row.kind === args[0] &&
-							(args.length === 1 || row.version === args[1]),
-					)
-					.sort((a, b) => b.version - a.version)[0] ?? null,
-		}),
-	}),
-});
+const templateDb = (rows: TemplateRow[]) =>
+	fakeD1({
+		prepare: () =>
+			double<D1PreparedStatement>({
+				bind: (...args: unknown[]) =>
+					double<D1PreparedStatement>({
+						// SAFETY: the endpoint reads only first from this statement, and the rows it returns are TemplateRow objects, the shape the endpoint's own template query selects.
+						first: (async () =>
+							rows
+								.filter(
+									(row) =>
+										row.kind === args[0] &&
+										(args.length === 1 || row.version === args[1]),
+								)
+								.sort((a, b) => b.version - a.version)[0] ??
+							null) as D1PreparedStatement["first"],
+					}),
+			}),
+	});
 
-const endpoint = (db: unknown) => (path: string, init: RequestInit) =>
-	POST({
-		request: new Request(`https://example.test${path}`, {
-			...init,
-			headers: { ...init.headers, origin: "https://example.test" },
+const endpoint = (db: D1Database) => (path: string, init: RequestInit) =>
+	POST(
+		double<APIContext>({
+			request: new Request(`https://example.test${path}`, {
+				...init,
+				headers: { ...init.headers, origin: "https://example.test" },
+			}),
+			locals: fakeLocals({ MUSIC_DB: db }, owner),
 		}),
-		locals: { owner, runtime: { env: { MUSIC_DB: db } } },
-	} as unknown as APIContext);
+	);
 
 function previewForm() {
 	const status = new FakeElement(),

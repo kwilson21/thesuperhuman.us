@@ -5,9 +5,13 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-function element(extra: Record<string, unknown> = {}) {
-	const handlers: Record<string, Array<(event?: unknown) => void>> = {};
-	const attributes: Record<string, string> = {};
+/**
+ * A fake DOM element with the members the project player script touches, plus the extra members
+ * given. fire runs the listeners registered for an event type with no event argument.
+ */
+function element<E extends object>(extra: E) {
+	const handlers: Partial<Record<string, Array<() => void>>> = {};
+	const attributes: Partial<Record<string, string>> = {};
 
 	return {
 		handlers,
@@ -25,7 +29,7 @@ function element(extra: Record<string, unknown> = {}) {
 				this.classes.delete(name);
 			},
 		},
-		addEventListener(type: string, handler: (event?: unknown) => void) {
+		addEventListener(type: string, handler: () => void) {
 			(handlers[type] ??= []).push(handler);
 		},
 		getAttribute: (name: string) => attributes[name] ?? null,
@@ -55,29 +59,29 @@ it("shows an accessible problem and disables the controls when the audio cannot 
 		}),
 	});
 
-	const toggle = element();
+	const toggle = element({});
 	toggle.setAttribute("aria-label", "Play Review");
 
-	const seek = element(),
-		time = element(),
-		wave = element(),
-		problem = element(),
-		status = element(),
-		retry = element();
+	const seek = element({}),
+		time = element({}),
+		wave = element({}),
+		problem = element({}),
+		status = element({}),
+		retry = element({});
 
-	const parts: Record<string, unknown> = {
-		audio,
-		"[data-player-toggle]": toggle,
-		"[data-player-seek]": seek,
-		"[data-player-time]": time,
-		".player-wave": wave,
-		"[data-player-problem]": problem,
-		"[data-player-status]": status,
-		"[data-player-retry]": retry,
-	};
+	const parts = new Map([
+		["audio", audio],
+		["[data-player-toggle]", toggle],
+		["[data-player-seek]", seek],
+		["[data-player-time]", time],
+		[".player-wave", wave],
+		["[data-player-problem]", problem],
+		["[data-player-status]", status],
+		["[data-player-retry]", retry],
+	]);
 
 	const player = element({
-		querySelector: (selector: string) => parts[selector] ?? null,
+		querySelector: (selector: string) => parts.get(selector) ?? null,
 	});
 
 	vi.stubGlobal("document", { querySelectorAll: () => [player] });

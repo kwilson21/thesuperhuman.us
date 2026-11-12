@@ -79,6 +79,18 @@ const requiredSchema = [
 	"software_agreement_notifications",
 ];
 
+/** Rows of a sqlite_master or pragma_table_info query, each with the name column. */
+type NameRow = { name: string };
+
+/** Runs a schema query against db. The caller's SQL selects name, so each row is a NameRow. */
+function nameRows(
+	db: { prepare(sql: string): { all(): unknown[] } },
+	sql: string,
+): NameRow[] {
+	// SAFETY: the sqlite_master and pragma_table_info queries in scripts/owner-health.mjs select a name column, so each row has name.
+	return db.prepare(sql).all() as NameRow[];
+}
+
 function healthyFixture() {
 	return {
 		now: new Date("2026-09-19T12:00:00Z"),
@@ -103,7 +115,7 @@ function healthyFixture() {
 						),
 					);
 
-					return db.prepare(sql).all() as { name: string }[];
+					return nameRows(db, sql);
 				} finally {
 					db.close();
 				}
@@ -162,9 +174,9 @@ it("reports actionable safe failures without private data", async () => {
 	fixture.configuredNames.delete("OWNER_EMAIL");
 	fixture.query = async (sql: string) => {
 		if (sql.includes("sqlite_master"))
-			return requiredSchema
-				.filter((name) => name !== "owner_requests")
-				.map((name) => ({ name }));
+			return requiredSchema.flatMap((name) =>
+				name !== "owner_requests" ? [{ name }] : [],
+			);
 
 		if (sql.includes("owner_retention_runs")) return [];
 		throw new Error("fan@example.com database failure");
@@ -188,9 +200,9 @@ it("requires the payment projection and Stripe event ledger", async () => {
 	const fixture = healthyFixture();
 	fixture.query = async (sql: string) => {
 		if (sql.includes("sqlite_master"))
-			return requiredSchema
-				.filter((name) => name !== "audio_payments")
-				.map((name) => ({ name }));
+			return requiredSchema.flatMap((name) =>
+				name !== "audio_payments" ? [{ name }] : [],
+			);
 
 		if (sql.includes("owner_retention_runs"))
 			return [{ completed_at: "2026-09-18T12:00:00Z" }];
@@ -209,9 +221,9 @@ it("reports attention when the request audit trigger is missing", async () => {
 	const baseQuery = fixture.query;
 	fixture.query = async (sql: string) =>
 		sql.includes("sqlite_master")
-			? requiredSchema
-					.filter((name) => name !== "owner_requests_audit_personal_delete")
-					.map((name) => ({ name }))
+			? requiredSchema.flatMap((name) =>
+					name !== "owner_requests_audit_personal_delete" ? [{ name }] : [],
+				)
 			: baseQuery(sql);
 	const report = await ownerHealth(fixture);
 	expect(report.status).toBe("attention");
@@ -241,7 +253,7 @@ it("detects incomplete schemas and passes only after 0026", async () => {
 	const baseQuery = fixture.query;
 	fixture.query = (sql) =>
 		sql.includes("sqlite_master") || sql.includes("pragma_table_info")
-			? Promise.resolve(db.prepare(sql).all() as { name: string }[])
+			? Promise.resolve(nameRows(db, sql))
 			: baseQuery(sql);
 	expect((await ownerHealth(fixture)).checks).toContainEqual(
 		expect.objectContaining({ id: "schema", status: "attention" }),
@@ -368,7 +380,7 @@ it("reports the agreement template label migration missing on a database migrate
 	const baseQuery = fixture.query;
 	fixture.query = (sql) =>
 		sql.includes("sqlite_master") || sql.includes("pragma_table_info")
-			? Promise.resolve(db.prepare(sql).all() as { name: string }[])
+			? Promise.resolve(nameRows(db, sql))
 			: baseQuery(sql);
 	expect((await ownerHealth(fixture)).checks).toContainEqual(
 		expect.objectContaining({
@@ -580,9 +592,9 @@ it("requires the brief suggestion budget schema", async () => {
 	fixture.query = (sql) =>
 		sql.includes("sqlite_master")
 			? Promise.resolve(
-					requiredSchema
-						.filter((name) => name !== "brief_suggestion_budget")
-						.map((name) => ({ name })),
+					requiredSchema.flatMap((name) =>
+						name !== "brief_suggestion_budget" ? [{ name }] : [],
+					),
 				)
 			: query(sql);
 	const result = await ownerHealth(fixture);
@@ -601,7 +613,7 @@ it("rejects a complete schema with a missing migration 0023 recipient snapshot c
 		const baseQuery = fixture.query;
 		fixture.query = (sql) =>
 			sql.includes("sqlite_master") || sql.includes("pragma_table_info")
-				? Promise.resolve(db.prepare(sql).all() as { name: string }[])
+				? Promise.resolve(nameRows(db, sql))
 				: baseQuery(sql);
 		expect((await ownerHealth(fixture)).checks).toContainEqual(
 			expect.objectContaining({ id: "schema", status: "pass" }),

@@ -14,6 +14,8 @@ import {
 	agreementDetailsSchema,
 } from "~/lib/agreement-fields";
 import { projectToday } from "~/lib/audio-project-updates";
+import { double, fakeD1 } from "../helpers/doubles";
+import { fakeLocals, sqliteD1 } from "../helpers/tests-other-fakes";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 let start: any, privacy: any;
@@ -185,23 +187,17 @@ async function fixture() {
 		.prepare("INSERT INTO software_offer_links VALUES ('r',?,'now',NULL)")
 		.run(await hashOfferToken(token));
 
-	const statement = (query: string, args: unknown[] = []) => ({
-		bind: (...values: unknown[]) => statement(query, values),
-		first: async () => sql.prepare(query).get(...args) ?? null,
-		all: async () => ({ results: sql.prepare(query).all(...args) }),
-	});
-
-	return { sql, db: { prepare: (query: string) => statement(query) } };
+	return { sql, db: sqliteD1(sql) };
 }
 
-async function render(db: unknown, value: string) {
+async function render(db: D1Database | undefined, value: string) {
 	const container = await AstroContainer.create();
 
 	return container.renderToResponse(page, {
 		partial: false,
 		request: new Request(`https://thesuperhuman.us/offer/${value}`),
 		params: { token: value },
-		locals: { runtime: { env: { MUSIC_DB: db } } } as any,
+		locals: fakeLocals({ MUSIC_DB: db }),
 	});
 }
 
@@ -280,11 +276,11 @@ it("protects owner previews and selects draft or exact sent version without priv
 				`https://thesuperhuman.us/owner/requests/r/offer${query}`,
 			),
 			params: { id: "r" },
-			locals: {
-				owner: owner ? { email: "owner@example.com" } : undefined,
-				runtime: { env: { MUSIC_DB: db } },
-			},
-		} as any);
+			locals: fakeLocals(
+				{ MUSIC_DB: db },
+				owner ? { email: "owner@example.com" } : undefined,
+			),
+		});
 
 	try {
 		expect((await renderPreview(false)).status).toBe(403);
@@ -490,11 +486,10 @@ it("returns an unavailable 404 without project data for foreign and revoked soft
 					headers: { cookie: `studio_session=${token}` },
 				}),
 				params: { id: "r" },
-				locals: {
-					runtime: {
-						env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
-					},
-				} as any,
+				locals: fakeLocals({
+					MUSIC_DB: db,
+					AUDIO_CLIENT_PORTAL_ENABLED: "true",
+				}),
 			});
 
 			const html = await response.text();
@@ -569,11 +564,10 @@ it("renders version-specific direction, delivery, acceptance, handoff and earlie
 					headers: { cookie: `studio_session=${session}` },
 				}),
 				params: { id: "r" },
-				locals: {
-					runtime: {
-						env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
-					},
-				} as any,
+				locals: fakeLocals({
+					MUSIC_DB: db,
+					AUDIO_CLIENT_PORTAL_ENABLED: "true",
+				}),
 			});
 
 		sql.exec(
@@ -793,10 +787,10 @@ it("renders version-specific direction, delivery, acceptance, handoff and earlie
 		const ownerHTML = await container.renderToString(composer, {
 			request: new Request("https://thesuperhuman.us/owner/requests/r/update"),
 			params: { id: "r" },
-			locals: {
-				owner: { email: "owner@example.com" },
-				runtime: { env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" } },
-			} as any,
+			locals: fakeLocals(
+				{ MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
+				{ email: "owner@example.com" },
+			),
 		});
 
 		expect(ownerHTML).toContain("Delivery review");
@@ -843,11 +837,10 @@ it("keeps newer progress first and pending review actions in the rail", async ()
 					headers: { cookie: `studio_session=${session}` },
 				}),
 				params: { id: "r" },
-				locals: {
-					runtime: {
-						env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
-					},
-				} as any,
+				locals: fakeLocals({
+					MUSIC_DB: db,
+					AUDIO_CLIENT_PORTAL_ENABLED: "true",
+				}),
 			});
 
 		let html = await renderProject();
@@ -940,10 +933,10 @@ it("reopens an earlier milestone revision with its saved evidence intact", async
 				"https://thesuperhuman.us/owner/requests/r/update?respond=old-review",
 			),
 			params: { id: "r" },
-			locals: {
-				owner: { email: "owner@example.com" },
-				runtime: { env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" } },
-			} as any,
+			locals: fakeLocals(
+				{ MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
+				{ email: "owner@example.com" },
+			),
 		});
 
 		expect(html).toContain("Respond to requested changes");
@@ -981,7 +974,7 @@ it("reopens an earlier milestone revision with its saved evidence intact", async
 				updates,
 				closed: false,
 			},
-			locals: { runtime: { env: { MUSIC_DB: db } } } as any,
+			locals: fakeLocals({ MUSIC_DB: db }),
 		});
 
 		expect(ownerPanel).toContain("/owner/requests/r/update?respond=old-review");
@@ -1018,11 +1011,10 @@ it("keeps update requests separate from Waiting on you and renders the Today sof
 					headers: { cookie: `studio_session=${session}` },
 				}),
 				params: { id: "r" },
-				locals: {
-					runtime: {
-						env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
-					},
-				} as any,
+				locals: fakeLocals({
+					MUSIC_DB: db,
+					AUDIO_CLIENT_PORTAL_ENABLED: "true",
+				}),
 			});
 
 		let html = await renderProject();
@@ -1043,10 +1035,10 @@ it("keeps update requests separate from Waiting on you and renders the Today sof
 			"INSERT INTO software_project_messages(request_id,actor,actor_id,body,created_at) VALUES ('r','client','alex@example.com','Question','2026-09-29')",
 		);
 		html = await container.renderToString(today, {
-			locals: {
-				owner: { email: "owner@example.com" },
-				runtime: { env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" } },
-			} as any,
+			locals: fakeLocals(
+				{ MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
+				{ email: "owner@example.com" },
+			),
 		});
 		expect(html).toContain("Projects needing a next step");
 		expect(html).toMatch(/<strong[^>]*>Current offer<\/strong>/);
@@ -1087,15 +1079,15 @@ it("hides Reopen for a started request and gates both sending retry controls at 
 		sql.exec("UPDATE owner_requests SET status='reviewed'");
 
 		const container = await AstroContainer.create(),
-			locals = {
-				owner: { email: "owner@example.com" },
-				runtime: { env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" } },
-			};
+			locals = fakeLocals(
+				{ MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
+				{ email: "owner@example.com" },
+			);
 
 		const ownerHTML = await container.renderToString(ownerRequest, {
 			params: { id: "r" },
 			request: new Request("https://thesuperhuman.us/owner/requests/r"),
-			locals: locals as any,
+			locals: locals,
 		});
 
 		expect(ownerHTML).not.toContain('data-action="reopen"');
@@ -1107,7 +1099,7 @@ it("hides Reopen for a started request and gates both sending retry controls at 
 			const closedHTML = await container.renderToString(ownerRequest, {
 				params: { id: "r" },
 				request: new Request("https://thesuperhuman.us/owner/requests/r"),
-				locals: locals as any,
+				locals: locals,
 			});
 
 			expect(closedHTML).toContain('data-action="resolve"');
@@ -1142,7 +1134,7 @@ it("hides Reopen for a started request and gates both sending retry controls at 
 							},
 						],
 					},
-					locals: locals as any,
+					locals: locals,
 				});
 
 				if (age < 60_000) {
@@ -1181,7 +1173,7 @@ it("renders offer-scoped deposit controls before start and a paid deposit confir
 					updates: [],
 					closed: false,
 				},
-				locals: { runtime: { env: { MUSIC_DB: db } } } as any,
+				locals: fakeLocals({ MUSIC_DB: db }),
 			});
 
 		let html = await ownerPanel();
@@ -1244,11 +1236,10 @@ it("renders only the client project invoices with private payment links and pres
 					headers: { cookie: `studio_session=${session}` },
 				}),
 				params: { id: "r" },
-				locals: {
-					runtime: {
-						env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
-					},
-				} as any,
+				locals: fakeLocals({
+					MUSIC_DB: db,
+					AUDIO_CLIENT_PORTAL_ENABLED: "true",
+				}),
 			});
 
 		let html = await renderProject();
@@ -1368,7 +1359,7 @@ it("renders one signing page, returning details, waiting and both-signed actions
 					`https://thesuperhuman.us/offer/${token}/sign${query}`,
 					{ headers: { cookie: `agreement_session=${session}` } },
 				),
-				locals: { runtime: { env: { MUSIC_DB: db } } } as any,
+				locals: fakeLocals({ MUSIC_DB: db }),
 			});
 
 		let html = await render();
@@ -1552,7 +1543,7 @@ it("renders one signing page, returning details, waiting and both-signed actions
 		expect(html).toContain("Kazon countersigns next.");
 		html = await container.renderToString(agreementPanel, {
 			props: { requestId: "r", offerId: "current" },
-			locals: { runtime: { env: { MUSIC_DB: db } } } as any,
+			locals: fakeLocals({ MUSIC_DB: db }),
 		});
 		expect(html).toContain("Countersign the agreement.");
 		expect(html).toContain("countersign-columns");
@@ -1572,7 +1563,7 @@ it("renders one signing page, returning details, waiting and both-signed actions
 		const renderAgreementPanel = () =>
 			container.renderToString(agreementPanel, {
 				props: { requestId: "r", offerId: "current" },
-				locals: { runtime: { env: { MUSIC_DB: db } } } as any,
+				locals: fakeLocals({ MUSIC_DB: db }),
 			});
 
 		sql.exec(
@@ -1628,7 +1619,7 @@ it("keeps manual signing closed and shows start exceptions only when required", 
 	try {
 		const container = await AstroContainer.create();
 
-		const render = (details: unknown) =>
+		const render = (details: Record<string, string>) =>
 			container.renderToString(panel, {
 				props: {
 					requestId: "r",
@@ -1643,7 +1634,7 @@ it("keeps manual signing closed and shows start exceptions only when required", 
 					updates: [],
 					closed: false,
 				},
-				locals: { runtime: { env: { MUSIC_DB: db } } } as any,
+				locals: fakeLocals({ MUSIC_DB: db }),
 			});
 
 		let html = await render({
@@ -1689,11 +1680,8 @@ it("renders Agreements with the owner heading, active navigation and ordered rai
 		const html = await container.renderToString(agreements, {
 			partial: false,
 			request: new Request("https://thesuperhuman.us/owner/agreements"),
-			locals: {
-				owner: { email: "owner@example.com" },
-				runtime: { env: { MUSIC_DB: db } },
-			},
-		} as any);
+			locals: fakeLocals({ MUSIC_DB: db }, { email: "owner@example.com" }),
+		});
 
 		expect(html.match(/class="owner-header"/g)).toHaveLength(1);
 		expect(html.match(/<main\b/g)).toHaveLength(1);
@@ -1772,11 +1760,8 @@ it("renders template version labels, source revision fields, the current version
 			await container.renderToString(agreements, {
 				partial: false,
 				request: new Request("https://thesuperhuman.us/owner/agreements"),
-				locals: {
-					owner: { email: "owner@example.com" },
-					runtime: { env: { MUSIC_DB: db } },
-				},
-			} as any)
+				locals: fakeLocals({ MUSIC_DB: db }, { email: "owner@example.com" }),
+			})
 		).replace(/<!--[\s\S]*?-->/g, "");
 
 		const inputs = (name: string) =>
@@ -1957,10 +1942,11 @@ it("scopes the script-built diff and version text rules to the agreement setting
 
 	const bodyOf = (cls: string) =>
 		rules
-			.filter((rule) =>
-				rule.selectors.some((selector) => selector.endsWith(` .${cls}`)),
+			.flatMap((rule) =>
+				rule.selectors.some((selector) => selector.endsWith(` .${cls}`))
+					? [rule.body]
+					: [],
 			)
-			.map((rule) => rule.body)
 			.join(";");
 
 	for (const cls of [
@@ -2123,11 +2109,10 @@ it("reads immutable agreed fees, dates and complete legal text without enabling 
 					headers: { cookie: `studio_session=${cookie}` },
 				}),
 				params: { id: "r" },
-				locals: {
-					runtime: {
-						env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
-					},
-				} as any,
+				locals: fakeLocals({
+					MUSIC_DB: db,
+					AUDIO_CLIENT_PORTAL_ENABLED: "true",
+				}),
 			});
 
 		let html = await render();
@@ -2391,12 +2376,11 @@ it.each(
 					headers: { cookie: `studio_session=${session}` },
 				}),
 				params: { id: "r" },
-				locals: {
-					runtime: {
-						env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
-					},
-				},
-			} as any);
+				locals: fakeLocals({
+					MUSIC_DB: db,
+					AUDIO_CLIENT_PORTAL_ENABLED: "true",
+				}),
+			});
 
 			const deadline = days === 30 ? "Nov 1, 2026" : "Nov 16, 2026";
 			expect(
@@ -2480,11 +2464,10 @@ it("puts the named review work first through partial, complete, accepted and han
 					headers: { cookie: `studio_session=${session}` },
 				}),
 				params: { id: "r" },
-				locals: {
-					runtime: {
-						env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
-					},
-				} as any,
+				locals: fakeLocals({
+					MUSIC_DB: db,
+					AUDIO_CLIENT_PORTAL_ENABLED: "true",
+				}),
 			});
 
 		sql.exec(
@@ -2942,8 +2925,8 @@ it("masks the recipient on every unauthenticated email receipt", async () => {
 			request: new Request(
 				`https://thesuperhuman.us/offer/${token}/sign?email=sent`,
 			),
-			locals: { runtime: { env: { MUSIC_DB: db } } },
-		} as any);
+			locals: fakeLocals({ MUSIC_DB: db }),
+		});
 
 		expect(html).toContain("I sent a link to a•••@example.com.");
 		expect(html).not.toContain("alex@example.com");
@@ -2977,8 +2960,8 @@ it("renders a quiet Remove control beside each unsent attachment", async () => {
 
 		const html = await (await AstroContainer.create()).renderToString(editor, {
 			props: { requestId: "r", email: "alex@example.com", offers },
-			locals: { runtime: { env: { MUSIC_DB: db } } },
-		} as any);
+			locals: fakeLocals({ MUSIC_DB: db }),
+		});
 
 		expect(html).toMatch(
 			/Draft.pdf[\s\S]*class="studio-quiet"[^>]*data-remove-attachment[^>]*>Remove<\/button>/,
@@ -3034,8 +3017,8 @@ async function renderMsaContinuity({
 
 		return await (await AstroContainer.create()).renderToString(editor, {
 			props: { requestId: "r", email: "alex@example.com", offers },
-			locals: { runtime: { env: { MUSIC_DB: db } } },
-		} as any);
+			locals: fakeLocals({ MUSIC_DB: db }),
+		});
 	} finally {
 		sql.close();
 	}
@@ -3127,12 +3110,11 @@ it("renders omitted duplicate legacy deliverables by index without offering acce
 				request: new Request("https://thesuperhuman.us/studio/software/r", {
 					headers: { cookie: `studio_session=${session}` },
 				}),
-				locals: {
-					runtime: {
-						env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
-					},
-				},
-			} as any,
+				locals: fakeLocals({
+					MUSIC_DB: db,
+					AUDIO_CLIENT_PORTAL_ENABLED: "true",
+				}),
+			},
 		);
 
 		expect(html).toMatch(
@@ -3178,8 +3160,8 @@ it("renders scanner-safe agreement and archive landings with exact copy", async 
 					request: new Request(
 						`https://thesuperhuman.us/${archive ? "agreements" : `offer/${token}`}/verify?key=${key}`,
 					),
-					locals: { runtime: { env: { MUSIC_DB: db } } },
-				} as any,
+					locals: fakeLocals({ MUSIC_DB: db }),
+				},
 			);
 
 			const html = await response.text();
@@ -3209,12 +3191,11 @@ it("renders scanner-safe agreement and archive landings with exact copy", async 
 						request: new Request(
 							`${origin}/${archive ? "agreements" : `offer/${token}`}/verify?key=${key}`,
 						),
-						locals: {
-							runtime: {
-								env: { MUSIC_DB: db, SITE_ORIGIN: "http://127.0.0.1:4321" },
-							},
-						},
-					} as any,
+						locals: fakeLocals({
+							MUSIC_DB: db,
+							SITE_ORIGIN: "http://127.0.0.1:4321",
+						}),
+					},
 				);
 
 				expect(preview.status).toBe(
@@ -3241,8 +3222,8 @@ it("renders scanner-safe agreement and archive landings with exact copy", async 
 					request: new Request(
 						`https://thesuperhuman.us/${archive ? "agreements" : `offer/${token}`}/verify?key=${key}`,
 					),
-					locals: { runtime: { env: { MUSIC_DB: db } } },
-				} as any,
+					locals: fakeLocals({ MUSIC_DB: db }),
+				},
 			);
 
 			expect(expired).toMatch(
@@ -3260,16 +3241,12 @@ it("renders the approved receipt and keeps booking reassurance only on the send 
 
 	const html = await container.renderToString(start, {
 		request: new Request("https://thesuperhuman.us/software/start"),
-		locals: {
-			runtime: {
-				env: {
-					PUBLIC_TURNSTILE_SITE_KEY: "test",
-					MUSIC_DB: {},
-					TURNSTILE_SECRET_KEY: "test",
-					RATE_LIMIT: {},
-				},
-			},
-		} as any,
+		locals: fakeLocals({
+			PUBLIC_TURNSTILE_SITE_KEY: "test",
+			MUSIC_DB: fakeD1({}),
+			TURNSTILE_SECRET_KEY: "test",
+			RATE_LIMIT: double<KVNamespace>({}),
+		}),
 	});
 
 	for (const copy of [
@@ -3283,7 +3260,7 @@ it("renders the approved receipt and keeps booking reassurance only on the send 
 	expect(html).not.toContain("Software brief · sent");
 	expect(html).not.toMatch(/data-print|Print or save|Not provided/);
 	expect(html.match(/No booking or payment at this stage\./g)).toHaveLength(1);
-	const receipt = parse(html) as any;
+	const receipt = parse(html);
 
 	const find = (node: any): any =>
 		node.attrs?.some(
@@ -3317,7 +3294,7 @@ it("renders the project brief start page with named paths, website screens and t
 	const render = (query: string) =>
 		container.renderToString(start, {
 			request: new Request(`https://thesuperhuman.us/software/start${query}`),
-			locals: { runtime: { env: {} } } as any,
+			locals: fakeLocals({}),
 		});
 
 	const textOf = (node: any): string =>
@@ -3467,10 +3444,7 @@ it("renders each owner brief outcome and gates uncertain retry at one minute", a
 			const html = await container.renderToString(ownerRequest, {
 				params: { id: "r" },
 				request: new Request("https://thesuperhuman.us/owner/requests/r"),
-				locals: {
-					owner: { email: "owner@example.com" },
-					runtime: { env: { MUSIC_DB: db } },
-				} as any,
+				locals: fakeLocals({ MUSIC_DB: db }, { email: "owner@example.com" }),
 			});
 
 			expect(html).toContain(
@@ -3534,10 +3508,10 @@ it("renders legacy reissue guidance and removes signing actions after a project 
 		const ownerHTML = await container.renderToString(composer, {
 			request: new Request("https://thesuperhuman.us/owner/requests/r/update"),
 			params: { id: "r" },
-			locals: {
-				owner: { email: "owner@example.com" },
-				runtime: { env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" } },
-			} as any,
+			locals: fakeLocals(
+				{ MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
+				{ email: "owner@example.com" },
+			),
 		});
 
 		expect(ownerHTML).toContain("Keep these files available for 90 days.");
@@ -3612,11 +3586,10 @@ it("keeps payment and acceptance terms with each rail review and decisions with 
 					headers: { cookie: `studio_session=${session}` },
 				}),
 				params: { id: "r" },
-				locals: {
-					runtime: {
-						env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
-					},
-				} as any,
+				locals: fakeLocals({
+					MUSIC_DB: db,
+					AUDIO_CLIENT_PORTAL_ENABLED: "true",
+				}),
 			});
 
 		for (const [id, milestone, version] of [
@@ -3797,10 +3770,8 @@ async function reviewStateFixture() {
 			request: new Request("https://thesuperhuman.us/studio/software/r", {
 				headers: { cookie: `studio_session=${session}` },
 			}),
-			locals: {
-				runtime: { env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" } },
-			},
-		} as any);
+			locals: fakeLocals({ MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" }),
+		});
 
 	const add = (id: string, kind: string, milestone = 0, date = "2026-10-01") =>
 		sql
@@ -4131,13 +4102,11 @@ it("renders future milestone choices unavailable for progress but available for 
 				request: new Request(
 					"https://thesuperhuman.us/owner/requests/r/update",
 				),
-				locals: {
-					owner: { email: "owner@example.com" },
-					runtime: {
-						env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
-					},
-				},
-			} as any);
+				locals: fakeLocals(
+					{ MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
+					{ email: "owner@example.com" },
+				),
+			});
 
 		let html = await render();
 		expect(html).toMatch(/<option value="1"[^>]*disabled[^>]*hidden/);
@@ -4260,7 +4229,7 @@ it("renders all four personalized receipt outcomes into the rendered page", asyn
 
 	const html = await container.renderToString(start, {
 		request: new Request("https://thesuperhuman.us/software/start"),
-		locals: { runtime: { env: {} } } as any,
+		locals: fakeLocals({}),
 	});
 
 	const dom = parse(html);
@@ -4371,7 +4340,7 @@ it("renders the AI disclosure beside both answer boxes and the dated retention n
 
 	const html = await container.renderToString(start, {
 		request: new Request("https://thesuperhuman.us/software/start"),
-		locals: { runtime: { env: {} } } as any,
+		locals: fakeLocals({}),
 	});
 
 	const document = parse(html);
@@ -4449,11 +4418,8 @@ it("shows the countersign requirement beside both disabled closing actions", asy
 		const html = await container.renderToString(ownerRequest, {
 			params: { id: "r" },
 			request: new Request("https://thesuperhuman.us/owner/requests/r"),
-			locals: {
-				owner: { email: "owner@example.com" },
-				runtime: { env: { MUSIC_DB: db } },
-			},
-		} as any);
+			locals: fakeLocals({ MUSIC_DB: db }, { email: "owner@example.com" }),
+		});
 
 		expect(html).toContain(
 			"Countersign or abandon the signed agreement first.",
@@ -4663,10 +4629,7 @@ it("helps the owner review a website brief: link, offer examples and unsafe link
 			container.renderToString(ownerRequest, {
 				params: { id: "site" },
 				request: new Request("https://thesuperhuman.us/owner/requests/site"),
-				locals: {
-					owner: { email: "owner@example.com" },
-					runtime: { env: { MUSIC_DB: db } },
-				} as any,
+				locals: fakeLocals({ MUSIC_DB: db }, { email: "owner@example.com" }),
 			});
 
 		const briefOf = (html: string) => {
@@ -4736,10 +4699,7 @@ it("keeps the workflow owner page on the existing fit note without website copy"
 		const html = await container.renderToString(ownerRequest, {
 			params: { id: "r" },
 			request: new Request("https://thesuperhuman.us/owner/requests/r"),
-			locals: {
-				owner: { email: "owner@example.com" },
-				runtime: { env: { MUSIC_DB: db } },
-			} as any,
+			locals: fakeLocals({ MUSIC_DB: db }, { email: "owner@example.com" }),
 		});
 
 		expect(html).toContain(
@@ -4780,10 +4740,7 @@ it("links the rail service to the row for each software path", async () => {
 			const html = await container.renderToString(ownerRequest, {
 				params: { id },
 				request: new Request(`https://thesuperhuman.us/owner/requests/${id}`),
-				locals: {
-					owner: { email: "owner@example.com" },
-					runtime: { env: { MUSIC_DB: db } },
-				} as any,
+				locals: fakeLocals({ MUSIC_DB: db }, { email: "owner@example.com" }),
 			});
 
 			return html.match(/<a href="([^"]+)"[^>]*>Service →<\/a>/)?.[1];
@@ -4863,10 +4820,7 @@ it("shows the website question placeholder on a seeded website owner request", a
 		const html = await container.renderToString(ownerRequest, {
 			params: { id: "site" },
 			request: new Request("https://thesuperhuman.us/owner/requests/site"),
-			locals: {
-				owner: { email: "owner@example.com" },
-				runtime: { env: { MUSIC_DB: db } },
-			} as any,
+			locals: fakeLocals({ MUSIC_DB: db }, { email: "owner@example.com" }),
 		});
 
 		expect(html).toMatch(

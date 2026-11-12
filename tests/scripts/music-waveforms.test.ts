@@ -1,6 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { readFile, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
+import { double } from "../helpers/doubles";
 
 vi.mock("node:fs/promises", () => ({ readFile: vi.fn(), writeFile: vi.fn() }));
 
@@ -24,13 +25,12 @@ it("measures each aligned playback window for both waveform and loudness", async
 				versions: { mix: { key: "mix.mp3" }, master: { key: "master.mp3" } },
 			}),
 		);
-	vi.mocked(spawnSync).mockImplementation(
-		(_command, args) =>
-			({
-				status: 0,
-				stdout: Buffer.alloc(640),
-				stderr: Buffer.from(args?.includes("null") ? '{"input_i":"-18"}' : ""),
-			}) as ReturnType<typeof spawnSync>,
+	vi.mocked(spawnSync).mockImplementation((_command, args) =>
+		double<ReturnType<typeof spawnSync>>({
+			status: 0,
+			stdout: Buffer.alloc(640),
+			stderr: Buffer.from(args?.includes("null") ? '{"input_i":"-18"}' : ""),
+		}),
 	);
 
 	try {
@@ -40,6 +40,7 @@ it("measures each aligned playback window for both waveform and loudness", async
 
 		for (const [index, offset] of [4, 2].entries()) {
 			for (const call of calls.slice(index * 2, index * 2 + 2)) {
+				// SAFETY: the waveform script calls spawnSync(command, args), so every recorded call carries its argument array at index 1.
 				const args = call[1] as string[];
 				expect(args[args.indexOf("-ss") + 1]).toBe(String(offset));
 				expect(args[args.indexOf("-t") + 1]).toBe("12");
