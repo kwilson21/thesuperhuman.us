@@ -56,6 +56,22 @@ async function bounded(request: Request): Promise<Request | null> {
 	});
 }
 
+function isText<T>(value: T): value is T & string {
+	return typeof value === "string";
+}
+
+function isIdentity(value: unknown): value is PublicationIdentity {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"ownerId" in value &&
+		isText(value.ownerId) &&
+		"scopes" in value &&
+		Array.isArray(value.scopes) &&
+		value.scopes.every(isText)
+	);
+}
+
 export const publicationOAuthRoute: APIRoute = async ({ request, locals }) => {
 	const url = new URL(request.url);
 	const headers = { "Cache-Control": "no-store" };
@@ -99,15 +115,11 @@ export const publicationOAuthRoute: APIRoute = async ({ request, locals }) => {
 			apiRoute: publicationResource,
 			apiHandler: {
 				async fetch(req, bindings, ctx) {
-					const identity = (ctx as unknown as { props?: PublicationIdentity })
-						.props;
+					const identity: unknown = "props" in ctx ? ctx.props : undefined;
 
 					if (
-						!identity ||
-						typeof identity.ownerId !== "string" ||
-						!Array.isArray(identity.scopes) ||
-						identity.ownerId !== bindings.PUBLICATION_OWNER_ID ||
-						!identity.scopes.every((s) => typeof s === "string")
+						!isIdentity(identity) ||
+						identity.ownerId !== bindings.PUBLICATION_OWNER_ID
 					) {
 						return new Response("Forbidden", { status: 403 });
 					}
@@ -139,9 +151,10 @@ export const publicationOAuthRoute: APIRoute = async ({ request, locals }) => {
 			}),
 		});
 
+		// SAFETY: OAuthProvider.fetch adds env.OAUTH_PROVIDER before routing, and the publication secrets LoginEnv adds are checked at the top of this handler.
 		const response = await provider.fetch(
 			limited,
-			env as unknown as LoginEnv,
+			env as LoginEnv,
 			locals.runtime.ctx,
 		);
 

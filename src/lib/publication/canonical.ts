@@ -1,14 +1,19 @@
 /** Canonical serialization for the version-1 object-only publication envelope. */
+function isObject(value: unknown): value is object {
+	return value !== null && typeof value === "object";
+}
+
 export function canonicalPublication(value: unknown): string {
-	if (value === null || typeof value !== "object") return JSON.stringify(value);
-	const object = value as Record<string, unknown>;
+	if (!isObject(value)) return JSON.stringify(value);
+	const fields = new Map<string, unknown>(Object.entries(value));
 
 	return (
 		"{" +
-		Object.keys(object)
+		[...fields.keys()]
 			.sort()
 			.map(
-				(key) => JSON.stringify(key) + ":" + canonicalPublication(object[key]),
+				(key) =>
+					JSON.stringify(key) + ":" + canonicalPublication(fields.get(key)),
 			)
 			.join(",") +
 		"}"

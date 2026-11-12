@@ -50,15 +50,23 @@ export interface PublicationJournal {
 	commit(publication: Publication): Promise<CommitResult>;
 }
 
-function record(value: unknown): value is Record<string, unknown> {
+function record(value: unknown): value is object {
 	return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function exact(value: Record<string, unknown>, keys: string[]): boolean {
-	return (
-		Object.keys(value).length === keys.length &&
-		keys.every((key) => Object.prototype.hasOwnProperty.call(value, key))
-	);
+function exact(fields: Map<string, unknown>, keys: string[]): boolean {
+	return fields.size === keys.length && keys.every((key) => fields.has(key));
+}
+
+function oneOf<T extends string>(
+	options: readonly T[],
+	value: unknown,
+): value is T {
+	return options.some((option) => option === value);
+}
+
+function revision(value: unknown): value is number {
+	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
 function id(value: unknown): value is string {
@@ -87,9 +95,11 @@ function day(value: unknown): value is string {
 
 /** Strict shape validation, NOT content sanitization or publication permission. */
 export function parsePublication(value: unknown): Publication | null {
+	if (!record(value)) return null;
+	const fields = new Map<string, unknown>(Object.entries(value));
+
 	if (
-		!record(value) ||
-		!exact(value, [
+		!exact(fields, [
 			"version",
 			"projectId",
 			"eventId",
@@ -106,46 +116,51 @@ export function parsePublication(value: unknown): Publication | null {
 		return null;
 
 	if (
-		value.version !== 1 ||
-		!id(value.projectId) ||
-		!id(value.eventId) ||
-		!id(value.entryId) ||
-		!Number.isSafeInteger(value.expectedRevision) ||
-		(value.expectedRevision as number) < 0 ||
-		!day(value.occurredOn) ||
-		(value.threadId !== null && !id(value.threadId)) ||
-		(value.milestoneId !== null && !id(value.milestoneId)) ||
-		!["publish", "correct", "withdraw"].includes(value.operation as string) ||
-		!["work", "shutdown", "backfill"].includes(value.origin as string)
+		fields.get("version") !== 1 ||
+		!id(fields.get("projectId")) ||
+		!id(fields.get("eventId")) ||
+		!id(fields.get("entryId")) ||
+		!revision(fields.get("expectedRevision")) ||
+		!day(fields.get("occurredOn")) ||
+		(fields.get("threadId") !== null && !id(fields.get("threadId"))) ||
+		(fields.get("milestoneId") !== null && !id(fields.get("milestoneId"))) ||
+		!oneOf(["publish", "correct", "withdraw"], fields.get("operation")) ||
+		!oneOf(["work", "shutdown", "backfill"], fields.get("origin"))
 	)
 		return null;
-	const story = value.story;
+	const story = fields.get("story");
 
-	if (value.operation === "withdraw") {
+	if (fields.get("operation") === "withdraw") {
 		if (story !== null) return null;
 	} else {
+		if (!record(story)) return null;
+		const storyFields = new Map<string, unknown>(Object.entries(story));
+
 		if (
-			!record(story) ||
-			!exact(story, [
+			!exact(storyFields, [
 				"headline",
 				"summary",
 				"technicalDetail",
 				"delivery",
 				"basis",
 			]) ||
-			!text(story.headline, 140) ||
-			!text(story.summary, 1000) ||
-			(story.technicalDetail !== null && !text(story.technicalDetail, 4000)) ||
-			!["proposed", "implemented", "tested", "available"].includes(
-				story.delivery as string,
+			!text(storyFields.get("headline"), 140) ||
+			!text(storyFields.get("summary"), 1000) ||
+			(storyFields.get("technicalDetail") !== null &&
+				!text(storyFields.get("technicalDetail"), 4000)) ||
+			!oneOf(
+				["proposed", "implemented", "tested", "available"],
+				storyFields.get("delivery"),
 			) ||
-			!["agent-reported", "repository-verified", "human-confirmed"].includes(
-				story.basis as string,
+			!oneOf(
+				["agent-reported", "repository-verified", "human-confirmed"],
+				storyFields.get("basis"),
 			)
 		)
 			return null;
 	}
 
+	// SAFETY: the checks above validate every Publication field (exact keys, version, id and day formats, operation, origin, and the story for each operation), so the copy has that shape.
 	// Detach from the caller so later mutations cannot change a prepared delivery.
 	return JSON.parse(JSON.stringify(value)) as Publication;
 }

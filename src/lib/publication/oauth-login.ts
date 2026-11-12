@@ -86,6 +86,7 @@ async function unseal(request: Request, env: LoginEnv): Promise<LoginState> {
 		decode(ciphertext),
 	);
 
+	// SAFETY: the bytes are AES-GCM-decrypted with the server cookie key, so they are the JSON that seal wrote from a LoginState.
 	const state = JSON.parse(new TextDecoder().decode(bytes)) as LoginState;
 
 	if (!Number.isFinite(state.expires) || state.expires < Date.now())
@@ -256,6 +257,7 @@ export async function publicationLogin(
 				},
 			);
 
+			// SAFETY: only access_token and error are read, and the fail() check below tests both before access_token is used.
 			const token = (await response.json()) as {
 				access_token?: string;
 				error?: string;
@@ -272,6 +274,7 @@ export async function publicationLogin(
 				signal: AbortSignal.timeout(10000),
 			});
 
+			// SAFETY: only id is read, and it is compared as a string with the owner ID, so a missing or non-numeric id fails the comparison below.
 			const user = (await userResponse.json()) as { id?: number };
 
 			if (
