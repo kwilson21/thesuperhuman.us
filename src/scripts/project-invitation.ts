@@ -38,7 +38,7 @@ export function setupProjectInvitation(selector = "[data-project-invitation]") {
 				return;
 			}
 
-			// SAFETY: the invitation endpoint answers with JSON; error is optional and used only as a message, with a fallback when it is absent.
+			// SAFETY: src/pages/api/owner/projects/[id]/invitation.ts answers with JSON except a plain-text 404 ("Not found") when the client portal is off, which makes json() throw into the catch below. error is optional and used only as a message, with a fallback when it is absent.
 			const result = (await response.json()) as { error?: string };
 			status.textContent = result.error ?? failure;
 		} catch {

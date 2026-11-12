@@ -32,9 +32,16 @@ export function setupSoftwareComposer() {
 	let objectUrl: string | undefined,
 		busy = false;
 
-	// SAFETY: field() receives names of controls that src/pages/owner/requests/[id]/update.astro renders with that name attribute: inputs (artifact_version, review_window_days, paid_confirmed, ...) and selects (kind, milestone_index, evidence_type). This file reads only value, disabled, required, placeholder, dataset and setCustomValidity from them, and every element has those.
+	// SAFETY: field() receives names of controls that src/pages/owner/requests/[id]/update.astro renders with that name attribute, exactly once each: inputs (artifact_version, review_window_days, paid_confirmed), textareas (checks_limitations, next_step, client_request) and selects (kind, milestone_index, evidence_type). This file reads only value, disabled, required, dataset, setCustomValidity and reportValidity from them, which all three control types have.
 	const field = (name: string) =>
-		form.elements.namedItem(name) as HTMLInputElement;
+		form.elements.namedItem(name) as
+			| HTMLInputElement
+			| HTMLTextAreaElement
+			| HTMLSelectElement;
+
+	// SAFETY: only for artifact_version (an input) and next_step (a textarea) in update.astro; selects have no placeholder.
+	const placeholderField = (name: string) =>
+		form.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement;
 
 	const value = (key: string) => field(key).value;
 
@@ -94,7 +101,7 @@ export function setupSoftwareComposer() {
 						? "Share the delivered files after the milestone is paid in full."
 						: "Share progress and the next step.";
 		field("artifact_version").required = kind.endsWith("_review");
-		field("artifact_version").placeholder =
+		placeholderField("artifact_version").placeholder =
 			kind === "direction_review"
 				? "Direction v1"
 				: delivery
@@ -251,7 +258,7 @@ export function setupSoftwareComposer() {
 				!form.querySelector<HTMLElement>("[data-delivery-reference][hidden]");
 		field("checks_limitations").required = handoff;
 		field("next_step").required = handoff;
-		field("next_step").placeholder = handoff
+		placeholderField("next_step").placeholder = handoff
 			? "Corrections within the correction period. Anything new is a separate milestone."
 			: "";
 		form.querySelector("[data-changed-label]")!.textContent = handoff

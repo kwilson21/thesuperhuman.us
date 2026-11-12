@@ -1,6 +1,7 @@
 import { setupFormSubmission } from "~/scripts/form-submission";
 
 export function setupContactForm() {
+	// ContactForm.astro, which loads this script, always renders #contact-form; a missing form still fails later, as before.
 	const form = document.querySelector<HTMLFormElement>("#contact-form")!;
 	setupFormSubmission({
 		form,

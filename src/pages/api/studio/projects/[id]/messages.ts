@@ -116,14 +116,14 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				);
 
 			// Stopping closes this project's access in the same write, so the review stops playing.
-			// SAFETY: notes is null here only if decision is not "changes" (the check above returns for changes without notes), so defaultText is read only for "approved" or "stopped", its two keys.
 			const saved = await postClientReviewDecision(
 				env.MUSIC_DB,
 				params.id,
 				token,
 				parsed.data.reviewId,
 				decision,
-				notes ?? defaultText[decision as "approved" | "stopped"],
+				// The empty text is unreachable: "changes" without notes returned above.
+				notes ?? (decision === "changes" ? "" : defaultText[decision]),
 			);
 
 			if (!saved) {

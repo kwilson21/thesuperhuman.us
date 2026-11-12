@@ -1,7 +1,7 @@
-// A saved review draft is a JSON object. Its values are checked against the two saved marks before use.
-function isSavedDraft(
-	value: unknown,
-): value is Partial<Record<string, string>> {
+// What a saved review draft can hold. This script writes only the strings "works" and "not-yet", but the object is read back from localStorage, so each value is compared with those two before use.
+type SavedDraft = Partial<Record<string, string | number | boolean | null>>;
+
+function isSavedDraft(value: unknown): value is SavedDraft {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 

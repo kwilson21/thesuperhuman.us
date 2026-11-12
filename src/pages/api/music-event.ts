@@ -67,7 +67,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			return Response.json({ ok: false }, { status: 429 });
 		const tag = await resolveCampaignTag(env.MUSIC_DB, input);
 
-		// SAFETY: the Workers runtime sets cf on every incoming request, and the Request type here omits it; the fields read below are optional and read with ?.
+		// SAFETY: Request.cf is typed CfProperties<unknown>, so its location fields read as unknown. On an incoming Worker request country, region and city are optional strings and botManagement.verifiedBot an optional boolean; cf itself can be absent (read with ?.), locationPart re-checks typeof before use, and verifiedBot is compared with === true.
 		const cf = (
 			request as Request & {
 				cf?: {

@@ -24,6 +24,24 @@ const eventStatuses: Partial<
 	"invoice.marked_uncollectible": "uncollectible",
 };
 
+// The five invoice events that eventStatuses maps; each carries a Stripe.Invoice as data.object.
+type InvoiceEvent =
+	| Stripe.InvoiceSentEvent
+	| Stripe.InvoicePaidEvent
+	| Stripe.InvoicePaymentFailedEvent
+	| Stripe.InvoiceVoidedEvent
+	| Stripe.InvoiceMarkedUncollectibleEvent;
+
+function isInvoiceEvent(event: Stripe.Event): event is InvoiceEvent {
+	return (
+		event.type === "invoice.sent" ||
+		event.type === "invoice.paid" ||
+		event.type === "invoice.payment_failed" ||
+		event.type === "invoice.voided" ||
+		event.type === "invoice.marked_uncollectible"
+	);
+}
+
 function isInstallment(value: string | undefined): value is Installment {
 	return value === "booking" || value === "balance";
 }
@@ -52,10 +70,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
 	const status = eventStatuses[event.type];
 
-	if (!status) return Response.json({ received: true });
-
-	// SAFETY: status is set only for the five invoice.* event types in eventStatuses, and Stripe sends a Stripe.Invoice as data.object for each of them.
-	const invoice = event.data.object as Stripe.Invoice;
+	if (!status || !isInvoiceEvent(event))
+		return Response.json({ received: true });
+	const invoice = event.data.object;
 
 	if (
 		!invoice.metadata?.audio_request_id &&

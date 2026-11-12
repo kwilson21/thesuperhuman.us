@@ -34,7 +34,7 @@ export function setupProjectUpdates() {
 								}),
 							});
 
-							// SAFETY: the update endpoint answers with JSON; error is optional and read only when response.ok is false (the success branch returns first).
+							// SAFETY: src/pages/api/owner/projects/[id]/updates.ts answers with JSON except a plain-text 404 ("Not found") when the client portal is off, which makes json() throw into the catch below. error is optional and read only when response.ok is false (the success branch returns first).
 							const result = (await response.json()) as { error?: string };
 
 							if (response.ok) {

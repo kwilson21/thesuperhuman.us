@@ -13,6 +13,7 @@ export function setupStudioSignIn() {
 
 		if (!requestForm || !verifyForm || !status) return;
 
+		// src/pages/studio/sign-in.astro renders the email input in #studio-code-request; a missing one throws, as before.
 		const email =
 			requestForm.querySelector<HTMLInputElement>('[name="email"]')!.value;
 
@@ -34,7 +35,7 @@ export function setupStudioSignIn() {
 				body: JSON.stringify({ email, turnstileToken }),
 			});
 
-			// SAFETY: the code endpoint answers with JSON carrying message or error. Both fields are optional here and read with ??, so either shape is handled.
+			// SAFETY: src/pages/api/studio/code.ts answers with JSON carrying message or error except a plain-text 404 ("Not found") when the client portal is off, which makes json() throw into the catch below. Both fields are optional here and read with ??, so either shape is handled.
 			const result = (await response.json()) as {
 				message?: string;
 				error?: string;
@@ -51,10 +52,7 @@ export function setupStudioSignIn() {
 			status.textContent = "Could not reach the studio. Please try again.";
 		} finally {
 			if (button) button.disabled = false;
-			// SAFETY: adds the optional turnstile property that Cloudflare's Turnstile script sets on window. The type marks it optional, and the optional call handles the script not having loaded.
-			(
-				window as Window & { turnstile?: { reset: () => void } }
-			).turnstile?.reset();
+			window.turnstile?.reset();
 		}
 	});
 
@@ -112,6 +110,7 @@ export function setupStudioSignIn() {
 
 		if (!requestForm || !verifyForm || !status) return;
 
+		// src/pages/studio/sign-in.astro renders the email input in #studio-code-request; a missing one throws, as before.
 		const email =
 			requestForm.querySelector<HTMLInputElement>('[name="email"]')!.value;
 
@@ -124,6 +123,7 @@ export function setupStudioSignIn() {
 			return;
 		}
 
+		// src/pages/studio/sign-in.astro renders the hidden code input in #studio-code-verify; a missing one throws, as before.
 		verifyForm.querySelector<HTMLInputElement>('[name="code"]')!.value = code;
 
 		const button = verifyForm.querySelector<HTMLButtonElement>(
@@ -139,7 +139,7 @@ export function setupStudioSignIn() {
 				body: JSON.stringify({ email, code }),
 			});
 
-			// SAFETY: the session endpoint answers with JSON; error is optional and read only when response.ok is false (the success branch returns first).
+			// SAFETY: src/pages/api/studio/session.ts answers with JSON except a plain-text 404 ("Not found") when the client portal is off, which makes json() throw into the catch below. error is optional and read only when response.ok is false (the success branch returns first).
 			const result = (await response.json()) as { error?: string };
 
 			if (response.ok) {

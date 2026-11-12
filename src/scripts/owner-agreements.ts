@@ -51,9 +51,9 @@ export function setupOwnerAgreements() {
 					headers: { "content-type": "application/json" },
 					body: JSON.stringify({ action: "retention-preview" }),
 				}),
-				// SAFETY: the agreements endpoint answers with JSON; error is read only after the !response.ok throw, and manifest only after it too.
+				// SAFETY: src/pages/api/owner/agreements.ts answers with JSON; its 403 and 503 bodies are a bare { ok: false }, so error is optional here (an absent one becomes an empty message, as before). error is read only in the !response.ok branch, and manifest only after that throw.
 				result = (await response.json()) as {
-					error: string;
+					error?: string;
 					manifest: unknown;
 				};
 
@@ -117,14 +117,14 @@ export function setupOwnerAgreements() {
 			}
 
 			try {
-				// SAFETY: the agreements endpoint answers with JSON; error is read only after the !r.ok throw, and text and compare only after it, when the request succeeded.
+				// SAFETY: src/pages/api/owner/agreements.ts answers with JSON; its 403 and 503 bodies are a bare { ok: false }, so error is optional here (an absent one becomes an empty message, as before). error is read only in the !r.ok branch, and text and compare only after that throw.
 				const r = await fetch(form.getAttribute("action")!, {
 						method: "POST",
 						headers: { "content-type": "application/json" },
 						body: JSON.stringify(payload),
 					}),
 					result = (await r.json()) as {
-						error: string;
+						error?: string;
 						text?: string;
 						compare?: Comparison;
 					};
@@ -162,9 +162,9 @@ export function setupOwnerAgreements() {
 							version: Number(button.dataset.version),
 						}),
 					}),
-					// SAFETY: the agreements endpoint answers with JSON; error is read only after the !response.ok throw, and text and compare only after it too.
+					// SAFETY: src/pages/api/owner/agreements.ts answers with JSON; its 403 and 503 bodies are a bare { ok: false }, so error is optional here (an absent one becomes an empty message, as before). error is read only in the !response.ok branch, and text and compare only after that throw.
 					result = (await response.json()) as {
-						error: string;
+						error?: string;
 						text?: string;
 						compare?: Comparison;
 					};

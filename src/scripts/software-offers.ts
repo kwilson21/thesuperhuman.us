@@ -483,8 +483,11 @@ export function setupSoftwareOffers() {
 	};
 
 	form.addEventListener("input", (event) => {
-		// SAFETY: the editor forms render only input and textarea controls (src/components/owner/SoftwareOfferEditor.astro has no select), and both have name, type and removeAttribute, which the code below uses.
-		const input = event.target as HTMLInputElement | HTMLTextAreaElement;
+		// SAFETY: input events on the editor form come from its form controls: the inputs and textareas of SoftwareOfferEditor.astro and the selects of the embedded SoftwareAgreementDetails.astro (agreement.po_requirement, reusedMsaId). All three types have name, type and removeAttribute, which the code below uses.
+		const input = event.target as
+			| HTMLInputElement
+			| HTMLTextAreaElement
+			| HTMLSelectElement;
 
 		input?.removeAttribute("aria-invalid");
 
@@ -841,7 +844,7 @@ export function setupAgreementAttachments(block: HTMLElement) {
 		upload.disabled = true;
 
 		try {
-			// SAFETY: the upload endpoint returns JSON with error (failures) or attachment (success). result.error is read only after the !response.ok throw, and result.attachment only after it too.
+			// SAFETY: src/pages/api/owner/requests/[id]/agreement-attachments.ts answers PUT with JSON: { ok: true, attachment } on success and { ok: false } (403, 503, 404) or { ok: false, error } (400s, 500s) on failure, so error is optional here. result.error is read only in the !response.ok branch, and result.attachment only after that throw.
 			const query = new URLSearchParams({ filename: file.name, version, date }),
 				response = await fetch(`${block.dataset.uploadEndpoint}?${query}`, {
 					method: "PUT",
@@ -849,7 +852,7 @@ export function setupAgreementAttachments(block: HTMLElement) {
 					body: file,
 				}),
 				result = (await response.json()) as {
-					error: string;
+					error?: string;
 					attachment: {
 						filename: string;
 						version: string;

@@ -1,10 +1,12 @@
+import type { JsonBody } from "./json-body";
+
 export function setupSoftwareProject() {
 	document
 		.querySelectorAll<HTMLElement>("[data-software-project]")
 		.forEach((root) => {
 			const status = root.querySelector<HTMLElement>("[data-software-status]")!;
 
-			async function send<T>(body: T, endpoint = root.dataset.endpoint!) {
+			async function send(body: JsonBody, endpoint = root.dataset.endpoint!) {
 				const buttons = root.querySelectorAll<HTMLButtonElement>("button");
 				const disabled = Array.from(buttons, (button) => button.disabled);
 				buttons.forEach((button) => (button.disabled = true));

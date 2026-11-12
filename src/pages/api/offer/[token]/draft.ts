@@ -37,7 +37,7 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
 			},
 			401,
 		);
-	// SAFETY: this names the two body fields the route reads; csrf_nonce is compared to the session value and values goes to draftSchema.safeParse, so neither is used unchecked.
+	// SAFETY: this names the two body fields the route reads; csrf_nonce is compared to the session value and values goes to draftSchema.safeParse, so neither is used unchecked. The cast does not check that the body is an object: a JSON null body gets through and throws at the csrf_nonce read below, which is answered as a server error, as before.
 	const input = body as { csrf_nonce?: unknown; values?: unknown };
 
 	if (input.csrf_nonce !== session.csrf_nonce)
