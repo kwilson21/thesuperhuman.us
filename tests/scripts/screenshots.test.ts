@@ -1606,6 +1606,7 @@ describe("moved client modules", () => {
 			"website-brief",
 		].map((name) => ({ name, title: name, steps: [] })),
 	};
+
 	const OWNER_REQUEST_SCENARIOS = [
 		"owner-details",
 		"software-brief",
@@ -1613,10 +1614,12 @@ describe("moved client modules", () => {
 		"software-project",
 		"website-brief",
 	];
+
 	const OWNER_REQUEST_WITH_SIGNING = [
 		...OWNER_REQUEST_SCENARIOS,
 		"software-signing",
 	];
+
 	// Building pages import ProjectUpdates, which imports ProjectTimeline.
 	const BUILDING_PROJECT_PAGES = [
 		"building-personal-website",
@@ -1625,11 +1628,13 @@ describe("moved client modules", () => {
 		"building-threadline",
 		"building-the-engineers-daily",
 	];
+
 	const TIMELINE_PAGES = [
 		...BUILDING_PROJECT_PAGES,
 		"building-kaillera-next",
 		"building-tally",
 	];
+
 	const SHARED_SITE = ["home", "work", "audio", "services", "audio-services"];
 
 	const moved: [string, string[], string[]][] = [
