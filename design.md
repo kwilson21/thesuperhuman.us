@@ -28,6 +28,9 @@ file is the rule. Process rules (audits, triage, image QA, copy) live in
   --rule:   #E8E3DA;  /* hairlines only, 1.2:1 */
   --accent: #AE5534;  /* oklch(55.3% 0.126 40)  4.78:1 on paper, and paper on accent */
   --field-border: color-mix(in srgb, var(--muted) 65%, var(--paper)); /* 3.4:1, field edges */
+  --panel: color-mix(in srgb, var(--rule) 50%, var(--paper)); /* the closing panel and door art: the one soft surface */
+  --radius-panel: 32px;  /* closing panel corners */
+  --radius-button: 999px; /* every button is a pill; fields, pictures and cards keep 3px or their own corners */
 
   /* @theme: Tailwind maps --color-paper/ink/muted/rule/accent to the above. */
   --font-serif: 'Libron', 'Iowan Old Style', Georgia, serif;     /* display, body */
@@ -85,11 +88,15 @@ component (`--ill-*`, `--code-*`); declarations reference tokens, never raw hex.
 - Project statuses are accent-dot lines in their stored sentence case (D4.1-D).
 - Numbered steps: hanging numerals in one list (D7.1-C); Threadline's steps use the
   study's stepper, accent circles joined by a hairline (D6.3-C).
+- Every page with the shared footer ends on the closing panel (`--panel`,
+  `--radius-panel`). It is the site's one soft surface; no other panel, card or field
+  takes a large radius without an owner decision.
 
 ## CTA voice
-- Primary · `.site-button`: accent fill, paper text, 1px border, 3px radius, 44px
-  minimum height; on a fine-pointer hover, ink fill.
-- Secondary · `.site-button-outline` (transparent, ink text) or `.site-link`: ink
+- Primary · `.site-button`: accent fill, paper text, 1px border, pill (`--radius-button`),
+  44px minimum height, one line; on a fine-pointer hover, ink fill. Large size,
+  `.site-button-large`, 52px, in the closing panel only.
+- Secondary · `.site-button-outline` (transparent, ink text, also a pill) or `.site-link`: ink
   text, accent rule about 4px under the baseline, accent arrow, 44px tap area
   (D8.4-C).
 - Running links · ink with a 1px accent rule; accent on fine-pointer hover.
@@ -181,6 +188,11 @@ One-time changes with no standing rule: D1.1-B and D1.2-C (door layout on Home a
 D5.4-B, D8.5-D, D9.1-B, D10.1-C, D10.4-A, D10.6-B. Deferred: D5.1-D (photographs
 of the owner's own objects; recorded in `docs/website-system-plan.md`, Deferred
 maintenance).
+
+## Owner decisions (November 12, 2026)
+Kazon chose the closing panel and pill buttons from the design options: "I really like B"
+and "Pills on every button". The spec is
+`docs/superpowers/specs/2026-11-12-closing-panel-and-pill-buttons-design.md`.
 
 ## Variants
 None. A page that needs something this file does not allow gets an owner decision
