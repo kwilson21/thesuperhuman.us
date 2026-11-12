@@ -68,7 +68,10 @@ afterAll(async () => {
 	if (directory) await rm(directory, { recursive: true, force: true });
 });
 
-async function head(path: string, props: Record<string, unknown> = {}) {
+async function head(
+	path: string,
+	props: { ogImage?: string; ogScene?: string } = {},
+) {
 	const container = await AstroContainer.create();
 
 	const html = await container.renderToString(layout, {
@@ -84,6 +87,7 @@ async function head(path: string, props: Record<string, unknown> = {}) {
 const value = (tags: (readonly [string, string])[], key: string) =>
 	tags.find(([name]) => name === key)?.[1];
 
+// SAFETY: Object.keys of OG_SCENES returns exactly its own keys, and OgScene is keyof typeof OG_SCENES.
 const exactRoute = (Object.keys(OG_SCENES) as OgScene[]).flatMap((scene) =>
 	OG_SCENES[scene].routes
 		.filter((route) => !route.endsWith("/*"))
@@ -175,6 +179,7 @@ describe("link-preview tags", () => {
 	});
 
 	it("let a page choose its scene when its URL cannot", async () => {
+		// SAFETY: Object.keys of OG_SCENES returns exactly its own keys, and OgScene is keyof typeof OG_SCENES.
 		const scene = (Object.keys(OG_SCENES) as OgScene[]).at(-1)!;
 		const tags = await head("/this-page-does-not-exist", { ogScene: scene });
 		expect(value(tags, "og:video")).toBe(

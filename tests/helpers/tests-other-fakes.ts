@@ -42,6 +42,8 @@ export function fakeLocals(
 ): App.Locals {
 	return double<App.Locals>({
 		owner,
-		runtime: double<App.Locals["runtime"]>({ env: double<Env>(env) }),
+		runtime: double<App.Locals["runtime"]>({
+			env: double<App.Locals["runtime"]["env"]>(env),
+		}),
 	});
 }

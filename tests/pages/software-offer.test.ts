@@ -276,10 +276,10 @@ it("protects owner previews and selects draft or exact sent version without priv
 				`https://thesuperhuman.us/owner/requests/r/offer${query}`,
 			),
 			params: { id: "r" },
-			locals: {
-				owner: owner ? { email: "owner@example.com" } : undefined,
-				runtime: { env: { MUSIC_DB: db } },
-			},
+			locals: fakeLocals(
+				{ MUSIC_DB: db },
+				owner ? { email: "owner@example.com" } : undefined,
+			),
 		});
 
 	try {

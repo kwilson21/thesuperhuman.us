@@ -2,8 +2,24 @@ import { afterEach, expect, it, vi } from "vitest";
 import { setupAgreementAccess } from "~/scripts/agreement-access";
 import { consentText } from "~/lib/agreement-fields";
 
+/** The fake element members the code under test reads from a query result. */
+type FakeNode = {
+	value: string;
+	textContent: string;
+	hidden: boolean;
+	checked: boolean;
+	disabled: boolean;
+	dataset: Record<string, string>;
+};
+
+/** The members a test overrides on a fake element. */
+type NodeExtra = {
+	dataset?: Record<string, string>;
+	querySelector?: (selector: string) => FakeNode | null;
+};
+
 function fixture() {
-	const values: Record<string, string> = {
+	const values = {
 		legal_name: " Example LLC ",
 		signer_name: " Alex Example ",
 		signer_title: " Owner ",
@@ -21,7 +37,7 @@ function fixture() {
 		documents: "[]",
 	};
 
-	const node = (extra: Record<string, unknown> = {}) => {
+	const node = (extra: NodeExtra = {}) => {
 		const events: Record<string, Function> = {};
 
 		return {
@@ -90,7 +106,7 @@ function fixture() {
 	vi.stubGlobal(
 		"FormData",
 		class {
-			constructor(_form: unknown) {}
+			constructor(_form: HTMLFormElement) {}
 			*[Symbol.iterator]() {
 				yield* Object.entries(values);
 			}
@@ -98,7 +114,10 @@ function fixture() {
 				return key in values;
 			}
 			get(key: string) {
-				return values[key] ?? null;
+				if (!(key in values)) return null;
+
+				// SAFETY: key in values is checked on the line above, so key names one of the keys of values.
+				return values[key as keyof typeof values];
 			}
 		},
 	);

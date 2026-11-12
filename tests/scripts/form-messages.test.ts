@@ -1,4 +1,5 @@
 import { expect, it, vi } from "vitest";
+import { double } from "../helpers/doubles";
 import { openMessages, scrollShift } from "~/scripts/form-messages";
 
 it("keeps an action that was on screen above the fold after messages open", () => {
@@ -21,6 +22,8 @@ it("never scrolls the focused field off the top", () => {
 
 it("runs the update and returns its result without a browser layout", () => {
 	const update = vi.fn(() => "first field");
-	expect(openMessages({} as HTMLElement, null, update)).toBe("first field");
+	expect(openMessages(double<HTMLElement>({}), null, update)).toBe(
+		"first field",
+	);
 	expect(update).toHaveBeenCalledOnce();
 });

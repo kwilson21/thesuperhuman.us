@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
+import { double } from "../helpers/doubles";
 import { setupSuggestionPass } from "~/scripts/brief-suggestion-pass";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -32,9 +33,11 @@ function setup(interactive = false) {
 		container,
 		render,
 		remove,
-		start: setupSuggestionPass({
-			dataset: { suggestionSitekey: "site-key" },
-		} as any),
+		start: setupSuggestionPass(
+			double<HTMLFormElement>({
+				dataset: { suggestionSitekey: "site-key" },
+			}),
+		),
 	};
 }
 
@@ -64,7 +67,9 @@ it("never shows an interactive challenge or requests a pass afterward", async ()
 });
 
 it("disables suggestions without a configured widget", async () => {
-	expect(await setupSuggestionPass({ dataset: {} } as any)()).toBe(false);
+	expect(
+		await setupSuggestionPass(double<HTMLFormElement>({ dataset: {} }))(),
+	).toBe(false);
 });
 
 it("shares one renewal check and can renew again after a later expiry", async () => {

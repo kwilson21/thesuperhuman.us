@@ -16,7 +16,7 @@ it("blocks overlapping uploads and merges into the current attachment manifest",
 		dispatchEvent: vi.fn(),
 	};
 
-	const nodes: Record<string, unknown> = {
+	const nodes = {
 		"[data-upload-attachment]": upload,
 		'[name="agreement.attachments"]': field,
 		"[data-attachment-file]": { files: [{ name: "sample.pdf" }] },
@@ -25,10 +25,11 @@ it("blocks overlapping uploads and merges into the current attachment manifest",
 		"[data-attachment-list]": { appendChild: vi.fn() },
 	};
 
+	// SAFETY: the selectors this test queries are the keys of nodes, so the keyof cast holds; a missing key returns undefined, as a missing element does in the DOM.
 	const block = {
 		dataset: { uploadEndpoint: "/upload" },
 		addEventListener: vi.fn(),
-		querySelector: (s: string) => nodes[s],
+		querySelector: (s: string) => nodes[s as keyof typeof nodes],
 		closest: () => ({ querySelector: () => ({ textContent: "" }) }),
 	};
 
@@ -44,6 +45,7 @@ it("blocks overlapping uploads and merges into the current attachment manifest",
 				}),
 		),
 	);
+	// SAFETY: setupAgreementAttachments reads only dataset, addEventListener, querySelector and closest from block, all supplied above, and it queries only the keys of nodes.
 	setupAgreementAttachments(block as never);
 	const pending = click();
 	expect(upload.disabled).toBe(true);

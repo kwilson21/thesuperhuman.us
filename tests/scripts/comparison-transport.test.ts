@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { double } from "../helpers/doubles";
 import { ComparisonTransport } from "../../src/scripts/comparison-transport";
 
 function fixture() {
@@ -39,8 +40,12 @@ function fixture() {
 	};
 
 	const transport = new ComparisonTransport(
-		context as any,
-		[{ duration: 160.3 }, { duration: 160 }] as AudioBuffer[],
+		// SAFETY: ComparisonTransport reads only currentTime, destination, createGain and createBufferSource from the context, and the fake supplies each of them; its nodes are plain objects with the members the transport uses.
+		context as never,
+		[
+			double<AudioBuffer>({ duration: 160.3 }),
+			double<AudioBuffer>({ duration: 160 }),
+		],
 		[0.05, 0],
 		160,
 		vi.fn(),
