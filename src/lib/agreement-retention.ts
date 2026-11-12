@@ -2,6 +2,11 @@ import { canonicalJson, hashBytes } from "./agreement-artifacts";
 import { hashOfferToken } from "./software-offers";
 import { agreementEvent } from "./agreement-events";
 import { softwareGuard } from "./software-projects";
+import type { Agreement } from "./software-agreements";
+
+function isText<T>(value: T): value is T & string {
+	return typeof value === "string";
+}
 
 export type RetentionManifest = {
 	version: 1;
@@ -61,19 +66,14 @@ export async function previewAgreementRetention(
 				`SELECT a.* FROM software_agreements a WHERE ${eligible} ORDER BY a.id LIMIT 20`,
 			)
 			.bind(now.toISOString())
-			.all<
-				Record<string, unknown> & {
-					id: string;
-					text_sha256: string;
-					attachment_manifest_json: string;
-				}
-			>()
+			.all<Agreement>()
 	).results;
 
 	const retiringIds = JSON.stringify(rows.map((row) => row.id));
 	// Assign a shared attachment to its last retiring reference, after the earlier rows are removed.
 	const attachmentOwners = new Map<string, string>();
 
+	// SAFETY: row.attachment_manifest_json is JSON.stringify of the validated attachments that software-agreements.ts writes (or [] for an MSA), so each item has a key string.
 	for (const row of rows)
 		for (const attachment of JSON.parse(row.attachment_manifest_json) as {
 			key: string;
@@ -104,6 +104,7 @@ export async function previewAgreementRetention(
 			cursor = listed.truncated ? listed.cursor : undefined;
 		} while (cursor);
 
+		// SAFETY: the same manifest as the loop above, so each item has the key and sha256 strings that the attachment upload recorded.
 		for (const attachment of JSON.parse(row.attachment_manifest_json) as {
 			key: string;
 			sha256: string;
@@ -179,7 +180,7 @@ export async function previewAgreementRetention(
 
 				if (
 					saved.version === 1 &&
-					typeof saved.cursor === "string" &&
+					isText(saved.cursor) &&
 					saved.cursor.length > 0 &&
 					saved.cursor.length <= 4096
 				)
@@ -269,7 +270,7 @@ export async function applyAgreementRetention(
 
 	if (
 		(manifest.orphan_scan_cursor != null &&
-			(typeof manifest.orphan_scan_cursor !== "string" ||
+			(!isText(manifest.orphan_scan_cursor) ||
 				manifest.orphan_scan_cursor.length === 0 ||
 				manifest.orphan_scan_cursor.length > 4096)) ||
 		manifest.version !== 1 ||
@@ -576,7 +577,7 @@ export async function applyAgreementRetention(
 				new TextDecoder().decode(await marker.arrayBuffer()),
 			);
 
-			if (saved.version === 1 && typeof saved.cursor === "string")
+			if (saved.version === 1 && isText(saved.cursor))
 				savedCursor = saved.cursor;
 		} catch {
 			// Match the preview's restart for an unreadable marker.

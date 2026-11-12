@@ -333,10 +333,7 @@ export function agreementValues(
 		...base,
 		contractor: {
 			...contractor,
-			config_version: String(
-				(contractor as typeof contractor & { config_version?: number })
-					.config_version ?? 1,
-			),
+			config_version: String(contractor.config_version ?? 1),
 		},
 		msa: {
 			effective_on: system.msa_version.split(" / ")[0],
@@ -404,3 +401,9 @@ export function agreementValues(
 		})),
 	};
 }
+
+/** The part of the agreementValues result that artifact and PDF code reads back from values_json. Older rows lack the label and revision fields. */
+export type StoredAgreementValues = {
+	msa?: { version_label?: string; source_revision?: string };
+	sow?: { version_label?: string; source_revision?: string };
+};
