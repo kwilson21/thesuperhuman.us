@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
 const migration = readFileSync(
 	new URL(
 		"../../migrations/music/0017_audio_project_update_milestones.sql",
@@ -10,6 +11,7 @@ const migration = readFileSync(
 	),
 	"utf8",
 );
+
 const schema = readFileSync(
 	new URL("../../db/music.sql", import.meta.url),
 	"utf8",
@@ -25,12 +27,15 @@ it("backfills revision and completion notes only when the same-instant pairing i
 		at(0),
 		at(0),
 	);
+
 	const note = db.prepare(
 		`INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at) VALUES ('song-1',?,?,'owner',?)`,
 	);
+
 	const audit = db.prepare(
 		`INSERT INTO audio_project_audit(request_id,action,actor,occurred_at) VALUES ('song-1',?,'owner',?)`,
 	);
+
 	note.run("work_started", "Starting.", at(1));
 	audit.run("stage-changed", at(1));
 	note.run("progress", "Chorus notes heard.", at(2));

@@ -13,6 +13,7 @@ import {
 } from "~/lib/og-media";
 
 let layout: any, directory: string;
+
 beforeAll(async () => {
 	directory = await mkdtemp(resolve(".og-tags-render-"));
 	await build({
@@ -62,22 +63,27 @@ beforeAll(async () => {
 		)
 	).default;
 });
+
 afterAll(async () => {
 	if (directory) await rm(directory, { recursive: true, force: true });
 });
 
 async function head(path: string, props: Record<string, unknown> = {}) {
 	const container = await AstroContainer.create();
+
 	const html = await container.renderToString(layout, {
 		props: { title: "Title", description: "Description", ...props },
 		request: new Request(`https://thesuperhuman.us${path}`),
 	});
+
 	return [
 		...html.matchAll(/<meta (?:property|name)="([^"]+)" content="([^"]*)"/g),
 	].map(([, key, value]) => [key, value.replaceAll("&amp;", "&")] as const);
 }
+
 const value = (tags: (readonly [string, string])[], key: string) =>
 	tags.find(([name]) => name === key)?.[1];
+
 const exactRoute = (Object.keys(OG_SCENES) as OgScene[]).flatMap((scene) =>
 	OG_SCENES[scene].routes
 		.filter((route) => !route.endsWith("/*"))
@@ -102,10 +108,12 @@ describe("link-preview tags", () => {
 		expect(value(tags, "og:video:width")).toBe("1200");
 		expect(value(tags, "og:video:height")).toBe("630");
 		expect(value(tags, "twitter:card")).toBe("summary_large_image");
+
 		// Apple's reader starts a new video at a URL tag that follows a type or size tag.
 		const order = tags
 			.map(([name]) => name)
 			.filter((name) => name.startsWith("og:video"));
+
 		expect(order).toEqual([
 			"og:video",
 			"og:video:secure_url",
@@ -126,6 +134,7 @@ describe("link-preview tags", () => {
 		const tags = await head("/no-such-section/page", {
 			ogImage: "/artwork.webp",
 		});
+
 		expect(value(tags, "og:image")).toBe(
 			"https://thesuperhuman.us/artwork.webp",
 		);
@@ -147,6 +156,7 @@ describe("link-preview tags", () => {
 		const family = await head("/writing/a-future-essay", {
 			ogImage: "/cover.webp",
 		});
+
 		expect(value(family, "og:image")).toBe(
 			"https://thesuperhuman.us/cover.webp",
 		);

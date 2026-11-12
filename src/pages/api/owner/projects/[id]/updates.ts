@@ -12,6 +12,7 @@ import { musicRequest } from "~/lib/music-request";
 export const prerender = false;
 const note = z.string().trim().min(1).max(1000);
 const date = z.string().refine(validProjectDate);
+
 const inputSchema = z.discriminatedUnion("action", [
 	z.object({ action: z.literal("accept"), dueDate: date, body: note }),
 	z.object({ action: z.literal("progress"), body: note }),
@@ -38,22 +39,28 @@ const inputSchema = z.discriminatedUnion("action", [
 export const POST: APIRoute = async ({ params, request, locals }) => {
 	if (!locals.owner) return Response.json({ ok: false }, { status: 403 });
 	const env = locals.runtime?.env;
+
 	if (!clientPortalEnabled(env))
 		return new Response("Not found", { status: 404 });
+
 	if (!env.MUSIC_DB || !locals.runtime.ctx || !params.id) {
 		return Response.json(
 			{ ok: false, error: "Project updates are temporarily unavailable." },
 			{ status: 503 },
 		);
 	}
+
 	const body = await musicRequest(request, 8192);
+
 	if (body instanceof Response) return body;
 	const parsed = inputSchema.safeParse(body);
+
 	if (!parsed.success)
 		return Response.json(
 			{ ok: false, error: "Check the update and try again." },
 			{ status: 400 },
 		);
+
 	try {
 		if (parsed.data.action === "retry_email") {
 			const requeued = await queueProjectNoticeForDelivery(
@@ -62,6 +69,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				parsed.data.updateId,
 				parsed.data.confirmedNotSent,
 			);
+
 			if (!requeued)
 				return Response.json(
 					{ ok: false, error: "This email cannot be retried here." },
@@ -74,14 +82,17 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					env,
 				).catch(() => console.error("Studio update email state is uncertain.")),
 			);
+
 			return Response.json({ ok: true });
 		}
+
 		const update = await saveProjectUpdate(
 			env.MUSIC_DB,
 			params.id,
 			locals.owner.email,
 			parsed.data,
 		);
+
 		if (!update)
 			return Response.json(
 				{ ok: false, error: "This project cannot take that update right now." },
@@ -92,6 +103,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				console.error("Studio update email state is uncertain."),
 			),
 		);
+
 		return Response.json({ ok: true, update });
 	} catch {
 		return Response.json(

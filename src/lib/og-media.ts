@@ -129,14 +129,17 @@ export function ogSceneFor(
 	table: Record<string, { routes: readonly string[] }> = OG_SCENES,
 ): { scene: OgScene; exact: boolean } | null {
 	let family: { scene: OgScene; length: number } | null = null;
+
 	for (const [scene, { routes }] of Object.entries(table) as [
 		OgScene,
 		{ routes: readonly string[] },
 	][]) {
 		for (const route of routes) {
 			if (route === pathname) return { scene, exact: true };
+
 			if (route.endsWith("/*")) {
 				const base = route.slice(0, -1);
+
 				if (
 					pathname.startsWith(base) &&
 					(!family || base.length > family.length)
@@ -145,15 +148,18 @@ export function ogSceneFor(
 			}
 		}
 	}
+
 	return family && { scene: family.scene, exact: false };
 }
 
 export function ogMedia(scene: OgScene): OgMedia {
 	const files = renderedScenes[scene];
+
 	if (!files)
 		throw new Error(
 			`Link-preview scene ${scene} has not been rendered. Run node scripts/og-video/render.mjs ${scene}.`,
 		);
+
 	return {
 		image: files.image,
 		video: files.video,
@@ -176,38 +182,47 @@ export async function serveOgVideo(
 	assets: Pick<Fetcher, "fetch"> | undefined,
 ): Promise<Response> {
 	const path = `/og/${name}.mp4`;
+
 	if (
 		!name ||
 		!Object.values(renderedScenes).some((files) => files?.video === path)
 	)
 		return new Response("Not found", { status: 404 });
+
 	const source = await (assets ?? globalThis).fetch(
 		new URL(`/og/raw/${name}.mp4`, request.url),
 	);
+
 	if (!source.ok) return new Response("Not found", { status: 404 });
 	const bytes = await source.arrayBuffer();
 	const size = bytes.byteLength;
+
 	const range =
 		request.method === "HEAD"
 			? null
 			: mediaRange(request.headers.get("range"), size);
+
 	if (range === "invalid")
 		return new Response(null, {
 			status: 416,
 			headers: { "content-range": `bytes */${size}` },
 		});
+
 	const headers = new Headers({
 		"content-type": "video/mp4",
 		"accept-ranges": "bytes",
 		"content-length": String(range?.length ?? size),
 		"cache-control": IMMUTABLE,
 	});
+
 	if (range)
 		headers.set(
 			"content-range",
 			`bytes ${range.offset}-${range.offset + range.length - 1}/${size}`,
 		);
+
 	if (request.method === "HEAD") return new Response(null, { headers });
+
 	return new Response(
 		range ? bytes.slice(range.offset, range.offset + range.length) : bytes,
 		{ status: range ? 206 : 200, headers },

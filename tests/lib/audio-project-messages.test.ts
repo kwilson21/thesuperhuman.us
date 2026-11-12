@@ -19,10 +19,12 @@ import {
 } from "~/lib/audio-project-messages";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
 const baseline = readFileSync(
 	new URL("../../db/music.sql", import.meta.url),
 	"utf8",
 );
+
 const secret = "studio-code-key-for-tests-32-characters";
 const now = new Date("2026-09-22T12:00:00Z");
 
@@ -30,12 +32,14 @@ function fixture() {
 	const sql = new DatabaseSync(":memory:");
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(baseline);
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		query,
 		args,
 		bind: (...values: unknown[]) => statement(query, values),
 		run: async () => {
 			const result = sql.prepare(query).run(...args);
+
 			return { success: true, meta: { changes: result.changes }, results: [] };
 		},
 		all: async () => ({
@@ -44,23 +48,29 @@ function fixture() {
 		}),
 		first: async () => sql.prepare(query).get(...args) ?? null,
 	});
+
 	const db = {
 		prepare: (query: string) => statement(query),
 		batch: async (statements: ReturnType<typeof statement>[]) => {
 			sql.exec("BEGIN");
+
 			try {
 				const results = statements.map((item) => {
 					const prepared = sql.prepare(item.query);
+
 					if (/\bRETURNING\b/i.test(item.query))
 						return { success: true, results: prepared.all(...item.args) };
 					const result = prepared.run(...item.args);
+
 					return {
 						success: true,
 						meta: { changes: result.changes },
 						results: [],
 					};
 				});
+
 				sql.exec("COMMIT");
+
 				return results;
 			} catch (error) {
 				sql.exec("ROLLBACK");
@@ -68,12 +78,14 @@ function fixture() {
 			}
 		},
 	} as unknown as D1Database;
+
 	function addRequest(id: string, email = "artist@example.com") {
 		sql
 			.prepare(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
       VALUES (?,'service',?,'A song','new',?,?)`)
 			.run(id, email, now.toISOString(), now.toISOString());
 	}
+
 	return { sql, db, addRequest };
 }
 
@@ -99,12 +111,14 @@ describe("audio project messages", () => {
 		const { sql, db, addRequest } = fixture();
 		addRequest("song-1");
 		addRequest("other-song", "other@example.com");
+
 		const code = (await issueClientCode(
 			db,
 			"artist@example.com",
 			secret,
 			now,
 		))!;
+
 		const token = (await completeClientCode(
 			db,
 			"artist@example.com",
@@ -112,6 +126,7 @@ describe("audio project messages", () => {
 			secret,
 			now,
 		))!;
+
 		const first = await postClientProjectMessage(
 			db,
 			"song-1",
@@ -119,6 +134,7 @@ describe("audio project messages", () => {
 			"I updated the Drive link.",
 			now,
 		);
+
 		expect(first).toMatchObject({
 			actor: "client",
 			body: "I updated the Drive link.",
@@ -132,6 +148,7 @@ describe("audio project messages", () => {
 				now,
 			),
 		).toBeNull();
+
 		const reply = await postOwnerProjectMessage(
 			db,
 			"song-1",
@@ -139,6 +156,7 @@ describe("audio project messages", () => {
 			"Thanks, I have it.",
 			now,
 		);
+
 		expect(reply).toMatchObject({ actor: "owner", body: "Thanks, I have it." });
 		expect(
 			(await listProjectMessages(db, "song-1")).map((message) => message.body),
@@ -174,12 +192,14 @@ describe("audio project messages", () => {
 	it("takes one answer per published review and starts over when a new review is shared", async () => {
 		const { sql, db, addRequest } = fixture();
 		addRequest("song-1");
+
 		const code = (await issueClientCode(
 			db,
 			"artist@example.com",
 			secret,
 			now,
 		))!;
+
 		const token = (await completeClientCode(
 			db,
 			"artist@example.com",
@@ -187,12 +207,14 @@ describe("audio project messages", () => {
 			secret,
 			now,
 		))!;
+
 		const publish = (id: string, at: string) =>
 			sql
 				.prepare(`INSERT INTO audio_project_files
       (id,request_id,version,object_key,display_name,media_type,byte_size,status,uploaded_at,published_at)
       VALUES (?,'song-1','review',?,'Mix.wav','audio/wav',10,'published',?,?)`)
 				.run(id, `key-${id}`, at, at);
+
 		// No answer before a review is shared, even at the right stage.
 		sql
 			.prepare(
@@ -212,6 +234,7 @@ describe("audio project messages", () => {
 		).toBeNull();
 		publish("review-1", "2026-09-22T11:00:00.000Z");
 		expect(await latestReviewDecision(db, "song-1")).toBeNull();
+
 		const changes = await postClientReviewDecision(
 			db,
 			"song-1",
@@ -221,6 +244,7 @@ describe("audio project messages", () => {
 			"Vocal up in verse two.",
 			now,
 		);
+
 		expect(changes).toMatchObject({
 			actor: "client",
 			body: "Vocal up in verse two.",
@@ -300,12 +324,14 @@ describe("audio project messages", () => {
 	it("allows changes only while revision rounds remain, and stopping only once they are used", async () => {
 		const { sql, db, addRequest } = fixture();
 		addRequest("song-1");
+
 		const code = (await issueClientCode(
 			db,
 			"artist@example.com",
 			secret,
 			now,
 		))!;
+
 		const token = (await completeClientCode(
 			db,
 			"artist@example.com",
@@ -313,6 +339,7 @@ describe("audio project messages", () => {
 			secret,
 			now,
 		))!;
+
 		sql
 			.prepare(
 				"UPDATE audio_projects SET stage='review_ready' WHERE request_id='song-1'",
@@ -334,12 +361,14 @@ describe("audio project messages", () => {
 				now,
 			),
 		).toBeNull();
+
 		for (const at of ["2026-09-20T12:00:00.000Z", "2026-09-21T12:00:00.000Z"]) {
 			sql
 				.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at,milestone)
         VALUES ('song-1','progress','Revising.','owner@example.com',?,'revision_started')`)
 				.run(at);
 		}
+
 		expect(await revisionRoundsLeft(db, "song-1")).toBe(0);
 		expect(
 			await postClientReviewDecision(
@@ -429,12 +458,14 @@ describe("audio project messages", () => {
 	it("marks only the message the reader actually reached", async () => {
 		const { sql, db, addRequest } = fixture();
 		addRequest("song-1");
+
 		const code = (await issueClientCode(
 			db,
 			"artist@example.com",
 			secret,
 			now,
 		))!;
+
 		const token = (await completeClientCode(
 			db,
 			"artist@example.com",
@@ -442,6 +473,7 @@ describe("audio project messages", () => {
 			secret,
 			now,
 		))!;
+
 		const first = (await postClientProjectMessage(
 			db,
 			"song-1",
@@ -449,6 +481,7 @@ describe("audio project messages", () => {
 			"First note.",
 			now,
 		))!;
+
 		const second = (await postClientProjectMessage(
 			db,
 			"song-1",
@@ -456,6 +489,7 @@ describe("audio project messages", () => {
 			"Second note.",
 			now,
 		))!;
+
 		await markProjectMessagesRead(db, "song-1", "owner", first.id, null, now);
 		expect(
 			(await listProjectMessages(db, "song-1")).map(
@@ -474,12 +508,14 @@ describe("audio project messages", () => {
 	it("counts saved client messages within the rolling five-minute window", async () => {
 		const { sql, db, addRequest } = fixture();
 		addRequest("song-1");
+
 		const code = (await issueClientCode(
 			db,
 			"artist@example.com",
 			secret,
 			now,
 		))!;
+
 		const token = (await completeClientCode(
 			db,
 			"artist@example.com",
@@ -487,11 +523,13 @@ describe("audio project messages", () => {
 			secret,
 			now,
 		))!;
+
 		const sends = await Promise.all(
 			Array.from({ length: 13 }, (_, index) =>
 				postClientProjectMessage(db, "song-1", token, `Note ${index}`, now),
 			),
 		);
+
 		expect(sends.filter(Boolean)).toHaveLength(12);
 		expect(
 			sql
@@ -500,12 +538,14 @@ describe("audio project messages", () => {
 				)
 				.get(),
 		).toEqual({ n: 12 });
+
 		const secondCode = (await issueClientCode(
 			db,
 			"artist@example.com",
 			secret,
 			new Date(now.getTime() + 31_000),
 		))!;
+
 		const secondToken = (await completeClientCode(
 			db,
 			"artist@example.com",
@@ -513,6 +553,7 @@ describe("audio project messages", () => {
 			secret,
 			new Date(now.getTime() + 31_000),
 		))!;
+
 		expect(
 			await clientMessageRateLimited(
 				db,

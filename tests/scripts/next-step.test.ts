@@ -12,6 +12,7 @@ it("jumps to the named control, highlights it and focuses the field that comes f
 	const classes = new Set<string>();
 	const focus = vi.fn();
 	const checkbox = { focus };
+
 	const form = {
 		matches: () => false,
 		scrollIntoView: vi.fn(),
@@ -22,6 +23,7 @@ it("jumps to the named control, highlights it and focuses the field that comes f
 			remove: (name: string) => classes.delete(name),
 		},
 	};
+
 	vi.stubGlobal("matchMedia", () => ({ matches: false }));
 	vi.stubGlobal("document", {
 		querySelector: () => ({
@@ -50,6 +52,7 @@ it("jumps to the named control, highlights it and focuses the field that comes f
 it("highlights the whole section for a heading and focuses nothing in it", () => {
 	let click: (event: { preventDefault: () => void }) => void = () => {};
 	const classes = new Set<string>();
+
 	const section = {
 		scrollIntoView: vi.fn(),
 		classList: {
@@ -57,11 +60,13 @@ it("highlights the whole section for a heading and focuses nothing in it", () =>
 			remove: (name: string) => classes.delete(name),
 		},
 	};
+
 	const heading = {
 		matches: (selector: string) => selector === "h2, h3",
 		closest: () => section,
 		querySelector: () => null,
 	};
+
 	vi.stubGlobal("matchMedia", () => ({ matches: true }));
 	vi.stubGlobal("document", {
 		querySelector: () => ({

@@ -1,5 +1,6 @@
 import approvedReview from "../data/project-stories/threadline-review.json";
 import type { ProjectFeed, PublicEntry } from "./publication/read";
+
 export interface ProjectArtifact {
 	src: string;
 	title: string;
@@ -9,6 +10,7 @@ export interface ProjectArtifact {
 	width: number;
 	height: number;
 }
+
 export interface Milestone {
 	id: string;
 	day: string;
@@ -32,6 +34,7 @@ export interface Milestone {
 	 * milestone; the projections below compute them from recency instead. */
 	placement?: "story";
 }
+
 const entries = (feed: ProjectFeed): PublicEntry[] => [
 	...new Map(
 		[...feed.history, ...(feed.current ? [feed.current] : [])].map((entry) => [
@@ -40,14 +43,17 @@ const entries = (feed: ProjectFeed): PublicEntry[] => [
 		]),
 	).values(),
 ];
+
 export function publicationMilestones(feed: ProjectFeed | null): Milestone[] {
 	if (!feed) return [];
+
 	return entries(feed)
 		.reverse()
 		.map((entry) => {
 			const split = entry.story.summary
 				.match(/^(?:.*?[.!?](?:\s|$)){1,2}/)?.[0]
 				.trim();
+
 			const reviewed =
 				feed.projectId === approvedReview.projectId &&
 				entry.entryId === approvedReview.entryId &&
@@ -56,6 +62,7 @@ export function publicationMilestones(feed: ProjectFeed | null): Milestone[] {
 					([key, value]) =>
 						entry.story[key as keyof typeof entry.story] === value,
 				);
+
 			return {
 				illustration: reviewed ? "payload-review" : undefined,
 				detailLabel: reviewed ? "What was checked" : undefined,
@@ -81,6 +88,7 @@ export function publicationMilestones(feed: ProjectFeed | null): Milestone[] {
 			};
 		});
 }
+
 /** Curated history remains repository-owned; publish new milestones under separate IDs. */
 export function journalMilestones(
 	feed: ProjectFeed | null,
@@ -90,12 +98,14 @@ export function journalMilestones(
 		a.day.localeCompare(b.day),
 	);
 }
+
 /** Explicitly authored narrative chapters, in the order they happened. Never inferred from dates. */
 export function storyMilestones(entries: Milestone[]): Milestone[] {
 	return entries
 		.filter((entry) => entry.placement === "story")
 		.sort((a, b) => a.day.localeCompare(b.day));
 }
+
 /** Everything not in the authored story, newest first: the pool Latest work and Archive divide by recency. */
 function readingPool(entries: Milestone[]): Milestone[] {
 	return entries
@@ -103,6 +113,7 @@ function readingPool(entries: Milestone[]): Milestone[] {
 		.slice()
 		.sort((a, b) => b.day.localeCompare(a.day));
 }
+
 /** The default view: at most `limit` recent, non-story updates, newest first. */
 export function latestJournalMilestones(
 	entries: Milestone[],
@@ -110,6 +121,7 @@ export function latestJournalMilestones(
 ): Milestone[] {
 	return readingPool(entries).slice(0, limit);
 }
+
 /** Non-story updates older than the Latest work window, newest first. Nothing is deleted, only relocated. */
 export function archiveMilestones(
 	entries: Milestone[],
@@ -117,6 +129,7 @@ export function archiveMilestones(
 ): Milestone[] {
 	return readingPool(entries).slice(limit);
 }
+
 /** The panel a reading view opens on. A named view (Latest work, Story, Archive) always opens on
  * the first entry of its own projection: newest for Latest work and Archive, oldest for the
  * chronological story. The live feed's current entry only takes precedence when there is no named
@@ -129,6 +142,7 @@ export function journalSelection(
 ): string | undefined {
 	return view ? (visible[0]?.id ?? selectedId) : (currentEntryId ?? selectedId);
 }
+
 export function feedChange(
 	previous: ProjectFeed,
 	next: ProjectFeed,
@@ -139,6 +153,7 @@ export function feedChange(
 	)
 		return "ignore";
 	const current = new Map(entries(next).map((entry) => [entry.entryId, entry]));
+
 	if (
 		(previous.current && !next.current) ||
 		entries(previous).some(
@@ -147,6 +162,7 @@ export function feedChange(
 		)
 	)
 		return "replace";
+
 	return JSON.stringify(previous) === JSON.stringify(next)
 		? "unchanged"
 		: "new";

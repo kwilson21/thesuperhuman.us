@@ -10,6 +10,7 @@ import { OG_SCENES, type OgScene } from "~/lib/og-media";
 // the scene to re-render (node scripts/og-video/render.mjs <scene>). Lines the page composes from data
 // are rebuilt from that data below; the rest are short composite labels or text read from a reviewed image.
 const SCENES = "scripts/og-video/scenes";
+
 // The link-preview alt text quotes the scenes, so it cannot vouch for them.
 const corpus = readdirSync("src", { recursive: true })
 	.filter(
@@ -22,6 +23,7 @@ const corpus = readdirSync("src", { recursive: true })
 	.join("\n")
 	.replace(/&amp;/g, "&")
 	.replace(/\s+/g, " ");
+
 const publicReleases = readdirSync("src/content/releases")
 	.filter((file) => file.endsWith(".json"))
 	.filter(
@@ -29,6 +31,7 @@ const publicReleases = readdirSync("src/content/releases")
 			JSON.parse(readFileSync(join("src/content/releases", file), "utf8"))
 				.visibility === "public",
 	).length;
+
 const composed = new Set([
 	// src/components/audio/AudioHero.astro builds its price lede from audioOffers.
 	`From $${audioOffers["vocal-mix"].price} per song for two-track vocal mixing.`,
@@ -39,6 +42,7 @@ const composed = new Set([
 	// src/pages/audio/releases.astro counts the public releases.
 	`${publicReleases} ${publicReleases === 1 ? "release" : "releases"}`,
 ]);
+
 const labels: Record<string, Record<string, string>> = {
 	"audio-portfolio": {
 		"· Prod. Lexi Banks":
@@ -115,22 +119,32 @@ type Node = {
 	childNodes?: Node[];
 	content?: Node;
 };
+
 function lines(node: Node, out: string[] = []): string[] {
 	if (node.nodeName === "script" || node.nodeName === "style") return out;
+
 	if (node.nodeName === "#text") {
 		const text = node.value!.replace(/\s+/g, " ").trim();
+
 		if (text.split(" ").length >= 2) out.push(text);
 	}
+
 	for (const child of node.childNodes ?? []) lines(child, out);
+
 	if (node.content) lines(node.content, out);
+
 	return out;
 }
 
 function allText(node: Node, out: string[] = []): string[] {
 	if (node.nodeName === "script" || node.nodeName === "style") return out;
+
 	if (node.nodeName === "#text") out.push(node.value!);
+
 	for (const child of node.childNodes ?? []) allText(child, out);
+
 	if (node.content) allText(node.content, out);
+
 	return out;
 }
 
@@ -147,10 +161,12 @@ describe("link-preview scene copy", () => {
 				),
 			),
 		];
+
 		const stale = text.filter(
 			(line) =>
 				!corpus.includes(line) && !composed.has(line) && !labels[scene]?.[line],
 		);
+
 		expect(stale, `re-render ${scene} after updating it`).toEqual([]);
 	});
 
@@ -163,15 +179,18 @@ describe("link-preview scene copy", () => {
 					.filter((price) => price != null)
 					.map(String),
 			);
+
 			const text = [
 				...allText(
 					parse(readFileSync(join(SCENES, `${scene}.html`), "utf8")) as Node,
 				),
 				OG_SCENES[scene as OgScene].alt,
 			].join(" ");
+
 			const shown = (text.match(/\$\d[\d,]*\d|\$\d/g) ?? []).filter(
 				(amount) => !demoAmounts[scene]?.includes(amount),
 			);
+
 			expect(
 				shown.filter(
 					(amount) => !prices.has(amount.slice(1).replace(/,/g, "")),
@@ -186,6 +205,7 @@ describe("link-preview scene copy", () => {
 			const text = lines(
 				parse(readFileSync(join(SCENES, `${scene}.html`), "utf8")) as Node,
 			);
+
 			for (const label of Object.keys(entries))
 				expect(text, scene).toContain(label);
 		}

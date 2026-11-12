@@ -11,11 +11,13 @@ it("keeps file and project revocation behind the owner and portal gates", async 
 			body: JSON.stringify({ action: "revoke" }),
 		},
 	);
+
 	const context = {
 		params: { id: "song-1" },
 		request,
 		locals: { runtime: { env: { AUDIO_CLIENT_PORTAL_ENABLED: "false" } } },
 	} as any;
+
 	expect((await revokeAccess(context)).status).toBe(403);
 	context.locals.owner = { email: "owner@example.com" };
 	expect((await revokeAccess(context)).status).toBe(404);

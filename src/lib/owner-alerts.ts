@@ -14,6 +14,7 @@ export async function sendUrgentOwnerAlert(
 ): Promise<boolean> {
 	if (!env.RESEND_API_KEY || !env.CONTACT_FROM_EMAIL || !env.CONTACT_TO_EMAIL)
 		return false;
+
 	const text = [
 		"A valid visitor request could not be stored.",
 		`Category: ${incident.category}`,
@@ -24,6 +25,7 @@ export async function sendUrgentOwnerAlert(
 		"",
 		"No visitor name, email, files, notes or challenge token are included in this alert.",
 	].join("\n");
+
 	const result = await sendAudioMessage({
 		apiKey: env.RESEND_API_KEY,
 		payload: {
@@ -33,5 +35,6 @@ export async function sendUrgentOwnerAlert(
 			text,
 		},
 	});
+
 	return result.ok;
 }

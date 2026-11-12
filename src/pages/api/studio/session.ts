@@ -10,6 +10,7 @@ import {
 import { musicRequest } from "~/lib/music-request";
 
 export const prerender = false;
+
 const inputSchema = z.object({
 	email: z.string().max(320),
 	code: z.string().regex(/^\d{8}$/),
@@ -17,24 +18,30 @@ const inputSchema = z.object({
 
 export const POST: APIRoute = async ({ request, locals }) => {
 	const env = locals.runtime?.env;
+
 	if (!clientPortalEnabled(env))
 		return new Response("Not found", { status: 404 });
+
 	if (!env?.MUSIC_DB || !env.AUDIO_CLIENT_CODE_KEY) {
 		return Response.json(
 			{ ok: false, error: "Studio sign-in is temporarily unavailable." },
 			{ status: 503 },
 		);
 	}
+
 	const body = await musicRequest(request, 4096);
+
 	if (body instanceof Response) return body;
 	const parsed = inputSchema.safeParse(body);
 	const email = parsed.success ? normalizeClientEmail(parsed.data.email) : null;
+
 	if (!parsed.success || !email)
 		return Response.json(
 			{ ok: false, error: "Check the email and eight-digit code." },
 			{ status: 400 },
 		);
 	const ip = request.headers.get("cf-connecting-ip") ?? "0.0.0.0";
+
 	try {
 		const allowed =
 			(await takeStudioAllowance(
@@ -51,17 +58,20 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				10,
 				env.AUDIO_CLIENT_CODE_KEY,
 			));
+
 		if (!allowed)
 			return Response.json(
 				{ ok: false, error: "Too many attempts. Please wait a few minutes." },
 				{ status: 429 },
 			);
+
 		const token = await completeClientCode(
 			env.MUSIC_DB,
 			email,
 			parsed.data.code,
 			env.AUDIO_CLIENT_CODE_KEY,
 		);
+
 		if (!token)
 			return Response.json(
 				{
@@ -71,6 +81,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				},
 				{ status: 401 },
 			);
+
 		return Response.json(
 			{ ok: true },
 			{

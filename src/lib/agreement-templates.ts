@@ -9,7 +9,9 @@ import { hashOfferToken } from "./software-offers";
 import { templateFields } from "./agreement-template-fields.mjs";
 import coverage from "../assets/agreement-fonts/Inter-coverage.json";
 import { lineDiff } from "./line-diff";
+
 export { templateFields } from "./agreement-template-fields.mjs";
+
 const optionalFields = [
 	"contractor.legal_name",
 	"contractor.entity_jurisdiction",
@@ -21,35 +23,45 @@ const optionalFields = [
 	"contractor.signer_name",
 	"contractor.signer_title",
 ];
+
 export type AgreementKind = keyof typeof templateFields;
+
 const bytes = (s: string) => new TextEncoder().encode(s).length;
+
 export function sampleAgreementValues(
 	kind: AgreementKind,
 	text: string,
 	versionLabel = "Sample version label",
 ) {
 	const values: Record<string, Record<string, string> | unknown> = {};
+
 	const addSample = (field: string) => {
 		const [namespace, key] = field.split(".");
 		values[namespace] ??= {};
 		const group = values[namespace] as Record<string, string>;
 		group[key] ??= `Sample ${key.replaceAll("_", " ")}`;
 	};
+
 	for (const field of templateFields[kind]) addSample(field);
+
 	for (const match of text.matchAll(/{{([a-z_]+\.[a-z_0-9]+)}}/g))
 		addSample(match[1]);
+
 	if (kind === "sow") values.milestones = [values.milestone];
 	// Previews show the label the owner typed, as clients will see it.
 	const msa = (values.msa ??= {}) as Record<string, string>;
 	msa.version_label = versionLabel;
+
 	return values;
 }
+
 export const agreementCharacterSupported = (character: string) =>
 	["\n", "\r", "\t"].includes(character) ||
 	coverage.ranges.some(
 		([start, end]) =>
 			character.codePointAt(0)! >= start && character.codePointAt(0)! <= end,
 	);
+
 export function agreementCertificateText(json: string) {
 	// Format certificate display only. Stored evidence and its canonical hash stay exact.
 	const display = JSON.stringify(JSON.parse(json), (key, value) =>
@@ -61,6 +73,7 @@ export function agreementCertificateText(json: string) {
 				: newYorkTime(value)
 			: value,
 	);
+
 	return [...display]
 		.map((character) =>
 			agreementCharacterSupported(character)
@@ -75,14 +88,17 @@ export function agreementCertificateText(json: string) {
 		)
 		.join("");
 }
+
 export function validateAgreementCharacters(text: string) {
 	for (const character of text) {
 		if (!agreementCharacterSupported(character))
 			throw new Error("Unsupported character. Arrange outside-site signing.");
 	}
 }
+
 export function validateTemplate(kind: AgreementKind, text: string) {
 	validateAgreementCharacters(text);
+
 	if (
 		bytes(text) > 102400 ||
 		!text.trim() ||
@@ -91,17 +107,23 @@ export function validateTemplate(kind: AgreementKind, text: string) {
 		throw new Error(
 			"Use plain text up to 100 KiB, without HTML or control characters.",
 		);
+
 	if (/\[[^\]\n]+\]|_{3,}/.test(text))
 		throw new Error("Replace every blank with a named field.");
 	const tokens = [...text.matchAll(/{{([^{}]+)}}/g)];
+
 	if (text.replace(/{{[^{}]+}}/g, "").match(/[{}]/))
 		throw new Error("Malformed field.");
+
 	let loop = false,
 		loops = 0;
+
 	const found = new Set<string>();
+
 	for (const t of tokens) {
 		const field = t[1],
 			line = text.slice(0, t.index).split("\n").length;
+
 		if (field === "#milestones") {
 			if (kind !== "sow" || loop || loops++)
 				throw new Error(
@@ -110,11 +132,13 @@ export function validateTemplate(kind: AgreementKind, text: string) {
 			loop = true;
 			continue;
 		}
+
 		if (field === "/milestones") {
 			if (!loop) throw new Error(`Line ${line}: unexpected loop end.`);
 			loop = false;
 			continue;
 		}
+
 		if (
 			(!(templateFields[kind] as readonly string[]).includes(field) &&
 				!optionalFields.includes(field)) ||
@@ -125,49 +149,62 @@ export function validateTemplate(kind: AgreementKind, text: string) {
 			);
 		found.add(field);
 	}
+
 	if (loop) throw new Error("Close the milestone loop.");
 	const missing = templateFields[kind].filter((f) => !found.has(f));
+
 	if (missing.length)
 		throw new Error(`Missing required fields: ${missing.join(", ")}.`);
+
 	return text.replace(/\r\n?/g, "\n");
 }
+
 function lookup(values: Record<string, unknown>, path: string): string {
 	// {{msa.source_revision}} prints the MSA's client-visible label; the internal revision stays in the signing record.
 	const key = path === "msa.source_revision" ? "msa.version_label" : path;
 	let value: unknown = values;
+
 	for (const part of key.split("."))
 		value =
 			typeof value === "object" && value !== null
 				? (value as Record<string, unknown>)[part]
 				: undefined;
+
 	if (typeof value !== "string" || !value.trim())
 		throw new Error(`Missing value: ${path}.`);
+
 	return value.normalize("NFC");
 }
+
 export function renderAgreement(
 	kind: AgreementKind,
 	template: string,
 	values: Record<string, unknown>,
 ): string {
 	validateTemplate(kind, template);
+
 	const fill = (t: string, v: Record<string, unknown>) =>
 		t.replace(/{{([a-z_]+\.[a-z_0-9]+)}}/g, (_, p) => lookup(v, p));
+
 	const rendered = template.replace(
 		/{{#milestones}}([\s\S]*?){{\/milestones}}|{{([a-z_]+\.[a-z_0-9]+)}}/g,
 		(_, block, path) => {
 			if (path) return lookup(values, path);
 			const milestones = values.milestones;
+
 			if (
 				!Array.isArray(milestones) ||
 				milestones.length < 1 ||
 				milestones.length > 3
 			)
 				throw new Error("Use one to three milestones.");
+
 			return milestones
 				.map((m) => fill(block, { ...values, milestone: m }))
 				.join("\n");
 		},
 	);
+
 	const text =
 		rendered
 			.replace(/\r\n?/g, "\n")
@@ -175,13 +212,16 @@ export function renderAgreement(
 			.map((l) => l.trimEnd())
 			.join("\n")
 			.trimEnd() + "\n";
+
 	if (bytes(text) > 262144 || /{{|}}|\[[^\]\n]+\]|_{3,}/.test(text))
 		throw new Error(
 			"The filled agreement has unresolved blanks or exceeds 256 KiB.",
 		);
 	validateAgreementCharacters(text);
+
 	return text;
 }
+
 export type AgreementTemplate = {
 	id: string;
 	kind: AgreementKind;
@@ -192,10 +232,12 @@ export type AgreementTemplate = {
 	source_revision: string | null;
 	published_at: string;
 };
+
 export {
 	templateVersionLabel,
 	versionLabelPattern,
 } from "./agreement-version-label";
+
 export async function currentTemplate(db: D1Database, kind: AgreementKind) {
 	return db
 		.prepare(
@@ -204,6 +246,7 @@ export async function currentTemplate(db: D1Database, kind: AgreementKind) {
 		.bind(kind)
 		.first<AgreementTemplate>();
 }
+
 export async function templateVersion(
 	db: D1Database,
 	kind: AgreementKind,
@@ -216,6 +259,7 @@ export async function templateVersion(
 		.bind(kind, version)
 		.first<AgreementTemplate>();
 }
+
 export const templateComparison = (
 	previous: AgreementTemplate,
 	text: string,
@@ -223,6 +267,7 @@ export const templateComparison = (
 	label: templateVersionLabel(previous),
 	rows: lineDiff(previous.text, text),
 });
+
 export async function compareWithPrevious(
 	db: D1Database,
 	template: AgreementTemplate,
@@ -232,8 +277,10 @@ export async function compareWithPrevious(
 		template.kind,
 		template.version - 1,
 	);
+
 	return previous ? templateComparison(previous, template.text) : null;
 }
+
 export async function publishTemplate(
 	db: D1Database,
 	kind: AgreementKind,
@@ -249,15 +296,18 @@ export async function publishTemplate(
 		sha = await hashOfferToken(canonical),
 		at = new Date().toISOString(),
 		labelUsed = `${versionLabel} is already used for the ${kind.toUpperCase()}. Choose another label.`;
+
 	if (!versionLabelPattern.test(versionLabel))
 		throw new Error(
 			"Use letters, digits, dots and dashes for the version label, up to 40 characters.",
 		);
 	const current = await currentTemplate(db, kind);
+
 	if (current?.sha256 === sha)
 		throw new Error(
 			`This text matches ${templateVersionLabel(current)}. Nothing to publish.`,
 		);
+
 	if (
 		await db
 			.prepare(
@@ -267,6 +317,7 @@ export async function publishTemplate(
 			.first()
 	)
 		throw new Error(labelUsed);
+
 	try {
 		await db.batch([
 			db
@@ -300,5 +351,6 @@ export async function publishTemplate(
 			throw new Error(labelUsed);
 		throw error;
 	}
+
 	return { id, sha256: sha, version: expected + 1, versionLabel };
 }

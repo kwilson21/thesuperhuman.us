@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { templateFields } from "../../src/lib/agreement-template-fields.mjs";
+
 const signingTemplates = Object.fromEntries(
 	["msa", "sow"].map((kind) => [
 		kind,
@@ -17,6 +18,7 @@ const signingTemplates = Object.fromEntries(
 				: ""),
 	]),
 );
+
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -48,8 +50,10 @@ import {
 function pageFiles(directory: string): string[] {
 	return readdirSync(directory).flatMap((name) => {
 		const path = join(directory, name);
+
 		if (statSync(path).isDirectory())
 			return name === "api" ? [] : pageFiles(path);
+
 		return name.endsWith(".astro") ? [relative(process.cwd(), path)] : [];
 	});
 }
@@ -59,16 +63,19 @@ function routeFor(file: string): string {
 		.replace(/^src\/pages/, "")
 		.replace(/\.astro$/, "")
 		.replace(/\/index$/, "");
+
 	return route || "/";
 }
 
 it("saves full-page prepare failure diagnostics and rethrows the original error", async () => {
 	const out = await mkdtemp(join(tmpdir(), "screenshot-failure-"));
 	const error = new Error("Agreement message did not appear");
+
 	const page = {
 		url: () => "http://localhost/owner/requests/example",
 		locator: (selector: string) => {
 			expect(selector).toBe("[role=status]");
+
 			return {
 				allTextContents: async () => [
 					"",
@@ -81,6 +88,7 @@ it("saves full-page prepare failure diagnostics and rethrows the original error"
 			await writeFile(options.path, "failure image");
 		},
 	};
+
 	try {
 		await expect(
 			prepareWithDiagnostics(
@@ -116,15 +124,18 @@ it("seeds a completed send so missing details reach the real agreement validatio
 	const sql = new DatabaseSync(":memory:");
 	sql.exec(readFileSync("db/music.sql", "utf8"));
 	const stop = new Error("fixture ready");
+
 	const statement = (query: string, args: any[] = []): any => ({
 		bind: (...values: any[]) => statement(query, values),
 		first: async () => sql.prepare(query).get(...args) ?? null,
 		all: async () => ({ results: sql.prepare(query).all(...args) }),
 	});
+
 	try {
 		const scenario = await import(
 			"../../scripts/screenshots/scenarios/software-signing.mjs"
 		);
+
 		await expect(
 			scenario.default.run({
 				templates: signingTemplates,
@@ -134,18 +145,23 @@ it("seeds a completed send so missing details reach the real agreement validatio
 				},
 				capture: async ({ file }: { file: string }) => {
 					if (file.includes("missing-send-field")) throw stop;
+
 					return file;
 				},
 			}),
 		).rejects.toBe(stop);
+
 		const config = JSON.parse(
 			sql.prepare("SELECT values_json FROM software_contractor_config").get()
 				.values_json,
 		);
+
 		expect(contractorSchema.safeParse(config).success).toBe(true);
+
 		const draft = sql
 			.prepare("SELECT updated_at FROM software_offers WHERE status='draft'")
 			.get();
+
 		const send = () =>
 			sendOffer({
 				params: { id: "screenshot-signing" },
@@ -169,6 +185,7 @@ it("seeds a completed send so missing details reach the real agreement validatio
 					runtime: { env: { MUSIC_DB: { prepare: statement } } },
 				},
 			} as any) as Promise<Response>;
+
 		const response = await send();
 		expect(response.status).toBe(400);
 		expect(await response.json()).toMatchObject({
@@ -191,6 +208,7 @@ it("prepares attachment captures with visible Remove controls and a shrinking li
 	const scenario = await import(
 		"../../scripts/screenshots/scenarios/software-signing.mjs"
 	);
+
 	let captures = 0;
 	await scenario.default.run({
 		templates: signingTemplates,
@@ -209,6 +227,7 @@ it("prepares attachment captures with visible Remove controls and a shrinking li
 				return file;
 			// Earlier desktop/phone captures can leave multiple saved uploads in the draft.
 			let remaining = 3;
+
 			const remove = {
 				count: async () => remaining,
 				first: () => ({
@@ -226,6 +245,7 @@ it("prepares attachment captures with visible Remove controls and a shrinking li
 						},
 					})),
 			};
+
 			const locator: any = {
 				locator: (selector: string) =>
 					selector === "[data-remove-attachment]" ? remove : locator,
@@ -235,6 +255,7 @@ it("prepares attachment captures with visible Remove controls and a shrinking li
 				filter: () => locator,
 				waitFor: async () => {},
 			};
+
 			await prepare({
 				locator: () => locator,
 				viewportSize: () => ({ width: 1280, height: 800 }),
@@ -243,6 +264,7 @@ it("prepares attachment captures with visible Remove controls and a shrinking li
 			});
 			expect(remaining).toBe(file.includes("attachment-removed") ? 0 : 3);
 			captures++;
+
 			return file;
 		},
 	});
@@ -252,6 +274,7 @@ it("prepares attachment captures with visible Remove controls and a shrinking li
 describe("screenshot coverage", () => {
 	it("captures every page file or says why not", () => {
 		const captured = new Set(PAGES.map((page) => page.path));
+
 		const missing = pageFiles("src/pages").filter(
 			(file) =>
 				!NOT_PAGES[file as keyof typeof NOT_PAGES] &&
@@ -259,6 +282,7 @@ describe("screenshot coverage", () => {
 				!REDIRECTS[file as keyof typeof REDIRECTS] &&
 				!captured.has(routeFor(file)),
 		);
+
 		expect(missing).toEqual([]);
 	});
 
@@ -269,12 +293,14 @@ describe("screenshot coverage", () => {
 
 	it("runs each seeding scenario and sees it capture a page under every route it covers", async () => {
 		const captured: { scenario: string; path: string }[] = [];
+
 		for (const scenario of new Set(
 			Object.values(SCENARIO_PAGES).map((item) => item.scenario),
 		)) {
 			const module = await import(
 				pathToFileURL(`scripts/screenshots/scenarios/${scenario}.mjs`).href
 			);
+
 			const steps = await module.default.run({
 				templates: signingTemplates,
 				base: "http://127.0.0.1:4321",
@@ -301,19 +327,24 @@ describe("screenshot coverage", () => {
 						: {},
 				capture: async ({ file, path }: { file: string; path: string }) => {
 					captured.push({ scenario, path });
+
 					return file;
 				},
 			});
+
 			expect(steps.length).toBeGreaterThan(0);
 		}
+
 		expect(missingScenarioRoutes(SCENARIO_PAGES, captured)).toEqual([]);
 	});
 
 	it("captures the website brief journey at both widths, with its seeded owner pages", async () => {
 		const captures: { path: string; owner: boolean }[] = [];
+
 		const scenario = await import(
 			"../../scripts/screenshots/scenarios/website-brief.mjs"
 		);
+
 		const steps = await scenario.default.run({
 			sql: () => "[]",
 			capture: async ({
@@ -326,9 +357,11 @@ describe("screenshot coverage", () => {
 				owner?: boolean;
 			}) => {
 				captures.push({ path, owner });
+
 				return file;
 			},
 		});
+
 		expect(steps).toHaveLength(11);
 		expect(steps.every((step) => step.images.length === 2)).toBe(true);
 		// Nine client screens, then the owner's brief and the request list, each at desktop and phone width.
@@ -359,16 +392,20 @@ describe("screenshot coverage", () => {
 		const scenario = await import(
 			"../../scripts/screenshots/scenarios/software-signing.mjs"
 		);
+
 		const landings: { path: string; status: number }[] = [];
 		const seeds: string[] = [];
+
 		const documents = [
 			{ id: "msa", kind: "msa", hash: "a".repeat(64) },
 			{ id: "sow", kind: "sow", hash: "b".repeat(64) },
 		];
+
 		await scenario.default.run({
 			templates: signingTemplates,
 			sql: (query: string) => {
 				seeds.push(query);
+
 				return query.startsWith(
 					"SELECT status FROM software_agreement_artifacts",
 				)
@@ -378,16 +415,21 @@ describe("screenshot coverage", () => {
 			ownerFetch: async () => ({ documents }),
 			capture: async ({ file, path, status = 200, prepare }: any) => {
 				const url = new URL(path, "http://localhost");
+
 				if (!url.pathname.endsWith("/verify")) return file;
 				landings.push({ path, status });
+
 				if (url.searchParams.has("key")) {
 					const expired = file.includes("expired");
 					expect(status).toBe(expired ? 401 : 200);
 					const key = url.searchParams.get("key")!;
+
 					const seed = seeds.find((query) =>
 						query.includes(createHash("sha256").update(key).digest("hex")),
 					);
+
 					expect(seed).toContain(expired ? "2000-01-01" : "2099-01-01");
+
 					const page = {
 						url: () => url.href,
 						getByText: (text: string) => {
@@ -396,6 +438,7 @@ describe("screenshot coverage", () => {
 									? "Links work once and last an hour."
 									: "This link works once.",
 							);
+
 							return { isVisible: async () => true };
 						},
 						getByRole: (role: string, options: any) => {
@@ -411,11 +454,14 @@ describe("screenshot coverage", () => {
 											? "Your agreement is ready."
 											: "Your documents are ready.",
 							);
+
 							return { waitFor: async () => {} };
 						},
 					};
+
 					await prepare(page);
 				} else expect(status).toBe(401);
+
 				return file;
 			},
 		});
@@ -425,10 +471,12 @@ describe("screenshot coverage", () => {
 			{ path: "/agreements/verify", status: 401 },
 			{ path: `/offer/${"g".repeat(43)}/verify`, status: 401 },
 		]);
+
 		for (const { path: route, status } of BARE_LINK_LANDINGS) {
 			const visits = landings.filter(
 				(visit) => new URL(visit.path, "http://localhost").pathname === route,
 			);
+
 			expect(visits.filter((visit) => !visit.path.includes("?"))).toHaveLength(
 				2,
 			);
@@ -450,6 +498,7 @@ describe("screenshot coverage", () => {
 		const pages = {
 			"src/pages/a/[id].astro": { scenario: "flow", route: "/a/" },
 		};
+
 		expect(
 			missingScenarioRoutes(pages, [
 				{ scenario: "flow", path: "/a/" },
@@ -487,12 +536,14 @@ describe("screenshot coverage", () => {
 				},
 			],
 		};
+
 		const clean = sanitizeManifest(manifest, [
 			"home-desktop.png",
 			"home-phone.png",
 			"flow-desktop.png",
 			"Evil.PNG",
 		]);
+
 		expect(clean.pages).toEqual([{ name: "home", path: "/" }]);
 		expect(clean.scenarios).toHaveLength(1);
 		expect(clean.scenarios[0].name).toBe("");
@@ -500,11 +551,13 @@ describe("screenshot coverage", () => {
 		expect(clean.scenarios[0].steps[0].images).toEqual([
 			{ file: "flow-desktop.png", caption: "&#34;quoted&#34; &#60;b&#62;" },
 		]);
+
 		const section = screenshotSection(
 			clean,
 			"https://raw.example/pr-1/abc1234",
 			"abc1234def",
 		);
+
 		expect(section).not.toContain("<img src=x");
 		expect(section).not.toContain("secret");
 		expect(sanitizeManifest(null, [])).toEqual({ pages: [], scenarios: [] });
@@ -543,6 +596,7 @@ describe("screenshot coverage", () => {
 			"https://raw.example/pr-1/abc1234",
 			"abc1234def",
 		);
+
 		expect(section.indexOf("### A flow")).toBeLessThan(
 			section.indexOf("| Page |"),
 		);
@@ -568,10 +622,12 @@ describe("screenshot coverage", () => {
 				{ name: "owner-details", title: "Owner detail pages", steps: [] },
 			],
 		};
+
 		const selected = relevantScreenshots(manifest, [
 			"src/components/SiteNav.astro",
 			"src/data/profile.ts",
 		]);
+
 		expect(selected.pages.map((page: { name: string }) => page.name)).toEqual([
 			"home",
 			"work",
@@ -638,6 +694,7 @@ describe("screenshot coverage", () => {
 				},
 			],
 		};
+
 		expect(
 			relevantScreenshots(manifest, ["src/data/profile.ts"]).pages.map(
 				(page: { name: string }) => page.name,
@@ -654,6 +711,7 @@ describe("screenshot coverage", () => {
 				"src/data/services.ts",
 			]).pages.map((page: { name: string }) => page.name),
 		).toEqual(["services"]);
+
 		for (const file of [
 			"src/layouts/ServiceSheet.astro",
 			"src/data/services.ts",
@@ -670,6 +728,7 @@ describe("screenshot coverage", () => {
 				),
 			).toEqual(["services-print"]);
 		}
+
 		expect(
 			relevantScreenshots(manifest, ["src/components/WorkDiagram.astro"])
 				.scenarios,
@@ -689,6 +748,7 @@ describe("screenshot coverage", () => {
 				(page: { name: string }) => page.name,
 			),
 		).toEqual(["audio"]);
+
 		for (const file of [
 			"src/components/audio/ComparisonPlayer.astro",
 			"src/scripts/comparison-player.ts",
@@ -700,6 +760,7 @@ describe("screenshot coverage", () => {
 				),
 			).toEqual(["home", "audio", "audio-portfolio", "audio-services"]);
 		}
+
 		expect(
 			relevantScreenshots(manifest, [
 				"src/components/audio/LyricVideo.astro",
@@ -806,9 +867,11 @@ describe("screenshot coverage", () => {
 				},
 			],
 		};
+
 		const selected = relevantScreenshots(manifest, [
 			"src/pages/owner/requests/[id].astro",
 		]);
+
 		expect(selected.pages.map((page: { name: string }) => page.name)).toEqual([
 			"owner-requests",
 		]);
@@ -826,6 +889,7 @@ describe("screenshot coverage", () => {
 			],
 			scenarios: [],
 		};
+
 		expect(
 			relevantScreenshots(manifest, [
 				"src/pages/audio/services.astro",
@@ -840,9 +904,11 @@ describe("screenshot coverage", () => {
 				{ name: "software-brief", title: "Software brief journey", steps: [] },
 			],
 		};
+
 		const selected = relevantScreenshots(manifest, [
 			"src/lib/software-inquiry.ts",
 		]);
+
 		expect(selected.pages.map((page: { name: string }) => page.name)).toEqual([
 			"software-start",
 		]);
@@ -860,9 +926,11 @@ describe("screenshot coverage", () => {
 				{ name: "software-offer", title: "Software offer", steps: [] },
 			],
 		};
+
 		const start = relevantScreenshots(manifest, [
 			"src/pages/software/start.astro",
 		]);
+
 		expect(start.pages.map((page: { name: string }) => page.name)).toEqual([
 			"software-start",
 		]);
@@ -887,6 +955,7 @@ describe("screenshot coverage", () => {
 			},
 			["src/assets/unmapped-artwork.webp"],
 		);
+
 		expect(selected).toEqual({ pages: [], scenarios: [] });
 		expect(
 			screenshotSection(
@@ -915,8 +984,10 @@ describe("screenshot preview config", () => {
 		expect(preview.compatibility_flags).toEqual(wrangler.compatibility_flags);
 		expect(preview.vars).toEqual({ ...wrangler.vars, ...PREVIEW_OVERRIDES });
 		expect(preview.vars.SITE_ORIGIN).toBe("http://127.0.0.1:4321");
+
 		const bindings = (items: { binding: string }[] = []) =>
 			items.map((item) => item.binding);
+
 		expect(bindings(preview.d1_databases)).toEqual(
 			bindings(wrangler.d1_databases),
 		);
@@ -937,6 +1008,7 @@ describe("screenshot preview config", () => {
 
 	it("points no binding at a production resource", () => {
 		const text = JSON.stringify(previewWrangler(wrangler));
+
 		const ids = [
 			...wrangler.d1_databases.flatMap((item: Record<string, string>) => [
 				item.database_id,
@@ -947,6 +1019,7 @@ describe("screenshot preview config", () => {
 				(item: Record<string, string>) => item.bucket_name,
 			),
 		];
+
 		for (const id of ids) expect(text).not.toContain(id);
 		expect(text).not.toContain(wrangler.vars.PUBLIC_TURNSTILE_SITE_KEY);
 	});
@@ -957,6 +1030,7 @@ it("software print styling never forces a receipt before submission", () => {
 		new URL("../../src/styles/software-intake.css", import.meta.url),
 		"utf8",
 	);
+
 	expect(css).not.toMatch(/#software-success\s*\{\s*display:block/);
 	expect(css).not.toMatch(/@media print[^}]*#software-inquiry/);
 });
@@ -964,12 +1038,15 @@ it("software print styling never forces a receipt before submission", () => {
 it("allows only exact deliberate HTTP resource failures, preserving other console errors", () => {
 	const base = "http://127.0.0.1:4321";
 	const expected = [{ url: base + "/api/offer/sample/session", status: 401 }];
+
 	const resource = (text: string, url: string) => ({
 		text: () => text,
 		location: () => ({ url }),
 	});
+
 	const message =
 		"Failed to load resource: the server responded with a status of 401 (Unauthorized)";
+
 	expect(
 		expectedResourceError(resource(message, expected[0].url), expected),
 	).toBe(true);
@@ -997,15 +1074,18 @@ it("captures the work-first project states at desktop and phone sizes", async ()
 	const scenario = await import(
 		"../../scripts/screenshots/scenarios/software-project.mjs"
 	);
+
 	const files: string[] = [];
 	await scenario.default.run({
 		sql: () => "[]",
 		ownerFetch: async () => ({}),
 		capture: async ({ file }: { file: string }) => {
 			files.push(file);
+
 			return file;
 		},
 	});
+
 	for (const state of [
 		"first",
 		"shared",
@@ -1034,9 +1114,11 @@ it("can seed empty details after link-landing captures have autosaved a draft", 
 	const sql = new DatabaseSync(":memory:");
 	sql.exec(readFileSync("db/music.sql", "utf8"));
 	const stop = new Error("draft collision passed");
+
 	const scenario = await import(
 		"../../scripts/screenshots/scenarios/software-signing.mjs"
 	);
+
 	try {
 		await expect(
 			scenario.default.run({
@@ -1047,6 +1129,7 @@ it("can seed empty details after link-landing captures have autosaved a draft", 
 						sql.exec(
 							"INSERT OR REPLACE INTO software_agreement_drafts VALUES('screenshot-signing-offer','signer@example.com','{}','now')",
 						);
+
 					return file;
 				},
 				ownerFetch: async () => {
@@ -1065,6 +1148,7 @@ it.each([false, true])(
 		const scenario = await import(
 			"../../scripts/screenshots/scenarios/software-project.mjs"
 		);
+
 		let prepared = 0;
 		await scenario.default.run({
 			sql: () => "[]",
@@ -1074,14 +1158,18 @@ it.each([false, true])(
 					let marked = saved,
 						checked = false,
 						manual = false;
+
 					const first = (value: any) => ({ ...value, first: () => value });
+
 					const mark = {
 						getAttribute: async () => String(marked),
 						click: async () => {
 							marked = !marked;
+
 							if (!manual) checked = marked;
 						},
 					};
+
 					const checkbox = {
 						isChecked: async () => checked,
 						uncheck: async () => {
@@ -1093,6 +1181,7 @@ it.each([false, true])(
 							manual = true;
 						},
 					};
+
 					await prepare({
 						locator: (selector: string) =>
 							selector.includes("not-yet")
@@ -1101,6 +1190,7 @@ it.each([false, true])(
 									? first({
 											click: async () => {
 												marked = false;
+
 												if (!manual) checked = false;
 											},
 										})
@@ -1120,6 +1210,7 @@ it.each([false, true])(
 					expect(checked).toBe(true);
 					prepared++;
 				}
+
 				return file;
 			},
 		});
@@ -1131,12 +1222,16 @@ it("serves a scenario-local Turnstile API for silent and receipt widgets", async
 	const scenario = await import(
 		"../../scripts/screenshots/scenarios/software-brief.mjs"
 	);
+
 	const routes = new Map<string, any>(),
 		callback = vi.fn(),
 		onload = vi.fn();
+
 	const inputs: any[] = [],
 		receipt = { appendChild: (input: any) => inputs.push(input) };
+
 	const window: any = { loaded: onload };
+
 	const document = {
 		createElement: () => ({ remove: vi.fn() }),
 		querySelectorAll: () => [receipt],
@@ -1144,6 +1239,7 @@ it("serves a scenario-local Turnstile API for silent and receipt widgets", async
 			src: "https://challenges.cloudflare.com/turnstile/v0/api.js?onload=loaded",
 		},
 	};
+
 	await scenario.default.run({
 		base: "http://127.0.0.1:4321",
 		sql() {},
@@ -1195,6 +1291,7 @@ it("serves a scenario-local Turnstile API for silent and receipt widgets", async
 			const fulfill = vi.fn();
 			await routes.get("**/api/software/brief/pass")({ fulfill });
 			expect(fulfill).toHaveBeenCalledWith({ json: { ok: true } });
+
 			return file;
 		},
 	});
@@ -1206,12 +1303,15 @@ it.each(["reload", "API wait", "ghost wait"])(
 		const scenario = await import(
 			"../../scripts/screenshots/scenarios/software-brief.mjs"
 		);
+
 		const failure = new Error("ghost text hidden"),
 			log = vi.spyOn(console, "error").mockImplementation(() => {});
+
 		const request = {
 			url: () => "http://127.0.0.1:4321/api/software/brief/pass",
 			method: () => "POST",
 		};
+
 		try {
 			await expect(
 				scenario.default.run({
@@ -1234,7 +1334,9 @@ it.each(["reload", "API wait", "ghost wait"])(
 										type: () => "warning",
 										text: () => "test message",
 									});
+
 								if (event === "request") handler(request);
+
 								if (event === "response")
 									handler({ request: () => request, status: () => 200 });
 							},
@@ -1252,6 +1354,7 @@ it.each(["reload", "API wait", "ghost wait"])(
 								},
 							}),
 						});
+
 						return file;
 					},
 				}),
@@ -1278,8 +1381,10 @@ it.each(["desktop", "phone"])(
 		const scenario = await import(
 			"../../scripts/screenshots/scenarios/software-brief.mjs"
 		);
+
 		const dispatchEvent = vi.fn(),
 			waits: string[] = [];
+
 		await scenario.default.run({
 			base: "http://127.0.0.1:4321",
 			sql() {},
@@ -1301,6 +1406,7 @@ it.each(["desktop", "phone"])(
 						inputValue: async () => "We track new clients",
 					}),
 				});
+
 				return file;
 			},
 		});
@@ -1315,7 +1421,9 @@ it("holds the sending request whether fetch gets a string, a URL, a Request or a
 	const scenario = await import(
 		"../../scripts/screenshots/scenarios/software-brief.mjs"
 	);
+
 	let script = "";
+
 	const page = {
 		on() {},
 		route: async () => {},
@@ -1339,22 +1447,28 @@ it("holds the sending request whether fetch gets a string, a URL, a Request or a
 			evaluateAll: async () => true,
 		}),
 	};
+
 	await scenario.default.run({
 		base: "http://127.0.0.1:4321",
 		sql() {},
 		capture: async ({ file, prepare }: any) => {
 			if (file === "software-brief-sending-desktop.png") await prepare(page);
+
 			return file;
 		},
 	});
 	expect(script).toContain("/api/software-inquiry");
+
 	const inquiry = "http://127.0.0.1:4321/api/software-inquiry",
 		pass = "http://127.0.0.1:4321/api/software/brief/pass";
+
 	const passed: string[] = [];
+
 	const sandbox: any = {
 		window: {
 			fetch: vi.fn(async (input: unknown) => {
 				passed.push(String(input));
+
 				return "passed";
 			}),
 		},
@@ -1362,6 +1476,7 @@ it("holds the sending request whether fetch gets a string, a URL, a Request or a
 		URL,
 		Request,
 	};
+
 	runInNewContext(`(${script})()`, sandbox);
 	const wrapped = sandbox.window.fetch;
 	wrapped(inquiry, { method: "POST" });
@@ -1374,15 +1489,19 @@ it("holds the sending request whether fetch gets a string, a URL, a Request or a
 
 it("allows only the exact declared failed resource URL and status", () => {
 	const url = "http://127.0.0.1:4321/api/software-inquiry";
+
 	const message = (resource: string, text: string) => ({
 		location: () => ({ url: resource }),
 		text: () => text,
 	});
+
 	const failed = (status: number) =>
 		`Failed to load resource: the server responded with a status of ${status} (Service Unavailable)`;
+
 	const allowed = [{ url, status: 503 }];
 	expect(expectedResourceError(message(url, failed(503)), allowed)).toBe(true);
 	expect(expectedResourceError(message(url, failed(503)), [])).toBe(false);
+
 	for (const resource of [
 		url + "?other=1",
 		url + "/other",
@@ -1392,6 +1511,7 @@ it("allows only the exact declared failed resource URL and status", () => {
 			false,
 		);
 	}
+
 	expect(expectedResourceError(message(url, failed(500)), allowed)).toBe(false);
 	expect(
 		expectedResourceError(
@@ -1411,6 +1531,7 @@ it("declares the mocked 503 only for send-failed captures at both widths", async
 	const scenario = await import(
 		"../../scripts/screenshots/scenarios/software-brief.mjs"
 	);
+
 	const allowances: string[] = [];
 	await scenario.default.run({
 		base: "http://127.0.0.1:4321",
@@ -1422,6 +1543,7 @@ it("declares the mocked 503 only for send-failed captures at both widths", async
 					{ url: "http://127.0.0.1:4321/api/software-inquiry", status: 503 },
 				]);
 			}
+
 			return file;
 		},
 	});
@@ -1438,6 +1560,7 @@ it.each([
 	const scenario = await import(
 		"../../scripts/screenshots/scenarios/software-project.mjs"
 	);
+
 	let prepared = 0;
 	await scenario.default.run({
 		sql: () => "[]",
@@ -1453,6 +1576,7 @@ it.each([
 									expect(selector).toBe(
 										"[data-software-review] button[value=milestone_accepted] + p",
 									);
+
 									return {
 										isVisible: async () => true,
 										textContent: async () => wording,
@@ -1461,6 +1585,7 @@ it.each([
 				});
 				prepared++;
 			}
+
 			return file;
 		},
 	});

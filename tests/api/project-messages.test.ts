@@ -6,10 +6,12 @@ import { POST as ownerPost } from "~/pages/api/owner/projects/[id]/messages";
 import { completeClientCode, issueClientCode } from "~/lib/audio-client-access";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
 const baseline = readFileSync(
 	new URL("../../db/music.sql", import.meta.url),
 	"utf8",
 );
+
 const secret = "studio-code-key-for-tests-32-characters";
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database, token: string;
 
@@ -21,6 +23,7 @@ beforeEach(async () => {
 		.prepare(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
     VALUES ('song-1','service','artist@example.com','A song','new',?,?)`)
 		.run(new Date().toISOString(), new Date().toISOString());
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		query,
 		args,
@@ -32,17 +35,21 @@ beforeEach(async () => {
 		all: async () => ({ results: sql.prepare(query).all(...args) }),
 		first: async () => sql.prepare(query).get(...args) ?? null,
 	});
+
 	db = {
 		prepare: (query: string) => statement(query),
 		batch: async (items: ReturnType<typeof statement>[]) => {
 			sql.exec("BEGIN");
+
 			try {
 				const results = items.map((item) => ({
 					results: /\bRETURNING\b/i.test(item.query)
 						? sql.prepare(item.query).all(...item.args)
 						: (sql.prepare(item.query).run(...item.args), []),
 				}));
+
 				sql.exec("COMMIT");
+
 				return results;
 			} catch (error) {
 				sql.exec("ROLLBACK");
@@ -68,6 +75,7 @@ function context(
 	const owner = options.owner ?? actor === "owner";
 	const path = actor === "owner" ? "owner" : "studio";
 	const id = options.id ?? "song-1";
+
 	return {
 		params: { id },
 		request: new Request(
@@ -193,6 +201,7 @@ it("rate-limits client messages without deleting earlier messages", async () => 
 			clientPost(context("client", { action: "send", body: `Note ${index}` })),
 		),
 	);
+
 	expect(responses.filter((response) => response.status === 200)).toHaveLength(
 		12,
 	);

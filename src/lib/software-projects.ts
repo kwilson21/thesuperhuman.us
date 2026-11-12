@@ -16,12 +16,14 @@ export const projectStates = {
 	ready_for_review: "Ready for review",
 	complete: "Complete",
 } as const;
+
 export const projectSteps = [
 	"direction",
 	"build",
 	"review",
 	"handoff",
 ] as const;
+
 export const evidenceTypes = {
 	concept: "Concept",
 	prototype: "Prototype",
@@ -30,12 +32,14 @@ export const evidenceTypes = {
 	investigation: "Investigation",
 	handoff: "Handoff",
 } as const;
+
 export const updateKinds = {
 	progress: "Progress",
 	direction_review: "Direction review",
 	delivery_review: "Delivery review",
 	handoff: "Handoff",
 } as const;
+
 const text = (max: number) =>
 	z
 		.string()
@@ -45,9 +49,11 @@ const text = (max: number) =>
 			(value) => !/[\x00-\x08\x0b\x0c\x0e-\x1f]|\p{Cs}/u.test(value),
 			"Remove control characters.",
 		);
+
 export const projectDate = z
 	.string()
 	.refine((value) => !value || validProjectDate(value), "Choose a valid date.");
+
 export const updateInput = z.object({
 	kind: z.enum(["progress", "direction_review", "delivery_review", "handoff"]),
 	milestone_index: z.number().int().min(0).max(2),
@@ -64,8 +70,10 @@ export const updateInput = z.object({
 	visual_alt: text(300),
 	preview_url: text(2000).refine((value) => {
 		if (!value) return true;
+
 		try {
 			const url = new URL(value);
+
 			return url.protocol === "https:" && !url.username && !url.password;
 		} catch {
 			return false;
@@ -91,7 +99,9 @@ export const updateInput = z.object({
 	review_window_days: z.number().int().min(5).max(365).default(5),
 	paid_confirmed: z.boolean().default(false),
 });
+
 export type SoftwareUpdateInput = z.infer<typeof updateInput>;
+
 export type SoftwareProject = {
 	agreement_id?: string | null;
 	request_id: string;
@@ -111,6 +121,7 @@ export type SoftwareProject = {
 	content_deleted_at: string | null;
 	updated_at: string;
 };
+
 export type SoftwareUpdate = Omit<
 	SoftwareUpdateInput,
 	| "email_client"
@@ -134,24 +145,30 @@ export type SoftwareUpdate = Omit<
 	notification_attempted_at: string | null;
 	email_client: number;
 };
+
 export const projectTerms = (project: { terms_json: string }) =>
 	offerTermsSchema.parse(JSON.parse(project.terms_json));
+
 export function softwareVersionNumber(update: { artifact_version: string }) {
 	return (
 		update.artifact_version.match(/^(?:Delivery|Direction) v(\d+)$/i)?.[1] ??
 		null
 	);
 }
+
 export function softwareVersionLabel(update: {
 	artifact_version: string;
 	kind?: string;
 }) {
 	const number = softwareVersionNumber(update);
+
 	if (!number) return update.artifact_version || "Latest update";
+
 	return /^Direction /i.test(update.artifact_version)
 		? `Sketch ${number}`
 		: `Version ${number}`;
 }
+
 export function softwareStateSentence(project: {
 	state: string;
 	waiting_for: string;
@@ -166,6 +183,7 @@ export function softwareStateSentence(project: {
 		}[project.state] ?? "Getting set up."
 	);
 }
+
 export const softwareDate = (value: string) =>
 	new Date(
 		value.length === 10 ? `${value}T12:00:00Z` : value,
@@ -175,12 +193,14 @@ export const softwareDate = (value: string) =>
 		year: "numeric",
 		timeZone: "America/New_York",
 	});
+
 export async function getSoftwareProject(db: D1Database, id: string) {
 	return db
 		.prepare("SELECT * FROM software_projects WHERE request_id=?")
 		.bind(id)
 		.first<SoftwareProject>();
 }
+
 export async function listSoftwareUpdates(db: D1Database, id: string) {
 	const updates = (
 		await db
@@ -190,17 +210,20 @@ export async function listSoftwareUpdates(db: D1Database, id: string) {
 			.bind(id)
 			.all<SoftwareUpdate>()
 	).results;
+
 	return updates.map((update) => ({
 		...update,
 		review_window_days:
 			update.review_window_days_extended ?? update.review_window_days ?? 5,
 	}));
 }
+
 // Client queries never select drafts, storage keys, notification internals or owner identities.
 export type SoftwareDecision =
 	| "direction_confirmed"
 	| "milestone_accepted"
 	| "changes_requested";
+
 export type ClientSoftwareUpdate = Pick<
 	SoftwareUpdate,
 	| "id"
@@ -228,6 +251,7 @@ export type ClientSoftwareUpdate = Pick<
 	decided_at?: string | null;
 	decision_body?: string | null;
 };
+
 /** Older review rows predate saved scope snapshots; treat them as full scope. */
 export function deliveredIndexes(
 	update: Pick<ClientSoftwareUpdate, "delivered_deliverables_json">,
@@ -237,8 +261,11 @@ export function deliveredIndexes(
 		const saved: unknown = JSON.parse(
 			update.delivered_deliverables_json ?? "[]",
 		);
+
 		if (!Array.isArray(saved)) return [];
+
 		if (!saved.length) return planned.map((_, index) => index); // Legacy rows predate scope snapshots.
+
 		return [
 			...new Set(
 				saved.map((item) =>
@@ -257,21 +284,25 @@ export function deliveredIndexes(
 		return [];
 	}
 }
+
 export function deliveredScope(
 	update: Pick<ClientSoftwareUpdate, "delivered_deliverables_json">,
 	planned: string[],
 ) {
 	return deliveredIndexes(update, planned).map((index) => planned[index]);
 }
+
 function parseLegacyRevisionTargets(
 	header: string,
 	checks: string[],
 	planned: string[],
 ) {
 	const prefix = header.match(/^Requested changes to .* for milestone \d+: /);
+
 	if (!prefix) return null;
 	const text = header.slice(prefix[0].length);
 	const parses: { checks: number[]; deliverables: number[] }[] = [];
+
 	const visit = (
 		position: number,
 		phase: "checks" | "deliverables",
@@ -279,64 +310,84 @@ function parseLegacyRevisionTargets(
 		selectedDeliverables: number[],
 	) => {
 		if (parses.length > 1) return;
+
 		if (position === text.length) {
 			parses.push({
 				checks: selectedChecks,
 				deliverables: selectedDeliverables,
 			});
+
 			return;
 		}
+
 		const marker = /^(check|missing) #?(\d+)(?:: | \()/.exec(
 			text.slice(position),
 		);
+
 		if (!marker) return;
 		const kind = marker[1] === "check" ? "checks" : "deliverables";
+
 		if (kind === "checks" && phase !== "checks") return;
 		const index = Number(marker[2]) - 1;
 		const labels = kind === "checks" ? checks : planned;
 		const selected = kind === "checks" ? selectedChecks : selectedDeliverables;
+
 		if (index < 0 || index >= labels.length || selected.includes(index)) return;
 		const label = labels[index];
 		const labelStart = position + marker[0].length;
+
 		if (!text.startsWith(label, labelStart)) return;
 		const parenthetical = marker[0].endsWith("(");
 		const labelEnd = labelStart + label.length;
+
 		if (parenthetical && text[labelEnd] !== ")") return;
 		const next = labelEnd + (parenthetical ? 1 : 0);
 		const nextPhase = kind === "checks" ? "checks" : "deliverables";
+
 		const nextChecks =
 			kind === "checks" ? [...selectedChecks, index] : selectedChecks;
+
 		const nextDeliverables =
 			kind === "deliverables"
 				? [...selectedDeliverables, index]
 				: selectedDeliverables;
+
 		if (next === text.length) {
 			visit(next, nextPhase, nextChecks, nextDeliverables);
+
 			return;
 		}
+
 		const separators = parenthetical ? [", ", "; "] : ["; "];
+
 		for (const separator of separators)
 			if (text.startsWith(separator, next))
 				visit(next + separator.length, nextPhase, nextChecks, nextDeliverables);
 	};
+
 	visit(0, "checks", [], []);
+
 	return parses.length === 1 ? parses[0] : null;
 }
+
 export function softwareRevisionTargets(
 	body: string | null | undefined,
 	checks: string[],
 	planned: string[],
 ) {
 	const header = body?.split("\n", 1)[0] ?? "";
+
 	const summary = header.match(
 		/\. Checks reported unmet: \[([0-9, ]*)\]\. Deliverables unavailable: \[([0-9, ]*)\]\.(?: Included but inaccessible: \[([0-9, ]*)\]\.)?$/,
 	);
+
 	const indexes = (value: string | undefined, length: number) =>
 		[
 			...new Set(
 				(value?.match(/\d+/g) ?? []).map((number) => Number(number) - 1),
 			),
 		].filter((index) => index >= 0 && index < length);
+
 	if (summary)
 		return {
 			checks: indexes(summary[1], checks.length),
@@ -347,46 +398,58 @@ export function softwareRevisionTargets(
 	// closed if parsing is ambiguous; marker-like text inside a label must not select
 	// another check or deliverable.
 	const legacy = parseLegacyRevisionTargets(header, checks, planned);
+
 	return legacy
 		? { ...legacy, inaccessibleDeliverables: [] }
 		: { checks: [], deliverables: [], inaccessibleDeliverables: [] };
 }
+
 export function softwareRevisionHistoryBody(
 	body: string | null | undefined,
 	checks: string[],
 	planned: string[],
 ) {
 	if (!body) return "";
+
 	const separator = body.indexOf("\n\n"),
 		header = separator < 0 ? body : body.slice(0, separator);
+
 	if (!header.startsWith("Requested changes to ")) return body;
 	const targets = softwareRevisionTargets(header, checks, planned);
 	const note = separator < 0 ? "" : body.slice(separator + 2);
 	const sections = [header];
+
 	if (targets.checks.length)
 		sections.push(
 			`Unmet checks:\n${targets.checks.map((index) => `${index + 1}. ${checks[index]}`).join("\n")}`,
 		);
+
 	if (targets.deliverables.length)
 		sections.push(
 			`Unavailable deliverables:\n${targets.deliverables.map((index) => `${index + 1}. ${planned[index]}`).join("\n")}`,
 		);
+
 	if (targets.inaccessibleDeliverables.length)
 		sections.push(
 			`Included deliverables the client could not open or find:\n${targets.inaccessibleDeliverables.map((index) => `${index + 1}. ${planned[index]}`).join("\n")}`,
 		);
+
 	if (note) sections.push(`Client note:\n${note}`);
+
 	return sections.join("\n\n");
 }
+
 export function softwareClientRevisionBody(
 	body: string | null | undefined,
 	checks: string[],
 	planned: string[],
 ) {
 	if (!body) return "";
+
 	if (!body.startsWith("Requested changes to ")) return body;
 	const targets = softwareRevisionTargets(body, checks, planned);
 	const separator = body.indexOf("\n\n");
+
 	return [
 		...targets.checks.map(
 			(index) => `You marked "${checks[index]}" as not working yet.`,
@@ -400,13 +463,16 @@ export function softwareClientRevisionBody(
 		...(separator < 0 ? [] : [body.slice(separator + 2)]),
 	].join("\n\n");
 }
+
 export function clearUnmetRevisionEvidence(
 	evidence: string[],
 	unmetChecks: number[],
 ) {
 	const unmet = new Set(unmetChecks);
+
 	return evidence.map((value, index) => (unmet.has(index) ? "" : value));
 }
+
 export async function sharedSoftwareUpdates(db: D1Database, id: string) {
 	return (
 		await db
@@ -420,6 +486,7 @@ export async function sharedSoftwareUpdates(db: D1Database, id: string) {
 			.all<ClientSoftwareUpdate>()
 	).results;
 }
+
 export const softwareAudit = (
 	db: D1Database,
 	id: string,
@@ -433,6 +500,7 @@ export const softwareAudit = (
 			"INSERT INTO software_project_audit(request_id,action,actor,occurred_at,note) VALUES (?,?,?,?,?)",
 		)
 		.bind(id, action, actor, at, note);
+
 export function recordMilestonePayment(
 	db: D1Database,
 	id: string,
@@ -464,6 +532,7 @@ export function recordMilestonePayment(
 			.bind(id, milestone, at, actor),
 	];
 }
+
 export async function milestonePayments(db: D1Database, id: string) {
 	return (
 		await db
@@ -474,6 +543,7 @@ export async function milestonePayments(db: D1Database, id: string) {
 			.all<{ milestone_index: number; paid_recorded_at: string }>()
 	).results;
 }
+
 export function correctionPeriodEnd(
 	acceptedAt: string,
 	paidAt?: string,
@@ -481,13 +551,17 @@ export function correctionPeriodEnd(
 ) {
 	const start = paidAt && paidAt < acceptedAt ? paidAt : acceptedAt;
 	const instant = new Date(start.length === 10 ? `${start}T12:00:00Z` : start);
+
 	const date = new Date(
 		instant.toLocaleDateString("en-CA", { timeZone: "America/New_York" }) +
 			"T12:00:00Z",
 	);
+
 	date.setUTCDate(date.getUTCDate() + days);
+
 	return date.toISOString().slice(0, 10);
 }
+
 export const acceptedDeliveryGuard = (
 	db: D1Database,
 	id: string,
@@ -501,6 +575,7 @@ export const acceptedDeliveryGuard = (
      AND latest.kind='delivery_review' AND latest.status='shared' ORDER BY latest.shared_at DESC,latest.id DESC LIMIT 1)`,
 		[id, milestone],
 	);
+
 /** Same atomic assertion as software offers: a stale write rolls back its whole batch. */
 export const softwareGuard = (
 	db: D1Database,
@@ -512,6 +587,7 @@ export const softwareGuard = (
 			`SELECT CASE WHEN EXISTS(${query}) THEN 1 ELSE json_extract('Project changed. Reload and try again.','$') END`,
 		)
 		.bind(...values);
+
 export const priorMilestonePaymentGuard = (
 	db: D1Database,
 	id: string,
@@ -522,6 +598,7 @@ export const priorMilestonePaymentGuard = (
 		"SELECT 1 WHERE (SELECT count(*) FROM software_milestone_payments WHERE request_id=? AND milestone_index<?)=?",
 		[id, milestone, milestone],
 	);
+
 export const openSoftwareGuard = (db: D1Database, id: string) =>
 	softwareGuard(
 		db,
@@ -539,25 +616,31 @@ export async function deliverSoftwareNotice(
 ) {
 	const table = updateId ? "software_project_updates" : "software_projects";
 	const prefix = updateId ? "notification" : "invitation";
+
 	const where = updateId
 		? "id=? AND request_id=? AND status='shared'"
 		: "request_id=?";
+
 	const values = updateId ? [updateId, id] : [id];
 	const at = new Date().toISOString();
+
 	const claimed = await db
 		.prepare(`UPDATE ${table} SET ${prefix}_status='sending',${prefix}_attempted_at=?
     WHERE ${where} AND ${prefix}_status='pending' AND EXISTS(SELECT 1 FROM software_projects p JOIN owner_requests r ON r.id=p.request_id
     WHERE p.request_id=? AND p.revoked_at IS NULL AND r.status<>'withdrawn' AND r.email<>'') RETURNING request_id`)
 		.bind(at, ...values, id)
 		.first();
+
 	if (!claimed) return;
 	let sent: { ok: boolean; uncertain?: boolean } = { ok: false };
+
 	try {
 		const recipient = await db
 			.prepare(`SELECT r.email FROM owner_requests r JOIN software_projects p ON p.request_id=r.id
       WHERE r.id=? AND r.status<>'withdrawn' AND p.revoked_at IS NULL`)
 			.bind(id)
 			.first<{ email: string }>();
+
 		const update = updateId
 			? await db
 					.prepare(
@@ -566,8 +649,10 @@ export async function deliverSoftwareNotice(
 					.bind(updateId, id)
 					.first<{ kind: string }>()
 			: null;
+
 		const handoff = update?.kind === "handoff",
 			review = update?.kind.endsWith("_review");
+
 		if (recipient && env.RESEND_API_KEY && env.CONTACT_FROM_EMAIL)
 			sent = await sendAudioMessage({
 				apiKey: env.RESEND_API_KEY,
@@ -593,6 +678,7 @@ export async function deliverSoftwareNotice(
 	} catch {
 		/* A lookup failure sends nothing. */
 	}
+
 	if (sent.uncertain) return;
 	await db
 		.prepare(
@@ -606,6 +692,7 @@ export async function deliverSoftwareNotice(
 		)
 		.run();
 }
+
 export async function queueSoftwareNotice(
 	db: D1Database,
 	id: string,
@@ -614,6 +701,7 @@ export async function queueSoftwareNotice(
 ) {
 	const table = updateId ? "software_project_updates" : "software_projects",
 		prefix = updateId ? "notification" : "invitation";
+
 	return Boolean(
 		await db
 			.prepare(`UPDATE ${table} SET ${prefix}_status='pending',${prefix}_attempted_at=NULL
@@ -639,6 +727,7 @@ export function softwareAccessRevocation(
 	at: string,
 ) {
 	const closedEmail = `SELECT r.email FROM owner_requests r JOIN software_projects p ON p.request_id=r.id WHERE p.request_id=? AND p.revoked_at=?`;
+
 	return [
 		db
 			.prepare(`INSERT INTO software_project_audit(request_id,action,actor,occurred_at)
@@ -697,6 +786,7 @@ export async function projectAgreementDetails(
 				)
 				.bind(project.offer_id)
 				.first<{ details: string | null }>();
+
 	return row?.details
 		? (JSON.parse(row.details) as {
 				review_business_days?: string | number;

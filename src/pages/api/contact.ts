@@ -13,10 +13,13 @@ const ALLOWED_ORIGINS = [
 
 function isAllowedOrigin(origin: string | null): boolean {
 	if (!origin) return false;
+
 	if (ALLOWED_ORIGINS.includes(origin)) return true;
+
 	// Cloudflare Pages preview deployments
 	if (/^https:\/\/[a-z0-9-]+\.thesuperhuman-us\.pages\.dev$/.test(origin))
 		return true;
+
 	return false;
 }
 
@@ -26,12 +29,14 @@ export const POST: APIRoute = async (context) => {
 
 	// Origin check
 	const origin = request.headers.get("origin");
+
 	if (!isAllowedOrigin(origin)) {
 		return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 	}
 
 	// Parse JSON
 	let body: unknown;
+
 	try {
 		body = await request.json();
 	} catch {
@@ -40,17 +45,20 @@ export const POST: APIRoute = async (context) => {
 
 	// Validate
 	const validation = validateContactInput(body);
+
 	if (!validation.ok) {
 		return Response.json(
 			{ ok: false, errors: validation.errors },
 			{ status: 400 },
 		);
 	}
+
 	const input = validation.value;
 
 	// Rate limit by IP
 	const ip = request.headers.get("cf-connecting-ip") ?? "0.0.0.0";
 	const rl = await checkRateLimit(env.RATE_LIMIT, ip);
+
 	if (!rl.allowed) {
 		return Response.json(
 			{
@@ -67,6 +75,7 @@ export const POST: APIRoute = async (context) => {
 		env.TURNSTILE_SECRET_KEY,
 		ip,
 	);
+
 	if (!turnstileOk) {
 		return Response.json(
 			{ ok: false, error: "Captcha failed." },
@@ -81,6 +90,7 @@ export const POST: APIRoute = async (context) => {
 		from: env.CONTACT_FROM_EMAIL,
 		to: env.CONTACT_TO_EMAIL,
 	});
+
 	if (!send.ok) {
 		return Response.json(
 			{

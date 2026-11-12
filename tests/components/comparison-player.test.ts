@@ -6,6 +6,7 @@ const component = readFileSync(
 	new URL("../../src/components/audio/ComparisonPlayer.astro", import.meta.url),
 	"utf8",
 );
+
 const script = readFileSync(
 	new URL("../../src/scripts/comparison-player.ts", import.meta.url),
 	"utf8",
@@ -196,29 +197,39 @@ it("draws the unplayed bars and both seek tracks at 3:1 or better against paper 
 		new URL("../../src/styles/global.css", import.meta.url),
 		"utf8",
 	);
+
 	const hex = (name: string) => {
 		const match = global.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`));
+
 		if (!match) throw new Error(`--${name} not found in global.css`);
+
 		return [1, 3, 5].map((i) => parseInt(match[1].slice(i, i + 2), 16));
 	};
+
 	const luminance = (channels: number[]) => {
 		const [r, g, b] = channels.map((c) => {
 			const s = c / 255;
+
 			return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
 		});
+
 		return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 	};
+
 	const share =
 		Number(
 			sourceText(component).match(
 				/--wave-unplayed:color-mix\(insrgb,var\(--muted\)(\d+)%,var\(--paper\)\)/,
 			)![1],
 		) / 100;
+
 	const paper = hex("paper");
 	const wave = hex("muted").map((c, i) => c * share + paper[i] * (1 - share));
+
 	const [light, dark] = [luminance(paper), luminance(wave)].sort(
 		(x, y) => y - x,
 	);
+
 	expect((light + 0.05) / (dark + 0.05)).toBeGreaterThanOrEqual(3);
 	// Every seek and volume track uses the same grey for its unplayed part, never the --rule hairline.
 	expect(
@@ -235,10 +246,12 @@ it("sets every player control in Libron at 14px or more (type board D4.4-B)", ()
 	);
 	expectSource(component).not.toContain("var(--font-sans)");
 	expectSource(component).not.toMatch(/Inter,sans-serif/);
+
 	// The only size under 14px is the visually hidden seek label (font-size:0).
 	const sizes = [...component.matchAll(/font(?:-size)?:([\d.]+)rem/g)].map(
 		(match) => Number(match[1]),
 	);
+
 	expect(sizes.length).toBeGreaterThan(10);
 	expect(sizes.filter((size) => size < 0.875)).toEqual([]);
 	// The dimmed version letter stays at full opacity on the accent button (paper at 75% on the accent is 3.4:1).

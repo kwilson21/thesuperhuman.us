@@ -52,6 +52,7 @@ export type OwnerRequestAudit = {
 
 export const signedAgreementPendingMessage =
 	"Countersign or abandon the signed agreement first.";
+
 export const projectIncompleteMessage = "Mark the project complete first.";
 
 export const projectStartedMessage =
@@ -68,7 +69,9 @@ const requestColumns = `id,kind,release_id,service_id,campaign_id,name,email,cit
 
 function validActor(actor: string) {
 	const value = actor.trim().toLowerCase();
+
 	if (!value || value.length > 320) throw new Error("Invalid request actor.");
+
 	return value;
 }
 
@@ -80,6 +83,7 @@ export async function saveOwnerRequest(
 	if (!ownerRequestKinds.includes(input.kind))
 		throw new Error("Invalid request kind.");
 	const details = JSON.stringify(input.details ?? {});
+
 	if (details.length > 16_000) throw new RequestDetailsTooLargeError();
 	const id = crypto.randomUUID();
 	const now = new Date().toISOString();
@@ -108,6 +112,7 @@ export async function saveOwnerRequest(
       VALUES (?,'created',?,'',?)`)
 			.bind(id, validActor(actor), now),
 	]);
+
 	return (await getOwnerRequest(db, id))!;
 }
 
@@ -119,6 +124,7 @@ export async function getOwnerRequest(
 		.prepare(`SELECT ${requestColumns} FROM owner_requests WHERE id=?`)
 		.bind(id)
 		.first<OwnerRequestRow>();
+
 	return row ? ownerRequestFromRow(row) : null;
 }
 
@@ -138,6 +144,7 @@ export async function listOwnerRequestAudit(
 			note: string;
 			occurred_at: string;
 		}>();
+
 	return result.results.map((row) => ({
 		id: row.id,
 		action: row.action,
@@ -153,25 +160,31 @@ export async function listOwnerRequests(
 ) {
 	if (filter.kind && !ownerRequestKinds.includes(filter.kind))
 		throw new Error("Invalid request kind.");
+
 	if (filter.status && !ownerRequestStatuses.includes(filter.status))
 		throw new Error("Invalid request status.");
 	const clauses: string[] = [];
 	const values: string[] = [];
+
 	if (filter.kind) {
 		clauses.push("kind=?");
 		values.push(filter.kind);
 	}
+
 	if (filter.status) {
 		clauses.push("status=?");
 		values.push(filter.status);
 	}
+
 	const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
+
 	const result = await db
 		.prepare(
 			`SELECT ${requestColumns} FROM owner_requests${where} ORDER BY created_at DESC`,
 		)
 		.bind(...values)
 		.all<OwnerRequestRow>();
+
 	return result.results.map(ownerRequestFromRow);
 }
 
@@ -180,7 +193,9 @@ export async function changeOwnerRequest(
 	command: RequestCommand,
 ): Promise<OwnerRequest> {
 	const current = await getOwnerRequest(db, command.id);
+
 	if (!current) throw new Error("Request not found.");
+
 	if (
 		command.expectedUpdatedAt !== undefined &&
 		command.expectedUpdatedAt !== current.updatedAt
@@ -188,10 +203,13 @@ export async function changeOwnerRequest(
 		throw new Error("Request changed while it was being updated.");
 	const actor = validActor(command.actor);
 	const now = new Date().toISOString();
+
 	if (command.action === "note") {
 		const note = command.note.trim();
+
 		if (note.length > 1000)
 			throw new Error("Private note must be 1,000 characters or fewer.");
+
 		const [update] = await db.batch([
 			db
 				.prepare(
@@ -204,8 +222,11 @@ export async function changeOwnerRequest(
           (SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND private_note=?)`)
 				.bind(command.id, actor, now, command.id, now, note),
 		]);
+
 		const row = update.results[0] as OwnerRequestRow | undefined;
+
 		if (!row) throw new Error("Request changed while it was being updated.");
+
 		return ownerRequestFromRow(row);
 	}
 
@@ -219,23 +240,31 @@ export async function changeOwnerRequest(
 			audit: "withdrawn",
 		},
 	} as const;
+
 	const transition = transitions[command.action];
+
 	if (
 		!(transition.from as readonly OwnerRequestStatus[]).includes(current.status)
 	)
 		throw new Error("Invalid request transition.");
 	const placeholders = transition.from.map(() => "?").join(",");
 	const resolvedAt = transition.to === "resolved" ? now : null;
+
 	const closingSoftware =
 		current.kind === "software" && command.action === "withdraw";
+
 	const resolvingSoftware =
 		current.kind === "software" && command.action === "resolve";
+
 	const reopeningSoftware =
 		current.kind === "software" && command.action === "reopen";
+
 	if (closingSoftware) {
 		const block = await depositOfferBlock(db, command.id, true);
+
 		if (block) throw new Error(block);
 	}
+
 	const awaitingCountersign = () =>
 		db
 			.prepare(
@@ -243,9 +272,11 @@ export async function changeOwnerRequest(
 			)
 			.bind(command.id)
 			.first();
+
 	if ((closingSoftware || resolvingSoftware) && (await awaitingCountersign()))
 		throw new Error(signedAgreementPendingMessage);
 	let results: D1Result[];
+
 	try {
 		results = await db.batch([
 			...(closingSoftware || resolvingSoftware
@@ -334,8 +365,10 @@ export async function changeOwnerRequest(
 	} catch (error) {
 		if ((closingSoftware || resolvingSoftware) && (await awaitingCountersign()))
 			throw new Error(signedAgreementPendingMessage);
+
 		if (resolvingSoftware) {
 			const project = await getSoftwareProject(db, command.id);
+
 			if (
 				project &&
 				project.completed_at === null &&
@@ -343,21 +376,29 @@ export async function changeOwnerRequest(
 			)
 				throw new Error(projectIncompleteMessage);
 		}
+
 		if (reopeningSoftware && (await getSoftwareProject(db, command.id)))
 			throw new Error(projectStartedMessage);
+
 		if (closingSoftware) {
 			const block = await depositOfferBlock(db, command.id, true);
+
 			if (block) throw new Error(block);
 		}
+
 		if (closingSoftware && (await offerIsSending(db, command.id)))
 			throw new Error(offerSendingMessage);
 		throw error;
 	}
+
 	const update =
 		results[
 			closingSoftware ? 3 : resolvingSoftware ? 2 : reopeningSoftware ? 1 : 0
 		];
+
 	const row = update.results[0] as OwnerRequestRow | undefined;
+
 	if (!row) throw new Error("Request changed while it was being updated.");
+
 	return ownerRequestFromRow(row);
 }

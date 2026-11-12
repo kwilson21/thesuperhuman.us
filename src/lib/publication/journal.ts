@@ -12,16 +12,20 @@ export class D1PublicationJournal implements PublicationJournal {
 
 	async commit(input: Publication): Promise<CommitResult> {
 		const p = parsePublication(input);
+
 		if (!p || p.expectedRevision === Number.MAX_SAFE_INTEGER)
 			return { status: "rejected" };
 		const payload = canonicalPublication(p);
+
 		const digest = await crypto.subtle.digest(
 			"SHA-256",
 			new TextEncoder().encode(payload),
 		);
+
 		const hash = Array.from(new Uint8Array(digest), (b) =>
 			b.toString(16).padStart(2, "0"),
 		).join("");
+
 		const statements = [
 			this.db
 				.prepare(`INSERT INTO publication_events
@@ -60,15 +64,21 @@ export class D1PublicationJournal implements PublicationJournal {
         WHERE project_id=?1 AND entry_id=?2 AND operation='withdraw'`)
 				.bind(p.projectId, p.entryId),
 		];
+
 		const [insert, , receipt, tombstone] = await this.db.batch(statements);
+
 		const row = receipt.results[0] as
 			| { revision: number; published_at: string; payload_hash: string }
 			| undefined;
+
 		if (row && row.payload_hash !== hash) return { status: "conflict" };
+
 		if (tombstone.results.length && p.operation !== "withdraw")
 			return { status: "withdrawn" };
+
 		if (!row)
 			return { status: tombstone.results.length ? "withdrawn" : "conflict" };
+
 		return {
 			status: insert.results.length ? "accepted" : "duplicate",
 			receipt: {

@@ -5,18 +5,24 @@ import {
 	nativeAgreementRoute,
 	agreementRequest,
 } from "~/lib/agreement-request";
+
 export const prerender = false;
+
 const post: APIRoute = async ({ request, locals, params }) => {
 	const body = await agreementRequest(request, 4096);
+
 	if (body instanceof Response) return body;
+
 	const input = z
 		.object({ turnstileToken: z.string().min(1).max(2048) })
 		.safeParse(body);
+
 	if (!input.success)
 		return agreementJson(
 			{ ok: false, error: "Complete the security check." },
 			400,
 		);
+
 	try {
 		const response = await issueAgreementLink(
 			locals.runtime.env,
@@ -24,6 +30,7 @@ const post: APIRoute = async ({ request, locals, params }) => {
 			input.data,
 			params.token,
 		);
+
 		if (
 			response.ok &&
 			request.headers
@@ -38,6 +45,7 @@ const post: APIRoute = async ({ request, locals, params }) => {
 				},
 			});
 		}
+
 		return response;
 	} catch {
 		return agreementJson(

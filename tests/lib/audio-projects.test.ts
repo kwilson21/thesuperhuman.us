@@ -3,10 +3,12 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
 const migration = readFileSync(
 	new URL("../../migrations/music/0005_audio_projects.sql", import.meta.url),
 	"utf8",
 );
+
 const baseline = readFileSync(
 	new URL("../../db/music.sql", import.meta.url),
 	"utf8",

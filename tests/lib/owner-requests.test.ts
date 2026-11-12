@@ -13,6 +13,7 @@ const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
 function fixture(beforeSoftware = false) {
 	const sql = new DatabaseSync(":memory:");
+
 	if (beforeSoftware) {
 		for (const name of readdirSync(
 			new URL("../../migrations/music/", import.meta.url),
@@ -29,12 +30,14 @@ function fixture(beforeSoftware = false) {
 		sql.exec(
 			readFileSync(new URL("../../db/music.sql", import.meta.url), "utf8"),
 		);
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		query,
 		args,
 		bind: (...values: unknown[]) => statement(query, values),
 		run: async () => {
 			const result = sql.prepare(query).run(...args);
+
 			return { success: true, meta: { changes: result.changes }, results: [] };
 		},
 		all: async () => ({
@@ -43,23 +46,29 @@ function fixture(beforeSoftware = false) {
 		}),
 		first: async () => sql.prepare(query).get(...args) ?? null,
 	});
+
 	const db = {
 		prepare: (query: string) => statement(query),
 		batch: async (statements: ReturnType<typeof statement>[]) => {
 			sql.exec("BEGIN");
+
 			try {
 				const results = statements.map((item) => {
 					const prepared = sql.prepare(item.query);
+
 					if (/\bRETURNING\b/i.test(item.query))
 						return { success: true, results: prepared.all(...item.args) };
 					const result = prepared.run(...item.args);
+
 					return {
 						success: true,
 						meta: { changes: result.changes },
 						results: [],
 					};
 				});
+
 				sql.exec("COMMIT");
+
 				return results;
 			} catch (error) {
 				sql.exec("ROLLBACK");
@@ -67,6 +76,7 @@ function fixture(beforeSoftware = false) {
 			}
 		},
 	} as unknown as D1Database;
+
 	return { db, sql };
 }
 
@@ -169,12 +179,14 @@ describe("owner requests", () => {
 			email: "artist@example.com",
 			summary: "Mastering review",
 		});
+
 		const updated = await changeOwnerRequest(db, {
 			id: purchaseRequest.id,
 			action: "note",
 			actor: "owner@example.com",
 			note: "Reply after listening.",
 		});
+
 		expect(updated).toMatchObject({
 			status: "new",
 			privateNote: "Reply after listening.",
@@ -195,12 +207,14 @@ describe("owner requests", () => {
 
 it("saves a service request before software migration 0019", async () => {
 	const { db, sql } = fixture(true);
+
 	const request = await saveOwnerRequest(db, {
 		kind: "service",
 		serviceId: "mixing",
 		email: "CLIENT@EXAMPLE.COM",
 		summary: "Audio inquiry",
 	});
+
 	expect(request.email).toBe("client@example.com");
 	expect(sql.prepare("SELECT COUNT(*) AS n FROM owner_requests").get()).toEqual(
 		{ n: 1 },

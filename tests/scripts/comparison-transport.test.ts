@@ -4,6 +4,7 @@ import { ComparisonTransport } from "../../src/scripts/comparison-transport";
 function fixture() {
 	const sources: any[] = [],
 		gains: any[] = [];
+
 	const context = {
 		currentTime: 10,
 		destination: {},
@@ -16,7 +17,9 @@ function fixture() {
 				},
 				connect: vi.fn(),
 			};
+
 			gains.push(node);
+
 			return node;
 		},
 		createBufferSource() {
@@ -28,10 +31,13 @@ function fixture() {
 				stop: vi.fn(),
 				onended: null,
 			};
+
 			sources.push(source);
+
 			return source;
 		},
 	};
+
 	const transport = new ComparisonTransport(
 		context as any,
 		[{ duration: 160.3 }, { duration: 160 }] as AudioBuffer[],
@@ -39,8 +45,10 @@ function fixture() {
 		160,
 		vi.fn(),
 	);
+
 	return { context, sources, gains, transport };
 }
+
 describe("shared comparison clock", () => {
 	it("starts both exports at exactly the same clock time with their source offsets", () => {
 		const { transport, sources } = fixture();
@@ -56,6 +64,7 @@ describe("shared comparison clock", () => {
 		transport.play();
 		context.currentTime += 1;
 		const position = transport.position;
+
 		for (let i = 0; i < 100; i++)
 			transport.setLevels(i % 2 ? [1, 0] : [0, 0.75]);
 		expect(transport.position).toBe(position);

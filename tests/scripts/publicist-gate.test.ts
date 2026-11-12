@@ -128,6 +128,7 @@ describe("noteProblems", () => {
 			"docs/publicist/review-note-template.md",
 			"utf8",
 		);
+
 		const block = template.match(/```markdown\n([\s\S]*?)\n```/)![1];
 		const problems = noteProblems(block);
 		expect(problems).toContain("publish is not yes");
@@ -167,6 +168,7 @@ describe("text checks", () => {
 	it("keeps URLs out of queued post text but allows the link field", () => {
 		const post = (body: string) =>
 			`---\nsource: tally-home-screen\nlink: https://thesuperhuman.us/building/tally\n---\n${body}\n`;
+
 		expect(queueBodyProblems(post("Tally has a new Home screen."))).toEqual([]);
 		expect(
 			queueBodyProblems(post("More: https://thesuperhuman.us/building/tally")),
@@ -224,6 +226,7 @@ describe("text checks", () => {
 describe("entries needing notes", () => {
 	const source =
 		"[{ id: 'site-old', day: '2026-09-20' }, { id: 'site-new', day: '2026-09-27' }, { id: 'site-backdated', day: '2026-09-01' }]";
+
 	it("needs a note for every entry when nothing predates the publicist", () => {
 		expect(entriesNeedingNotes(source)).toEqual([
 			"site-old",
@@ -256,6 +259,7 @@ describe("entries needing notes", () => {
 describe("AGENTS.md sync", () => {
 	const skill =
 		"# S\n\n## Hard rules (never break these)\n\n1. Rule one.\n\n## Review notes\n\nText.\n";
+
 	it("extracts the hard rules and inserts the block idempotently", () => {
 		expect(hardRules(skill)).toBe("1. Rule one.");
 		const once = syncAgents("# Agents\n", skill);
@@ -274,9 +278,11 @@ describe("gate runner", () => {
 		for (const root of roots.splice(0))
 			rmSync(root, { recursive: true, force: true });
 	});
+
 	function fixture(entrySource: string | null, websiteSource?: string) {
 		const root = mkdtempSync(join(tmpdir(), "publicist-gate-"));
 		roots.push(root);
+
 		for (const dir of [
 			"publicist",
 			".agents/skills/publicist",
@@ -290,24 +296,29 @@ describe("gate runner", () => {
 			join(root, "publicist/config.json"),
 			readFileSync("publicist/config.json"),
 		);
+
 		if (entrySource)
 			writeFileSync(
 				join(root, "src/data/project-stories/tally.ts"),
 				entrySource,
 			);
+
 		if (websiteSource)
 			writeFileSync(
 				join(root, "src/data/project-stories/personal-website.ts"),
 				websiteSource,
 			);
+
 		return root;
 	}
+
 	const run = (root: string, env: Record<string, string>) =>
 		spawnSync(process.execPath, [resolve("scripts/publicist/gate.mjs")], {
 			cwd: root,
 			encoding: "utf8",
 			env: { PATH: process.env.PATH ?? "", ...env },
 		});
+
 	it("passes with no publicist entries", () => {
 		expect(run(fixture(null), { CI: "true" }).status).toBe(0);
 	});
@@ -318,6 +329,7 @@ describe("gate runner", () => {
 			),
 			{ CI: "true" },
 		);
+
 		expect(result.status).toBe(1);
 		expect(result.stderr).toContain("PUBLICIST_PRIVATE_TOKEN is not set");
 	});
@@ -329,6 +341,7 @@ describe("gate runner", () => {
 			),
 			{ CI: "true" },
 		);
+
 		expect(result.status).toBe(0);
 		expect(result.stdout).toContain("0 entries checked");
 	});
@@ -340,6 +353,7 @@ describe("gate runner", () => {
 			),
 			{ CI: "true" },
 		);
+
 		expect(result.status).toBe(1);
 		expect(result.stderr).toContain("PUBLICIST_PRIVATE_TOKEN is not set");
 	});
@@ -350,6 +364,7 @@ describe("gate runner", () => {
 			),
 			{},
 		);
+
 		expect(result.status).toBe(0);
 		expect(result.stderr).toContain("skipped private note lookup");
 	});

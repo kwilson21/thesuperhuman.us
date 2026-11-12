@@ -1,32 +1,42 @@
 import type { OfferTerms } from "~/lib/software-offers";
+
 const editableSections = () => [
 	...document.querySelectorAll<HTMLElement>(
 		"[data-software-action], [data-request-note], [data-software-editor]",
 	),
 ];
+
 export const hasUnsavedRequestChanges = (submitted?: HTMLElement) =>
 	editableSections().some(
 		(section) => section !== submitted && section.dataset.dirty === "true",
 	);
+
 export const markRequestPageClean = () =>
 	editableSections().forEach((section) => {
 		section.dataset.dirty = "false";
 	});
+
 export function setupSoftwareOffers() {
 	const sessionValue = (key: string, value?: string | null) => {
 		try {
 			if (value === undefined) return sessionStorage.getItem(key);
+
 			if (value === null) sessionStorage.removeItem(key);
 			else sessionStorage.setItem(key, value);
+
 			return value;
 		} catch {
 			/* The link remains usable in this page when browser storage is disabled. */
 		}
+
 		return null;
 	};
+
 	class TransportError extends Error {}
+
 	const post = async (endpoint: string, body: unknown) => {
 		let response: Response;
+
 		try {
 			response = await fetch(endpoint, {
 				method: "POST",
@@ -38,7 +48,9 @@ export function setupSoftwareOffers() {
 				"The request didn’t finish. Check the activity log or Resend before sending again.",
 			);
 		}
+
 		let parsed: unknown;
+
 		try {
 			parsed = await response.json();
 		} catch {
@@ -48,6 +60,7 @@ export function setupSoftwareOffers() {
 					: "Something went wrong. Nothing was saved. Try again.",
 			);
 		}
+
 		const result = parsed as {
 			message?: string;
 			errors?: Record<string, string>;
@@ -61,6 +74,7 @@ export function setupSoftwareOffers() {
 			copySent?: boolean;
 			attachmentCleanupPending?: boolean;
 		};
+
 		if (!response.ok) {
 			if (
 				response.status === 409 &&
@@ -70,20 +84,27 @@ export function setupSoftwareOffers() {
 				const editor = document.querySelector<HTMLElement>(
 					"[data-software-editor]",
 				);
+
 				if (editor) editor.dataset.updated = result.updatedAt ?? "";
 			}
+
 			const form = document.querySelector<HTMLElement>("[data-offer-form]");
+
 			const messages = Object.entries(result.errors ?? {}).map(
 				([path, message]) => {
 					const parts = path.split(".");
+
 					const milestone =
 						parts[0] === "milestones" && /^\d+$/.test(parts[1] ?? "");
+
 					const scope = milestone
 						? document.querySelectorAll<HTMLElement>("[data-milestone]")[
 								Number(parts[1])
 							]
 						: form;
+
 					const field = parts.at(-1)!;
+
 					const names: Record<string, string> = {
 						name: "milestoneName",
 						feeCents: "fee",
@@ -92,19 +113,23 @@ export function setupSoftwareOffers() {
 						lowCents: "rangeLow",
 						highCents: "rangeHigh",
 					};
+
 					if (path.startsWith("agreement.")) {
 						scope
 							?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
 								`[name="${path}"]`,
 							)
 							.forEach((input) => input.setAttribute("aria-invalid", "true"));
+
 						return `${path.slice(10).replaceAll("_", " ")}: ${message}`;
 					}
+
 					const key = milestone
 						? parts[2] === "checkpoint"
 							? parts[3]
 							: parts[2]
 						: field;
+
 					const labels: Record<string, string> = {
 						outcome: "Outcome",
 						summary: "Summary",
@@ -122,42 +147,52 @@ export function setupSoftwareOffers() {
 						lowCents: "Range low",
 						highCents: "Range high",
 					};
+
 					scope
 						?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
 							`[name="${names[key] ?? key}"]`,
 						)
 						.forEach((input) => input.setAttribute("aria-invalid", "true"));
+
 					return `${milestone ? `Milestone ${Number(parts[1]) + 1} ` : ""}${labels[key] ?? "Offer"}: ${message}`;
 				},
 			);
+
 			throw new Error(
 				[result.message, messages.join("\n")].filter(Boolean).join("\n") ||
 					"Could not save. Try again.",
 			);
 		}
+
 		return result;
 	};
+
 	const editableForms = [
 		...document.querySelectorAll<HTMLFormElement>(
 			"[data-software-action], [data-request-note]",
 		),
 	];
+
 	editableForms.forEach((form) =>
 		form.addEventListener("input", () => {
 			form.dataset.dirty = "true";
 			form.dataset.revision = String(Number(form.dataset.revision ?? 0) + 1);
 		}),
 	);
+
 	const setSending = (page: HTMLElement, sending: boolean) => {
 		if (sending) page.setAttribute("inert", "");
 		else page.removeAttribute("inert");
+
 		if (sending) page.setAttribute("aria-busy", "true");
 		else page.removeAttribute("aria-busy");
 		page.dataset.offerSending = String(sending);
 		page.dataset.busy = String(sending);
 	};
+
 	let reloading = false;
 	const hasUnsavedChanges = () => hasUnsavedRequestChanges();
+
 	const reload = (status: HTMLElement, submitted?: HTMLFormElement) => {
 		if (
 			hasUnsavedChanges() &&
@@ -173,6 +208,7 @@ export function setupSoftwareOffers() {
 		);
 		location.reload();
 	};
+
 	window.addEventListener("beforeunload", (event) => {
 		if (!reloading && hasUnsavedChanges()) event.preventDefault();
 	});
@@ -181,12 +217,16 @@ export function setupSoftwareOffers() {
 		.forEach((form) => {
 			form.addEventListener("submit", async (event) => {
 				event.preventDefault();
+
 				const requestPage =
 					document.querySelector<HTMLElement>("[data-request-id]");
+
 				if (requestPage?.dataset.offerSending === "true") return;
+
 				const action = form.dataset.softwareAction!,
 					data = new FormData(form),
 					status = form.querySelector<HTMLElement>("[data-software-status]")!;
+
 				if (
 					action === "decline" &&
 					!confirm("Send this message and decline the inquiry?")
@@ -195,17 +235,21 @@ export function setupSoftwareOffers() {
 				const button = form.querySelector<HTMLButtonElement>("button")!;
 				button.disabled = true;
 				const revision = form.dataset.revision;
+
 				const sendingPage =
 					action === "question" || action === "decline"
 						? (requestPage ?? form)
 						: null;
+
 				if (sendingPage) setSending(sendingPage, true);
+
 				try {
 					const result = await post(form.dataset.endpoint!, {
 						action,
 						...Object.fromEntries(data),
 						expectedRequestUpdatedAt: requestPage?.dataset.requestUpdated,
 					});
+
 					if (action === "fit" && requestPage)
 						requestPage.dataset.requestUpdated = result.updatedAt;
 					status.textContent =
@@ -214,10 +258,12 @@ export function setupSoftwareOffers() {
 							: action === "fit"
 								? "Fit review saved."
 								: "Sent.";
+
 					if (form.dataset.revision === revision) form.dataset.dirty = "false";
 					reload(status, form);
 				} catch (error) {
 					status.textContent = (error as Error).message;
+
 					if (
 						error instanceof TransportError &&
 						(action === "question" || action === "decline")
@@ -225,20 +271,24 @@ export function setupSoftwareOffers() {
 						button.textContent = "Send again";
 				} finally {
 					button.disabled = false;
+
 					if (sendingPage) setSending(sendingPage, false);
 				}
 			});
 		});
 	const root = document.querySelector<HTMLElement>("[data-software-editor]");
+
 	if (!root) return;
 	const status = root.querySelector<HTMLElement>("[data-software-status]")!;
 	const endpoint = root.dataset.endpoint!;
 	const flashKey = `software-flash:${endpoint}`;
 	const flash = sessionValue(flashKey);
+
 	if (flash) {
 		status.textContent = flash;
 		sessionValue(flashKey, null);
 	}
+
 	let link = "";
 	let changed = false;
 	let updateControls = () => {};
@@ -251,8 +301,10 @@ export function setupSoftwareOffers() {
 				if (!link || root.dataset.revoked === "true") {
 					status.textContent =
 						"The client link is in your copy of the offer email. To issue a new one, revoke this link and send again.";
+
 					return;
 				}
+
 				await navigator.clipboard.writeText(link);
 				status.textContent = "Client link copied.";
 			} catch {
@@ -270,6 +322,7 @@ export function setupSoftwareOffers() {
 			root.setAttribute("inert", "");
 			root.setAttribute("aria-busy", "true");
 			root.dataset.busy = "true";
+
 			try {
 				await post(endpoint, {
 					action: "revoke",
@@ -295,32 +348,43 @@ export function setupSoftwareOffers() {
 				root.dataset.busy = "false";
 			}
 		});
+
 	if (!root.querySelector("[data-offer-form]")) return;
+
 	const form = root.querySelector<HTMLFormElement>("[data-offer-form]")!,
 		list = root.querySelector<HTMLElement>("[data-milestones]")!;
+
 	const attachmentBlock = form.querySelector<HTMLElement>(
 		"[data-agreement-attachments]",
 	);
+
 	if (attachmentBlock) setupAgreementAttachments(attachmentBlock);
+
 	const send = root.querySelector<HTMLButtonElement>("[data-send-offer]")!,
 		preview = root.querySelector<HTMLAnchorElement>("[data-preview-offer]")!;
+
 	let saved = Boolean(root.dataset.updated),
 		inputRevision = 0;
+
 	const get = (element: HTMLElement, name: string) =>
 		element
 			.querySelector<HTMLInputElement | HTMLTextAreaElement>(
 				`[name="${name}"]`,
 			)!
 			.value.trim();
+
 	const checked = (element: HTMLElement, name: string) =>
 		element.querySelector<HTMLInputElement>(`[name="${name}"]`)!.checked;
+
 	const lines = (value: string) =>
 		value
 			.split(/\r?\n/)
 			.map((line) => line.trim())
 			.filter(Boolean);
+
 	const amount = (value: string) =>
 		value ? Math.round(Number(value) * 100) : NaN;
+
 	const terms = (): OfferTerms => ({
 		outcome: get(form, "outcome"),
 		summary: get(form, "summary"),
@@ -355,6 +419,7 @@ export function setupSoftwareOffers() {
 				}
 			: {}),
 	});
+
 	updateControls = () => {
 		root.dataset.dirty = String(changed);
 		root.querySelector<HTMLButtonElement>("[data-add-milestone]")!.disabled =
@@ -372,22 +437,27 @@ export function setupSoftwareOffers() {
 					.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("[name]")
 					.forEach((input) => {
 						input.id = `milestone-${index + 1}-${input.name}`;
+
 						if (input.hasAttribute("aria-describedby"))
 							input.setAttribute("aria-describedby", `${input.id}-hint`);
 					});
 				row.querySelectorAll<HTMLElement>("[data-hint]").forEach((hint) => {
 					hint.id = `milestone-${index + 1}-${hint.dataset.hint}-hint`;
 				});
+
 				const active = checked(row, "hasCheckpoint"),
 					block = row.querySelector<HTMLElement>("[data-checkpoint]")!;
+
 				block.hidden = !active;
 				block.querySelectorAll<HTMLInputElement>("input").forEach((input) => {
 					input.disabled = !active;
 					input.required = active;
 				});
 			});
+
 		const rangeActive = checked(form, "hasRange"),
 			range = root.querySelector<HTMLElement>("[data-range]")!;
+
 		range.hidden = !rangeActive;
 		range.querySelectorAll<HTMLInputElement>("input").forEach((input) => {
 			input.disabled = !rangeActive;
@@ -398,9 +468,11 @@ export function setupSoftwareOffers() {
 			!(saved || (root.dataset.sentVersion && root.dataset.revoked === "true"));
 		preview.hidden = !saved || changed;
 	};
+
 	form.addEventListener("input", (event) => {
 		const input = event.target as HTMLInputElement;
 		input?.removeAttribute("aria-invalid");
+
 		if (input?.type === "radio")
 			form
 				.querySelectorAll<HTMLInputElement>(`[name="${input.name}"]`)
@@ -418,10 +490,12 @@ export function setupSoftwareOffers() {
 				.content.cloneNode(true),
 		);
 		const agreementRows = form.querySelector("[data-agreement-milestones]");
+
 		if (agreementRows) {
 			const row = agreementRows.firstElementChild!.cloneNode(
 				true,
 			) as HTMLElement;
+
 			const index = agreementRows.children.length;
 			row.dataset.agreementMilestone = String(index);
 			row.querySelector("legend")!.textContent =
@@ -440,6 +514,7 @@ export function setupSoftwareOffers() {
 				});
 			agreementRows.appendChild(row);
 		}
+
 		changed = true;
 		inputRevision++;
 		updateControls();
@@ -450,6 +525,7 @@ export function setupSoftwareOffers() {
 		const button = (event.target as HTMLElement).closest(
 			"[data-remove-milestone]",
 		);
+
 		if (!button || list.children.length <= 1) return;
 		const row = button.closest("[data-milestone]")!;
 		const neighbor = row.nextElementSibling ?? row.previousElementSibling;
@@ -484,9 +560,11 @@ export function setupSoftwareOffers() {
 		const button = form.querySelector<HTMLButtonElement>('[type="submit"]')!;
 		button.disabled = true;
 		const revision = inputRevision;
+
 		const removedAttachmentKeys: string[] = JSON.parse(
 			attachmentBlock?.dataset.removedKeys ?? "[]",
 		);
+
 		try {
 			const result = await post(endpoint, {
 				action: "draft",
@@ -495,6 +573,7 @@ export function setupSoftwareOffers() {
 				removedAttachmentKeys,
 				expectedUpdatedAt: root.dataset.updated || null,
 			});
+
 			if (attachmentBlock && !result.attachmentCleanupPending)
 				attachmentBlock.dataset.removedKeys = JSON.stringify(
 					(
@@ -523,17 +602,22 @@ export function setupSoftwareOffers() {
 	});
 	send.addEventListener("click", async () => {
 		if (changed || send.disabled) return;
+
 		const version = Number(
 			saved ? root.dataset.version : root.dataset.sentVersion,
 		);
+
 		if (!confirm(`Send offer v${version} to ${root.dataset.email}?`)) return;
+
 		const requestPage =
 			document.querySelector<HTMLElement>("[data-request-id]") ?? root;
+
 		setSending(requestPage, true);
 		send.disabled = true;
 		root.setAttribute("inert", "");
 		root.setAttribute("aria-busy", "true");
 		root.dataset.busy = "true";
+
 		try {
 			const result = await post(endpoint, {
 				action: "send",
@@ -542,6 +626,7 @@ export function setupSoftwareOffers() {
 					? root.dataset.updated
 					: root.dataset.sentUpdated,
 			});
+
 			root.querySelector<HTMLButtonElement>(
 				"[data-revoke-link]",
 			)!.dataset.linkCreatedAt = result.linkCreatedAt;
@@ -576,19 +661,23 @@ export function setupSoftwareOffers() {
 			root.querySelector<HTMLElement>("[data-offer-state]")!.textContent =
 				`v${version} sent ${root.dataset.sentDate} · no changes since`;
 			updateControls();
+
 			const versions = root.querySelector<HTMLElement>(
 					"[data-offer-versions]",
 				)!,
 				versionList = root.querySelector<HTMLElement>("[data-version-list]")!;
+
 			versions.hidden = false;
 			versionList
 				.querySelectorAll<HTMLElement>("[data-version-status]")
 				.forEach((value) => {
 					if (value.textContent === "sent") value.textContent = "superseded";
 				});
+
 			let entry = versionList.querySelector<HTMLElement>(
 				`[data-version="${version}"]`,
 			);
+
 			if (!entry) {
 				entry = document.createElement("li");
 				entry.dataset.version = String(version);
@@ -606,6 +695,7 @@ export function setupSoftwareOffers() {
 				entry.appendChild(state);
 				versionList.insertBefore(entry, versionList.firstChild);
 			}
+
 			entry.querySelector<HTMLElement>("[data-version-status]")!.textContent =
 				"sent";
 			root.removeAttribute("inert");
@@ -627,9 +717,11 @@ export function setupSoftwareOffers() {
 function agreementDetails(form: HTMLFormElement) {
 	if (!form.querySelector("[data-agreement-details]")) return {};
 	const details: Record<string, unknown> = { milestones: [] };
+
 	for (const [key, value] of new FormData(form)) {
 		if (!key.startsWith("agreement.")) continue;
 		const parts = key.slice(10).split(".");
+
 		if (parts[0] === "milestones") {
 			const milestones = details.milestones as Record<string, unknown>[];
 			const i = Number(parts[1]);
@@ -649,9 +741,11 @@ function agreementDetails(form: HTMLFormElement) {
 			details[parts[0]] = value === "" ? null : Number(value);
 		else details[parts[0]] = String(value);
 	}
+
 	details.longer_review_confirmed = new FormData(form).has(
 		"agreement.longer_review_confirmed",
 	);
+
 	return {
 		agreementDetails: details,
 		reusedMsaId: new FormData(form).get("reusedMsaId") || null,
@@ -664,10 +758,13 @@ export function setupAgreementAttachments(block: HTMLElement) {
 		const button = (event.target as HTMLElement).closest<HTMLButtonElement>(
 			"[data-remove-attachment]",
 		);
+
 		if (!button) return;
+
 		const field = block.querySelector<HTMLInputElement>(
 			'[name="agreement.attachments"]',
 		)!;
+
 		field.value = JSON.stringify(
 			JSON.parse(field.value).filter(
 				(attachment: { key: string }) =>
@@ -683,11 +780,14 @@ export function setupAgreementAttachments(block: HTMLElement) {
 		button.closest("li")!.remove();
 		field.dispatchEvent(new Event("input", { bubbles: true }));
 	});
+
 	const upload = block.querySelector<HTMLButtonElement>(
 		"[data-upload-attachment]",
 	)!;
+
 	upload.addEventListener("click", async () => {
 		if (upload.disabled) return;
+
 		const file = block.querySelector<HTMLInputElement>(
 				"[data-attachment-file]",
 			)!.files?.[0],
@@ -697,6 +797,7 @@ export function setupAgreementAttachments(block: HTMLElement) {
 			date = block.querySelector<HTMLInputElement>(
 				"[data-attachment-date]",
 			)!.value;
+
 		const field = block.querySelector<HTMLInputElement>(
 				'[name="agreement.attachments"]',
 			)!,
@@ -704,12 +805,16 @@ export function setupAgreementAttachments(block: HTMLElement) {
 			status = block
 				.closest("[data-software-editor]")!
 				.querySelector<HTMLElement>("[data-software-status]")!;
+
 		if (!file || !version || !date || attachments.length >= 5) {
 			status.textContent =
 				"Choose a PDF, version and date. Up to five attachments.";
+
 			return;
 		}
+
 		upload.disabled = true;
+
 		try {
 			const query = new URLSearchParams({ filename: file.name, version, date }),
 				response = await fetch(`${block.dataset.uploadEndpoint}?${query}`, {
@@ -726,6 +831,7 @@ export function setupAgreementAttachments(block: HTMLElement) {
 						key: string;
 					};
 				};
+
 			if (!response.ok) throw new Error(result.error);
 			field.value = JSON.stringify([
 				...JSON.parse(field.value),

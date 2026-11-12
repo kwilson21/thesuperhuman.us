@@ -7,16 +7,19 @@ import {
 } from "~/lib/audio-project-revocation";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
 const schema = readFileSync(
 	new URL("../../db/music.sql", import.meta.url),
 	"utf8",
 );
+
 const now = new Date("2026-09-22T12:00:00Z");
 
 function fixture() {
 	const sql = new DatabaseSync(":memory:");
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(schema);
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		query,
 		args,
@@ -26,17 +29,21 @@ function fixture() {
 			meta: { changes: sql.prepare(query).run(...args).changes },
 		}),
 	});
+
 	const db = {
 		prepare: (query: string) => statement(query),
 		batch: async (items: ReturnType<typeof statement>[]) => {
 			sql.exec("BEGIN");
+
 			try {
 				const results = items.map((item) => ({
 					results: /\bRETURNING\b/i.test(item.query)
 						? sql.prepare(item.query).all(...item.args)
 						: (sql.prepare(item.query).run(...item.args), []),
 				}));
+
 				sql.exec("COMMIT");
+
 				return results;
 			} catch (error) {
 				sql.exec("ROLLBACK");
@@ -44,6 +51,7 @@ function fixture() {
 			}
 		},
 	} as unknown as D1Database;
+
 	sql
 		.prepare(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
     VALUES ('song-1','service','artist@example.com','A song','reviewed',?,?)`)
@@ -66,6 +74,7 @@ function fixture() {
 		.prepare(`INSERT INTO audio_client_codes(email,code_hash,created_at,expires_at)
     VALUES ('artist@example.com','code-hash',?,?)`)
 		.run(now.toISOString(), "2026-10-01T12:00:00Z");
+
 	return { sql, db };
 }
 
@@ -81,6 +90,7 @@ it("removes a published review immediately and records a client update once", as
 			now,
 		),
 	).toBeNull();
+
 	const result = await revokeProjectFile(
 		db,
 		"song-1",
@@ -89,6 +99,7 @@ it("removes a published review immediately and records a client update once", as
 		"I need to replace this review.",
 		now,
 	);
+
 	expect(result?.updateId).toBeGreaterThan(0);
 	expect(
 		sql
@@ -237,6 +248,7 @@ it("reopens a completed project when its only final is revoked, so a replacement
 			"UPDATE audio_projects SET stage='complete',completed_at=? WHERE request_id='song-1'",
 		)
 		.run(now.toISOString());
+
 	const result = await revokeProjectFile(
 		db,
 		"song-1",
@@ -245,6 +257,7 @@ it("reopens a completed project when its only final is revoked, so a replacement
 		"That export was wrong; a corrected final is coming.",
 		now,
 	);
+
 	expect(result?.updateId).toBeGreaterThan(0);
 	expect(
 		sql

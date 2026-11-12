@@ -17,6 +17,7 @@ it("publishes every Old News surface together after launch verification passes",
 		"src/content/recordings/old-news-recording.json",
 		"src/content/audio-examples/old-news-mastering.json",
 	];
+
 	expect(paths.map((path) => read(path).visibility)).toEqual([
 		"public",
 		"public",

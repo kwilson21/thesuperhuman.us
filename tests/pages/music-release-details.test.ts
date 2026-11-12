@@ -50,19 +50,23 @@ it("keeps the nameplate centred over the lead column, with the credit, actions a
 		page.indexOf('<header class="premiere-masthead">'),
 		page.indexOf("</header>"),
 	);
+
 	expect(masthead).toContain('class="masthead-artist"');
 	expect(masthead).toContain("masthead-title");
 	expect(masthead).not.toContain("premiere-actions");
+
 	const lead = page.slice(
 		page.indexOf('<div class="premiere-lead">'),
 		page.indexOf("{tracks.length > 1"),
 	);
+
 	const order = [
 		'class="masthead-credit"',
 		'class="premiere-actions"',
 		"<LyricVideo",
 		'class="release-platform-links"',
 	].map((part) => lead.indexOf(part));
+
 	expect(order.every((index) => index >= 0)).toBe(true);
 	expect([...order].sort((a, b) => a - b)).toEqual(order);
 	// The column layout starts at 1024px; narrower screens keep the single-column stack.
@@ -81,6 +85,7 @@ it("shrinks the masthead on short screens until the whole poster fits, still cap
 	const fit = css.slice(
 		css.indexOf("@media(min-width:1024px) and (min-height:451px)"),
 	);
+
 	expect(fit).toContain(
 		"--masthead-room:calc(100svh - 16.25rem - (100cqi - var(--space-8)) / 2.94)",
 	);

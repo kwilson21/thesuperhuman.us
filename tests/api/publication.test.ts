@@ -1,12 +1,17 @@
 import { describe, it, expect, vi } from "vitest";
+
 const { commit, read } = vi.hoisted(() => ({ commit: vi.fn(), read: vi.fn() }));
+
 vi.mock("~/lib/publication/journal", () => ({
 	D1PublicationJournal: class {
 		commit = commit;
 	},
 }));
+
 vi.mock("~/lib/publication/read", () => ({ readProject: read }));
+
 import { GET, POST } from "~/pages/api/work-feed";
+
 const body = {
 	version: 1,
 	projectId: "threadline",
@@ -20,6 +25,7 @@ const body = {
 	milestoneId: null,
 	story: null,
 };
+
 function ctx(
 	value: unknown = body,
 	env: Record<string, unknown> = {},
@@ -44,6 +50,7 @@ function ctx(
 		}),
 	} as any;
 }
+
 describe("publication receiver", () => {
 	it("fails closed without authorization or a binding", async () => {
 		expect((await POST(ctx(body, {}, "wrong"))).status).toBe(401);

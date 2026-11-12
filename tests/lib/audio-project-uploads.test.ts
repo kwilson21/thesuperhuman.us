@@ -19,16 +19,19 @@ import {
 } from "~/lib/audio-project-uploads";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
 const schema = readFileSync(
 	new URL("../../db/music.sql", import.meta.url),
 	"utf8",
 );
+
 const now = new Date("2026-09-22T12:00:00Z");
 
 function fixture() {
 	const sql = new DatabaseSync(":memory:");
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(schema);
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		bind: (...values: unknown[]) => statement(query, values),
 		first: async () => sql.prepare(query).get(...args) ?? null,
@@ -36,9 +39,11 @@ function fixture() {
 			meta: { changes: sql.prepare(query).run(...args).changes },
 		}),
 	});
+
 	const db = {
 		prepare: (query: string) => statement(query),
 	} as unknown as D1Database;
+
 	sql
 		.prepare(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
     VALUES ('song-1','service','artist@example.com','A song','reviewed',?,?)`)
@@ -56,10 +61,12 @@ function fixture() {
 	const objects = new Map<string, { size: number }>();
 	const uploads = new Map<string, string>();
 	const deleted: string[] = [];
+
 	const bucket = {
 		createMultipartUpload: async (key: string) => {
 			const uploadId = `r2-${uploads.size + 1}`;
 			uploads.set(uploadId, key);
+
 			return {
 				uploadId,
 				abort: async () => {
@@ -69,6 +76,7 @@ function fixture() {
 		},
 		resumeMultipartUpload: (key: string, uploadId: string) => {
 			if (uploads.get(uploadId) !== key) throw new Error("Invalid R2 upload");
+
 			return {
 				uploadPart: async (partNumber: number) => ({
 					partNumber,
@@ -77,6 +85,7 @@ function fixture() {
 				complete: async () => {
 					const object = { size: uploadPartSize + 3 };
 					objects.set(key, object);
+
 					return object;
 				},
 				abort: async () => {
@@ -90,17 +99,20 @@ function fixture() {
 			objects.delete(key);
 		},
 	} as unknown as R2Bucket;
+
 	return { sql, db, bucket, objects, deleted };
 }
 
 it("keeps an owner upload private until publication and supports a large multipart file", async () => {
 	const { sql, db, bucket } = fixture();
+
 	const input = {
 		version: "review" as const,
 		displayName: "Review.wav",
 		mediaType: "audio/wav" as const,
 		byteSize: uploadPartSize + 3,
 	};
+
 	expect(await ownerProjectCanUpload(db, "song-1", "review")).toBe(false);
 	expect(await beginProjectUpload(db, bucket, "song-1", input, now)).toBeNull();
 	sql
@@ -113,10 +125,12 @@ it("keeps an owner upload private until publication and supports a large multipa
 	expect(expectedPartLength(input.byteSize, 1)).toBe(uploadPartSize);
 	expect(expectedPartLength(input.byteSize, 2)).toBe(3);
 	expect(expectedPartLength(input.byteSize, 3)).toBeNull();
+
 	const parts = [1, 2].map((partNumber) => ({
 		partNumber,
 		etag: "a".repeat(32),
 	}));
+
 	expect(
 		await finishProjectUpload(db, bucket, upload, parts.slice(0, 1), now),
 	).toBe("blocked");
@@ -157,10 +171,12 @@ it("finishes an upload using the opaque part tag returned by local R2", async ()
 			r2_buckets: [{ binding: "AUDIO", bucket_name: "studio-upload-test" }],
 		}),
 	);
+
 	const proxy = await getPlatformProxy({
 		configPath: join(directory, "wrangler.jsonc"),
 		persist: { path: join(directory, "state") },
 	});
+
 	try {
 		sql
 			.prepare(
@@ -168,6 +184,7 @@ it("finishes an upload using the opaque part tag returned by local R2", async ()
 			)
 			.run();
 		const bucket = proxy.env.AUDIO as R2Bucket;
+
 		const upload = (await beginProjectUpload(
 			db,
 			bucket,
@@ -180,9 +197,11 @@ it("finishes an upload using the opaque part tag returned by local R2", async ()
 			},
 			now,
 		))!;
+
 		const part = await bucket
 			.resumeMultipartUpload(upload.object_key, upload.upload_id)
 			.uploadPart(1, new Uint8Array([1, 2, 3, 4, 5]));
+
 		expect(part.etag.length).toBeGreaterThan(128);
 		expect(part.etag.length).toBeLessThanOrEqual(maxPartEtagLength);
 		expect(await finishProjectUpload(db, bucket, upload, [part], now)).toBe(
@@ -202,10 +221,12 @@ it("finishes an upload using the opaque part tag returned by local R2", async ()
 
 it("fits the maximum part tags and waveform peaks into the completion request limit", () => {
 	const count = Math.ceil(maxProjectFileSize / uploadPartSize);
+
 	const parts = Array.from({ length: count }, (_, index) => ({
 		partNumber: index + 1,
 		etag: "x".repeat(maxPartEtagLength),
 	}));
+
 	const peaks = Array.from({ length: 400 }, () => 100);
 	expect(
 		new TextEncoder().encode(
@@ -226,6 +247,7 @@ it("recovers a completed R2 object after a metadata write failure and can discar
 			"UPDATE audio_payments SET booking_status='paid' WHERE request_id='song-1'",
 		)
 		.run();
+
 	const upload = (await beginProjectUpload(
 		db,
 		bucket,
@@ -238,6 +260,7 @@ it("recovers a completed R2 object after a metadata write failure and can discar
 		},
 		now,
 	))!;
+
 	objects.set(upload.object_key, { size: 4 });
 	expect(await finishProjectUpload(db, bucket, upload, null, now)).toBe(
 		"size-mismatch",
@@ -252,6 +275,7 @@ it("recovers a completed R2 object after a metadata write failure and can discar
 			.prepare("SELECT status FROM audio_project_files WHERE id=?")
 			.get(upload.id),
 	).toEqual({ status: "uploaded" });
+
 	const second = (await beginProjectUpload(
 		db,
 		bucket,
@@ -264,6 +288,7 @@ it("recovers a completed R2 object after a metadata write failure and can discar
 		},
 		now,
 	))!;
+
 	objects.set(second.object_key, { size: 5 });
 	await abortProjectUpload(db, bucket, second);
 	expect(deleted).toContain(second.object_key);
@@ -278,6 +303,7 @@ it("keeps a failed discard recoverable and retries R2 cleanup", async () => {
 			"UPDATE audio_payments SET booking_status='paid' WHERE request_id='song-1'",
 		)
 		.run();
+
 	const upload = (await beginProjectUpload(
 		db,
 		bucket,
@@ -290,6 +316,7 @@ it("keeps a failed discard recoverable and retries R2 cleanup", async () => {
 		},
 		now,
 	))!;
+
 	objects.set(upload.object_key, { size: 5 });
 	vi.spyOn(bucket, "delete").mockRejectedValueOnce(new Error("R2 unavailable"));
 	await expect(abortProjectUpload(db, bucket, upload)).rejects.toThrow(
@@ -315,6 +342,7 @@ it("finishes a discard when R2 no longer has the multipart upload", async () => 
 			"UPDATE audio_payments SET booking_status='paid' WHERE request_id='song-1'",
 		)
 		.run();
+
 	const upload = (await beginProjectUpload(
 		db,
 		bucket,
@@ -327,6 +355,7 @@ it("finishes a discard when R2 no longer has the multipart upload", async () => 
 		},
 		now,
 	))!;
+
 	// R2's incomplete-upload lifecycle, or an earlier abort, already removed it.
 	vi.spyOn(bucket, "resumeMultipartUpload").mockReturnValue({
 		abort: async () => {
@@ -347,6 +376,7 @@ it("keeps a discard retryable when aborting the upload fails for another reason"
 			"UPDATE audio_payments SET booking_status='paid' WHERE request_id='song-1'",
 		)
 		.run();
+
 	const upload = (await beginProjectUpload(
 		db,
 		bucket,
@@ -359,6 +389,7 @@ it("keeps a discard retryable when aborting the upload fails for another reason"
 		},
 		now,
 	))!;
+
 	const original = bucket.resumeMultipartUpload.bind(bucket);
 	vi.spyOn(bucket, "resumeMultipartUpload")
 		.mockReturnValueOnce({
@@ -385,6 +416,7 @@ it("cleans an object completed while a discard is starting", async () => {
 			"UPDATE audio_payments SET booking_status='paid' WHERE request_id='song-1'",
 		)
 		.run();
+
 	const upload = (await beginProjectUpload(
 		db,
 		bucket,
@@ -397,10 +429,12 @@ it("cleans an object completed while a discard is starting", async () => {
 		},
 		now,
 	))!;
+
 	const parts = [1, 2].map((partNumber) => ({
 		partNumber,
 		etag: "a".repeat(32),
 	}));
+
 	const originalHead = bucket.head.bind(bucket);
 	let interleave = true;
 	vi.spyOn(bucket, "head").mockImplementation(async (key) => {
@@ -410,6 +444,7 @@ it("cleans an object completed while a discard is starting", async () => {
 				"blocked",
 			);
 		}
+
 		return originalHead(key);
 	});
 	await abortProjectUpload(db, bucket, upload);
@@ -423,14 +458,17 @@ it("cleans an object completed while a discard is starting", async () => {
 
 it("stops reading an upload body as soon as it passes the expected size", async () => {
 	let pulled = 0;
+
 	const endless = new ReadableStream<Uint8Array>({
 		pull(controller) {
 			pulled++;
 			controller.enqueue(new Uint8Array(4));
 		},
 	});
+
 	expect(await readBodyWithin(endless, 10)).toBeNull();
 	expect(pulled).toBeLessThanOrEqual(4);
+
 	const exact = new ReadableStream<Uint8Array>({
 		start(controller) {
 			controller.enqueue(new Uint8Array([1, 2]));
@@ -438,6 +476,7 @@ it("stops reading an upload body as soon as it passes the expected size", async 
 			controller.close();
 		},
 	});
+
 	expect([...new Uint8Array((await readBodyWithin(exact, 3))!)]).toEqual([
 		1, 2, 3,
 	]);

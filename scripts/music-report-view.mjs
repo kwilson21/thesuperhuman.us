@@ -11,6 +11,7 @@ export function renderMusicReport(title, subtitle, description, report) {
 					"'": "&#39;",
 				})[c],
 		);
+
 	const sections = Object.entries(report)
 		.filter(([, value]) => Array.isArray(value) && value.length)
 		.map(
@@ -29,5 +30,6 @@ export function renderMusicReport(title, subtitle, description, report) {
 					.join("")}</tbody></table></div></section>`,
 		)
 		.join("");
+
 	return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escape(title)}</title><style>body{background:#fbf8f2;color:#0e0e0e;font:16px/1.6 system-ui;max-width:1100px;margin:4rem auto;padding:0 1rem}h1{font:3rem Georgia}h2{text-transform:capitalize}section{border-top:1px solid #e8e3da;margin-top:2rem}.scroll{overflow:auto}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:.7rem;border-bottom:1px solid #e8e3da}small,p{color:#4a4a4a}</style><h1>${escape(title)}</h1><p>${escape(subtitle)}</p><p>${escape(description)}</p>${sections || "<p>No engagement recorded yet.</p>"}<small>Private operator report. Never publish contact exports.</small></html>`;
 }

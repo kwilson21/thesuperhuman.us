@@ -9,7 +9,9 @@ export const invoiceStatuses = [
 	"void",
 	"uncollectible",
 ] as const;
+
 export type InvoiceStatus = (typeof invoiceStatuses)[number];
+
 export type Installment = "booking" | "balance";
 
 export type AudioPayment = {
@@ -117,6 +119,7 @@ export async function getAudioPayment(
 		.prepare(`SELECT ${columns} FROM audio_payments WHERE request_id=?`)
 		.bind(requestId)
 		.first<PaymentRow>();
+
 	return row ? fromRow(row) : null;
 }
 
@@ -137,19 +140,26 @@ export async function approveAudioPayment(
 	) {
 		throw new Error("Invalid fixed project price.");
 	}
+
 	const approvedService = input.approvedService.trim();
+
 	if (!approvedService || approvedService.length > 160)
 		throw new Error("Invalid approved service.");
 	validTimestamp(input.offerAcceptedAt, "offer acceptance time");
+
 	if (!input.actor.trim()) throw new Error("Invalid request actor.");
+
 	const request = await db
 		.prepare("SELECT kind FROM owner_requests WHERE id=?")
 		.bind(input.requestId)
 		.first<{ kind: string }>();
+
 	if (!request) throw new Error("Request not found.");
+
 	if (request.kind !== "service")
 		throw new Error("Payment approval requires an audio service request.");
 	const existing = await getAudioPayment(db, input.requestId);
+
 	if (existing) {
 		if (
 			existing.approvedService === approvedService &&
@@ -159,6 +169,7 @@ export async function approveAudioPayment(
 			return existing;
 		throw new Error("Payment terms are already approved.");
 	}
+
 	const booking = Math.ceil(input.totalAmountCents / 2);
 	const balance = input.totalAmountCents - booking;
 	const now = new Date().toISOString();
@@ -188,6 +199,7 @@ export async function approveAudioPayment(
 				now,
 			),
 	]);
+
 	return (await getAudioPayment(db, input.requestId))!;
 }
 
@@ -204,22 +216,29 @@ export async function recordInvoice(
 	},
 ): Promise<AudioPayment> {
 	const payment = await getAudioPayment(db, input.requestId);
+
 	if (!payment) throw new Error("Payment terms are not approved.");
+
 	if (!input.actor.trim()) throw new Error("Invalid request actor.");
+
 	if (input.installment === "balance" && payment.bookingStatus !== "paid") {
 		throw new Error(
 			"The booking invoice must be paid before creating the balance invoice.",
 		);
 	}
+
 	const currentId =
 		input.installment === "booking"
 			? payment.bookingInvoiceId
 			: payment.balanceInvoiceId;
+
 	if (currentId === input.invoiceId) return payment;
+
 	if (currentId)
 		throw new Error(
 			`${input.installment === "booking" ? "Booking" : "Balance"} invoice already exists.`,
 		);
+
 	if (
 		!input.stripeCustomerId ||
 		!input.invoiceId ||
@@ -227,6 +246,7 @@ export async function recordInvoice(
 	) {
 		throw new Error("Invalid Stripe invoice response.");
 	}
+
 	if (!invoiceStatuses.includes(input.status))
 		throw new Error("Invalid invoice status.");
 	const prefix = input.installment === "booking" ? "booking" : "balance";
@@ -263,8 +283,10 @@ export async function recordInvoice(
 			.bind(input.invoiceId, input.requestId, input.installment, now),
 	]);
 	const updated = await getAudioPayment(db, input.requestId);
+
 	if (!updated || updated[`${prefix}InvoiceId`] !== input.invoiceId)
 		throw new Error("Invoice already exists.");
+
 	return updated;
 }
 
@@ -277,11 +299,14 @@ export async function replaceTerminalInvoice(
 	},
 ): Promise<AudioPayment> {
 	const payment = await getAudioPayment(db, input.requestId);
+
 	if (!payment) throw new Error("Payment terms are not approved.");
+
 	if (!input.actor.trim()) throw new Error("Invalid request actor.");
 	const prefix = input.installment;
 	const status = payment[`${prefix}Status`];
 	const invoiceId = payment[`${prefix}InvoiceId`];
+
 	if (!invoiceId || status !== "void")
 		throw new Error("Only a void invoice can be replaced.");
 	const now = new Date().toISOString();
@@ -311,6 +336,7 @@ export async function replaceTerminalInvoice(
       WHERE request_id=? AND ${prefix}_invoice_id=? AND ${prefix}_status='void'`)
 			.bind(now, input.requestId, invoiceId),
 	]);
+
 	return (await getAudioPayment(db, input.requestId))!;
 }
 
@@ -324,6 +350,7 @@ export const manualPaymentMethods = [
 	"Bank transfer",
 	"Other",
 ] as const;
+
 export type ManualPaymentMethod = (typeof manualPaymentMethods)[number];
 
 /**
@@ -343,16 +370,22 @@ export async function recordManualPayment(
 	},
 ): Promise<AudioPayment> {
 	const payment = await getAudioPayment(db, input.requestId);
+
 	if (!payment) throw new Error("Payment terms are not approved.");
+
 	if (!input.actor.trim()) throw new Error("Invalid request actor.");
+
 	if (!manualPaymentMethods.includes(input.method))
 		throw new Error("Invalid payment method.");
 	const reference = (input.reference ?? "").trim().replace(/\s+/g, " ");
+
 	if (reference.length > 120 || !/^[A-Za-z0-9 #._:/-]*$/.test(reference))
 		throw new Error("Invalid payment reference.");
 	const prefix = input.installment;
+
 	if (payment[`${prefix}Status`] === "paid" && !payment[`${prefix}InvoiceId`])
 		return payment;
+
 	if (
 		payment[`${prefix}Status`] !== "not_created" ||
 		payment[`${prefix}InvoiceId`] ||
@@ -361,12 +394,15 @@ export async function recordManualPayment(
 	) {
 		throw new Error("This payment already has an invoice.");
 	}
+
 	if (prefix === "balance" && payment.bookingStatus !== "paid")
 		throw new Error("The booking must be paid before the balance.");
 	const amount = (payment[`${prefix}AmountCents`] / 100).toFixed(2);
 	const now = new Date().toISOString();
+
 	const eligible = `request_id=? AND ${prefix}_status='not_created' AND ${prefix}_invoice_id IS NULL
     AND ${prefix}_creation_started_at IS NULL AND external_refs_deleted_at IS NULL${prefix === "balance" ? " AND booking_status='paid'" : ""}`;
+
 	await db.batch([
 		db
 			.prepare(`INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at)
@@ -386,8 +422,10 @@ export async function recordManualPayment(
 			.bind(now, now, input.requestId),
 	]);
 	const updated = (await getAudioPayment(db, input.requestId))!;
+
 	if (updated[`${prefix}Status`] !== "paid" || updated[`${prefix}InvoiceId`])
 		throw new Error("This payment already has an invoice.");
+
 	return updated;
 }
 
@@ -400,15 +438,18 @@ export async function reserveInvoiceCreation(
 ): Promise<AudioPayment> {
 	const prefix = input.installment;
 	const now = new Date().toISOString();
+
 	const reservation = await db
 		.prepare(`UPDATE audio_payments SET ${prefix}_creation_started_at=?,updated_at=?
     WHERE request_id=? AND ${prefix}_invoice_id IS NULL AND ${prefix}_creation_started_at IS NULL
       AND ${prefix}_status='not_created' AND external_refs_deleted_at IS NULL`)
 		.bind(now, now, input.requestId)
 		.run();
+
 	if (reservation.meta.changes !== 1)
 		throw new Error("Invoice creation is already pending or complete.");
 	const payment = await getAudioPayment(db, input.requestId);
+
 	if (
 		!payment ||
 		!payment[`${prefix}CreationStartedAt`] ||
@@ -416,6 +457,7 @@ export async function reserveInvoiceCreation(
 	) {
 		throw new Error("Invoice creation is already pending or complete.");
 	}
+
 	return payment;
 }
 
@@ -481,17 +523,20 @@ export async function recoverInvoiceFromWebhook(
 	},
 ): Promise<"recovered" | "discarded" | "unmatched"> {
 	const payment = await getAudioPayment(db, input.requestId);
+
 	if (payment?.externalRefsDeletedAt) return "discarded";
 	const prefix = input.installment;
 	const currentId = payment?.[`${prefix}InvoiceId`];
 	const receivedAt = new Date().toISOString();
 	const expectedAmount = payment?.[`${prefix}AmountCents`];
+
 	const invalidInvoice =
 		payment &&
 		(input.totalAmountCents !== expectedAmount ||
 			input.currency !== payment.currency ||
 			(input.installment === "balance" && payment.bookingStatus !== "paid") ||
 			payment[`${prefix}Status`] === "paid");
+
 	if (!payment || currentId || invalidInvoice) {
 		await recordUnmatchedStripeEvent(db, {
 			eventId: input.eventId,
@@ -503,8 +548,10 @@ export async function recoverInvoiceFromWebhook(
 			occurredAt: input.occurredAt,
 			reason: payment ? "invoice-conflict" : "request-not-found",
 		});
+
 		return "unmatched";
 	}
+
 	await db.batch([
 		db
 			.prepare(`UPDATE audio_payments SET stripe_customer_id=COALESCE(?,stripe_customer_id),
@@ -617,10 +664,12 @@ export async function recoverInvoiceFromWebhook(
     )`)
 			.bind(input.eventId, input.requestId, input.invoiceId),
 	]);
+
 	const unmatched = await db
 		.prepare("SELECT event_id FROM stripe_unmatched_events WHERE event_id=?")
 		.bind(input.eventId)
 		.first();
+
 	return unmatched ? "unmatched" : "recovered";
 }
 
@@ -636,35 +685,45 @@ export async function applyStripeInvoiceEvent(
 ): Promise<{ applied: boolean; payment: AudioPayment | null }> {
 	if (!input.eventId || !input.eventType || !input.invoiceId)
 		throw new Error("Invalid Stripe event.");
+
 	if (!invoiceStatuses.includes(input.status))
 		throw new Error("Invalid invoice status.");
 	validTimestamp(input.occurredAt, "Stripe event time");
+
 	const duplicate = await db
 		.prepare("SELECT id FROM stripe_webhook_events WHERE id=?")
 		.bind(input.eventId)
 		.first();
+
 	if (duplicate) {
 		const current = await db
 			.prepare(`SELECT ${columns} FROM audio_payments
       WHERE booking_invoice_id=? OR balance_invoice_id=?`)
 			.bind(input.invoiceId, input.invoiceId)
 			.first<PaymentRow>();
+
 		return { applied: false, payment: current ? fromRow(current) : null };
 	}
+
 	const row = await db
 		.prepare(`SELECT ${columns} FROM audio_payments
     WHERE booking_invoice_id=? OR balance_invoice_id=?`)
 		.bind(input.invoiceId, input.invoiceId)
 		.first<PaymentRow>();
+
 	if (!row) return { applied: false, payment: null };
+
 	const installment =
 		row.booking_invoice_id === input.invoiceId ? "booking" : "balance";
+
 	const processedAt = new Date().toISOString();
 	const currentStatus = row[`${installment}_status`];
 	const currentEventAt = row[`${installment}_status_updated_at`];
+
 	const shouldApply =
 		currentStatus !== "paid" &&
 		(!currentEventAt || input.occurredAt >= currentEventAt);
+
 	const statements = [
 		db
 			.prepare(`INSERT INTO stripe_webhook_events (id,event_type,invoice_id,occurred_at,processed_at)
@@ -677,6 +736,7 @@ export async function applyStripeInvoiceEvent(
 				processedAt,
 			),
 	];
+
 	if (shouldApply)
 		statements.unshift(
 			db
@@ -711,6 +771,7 @@ export async function applyStripeInvoiceEvent(
 				),
 		);
 	await db.batch(statements);
+
 	return {
 		applied: shouldApply,
 		payment: await getAudioPayment(db, row.request_id),
@@ -730,11 +791,14 @@ export function paymentDefaults(
 		serviceId && serviceId in audioOffers
 			? audioOffers[serviceId as keyof typeof audioOffers]
 			: null;
+
 	if (!offer?.price) return { approvedService: "", totalAmount: "" };
+
 	const title =
 		typeof details.title === "string"
 			? details.title.trim().replace(/\s+/g, " ")
 			: "";
+
 	return {
 		approvedService: (title ? `${offer.name}: ${title}` : offer.name).slice(
 			0,

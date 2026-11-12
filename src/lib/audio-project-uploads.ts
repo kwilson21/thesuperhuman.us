@@ -56,10 +56,13 @@ export async function beginProjectUpload(
 	if (!(await ownerProjectCanUpload(db, requestId, input.version))) return null;
 	const id = crypto.randomUUID();
 	const key = privateProjectObjectKey(requestId, id, input.mediaType);
+
 	if (!key) return null;
+
 	const upload = await bucket.createMultipartUpload(key, {
 		httpMetadata: { contentType: input.mediaType },
 	});
+
 	try {
 		const row = await db
 			.prepare(`INSERT INTO audio_project_uploads(id,request_id,upload_id,object_key,version,display_name,media_type,byte_size,created_at)
@@ -78,12 +81,15 @@ export async function beginProjectUpload(
 				requestId,
 			)
 			.first<ProjectUpload>();
+
 		if (row) return row;
 	} catch (error) {
 		await upload.abort().catch(() => {});
 		throw error;
 	}
+
 	await upload.abort().catch(() => {});
+
 	return null;
 }
 
@@ -104,8 +110,10 @@ export function expectedPartLength(
 	partNumber: number,
 ): number | null {
 	const count = Math.ceil(byteSize / uploadPartSize);
+
 	if (!Number.isSafeInteger(partNumber) || partNumber < 1 || partNumber > count)
 		return null;
+
 	return Math.min(uploadPartSize, byteSize - (partNumber - 1) * uploadPartSize);
 }
 
@@ -117,26 +125,34 @@ export async function readBodyWithin(
 	const reader = body.getReader();
 	const chunks: Uint8Array[] = [];
 	let total = 0;
+
 	try {
 		for (;;) {
 			const { done, value } = await reader.read();
+
 			if (done) break;
 			total += value.byteLength;
+
 			if (total > limit) {
 				await reader.cancel().catch(() => {});
+
 				return null;
 			}
+
 			chunks.push(value);
 		}
 	} finally {
 		reader.releaseLock();
 	}
+
 	const joined = new Uint8Array(total);
 	let at = 0;
+
 	for (const chunk of chunks) {
 		joined.set(chunk, at);
 		at += chunk.byteLength;
 	}
+
 	return joined.buffer;
 }
 
@@ -148,6 +164,7 @@ export async function putProjectUploadPart(
 ): Promise<R2UploadedPart> {
 	if (upload.state !== "pending")
 		throw new Error("This upload is being discarded.");
+
 	return bucket
 		.resumeMultipartUpload(upload.object_key, upload.upload_id)
 		.uploadPart(partNumber, body);
@@ -162,10 +179,12 @@ export async function finishProjectUpload(
 	peaks: number[] | null = null,
 ): Promise<"saved" | "blocked" | "size-mismatch"> {
 	if (upload.state !== "pending") return "blocked";
+
 	if (!(await ownerProjectCanUpload(db, upload.request_id, upload.version)))
 		return "blocked";
 	const count = Math.ceil(upload.byte_size / uploadPartSize);
 	let object = await bucket.head(upload.object_key);
+
 	if (!object) {
 		if (
 			!parts ||
@@ -183,7 +202,9 @@ export async function finishProjectUpload(
 			.resumeMultipartUpload(upload.object_key, upload.upload_id)
 			.complete(parts);
 	}
+
 	if (object.size !== upload.byte_size) return "size-mismatch";
+
 	const saved = await db
 		.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,uploaded_at,peaks)
     SELECT id,request_id,version,object_key,display_name,media_type,byte_size,?,?
@@ -197,17 +218,20 @@ export async function finishProjectUpload(
 			upload.request_id,
 		)
 		.first<{ id: string }>();
+
 	const existing =
 		saved ||
 		(await db
 			.prepare("SELECT id FROM audio_project_files WHERE id=? AND request_id=?")
 			.bind(upload.id, upload.request_id)
 			.first<{ id: string }>());
+
 	if (!existing) return "blocked";
 	await db
 		.prepare("DELETE FROM audio_project_uploads WHERE id=? AND request_id=?")
 		.bind(upload.id, upload.request_id)
 		.run();
+
 	return "saved";
 }
 
@@ -229,6 +253,7 @@ export async function abortProjectUpload(
     WHERE id=? AND request_id=? AND NOT EXISTS(SELECT 1 FROM audio_project_files WHERE id=?) RETURNING id`)
 		.bind(upload.id, upload.request_id, upload.id)
 		.first<{ id: string }>();
+
 	if (!discarding) {
 		await db
 			.prepare(
@@ -236,9 +261,12 @@ export async function abortProjectUpload(
 			)
 			.bind(upload.id, upload.request_id, upload.id)
 			.run();
+
 		return;
 	}
+
 	const object = await bucket.head(upload.object_key);
+
 	if (object) await bucket.delete(upload.object_key);
 	else {
 		try {
@@ -253,6 +281,7 @@ export async function abortProjectUpload(
 			else if (!multipartUploadGone(error)) throw error;
 		}
 	}
+
 	await db
 		.prepare(`DELETE FROM audio_project_uploads WHERE id=? AND request_id=? AND state='discarding'
     AND NOT EXISTS(SELECT 1 FROM audio_project_files WHERE id=?)`)

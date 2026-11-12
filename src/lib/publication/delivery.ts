@@ -61,23 +61,30 @@ export async function deliver(
 	ports: DeliveryPorts,
 ): Promise<DeliveryResult> {
 	const publication = parsePublication(input);
+
 	if (!publication) return { status: "invalid" };
+
 	try {
 		const prepared = await ports.outbox.prepare(publication);
 		const stored = parsePublication(prepared.publication);
+
 		if (
 			!stored ||
 			canonicalPublication(stored) !== canonicalPublication(publication)
 		)
 			return { status: "conflict" };
+
 		// A successful old receipt is not permission to bypass a newly restrictive policy.
 		if (!(await ports.mayPublish(parsePublication(stored)!)))
 			return { status: "held" };
+
 		if (prepared.receipt && validReceipt(prepared.receipt, stored)) {
 			return { status: "delivered", receipt: prepared.receipt };
 		}
+
 		// Recover corrupt local receipts through the journal's idempotent commit.
 		const result = await ports.journal.commit(stored);
+
 		if (
 			result.status === "conflict" ||
 			result.status === "withdrawn" ||
@@ -85,12 +92,14 @@ export async function deliver(
 		) {
 			return { status: result.status };
 		}
+
 		if (
 			(result.status !== "accepted" && result.status !== "duplicate") ||
 			!validReceipt(result.receipt, stored)
 		)
 			return { status: "pending" };
 		await ports.outbox.acknowledge(result.receipt);
+
 		return { status: "delivered", receipt: result.receipt };
 	} catch {
 		// No exception text or source details may leak to a public error response.

@@ -2,6 +2,7 @@ import { expect, it, vi } from "vitest";
 import { mkdtemp, mkdir, writeFile, stat, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 const { dispose, spawnSync } = vi.hoisted(() => ({
 	dispose: vi.fn(),
 	spawnSync: vi.fn((..._args: unknown[]) => ({
@@ -10,7 +11,9 @@ const { dispose, spawnSync } = vi.hoisted(() => ({
 		stderr: "",
 	})),
 }));
+
 vi.mock("node:child_process", () => ({ spawnSync }));
+
 vi.mock("wrangler", () => ({
 	getPlatformProxy: async () => ({
 		env: {
@@ -22,9 +25,11 @@ vi.mock("wrangler", () => ({
 		dispose,
 	}),
 }));
+
 it("sets up an empty checkout without any imported music assets", async () => {
 	const root = await mkdtemp(join(tmpdir(), "music-preview-"));
 	const cwd = process.cwd();
+
 	try {
 		await mkdir(join(root, "db"));
 		await writeFile(join(root, "db/music.sql"), "CREATE TABLE demo (id TEXT);");

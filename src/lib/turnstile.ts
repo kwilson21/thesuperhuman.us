@@ -16,8 +16,10 @@ export async function verifyTurnstile(
 			body,
 			signal: AbortSignal.timeout(5000),
 		});
+
 		if (!res.ok) return false;
 		const data = (await res.json()) as { success?: boolean };
+
 		return data.success === true;
 	} catch {
 		return false;

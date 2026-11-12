@@ -6,6 +6,7 @@ import {
 	hashOfferToken,
 	newOfferToken,
 } from "~/lib/software-offers";
+
 export const terms = {
 	outcome: "Onboarding",
 	summary: "A shared view.",
@@ -22,11 +23,14 @@ export const terms = {
 	timing: "",
 	paymentMode: "standard",
 };
+
 const errors = (value: unknown) => {
 	const result = validateOfferTerms(value);
 	expect(result.ok).toBe(false);
+
 	return result.ok ? {} : result.errors;
 };
+
 describe("software offer terms", () => {
 	it("validates complete terms and derives the total", () => {
 		const result = validateOfferTerms(terms);
@@ -155,6 +159,7 @@ describe("software offer terms", () => {
 				status: "sent",
 			} as any,
 		);
+
 		expect(Object.keys(projection!)).toEqual([
 			"name",
 			"company",
@@ -206,6 +211,7 @@ it("rejects repeated deliverable lines after case and whitespace normalization",
 			},
 		],
 	};
+
 	expect(validateOfferTerms(value)).toMatchObject({
 		ok: false,
 		errors: {
@@ -225,5 +231,6 @@ it.each([
 		{ name: "Alex", details: {}, serviceId } as any,
 		{ version: 1, terms_json: JSON.stringify(terms), status: "sent" } as any,
 	);
+
 	expect(projection?.path).toBe(path);
 });

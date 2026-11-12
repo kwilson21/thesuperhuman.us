@@ -11,6 +11,7 @@ export default {
 		sql(`INSERT OR IGNORE INTO owner_campaigns(id,subject_type,subject_id,name,primary_goal,starts_at,status,created_at,updated_at)
       VALUES ('screenshot-campaign','release','old-news-single','Old News premiere','Grow saved listeners','2026-09-01','active','${at}','${at}')`);
 		const steps = [];
+
 		for (const [title, route, name] of [
 			["Request detail", "/owner/requests/screenshot-request", "owner-request"],
 			[
@@ -20,6 +21,7 @@ export default {
 			],
 		]) {
 			const images = [];
+
 			for (const viewport of ["desktop", "phone"]) {
 				images.push({
 					file: await capture({
@@ -31,8 +33,10 @@ export default {
 					caption: `${title}, ${viewport}`,
 				});
 			}
+
 			steps.push({ title, images });
 		}
+
 		return steps;
 	},
 };

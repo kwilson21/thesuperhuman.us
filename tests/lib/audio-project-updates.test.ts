@@ -14,17 +14,21 @@ import {
 vi.mock("~/lib/audio-resend", () => ({
 	sendStudioSignInNotice: vi.fn(async () => ({ ok: true })),
 }));
+
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
 const baseline = readFileSync(
 	new URL("../../db/music.sql", import.meta.url),
 	"utf8",
 );
+
 const now = new Date("2026-09-22T12:00:00Z");
 
 function fixture() {
 	const sql = new DatabaseSync(":memory:");
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(baseline);
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		query,
 		args,
@@ -36,17 +40,21 @@ function fixture() {
 		all: async () => ({ results: sql.prepare(query).all(...args) }),
 		first: async () => sql.prepare(query).get(...args) ?? null,
 	});
+
 	const db = {
 		prepare: (query: string) => statement(query),
 		batch: async (items: ReturnType<typeof statement>[]) => {
 			sql.exec("BEGIN");
+
 			try {
 				const results = items.map((item) => ({
 					results: /\bRETURNING\b/i.test(item.query)
 						? sql.prepare(item.query).all(...item.args)
 						: (sql.prepare(item.query).run(...item.args), []),
 				}));
+
 				sql.exec("COMMIT");
+
 				return results;
 			} catch (error) {
 				sql.exec("ROLLBACK");
@@ -54,10 +62,12 @@ function fixture() {
 			}
 		},
 	} as unknown as D1Database;
+
 	sql
 		.prepare(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
     VALUES ('song-1','service','artist@example.com','A song','new',?,?)`)
 		.run(now.toISOString(), now.toISOString());
+
 	return { sql, db };
 }
 
@@ -69,15 +79,18 @@ describe("project updates", () => {
 		sql
 			.prepare("UPDATE owner_requests SET status='reviewed' WHERE id='song-1'")
 			.run();
+
 		const command = {
 			action: "accept" as const,
 			dueDate: "2026-10-01",
 			body: "I have your song.",
 		};
+
 		const results = await Promise.all([
 			saveProjectUpdate(db, "song-1", "owner@example.com", command, now),
 			saveProjectUpdate(db, "song-1", "owner@example.com", command, now),
 		]);
+
 		expect(results.filter(Boolean)).toHaveLength(1);
 		expect(
 			sql
@@ -111,6 +124,7 @@ describe("project updates", () => {
 		sql
 			.prepare("UPDATE owner_requests SET status='reviewed' WHERE id='song-1'")
 			.run();
+
 		const accepted = await saveProjectUpdate(
 			db,
 			"song-1",
@@ -118,6 +132,7 @@ describe("project updates", () => {
 			{ action: "accept", dueDate: "2026-10-01", body: "I have your song." },
 			now,
 		);
+
 		expect(accepted).toMatchObject({
 			kind: "accepted",
 			new_due_at: "2026-10-01",
@@ -137,6 +152,7 @@ describe("project updates", () => {
       offer_accepted_at,booking_status,created_at,updated_at)
       VALUES ('song-1','Two-track vocal mix',20000,10000,10000,?,'paid',?,?)`)
 			.run(now.toISOString(), now.toISOString(), now.toISOString());
+
 		const started = await saveProjectUpdate(
 			db,
 			"song-1",
@@ -147,7 +163,9 @@ describe("project updates", () => {
 			},
 			new Date(now.getTime() + 1000),
 		);
+
 		expect(started?.kind).toBe("work_started");
+
 		const revised = await saveProjectUpdate(
 			db,
 			"song-1",
@@ -160,6 +178,7 @@ describe("project updates", () => {
 			},
 			new Date(now.getTime() + 2000),
 		);
+
 		expect(revised).toMatchObject({
 			kind: "date_changed",
 			reason: "client_clarification",
@@ -200,6 +219,7 @@ describe("project updates", () => {
 		sql
 			.prepare("UPDATE owner_requests SET status='reviewed' WHERE id='song-1'")
 			.run();
+
 		const update = (await saveProjectUpdate(
 			db,
 			"song-1",
@@ -207,10 +227,12 @@ describe("project updates", () => {
 			{ action: "accept", dueDate: "2026-10-01", body: "We are set." },
 			now,
 		))!;
+
 		const env = {
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "noreply@example.com",
 		} as Env;
+
 		vi.mocked(sendStudioSignInNotice).mockResolvedValueOnce({ ok: false });
 		await deliverProjectUpdateNotice(db, update.id, env);
 		expect(
@@ -257,10 +279,12 @@ describe("project updates", () => {
 				"UPDATE audio_projects SET stage='review_ready' WHERE request_id='song-1'",
 			)
 			.run();
+
 		const revision = {
 			action: "begin_revision" as const,
 			body: "I heard your notes and am revising the vocal balance.",
 		};
+
 		expect(
 			await saveProjectUpdate(db, "song-1", "owner@example.com", revision, now),
 		).toBeNull();
@@ -285,10 +309,12 @@ describe("project updates", () => {
 				"UPDATE audio_projects SET stage='final_files_ready' WHERE request_id='song-1'",
 			)
 			.run();
+
 		const close = {
 			action: "complete" as const,
 			body: "Your final is ready. Thank you for trusting me with your song.",
 		};
+
 		expect(
 			await saveProjectUpdate(
 				db,
@@ -366,6 +392,7 @@ describe("project updates", () => {
 		sql
 			.prepare("UPDATE owner_requests SET status='reviewed' WHERE id='song-1'")
 			.run();
+
 		const update = (await saveProjectUpdate(
 			db,
 			"song-1",
@@ -373,10 +400,12 @@ describe("project updates", () => {
 			{ action: "accept", dueDate: "2026-10-01", body: "We are set." },
 			now,
 		))!;
+
 		const env = {
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "noreply@example.com",
 		} as Env;
+
 		vi.mocked(sendStudioSignInNotice).mockResolvedValueOnce({
 			ok: false,
 			uncertain: true,
@@ -424,6 +453,7 @@ describe("project updates", () => {
 		sql
 			.prepare("UPDATE owner_requests SET status='reviewed' WHERE id='song-1'")
 			.run();
+
 		const update = (await saveProjectUpdate(
 			db,
 			"song-1",
@@ -435,6 +465,7 @@ describe("project updates", () => {
 			},
 			now,
 		))!;
+
 		sql
 			.prepare(
 				"UPDATE audio_projects SET revoked_at=? WHERE request_id='song-1'",
@@ -466,10 +497,12 @@ describe("project updates", () => {
 				"UPDATE audio_projects SET stage='review_ready' WHERE request_id='song-1'",
 			)
 			.run();
+
 		const revision = {
 			action: "begin_revision" as const,
 			body: "I heard your notes and am revising the vocal balance.",
 		};
+
 		sql
 			.prepare("UPDATE owner_requests SET status='withdrawn' WHERE id='song-1'")
 			.run();
@@ -509,10 +542,12 @@ describe("project updates", () => {
 		sql
 			.prepare("UPDATE owner_requests SET status='resolved' WHERE id='song-1'")
 			.run();
+
 		const close = {
 			action: "complete" as const,
 			body: "Your final is ready. Thank you for trusting me with your song.",
 		};
+
 		expect(
 			await saveProjectUpdate(db, "song-1", "owner@example.com", close, now),
 		).toMatchObject({ kind: "progress" });
@@ -532,6 +567,7 @@ describe("default first update", () => {
 		expect(defaultFirstUpdate("mastering")).toContain("shaping the master");
 		expect(defaultFirstUpdate("custom")).toContain("plan we agreed");
 		expect(defaultFirstUpdate(null)).toBe(defaultFirstUpdate("custom"));
+
 		for (const service of ["vocal-mix", "mastering", "custom"]) {
 			const text = defaultFirstUpdate(service);
 			expect(text.length).toBeLessThanOrEqual(1000);

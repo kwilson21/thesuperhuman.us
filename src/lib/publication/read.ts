@@ -7,6 +7,7 @@ export interface PublicEntry {
 	backfilled: boolean;
 	story: Story;
 }
+
 export interface ProjectFeed {
 	projectId: string;
 	revision: number;
@@ -17,7 +18,9 @@ export interface ProjectFeed {
 function entry(row: Record<string, unknown>): PublicEntry | null {
 	if (row.payload === null) return null;
 	const p = parsePublication(JSON.parse(row.payload as string));
+
 	if (!p || !p.story) throw new Error("Invalid stored publication");
+
 	return {
 		entryId: p.entryId,
 		occurredOn: (row.occurred_on as string | undefined) ?? p.occurredOn,
@@ -55,6 +58,7 @@ export async function readProject(
       ORDER BY occurred_on DESC,o.revision DESC LIMIT 100`)
 			.bind(projectId),
 	]);
+
 	return {
 		projectId,
 		revision: version.results[0].revision as number,

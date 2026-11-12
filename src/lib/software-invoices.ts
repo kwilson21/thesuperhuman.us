@@ -10,6 +10,7 @@ import { stripeClient } from "./stripe-invoicing";
 import type { CreatedStripeInvoice } from "./stripe-invoicing";
 
 export type SoftwareInvoiceKind = "deposit" | "balance" | "milestone";
+
 export type SoftwareInvoice = {
 	id: string;
 	request_id: string;
@@ -43,8 +44,10 @@ export type SoftwareInvoice = {
 
 export const payableSoftwareInvoiceStatuses =
 	"'creating','open','payment_failed','uncollectible'";
+
 export const manualPaymentReminder =
 	"Void the open invoice in Stripe first, then record the payment.";
+
 export const payableSoftwareInvoice = (
 	invoices: SoftwareInvoice[],
 	milestone: number,
@@ -58,6 +61,7 @@ export const payableSoftwareInvoice = (
 				invoice.status,
 			),
 	);
+
 export const manualSoftwarePaymentGuard = (
 	db: D1Database,
 	id: string,
@@ -77,6 +81,7 @@ export const softwareInvoiceKindLabels = {
 	balance: "Balance",
 	milestone: "Milestone",
 };
+
 export const softwareInvoiceStatusLabels = {
 	creating: "Creating",
 	open: "Open",
@@ -92,6 +97,7 @@ export function softwareInvoiceTerms(
 	kind: SoftwareInvoiceKind,
 ) {
 	const item = terms.milestones[milestone];
+
 	if (
 		!["deposit", "balance", "milestone"].includes(kind) ||
 		!Number.isInteger(milestone) ||
@@ -105,7 +111,9 @@ export function softwareInvoiceTerms(
 			"Choose an invoice from the agreed milestone payment schedule.",
 		);
 	}
+
 	const deposit = Math.floor(item.feeCents / 2);
+
 	return {
 		amountCents:
 			kind === "deposit"
@@ -126,6 +134,7 @@ type InvoiceResult = {
 	hosted_invoice_url?: string | null;
 	due_date?: number | null;
 };
+
 // The existing audio adapter uses this same small structural surface for mocked Stripe checks.
 type SoftwareStripeClient = {
 	customers: {
@@ -169,6 +178,7 @@ export async function createSoftwareInvoiceWithClient(
 		invoice.milestone_index,
 		invoice.kind,
 	);
+
 	if (
 		invoice.amount_cents !== agreed.amountCents ||
 		invoice.days_until_due !== agreed.daysUntilDue ||
@@ -178,8 +188,10 @@ export async function createSoftwareInvoiceWithClient(
 	) {
 		throw new Error("Invoice does not match the project payment terms.");
 	}
+
 	const customerKey = `software-request:${invoice.request_id}`;
 	const rootKey = `${customerKey}:offer-${invoice.offer_id}:milestone-${invoice.milestone_index}:${invoice.kind}:attempt-${invoice.attempt}`;
+
 	const metadata = {
 		software_request_id: invoice.request_id,
 		milestone_index: String(invoice.milestone_index),
@@ -187,6 +199,7 @@ export async function createSoftwareInvoiceWithClient(
 		software_invoice_id: invoice.id,
 		software_offer_id: invoice.offer_id,
 	};
+
 	const customerId =
 		invoice.stripe_customer_id ??
 		(
@@ -199,6 +212,7 @@ export async function createSoftwareInvoiceWithClient(
 				{ idempotencyKey: `${customerKey}:customer` },
 			)
 		).id;
+
 	const created = await stripe.invoices.create(
 		{
 			customer: customerId,
@@ -215,11 +229,13 @@ export async function createSoftwareInvoiceWithClient(
 		},
 		{ idempotencyKey: `${rootKey}:invoice` },
 	);
+
 	const label = {
 		deposit: "50% deposit",
 		balance: "remaining balance",
 		milestone: "full milestone price",
 	}[invoice.kind];
+
 	await stripe.invoiceItems.create(
 		{
 			customer: customerId,
@@ -236,11 +252,13 @@ export async function createSoftwareInvoiceWithClient(
 		{},
 		{ idempotencyKey: `${rootKey}:finalize` },
 	);
+
 	const sent = await stripe.invoices.sendInvoice(
 		created.id,
 		{},
 		{ idempotencyKey: `${rootKey}:send` },
 	);
+
 	if (
 		sent.id !== created.id ||
 		sent.status !== "open" ||
@@ -248,6 +266,7 @@ export async function createSoftwareInvoiceWithClient(
 	) {
 		throw new Error("Stripe did not return a hosted payment URL.");
 	}
+
 	return {
 		stripeCustomerId: customerId,
 		invoiceId: sent.id,
@@ -270,6 +289,7 @@ export const listSoftwareInvoices = async (
 			.bind(id, ...(offerId ? [offerId] : []))
 			.all<SoftwareInvoice>()
 	).results;
+
 export type ClientSoftwareInvoice = Pick<
 	SoftwareInvoice,
 	| "milestone_index"
@@ -281,6 +301,7 @@ export type ClientSoftwareInvoice = Pick<
 	| "hosted_invoice_url"
 	| "refunded_at"
 >;
+
 // Call only after the existing session-to-project authorization; bind both project identities.
 export async function clientSoftwareInvoices(
 	db: D1Database,
@@ -294,6 +315,7 @@ export async function clientSoftwareInvoices(
 			.all<ClientSoftwareInvoice>()
 	).results;
 }
+
 export function invoiceAvailable(
 	terms: OfferTerms,
 	milestone: number,
@@ -307,13 +329,16 @@ export function invoiceAvailable(
 	} catch {
 		return false;
 	}
+
 	if (paid || project?.completed_at) return false;
+
 	return kind === "deposit"
 		? !project
 			? milestone === 0
 			: milestone > project.milestone_index
 		: Boolean(project && delivered);
 }
+
 export const paidFirstDeposit = (
 	invoices: SoftwareInvoice[],
 	offerId: string,
@@ -326,6 +351,7 @@ export const paidFirstDeposit = (
 			invoice.status === "paid" &&
 			!invoice.refunded_at,
 	);
+
 export async function depositOfferBlock(
 	db: D1Database,
 	id: string,
@@ -337,6 +363,7 @@ export async function depositOfferBlock(
     AND i.refunded_at IS NULL AND i.status IN ('creating','open','payment_failed','uncollectible','paid')`)
 		.bind(id)
 		.all<{ status: string }>();
+
 	if (
 		rows.results.some((row) =>
 			["creating", "open", "payment_failed", "uncollectible"].includes(
@@ -345,10 +372,13 @@ export async function depositOfferBlock(
 		)
 	)
 		return "Void the open deposit invoice in Stripe first, then send the new offer.";
+
 	if (!decline && rows.results.some((row) => row.status === "paid"))
 		return "A deposit is already paid for this offer. Start the project, or refund it in Stripe before sending new terms.";
+
 	return null;
 }
+
 export const depositOfferGuard = (
 	db: D1Database,
 	id: string,
@@ -394,6 +424,7 @@ export async function reserveSoftwareInvoice(
 	},
 ) {
 	const { requestId: id, offerId, milestone, kind } = input;
+
 	const offer = await db
 		.prepare(`SELECT o.*,r.updated_at AS request_updated_at FROM software_offers o JOIN owner_requests r ON r.id=o.request_id
     WHERE o.id=? AND o.request_id=? AND r.kind='software' AND r.status NOT IN ('withdrawn','resolved') AND r.email<>''`)
@@ -403,7 +434,9 @@ export async function reserveSoftwareInvoice(
 			status: string;
 			request_updated_at: string;
 		}>();
+
 	if (!offer) throw new Error("Choose the current offer.");
+
 	const project = await db
 		.prepare("SELECT * FROM software_projects WHERE request_id=?")
 		.bind(id)
@@ -415,6 +448,7 @@ export async function reserveSoftwareInvoice(
 			content_deleted_at: string | null;
 			updated_at: string;
 		}>();
+
 	if (
 		project
 			? project.offer_id !== offerId ||
@@ -423,16 +457,20 @@ export async function reserveSoftwareInvoice(
 			: offer.status !== "sent"
 	)
 		throw new Error("Choose the current offer.");
+
 	const terms = projectTerms(offer),
 		agreed = softwareInvoiceTerms(terms, milestone, kind);
+
 	const delivery = await db
 		.prepare(invoiceDeliveryQuery)
 		.bind(id, milestone)
 		.first<{ delivered_deliverables_json: string }>();
+
 	const delivered = invoiceDelivered(
 		delivery ?? undefined,
 		terms.milestones[milestone].deliverables,
 	);
+
 	const paid = Boolean(
 		await db
 			.prepare(
@@ -441,12 +479,15 @@ export async function reserveSoftwareInvoice(
 			.bind(id, milestone)
 			.first(),
 	);
+
 	const invoices = (await listSoftwareInvoices(db, id, offerId)).filter(
 		(row) => row.milestone_index === milestone && row.kind === kind,
 	);
+
 	const previous = invoices.find(
 		(row) => row.id === (input.retryId ?? input.replaceId),
 	);
+
 	if (
 		kind === "deposit" &&
 		(await db
@@ -457,14 +498,17 @@ export async function reserveSoftwareInvoice(
 			.first())
 	)
 		throw new Error("This installment is already paid.");
+
 	if (
 		!invoiceAvailable(terms, milestone, kind, project, delivered, paid) &&
 		!input.retryId
 	)
 		throw new Error("This invoice is not available at this milestone.");
+
 	if (invoices.some((row) => row.status === "paid" && !row.refunded_at))
 		throw new Error("This installment is already paid.");
 	const at = new Date().toISOString();
+
 	const guards = [
 		softwareGuard(
 			db,
@@ -493,6 +537,7 @@ export async function reserveSoftwareInvoice(
 			[id, offerId, milestone, kind],
 		),
 	];
+
 	if (kind !== "deposit")
 		guards.push(
 			softwareGuard(
@@ -506,6 +551,7 @@ export async function reserveSoftwareInvoice(
 				],
 			),
 		);
+
 	if (kind === "deposit")
 		guards.push(
 			softwareGuard(
@@ -514,6 +560,7 @@ export async function reserveSoftwareInvoice(
 				[id, milestone],
 			),
 		);
+
 	if (input.retryId) {
 		// Stripe retains idempotency keys for at least 24 hours. Older uncertain attempts need webhook/Stripe reconciliation.
 		if (
@@ -538,19 +585,23 @@ export async function reserveSoftwareInvoice(
 				)
 				.bind(at, at, previous.id),
 		]);
+
 		return (await listSoftwareInvoices(db, id, offerId)).find(
 			(row) => row.id === previous.id,
 		)!;
 	}
+
 	if (
 		input.replaceId &&
 		(!previous || !["void", "uncollectible"].includes(previous.status))
 	)
 		throw new Error("Void the invoice in Stripe before replacing it.");
+
 	if (input.replaceId && previous?.status === "uncollectible")
 		throw new Error(
 			"Void the uncollectible invoice in Stripe first; it can still be paid.",
 		);
+
 	if (
 		!input.replaceId &&
 		invoices.some((row) => ["void", "uncollectible"].includes(row.status))
@@ -558,11 +609,14 @@ export async function reserveSoftwareInvoice(
 		throw new Error(
 			"Use Replace invoice after voiding the original in Stripe.",
 		);
+
 	const newId = crypto.randomUUID(),
 		attempt = Math.max(-1, ...invoices.map((row) => row.attempt)) + 1;
+
 	const customer =
 		(await listSoftwareInvoices(db, id)).find((row) => row.stripe_customer_id)
 			?.stripe_customer_id ?? null;
+
 	await db.batch([
 		...guards,
 		...(previous
@@ -602,10 +656,12 @@ export async function reserveSoftwareInvoice(
 			`${kind[0].toUpperCase() + kind.slice(1)} for milestone ${milestone + 1} reserved`,
 		),
 	]);
+
 	return (await listSoftwareInvoices(db, id, offerId)).find(
 		(row) => row.id === newId,
 	)!;
 }
+
 export async function recordSoftwareInvoice(
 	db: D1Database,
 	invoice: SoftwareInvoice,
@@ -625,14 +681,18 @@ export async function recordSoftwareInvoice(
 			result.invoiceId,
 		)
 		.run();
+
 	const row = await db
 		.prepare("SELECT * FROM software_invoices WHERE id=?")
 		.bind(invoice.id)
 		.first<SoftwareInvoice>();
+
 	if (!row || row.stripe_invoice_id !== result.invoiceId)
 		throw new Error("Invoice recovery is pending.");
+
 	return row;
 }
+
 export async function createSoftwareInvoice(
 	env: Env,
 	request: { name: string; email: string },
@@ -664,6 +724,7 @@ export type SoftwareInvoiceEvent = {
 	hostedUrl: string | null;
 	dueAt: string | null;
 };
+
 export async function applySoftwareInvoiceEvent(
 	db: D1Database,
 	event: SoftwareInvoiceEvent,
@@ -672,7 +733,9 @@ export async function applySoftwareInvoiceEvent(
 		.prepare("SELECT * FROM software_invoices WHERE id=? AND request_id=?")
 		.bind(event.localId, event.requestId)
 		.first<SoftwareInvoice>();
+
 	const at = new Date().toISOString();
+
 	if (
 		!invoice ||
 		invoice.retention_fenced_at ||
@@ -699,8 +762,10 @@ export async function applySoftwareInvoiceEvent(
 				at,
 			)
 			.run();
+
 		return "unmatched";
 	}
+
 	if (
 		await db
 			.prepare("SELECT 1 FROM stripe_webhook_events WHERE id=?")
@@ -708,8 +773,10 @@ export async function applySoftwareInvoiceEvent(
 			.first()
 	)
 		return "duplicate";
+
 	const eligible = `id=? AND external_refs_deleted_at IS NULL AND retention_fenced_at IS NULL AND status<>'paid' AND (status_updated_at IS NULL OR status_updated_at<? OR (status_updated_at=? AND CASE ? WHEN 'paid' THEN 5 WHEN 'void' THEN 4 WHEN 'uncollectible' THEN 3 WHEN 'payment_failed' THEN 2 WHEN 'open' THEN 1 ELSE 0 END > CASE status WHEN 'paid' THEN 5 WHEN 'void' THEN 4 WHEN 'uncollectible' THEN 3 WHEN 'payment_failed' THEN 2 WHEN 'open' THEN 1 ELSE 0 END))
     AND NOT EXISTS(SELECT 1 FROM stripe_webhook_events WHERE id=?)`;
+
 	const args = [
 		invoice.id,
 		event.occurredAt,
@@ -717,6 +784,7 @@ export async function applySoftwareInvoiceEvent(
 		event.status,
 		event.eventId,
 	];
+
 	await db.batch([
 		db
 			.prepare(`INSERT INTO software_project_audit(request_id,action,actor,occurred_at,note)
@@ -785,6 +853,7 @@ export async function applySoftwareInvoiceEvent(
 				invoice.id,
 			),
 	]);
+
 	return (await db
 		.prepare("SELECT 1 FROM software_stripe_unmatched_events WHERE event_id=?")
 		.bind(event.eventId)

@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { nativeAgreementRoute } from "~/lib/agreement-request";
 import type { APIContext } from "astro";
+
 const context = (type: string) =>
 	({
 		request: new Request("https://example.test/api/agreements/session", {
@@ -8,6 +9,7 @@ const context = (type: string) =>
 			headers: { "content-type": type },
 		}),
 	}) as APIContext;
+
 it("shows escaped actionable native errors while preserving status and no-store headers", async () => {
 	const route = nativeAgreementRoute(
 		async () =>
@@ -17,6 +19,7 @@ it("shows escaped actionable native errors while preserving status and no-store 
 			),
 		() => "/agreements",
 	);
+
 	const response = await route(context("application/x-www-form-urlencoded"));
 	expect(response.status).toBe(401);
 	expect(response.headers.get("content-type")).toContain("text/html");
@@ -26,19 +29,23 @@ it("shows escaped actionable native errors while preserving status and no-store 
 	expect(html).toContain('href="/agreements"');
 	expect(html).toContain('role="alert"');
 });
+
 it("keeps enhanced JSON and native success redirects unchanged", async () => {
 	const json = nativeAgreementRoute(
 		async () => Response.json({ ok: false }, { status: 409 }),
 		() => "/agreements",
 	);
+
 	expect(await (await json(context("application/json"))).json()).toEqual({
 		ok: false,
 	});
+
 	const redirect = nativeAgreementRoute(
 		async () =>
 			new Response(null, { status: 303, headers: { location: "/agreements" } }),
 		() => "/agreements",
 	);
+
 	expect(
 		(await redirect(context("application/x-www-form-urlencoded"))).headers.get(
 			"location",

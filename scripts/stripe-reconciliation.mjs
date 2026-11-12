@@ -3,6 +3,7 @@ import { openMusicDatabase } from "./music-analytics.mjs";
 import { pathToFileURL } from "node:url";
 
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
+
 const validId = (value) =>
 	typeof value === "string" && /^[A-Za-z0-9_:-]{1,200}$/.test(value);
 
@@ -10,12 +11,14 @@ export function reconciliationStatements(args, now = new Date()) {
 	const [action, first, second, ...rest] = args;
 	const note = rest.join(" ").trim();
 	const at = now.toISOString();
+
 	if (action === "--resolve-event" && validId(first) && second?.trim()) {
 		return [
 			`UPDATE stripe_unmatched_events SET resolved_at=${quote(at)},resolution=${quote([second, ...rest].join(" ").trim())}
       WHERE event_id=${quote(first)} AND resolved_at IS NULL`,
 		];
 	}
+
 	if (
 		action === "--clear-reservation" &&
 		validId(first) &&
@@ -30,6 +33,7 @@ export function reconciliationStatements(args, now = new Date()) {
         WHERE request_id=${quote(first)} AND ${second}_invoice_id IS NULL AND ${second}_creation_started_at IS NOT NULL`,
 		];
 	}
+
 	if (
 		action === "--resolve-software-event" &&
 		validId(first) &&
@@ -39,25 +43,30 @@ export function reconciliationStatements(args, now = new Date()) {
 			`UPDATE software_stripe_unmatched_events SET resolved_at=${quote(at)} WHERE event_id=${quote(first)} AND resolved_at IS NULL`,
 		];
 	}
+
 	if (
 		["--software-deposit-refunded", "--software-no-invoice"].includes(action) &&
 		validId(first) &&
 		second?.trim()
 	) {
 		const refunded = action === "--software-deposit-refunded";
+
 		const eligible = refunded
 			? "kind='deposit' AND status='paid' AND refunded_at IS NULL AND ((milestone_index=0 AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.request_id=software_invoices.request_id)) OR (milestone_index>0 AND EXISTS(SELECT 1 FROM software_projects p WHERE p.request_id=software_invoices.request_id AND p.offer_id=software_invoices.offer_id AND p.milestone_index<software_invoices.milestone_index)))"
 			: `status='creating' AND stripe_invoice_id IS NULL AND created_at<=${quote(new Date(now.getTime() - 23 * 3600_000).toISOString())}
         AND (creation_started_at IS NULL OR creation_started_at<=${quote(new Date(now.getTime() - 60_000).toISOString())})`;
+
 		const description = refunded
 			? "Owner confirmed full deposit refund in Stripe"
 			: "Owner confirmed no Stripe invoice exists for this attempt";
+
 		return [
 			`INSERT INTO software_project_audit(request_id,action,actor,note,occurred_at)
         SELECT request_id,'invoice-status-updated','stripe-reconciliation',${quote(description)},${quote(at)} FROM software_invoices WHERE id=${quote(first)} AND ${eligible}`,
 			`UPDATE software_invoices SET ${refunded ? `refunded_at=${quote(at)}` : `status='void',creation_started_at=NULL`},updated_at=${quote(at)} WHERE id=${quote(first)} AND ${eligible}`,
 		];
 	}
+
 	throw new Error(
 		"Use --resolve-event EVENT_ID NOTE or --clear-reservation REQUEST_ID booking|balance NOTE.",
 	);
@@ -66,8 +75,10 @@ export function reconciliationStatements(args, now = new Date()) {
 export function changedRows(value) {
 	if (Array.isArray(value))
 		return value.reduce((total, item) => total + changedRows(item), 0);
+
 	if (!value || typeof value !== "object") return 0;
 	const changes = Number(value.meta?.changes);
+
 	return (Number.isFinite(changes) ? changes : 0) + changedRows(value.results);
 }
 
@@ -77,20 +88,25 @@ if (
 ) {
 	const remote = process.argv.includes("--remote"),
 		configIndex = process.argv.indexOf("--config");
+
 	const configPath =
 		configIndex < 0 ? undefined : process.argv[configIndex + 1];
+
 	if (configIndex >= 0 && (!remote || !configPath))
 		throw new Error("Use --config path only with --remote.");
 	const database = await openMusicDatabase(remote, configPath);
+
 	try {
 		const rawArgs = process.argv.slice(2),
 			rawConfigIndex = rawArgs.indexOf("--config");
+
 		const args = rawArgs.filter(
 			(value, index) =>
 				value !== "--remote" &&
 				value !== "--config" &&
 				index !== rawConfigIndex + 1,
 		);
+
 		if (!args.length) {
 			console.log(
 				JSON.stringify(
@@ -102,6 +118,7 @@ if (
 			);
 		} else {
 			const results = await database.batch(reconciliationStatements(args));
+
 			if (changedRows(results) < 1)
 				throw new Error(
 					"No matching unresolved event or pending reservation was changed.",

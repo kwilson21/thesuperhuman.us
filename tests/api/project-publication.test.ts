@@ -14,11 +14,13 @@ it("keeps file publication behind owner access and the disabled portal gate", as
 			}),
 		},
 	);
+
 	const context = {
 		params: { id: "song-1", fileId: "review-1" },
 		request,
 		locals: { runtime: { env: { AUDIO_CLIENT_PORTAL_ENABLED: "false" } } },
 	} as any;
+
 	expect((await POST(context)).status).toBe(403);
 	context.locals.owner = { email: "owner@example.com" };
 	expect((await POST(context)).status).toBe(404);

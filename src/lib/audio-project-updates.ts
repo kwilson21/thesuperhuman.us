@@ -35,6 +35,7 @@ const columns = `id,request_id,kind,body,reason,previous_due_at,new_due_at,actor
 export function validProjectDate(value: string): boolean {
 	if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
 	const date = new Date(`${value}T12:00:00Z`);
+
 	return (
 		!Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value
 	);
@@ -47,8 +48,10 @@ export function projectToday(now = new Date()): string {
 		month: "2-digit",
 		day: "2-digit",
 	}).formatToParts(now);
+
 	const number = (type: string) =>
 		parts.find((part) => part.type === type)?.value ?? "";
+
 	return `${number("year")}-${number("month")}-${number("day")}`;
 }
 
@@ -61,6 +64,7 @@ export async function listProjectUpdates(
     FROM audio_project_updates WHERE request_id=? ORDER BY id`)
 		.bind(requestId)
 		.all<ProjectUpdate>();
+
 	return result.results;
 }
 
@@ -92,6 +96,7 @@ export async function saveProjectUpdate(
 	now = new Date(),
 ): Promise<ProjectUpdate | null> {
 	const state = await getOwnerProjectState(db, requestId);
+
 	if (
 		!state ||
 		state.revoked_at ||
@@ -101,7 +106,9 @@ export async function saveProjectUpdate(
 		return null;
 	const at = now.toISOString();
 	const body = command.body.trim();
+
 	if (!body || body.length > 1000 || !actor.trim()) return null;
+
 	if (
 		"dueDate" in command &&
 		(!validProjectDate(command.dueDate) || command.dueDate < projectToday(now))
@@ -110,6 +117,7 @@ export async function saveProjectUpdate(
 
 	if (command.action === "progress") {
 		if (state.stage === "files_under_review") return null;
+
 		return db
 			.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at)
       SELECT p.request_id,'progress',?,?,? FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
@@ -125,6 +133,7 @@ export async function saveProjectUpdate(
 			state.request_status !== "reviewed"
 		)
 			return null;
+
 		const [changed, update] = await db.batch([
 			db
 				.prepare(`UPDATE audio_projects SET stage='accepted',original_due_at=?,current_due_at=?,updated_at=?
@@ -149,12 +158,14 @@ export async function saveProjectUpdate(
         WHERE request_id=? AND stage='accepted' AND updated_at=? AND original_due_at=? AND changes()=1`)
 				.bind(actor, at, requestId, at, command.dueDate),
 		]);
+
 		return changed.results.length ? (update.results[0] as ProjectUpdate) : null;
 	}
 
 	if (command.action === "start_work") {
 		if (state.stage !== "accepted" || state.booking_status !== "paid")
 			return null;
+
 		const [changed, update] = await db.batch([
 			db
 				.prepare(`UPDATE audio_projects SET stage='in_progress',updated_at=?
@@ -173,12 +184,14 @@ export async function saveProjectUpdate(
         WHERE request_id=? AND stage='in_progress' AND updated_at=? AND changes()=1`)
 				.bind(actor, at, requestId, at),
 		]);
+
 		return changed.results.length ? (update.results[0] as ProjectUpdate) : null;
 	}
 
 	if (command.action === "begin_revision") {
 		if (state.stage !== "review_ready" || state.booking_status !== "paid")
 			return null;
+
 		const [changed, update] = await db.batch([
 			db
 				.prepare(`UPDATE audio_projects SET stage='revision_in_progress',updated_at=?
@@ -198,6 +211,7 @@ export async function saveProjectUpdate(
         WHERE request_id=? AND stage='revision_in_progress' AND updated_at=? AND changes()=1`)
 				.bind(actor, at, requestId, at),
 		]);
+
 		return changed.results.length ? (update.results[0] as ProjectUpdate) : null;
 	}
 
@@ -209,6 +223,7 @@ export async function saveProjectUpdate(
 			!["reviewed", "resolved"].includes(state.request_status)
 		)
 			return null;
+
 		const [changed, update] = await db.batch([
 			db
 				.prepare(`UPDATE audio_projects SET stage='complete',completed_at=?,updated_at=?
@@ -237,11 +252,13 @@ export async function saveProjectUpdate(
         WHERE request_id=? AND stage='complete' AND updated_at=? AND changes()=1`)
 				.bind(actor, at, requestId, at),
 		]);
+
 		return changed.results.length ? (update.results[0] as ProjectUpdate) : null;
 	}
 
 	if (!state.current_due_at || command.dueDate <= state.current_due_at)
 		return null;
+
 	const [changed, update] = await db.batch([
 		db
 			.prepare(`UPDATE audio_projects SET current_due_at=?,updated_at=?
@@ -277,6 +294,7 @@ export async function saveProjectUpdate(
       WHERE request_id=? AND current_due_at=? AND updated_at=? AND changes()=1`)
 			.bind(actor, at, requestId, command.dueDate, at),
 	]);
+
 	return changed.results.length ? (update.results[0] as ProjectUpdate) : null;
 }
 
@@ -286,13 +304,16 @@ export async function deliverProjectUpdateNotice(
 	env: Env,
 ): Promise<void> {
 	const at = new Date().toISOString();
+
 	const claimed = await db
 		.prepare(`UPDATE audio_project_updates SET notification_status='sending',notification_attempted_at=?
     WHERE id=? AND notification_status='pending' RETURNING request_id`)
 		.bind(at, updateId)
 		.first<{ request_id: string }>();
+
 	if (!claimed) return;
 	let recipient: { email: string } | null;
+
 	try {
 		recipient = await db
 			.prepare(`SELECT r.email FROM owner_requests r JOIN audio_projects p ON p.request_id=r.id
@@ -305,8 +326,10 @@ export async function deliverProjectUpdateNotice(
       WHERE id=? AND notification_status='sending'`)
 			.bind(updateId)
 			.run();
+
 		return;
 	}
+
 	const sent =
 		recipient && env.RESEND_API_KEY && env.CONTACT_FROM_EMAIL
 			? await sendStudioSignInNotice(
@@ -318,6 +341,7 @@ export async function deliverProjectUpdateNotice(
 					env.SITE_ORIGIN,
 				)
 			: { ok: false };
+
 	if (sent.uncertain) return;
 	await db
 		.prepare(`UPDATE audio_project_updates SET notification_status=?,notification_sent_at=?
@@ -338,6 +362,7 @@ export async function queueProjectNoticeForDelivery(
 	now = new Date(),
 ): Promise<boolean> {
 	const staleBefore = new Date(now.getTime() - 60_000).toISOString();
+
 	const result = await db
 		.prepare(`UPDATE audio_project_updates SET notification_status='pending',notification_attempted_at=NULL
     WHERE id=? AND request_id=? AND (notification_status IN ('failed','pending') OR
@@ -347,6 +372,7 @@ export async function queueProjectNoticeForDelivery(
     RETURNING id`)
 		.bind(updateId, requestId, confirmedNotSent ? 1 : 0, staleBefore, requestId)
 		.first<{ id: number }>();
+
 	return Boolean(result);
 }
 

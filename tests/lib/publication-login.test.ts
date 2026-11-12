@@ -4,7 +4,9 @@ import {
 	publicationResource,
 	type LoginEnv,
 } from "~/lib/publication/oauth-login";
+
 const origin = "https://thesuperhuman.us";
+
 const auth = {
 	responseType: "code",
 	clientId: "client",
@@ -15,10 +17,12 @@ const auth = {
 	codeChallengeMethod: "S256",
 	resource: publicationResource,
 };
+
 function fixture(overrides = {}) {
 	const complete = vi.fn(async () => ({
 		redirectTo: "https://chatgpt.com/callback?code=issued",
 	}));
+
 	const env = {
 		PUBLICATION_PROJECTS: "threadline",
 		PUBLICATION_OWNER_ID: "10987837",
@@ -33,18 +37,23 @@ function fixture(overrides = {}) {
 			completeAuthorization: complete,
 		},
 	} as unknown as LoginEnv;
+
 	return { env, complete };
 }
+
 function cookie(response: Response) {
 	return response.headers.get("set-cookie")!.split(";")[0];
 }
+
 async function start(env: LoginEnv) {
 	const page = await publicationLogin(
 		new Request(origin + "/api/publication/authorize"),
 		env,
 	);
+
 	const html = await page.text();
 	const nonce = /name="nonce" value="([^"]+)"/.exec(html)![1];
+
 	const response = await publicationLogin(
 		new Request(origin + "/api/publication/authorize", {
 			method: "POST",
@@ -53,9 +62,12 @@ async function start(env: LoginEnv) {
 		}),
 		env,
 	);
+
 	return { page, html, response, nonce };
 }
+
 afterEach(() => vi.unstubAllGlobals());
+
 describe("publication consent and GitHub identity", () => {
 	it("permits the validated client return origin without copying callback paths or query values into CSP", async () => {
 		for (const redirectUri of [
@@ -63,10 +75,12 @@ describe("publication consent and GitHub identity", () => {
 			"https://chatgpt.com/callback?marker=private",
 		]) {
 			const { env } = fixture({ redirectUri });
+
 			const page = await publicationLogin(
 				new Request(origin + "/api/publication/authorize"),
 				env,
 			);
+
 			const policy = page.headers.get("content-security-policy")!;
 			expect(policy).toContain(
 				`form-action 'self' https://github.com/login/oauth/authorize ${new URL(redirectUri).origin};`,
@@ -119,6 +133,7 @@ describe("publication consent and GitHub identity", () => {
 		const { response, nonce } = await start(env);
 		const fetcher = vi.fn();
 		vi.stubGlobal("fetch", fetcher);
+
 		const post = await publicationLogin(
 			new Request(origin + "/api/publication/authorize", {
 				method: "POST",
@@ -127,6 +142,7 @@ describe("publication consent and GitHub identity", () => {
 			}),
 			env,
 		);
+
 		expect(post.status).toBe(400);
 		expect(
 			(
@@ -144,21 +160,27 @@ describe("publication consent and GitHub identity", () => {
 	it("grants only the verified owner and discards the upstream access token", async () => {
 		const { env, complete } = fixture();
 		const { response, nonce } = await start(env);
+
 		const fetcher = vi
 			.fn()
 			.mockResolvedValueOnce(Response.json({ access_token: "upstream-secret" }))
 			.mockResolvedValueOnce(Response.json({ id: 10987837 }));
+
 		vi.stubGlobal("fetch", fetcher);
+
 		const result = await publicationLogin(
 			new Request(origin + "/api/publication/callback?code=x&state=" + nonce, {
 				headers: { cookie: cookie(response) },
 			}),
 			env,
 		);
+
 		expect(result.status).toBe(302);
+
 		const grant = complete.mock.calls[0] as unknown as [
 			Record<string, unknown>,
 		];
+
 		expect(grant[0].props).toEqual({
 			ownerId: "10987837",
 			scopes: ["publication:threadline"],
@@ -179,10 +201,12 @@ describe("publication consent and GitHub identity", () => {
 				.mockResolvedValueOnce(Response.json({ access_token: "token" }))
 				.mockResolvedValueOnce(Response.json({ id: 123 })),
 		);
+
 		const req = () =>
 			new Request(origin + "/api/publication/callback?code=x&state=" + nonce, {
 				headers: { cookie: cookie(response) },
 			});
+
 		expect((await publicationLogin(req(), env)).status).toBe(400);
 		const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 700000);
 		expect((await publicationLogin(req(), env)).status).toBe(400);

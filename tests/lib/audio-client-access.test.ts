@@ -15,10 +15,12 @@ import {
 } from "~/lib/audio-client-access";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
 const baseline = readFileSync(
 	new URL("../../db/music.sql", import.meta.url),
 	"utf8",
 );
+
 const secret = "studio-code-key-for-tests-32-characters";
 const now = new Date("2026-09-22T12:00:00.000Z");
 
@@ -26,12 +28,14 @@ function fixture() {
 	const sql = new DatabaseSync(":memory:");
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(baseline);
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		query,
 		args,
 		bind: (...values: unknown[]) => statement(query, values),
 		run: async () => {
 			const result = sql.prepare(query).run(...args);
+
 			return { success: true, meta: { changes: result.changes }, results: [] };
 		},
 		all: async () => ({
@@ -40,23 +44,29 @@ function fixture() {
 		}),
 		first: async () => sql.prepare(query).get(...args) ?? null,
 	});
+
 	const db = {
 		prepare: (query: string) => statement(query),
 		batch: async (statements: ReturnType<typeof statement>[]) => {
 			sql.exec("BEGIN");
+
 			try {
 				const results = statements.map((item) => {
 					const prepared = sql.prepare(item.query);
+
 					if (/\bRETURNING\b/i.test(item.query))
 						return { success: true, results: prepared.all(...item.args) };
 					const result = prepared.run(...item.args);
+
 					return {
 						success: true,
 						meta: { changes: result.changes },
 						results: [],
 					};
 				});
+
 				sql.exec("COMMIT");
+
 				return results;
 			} catch (error) {
 				sql.exec("ROLLBACK");
@@ -64,12 +74,14 @@ function fixture() {
 			}
 		},
 	} as unknown as D1Database;
+
 	const addRequest = (id: string, email = "artist@example.com") =>
 		sql
 			.prepare(`INSERT INTO owner_requests
     (id,kind,email,summary,status,created_at,updated_at)
     VALUES (?,'service',?,'A song','new',?,?)`)
 			.run(id, email, now.toISOString(), now.toISOString());
+
 	return { sql, db, addRequest };
 }
 
@@ -89,11 +101,13 @@ describe("audio client access", () => {
 		addRequest("song-1");
 		const code = await issueClientCode(db, "artist@example.com", secret, now);
 		expect(code).toMatch(/^\d{8}$/);
+
 		const stored = sql
 			.prepare(
 				"SELECT code_hash FROM audio_client_codes WHERE email='artist@example.com'",
 			)
 			.get() as { code_hash: string };
+
 		expect(stored.code_hash).not.toBe(code);
 		expect(stored.code_hash).toMatch(/^[0-9a-f]{64}$/);
 		expect(
@@ -107,22 +121,26 @@ describe("audio client access", () => {
 		addRequest("song-1");
 		addRequest("song-2");
 		addRequest("other-song", "other@example.com");
+
 		const oldCode = (await issueClientCode(
 			db,
 			"artist@example.com",
 			secret,
 			now,
 		))!;
+
 		expect(
 			await issueClientCode(db, "artist@example.com", secret, now),
 		).toBeNull();
 		const afterCooldown = new Date(now.getTime() + 31_000);
+
 		const code = (await issueClientCode(
 			db,
 			"artist@example.com",
 			secret,
 			afterCooldown,
 		))!;
+
 		if (oldCode !== code)
 			expect(
 				await completeClientCode(
@@ -133,6 +151,7 @@ describe("audio client access", () => {
 					now,
 				),
 			).toBeNull();
+
 		const token = await completeClientCode(
 			db,
 			"artist@example.com",
@@ -140,6 +159,7 @@ describe("audio client access", () => {
 			secret,
 			afterCooldown,
 		);
+
 		expect(token).toBeTruthy();
 		expect(
 			await completeClientCode(db, "artist@example.com", code, secret, now),
@@ -178,18 +198,22 @@ describe("audio client access", () => {
 	it("locks a code after five wrong guesses, even when they arrive together", async () => {
 		const { sql, db, addRequest } = fixture();
 		addRequest("song-1");
+
 		const code = (await issueClientCode(
 			db,
 			"artist@example.com",
 			secret,
 			now,
 		))!;
+
 		const wrong = code === "00000000" ? "11111111" : "00000000";
+
 		const guesses = await Promise.all(
 			Array.from({ length: 10 }, () =>
 				completeClientCode(db, "artist@example.com", wrong, secret, now),
 			),
 		);
+
 		expect(guesses.every((token) => token === null)).toBe(true);
 		expect(
 			sql
@@ -206,6 +230,7 @@ describe("audio client access", () => {
 
 	it("admits exactly the allowance when requests arrive together, then opens a new window", async () => {
 		const { sql, db } = fixture();
+
 		const results = await Promise.all(
 			Array.from({ length: 20 }, () =>
 				takeStudioAllowance(
@@ -218,6 +243,7 @@ describe("audio client access", () => {
 				),
 			),
 		);
+
 		expect(results.filter(Boolean)).toHaveLength(3);
 		expect(
 			await takeStudioAllowance(
@@ -239,9 +265,11 @@ describe("audio client access", () => {
 				new Date(now.getTime() + 5 * 60_000 + 1),
 			),
 		).toBe(true);
+
 		const stored = sql
 			.prepare("SELECT key FROM audio_client_allowances")
 			.all() as { key: string }[];
+
 		expect(stored.every((row) => !row.key.includes("artist"))).toBe(true);
 		sql.close();
 	});
@@ -249,27 +277,33 @@ describe("audio client access", () => {
 	it("locks a code after five wrong attempts and rejects expired or undelivered codes", async () => {
 		const { sql, db, addRequest } = fixture();
 		addRequest("song-1");
+
 		const code = (await issueClientCode(
 			db,
 			"artist@example.com",
 			secret,
 			now,
 		))!;
+
 		const wrong = code === "00000000" ? "11111111" : "00000000";
+
 		for (let attempt = 0; attempt < 5; attempt++) {
 			expect(
 				await completeClientCode(db, "artist@example.com", wrong, secret, now),
 			).toBeNull();
 		}
+
 		expect(
 			await completeClientCode(db, "artist@example.com", code, secret, now),
 		).toBeNull();
+
 		const newer = (await issueClientCode(
 			db,
 			"artist@example.com",
 			secret,
 			new Date(now.getTime() + 31_000),
 		))!;
+
 		expect(
 			await completeClientCode(
 				db,
@@ -288,12 +322,14 @@ describe("audio client access", () => {
 				new Date("2026-09-22T12:11:00Z"),
 			),
 		).toBeNull();
+
 		const undelivered = (await issueClientCode(
 			db,
 			"artist@example.com",
 			secret,
 			new Date("2026-09-22T12:12:00Z"),
 		))!;
+
 		await discardUndeliveredCode(
 			db,
 			"artist@example.com",
@@ -323,12 +359,14 @@ describe("audio client access", () => {
 	it("surfaces failed delivery until the client signs in", async () => {
 		const { sql, db, addRequest } = fixture();
 		addRequest("song-1");
+
 		const undelivered = (await issueClientCode(
 			db,
 			"artist@example.com",
 			secret,
 			now,
 		))!;
+
 		await discardUndeliveredCode(
 			db,
 			"artist@example.com",
@@ -351,6 +389,7 @@ describe("audio client access", () => {
 describe("studio song groups", () => {
 	it("delivers only songs with a published final and marks expired ones", () => {
 		const now = new Date("2026-09-23T12:00:00Z");
+
 		const { active, delivered } = groupStudioProjects(
 			[
 				{ id: "working", stage: "in_progress", final_expires_at: null },
@@ -372,6 +411,7 @@ describe("studio song groups", () => {
 			],
 			now,
 		);
+
 		expect(active.map((project) => project.id)).toEqual([
 			"working",
 			"revoked-final",

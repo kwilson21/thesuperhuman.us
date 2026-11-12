@@ -5,6 +5,7 @@ afterEach(() => {
 	vi.useRealTimers();
 	vi.unstubAllGlobals();
 });
+
 it("rechecks the New York start date before validating and submitting", () => {
 	vi.useFakeTimers();
 	vi.setSystemTime(new Date("2026-10-01T03:59:59Z"));
@@ -14,6 +15,7 @@ it("rechecks the New York start date before validating and submitting", () => {
 	const block = { hidden: false, querySelectorAll: () => [date, agreement] };
 	const button = { disabled: false };
 	const listeners: Record<string, (event: Event) => void> = {};
+
 	const form = {
 		noValidate: false,
 		dataset: { plannedStart: "2026-10-01", requestUpdatedAt: "saved" },
@@ -30,6 +32,7 @@ it("rechecks the New York start date before validating and submitting", () => {
 			() => !date.required && !agreement.required && inputs.checked,
 		),
 	};
+
 	const root = {
 		dataset: { endpoint: "/start" },
 		querySelector: (selector: string) =>
@@ -41,6 +44,7 @@ it("rechecks the New York start date before validating and submitting", () => {
 		querySelectorAll: (selector: string) =>
 			selector === "button" ? [button] : [],
 	};
+
 	vi.stubGlobal("document", { querySelectorAll: () => [root] });
 	vi.stubGlobal(
 		"FormData",
@@ -53,10 +57,12 @@ it("rechecks the New York start date before validating and submitting", () => {
 			}
 		},
 	);
+
 	const fetch = vi.fn().mockResolvedValue({
 		ok: false,
 		json: async () => ({ error: "Test response" }),
 	});
+
 	vi.stubGlobal("fetch", fetch);
 	setupSoftwareProject();
 	expect(form.noValidate).toBe(true);

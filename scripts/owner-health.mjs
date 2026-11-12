@@ -20,6 +20,7 @@ const requiredConfiguration = [
 	"OWNER_ACCESS_AUD",
 	"OWNER_EMAIL",
 ];
+
 const requiredSchema = [
 	"brief_suggestion_budget",
 	"owner_campaigns",
@@ -93,12 +94,14 @@ const requiredSchema = [
 	"software_agreement_notices_immutable",
 	"software_agreement_notifications",
 ];
+
 const attention = (id, summary, next) => ({
 	id,
 	status: "attention",
 	summary,
 	next,
 });
+
 const pass = (id, summary) => ({ id, status: "pass", summary, next: "" });
 
 export function wranglerSecretListArguments() {
@@ -123,9 +126,11 @@ export async function ownerHealth({
 	siteOrigin: configuredOrigin = /** @type {string | undefined} */ (undefined),
 }) {
 	const checks = [];
+
 	try {
 		const origin = siteOrigin(configuredOrigin);
 		checks.push(pass("signing-origin", `Effective signing origin: ${origin}.`));
+
 		if (remote && postDeploy) {
 			try {
 				const result = await verify(`${origin}/agreements/verify`);
@@ -160,9 +165,11 @@ export async function ownerHealth({
 			),
 		);
 	}
+
 	const missingConfiguration = requiredConfiguration.filter(
 		(name) => !configuredNames.has(name),
 	);
+
 	checks.push(
 		missingConfiguration.length
 			? attention(
@@ -177,6 +184,7 @@ export async function ownerHealth({
 	);
 
 	let availableSchema = new Set();
+
 	try {
 		availableSchema = new Set(
 			(
@@ -194,8 +202,10 @@ export async function ownerHealth({
 			),
 		);
 	}
+
 	if (availableSchema.size) {
 		const missing = requiredSchema.filter((name) => !availableSchema.has(name));
+
 		for (const [table, migration, requiredColumns] of [
 			[
 				"software_offers",
@@ -237,6 +247,7 @@ export async function ownerHealth({
 						(row) => row.name,
 					),
 				);
+
 				for (const column of requiredColumns)
 					if (!columns.has(column))
 						missing.push(`${table}.${column} (migration ${migration})`);
@@ -244,6 +255,7 @@ export async function ownerHealth({
 				missing.push(`${table} columns (migration ${migration})`);
 			}
 		}
+
 		checks.push(
 			missing.length
 				? attention(
@@ -259,15 +271,18 @@ export async function ownerHealth({
 	}
 
 	let mediaFailures = 0;
+
 	for (const asset of media) {
 		try {
 			const result = await head(asset.url);
+
 			if (!result.ok || !result.contentType.startsWith(asset.type))
 				mediaFailures += 1;
 		} catch {
 			mediaFailures += 1;
 		}
 	}
+
 	checks.push(
 		mediaFailures
 			? attention(
@@ -285,6 +300,7 @@ export async function ownerHealth({
 		const rows = await query(
 			"SELECT COUNT(*) AS total FROM owner_requests WHERE status='new'",
 		);
+
 		if (rows.length !== 1 || !Number.isFinite(Number(rows[0].total)))
 			throw new Error("invalid summary");
 		checks.push(
@@ -307,7 +323,9 @@ export async function ownerHealth({
 		const rows = await query(
 			"SELECT (SELECT COUNT(*) FROM stripe_unmatched_events WHERE resolved_at IS NULL) + (SELECT COUNT(*) FROM software_stripe_unmatched_events WHERE resolved_at IS NULL) AS total",
 		);
+
 		const total = Number(rows[0]?.total);
+
 		if (!Number.isFinite(total)) throw new Error("invalid summary");
 		checks.push(
 			total > 0
@@ -335,9 +353,11 @@ export async function ownerHealth({
 		const rows = await query(
 			"SELECT completed_at FROM owner_retention_runs ORDER BY completed_at DESC LIMIT 1",
 		);
+
 		const completed = rows[0]?.completed_at
 			? Date.parse(String(rows[0].completed_at))
 			: Number.NaN;
+
 		const ageDays = (now.getTime() - completed) / 86400000;
 		checks.push(
 			Number.isFinite(completed) && ageDays >= 0 && ageDays <= 100
@@ -363,6 +383,7 @@ export async function ownerHealth({
 
 	try {
 		const old = new Date(now.getTime() - 30 * 86400000).toISOString();
+
 		const rows = await query(`SELECT
       (SELECT COUNT(*) FROM audio_client_codes WHERE COALESCE(used_at,expires_at)< '${old}')
       +(SELECT COUNT(*) FROM audio_client_sessions WHERE expires_at<'${old}' OR revoked_at<'${old}' OR last_seen_at<'${old}')
@@ -372,7 +393,9 @@ export async function ownerHealth({
       (SELECT COUNT(*) FROM software_projects p WHERE p.content_deleted_at IS NULL
         AND (p.completed_at<='${new Date(now.getTime() - 365 * 86400000).toISOString()}' OR p.revoked_at<='${new Date(now.getTime() - 365 * 86400000).toISOString()}')
         AND EXISTS(SELECT 1 FROM software_invoices i WHERE i.request_id=p.request_id AND i.status IN ('creating','open','payment_failed','uncollectible'))) AS blocked`);
+
 		const total = Number(rows[0]?.total);
+
 		if (!Number.isFinite(total)) throw new Error("invalid summary");
 		const blocked = Number(rows[0]?.blocked ?? 0);
 		checks.push(
@@ -414,12 +437,14 @@ export async function ownerHealth({
 
 async function main() {
 	const args = process.argv.slice(2);
+
 	if (args.some((arg) => !["--remote", "--post-deploy"].includes(arg)))
 		throw new Error(
 			"Usage: node scripts/owner-health.mjs [--remote] [--post-deploy]",
 		);
 	const remote = args.includes("--remote");
 	const postDeploy = args.includes("--post-deploy");
+
 	const recording = JSON.parse(
 		await readFile(
 			new URL(
@@ -429,18 +454,23 @@ async function main() {
 			"utf8",
 		),
 	);
+
 	const baseUrl =
 		process.env.OWNER_HEALTH_BASE_URL || "https://thesuperhuman.us";
+
 	const configuredNames = new Set([
 		"MUSIC_DB",
 		"AUDIO",
 		...requiredConfiguration.filter((name) => process.env[name]),
 	]);
+
 	const config = parseJsonc(
 		await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"),
 	);
+
 	for (const [name, value] of Object.entries(config.vars ?? {}))
 		if (value) configuredNames.add(name);
+
 	if (remote) {
 		const secretList = spawnSync(
 			process.execPath,
@@ -453,17 +483,21 @@ async function main() {
 				},
 			},
 		);
+
 		if (secretList.status === 0) {
 			for (const secret of JSON.parse(secretList.stdout))
 				if (typeof secret.name === "string") configuredNames.add(secret.name);
 		}
 	}
+
 	const media = Object.entries(recording.versions).map(([version, asset]) => ({
 		label: `Old News ${version}`,
 		url: `${baseUrl}/music/file/${recording.id}/${version}`,
 		type: asset.type.split("/")[0],
 	}));
+
 	const database = await openMusicDatabase(remote);
+
 	try {
 		const report = await ownerHealth({
 			configuredNames,
@@ -475,7 +509,9 @@ async function main() {
 					redirect: "manual",
 					signal: AbortSignal.timeout(10_000),
 				});
+
 				await response.body?.cancel();
+
 				return { status: response.status };
 			},
 			query: (sql) => database.query(sql),
@@ -485,7 +521,9 @@ async function main() {
 					headers: { Range: "bytes=0-0" },
 					signal: AbortSignal.timeout(10_000),
 				});
+
 				await response.body?.cancel();
+
 				return {
 					ok: response.ok,
 					status: response.status,
@@ -493,6 +531,7 @@ async function main() {
 				};
 			},
 		});
+
 		await mkdir(".private", { recursive: true });
 		await writeFile(
 			".private/owner-health.json",
@@ -511,10 +550,12 @@ async function main() {
 			),
 			{ mode: 0o600 },
 		);
+
 		for (const check of report.checks)
 			console.log(
 				`${check.status.toUpperCase()} ${check.id}: ${check.summary}${check.next ? ` Next: ${check.next}` : ""}`,
 			);
+
 		if (report.status !== "healthy") process.exitCode = 1;
 	} finally {
 		await database.close();

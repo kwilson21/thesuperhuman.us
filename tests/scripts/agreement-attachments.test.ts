@@ -3,16 +3,19 @@ import { setupAgreementAttachments } from "~/scripts/software-offers";
 
 it("blocks overlapping uploads and merges into the current attachment manifest", async () => {
 	let click!: () => Promise<void>, finish!: (response: Response) => void;
+
 	const upload = {
 		disabled: false,
 		addEventListener: (_: string, fn: typeof click) => {
 			click = fn;
 		},
 	};
+
 	const field = {
 		value: JSON.stringify([{ key: "removed" }]),
 		dispatchEvent: vi.fn(),
 	};
+
 	const nodes: Record<string, unknown> = {
 		"[data-upload-attachment]": upload,
 		'[name="agreement.attachments"]': field,
@@ -21,12 +24,14 @@ it("blocks overlapping uploads and merges into the current attachment manifest",
 		"[data-attachment-date]": { value: "2026-10-10" },
 		"[data-attachment-list]": { appendChild: vi.fn() },
 	};
+
 	const block = {
 		dataset: { uploadEndpoint: "/upload" },
 		addEventListener: vi.fn(),
 		querySelector: (s: string) => nodes[s],
 		closest: () => ({ querySelector: () => ({ textContent: "" }) }),
 	};
+
 	vi.stubGlobal("document", {
 		createElement: () => ({ dataset: {}, appendChild: vi.fn() }),
 	});

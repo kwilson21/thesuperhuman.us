@@ -9,6 +9,7 @@ const base = {
 	booking_amount_cents: 7500,
 	balance_amount_cents: 7500,
 };
+
 const invoice = "https://invoice.stripe.com/i/acct_1/test_abc";
 
 describe("clientPaymentDue", () => {

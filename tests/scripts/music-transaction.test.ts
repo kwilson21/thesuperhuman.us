@@ -10,6 +10,7 @@ import {
 
 it("rolls back replacements and new files when a later rename fails", async () => {
 	const root = await fs.mkdtemp(join(tmpdir(), "music-transaction-"));
+
 	try {
 		await fs.writeFile(join(root, "recording.json"), "original");
 		let writes = 0;
@@ -26,6 +27,7 @@ it("rolls back replacements and new files when a later rename fails", async () =
 					rename: async (source, target) => {
 						if (String(source).endsWith(".staged") && ++writes === 3)
 							throw new Error("simulated disk failure");
+
 						return fs.rename(source, target);
 					},
 				},
@@ -45,9 +47,11 @@ it("rolls back replacements and new files when a later rename fails", async () =
 
 it("recovers an interrupted commit before another preparation reads the catalog", async () => {
 	const root = await fs.mkdtemp(join(tmpdir(), "music-interrupted-"));
+
 	try {
 		await fs.writeFile(join(root, "recording.json"), "original");
 		const helper = resolve("scripts/music-transaction.mjs");
+
 		const source = `import * as fs from 'node:fs/promises';
       import { commitMusicFiles } from ${JSON.stringify(helper)};
       let writes = 0;
@@ -56,6 +60,7 @@ it("recovers an interrupted commit before another preparation reads the catalog"
           if (String(source).endsWith('.staged') && ++writes === 2) process.exit(77);
           return fs.rename(source, target);
         }});`;
+
 		expect(() =>
 			execFileSync(process.execPath, ["--input-type=module", "-e", source], {
 				stdio: "pipe",
@@ -85,6 +90,7 @@ it("recovers an interrupted commit before another preparation reads the catalog"
 
 it("leaves the package untouched if staging fails and permits a later retry", async () => {
 	const root = await fs.mkdtemp(join(tmpdir(), "music-staging-"));
+
 	try {
 		await fs.writeFile(join(root, "recording.json"), "original");
 		await expect(
@@ -93,6 +99,7 @@ it("leaves the package untouched if staging fails and permits a later retry", as
 				writeFile: async (path, ...args) => {
 					if (String(path).endsWith(".staged"))
 						throw new Error("staging disk full");
+
 					return fs.writeFile(path, ...args);
 				},
 			}),
@@ -114,6 +121,7 @@ it("leaves the package untouched if staging fails and permits a later retry", as
 
 it("refuses to recover a transaction owned by a running process", async () => {
 	const root = await fs.mkdtemp(join(tmpdir(), "music-owner-"));
+
 	try {
 		const dir = join(root, ".private/music-prepare-transaction");
 		await fs.mkdir(dir, { recursive: true });

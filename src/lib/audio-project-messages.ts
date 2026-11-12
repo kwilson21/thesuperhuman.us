@@ -9,7 +9,9 @@ export type ProjectMessage = {
 	/** Set when a client message answers a published review. */
 	review_decision: ReviewDecision | null;
 };
+
 export type ReviewDecision = "approved" | "changes" | "stopped";
+
 /** Revision rounds included with every project, bundle and custom quotes too, as the services page states. */
 export const REVISION_ROUNDS = 2;
 
@@ -20,18 +22,22 @@ const CLIENT_MESSAGE_LIMIT = 12;
 export function validateProjectMessage(value: unknown): string | null {
 	if (typeof value !== "string") return null;
 	const body = value.trim();
+
 	if (
 		!body ||
 		body.length > 4000 ||
 		/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(body)
 	)
 		return null;
+
 	for (const match of body.matchAll(
 		/(?:[a-z][a-z0-9+.-]*:\/\/|www\.)[^\s<>"']+/gi,
 	)) {
 		if (!match[0].toLowerCase().startsWith("https://")) return null;
+
 		try {
 			const url = new URL(match[0].replace(/[.,!?;:)\]]+$/, ""));
+
 			if (
 				url.protocol !== "https:" ||
 				!url.hostname ||
@@ -43,6 +49,7 @@ export function validateProjectMessage(value: unknown): string | null {
 			return null;
 		}
 	}
+
 	return body;
 }
 
@@ -56,6 +63,7 @@ export async function listProjectMessages(
 		)
 		.bind(requestId)
 		.all<ProjectMessage>();
+
 	return result.results;
 }
 
@@ -84,9 +92,11 @@ export async function postClientProjectMessage(
 	now = new Date(),
 ): Promise<ProjectMessage | null> {
 	const tokenHash = await hashValue(token);
+
 	const windowStart = new Date(
 		now.getTime() - CLIENT_MESSAGE_WINDOW_MS,
 	).toISOString();
+
 	// The count and write belong to one SQL statement so concurrent sends cannot
 	// all pass a separate KV read before any of them saves a message.
 	return db
@@ -132,9 +142,11 @@ export async function postClientReviewDecision(
 ): Promise<ProjectMessage | null> {
 	const tokenHash = await hashValue(token);
 	const at = now.toISOString();
+
 	const windowStart = new Date(
 		now.getTime() - CLIENT_MESSAGE_WINDOW_MS,
 	).toISOString();
+
 	const insert = db
 		.prepare(`INSERT INTO audio_project_messages(request_id,actor,actor_id,body,created_at,review_decision)
     SELECT p.request_id,'client',?,?,?,? FROM audio_projects p
@@ -164,8 +176,10 @@ export async function postClientReviewDecision(
 			decision,
 			reviewId,
 		);
+
 	if (decision !== "stopped") return insert.first<ProjectMessage>();
 	const stopped = `EXISTS(SELECT 1 FROM audio_project_messages WHERE request_id=? AND review_decision='stopped' AND created_at=?)`;
+
 	const [saved] = await db.batch([
 		insert,
 		db
@@ -178,6 +192,7 @@ export async function postClientReviewDecision(
       SELECT request_id,'revoked','client-stopped',? FROM audio_projects WHERE request_id=? AND revoked_at=? AND ${stopped}`)
 			.bind(at, requestId, at, requestId, at),
 	]);
+
 	return (saved.results[0] as ProjectMessage | undefined) ?? null;
 }
 
@@ -195,6 +210,7 @@ export async function revisionRoundsLeft(
 		.prepare(`SELECT ${roundsUsed("?")} AS used`)
 		.bind(requestId)
 		.first<{ used: number }>();
+
 	return Math.max(0, REVISION_ROUNDS - Number(row?.used ?? 0));
 }
 
@@ -202,6 +218,7 @@ export async function revisionRoundsLeft(
 function reviewAwaitingAnswer(requestId: string) {
 	const published = `(SELECT MAX(f.published_at) FROM audio_project_files f
     WHERE f.request_id=${requestId} AND f.version='review' AND f.status='published')`;
+
 	return `${published} IS NOT NULL AND NOT EXISTS(SELECT 1 FROM audio_project_messages d
     WHERE d.request_id=${requestId} AND d.review_decision IS NOT NULL AND d.created_at>=${published})`;
 }
@@ -218,6 +235,7 @@ export async function latestReviewDecision(
     ORDER BY m.id DESC LIMIT 1`)
 		.bind(requestId)
 		.first<{ review_decision: ReviewDecision }>();
+
 	return row?.review_decision ?? null;
 }
 
@@ -229,11 +247,13 @@ export async function clientMessageRateLimited(
 	const windowStart = new Date(
 		now.getTime() - CLIENT_MESSAGE_WINDOW_MS,
 	).toISOString();
+
 	const row = await db
 		.prepare(`SELECT count(*) AS total FROM audio_project_messages
     WHERE request_id=? AND actor='client' AND created_at>?`)
 		.bind(requestId, windowStart)
 		.first<{ total: number }>();
+
 	return (row?.total ?? 0) >= CLIENT_MESSAGE_LIMIT;
 }
 
@@ -247,6 +267,7 @@ export async function markProjectMessagesRead(
 ): Promise<void> {
 	if (!Number.isInteger(messageId) || messageId < 1) return;
 	const sender = reader === "owner" ? "client" : "owner";
+
 	if (reader === "owner") {
 		await db
 			.prepare(
@@ -254,8 +275,10 @@ export async function markProjectMessagesRead(
 			)
 			.bind(now.toISOString(), messageId, requestId, sender)
 			.run();
+
 		return;
 	}
+
 	if (!token) return;
 	const tokenHash = await hashValue(token);
 	await db

@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
+
 // Sent rows and links are seeded because sending depends on an external email service.
 export default {
 	title: "Software offer review and private client views",
 	async run({ capture, sql, ownerFetch }) {
 		const id = "screenshot-offer";
+
 		const terms = {
 			outcome: "One place for client onboarding.",
 			summary:
@@ -31,6 +33,7 @@ export default {
 			paymentMode: "standard",
 			projectRange: { lowCents: 240000, highCents: 500000 },
 		};
+
 		const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 		sql(`INSERT OR IGNORE INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,private_note,created_at,updated_at)
       VALUES (${quote(id)},'software','workflow','Alex Example','alex@example.com','Client onboarding tool','{"path":"workflow","company":"Example Studio","today":"We track client onboarding in spreadsheets and chase updates by email.","audience":"The client team","firstResult":"One place to see what each client needs next.","timing":"flexible","budgetStatus":"exploring","approver":"self"}','new','Check how many people need access.','2026-09-29T12:00:00Z','2026-09-29T12:00:00Z')`);
@@ -45,6 +48,7 @@ export default {
 			expectedUpdatedAt: null,
 		});
 		const steps = [];
+
 		for (const viewport of ["desktop", "phone"]) {
 			steps.push({
 				title: `Owner draft and fit review, ${viewport}`,
@@ -75,9 +79,11 @@ export default {
 				],
 			});
 		}
+
 		for (const [index, mode] of ["standard", "invoice"].entries()) {
 			const token = (mode === "standard" ? "s" : "i").repeat(43),
 				hash = createHash("sha256").update(token).digest("hex");
+
 			if (index === 0)
 				sql(
 					`DELETE FROM software_offers WHERE request_id=${quote(id)} AND status='draft'`,
@@ -87,6 +93,7 @@ export default {
         VALUES (${quote(`screenshot-offer-${mode}`)},${quote(id)},${index + 1},'sent',${quote(JSON.stringify({ ...terms, paymentMode: mode }))},'2026-09-29T12:00:00Z','2026-09-29T12:00:00Z','2026-09-29T12:00:00Z','owner@example.com');
         INSERT INTO software_offer_links(request_id,token_hash,created_at) VALUES (${quote(id)},${quote(hash)},'2026-09-29T12:00:00Z')
         ON CONFLICT(request_id) DO UPDATE SET token_hash=excluded.token_hash,revoked_at=NULL;`);
+
 			for (const viewport of ["desktop", "phone"])
 				steps.push({
 					title: `Owner sent v${index + 1}, ${viewport}`,
@@ -103,6 +110,7 @@ export default {
 						},
 					],
 				});
+
 			for (const viewport of ["desktop", "phone"])
 				steps.push({
 					title: `Client ${mode} terms, ${viewport}`,
@@ -118,10 +126,12 @@ export default {
 					],
 				});
 		}
+
 		// Seed the same post-decline state as the guarded API batch; never send a real email.
 		sql(
 			`UPDATE owner_requests SET status='resolved',resolved_at='2026-09-29T13:00:00Z' WHERE id=${quote(id)}; UPDATE software_offers SET status='withdrawn' WHERE request_id=${quote(id)} AND status IN ('sent','draft'); UPDATE software_offer_links SET revoked_at='2026-09-29T13:00:00Z' WHERE request_id=${quote(id)};`,
 		);
+
 		for (const viewport of ["desktop", "phone"])
 			steps.push({
 				title: `Resolved owner request, ${viewport}`,
@@ -137,6 +147,7 @@ export default {
 					},
 				],
 			});
+
 		for (const viewport of ["desktop", "phone"])
 			steps.push({
 				title: `Declined client offer unavailable, ${viewport}`,
@@ -154,6 +165,7 @@ export default {
 				],
 			});
 		sql(`UPDATE owner_requests SET status='withdrawn' WHERE id=${quote(id)}`);
+
 		for (const viewport of ["desktop", "phone"])
 			steps.push({
 				title: `Withdrawn owner request, ${viewport}`,
@@ -170,6 +182,7 @@ export default {
 					},
 				],
 			});
+
 		for (const viewport of ["desktop", "phone"])
 			steps.push({
 				title: `Unavailable offer, ${viewport}`,
@@ -185,6 +198,7 @@ export default {
 					},
 				],
 			});
+
 		return steps;
 	},
 };

@@ -79,6 +79,7 @@ describe("shouldIncludeSitemapPage", () => {
 				path,
 			).toBe(false);
 		}
+
 		expect(shouldIncludeSitemapPage("https://thesuperhuman.us/studios")).toBe(
 			true,
 		);

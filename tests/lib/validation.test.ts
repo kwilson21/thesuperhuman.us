@@ -18,6 +18,7 @@ describe("validateContactInput", () => {
 	it("rejects missing name", () => {
 		const result = validateContactInput({ ...validInput, name: "" });
 		expect(result.ok).toBe(false);
+
 		if (!result.ok) expect(result.errors.name).toBeDefined();
 	});
 
@@ -26,13 +27,16 @@ describe("validateContactInput", () => {
 			...validInput,
 			email: "not-an-email",
 		});
+
 		expect(result.ok).toBe(false);
+
 		if (!result.ok) expect(result.errors.email).toBeDefined();
 	});
 
 	it("rejects a whitespace-only message", () => {
 		const result = validateContactInput({ ...validInput, description: "   " });
 		expect(result.ok).toBe(false);
+
 		if (!result.ok) expect(result.errors.description).toBeDefined();
 	});
 
@@ -41,6 +45,7 @@ describe("validateContactInput", () => {
 			...validInput,
 			description: "a".repeat(4001),
 		});
+
 		expect(result.ok).toBe(false);
 	});
 

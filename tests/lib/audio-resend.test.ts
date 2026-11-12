@@ -54,6 +54,7 @@ describe("sendOwnerRequestNotice", () => {
 			from: "noreply@notifs.x",
 			to: "kazon@x",
 		});
+
 		expect(res.ok).toBe(true);
 		const calls = (fetch as any).mock.calls;
 		expect(calls.length).toBe(1);
@@ -106,6 +107,7 @@ describe("sendOwnerRequestNotice", () => {
 			referenceUrl: "",
 			referenceNote: "",
 		};
+
 		await sendOwnerRequestNotice({
 			input: minimal,
 			requestId: "req-3",
@@ -115,6 +117,7 @@ describe("sendOwnerRequestNotice", () => {
 		});
 		const body = JSON.parse((fetch as any).mock.calls[0][1].body);
 		expect(body.text).toContain("Direction: Use your judgment");
+
 		for (const label of [
 			"Preferences:",
 			"Keep or avoid:",
@@ -128,6 +131,7 @@ describe("sendOwnerRequestNotice", () => {
 		(fetch as any).mockImplementation(
 			async () => ({ ok: false, json: async () => ({}) }) as any,
 		);
+
 		const res = await sendOwnerRequestNotice({
 			input: intake,
 			requestId: "req-1",
@@ -135,6 +139,7 @@ describe("sendOwnerRequestNotice", () => {
 			from: "noreply@notifs.x",
 			to: "kazon@x",
 		});
+
 		expect(res.ok).toBe(false);
 	});
 
@@ -146,6 +151,7 @@ describe("sendOwnerRequestNotice", () => {
 			from: "",
 			to: "",
 		});
+
 		expect(res).toEqual({ ok: false });
 		expect(fetch).not.toHaveBeenCalled();
 	});
@@ -162,6 +168,7 @@ it("sends only a sign-in link for private project notices, as HTML with a plain-
 	expect(body.to).toEqual(["artist@example.com"]);
 	expect(body.text).toContain("https://thesuperhuman.us/studio/sign-in");
 	expect(body.html).toContain('href="https://thesuperhuman.us/studio/sign-in"');
+
 	// Notices name no project, file, stage or payment: the client signs in to see those.
 	for (const part of [body.text, body.html])
 		for (const detail of ["invoice", "review mix is ready", "balance", "$"])

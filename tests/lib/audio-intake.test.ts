@@ -5,6 +5,7 @@ import {
 	isAudioIntakeAvailable,
 	ownerRequestForIntake,
 } from "~/lib/audio-intake";
+
 const base = {
 	service: "vocal-mix",
 	title: "My song",
@@ -19,6 +20,7 @@ const base = {
 	turnstileToken: "test",
 	fileLink: "https://drive.google.com/example",
 };
+
 describe("audio intake", () => {
 	it("accepts delegated judgment without requiring references or preservation notes", () => {
 		const result = validateIntake(base);
@@ -35,6 +37,7 @@ describe("audio intake", () => {
 				},
 			});
 		}
+
 		expect(
 			validateIntake({
 				...base,
@@ -105,6 +108,7 @@ describe("audio intake", () => {
 	});
 	it("maps validated intake to a bounded owner request without retaining the challenge token", () => {
 		const result = validateIntake(base);
+
 		if (!result.ok) throw new Error("fixture should be valid");
 		const request = ownerRequestForIntake(result.value);
 		expect(request).toMatchObject({
@@ -122,6 +126,7 @@ describe("audio intake", () => {
 			TURNSTILE_SECRET_KEY: "secret",
 			RATE_LIMIT: {},
 		} as Env;
+
 		expect(isAudioIntakeAvailable(env)).toBe(true);
 		expect(isAudioIntakeAvailable({ ...env, MUSIC_DB: undefined })).toBe(false);
 		expect(isAudioIntakeAvailable({ ...env, TURNSTILE_SECRET_KEY: "" })).toBe(

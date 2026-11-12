@@ -3,15 +3,18 @@ import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
 const migrationsBefore = (name: string) =>
 	readdirSync(new URL("../../migrations/music/", import.meta.url))
 		.filter((file) => file.endsWith(".sql") && file < name)
 		.sort();
+
 const migrationSql = (name: string) =>
 	readFileSync(
 		new URL(`../../migrations/music/${name}`, import.meta.url),
 		"utf8",
 	);
+
 const sha = "a".repeat(64);
 
 function insertTemplate(
@@ -33,6 +36,7 @@ describe("agreement template version labels", () => {
 		)
 			.filter((file) => file.endsWith(".sql"))
 			.sort();
+
 		const concatenated = Buffer.concat(
 			migrations.map((name) =>
 				readFileSync(
@@ -40,6 +44,7 @@ describe("agreement template version labels", () => {
 				),
 			),
 		);
+
 		expect(
 			readFileSync(new URL("../../db/music.sql", import.meta.url)),
 		).toEqual(concatenated);
@@ -50,12 +55,14 @@ describe("agreement template version labels", () => {
 		db.exec(
 			readFileSync(new URL("../../db/music.sql", import.meta.url), "utf8"),
 		);
+
 		const columns = db
 			.prepare(
 				"SELECT name FROM pragma_table_info('software_agreement_templates')",
 			)
 			.all()
 			.map((row: { name: string }) => row.name);
+
 		expect(columns).toEqual(
 			expect.arrayContaining(["version_label", "source_revision"]),
 		);
@@ -115,6 +122,7 @@ describe("agreement template version labels", () => {
 
 	it("upgrades a database with an existing template row and reads NULL label and revision", () => {
 		const db = new DatabaseSync(":memory:");
+
 		for (const name of migrationsBefore("0026_agreement_template_labels.sql"))
 			db.exec(migrationSql(name));
 		db.exec(

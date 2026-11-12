@@ -26,6 +26,7 @@ import { threadlineStory } from "../../src/data/project-stories/threadline";
 import dailyStory from "../../src/data/project-stories/the-engineers-daily.json";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+
 const entry = (id: string, day = "2026-09-09"): PublicEntry => ({
 	entryId: id,
 	occurredOn: day,
@@ -39,12 +40,14 @@ const entry = (id: string, day = "2026-09-09"): PublicEntry => ({
 		technicalDetail: null,
 	},
 });
+
 const feed = (items: PublicEntry[], revision = 1): ProjectFeed => ({
 	projectId: "threadline",
 	revision,
 	current: items[0] ?? null,
 	history: items,
 });
+
 describe("project story publication projection", () => {
 	it("orders earlier work first without losing same-day publication order or duplicating current", () => {
 		const f = feed([
@@ -52,6 +55,7 @@ describe("project story publication projection", () => {
 			entry("same-day"),
 			entry("old", "2026-09-08"),
 		]);
+
 		expect(publicationMilestones(f).map((e) => e.id)).toEqual([
 			"old",
 			"same-day",
@@ -103,6 +107,7 @@ const reviewedEntry = (): PublicEntry => ({
 	backfilled: true,
 	story: { ...approved.story } as Story,
 });
+
 describe("reviewed milestone illustration", () => {
 	it("attaches only to the reviewed story in its project and preserves the full short explanation", () => {
 		const e = reviewedEntry();
@@ -128,6 +133,7 @@ describe("reviewed milestone illustration", () => {
 			Object.assign(e.story, { [key]: "Changed" });
 			expect(publicationMilestones(feed([e]))[0].illustration).toBeUndefined();
 		}
+
 		expect(publicationMilestones(feed([]))).toEqual([]);
 	});
 	it("keeps the illustration when unrelated work advances the project revision", () => {
@@ -148,6 +154,7 @@ describe("one journal for curated and published milestones", () => {
 		summary: "A reviewed study.",
 		artifacts: [],
 	};
+
 	it("retains curated visuals when the feed is empty or unavailable", () => {
 		expect(journalMilestones(null, [design])).toEqual([design]);
 		expect(journalMilestones(feed([]), [design])).toEqual([design]);
@@ -157,6 +164,7 @@ describe("one journal for curated and published milestones", () => {
 			feed([entry("launch", "2026-09-10"), entry("earlier", "2026-09-08")]),
 			[design],
 		);
+
 		expect(result.map((m) => m.id)).toEqual([
 			"earlier",
 			"website-design",
@@ -174,6 +182,7 @@ describe("one journal for curated and published milestones", () => {
 			kind: "Browser capture",
 			alt: "A phone layout before the repair.",
 		};
+
 		const after = {
 			src: "/after.webp",
 			width: 390,
@@ -183,6 +192,7 @@ describe("one journal for curated and published milestones", () => {
 			kind: "Browser capture",
 			alt: "A phone layout after the repair.",
 		};
+
 		const repaired = {
 			id: "mobile-repair",
 			day: "2026-09-21",
@@ -190,6 +200,7 @@ describe("one journal for curated and published milestones", () => {
 			summary: "A narrow layout was corrected.",
 			visualProof: { label: "Mobile layout before and after", before, after },
 		} satisfies Milestone;
+
 		expect(journalMilestones(null, [repaired])[0].visualProof).toEqual({
 			label: "Mobile layout before and after",
 			before,
@@ -215,7 +226,9 @@ describe("one journal for curated and published milestones", () => {
 				"website-owner-mobile-tooltips",
 			].includes(id),
 		);
+
 		expect(repairs).toHaveLength(3);
+
 		for (const repair of repairs) {
 			expect(repair.visualProof?.before.kind).toBe("Browser capture");
 			expect(repair.visualProof?.after.kind).toBe("Browser capture");
@@ -230,12 +243,14 @@ const chapter = (id: string, day: string): Milestone => ({
 	summary: "A chapter.",
 	placement: "story",
 });
+
 const update = (id: string, day: string): Milestone => ({
 	id,
 	day,
 	title: id,
 	summary: "An update.",
 });
+
 describe("journal presentation: Latest work, Project story and Archive", () => {
 	it("keeps an authored story chronological and never infers it from dates", () => {
 		const entries = [
@@ -243,6 +258,7 @@ describe("journal presentation: Latest work, Project story and Archive", () => {
 			update("mixed-in", "2026-09-10"),
 			chapter("a", "2026-09-09"),
 		];
+
 		expect(storyMilestones(entries).map((e) => e.id)).toEqual(["a", "b"]);
 	});
 
@@ -255,6 +271,7 @@ describe("journal presentation: Latest work, Project story and Archive", () => {
 			update("b", "2026-09-22"),
 			update("a", "2026-09-21"),
 		];
+
 		expect(latestJournalMilestones(entries).map((e) => e.id)).toEqual([
 			"e",
 			"d",
@@ -277,6 +294,7 @@ describe("journal presentation: Latest work, Project story and Archive", () => {
 			update("a", "2026-09-21"),
 			update("oldest", "2026-09-20"),
 		];
+
 		expect(archiveMilestones(entries).map((e) => e.id)).toEqual(["oldest"]);
 		expect(archiveMilestones(entries, 2).map((e) => e.id)).toEqual([
 			"c",
@@ -290,6 +308,7 @@ describe("journal presentation: Latest work, Project story and Archive", () => {
 		const published = publicationMilestones(
 			feed([entry("shipped", "2026-09-25")]),
 		);
+
 		expect(storyMilestones(published)).toEqual([]);
 		expect(latestJournalMilestones(published).map((e) => e.id)).toEqual([
 			"shipped",
@@ -325,6 +344,7 @@ describe("journal presentation: Latest work, Project story and Archive", () => {
 			update("curated-d", "2026-09-04"),
 			update("curated-e", "2026-09-05"),
 		];
+
 		const merged = journalMilestones(
 			feed([
 				entry("published-1", "2026-09-10"),
@@ -332,6 +352,7 @@ describe("journal presentation: Latest work, Project story and Archive", () => {
 			]),
 			curated,
 		);
+
 		expect(latestJournalMilestones(merged).map((e) => e.id)).toEqual([
 			"published-1",
 			"published-2",
@@ -350,18 +371,23 @@ describe("project status lives once, on the story data", () => {
 	const astroFilesUnder = (dir: string): string[] =>
 		readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
 			const full = join(dir, entry.name);
+
 			if (entry.isDirectory()) return astroFilesUnder(full);
+
 			return entry.name.endsWith(".astro") ? [full] : [];
 		});
+
 	const pageFiles = [
 		join("src", "pages", "index.astro"),
 		join("src", "pages", "building.astro"),
 		...astroFilesUnder(join("src", "pages", "building")),
 	];
+
 	const pageSources = pageFiles.map((file) => ({
 		file,
 		source: readFileSync(file, "utf8"),
 	}));
+
 	const statuses = [
 		tallyStory.status,
 		kailleraStory.status,
@@ -382,6 +408,7 @@ describe("project status lives once, on the story data", () => {
 		const offenders = pageSources
 			.filter(({ source }) => source.includes('status="'))
 			.map(({ file }) => file);
+
 		expect(offenders).toEqual([]);
 	});
 
@@ -391,6 +418,7 @@ describe("project status lives once, on the story data", () => {
 				.filter((status) => source.includes(status))
 				.map((status) => `${file}: ${status}`),
 		);
+
 		expect(offenders).toEqual([]);
 	});
 });
@@ -400,6 +428,7 @@ describe("journal default selection", () => {
 		update("newest", "2026-09-25"),
 		update("older", "2026-09-20"),
 	];
+
 	const chronological = [
 		chapter("first", "2026-09-09"),
 		chapter("last", "2026-09-10"),
@@ -450,8 +479,10 @@ describe("Tally decision highlight sources", () => {
 			["tally-design-system-catalog"],
 			["tally-demo-environment"],
 		]);
+
 		for (const highlight of tallyDecisionHighlights) {
 			expect(highlight).not.toHaveProperty("credit");
+
 			for (const source of highlight.entries) {
 				expect(source).not.toHaveProperty("id");
 				expect(
@@ -464,6 +495,7 @@ describe("Tally decision highlight sources", () => {
 		const merchant = tallyMilestones.find(
 			(milestone) => milestone.id === "tally-store-names",
 		);
+
 		expect(merchant?.day).toBe("2026-10-06");
 		expect(merchant?.summary).toBe(
 			"Some bank text comes without a clean store name. Plaid’s merchant name comes first. When Plaid sends none, Workers AI suggests up to three names. A suggestion can appear provisionally in the list, dashed, but it becomes the saved name only when a person accepts it. A suggestion a person turns down isn’t offered again for that merchant record. Merchant-name suggestions are optional, with their own switch in Settings. Implemented and tested locally.",

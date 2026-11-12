@@ -7,16 +7,20 @@ afterEach(() => {
 
 it("binds only request status buttons, not project update forms that share data-action", () => {
 	const bound: string[] = [];
+
 	const element = (name: string, data: Record<string, string> = {}) => ({
 		dataset: data,
 		addEventListener: () => {
 			bound.push(name);
 		},
 	});
+
 	const statusButton = element("resolve button", { action: "resolve" });
+
 	const revisionForm = element("begin_revision form", {
 		action: "begin_revision",
 	});
+
 	vi.stubGlobal("location", { hash: "" });
 	vi.stubGlobal("document", {
 		querySelector: (selector: string) =>
@@ -43,6 +47,7 @@ it("binds only request status buttons, not project update forms that share data-
 
 it("asks before resolving a request whose provisional studio is still open", async () => {
 	const handlers: Record<string, () => void> = {};
+
 	const button = (action: string, openStudio: boolean) => ({
 		dataset: { action },
 		closest: (selector: string) =>
@@ -51,6 +56,7 @@ it("asks before resolving a request whose provisional studio is still open", asy
 			handlers[`${action}-${openStudio}`] = handler;
 		},
 	});
+
 	const fetch = vi.fn(async () => ({ ok: true }));
 	const confirm = vi.fn(() => false);
 	vi.stubGlobal("fetch", fetch);
@@ -83,6 +89,7 @@ it("asks before resolving a request whose provisional studio is still open", asy
 
 it("reloads a newly reviewed request onto the Accept panel", async () => {
 	const handlers: Record<string, () => void> = {};
+
 	const button = {
 		dataset: { action: "review" },
 		closest: () => null,
@@ -90,6 +97,7 @@ it("reloads a newly reviewed request onto the Accept panel", async () => {
 			handlers.review = handler;
 		},
 	};
+
 	const replaceState = vi.fn();
 	const reload = vi.fn();
 	vi.stubGlobal(
@@ -167,6 +175,7 @@ it.each(["note", "review", "resolve", "reopen", "withdraw"])(
 	"confirms dirty offer edits before %s and sends the shared timestamp",
 	async (action) => {
 		let handler!: (event: any) => void;
+
 		const button = {
 			dataset: { action },
 			closest: () => null,
@@ -174,15 +183,18 @@ it.each(["note", "review", "resolve", "reopen", "withdraw"])(
 				handler = fn;
 			},
 		};
+
 		const note = {
 			dataset: { dirty: "true" },
 			addEventListener: (_: string, fn: any) => {
 				if (action === "note") handler = fn;
 			},
 		};
+
 		const fetch = vi.fn(async (_url: string, _init: RequestInit) => ({
 			ok: true,
 		}));
+
 		vi.stubGlobal("fetch", fetch);
 		vi.stubGlobal(
 			"confirm",
@@ -246,6 +258,7 @@ it.each(["offer", "fit", "question", "decline", "private-note"])(
 	"checks dirty %s before posting and clears all sections before reload",
 	async (section) => {
 		let click!: () => void;
+
 		const button = {
 			dataset: { action: "reopen" },
 			closest: () => null,
@@ -253,11 +266,14 @@ it.each(["offer", "fit", "question", "decline", "private-note"])(
 				click = fn;
 			},
 		};
+
 		const dirty = { dataset: { dirty: "true", section } };
 		const fetch = vi.fn(async () => ({ ok: true }));
+
 		const reload = vi.fn(() => {
 			expect(dirty.dataset.dirty).toBe("false");
 		});
+
 		vi.stubGlobal("fetch", fetch);
 		vi.stubGlobal(
 			"confirm",
@@ -298,17 +314,20 @@ it.each([true, false])(
 	"saves its own private note without a discard prompt (software %s)",
 	async (software) => {
 		let submit!: (event: any) => void;
+
 		const root = {
 			setAttribute: vi.fn(),
 			removeAttribute: vi.fn(),
 			dataset: { requestId: "r" },
 		};
+
 		const note = {
 			dataset: { dirty: "true" },
 			addEventListener: (_: string, fn: any) => {
 				submit = fn;
 			},
 		};
+
 		vi.stubGlobal(
 			"fetch",
 			vi.fn(async () => ({ ok: true })),
@@ -353,12 +372,14 @@ it.each(["note", "review", "resolve", "reopen", "withdraw"])(
 	"locks the request page during %s and restores it on error",
 	async (action) => {
 		let handler!: (event: any) => void;
+
 		const note = {
 			dataset: { dirty: "true" },
 			addEventListener: (_: string, fn: any) => {
 				if (action === "note") handler = fn;
 			},
 		};
+
 		const button = {
 			dataset: { action },
 			closest: () => null,
@@ -366,19 +387,24 @@ it.each(["note", "review", "resolve", "reopen", "withdraw"])(
 				handler = fn;
 			},
 		};
+
 		const attributes = new Map<string, string>();
+
 		const root = {
 			dataset: { requestId: "r" },
 			setAttribute: (key: string, value: string) => attributes.set(key, value),
 			removeAttribute: (key: string) => attributes.delete(key),
 		};
+
 		let finish!: (value: { ok: boolean }) => void;
+
 		const fetch = vi.fn(
 			() =>
 				new Promise<{ ok: boolean }>((resolve) => {
 					finish = resolve;
 				}),
 		);
+
 		vi.stubGlobal("fetch", fetch);
 		vi.stubGlobal(
 			"confirm",

@@ -19,13 +19,16 @@ vi.mock("~/lib/audio-client-access", async (importOriginal) => ({
 	revokeClientSession: vi.fn(),
 	takeStudioAllowance: vi.fn(async () => true),
 }));
+
 vi.mock("~/lib/audio-resend", () => ({
 	sendAudioMessage: vi.fn(async () => ({ ok: true })),
 }));
 
 const email = "Artist@Example.com";
+
 function context(path: string, body: unknown, enabled = true) {
 	const pending: Promise<unknown>[] = [];
+
 	return {
 		request: new Request(`https://thesuperhuman.us${path}`, {
 			method: "POST",
@@ -69,15 +72,19 @@ describe("studio access routes", () => {
 		vi.mocked(issueClientCode)
 			.mockResolvedValueOnce(null)
 			.mockResolvedValueOnce("12345678");
+
 		const unknown = await requestCode(
 			context("/api/studio/code", { email, turnstileToken: "challenge" }),
 		);
+
 		expect(unknown.status).toBe(200);
 		expect(sendAudioMessage).not.toHaveBeenCalled();
+
 		const knownContext = context("/api/studio/code", {
 			email,
 			turnstileToken: "challenge",
 		});
+
 		const known = await requestCode(knownContext);
 		expect(known.status).toBe(200);
 		expect(await known.json()).toEqual(await unknown.json());
@@ -101,10 +108,12 @@ describe("studio access routes", () => {
 				finishDelivery = resolve;
 			}),
 		);
+
 		const ctx = context("/api/studio/code", {
 			email,
 			turnstileToken: "challenge",
 		});
+
 		const response = await Promise.race([
 			requestCode(ctx),
 			new Promise<never>((_, reject) =>
@@ -114,6 +123,7 @@ describe("studio access routes", () => {
 				),
 			),
 		]);
+
 		expect(response.status).toBe(200);
 		expect(ctx.locals.runtime.ctx.waitUntil).toHaveBeenCalledOnce();
 		finishDelivery({ ok: true });
@@ -134,9 +144,11 @@ describe("studio access routes", () => {
 		).toBe(404);
 		expect(issueClientCode).not.toHaveBeenCalled();
 		vi.mocked(completeClientCode).mockResolvedValueOnce("0".repeat(72));
+
 		const response = await completeCode(
 			context("/api/studio/session", { email, code: "12345678" }),
 		);
+
 		expect(response.status).toBe(200);
 		const cookie = response.headers.get("set-cookie");
 		expect(cookie).toContain("HttpOnly");
@@ -148,10 +160,12 @@ describe("studio access routes", () => {
 	it("invalidates an undelivered code and revokes the current session on sign-out", async () => {
 		vi.mocked(issueClientCode).mockResolvedValueOnce("12345678");
 		vi.mocked(sendAudioMessage).mockResolvedValueOnce({ ok: false });
+
 		const codeContext = context("/api/studio/code", {
 			email,
 			turnstileToken: "challenge",
 		});
+
 		const codeResponse = await requestCode(codeContext);
 		expect(codeResponse.status).toBe(200);
 		await Promise.all(codeContext.pending);
@@ -171,10 +185,12 @@ describe("studio access routes", () => {
 			ok: false,
 			uncertain: true,
 		});
+
 		const codeContext = context("/api/studio/code", {
 			email,
 			turnstileToken: "challenge",
 		});
+
 		expect((await requestCode(codeContext)).status).toBe(200);
 		await Promise.all(codeContext.pending);
 		expect(discardUndeliveredCode).not.toHaveBeenCalled();

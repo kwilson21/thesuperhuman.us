@@ -16,11 +16,13 @@ it("fails closed without owner access or the portal gate", async () => {
 			byteSize: 10,
 		}),
 	});
+
 	const context = {
 		params: { id: "song-1" },
 		request,
 		locals: { runtime: { env: { AUDIO_CLIENT_PORTAL_ENABLED: "false" } } },
 	} as any;
+
 	expect((await POST(context)).status).toBe(403);
 	context.locals.owner = { email: "owner@example.com" };
 	expect((await POST(context)).status).toBe(404);
@@ -28,6 +30,7 @@ it("fails closed without owner access or the portal gate", async () => {
 
 it("rejects a wrongly sized part before sending it to R2", async () => {
 	let reachedR2 = false;
+
 	const db = {
 		prepare: (query: string) => ({
 			bind: () => ({
@@ -44,11 +47,13 @@ it("rejects a wrongly sized part before sending it to R2", async () => {
 			}),
 		}),
 	};
+
 	const request = new Request(`${url}?uploadId=${uuid}&part=1`, {
 		method: "PUT",
 		headers: { "content-length": "9" },
 		body: new Uint8Array(9),
 	});
+
 	const context = {
 		params: { id: "song-1" },
 		request,
@@ -67,12 +72,14 @@ it("rejects a wrongly sized part before sending it to R2", async () => {
 			},
 		},
 	} as any;
+
 	expect((await PUT(context)).status).toBe(400);
 	expect(reachedR2).toBe(false);
 });
 
 it("checks the received part size even without a content-length header", async () => {
 	let reachedR2 = false;
+
 	const db = {
 		prepare: (query: string) => ({
 			bind: () => ({
@@ -90,17 +97,20 @@ it("checks the received part size even without a content-length header", async (
 			}),
 		}),
 	};
+
 	const body = new ReadableStream({
 		start(controller) {
 			controller.enqueue(new Uint8Array(9));
 			controller.close();
 		},
 	});
+
 	const request = new Request(`${url}?uploadId=${uuid}&part=1`, {
 		method: "PUT",
 		body,
 		duplex: "half",
 	} as RequestInit);
+
 	const context = {
 		params: { id: "song-1" },
 		request,
@@ -119,6 +129,7 @@ it("checks the received part size even without a content-length header", async (
 			},
 		},
 	} as any;
+
 	expect((await PUT(context)).status).toBe(400);
 	expect(reachedR2).toBe(false);
 });

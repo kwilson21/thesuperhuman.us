@@ -19,10 +19,12 @@ function context(
 	} = {},
 ) {
 	const waitUntil = vi.fn();
+
 	const env = {
 		AUDIO_CLIENT_PORTAL_ENABLED: options.enabled === false ? "false" : "true",
 		MUSIC_DB: {},
 	};
+
 	return {
 		params: { id: "song-1" },
 		request: new Request(

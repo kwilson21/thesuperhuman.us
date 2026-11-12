@@ -12,6 +12,7 @@ export async function deliverSoftwareBriefCopy(
 ): Promise<string | null> {
 	const at = new Date().toISOString();
 	let providerStarted = false;
+
 	try {
 		// Claim atomically before sending; uncertain delivery requires an explicit checked retry.
 		const claimed = await db
@@ -36,7 +37,9 @@ export async function deliverSoftwareBriefCopy(
 					: []),
 			)
 			.first<{ id: string }>();
+
 		if (!claimed) return null;
+
 		const payload = {
 			from: env.CONTACT_FROM_EMAIL,
 			to: [request.email],
@@ -44,11 +47,14 @@ export async function deliverSoftwareBriefCopy(
 			subject: `Your brief: ${request.summary || "your project"}`,
 			...softwareBriefEmail(request.name, softwareBrief(request)),
 		};
+
 		let copy: { ok: boolean; uncertain?: boolean } = { ok: false };
+
 		if (env.RESEND_API_KEY && env.CONTACT_FROM_EMAIL && env.CONTACT_TO_EMAIL) {
 			providerStarted = true;
 			copy = await sendAudioMessage({ apiKey: env.RESEND_API_KEY, payload });
 		}
+
 		const status = copy.ok ? "sent" : copy.uncertain ? "uncertain" : "failed";
 		await db.batch([
 			db
@@ -56,9 +62,11 @@ export async function deliverSoftwareBriefCopy(
       WHERE id=? AND json_extract(details_json,'$.clientCopyAttemptedAt')=?`)
 				.bind(status, request.id, at),
 		]);
+
 		return status;
 	} catch {
 		const status = providerStarted ? "uncertain" : "failed";
+
 		if (!providerStarted) {
 			try {
 				await db.batch([
@@ -72,7 +80,9 @@ export async function deliverSoftwareBriefCopy(
 				console.error("Client brief copy failure could not be recorded.");
 			}
 		}
+
 		console.error(`Client brief copy state is ${status}.`);
+
 		return status;
 	}
 }

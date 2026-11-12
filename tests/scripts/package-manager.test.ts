@@ -4,16 +4,20 @@ import { describe, expect, it } from "vitest";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const read = (path: string) => readFileSync(`${root}${path}`, "utf8");
+
 const workflows = [
 	".github/workflows/validate.yml",
 	".github/workflows/screenshots.yml",
 ];
+
 // pnpm forwards a `--` separator to the script (npm stripped it), so documented commands must omit it.
 const pnpmSeparator = /\bpnpm (?:run [\w:.-]+|test) -- /;
+
 const under = (dir: string) =>
 	readdirSync(`${root}${dir}`, { recursive: true }).map(
 		(entry) => `${dir}/${entry}`,
 	);
+
 const commandFiles = [
 	"README.md",
 	"CLAUDE.md",
@@ -89,6 +93,7 @@ describe("package manager and Node pin", () => {
 				.filter((line) => pnpmSeparator.test(line))
 				.map((line) => `${path}: ${line.trim()}`),
 		);
+
 		expect(offenders).toEqual([]);
 	});
 });

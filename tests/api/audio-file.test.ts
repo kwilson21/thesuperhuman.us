@@ -19,14 +19,17 @@ function makeR2(body = new Uint8Array([1, 2, 3, 4, 5]), size = 5) {
 		head: vi.fn(async (_key: string) => ({ size })),
 		get: vi.fn(async (_key: string, opts?: any) => {
 			const range = opts?.range;
+
 			if (range && range.offset !== undefined && range.length !== undefined) {
 				const slice = body.slice(range.offset, range.offset + range.length);
+
 				return {
 					body: new Response(slice).body,
 					size,
 					range,
 				};
 			}
+
 			return {
 				body: new Response(body).body,
 				size,
@@ -37,8 +40,10 @@ function makeR2(body = new Uint8Array([1, 2, 3, 4, 5]), size = 5) {
 
 function makeContext(slug: string, rangeHeader?: string) {
 	const headers = new Headers();
+
 	if (rangeHeader) headers.set("range", rangeHeader);
 	const audio = makeR2();
+
 	return {
 		params: { slug },
 		request: new Request(`https://audio.thesuperhuman.us/file/${slug}`, {

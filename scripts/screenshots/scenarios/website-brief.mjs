@@ -4,6 +4,7 @@ import { stubTurnstile } from "../turnstile-stub.mjs";
 const VIEWPORTS = ["desktop", "phone"];
 const BRIEF_ID = "screenshot-website";
 const BRIEF_PATH = "/software/start?path=website";
+
 const brief = {
 	name: "Jordan Example",
 	email: "jordan@example.com",
@@ -15,8 +16,10 @@ const brief = {
 		"A logo and about 30 class photos. The About and Pricing pages are still accurate.",
 	timingDate: "2026-12-01",
 };
+
 const receiptFirstStep =
 	"I’ll look at what you have and reply with a fixed-price first milestone, or a question or two.";
+
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 
 // The screens after the path, in the order the website path shows them (data-step values). Each screen
@@ -83,6 +86,7 @@ async function guard(page, label, action) {
 		messages.push(`${message.type()}: ${message.text()}`),
 	);
 	page.on("pageerror", (error) => messages.push(`pageerror: ${error.message}`));
+
 	try {
 		return await action();
 	} catch (error) {
@@ -95,6 +99,7 @@ async function guard(page, label, action) {
 				status: document.querySelector("[data-form-status]")?.textContent ?? "",
 			}))
 			.catch((failure) => ({ lastError: String(failure) }));
+
 		console.error(
 			`Website brief ${label} failure:`,
 			JSON.stringify(
@@ -114,6 +119,7 @@ async function reachScreen(page, last) {
 		const screen = screens[index];
 		await page.locator(`[data-step="${screen.step}"]:visible`).waitFor();
 		await screen.fill?.(page);
+
 		if (index < last) await page.locator("[data-next]").click();
 	}
 }
@@ -127,12 +133,14 @@ async function chooseWebsitePath(page) {
 	// Move the pointer off Next, so its hover style is not captured on a phone.
 	await page.mouse.move(0, 0);
 	await page.locator('[data-step="0"]:visible').waitFor();
+
 	if (!(await page.locator("[name=path][value=website]").isChecked()))
 		throw new Error("The website path was not kept after Back.");
 }
 
 async function assertReview(page) {
 	const review = (await page.locator("[data-review]").textContent()) ?? "";
+
 	for (const text of [
 		"Website design",
 		"Me or someone on my team",
@@ -141,6 +149,7 @@ async function assertReview(page) {
 		if (!review.includes(text))
 			throw new Error(`The review is missing "${text}": ${review}`);
 	}
+
 	if (review.includes("What they already have"))
 		throw new Error(
 			'The review uses the owner label "What they already have".',
@@ -166,9 +175,11 @@ async function sendBrief(page) {
 	);
 	await page.locator("[type=submit]").click();
 	await page.locator("#software-success:visible").waitFor({ timeout: 30_000 });
+
 	const first = (
 		await page.locator("[data-receipt-first-step]").textContent()
 	)?.trim();
+
 	if (first !== receiptFirstStep)
 		throw new Error(`The first next step reads "${first}".`);
 }
@@ -271,6 +282,7 @@ export default {
 			approverRole: "",
 			clientCopyStatus: "sent",
 		};
+
 		sql(`INSERT OR IGNORE INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,private_note,created_at,updated_at,submission_id)
       VALUES (${quote(BRIEF_ID)},'software','website',${quote(brief.name)},${quote(brief.email)},'A site for my pottery studio.',${quote(JSON.stringify(details))},
       'new','','2026-10-19T12:00:00.000Z','2026-10-19T12:00:00.000Z','00000000-0000-4000-8000-000000000019')`);
@@ -298,9 +310,12 @@ export default {
 					page.getByText("A site for my pottery studio.").first().waitFor(),
 			},
 		];
+
 		const steps = [];
+
 		for (const shot of shots) {
 			const images = [];
+
 			for (const viewport of VIEWPORTS) {
 				images.push({
 					file: await capture({
@@ -313,8 +328,10 @@ export default {
 					caption: `${shot.caption} (${viewport})`,
 				});
 			}
+
 			steps.push({ title: shot.title, images });
 		}
+
 		return steps;
 	},
 };

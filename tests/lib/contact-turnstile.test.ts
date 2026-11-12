@@ -5,6 +5,7 @@ const contact = readFileSync(
 	new URL("../../src/components/ContactForm.astro", import.meta.url),
 	"utf8",
 );
+
 const home = readFileSync(
 	new URL("../../src/pages/index.astro", import.meta.url),
 	"utf8",

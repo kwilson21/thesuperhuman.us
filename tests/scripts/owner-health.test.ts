@@ -94,6 +94,7 @@ function healthyFixture() {
 			if (sql.includes("pragma_table_info")) {
 				const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 				const db = new DatabaseSync(":memory:");
+
 				try {
 					db.exec(
 						readFileSync(
@@ -101,17 +102,23 @@ function healthyFixture() {
 							"utf8",
 						),
 					);
+
 					return db.prepare(sql).all() as { name: string }[];
 				} finally {
 					db.close();
 				}
 			}
+
 			if (sql.includes("sqlite_master"))
 				return requiredSchema.map((name) => ({ name }));
+
 			if (sql.includes("owner_retention_runs"))
 				return [{ completed_at: "2026-09-18T12:00:00Z" }];
+
 			if (sql.includes("stripe_unmatched_events")) return [{ total: 0 }];
+
 			if (sql.includes("audio_client_codes")) return [{ total: 0 }];
+
 			return [{ total: 2 }];
 		},
 		media: [
@@ -158,9 +165,11 @@ it("reports actionable safe failures without private data", async () => {
 			return requiredSchema
 				.filter((name) => name !== "owner_requests")
 				.map((name) => ({ name }));
+
 		if (sql.includes("owner_retention_runs")) return [];
 		throw new Error("fan@example.com database failure");
 	};
+
 	fixture.head = async () => ({ ok: false, status: 404, contentType: "" });
 	const report = await ownerHealth(fixture);
 	expect(report.status).toBe("attention");
@@ -182,10 +191,13 @@ it("requires the payment projection and Stripe event ledger", async () => {
 			return requiredSchema
 				.filter((name) => name !== "audio_payments")
 				.map((name) => ({ name }));
+
 		if (sql.includes("owner_retention_runs"))
 			return [{ completed_at: "2026-09-18T12:00:00Z" }];
+
 		return [{ total: 0 }];
 	};
+
 	const report = await ownerHealth(fixture);
 	expect(report.checks).toContainEqual(
 		expect.objectContaining({ id: "schema", status: "attention" }),
@@ -211,11 +223,13 @@ it("reports attention when the request audit trigger is missing", async () => {
 it("detects incomplete schemas and passes only after 0026", async () => {
 	const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 	const db = new DatabaseSync(":memory:");
+
 	const migrations = readdirSync(
 		new URL("../../migrations/music/", import.meta.url),
 	)
 		.filter((name) => name.endsWith(".sql"))
 		.sort();
+
 	for (const name of migrations.filter((name) => name < "0019"))
 		db.exec(
 			readFileSync(
@@ -336,11 +350,13 @@ it("detects incomplete schemas and passes only after 0026", async () => {
 it("reports the agreement template label migration missing on a database migrated only through 0025", async () => {
 	const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 	const db = new DatabaseSync(":memory:");
+
 	const migrations = readdirSync(
 		new URL("../../migrations/music/", import.meta.url),
 	)
 		.filter((name) => name.endsWith(".sql"))
 		.sort();
+
 	for (const name of migrations.filter((name) => name < "0026"))
 		db.exec(
 			readFileSync(
@@ -399,6 +415,7 @@ it("counts eligible software projects alongside audio retention items", async ()
 		sql.includes("audio_client_codes")
 			? Promise.resolve(db.prepare(sql).all())
 			: baseQuery(sql);
+
 	for (const [id, completed, revoked, deleted] of [
 		["completed", "2025-09-01", null, null],
 		["revoked", null, "2025-09-01", null],
@@ -416,6 +433,7 @@ it("counts eligible software projects alongside audio retention items", async ()
 			"INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,completed_at,revoked_at,content_deleted_at,created_at,updated_at) VALUES (?,?,'{}','standard','now','now','now','owner',?,?,?,'now','now')",
 		).run(id, id, completed, revoked, deleted);
 	}
+
 	expect((await ownerHealth(fixture)).checks).toContainEqual(
 		expect.objectContaining({
 			id: "studio-retention",
@@ -436,8 +454,10 @@ it("sums unresolved audio and software Stripe dead letters", async () => {
 	db.exec(readFileSync(new URL("../../db/music.sql", import.meta.url), "utf8"));
 	db.exec(`INSERT INTO stripe_unmatched_events(event_id,event_type,invoice_id,request_id,installment,status,occurred_at,received_at,reason) VALUES ('audio','invoice.paid','in_audio','audio','booking','paid','now','now','request-not-found');
     INSERT INTO software_stripe_unmatched_events VALUES ('software','invoice.paid','in_software','software','paid','now','now',NULL),('resolved','invoice.paid','in_old','old','paid','now','now','now');`);
+
 	const fixture = healthyFixture(),
 		base = fixture.query;
+
 	fixture.query = (sql) =>
 		sql.includes("stripe_unmatched_events")
 			? Promise.resolve(db.prepare(sql).all())
@@ -459,6 +479,7 @@ it("sums unresolved audio and software Stripe dead letters", async () => {
 	);
 	db.close();
 });
+
 it.each(["creating", "open", "payment_failed", "uncollectible"])(
 	"health reports %s software invoices blocking overdue retention",
 	async (status) => {
@@ -473,8 +494,10 @@ it.each(["creating", "open", "payment_failed", "uncollectible"])(
 		db.prepare(
 			`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,created_by,created_at,updated_at) VALUES ('invoice','software','offer',0,'deposit',100,7,?,'owner','now','now')`,
 		).run(status);
+
 		const fixture = healthyFixture(),
 			base = fixture.query;
+
 		fixture.query = (sql) =>
 			sql.includes("audio_client_codes")
 				? Promise.resolve(db.prepare(sql).all())
@@ -517,6 +540,7 @@ it.each([401, 404])(
 	"checks the deployed signing landing status %s",
 	async (status) => {
 		const urls: string[] = [];
+
 		const report = await ownerHealth({
 			...healthyFixture(),
 			siteOrigin: "https://deployed.example",
@@ -524,9 +548,11 @@ it.each([401, 404])(
 			postDeploy: true,
 			verify: async (url: string) => {
 				urls.push(url);
+
 				return { status };
 			},
 		});
+
 		expect(urls).toEqual(["https://deployed.example/agreements/verify"]);
 		expect(report.checks.find((c) => c.id === "signing-route")?.status).toBe(
 			status === 401 ? "pass" : "attention",
@@ -538,11 +564,13 @@ it("does not check the live signing route before deployment", async () => {
 	const verify = async () => {
 		throw new Error("must not call");
 	};
+
 	const report = await ownerHealth({
 		...healthyFixture(),
 		remote: true,
 		verify,
 	});
+
 	expect(report.checks.some((c) => c.id === "signing-route")).toBe(false);
 });
 
@@ -564,6 +592,7 @@ it("requires the brief suggestion budget schema", async () => {
 it("rejects a complete schema with a missing migration 0023 recipient snapshot column", async () => {
 	const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 	const db = new DatabaseSync(":memory:");
+
 	try {
 		db.exec(
 			readFileSync(new URL("../../db/music.sql", import.meta.url), "utf8"),

@@ -1,6 +1,7 @@
 const clock = (seconds: number) => {
 	if (!Number.isFinite(seconds)) return "0:00";
 	const whole = Math.floor(seconds);
+
 	return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
 };
 
@@ -8,37 +9,50 @@ export function setupProjectPlayers() {
 	const players = [
 		...document.querySelectorAll<HTMLElement>("[data-project-player]"),
 	];
+
 	for (const player of players) {
 		const audio = player.querySelector("audio");
+
 		const toggle = player.querySelector<HTMLButtonElement>(
 			"[data-player-toggle]",
 		);
+
 		const seek = player.querySelector<HTMLInputElement>("[data-player-seek]");
 		const time = player.querySelector<HTMLElement>("[data-player-time]");
 		const wave = player.querySelector<HTMLElement>(".player-wave");
+
 		if (!audio || !toggle || !seek || !time || !wave) continue;
+
 		const label =
 			toggle.getAttribute("aria-label")?.replace(/^Play /, "") ?? "";
+
 		const problem = player.querySelector<HTMLElement>("[data-player-problem]");
 		const status = player.querySelector<HTMLElement>("[data-player-status]");
+
 		// A missing file, an expired session or a revoked file all surface as a failed load or play.
 		const unavailable = () => {
 			player.classList.remove("playing");
 			player.classList.add("unavailable");
 			toggle.disabled = true;
 			seek.disabled = true;
+
 			if (status)
 				status.textContent =
 					"This audio could not load. Your sign-in may have expired or the file may have changed.";
+
 			if (problem) problem.hidden = false;
 		};
+
 		const available = () => {
 			player.classList.remove("unavailable");
 			toggle.disabled = false;
 			seek.disabled = false;
+
 			if (status) status.textContent = "";
+
 			if (problem) problem.hidden = true;
 		};
+
 		audio.addEventListener("error", unavailable);
 		player
 			.querySelector("[data-player-retry]")
@@ -46,6 +60,7 @@ export function setupProjectPlayers() {
 				available();
 				audio.load();
 			});
+
 		const render = () => {
 			const share = audio.duration ? audio.currentTime / audio.duration : 0;
 			wave.style.setProperty("--progress", `${(share * 100).toFixed(2)}%`);
@@ -56,11 +71,14 @@ export function setupProjectPlayers() {
 			);
 			time.textContent = `${clock(audio.currentTime)} / ${clock(audio.duration)}`;
 		};
+
 		toggle.addEventListener("click", () => {
 			if (!audio.paused) {
 				audio.pause();
+
 				return;
 			}
+
 			// AbortError only means a pause or reload interrupted this play; everything else is a real failure.
 			audio.play().catch((error: unknown) => {
 				if ((error as { name?: string })?.name !== "AbortError") unavailable();

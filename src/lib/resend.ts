@@ -45,13 +45,17 @@ async function sendOne(args: {
 		subject: args.subject,
 		text: args.text,
 	};
+
 	if (args.html) payload.html = args.html;
+
 	if (args.replyTo) payload.reply_to = args.replyTo;
+
 	if (args.attachments && args.attachments.length > 0) {
 		payload.attachments = args.attachments;
 	}
 
 	let res: Response;
+
 	try {
 		res = await fetch(ENDPOINT, {
 			method: "POST",
@@ -65,15 +69,18 @@ async function sendOne(args: {
 	} catch {
 		return false;
 	}
+
 	return res.ok;
 }
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
 	const bytes = new Uint8Array(buffer);
 	let binary = "";
+
 	for (let i = 0; i < bytes.byteLength; i++) {
 		binary += String.fromCharCode(bytes[i]);
 	}
+
 	return btoa(binary);
 }
 
@@ -88,6 +95,7 @@ export async function sendContactEmails(
 		text: primaryBody(args.input),
 		replyTo: args.input.email,
 	});
+
 	if (!primaryOk) return { ok: false };
 
 	// Best-effort autoresponder. Do not fail the request if this errors.
@@ -143,6 +151,7 @@ export async function sendResumeApprovalRequest(
 		text: approvalNotificationBody(args.request, args.approvalUrl),
 		replyTo: args.request.email,
 	});
+
 	return { ok };
 }
 
@@ -172,5 +181,6 @@ export async function sendResumeDelivery(
 			},
 		],
 	});
+
 	return { ok };
 }

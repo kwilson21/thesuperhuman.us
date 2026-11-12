@@ -21,19 +21,23 @@ export function setupFormSubmission({
 	const button = form.querySelector<HTMLButtonElement>(
 		'button[type="submit"]',
 	)!;
+
 	const status = form.querySelector<HTMLElement>("[data-form-status]")!;
 	const errors = [...form.querySelectorAll<HTMLElement>("[data-form-error]")];
+
 	const controlsFor = (name: string) =>
 		[...form.elements].filter(
 			(element): element is HTMLElement =>
 				element instanceof HTMLElement && element.getAttribute("name") === name,
 		);
+
 	const label = button.textContent;
 	let pending = false;
 	button.disabled = form.dataset.available !== "true";
 
 	for (const error of errors) {
 		error.id = `${form.id}-${error.dataset.formError}-error`;
+
 		for (const control of controlsFor(error.dataset.formError!)) {
 			const description = control.getAttribute("aria-describedby");
 			control.setAttribute(
@@ -45,6 +49,7 @@ export function setupFormSubmission({
 
 	form.addEventListener("submit", async (event) => {
 		event.preventDefault();
+
 		if (pending || button.disabled) return;
 		pending = true;
 		button.disabled = true;
@@ -63,52 +68,67 @@ export function setupFormSubmission({
 
 		try {
 			const data = new FormData(form);
+
 			const body = JSON.stringify({
 				...payload(data),
 				turnstileToken: String(data.get("cf-turnstile-response") ?? ""),
 			});
+
 			onSendingChange?.(true);
+
 			const response = await fetch(endpoint, {
 				method: "POST",
 				headers: { "content-type": "application/json" },
 				body,
 				signal: AbortSignal.timeout(30_000),
 			});
+
 			const result = (await response.json()) as {
 				ok?: boolean;
 				errors?: Record<string, string>;
 				error?: string;
 			};
+
 			onSendingChange?.(false);
+
 			if (response.ok && result.ok === true) {
 				onSuccess?.(result);
 				form.hidden = true;
 				success.hidden = false;
 				success.focus();
+
 				return;
 			}
+
 			if (response.status === 409) onConflict?.();
 			openMessages(form, button, () => {
 				let firstInvalid: HTMLElement | undefined;
 				let hasDisplayedErrors = false;
 				const generalErrors: string[] = [];
+
 				for (const [field, message] of Object.entries(result.errors ?? {})) {
 					const error = errors.find(
 						(element) => element.dataset.formError === field,
 					);
+
 					const controls = controlsFor(field);
+
 					if (error) {
 						error.textContent = message;
 						error.hidden = false;
 						hasDisplayedErrors = true;
+
 						if (!controls.length) error.tabIndex = -1;
 					}
+
 					controls.forEach((control) =>
 						control.setAttribute("aria-invalid", "true"),
 					);
 					firstInvalid ??= controls[0] ?? error;
+
 					if (!error && !controls.length) generalErrors.push(message);
 				}
+
 				status.textContent =
 					generalErrors.join(" ") ||
 					result.error ||
@@ -129,10 +149,12 @@ export function setupFormSubmission({
 			button.disabled = form.dataset.available !== "true";
 			button.textContent = label;
 			form.removeAttribute("aria-busy");
+
 			// A token may have been consumed even when the response was lost.
 			const turnstile = (
 				window as Window & { turnstile?: { reset: () => void } }
 			).turnstile;
+
 			try {
 				turnstile?.reset();
 			} catch {

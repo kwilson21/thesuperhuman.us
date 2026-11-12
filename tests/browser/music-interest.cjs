@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const path = require("node:path");
+
 const { chromium } = require(
 	path.join(process.env.PW_SKILL_DIR, "node_modules/playwright"),
 );
@@ -9,11 +10,13 @@ const artifactDir = process.env.PW_ARTIFACT_DIR || "/tmp";
 
 (async () => {
 	const browser = await chromium.launch({ headless: true });
+
 	try {
 		const page = await browser.newPage({
 			viewport: { width: 390, height: 844 },
 			deviceScaleFactor: 2,
 		});
+
 		await page.route("**/api/music-interest", async (route) => {
 			const payload = route.request().postDataJSON();
 			await route.fulfill({
@@ -49,10 +52,12 @@ const artifactDir = process.env.PW_ARTIFACT_DIR || "/tmp";
 			"Check the box to confirm I may email you about your selection.",
 			{ exact: true },
 		);
+
 		const verificationError = page.getByText(
 			"Complete the verification and try again.",
 			{ exact: true },
 		);
+
 		await consentError.waitFor();
 		await verificationError.first().waitFor();
 		assert.equal(
@@ -69,6 +74,7 @@ const artifactDir = process.env.PW_ARTIFACT_DIR || "/tmp";
 		const checkbox = page.getByRole("checkbox", {
 			name: /may email me about availability/i,
 		});
+
 		assert.equal(await checkbox.getAttribute("aria-invalid"), "true");
 		assert.equal(
 			await checkbox.evaluate((element) => element === document.activeElement),
@@ -99,9 +105,11 @@ const artifactDir = process.env.PW_ARTIFACT_DIR || "/tmp";
 		const nameFont = await page
 			.locator('.music-consent [data-name-style="inherit"]')
 			.evaluate((element) => getComputedStyle(element).fontFamily);
+
 		const sentenceFont = await page
 			.locator(".music-consent > span")
 			.evaluate((element) => getComputedStyle(element).fontFamily);
+
 		assert.equal(
 			nameFont,
 			sentenceFont,
@@ -114,6 +122,7 @@ const artifactDir = process.env.PW_ARTIFACT_DIR || "/tmp";
 	} finally {
 		await browser.close();
 	}
+
 	console.log("music interest browser checks: PASS");
 })().catch((error) => {
 	console.error(error);

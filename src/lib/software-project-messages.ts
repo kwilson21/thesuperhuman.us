@@ -13,13 +13,16 @@ import {
 	softwareRevisionHistoryBody,
 } from "./software-projects";
 import type { SoftwareDecision, SoftwareUpdate } from "./software-projects";
+
 export type SoftwareProjectMessage = Omit<ProjectMessage, "review_decision"> & {
 	review_decision: null;
 	decision: SoftwareDecision | null;
 	update_id: string | null;
 };
+
 const messageColumns =
 	"id,actor,body,created_at,read_at,NULL AS review_decision,decision,update_id";
+
 export const softwareDecisionInput = z.discriminatedUnion("decision", [
 	z.object({ decision: z.literal("direction_confirmed") }),
 	z.object({
@@ -45,6 +48,7 @@ export const softwareDecisionInput = z.discriminatedUnion("decision", [
 			.refine((value) => !/[\x00-\x08\x0b\x0c\x0e-\x1f]|\p{Cs}/u.test(value)),
 	}),
 ]);
+
 export async function postSoftwareReviewDecision(
 	db: D1Database,
 	id: string,
@@ -59,12 +63,17 @@ export async function postSoftwareReviewDecision(
 		)
 		.bind(id, updateId)
 		.first<SoftwareUpdate>();
+
 	const project = await getSoftwareProject(db, id);
+
 	if (!update || !project) return { ok: false, status: 409 };
+
 	const direction = update.kind === "direction_review",
 		milestone = projectTerms(project).milestones[update.milestone_index],
 		checks = milestone.acceptance;
+
 	const delivered = deliveredIndexes(update, milestone.deliverables);
+
 	if (
 		(input.decision === "direction_confirmed" && !direction) ||
 		(input.decision === "milestone_accepted" && direction)
@@ -74,6 +83,7 @@ export async function postSoftwareReviewDecision(
 			status: 400,
 			error: "This decision doesn’t apply to this review.",
 		};
+
 	if (
 		input.decision === "milestone_accepted" &&
 		milestone.deliverables.some((_, index) => !delivered.includes(index))
@@ -84,22 +94,26 @@ export async function postSoftwareReviewDecision(
 			error:
 				"This version includes only part of the milestone. The client can accept after every agreed deliverable is included in a review.",
 		};
+
 	const criteria =
 		input.decision === "changes_requested"
 			? [...new Set(input.criteria)].sort((first, second) => first - second)
 			: [];
+
 	const missing =
 		input.decision === "changes_requested"
 			? [...new Set(input.missing_deliverables)].sort(
 					(first, second) => first - second,
 				)
 			: [];
+
 	const inaccessible =
 		input.decision === "changes_requested"
 			? [...new Set(input.inaccessible_deliverables)].sort(
 					(first, second) => first - second,
 				)
 			: [];
+
 	if (
 		criteria.some((index) => index >= checks.length) ||
 		missing.some(
@@ -122,19 +136,24 @@ export async function postSoftwareReviewDecision(
 			error:
 				"Choose an unmet check, an omitted deliverable, or an included deliverable you cannot access. Tell me what happened.",
 		};
+
 	const tokenHash = await hashValue(token),
 		at = now.toISOString();
+
 	const label =
 		input.decision === "direction_confirmed"
 			? "Direction confirmed"
 			: input.decision === "milestone_accepted"
 				? "Accepted"
 				: "Changes requested";
+
 	const version = `${update.artifact_version} for milestone ${update.milestone_index + 1}`;
+
 	const body =
 		input.decision === "changes_requested"
 			? `Requested changes to ${version}. Checks reported unmet: [${criteria.map((index) => index + 1).join(", ")}]. Deliverables unavailable: [${missing.map((index) => index + 1).join(", ")}]. Included but inaccessible: [${inaccessible.map((index) => index + 1).join(", ")}].\n\n${input.note}`
 			: `${direction ? "Confirmed" : "Accepted"} ${version}.`;
+
 	const note = `${label} on ${update.artifact_version} · milestone ${update.milestone_index + 1}${criteria.length ? ` · checks ${criteria.map((index) => index + 1).join(", ")}` : ""}${missing.length ? ` · missing deliverables ${missing.map((index) => index + 1).join(", ")}` : ""}${inaccessible.length ? ` · inaccessible deliverables ${inaccessible.map((index) => index + 1).join(", ")}` : ""}`;
 	await db.batch([
 		softwareGuard(
@@ -178,10 +197,13 @@ export async function postSoftwareReviewDecision(
 			.bind(id, at),
 		softwareAudit(db, id, "decision-recorded", "client", at, note),
 	]);
+
 	return { ok: true, status: 200 };
 }
+
 const CLIENT_MESSAGE_WINDOW_MS = 300_000,
 	CLIENT_MESSAGE_LIMIT = 12;
+
 export async function listSoftwareProjectMessages(
 	db: D1Database,
 	requestId: string,
@@ -192,8 +214,10 @@ export async function listSoftwareProjectMessages(
 		)
 		.bind(requestId)
 		.all<SoftwareProjectMessage>();
+
 	return result.results;
 }
+
 export function readableSoftwareProjectMessages(
 	messages: SoftwareProjectMessage[],
 	updates: {
@@ -207,9 +231,12 @@ export function readableSoftwareProjectMessages(
 ) {
 	return messages.map((message) => {
 		if (!message.decision || !message.update_id) return message;
+
 		const update = updates.find((item) => item.id === message.update_id),
 			milestone = terms.milestones[update?.milestone_index ?? 0];
+
 		if (!milestone || !update) return message;
+
 		if (reader === "owner")
 			return message.decision === "changes_requested"
 				? {
@@ -221,19 +248,23 @@ export function readableSoftwareProjectMessages(
 						),
 					}
 				: message;
+
 		const label = softwareVersionLabel({
 			artifact_version: update.artifact_version ?? "",
 			kind: update.kind,
 		});
+
 		const version = softwareVersionNumber({
 			artifact_version: update.artifact_version ?? "",
 		})
 			? label.toLowerCase()
 			: label;
+
 		const milestoneLabel =
 			terms.milestones.length > 1
 				? ` of milestone ${(update.milestone_index ?? 0) + 1}`
 				: "";
+
 		if (message.decision !== "changes_requested")
 			return {
 				...message,
@@ -242,6 +273,7 @@ export function readableSoftwareProjectMessages(
 						? `You confirmed ${version}${terms.milestones.length > 1 ? ` for milestone ${(update.milestone_index ?? 0) + 1}` : ""}.`
 						: `You accepted ${version}${milestoneLabel}.`,
 			};
+
 		return {
 			...message,
 			body: `You asked for changes to ${version}${milestoneLabel}.\n\n${softwareClientRevisionBody(message.body, milestone.acceptance, milestone.deliverables)}`,
@@ -274,9 +306,11 @@ export async function postClientSoftwareProjectMessage(
 	now = new Date(),
 ): Promise<SoftwareProjectMessage | null> {
 	const tokenHash = await hashValue(token);
+
 	const windowStart = new Date(
 		now.getTime() - CLIENT_MESSAGE_WINDOW_MS,
 	).toISOString();
+
 	// The count and write belong to one SQL statement so concurrent sends cannot
 	// all pass a separate KV read before any of them saves a message.
 	return db
@@ -313,6 +347,7 @@ export async function markProjectMessagesRead(
 ): Promise<void> {
 	if (!Number.isInteger(messageId) || messageId < 1) return;
 	const sender = reader === "owner" ? "client" : "owner";
+
 	if (reader === "owner") {
 		await db
 			.prepare(
@@ -320,8 +355,10 @@ export async function markProjectMessagesRead(
 			)
 			.bind(now.toISOString(), messageId, requestId, sender)
 			.run();
+
 		return;
 	}
+
 	if (!token) return;
 	const tokenHash = await hashValue(token);
 	await db

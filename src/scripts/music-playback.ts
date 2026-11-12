@@ -1,9 +1,11 @@
 /** One active player, with engagement separate from playback controls. */
 import { setupAudioControls } from "./music-controls";
 import { setupVideoControls } from "./video-controls";
+
 interface Playable {
 	pause: () => void;
 }
+
 interface YoutubePlayer {
 	seekTo(seconds: number, allowSeekAhead: boolean): void;
 	playVideo(): void;
@@ -16,14 +18,18 @@ interface YoutubePlayer {
 	getPlaybackRate(): number;
 	getIframe(): HTMLIFrameElement;
 }
+
 interface YoutubeAPI {
 	Player: new (
 		element: HTMLElement,
 		options: Record<string, unknown>,
 	) => YoutubePlayer;
 }
+
 type PlaybackMedium = "audio" | "video";
+
 type PlaybackEvent = "start" | "progress" | "listen30" | "complete" | "replay";
+
 type PlaybackPayload = {
 	releaseId: string;
 	recordingId: string;
@@ -39,6 +45,7 @@ type PlaybackPayload = {
 	channel?: string;
 	creative?: string;
 };
+
 type PlaybackTrackerOptions = {
 	releaseId: string;
 	recordingId: string;
@@ -50,17 +57,22 @@ type PlaybackTrackerOptions = {
 
 export function createPlaybackTracker(options: PlaybackTrackerOptions) {
 	const now = options.now ?? (() => performance.now());
+
 	let playthroughId = crypto.randomUUID(),
 		sequence = 0,
 		accumulated = 0;
+
 	let lastPosition: number | undefined,
 		lastWall = now(),
 		nextProgress = 10;
+
 	let started = false,
 		listened30 = false,
 		completed = false,
 		replay = false;
+
 	let queue = Promise.resolve();
+
 	function emit(
 		event: PlaybackEvent,
 		medium: PlaybackMedium,
@@ -82,8 +94,10 @@ export function createPlaybackTracker(options: PlaybackTrackerOptions) {
 			),
 			...options.attribution,
 		};
+
 		queue = queue.then(() => options.submit(payload)).catch(() => {});
 	}
+
 	return {
 		get completed() {
 			return completed;
@@ -113,8 +127,10 @@ export function createPlaybackTracker(options: PlaybackTrackerOptions) {
 		) {
 			const currentWall = now();
 			const wallSeconds = Math.max(0, (currentWall - lastWall) / 1000);
+
 			const mediaDelta =
 				lastPosition === undefined ? 0 : position - lastPosition;
+
 			if (
 				audible &&
 				rate > 0 &&
@@ -126,21 +142,26 @@ export function createPlaybackTracker(options: PlaybackTrackerOptions) {
 					started = true;
 					replay = false;
 				}
+
 				accumulated += Math.min(mediaDelta / rate, wallSeconds);
+
 				while (accumulated >= nextProgress) {
 					const threshold = nextProgress;
 					nextProgress += 10;
 					emit("progress", medium, duration, threshold);
 				}
+
 				if (!listened30 && accumulated >= 30) {
 					emit("listen30", medium, duration);
 					listened30 = true;
 				}
+
 				if (!completed && duration > 0 && accumulated * 10 >= duration * 9) {
 					emit("complete", medium, duration);
 					completed = true;
 				}
 			}
+
 			lastPosition = position;
 			lastWall = currentWall;
 		},
@@ -149,50 +170,65 @@ export function createPlaybackTracker(options: PlaybackTrackerOptions) {
 		},
 	};
 }
+
 const players = new Map<object, Playable>();
 let initialized = false;
 let youtubeReady: Promise<YoutubeAPI> | undefined;
+
 function pauseOthers(active: object) {
 	players.forEach((player, key) => {
 		if (key !== active) player.pause();
 	});
 }
+
 export function registerMusicPlayer(key: object, player: Playable) {
 	players.set(key, player);
+
 	return () => pauseOthers(key);
 }
+
 function sessionId() {
 	try {
 		let id = sessionStorage.getItem("music-session");
+
 		if (!id) {
 			id = crypto.randomUUID();
 			sessionStorage.setItem("music-session", id);
 		}
+
 		return id;
 	} catch {
 		return crypto.randomUUID();
 	}
 }
+
 const engagementTrackers = new Map<
 	string,
 	ReturnType<typeof createPlaybackTracker>
 >();
+
 function attribution() {
 	const result: { campaignId?: string; channel?: string; creative?: string } =
 		{};
+
 	const params = new URLSearchParams(location.search);
+
 	const fields = {
 		campaignId: "campaign",
 		channel: "channel",
 		creative: "creative",
 	} as const;
+
 	Object.entries(fields).forEach(([field, parameter]) => {
 		const value = params.get(parameter);
+
 		if (value && /^[a-z0-9][a-z0-9-]{0,79}$/.test(value))
 			result[field as keyof typeof result] = value;
 	});
+
 	return result;
 }
+
 async function submitPlayback(
 	payload: PlaybackPayload,
 	attempt = 0,
@@ -204,19 +240,24 @@ async function submitPlayback(
 			body: JSON.stringify(payload),
 			keepalive: true,
 		});
+
 		if (response.ok || response.status < 500) return;
 	} catch {
 		/* Bounded retry of the same event identity; listening continues. */
 	}
+
 	if (attempt < 2)
 		await new Promise<void>((resolve) =>
 			window.setTimeout(resolve, 2000 * (attempt + 1)),
 		);
+
 	if (attempt < 2) await submitPlayback(payload, attempt + 1);
 }
+
 function engagement(element: HTMLElement, medium: PlaybackMedium) {
 	const releaseId = element.dataset.releaseId,
 		recordingId = element.dataset.recordingId;
+
 	if (!releaseId || !recordingId)
 		return {
 			completed: false,
@@ -227,6 +268,7 @@ function engagement(element: HTMLElement, medium: PlaybackMedium) {
 		};
 	const key = `${releaseId}:${recordingId}`;
 	let tracker = engagementTrackers.get(key);
+
 	if (!tracker) {
 		tracker = createPlaybackTracker({
 			releaseId,
@@ -237,6 +279,7 @@ function engagement(element: HTMLElement, medium: PlaybackMedium) {
 		});
 		engagementTrackers.set(key, tracker);
 	}
+
 	return {
 		get completed() {
 			return tracker!.completed;
@@ -248,19 +291,25 @@ function engagement(element: HTMLElement, medium: PlaybackMedium) {
 		flush: () => tracker!.flush(),
 	};
 }
+
 function youtubeAPI(): Promise<YoutubeAPI> {
 	if (youtubeReady) return youtubeReady;
+
 	const win = window as Window & {
 		YT?: YoutubeAPI;
 		onYouTubeIframeAPIReady?: () => void;
 	};
+
 	youtubeReady = new Promise((resolve, reject) => {
 		if (win.YT?.Player) {
 			resolve(win.YT);
+
 			return;
 		}
+
 		const previous = win.onYouTubeIframeAPIReady;
 		const script = document.createElement("script");
+
 		const fail = () => {
 			clearTimeout(timeout);
 			script.remove();
@@ -268,18 +317,23 @@ function youtubeAPI(): Promise<YoutubeAPI> {
 			win.onYouTubeIframeAPIReady = previous;
 			reject(new Error("YouTube could not load"));
 		};
+
 		const timeout = window.setTimeout(fail, 15_000);
 		win.onYouTubeIframeAPIReady = () => {
 			clearTimeout(timeout);
 			previous?.();
+
 			if (win.YT) resolve(win.YT);
 		};
+
 		script.src = "https://www.youtube.com/iframe_api";
 		script.onerror = fail;
 		document.head.appendChild(script);
 	});
+
 	return youtubeReady;
 }
+
 export function setupMusicPlayback() {
 	if (initialized) return;
 	initialized = true;
@@ -288,12 +342,15 @@ export function setupMusicPlayback() {
 		.forEach((media) => {
 			players.set(media, { pause: () => media.pause() });
 			media.addEventListener("music-request-play", () => pauseOthers(media));
+
 			const meter = engagement(
 				media,
 				media.tagName === "VIDEO" ? "video" : "audio",
 			);
+
 			media.addEventListener("play", () => {
 				pauseOthers(media);
+
 				if (meter.completed && media.currentTime < 0.5)
 					meter.restart(media.currentTime);
 				else meter.reset(media.currentTime);
@@ -319,14 +376,17 @@ export function setupMusicPlayback() {
 			const native = stage.querySelector<HTMLVideoElement>("video");
 			const youtube = stage.querySelector<HTMLElement>("[data-youtube-id]");
 			const status = stage.querySelector<HTMLElement>("[data-video-status]")!;
+
 			const triggers = [
 				...document.querySelectorAll<HTMLButtonElement>("[data-video-trigger]"),
 			].filter((b) => b.dataset.videoTrigger === stage.id);
+
 			const linkedAudio = stage.querySelector<HTMLAudioElement>("audio");
 			let lastMedium: "audio" | "video" = "audio";
 			let youtubeStart = 0;
 			let youtubePlayer: YoutubePlayer | undefined;
 			let youtubeIsReady = false;
+
 			if (linkedAudio) {
 				const restoreAudio = () => {
 					if (lastMedium === "video")
@@ -336,24 +396,33 @@ export function setupMusicPlayback() {
 							linkedAudio.currentTime;
 					lastMedium = "audio";
 				};
+
 				linkedAudio.addEventListener("music-request-play", restoreAudio);
 				linkedAudio.addEventListener("play", restoreAudio);
 				linkedAudio.addEventListener("seeking", () => {
 					lastMedium = "audio";
 				});
 			}
+
 			let wantsVideo = false;
 			let loading = false;
+
 			function showVideo() {
 				poster.hidden = true;
+
 				if (native) native.hidden = false;
+
 				if (youtube) youtube.hidden = false;
 			}
+
 			function showPoster() {
 				poster.hidden = false;
+
 				if (native) native.hidden = true;
+
 				if (youtube) youtube.hidden = true;
 			}
+
 			const videoState = (playing: boolean) => {
 				triggers.forEach((button) => {
 					button.dataset.playing = String(playing);
@@ -362,15 +431,19 @@ export function setupMusicPlayback() {
 						playing ? "Pause video" : "Watch lyric video",
 					);
 					const label = button.querySelector("[data-action-label]");
+
 					if (label)
 						label.textContent = playing ? "Pause video" : "Watch lyric video";
 				});
 			};
+
 			document.querySelectorAll("audio").forEach((audio) =>
 				["play", "music-request-play"].forEach((event) =>
 					audio.addEventListener(event, () => {
 						wantsVideo = false;
+
 						if (native) native.pause();
+
 						if (youtubeIsReady) youtubePlayer?.pauseVideo();
 						showPoster();
 						videoState(false);
@@ -378,6 +451,7 @@ export function setupMusicPlayback() {
 					}),
 				),
 			);
+
 			if (native) {
 				native.addEventListener("play", () => {
 					if (linkedAudio && lastMedium === "audio")
@@ -403,6 +477,7 @@ export function setupMusicPlayback() {
 					videoState(false);
 				});
 			}
+
 			triggers.forEach((button) => {
 				button.disabled = false;
 				button.addEventListener("click", async () => {
@@ -411,10 +486,13 @@ export function setupMusicPlayback() {
 						(youtubeIsReady && youtubePlayer?.getPlayerState() === 1)
 					) {
 						native?.pause();
+
 						if (youtubeIsReady) youtubePlayer?.pauseVideo();
 						videoState(false);
+
 						return;
 					}
+
 					if (loading) return;
 					youtubeStart =
 						lastMedium === "audio"
@@ -429,6 +507,7 @@ export function setupMusicPlayback() {
 					status.textContent = "Loading the lyric video…";
 					pauseOthers(native ?? youtubePlayer ?? stage);
 					showVideo();
+
 					try {
 						if (native) {
 							if (native.error) native.load();
@@ -455,6 +534,7 @@ export function setupMusicPlayback() {
 												loading = false;
 												youtubePlayer!.getIframe().title = "Lyric video";
 												status.textContent = "";
+
 												if (wantsVideo) {
 													youtubePlayer!.seekTo(youtubeStart, true);
 													youtubePlayer!.playVideo();
@@ -465,12 +545,14 @@ export function setupMusicPlayback() {
 												if (event.data === 1) {
 													pauseOthers(youtubePlayer!);
 													status.textContent = "";
+
 													if (
 														meter.completed &&
 														youtubePlayer!.getCurrentTime() < 0.5
 													)
 														meter.restart(0);
 												}
+
 												videoState(event.data === 1);
 												meter.reset(youtubePlayer!.getCurrentTime());
 											},
@@ -488,6 +570,7 @@ export function setupMusicPlayback() {
 										if (youtubeIsReady) player.pauseVideo();
 									},
 								});
+
 								const timer = window.setInterval(() => {
 									if (player.getPlayerState)
 										meter.sample(
@@ -499,6 +582,7 @@ export function setupMusicPlayback() {
 											player.getDuration(),
 										);
 								}, 500);
+
 								window.addEventListener(
 									"pagehide",
 									() => clearInterval(timer),
@@ -506,6 +590,7 @@ export function setupMusicPlayback() {
 								);
 							}
 						}
+
 						// Keep the selected video visible on short screens without a long page jump.
 						if (
 							wantsVideo &&

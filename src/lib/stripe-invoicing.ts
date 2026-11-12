@@ -6,6 +6,7 @@ type InvoiceResult = {
 	status?: string | null;
 	hosted_invoice_url?: string | null;
 };
+
 type StripeInvoicingClient = {
 	customers: {
 		create(
@@ -38,6 +39,7 @@ type StripeInvoicingClient = {
 };
 
 type InvoiceRequest = { name: string; email: string; summary: string };
+
 export type CreatedStripeInvoice = {
 	stripeCustomerId: string;
 	invoiceId: string;
@@ -61,6 +63,7 @@ export function stripeClient(env: Env, invoiceCreation = true): Stripe {
 				: "Stripe webhooks are unavailable.",
 		);
 	}
+
 	return new Stripe(env.STRIPE_SECRET_KEY!, {
 		httpClient: Stripe.createFetchHttpClient(),
 	});
@@ -73,11 +76,14 @@ export async function createInvoiceWithClient(
 	installment: Installment,
 ): Promise<CreatedStripeInvoice> {
 	const customerKey = `audio-request:${payment.requestId}`;
+
 	const attempt =
 		installment === "booking"
 			? payment.bookingAttemptCount
 			: payment.balanceAttemptCount;
+
 	const rootKey = `${customerKey}:${installment}:attempt-${attempt}`;
+
 	const customerId =
 		payment.stripeCustomerId ??
 		(
@@ -90,6 +96,7 @@ export async function createInvoiceWithClient(
 				{ idempotencyKey: `${customerKey}:customer` },
 			)
 		).id;
+
 	const invoice = await stripe.invoices.create(
 		{
 			customer: customerId,
@@ -101,6 +108,7 @@ export async function createInvoiceWithClient(
 		},
 		{ idempotencyKey: `${rootKey}:invoice` },
 	);
+
 	const booking = installment === "booking";
 	await stripe.invoiceItems.create(
 		{
@@ -118,17 +126,20 @@ export async function createInvoiceWithClient(
 		{},
 		{ idempotencyKey: `${rootKey}:finalize` },
 	);
+
 	const sent = await stripe.invoices.sendInvoice(
 		invoice.id,
 		{},
 		{ idempotencyKey: `${rootKey}:send` },
 	);
+
 	if (
 		sent.status !== "open" ||
 		!sent.hosted_invoice_url?.startsWith("https://")
 	) {
 		throw new Error("Stripe did not return a hosted payment URL.");
 	}
+
 	return {
 		stripeCustomerId: customerId,
 		invoiceId: sent.id,

@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { setupAgreementAccess } from "~/scripts/agreement-access";
 import { consentText } from "~/lib/agreement-fields";
+
 function fixture() {
 	const values: Record<string, string> = {
 		legal_name: " Example LLC ",
@@ -19,8 +20,10 @@ function fixture() {
 		csrf_nonce: "csrf",
 		documents: "[]",
 	};
+
 	const node = (extra: Record<string, unknown> = {}) => {
 		const events: Record<string, Function> = {};
+
 		return {
 			value: "",
 			textContent: "",
@@ -43,7 +46,9 @@ function fixture() {
 			...extra,
 		};
 	};
+
 	const elements: Record<string, ReturnType<typeof node>> = {};
+
 	for (const selector of [
 		'[name="csrf_nonce"]',
 		'[role="status"]',
@@ -68,10 +73,12 @@ function fixture() {
 		},
 	});
 	elements['[name="csrf_nonce"]'].value = "csrf";
+
 	const form = node({
 		dataset: { token: "offer", email: "alex@example.com" },
 		querySelector: (s: string) => elements[s] ?? null,
 	});
+
 	const summary = node();
 	vi.stubGlobal("document", {
 		querySelector: (selector: string) =>
@@ -99,12 +106,15 @@ function fixture() {
 		"fetch",
 		vi.fn(async () => Response.json({ ok: true })),
 	);
+
 	return { values, elements, form };
 }
+
 afterEach(() => {
 	vi.useRealTimers();
 	vi.unstubAllGlobals();
 });
+
 it("shows the normalized name and exactly the consent text retained by the server", async () => {
 	const { elements } = fixture();
 	setupAgreementAccess();
@@ -119,6 +129,7 @@ it("shows the normalized name and exactly the consent text retained by the serve
 	expect(fetch).toHaveBeenCalledOnce();
 	expect(String(vi.mocked(fetch).mock.calls[0][0])).toContain("/draft");
 });
+
 it("autosaves changed fields and clears consent before a new review", async () => {
 	vi.useFakeTimers();
 	const { elements, form, values } = fixture();
@@ -135,15 +146,19 @@ it("autosaves changed fields and clears consent before a new review", async () =
 
 it("document links activate the existing reader navigation", () => {
 	let click: Function;
+
 	const stageClick = vi.fn(),
 		scroll = vi.fn();
+
 	const reader = {
 		open: false,
 		querySelector: (selector: string) => {
 			expect(selector).toBe('[data-terms-stage-button="3"]');
+
 			return { click: stageClick };
 		},
 	};
+
 	const link = {
 		hash: "#review-sow",
 		hasAttribute: () => true,
@@ -151,6 +166,7 @@ it("document links activate the existing reader navigation", () => {
 			click = handler;
 		},
 	};
+
 	vi.stubGlobal("document", {
 		querySelectorAll: (selector: string) =>
 			selector.includes("[data-document-link]") ? [link] : [],
@@ -184,6 +200,7 @@ it.each(["Wyoming", "District of Columbia"])(
 		await vi.runAllTimersAsync();
 	},
 );
+
 it.each(["", "Outside the US", "Unknown"])(
 	"leaves an empty country for %s",
 	(state) => {
@@ -257,6 +274,7 @@ it("opening reviewed terms preserves the documents and consent", async () => {
 	expect(fetch).toHaveBeenCalledTimes(calls);
 	expect(elements['[name="consent"]'].checked).toBe(true);
 });
+
 it("refreshing documents clears consent and explains why beside the checkbox", async () => {
 	const { values, elements } = fixture();
 	Object.assign(values, {
@@ -293,9 +311,11 @@ it.each([502, "network"])(
 	"resets verification before enabling a failed link request (%s)",
 	async (failure) => {
 		let submit!: Function;
+
 		const button = { disabled: false },
 			status = { textContent: "" },
 			reset = vi.fn(() => expect(button.disabled).toBe(true));
+
 		const form = {
 			action: "/api/offer/token/link",
 			dataset: {},
@@ -304,6 +324,7 @@ it.each([502, "network"])(
 				submit = fn;
 			},
 		};
+
 		vi.stubGlobal("document", {
 			querySelectorAll: () => [form],
 			querySelector: (selector: string) =>
@@ -322,6 +343,7 @@ it.each([502, "network"])(
 			"fetch",
 			vi.fn(async () => {
 				if (failure === "network") throw new Error("Offline");
+
 				return Response.json({ error: "Retry" }, { status: 502 });
 			}),
 		);

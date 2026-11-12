@@ -4,20 +4,27 @@ export function setupSoftwareReviews() {
 		.forEach((form) => {
 			let busy = false;
 			const note = form.querySelector<HTMLTextAreaElement>("[name=note]")!;
+
 			const buttons = Array.from(
 				form.querySelectorAll<HTMLButtonElement>("button"),
 			);
+
 			const disabled = buttons.map((button) => button.disabled);
+
 			const marks = Array.from(
 				form.querySelectorAll<HTMLButtonElement>("[data-review-mark]"),
 			);
+
 			const storageKey = `software-review:${form.dataset.endpoint}`;
 			let saved: Record<string, string> = {};
+
 			try {
 				const value = JSON.parse(localStorage.getItem(storageKey) ?? "{}");
+
 				if (value && typeof value === "object" && !Array.isArray(value)) {
 					for (const button of marks) {
 						const index = button.dataset.reviewCheck!;
+
 						if (value[index] === "works" || value[index] === "not-yet")
 							saved[index] = value[index];
 					}
@@ -25,6 +32,7 @@ export function setupSoftwareReviews() {
 			} catch {
 				/* The helper still works when browser storage is unavailable. */
 			}
+
 			const renderMarks = () =>
 				marks.forEach((button) =>
 					button.setAttribute(
@@ -34,21 +42,27 @@ export function setupSoftwareReviews() {
 						),
 					),
 				);
+
 			renderMarks();
+
 			const criteria = Array.from(
 				form.querySelectorAll<HTMLInputElement>("[name=criteria]"),
 			);
+
 			const helperTicked = new Set<HTMLInputElement>(),
 				manual = new Set<HTMLInputElement>();
+
 			criteria.forEach((checkbox) =>
 				checkbox.addEventListener("change", () => {
 					manual.add(checkbox);
 					helperTicked.delete(checkbox);
 				}),
 			);
+
 			const syncCriteria = () =>
 				criteria.forEach((checkbox) => {
 					if (manual.has(checkbox)) return;
+
 					if (saved[checkbox.value] === "not-yet" && !checkbox.checked) {
 						checkbox.checked = true;
 						helperTicked.add(checkbox);
@@ -60,15 +74,19 @@ export function setupSoftwareReviews() {
 						helperTicked.delete(checkbox);
 					}
 				});
+
 			marks.forEach((button) =>
 				button.addEventListener("click", () => {
 					if (busy) return;
+
 					const index = button.dataset.reviewCheck!,
 						mark = button.dataset.reviewMark!;
+
 					if (saved[index] === mark) delete saved[index];
 					else saved[index] = mark;
 					renderMarks();
 					syncCriteria();
+
 					try {
 						localStorage.setItem(storageKey, JSON.stringify(saved));
 					} catch {
@@ -84,10 +102,13 @@ export function setupSoftwareReviews() {
 				});
 			form.addEventListener("submit", async (event) => {
 				event.preventDefault();
+
 				if (busy) return;
 				const submitter = event.submitter as HTMLButtonElement | null;
+
 				if (!submitter || submitter.disabled) return;
 				const decision = submitter.value;
+
 				const formData = new FormData(form),
 					criteria = formData.getAll("criteria").map(Number),
 					missing_deliverables = formData
@@ -97,6 +118,7 @@ export function setupSoftwareReviews() {
 						.getAll("inaccessible_deliverables")
 						.map(Number),
 					status = form.querySelector<HTMLElement>("[data-review-status]")!;
+
 				if (
 					decision === "changes_requested" &&
 					(!note.value.trim() ||
@@ -108,8 +130,10 @@ export function setupSoftwareReviews() {
 					status.textContent =
 						"Choose an unmet check or an unavailable deliverable, then tell me what happened.";
 					note.focus();
+
 					return;
 				}
+
 				if (
 					decision === "milestone_accepted" &&
 					!confirm(
@@ -121,6 +145,7 @@ export function setupSoftwareReviews() {
 				form
 					.querySelectorAll<HTMLButtonElement>("button")
 					.forEach((button) => (button.disabled = true));
+
 				try {
 					const response = await fetch(form.dataset.endpoint!, {
 						method: "POST",
@@ -134,11 +159,15 @@ export function setupSoftwareReviews() {
 							note: note.value,
 						}),
 					});
+
 					const result = (await response.json()) as { error?: string };
+
 					if (response.ok) {
 						location.reload();
+
 						return;
 					}
+
 					status.textContent =
 						result.error ?? "This review changed. Reload before trying again.";
 				} catch {

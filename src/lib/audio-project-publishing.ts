@@ -19,12 +19,15 @@ export async function publishProjectFile(
 	now = new Date(),
 ): Promise<number | null> {
 	const body = note.trim();
+
 	if (!body || body.length > 1000 || !actor.trim()) return null;
+
 	const file = await db
 		.prepare(`SELECT id,request_id,version,object_key,media_type,byte_size,status
     FROM audio_project_files WHERE id=? AND request_id=?`)
 		.bind(fileId, requestId)
 		.first<DraftFile>();
+
 	if (
 		!file ||
 		file.status !== "uploaded" ||
@@ -33,14 +36,17 @@ export async function publishProjectFile(
 	)
 		return null;
 	const object = await bucket.head(file.object_key);
+
 	if (!object || object.size !== file.byte_size) return null;
 
 	const at = now.toISOString();
 	const expiry = new Date(now);
 	expiry.setUTCFullYear(expiry.getUTCFullYear() + 1);
 	const publicationId = crypto.randomUUID();
+
 	const targetStage =
 		file.version === "review" ? "review_ready" : "final_files_ready";
+
 	const [changed, , , update] = await db.batch([
 		db
 			.prepare(`UPDATE audio_project_files SET status='published',downloadable=?,published_at=?,expires_at=?,publication_id=?
@@ -76,6 +82,7 @@ export async function publishProjectFile(
       WHERE id=? AND publication_id=? AND status='published' RETURNING id`)
 			.bind(body, actor, at, fileId, publicationId),
 	]);
+
 	return changed.results.length
 		? Number((update.results[0] as { id: number }).id)
 		: null;

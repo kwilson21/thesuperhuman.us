@@ -8,15 +8,18 @@ import { openMusicDatabase, lifetimePlayback } from "./music-analytics.mjs";
 
 const quote = (value) => `'${value.replaceAll("'", "''")}'`;
 const hash = (value) => createHash("sha256").update(value).digest("hex");
+
 export const cutoffFor = (now) =>
 	new Date(now.getTime() - 90 * 86400000).toISOString().slice(0, 10) +
 	"T00:00:00.000Z";
+
 export const snapshotQuery = (
 	cutoff,
 	selection = "1",
 ) => `SELECT json_group_array(json_array(release_id,recording_id,session_id,medium,event,occurred_at)) AS snapshot
 FROM (SELECT * FROM music_events WHERE occurred_at < ${quote(cutoff)} AND (${selection})
 ORDER BY release_id,recording_id,session_id,medium,event)`;
+
 export const summaryQuery = (
 	cutoff,
 ) => `SELECT substr(occurred_at,1,10) AS day,release_id,recording_id,medium,event,count(*) AS count
@@ -29,10 +32,12 @@ export async function preview(database, environment, now = new Date()) {
 	const dailySummary = await database.query(summaryQuery(cutoff));
 	// Confirm a consistent review if records changed between the two reads.
 	const [check] = await database.query(snapshotQuery(cutoff));
+
 	if (check.snapshot !== snapshot)
 		throw new Error(
 			"Eligible events changed during preview. Generate a fresh review.",
 		);
+
 	return {
 		version: 1,
 		environment,
@@ -60,12 +65,15 @@ export async function apply(database, review, environment, now = new Date()) {
 			"Invalid review, wrong environment, or cutoff less than 90 days old.",
 		);
 	}
+
 	const [{ snapshot }] = await database.query(snapshotQuery(review.cutoff));
+
 	if (hash(snapshot) !== review.sourceHash)
 		throw new Error(
 			"Eligible events changed or this review was already applied. Generate and review a fresh preview.",
 		);
 	const summary = await database.query(summaryQuery(review.cutoff));
+
 	if (
 		JSON.stringify(summary) !== JSON.stringify(review.dailySummary) ||
 		JSON.parse(snapshot).length !== review.rows
@@ -74,24 +82,29 @@ export async function apply(database, review, environment, now = new Date()) {
 			"Review summary does not match eligible events. Generate a fresh preview.",
 		);
 	}
+
 	// Verify the archive mechanism before any delete. Its inserts and each delete
 	// are part of one SQLite statement, so a trigger failure rolls everything back.
 	const schema = await readFile(
 		new URL("../db/music.sql", import.meta.url),
 		"utf8",
 	);
+
 	const expected = schema.match(
 		/CREATE TRIGGER IF NOT EXISTS music_events_archive_before_delete[\s\S]*?END;/,
 	)[0];
+
 	const triggers = await database.query(
 		"SELECT sql FROM sqlite_master WHERE type='trigger' AND name='music_events_archive_before_delete'",
 	);
+
 	const normalize = (sql) =>
 		sql
 			.replace("IF NOT EXISTS ", "")
 			.replace(/;$/, "")
 			.replace(/\s+/g, " ")
 			.trim();
+
 	if (
 		triggers.length !== 1 ||
 		normalize(triggers[0].sql) !== normalize(expected)
@@ -102,19 +115,24 @@ export async function apply(database, review, environment, now = new Date()) {
 	// Bound each atomic statement below D1's SQL-size limit. The single explicit
 	// approval covers this exact reviewed snapshot; no new rows join the cleanup.
 	const rows = JSON.parse(snapshot);
+
 	for (let start = 0; start < rows.length; start += 100) {
 		const chunk = rows.slice(start, start + 100);
 		const selection = `(release_id,recording_id,session_id,medium,event) IN (VALUES ${chunk.map((row) => `(${row.slice(0, 5).map(quote).join(",")})`).join(",")})`;
 		const query = snapshotQuery(review.cutoff, selection);
+
 		const sql = `DELETE FROM music_events WHERE occurred_at < ${quote(review.cutoff)} AND (${selection})
 AND (${query}) = ${quote(JSON.stringify(chunk))}`;
+
 		if (Buffer.byteLength(sql) > 90000)
 			throw new Error(
 				"Reviewed chunk exceeds the safe query limit; remaining rows were retained. Generate a fresh preview before retrying.",
 			);
+
 		try {
 			await database.query(sql);
 			const [remaining] = await database.query(query);
+
 			if (remaining.snapshot !== "[]")
 				throw new Error("Reviewed source changed during cleanup.");
 		} catch (error) {
@@ -123,6 +141,7 @@ AND (${query}) = ${quote(JSON.stringify(chunk))}`;
 			);
 		}
 	}
+
 	return review.rows;
 }
 
@@ -130,15 +149,18 @@ async function main() {
 	const args = process.argv.slice(2);
 	const remote = args.includes("--remote");
 	const applyIndex = args.indexOf("--apply");
+
 	const reviewPath =
 		applyIndex < 0
 			? ".private/music-retention-review.json"
 			: args[applyIndex + 1];
+
 	const allowed = new Set([
 		"--remote",
 		"--apply",
 		...(applyIndex < 0 ? [] : [reviewPath]),
 	]);
+
 	if (!reviewPath || args.some((arg) => !allowed.has(arg)))
 		throw new Error(
 			"Usage: node scripts/music-retention.mjs [--remote] [--apply .private/music-retention-review.json]",
@@ -146,6 +168,7 @@ async function main() {
 	await mkdir(".private", { recursive: true });
 	const environment = remote ? "Production" : "Local test data";
 	const database = await openMusicDatabase(remote);
+
 	try {
 		if (applyIndex >= 0) {
 			const review = JSON.parse(await readFile(resolve(reviewPath), "utf8"));
@@ -179,6 +202,7 @@ async function main() {
 		await database.close();
 	}
 }
+
 if (
 	process.argv[1] &&
 	import.meta.url === pathToFileURL(resolve(process.argv[1])).href

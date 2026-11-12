@@ -7,27 +7,36 @@ export function setupAudioControls() {
 		const current = root.querySelector<HTMLElement>("[data-current-time]")!;
 		const mute = root.querySelector<HTMLButtonElement>("[data-mute]")!;
 		const status = root.querySelector<HTMLElement>("[data-media-status]")!;
+
 		const buttons = [
 			...document.querySelectorAll<HTMLButtonElement>("[data-audio-toggle]"),
 		].filter((b) => b.dataset.audioToggle === audio.id);
+
 		let requested = false;
+
 		const format = (value: number) =>
 			`${Math.floor(value / 60)}:${String(Math.floor(value % 60)).padStart(2, "0")}`;
+
 		const sync = () => {
 			for (const button of buttons) {
 				button.disabled = false;
 				button.dataset.playing = String(!audio.paused);
+
 				const label = audio.paused
 					? button.dataset.playLabel!
 					: button.dataset.pauseLabel!;
+
 				button.setAttribute("aria-label", label);
 				const text = button.querySelector("[data-action-label]");
+
 				if (text) text.textContent = label;
 			}
+
 			if (Number.isFinite(audio.duration)) {
 				seek.max = String(audio.duration);
 				seek.disabled = false;
 			}
+
 			seek.value = String(audio.currentTime);
 			seek.setAttribute("aria-valuetext", format(audio.currentTime));
 			current.textContent = format(audio.currentTime);
@@ -37,17 +46,21 @@ export function setupAudioControls() {
 				`${audio.muted ? "Unmute" : "Mute"} ${audio.getAttribute("aria-label")}`,
 			);
 		};
+
 		buttons.forEach((button) =>
 			button.addEventListener("click", async () => {
 				if (!audio.paused || requested) {
 					requested = false;
 					audio.pause();
 					status.textContent = "";
+
 					return;
 				}
+
 				requested = true;
 				status.textContent = "Loading the song…";
 				audio.dispatchEvent(new Event("music-request-play"));
+
 				try {
 					if (audio.error) audio.load();
 					await audio.play();

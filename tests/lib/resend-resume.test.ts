@@ -27,11 +27,13 @@ describe("sendResumeApprovalRequest", () => {
 			to: "kazon.wilson@thesuperhuman.us",
 			approvalUrl: "https://thesuperhuman.us/api/resume-approve?id=abc",
 		});
+
 		expect(result.ok).toBe(true);
 
 		const body = JSON.parse(
 			(fetchMock.mock.calls[0][1] as RequestInit).body as string,
 		);
+
 		expect(body.to).toEqual(["kazon.wilson@thesuperhuman.us"]);
 		expect(body.subject).toContain("Jane Doe");
 		expect(body.subject).toContain("dod");
@@ -51,6 +53,7 @@ describe("sendResumeApprovalRequest", () => {
 			status: 500,
 			json: async () => ({}),
 		});
+
 		const result = await sendResumeApprovalRequest({
 			request: storedRequest,
 			apiKey: "key",
@@ -58,17 +61,20 @@ describe("sendResumeApprovalRequest", () => {
 			to: "kazon.wilson@thesuperhuman.us",
 			approvalUrl: "https://thesuperhuman.us/api/resume-approve?id=abc",
 		});
+
 		expect(result.ok).toBe(false);
 	});
 
 	it("omits company and note lines when those fields are empty", async () => {
 		const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
 		fetchMock.mockResolvedValue({ ok: true, json: async () => ({ id: "em" }) });
+
 		const lean: StoredResumeRequest = {
 			...storedRequest,
 			company: "",
 			note: "",
 		};
+
 		await sendResumeApprovalRequest({
 			request: lean,
 			apiKey: "key",
@@ -76,9 +82,11 @@ describe("sendResumeApprovalRequest", () => {
 			to: "kazon.wilson@thesuperhuman.us",
 			approvalUrl: "https://thesuperhuman.us/api/resume-approve?id=abc",
 		});
+
 		const body = JSON.parse(
 			(fetchMock.mock.calls[0][1] as RequestInit).body as string,
 		);
+
 		expect(body.text).not.toContain("Company:");
 		expect(body.text).not.toContain("Note:");
 	});
@@ -104,11 +112,13 @@ describe("sendResumeDelivery", () => {
 			pdf: pdfBytes,
 			filename: "kazon-wilson-resume-dod.pdf",
 		});
+
 		expect(result.ok).toBe(true);
 
 		const body = JSON.parse(
 			(fetchMock.mock.calls[0][1] as RequestInit).body as string,
 		);
+
 		expect(body.to).toEqual(["jane@example.com"]);
 		expect(body.subject).toContain("resume");
 		expect(body.text).toContain("Jane Doe");
@@ -126,6 +136,7 @@ describe("sendResumeDelivery", () => {
 			status: 500,
 			json: async () => ({}),
 		});
+
 		const result = await sendResumeDelivery({
 			apiKey: "key",
 			from: "noreply@thesuperhuman.us",
@@ -135,6 +146,7 @@ describe("sendResumeDelivery", () => {
 			pdf: new ArrayBuffer(4),
 			filename: "Kazon-Wilson-Resume.pdf",
 		});
+
 		expect(result.ok).toBe(false);
 	});
 });

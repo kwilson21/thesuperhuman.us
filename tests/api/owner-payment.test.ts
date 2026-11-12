@@ -6,6 +6,7 @@ const invoiceMocks = vi.hoisted(() => ({
 	booking: vi.fn(),
 	balance: vi.fn(),
 }));
+
 vi.mock("~/lib/stripe-invoicing", () => ({
 	createBookingInvoice: invoiceMocks.booking,
 	createBalanceInvoice: invoiceMocks.balance,
@@ -32,28 +33,34 @@ beforeEach(() => {
 	);
 	sql.exec(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,status,created_at,updated_at)
     VALUES ('request-1','service','two-track-mix-master','Artist','artist@example.com','Old News mix','reviewed','2026-09-19T12:00:00Z','2026-09-19T12:00:00Z')`);
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		query,
 		args,
 		bind: (...values: unknown[]) => statement(query, values),
 		run: async () => {
 			const result = sql.prepare(query).run(...args);
+
 			return { meta: { changes: result.changes }, results: [] };
 		},
 		first: async () => sql.prepare(query).get(...args) ?? null,
 		all: async () => ({ results: sql.prepare(query).all(...args) }),
 	});
+
 	db = {
 		prepare: (query: string) => statement(query),
 		batch: async (items: ReturnType<typeof statement>[]) => {
 			sql.exec("BEGIN");
+
 			try {
 				const result = items.map((item) => ({
 					results: /RETURNING/i.test(item.query)
 						? sql.prepare(item.query).all(...item.args)
 						: (sql.prepare(item.query).run(...item.args), []),
 				}));
+
 				sql.exec("COMMIT");
+
 				return result;
 			} catch (error) {
 				sql.exec("ROLLBACK");
@@ -166,6 +173,7 @@ it("persists approved terms before any Stripe call", async () => {
 			offerAccepted: true,
 		}),
 	);
+
 	expect(response.status).toBe(200);
 	expect(invoiceMocks.booking).not.toHaveBeenCalled();
 	expect(
@@ -184,6 +192,7 @@ it("rejects changed terms after approval instead of reporting stale terms as sav
 			offerAccepted: true,
 		}),
 	);
+
 	const response = await POST(
 		context({
 			action: "approve",
@@ -192,6 +201,7 @@ it("rejects changed terms after approval instead of reporting stale terms as sav
 			offerAccepted: true,
 		}),
 	);
+
 	expect(response.status).toBe(409);
 	expect(
 		sql
@@ -209,9 +219,11 @@ it("creates and records one booking invoice after approval", async () => {
 			offerAccepted: true,
 		}),
 	);
+
 	const response = await POST(
 		context({ action: "create-booking-invoice" }, true, stripeEnv),
 	);
+
 	expect(response.status).toBe(200);
 	expect(invoiceMocks.booking).toHaveBeenCalledWith(
 		expect.anything(),
@@ -240,13 +252,16 @@ it("does not create an invoice after retention deletes a withdrawn request", asy
 	sql.exec(
 		"UPDATE audio_projects SET revoked_at='2026-09-19',content_deleted_at='2026-09-20' WHERE request_id='request-1'",
 	);
+
 	const retentionDb = {
 		query: async (query: string) => sql.prepare(query).all(),
 		batch: async (queries: string[]) => {
 			sql.exec("BEGIN");
+
 			try {
 				const result = queries.map((query) => sql.prepare(query).all());
 				sql.exec("COMMIT");
+
 				return result;
 			} catch (error) {
 				sql.exec("ROLLBACK");
@@ -254,24 +269,30 @@ it("does not create an invoice after retention deletes a withdrawn request", asy
 			}
 		},
 	};
+
 	const retentionNow = new Date();
+
 	const review = await previewOwnerRetention(
 		retentionDb,
 		"Local test data",
 		retentionNow,
 	);
+
 	const originalPrepare = db.prepare.bind(db);
 	db.prepare = ((query: string) => {
 		const prepared = originalPrepare(query);
+
 		if (
 			!query.startsWith(
 				"UPDATE audio_payments SET booking_creation_started_at=",
 			)
 		)
 			return prepared;
+
 		return {
 			bind: (...args: unknown[]) => {
 				const bound = prepared.bind(...args);
+
 				return {
 					run: async () => {
 						await applyOwnerRetention(
@@ -280,15 +301,18 @@ it("does not create an invoice after retention deletes a withdrawn request", asy
 							"Local test data",
 							retentionNow,
 						);
+
 						return bound.run();
 					},
 				};
 			},
 		};
 	}) as typeof db.prepare;
+
 	const response = await POST(
 		context({ action: "create-booking-invoice" }, true, stripeEnv),
 	);
+
 	expect(response.status).toBe(409);
 	expect(invoiceMocks.booking).not.toHaveBeenCalled();
 	expect(
@@ -307,9 +331,11 @@ it("does not create a balance invoice before Stripe confirms the booking payment
 			offerAccepted: true,
 		}),
 	);
+
 	const response = await POST(
 		context({ action: "create-balance-invoice" }, true, stripeEnv),
 	);
+
 	expect(response.status).toBe(409);
 	expect(invoiceMocks.balance).not.toHaveBeenCalled();
 });
@@ -323,11 +349,13 @@ it("returns service unavailable without calling Stripe when invoice creation is 
 			offerAccepted: true,
 		}),
 	);
+
 	const response = await POST(
 		context({ action: "create-booking-invoice" }, true, {
 			STRIPE_PAYMENTS_ENABLED: "false",
 		}),
 	);
+
 	expect(response.status).toBe(503);
 	expect(invoiceMocks.booking).not.toHaveBeenCalled();
 });
@@ -342,9 +370,11 @@ it("does not record invoice success when Stripe fails", async () => {
 		}),
 	);
 	invoiceMocks.booking.mockRejectedValueOnce(new Error("Stripe unavailable"));
+
 	const response = await POST(
 		context({ action: "create-booking-invoice" }, true, stripeEnv),
 	);
+
 	expect(response.status).toBe(502);
 	expect(
 		sql
@@ -373,9 +403,11 @@ it("reports pending recovery when D1 fails after Stripe sends the invoice", asyn
 			throw new Error("D1 unavailable");
 		},
 	} as unknown as D1Database;
+
 	const response = await POST(
 		context({ action: "create-booking-invoice" }, true, stripeEnv),
 	);
+
 	expect(response.status).toBe(503);
 	expect(await response.json()).toMatchObject({
 		ok: false,
@@ -405,9 +437,11 @@ it("creates a replacement after a voided booking invoice", async () => {
 		hostedInvoiceUrl: "https://invoice.stripe.com/replacement",
 		status: "open",
 	});
+
 	const response = await POST(
 		context({ action: "replace-booking-invoice" }, true, stripeEnv),
 	);
+
 	expect(response.status).toBe(200);
 	expect(
 		sql
@@ -423,6 +457,7 @@ it("records a payment received outside Stripe with invoices off, and never calls
 		method: "Zelle",
 		received: true,
 	};
+
 	expect((await POST(context(received))).status).toBe(409);
 	await POST(
 		context({
@@ -461,11 +496,13 @@ it("records the balance only after the booking and rejects a reference that is n
 			offerAccepted: true,
 		}),
 	);
+
 	const received = {
 		action: "record-payment-received",
 		method: "Cash App",
 		received: true,
 	};
+
 	expect(
 		(await POST(context({ ...received, installment: "balance" }))).status,
 	).toBe(409);

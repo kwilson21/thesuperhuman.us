@@ -31,6 +31,7 @@ class FakeElement {
 	}
 	appendChild(node: FakeElement) {
 		this.kids.push(node);
+
 		return node;
 	}
 	replaceChildren(...nodes: FakeElement[]) {
@@ -41,22 +42,28 @@ class FakeElement {
 		this.handlers.set(type, handler);
 	}
 }
+
 const createElement = (tagName: string) =>
 	Object.assign(new FakeElement(), { tagName: tagName.toUpperCase() });
+
 const lineDiffExports: Record<string, unknown> = {};
+
 runInNewContext(
 	transpileModule(readFileSync("src/lib/line-diff.ts", "utf8"), {
 		compilerOptions: { module: ModuleKind.CommonJS },
 	}).outputText,
 	{ exports: lineDiffExports },
 );
+
 const pageScript = transpileModule(
 	readFileSync("src/pages/owner/agreements.astro", "utf8")
 		.split("<script>")[1]
 		.split("</script>")[0],
 	{ compilerOptions: { module: ModuleKind.CommonJS } },
 ).outputText;
+
 const owner = { email: "owner@example.test" };
+
 type TemplateRow = {
 	id: string;
 	kind: "msa" | "sow";
@@ -67,6 +74,7 @@ type TemplateRow = {
 	source_revision: string | null;
 	published_at: string;
 };
+
 // Serves the two queries the agreement endpoint makes: the current version of a kind, and one version by number.
 const templateDb = (rows: TemplateRow[]) => ({
 	prepare: () => ({
@@ -82,6 +90,7 @@ const templateDb = (rows: TemplateRow[]) => ({
 		}),
 	}),
 });
+
 const endpoint = (db: unknown) => (path: string, init: RequestInit) =>
 	POST({
 		request: new Request(`https://example.test${path}`, {
@@ -90,10 +99,12 @@ const endpoint = (db: unknown) => (path: string, init: RequestInit) =>
 		}),
 		locals: { owner, runtime: { env: { MUSIC_DB: db } } },
 	} as unknown as APIContext);
+
 function previewForm() {
 	const status = new FakeElement(),
 		preview = new FakeElement(),
 		diff = Object.assign(new FakeElement(), { hidden: true });
+
 	const form = Object.assign(new FakeElement(), {
 		// HTMLFormElement named access returns a RadioNodeList for these two buttons.
 		action: { toString: () => "[object RadioNodeList]" },
@@ -107,8 +118,10 @@ function previewForm() {
 					? diff
 					: preview,
 	});
+
 	return { form, status, preview, diff };
 }
+
 function runPage({
 	form,
 	buttons = [],
@@ -134,6 +147,7 @@ function runPage({
 		},
 		require: (id: string) => {
 			expect(id).toBe("~/lib/line-diff");
+
 			return lineDiffExports;
 		},
 		exports: {},
@@ -150,6 +164,7 @@ it.each(["msa", "sow"] as const)(
 	"renders the %s preview when named action buttons shadow the form endpoint",
 	async (kind) => {
 		const fields = templateFields[kind];
+
 		const text =
 			fields
 				.filter((field) => !field.startsWith("milestone."))
@@ -163,13 +178,17 @@ it.each(["msa", "sow"] as const)(
 						.join("\n") +
 					"\n{{/milestones}}"
 				: "");
+
 		const { form, status, preview, diff } = previewForm();
+
 		const fetch = vi.fn(async (path: string, init: RequestInit) => {
 			expect(path).toBe("/api/owner/agreements");
 			expect(JSON.parse(String(init.body)).action).toBe("preview");
+
 			// No template is published here, so the preview has nothing to compare with.
 			return endpoint(templateDb([]))(path, init);
 		});
+
 		runPage({ form, fetch, data: { kind, text, expectedCurrentVersion: "1" } });
 		await form.handlers.get("submit")!({
 			preventDefault: () => {},
@@ -186,6 +205,7 @@ it.each(["msa", "sow"] as const)(
 
 it("shows the preview changes from the current version, with unchanged lines collapsed", async () => {
 	const body = templateFields.msa.map((field) => `{{${field}}}`).join("\n");
+
 	const rows: TemplateRow[] = [
 		{
 			id: "msa-1",
@@ -198,6 +218,7 @@ it("shows the preview changes from the current version, with unchanged lines col
 			published_at: "2026-09-30T12:00:00.000Z",
 		},
 	];
+
 	const { form, status, diff } = previewForm();
 	const fetch = vi.fn(endpoint(templateDb(rows)));
 	runPage({
@@ -234,13 +255,16 @@ it("clears the diff region and shows it before a preview request, so the result 
 	const { form, status, diff } = previewForm();
 	diff.replaceChildren(createElement("p"));
 	let seen: { hidden: boolean; children: number } | undefined;
+
 	const fetch = vi.fn(async () => {
 		seen = { hidden: diff.hidden, children: diff.kids.length };
+
 		return new Response(JSON.stringify({ error: "Preview refused." }), {
 			status: 400,
 			headers: { "content-type": "application/json" },
 		});
 	});
+
 	runPage({
 		form,
 		fetch,
@@ -259,13 +283,16 @@ it("clears the diff region and shows it before a preview request, so the result 
 it("leaves the diff region hidden while a publish request runs", async () => {
 	const { form, status, diff } = previewForm();
 	let seen: boolean | undefined;
+
 	const fetch = vi.fn(async () => {
 		seen = diff.hidden;
+
 		return new Response(JSON.stringify({ error: "Publish refused." }), {
 			status: 400,
 			headers: { "content-type": "application/json" },
 		});
 	});
+
 	runPage({
 		form,
 		fetch,
@@ -282,6 +309,7 @@ it("leaves the diff region hidden while a publish request runs", async () => {
 
 it("submits the contractor form, which has no diff region, without touching one", async () => {
 	const status = new FakeElement();
+
 	const form = Object.assign(new FakeElement(), {
 		getAttribute: (name: string) =>
 			name === "action" ? "/api/owner/agreements" : null,
@@ -289,6 +317,7 @@ it("submits the contractor form, which has no diff region, without touching one"
 		querySelector: (selector: string) =>
 			selector === '[role="status"]' ? status : null,
 	});
+
 	const fetch = vi.fn(
 		async () =>
 			new Response(JSON.stringify({ error: "Config refused." }), {
@@ -296,6 +325,7 @@ it("submits the contractor form, which has no diff region, without touching one"
 				headers: { "content-type": "application/json" },
 			}),
 	);
+
 	runPage({
 		form,
 		fetch,
@@ -337,26 +367,33 @@ it("fills a version entry with its stored text, or its changes from the previous
 			published_at: "2026-10-02T12:00:00.000Z",
 		},
 	];
+
 	const output = new FakeElement();
+
 	const entry = Object.assign(new FakeElement(), {
 		querySelector: (selector: string) =>
 			selector === "[data-template-version-output]" ? output : null,
 	});
+
 	const button = (view: string, version = "2") =>
 		Object.assign(new FakeElement(), {
 			dataset: { kind: "msa", version, view },
 			closest: () => entry,
 		});
+
 	const viewText = button("text"),
 		compare = button("compare"),
 		missing = button("compare", "9");
+
 	const fetch = vi.fn(async (path: string, init: RequestInit) => {
 		expect(JSON.parse(String(init.body))).toMatchObject({
 			action: "template-version",
 			kind: "msa",
 		});
+
 		return endpoint(templateDb(rows))(path, init);
 	});
+
 	runPage({
 		form: previewForm().form,
 		buttons: [viewText, compare, missing],

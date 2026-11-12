@@ -17,6 +17,7 @@ const storage = {
 	bucket: "local-audio",
 	jurisdiction: null,
 };
+
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 const now = new Date("2026-09-19T12:00:00Z");
 
@@ -32,9 +33,11 @@ function fixture() {
     VALUES ('old-request','Mastering',7500,3750,3750,'2026-01-01T00:00:00Z','cus_private','in_old','https://invoice.stripe.com/private','paid','in_balance','https://invoice.stripe.com/balance','paid','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z');
     INSERT INTO stripe_invoice_attempts(invoice_id,request_id,installment,created_at)
     VALUES ('in_old','old-request','booking','2026-01-01T00:00:00Z');`);
+
 	const event = db.prepare(
 		`INSERT INTO music_playback_events(id,release_id,recording_id,session_id,playthrough_id,sequence,medium,event,accumulated_seconds,media_duration_seconds,campaign_id,channel,creative,traffic_class,country,region,city,occurred_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 	);
+
 	for (let index = 0; index < 3; index++)
 		event.run(
 			`event-${index}`,
@@ -116,6 +119,7 @@ function fixture() {
 		"",
 		"2026-09-18T00:00:00Z",
 	);
+
 	const database = {
 		db,
 		query: async (sql: string) =>
@@ -125,9 +129,11 @@ function fixture() {
 				.map((row: Record<string, unknown>) => ({ ...row })),
 		batch: async (statements: string[]) => {
 			db.exec("BEGIN");
+
 			try {
 				const results = statements.map((sql) => db.prepare(sql).all());
 				db.exec("COMMIT");
+
 				return results;
 			} catch (error) {
 				db.exec("ROLLBACK");
@@ -135,6 +141,7 @@ function fixture() {
 			}
 		},
 	};
+
 	return database;
 }
 
@@ -259,10 +266,12 @@ it("selects resolved software contact details after 90 days but keeps newer deta
 it("rolls back every retention mutation when an atomic batch statement fails", async () => {
 	const database = fixture();
 	const review = await previewOwnerRetention(database, "Local test data", now);
+
 	const interrupted = {
 		...database,
 		batch: async (statements: string[]) => {
 			database.db.exec("BEGIN");
+
 			try {
 				database.db.prepare(statements[0]).all();
 				database.db.prepare(statements[1]).all();
@@ -273,6 +282,7 @@ it("rolls back every retention mutation when an atomic batch statement fails", a
 			}
 		},
 	};
+
 	await expect(
 		applyOwnerRetention(interrupted, review, "Local test data", now),
 	).rejects.toThrow("simulated failure");
@@ -418,12 +428,14 @@ it("clears request contact and summary after studio cleanup has removed withdraw
     INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
       offer_accepted_at,created_at,updated_at)
     VALUES ('studio-withdrawn','Mix',10000,5000,5000,'2026-09-01','2026-09-01','2026-09-01');`);
+
 	const studioReview = await previewStudioRetention(
 		database,
 		"Local test data",
 		storage,
 		later,
 	);
+
 	await applyStudioRetention(
 		database,
 		studioReview,
@@ -432,11 +444,13 @@ it("clears request contact and summary after studio cleanup has removed withdraw
 		async () => {},
 		later,
 	);
+
 	const ownerReview = await previewOwnerRetention(
 		database,
 		"Local test data",
 		later,
 	);
+
 	await applyOwnerRetention(database, ownerReview, "Local test data", later);
 	expect(
 		(
@@ -549,6 +563,7 @@ it("clears fit notes, offer terms and links with eligible software contact data"
 	database.db.exec("PRAGMA foreign_keys=ON");
 	const review = await previewOwnerRetention(database, "Local test data", now);
 	await applyOwnerRetention(database, review, "Local test data", now);
+
 	for (const table of [
 		"software_fit_reviews",
 		"software_offers",
@@ -638,8 +653,10 @@ it("previews two-year software brief cleanup after project content cleanup and p
 					statement.startsWith("UPDATE owner_requests SET name=''") &&
 					statement.includes("'signed-software'"),
 			) ?? "";
+
 		return batch(statements);
 	};
+
 	await applyOwnerRetention(database, preview, "Local test data", now);
 	expect(scrubStatement).toContain("WHERE id IN ('signed-software')");
 	expect(
@@ -713,11 +730,13 @@ it("holds unstarted request contacts for invoices younger than two years, then r
 		database.db.prepare("SELECT count(*) AS n FROM software_invoices").get(),
 	).toEqual({ n: 1 });
 	const later = new Date("2028-01-02T12:00:00Z");
+
 	const expired = await previewOwnerRetention(
 		database,
 		"Local test data",
 		later,
 	);
+
 	await applyOwnerRetention(database, expired, "Local test data", later);
 	expect(
 		database.db.prepare("SELECT count(*) AS n FROM software_invoices").get(),
@@ -735,11 +754,13 @@ it("deletes offer-scoped events when owner retention deletes the offer", async (
 	database.db.exec(
 		"INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES('old-offer','old-request',1,'withdrawn','{}','2026-01-01','2026-01-01'); INSERT INTO software_agreement_events VALUES('old-event',NULL,'old-offer','link-issued','actor','2026-01-01','{}')",
 	);
+
 	const manifest = await previewOwnerRetention(
 		database,
 		"Local test data",
 		now,
 	);
+
 	await applyOwnerRetention(database, manifest, "Local test data", now);
 	expect(
 		(

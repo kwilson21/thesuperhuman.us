@@ -7,7 +7,9 @@ import {
 	type SoftwareInvoice,
 } from "~/lib/software-invoices";
 import type { OfferTerms } from "~/lib/software-offers";
+
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
 const terms: OfferTerms = {
 	outcome: "Shared tracker",
 	summary: "Client status",
@@ -24,6 +26,7 @@ const terms: OfferTerms = {
 	timing: "",
 	paymentMode: "standard",
 };
+
 const invoice: SoftwareInvoice = {
 	id: "local-invoice",
 	request_id: "software",
@@ -47,6 +50,7 @@ const invoice: SoftwareInvoice = {
 	created_at: "now",
 	updated_at: "now",
 };
+
 function stripe() {
 	return {
 		customers: { create: vi.fn(async () => ({ id: "cus_test" })) },
@@ -62,6 +66,7 @@ function stripe() {
 		invoiceItems: { create: vi.fn(async () => ({ id: "ii_test" })) },
 	};
 }
+
 describe("software invoice amounts and Stripe adapter", () => {
 	it("rounds deposits down and gives the balance the remainder", () => {
 		expect(softwareInvoiceTerms(terms, 0, "deposit")).toEqual({
@@ -79,6 +84,7 @@ describe("software invoice amounts and Stripe adapter", () => {
 				"milestone",
 			),
 		).toEqual({ amountCents: 101, daysUntilDue: 30 });
+
 		for (const index of [-1, 0.5, 1])
 			expect(() => softwareInvoiceTerms(terms, index, "deposit")).toThrow();
 		expect(() => softwareInvoiceTerms(terms, 0, "milestone")).toThrow();
@@ -179,6 +185,7 @@ describe("software invoice amounts and Stripe adapter", () => {
 			terms,
 			invoice,
 		);
+
 		for (const method of [
 			client.customers.create,
 			client.invoices.create,
@@ -218,6 +225,7 @@ describe("software invoice amounts and Stripe adapter", () => {
 it("migration preserves audit ids and notes and constrains active invoice rows", () => {
 	const db = new DatabaseSync(":memory:");
 	db.exec("PRAGMA foreign_keys=ON");
+
 	for (const name of readdirSync(
 		new URL("../../migrations/music/", import.meta.url),
 	)
@@ -247,6 +255,7 @@ it("migration preserves audit ids and notes and constrains active invoice rows",
 	expect(db.prepare("SELECT * FROM software_project_audit").all()).toEqual(
 		audit,
 	);
+
 	for (const action of [
 		"invoice-created",
 		"invoice-status-updated",
@@ -258,15 +267,19 @@ it("migration preserves audit ids and notes and constrains active invoice rows",
 	expect(
 		db.prepare("SELECT max(id) AS id FROM software_project_audit").get(),
 	).toEqual({ id: 45 });
+
 	const insert =
 		db.prepare(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,allow_card,status,stripe_invoice_id,created_by,created_at,updated_at)
     VALUES (?,'software','offer',0,'deposit',50,7,0,?,?,'owner','now','now')`);
+
 	insert.run("first", "creating", null);
+
 	for (const status of ["creating", "open", "payment_failed", "uncollectible"])
 		expect(() => insert.run(status, status, null)).toThrow();
 	db.exec("UPDATE software_invoices SET status='void' WHERE id='first'");
 	insert.run("second", "open", "in_test");
 	expect(() => insert.run("duplicate-stripe", "void", "in_test")).toThrow();
+
 	for (const [column, value] of [
 		["kind", "wrong"],
 		["milestone_index", 3],
@@ -296,10 +309,12 @@ it("limits buttons to the agreed mode, before-start deposits, delivered balances
 	expect(invoiceAvailable(terms, 0, "milestone", null, true, false)).toBe(
 		false,
 	);
+
 	const later = {
 		...terms,
 		milestones: [...terms.milestones, { ...terms.milestones[0], name: "Next" }],
 	};
+
 	const project = { milestone_index: 0, completed_at: null };
 	expect(invoiceAvailable(later, 1, "deposit", project, false, false)).toBe(
 		true,
@@ -351,6 +366,7 @@ it("limits buttons to the agreed mode, before-start deposits, delivered balances
 it("requires full delivered scope for invoice availability", async () => {
 	const { invoiceDelivered } = await import("~/lib/software-invoices");
 	const planned = ["One", "Two"];
+
 	for (const scope of ["[0]", "[1]", "null", "broken"])
 		expect(
 			invoiceDelivered(
@@ -358,6 +374,7 @@ it("requires full delivered scope for invoice availability", async () => {
 				planned,
 			),
 		).toBe(false);
+
 	for (const scope of ["[0,1]", '["One","Two"]', "[]"])
 		expect(
 			invoiceDelivered(
@@ -378,6 +395,7 @@ it("blocks partial latest delivery and scope changes during invoice reservation"
 	const { reserveSoftwareInvoice } = await import("~/lib/software-invoices");
 	const sql = new DatabaseSync(":memory:");
 	sql.exec(readFileSync("db/music.sql", "utf8"));
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		query,
 		args,
@@ -385,7 +403,9 @@ it("blocks partial latest delivery and scope changes during invoice reservation"
 		first: async () => sql.prepare(query).get(...args) ?? null,
 		all: async () => ({ results: sql.prepare(query).all(...args) }),
 	});
+
 	let race = false;
+
 	const db = {
 		prepare: statement,
 		batch: async (items: ReturnType<typeof statement>[]) => {
@@ -394,6 +414,7 @@ it("blocks partial latest delivery and scope changes during invoice reservation"
 					"UPDATE software_project_updates SET delivered_deliverables_json='[0]' WHERE id='latest'",
 				);
 			sql.exec("BEGIN");
+
 			try {
 				for (const item of items) sql.prepare(item.query).all(...item.args);
 				sql.exec("COMMIT");
@@ -403,13 +424,16 @@ it("blocks partial latest delivery and scope changes during invoice reservation"
 			}
 		},
 	} as unknown as D1Database;
+
 	sql.exec(
 		"INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES('r','software','client@example.com','Tool','reviewed','now','now')",
 	);
+
 	const fullTerms = {
 		...terms,
 		milestones: [{ ...terms.milestones[0], deliverables: ["One", "Two"] }],
 	};
+
 	sql
 		.prepare(
 			"INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES('o','r',1,'sent',?,'now','now')",
@@ -418,6 +442,7 @@ it("blocks partial latest delivery and scope changes during invoice reservation"
 	sql.exec(
 		"INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) SELECT 'r','o',terms_json,'standard','now','now','now','owner','now','now' FROM software_offers; INSERT INTO software_project_updates(id,request_id,milestone_index,kind,status,title,evidence_type,created_by,created_at,updated_at,shared_at,delivered_deliverables_json) VALUES('older','r',0,'delivery_review','shared','Full','prototype','owner','now','now','2026-01-01','[0,1]'),('latest','r',0,'delivery_review','shared','Partial','prototype','owner','now','now','2026-01-02','[0]')",
 	);
+
 	const input = {
 		requestId: "r",
 		offerId: "o",
@@ -426,6 +451,7 @@ it("blocks partial latest delivery and scope changes during invoice reservation"
 		allowCard: false,
 		actor: "owner",
 	};
+
 	await expect(reserveSoftwareInvoice(db, input)).rejects.toThrow(
 		"not available",
 	);

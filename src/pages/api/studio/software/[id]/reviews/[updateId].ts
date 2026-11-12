@@ -9,18 +9,25 @@ import {
 	postSoftwareReviewDecision,
 } from "~/lib/software-project-messages";
 import { musicRequest } from "~/lib/music-request";
+
 export const prerender = false;
+
 export const POST: APIRoute = async ({ params, request, locals }) => {
 	const json = (body: unknown, status = 200) =>
 		Response.json(body, {
 			status,
 			headers: { "cache-control": "private, no-store" },
 		});
+
 	const env = locals.runtime.env;
+
 	if (!clientPortalEnabled(env)) return json({ ok: false }, 404);
+
 	if (!env.MUSIC_DB) return json({ ok: false }, 503);
 	const token = studioSessionFromRequest(request);
+
 	if (!token) return json({ ok: false }, 401);
+
 	if (
 		!params.id ||
 		!params.updateId ||
@@ -28,8 +35,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 	)
 		return json({ ok: false }, 404);
 	const body = await musicRequest(request, 16000);
+
 	if (body instanceof Response) return body;
 	const parsed = softwareDecisionInput.safeParse(body);
+
 	if (!parsed.success)
 		return json(
 			{
@@ -39,6 +48,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			},
 			400,
 		);
+
 	try {
 		const result = await postSoftwareReviewDecision(
 			env.MUSIC_DB,
@@ -47,6 +57,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			params.updateId,
 			parsed.data,
 		);
+
 		return json(result, result.status);
 	} catch {
 		return json(

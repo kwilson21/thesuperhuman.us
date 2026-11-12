@@ -6,10 +6,12 @@ const player = readFileSync(
 	new URL("../../src/components/audio/AudioPlayer.astro", import.meta.url),
 	"utf8",
 );
+
 const premiere = readFileSync(
 	new URL("../../src/styles/music-premiere.css", import.meta.url),
 	"utf8",
 );
+
 const controls = readFileSync(
 	new URL("../../src/scripts/music-controls.ts", import.meta.url),
 	"utf8",

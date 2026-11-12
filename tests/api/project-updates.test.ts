@@ -81,10 +81,12 @@ it("saves first and schedules a separate minimal email delivery", async () => {
 		kind: "progress",
 		notification_status: "pending",
 	} as any);
+
 	const ctx = context({
 		action: "progress",
 		body: "I have started listening.",
 	});
+
 	const response = await POST(ctx);
 	expect(response.status).toBe(200);
 	expect(saveProjectUpdate).toHaveBeenCalledWith(
@@ -132,11 +134,13 @@ it("passes owner confirmation through when retrying an unconfirmed notification"
 		(await POST(context({ action: "retry_email", updateId: 7 }))).status,
 	).toBe(409);
 	vi.mocked(queueProjectNoticeForDelivery).mockResolvedValueOnce(true);
+
 	const ctx = context({
 		action: "retry_email",
 		updateId: 7,
 		confirmedNotSent: true,
 	});
+
 	expect((await POST(ctx)).status).toBe(200);
 	expect(queueProjectNoticeForDelivery).toHaveBeenLastCalledWith(
 		{},

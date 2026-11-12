@@ -1,11 +1,13 @@
 import { z } from "astro/zod";
 import { musicId } from "./music-catalog";
+
 export const MERCHANDISE = {
 	shirts: "Shirts",
 	hoodies: "Hoodies",
 	stickers: "Stickers",
 	"digital-art": "Digital art",
 } as const;
+
 export const interestSchema = z
 	.object({
 		releaseId: musicId,
@@ -36,6 +38,7 @@ export const interestSchema = z
 				"Choose merchandise interest to include merchandise suggestions.",
 		},
 	);
+
 export const eventSchema = z.object({
 	releaseId: musicId,
 	recordingId: musicId,
@@ -51,16 +54,20 @@ export const eventSchema = z.object({
 	channel: musicId.optional(),
 	creative: musicId.optional(),
 });
+
 type InterestInput = z.infer<typeof interestSchema>;
 
 export async function saveInterest(db: D1Database, input: InterestInput) {
 	const now = new Date().toISOString();
 	const kinds: ("purchase" | "merchandise")[] = [];
+
 	if (input.interest === "song" || input.interest === "both")
 		kinds.push("purchase");
+
 	if (input.interest === "merchandise" || input.interest === "both")
 		kinds.push("merchandise");
 	const requestIds = kinds.map(() => `music-${crypto.randomUUID()}`);
+
 	const statements = [
 		db
 			.prepare(`INSERT INTO music_interest (release_id,email,interest,merchandise,suggestion,consent_version,updated_at)
@@ -76,6 +83,7 @@ export async function saveInterest(db: D1Database, input: InterestInput) {
 				now,
 			),
 	];
+
 	kinds.forEach((kind, index) => {
 		const summary =
 			kind === "purchase"
@@ -83,6 +91,7 @@ export async function saveInterest(db: D1Database, input: InterestInput) {
 				: kind === "merchandise"
 					? `Merchandise interest · ${input.releaseId}`
 					: `Release updates · ${input.releaseId}`;
+
 		const details =
 			kind === "merchandise"
 				? JSON.stringify({
@@ -90,6 +99,7 @@ export async function saveInterest(db: D1Database, input: InterestInput) {
 						suggestion: input.suggestion,
 					})
 				: "{}";
+
 		statements.push(
 			db
 				.prepare(`INSERT INTO owner_requests
@@ -114,6 +124,7 @@ export async function saveInterest(db: D1Database, input: InterestInput) {
 	});
 	await db.batch(statements);
 }
+
 export class PlaybackSequenceError extends Error {}
 
 type PlaybackMetadata = {
@@ -138,6 +149,7 @@ export async function saveEvent(
 		)
 		.bind(input.eventId)
 		.first<{ session_id: string; playthrough_id: string; sequence: number }>();
+
 	if (duplicate) {
 		if (
 			duplicate.session_id === input.sessionId &&
@@ -147,6 +159,7 @@ export async function saveEvent(
 			return { status: "duplicate" as const };
 		throw new PlaybackSequenceError("Playback event identity was reused.");
 	}
+
 	const last = await db
 		.prepare(`SELECT sequence,accumulated_seconds,event,occurred_at,
       (SELECT occurred_at FROM music_playback_events first_event
@@ -166,7 +179,9 @@ export async function saveEvent(
 			occurred_at: string;
 			started_at: string;
 		}>();
+
 	const first = input.event === "start" || input.event === "replay";
+
 	if (
 		first
 			? Boolean(last) || input.sequence !== 1 || input.accumulatedSeconds !== 0
@@ -176,8 +191,10 @@ export async function saveEvent(
 	) {
 		throw new PlaybackSequenceError("Playback event sequence is invalid.");
 	}
+
 	if (input.event === "listen30" && input.accumulatedSeconds < 30)
 		throw new PlaybackSequenceError("Reported listen is not earned.");
+
 	if (
 		input.event === "complete" &&
 		(input.mediaDurationSeconds <= 0 ||
@@ -185,21 +202,26 @@ export async function saveEvent(
 	) {
 		throw new PlaybackSequenceError("Reported completion is not earned.");
 	}
+
 	if (last) {
 		const advance = input.accumulatedSeconds - last.accumulated_seconds;
+
 		if (advance > 12)
 			throw new PlaybackSequenceError(
 				"Reported playback skipped required progress evidence.",
 			);
+
 		const elapsed = Math.max(
 			0,
 			(now.getTime() - new Date(last.started_at).getTime()) / 1000,
 		);
+
 		if (!Number.isFinite(elapsed) || input.accumulatedSeconds > elapsed + 2)
 			throw new PlaybackSequenceError(
 				"Reported playback advanced faster than server time.",
 			);
 	}
+
 	const occurredAt = now.toISOString();
 	await db
 		.prepare(`INSERT INTO music_playback_events
@@ -227,5 +249,6 @@ export async function saveEvent(
 			occurredAt,
 		)
 		.run();
+
 	return { status: "stored" as const };
 }

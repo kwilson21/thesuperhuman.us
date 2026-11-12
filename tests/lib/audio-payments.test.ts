@@ -26,12 +26,14 @@ function fixture(kind: "service" | "purchase" = "service") {
     (id,kind,service_id,email,summary,status,created_at,updated_at)
     VALUES ('request-1',?, 'two-track-mix-master','artist@example.com','Old News mix','reviewed',?,?)`)
 		.run(kind, now, now);
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		query,
 		args,
 		bind: (...values: unknown[]) => statement(query, values),
 		run: async () => {
 			const result = sql.prepare(query).run(...args);
+
 			return { success: true, meta: { changes: result.changes }, results: [] };
 		},
 		all: async () => ({
@@ -40,23 +42,29 @@ function fixture(kind: "service" | "purchase" = "service") {
 		}),
 		first: async () => sql.prepare(query).get(...args) ?? null,
 	});
+
 	const db = {
 		prepare: (query: string) => statement(query),
 		batch: async (statements: ReturnType<typeof statement>[]) => {
 			sql.exec("BEGIN");
+
 			try {
 				const results = statements.map((item) => {
 					const prepared = sql.prepare(item.query);
+
 					if (/\bRETURNING\b/i.test(item.query))
 						return { success: true, results: prepared.all(...item.args) };
 					const result = prepared.run(...item.args);
+
 					return {
 						success: true,
 						meta: { changes: result.changes },
 						results: [],
 					};
 				});
+
 				sql.exec("COMMIT");
+
 				return results;
 			} catch (error) {
 				sql.exec("ROLLBACK");
@@ -64,6 +72,7 @@ function fixture(kind: "service" | "purchase" = "service") {
 			}
 		},
 	} as unknown as D1Database;
+
 	return { db, sql };
 }
 
@@ -129,6 +138,7 @@ describe("audio payments", () => {
 				actor: approval.actor,
 			}),
 		).rejects.toThrow("booking invoice");
+
 		const booking = await recordInvoice(db, {
 			requestId: "request-1",
 			installment: "booking",
@@ -138,6 +148,7 @@ describe("audio payments", () => {
 			status: "open",
 			actor: approval.actor,
 		});
+
 		expect(booking).toMatchObject({
 			bookingInvoiceId: "in_booking",
 			bookingStatus: "open",
@@ -212,6 +223,7 @@ describe("audio payments", () => {
 			status: "open",
 			actor: approval.actor,
 		});
+
 		const event = {
 			eventId: "evt_paid",
 			eventType: "invoice.paid",
@@ -219,6 +231,7 @@ describe("audio payments", () => {
 			status: "paid" as const,
 			occurredAt: "2026-09-20T14:00:00.000Z",
 		};
+
 		expect((await applyStripeInvoiceEvent(db, event)).applied).toBe(true);
 		expect((await applyStripeInvoiceEvent(db, event)).applied).toBe(false);
 		expect((await getAudioPayment(db, "request-1"))?.bookingStatus).toBe(
@@ -234,6 +247,7 @@ describe("audio payments", () => {
 				)
 				.get("request-1"),
 		).toEqual({ action: "booking-payment-updated", actor: "stripe" });
+
 		const balance = await recordInvoice(db, {
 			requestId: "request-1",
 			installment: "balance",
@@ -243,6 +257,7 @@ describe("audio payments", () => {
 			status: "open",
 			actor: approval.actor,
 		});
+
 		expect(balance.balanceInvoiceId).toBe("in_balance");
 	});
 
@@ -319,8 +334,10 @@ describe("audio payments", () => {
 				.prepare(`UPDATE audio_payments SET booking_status='paid',booking_status_updated_at='2026-09-20T15:00:00.000Z'
         WHERE request_id='request-1'`)
 				.run();
+
 			return originalBatch(statements as any);
 		};
+
 		await applyStripeInvoiceEvent(db, {
 			eventId: "evt_old_sent",
 			eventType: "invoice.sent",
@@ -348,11 +365,13 @@ describe("audio payments", () => {
 			status: "void",
 			actor: approval.actor,
 		});
+
 		const reset = await replaceTerminalInvoice(db, {
 			requestId: "request-1",
 			installment: "booking",
 			actor: approval.actor,
 		});
+
 		expect(reset).toMatchObject({
 			bookingInvoiceId: null,
 			bookingInvoiceUrl: null,
@@ -432,13 +451,16 @@ describe("audio payments", () => {
 					`UPDATE audio_payments SET booking_status='paid' WHERE request_id='request-1'`,
 				)
 				.run();
+
 			return originalBatch(statements as any);
 		};
+
 		const payment = await replaceTerminalInvoice(db, {
 			requestId: "request-1",
 			installment: "booking",
 			actor: approval.actor,
 		});
+
 		expect(payment).toMatchObject({
 			bookingInvoiceId: "in_void",
 			bookingStatus: "paid",
@@ -456,6 +478,7 @@ describe("audio payments", () => {
 	it("dead-letters the invoice that loses a concurrent recovery race", async () => {
 		const { db, sql } = fixture();
 		await approveAudioPayment(db, approval);
+
 		const recover = (eventId: string, invoiceId: string) =>
 			recoverInvoiceFromWebhook(db, {
 				eventId,
@@ -470,10 +493,12 @@ describe("audio payments", () => {
 				totalAmountCents: 10_001,
 				currency: "usd",
 			});
+
 		const results = await Promise.all([
 			recover("evt_first", "in_first"),
 			recover("evt_second", "in_second"),
 		]);
+
 		expect(results.sort()).toEqual(["recovered", "unmatched"]);
 		expect(
 			sql.prepare("SELECT COUNT(*) AS total FROM stripe_webhook_events").get(),
@@ -504,6 +529,7 @@ describe("audio payments", () => {
 	it("applies a later concurrent event for the same recovered invoice", async () => {
 		const { db, sql } = fixture();
 		await approveAudioPayment(db, approval);
+
 		const recover = (
 			eventId: string,
 			status: "open" | "paid",
@@ -522,6 +548,7 @@ describe("audio payments", () => {
 				totalAmountCents: 10_001,
 				currency: "usd",
 			});
+
 		await Promise.all([
 			recover("evt_sent", "open", "2026-09-20T14:00:00.000Z"),
 			recover("evt_paid", "paid", "2026-09-20T15:00:00.000Z"),
@@ -537,6 +564,7 @@ describe("audio payments", () => {
 	it("rejects recovery with the wrong amount or a premature balance invoice", async () => {
 		const { db, sql } = fixture();
 		await approveAudioPayment(db, approval);
+
 		const base = {
 			eventId: "evt_wrong",
 			eventType: "invoice.paid",
@@ -548,6 +576,7 @@ describe("audio payments", () => {
 			occurredAt: "2026-09-20T15:00:00.000Z",
 			currency: "usd",
 		};
+
 		expect(
 			await recoverInvoiceFromWebhook(db, {
 				...base,
@@ -574,19 +603,23 @@ describe("audio payments", () => {
 	it("records a payment received outside Stripe, balance only after booking, and never over an invoice", async () => {
 		const { db, sql } = fixture();
 		await approveAudioPayment(db, approval);
+
 		const manual = {
 			requestId: "request-1",
 			method: "Zelle" as const,
 			reference: " zelle   1234 ",
 			actor: "Owner@example.com",
 		};
+
 		await expect(
 			recordManualPayment(db, { ...manual, installment: "balance" }),
 		).rejects.toThrow("booking must be paid");
+
 		const booked = await recordManualPayment(db, {
 			...manual,
 			installment: "booking",
 		});
+
 		expect(booked).toMatchObject({
 			bookingStatus: "paid",
 			bookingInvoiceId: null,
@@ -655,12 +688,14 @@ describe("audio payments", () => {
 			requestId: "request-1",
 			installment: "booking",
 		});
+
 		const manual = {
 			requestId: "request-1",
 			installment: "booking" as const,
 			method: "Zelle" as const,
 			actor: "owner@example.com",
 		};
+
 		await expect(recordManualPayment(db, manual)).rejects.toThrow(
 			"already has an invoice",
 		);
@@ -685,6 +720,7 @@ describe("audio payments", () => {
 		const { db, sql } = fixture();
 		await approveAudioPayment(db, approval);
 		let raced = false;
+
 		const racing = {
 			...db,
 			prepare: db.prepare.bind(db),
@@ -693,9 +729,11 @@ describe("audio payments", () => {
 					raced = true;
 					sql.exec("UPDATE audio_payments SET booking_status='paid'");
 				}
+
 				return db.batch(items);
 			},
 		} as unknown as D1Database;
+
 		expect(
 			await recoverInvoiceFromWebhook(racing, {
 				eventId: "evt_race",
@@ -753,12 +791,14 @@ describe("audio payments", () => {
 	it("refuses a manual payment after retention or with a reference that is not a transaction ID", async () => {
 		const { db, sql } = fixture();
 		await approveAudioPayment(db, approval);
+
 		const manual = {
 			requestId: "request-1",
 			installment: "booking" as const,
 			method: "Zelle" as const,
 			actor: "owner@example.com",
 		};
+
 		await expect(
 			recordManualPayment(db, { ...manual, reference: "Jane Doe <555-1234>" }),
 		).rejects.toThrow("reference");

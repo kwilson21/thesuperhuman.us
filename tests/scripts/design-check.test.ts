@@ -32,9 +32,12 @@ const GLOBAL = `@font-face { font-family: 'Libron'; src: url('/fonts/libron.woff
 :root { --paper: #FBF8F2; --accent: #AE5534; --ease-site: cubic-bezier(.2, .7, .2, 1); }
 *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 `;
+
 const faces = systemFamilies(GLOBAL);
+
 const gates = (path: string, source: string) =>
 	fileViolations(path, source, { faces }).map((v) => v.gate);
+
 const css = (source: string) => gates("src/styles/x.css", source);
 
 describe("cssDeclarations", () => {
@@ -42,6 +45,7 @@ describe("cssDeclarations", () => {
 		const decls = cssDeclarations(
 			"/* a; b: c */\n@media (min-width: 40rem) {\n  .a:hover { color: var(--ink); }\n}\n.b{margin:0}",
 		);
+
 		expect(decls).toEqual([
 			{
 				prop: "color",
@@ -57,6 +61,7 @@ describe("cssDeclarations", () => {
 		const decls = cssDeclarations(
 			".a { background: url(data:image/svg+xml;base64,AAA); content: '{;}'; }",
 		);
+
 		expect(decls.map((d) => d.prop)).toEqual(["background", "content"]);
 	});
 
@@ -64,6 +69,7 @@ describe("cssDeclarations", () => {
 		const blocks = styleBlocks(
 			"---\nconst a = 1;\n---\n<p>x</p>\n<style is:global>\n.a { color: red; }\n</style>",
 		);
+
 		expect(blocks).toHaveLength(1);
 		expect(cssDeclarations(blocks[0].css, blocks[0].line)[0].line).toBe(6);
 	});
@@ -134,6 +140,7 @@ describe("fontFamilies and systemFamilies", () => {
 
 	it("reads the real global.css", () => {
 		const real = systemFamilies(readFileSync("src/styles/global.css", "utf8"));
+
 		for (const face of [
 			"libron",
 			"inter",
@@ -253,6 +260,7 @@ describe("gates", () => {
 			".drop { transition: border-color 140ms ease, background 140ms ease; }",
 			{ faces },
 		);
+
 		expect(hit).toMatchObject({
 			gate: "bare-ease",
 			match: "transition: border-color 140ms ease, background 140ms ease",
@@ -472,9 +480,11 @@ describe("gates", () => {
 		expect(gates(astro, '<a class="focus-visible:outline-none">x</a>')).toEqual(
 			["outline-none"],
 		);
+
 		// The hint names what clears a markup hit: a utility on the element, not a style block.
 		const source =
 			'<button class="outline-none">x</button>\n<style>button:focus-visible { outline: 2px solid var(--accent); }</style>';
+
 		const [hit] = fileViolations(astro, source, { faces });
 		expect(hit).toMatchObject({ gate: "outline-none", line: 1 });
 		expect(hit.hint).toContain("same element");
@@ -494,8 +504,10 @@ describe("gates", () => {
 
 	it("reads whole class attributes: multi-line class:list and class, single quotes, comments, prose", () => {
 		const astro = "src/pages/x.astro";
+
 		const list = (focus: string) =>
 			`<button\n  class:list={[\n    'rounded border outline-none',\n    '${focus}',\n  ]}\n>x</button>`;
+
 		expect(
 			gates(
 				astro,
@@ -582,6 +594,7 @@ describe("gates", () => {
 			"<div />\n<style>\n.a {\n  color: #123456;\n}\n</style>",
 			{ faces },
 		);
+
 		expect(hit).toMatchObject({
 			path: "src/pages/x.astro",
 			line: 4,
@@ -593,6 +606,7 @@ describe("gates", () => {
 	it("scans the <style> block of a .ts route under src/pages, reporting the .ts line", () => {
 		const route =
 			"export const GET = () => new Response(`<!doctype html>\n<style>\n  body { color: #123456; font-family: ${family}; }\n  @media (min-width: 40rem) { h1 { margin: 0; } }\n</style>`);";
+
 		const hits = fileViolations("src/pages/api/page.ts", route, { faces });
 		expect(hits).toHaveLength(1);
 		expect(hits[0]).toMatchObject({
@@ -618,6 +632,7 @@ describe("gates", () => {
 	it("reads a .ts route only where it emits HTML: literals count, comments and bare code do not", () => {
 		const route = (body: string) =>
 			`export const GET = () => new Response(${body});`;
+
 		const hex = "<style>.a { color: #123456; }</style>";
 		// A <style> in a block or line comment is ignored; the real one after it keeps its line.
 		expect(
@@ -629,16 +644,20 @@ describe("gates", () => {
 		expect(
 			gates("src/pages/api/page.ts", `/*\n${hex}\n*/\nconst a = 1;`),
 		).toEqual([]);
+
 		const [hit] = fileViolations(
 			"src/pages/api/page.ts",
 			`/* ${hex} */\n\n${route(`'<p></p>\\n${hex}'`)}`,
 			{ faces },
 		);
+
 		expect(hit).toMatchObject({ gate: "raw-hex", line: 3 });
+
 		// `//` inside a string or template (a URL) does not start a comment.
 		const url = route(
 			`\`<a href="https://example.com/">x</a><style>.a { color: #123456; }</style>\``,
 		);
+
 		expect(gates("src/pages/api/page.ts", url)).toEqual(["raw-hex"]);
 		expect(
 			gates("src/pages/api/page.ts", `const s = 'http://x.test/'; ${url}`),
@@ -652,6 +671,7 @@ describe("gates", () => {
 	it("keeps the string literals inside a template interpolation and blanks the rest", () => {
 		const route = (value: string) =>
 			`const html = \`<style>.a { color: ${value}; }</style>\`;`;
+
 		expect(
 			gates("src/pages/api/page.ts", route("${dark ? '#fff' : '#000'}")),
 		).toEqual(["raw-hex", "raw-hex"]);
@@ -676,6 +696,7 @@ describe("gates", () => {
 	it("does not scan an email template, or TypeScript outside src/pages", () => {
 		const email =
 			"`<html><head><style>.btn { color: #ffffff; background: #AE5534; font-family: Arial; transition: all 1s ease; }</style></head></html>`";
+
 		expect(gates("src/lib/email-template.ts", email)).toEqual([]);
 		expect(gates("src/lib/client-emails.ts", email)).toEqual([]);
 		expect(gates("src/pages/api/page.ts", email)).not.toEqual([]);
@@ -685,6 +706,7 @@ describe("gates", () => {
 
 	it("names a Hallmark rule for every gate", () => {
 		const source = sourceText(readFileSync("scripts/check-design.mjs", "utf8"));
+
 		for (const id of Object.keys(GATES)) {
 			const start = source.indexOf(sourceText(`'${id}': {`));
 			const block = source.slice(start, source.indexOf("},", start));
@@ -720,6 +742,7 @@ describe("allowlist", () => {
 				reason: "r",
 			},
 		];
+
 		const { failures, stale } = applyAllowlist([hit], entries);
 		expect(failures).toEqual([]);
 		expect(stale).toEqual([entries[1]]);
@@ -734,6 +757,7 @@ describe("allowlist", () => {
 				reason: "r",
 			},
 		];
+
 		expect(applyAllowlist([hit], entries).failures).toEqual([hit]);
 	});
 
@@ -746,13 +770,16 @@ describe("allowlist", () => {
 				reason: "r",
 			},
 		];
+
 		const longer = { ...hit, path: "src/pages/index.astro", match: "#000cff" };
 		expect(applyAllowlist([longer], entries).failures).toEqual([longer]);
+
 		const real = fileViolations(
 			"src/pages/index.astro",
 			"<style>.a { box-shadow: 0 1px 2px #000cff; }</style>",
 			{ faces },
 		);
+
 		expect(applyAllowlist(real).failures.map((v) => v.match)).toEqual([
 			"#000cff",
 		]);
@@ -761,15 +788,18 @@ describe("allowlist", () => {
 	it("allows the listed declaration in a bare-ease file but not another ease in it", () => {
 		const listed =
 			".drop { transition: border-color 140ms ease, background 140ms ease; }";
+
 		expect(
 			applyAllowlist(fileViolations("src/styles/owner.css", listed, { faces }))
 				.failures,
 		).toEqual([]);
+
 		const added = fileViolations(
 			"src/styles/owner.css",
 			`${listed} .new-thing { transition: color 2s ease; }`,
 			{ faces },
 		);
+
 		expect(applyAllowlist(added).failures.map((v) => v.match)).toEqual([
 			"transition: color 2s ease",
 		]);
@@ -783,11 +813,13 @@ describe("allowlist", () => {
 			count: 1,
 			reason: "r",
 		};
+
 		const twice = fileViolations(
 			"src/styles/studio.css",
 			".a { color: #4a5639; } .b { color: #4a5639; }",
 			{ faces },
 		);
+
 		const split = applyAllowlist(twice, [entry]);
 		expect(split.failures).toHaveLength(1);
 		expect(split.failures[0]).toMatchObject({ line: 1, match: "#4a5639" });
@@ -816,9 +848,11 @@ describe("runner", () => {
 			.splice(0)
 			.forEach((root) => rmSync(root, { recursive: true, force: true }));
 	});
+
 	function fixture(files: Record<string, string>) {
 		const root = mkdtempSync(join(tmpdir(), "design-check-"));
 		roots.push(root);
+
 		for (const [path, text] of Object.entries({
 			"src/styles/global.css": GLOBAL,
 			...files,
@@ -826,8 +860,10 @@ describe("runner", () => {
 			mkdirSync(join(root, dirname(path)), { recursive: true });
 			writeFileSync(join(root, path), text);
 		}
+
 		return root;
 	}
+
 	const run = (cwd: string) =>
 		spawnSync(process.execPath, [checker], { cwd, encoding: "utf8" });
 
@@ -838,6 +874,7 @@ describe("runner", () => {
 					'<p class="site-link">x</p>\n<style>.a { color: var(--ink); }</style>',
 			}),
 		);
+
 		expect(result.status).toBe(0);
 		expect(result.stdout).toContain("design-check passed");
 		expect(result.stderr).toContain("allowlist entry no longer matches");
@@ -850,6 +887,7 @@ describe("runner", () => {
 					"<b />\n<style>\n.b { transition: all 1s ease; }\n</style>",
 			}),
 		);
+
 		expect(result.status).toBe(1);
 		expect(result.stderr).toContain(
 			"src/components/B.astro:3: transition: all",
@@ -862,12 +900,14 @@ describe("runner", () => {
 	it("reads a .ts route under src/pages and leaves an email template in src/lib alone", () => {
 		const page = "<style>\nbody { color: #123456; }\n</style>";
 		const route = `export const GET = () => new Response(\`\n${page}\`);`;
+
 		const result = run(
 			fixture({
 				"src/pages/api/page.ts": route,
 				"src/lib/email-template.ts": `export const html = \`${page}\`;`,
 			}),
 		);
+
 		expect(result.status).toBe(1);
 		expect(result.stderr).toContain(
 			'src/pages/api/page.ts:3: raw hex colour outside a token: "#123456"',
@@ -878,6 +918,7 @@ describe("runner", () => {
 	it("points a multi-line class:list hit at its line and names the element-level fix", () => {
 		const field =
 			"<button\n  class:list={[\n    'rounded border outline-none',\n  ]}\n>x</button>";
+
 		const result = run(fixture({ "src/components/Field.astro": field }));
 		expect(result.status).toBe(1);
 		expect(result.stderr).toContain(
@@ -895,6 +936,7 @@ describe("runner", () => {
 					".a { color: #4a5639; } .b { color: #4a5639; }",
 			}),
 		);
+
 		expect(result.status).toBe(1);
 		expect(result.stderr).toContain("src/styles/studio.css:1:");
 		expect(result.stderr).toContain('"#4a5639"');

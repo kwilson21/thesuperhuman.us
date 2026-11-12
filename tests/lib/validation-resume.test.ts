@@ -19,6 +19,7 @@ describe("validateResumeRequestInput", () => {
 	it("rejects missing name", () => {
 		const result = validateResumeRequestInput({ ...valid, name: "" });
 		expect(result.ok).toBe(false);
+
 		if (!result.ok) expect(result.errors.name).toBeDefined();
 	});
 
@@ -27,19 +28,23 @@ describe("validateResumeRequestInput", () => {
 			...valid,
 			email: "not-an-email",
 		});
+
 		expect(result.ok).toBe(false);
+
 		if (!result.ok) expect(result.errors.email).toBeDefined();
 	});
 
 	it("rejects unknown audience", () => {
 		const result = validateResumeRequestInput({ ...valid, audience: "sales" });
 		expect(result.ok).toBe(false);
+
 		if (!result.ok) expect(result.errors.audience).toBeDefined();
 	});
 
 	it("rejects the retired DoD variant for new requests", () => {
 		const result = validateResumeRequestInput({ ...valid, audience: "dod" });
 		expect(result.ok).toBe(false);
+
 		if (!result.ok) expect(result.errors.audience).toBeDefined();
 	});
 
@@ -54,6 +59,7 @@ describe("validateResumeRequestInput", () => {
 			...valid,
 			note: "x".repeat(1001),
 		});
+
 		expect(result.ok).toBe(false);
 	});
 
@@ -63,6 +69,7 @@ describe("validateResumeRequestInput", () => {
 			company: "",
 			note: "",
 		});
+
 		expect(result.ok).toBe(true);
 	});
 
@@ -77,6 +84,7 @@ describe("validateResumeRequestInput", () => {
 			name: "  Jane  ",
 			company: "  Acme  ",
 		});
+
 		if (!result.ok) throw new Error("expected ok");
 		expect(result.value.name).toBe("Jane");
 		expect(result.value.company).toBe("Acme");

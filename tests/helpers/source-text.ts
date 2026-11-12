@@ -22,6 +22,7 @@ export function sourceText(text: string): string {
  */
 export function expectSource(text: string) {
 	const source = sourceText(text);
+
 	return {
 		toContain: (snippet: string) =>
 			expect(source).toContain(sourceText(snippet)),

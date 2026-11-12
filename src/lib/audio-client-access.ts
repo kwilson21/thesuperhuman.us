@@ -6,6 +6,7 @@ const sessionLifetimeMs = 14 * 24 * 60 * 60 * 1000;
 
 export function normalizeClientEmail(input: unknown): string | null {
 	const parsed = emailSchema.safeParse(input);
+
 	return parsed.success ? parsed.data : null;
 }
 
@@ -17,6 +18,7 @@ export async function hashValue(value: string): Promise<string> {
 	const bytes = new Uint8Array(
 		await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)),
 	);
+
 	return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
 		"",
 	);
@@ -27,6 +29,7 @@ export async function keyedHash(
 	message: string,
 ): Promise<string> {
 	if (secret.length < 32) throw new Error("Studio code key is not configured.");
+
 	const key = await crypto.subtle.importKey(
 		"raw",
 		new TextEncoder().encode(secret),
@@ -34,9 +37,11 @@ export async function keyedHash(
 		false,
 		["sign"],
 	);
+
 	const bytes = new Uint8Array(
 		await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message)),
 	);
+
 	return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
 		"",
 	);
@@ -48,10 +53,12 @@ const codeHash = (email: string, code: string, secret: string) =>
 function newCode(): string {
 	const values = new Uint32Array(1);
 	crypto.getRandomValues(values);
+
 	return String(values[0] % 100_000_000).padStart(8, "0");
 }
 
 const studioProjects = `(SELECT request_id,revoked_at FROM audio_projects UNION ALL SELECT request_id,revoked_at FROM software_projects WHERE content_deleted_at IS NULL)`;
+
 const activeProjects = `SELECT p.request_id FROM ${studioProjects} p
   JOIN owner_requests r ON r.id=p.request_id
   WHERE r.email=? AND r.status<>'withdrawn' AND p.revoked_at IS NULL`;
@@ -66,6 +73,7 @@ export async function issueClientCode(
 	const digest = await codeHash(email, code, secret);
 	const issuedAt = now.toISOString();
 	const expiresAt = new Date(now.getTime() + codeLifetimeMs).toISOString();
+
 	const [stored] = await db.batch([
 		db
 			.prepare(`INSERT INTO audio_client_codes(email,code_hash,attempts,created_at,expires_at,used_at,session_token_hash)
@@ -90,6 +98,7 @@ export async function issueClientCode(
         AND EXISTS(SELECT 1 FROM audio_client_codes WHERE email=? AND code_hash=? AND created_at=?)`)
 			.bind(issuedAt, email, email, digest, issuedAt),
 	]);
+
 	return stored.results.length ? code : null;
 }
 
@@ -133,6 +142,7 @@ export async function listStudioSignInFailures(
 			clientName: string | null;
 			last_failure: number;
 		}>();
+
 	return rows.results.map((row) => ({
 		requestId: row.requestId,
 		clientName: row.clientName,
@@ -152,6 +162,7 @@ export async function completeClientCode(
 	const tokenHash = await hashValue(token);
 	const at = now.toISOString();
 	const expiresAt = new Date(now.getTime() + sessionLifetimeMs).toISOString();
+
 	// One transaction: charge the attempt first, then accept the code only if that charge landed.
 	// Concurrent guesses each spend one of the code's five attempts before any comparison.
 	const [, used] = await db.batch([
@@ -175,6 +186,7 @@ export async function completeClientCode(
         AND EXISTS(SELECT 1 FROM audio_client_sessions WHERE token_hash=?)`)
 			.bind(at, email, tokenHash),
 	]);
+
 	return used.results.length ? token : null;
 }
 
@@ -194,6 +206,7 @@ export async function reserveStudioAllowance(
 	now = new Date(),
 ) {
 	const key = await keyedHash(secret, `${scope}:${subject}`);
+
 	const [, counted] = await db.batch([
 		db
 			.prepare("DELETE FROM audio_client_allowances WHERE window_start<=?")
@@ -203,15 +216,18 @@ export async function reserveStudioAllowance(
       ON CONFLICT(key) DO UPDATE SET uses=uses+1 RETURNING uses,window_start`)
 			.bind(key, now.toISOString()),
 	]);
+
 	const row = counted.results[0] as
 		| { uses: number; window_start: string }
 		| undefined;
+
 	return {
 		key,
 		windowStart: row?.window_start ?? "",
 		allowed: Number(row?.uses ?? Infinity) <= limit,
 	};
 }
+
 export async function takeStudioAllowance(
 	db: D1Database,
 	scope: string,
@@ -232,6 +248,7 @@ export async function clientProjectForSession(
 ) {
 	if (!/^[0-9a-f-]{72}$/i.test(token)) return null;
 	const tokenHash = await hashValue(token);
+
 	return db
 		.prepare(`SELECT p.request_id,p.stage,p.original_due_at,p.current_due_at,p.completed_at,
     r.summary,r.service_id,pay.booking_status,pay.balance_status,pay.booking_invoice_url,pay.balance_invoice_url,
@@ -269,11 +286,14 @@ type PayableProject = Pick<
 	| "booking_amount_cents"
 	| "balance_amount_cents"
 >;
+
 const unpaid = ["open", "payment_failed"];
+
 /** A Stripe-hosted invoice link, and nothing else, so a stored value can never send the client elsewhere. */
 function stripeInvoiceUrl(value: string | null) {
 	try {
 		const url = new URL(value ?? "");
+
 		return url.protocol === "https:" && url.hostname === "invoice.stripe.com"
 			? url.href
 			: null;
@@ -291,17 +311,20 @@ export function clientPaymentDue(project: PayableProject): {
 	const booking = unpaid.includes(project.booking_status ?? "")
 		? stripeInvoiceUrl(project.booking_invoice_url)
 		: null;
+
 	if (booking)
 		return {
 			installment: "booking",
 			href: booking,
 			amountCents: Number(project.booking_amount_cents ?? 0),
 		};
+
 	const balance =
 		project.booking_status === "paid" &&
 		unpaid.includes(project.balance_status ?? "")
 			? stripeInvoiceUrl(project.balance_invoice_url)
 			: null;
+
 	return balance
 		? {
 				installment: "balance",
@@ -318,12 +341,15 @@ export async function clientProjectsForSession(
 ) {
 	if (!/^[0-9a-f-]{72}$/i.test(token)) return null;
 	const tokenHash = await hashValue(token);
+
 	const session = await db
 		.prepare(`SELECT email FROM audio_client_sessions
     WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL`)
 		.bind(tokenHash, now.toISOString())
 		.first<{ email: string }>();
+
 	if (!session) return null;
+
 	// Only a published, unrevoked final with an expiry counts as delivered for the list.
 	const projects = await db
 		.prepare(`SELECT p.request_id,p.stage,r.summary,pay.booking_status,
@@ -342,6 +368,7 @@ export async function clientProjectsForSession(
 			booking_status: string | null;
 			final_expires_at: string | null;
 		}>();
+
 	return projects.results;
 }
 
@@ -372,10 +399,12 @@ export function studioSessionFromRequest(request: Request): string | null {
 	const match = request.headers
 		.get("cookie")
 		?.match(/(?:^|;\s*)studio_session=([0-9a-f-]{72})(?:;|$)/i);
+
 	return match?.[1] ?? null;
 }
 
 type ListedProject = { stage: string; final_expires_at: string | null };
+
 /**
  * Splits a client's songs into active and delivered. Delivered needs a published final file, not just
  * a stage, so a revoked final keeps the song active. `available` is false once the final has expired.
@@ -387,6 +416,7 @@ export function groupStudioProjects<T extends ListedProject>(
 	const delivered = (project: T) =>
 		(project.stage === "final_files_ready" || project.stage === "complete") &&
 		Boolean(project.final_expires_at);
+
 	return {
 		active: projects.filter((project) => !delivered(project)),
 		delivered: projects.filter(delivered).map((project) => ({
@@ -403,13 +433,16 @@ export async function clientSoftwareProjectsForSession(
 	now = new Date(),
 ) {
 	if (!/^[0-9a-f-]{72}$/i.test(token)) return null;
+
 	const session = await db
 		.prepare(
 			`SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL`,
 		)
 		.bind(await hashValue(token), now.toISOString())
 		.first<{ email: string }>();
+
 	if (!session) return null;
+
 	return (
 		await db
 			.prepare(`SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,
@@ -420,6 +453,7 @@ export async function clientSoftwareProjectsForSession(
 			.all<ClientSoftwareProject>()
 	).results;
 }
+
 export type ClientSoftwareProject = {
 	request_id: string;
 	offer_id: string;
@@ -433,6 +467,7 @@ export type ClientSoftwareProject = {
 	started_at: string;
 	next_update_on: string | null;
 };
+
 export async function clientSoftwareProjectForSession(
 	db: D1Database,
 	token: string,
@@ -440,5 +475,6 @@ export async function clientSoftwareProjectForSession(
 	now = new Date(),
 ) {
 	const projects = await clientSoftwareProjectsForSession(db, token, now);
+
 	return projects?.find((project) => project.request_id === id) ?? null;
 }

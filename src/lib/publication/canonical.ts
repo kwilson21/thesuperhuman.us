@@ -2,6 +2,7 @@
 export function canonicalPublication(value: unknown): string {
 	if (value === null || typeof value !== "object") return JSON.stringify(value);
 	const object = value as Record<string, unknown>;
+
 	return (
 		"{" +
 		Object.keys(object)

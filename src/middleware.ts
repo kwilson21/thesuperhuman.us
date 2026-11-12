@@ -21,6 +21,7 @@ const studioPrivateHeaders = {
 function withOwnerHeaders(response: Response) {
 	for (const [name, value] of Object.entries(ownerPrivateHeaders))
 		response.headers.set(name, value);
+
 	return response;
 }
 
@@ -29,21 +30,29 @@ async function handle(
 	next: MiddlewareNext,
 ): Promise<Response> {
 	const { request, url } = context;
+
 	const ownerPage =
 		url.pathname === "/owner" || url.pathname.startsWith("/owner/");
+
 	const ownerApi =
 		url.pathname === "/api/owner" || url.pathname.startsWith("/api/owner/");
+
 	const ownerBoundary = ownerPage || ownerApi;
+
 	const studioPage =
 		url.pathname === "/studio" || url.pathname.startsWith("/studio/");
+
 	const studioApi =
 		url.pathname === "/api/studio" || url.pathname.startsWith("/api/studio/");
+
 	const offerPage = url.pathname.startsWith("/offer/");
+
 	const agreementBoundary =
 		url.pathname === "/agreements" ||
 		url.pathname.startsWith("/agreements/") ||
 		url.pathname.startsWith("/api/agreements/") ||
 		url.pathname.startsWith("/api/offer/");
+
 	if (
 		!context.isPrerendered &&
 		(url.pathname.startsWith("/api/agreements/") ||
@@ -51,14 +60,19 @@ async function handle(
 		!canonicalAgreementRequest(context.locals.runtime.env, request)
 	)
 		return new Response(null, { status: 404, headers: agreementHeaders });
+
 	const studioBoundary =
 		studioPage || studioApi || offerPage || agreementBoundary;
+
 	if (context.isPrerendered && ownerPage)
 		throw new Error("Owner routes must be server-rendered.");
+
 	if (context.isPrerendered && studioPage)
 		throw new Error("Studio routes must be server-rendered.");
+
 	if (!context.isPrerendered && ownerBoundary) {
 		const owner = await verifyOwnerAccess(request, context.locals.runtime.env);
+
 		if (!owner)
 			return new Response("Owner access required.", {
 				status: 403,
@@ -66,6 +80,7 @@ async function handle(
 			});
 		context.locals.owner = owner;
 	}
+
 	if (
 		!context.isPrerendered &&
 		ownerApi &&
@@ -77,6 +92,7 @@ async function handle(
 			{ status: 403, headers: ownerPrivateHeaders },
 		);
 	}
+
 	if (
 		!context.isPrerendered &&
 		studioApi &&
@@ -88,6 +104,7 @@ async function handle(
 			headers: studioPrivateHeaders,
 		});
 	}
+
 	// OAuth clients exchange codes/PKCE or refresh tokens without browser Origin.
 	// The token endpoint does not authenticate using cookies.
 	const tokenExchange =
@@ -100,12 +117,14 @@ async function handle(
 			request.headers.get("sec-fetch-site") === "none") &&
 		request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() ===
 			"application/x-www-form-urlencoded";
+
 	if (
 		!context.isPrerendered &&
 		!["GET", "HEAD", "OPTIONS"].includes(request.method) &&
 		!tokenExchange
 	) {
 		const type = request.headers.get("content-type");
+
 		const formLike =
 			!type ||
 			[
@@ -113,6 +132,7 @@ async function handle(
 				"multipart/form-data",
 				"text/plain",
 			].some((formType) => type.toLowerCase().includes(formType));
+
 		if (formLike && request.headers.get("origin") !== url.origin) {
 			return new Response(
 				`Cross-site ${request.method} form submissions are forbidden`,
@@ -120,9 +140,11 @@ async function handle(
 			);
 		}
 	}
+
 	const host = context.isPrerendered
 		? context.url.host
 		: (context.request.headers.get("host") ?? context.url.host);
+
 	if (
 		offerPage &&
 		host.split(":")[0].toLowerCase() === "audio.thesuperhuman.us"
@@ -135,20 +157,29 @@ async function handle(
 			},
 		});
 	}
+
 	const rewritten = rewritePathForHost(host, context.url.pathname);
+
 	if (rewritten) {
 		const response = await context.rewrite(rewritten);
+
 		return ownerBoundary ? withOwnerHeaders(response) : response;
 	}
+
 	const response = await next();
+
 	if (url.hostname.endsWith(".workers.dev"))
 		response.headers.set("x-robots-tag", "noindex, nofollow");
+
 	if (ownerBoundary) return withOwnerHeaders(response);
+
 	if (studioBoundary) {
 		response.headers.set("referrer-policy", "no-referrer");
+
 		for (const [name, value] of Object.entries(studioPrivateHeaders))
 			response.headers.set(name, value);
 	}
+
 	return response;
 }
 

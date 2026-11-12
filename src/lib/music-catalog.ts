@@ -4,11 +4,13 @@ export const musicId = z
 	.string()
 	.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
 	.max(100);
+
 export const methodologySchema = z.enum([
 	"two-track-vocals",
 	"full-mix",
 	"mastering",
 ]);
+
 export const methodologies = {
 	"two-track-vocals": {
 		label: "Two-track vocal mixing",
@@ -27,20 +29,25 @@ export const methodologies = {
 		service: "mastering",
 	},
 } as const;
+
 const visibility = z.enum(["draft", "public"]);
+
 const audioAsset = z.object({
 	key: z.string().regex(/^music\/[a-z0-9-]+\/[a-z0-9-]+\.mp3$/),
 	type: z.literal("audio/mpeg"),
 });
+
 const videoAsset = z.object({
 	key: z.string().regex(/^music\/[a-z0-9-]+\/[a-z0-9-]+\.mp4$/),
 	type: z.literal("video/mp4"),
 });
+
 const youtubeUrl = z
 	.string()
 	.url()
 	.refine((value) => {
 		const url = new URL(value);
+
 		return (
 			(url.hostname === "youtu.be" &&
 				/^\/[a-zA-Z0-9_-]{11}$/.test(url.pathname) &&
@@ -50,18 +57,21 @@ const youtubeUrl = z
 				/^[a-zA-Z0-9_-]{11}$/.test(url.searchParams.get("v") ?? ""))
 		);
 	});
+
 const soundcloudUrl = z
 	.string()
 	.url()
 	.refine((value) => {
 		const url = new URL(value);
 		const segments = url.pathname.split("/").filter(Boolean);
+
 		return (
 			(url.hostname === "on.soundcloud.com" && segments.length === 1) ||
 			(["soundcloud.com", "www.soundcloud.com"].includes(url.hostname) &&
 				segments.length >= 2)
 		);
 	});
+
 export const recordingSchema = z.object({
 	id: musicId,
 	title: z.string().min(1),
@@ -88,6 +98,7 @@ export const recordingSchema = z.object({
 	youtubeUrl: youtubeUrl.optional(),
 	soundcloudUrl: soundcloudUrl.optional(),
 });
+
 export const releaseSchema = z.object({
 	id: musicId,
 	slug: musicId,
@@ -108,6 +119,7 @@ export const releaseSchema = z.object({
 		.optional(),
 	tracks: z.array(musicId).min(1),
 });
+
 export const exampleSchema = z.object({
 	id: musicId,
 	recordingId: musicId,
@@ -137,8 +149,11 @@ export const exampleSchema = z.object({
 		})
 		.optional(),
 });
+
 export type Recording = z.infer<typeof recordingSchema>;
+
 export type Release = z.infer<typeof releaseSchema>;
+
 export type MusicCatalog = {
 	recordings: Recording[];
 	releases: Release[];
@@ -153,10 +168,12 @@ export function validateCatalog(input: unknown): MusicCatalog {
 			examples: z.array(exampleSchema),
 		})
 		.parse(input);
+
 	function unique(values: string[], label: string) {
 		if (new Set(values).size !== values.length)
 			throw new Error(`Duplicate ${label}`);
 	}
+
 	unique(
 		catalog.recordings.map((r) => r.id),
 		"recording ID",
@@ -174,46 +191,58 @@ export function validateCatalog(input: unknown): MusicCatalog {
 		"example ID",
 	);
 	const recordings = new Map(catalog.recordings.map((r) => [r.id, r]));
+
 	for (const release of catalog.releases) {
 		for (const id of release.tracks) {
 			const track = recordings.get(id);
+
 			if (!track) throw new Error(`Unknown recording ${id}`);
+
 			if (!track.versions.master && !track.versions.mix)
 				throw new Error(`Release needs a playable mix or master: ${id}`);
+
 			if (release.visibility === "public" && track.visibility !== "public")
 				throw new Error(`Public release references draft recording ${id}`);
 		}
 	}
+
 	for (const example of catalog.examples) {
 		const track = recordings.get(example.recordingId);
+
 		if (
 			example.methodology &&
 			methodologies[example.methodology].service !== example.service
 		)
 			throw new Error(`Incompatible methodology and service: ${example.id}`);
+
 		if (example.service === "mixing" && !example.methodology)
 			throw new Error(`Mixing methodology is required: ${example.id}`);
+
 		if (
 			example.service === "mastering"
 				? example.before !== "mix" || example.after !== "master"
 				: example.before !== "unmixed" || example.after !== "mix"
 		)
 			throw new Error(`Invalid comparison pair: ${example.id}`);
+
 		if (
 			example.methodology &&
 			track?.services.length &&
 			!track.services.includes(example.methodology)
 		)
 			throw new Error(`Comparison methodology is not credited: ${example.id}`);
+
 		if (
 			!track ||
 			!track.versions[example.before] ||
 			!track.versions[example.after]
 		)
 			throw new Error(`Missing comparison recording/version ${example.id}`);
+
 		if (example.visibility === "public" && track.visibility !== "public")
 			throw new Error("Public example references draft recording");
 	}
+
 	return catalog;
 }
 
@@ -223,12 +252,14 @@ export function visibleCatalog(
 ): MusicCatalog {
 	const visible = (r: { visibility: string }) =>
 		preview || r.visibility === "public";
+
 	return {
 		recordings: catalog.recordings.filter(visible),
 		releases: catalog.releases.filter(visible),
 		examples: catalog.examples.filter(visible),
 	};
 }
+
 export function musicFile(id: string, version: keyof Recording["versions"]) {
 	return `/music/file/${id}/${version}`;
 }

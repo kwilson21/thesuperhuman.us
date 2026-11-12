@@ -9,7 +9,9 @@ export interface PublicationIdentity {
 	ownerId: string;
 	scopes: string[];
 }
+
 export const scopeFor = (project: string) => `publication:${project}`;
+
 export function projectAccess(
 	env: Env,
 	identity: PublicationIdentity,
@@ -25,7 +27,9 @@ export function projectAccess(
 			.includes(project)
 	);
 }
+
 const id = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,79}$/);
+
 const envelope = z
 	.object({
 		version: z.literal(1),
@@ -54,6 +58,7 @@ const envelope = z
 			.nullable(),
 	})
 	.strict();
+
 const result = (value: unknown, isError = false) => ({
 	content: [{ type: "text" as const, text: JSON.stringify(value) }],
 	isError,
@@ -67,6 +72,7 @@ export async function publicationMcp(
 ): Promise<Response> {
 	if (!env.PUBLICATION_DB)
 		return new Response("Publication unavailable", { status: 503 });
+
 	const server = new McpServer(
 		{ name: "superhuman-publication", version: "1.0.0" },
 		{
@@ -74,9 +80,11 @@ export async function publicationMcp(
 				"Follow docs/publication-agent-protocol.md in kwilson21/thesuperhuman.us. Reconcile the project roadmap and review public wording before delivery. Never send raw private evidence or secrets. Receipts confirm ingestion, not completion or website rendering. Retry identical envelopes; reconcile conflicts without blindly increasing revisions.",
 		},
 	);
+
 	const scopes = identity.scopes.filter((scope) =>
 		scope.startsWith("publication:"),
 	);
+
 	const security = { securitySchemes: [{ type: "oauth2", scopes }] };
 	server.registerTool(
 		"get_project_progress",
@@ -95,6 +103,7 @@ export async function publicationMcp(
 		async ({ projectId }) => {
 			if (!projectAccess(env, identity, projectId))
 				return result({ status: "forbidden" }, true);
+
 			try {
 				return result(await readProject(env.PUBLICATION_DB!, projectId));
 			} catch {
@@ -120,11 +129,14 @@ export async function publicationMcp(
 			if (!projectAccess(env, identity, publication.projectId))
 				return result({ status: "forbidden" }, true);
 			const parsed = parsePublication(publication);
+
 			if (!parsed) return result({ status: "invalid" }, true);
+
 			try {
 				const outcome = await new D1PublicationJournal(
 					env.PUBLICATION_DB!,
 				).commit(parsed);
+
 				return outcome.status === "accepted" || outcome.status === "duplicate"
 					? result({ status: "delivered", receipt: outcome.receipt })
 					: result(outcome, true);
@@ -133,14 +145,17 @@ export async function publicationMcp(
 			}
 		},
 	);
+
 	const transport = new WebStandardStreamableHTTPServerTransport({
 		sessionIdGenerator: undefined,
 		enableJsonResponse: true,
 	});
+
 	try {
 		await server.connect(transport);
 		const response = await transport.handleRequest(request);
 		response.headers.set("Cache-Control", "no-store");
+
 		return response;
 	} finally {
 		await server.close();

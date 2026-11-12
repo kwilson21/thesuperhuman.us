@@ -16,22 +16,29 @@ import {
 } from "~/lib/agreement-request";
 import { getLinkedOffer } from "~/lib/software-offers";
 import { reviewAgreements, offerAgreements } from "~/lib/software-agreements";
+
 export const prerender = false;
+
 export const GET: APIRoute = async ({ request, locals, params, url }) => {
 	const db = locals.runtime.env.MUSIC_DB,
 		offer = db && params.token ? await getLinkedOffer(db, params.token) : null;
+
 	const session =
 		db && offer
 			? await agreementSession(db, request, "agreement", offer.id)
 			: null;
+
 	if (!db || !offer || !session || !(await signingEnabled(db)))
 		return agreementJson({ ok: false }, 401);
+
 	const document = (await offerAgreements(db, offer.id)).find(
 		(d) =>
 			d.id === url.searchParams.get("document") &&
 			d.review_session_hash === session.token_hash,
 	);
+
 	if (!document) return agreementJson({ ok: false }, 404);
+
 	return new Response(document.canonical_text, {
 		headers: {
 			"content-type": "text/plain; charset=utf-8",
@@ -42,18 +49,24 @@ export const GET: APIRoute = async ({ request, locals, params, url }) => {
 		},
 	});
 };
+
 const post: APIRoute = async ({ request, locals, params }) => {
 	const db = locals.runtime.env.MUSIC_DB;
+
 	if (!db) return agreementJson({ ok: false }, 503);
 	const body = await agreementRequest(request);
+
 	if (body instanceof Response) return body;
+
 	const input = z
 		.object({ csrf_nonce: z.string().min(1), values: z.unknown() })
 		.safeParse(body);
+
 	const offer = params.token ? await getLinkedOffer(db, params.token) : null,
 		session = offer
 			? await agreementSession(db, request, "agreement", offer.id)
 			: null;
+
 	if (!(await signingEnabled(db)) || !session)
 		return agreementJson(
 			{
@@ -63,13 +76,16 @@ const post: APIRoute = async ({ request, locals, params }) => {
 			},
 			401,
 		);
+
 	if (!input.success || input.data.csrf_nonce !== session.csrf_nonce)
 		return agreementJson({ ok: false, error: "Reload and try again." }, 403);
+
 	try {
 		const resolved = resolveClientDetails(
 			input.data.values,
 			session.recipient_email,
 		);
+
 		if (!resolved.ok)
 			return agreementJson(
 				{
@@ -80,6 +96,7 @@ const post: APIRoute = async ({ request, locals, params }) => {
 				400,
 			);
 		await saveAgreementDraft(db, offer!, session, input.data.values);
+
 		return nativeAgreementResponse(
 			request,
 			agreementJson({

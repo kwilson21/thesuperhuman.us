@@ -3,21 +3,27 @@ export function setupSoftwareProject() {
 		.querySelectorAll<HTMLElement>("[data-software-project]")
 		.forEach((root) => {
 			const status = root.querySelector<HTMLElement>("[data-software-status]")!;
+
 			async function send(body: unknown, endpoint = root.dataset.endpoint!) {
 				const buttons = root.querySelectorAll<HTMLButtonElement>("button");
 				const disabled = Array.from(buttons, (button) => button.disabled);
 				buttons.forEach((button) => (button.disabled = true));
+
 				try {
 					const response = await fetch(endpoint, {
 						method: "POST",
 						headers: { "content-type": "application/json" },
 						body: JSON.stringify(body),
 					});
+
 					const result = (await response.json()) as { error?: string };
+
 					if (response.ok) {
 						location.reload();
+
 						return;
 					}
+
 					status.textContent =
 						result.error ?? "Could not save. Please try again.";
 				} catch {
@@ -29,9 +35,11 @@ export function setupSoftwareProject() {
 					syncStart();
 				}
 			}
+
 			const start = root.querySelector<HTMLFormElement>(
 				"[data-software-start]",
 			);
+
 			function syncStart() {
 				if (!start) return;
 				start.querySelector<HTMLButtonElement>("button")!.disabled =
@@ -39,24 +47,29 @@ export function setupSoftwareProject() {
 						.checked ||
 					!start.querySelector<HTMLInputElement>("[name=payment]")!.checked;
 			}
+
 			// Validate after refreshing date-dependent requirements, including forms left open overnight.
 			if (start) start.noValidate = true;
 			start?.addEventListener("change", syncStart);
 			start?.addEventListener("submit", (event) => {
 				event.preventDefault();
+
 				const today = new Intl.DateTimeFormat("en-CA", {
 					timeZone: "America/New_York",
 					year: "numeric",
 					month: "2-digit",
 					day: "2-digit",
 				}).format(new Date());
+
 				const earlierStart = start.querySelector<HTMLElement>(
 					"[data-earlier-start]",
 				);
+
 				if (earlierStart) {
 					const required = Boolean(
 						start.dataset.plannedStart && today < start.dataset.plannedStart,
 					);
+
 					earlierStart.hidden = !required;
 					earlierStart
 						.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
@@ -67,6 +80,7 @@ export function setupSoftwareProject() {
 							field.disabled = !required;
 						});
 				}
+
 				if (!start.reportValidity()) return;
 				const data = new FormData(start);
 				void send({
@@ -98,6 +112,7 @@ export function setupSoftwareProject() {
 				.forEach((form) =>
 					form.addEventListener("submit", (event) => {
 						event.preventDefault();
+
 						if (
 							form.dataset.replaceId &&
 							!confirm(
@@ -119,9 +134,11 @@ export function setupSoftwareProject() {
 						);
 					}),
 				);
+
 			const state = root.querySelector<HTMLFormElement>(
 				"[data-software-state]",
 			);
+
 			const syncWaiting = () => {
 				if (state)
 					state.querySelector<HTMLInputElement>(
@@ -130,6 +147,7 @@ export function setupSoftwareProject() {
 						state.querySelector<HTMLInputElement>("[name=state]")!.value ===
 						"waiting_for_input";
 			};
+
 			state?.addEventListener("change", syncWaiting);
 			state?.addEventListener("submit", (event) => {
 				event.preventDefault();
@@ -146,6 +164,7 @@ export function setupSoftwareProject() {
 				.forEach((button) =>
 					button.addEventListener("click", () => {
 						const uncertain = button.dataset.uncertain === "true";
+
 						if (
 							uncertain &&
 							!confirm(

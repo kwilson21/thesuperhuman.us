@@ -6,16 +6,19 @@ import { privateProjectObjectKey } from "~/lib/audio-project-files";
 import { publishProjectFile } from "~/lib/audio-project-publishing";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
 const schema = readFileSync(
 	new URL("../../db/music.sql", import.meta.url),
 	"utf8",
 );
+
 const now = new Date("2026-09-22T12:00:00Z");
 
 function fixture() {
 	const sql = new DatabaseSync(":memory:");
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(schema);
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		query,
 		args,
@@ -26,17 +29,21 @@ function fixture() {
 		}),
 		all: async () => ({ results: sql.prepare(query).all(...args) }),
 	});
+
 	const db = {
 		prepare: (query: string) => statement(query),
 		batch: async (items: ReturnType<typeof statement>[]) => {
 			sql.exec("BEGIN");
+
 			try {
 				const results = items.map((item) => ({
 					results: /\bRETURNING\b/i.test(item.query)
 						? sql.prepare(item.query).all(...item.args)
 						: (sql.prepare(item.query).run(...item.args), []),
 				}));
+
 				sql.exec("COMMIT");
+
 				return results;
 			} catch (error) {
 				sql.exec("ROLLBACK");
@@ -44,6 +51,7 @@ function fixture() {
 			}
 		},
 	} as unknown as D1Database;
+
 	sql
 		.prepare(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
     VALUES ('song-1','service','artist@example.com','A song','reviewed',?,?)`)
@@ -58,6 +66,7 @@ function fixture() {
 			"UPDATE audio_projects SET stage='in_progress' WHERE request_id='song-1'",
 		)
 		.run();
+
 	const addFile = (id: string, version: "review" | "final", size = 5) =>
 		sql
 			.prepare(`INSERT INTO audio_project_files
@@ -71,7 +80,9 @@ function fixture() {
 				size,
 				now.toISOString(),
 			);
+
 	const bucket = { head: async () => ({ size: 5 }) } as unknown as R2Bucket;
+
 	return { sql, db, addFile, bucket };
 }
 
@@ -96,6 +107,7 @@ it("publishes a review atomically, supersedes the old review, and records the cl
 			"UPDATE audio_payments SET booking_status='paid' WHERE request_id='song-1'",
 		)
 		.run();
+
 	const first = await publishProjectFile(
 		db,
 		bucket,
@@ -106,6 +118,7 @@ it("publishes a review atomically, supersedes the old review, and records the cl
 		false,
 		now,
 	);
+
 	expect(first).toBeGreaterThan(0);
 	expect(
 		sql

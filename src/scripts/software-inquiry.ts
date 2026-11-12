@@ -17,11 +17,13 @@ const plans = {
 	webapp: [0, 1, 2, 3, 4, 5, 6],
 	workflow: [0, 1, 2, 3, 4, 5, 6],
 } as const;
+
 const pathFields = {
 	website: ["purpose", "currentUrl", "existing", "updates"],
 	webapp: ["appGoal", "firstVersion"],
 	workflow: ["today", "firstResult"],
 } as const;
+
 const questionLimits: Record<string, number> = {
 	today: 2000,
 	firstResult: 2000,
@@ -40,11 +42,13 @@ export function renderSoftwareReceipt(
 		!Array.isArray(result.brief)
 			? (result.brief as Record<string, string>)
 			: {};
+
 	const firstName = brief.name?.trim().split(/\s+/)[0] || "there";
 	document.querySelector<HTMLElement>("[data-receipt-thanks]")!.textContent =
 		`Thanks, ${firstName}. I’ll read it myself and reply within two business days.`;
 	document.querySelector<HTMLElement>("[data-intake-progress]")!.hidden = true;
 	const kicker = document.querySelector<HTMLElement>("[data-brief-kicker]");
+
 	if (kicker) kicker.hidden = true;
 	const sent = result.clientCopyStatus === "sent";
 	const uncertain = result.clientCopyStatus === "uncertain";
@@ -60,6 +64,7 @@ export function renderSoftwareReceipt(
 	note.textContent = uncertain
 		? "If it doesn’t, your brief is still saved and I’ll still reply."
 		: "It has everything you wrote, so you don’t need to save this page.";
+
 	if (path === "website")
 		document.querySelector<HTMLElement>(
 			"[data-receipt-first-step]",
@@ -78,22 +83,28 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 	const requestedPath = new FormData(form).get("path");
 	const answers: Record<string, string> = {};
 	let sentElsewhere = false;
+
 	const sentNotice =
 		"This brief was already sent from another tab. Your changes here will be sent as a new brief.";
+
 	let step =
 			typeof requestedPath === "string" &&
 			Object.hasOwn(softwarePaths, requestedPath)
 				? 1
 				: 0,
 		submissionId = crypto.randomUUID();
+
 	const path = (): SoftwarePath => {
 		const value = new FormData(form).get("path");
+
 		return typeof value === "string" && Object.hasOwn(softwarePaths, value)
 			? (value as SoftwarePath)
 			: "workflow";
 	};
+
 	const plan = (): readonly number[] => plans[path()];
 	const last = () => plan().length - 1;
+
 	const fields = () => [
 		"path",
 		...pathFields[path()],
@@ -104,6 +115,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 		"email",
 		"company",
 	];
+
 	const payload = (trim = true) =>
 		Object.fromEntries(
 			fields().map((key) => [
@@ -113,6 +125,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 					: String(new FormData(form).get(key) ?? ""),
 			]),
 		);
+
 	// The fields each data-step asks for, for validation and the review list.
 	const sectionFields = (section: number): string[] =>
 		[
@@ -126,25 +139,31 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 			["currentUrl", "existing"],
 			["updates"],
 		][section] ?? [];
+
 	function noticeSentDraft() {
 		// Keep the identity stable until the in-flight response has been handled.
 		if (form.getAttribute("aria-busy") === "true") return false;
+
 		try {
 			if (localStorage.getItem(sentKey) !== submissionId) return false;
 			submissionId = crypto.randomUUID();
 			sentElsewhere = true;
 			status.textContent = sentNotice;
+
 			return true;
 		} catch {
 			return false;
 		}
 	}
+
 	function save() {
 		noticeSentDraft();
 		steps.slice(1, 3).forEach((section) => {
 			const box = section.querySelector<HTMLTextAreaElement>("[data-answer]")!;
+
 			if (box.name) answers[box.name] = box.value;
 		});
+
 		// Website answers stay saved while another path is selected.
 		const kept = Object.fromEntries(
 			["currentUrl", "existing", "updates"].map((key) => [
@@ -152,6 +171,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 				String(new FormData(form).get(key) ?? ""),
 			]),
 		);
+
 		try {
 			localStorage.setItem(
 				storageKey,
@@ -165,6 +185,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 			/* Keep writing when storage is unavailable. */
 		}
 	}
+
 	function configureQuestions() {
 		const questions =
 			path() === "website"
@@ -210,13 +231,16 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 								2000,
 							],
 						];
+
 		const footnote =
 			path() === "website"
 				? "Plain language is fine. We’ll work out the design and technical details together. Please leave out passwords and access details."
 				: "Plain language is fine. We’ll work out the technical details together. Please leave out passwords, access details and real customer data.";
+
 		questions.forEach(([key, title, hint, placeholder, max], i) => {
 			const section = steps[i + 1],
 				box = section.querySelector<HTMLTextAreaElement>("[data-answer]")!;
+
 			box.name = String(key);
 			box.maxLength = Number(max);
 			box.placeholder = String(placeholder);
@@ -230,6 +254,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 			error.hidden = true;
 			// form-submission links an error to its box only when the box is named at setup. Link it now if the error already has an id.
 			const described = box.getAttribute("aria-describedby") ?? "";
+
 			if (error.id && !described.split(/\s+/).includes(error.id))
 				box.setAttribute(
 					"aria-describedby",
@@ -238,20 +263,27 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 			box.removeAttribute("aria-invalid");
 		});
 	}
+
 	try {
 		const saved = JSON.parse(localStorage.getItem(storageKey) ?? "null");
+
 		if (saved && saved.answers && typeof saved.answers === "object") {
 			const stored: Record<string, unknown> = { ...saved.answers };
+
 			// Drafts from before the named paths used one "idea" path, which is now the web app brief. Its idea text is the app goal on any path.
 			if (stored.path === "idea") stored.path = "webapp";
+
 			if (typeof stored.idea === "string" && typeof stored.appGoal !== "string")
 				stored.appGoal = stored.idea;
+
 			const validPath =
 				typeof stored.path === "string" &&
 				Object.hasOwn(softwarePaths, stored.path);
+
 			for (const [key, max] of Object.entries(questionLimits))
 				if (typeof stored[key] === "string")
 					answers[key] = (stored[key] as string).slice(0, max);
+
 			for (const name of ["path", "timing", "updates"])
 				form
 					.querySelectorAll<HTMLInputElement>(`[name="${name}"]`)
@@ -264,9 +296,11 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 									: stored[name])),
 					);
 			configureQuestions();
+
 			for (const key of [...fields(), "currentUrl", "existing"]) {
 				const control = form.elements.namedItem(key),
 					value = stored[key];
+
 				if (
 					(control instanceof HTMLInputElement ||
 						control instanceof HTMLTextAreaElement) &&
@@ -277,6 +311,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 						control.maxLength > 0 ? control.maxLength : 200,
 					);
 			}
+
 			if (
 				validPath &&
 				(!requestedPath || requestedPath === stored.path) &&
@@ -285,6 +320,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 				saved.step <= last()
 			)
 				step = saved.step;
+
 			if (
 				typeof saved.submissionId === "string" &&
 				/^[a-f0-9-]{36}$/i.test(saved.submissionId)
@@ -294,7 +330,9 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 	} catch {
 		/* Ignore unavailable storage and invalid drafts. */
 	}
+
 	configureQuestions();
+
 	const suggestions = setupBriefAutocomplete(form, () =>
 		plan()[step] === 2
 			? {
@@ -303,24 +341,30 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 				}
 			: { path: path() },
 	);
+
 	function renderSummary() {
 		const list = form.querySelector<HTMLDListElement>("[data-review]")!;
 		list.replaceChildren();
 		const values = payload();
+
 		const labels: Record<string, string> = {
 			budgetNote: "Budget",
 			firstResult: "First result",
 			firstVersion: "First version",
 		};
+
 		for (const [key, value] of Object.entries(values)) {
 			if (!value || (key === "timingDate" && values.timing !== "date"))
 				continue;
+
 			const index = plan().findIndex((section) =>
 				sectionFields(section).includes(key),
 			);
+
 			const dt = document.createElement("dt"),
 				dd = document.createElement("dd"),
 				edit = document.createElement("button");
+
 			dt.textContent = labels[key] ?? clientSoftwareLabels[key];
 			dd.textContent =
 				key === "path"
@@ -340,26 +384,31 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 			list.appendChild(dd);
 		}
 	}
+
 	function showStep(index: number, focus = true) {
 		suggestions.clear();
 		step = index;
 		const section = plan()[index];
 		steps.forEach((node, i) => (node.hidden = i !== section));
+
 		if (section === 1 || section === 2) suggestions.start();
 		document
 			.querySelectorAll<HTMLElement>(".intake-progress li")
 			.forEach((item, i) => {
 				item.hidden = i >= plan().length;
+
 				if (i === index) item.setAttribute("aria-current", "step");
 				else item.removeAttribute("aria-current");
 				item.querySelector<HTMLElement>(".sr-only")!.textContent =
 					`Question ${i + 1} of ${plan().length}`;
 			});
 		const kicker = document.querySelector<HTMLElement>("[data-brief-kicker]");
+
 		if (kicker)
 			kicker.textContent =
 				index === 0 ? "Project brief" : softwareBriefKickers[path()];
 		const timingHint = form.querySelector<HTMLElement>("[data-timing-hint]");
+
 		if (timingHint) timingHint.hidden = path() !== "website";
 		form.querySelector<HTMLElement>("[data-send-reassurance]")!.hidden =
 			index !== last();
@@ -367,39 +416,51 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 		submit.hidden = index !== last();
 		back.hidden = index === 0;
 		status.textContent = sentElsewhere ? sentNotice : "";
+
 		if (index === last()) renderSummary();
+
 		if (focus) steps[section].querySelector<HTMLElement>("h1")!.focus();
 		save();
 	}
+
 	function continueStep() {
 		const input = payload();
+
 		const result = validateSoftwareInquiry({
 			...input,
 			turnstileToken: "pending",
 			submissionId,
 		});
+
 		const errors = result.ok ? {} : result.errors;
 		const keys = sectionFields(plan()[step]);
+
 		if (step === 0 && !new FormData(form).get("path"))
 			errors.path = "Choose a starting point.";
+
 		const first = openMessages(form, step === last() ? submit : next, () => {
 			let first: HTMLElement | undefined;
+
 			for (const key of keys) {
 				const control = [...form.elements].find(
 					(node) => node.getAttribute("name") === key,
 				) as HTMLInputElement | HTMLTextAreaElement | undefined;
+
 				const message =
 					errors[key] ||
 					(control && !control.checkValidity()
 						? "Please check this answer."
 						: "");
+
 				const error = form.querySelector<HTMLElement>(
 					`[data-form-error="${key}"]`,
 				);
+
 				if (error) {
 					error.textContent = message;
 					error.hidden = !message;
 				}
+
 				if (control) {
 					if (message) {
 						control.setAttribute("aria-invalid", "true");
@@ -407,15 +468,20 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 					} else control.removeAttribute("aria-invalid");
 				}
 			}
+
 			if (first) {
 				status.textContent = "Please check the highlighted fields.";
 				first.focus();
 			}
+
 			return first;
 		});
+
 		if (first) return;
+
 		if (step < last()) showStep(step + 1);
 	}
+
 	form.addEventListener("input", save);
 	// Only a pointer choice moves on by itself. Arrow keys step through the radio group, so keyboard and screen-reader users
 	// reach every starting point and continue with Next, as they do after any other answer.
@@ -428,21 +494,26 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 	});
 	form.addEventListener("change", (event) => {
 		const control = event.target as HTMLInputElement;
+
 		if (control.name === "path") {
 			steps.slice(1, 3).forEach((section) => {
 				const box = section.querySelector<HTMLTextAreaElement>("textarea")!;
+
 				if (box.name) answers[box.name] = box.value;
 			});
 			configureQuestions();
 			steps.slice(1, 3).forEach((section) => {
 				const box = section.querySelector<HTMLTextAreaElement>("textarea")!;
+
 				if (box.name) box.value = answers[box.name] ?? "";
 			});
+
 			if (pointerChoice) continueStep();
 			else {
 				const error = form.querySelector<HTMLElement>(
 					'[data-form-error="path"]',
 				)!;
+
 				error.textContent = "";
 				error.hidden = true;
 				form
@@ -450,23 +521,29 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 					.forEach((box) => box.removeAttribute("aria-invalid"));
 				showStep(step, false);
 			}
+
 			pointerChoice = false;
 		}
+
 		if (control.name === "timing") {
 			form.querySelector<HTMLElement>("[data-date-field]")!.hidden =
 				control.value !== "date";
+
 			if (control.value !== "date") {
 				const date = form.elements.namedItem("timingDate") as HTMLInputElement;
 				date.value = "";
 				date.removeAttribute("aria-invalid");
+
 				const error = form.querySelector<HTMLElement>(
 					'[data-form-error="timingDate"]',
 				)!;
+
 				error.textContent = "";
 				error.hidden = true;
 				status.textContent = sentElsewhere ? sentNotice : "";
 			}
 		}
+
 		save();
 	});
 	form.querySelector<HTMLElement>("[data-date-field]")!.hidden =
@@ -503,18 +580,22 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 			event.preventDefault();
 			event.stopImmediatePropagation();
 			save();
+
 			return;
 		}
+
 		if (step !== last()) {
 			event.preventDefault();
 			event.stopImmediatePropagation();
 			continueStep();
 		}
 	});
+
 	const disabledControls = new Map<
 		HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement,
 		boolean
 	>();
+
 	setupFormSubmission({
 		form,
 		endpoint: "/api/software-inquiry",
@@ -540,14 +621,17 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 		},
 		onSuccess: (result) => {
 			suggestions.clear();
+
 			try {
 				localStorage.setItem(sentKey, submissionId);
 				const saved = JSON.parse(localStorage.getItem(storageKey) ?? "null");
+
 				if (saved?.submissionId === submissionId)
 					localStorage.removeItem(storageKey);
 			} catch {
 				/* Storage is optional. */
 			}
+
 			renderSoftwareReceipt(result, path());
 		},
 		onConflict: () => {
@@ -555,6 +639,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 			save();
 		},
 	});
+
 	const observer = new MutationObserver((records) => {
 		const target = records
 			.map((record) => record.target as HTMLElement)
@@ -563,14 +648,18 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 					node.getAttribute("aria-invalid") === "true" &&
 					steps.some((section) => section.hidden && section.contains(node)),
 			);
+
 		if (!target) return;
+
 		const position = plan().indexOf(
 			steps.findIndex((section) => section.contains(target)),
 		);
+
 		if (position < 0) return;
 		showStep(position, false);
 		target.focus();
 	});
+
 	observer.observe(form, {
 		attributes: true,
 		subtree: true,
@@ -578,5 +667,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 	});
 	showStep(step, false);
 }
+
 const form = document.querySelector<HTMLFormElement>("#software-inquiry");
+
 if (form) setupSoftwareInquiry(form);

@@ -5,7 +5,9 @@ import {
 	validSuggestionPass,
 	suggestionVisitorHash,
 } from "~/lib/brief-suggestion-pass";
+
 const secret = "existing-turnstile-secret-for-tests";
+
 const context = (token: unknown = "token", overrides = {}) =>
 	({
 		request: new Request("https://example.com/api/software/brief/pass", {
@@ -27,10 +29,12 @@ const context = (token: unknown = "token", overrides = {}) =>
 			},
 		},
 	}) as any;
+
 afterEach(() => {
 	vi.useRealTimers();
 	vi.unstubAllGlobals();
 });
+
 it("verifies once and issues a thirty-minute secure, IP-bound pass", async () => {
 	vi.stubGlobal(
 		"fetch",
@@ -48,6 +52,7 @@ it("verifies once and issues a thirty-minute secure, IP-bound pass", async () =>
 	).toBe(true);
 	expect(fetch).toHaveBeenCalledTimes(1);
 });
+
 it.each([false, true])(
 	"never issues a pass on verification failure or absent secret (%s)",
 	async (missing) => {
@@ -64,6 +69,7 @@ it.each([false, true])(
 		).toBeNull();
 	},
 );
+
 it("rejects invalid payloads and cross-origin issuance", async () => {
 	vi.stubGlobal("fetch", vi.fn());
 	await POST(context(""));
@@ -96,9 +102,11 @@ it("keeps an IP-bound pass valid across midnight UTC until its signed expiry", a
 it("keys visitor identities with a labelled HMAC over the IP and UTC day", async () => {
 	const { createHmac } = await import("node:crypto");
 	const now = Date.parse("2026-10-10T23:50:00Z");
+
 	const expected = createHmac("sha256", secret)
 		.update(`brief-suggestion-visitor:v1:${Math.floor(now / 86400000)}:test`)
 		.digest("hex");
+
 	expect(await suggestionVisitorHash(secret, "test", now)).toBe(expected);
 	expect(await suggestionVisitorHash("other-secret", "test", now)).not.toBe(
 		expected,

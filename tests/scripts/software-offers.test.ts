@@ -6,6 +6,7 @@ import { setupSoftwareOffers } from "~/scripts/software-offers";
 function fixture(action = "fit") {
 	const element = (extra: Record<string, any> = {}) => {
 		const events: Record<string, Function> = {};
+
 		return {
 			dataset: {} as Record<string, string>,
 			disabled: false,
@@ -31,6 +32,7 @@ function fixture(action = "fit") {
 			...extra,
 		};
 	};
+
 	const inputs: Record<string, any> = Object.fromEntries(
 		Object.entries({
 			outcome: "Tracker",
@@ -47,15 +49,18 @@ function fixture(action = "fit") {
 			hasCheckpoint: "",
 		}).map(([name, value]) => [name, element({ value })]),
 	);
+
 	const send = element(),
 		preview = element(),
 		status = element(),
 		state = element(),
 		range = element(),
 		checkpoint = element();
+
 	const row: any = element({
 		querySelectorAll: (selector: string) => {
 			const input = inputs[selector.match(/name="([^"]+)"/)?.[1] ?? ""];
+
 			return input ? [input] : [];
 		},
 		querySelector: (selector: string) =>
@@ -67,6 +72,7 @@ function fixture(action = "fit") {
 						? checkpoint
 						: inputs[selector.match(/name="([^"]+)"/)?.[1] ?? ""],
 	});
+
 	const list: any = element({
 		children: [row],
 		lastElementChild: row,
@@ -78,7 +84,9 @@ function fixture(action = "fit") {
 			return selector === "[data-milestone]" ? this.children : [];
 		},
 	});
+
 	const submit = element();
+
 	const form = element({
 		querySelector: (selector: string) =>
 			selector === '[type="submit"]'
@@ -86,9 +94,11 @@ function fixture(action = "fit") {
 				: inputs[selector.match(/name="([^"]+)"/)?.[1] ?? ""],
 		querySelectorAll: (selector: string) => {
 			const input = inputs[selector.match(/name="([^"]+)"/)?.[1] ?? ""];
+
 			return input ? [input] : [];
 		},
 	});
+
 	const targets: Record<string, any> = {
 		"[data-offer-form]": form,
 		"[data-milestones]": list,
@@ -107,10 +117,12 @@ function fixture(action = "fit") {
 		"[data-client-link]": element({ select: vi.fn() }),
 		"[data-client-link-field]": element(),
 	};
+
 	targets["[data-milestone-template]"] = {
 		content: {
 			cloneNode: () => {
 				const first = element({ focus: vi.fn() });
+
 				return element({
 					first,
 					querySelector: (selector: string) =>
@@ -119,26 +131,33 @@ function fixture(action = "fit") {
 			},
 		},
 	};
+
 	const versionState = element({ textContent: "sent" }),
 		versionEntry = element({ querySelector: () => versionState });
+
 	targets["[data-offer-versions]"] = element();
 	targets["[data-version-list]"] = element({
 		querySelector: () => versionEntry,
 		querySelectorAll: () => [versionState],
 	});
+
 	const actionStatus = element(),
 		siblingForm = element(),
 		privateNote = element();
+
 	const actionButton = element({ textContent: "Send" });
+
 	const actionForm = element({
 		dataset: { softwareAction: action, endpoint: "/api/software" },
 		querySelector: (selector: string) =>
 			selector === "button" ? actionButton : actionStatus,
 	});
+
 	const requestActions = [
 		element({ dataset: { action: "resolve" }, closest: () => null }),
 		element({ dataset: { action: "withdraw" }, closest: () => null }),
 	];
+
 	const root = element({
 		dataset: {
 			requestId: "software",
@@ -151,6 +170,7 @@ function fixture(action = "fit") {
 		},
 		querySelector: (selector: string) => targets[selector],
 	});
+
 	vi.stubGlobal("document", {
 		querySelector: (selector: string) =>
 			selector === "[data-offer-form]" ? form : root,
@@ -188,6 +208,7 @@ function fixture(action = "fit") {
 	);
 	vi.stubGlobal("window", { addEventListener: vi.fn() });
 	setupSoftwareOffers();
+
 	return {
 		requestActions,
 		list,
@@ -206,7 +227,9 @@ function fixture(action = "fit") {
 		privateNote,
 	};
 }
+
 afterEach(() => vi.unstubAllGlobals());
+
 it("keeps newer edits unsaved when a draft save finishes", async () => {
 	const { form, inputs, send, preview, status } = fixture();
 	let finish!: (value: Response) => void;
@@ -230,6 +253,7 @@ it("keeps newer edits unsaved when a draft save finishes", async () => {
 		"Draft saved. Your newer edits still need saving.",
 	);
 });
+
 it("keeps a sent link only in this page view and refreshes versions without reloading", async () => {
 	const { root, send, targets } = fixture();
 	let finish!: (value: Response) => void;
@@ -300,6 +324,7 @@ it("labels field validation errors and marks inputs until edited", async () => {
 	await form.emit("input", inputs.fee);
 	expect(inputs.fee.removeAttribute).toHaveBeenCalledWith("aria-invalid");
 });
+
 it("reports unconfirmed offer email without claiming rejection", async () => {
 	const { send, status } = fixture();
 	vi.stubGlobal(
@@ -334,8 +359,10 @@ it("reloads after decline with unsaved offer edits only after confirmed discard"
 	const { root } = fixture();
 	root.dataset.dirty = "true";
 	let submit!: (event: any) => Promise<void>;
+
 	const status = { textContent: "" },
 		button = { disabled: false };
+
 	const form = {
 		dataset: { softwareAction: "decline", endpoint: "/api/software" },
 		addEventListener: (_name: string, handler: any) => {
@@ -344,6 +371,7 @@ it("reloads after decline with unsaved offer edits only after confirmed discard"
 		querySelector: (selector: string) =>
 			selector === "button" ? button : status,
 	};
+
 	vi.stubGlobal(
 		"FormData",
 		class {
@@ -413,8 +441,10 @@ it("keeps on-screen edits and retries a conflicted save with the returned timest
 	const { root, form, inputs, status } = fixture();
 	inputs.outcome.value = "Newer edits";
 	await form.emit("input");
+
 	const message =
 		"The saved draft changed since this page loaded. Save again to keep what’s on screen, or reload to see the saved version.";
+
 	vi.stubGlobal(
 		"fetch",
 		vi
@@ -437,6 +467,7 @@ it("keeps on-screen edits and retries a conflicted save with the returned timest
 	});
 	expect(root.dataset.dirty).toBe("false");
 });
+
 it.each([true, false])(
 	"locks all request actions during send and restores them (success %s)",
 	async (success) => {
@@ -468,11 +499,14 @@ it.each([true, false])(
 		expect(root.removeAttribute).toHaveBeenCalledWith("inert");
 	},
 );
+
 it("prompts before unloading only while offer edits are dirty", async () => {
 	const { form } = fixture();
+
 	const handler = vi.mocked(window.addEventListener).mock.calls[0][1] as (
 		event: any,
 	) => void;
+
 	const event = { preventDefault: vi.fn(), returnValue: undefined };
 	handler(event);
 	expect(event.preventDefault).not.toHaveBeenCalled();
@@ -493,8 +527,11 @@ it.each([401, 403, 500])(
 				),
 			);
 			inputs.outcome.value = "Keep this title";
+
 			if (action === "draft") await form.emit("submit");
+
 			if (action === "send") await send.emit("click");
+
 			if (action === "revoke")
 				await targets["[data-revoke-link]"].emit("click");
 			expect(status.textContent).toBe(
@@ -511,14 +548,17 @@ it.each([401, 403, 500])(
 		}
 	},
 );
+
 it.each(["fit", "question", "decline"])(
 	"keeps %s form contents and restores its button on a non-JSON session failure",
 	async (action) => {
 		const { root } = fixture();
 		let submit!: (event: any) => Promise<void>;
+
 		const status = { textContent: "" },
 			button = { disabled: false },
 			input = { value: "Keep my message" };
+
 		const form = {
 			dataset: { softwareAction: action, endpoint: "/api/software" },
 			addEventListener: (_name: string, handler: any) => {
@@ -527,6 +567,7 @@ it.each(["fit", "question", "decline"])(
 			querySelector: (selector: string) =>
 				selector === "button" ? button : status,
 		};
+
 		vi.stubGlobal(
 			"FormData",
 			class {
@@ -562,6 +603,7 @@ it.each(["fit", "question", "decline", "revoke"])(
 	async (action) => {
 		const { actionForm, actionStatus, privateNote, targets, status } =
 			fixture(action);
+
 		await privateNote.emit("input");
 		vi.mocked(confirm).mockImplementation(
 			(message) =>
@@ -574,6 +616,7 @@ it.each(["fit", "question", "decline", "revoke"])(
 				Response.json({ ok: true, updatedAt: "new", copySent: true }),
 			),
 		);
+
 		if (action === "revoke") await targets["[data-revoke-link]"].emit("click");
 		else await actionForm.emit("submit");
 		expect(confirm).toHaveBeenCalledWith(
@@ -591,6 +634,7 @@ it.each(["fit", "question", "decline", "revoke"])(
 		);
 	},
 );
+
 it("tracks the other software forms and permits confirmed discard", async () => {
 	const { actionForm, siblingForm } = fixture();
 	await siblingForm.emit("input");
@@ -604,6 +648,7 @@ it("tracks the other software forms and permits confirmed discard", async () => 
 	);
 	expect(location.reload).toHaveBeenCalledOnce();
 });
+
 it("sending retains unsaved sibling forms without reloading", async () => {
 	const { siblingForm, send } = fixture();
 	await siblingForm.emit("input");
@@ -622,14 +667,17 @@ it("sending retains unsaved sibling forms without reloading", async () => {
 	expect(siblingForm.dataset.dirty).toBe("true");
 	expect(location.reload).not.toHaveBeenCalled();
 });
+
 it("does not prompt on unload after a generic action marks the shared page clean", async () => {
 	const { markRequestPageClean } = await import("~/scripts/software-offers");
 	const { form, siblingForm } = fixture();
 	await form.emit("input");
 	await siblingForm.emit("input");
+
 	const handler = vi.mocked(window.addEventListener).mock.calls[0][1] as (
 		event: any,
 	) => void;
+
 	const event = { preventDefault: vi.fn() };
 	handler(event);
 	expect(event.preventDefault).toHaveBeenCalledOnce();
@@ -712,6 +760,7 @@ it("updates revoked controls before a canceled reload and permits reissue", asyn
 	expect(targets["[data-revoke-link]"].hidden).toBe(false);
 	expect(targets["[data-revoke-link]"].disabled).toBe(false);
 });
+
 it.each(["question", "decline"])(
 	"requires an explicit retry after a lost %s response",
 	async (action) => {
@@ -740,14 +789,17 @@ it.each(["question", "decline"])(
 		).toBe("Thanks.");
 	},
 );
+
 it("focuses and announces each added milestone, including the third", async () => {
 	const { list, targets, status } = fixture();
+
 	for (const count of [2, 3]) {
 		await targets["[data-add-milestone]"].emit("click");
 		expect(list.children).toHaveLength(count);
 		expect(list.lastElementChild.first.focus).toHaveBeenCalledOnce();
 		expect(status.textContent).toBe(`Milestone ${count} added.`);
 	}
+
 	expect(targets["[data-add-milestone]"].disabled).toBe(true);
 });
 
@@ -771,6 +823,7 @@ it.each(["question", "decline"])(
 		expect(root.dataset.busy).toBe("true");
 		expect(root.setAttribute).toHaveBeenCalledWith("inert", "");
 		expect(root.setAttribute).toHaveBeenCalledWith("aria-busy", "true");
+
 		for (const button of requestActions) await button.emit("click");
 		expect(fetch).toHaveBeenCalledOnce();
 		finish(Response.json({ message: "Failed" }, { status: 502 }));
@@ -781,6 +834,7 @@ it.each(["question", "decline"])(
 		expect(root.removeAttribute).toHaveBeenCalledWith("aria-busy");
 	},
 );
+
 it.each([0, 1, 2])(
 	"focuses the next milestone or previous one after removing row %s",
 	async (index) => {
@@ -805,6 +859,7 @@ it.each([0, 1, 2])(
 		expect(status.textContent).toBe("Milestone removed.");
 	},
 );
+
 it("marks and names the full agreement field path returned by send validation", async () => {
 	const { inputs, form, status } = fixture();
 	inputs["agreement.environment"] = { value: "", setAttribute: vi.fn() };
@@ -832,7 +887,9 @@ it("drops a removed attachment from the manifest and queues its key for draft cl
 	const { setupAgreementAttachments } = await import(
 		"~/scripts/software-offers"
 	);
+
 	let remove!: Function;
+
 	const field = {
 		value: JSON.stringify([
 			{ key: "first", filename: "One.pdf" },
@@ -840,8 +897,10 @@ it("drops a removed attachment from the manifest and queues its key for draft cl
 		]),
 		dispatchEvent: vi.fn(),
 	};
+
 	const row = { remove: vi.fn() },
 		button = { dataset: { removeAttachment: "first" }, closest: () => row };
+
 	const block = {
 		dataset: {} as Record<string, string>,
 		addEventListener: (_name: string, fn: Function) => (remove = fn),
@@ -850,6 +909,7 @@ it("drops a removed attachment from the manifest and queues its key for draft cl
 				? field
 				: { addEventListener: vi.fn() },
 	};
+
 	setupAgreementAttachments(block as never);
 	remove({ target: { closest: () => button } });
 	expect(JSON.parse(field.value)).toEqual([

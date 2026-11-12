@@ -13,10 +13,12 @@ import { verifyTurnstile } from "~/lib/turnstile";
 import { studioCodeEmail } from "~/lib/client-emails";
 
 export const prerender = false;
+
 const inputSchema = z.object({
 	email: z.string().max(320),
 	turnstileToken: z.string().min(1).max(2048),
 });
+
 const generic = {
 	ok: true,
 	message: "If this email has a studio project, a sign-in code is on its way.",
@@ -24,8 +26,10 @@ const generic = {
 
 export const POST: APIRoute = async ({ request, locals }) => {
 	const env = locals.runtime?.env;
+
 	if (!clientPortalEnabled(env))
 		return new Response("Not found", { status: 404 });
+
 	if (
 		!env?.MUSIC_DB ||
 		!env.TURNSTILE_SECRET_KEY ||
@@ -38,20 +42,24 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			{ status: 503 },
 		);
 	const body = await musicRequest(request, 4096);
+
 	if (body instanceof Response) return body;
 	const parsed = inputSchema.safeParse(body);
+
 	if (!parsed.success)
 		return Response.json(
 			{ ok: false, error: "Enter your email and complete the security check." },
 			{ status: 400 },
 		);
 	const email = normalizeClientEmail(parsed.data.email);
+
 	if (!email)
 		return Response.json(
 			{ ok: false, error: "Enter a valid email address." },
 			{ status: 400 },
 		);
 	const ip = request.headers.get("cf-connecting-ip") ?? "0.0.0.0";
+
 	try {
 		if (
 			!(await takeStudioAllowance(
@@ -69,6 +77,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				},
 				{ status: 429 },
 			);
+
 		if (
 			!(await verifyTurnstile(
 				parsed.data.turnstileToken,
@@ -81,6 +90,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				{ status: 403 },
 			);
 		}
+
 		if (
 			!(await takeStudioAllowance(
 				env.MUSIC_DB,
@@ -97,11 +107,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				},
 				{ status: 429 },
 			);
+
 		const code = await issueClientCode(
 			env.MUSIC_DB,
 			email,
 			env.AUDIO_CLIENT_CODE_KEY,
 		);
+
 		if (code)
 			locals.runtime.ctx.waitUntil(
 				(async () => {
@@ -114,6 +126,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 							...studioCodeEmail(code, env.SITE_ORIGIN),
 						},
 					});
+
 					// Discard only a confirmed rejection. After a timeout or provider error the email may still
 					// arrive, so that code stays usable until it expires.
 					if (!sent.ok && !sent.uncertain)
@@ -128,6 +141,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 					console.error("Studio code delivery or cleanup failed.");
 				}),
 			);
+
 		return Response.json(generic);
 	} catch {
 		return Response.json(

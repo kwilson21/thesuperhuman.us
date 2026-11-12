@@ -2,15 +2,18 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { POST as interest } from "~/pages/api/music-interest";
 import { POST as event } from "~/pages/api/music-event";
 import { sendUrgentOwnerAlert } from "~/lib/owner-alerts";
+
 vi.mock("~/lib/music-content", () => ({
 	loadMusicCatalog: async () => ({
 		releases: [{ id: "release", tracks: ["recording"] }],
 		recordings: [{ id: "recording", versions: { video: {} } }],
 	}),
 }));
+
 vi.mock("~/lib/owner-alerts", () => ({
 	sendUrgentOwnerAlert: vi.fn(async () => true),
 }));
+
 const body = {
 	releaseId: "release",
 	email: "fan@example.com",
@@ -20,6 +23,7 @@ const body = {
 	suggestion: "",
 	turnstileToken: "test",
 };
+
 function context(
 	data: unknown,
 	options: {
@@ -40,9 +44,11 @@ function context(
 		}),
 		batch: async (statements: { run: () => Promise<unknown> }[]) => {
 			for (const statement of statements) await statement.run();
+
 			return [];
 		},
 	};
+
 	return {
 		request: new Request("https://thesuperhuman.us/api/music-interest", {
 			method: "POST",
@@ -68,12 +74,14 @@ function context(
 		},
 	} as any;
 }
+
 beforeEach(() =>
 	vi.stubGlobal(
 		"fetch",
 		vi.fn(async () => Response.json({ success: true })),
 	),
 );
+
 it("rejects cross-origin requests and unknown releases", async () => {
 	expect(
 		(await interest(context(body, { origin: "https://evil.example" }))).status,
@@ -82,6 +90,7 @@ it("rejects cross-origin requests and unknown releases", async () => {
 		(await interest(context({ ...body, releaseId: "missing" }))).status,
 	).toBe(404);
 });
+
 it("only confirms interest after persistence and captcha succeed", async () => {
 	expect((await interest(context(body))).status).toBe(200);
 	expect((await interest(context(body, { fail: true }))).status).toBe(503);
@@ -99,10 +108,12 @@ it("only confirms interest after persistence and captcha succeed", async () => {
 	);
 	expect((await interest(context(body))).status).toBe(403);
 });
+
 it("rejects oversized requests and events for unrelated recordings", async () => {
 	expect(
 		(await interest(context({ ...body, padding: "x".repeat(9000) }))).status,
 	).toBe(413);
+
 	const data = {
 		releaseId: "release",
 		recordingId: "other",
@@ -115,8 +126,10 @@ it("rejects oversized requests and events for unrelated recordings", async () =>
 		accumulatedSeconds: 0,
 		mediaDurationSeconds: 200,
 	};
+
 	expect((await event(context(data))).status).toBe(404);
 });
+
 it("allows the same event to retry after a temporary database failure", async () => {
 	const data = {
 		releaseId: "release",
@@ -130,6 +143,7 @@ it("allows the same event to retry after a temporary database failure", async ()
 		accumulatedSeconds: 0,
 		mediaDurationSeconds: 200,
 	};
+
 	const stored = new Map<string, string>();
 	const ctx = context(data, { fail: true });
 	ctx.locals.runtime.env.RATE_LIMIT = {
@@ -146,6 +160,7 @@ it("allows the same event to retry after a temporary database failure", async ()
 	retry.locals.runtime.env.RATE_LIMIT = ctx.locals.runtime.env.RATE_LIMIT;
 	expect((await event(retry)).status).toBe(200);
 });
+
 it("reports an invalid playback sequence as a conflict", async () => {
 	const data = {
 		releaseId: "release",
@@ -159,8 +174,10 @@ it("reports an invalid playback sequence as a conflict", async () => {
 		accumulatedSeconds: 10,
 		mediaDurationSeconds: 200,
 	};
+
 	expect((await event(context(data))).status).toBe(409);
 });
+
 it("can disable playback collection without breaking the player", async () => {
 	const data = {
 		releaseId: "release",
@@ -174,6 +191,7 @@ it("can disable playback collection without breaking the player", async () => {
 		accumulatedSeconds: 0,
 		mediaDurationSeconds: 200,
 	};
+
 	expect((await event(context(data, { eventsEnabled: "false" }))).status).toBe(
 		204,
 	);

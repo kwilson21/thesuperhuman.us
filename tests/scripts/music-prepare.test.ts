@@ -14,6 +14,7 @@ import sharp from "sharp";
 it("prepares an album using a previously imported recording and rejects duplicate routes before writing", async () => {
 	const dir = mkdtempSync(join(tmpdir(), "music-catalog-"));
 	const script = resolve("scripts/prepare-music.mjs");
+
 	try {
 		await sharp({
 			create: { width: 2, height: 2, channels: 3, background: "#ffffff" },
@@ -21,6 +22,7 @@ it("prepares an album using a previously imported recording and rejects duplicat
 			.png()
 			.toFile(join(dir, "cover.png"));
 		writeFileSync(join(dir, "master.mp3"), "ID3 test fixture");
+
 		const recording = {
 			id: "song-recording",
 			title: "Same Name",
@@ -30,6 +32,7 @@ it("prepares an album using a previously imported recording and rejects duplicat
 			credits: [],
 			sources: { master: "master.mp3" },
 		};
+
 		const release = {
 			id: "song-single",
 			slug: "same-name",
@@ -40,19 +43,24 @@ it("prepares an album using a previously imported recording and rejects duplicat
 			visibility: "draft",
 			tracks: ["song-recording"],
 		};
+
 		const run = (input: unknown, flags: string[] = []) => {
 			writeFileSync(join(dir, "package.json"), JSON.stringify(input));
+
 			return execFileSync(
 				process.execPath,
 				[script, join(dir, "package.json"), ...flags],
 				{ cwd: dir, encoding: "utf8", stdio: "pipe" },
 			);
 		};
+
 		run({ artworkFile: "cover.png", recordings: [recording], release });
+
 		const original = readFileSync(
 			join(dir, "src/content/recordings/song-recording.json"),
 			"utf8",
 		);
+
 		run({
 			artworkFile: "cover.png",
 			recordings: [],
@@ -91,12 +99,14 @@ it("prepares an album using a previously imported recording and rejects duplicat
 			},
 			["--replace"],
 		);
+
 		const revised = JSON.parse(
 			readFileSync(
 				join(dir, "src/content/recordings/song-recording.json"),
 				"utf8",
 			),
 		);
+
 		expect(revised.title).toBe("Revised title");
 		expect(revised.versions.master.key).not.toBe(
 			JSON.parse(original).versions.master.key,

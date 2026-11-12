@@ -13,7 +13,9 @@ export async function prepareWithDiagnostics(
 		const shot = file
 			.replace(/\.png$/, "")
 			.replace(new RegExp(`^${scenario}-`), "");
+
 		const path = `${out}/_failure-${scenario}-${shot}`;
+
 		// Diagnostics must not replace the original prepare error if the page closed.
 		const results = await Promise.allSettled([
 			page.screenshot({
@@ -29,6 +31,7 @@ export async function prepareWithDiagnostics(
 				);
 			})(),
 		]);
+
 		for (const result of results)
 			if (result.status === "rejected")
 				console.error("Could not save prepare diagnostics:", result.reason);

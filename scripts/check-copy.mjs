@@ -17,6 +17,7 @@ import { pathToFileURL } from "node:url";
 // entirely; use it sparingly and only for a real, reviewed exception.
 
 const ROOTS = ["src", "public", "scripts/og-video/scenes", "README.md"];
+
 const EXTENSIONS = new Set([
 	".astro",
 	".ts",
@@ -30,6 +31,7 @@ const EXTENSIONS = new Set([
 	".txt",
 	".svg",
 ]);
+
 const SKIP_BASENAMES = new Set(["CLAUDE.md", "AGENTS.md"]);
 const ALLOW_MARKER = "copy-check: allow";
 
@@ -39,12 +41,16 @@ function matchAll(line, pattern) {
 		pattern.source,
 		pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`,
 	);
+
 	const hits = [];
 	let match;
+
 	while ((match = re.exec(line))) {
 		hits.push(match[0]);
+
 		if (match[0].length === 0) re.lastIndex += 1;
 	}
+
 	return hits;
 }
 
@@ -62,6 +68,7 @@ const BUZZWORD_RE = /\b(passionate|innovative|guru|ninja|rockstar)\b/gi;
 // approved audio starting prices).
 const HOURLY_PHRASE_RE =
 	/\bhourly (?:rates?|billing|pricing)\b|\bbill(?:ed|s|ing)? hourly\b|\bcharge[sd]? hourly\b|\bper[-\s]hour (?:rates?|pricing|billing)\b/gi;
+
 const HOURLY_MONEY_RE =
 	/\$\s?\d[\d,]*(?:\.\d+)?\s*(?:\/\s*(?:hr|hour|h)\b|[-\s]*(?:per|an|a|each)[-\s]+hour\b|[-\s]*hourly\b)/gi;
 
@@ -82,7 +89,9 @@ function findHourlyRate(line) {
 // ("No problem: I hold an active clearance") does not count.
 const CLEARANCE_UNCONDITIONAL_RE =
 	/\b(?:TS\/SCI|cleared engineer|cleared developer)\b/gi;
+
 const ACTIVE_CLEARANCE_RE = /\bactive(?: security)? clearance\b/gi;
+
 const NEGATED_RE =
 	/(?:\bno|\bnot|\bnever|\bwithout|n't)\s+(?:(?:hold|have|holding|having|currently|yet|an?)\s+){0,3}$/i;
 
@@ -90,14 +99,17 @@ function findClearance(line) {
 	const hits = matchAll(line, CLEARANCE_UNCONDITIONAL_RE);
 	const re = new RegExp(ACTIVE_CLEARANCE_RE.source, ACTIVE_CLEARANCE_RE.flags);
 	let match;
+
 	while ((match = re.exec(line))) {
 		const clause =
 			line
 				.slice(0, match.index)
 				.split(/[.:;?!,()]/)
 				.pop() ?? "";
+
 		if (!NEGATED_RE.test(clause)) hits.push(match[0]);
 	}
+
 	return hits;
 }
 
@@ -131,10 +143,12 @@ export const RULES = [
 export function lineViolations(line) {
 	if (line.includes(ALLOW_MARKER)) return [];
 	const hits = [];
+
 	for (const rule of RULES) {
 		for (const match of rule.find(line))
 			hits.push({ rule: rule.id, label: rule.label, match });
 	}
+
 	return hits;
 }
 
@@ -145,47 +159,61 @@ export function fileViolations(path, content) {
 		for (const hit of lineViolations(line))
 			violations.push({ path, line: index + 1, ...hit });
 	});
+
 	return violations;
 }
 
 /** True when a path (relative, posix-ish) should be scanned. */
 export function isScannable(path) {
 	const name = basename(path);
+
 	if (SKIP_BASENAMES.has(name)) return false;
 	const dot = name.lastIndexOf(".");
+
 	if (dot === -1) return false;
+
 	return EXTENSIONS.has(name.slice(dot));
 }
 
 function collectFiles(root) {
 	const stats = statSync(root, { throwIfNoEntry: false });
+
 	if (!stats) return [];
+
 	if (stats.isFile()) return isScannable(root) ? [root] : [];
 	const files = [];
+
 	for (const entry of readdirSync(root, { withFileTypes: true })) {
 		const path = join(root, entry.name);
+
 		if (entry.isDirectory()) files.push(...collectFiles(path));
 		else if (entry.isFile() && isScannable(path)) files.push(path);
 	}
+
 	return files;
 }
 
 function main() {
 	const violations = [];
+
 	for (const root of ROOTS) {
 		for (const path of collectFiles(root)) {
 			const content = readFileSync(path, "utf8");
 			violations.push(...fileViolations(path, content));
 		}
 	}
+
 	if (violations.length) {
 		const lines = violations.map(
 			(v) => `${v.path}:${v.line}: ${v.label}: ${JSON.stringify(v.match)}`,
 		);
+
 		console.error(`copy-check failed:\n- ${lines.join("\n- ")}`);
 		process.exitCode = 1;
+
 		return;
 	}
+
 	console.log("copy-check passed: no banned copy patterns found.");
 }
 

@@ -1,4 +1,5 @@
 export type AudioRole = "mix" | "master" | "produce" | "record";
+
 export type AudioService = "mixing" | "mastering" | "production" | "recording";
 
 export interface AudioTrack {
@@ -33,8 +34,10 @@ export function groupTracksByService(tracks: AudioTrack[]): ServiceGroup[] {
 			.filter((t) => t.primaryService === service)
 			.sort((a, b) => {
 				if (a.order !== b.order) return a.order - b.order;
+
 				return b.year - a.year;
 			});
+
 		return { service, tracks: matching };
 	});
 }

@@ -23,7 +23,9 @@ import {
 } from "~/lib/agreement-artifacts";
 import { softwareGuard } from "~/lib/software-projects";
 import type { SoftwareOffer } from "~/lib/software-offers";
+
 export const prerender = false;
+
 const documents = z
 	.array(
 		z.object({
@@ -33,6 +35,7 @@ const documents = z
 	)
 	.min(1)
 	.max(2);
+
 const schema = z.discriminatedUnion("action", [
 	z.object({
 		action: z.literal("countersign"),
@@ -72,33 +75,45 @@ const schema = z.discriminatedUnion("action", [
 		confirmed: z.literal(true),
 	}),
 ]);
+
 const depositBlockMessage = "Void or refund the deposit invoice first.";
+
 const openMsaMessage =
 	"An open offer uses this agreement. Withdraw that offer first.";
+
 const depositUse =
 	"SELECT 1 FROM software_invoices WHERE offer_id=? AND milestone_index=0 AND kind='deposit' AND (status IN ('creating','open','payment_failed','uncollectible') OR (status='paid' AND refunded_at IS NULL))";
+
 const msaUse =
 	"SELECT 1 FROM software_offers o JOIN owner_requests r ON r.id=o.request_id WHERE o.reused_msa_id=? AND o.status IN ('draft','sent') AND r.status NOT IN ('resolved','withdrawn') AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id)";
+
 const post: APIRoute = async ({ request, locals, params }) => {
 	const db = locals.runtime.env.MUSIC_DB;
+
 	if (!locals.owner) return agreementJson({ ok: false }, 403);
+
 	if (!db || !params.id) return agreementJson({ ok: false }, 503);
 	const body = await agreementRequest(request);
+
 	if (body instanceof Response) return body;
 	const parsed = schema.safeParse(body);
+
 	if (!parsed.success)
 		return agreementJson(
 			{ ok: false, error: "Complete the required confirmations." },
 			400,
 		);
+
 	const c = parsed.data,
 		at = new Date().toISOString();
+
 	const offer = await db
 		.prepare(
 			"SELECT * FROM software_offers WHERE request_id=? AND status='sent'",
 		)
 		.bind(params.id)
 		.first<SoftwareOffer>();
+
 	try {
 		if (c.action === "countersign") {
 			if (!offer || !(await signingEnabled(db)))
@@ -106,6 +121,7 @@ const post: APIRoute = async ({ request, locals, params }) => {
 					{ ok: false, error: "Signing is off or the offer changed." },
 					409,
 				);
+
 			const id = await countersignAgreements(
 				db,
 				offer,
@@ -114,12 +130,15 @@ const post: APIRoute = async ({ request, locals, params }) => {
 				locals.owner.email,
 				request,
 			);
+
 			try {
 				const { renderAgreementPacket } = await import("~/lib/agreement-pdf");
+
 				const msa = await db
 					.prepare("SELECT msa_id FROM software_agreements WHERE id=?")
 					.bind(id)
 					.first<{ msa_id: string | null }>();
+
 				if (msa?.msa_id)
 					await prepareAgreementArtifact(
 						locals.runtime.env,
@@ -135,6 +154,7 @@ const post: APIRoute = async ({ request, locals, params }) => {
 			} catch {
 				/* Persisted execution is safe; owner retries copy preparation. */
 			}
+
 			// Artifact work is explicit and retryable. It never changes the recorded signatures.
 			return nativeAgreementResponse(
 				request,
@@ -145,11 +165,14 @@ const post: APIRoute = async ({ request, locals, params }) => {
 				`/owner/requests/${params.id}`,
 			);
 		}
+
 		if (c.action === "abandon") {
 			if (!offer) return agreementJson({ ok: false }, 409);
+
 			const pending = (await offerAgreements(db, offer.id)).filter(
 				(d) => d.status === "client_signed",
 			);
+
 			if (
 				!pending.length ||
 				signatureIds(
@@ -160,6 +183,7 @@ const post: APIRoute = async ({ request, locals, params }) => {
 					{ ok: false, error: "Review the complete pending signing action." },
 					409,
 				);
+
 			if (await db.prepare(depositUse).bind(offer.id).first())
 				return agreementJson({ ok: false, error: depositBlockMessage }, 409);
 			await db.batch([
@@ -231,7 +255,9 @@ const post: APIRoute = async ({ request, locals, params }) => {
 					client_signed_at: string | null;
 					executed_at: string | null;
 				}>();
+
 			if (!agreement) return agreementJson({ ok: false }, 404);
+
 			if (c.action === "retry-copy") {
 				await db
 					.prepare(
@@ -256,6 +282,7 @@ const post: APIRoute = async ({ request, locals, params }) => {
 				await deliverAgreementNotifications(locals.runtime.env, c.agreement_id);
 				await deliverAgreementCopies(locals.runtime.env, c.agreement_id);
 			}
+
 			if (c.action === "retry-artifact") {
 				if (
 					c.expectedAttempt &&
@@ -275,10 +302,12 @@ const post: APIRoute = async ({ request, locals, params }) => {
 					);
 				// Loading the renderer is kept separate from committing legal execution.
 				const { renderAgreementPacket } = await import("~/lib/agreement-pdf");
+
 				const msa = await db
 					.prepare("SELECT msa_id FROM software_agreements WHERE id=?")
 					.bind(c.agreement_id)
 					.first<{ msa_id: string | null }>();
+
 				if (msa?.msa_id)
 					await prepareAgreementArtifact(
 						locals.runtime.env,
@@ -292,6 +321,7 @@ const post: APIRoute = async ({ request, locals, params }) => {
 				);
 				await deliverAgreementCopies(locals.runtime.env, c.agreement_id);
 			}
+
 			if (c.action === "record-alternate-copy")
 				await db.batch([
 					db
@@ -307,6 +337,7 @@ const post: APIRoute = async ({ request, locals, params }) => {
 						c.agreement_id,
 					),
 				]);
+
 			if (c.action === "hold")
 				await db.batch([
 					db
@@ -320,29 +351,36 @@ const post: APIRoute = async ({ request, locals, params }) => {
 						c.agreement_id,
 					),
 				]);
+
 			if (c.action === "end") {
 				if (!["executed", "abandoned"].includes(agreement.status))
 					return agreementJson({ ok: false }, 409);
 				const signedDate = agreement.executed_at ?? agreement.client_signed_at;
+
 				const day = new Intl.DateTimeFormat("en-CA", {
 					timeZone: "America/New_York",
 					year: "numeric",
 					month: "2-digit",
 					day: "2-digit",
 				});
+
 				const earliest = signedDate
 					? day.format(new Date(signedDate))
 					: agreement.effective_on;
+
 				const latest = day.format(new Date());
+
 				if (c.ended_on < earliest || c.ended_on > latest)
 					return agreementJson(
 						{ ok: false, error: "Use an end date from signing through today." },
 						409,
 					);
 				const end = new Date(`${c.ended_on}T12:00:00Z`);
+
 				if (end.toISOString().slice(0, 10) !== c.ended_on)
 					throw new Error("Invalid date.");
 				end.setUTCFullYear(end.getUTCFullYear() + 10);
+
 				if (
 					agreement.kind === "msa" &&
 					(await db.prepare(msaUse).bind(c.agreement_id).first())
@@ -364,6 +402,7 @@ const post: APIRoute = async ({ request, locals, params }) => {
 				]);
 			}
 		}
+
 		return nativeAgreementResponse(
 			request,
 			agreementJson({ ok: true }),
@@ -376,11 +415,13 @@ const post: APIRoute = async ({ request, locals, params }) => {
 			(await db.prepare(depositUse).bind(offer.id).first())
 		)
 			return agreementJson({ ok: false, error: depositBlockMessage }, 409);
+
 		if (
 			c.action === "end" &&
 			(await db.prepare(msaUse).bind(c.agreement_id).first())
 		)
 			return agreementJson({ ok: false, error: openMsaMessage }, 409);
+
 		return agreementJson(
 			{
 				ok: false,

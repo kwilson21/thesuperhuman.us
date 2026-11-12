@@ -3,6 +3,7 @@ import { checkRateLimit } from "~/lib/rate-limit";
 
 function makeKvStub() {
 	const store = new Map<string, string>();
+
 	return {
 		get: vi.fn(async (k: string) => store.get(k) ?? null),
 		put: vi.fn(
@@ -58,12 +59,14 @@ describe("checkRateLimit", () => {
 
 it("supports a bounded burst for metrics without blocking a second listener", async () => {
 	const values = new Map<string, string>();
+
 	const kv = {
 		get: async (key: string) => values.get(key) ?? null,
 		put: async (key: string, value: string) => {
 			values.set(key, value);
 		},
 	};
+
 	expect(
 		(await checkRateLimit(kv, "shared-network", "metrics:", 2)).allowed,
 	).toBe(true);

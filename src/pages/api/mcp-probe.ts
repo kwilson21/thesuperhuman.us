@@ -11,6 +11,7 @@ export const ALL: APIRoute = async ({ request }) => {
 		name: "superhuman-connectivity-probe",
 		version: "1.0.0",
 	});
+
 	server.registerTool(
 		"publication_connection_probe",
 		{
@@ -39,14 +40,17 @@ export const ALL: APIRoute = async ({ request }) => {
 			};
 		},
 	);
+
 	const transport = new WebStandardStreamableHTTPServerTransport({
 		sessionIdGenerator: undefined,
 		enableJsonResponse: true,
 	});
+
 	try {
 		await server.connect(transport);
 		const response = await transport.handleRequest(request);
 		response.headers.set("Cache-Control", "no-store");
+
 		return response;
 	} finally {
 		await server.close();

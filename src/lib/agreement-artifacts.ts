@@ -3,6 +3,7 @@ import { hashOfferToken } from "./software-offers";
 import { sendAudioMessage } from "./audio-resend";
 import type { Agreement } from "./software-agreements";
 import { templateVersionLabel } from "./agreement-version-label";
+
 export const hashBytes = async (bytes: ArrayBuffer | Uint8Array) =>
 	[
 		...new Uint8Array(
@@ -11,9 +12,11 @@ export const hashBytes = async (bytes: ArrayBuffer | Uint8Array) =>
 	]
 		.map((b) => b.toString(16).padStart(2, "0"))
 		.join("");
+
 export function canonicalJson(value: unknown): string {
 	if (Array.isArray(value))
 		return "[" + value.map(canonicalJson).join(",") + "]";
+
 	if (value && typeof value === "object")
 		return (
 			"{" +
@@ -28,8 +31,10 @@ export function canonicalJson(value: unknown): string {
 				.join(",") +
 			"}"
 		);
+
 	return JSON.stringify(value);
 }
+
 export type AgreementArtifact = {
 	status: string;
 	attempt_id: string | null;
@@ -38,6 +43,7 @@ export type AgreementArtifact = {
 	bytes: number | null;
 	certificate_key: string | null;
 };
+
 export const newYorkTime = (value: unknown) =>
 	typeof value === "string"
 		? new Date(value).toLocaleString("en-US", {
@@ -50,32 +56,42 @@ export const newYorkTime = (value: unknown) =>
 				timeZoneName: "short",
 			})
 		: null;
+
 // Each document's own label. Older stored values lack it, so the pinned template row supplies it.
 async function documentVersionLabel(db: D1Database, d: Agreement) {
 	const values = JSON.parse(d.values_json);
+
 	const stored =
 		d.kind === "msa" ? values.msa?.version_label : values.sow?.version_label;
+
 	if (stored) return stored as string;
+
 	const row = await db
 		.prepare(
 			"SELECT version_label,published_at FROM software_agreement_templates WHERE id=?",
 		)
 		.bind(d.template_id)
 		.first<{ version_label: string | null; published_at: string }>();
+
 	return templateVersionLabel(row!);
 }
+
 // Each document prints its own template's source revision. Older stored SOW values lack it, so the pinned template row supplies it.
 async function documentSourceRevision(db: D1Database, d: Agreement) {
 	const values = JSON.parse(d.values_json);
+
 	if (d.kind === "msa") return values.msa?.source_revision ?? "";
+
 	if (typeof values.sow?.source_revision === "string")
 		return values.sow.source_revision as string;
+
 	const row = await db
 		.prepare(
 			"SELECT source_revision FROM software_agreement_templates WHERE id=?",
 		)
 		.bind(d.template_id)
 		.first<{ source_revision: string | null }>();
+
 	return row?.source_revision ?? "";
 }
 
@@ -90,17 +106,22 @@ export async function prepareAgreementArtifact(
 	) => Promise<Uint8Array>,
 ) {
 	const db = env.MUSIC_DB!;
+
 	if (!env.AUDIO) throw new Error("Storage unavailable.");
+
 	const attempt = crypto.randomUUID(),
 		at = new Date().toISOString();
+
 	const claimed = await db
 		.prepare(
 			"UPDATE software_agreement_artifacts SET status='rendering',attempt_id=?,attempted_at=?,error_code=NULL WHERE agreement_id=? AND status IN ('pending','failed') AND EXISTS(SELECT 1 FROM software_agreements a WHERE a.id=software_agreement_artifacts.agreement_id AND a.archive_closed_at IS NULL) RETURNING agreement_id",
 		)
 		.bind(attempt, at, id)
 		.first();
+
 	if (!claimed) return;
 	let errorCode = "render";
+
 	try {
 		const agreement = await db
 			.prepare(
@@ -108,8 +129,10 @@ export async function prepareAgreementArtifact(
 			)
 			.bind(id)
 			.first<Agreement>();
+
 		if (!agreement) throw new Error("Not executed.");
 		const documents: Agreement[] = [];
+
 		if (agreement.msa_id) {
 			const msa = await db
 				.prepare(
@@ -117,10 +140,13 @@ export async function prepareAgreementArtifact(
 				)
 				.bind(agreement.msa_id)
 				.first<Agreement>();
+
 			if (!msa) throw new Error("Missing MSA.");
 			documents.push(msa);
 		}
+
 		documents.push(agreement);
+
 		const certificates = await Promise.all(
 			documents.map(async (d) => ({
 				document_id: d.id,
@@ -152,8 +178,10 @@ export async function prepareAgreementArtifact(
 				).results,
 			})),
 		);
+
 		if (certificates.some((c) => c.signatures.length !== 2))
 			throw new Error("Missing signature.");
+
 		const displayCertificates = certificates.map((c) => ({
 			...c,
 			executed_at_new_york: newYorkTime(c.executed_at),
@@ -163,21 +191,26 @@ export async function prepareAgreementArtifact(
 				verified_at_new_york: newYorkTime(s.verified_at),
 			})),
 		}));
+
 		const certificate = canonicalJson(displayCertificates),
 			certificateHash = await hashOfferToken(certificate),
 			key = `agreements/${id}/${certificateHash}.pdf`,
 			certificateKey = `agreements/${id}/${certificateHash}.certificate.json`;
+
 		const existing = await env.AUDIO.get(key),
 			bytes = existing
 				? new Uint8Array(await existing.arrayBuffer())
 				: await render(env, documents, displayCertificates);
+
 		if (
 			existing &&
 			existing.customMetadata?.sha256 !== (await hashBytes(bytes))
 		)
 			throw new Error("Stored packet hash mismatch.");
+
 		if (bytes.length > 25 * 1024 * 1024)
 			throw new Error("Packet exceeds 25 MiB.");
+
 		const pdfHash = await hashBytes(bytes),
 			manifest = canonicalJson({
 				documents: documents.map((d) => ({ id: d.id, sha256: d.text_sha256 })),
@@ -185,7 +218,9 @@ export async function prepareAgreementArtifact(
 				pdf_sha256: pdfHash,
 				renderer_version: "website-pdf-v2",
 			});
+
 		errorCode = "storage";
+
 		if (!existing)
 			await env.AUDIO.put(key, bytes, {
 				httpMetadata: { contentType: "application/pdf" },
@@ -199,14 +234,17 @@ export async function prepareAgreementArtifact(
 			`agreements/${id}/${certificateHash}.manifest.json`,
 			manifest,
 		);
+
 		for (const d of documents)
 			await env.AUDIO.put(
 				`agreements/${d.id}/${d.text_sha256}.txt`,
 				d.canonical_text,
 			);
 		errorCode = "readback";
+
 		const readback = await env.AUDIO.get(key),
 			certReadback = await env.AUDIO.get(certificateKey);
+
 		if (
 			!readback ||
 			(await hashBytes(await readback.arrayBuffer())) !== pdfHash ||
@@ -256,20 +294,26 @@ export async function prepareAgreementArtifact(
 			.run();
 	}
 }
+
 function base64(bytes: Uint8Array) {
 	let text = "";
+
 	for (let i = 0; i < bytes.length; i += 8192)
 		text += String.fromCharCode(...bytes.subarray(i, i + 8192));
+
 	return btoa(text);
 }
+
 export async function deliverAgreementCopies(env: Env, id: string) {
 	const db = env.MUSIC_DB!;
+
 	const artifact = await db
 		.prepare(
 			"SELECT * FROM software_agreement_artifacts WHERE agreement_id=? AND status='ready'",
 		)
 		.bind(id)
 		.first<AgreementArtifact>();
+
 	if (
 		!artifact?.pdf_key ||
 		!env.RESEND_API_KEY ||
@@ -278,9 +322,12 @@ export async function deliverAgreementCopies(env: Env, id: string) {
 	)
 		return;
 	const object = await env.AUDIO.get(artifact.pdf_key);
+
 	if (!object || object.size > 25 * 1024 * 1024) return;
 	const bytes = new Uint8Array(await object.arrayBuffer());
+
 	if ((await hashBytes(bytes)) !== artifact.pdf_sha256) return;
+
 	for (const role of ["client", "contractor"]) {
 		const signature = await db
 			.prepare(
@@ -288,16 +335,21 @@ export async function deliverAgreementCopies(env: Env, id: string) {
 			)
 			.bind(id, role)
 			.first<{ receipt_id: string }>();
+
 		if (!signature) continue;
+
 		const attempt = crypto.randomUUID(),
 			at = new Date().toISOString();
+
 		const claim = await db
 			.prepare(
 				"UPDATE software_agreement_deliveries SET status='sending',attempt_id=?,attempted_at=? WHERE agreement_id=? AND recipient_role=? AND status='pending' AND EXISTS(SELECT 1 FROM software_agreements a WHERE a.id=software_agreement_deliveries.agreement_id AND a.archive_closed_at IS NULL AND a.status='executed') RETURNING email",
 			)
 			.bind(attempt, at, id, role)
 			.first<{ email: string }>();
+
 		if (!claim) continue;
+
 		const sent = await sendAudioMessage({
 			apiKey: env.RESEND_API_KEY,
 			idempotencyKey: `agreement-${id}-${role}-${artifact.pdf_sha256}`,
@@ -311,6 +363,7 @@ export async function deliverAgreementCopies(env: Env, id: string) {
 				],
 			},
 		});
+
 		if (!sent.uncertain)
 			await db.batch([
 				db
@@ -350,6 +403,7 @@ export async function recoverAgreementRendering(
 	confirmed: boolean,
 ) {
 	if (!confirmed) return false;
+
 	return Boolean(
 		await db
 			.prepare(
@@ -359,26 +413,33 @@ export async function recoverAgreementRendering(
 			.first(),
 	);
 }
+
 export const currentSigningNotification =
 	"EXISTS(SELECT 1 FROM software_agreements a WHERE a.id=software_agreement_notifications.agreement_id AND a.archive_closed_at IS NULL AND a.status='client_signed' AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.request_id=a.request_id))";
 
 export async function deliverAgreementNotifications(env: Env, id: string) {
 	if (!env.MUSIC_DB || !env.RESEND_API_KEY || !env.CONTACT_FROM_EMAIL) return;
+
 	const agreement = await env.MUSIC_DB.prepare(
 		"SELECT request_id,(SELECT receipt_id FROM software_agreement_signatures WHERE agreement_id=software_agreements.id AND party='client') AS receipt_id FROM software_agreements WHERE id=?",
 	)
 		.bind(id)
 		.first<{ request_id: string; receipt_id: string }>();
+
 	if (!agreement) return;
+
 	for (const kind of ["signature-receipt", "countersign-notice"]) {
 		const attempt = crypto.randomUUID(),
 			at = new Date().toISOString();
+
 		const claim = await env.MUSIC_DB.prepare(
 			`UPDATE software_agreement_notifications SET status='sending',attempt_id=?,attempted_at=? WHERE agreement_id=? AND kind=? AND status='pending' AND ${currentSigningNotification} RETURNING email`,
 		)
 			.bind(attempt, at, id, kind)
 			.first<{ email: string }>();
+
 		if (!claim) continue;
+
 		const sent = await sendAudioMessage({
 			apiKey: env.RESEND_API_KEY,
 			idempotencyKey: `agreement-${id}-${kind}`,
@@ -395,6 +456,7 @@ export async function deliverAgreementNotifications(env: Env, id: string) {
 						: `A client signature is saved. Review the exact agreement before countersigning: ${new URL(`/owner/requests/${agreement.request_id}`, siteOrigin(env.SITE_ORIGIN)).href}`,
 			},
 		});
+
 		if (!sent.uncertain)
 			await env.MUSIC_DB.prepare(
 				"UPDATE software_agreement_notifications SET status=?,sent_at=? WHERE agreement_id=? AND kind=? AND attempt_id=? AND status='sending'",

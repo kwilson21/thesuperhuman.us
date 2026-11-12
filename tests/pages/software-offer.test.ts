@@ -14,8 +14,10 @@ import {
 	agreementDetailsSchema,
 } from "~/lib/agreement-fields";
 import { projectToday } from "~/lib/audio-project-updates";
+
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 let start: any, privacy: any;
+
 let linkLanding: any,
 	archiveLanding: any,
 	agreements: any,
@@ -32,7 +34,9 @@ let linkLanding: any,
 	fit: any,
 	panel: any,
 	ownerRequest: any;
+
 const token = "a".repeat(43);
+
 const terms = {
 	outcome: "Current offer",
 	summary: "A shared view.",
@@ -49,6 +53,7 @@ const terms = {
 	timing: "",
 	paymentMode: "standard",
 };
+
 beforeAll(async () => {
 	directory = await mkdtemp(resolve(".software-render-"));
 	await build({
@@ -111,12 +116,14 @@ beforeAll(async () => {
 		],
 	});
 	const { readdir } = await import("node:fs/promises");
+
 	for (const file of await readdir(directory)) {
 		const compiled = (
 			await import(
 				/* @vite-ignore */ pathToFileURL(resolve(directory, file)).href
 			)
 		).default;
+
 		if (file.startsWith("privacy")) privacy = compiled;
 		else if (file.startsWith("start")) start = compiled;
 		else if (file.startsWith("linkLanding")) linkLanding = compiled;
@@ -136,9 +143,11 @@ beforeAll(async () => {
 		else fit = compiled;
 	}
 });
+
 afterAll(async () => {
 	if (directory) await rm(directory, { recursive: true, force: true });
 });
+
 async function fixture() {
 	const sql = new DatabaseSync(":memory:");
 	sql.exec(readFileSync(resolve("db/music.sql"), "utf8"));
@@ -151,9 +160,11 @@ async function fixture() {
 			"INSERT INTO software_fit_reviews VALUES ('r','needs-clarification','PRIVATE FIT REVIEW','now','PRIVATE REVIEWER')",
 		)
 		.run();
+
 	const offer = sql.prepare(
 		`INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at,sent_at,sent_by) VALUES (?,'r',?,?,?,'now','now','now','PRIVATE ACTOR')`,
 	);
+
 	offer.run(
 		"old",
 		1,
@@ -173,15 +184,19 @@ async function fixture() {
 	sql
 		.prepare("INSERT INTO software_offer_links VALUES ('r',?,'now',NULL)")
 		.run(await hashOfferToken(token));
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		bind: (...values: unknown[]) => statement(query, values),
 		first: async () => sql.prepare(query).get(...args) ?? null,
 		all: async () => ({ results: sql.prepare(query).all(...args) }),
 	});
+
 	return { sql, db: { prepare: (query: string) => statement(query) } };
 }
+
 async function render(db: unknown, value: string) {
 	const container = await AstroContainer.create();
+
 	return container.renderToResponse(page, {
 		partial: false,
 		request: new Request(`https://thesuperhuman.us/offer/${value}`),
@@ -189,11 +204,14 @@ async function render(db: unknown, value: string) {
 		locals: { runtime: { env: { MUSIC_DB: db } } } as any,
 	});
 }
+
 it("renders the latest sent terms and excludes all private and draft data", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		const response = await render(db, token),
 			html = await response.text();
+
 		expect(response.status).toBe(200);
 		expect(html).toContain("Current offer");
 		expect(html).toContain("Offer v2");
@@ -206,11 +224,14 @@ it("renders the latest sent terms and excludes all private and draft data", asyn
 		sql.close();
 	}
 });
+
 it("renders unknown, revoked and no-sent links as identical private 404s", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		const unknown = await render(db, "b".repeat(43)),
 			unknownHTML = await unknown.text();
+
 		expect(unknown.status).toBe(404);
 		sql.exec("UPDATE software_offer_links SET revoked_at='now'");
 		const revoked = await render(db, token);
@@ -233,6 +254,7 @@ it.each(["{}", '{"outcome":"Invalid"}', "null", "broken JSON"])(
 	"renders invalid terms %s as the existing unavailable state",
 	async (termsJSON) => {
 		const { sql, db } = await fixture();
+
 		try {
 			const unknown = await render(db, "b".repeat(43));
 			sql
@@ -250,6 +272,7 @@ it.each(["{}", '{"outcome":"Invalid"}', "null", "broken JSON"])(
 it("protects owner previews and selects draft or exact sent version without private fields", async () => {
 	const { sql, db } = await fixture();
 	const container = await AstroContainer.create();
+
 	const renderPreview = (owner = true, query = "") =>
 		container.renderToResponse(preview, {
 			partial: false,
@@ -262,6 +285,7 @@ it("protects owner previews and selects draft or exact sent version without priv
 				runtime: { env: { MUSIC_DB: db } },
 			},
 		} as any);
+
 	try {
 		expect((await renderPreview(false)).status).toBe(403);
 		const draftHTML = await (await renderPreview()).text();
@@ -282,6 +306,7 @@ it("protects owner previews and selects draft or exact sent version without priv
 
 it("renders reload guidance, resolved controls, and the reopened editor", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		const offers = (
 			await db
@@ -290,7 +315,9 @@ it("renders reload guidance, resolved controls, and the reopened editor", async 
 				)
 				.all()
 		).results;
+
 		const container = await AstroContainer.create();
+
 		const renderEditor = (resolved: boolean, revoked = false) =>
 			container.renderToString(editor, {
 				props: {
@@ -302,6 +329,7 @@ it("renders reload guidance, resolved controls, and the reopened editor", async 
 					linkCreatedAt: "displayed-link",
 				},
 			});
+
 		const open = await renderEditor(false);
 		expect(open).toContain(
 			"The client link is in your copy of the offer email. To issue a new one, revoke this link and send again.",
@@ -333,24 +361,29 @@ it("renders reload guidance, resolved controls, and the reopened editor", async 
 
 it("keeps question, decline and fit hints outside their accessible labels", async () => {
 	const container = await AstroContainer.create();
+
 	const questionHTML = await container.renderToString(questions, {
 		props: { requestId: "r" },
 	});
+
 	for (const action of ["question", "decline"]) {
 		expect(questionHTML).toContain(
 			`aria-describedby="software-${action}-hint"`,
 		);
 		expect(questionHTML).toContain(`</label><p id="software-${action}-hint"`);
 	}
+
 	const fitHTML = await container.renderToString(fit, {
 		props: { requestId: "r", fit: null },
 	});
+
 	expect(fitHTML).toContain('aria-describedby="software-fit-note-hint"');
 	expect(fitHTML).toContain('</label><p id="software-fit-note-hint"');
 });
 
 it("shows the next draft version after decline and reopen", async () => {
 	const container = await AstroContainer.create();
+
 	const html = await container.renderToString(editor, {
 		props: {
 			requestId: "r",
@@ -362,11 +395,13 @@ it("shows the next draft version after decline and reopen", async () => {
 			],
 		},
 	});
+
 	expect(html).toContain("Draft v3 · Not sent");
 });
 
 it("hides withdrawn offer controls and renders saved fit history as text", async () => {
 	const container = await AstroContainer.create();
+
 	const html = await container.renderToString(editor, {
 		props: {
 			requestId: "r",
@@ -376,10 +411,12 @@ it("hides withdrawn offer controls and renders saved fit history as text", async
 			withdrawn: true,
 		},
 	});
+
 	expect(html).toContain("This request is withdrawn.");
 	expect(html).not.toMatch(
 		/data-offer-form|data-send-offer|data-preview-offer/,
 	);
+
 	const fitHTML = await container.renderToString(fit, {
 		props: {
 			requestId: "r",
@@ -387,24 +424,30 @@ it("hides withdrawn offer controls and renders saved fit history as text", async
 			closed: true,
 		},
 	});
+
 	expect(fitHTML).toContain("Potential fit");
 	expect(fitHTML).toContain("Saved note");
 	expect(fitHTML).not.toContain("<form");
 });
+
 it.each([false, true])(
 	"replaces only an earlier delivered version (earlier sent %s)",
 	async (earlierSent) => {
 		const { sql, db } = await fixture();
+
 		try {
 			sql.exec(
 				"UPDATE software_offers SET status='withdrawn',sent_at=NULL WHERE version=1",
 			);
+
 			if (earlierSent) {
 				sql.exec(
 					"UPDATE software_offers SET status='superseded',sent_at='now' WHERE version=1; UPDATE software_offers SET status='withdrawn',sent_at=NULL WHERE version=2; UPDATE software_offers SET status='sent',sent_at='now' WHERE version=3",
 				);
 			}
+
 			const html = await (await render(db, token)).text();
+
 			if (earlierSent) expect(html).toContain("replaces v1");
 			else expect(html).not.toContain("replaces");
 		} finally {
@@ -415,6 +458,7 @@ it.each([false, true])(
 
 it("returns an unavailable 404 without project data for foreign and revoked software ids", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		sql
 			.prepare(
@@ -432,12 +476,14 @@ it("returns an unavailable 404 without project data for foreign and revoked soft
 				"foreign@example.com",
 			);
 		const container = await AstroContainer.create();
+
 		for (const revoked of [false, true]) {
 			if (revoked) {
 				sql.exec(
 					"UPDATE audio_client_sessions SET email='alex@example.com'; UPDATE software_projects SET revoked_at='now'",
 				);
 			}
+
 			const response = await container.renderToResponse(softwarePage, {
 				partial: false,
 				request: new Request("https://thesuperhuman.us/studio/software/r", {
@@ -450,9 +496,11 @@ it("returns an unavailable 404 without project data for foreign and revoked soft
 					},
 				} as any,
 			});
+
 			const html = await response.text();
 			expect(response.status).toBe(404);
 			expect(html).toContain("This project isn’t available");
+
 			for (const secret of [
 				"Current offer",
 				"PRIVATE NOTE",
@@ -468,6 +516,7 @@ it("returns an unavailable 404 without project data for foreign and revoked soft
 
 it("renders started offers as history without initializing editor actions", async () => {
 	const container = await AstroContainer.create();
+
 	const html = await container.renderToString(editor, {
 		props: {
 			requestId: "r",
@@ -485,6 +534,7 @@ it("renders started offers as history without initializing editor actions", asyn
 			],
 		},
 	});
+
 	expect(html).toContain("The project started from offer v2.");
 	expect(html).toContain("Versions");
 	expect(html).toContain("Offer v2");
@@ -492,22 +542,27 @@ it("renders started offers as history without initializing editor actions", asyn
 	expect(html).not.toContain("data-offer-form");
 	expect(html).not.toContain("data-send-offer");
 });
+
 it("renders version-specific direction, delivery, acceptance, handoff and earlier decisions without private fields", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		sql
 			.prepare(
 				"INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('r','current',?,'standard','now','now','2026-09-29','PRIVATE OWNER','now','now')",
 			)
 			.run(JSON.stringify(terms));
+
 		const { createHash } = await import("node:crypto"),
 			session = "a".repeat(72);
+
 		sql
 			.prepare(
 				"INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES (?,'alex@example.com','now','2099-01-01','now')",
 			)
 			.run(createHash("sha256").update(session).digest("hex"));
 		const container = await AstroContainer.create();
+
 		const renderProject = () =>
 			container.renderToString(softwarePage, {
 				request: new Request("https://thesuperhuman.us/studio/software/r", {
@@ -520,6 +575,7 @@ it("renders version-specific direction, delivery, acceptance, handoff and earlie
 					},
 				} as any,
 			});
+
 		sql.exec(
 			"INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,created_by,created_at,updated_at,shared_at,review_window_days) VALUES ('direction','r','direction_review','shared',0,'Proposed direction','Direction v1','concept','PRIVATE AUTHOR','2026-09-29','2026-09-29','2026-09-29',5)",
 		);
@@ -561,6 +617,7 @@ it("renders version-specific direction, delivery, acceptance, handoff and earlie
 		expect(html.indexOf("Try these")).toBeLessThan(
 			html.indexOf("What we agreed"),
 		);
+
 		const multiTerms = {
 			...terms,
 			milestones: [
@@ -568,6 +625,7 @@ it("renders version-specific direction, delivery, acceptance, handoff and earlie
 				{ ...terms.milestones[0], name: "Follow-up" },
 			],
 		};
+
 		sql
 			.prepare("UPDATE software_projects SET terms_json=?")
 			.run(JSON.stringify(multiTerms));
@@ -598,10 +656,12 @@ it("renders version-specific direction, delivery, acceptance, handoff and earlie
 		).toHaveLength(1);
 		sql.exec("UPDATE software_projects SET milestone_index=1");
 		html = await renderProject();
+
 		const advancedRail = html.slice(
 			html.indexOf("<aside"),
 			html.indexOf("</aside>"),
 		);
+
 		expect(advancedRail.indexOf("/reviews/delivery")).toBeGreaterThan(-1);
 		expect(advancedRail.indexOf("/reviews/delivery")).toBeLessThan(
 			advancedRail.indexOf("/reviews/pending-direction"),
@@ -612,10 +672,12 @@ it("renders version-specific direction, delivery, acceptance, handoff and earlie
 		html = await renderProject();
 		expect(html).toContain("Current offer · milestone 2");
 		expect(html).toContain("Milestone 2 is starting.");
+
 		const startingRail = html.slice(
 			html.indexOf("<aside"),
 			html.indexOf("</aside>"),
 		);
+
 		expect(startingRail).toContain("/reviews/delivery");
 		expect(startingRail).toContain("Accept version 1");
 		expect(html.slice(html.indexOf("Earlier updates"))).not.toContain(
@@ -684,10 +746,12 @@ it("renders version-specific direction, delivery, acceptance, handoff and earlie
 			"UPDATE software_project_updates SET status='superseded' WHERE id='direction2'; INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,created_by,created_at,updated_at,shared_at) VALUES ('second-delivery','r','delivery_review','shared',1,'Follow-up delivery','Follow-up v1','working_preview','owner','2026-10-05','2026-10-05','2026-10-05'); INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES ('r','client','token','Accepted follow-up','second-delivery','milestone_accepted','2026-10-06'); INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,links_json,next_step,created_by,created_at,updated_at,shared_at) VALUES ('second-handoff','r','handoff','shared',1,'Follow-up files','handoff','[{\"label\":\"Follow-up notes\",\"url\":\"https://example.com/follow-up\"}]','Follow-up corrections only.','owner','2026-10-07','2026-10-07','2026-10-07')",
 		);
 		html = await renderProject();
+
 		const strips = html.slice(
 			html.indexOf('class="project-current'),
 			html.indexOf('class="project-history'),
 		);
+
 		expect(html).toContain("It&#39;s yours.");
 		expect(html).toContain("Follow-up notes");
 		expect(html).toContain("Corrections are covered through Nov 5, 2026.");
@@ -712,6 +776,7 @@ it("renders version-specific direction, delivery, acceptance, handoff and earlie
 		expect(
 			html.match(/Corrections are covered through Nov 1, 2026\./g),
 		).toHaveLength(1);
+
 		for (const secret of [
 			"PRIVATE OWNER",
 			"PRIVATE AUTHOR",
@@ -724,6 +789,7 @@ it("renders version-specific direction, delivery, acceptance, handoff and earlie
 		sql.exec(
 			"INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,links_json,created_by,created_at,updated_at,shared_at) VALUES ('progress-link','r','progress','shared',0,'Prior progress','concept','[{\"label\":\"Prior progress reference\",\"url\":\"https://example.com/progress\"}]','owner','2026-10-14','2026-10-14','2026-10-14')",
 		);
+
 		const ownerHTML = await container.renderToString(composer, {
 			request: new Request("https://thesuperhuman.us/owner/requests/r/update"),
 			params: { id: "r" },
@@ -732,6 +798,7 @@ it("renders version-specific direction, delivery, acceptance, handoff and earlie
 				runtime: { env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" } },
 			} as any,
 		});
+
 		expect(ownerHTML).toContain("Delivery review");
 		expect(ownerHTML).toContain("Evidence for every acceptance check");
 		expect(ownerHTML).toContain(
@@ -749,6 +816,7 @@ it("renders version-specific direction, delivery, acceptance, handoff and earlie
 
 it("keeps newer progress first and pending review actions in the rail", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		sql
 			.prepare(
@@ -758,14 +826,17 @@ it("keeps newer progress first and pending review actions in the rail", async ()
 		sql.exec(
 			"INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,created_by,created_at,updated_at,shared_at) VALUES ('delivery','r','delivery_review','shared',0,'Pending delivery','Delivery v1','working_preview','owner','2026-09-29','2026-09-29','2026-09-29'),('progress','r','progress','shared',0,'Newer concept','v1','concept','owner','2026-09-30','2026-09-30','2026-09-30'),('progress2','r','progress','shared',0,'Newest concept','v2','concept','owner','2026-10-01','2026-10-01','2026-10-01')",
 		);
+
 		const { createHash } = await import("node:crypto"),
 			session = "a".repeat(72);
+
 		sql
 			.prepare(
 				"INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES (?,'alex@example.com','now','2099-01-01','now')",
 			)
 			.run(createHash("sha256").update(session).digest("hex"));
 		const container = await AstroContainer.create();
+
 		const renderProject = () =>
 			container.renderToString(softwarePage, {
 				request: new Request("https://thesuperhuman.us/studio/software/r", {
@@ -778,12 +849,15 @@ it("keeps newer progress first and pending review actions in the rail", async ()
 					},
 				} as any,
 			});
+
 		let html = await renderProject();
 		expect(html).not.toContain("Version 1 is ready to try.");
+
 		const current = html.slice(
 			html.indexOf('class="project-current'),
 			html.indexOf("<aside"),
 		);
+
 		expect(current).toContain("Current offer");
 		expect(current).not.toContain("Newer concept");
 		expect(current).toContain("Newest concept");
@@ -811,6 +885,7 @@ it("keeps newer progress first and pending review actions in the rail", async ()
 it("reopens an earlier milestone revision with its saved evidence intact", async () => {
 	const { sql, db } = await fixture(),
 		container = await AstroContainer.create();
+
 	try {
 		const multiTerms = {
 			...terms,
@@ -829,6 +904,7 @@ it("reopens an earlier milestone revision with its saved evidence intact", async
 				},
 			],
 		};
+
 		sql
 			.prepare(
 				"INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,state,step,milestone_index) VALUES ('r','current',?,'standard','now','now','2026-09-29','owner','now','2026-10-10','building','build',1)",
@@ -858,6 +934,7 @@ it("reopens an earlier milestone revision with its saved evidence intact", async
 		sql.exec(
 			"UPDATE software_project_updates SET next_step='Keep the saved next step.' WHERE id='revision-draft'",
 		);
+
 		const html = await container.renderToString(composer, {
 			request: new Request(
 				"https://thesuperhuman.us/owner/requests/r/update?respond=old-review",
@@ -868,28 +945,34 @@ it("reopens an earlier milestone revision with its saved evidence intact", async
 				runtime: { env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" } },
 			} as any,
 		});
+
 		expect(html).toContain("Respond to requested changes");
 		expect(html).toContain("Please fix the client form.");
 		expect(html).toContain("Saved new evidence");
 		expect(html).toContain("Saved second check");
+
 		const clientPreview = html.slice(
 			html.indexOf('class="client-preview'),
 			html.indexOf("data-preview-templates"),
 		);
+
 		expect(clientPreview.match(/Keep the saved next step\./g)).toHaveLength(1);
 		expect(html).not.toContain(
 			"That revision request is no longer the latest review.",
 		);
 		expect(html).toContain('value="0" selected');
 		expect(html).toContain("Milestone 1 · First milestone");
+
 		const project = await db
 			.prepare("SELECT * FROM software_projects WHERE request_id='r'")
 			.first();
+
 		const updates = (
 			await db
 				.prepare("SELECT * FROM software_project_updates WHERE request_id='r'")
 				.all()
 		).results;
+
 		const ownerPanel = await container.renderToString(panel, {
 			props: {
 				requestId: "r",
@@ -900,6 +983,7 @@ it("reopens an earlier milestone revision with its saved evidence intact", async
 			},
 			locals: { runtime: { env: { MUSIC_DB: db } } } as any,
 		});
+
 		expect(ownerPanel).toContain("/owner/requests/r/update?respond=old-review");
 		expect(ownerPanel).toContain("Continue revision draft");
 	} finally {
@@ -909,6 +993,7 @@ it("reopens an earlier milestone revision with its saved evidence intact", async
 
 it("keeps update requests separate from Waiting on you and renders the Today software row", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		sql
 			.prepare(
@@ -926,6 +1011,7 @@ it("keeps update requests separate from Waiting on you and renders the Today sof
 			)
 			.run(createHash("sha256").update(session).digest("hex"));
 		const container = await AstroContainer.create();
+
 		const renderProject = () =>
 			container.renderToString(softwarePage, {
 				request: new Request("https://thesuperhuman.us/studio/software/r", {
@@ -938,6 +1024,7 @@ it("keeps update requests separate from Waiting on you and renders the Today sof
 					},
 				} as any,
 			});
+
 		let html = await renderProject();
 		expect(html).toContain("Send a sample");
 		expect(html).not.toContain("Waiting on you");
@@ -978,6 +1065,7 @@ it("keeps update requests separate from Waiting on you and renders the Today sof
 it("returns a private temporary-unavailable 503 without the database", async () => {
 	const response = await render(undefined, token),
 		html = await response.text();
+
 	expect(response.status).toBe(503);
 	expect(response.headers.get("cache-control")).toBe("private, no-store");
 	expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
@@ -989,6 +1077,7 @@ it("returns a private temporary-unavailable 503 without the database", async () 
 
 it("hides Reopen for a started request and gates both sending retry controls at one minute", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		sql
 			.prepare(
@@ -996,31 +1085,39 @@ it("hides Reopen for a started request and gates both sending retry controls at 
 			)
 			.run(JSON.stringify(terms));
 		sql.exec("UPDATE owner_requests SET status='reviewed'");
+
 		const container = await AstroContainer.create(),
 			locals = {
 				owner: { email: "owner@example.com" },
 				runtime: { env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" } },
 			};
+
 		const ownerHTML = await container.renderToString(ownerRequest, {
 			params: { id: "r" },
 			request: new Request("https://thesuperhuman.us/owner/requests/r"),
 			locals: locals as any,
 		});
+
 		expect(ownerHTML).not.toContain('data-action="reopen"');
 		expect(ownerHTML).not.toContain('data-action="resolve"');
+
 		for (const column of ["completed_at", "revoked_at"]) {
 			sql.exec(`UPDATE software_projects SET ${column}='now'`);
+
 			const closedHTML = await container.renderToString(ownerRequest, {
 				params: { id: "r" },
 				request: new Request("https://thesuperhuman.us/owner/requests/r"),
 				locals: locals as any,
 			});
+
 			expect(closedHTML).toContain('data-action="resolve"');
 			sql.exec(`UPDATE software_projects SET ${column}=NULL`);
 		}
+
 		const now = Date.now();
 		const clock = Date.now;
 		Date.now = () => now;
+
 		try {
 			for (const age of [59_999, 60_000]) {
 				const attempted = new Date(now - age).toISOString();
@@ -1028,6 +1125,7 @@ it("hides Reopen for a started request and gates both sending retry controls at 
 					.prepare("UPDATE software_projects SET invitation_attempted_at=?")
 					.run(attempted);
 				const project = sql.prepare("SELECT * FROM software_projects").get();
+
 				const html = await container.renderToString(panel, {
 					props: {
 						requestId: "r",
@@ -1046,6 +1144,7 @@ it("hides Reopen for a started request and gates both sending retry controls at 
 					},
 					locals: locals as any,
 				});
+
 				if (age < 60_000) {
 					expect(html).not.toContain("data-software-notice");
 					expect(
@@ -1065,11 +1164,13 @@ it("hides Reopen for a started request and gates both sending retry controls at 
 
 it("renders offer-scoped deposit controls before start and a paid deposit confirmation without a project", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		const container = await AstroContainer.create(),
 			sentOffer = sql
 				.prepare("SELECT * FROM software_offers WHERE id='current'")
 				.get();
+
 		const ownerPanel = () =>
 			container.renderToString(panel, {
 				props: {
@@ -1082,6 +1183,7 @@ it("renders offer-scoped deposit controls before start and a paid deposit confir
 				},
 				locals: { runtime: { env: { MUSIC_DB: db } } } as any,
 			});
+
 		let html = await ownerPanel();
 		expect(html).toContain("Create deposit invoice");
 		expect(html).toContain("Allow card for this invoice");
@@ -1112,16 +1214,20 @@ it("renders offer-scoped deposit controls before start and a paid deposit confir
 		sql.close();
 	}
 });
+
 it("renders only the client project invoices with private payment links and preserves manual initial payment", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		sql
 			.prepare(
 				"INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('r','current',?,'standard','now','now','2026-09-29','owner','now','now')",
 			)
 			.run(JSON.stringify(terms));
+
 		const { createHash } = await import("node:crypto"),
 			session = "a".repeat(72);
+
 		sql
 			.prepare(
 				"INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES (?,'alex@example.com','now','2099-01-01','now')",
@@ -1131,6 +1237,7 @@ it("renders only the client project invoices with private payment links and pres
       VALUES ('current-balance','r','current',0,'balance',120000,15,'open','cus_PRIVATE','in_PRIVATE','https://example.com/balance','2026-10-15','PRIVATE OWNER','2026-09-30','2026-09-30'),
       ('old-deposit','r','old',0,'deposit',111111,7,'paid','cus_PRIVATE_OLD','in_PRIVATE_OLD','https://example.com/old-secret','2026-10-01','PRIVATE OWNER','2026-09-29','2026-09-29')`);
 		const container = await AstroContainer.create();
+
 		const renderProject = () =>
 			container.renderToString(softwarePage, {
 				request: new Request("https://thesuperhuman.us/studio/software/r", {
@@ -1143,6 +1250,7 @@ it("renders only the client project invoices with private payment links and pres
 					},
 				} as any,
 			});
+
 		let html = await renderProject();
 		expect(html).toContain("Invoices");
 		expect(html).toContain("Pay invoice ↗");
@@ -1150,6 +1258,7 @@ it("renders only the client project invoices with private payment links and pres
 		expect(html).toContain("Due Oct 15, 2026");
 		expect(html).not.toContain("Initial payment · Received");
 		expect(html).not.toMatch(/PRIVATE|old-secret|1,111.11/);
+
 		for (const status of [
 			"open",
 			"payment_failed",
@@ -1167,6 +1276,7 @@ it("renders only the client project invoices with private payment links and pres
 				["open", "payment_failed", "uncollectible"].includes(status),
 			);
 		}
+
 		sql.exec(
 			"UPDATE software_invoices SET status='open' WHERE id='current-balance'",
 		);
@@ -1202,9 +1312,11 @@ it("renders only the client project invoices with private payment links and pres
 
 it("renders one signing page, returning details, waiting and both-signed actions", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		const session = "s".repeat(43),
 			sessionHash = await hashOfferToken(session);
+
 		sql
 			.prepare(
 				"INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by,version_label) VALUES ('msa','msa',1,'Template',?,1,'now','owner','v2026-09-30')",
@@ -1248,6 +1360,7 @@ it("renders one signing page, returning details, waiting and both-signed actions
 			.prepare("UPDATE owner_requests SET details_json=? WHERE id='r'")
 			.run(JSON.stringify({ company: "Example LLC" }));
 		const container = await AstroContainer.create();
+
 		const render = (query = "") =>
 			container.renderToString(signPage, {
 				params: { token },
@@ -1257,6 +1370,7 @@ it("renders one signing page, returning details, waiting and both-signed actions
 				),
 				locals: { runtime: { env: { MUSIC_DB: db } } } as any,
 			});
+
 		let html = await render();
 		expect(html).toContain("Ready to sign.");
 		expect(html).toContain('value="Example LLC"');
@@ -1307,11 +1421,13 @@ it("renders one signing page, returning details, waiting and both-signed actions
 					milestones: [terms.milestones[0], terms.milestones[0]],
 				}),
 			);
+
 		const originalDetails = sql
 			.prepare(
 				"SELECT agreement_details_json FROM software_offers WHERE id='current'",
 			)
 			.get().agreement_details_json;
+
 		const multiDetails = JSON.parse(originalDetails);
 		multiDetails.milestones = [
 			{ ...multiDetails.milestones[0], target: "2026-10-10" },
@@ -1399,6 +1515,7 @@ it("renders one signing page, returning details, waiting and both-signed actions
 		sql.exec(
 			"UPDATE software_offers SET reused_msa_id=NULL WHERE id='current'",
 		);
+
 		const values = {
 			client: {
 				signer_name: "Example Signer",
@@ -1414,6 +1531,7 @@ it("renders one signing page, returning details, waiting and both-signed actions
 			system: { payment: "Standard" },
 			choices: { portfolio: "Do not allow", naming: "No" },
 		};
+
 		sql
 			.prepare(
 				"INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES ('sow','sow','current','r','client','msa','review','Exact SOW',?,?,'now','2026-09-30',?)",
@@ -1450,15 +1568,18 @@ it("renders one signing page, returning details, waiting and both-signed actions
 		expect(html.indexOf("Client’s signed choices")).toBeLessThan(
 			html.indexOf('value="countersign"'),
 		);
+
 		const renderAgreementPanel = () =>
 			container.renderToString(agreementPanel, {
 				props: { requestId: "r", offerId: "current" },
 				locals: { runtime: { env: { MUSIC_DB: db } } } as any,
 			});
+
 		sql.exec(
 			"INSERT INTO software_agreement_notifications(agreement_id,kind,email,status) VALUES('sow','signature-receipt','client@example.com','failed')",
 		);
 		expect(await renderAgreementPanel()).toContain("Retry agreement email");
+
 		for (const status of ["executed", "abandoned"]) {
 			sql.prepare("UPDATE software_agreements SET status=?").run(status);
 			sql
@@ -1470,6 +1591,7 @@ it("renders one signing page, returning details, waiting and both-signed actions
 				"Retry agreement email",
 			);
 		}
+
 		sql.exec(
 			"UPDATE software_agreements SET status='executed'; INSERT INTO software_agreement_deliveries(agreement_id,recipient_role,email,status) VALUES('sow','client','client@example.com','failed')",
 		);
@@ -1502,8 +1624,10 @@ it("renders one signing page, returning details, waiting and both-signed actions
 
 it("keeps manual signing closed and shows start exceptions only when required", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		const container = await AstroContainer.create();
+
 		const render = (details: unknown) =>
 			container.renderToString(panel, {
 				props: {
@@ -1521,10 +1645,12 @@ it("keeps manual signing closed and shows start exceptions only when required", 
 				},
 				locals: { runtime: { env: { MUSIC_DB: db } } } as any,
 			});
+
 		let html = await render({
 			po_requirement: "not_required",
 			planned_start: "2000-01-01",
 		});
+
 		expect(html).toMatch(
 			/<details[^>]*><summary[^>]*>Signed outside the website<\/summary>/,
 		);
@@ -1556,8 +1682,10 @@ it("keeps manual signing closed and shows start exceptions only when required", 
 
 it("renders Agreements with the owner heading, active navigation and ordered rail sections", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		const container = await AstroContainer.create();
+
 		const html = await container.renderToString(agreements, {
 			partial: false,
 			request: new Request("https://thesuperhuman.us/owner/agreements"),
@@ -1566,6 +1694,7 @@ it("renders Agreements with the owner heading, active navigation and ordered rai
 				runtime: { env: { MUSIC_DB: db } },
 			},
 		} as any);
+
 		expect(html.match(/class="owner-header"/g)).toHaveLength(1);
 		expect(html.match(/<main\b/g)).toHaveLength(1);
 		expect(html).toMatch(/href="\/owner\/agreements"[^>]*aria-current="page"/);
@@ -1597,10 +1726,12 @@ it("renders Agreements with the owner heading, active navigation and ordered rai
 
 it("renders template version labels, source revision fields, the current version and version history on Agreements", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		const insert = sql.prepare(
 			"INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by,version_label,source_revision) VALUES(?,?,?,?,?,?,?,?,?)",
 		);
+
 		// msa-1 has no stored label, so its history falls back to its publish date.
 		insert.run(
 			"msa-1",
@@ -1636,6 +1767,7 @@ it("renders template version labels, source revision fields, the current version
 			null,
 		);
 		const container = await AstroContainer.create();
+
 		const html = (
 			await container.renderToString(agreements, {
 				partial: false,
@@ -1646,27 +1778,37 @@ it("renders template version labels, source revision fields, the current version
 				},
 			} as any)
 		).replace(/<!--[\s\S]*?-->/g, "");
+
 		const inputs = (name: string) =>
 			html.match(new RegExp(`<input[^>]*name="${name}"[^>]*>`, "g")) ?? [];
+
 		const versionInputs = inputs("versionLabel"),
 			revisionInputs = inputs("sourceRevision");
+
 		expect(versionInputs).toHaveLength(2);
 		expect(revisionInputs).toHaveLength(2);
+
 		for (const input of versionInputs)
 			expect(input).toContain(`value="v${projectToday()}"`);
+
 		for (const input of versionInputs) expect(input).toMatch(/ required/);
+
 		for (const input of versionInputs)
 			expect(input).toContain('maxlength="40"');
+
 		for (const input of versionInputs)
 			expect(input).toContain('pattern="[A-Za-z0-9.\\-]{1,40}"');
+
 		// The browser shows this title as the pattern-mismatch message, so it names the allowed format.
 		for (const input of versionInputs)
 			expect(input).toContain(
 				'title="Use letters, digits, dots and dashes for the version label, up to 40 characters."',
 			);
+
 		// Preview may run on an unfinished label, so it skips browser validation. Publish keeps the format check in the browser.
 		const actionButtons = (value: string) =>
 			html.match(new RegExp(`<button[^>]*value="${value}"[^>]*>`, "g")) ?? [];
+
 		expect(actionButtons("preview")).toHaveLength(2);
 		expect(
 			actionButtons("preview").every((button) =>
@@ -1679,15 +1821,19 @@ it("renders template version labels, source revision fields, the current version
 				button.includes("formnovalidate"),
 			),
 		).toBe(false);
+
 		// Browsers compile pattern with the v flag, where an unescaped trailing dash is a syntax error.
 		const pattern = new RegExp(
 			`^(?:${versionInputs[0]!.match(/pattern="([^"]*)"/)![1]})$`,
 			"v",
 		);
+
 		expect(pattern.test(`v${projectToday()}`)).toBe(true);
 		expect(pattern.test("v2026 10 12")).toBe(false);
+
 		for (const input of revisionInputs)
 			expect(input).toContain('maxlength="120"');
+
 		for (const input of revisionInputs)
 			expect(input).not.toMatch(/ required|value=/);
 		expect(html).toMatch(
@@ -1714,6 +1860,7 @@ it("renders template version labels, source revision fields, the current version
 		expect(html).toMatch(
 			/<p class="rail-muted rail-caption[^"]*" id="sow-source-revision-hint">Your reference for the legal source, for example a counsel revision\. Clients can see it in the signing record attached to the signed PDF\.<\/p>/,
 		);
+
 		// Each hint sits in its field's group, so the field gap (not the form gap) separates it from the next field.
 		for (const [name, id] of [
 			["versionLabel", "msa-version-label-hint"],
@@ -1734,9 +1881,11 @@ it("renders template version labels, source revision fields, the current version
 				.match(/<div[^>]*data-template-diff[^>]*>/g)!
 				.every((tag) => tag.includes(" hidden")),
 		).toBe(true);
+
 		const historyButtons =
 			html.match(/<button[^>]*data-template-version[^>]*>[^<]*<\/button>/g) ??
 			[];
+
 		expect(historyButtons).toHaveLength(4);
 		expect(
 			historyButtons.filter((button) => button.includes(">View text</button>")),
@@ -1748,9 +1897,11 @@ it("renders template version labels, source revision fields, the current version
 					button.includes('type="button"'),
 			),
 		).toHaveLength(4);
+
 		const compare = historyButtons.filter((button) =>
 			button.includes(">Compare with previous</button>"),
 		);
+
 		expect(compare).toHaveLength(1);
 		expect(compare[0]).toContain('data-kind="msa"');
 		expect(compare[0]).toContain('data-version="2"');
@@ -1769,9 +1920,11 @@ it("renders template version labels, source revision fields, the current version
 		expect(html).toMatch(/Version 2 · v2026-10-02 · /);
 		expect(html).toMatch(/Version 1 · v2026-09-15 · /);
 		expect(html.match(/data-template-version-output/g)).toHaveLength(3);
+
 		// History output is announced by moving focus to it. As a live region, a stored template (up to 100 KB) would be read aloud.
 		const outputs =
 			html.match(/<div[^>]*data-template-version-output[^>]*>/g) ?? [];
+
 		expect(outputs).toHaveLength(3);
 		expect(outputs.every((tag) => !tag.includes("aria-live"))).toBe(true);
 		// The preview diff starts hidden and stays a polite live region, so its content is announced when a preview arrives.
@@ -1794,12 +1947,14 @@ it("scopes the script-built diff and version text rules to the agreement setting
 			internalURL: "astro/compiler-runtime",
 		},
 	);
+
 	const rules = [...css.join("\n").matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(
 		(match) => ({
 			selectors: match[1].split(",").map((selector) => selector.trim()),
 			body: match[2],
 		}),
 	);
+
 	const bodyOf = (cls: string) =>
 		rules
 			.filter((rule) =>
@@ -1807,6 +1962,7 @@ it("scopes the script-built diff and version text rules to the agreement setting
 			)
 			.map((rule) => rule.body)
 			.join(";");
+
 	for (const cls of [
 		"template-diff",
 		"template-text",
@@ -1817,6 +1973,7 @@ it("scopes the script-built diff and version text rules to the agreement setting
 		const selectors = rules
 			.flatMap((rule) => rule.selectors)
 			.filter((selector) => selector.includes(`.${cls}`));
+
 		expect(selectors, cls).not.toHaveLength(0);
 		expect(
 			selectors.every(
@@ -1828,10 +1985,12 @@ it("scopes the script-built diff and version text rules to the agreement setting
 			cls,
 		).toBe(true);
 	}
+
 	for (const cls of ["template-diff", "template-text"]) {
 		expect(bodyOf(cls)).toMatch(/white-space:\s*pre-wrap/);
 		expect(bodyOf(cls)).toMatch(/overflow-wrap:\s*anywhere/);
 	}
+
 	expect(bodyOf("diff-removed")).toMatch(/color:\s*var\(--muted\)/);
 	expect(bodyOf("diff-unchanged")).toMatch(/color:\s*var\(--muted\)/);
 	expect(bodyOf("diff-added")).toMatch(/color:\s*var\(--accent\)/);
@@ -1845,17 +2004,20 @@ it("lets a 40 character version label wrap inside the agreement settings root, s
 			internalURL: "astro/compiler-runtime",
 		},
 	);
+
 	const rules = [...css.join("\n").matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(
 		(match) => ({
 			selectors: match[1].split(",").map((selector) => selector.trim()),
 			body: match[2],
 		}),
 	);
+
 	const root = rules.filter((rule) =>
 		rule.selectors.some((selector) =>
 			/^\.agreement-settings:where\(\.astro-\w+\)$/.test(selector),
 		),
 	);
+
 	expect(root).toHaveLength(1);
 	// overflow-wrap is inherited, so this reaches the history items, the current version line and the script-built heading.
 	expect(root[0].body).toMatch(/overflow-wrap:\s*anywhere/);
@@ -1864,8 +2026,10 @@ it("lets a 40 character version label wrap inside the agreement settings root, s
 it("reads immutable agreed fees, dates and complete legal text without enabling new consent", async () => {
 	const { sql, db } = await fixture();
 	const { createHash } = await import("node:crypto");
+
 	const session = "a".repeat(72),
 		hash = "b".repeat(64);
+
 	const fixed: OfferTerms = {
 		...terms,
 		paymentMode: "standard",
@@ -1880,6 +2044,7 @@ it("reads immutable agreed fees, dates and complete legal text without enabling 
 			},
 		],
 	};
+
 	const owner = agreementDetailsSchema.parse({
 		planned_start: "2026-10-01",
 		planned_end: "2026-10-20",
@@ -1898,6 +2063,7 @@ it("reads immutable agreed fees, dates and complete legal text without enabling 
 		support: "Agreed support only",
 		expenses_taxes: "No extra expenses",
 	});
+
 	const values = agreementValues(
 		fixed,
 		owner,
@@ -1937,6 +2103,7 @@ it("reads immutable agreed fees, dates and complete legal text without enabling 
 			sow_source_revision: "",
 		},
 	);
+
 	try {
 		sql
 			.prepare(
@@ -1949,6 +2116,7 @@ it("reads immutable agreed fees, dates and complete legal text without enabling 
 			)
 			.run(JSON.stringify(fixed));
 		const container = await AstroContainer.create();
+
 		const render = (cookie = session) =>
 			container.renderToString(softwarePage, {
 				request: new Request("https://thesuperhuman.us/studio/software/r", {
@@ -1961,6 +2129,7 @@ it("reads immutable agreed fees, dates and complete legal text without enabling 
 					},
 				} as any,
 			});
+
 		let html = await render();
 		expect(html).toContain("$1.01 fixed fee");
 		expect(html).toContain("50% of each milestone before it starts");
@@ -1973,6 +2142,7 @@ it("reads immutable agreed fees, dates and complete legal text without enabling 
 			)
 			.run(JSON.stringify(owner));
 		html = await render();
+
 		for (const text of [
 			"Planned Oct 1, 2026 to Oct 20, 2026",
 			"Target delivery: Oct 19, 2026",
@@ -1991,6 +2161,7 @@ it("reads immutable agreed fees, dates and complete legal text without enabling 
 				"INSERT INTO software_agreement_clients VALUES ('party','alex@example.com','Example Client LLC','example','LLC','WY','Example address','alex@example.com','now')",
 			)
 			.run();
+
 		for (const kind of ["msa", "sow"]) {
 			sql
 				.prepare(
@@ -2014,19 +2185,23 @@ it("reads immutable agreed fees, dates and complete legal text without enabling 
 					JSON.stringify(values),
 				);
 		}
+
 		sql.exec(
 			"UPDATE software_projects SET agreement_id='sow'; UPDATE software_offers SET terms_json='{}' WHERE id='current'",
 		);
 		html = await render();
+
 		const reader = html.slice(
 			html.indexOf("data-terms-reader"),
 			html.indexOf("Invoices"),
 		);
+
 		expect(html).toContain("Planned Oct 1, 2026 to Oct 20, 2026");
 		expect(html).toContain("Target delivery: Oct 19, 2026");
 		expect(reader).not.toContain("Nov 1, 2026");
 		expect(html).toContain("$0.50 deposit / $0.51 balance");
 		expect(html).toContain("80%, includes prior payments");
+
 		for (const text of [
 			"Synthetic access and sample.",
 			"Live rollout.",
@@ -2054,6 +2229,7 @@ it("reads immutable agreed fees, dates and complete legal text without enabling 
 		expect(html).not.toMatch(
 			/name="consent"|data-agreement-flow|PRIVATE TEMPLATE ACTOR|PRIVATE SIGNING SESSION|PRIVATE OWNER/,
 		);
+
 		for (let stage = 0; stage < 4; stage++)
 			expect(html).toMatch(
 				new RegExp(
@@ -2097,14 +2273,17 @@ it.each(
 	"keeps the correction deadline beside acceptance ($state, $days days, $signing)",
 	async ({ state, days, signing }) => {
 		const paid = state !== "accepted-unpaid";
+
 		const { sql, db } = await fixture(),
 			container = await AstroContainer.create();
+
 		try {
 			sql
 				.prepare(
 					"INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('r','current',?,'standard','now','now','2026-09-29','owner','now','now')",
 				)
 				.run(JSON.stringify(terms));
+
 			const owner = agreementDetailsSchema.parse({
 				correction_calendar_days: days,
 				planned_start: "2026-10-01",
@@ -2124,6 +2303,7 @@ it.each(
 				support: "Agreed support only",
 				expenses_taxes: "No extra expenses",
 			});
+
 			const values = agreementValues(
 				{ ...terms, paymentMode: "standard" },
 				owner,
@@ -2163,6 +2343,7 @@ it.each(
 					sow_source_revision: "",
 				},
 			);
+
 			sql.exec(
 				"INSERT INTO software_agreement_clients VALUES ('party','alex@example.com','Example Client LLC','example','LLC','WY','Example address','alex@example.com','now'); INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES ('sow','sow',1,'Template','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','now','owner')",
 			);
@@ -2181,6 +2362,7 @@ it.each(
 						correction_calendar_days: signing === "website" ? 90 : days,
 					}),
 				);
+
 			if (signing === "website")
 				sql.exec("UPDATE software_projects SET agreement_id='sow'");
 			const session = "a".repeat(72);
@@ -2193,14 +2375,17 @@ it.each(
       INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES ('r','client','token','Accepted','accepted','milestone_accepted','2026-10-02');
       INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,created_by,created_at,updated_at) VALUES ('balance','r','current',0,'milestone',240000,30,'open','https://example.com/invoice','owner','now','now');
       INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,what_changed,client_request,next_step,created_by,created_at,updated_at,shared_at) VALUES ('progress','r','progress','shared',0,'Preparing your guide','working_preview','The guide is drafted. The examples are ready. The final checklist is complete.','Read the guide.','Share the files.','owner','2026-10-03','2026-10-03','2026-10-03')`);
+
 			if (paid)
 				sql.exec(
 					"INSERT INTO software_milestone_payments VALUES ('r',0,'2026-10-03','owner'); UPDATE software_invoices SET status='paid'",
 				);
+
 			if (state === "handed-off")
 				sql.exec(
 					"INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,created_by,created_at,updated_at,shared_at) VALUES ('handoff','r','handoff','shared',0,'Files','handoff','owner','2026-10-02','2026-10-02','2026-10-02')",
 				);
+
 			const html = await container.renderToString(softwarePage, {
 				request: new Request("https://thesuperhuman.us/studio/software/r", {
 					headers: { cookie: `studio_session=${session}` },
@@ -2212,6 +2397,7 @@ it.each(
 					},
 				},
 			} as any);
+
 			const deadline = days === 30 ? "Nov 1, 2026" : "Nov 16, 2026";
 			expect(
 				html.split(`Corrections are covered through ${deadline}.`),
@@ -2226,6 +2412,7 @@ it.each(
 						: html.indexOf('class="project-history', acceptance),
 				),
 			).toContain(`Corrections are covered through ${deadline}.`);
+
 			if (state === "handed-off") return;
 			const current = html.slice(0, html.indexOf('class="project-history'));
 			expect(
@@ -2249,6 +2436,7 @@ it.each(
 			expect(current).toContain("I need from you: Read the guide.");
 			expect(current).toContain("Next from me: Share the files.");
 			expect(current).not.toContain("/updates/progress/visual");
+
 			if (!paid) expect(current).toContain("Pay $2,400 ↗");
 		} finally {
 			sql.close();
@@ -2259,8 +2447,10 @@ it.each(
 it("puts the named review work first through partial, complete, accepted and handoff states", async () => {
 	vi.useFakeTimers({ toFake: ["Date"] });
 	vi.setSystemTime(new Date("2026-10-11T03:30:00Z"));
+
 	const { sql, db } = await fixture(),
 		container = await AstroContainer.create();
+
 	try {
 		const scope = {
 			...terms,
@@ -2271,6 +2461,7 @@ it("puts the named review work first through partial, complete, accepted and han
 				},
 			],
 		};
+
 		sql
 			.prepare(
 				"INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('r','current',?,'standard','now','now','2026-09-29','owner','now','now')",
@@ -2282,6 +2473,7 @@ it("puts the named review work first through partial, complete, accepted and han
 				"INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES (?,'alex@example.com','now','2099-01-01','now')",
 			)
 			.run(await hashOfferToken(session));
+
 		const render = () =>
 			container.renderToString(softwarePage, {
 				request: new Request("https://thesuperhuman.us/studio/software/r", {
@@ -2294,6 +2486,7 @@ it("puts the named review work first through partial, complete, accepted and han
 					},
 				} as any,
 			});
+
 		sql.exec(
 			`INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,visual_key,visual_alt,preview_url,what_changed,created_by,created_at,updated_at,shared_at) VALUES ('progress','r','progress','shared',0,'Latest progress','v1','working_preview','private-image','The fictional tracker.','https://example.com/latest','I updated the layout.','owner','2026-09-30','2026-09-30','2026-09-30')`,
 		);
@@ -2365,6 +2558,7 @@ it("puts the named review work first through partial, complete, accepted and han
 			"The $1,200 balance is invoiced on delivery and due within 15 days.",
 		);
 		expect(html).not.toContain("accepts milestone 1 in full");
+
 		for (const old of [
 			"WORKING PREVIEW",
 			"Demonstrated",
@@ -2417,6 +2611,7 @@ it("puts the named review work first through partial, complete, accepted and han
 		expect(html).not.toContain("accepts milestone 1 in full");
 		expect(html).not.toContain("data-review-mark");
 		expect(html).not.toContain('name="criteria"');
+
 		for (const kind of ["direction_review", "delivery_review", "progress"]) {
 			for (const evidence of ["concept", "prototype", "working_preview"]) {
 				sql
@@ -2430,6 +2625,7 @@ it("puts the named review work first through partial, complete, accepted and han
 				);
 			}
 		}
+
 		sql.exec(
 			"UPDATE software_project_updates SET kind='direction_review',evidence_type='concept' WHERE id='v2'",
 		);
@@ -2511,10 +2707,12 @@ it("puts the named review work first through partial, complete, accepted and han
 		expect(html).toMatch(
 			/<h3[^>]*>Support after handoff<\/h3><p[^>]*>Support within the correction period\.<\/p>/,
 		);
+
 		const currentHandoffFiles = html.slice(
 			html.indexOf("Your files"),
 			html.indexOf("</section>", html.indexOf("Your files")),
 		);
+
 		expect(currentHandoffFiles).not.toMatch(/<h2[^>]*>Files<\/h2>/);
 		expect(html.indexOf("Your files · Milestone 1")).toBeLessThan(
 			html.indexOf("Your decision"),
@@ -2548,10 +2746,12 @@ it("puts the named review work first through partial, complete, accepted and han
 		expect(
 			html.match(/Corrections are covered through Nov 1, 2026\./g),
 		).toHaveLength(1);
+
 		const textOnlyFiles = html.slice(
 			html.indexOf("Your files"),
 			html.indexOf("</section>", html.indexOf("Your files")),
 		);
+
 		expect(textOnlyFiles).not.toMatch(/<h2[^>]*>Files<\/h2>/);
 		expect(html).toContain("Next update: Oct 11, 2026");
 		expect(textOnlyFiles).toContain("The final source and guide are ready.");
@@ -2570,10 +2770,12 @@ it("puts the named review work first through partial, complete, accepted and han
 			"UPDATE software_project_updates SET visual_key='handoff-image',visual_alt='The handed-off tracker.',preview_url='https://example.com/handoff-preview' WHERE id='handoff'",
 		);
 		html = await render();
+
 		const files = html.slice(
 			html.indexOf("Your files"),
 			html.indexOf("</section>", html.indexOf("Your files")),
 		);
+
 		expect(files).toContain("/updates/handoff/visual");
 		expect(files).toContain('alt="The handed-off tracker."');
 		expect(files).toContain('href="https://example.com/handoff-preview"');
@@ -2706,11 +2908,13 @@ it("puts the named review work first through partial, complete, accepted and han
 		expect(
 			html.match(/Corrections are covered through Nov 1, 2026\./g),
 		).toHaveLength(1);
+
 		const olderReview = html.slice(
 			html.indexOf(
 				'data-endpoint="/api/studio/software/r/reviews/new-delivery"',
 			),
 		);
+
 		expect(olderReview).toMatch(/name="missing_deliverables" value="1"/);
 		expect(olderReview).toMatch(/name="inaccessible_deliverables" value="0"/);
 	} finally {
@@ -2718,8 +2922,10 @@ it("puts the named review work first through partial, complete, accepted and han
 		vi.useRealTimers();
 	}
 });
+
 it("masks the recipient on every unauthenticated email receipt", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		sql
 			.prepare(
@@ -2730,6 +2936,7 @@ it("masks the recipient on every unauthenticated email receipt", async () => {
 			"UPDATE software_signing_settings SET software_signing_enabled=1; UPDATE software_offers SET msa_template_id='msa',recipient_email_snapshot='alex@example.com' WHERE id='current'",
 		);
 		const container = await AstroContainer.create();
+
 		const html = await container.renderToString(signPage, {
 			params: { token },
 			request: new Request(
@@ -2737,6 +2944,7 @@ it("masks the recipient on every unauthenticated email receipt", async () => {
 			),
 			locals: { runtime: { env: { MUSIC_DB: db } } },
 		} as any);
+
 		expect(html).toContain("I sent a link to a•••@example.com.");
 		expect(html).not.toContain("alex@example.com");
 		expect(html).toContain('data-appearance="interaction-only"');
@@ -2747,25 +2955,31 @@ it("masks the recipient on every unauthenticated email receipt", async () => {
 
 it("renders a quiet Remove control beside each unsent attachment", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		sql.exec("UPDATE software_signing_settings SET software_signing_enabled=1");
+
 		const attachment = {
 			filename: "Draft.pdf",
 			version: "1",
 			date: "2026-10-01",
 			key: "agreements/attachments/draft.pdf",
 		};
+
 		sql
 			.prepare(
 				"UPDATE software_offers SET agreement_details_json=? WHERE status='draft'",
 			)
 			.run(JSON.stringify({ attachments: [attachment] }));
+
 		const offers = (await db.prepare("SELECT * FROM software_offers").all())
 			.results;
+
 		const html = await (await AstroContainer.create()).renderToString(editor, {
 			props: { requestId: "r", email: "alex@example.com", offers },
 			locals: { runtime: { env: { MUSIC_DB: db } } },
 		} as any);
+
 		expect(html).toMatch(
 			/Draft.pdf[\s\S]*class="studio-quiet"[^>]*data-remove-attachment[^>]*>Remove<\/button>/,
 		);
@@ -2782,6 +2996,7 @@ async function renderMsaContinuity({
 	currentLabel?: string;
 }) {
 	const { sql, db } = await fixture();
+
 	try {
 		sql.exec(
 			"UPDATE software_signing_settings SET software_signing_enabled=1; INSERT INTO software_agreement_clients VALUES ('client','alex@example.com','Example LLC','example llc','LLC','Wyoming','Business address','notice@example.com','now')",
@@ -2791,6 +3006,7 @@ async function renderMsaContinuity({
 				"INSERT INTO software_agreement_templates(id,kind,version,text,sha256,field_schema_version,published_at,published_by,version_label) VALUES ('msa-signed','msa',1,'Template',?,1,'2026-09-30T12:00:00.000Z','owner','v2026-09-30')",
 			)
 			.run("a".repeat(64));
+
 		if (currentLabel)
 			sql
 				.prepare(
@@ -2807,12 +3023,15 @@ async function renderMsaContinuity({
 				"INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,review_session_hash) VALUES ('msa-draft','msa',NULL,'r','client','msa-signed','review','Unsigned text',?,'{}','now','2026-09-30','session')",
 			)
 			.run("d".repeat(64));
+
 		if (reusedMsaId)
 			sql
 				.prepare("UPDATE software_offers SET reused_msa_id=? WHERE id='draft'")
 				.run(reusedMsaId);
+
 		const offers = (await db.prepare("SELECT * FROM software_offers").all())
 			.results;
+
 		return await (await AstroContainer.create()).renderToString(editor, {
 			props: { requestId: "r", email: "alex@example.com", offers },
 			locals: { runtime: { env: { MUSIC_DB: db } } },
@@ -2827,6 +3046,7 @@ it("names the signed MSA label beside the Existing MSA choice, with the current 
 		reusedMsaId: "msa-agreement",
 		currentLabel: "v2026-11-01",
 	});
+
 	expect(html).toMatch(
 		/Existing MSA[\s\S]*confirmMsaReuse[\s\S]*<p[^>]*data-msa-continuity[^>]*>Uses their signed MSA v2026-09-30\. Your current MSA is v2026-11-01\.<\/p>/,
 	);
@@ -2852,12 +3072,14 @@ it("lets a 40 character MSA label wrap in the continuity line, so the request pa
 		new URL("../../src/styles/owner.css", import.meta.url),
 		"utf8",
 	).replace(/\/\*[\s\S]*?\*\//g, "");
+
 	const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(
 		([, selector, body]) => ({
 			selectors: selector.split(",").map((s) => s.trim()),
 			body,
 		}),
 	);
+
 	expect(
 		rules.filter(
 			(rule) =>
@@ -2870,6 +3092,7 @@ it("lets a 40 character MSA label wrap in the continuity line, so the request pa
 
 it("renders omitted duplicate legacy deliverables by index without offering acceptance", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		const purchased = {
 			...terms,
@@ -2880,6 +3103,7 @@ it("renders omitted duplicate legacy deliverables by index without offering acce
 				},
 			],
 		};
+
 		sql
 			.prepare(
 				"INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES('r','current',?,'standard','now','now','now','owner','now','now')",
@@ -2895,6 +3119,7 @@ it("renders omitted duplicate legacy deliverables by index without offering acce
 				"INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES(?,'alex@example.com','now','2099-01-01','now')",
 			)
 			.run(createHash("sha256").update(session).digest("hex"));
+
 		const html = await (await AstroContainer.create()).renderToString(
 			softwarePage,
 			{
@@ -2909,6 +3134,7 @@ it("renders omitted duplicate legacy deliverables by index without offering acce
 				},
 			} as any,
 		);
+
 		expect(html).toMatch(
 			/value="milestone_accepted"[^>]*disabled[^>]*>Accept Latest update/,
 		);
@@ -2921,12 +3147,14 @@ it("renders omitted duplicate legacy deliverables by index without offering acce
 
 it("renders scanner-safe agreement and archive landings with exact copy", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		const key = "k".repeat(43);
 		sql.exec(
 			"UPDATE software_signing_settings SET software_signing_enabled=1; UPDATE software_offers SET recipient_email_snapshot='alex@example.com' WHERE id='current'",
 		);
 		const container = await AstroContainer.create();
+
 		for (const archive of [false, true]) {
 			sql
 				.prepare(
@@ -2942,6 +3170,7 @@ it("renders scanner-safe agreement and archive landings with exact copy", async 
 					"now",
 					"2099-01-01",
 				);
+
 			const response = await container.renderToResponse(
 				archive ? archiveLanding : linkLanding,
 				{
@@ -2952,6 +3181,7 @@ it("renders scanner-safe agreement and archive landings with exact copy", async 
 					locals: { runtime: { env: { MUSIC_DB: db } } },
 				} as any,
 			);
+
 			const html = await response.text();
 			expect(response.status).toBe(200);
 			expect(response.headers.get("referrer-policy")).toBe("no-referrer");
@@ -2965,7 +3195,9 @@ it("renders scanner-safe agreement and archive landings with exact copy", async 
 			expect(html).toContain("This link works once.");
 			expect(html).toContain('method="post"');
 			expect(html).toMatch(/<form class="agreement-form"/);
+
 			if (!archive) expect(html).toContain("Current offer");
+
 			for (const origin of [
 				"https://thesuperhuman.us",
 				"http://127.0.0.1:4321",
@@ -2984,20 +3216,24 @@ it("renders scanner-safe agreement and archive landings with exact copy", async 
 						},
 					} as any,
 				);
+
 				expect(preview.status).toBe(
 					origin === "http://127.0.0.1:4321" ? 200 : 404,
 				);
+
 				if (preview.status === 200)
 					expect(await preview.text()).toContain(
 						archive ? "Your documents are ready." : "Your agreement is ready.",
 					);
 			}
+
 			expect(
 				sql
 					.prepare("SELECT used_at FROM software_agreement_links WHERE id=?")
 					.get(archive ? "archive" : "agreement").used_at,
 			).toBeNull();
 			sql.exec("DELETE FROM software_agreement_links");
+
 			const expired = await container.renderToString(
 				archive ? archiveLanding : linkLanding,
 				{
@@ -3008,6 +3244,7 @@ it("renders scanner-safe agreement and archive landings with exact copy", async 
 					locals: { runtime: { env: { MUSIC_DB: db } } },
 				} as any,
 			);
+
 			expect(expired).toMatch(
 				/class="page-lede"[^>]*>Links work once and last an hour\.<\/p>/,
 			);
@@ -3020,6 +3257,7 @@ it("renders scanner-safe agreement and archive landings with exact copy", async 
 
 it("renders the approved receipt and keeps booking reassurance only on the send step", async () => {
 	const container = await AstroContainer.create();
+
 	const html = await container.renderToString(start, {
 		request: new Request("https://thesuperhuman.us/software/start"),
 		locals: {
@@ -3033,6 +3271,7 @@ it("renders the approved receipt and keeps booking reassurance only on the send 
 			},
 		} as any,
 	});
+
 	for (const copy of [
 		"Project brief · sent",
 		"Your brief is in.",
@@ -3045,6 +3284,7 @@ it("renders the approved receipt and keeps booking reassurance only on the send 
 	expect(html).not.toMatch(/data-print|Print or save|Not provided/);
 	expect(html.match(/No booking or payment at this stage\./g)).toHaveLength(1);
 	const receipt = parse(html) as any;
+
 	const find = (node: any): any =>
 		node.attrs?.some(
 			(attr: any) =>
@@ -3053,6 +3293,7 @@ it("renders the approved receipt and keeps booking reassurance only on the send 
 		)
 			? node
 			: node.childNodes?.map(find).find(Boolean);
+
 	const steps = find(receipt);
 	expect(steps?.tagName).toBe("ol");
 	expect(
@@ -3072,38 +3313,49 @@ it("renders the approved receipt and keeps booking reassurance only on the send 
 
 it("renders the project brief start page with named paths, website screens and the old idea link", async () => {
 	const container = await AstroContainer.create();
+
 	const render = (query: string) =>
 		container.renderToString(start, {
 			request: new Request(`https://thesuperhuman.us/software/start${query}`),
 			locals: { runtime: { env: {} } } as any,
 		});
+
 	const textOf = (node: any): string =>
 		node.nodeName === "#text"
 			? node.value
 			: (node.childNodes ?? []).map(textOf).join("");
+
 	const find = (node: any, test: (node: any) => boolean): any =>
 		test(node)
 			? node
 			: (node.childNodes ?? [])
 					.map((child: any) => find(child, test))
 					.find(Boolean);
+
 	const hasAttr = (node: any, name: string) =>
 		node.attrs?.some((attr: any) => attr.name === name);
+
 	const attrValue = (node: any, name: string) =>
 		node.attrs.find((attr: any) => attr.name === name)?.value;
+
 	const pathRadios = (html: string) => {
 		const found: { value: string; checked: boolean }[] = [];
+
 		const visit = (node: any) => {
 			if (node.tagName === "input" && attrValue(node, "name") === "path")
 				found.push({
 					value: attrValue(node, "value"),
 					checked: hasAttr(node, "checked"),
 				});
+
 			for (const child of node.childNodes ?? []) visit(child);
 		};
+
 		visit(parse(html));
+
 		return found;
 	};
+
 	const progress = (html: string): { hidden: boolean; label: string }[] =>
 		find(parse(html), (node) => hasAttr(node, "data-intake-progress"))
 			.childNodes.filter((node: any) => node.tagName === "li")
@@ -3111,14 +3363,19 @@ it("renders the project brief start page with named paths, website screens and t
 				hidden: hasAttr(item, "hidden"),
 				label: textOf(item),
 			}));
+
 	const steps = (html: string) => {
 		const found: string[] = [];
+
 		const visit = (node: any) => {
 			if (node.tagName === "section" && hasAttr(node, "data-step"))
 				found.push(attrValue(node, "data-step"));
+
 			for (const child of node.childNodes ?? []) visit(child);
 		};
+
 		visit(parse(html));
+
 		return found;
 	};
 
@@ -3130,6 +3387,7 @@ it("renders the project brief start page with named paths, website screens and t
 	expect(first).toContain("Back to Work with me");
 	expect(first).not.toContain("Back to Software");
 	expect(first).toContain("data-brief-kicker>Project brief</p>");
+
 	for (const copy of [
 		"A site people can read on a phone and act on.",
 		"An app people open in a browser, on a phone or a computer.",
@@ -3173,6 +3431,7 @@ it("renders the project brief start page with named paths, website screens and t
 		{ value: "workflow", checked: false },
 	]);
 	expect(progress(legacy).filter((item) => !item.hidden)).toHaveLength(7);
+
 	// Paths that are not on the list (or are object keys) open the first screen with nothing chosen.
 	for (const value of ["bogus", "toString", "__proto__"]) {
 		const html = await render(`?path=${value}`);
@@ -3185,6 +3444,7 @@ it("renders the project brief start page with named paths, website screens and t
 it("renders each owner brief outcome and gates uncertain retry at one minute", async () => {
 	const { sql, db } = await fixture();
 	const container = await AstroContainer.create();
+
 	try {
 		for (const [status, age, button] of [
 			[null, 0, true],
@@ -3203,6 +3463,7 @@ it("renders each owner brief outcome and gates uncertain retry at one minute", a
 						"UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus',?,'$.clientCopyAttemptedAt',?)",
 					)
 					.run(status, new Date(Date.now() - age).toISOString());
+
 			const html = await container.renderToString(ownerRequest, {
 				params: { id: "r" },
 				request: new Request("https://thesuperhuman.us/owner/requests/r"),
@@ -3211,6 +3472,7 @@ it("renders each owner brief outcome and gates uncertain retry at one minute", a
 					runtime: { env: { MUSIC_DB: db } },
 				} as any,
 			});
+
 			expect(html).toContain(
 				`Client copy: ${status == null || status === "failed" ? "didn&#39;t send" : status}`,
 			);
@@ -3226,10 +3488,13 @@ it("renders each owner brief outcome and gates uncertain retry at one minute", a
 
 it("renders legacy reissue guidance and removes signing actions after a project starts", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		const container = await AstroContainer.create();
+
 		const offers = (await db.prepare("SELECT * FROM software_offers").all())
 			.results;
+
 		const html = await container.renderToString(editor, {
 			props: {
 				requestId: "r",
@@ -3238,6 +3503,7 @@ it("renders legacy reissue guidance and removes signing actions after a project 
 				offers,
 			},
 		});
+
 		expect(html).toContain(
 			"Sent before website signing. The client will sign outside the website. For website signing, create a new draft.",
 		);
@@ -3264,6 +3530,7 @@ it("renders legacy reissue guidance and removes signing actions after a project 
 		sql.exec(
 			"INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,created_by,created_at,updated_at,review_window_days) VALUES('old-draft','r','progress','draft',0,'Draft','concept','owner','now','now',5)",
 		);
+
 		const ownerHTML = await container.renderToString(composer, {
 			request: new Request("https://thesuperhuman.us/owner/requests/r/update"),
 			params: { id: "r" },
@@ -3272,16 +3539,19 @@ it("renders legacy reissue guidance and removes signing actions after a project 
 				runtime: { env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" } },
 			} as any,
 		});
+
 		expect(ownerHTML).toContain("Keep these files available for 90 days.");
 		expect(ownerHTML).toMatch(/name="review_window_days"[^>]*value="12"/);
 	} finally {
 		sql.close();
 	}
 });
+
 it.each(["client_signed", "executed"])(
 	"renders a %s offer without another signing action",
 	async (status) => {
 		const { sql, db } = await fixture();
+
 		try {
 			sql.exec(
 				"UPDATE software_signing_settings SET software_signing_enabled=1; INSERT INTO software_agreement_clients VALUES('party','alex@example.com','Example Client','example','LLC','WY','Example address','alex@example.com','now'); INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES('template','sow',1,'Synthetic',lower(hex(zeroblob(32))),'now','owner')",
@@ -3314,6 +3584,7 @@ it.each(["client_signed", "executed"])(
 it("keeps payment and acceptance terms with each rail review and decisions with current work", async () => {
 	const { sql, db } = await fixture(),
 		container = await AstroContainer.create();
+
 	try {
 		const scope = {
 			...terms,
@@ -3322,6 +3593,7 @@ it("keeps payment and acceptance terms with each rail review and decisions with 
 				{ ...terms.milestones[0], name: "Follow-up", feeCents: 360000 },
 			],
 		};
+
 		sql
 			.prepare(
 				"INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,milestone_index,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('r','current',?,'standard',1,'now','now','2026-09-29','owner','now','now')",
@@ -3333,6 +3605,7 @@ it("keeps payment and acceptance terms with each rail review and decisions with 
 				"INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES (?,'alex@example.com','now','2099-01-01','now')",
 			)
 			.run(await hashOfferToken(session));
+
 		const render = () =>
 			container.renderToString(softwarePage, {
 				request: new Request("https://thesuperhuman.us/studio/software/r", {
@@ -3345,6 +3618,7 @@ it("keeps payment and acceptance terms with each rail review and decisions with 
 					},
 				} as any,
 			});
+
 		for (const [id, milestone, version] of [
 			["old", 0, 1],
 			["new", 1, 2],
@@ -3354,9 +3628,11 @@ it("keeps payment and acceptance terms with each rail review and decisions with 
 					"INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,created_by,created_at,updated_at,shared_at) VALUES (?,'r','delivery_review','shared',?,'Tracker',?,'working_preview','owner','now','now',?)",
 				)
 				.run(id, milestone, `Delivery v${version}`, `2026-10-0${version}`);
+
 		for (const mode of ["standard", "invoice"]) {
 			sql.prepare("UPDATE software_projects SET payment_mode=?").run(mode);
 			const html = await render();
+
 			for (const [id, milestone, version] of [
 				["old", 1, 1],
 				["new", 2, 2],
@@ -3365,6 +3641,7 @@ it("keeps payment and acceptance terms with each rail review and decisions with 
 					html.indexOf(`id="review-${id}"`),
 					html.indexOf("</form>", html.indexOf(`id="review-${id}"`)),
 				);
+
 				expect(section).toMatch(
 					new RegExp(
 						`Accepting version ${version} accepts milestone ${milestone} in full, including every check above\\.<\\/p>\\s*<button`,
@@ -3384,14 +3661,17 @@ it("keeps payment and acceptance terms with each rail review and decisions with 
 				);
 			}
 		}
+
 		sql.exec(
 			"INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,due_at,created_by,created_at,updated_at) VALUES('balance','r','current',0,'milestone',240000,30,'open','https://example.com/pay','2026-11-01','owner','now','now')",
 		);
 		let html = await render();
+
 		let rail = html.slice(
 			html.indexOf('id="review-old"'),
 			html.indexOf("</form>", html.indexOf('id="review-old"')),
 		);
+
 		expect(rail).toContain("Invoice due Nov 1, 2026.");
 		expect(rail).toContain("Pay $2,400 ↗");
 		expect(rail).toContain('href="https://example.com/pay"');
@@ -3413,6 +3693,7 @@ it("keeps payment and acceptance terms with each rail review and decisions with 
 		expect(rail).toContain("Paid.");
 		expect(rail).not.toContain("Invoice due");
 		expect(rail).not.toContain("Pay $2,400");
+
 		for (const status of [
 			"open",
 			"payment_failed",
@@ -3427,7 +3708,9 @@ it("keeps payment and acceptance terms with each rail review and decisions with 
 			);
 			expect(rail.includes("Pay $2,400")).toBe(status !== "creating");
 		}
+
 		sql.exec("DELETE FROM software_invoices");
+
 		for (const kind of ["direction_review", "delivery_review"]) {
 			sql
 				.prepare(
@@ -3442,10 +3725,12 @@ it("keeps payment and acceptance terms with each rail review and decisions with 
 			expect(html.match(/id="version-new"/g)).toHaveLength(1);
 			sql.exec("DELETE FROM software_project_updates WHERE id='replacement'");
 		}
+
 		sql.exec(
 			"UPDATE software_project_updates SET status='shared' WHERE id='new'",
 		);
 		sql.exec("DELETE FROM software_project_updates WHERE id='old'");
+
 		for (const [kind, decision, record] of [
 			[
 				"direction_review",
@@ -3464,11 +3749,13 @@ it("keeps payment and acceptance terms with each rail review and decisions with 
 					"INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES ('r','client','token','Please revise.','new',?,'2026-10-03')",
 				)
 				.run(decision);
+
 			const html = await render(),
 				current = html.slice(
 					html.indexOf('class="project-current'),
 					html.indexOf('class="project-history'),
 				);
+
 			expect(current).toMatch(/<h2[^>]*>Your decision<\/h2>/);
 			expect(current).toContain(record);
 			expect(current.match(/Your decision/g)).toHaveLength(1);
@@ -3483,6 +3770,7 @@ async function reviewStateFixture() {
 	const fixtureData = await fixture(),
 		{ sql, db } = fixtureData,
 		container = await AstroContainer.create();
+
 	const scope = structuredClone({
 		...terms,
 		milestones: [
@@ -3490,6 +3778,7 @@ async function reviewStateFixture() {
 			{ ...terms.milestones[0], name: "Follow-up" },
 		],
 	});
+
 	sql
 		.prepare(
 			"INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES('r','current',?,'standard','now','now','now','owner','now','now')",
@@ -3501,6 +3790,7 @@ async function reviewStateFixture() {
 			"INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES(?,'alex@example.com','now','2099-01-01','now')",
 		)
 		.run(await hashOfferToken(session));
+
 	const render = () =>
 		container.renderToString(softwarePage, {
 			params: { id: "r" },
@@ -3511,6 +3801,7 @@ async function reviewStateFixture() {
 				runtime: { env: { MUSIC_DB: db, AUDIO_CLIENT_PORTAL_ENABLED: "true" } },
 			},
 		} as any);
+
 	const add = (id: string, kind: string, milestone = 0, date = "2026-10-01") =>
 		sql
 			.prepare(
@@ -3527,18 +3818,22 @@ async function reviewStateFixture() {
 				date,
 				date,
 			);
+
 	const decision = (id: string, value = "milestone_accepted") =>
 		sql
 			.prepare(
 				"INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES('r','client','token','Decision',?,?,'2026-10-02')",
 			)
 			.run(id, value);
+
 	return { ...fixtureData, scope, container, render, add, decision };
 }
+
 it.each([false, true])(
 	"keeps earlier accepted milestones under current work, paid=%s",
 	async (paid) => {
 		const { sql, render, add, decision } = await reviewStateFixture();
+
 		try {
 			add("accepted", "delivery_review");
 			decision("accepted");
@@ -3549,15 +3844,18 @@ it.each([false, true])(
 			sql.exec(
 				"UPDATE software_projects SET milestone_index=1; INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,created_by,created_at,updated_at) VALUES('balance','r','current',0,'balance',120000,15,'open','https://example.com/pay','owner','now','now')",
 			);
+
 			if (paid)
 				sql.exec(
 					"INSERT INTO software_milestone_payments VALUES('r',0,'2026-10-03','owner'); UPDATE software_invoices SET status='paid'",
 				);
+
 			let html = await render(),
 				current = html.slice(
 					html.indexOf('class="project-current'),
 					html.indexOf('class="project-history'),
 				);
+
 			expect(current).toMatch(/<h2[^>]*>Milestone 1<\/h2>/);
 			expect(current).toContain("See the delivered version");
 			expect(current).toContain("accepted work");
@@ -3594,10 +3892,12 @@ it.each([false, true])(
 		}
 	},
 );
+
 it.each([false, true])(
 	"shows each combined review record once before and after earlier handoff, paid=%s",
 	async (paid) => {
 		const { sql, render, add, decision } = await reviewStateFixture();
+
 		try {
 			add("accepted", "delivery_review");
 			decision("accepted");
@@ -3605,17 +3905,22 @@ it.each([false, true])(
 			add("delivery", "delivery_review", 1, "2026-10-03");
 			add("progress", "progress", 1, "2026-10-04");
 			sql.exec("UPDATE software_projects SET milestone_index=1");
+
 			if (paid)
 				sql.exec(
 					"INSERT INTO software_milestone_payments VALUES('r',0,'2026-10-03','owner')",
 				);
+
 			for (const handedOff of [false, true]) {
 				if (handedOff) add("handoff", "handoff", 0, "2026-10-05");
+
 				const html = await render(),
 					history = html.slice(html.indexOf('class="project-history'));
+
 				expect(
 					html.match(/You accepted Version 1 on Oct 2, 2026\./g),
 				).toHaveLength(1);
+
 				for (const id of ["direction", "delivery", "progress"])
 					expect(html.match(new RegExp(`${id} work`, "g"))).toHaveLength(1);
 				expect(history.includes('id="version-accepted"')).toBe(handedOff);
@@ -3627,10 +3932,12 @@ it.each([false, true])(
 		}
 	},
 );
+
 it.each([false, true])(
 	"derives acceptance from delivery despite an undecided direction, paid=%s",
 	async (paid) => {
 		const { sql, render, add, decision } = await reviewStateFixture();
+
 		try {
 			add("direction", "direction_review");
 			add("accepted", "delivery_review", 0, "2026-10-02");
@@ -3638,20 +3945,24 @@ it.each([false, true])(
 			sql.exec(
 				"INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,created_by,created_at,updated_at) VALUES('balance','r','current',0,'balance',120000,15,'open','https://example.com/pay','owner','now','now')",
 			);
+
 			if (paid)
 				sql.exec(
 					"INSERT INTO software_milestone_payments VALUES('r',0,'2026-10-03','owner'); UPDATE software_invoices SET status='paid'",
 				);
+
 			const html = await render(),
 				current = html.slice(
 					html.indexOf('class="project-current'),
 					html.indexOf("<aside"),
 				);
+
 			expect(html.slice(0, html.indexOf('class="project-columns'))).toContain(
 				paid ? "Paid. Your files are on the way." : "Version 1 is accepted.",
 			);
 			expect(current).toContain("You accepted Version 1 on Oct 2, 2026.");
 			expect(current).toContain("Corrections are covered through Nov 1, 2026.");
+
 			if (!paid) expect(current).toContain("Pay $1,200 ↗");
 			expect(html.slice(html.indexOf("<aside"))).toContain(
 				"Confirm this direction",
@@ -3661,15 +3972,19 @@ it.each([false, true])(
 		}
 	},
 );
+
 it.each(["delivery_review", "direction_review"])(
 	"shows newer progress above pending %s actions without a handoff",
 	async (kind) => {
 		const { sql, render, add } = await reviewStateFixture();
+
 		try {
 			add("pending", kind);
 			add("newer", "progress", 0, "2026-10-03");
+
 			const html = await render(),
 				top = html.slice(0, html.indexOf("<aside"));
+
 			expect(top).toContain("newer explanation");
 			expect(top).toContain("newer work");
 			expect(top).not.toContain("pending work");
@@ -3683,14 +3998,18 @@ it.each(["delivery_review", "direction_review"])(
 		}
 	},
 );
+
 it.each(["active", "complete", "superseded"])(
 	"keeps evidence unless editable form displays it: %s",
 	async (state) => {
 		const { sql, render, add } = await reviewStateFixture();
+
 		try {
 			add("review", "delivery_review");
+
 			if (state === "complete")
 				sql.exec("UPDATE software_projects SET state='complete'");
+
 			if (state === "superseded")
 				sql.exec("UPDATE software_project_updates SET status='superseded'");
 			const html = await render();
@@ -3702,6 +4021,7 @@ it.each(["active", "complete", "superseded"])(
 		}
 	},
 );
+
 it.each([
 	["Save", "Saved records persist", "Saved records persist"],
 	["Save", "Save records persist", "Save records persist"],
@@ -3715,6 +4035,7 @@ it.each([
 	"trims evidence only at a clear boundary: %s / %s",
 	async (check, evidence, expected) => {
 		const { sql, render, add, scope } = await reviewStateFixture();
+
 		try {
 			scope.milestones[0].acceptance = [check];
 			sql
@@ -3735,10 +4056,12 @@ it.each([
 		}
 	},
 );
+
 it.each(["direction_confirmed", "milestone_accepted", "changes_requested"])(
 	"names the milestone in client decision messages: %s",
 	async (value) => {
 		const { sql, render, add, decision } = await reviewStateFixture();
+
 		try {
 			add(
 				"review",
@@ -3761,6 +4084,7 @@ it.each(["direction_confirmed", "milestone_accepted", "changes_requested"])(
 		}
 	},
 );
+
 it.each([
 	[false, "Direction v2", "You confirmed sketch 2."],
 	[true, "Direction v2", "You confirmed sketch 2 for milestone 2."],
@@ -3774,6 +4098,7 @@ it.each([
 	"names the confirmed sketch (multiple milestones: %s, label: %s)",
 	async (multiple, label, expected) => {
 		const { sql, render, add, decision, scope } = await reviewStateFixture();
+
 		try {
 			if (!multiple) {
 				scope.milestones = scope.milestones.slice(0, 1);
@@ -3781,6 +4106,7 @@ it.each([
 					.prepare("UPDATE software_projects SET terms_json=?")
 					.run(JSON.stringify(scope));
 			}
+
 			add("review", "direction_review", multiple ? 1 : 0);
 			sql
 				.prepare(
@@ -3794,8 +4120,10 @@ it.each([
 		}
 	},
 );
+
 it("renders future milestone choices unavailable for progress but available for review drafts", async () => {
 	const { sql, db, container } = await reviewStateFixture();
+
 	try {
 		const render = () =>
 			container.renderToString(composer, {
@@ -3810,6 +4138,7 @@ it("renders future milestone choices unavailable for progress but available for 
 					},
 				},
 			} as any);
+
 		let html = await render();
 		expect(html).toMatch(/<option value="1"[^>]*disabled[^>]*hidden/);
 		sql.exec(
@@ -3821,22 +4150,27 @@ it("renders future milestone choices unavailable for progress but available for 
 		sql.close();
 	}
 });
+
 it("keeps every earlier acceptance visible until its own handoff", async () => {
 	const { sql, render, add, decision, scope } = await reviewStateFixture();
+
 	try {
 		scope.milestones.push({ ...scope.milestones[0], name: "Final stage" });
 		sql
 			.prepare("UPDATE software_projects SET milestone_index=2,terms_json=?")
 			.run(JSON.stringify(scope));
+
 		for (const milestone of [0, 1]) {
 			add(`accepted-${milestone}`, "delivery_review", milestone);
 			decision(`accepted-${milestone}`);
 		}
+
 		const html = await render(),
 			current = html.slice(
 				html.indexOf('class="project-current'),
 				html.indexOf('class="project-history'),
 			);
+
 		for (const milestone of [1, 2])
 			expect(current).toMatch(
 				new RegExp(`<h2[^>]*>Milestone ${milestone}<\\/h2>`),
@@ -3848,11 +4182,13 @@ it("keeps every earlier acceptance visible until its own handoff", async () => {
 			current.match(/Corrections are covered through Nov 1, 2026\./g),
 		).toHaveLength(2);
 		add("handoff", "handoff", 0, "2026-10-03");
+
 		const updated = await render(),
 			updatedCurrent = updated.slice(
 				updated.indexOf('class="project-current'),
 				updated.indexOf('class="project-history'),
 			);
+
 		expect(updatedCurrent).toContain("Your files · Milestone 1");
 		expect(updatedCurrent).not.toMatch(/<h2[^>]*>Milestone 1<\/h2>/);
 		expect(updatedCurrent).toMatch(/<h2[^>]*>Milestone 2<\/h2>/);
@@ -3863,25 +4199,30 @@ it("keeps every earlier acceptance visible until its own handoff", async () => {
 
 it("keeps later accepted milestones visible after moving the active milestone backward", async () => {
 	const { sql, render, add, decision, scope } = await reviewStateFixture();
+
 	try {
 		scope.milestones.push({ ...scope.milestones[0], name: "Final stage" });
 		sql
 			.prepare("UPDATE software_projects SET milestone_index=2,terms_json=?")
 			.run(JSON.stringify(scope));
+
 		for (const milestone of [0, 1, 2]) {
 			add(`accepted-${milestone}`, "delivery_review", milestone);
 			decision(`accepted-${milestone}`);
 		}
+
 		sql.exec(
 			"INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,hosted_invoice_url,created_by,created_at,updated_at) VALUES('balance','r','current',2,'balance',120000,15,'open','https://example.com/later-pay','owner','now','now')",
 		);
 		await render();
 		sql.exec("UPDATE software_projects SET milestone_index=1");
+
 		let html = await render(),
 			current = html.slice(
 				html.indexOf('class="project-current'),
 				html.indexOf('class="project-history'),
 			);
+
 		expect(current).toMatch(/<h2[^>]*>Milestone 1<\/h2>/);
 		expect(current).toMatch(/<h2[^>]*>Milestone 3<\/h2>/);
 		expect(current.indexOf(">Milestone 1</h2>")).toBeLessThan(
@@ -3897,10 +4238,12 @@ it("keeps later accepted milestones visible after moving the active milestone ba
 			"INSERT INTO software_milestone_payments VALUES('r',2,'2026-10-03','owner'); UPDATE software_invoices SET status='paid'",
 		);
 		html = await render();
+
 		const later = html.slice(
 			html.indexOf(">Milestone 3</h2>"),
 			html.indexOf('class="project-history'),
 		);
+
 		expect(later).toContain("Paid. Your files are on the way.");
 		expect(later).not.toContain("https://example.com/later-pay");
 		add("handoff", "handoff", 2, "2026-10-04");
@@ -3914,42 +4257,52 @@ it("keeps later accepted milestones visible after moving the active milestone ba
 
 it("renders all four personalized receipt outcomes into the rendered page", async () => {
 	const container = await AstroContainer.create();
+
 	const html = await container.renderToString(start, {
 		request: new Request("https://thesuperhuman.us/software/start"),
 		locals: { runtime: { env: {} } } as any,
 	});
+
 	const dom = parse(html);
+
 	const find = (node: any, attribute: string): any =>
 		node.attrs?.some((attr: any) => attr.name === attribute)
 			? node
 			: node.childNodes
 					?.map((child: any) => find(child, attribute))
 					.find(Boolean);
+
 	expect(
 		find(dom, "data-intake-progress").attrs.some(
 			(attr: any) => attr.name === "hidden",
 		),
 	).toBe(false);
+
 	const document = {
 		querySelector: (selector: string) => {
 			if (selector === "#software-inquiry") return null;
 			const node = find(dom, selector.slice(1, -1));
+
 			return {
 				set textContent(value: string) {
 					node.childNodes = [{ nodeName: "#text", value, parentNode: node }];
 				},
 				set hidden(value: boolean) {
 					node.attrs = node.attrs.filter((attr: any) => attr.name !== "hidden");
+
 					if (value) node.attrs.push({ name: "hidden", value: "" });
 				},
 			};
 		},
 	};
+
 	vi.stubGlobal("document", document);
+
 	try {
 		const { renderSoftwareReceipt } = await import(
 			"~/scripts/software-inquiry"
 		);
+
 		for (const [status, line, note] of [
 			[
 				"sent",
@@ -4005,6 +4358,7 @@ it("renders all four personalized receipt outcomes into the rendered page", asyn
 			expect(
 				renderedNote.attrs.some((attr: any) => attr.name === "hidden"),
 			).toBe(note === null);
+
 			if (note) expect(serialize(renderedNote)).toBe(note);
 		}
 	} finally {
@@ -4014,12 +4368,15 @@ it("renders all four personalized receipt outcomes into the rendered page", asyn
 
 it("renders the AI disclosure beside both answer boxes and the dated retention notice", async () => {
 	const container = await AstroContainer.create();
+
 	const html = await container.renderToString(start, {
 		request: new Request("https://thesuperhuman.us/software/start"),
 		locals: { runtime: { env: {} } } as any,
 	});
+
 	const document = parse(html);
 	const sections: any[] = [];
+
 	function visit(node: any) {
 		if (
 			node.tagName === "section" &&
@@ -4029,10 +4386,13 @@ it("renders the AI disclosure beside both answer boxes and the dated retention n
 			)
 		)
 			sections.push(node);
+
 		for (const child of node.childNodes ?? []) visit(child);
 	}
+
 	visit(document);
 	expect(sections).toHaveLength(2);
+
 	for (const section of sections) {
 		const output = serialize(section);
 		expect(output).toContain(
@@ -4046,9 +4406,11 @@ it("renders the AI disclosure beside both answer boxes and the dated retention n
 		expect(output).toContain("Suggestions are off.");
 		expect(output).toContain("Turn off");
 	}
+
 	const notice = await container.renderToString(privacy, {
 		request: new Request("https://thesuperhuman.us/privacy"),
 	});
+
 	expect(notice).toContain("Updated October 29, 2026");
 	expect(notice).toContain('id="software-briefs"');
 	expect(notice).toContain(
@@ -4067,6 +4429,7 @@ it("renders the AI disclosure beside both answer boxes and the dated retention n
 
 it("shows the countersign requirement beside both disabled closing actions", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		sql
 			.prepare(
@@ -4082,6 +4445,7 @@ it("shows the countersign requirement beside both disabled closing actions", asy
 			)
 			.run("a".repeat(64));
 		const container = await AstroContainer.create();
+
 		const html = await container.renderToString(ownerRequest, {
 			params: { id: "r" },
 			request: new Request("https://thesuperhuman.us/owner/requests/r"),
@@ -4090,9 +4454,11 @@ it("shows the countersign requirement beside both disabled closing actions", asy
 				runtime: { env: { MUSIC_DB: db } },
 			},
 		} as any);
+
 		expect(html).toContain(
 			"Countersign or abandon the signed agreement first.",
 		);
+
 		for (const action of ["resolve", "withdraw"])
 			expect(html).toMatch(new RegExp(`data-action="${action}"[^>]*disabled`));
 	} finally {
@@ -4113,6 +4479,7 @@ const websiteOfferText = [
 	"Open the homepage design on each approved device and approve it",
 	"Five pages built from the approved design\nContact form that emails you\nHandoff after final payment: site live on your domain, notes and a short editing walkthrough",
 ];
+
 const workflowOfferText = [
 	"A shared view of client onboarding",
 	"Client onboarding tracker",
@@ -4123,16 +4490,20 @@ const workflowOfferText = [
 	"Add a client and see them in the list",
 	"Your team sees each client’s status and next step in one place.",
 ];
+
 const templateOf = (html: string) => {
 	const start = html.indexOf("<template data-milestone-template>");
 	expect(start).toBeGreaterThan(-1);
+
 	return html.slice(start, html.indexOf("</template>", start));
 };
+
 const beforeTemplate = (html: string) =>
 	html.slice(0, html.indexOf("<template data-milestone-template>"));
 
 it("shows website offer examples only for website briefs and keeps today’s examples for other paths", async () => {
 	const container = await AstroContainer.create();
+
 	const website = await container.renderToString(editor, {
 		props: {
 			requestId: "r",
@@ -4142,6 +4513,7 @@ it("shows website offer examples only for website briefs and keeps today’s exa
 			path: "website",
 		},
 	});
+
 	for (const text of websiteOfferText) expect(website).toContain(text);
 	expect(website).not.toContain("A shared view of client onboarding");
 	expect(website).not.toContain("on your phone and approve it");
@@ -4156,6 +4528,7 @@ it("shows website offer examples only for website briefs and keeps today’s exa
 	);
 	expect(templateOf(website)).not.toContain("Design direction");
 	expect(templateOf(website)).toContain("milestone-2-milestoneName");
+
 	for (const path of ["workflow", "webapp", "idea", undefined]) {
 		const html = await container.renderToString(editor, {
 			props: {
@@ -4166,20 +4539,25 @@ it("shows website offer examples only for website briefs and keeps today’s exa
 				path,
 			},
 		});
+
 		for (const text of websiteOfferText) expect(html).not.toContain(text);
 		expect(html).not.toContain("<strong>For a website,");
+
 		for (const text of workflowOfferText) expect(html).toContain(text);
 		expect(templateOf(html)).toContain("milestone-1-milestoneName");
 	}
 });
+
 it("renders a saved second website milestone with the later example and five deliverable rows", async () => {
 	const container = await AstroContainer.create();
+
 	const second = {
 		name: "Follow-up",
 		deliverables: ["Saved page list"],
 		acceptance: ["Saved check."],
 		feeCents: 100000,
 	};
+
 	const html = await container.renderToString(editor, {
 		props: {
 			requestId: "r",
@@ -4201,10 +4579,12 @@ it("renders a saved second website milestone with the later example and five del
 			],
 		},
 	});
+
 	const milestones = html.slice(
 		html.indexOf("data-milestones"),
 		html.indexOf("<template data-milestone-template>"),
 	);
+
 	const split = milestones.indexOf("Milestone 2</legend>");
 	expect(split).toBeGreaterThan(-1);
 	const [first, row2] = [milestones.slice(0, split), milestones.slice(split)];
@@ -4222,9 +4602,11 @@ it("renders a saved second website milestone with the later example and five del
 
 it("asks website fit questions and keeps the workflow fit note", async () => {
 	const container = await AstroContainer.create();
+
 	const website = await container.renderToString(fit, {
 		props: { requestId: "r", fit: null, path: "website" },
 	});
+
 	expect(website).toContain(
 		"<strong>Before an offer:</strong> is the page text ready, who updates the site after launch, and whose account will host it?",
 	);
@@ -4232,6 +4614,7 @@ it("asks website fit questions and keeps the workflow fit note", async () => {
 		'placeholder="Ask whether page text and photos are ready."',
 	);
 	expect(website).not.toContain("Clarify who will use the first version.");
+
 	const closed = await container.renderToString(fit, {
 		props: {
 			requestId: "r",
@@ -4240,11 +4623,14 @@ it("asks website fit questions and keeps the workflow fit note", async () => {
 			path: "website",
 		},
 	});
+
 	expect(closed).toContain("Saved note");
 	expect(closed).not.toContain("Before an offer:");
+
 	const workflow = await container.renderToString(fit, {
 		props: { requestId: "r", fit: null, path: "workflow" },
 	});
+
 	expect(workflow).toContain(
 		'placeholder="Clarify who will use the first version."',
 	);
@@ -4253,6 +4639,7 @@ it("asks website fit questions and keeps the workflow fit note", async () => {
 
 it("helps the owner review a website brief: link, offer examples and unsafe links as text", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		sql
 			.prepare(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,private_note,created_at,updated_at)
@@ -4271,6 +4658,7 @@ it("helps the owner review a website brief: link, offer examples and unsafe link
 				}),
 			);
 		const container = await AstroContainer.create();
+
 		const render = () =>
 			container.renderToString(ownerRequest, {
 				params: { id: "site" },
@@ -4280,12 +4668,16 @@ it("helps the owner review a website brief: link, offer examples and unsafe link
 					runtime: { env: { MUSIC_DB: db } },
 				} as any,
 			});
+
 		const briefOf = (html: string) => {
 			const start = html.indexOf("Their brief");
+
 			return html.slice(start, html.indexOf("</section>", start));
 		};
+
 		const html = await render();
 		const brief = briefOf(html);
+
 		for (const text of [
 			"Website design",
 			"What’s the website for?",
@@ -4297,6 +4689,7 @@ it("helps the owner review a website brief: link, offer examples and unsafe link
 			/<a href="https:\/\/jordanclay\.example\/" target="_blank" rel="noopener noreferrer"[^>]*>https:\/\/jordanclay\.example\/<span class="visually-hidden[^"]*"> \(opens in a new tab\)<\/span><\/a> <span [^>]*aria-hidden="true"[^>]*>opens in a new tab<\/span>/,
 		);
 		expect(html).toMatch(/<a href="\/services#website"[^>]*>Service →<\/a>/);
+
 		for (const text of websiteOfferText) expect(html).toContain(text);
 		expect(html).toContain("Before an offer:");
 		sql
@@ -4304,8 +4697,10 @@ it("helps the owner review a website brief: link, offer examples and unsafe link
 				"UPDATE owner_requests SET details_json=json_set(details_json,'$.currentUrl',?) WHERE id='site'",
 			)
 			.run("javascript:alert(1)");
+
 		const unsafe = await render(),
 			unsafeBrief = briefOf(unsafe);
+
 		expect(unsafeBrief).toContain("javascript:alert(1)");
 		expect(unsafeBrief).not.toContain("<a");
 		// A look-alike Cyrillic 'a' links to its punycode host, and the visible text shows that same host.
@@ -4314,8 +4709,10 @@ it("helps the owner review a website brief: link, offer examples and unsafe link
 				"UPDATE owner_requests SET details_json=json_set(details_json,'$.currentUrl',?) WHERE id='site'",
 			)
 			.run("https://p\u0430ypal.example/");
+
 		const lookalike = briefOf(await render()),
 			punycode = new URL("https://p\u0430ypal.example/").href;
+
 		expect(punycode).toContain("xn--");
 		expect(lookalike).toContain(
 			`<a href="${punycode}" target="_blank" rel="noopener noreferrer"`,
@@ -4332,8 +4729,10 @@ it("helps the owner review a website brief: link, offer examples and unsafe link
 
 it("keeps the workflow owner page on the existing fit note without website copy", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		const container = await AstroContainer.create();
+
 		const html = await container.renderToString(ownerRequest, {
 			params: { id: "r" },
 			request: new Request("https://thesuperhuman.us/owner/requests/r"),
@@ -4342,9 +4741,11 @@ it("keeps the workflow owner page on the existing fit note without website copy"
 				runtime: { env: { MUSIC_DB: db } },
 			} as any,
 		});
+
 		expect(html).toContain(
 			'placeholder="Clarify who will use the first version."',
 		);
+
 		for (const text of [
 			"For a website, name the pages",
 			"Before an offer:",
@@ -4352,14 +4753,17 @@ it("keeps the workflow owner page on the existing fit note without website copy"
 			"Design direction",
 		])
 			expect(html).not.toContain(text);
+
 		for (const text of workflowOfferText) expect(html).toContain(text);
 		expect(html).toMatch(/<a href="\/services#workflow"[^>]*>Service →<\/a>/);
 	} finally {
 		sql.close();
 	}
 });
+
 it("links the rail service to the row for each software path", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		for (const [id, serviceId] of [
 			["app", "webapp"],
@@ -4371,6 +4775,7 @@ it("links the rail service to the row for each software path", async () => {
       VALUES (?,'software',?,'Alex Example','alex@example.com','Book lessons online.','{"path":"webapp","appGoal":"Book lessons online."}','new','','now','now')`)
 				.run(id, serviceId);
 		const container = await AstroContainer.create();
+
 		const serviceLink = async (id: string) => {
 			const html = await container.renderToString(ownerRequest, {
 				params: { id },
@@ -4380,8 +4785,10 @@ it("links the rail service to the row for each software path", async () => {
 					runtime: { env: { MUSIC_DB: db } },
 				} as any,
 			});
+
 			return html.match(/<a href="([^"]+)"[^>]*>Service →<\/a>/)?.[1];
 		};
+
 		expect(await serviceLink("app")).toBe("/services#web-app");
 		expect(await serviceLink("old-idea")).toBe("/services#web-app");
 		expect(await serviceLink("other")).toBe("/services#software");
@@ -4393,29 +4800,38 @@ it("links the rail service to the row for each software path", async () => {
 
 it("uses the website question placeholder only for website briefs and keeps the decline placeholder", async () => {
 	const container = await AstroContainer.create();
+
 	const websiteText =
 		"Could you send the page text and photos you have so far?";
+
 	const exportText = "Could you share an example of the export you use today?";
+
 	const declineText =
 		"Thanks for the brief. This isn’t a fit for me right now because…";
+
 	const questionPlaceholder = (html: string) =>
 		html.match(
 			/<textarea[^>]*id="software-question"[^>]*placeholder="([^"]*)"/,
 		)?.[1];
+
 	const declinePlaceholder = (html: string) =>
 		html.match(
 			/<textarea[^>]*id="software-decline"[^>]*placeholder="([^"]*)"/,
 		)?.[1];
+
 	const website = await container.renderToString(questions, {
 		props: { requestId: "r", path: "website" },
 	});
+
 	expect(questionPlaceholder(website)).toBe(websiteText);
 	expect(website).not.toContain(exportText);
 	expect(declinePlaceholder(website)).toBe(declineText);
+
 	for (const path of ["workflow", "webapp", "idea", undefined]) {
 		const html = await container.renderToString(questions, {
 			props: { requestId: "r", path },
 		});
+
 		expect(questionPlaceholder(html)).toBe(exportText);
 		expect(html).not.toContain(websiteText);
 		expect(declinePlaceholder(html)).toBe(declineText);
@@ -4424,6 +4840,7 @@ it("uses the website question placeholder only for website briefs and keeps the 
 
 it("shows the website question placeholder on a seeded website owner request", async () => {
 	const { sql, db } = await fixture();
+
 	try {
 		sql
 			.prepare(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,private_note,created_at,updated_at)
@@ -4442,6 +4859,7 @@ it("shows the website question placeholder on a seeded website owner request", a
 				}),
 			);
 		const container = await AstroContainer.create();
+
 		const html = await container.renderToString(ownerRequest, {
 			params: { id: "site" },
 			request: new Request("https://thesuperhuman.us/owner/requests/site"),
@@ -4450,6 +4868,7 @@ it("shows the website question placeholder on a seeded website owner request", a
 				runtime: { env: { MUSIC_DB: db } },
 			} as any,
 		});
+
 		expect(html).toMatch(
 			/<textarea[^>]*id="software-question"[^>]*placeholder="Could you send the page text and photos you have so far\?"/,
 		);

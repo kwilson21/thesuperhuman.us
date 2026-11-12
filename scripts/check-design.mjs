@@ -46,6 +46,7 @@ const GENERIC_FAMILIES = new Set([
 	"-apple-system",
 	"blinkmacsystemfont",
 ]);
+
 const CSS_WIDE = new Set([
 	"inherit",
 	"initial",
@@ -53,6 +54,7 @@ const CSS_WIDE = new Set([
 	"revert",
 	"revert-layer",
 ]);
+
 const SYSTEM_FONT_KEYWORDS = new Set([
 	"caption",
 	"icon",
@@ -216,11 +218,14 @@ export function cssDeclarations(css, firstLine = 1) {
 	let depth = 0;
 	let line = firstLine;
 	let startLine = firstLine;
+
 	const flush = () => {
 		const raw = buffer.trim();
 		buffer = "";
 		start = -1;
+
 		if (!raw) return;
+
 		if (raw.startsWith("@")) {
 			const name = raw.match(/^@[\w-]+/)[0];
 			out.push({
@@ -229,9 +234,12 @@ export function cssDeclarations(css, firstLine = 1) {
 				line: startLine,
 				context: [...stack],
 			});
+
 			return;
 		}
+
 		const colon = raw.indexOf(":");
+
 		if (colon <= 0) return;
 		const prop = raw.slice(0, colon).trim();
 		const value = raw.slice(colon + 1).trim();
@@ -242,8 +250,10 @@ export function cssDeclarations(css, firstLine = 1) {
 			context: [...stack],
 		});
 	};
+
 	for (let i = 0; i < text.length; i += 1) {
 		const ch = text[i];
+
 		if (
 			start === -1 &&
 			!/\s/.test(ch) &&
@@ -254,43 +264,56 @@ export function cssDeclarations(css, firstLine = 1) {
 			start = i;
 			startLine = line;
 		}
+
 		if (ch === "\n") line += 1;
+
 		if (quote) {
 			buffer += ch;
+
 			if (ch === quote && text[i - 1] !== "\\") quote = "";
 			continue;
 		}
+
 		if (ch === '"' || ch === "'") {
 			quote = ch;
 			buffer += ch;
 			continue;
 		}
+
 		if (ch === "(") depth += 1;
+
 		if (ch === ")") depth = Math.max(0, depth - 1);
+
 		if (depth === 0 && ch === "{") {
 			stack.push(buffer.trim());
 			buffer = "";
 			start = -1;
 			continue;
 		}
+
 		if (depth === 0 && ch === "}") {
 			flush();
 			stack.pop();
 			continue;
 		}
+
 		if (depth === 0 && ch === ";") {
 			flush();
 			continue;
 		}
+
 		buffer += ch;
 	}
+
 	flush();
+
 	return out;
 }
 
 /** The <style> blocks of an .astro file or a .ts route's HTML, with the line each block's CSS starts on. */
 export function styleBlocks(source) {
 	const blocks = [];
+
 	for (const match of source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/g)) {
 		const offset = match.index + match[0].indexOf(">") + 1;
 		blocks.push({
@@ -298,6 +321,7 @@ export function styleBlocks(source) {
 			line: source.slice(0, offset).split("\n").length,
 		});
 	}
+
 	return blocks;
 }
 
@@ -317,78 +341,99 @@ const REGEX_AFTER_WORD =
 export function literalText(source) {
 	const view = source.replace(/[^\n]/g, " ").split("");
 	const n = source.length;
+
 	const escape = (at) => {
 		// Backslash plus the next character: a quote, backtick, $ or backslash keeps that character; others (\n, \t) are not CSS text.
 		if (at + 1 < n && "'\"`$\\{}".includes(source[at + 1]))
 			view[at + 1] = source[at + 1];
 		else if (source[at + 1] === "\n") view[at + 1] = "\n";
+
 		return at + 2;
 	};
+
 	const scanString = (at) => {
 		const quote = source[at];
 		let i = at + 1;
+
 		while (i < n && source[i] !== quote && source[i] !== "\n") {
 			if (source[i] === "\\") {
 				i = escape(i);
 				continue;
 			}
+
 			view[i] = source[i];
 			i += 1;
 		}
+
 		return i + 1;
 	};
+
 	const scanTemplate = (at) => {
 		let i = at + 1;
+
 		while (i < n && source[i] !== "`") {
 			if (source[i] === "\\") {
 				i = escape(i);
 				continue;
 			}
+
 			if (source[i] === "$" && source[i + 1] === "{") {
 				i = scanCode(i + 2, true);
 				continue;
 			}
+
 			view[i] = source[i];
 			i += 1;
 		}
+
 		return i + 1;
 	};
+
 	const scanRegex = (at) => {
 		let i = at + 1;
 		let inClass = false;
+
 		while (i < n && source[i] !== "\n" && (inClass || source[i] !== "/")) {
 			if (source[i] === "\\") i += 1;
 			else if (source[i] === "[") inClass = true;
 			else if (source[i] === "]") inClass = false;
 			i += 1;
 		}
+
 		return i + 1;
 	};
+
 	function scanCode(at, inTemplate) {
 		let i = at;
 		let depth = 0;
 		let previous = "";
+
 		while (i < n) {
 			const ch = source[i];
+
 			if (ch === "/" && source[i + 1] === "/") {
 				while (i < n && source[i] !== "\n") i += 1;
 				continue;
 			}
+
 			if (ch === "/" && source[i + 1] === "*") {
 				const close = source.indexOf("*/", i + 2);
 				i = close === -1 ? n : close + 2;
 				continue;
 			}
+
 			if (ch === '"' || ch === "'") {
 				i = scanString(i);
 				previous = ch;
 				continue;
 			}
+
 			if (ch === "`") {
 				i = scanTemplate(i);
 				previous = ch;
 				continue;
 			}
+
 			if (
 				ch === "/" &&
 				(!previous ||
@@ -399,17 +444,23 @@ export function literalText(source) {
 				previous = ")";
 				continue;
 			}
+
 			if (ch === "{") depth += 1;
+
 			if (ch === "}") {
 				if (depth === 0 && inTemplate) return i + 1;
 				depth -= 1;
 			}
+
 			if (!/\s/.test(ch)) previous = ch;
 			i += 1;
 		}
+
 		return i;
 	}
+
 	scanCode(0, false);
+
 	return view.join("");
 }
 
@@ -426,11 +477,13 @@ export function isScanned(path) {
 /** An .astro file with its HTML comments and <style> and <script> blocks blanked, keeping line numbers. */
 function markupOnly(source) {
 	const blank = (text) => text.replace(/[^\n]/g, " ");
+
 	// Astro frontmatter (the leading --- block) is code, not markup.
 	const body = source.replace(
 		/^(\uFEFF?---\r?\n[\s\S]*?\r?\n---)(?=\r?\n|$)/,
 		blank,
 	);
+
 	return body
 		.replace(/<!--[\s\S]*?-->/g, blank)
 		.replace(/<(style|script)\b[\s\S]*?<\/\1>/g, blank);
@@ -442,31 +495,43 @@ function splitTop(value, separator) {
 	let buffer = "";
 	let depth = 0;
 	let quote = "";
+
 	for (let i = 0; i < value.length; i += 1) {
 		const ch = value[i];
+
 		if (quote) {
 			buffer += ch;
+
 			if (ch === quote && value[i - 1] !== "\\") quote = "";
 			continue;
 		}
+
 		if (ch === '"' || ch === "'") {
 			quote = ch;
 			buffer += ch;
 			continue;
 		}
+
 		if (ch === "(") depth += 1;
+
 		if (ch === ")") depth = Math.max(0, depth - 1);
+
 		if (depth === 0 && (separator === "," ? ch === "," : /\s/.test(ch))) {
 			parts.push(buffer);
 			buffer = "";
 			continue;
 		}
+
 		buffer += ch;
 	}
+
 	parts.push(buffer);
+
 	return parts;
 }
+
 const words = (text) => splitTop(text.trim(), " ").filter(Boolean);
+
 const commaItems = (value) =>
 	splitTop(value, ",")
 		.map((item) => item.trim())
@@ -474,13 +539,16 @@ const commaItems = (value) =>
 
 const UNITS =
 	"px|rem|em|%|pt|pc|vw|vh|vmin|vmax|vi|vb|ch|ex|lh|rlh|cap|ic|svh|lvh|dvh|cqi|cqw|cqh|q|mm|cm|in";
+
 const KEYWORD_SIZES =
 	"xx-small|x-small|small|medium|large|x-large|xx-large|xxx-large|smaller|larger";
+
 /** A `font` size token, with its optional /line-height (which may hold a var()). */
 const SIZE_TOKEN = new RegExp(
 	`^(?:\\d*\\.?\\d+(?:${UNITS})|${KEYWORD_SIZES}|(?:clamp|calc|min|max)\\(.*\\))(?:/\\S+)?$`,
 	"is",
 );
+
 /** A size or line-height that comes from a token. Used only when no literal size is found. */
 const TOKEN_SIZE = /^(?:var|theme|--theme|env)\(.*\)(?:\/\S+)?$/is;
 const FUNCTION_CALL = /^[\w-]+\(/;
@@ -494,6 +562,7 @@ const FUNCTION_CALL = /^[\w-]+\(/;
 export function fontFamilies(prop, value) {
 	const cleaned = value.replace(/!important/gi, "").trim();
 	let list = cleaned;
+
 	if (prop === "font") {
 		if (
 			CSS_WIDE.has(cleaned.toLowerCase()) ||
@@ -502,10 +571,13 @@ export function fontFamilies(prop, value) {
 			return [];
 		const tokens = words(cleaned.replace(/\s*\/\s*/g, "/"));
 		let size = tokens.findIndex((token) => SIZE_TOKEN.test(token));
+
 		if (size === -1) size = tokens.findIndex((token) => TOKEN_SIZE.test(token));
+
 		if (size === -1) return [];
 		list = tokens.slice(size + 1).join(" ");
 	}
+
 	return commaItems(list)
 		.map((item) =>
 			words(item)
@@ -529,10 +601,12 @@ export function fontFamilies(prop, value) {
 /** Lower-cased faces the design system declares: --font-* token families and @font-face names. */
 export function systemFamilies(globalCss) {
 	const faces = new Set();
+
 	for (const decl of cssDeclarations(globalCss)) {
 		const inFontFace = decl.context.some((prelude) =>
 			/^@font-face\b/i.test(prelude),
 		);
+
 		if (
 			decl.prop.startsWith("--font") ||
 			(inFontFace && decl.prop === "font-family")
@@ -541,21 +615,27 @@ export function systemFamilies(globalCss) {
 				faces.add(name.toLowerCase());
 		}
 	}
+
 	return faces;
 }
 
 const QUOTED_GENERIC =
 	/(['"])\s*(serif|sans-serif|monospace|cursive|fantasy|system-ui|ui-serif|ui-sans-serif|ui-monospace|ui-rounded|math|emoji|fangsong|-apple-system|BlinkMacSystemFont|inherit|initial|unset)\s*\1/gi;
+
 const HEX = /#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})\b/gi;
 const MASK_PROP = /^(?:-webkit-)?mask(?:-image|-border(?:-source)?)?$/;
+
 const FOCUS_REPLACEMENT_PROP =
 	/^(?:outline(?:-color|-style|-width)?|box-shadow|border(?:-color|-bottom|-bottom-color)?|background(?:-color)?|text-decoration(?:-color|-line)?)$/;
+
 const TRANSITION_ALL_UTILITY = /(?<![\w-])transition-(?:all|\[all\])(?![\w-])/g;
 const OUTLINE_UTILITY = /(?<![\w-])((?:[\w-]+:)*)outline-(?:none|0)(?![\w-])/g;
+
 const OUTLINE_MARKUP_HINT =
 	"put a focus-visible: utility with a visible ring on the same element";
 
 const isFontProp = (prop) => prop === "font" || prop === "font-family";
+
 const removesOutline = ({ prop, value }) =>
 	(prop === "outline" &&
 		/^(?:none|0(?:px)?)(?:\s*!important)?$/i.test(value)) ||
@@ -568,17 +648,22 @@ const removesOutline = ({ prop, value }) =>
  */
 export function arbitraryHex(text) {
 	const found = [];
+
 	for (const bracket of text.matchAll(/\[([^[\]\s]+)\]/g)) {
 		const inner = bracket[1];
+
 		if (inner.startsWith("--")) continue;
+
 		const scrubbed = inner.replace(/url\([^)]*\)/gi, (run) =>
 			" ".repeat(run.length),
 		);
+
 		for (const hex of scrubbed.matchAll(HEX)) {
 			if (/['"]/.test(scrubbed[hex.index - 1] ?? "")) continue;
 			found.push({ match: hex[0], offset: bracket.index + 1 + hex.index });
 		}
 	}
+
 	return found;
 }
 
@@ -590,7 +675,9 @@ function hasFocusVisibleUtility(text) {
 		/(?<![\w-])(?:[\w-]+:)*focus-visible:(?:[\w-]+:)*([\w-]+)/g,
 	)) {
 		const utility = found[1];
+
 		if (/^outline-(?:none|0)$/.test(utility)) continue;
+
 		if (
 			/^(?:outline|ring|border|bg|shadow|underline|decoration)(?:-|$)/.test(
 				utility,
@@ -598,36 +685,47 @@ function hasFocusVisibleUtility(text) {
 		)
 			return true;
 	}
+
 	return false;
 }
 
 /** The property each comma item of a `transition` value names, or 'all' when it names none. An item whose property could sit in an unknown var() is skipped. */
 function transitionProperties(value) {
 	const TIME = /^[+-]?\d*\.?\d+m?s$/;
+
 	const TIMING =
 		/^(?:ease|ease-in|ease-out|ease-in-out|linear|step-start|step-end|normal|allow-discrete)$|^(?:cubic-bezier|steps|linear|calc|min|max|clamp)\(|^var\(\s*--[\w-]*(?:ease|easing|timing|curve|dur|duration|delay|speed)/;
+
 	const found = [];
+
 	for (const item of commaItems(value.replace(/!important/gi, ""))) {
 		let property = "";
 		let unknown = false;
+
 		for (const token of words(item)) {
 			const lower = token.toLowerCase();
+
 			if (TIME.test(lower) || TIMING.test(lower)) continue;
+
 			if (FUNCTION_CALL.test(lower)) {
 				unknown = true;
 				break;
 			}
+
 			property = lower;
 			break;
 		}
+
 		if (!unknown) found.push(property || "all");
 	}
+
 	return found;
 }
 
 /** Selectors a declaration applies to, with `&` nesting resolved and at-rules skipped. */
 function resolvedSelectors(context) {
 	let parents = [""];
+
 	for (const prelude of context) {
 		if (prelude.startsWith("@")) continue;
 		const parts = commaItems(prelude);
@@ -641,10 +739,12 @@ function resolvedSelectors(context) {
 			),
 		);
 	}
+
 	return parents
 		.map((selector) => selector.replace(/\s+/g, " ").trim())
 		.filter(Boolean);
 }
+
 /** At-rules that decide whether the rules inside them apply at all. */
 const CONDITION_AT_RULE = /^@(media|supports|container)\b/i;
 
@@ -653,12 +753,15 @@ function splitAtTopLevel(text, separator) {
 	const parts = [];
 	let buffer = "";
 	let depth = 0;
+
 	for (let i = 0; i < text.length; i += 1) {
 		if (text[i] === "(") depth += 1;
 		else if (text[i] === ")") depth = Math.max(0, depth - 1);
+
 		if (depth === 0) {
 			separator.lastIndex = i;
 			const found = separator.exec(text);
+
 			if (found) {
 				parts.push(buffer);
 				buffer = "";
@@ -666,9 +769,12 @@ function splitAtTopLevel(text, separator) {
 				continue;
 			}
 		}
+
 		buffer += text[i];
 	}
+
 	parts.push(buffer);
+
 	return parts;
 }
 
@@ -682,9 +788,11 @@ function normalizeClause(clause) {
 		.replace(/\s+/g, " ")
 		.replace(/\s*([():,<>=/])\s*/g, "$1")
 		.trim();
+
 	let depth = 0;
 	let afterOpen = false;
 	let out = "";
+
 	for (const token of squeezed.match(/[()]|[^()]+/g) ?? []) {
 		if (token === "(") {
 			depth += 1;
@@ -692,18 +800,21 @@ function normalizeClause(clause) {
 			afterOpen = true;
 			continue;
 		}
+
 		if (token === ")") {
 			depth = Math.max(0, depth - 1);
 			out += token;
 			afterOpen = false;
 			continue;
 		}
+
 		if (depth === 0) out += token.toLowerCase();
 		else if (afterOpen)
 			out += token.replace(/^(?!--)[a-z][\w-]*/i, (word) => word.toLowerCase());
 		else out += token;
 		afterOpen = false;
 	}
+
 	return out;
 }
 
@@ -716,33 +827,44 @@ function normalizeClause(clause) {
  */
 function conditionsOf(context) {
 	const clauses = new Set();
+
 	for (const prelude of context) {
 		const at = CONDITION_AT_RULE.exec(prelude);
+
 		if (!at) continue;
 		const type = `@${at[1].toLowerCase()}`;
 		let rest = prelude.slice(at[0].length).replace(/\s+/g, " ").trim();
 		let name = "";
+
 		if (type === "@container") {
 			const named = /^([^\s()]+)\s(?=\S)/.exec(rest);
+
 			if (named && named[1].toLowerCase() !== "not") {
 				name = `${named[1]} `;
 				rest = rest.slice(named[0].length);
 			}
 		}
+
 		const opaque =
 			/^not\b/i.test(rest) ||
 			splitAtTopLevel(rest, /\s*,\s*|\s+or\s+/iy).length > 1;
+
 		for (const clause of opaque ? [rest] : splitAtTopLevel(rest, /\s+and\s+/iy))
 			clauses.add(`${type} ${name}${normalizeClause(clause)}`);
 	}
+
 	return [...clauses];
 }
+
 /** A replacement applies whenever a removal does when each of its clauses is also one of the removal's. No conditions is always. */
 const appliesWhenever = (replacement, removal) =>
 	replacement.every((clause) => removal.includes(clause));
+
 const NOT_FOCUS_VISIBLE = /:not\(\s*:focus-visible\s*\)/g;
+
 const hasFocusVisible = (selector) =>
 	/:focus-visible\b/.test(selector.replace(NOT_FOCUS_VISIBLE, ""));
+
 /** The element a selector styles, without its focus pseudo-classes. A bare `:focus-visible` is `*:focus-visible`, so `.a :focus-visible` has the base `.a *`. */
 const focusBase = (selector) =>
 	selector
@@ -751,6 +873,7 @@ const focusBase = (selector) =>
 		.replace(/:(?:focus-visible|focus-within|focus)\b/g, "")
 		.replace(/\s+/g, " ")
 		.trim();
+
 /** Whether a :focus-visible rule on `base` styles the element `target` selects: the same element, any element, or any descendant of a prefix (`.a *`). */
 const covers = (base, target) =>
 	base === "*" ||
@@ -760,17 +883,23 @@ const covers = (base, target) =>
 /** Gate hits in one stylesheet's declarations. */
 export function declarationViolations(decls, { faces = new Set() } = {}) {
 	const hits = [];
+
 	const hit = (gate, decl, match) =>
 		hits.push({ gate, line: decl.line, match });
+
 	const removals = [];
 	const replacements = [];
+
 	for (const decl of decls) {
 		const { prop, value, context } = decl;
+
 		if (prop === "@apply") {
 			for (const found of value.matchAll(TRANSITION_ALL_UTILITY))
 				hit("transition-all", decl, found[0]);
+
 			for (const found of arbitraryHex(value))
 				hit("raw-hex", decl, found.match);
+
 			for (const found of value.matchAll(OUTLINE_UTILITY)) {
 				if (!found[1].includes("not-focus-visible:"))
 					removals.push({
@@ -781,25 +910,32 @@ export function declarationViolations(decls, { faces = new Set() } = {}) {
 						covered: hasFocusVisibleUtility(value),
 					});
 			}
+
 			continue;
 		}
+
 		if (prop.startsWith("@")) continue;
+
 		const inFontFace = context.some((prelude) =>
 			/^@font-face\b/i.test(prelude),
 		);
+
 		if (isFontProp(prop) || /^--[\w-]*font/i.test(prop)) {
 			for (const match of value.matchAll(QUOTED_GENERIC))
 				hit("quoted-generic", decl, match[0]);
 		}
+
 		if (isFontProp(prop) && !inFontFace) {
 			for (const name of fontFamilies(prop, value))
 				if (!faces.has(name.toLowerCase()))
 					hit("font-outside-system", decl, name);
 		}
+
 		if (!prop.startsWith("--") && !MASK_PROP.test(prop)) {
 			for (const match of value.replace(/url\([^)]*\)/gi, "").matchAll(HEX))
 				hit("raw-hex", decl, match[0]);
 		}
+
 		if (prop === "transition" || prop === "transition-property") {
 			const all =
 				prop === "transition"
@@ -807,8 +943,10 @@ export function declarationViolations(decls, { faces = new Set() } = {}) {
 					: commaItems(value).some(
 							(item) => words(item)[0]?.toLowerCase() === "all",
 						);
+
 			if (all) hit("transition-all", decl, `${prop}: ${value}`);
 		}
+
 		if (/^(?:transition|animation)(?:-timing-function)?$/.test(prop)) {
 			if (
 				commaItems(value).some((item) =>
@@ -817,13 +955,16 @@ export function declarationViolations(decls, { faces = new Set() } = {}) {
 			)
 				hit("bare-ease", decl, `${prop}: ${value}`);
 		}
+
 		const selectors = resolvedSelectors(context);
+
 		if (removesOutline(decl)) {
 			const onlyUnfocused =
 				selectors.length > 0 &&
 				selectors.every((selector) =>
 					selector.replace(/\s+/g, "").includes(":not(:focus-visible)"),
 				);
+
 			if (!onlyUnfocused)
 				removals.push({
 					decl,
@@ -834,6 +975,7 @@ export function declarationViolations(decls, { faces = new Set() } = {}) {
 				});
 		} else if (FOCUS_REPLACEMENT_PROP.test(prop)) {
 			const focused = selectors.filter(hasFocusVisible).map(focusBase);
+
 			if (focused.length)
 				replacements.push({
 					bases: focused,
@@ -841,6 +983,7 @@ export function declarationViolations(decls, { faces = new Set() } = {}) {
 				});
 		}
 	}
+
 	// A removal is replaced by a :focus-visible rule for the same selector (or for every
 	// element), not by one for another selector in the file. The rule must also apply
 	// whenever the removal does: a replacement inside `@media (min-width: 64rem)` leaves an
@@ -856,32 +999,39 @@ export function declarationViolations(decls, { faces = new Set() } = {}) {
 					),
 				),
 		);
+
 	for (const removal of removals)
 		if (!isCovered(removal)) hit("outline-none", removal.decl, removal.match);
+
 	return hits;
 }
 
 /** The class attributes of .astro markup: class="...", class='...', class={...} and class:list={...}, as { text, index }. */
 export function classAttributes(markup) {
 	const spans = [];
+
 	for (const found of markup.matchAll(
 		/(?<![\w:.-])class(?::list)?\s*=(?!=)\s*/g,
 	)) {
 		const start = found.index + found[0].length;
 		const open = markup[start];
 		let end = -1;
+
 		if (open === '"' || open === "'") end = markup.indexOf(open, start + 1);
 		else if (open === "{") end = closingBrace(markup, start);
 		else {
 			const bare = /^[^\s>]+/.exec(markup.slice(start));
+
 			if (bare) {
 				spans.push({ text: bare[0], index: start });
 				continue;
 			}
 		}
+
 		if (end !== -1)
 			spans.push({ text: markup.slice(start + 1, end), index: start + 1 });
 	}
+
 	return spans;
 }
 
@@ -889,20 +1039,25 @@ export function classAttributes(markup) {
 function closingBrace(text, open) {
 	let depth = 0;
 	let quote = "";
+
 	for (let i = open; i < text.length; i += 1) {
 		const ch = text[i];
+
 		if (quote) {
 			if (ch === "\\") i += 1;
 			else if (ch === quote) quote = "";
 			continue;
 		}
+
 		if (ch === '"' || ch === "'" || ch === "`") quote = ch;
 		else if (ch === "{") depth += 1;
 		else if (ch === "}") {
 			depth -= 1;
+
 			if (depth === 0) return i;
 		}
 	}
+
 	return -1;
 }
 
@@ -913,6 +1068,7 @@ function closingBrace(text, open) {
 export function markupViolations(markup) {
 	const hits = [];
 	const lineAt = (offset) => markup.slice(0, offset).split("\n").length;
+
 	for (const { text, index } of classAttributes(markup)) {
 		for (const found of text.matchAll(TRANSITION_ALL_UTILITY))
 			hits.push({
@@ -920,6 +1076,7 @@ export function markupViolations(markup) {
 				line: lineAt(index + found.index),
 				match: found[0],
 			});
+
 		for (const found of arbitraryHex(text))
 			hits.push({
 				gate: "raw-hex",
@@ -927,6 +1084,7 @@ export function markupViolations(markup) {
 				match: found.match,
 			});
 		const replaced = hasFocusVisibleUtility(text);
+
 		for (const found of text.matchAll(OUTLINE_UTILITY)) {
 			if (!replaced && !found[1].includes("not-focus-visible:"))
 				hits.push({
@@ -937,12 +1095,14 @@ export function markupViolations(markup) {
 				});
 		}
 	}
+
 	return hits;
 }
 
 /** Every gate hit in one source file, as { path, line, gate, label, hint, match }. */
 export function fileViolations(path, source, { faces } = {}) {
 	let hits = [];
+
 	if (!isScanned(path)) hits = [];
 	else if (path.endsWith(".css"))
 		hits = declarationViolations(cssDeclarations(source), { faces });
@@ -951,10 +1111,13 @@ export function fileViolations(path, source, { faces } = {}) {
 		const decls = styleBlocks(
 			path.endsWith(".ts") ? literalText(source) : source,
 		).flatMap((block) => cssDeclarations(block.css, block.line));
+
 		hits = declarationViolations(decls, { faces });
+
 		if (path.endsWith(".astro"))
 			hits.push(...markupViolations(markupOnly(source)));
 	}
+
 	return hits.map((h) => ({
 		path,
 		...h,
@@ -974,6 +1137,7 @@ export function fileViolations(path, source, { faces } = {}) {
 export function applyAllowlist(violations, allowlist = ALLOWLIST) {
 	const uses = new Map();
 	const failures = [];
+
 	for (const v of violations) {
 		const entry = allowlist.find(
 			(e) =>
@@ -981,7 +1145,9 @@ export function applyAllowlist(violations, allowlist = ALLOWLIST) {
 				e.file === v.path &&
 				v.match.toLowerCase() === e.match.toLowerCase(),
 		);
+
 		const used = entry ? (uses.get(entry) ?? 0) : 0;
+
 		if (entry && (entry.count === undefined || used < entry.count))
 			uses.set(entry, used + 1);
 		else
@@ -994,18 +1160,23 @@ export function applyAllowlist(violations, allowlist = ALLOWLIST) {
 					: v,
 			);
 	}
+
 	const stale = allowlist.filter(
 		(entry) =>
 			(uses.get(entry) ?? 0) === 0 ||
 			(entry.count !== undefined && uses.get(entry) < entry.count),
 	);
+
 	return { failures, stale, uses };
 }
 
 function collectFiles(root) {
 	const stats = statSync(root, { throwIfNoEntry: false });
+
 	if (!stats) return [];
+
 	if (stats.isFile()) return isScanned(root.split(sep).join("/")) ? [root] : [];
+
 	return readdirSync(root, { withFileTypes: true }).flatMap((entry) =>
 		collectFiles(join(root, entry.name)),
 	);
@@ -1014,32 +1185,42 @@ function collectFiles(root) {
 function main() {
 	const globalCss = readFileSync(GLOBAL_CSS, "utf8");
 	const faces = systemFamilies(globalCss);
+
 	const violations = collectFiles(ROOT).flatMap((path) => {
 		const posix = relative(".", path).split(sep).join("/");
+
 		return fileViolations(posix, readFileSync(path, "utf8"), { faces });
 	});
+
 	const { failures, stale, uses } = applyAllowlist(violations);
+
 	for (const entry of stale) {
 		const matched = uses.get(entry) ?? 0;
+
 		const what =
 			matched === 0
 				? "no longer matches; remove it"
 				: `matches ${matched} of ${entry.count}; lower its count`;
+
 		console.warn(
 			`design-check: allowlist entry ${what}: ${entry.gate} ${entry.file} ${JSON.stringify(entry.match)}`,
 		);
 	}
+
 	if (failures.length) {
 		const lines = failures.map(
 			(v) =>
 				`${v.path}:${v.line}: ${v.label}: ${JSON.stringify(v.match)} (${v.hint})`,
 		);
+
 		console.error(
 			`design-check failed (Hallmark gates, see docs/design-standard.md):\n- ${lines.join("\n- ")}`,
 		);
 		process.exitCode = 1;
+
 		return;
 	}
+
 	console.log(
 		`design-check passed: ${Object.keys(GATES).length} Hallmark gates, ${violations.length} allowlisted exceptions.`,
 	);

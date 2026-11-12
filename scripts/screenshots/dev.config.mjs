@@ -9,6 +9,7 @@ const moduleGraph = {
 	configureServer(server) {
 		server.middlewares.use("/__screenshots/deps", (_, response) => {
 			const graph = {};
+
 			for (const [id, mod] of server.environments.ssr.moduleGraph
 				.idToModuleMap) {
 				graph[id] = {
@@ -16,6 +17,7 @@ const moduleGraph = {
 					imports: [...mod.importedModules].map((item) => item.id),
 				};
 			}
+
 			response.setHeader("content-type", "application/json");
 			response.end(JSON.stringify(graph));
 		});

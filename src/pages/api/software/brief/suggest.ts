@@ -6,7 +6,9 @@ import {
 	suggestionVisitorHash,
 	validSuggestionPass,
 } from "~/lib/brief-suggestion-pass";
+
 export const prerender = false;
+
 const schema = z
 	.object({
 		// Pages opened before the questions took curly apostrophes still send the straight ones, so both are accepted.
@@ -36,15 +38,19 @@ const schema = z
 			.strict(),
 	})
 	.strict();
+
 const empty = () =>
 	Response.json(
 		{ suggestion: "" },
 		{ headers: { "cache-control": "no-store" } },
 	);
+
 export const POST: APIRoute = async ({ request, locals }) => {
 	let timer: ReturnType<typeof setTimeout> | undefined;
+
 	try {
 		const env = locals.runtime?.env;
+
 		// Local previews never call Workers AI, even when a proxy binding exists.
 		if (
 			!env?.AI ||
@@ -59,38 +65,47 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		)
 			return empty();
 		const parsed = schema.safeParse(await musicRequest(request, 16000));
+
 		if (!parsed.success || parsed.data.text.trim().split(/\s+/).length < 3)
 			return empty();
 		const content = JSON.stringify(parsed.data);
+
 		if (content.length > 2000) return empty();
 		const now = Date.now();
 		const day = new Date(now).toISOString().slice(0, 10);
 		const previousDay = new Date(now - 86400000).toISOString().slice(0, 10);
 		const ip = request.headers.get("cf-connecting-ip");
+
 		if (!ip) return empty();
+
 		const pass = request.headers
 			.get("cookie")
 			?.split(";")
 			.map((part) => part.trim())
 			.find((part) => part.startsWith(`${suggestionPassCookie}=`))
 			?.slice(suggestionPassCookie.length + 1);
+
 		if (!(await validSuggestionPass(pass, env.TURNSTILE_SECRET_KEY, ip)))
 			return Response.json(
 				{ suggestion: "", passRequired: true },
 				{ headers: { "cache-control": "no-store" } },
 			);
 		const hash = await suggestionVisitorHash(env.TURNSTILE_SECRET_KEY, ip, now);
+
 		if (
 			!(await env.BRIEF_SUGGEST_RATE_LIMIT.limit({ key: hash })).success ||
 			!(await env.BRIEF_SUGGEST_SITE_LIMIT.limit({ key: "site" })).success
 		)
 			return empty();
+
 		const site = await env.MUSIC_DB.prepare(
 			"SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
 		)
 			.bind(day, "site")
 			.first<{ count: number }>();
+
 		if (site && site.count >= 10000) return empty();
+
 		for (const [scope, cap] of [
 			[hash, 300],
 			["site", 10000],
@@ -100,9 +115,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
         ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count`)
 					.bind(day, scope, cap)
 					.first<{ count: number }>();
+
 			if (!reserved) return empty();
+
 			if (scope === "site" && reserved.count === 1) {
 				const db = env.MUSIC_DB;
+
 				const cleanup = Promise.resolve()
 					.then(() =>
 						db
@@ -114,9 +132,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
 					)
 					.then(() => {})
 					.catch(() => {});
+
 				locals.runtime?.ctx?.waitUntil(cleanup);
 			}
 		}
+
 		const result = await Promise.race([
 			env.AI.run("@cf/meta/llama-3.2-1b-instruct", {
 				messages: [
@@ -134,13 +154,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				timer = setTimeout(() => resolve(null), 1200);
 			}),
 		]);
+
 		const raw =
 			result && "response" in result && typeof result.response === "string"
 				? result.response.trim()
 				: "";
+
 		if (!raw || /[\r\n"\x00-\x1f]/.test(raw) || raw.length > 100)
 			return empty();
 		const words = raw.split(/\s+/).slice(0, 6).join(" ");
+
 		return Response.json(
 			{ suggestion: `${/\s$/.test(parsed.data.text) ? "" : " "}${words}` },
 			{ headers: { "cache-control": "no-store" } },

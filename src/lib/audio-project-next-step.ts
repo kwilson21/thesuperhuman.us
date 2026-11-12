@@ -24,6 +24,7 @@ export type NextStep = {
 
 const upload = "#upload-file";
 const payment = "#payment-heading";
+
 const reconciling: NextStep = {
 	title: "Check the invoice in Stripe",
 	detail:
@@ -31,6 +32,7 @@ const reconciling: NextStep = {
 	target: payment,
 	action: "See the invoice status",
 };
+
 const stripeOff: NextStep = {
 	title: "Waiting on invoices",
 	detail:
@@ -39,6 +41,7 @@ const stripeOff: NextStep = {
 	action: "See the payment status",
 	waiting: true,
 };
+
 /** A voided, failed or uncollectible invoice: Book the work says how to replace or retry it. */
 const invoiceProblem = (
 	which: string,
@@ -86,8 +89,10 @@ export function ownerNextStep({
 		requestStatus !== "withdrawn"
 	)
 		return clientStopped;
+
 	if (revoked || requestStatus === "withdrawn" || stage === "complete")
 		return null;
+
 	// Resolving an unaccepted request closes its studio (migration 0015), so only new and reviewed remain.
 	if (stage === "files_under_review")
 		return requestStatus === "new"
@@ -107,6 +112,7 @@ export function ownerNextStep({
 						action: "Accept and update client",
 					}
 				: null;
+
 	if (stage === "accepted") {
 		if (!pay)
 			return {
@@ -116,6 +122,7 @@ export function ownerNextStep({
 				target: "#confirm-terms",
 				action: "Confirm terms",
 			};
+
 		if (pay.bookingStatus === "paid")
 			return {
 				title: "Start the work",
@@ -124,6 +131,7 @@ export function ownerNextStep({
 				target: "#start-work",
 				action: "Mark in progress",
 			};
+
 		if (pay.bookingStatus === "not_created")
 			return pay.bookingCreationStartedAt
 				? reconciling
@@ -142,6 +150,7 @@ export function ownerNextStep({
 							target: "#record-booking-payment",
 							action: "Record booking received",
 						};
+
 		if (pay.bookingStatus === "draft" || pay.bookingStatus === "open")
 			return {
 				title: "Waiting on the booking payment",
@@ -151,8 +160,10 @@ export function ownerNextStep({
 				action: "See the booking status",
 				waiting: true,
 			};
+
 		return invoiceProblem("booking", pay.bookingStatus, stripeEnabled);
 	}
+
 	if (stage === "in_progress")
 		return {
 			title: "Share a review mix",
@@ -161,6 +172,7 @@ export function ownerNextStep({
 			target: upload,
 			action: "Upload file",
 		};
+
 	if (stage === "revision_in_progress")
 		return {
 			title: "Share the revised mix",
@@ -169,8 +181,10 @@ export function ownerNextStep({
 			target: upload,
 			action: "Upload file",
 		};
+
 	if (stage === "review_ready") {
 		const balance = pay?.balanceStatus ?? "not_created";
+
 		if (balance === "paid")
 			return {
 				title: "Deliver the final files",
@@ -179,9 +193,12 @@ export function ownerNextStep({
 				target: upload,
 				action: "Upload file",
 			};
+
 		if (balance === "not_created") {
 			if (pay?.balanceCreationStartedAt) return reconciling;
+
 			if (reviewDecision === "stopped") return clientStopped;
+
 			if (reviewDecision === "changes")
 				return {
 					title: "Begin the revision",
@@ -190,6 +207,7 @@ export function ownerNextStep({
 					target: "#begin-revision",
 					action: "Begin revision",
 				};
+
 			if (reviewDecision === "approved")
 				return stripeEnabled
 					? {
@@ -206,6 +224,7 @@ export function ownerNextStep({
 							target: "#record-balance-payment",
 							action: "Record balance received",
 						};
+
 			return {
 				title: "Waiting on the client’s answer",
 				detail:
@@ -215,6 +234,7 @@ export function ownerNextStep({
 				waiting: true,
 			};
 		}
+
 		if (balance === "draft" || balance === "open")
 			return {
 				title: "Waiting on the balance payment",
@@ -224,8 +244,10 @@ export function ownerNextStep({
 				action: "See the balance status",
 				waiting: true,
 			};
+
 		return invoiceProblem("balance", balance, stripeEnabled);
 	}
+
 	if (stage === "final_files_ready")
 		return {
 			title: "Close the project",
@@ -234,5 +256,6 @@ export function ownerNextStep({
 			target: "#close-project",
 			action: "Mark complete",
 		};
+
 	return null;
 }

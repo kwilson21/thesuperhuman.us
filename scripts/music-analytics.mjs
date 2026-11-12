@@ -7,8 +7,10 @@ export const dailyPlayback = `SELECT day,release_id,recording_id,medium,event,su
   FROM music_events GROUP BY day,release_id,recording_id,medium,event
   UNION ALL SELECT day,release_id,recording_id,medium,event,count FROM music_event_daily
 ) GROUP BY day,release_id,recording_id,medium,event`;
+
 export const lifetimePlayback = `SELECT release_id,recording_id,medium,event,sum(count) AS count
 FROM (${dailyPlayback}) GROUP BY release_id,recording_id,medium,event`;
+
 export const lifetimeOwnerPlayback = `SELECT release_id,recording_id,medium,event,campaign_id,channel,creative,country,region,city,SUM(count) AS count FROM (
   SELECT release_id,recording_id,medium,event,COALESCE(campaign_id,'') AS campaign_id,COALESCE(channel,'') AS channel,
     COALESCE(creative,'') AS creative,country,region,city,COUNT(*) AS count FROM music_playback_events WHERE traffic_class='human'
@@ -18,8 +20,10 @@ export const lifetimeOwnerPlayback = `SELECT release_id,recording_id,medium,even
 
 function parseWranglerJson(output) {
 	const start = output.indexOf("[");
+
 	if (start < 0)
 		throw new Error("Music database command returned no JSON result.");
+
 	return JSON.parse(output.slice(start));
 }
 
@@ -31,16 +35,19 @@ export async function openMusicDatabase(remote, remoteConfigPath) {
 				configPath: resolve(".private/wrangler-music-preview.json"),
 				persist: { path: ".wrangler/state/v3" },
 			});
+
 	return {
 		async query(sql) {
 			if (proxy) return (await proxy.env.MUSIC_DB.prepare(sql).all()).results;
 			// Remove transient Wrangler logs, which may contain query results.
 			await mkdir(".private", { recursive: true });
 			const temporary = await mkdtemp(resolve(".private/music-query-"));
+
 			try {
 				const configArgs = remoteConfigPath
 					? ["--config", resolve(remoteConfigPath)]
 					: [];
+
 				const result = spawnSync(
 					process.execPath,
 					[
@@ -63,10 +70,12 @@ export async function openMusicDatabase(remote, remoteConfigPath) {
 						},
 					},
 				);
+
 				if (result.status !== 0)
 					throw new Error(
 						"Music database query failed. Check MUSIC_DB and Cloudflare authentication. No cleanup retry is automatic.",
 					);
+
 				return parseWranglerJson(result.stdout)[0].results;
 			} finally {
 				await rm(temporary, { recursive: true, force: true });
@@ -79,14 +88,17 @@ export async function openMusicDatabase(remote, remoteConfigPath) {
 				);
 			await mkdir(".private", { recursive: true });
 			const temporary = await mkdtemp(resolve(".private/music-batch-"));
+
 			try {
 				const file = resolve(temporary, "retention.sql");
 				await writeFile(file, statements.map((sql) => `${sql};`).join("\n"), {
 					mode: 0o600,
 				});
+
 				const configArgs = remoteConfigPath
 					? ["--config", resolve(remoteConfigPath)]
 					: [];
+
 				const result = spawnSync(
 					process.execPath,
 					[
@@ -110,10 +122,12 @@ export async function openMusicDatabase(remote, remoteConfigPath) {
 						},
 					},
 				);
+
 				if (result.status !== 0)
 					throw new Error(
 						"Atomic music database batch failed. D1 rolled back the reviewed retention file; no automatic retry was attempted.",
 					);
+
 				return parseWranglerJson(result.stdout);
 			} finally {
 				await rm(temporary, { recursive: true, force: true });

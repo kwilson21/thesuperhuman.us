@@ -11,6 +11,7 @@ function wav({ bits = 16, float = false, frames = 44_100 } = {}) {
 	const bytes = bits / 8,
 		block = bytes * 2,
 		list = 12;
+
 	const buffer = Buffer.alloc(12 + (8 + list) + 24 + 8 + frames * block);
 	buffer.write("RIFF", 0);
 	buffer.writeUInt32LE(buffer.length - 8, 4);
@@ -30,20 +31,25 @@ function wav({ bits = 16, float = false, frames = 44_100 } = {}) {
 	buffer.write("data", at);
 	buffer.writeUInt32LE(frames * block, at + 4);
 	at += 8;
+
 	for (let frame = 0; frame < frames; frame++) {
 		const level = (frame < frames / 2 ? 0.2 : 0.8) * Math.sin(frame / 7);
+
 		for (let channel = 0; channel < 2; channel++, at += bytes) {
 			if (float) buffer.writeFloatLE(level, at);
 			else if (bits === 16) buffer.writeInt16LE(Math.round(level * 32767), at);
 			else buffer.writeIntLE(Math.round(level * 8388607), at, 3);
 		}
 	}
+
 	return buffer;
 }
+
 const reader =
 	(buffer: Buffer, log: number[] = []) =>
 	async (start: number, end: number) => {
 		log.push(end - start);
+
 		return buffer.buffer.slice(
 			buffer.byteOffset + start,
 			buffer.byteOffset + end,
@@ -80,6 +86,7 @@ describe("audio peaks", () => {
 	it("measures every sample, so a single short transient still shows", async () => {
 		const frames = 44_100 * 60,
 			file = wav({ frames: 0 });
+
 		const silent = Buffer.concat([file, Buffer.alloc(frames * 4)]);
 		silent.writeUInt32LE(silent.length - 8, 4);
 		silent.writeUInt32LE(frames * 4, file.length - 4);

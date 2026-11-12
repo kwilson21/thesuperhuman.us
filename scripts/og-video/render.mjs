@@ -47,10 +47,13 @@ const WIDTH = 1200;
 const HEIGHT = 630;
 const SCALE = 2;
 const FPS = 30;
+
 // Messages allows 10 MB for the whole preview; Discord measures the file within a 10 s budget.
 const MAX_VIDEO_BYTES = 2.5 * 1024 * 1024;
+
 // WhatsApp documents 600 KB as its og:image ceiling.
 const MAX_POSTER_BYTES = 600 * 1024;
+
 const ENCODE = [
 	"-map",
 	"0:v:0",
@@ -97,6 +100,7 @@ const ENCODE = [
 	"-movflags",
 	"+faststart",
 ];
+
 // Recorded with each scene, so a change to these settings re-encodes without being taken for a
 // rendering difference.
 const ENCODING = createHash("sha256")
@@ -106,6 +110,7 @@ const ENCODING = createHash("sha256")
 
 const args = process.argv.slice(2);
 const sheetOnly = args.includes("--sheet");
+
 const moments = (
 	args
 		.find((arg) => arg.startsWith("--at="))
@@ -114,17 +119,24 @@ const moments = (
 )
 	.filter(Boolean)
 	.map(Number);
+
 if (moments.some((time) => !Number.isFinite(time) || time < 0))
 	fail("--at takes milliseconds, for example --at=0,1500,3000");
+
 const requested = args.filter((arg) => !arg.startsWith("--"));
+
 const available = readdirSync(SCENES)
 	.filter((name) => name.endsWith(".html"))
 	.map((name) => basename(name, ".html"))
 	.sort();
+
 const unknown = requested.filter((key) => !available.includes(key));
+
 if (unknown.length)
 	fail(`Unknown scene: ${unknown.join(", ")}. Scenes: ${available.join(", ")}`);
+
 const keys = requested.length ? requested : available;
+
 if (!spawnSync("ffmpeg", ["-version"]).stdout?.length)
 	fail("ffmpeg is required.");
 
@@ -139,26 +151,32 @@ const DETERMINISTIC = [
 	"--disable-image-animation-resync",
 	"--disable-new-content-rendering-timeout",
 ];
+
 const AGAIN = Symbol("capture again");
 const manifest = readManifest();
 const problems = [];
+
 try {
 	const queue = [...keys];
+
 	const worker = async () => {
 		for (let key = queue.shift(); key; key = queue.shift()) {
 			try {
 				const result = await renderScene(key);
+
 				if (result) manifest[key] = result;
 			} catch (error) {
 				problems.push(`${key}: ${error.message}`);
 			}
 		}
 	};
+
 	await Promise.all(Array.from({ length: Math.min(3, keys.length) }, worker));
 } finally {
 	// Scenes that finished have already replaced their files, so record them even if others failed.
 	if (!sheetOnly) writeManifest(manifest);
 }
+
 if (problems.length) fail(problems.join("\n"));
 
 // Each scene gets its own browser, so nothing an earlier scene left in Chromium's caches reaches it.
@@ -168,8 +186,10 @@ async function renderScene(key) {
 			executablePath: process.env.CHROMIUM_PATH || undefined,
 			args: DETERMINISTIC,
 		});
+
 		try {
 			const result = await renderIn(browser, key, attempt);
+
 			if (result !== AGAIN) return result;
 		} finally {
 			await browser.close();
@@ -182,6 +202,7 @@ async function renderIn(browser, key, attempt) {
 		viewport: { width: WIDTH, height: HEIGHT },
 		deviceScaleFactor: SCALE,
 	});
+
 	const errors = [];
 	const inputs = new Set();
 	page.on("requestfinished", (request) => {
@@ -195,6 +216,7 @@ async function renderIn(browser, key, attempt) {
 	await page.goto(pathToFileURL(join(SCENES, `${key}.html`)).href, {
 		waitUntil: "load",
 	});
+
 	const setup = await page.evaluate(async () => {
 		await document.fonts.ready;
 		await Promise.all(
@@ -204,12 +226,14 @@ async function renderIn(browser, key, attempt) {
 				}),
 			),
 		);
+
 		// Only elements that draw text need their font; a wrapper's inherited family may never load.
 		const texts = [...document.querySelectorAll("body *")].filter((element) =>
 			[...element.childNodes].some(
 				(node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim(),
 			),
 		);
+
 		const families = [
 			...new Set(
 				texts.map((element) =>
@@ -220,6 +244,7 @@ async function renderIn(browser, key, attempt) {
 				),
 			),
 		];
+
 		const missing = families.filter(
 			(family) =>
 				!document.fonts.check(`16px "${family}"`) ||
@@ -229,9 +254,12 @@ async function renderIn(browser, key, attempt) {
 						face.status === "loaded",
 				),
 		);
+
 		const animations = document.getAnimations();
+
 		for (const animation of animations) animation.pause();
 		const root = document.documentElement;
+
 		// A line that may not wrap must fit its own box, or it runs into its neighbour unseen.
 		const cramped = texts
 			.filter(
@@ -241,6 +269,7 @@ async function renderIn(browser, key, attempt) {
 					element.scrollWidth > element.clientWidth + 1,
 			)
 			.map((element) => element.textContent.trim().slice(0, 40));
+
 		return {
 			duration: Number(root.dataset.duration),
 			poster: root.dataset.poster === "jpeg" ? "jpeg" : "png",
@@ -251,31 +280,42 @@ async function renderIn(browser, key, attempt) {
 				root.scrollWidth > innerWidth || root.scrollHeight > innerHeight,
 		};
 	});
+
 	let failed = false;
+
 	const problem = (message) => {
 		problems.push(`${key}: ${message}`);
 		failed = true;
 	};
+
 	if (errors.length) problem(errors.join("; "));
+
 	if (setup.missing.length)
 		problem(`fonts not loaded: ${setup.missing.join(", ")}`);
+
 	if (setup.overflow) problem("content overflows the 1200×630 frame");
+
 	if (setup.cramped.length)
 		problem(`text wider than its box: ${setup.cramped.join(" | ")}`);
+
 	if (
 		!Number.isInteger(setup.duration) ||
 		setup.duration < 2000 ||
 		setup.duration > 10000
 	)
 		problem("data-duration must be an integer from 2000 to 10000 ms");
+
 	if (!setup.animations) problem("no animations found");
+
 	if (failed) {
 		await page.close();
+
 		return null;
 	}
 
 	const frames = Math.round((setup.duration * FPS) / 1000);
 	const work = mkdtempSync(join(tmpdir(), `og-${key}-`));
+
 	try {
 		// Wait two animation frames after moving the clock so the screenshot shows the new time, not the
 		// frame already in flight.
@@ -283,34 +323,43 @@ async function renderIn(browser, key, attempt) {
 			await page.evaluate((t) => {
 				for (const animation of document.getAnimations())
 					animation.currentTime = t;
+
 				return new Promise((resolve) =>
 					requestAnimationFrame(() => requestAnimationFrame(resolve)),
 				);
 			}, time);
 			await page.screenshot({ path: file });
 		};
+
 		// An infinite animation wraps back to frame 0 at exactly data-duration, so look 1 ms earlier.
 		await capture(0, join(work, "0000.png"));
 		await capture(setup.duration - 1, join(work, "end.png"));
+
 		const seam = await difference(
 			join(work, "0000.png"),
 			join(work, "end.png"),
 		);
+
 		if (seam > 0.5)
 			problem(
 				`the end of the loop differs from frame 0 (mean difference ${seam.toFixed(2)}), so the loop jumps`,
 			);
+
 		if (sheetOnly) {
 			const bytes = (await posterOf(join(work, "0000.png"), setup.poster))
 				.length;
+
 			if (bytes > MAX_POSTER_BYTES)
 				problem(`poster is ${bytes} bytes; keep it under ${MAX_POSTER_BYTES}`);
 			else console.log(`${key}: poster ${bytes} bytes as ${setup.poster}`);
 			await contactSheet(key, frames, capture, work);
+
 			for (const time of moments)
 				await capture(time, join(SHEETS, `${key}-t${time}.png`));
+
 			return null;
 		}
+
 		for (let frame = 1; frame < frames; frame++)
 			await capture(
 				(frame * 1000) / FPS,
@@ -318,6 +367,7 @@ async function renderIn(browser, key, attempt) {
 			);
 		const source = sourceHash([...inputs].sort());
 		const framesHash = createHash("sha256");
+
 		for (let frame = 0; frame < frames; frame++)
 			framesHash.update(
 				readFileSync(join(work, `${String(frame).padStart(4, "0")}.png`)),
@@ -326,14 +376,17 @@ async function renderIn(browser, key, attempt) {
 		const sameFrames = framesHash.digest("hex").slice(0, 16);
 		const previous = manifest[key];
 		const posterExtension = setup.poster === "jpeg" ? ".jpg" : ".png";
+
 		const reviewed =
 			!failed &&
 			previous?.image.endsWith(posterExtension) &&
 			[previous.image, previous.video.replace("/og/", "/og/raw/")].every(
 				(file) => existsSync(join(ROOT, "public", file)),
 			);
+
 		if (reviewed && previous.frames === sameFrames) {
 			console.log(`${key}: frames unchanged; keeping ${previous.video}`);
+
 			return {
 				...previous,
 				inputs: source.inputs,
@@ -341,6 +394,7 @@ async function renderIn(browser, key, attempt) {
 				encoding: ENCODING,
 			};
 		}
+
 		// Chromium can, very rarely, anti-alias a few pixels differently from one run to the next. When
 		// neither the scene's files nor the encoder settings have changed, capture it once more before
 		// replacing a reviewed video.
@@ -353,10 +407,12 @@ async function renderIn(browser, key, attempt) {
 			console.log(
 				`${key}: frames differ although its files and encoder settings are unchanged; capturing again`,
 			);
+
 			return AGAIN;
 		}
 
 		const video = join(work, "video.mp4");
+
 		const encode = spawnSync(
 			"ffmpeg",
 			[
@@ -372,20 +428,26 @@ async function renderIn(browser, key, attempt) {
 			],
 			{ encoding: "utf8" },
 		);
+
 		if (encode.status !== 0) {
 			problem(`ffmpeg failed: ${encode.stderr}`);
+
 			return null;
 		}
+
 		const poster = await posterOf(join(work, "0000.png"), setup.poster);
 		const videoBytes = readFileSync(video);
+
 		if (videoBytes.length > MAX_VIDEO_BYTES)
 			problem(
 				`video is ${videoBytes.length} bytes; keep it under ${MAX_VIDEO_BYTES}`,
 			);
+
 		if (poster.length > MAX_POSTER_BYTES)
 			problem(
 				`poster is ${poster.length} bytes; keep it under ${MAX_POSTER_BYTES}`,
 			);
+
 		if (failed) return null;
 
 		const imageName = `${key}-${hash(poster)}${posterExtension}`;
@@ -398,6 +460,7 @@ async function renderIn(browser, key, attempt) {
 		console.log(
 			`${key}: ${frames} frames, poster ${poster.length} bytes, video ${videoBytes.length} bytes`,
 		);
+
 		return {
 			image: `/og/${imageName}`,
 			video: `/og/${videoName}`,
@@ -422,25 +485,30 @@ async function contactSheet(key, frames, capture, work) {
 	const count = 12;
 	const tile = { width: 600, height: 315 };
 	const tiles = [];
+
 	for (let index = 0; index < count; index++) {
 		const frame = Math.round((index * frames) / count);
 		const file = join(work, `sheet-${index}.png`);
 		await capture((frame * 1000) / FPS, file);
+
 		const label = Buffer.from(
 			`<svg width="${tile.width}" height="28"><rect width="100%" height="100%" fill="#0E0E0E"/><text x="10" y="19" font-family="monospace" font-size="15" fill="#FBF8F2">${key} · ${(frame / FPS).toFixed(2)} s</text></svg>`,
 		);
+
 		const input = await sharp(file)
 			.resize(tile.width, tile.height)
 			.extend({ bottom: 28, background: "#0E0E0E" })
 			.composite([{ input: label, top: tile.height, left: 0 }])
 			.png()
 			.toBuffer();
+
 		tiles.push({
 			input,
 			left: (index % 3) * tile.width,
 			top: Math.floor(index / 3) * (tile.height + 28),
 		});
 	}
+
 	mkdirSync(SHEETS, { recursive: true });
 	const out = join(SHEETS, `${key}-sheet.png`);
 	await sharp({
@@ -454,6 +522,7 @@ async function contactSheet(key, frames, capture, work) {
 		.composite(tiles)
 		.png()
 		.toFile(out);
+
 	for (const index of [0, 6])
 		await capture(
 			(Math.round((index * frames) / count) * 1000) / FPS,
@@ -464,6 +533,7 @@ async function contactSheet(key, frames, capture, work) {
 
 function posterOf(file, format) {
 	const resized = sharp(file).resize(WIDTH, HEIGHT, { kernel: "lanczos3" });
+
 	return (
 		format === "jpeg"
 			? resized.jpeg({ quality: 85, mozjpeg: true })
@@ -475,14 +545,18 @@ async function difference(a, b) {
 	const [left, right] = await Promise.all(
 		[a, b].map((file) => sharp(file).raw().toBuffer()),
 	);
+
 	let total = 0;
+
 	for (let index = 0; index < left.length; index++)
 		total += Math.abs(left[index] - right[index]);
+
 	return total / left.length;
 }
 
 function removeStale(directory, key, keep) {
 	const pattern = new RegExp(`^${key}-[0-9a-f]{10}\\.(png|jpg|mp4)$`);
+
 	for (const name of readdirSync(directory)) {
 		if (
 			name !== keep &&
@@ -500,11 +574,13 @@ function hash(bytes) {
 // The same digest tests/lib/og-media.test.ts recomputes from each entry's inputs.
 function sourceHash(inputs) {
 	const digest = createHash("sha256");
+
 	for (const input of inputs)
 		digest
 			.update(`${input}\0`)
 			.update(readFileSync(join(ROOT, input)))
 			.update("\0");
+
 	return { inputs, hash: digest.digest("hex").slice(0, 16) };
 }
 
@@ -523,6 +599,7 @@ function writeManifest(entries) {
 			.sort()
 			.map((key) => [key, entries[key]]),
 	);
+
 	writeFileSync(MANIFEST, `${JSON.stringify(sorted, null, 2)}\n`);
 }
 

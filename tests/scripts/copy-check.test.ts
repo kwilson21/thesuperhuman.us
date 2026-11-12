@@ -20,6 +20,7 @@ describe("lineViolations", () => {
 		const hits = lineViolations(
 			"people who want more—whether that means merch",
 		);
+
 		expect(hits).toEqual([
 			{ rule: "em-dash", label: "em-dash (U+2014)", match: "—" },
 		]);
@@ -295,8 +296,10 @@ describe("isScannable", () => {
 
 const checker = resolve("scripts/check-copy.mjs");
 const roots: string[] = [];
+
 const run = (cwd: string) =>
 	spawnSync(process.execPath, [checker], { cwd, encoding: "utf8" });
+
 afterEach(() => {
 	roots
 		.splice(0)
@@ -308,6 +311,7 @@ function fixtureRepo() {
 	roots.push(root);
 	mkdirSync(join(root, "src/pages"), { recursive: true });
 	mkdirSync(join(root, "public"), { recursive: true });
+
 	return root;
 }
 

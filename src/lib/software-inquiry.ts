@@ -7,30 +7,39 @@ export const softwarePaths = {
 	webapp: "Web app",
 	workflow: "Workflow automation",
 } as const;
+
 // Earlier briefs keep the name they were sent with. The page no longer offers it, but the server still accepts it from pages opened before the change.
 export const legacySoftwarePaths = { idea: "Bring an idea to life" } as const;
+
 export const softwarePathDescriptions = {
 	website: "A site people can read on a phone and act on.",
 	webapp: "An app people open in a browser, on a phone or a computer.",
 	workflow: "A tool that takes manual steps out of a task your team repeats.",
 } as const;
+
 export const softwareBriefKickers = {
 	website: "Website brief",
 	webapp: "Web app brief",
 	workflow: "Workflow brief",
 } as const;
+
 export type SoftwarePath = keyof typeof softwarePaths;
+
 export type StoredSoftwarePath =
 	| SoftwarePath
 	| keyof typeof legacySoftwarePaths;
+
 export function softwarePathLabel(path: unknown): string | undefined {
 	if (typeof path !== "string") return undefined;
+
 	if (Object.hasOwn(softwarePaths, path))
 		return softwarePaths[path as SoftwarePath];
+
 	return Object.hasOwn(legacySoftwarePaths, path)
 		? legacySoftwarePaths[path as keyof typeof legacySoftwarePaths]
 		: undefined;
 }
+
 export const softwareLabels = {
 	path: "Project",
 	today: "What happens today?",
@@ -56,17 +65,20 @@ export const softwareLabels = {
 	updates: "Who will keep it up to date?",
 	appGoal: "What should the app let people do?",
 } as const;
+
 // The client reads their own answers, so "they" becomes "you".
 export const clientSoftwareLabels: Record<string, string> = {
 	...softwareLabels,
 	existing: "What you already have",
 };
+
 export const softwareQuestions = {
 	website: ["purpose", "currentUrl", "existing", "updates"],
 	webapp: ["appGoal", "firstVersion"],
 	workflow: ["today", "audience", "firstResult"],
 	idea: ["idea", "audienceToday", "firstVersion", "signal"],
 } as const;
+
 export const softwareDetailKeys = [
 	"name",
 	"email",
@@ -79,6 +91,7 @@ export const softwareDetailKeys = [
 	"approver",
 	"approverRole",
 ] as const;
+
 export const timingLabels = {
 	flexible: "Flexible",
 	month: "Within a month",
@@ -86,22 +99,26 @@ export const timingLabels = {
 	date: "By a date",
 	asap: "As soon as possible",
 } as const;
+
 export const budgetLabels = {
 	approved: "Approved",
 	pending: "Waiting for approval",
 	exploring: "Still exploring",
 	unsure: "Not sure yet",
 } as const;
+
 export const approverLabels = {
 	self: "I do",
 	other: "Someone else, and I can involve them",
 	unsure: "Not sure yet",
 } as const;
+
 export const updateLabels = {
 	self: "Me or someone on my team",
 	help: "I’d like help with updates",
 	unsure: "Not sure yet",
 } as const;
+
 export function currentSiteHref(value: unknown): string | null {
 	if (
 		typeof value !== "string" ||
@@ -109,8 +126,10 @@ export function currentSiteHref(value: unknown): string | null {
 		/\s/.test(value)
 	)
 		return null;
+
 	try {
 		const url = new URL(value);
+
 		return (url.protocol === "http:" || url.protocol === "https:") &&
 			url.hostname &&
 			!url.username &&
@@ -121,9 +140,11 @@ export function currentSiteHref(value: unknown): string | null {
 		return null;
 	}
 }
+
 // bareHost: dots split the host labels, so it runs in linear time; '@' is excluded, so an email address is not a host.
 const bareHost =
 	/^(\/\/)?([^\s\/:?#.@]+(\.[^\s\/:?#.@]+)+\.?|localhost)(:\d+)?([\/?#]\S*)?$/i;
+
 // Four cases, in order. A link that starts with http:// or https:// but isn't accepted as a link
 // (it doesn't parse, or has a space, username or password) is told to check the link or leave it
 // empty.
@@ -144,11 +165,15 @@ export const currentUrlMessage = (value: string) =>
 			: bareHost.test(value) && currentSiteHref("https://" + value) !== null
 				? "Add https:// to the start of the link."
 				: "Check the link, or leave it empty.";
+
 const currentUrlMax = 2048;
+
 const single = (max: number) =>
 	z.string().trim().max(max, `Keep this under ${max} characters.`);
+
 const required = (max: number) =>
 	single(max).min(1, "This answer is required.");
+
 const common = {
 	name: single(100).min(1, "Add your name."),
 	email: single(120).email("Add a valid email address."),
@@ -179,6 +204,7 @@ const common = {
 		.max(2048, "Keep this under 2048 characters."),
 	submissionId: z.string().uuid("Invalid submission ID."),
 };
+
 const schema = z.discriminatedUnion("path", [
 	z.object({
 		...common,
@@ -219,15 +245,19 @@ const schema = z.discriminatedUnion("path", [
 		firstVersion: single(1000).default(""),
 	}),
 ]);
+
 export type SoftwareInput = z.infer<typeof schema>;
+
 export function validateSoftwareInquiry(
 	input: unknown,
 ):
 	| { ok: true; value: SoftwareInput }
 	| { ok: false; errors: Record<string, string> } {
 	const lineErrors: Record<string, string> = {};
+
 	if (input && typeof input === "object") {
 		const raw = input as Record<string, unknown>;
+
 		if (
 			"timingDate" in raw &&
 			raw.timing === "date" &&
@@ -237,6 +267,7 @@ export function validateSoftwareInquiry(
 				new Date(raw.timingDate).toISOString().slice(0, 10) !== raw.timingDate)
 		)
 			lineErrors.timingDate = "Add a valid date.";
+
 		for (const key of [
 			"name",
 			"email",
@@ -247,16 +278,19 @@ export function validateSoftwareInquiry(
 		])
 			if (typeof raw[key] === "string" && /[\r\n]/.test(raw[key]))
 				lineErrors[key] = "Use one line.";
+
 		if (
 			raw.path === "website" &&
 			typeof raw.currentUrl === "string" &&
 			/[\r\n]/.test(raw.currentUrl)
 		)
 			lineErrors.currentUrl = "Use one line.";
+
 		const questions =
 			typeof raw.path === "string" && Object.hasOwn(softwareQuestions, raw.path)
 				? softwareQuestions[raw.path as StoredSoftwarePath]
 				: [];
+
 		for (const key of [...questions, ...softwareDetailKeys])
 			if (
 				typeof raw[key] === "string" &&
@@ -264,6 +298,7 @@ export function validateSoftwareInquiry(
 			)
 				lineErrors[key] = "Remove control characters.";
 	}
+
 	const parsed = schema.safeParse(input, {
 		errorMap: (issue, context) => ({
 			message:
@@ -277,18 +312,25 @@ export function validateSoftwareInquiry(
 					: context.defaultError,
 		}),
 	});
+
 	if (!parsed.success || Object.keys(lineErrors).length) {
 		const errors: Record<string, string> = {};
+
 		if (!parsed.success)
 			for (const issue of parsed.error.issues)
 				errors[String(issue.path[0] ?? "_form")] ??=
 					issue.path[0] === "path" ? "Choose a starting point." : issue.message;
+
 		return { ok: false, errors: { ...errors, ...lineErrors } };
 	}
+
 	const value = parsed.data;
+
 	if (value.approver !== "other") value.approverRole = "";
+
 	return { ok: true, value };
 }
+
 export function softwareRequest(input: SoftwareInput): NewOwnerRequest {
 	const firstLine = String(
 		(input as Record<string, unknown>)[softwareQuestions[input.path][0]],
@@ -296,6 +338,7 @@ export function softwareRequest(input: SoftwareInput): NewOwnerRequest {
 		.trim()
 		.replace(/\s+/g, " ")
 		.split(/(?<=[.!?])\s/, 1)[0];
+
 	const summaryCharacters =
 		typeof Intl.Segmenter === "function"
 			? [
@@ -304,6 +347,7 @@ export function softwareRequest(input: SoftwareInput): NewOwnerRequest {
 					),
 				].map((part) => part.segment)
 			: Array.from(firstLine);
+
 	return {
 		kind: "software",
 		serviceId: input.path,
@@ -322,13 +366,16 @@ export function softwareRequest(input: SoftwareInput): NewOwnerRequest {
 		),
 	};
 }
+
 export function softwareBrief(request: OwnerRequest): Record<string, string> {
 	const details = request.details;
+
 	const path: StoredSoftwarePath =
 		typeof details.path === "string" &&
 		Object.hasOwn(softwareQuestions, details.path)
 			? (details.path as StoredSoftwarePath)
 			: "workflow";
+
 	return Object.fromEntries(
 		["path", ...softwareQuestions[path], ...softwareDetailKeys]
 			.filter((key) => key !== "approverRole" || details.approver === "other")
@@ -339,6 +386,7 @@ export function softwareBrief(request: OwnerRequest): Record<string, string> {
 						: key === "email"
 							? request.email
 							: details[key];
+
 				const display =
 					key === "path"
 						? softwarePathLabel(value)
@@ -351,6 +399,7 @@ export function softwareBrief(request: OwnerRequest): Record<string, string> {
 									: key === "updates"
 										? updateLabels[value as keyof typeof updateLabels]
 										: value;
+
 				return [key, typeof display === "string" ? display : ""];
 			})
 			.filter(([, value]) => value),

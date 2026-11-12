@@ -1,4 +1,5 @@
 export const versionLabelPattern = /^[A-Za-z0-9.-]{1,40}$/;
+
 export const templateVersionLabel = (t: {
 	version_label?: string | null;
 	published_at: string;

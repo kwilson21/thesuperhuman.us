@@ -27,6 +27,7 @@ const assets = {
 		throw new Error("PDF rendering must not fetch font assets.");
 	},
 };
+
 function document(
 	kind: "msa" | "sow",
 	text: string,
@@ -40,30 +41,37 @@ function document(
 		attachment_manifest_json: "[]",
 	} as Agreement;
 }
+
 function extract(pdf: PDFDocument) {
 	return pdf
 		.getPages()
 		.map((page) => {
 			const resources = page.node.Resources()!;
+
 			if (!resources.has(PDFName.of("Font"))) return "";
 			const dictionary = resources.lookup(PDFName.of("Font"), PDFDict);
 			const contents = page.node.Contents();
+
 			const streams =
 				contents instanceof PDFArray ? contents.asArray() : [contents!];
+
 			return streams
 				.map((ref) => {
 					const stream = pdf.context.lookup(ref) as PDFRawStream;
 					const content = inflateSync(stream.contents).toString();
 					let cmap = new Map<string, string>();
 					const lines: string[] = [];
+
 					for (const match of content.matchAll(
 						/\/(\S+) [\d.]+ Tf|<([A-Fa-f0-9]+)> Tj/g,
 					)) {
 						if (match[1]) {
 							const resource = dictionary.lookup(PDFName.of(match[1]), PDFDict);
+
 							const unicode = resource.lookup(
 								PDFName.of("ToUnicode"),
 							) as PDFRawStream;
+
 							cmap = new Map(
 								[
 									...inflateSync(unicode.contents)
@@ -86,16 +94,19 @@ function extract(pdf: PDFDocument) {
 							);
 						}
 					}
+
 					return lines.join("\n");
 				})
 				.join("\n");
 		})
 		.join("\n");
 }
+
 it("renders selectable full legal text, Unicode, wrapped long words, certificates and attachments", async () => {
 	const attachment = await PDFDocument.create();
 	attachment.addPage([300, 400]);
 	const bytes = await attachment.save();
+
 	const text =
 		"José Ångström\n" +
 		"Longword".repeat(200) +
@@ -104,14 +115,17 @@ it("renders selectable full legal text, Unicode, wrapped long words, certificate
 			{ length: 100 },
 			(_, i) => `Clause ${i}: preserve the exact words.`,
 		).join("\n");
+
 	const sow = document("sow", "Synthetic SOW\nNo missing terms.");
 	sow.attachment_manifest_json = JSON.stringify([
 		{ key: "attachment", sha256: await hashBytes(bytes) },
 	]);
+
 	const env = {
 		ASSETS: assets,
 		AUDIO: { get: async () => ({ arrayBuffer: async () => bytes }) },
 	} as unknown as Env;
+
 	const result = await renderAgreementPacket(
 		env,
 		[document("msa", text), sow],
@@ -130,6 +144,7 @@ it("renders selectable full legal text, Unicode, wrapped long words, certificate
 			},
 		],
 	);
+
 	const pdf = await PDFDocument.load(result);
 	const extracted = extract(pdf);
 	expect(
@@ -148,13 +163,16 @@ it("renders selectable full legal text, Unicode, wrapped long words, certificate
 	expect(pdf.getPages().at(-1)!.getSize()).toEqual({ width: 300, height: 400 });
 	expect(pdf.getPageCount()).toBeGreaterThan(6);
 });
+
 it("imports the original executed MSA pages unchanged before the later SOW", async () => {
 	const env = { ASSETS: assets } as unknown as Env;
+
 	const original = await renderAgreementPacket(
 		env,
 		[document("msa", "Original MSA")],
 		[{ signatures: [{ receipt_id: "original-receipt" }] }],
 	);
+
 	env.MUSIC_DB = {
 		prepare: () => ({
 			bind: () => ({
@@ -168,6 +186,7 @@ it("imports the original executed MSA pages unchanged before the later SOW", asy
 	env.AUDIO = {
 		get: async () => ({ arrayBuffer: async () => original }),
 	} as unknown as R2Bucket;
+
 	const result = await renderAgreementPacket(
 		env,
 		[
@@ -176,6 +195,7 @@ it("imports the original executed MSA pages unchanged before the later SOW", asy
 		],
 		[{}, { signatures: [{ receipt_id: "later-receipt" }] }],
 	);
+
 	const pdf = await PDFDocument.load(result);
 	const extracted = extract(pdf);
 	expect(extracted).toContain("Original MSA");
@@ -204,6 +224,7 @@ it("preflights exact attachment merge inputs and rejects a missing original MSA 
 		exclusions: "",
 		timing: "",
 	};
+
 	const details = agreementDetailsSchema.parse({
 		planned_start: "2026-10-01",
 		planned_end: "2026-10-20",
@@ -214,6 +235,7 @@ it("preflights exact attachment merge inputs and rejects a missing original MSA 
 			{ start: "2026-10-01", target: "2026-10-20", handoff: "Source" },
 		],
 	});
+
 	const contractor = contractorSchema.parse({
 		legal_name: "Example LLC",
 		entity_jurisdiction: "Wyoming LLC",
@@ -223,6 +245,7 @@ it("preflights exact attachment merge inputs and rejects a missing original MSA 
 		business_address: "Example business street",
 		registered_agent_confirmed: true,
 	});
+
 	const templates = (["msa", "sow"] as const).map(
 		(kind) =>
 			({
@@ -246,12 +269,14 @@ it("preflights exact attachment merge inputs and rejects a missing original MSA 
 						: ""),
 			}) as AgreementTemplate,
 	);
+
 	const env = {
 		ASSETS: assets,
 		MUSIC_DB: {
 			prepare: () => ({ bind: () => ({ first: async () => null }) }),
 		},
 	} as unknown as Env;
+
 	await expect(
 		preflightAgreementPacket(env, terms, details, contractor, templates, null),
 	).resolves.toBeUndefined();
@@ -307,6 +332,7 @@ it("bundles exactly the licensed source font bytes", () => {
 			),
 		).toBe(true);
 	}
+
 	// The heading font is the pinned Libron v0.25 Regular, unchanged apart from leaving WOFF2.
 	expect(
 		readFileSync(
@@ -333,8 +359,10 @@ it("sets headings in Libron and agreement text in Inter", async () => {
 			[{}],
 		),
 	);
+
 	const page = pdf.getPage(0);
 	const fonts = page.node.Resources()!.lookup(PDFName.of("Font"), PDFDict);
+
 	const content = inflateSync(
 		(
 			pdf.context.lookup(
@@ -342,6 +370,7 @@ it("sets headings in Libron and agreement text in Inter", async () => {
 			) as PDFRawStream
 		).contents,
 	).toString();
+
 	const faces = [...content.matchAll(/\/(\S+) ([\d.]+) Tf/g)].map((match) => [
 		String(
 			fonts
@@ -350,6 +379,7 @@ it("sets headings in Libron and agreement text in Inter", async () => {
 		),
 		match[2],
 	]);
+
 	// Three 18pt headings in Libron; the clause (11pt), page header (9pt) and page number (8pt) in Inter.
 	expect(faces.slice(0, 3)).toEqual(
 		Array(3).fill([expect.stringMatching(/^\/Libron-Regular-/), "18"]),
@@ -368,7 +398,9 @@ it("formats PDF certificate dates in New York without changing source evidence",
 		effective_on: "2026-09-30",
 		signatures: [{ signed_at: "2026-01-01T02:15:00Z" }],
 	};
+
 	const original = JSON.stringify(certificate);
+
 	const pdf = await PDFDocument.load(
 		await renderAgreementPacket(
 			{ ASSETS: assets } as unknown as Env,
@@ -376,6 +408,7 @@ it("formats PDF certificate dates in New York without changing source evidence",
 			[certificate],
 		),
 	);
+
 	const text = extract(pdf).replace(/\s+/g, " ");
 	expect(text).toContain("Sep 30, 2026, 9:15 AM EDT");
 	expect(text).toContain("Dec 31, 2025, 9:15 PM EST");
@@ -392,6 +425,7 @@ it("draws only the document title in the page header when a certificate has no v
 			[{ executed_at: "2026-09-30T13:15:43.382Z", effective_on: "2026-09-30" }],
 		),
 	);
+
 	const text = extract(pdf).replace(/\s+/g, " ");
 	expect(text).toContain("Exact header text");
 	expect(text).not.toContain("Statement of Work ·");
@@ -402,11 +436,13 @@ const sampleTemplateFile = new URL(
 	"../../scripts/screenshots/fixtures/sample-agreement-templates.json",
 	import.meta.url,
 );
+
 async function checkTemplatePacket(
 	templateFile: string | URL,
 	headings: string[],
 ) {
 	const templates = JSON.parse(readFileSync(templateFile, "utf8"));
+
 	const terms: OfferTerms = {
 		outcome: "Client tracker",
 		summary: "One shared view",
@@ -423,6 +459,7 @@ async function checkTemplatePacket(
 		exclusions: "Production rollout",
 		timing: "Agreed dates",
 	};
+
 	const details = agreementDetailsSchema.parse({
 		planned_start: "2026-10-01",
 		planned_end: "2026-10-20",
@@ -437,6 +474,7 @@ async function checkTemplatePacket(
 			},
 		],
 	});
+
 	const contractor = contractorSchema.parse({
 		legal_name: "Example Contractor LLC",
 		entity_jurisdiction: "Wyoming LLC",
@@ -446,6 +484,7 @@ async function checkTemplatePacket(
 		business_address: "200 Example Business Street",
 		registered_agent_confirmed: true,
 	});
+
 	const client = {
 		legal_name: "Example Client LLC",
 		entity_type: "LLC",
@@ -461,6 +500,7 @@ async function checkTemplatePacket(
 		portfolio: "deny" as const,
 		naming: false,
 	};
+
 	const values = agreementValues(terms, details, client, contractor, {
 		effective_on: "2026-09-30",
 		msa_version: "2026-09-30 / template 1",
@@ -472,13 +512,16 @@ async function checkTemplatePacket(
 		sow_version_label: "v2026-09-30",
 		sow_source_revision: "",
 	});
+
 	const docs = (["msa", "sow"] as const).map((kind) =>
 		document(kind, renderAgreement(kind, templates[kind], values)),
 	);
+
 	for (const doc of docs)
 		doc.text_sha256 = await hashBytes(
 			new TextEncoder().encode(doc.canonical_text),
 		);
+
 	const certificates = docs.map((doc) => ({
 		document_id: doc.id,
 		document_sha256: doc.text_sha256,
@@ -506,10 +549,13 @@ async function checkTemplatePacket(
 			intent_text: "Signature intent for " + party,
 		})),
 	}));
+
 	const pdf = await PDFDocument.load(
 		await renderAgreementPacket({} as Env, docs, certificates),
 	);
+
 	const text = extract(pdf).replace(/\s+/g, " ");
+
 	for (const expected of [
 		...headings,
 		"Example Client LLC",
@@ -520,6 +566,7 @@ async function checkTemplatePacket(
 	expect(text).not.toContain("client.legal_name:");
 	expect(text).not.toContain("{{");
 	const certificateText = text.slice(text.indexOf("Signing certificate"));
+
 	for (const label of [
 		"Party",
 		"Typed name",
@@ -541,23 +588,28 @@ async function checkTemplatePacket(
 	expect(text).not.toContain("Template version");
 	expect(text).not.toContain("Source revision");
 	expect(text).not.toContain("private-source-revision");
+
 	for (const party of ["client", "contractor"])
 		expect(certificateText).toContain("website-signing-v2-" + party);
 	expect(certificateText).toContain("Agreement version v2026-09-30");
 	expect(certificateText).not.toMatch(/[{}]/);
+
 	const names = pdf.catalog
 		.lookup(PDFName.of("Names"), PDFDict)
 		.lookup(PDFName.of("EmbeddedFiles"), PDFDict)
 		.lookup(PDFName.of("Names"), PDFArray);
+
 	const file = names
 		.lookup(1, PDFDict)
 		.lookup(PDFName.of("EF"), PDFDict)
 		.lookup(PDFName.of("F")) as PDFRawStream;
+
 	expect(inflateSync(file.contents).toString()).toBe(
 		canonicalJson(certificates),
 	);
 	expect(certificates[0].signatures[0].user_agent).toBe("Synthetic browser 🧪");
 }
+
 it("renders supplied or fictional agreements and embeds exact signing evidence", async () => {
 	await checkTemplatePacket(
 		process.env.AGREEMENT_TEMPLATE_FILE ?? sampleTemplateFile,
@@ -577,13 +629,16 @@ it("prints each document's own version label in its page headers and in the cert
 		document("msa", "Synthetic MSA\nNo missing terms."),
 		document("sow", "Synthetic SOW\nNo missing terms."),
 	];
+
 	const certificates = [
 		{ versions: { version_label: "v2026-09-30" } },
 		{ versions: { version_label: "v2026-11-01" } },
 	];
+
 	const pdf = await PDFDocument.load(
 		await renderAgreementPacket({} as Env, docs, certificates),
 	);
+
 	const text = extract(pdf).replace(/\s+/g, " ");
 	expect(text).toContain("Master Services Agreement · v2026-09-30");
 	expect(text).toContain("Statement of Work · v2026-11-01");
@@ -596,6 +651,7 @@ it("prints each document's own version label in its page headers and in the cert
 
 // Real clauses stay private; this additional local coverage is optional.
 const privateTemplateFile = ".private/signing/templates.json";
+
 it.runIf(existsSync(privateTemplateFile))(
 	"renders the real v1 agreements and embeds exact signing evidence",
 	async () => {
@@ -613,15 +669,19 @@ it("preserves heading characters absent from Libron using Inter", async () => {
 	const { default: fontkit } = await import("@pdf-lib/fontkit");
 	const heading = fontkit.create(Buffer.from(libronBase64, "base64"));
 	const inter = fontkit.create(Buffer.from(interBase64, "base64"));
+
 	const character = String.fromCodePoint(
 		inter.characterSet.find(
 			(point: number) => point > 1024 && !heading.characterSet.includes(point),
 		)!,
 	);
+
 	const text = "1 Client " + character;
+
 	const pdf = await PDFDocument.load(
 		await renderAgreementPacket({} as Env, [document("sow", text)], [{}]),
 	);
+
 	expect(extract(pdf)).toContain("Client " + character);
 });
 
@@ -629,6 +689,7 @@ it.each([false, true])(
 	"prints stored statement versions unchanged in the PDF (SOW only: %s)",
 	async (sowOnly) => {
 		const { intentText, consentText } = await import("~/lib/agreement-fields");
+
 		const signatures = ["client", "contractor"].map((party) => ({
 			party,
 			typed_name: "Example Signer",
@@ -636,6 +697,7 @@ it.each([false, true])(
 			consent_text: consentText("Example LLC", party === "contractor"),
 			intent_text: intentText(party === "contractor", sowOnly),
 		}));
+
 		signatures.push({
 			party: "client",
 			typed_name: "Earlier Signer",
@@ -646,6 +708,7 @@ it.each([false, true])(
 		});
 		const certificate = { signatures };
 		const original = JSON.stringify(certificate);
+
 		const pdf = await PDFDocument.load(
 			await renderAgreementPacket(
 				{ ASSETS: assets } as unknown as Env,
@@ -653,7 +716,9 @@ it.each([false, true])(
 				[certificate],
 			),
 		);
+
 		const text = extract(pdf).replace(/\s+/g, " ");
+
 		for (const signature of signatures)
 			for (const key of [
 				"consent_version",

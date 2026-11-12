@@ -1,8 +1,10 @@
 // Curated from the owner's career account. Update professional facts here.
 export const workingPreference =
 	"I work independently, through contracts and projects, and I’m selective about full-time roles.";
+
 export const workingPreferenceDetail =
 	"I work independently, through contracts and projects. I’ll consider full-time roles where I’d own a system end to end, either fully remotely or in person near Roanoke, Virginia. If that isn’t your role, a contract is probably the better fit, and I’m glad to talk about that too.";
+
 export const lyftBonus = {
 	before: "5,000",
 	after: "100,000+",
@@ -10,6 +12,7 @@ export const lyftBonus = {
 	description:
 		"I changed Lyft’s driver-bonus tool so support could run and monitor larger batches without handing the work to on-call engineers.",
 };
+
 // Team scope clarified by the owner on September 10, 2026. Rentals projects come
 // from the existing career account. Quiet hours was completed after the July 2026
 // candidate summary and is recorded separately from that historical account.

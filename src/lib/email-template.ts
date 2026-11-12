@@ -29,6 +29,7 @@ const colors = {
 	accent: "#AE5534",
 	codeBox: "#F1ECE3",
 };
+
 const serif = "Newsreader, Georgia, 'Times New Roman', serif";
 const sans = "Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif";
 
@@ -60,26 +61,32 @@ export function renderEmail(content: EmailContent): {
 	text: string;
 } {
 	const e = escapeHtml;
+
 	const paragraphs = content.paragraphs
 		.map(
 			(text) =>
 				`<p style="margin:0 0 16px;${font(400, 16, 1.6, sans)}color:${colors.muted};">${e(text)}</p>`,
 		)
 		.join("");
+
 	const code = content.code
 		? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 20px;"><tr>
     <td align="center" style="background:${colors.codeBox};padding:22px 12px;${font(500, 34, 1, "'SFMono-Regular',Menlo,Consolas,monospace")}letter-spacing:4px;color:${colors.ink};">${e(spacedCode(content.code))}</td></tr></table>`
 		: "";
+
 	const button = content.button
 		? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 20px;"><tr>
     <td style="background:${colors.accent};border-radius:2px;mso-padding-alt:14px 28px;"><a href="${e(content.button.href)}" style="display:inline-block;padding:14px 28px;${font(500, 16, 1, sans)}color:#FFFFFF;text-decoration:none;">${e(content.button.label)}</a></td></tr></table>`
 		: "";
+
 	const link = content.link
 		? `<p style="margin:4px 0 20px;"><a href="${e(content.link.href)}" style="${font(400, 16, 1.5, sans)}color:${colors.accent};text-decoration:underline;">${e(content.link.label)}</a></p>`
 		: "";
+
 	const note = content.note
 		? `<p style="margin:0 0 8px;${font(400, 13, 1.5, sans)}color:${colors.muted};">${e(content.note)}</p>`
 		: "";
+
 	const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light">
@@ -104,6 +111,7 @@ ${paragraphs}${code}${content.code ? note : ""}${button}${link}${content.code ? 
 <!--[if mso]></td></tr></table><![endif]-->
 </td></tr></table>
 </body></html>`;
+
 	const text = [
 		content.heading,
 		"",
@@ -124,5 +132,6 @@ ${paragraphs}${code}${content.code ? note : ""}${button}${link}${content.code ? 
 		"The Superhuman Group LLC",
 		content.reason,
 	].join("\n");
+
 	return { html, text };
 }

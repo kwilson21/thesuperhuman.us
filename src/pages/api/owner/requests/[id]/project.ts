@@ -30,7 +30,9 @@ import {
 	payableSoftwareInvoice,
 	listSoftwareInvoices,
 } from "~/lib/software-invoices";
+
 export const prerender = false;
+
 const schema = z.discriminatedUnion("action", [
 	z.object({
 		action: z.literal("start"),
@@ -84,29 +86,39 @@ const schema = z.discriminatedUnion("action", [
 	}),
 	z.object({ action: z.literal("complete"), confirmed: z.literal(true) }),
 ]);
+
 export const POST: APIRoute = async ({ params, request, locals }) => {
 	const json = (value: unknown, status = 200) =>
 		Response.json(value, {
 			status,
 			headers: { "cache-control": "private, no-store" },
 		});
+
 	if (!locals.owner) return json({ ok: false }, 403);
+
 	const env = locals.runtime.env,
 		db = env.MUSIC_DB,
 		id = params.id;
+
 	if (!clientPortalEnabled(env)) return json({ ok: false }, 404);
+
 	if (!db || !id) return json({ ok: false }, 503);
 	const input = await musicRequest(request);
+
 	if (input instanceof Response) return input;
 	const parsed = schema.safeParse(input);
+
 	if (!parsed.success)
 		return json(
 			{ ok: false, error: "Check both confirmations and the project fields." },
 			400,
 		);
+
 	const command = parsed.data,
 		actor = locals.owner.email;
+
 	let at = new Date().toISOString();
+
 	try {
 		if (command.action === "start") {
 			if (
@@ -123,10 +135,12 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					},
 					409,
 				);
+
 			const executed =
 				command.signature_source === "website"
 					? await executedOfferAgreement(db, command.offer_id)
 					: null;
+
 			if (command.signature_source === "website" && !executed)
 				return json(
 					{
@@ -136,6 +150,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					},
 					409,
 				);
+
 			if (
 				command.signature_source === "external" &&
 				(!command.signatures ||
@@ -153,6 +168,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					400,
 				);
 			const today = projectToday();
+
 			if (
 				command.signature_source === "external" &&
 				command.external_signed_on! > today
@@ -164,15 +180,18 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					},
 					400,
 				);
+
 			const offerDetails = await db
 				.prepare(
 					"SELECT agreement_details_json FROM software_offers WHERE id=?",
 				)
 				.bind(command.offer_id)
 				.first<{ agreement_details_json: string | null }>();
+
 			const details = offerDetails?.agreement_details_json
 				? JSON.parse(offerDetails.agreement_details_json)
 				: null;
+
 			if (details?.po_requirement === "before_start" && !command.po_number)
 				return json(
 					{
@@ -181,6 +200,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					},
 					400,
 				);
+
 			if (
 				details?.planned_start > today &&
 				(!command.earlier_start_agreement ||
@@ -196,6 +216,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					},
 					409,
 				);
+
 			const external =
 				command.signature_source === "external"
 					? JSON.stringify({
@@ -205,6 +226,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 							copy_reference: command.external_copy_reference,
 						})
 					: null;
+
 			await db.batch([
 				...(command.signature_source === "external"
 					? [
@@ -311,15 +333,20 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					: []),
 				softwareAudit(db, id, "started", actor, at),
 			]);
+
 			try {
 				await deliverSoftwareNotice(db, id, env);
 			} catch {
 				return json({ ok: true, noticeUnchecked: true });
 			}
+
 			return json({ ok: true });
 		}
+
 		const project = await getSoftwareProject(db, id);
+
 		if (!project) return json({ ok: false }, 404);
+
 		if (command.action === "notice") {
 			if (
 				!(await queueSoftwareNotice(
@@ -337,15 +364,19 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					409,
 				);
 			await deliverSoftwareNotice(db, id, env, command.updateId);
+
 			return json({ ok: true });
 		}
+
 		if (command.action === "revoke") {
 			await db.batch([
 				openSoftwareGuard(db, id),
 				...softwareAccessRevocation(db, id, actor, at),
 			]);
+
 			return json({ ok: true });
 		}
+
 		if (command.action === "deposit") {
 			if (
 				project.payment_mode !== "standard" ||
@@ -385,8 +416,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					)
 					.bind(id, command.milestone_index, at, actor),
 			]);
+
 			return json({ ok: true });
 		}
+
 		if (command.action === "payment") {
 			if (command.milestone_index >= projectTerms(project).milestones.length)
 				return json({ ok: false }, 400);
@@ -394,10 +427,13 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				openSoftwareGuard(db, id),
 				...recordMilestonePayment(db, id, command.milestone_index, actor, at),
 			]);
+
 			return json({ ok: true });
 		}
+
 		const completing =
 			command.action === "complete" || command.state === "complete";
+
 		if (completing) {
 			const last = projectTerms(project).milestones.length - 1;
 			await db.batch([
@@ -438,10 +474,13 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					"Project completed after final milestone handoff",
 				),
 			]);
+
 			return json({ ok: true });
 		}
+
 		if (command.action !== "state" || project.completed_at)
 			return json({ ok: false, error: "This project is complete." }, 409);
+
 		if (
 			command.milestone_index >= projectTerms(project).milestones.length ||
 			(command.state === "waiting_for_input" && !command.waiting_for)
@@ -453,6 +492,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				},
 				400,
 			);
+
 		if (
 			project.payment_mode === "invoice" &&
 			command.milestone_index > project.milestone_index
@@ -463,6 +503,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				)
 				.bind(id, command.milestone_index)
 				.first<{ n: number }>();
+
 			if (prior?.n !== command.milestone_index)
 				return json(
 					{
@@ -473,6 +514,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					409,
 				);
 		}
+
 		at = new Date(
 			Math.max(Date.now(), Date.parse(project.updated_at) + 1),
 		).toISOString();
@@ -507,12 +549,14 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				),
 			softwareAudit(db, id, "state-changed", actor, at),
 		]);
+
 		return json({ ok: true });
 	} catch {
 		const offerId =
 			command.action === "start"
 				? command.offer_id
 				: (await getSoftwareProject(db, id))?.offer_id;
+
 		if (
 			offerId &&
 			(command.action === "start" ||
@@ -527,6 +571,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			)
 		)
 			return json({ ok: false, error: manualPaymentReminder }, 409);
+
 		if (
 			command.action === "start" &&
 			!(await db
@@ -542,6 +587,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				},
 				409,
 			);
+
 		return json(
 			{
 				ok: false,

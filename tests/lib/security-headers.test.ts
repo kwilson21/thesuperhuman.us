@@ -9,22 +9,29 @@ function headersFor(path: string) {
 		new URL("../../public/_headers", import.meta.url),
 		"utf8",
 	).split("\n");
+
 	let headers: Record<string, string> = {};
 	let rule = "";
+
 	for (const raw of lines) {
 		const line = raw.trim();
+
 		if (line === "" || line.startsWith("#")) continue;
+
 		if (/^([^\s]+:\/\/|\/)/.test(line)) {
 			rule = line;
+
 			if (rule === path) headers = {};
 			continue;
 		}
+
 		if (rule !== path) continue;
 		const separator = line.indexOf(":");
 		const name = line.slice(0, separator).trim().toLowerCase();
 		const value = line.slice(separator + 1).trim();
 		headers[name] = headers[name] ? `${headers[name]}, ${value}` : value;
 	}
+
 	return headers;
 }
 
@@ -41,6 +48,7 @@ describe("security headers", () => {
 				"content-security-policy-report-only",
 			),
 		).toBe(securityHeaders["content-security-policy-report-only"]);
+
 		const oauth = withSecurityHeaders(
 			new Response("x", {
 				headers: {
@@ -49,6 +57,7 @@ describe("security headers", () => {
 				},
 			}),
 		);
+
 		expect(oauth.headers.get("content-security-policy")).toBe(
 			"default-src 'none'; form-action 'self' https://github.com/login/oauth/authorize",
 		);
@@ -78,6 +87,7 @@ describe("security headers", () => {
 				},
 			}),
 		);
+
 		expect(response.headers.get("referrer-policy")).toBe("no-referrer");
 		expect(response.headers.get("x-frame-options")).toBe("SAMEORIGIN");
 		expect(response.headers.get("x-content-type-options")).toBe("nosniff");
@@ -87,6 +97,7 @@ describe("security headers", () => {
 		const response = withSecurityHeaders(
 			Response.redirect("https://thesuperhuman.us/next", 302),
 		);
+
 		expect(response.status).toBe(302);
 		expect(response.headers.get("location")).toBe(
 			"https://thesuperhuman.us/next",
@@ -102,6 +113,7 @@ describe("security headers", () => {
 				},
 			},
 		} as unknown as Response;
+
 		expect(() => withSecurityHeaders(response)).toThrow(RangeError);
 	});
 });

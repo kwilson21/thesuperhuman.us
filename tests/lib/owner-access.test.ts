@@ -11,16 +11,19 @@ async function signedRequest(
 	claims: { email?: string; audience?: string } = {},
 ) {
 	const { privateKey, publicKey } = await keyPair;
+
 	const key = {
 		...(await exportJWK(publicKey)),
 		kid: "owner-test-key",
 		alg: "RS256",
 		use: "sig",
 	};
+
 	vi.stubGlobal(
 		"fetch",
 		vi.fn(async () => Response.json({ keys: [key] })),
 	);
+
 	const token = await new SignJWT({
 		email: claims.email ?? ownerEmail,
 		type: "app",
@@ -31,6 +34,7 @@ async function signedRequest(
 		.setIssuedAt()
 		.setExpirationTime("5m")
 		.sign(privateKey);
+
 	return new Request("https://thesuperhuman.us/owner", {
 		headers: { "cf-access-jwt-assertion": token },
 	});
@@ -77,9 +81,11 @@ describe("owner Access verification", () => {
 		const token = request.headers.get("cf-access-jwt-assertion")!;
 		const parts = token.split(".");
 		parts[2] = `${parts[2][0] === "a" ? "b" : "a"}${parts[2].slice(1)}`;
+
 		const invalid = new Request(request.url, {
 			headers: { "cf-access-jwt-assertion": parts.join(".") },
 		});
+
 		await expect(verifyOwnerAccess(invalid, env)).resolves.toBeNull();
 		await expect(
 			verifyOwnerAccess(request, { ...env, OWNER_ACCESS_AUD: "" }),

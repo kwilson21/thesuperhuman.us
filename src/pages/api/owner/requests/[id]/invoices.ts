@@ -9,7 +9,9 @@ import {
 	recordSoftwareInvoice,
 } from "~/lib/software-invoices";
 import { projectTerms } from "~/lib/software-projects";
+
 export const prerender = false;
+
 const schema = z
 	.object({
 		offer_id: z.string().min(1),
@@ -20,29 +22,38 @@ const schema = z
 		replace_id: z.string().optional(),
 	})
 	.refine((value) => !(value.retry_id && value.replace_id));
+
 export const POST: APIRoute = async ({ params, request, locals }) => {
 	const json = (value: unknown, status = 200) =>
 		Response.json(value, {
 			status,
 			headers: { "cache-control": "private, no-store" },
 		});
+
 	if (!locals.owner) return json({ ok: false }, 403);
+
 	const env = locals.runtime.env,
 		db = env.MUSIC_DB,
 		id = params.id;
+
 	if (!clientPortalEnabled(env)) return json({ ok: false }, 404);
+
 	if (!db || !id || !stripeAvailable(env))
 		return json(
 			{ ok: false, error: "Stripe invoice creation is unavailable." },
 			503,
 		);
 	const body = await musicRequest(request);
+
 	if (body instanceof Response) return body;
 	const parsed = schema.safeParse(body);
+
 	if (!parsed.success) return json({ ok: false }, 400);
 	let reserved = false;
+
 	try {
 		const command = parsed.data;
+
 		const invoice = await reserveSoftwareInvoice(db, {
 			requestId: id,
 			offerId: command.offer_id,
@@ -53,26 +64,33 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			retryId: command.retry_id,
 			replaceId: command.replace_id,
 		});
+
 		reserved = true;
+
 		const recipient = await db
 			.prepare("SELECT name,email FROM owner_requests WHERE id=?")
 			.bind(id)
 			.first<{ name: string; email: string }>();
+
 		const offer = await db
 			.prepare(
 				"SELECT terms_json FROM software_offers WHERE id=? AND request_id=?",
 			)
 			.bind(invoice.offer_id, id)
 			.first<{ terms_json: string }>();
+
 		if (!recipient?.email || !offer)
 			throw new Error("Invoice recovery is pending.");
+
 		const result = await createSoftwareInvoice(
 			env,
 			recipient,
 			projectTerms(offer),
 			invoice,
 		);
+
 		await recordSoftwareInvoice(db, invoice, result);
+
 		return json({ ok: true });
 	} catch (error) {
 		return json(

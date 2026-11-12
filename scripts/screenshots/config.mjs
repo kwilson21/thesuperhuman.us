@@ -139,6 +139,7 @@ const SHARED_SITE_PAGES = [
 	"services",
 	"audio-services",
 ];
+
 const AUDIO_SHELL_PAGES = [
 	"audio",
 	"audio-portfolio",
@@ -147,18 +148,23 @@ const AUDIO_SHELL_PAGES = [
 	"audio-start",
 	"music-old-news",
 ];
+
 const AUDIO_NAV_PAGES = AUDIO_SHELL_PAGES.filter(
 	(name) => name !== "audio-start",
 );
+
 const MUSIC_CATALOG_PAGES = [
 	"audio-portfolio",
 	"audio-releases",
 	"audio-services",
 	"music-old-news",
 ];
+
 const MUSIC_HUB_PAGES = ["audio-portfolio", "audio-releases", "audio-services"];
+
 // The homepage shows the compact A/B player; the audio pages show the full one.
 const COMPARISON_PAGES = ["home", "audio", "audio-portfolio", "audio-services"];
+
 const PROJECT_STORY_PAGES = [
 	"building-personal-website",
 	"building-personal-website-story",
@@ -168,7 +174,9 @@ const PROJECT_STORY_PAGES = [
 	"building-threadline",
 	"building-the-engineers-daily",
 ];
+
 const OWNER_PAGES = ["owner-today", "owner-requests", "owner-campaigns"];
+
 const PAGE_NAMES_BY_FILE = {
 	"src/components/SiteNav.astro": SHARED_SITE_PAGES,
 	"src/components/Footer.astro": SHARED_SITE_PAGES,
@@ -225,6 +233,7 @@ const PAGE_NAMES_BY_FILE = {
 		"music-old-news",
 	],
 };
+
 const SCENARIO_NAMES_BY_FILE = {
 	"src/data/work-with-me.ts": ["services-print"],
 	"src/data/project-stories/tally.ts": ["services-print"],
@@ -321,11 +330,14 @@ const SCENARIO_NAMES_BY_FILE = {
 
 function routeForPageFile(file) {
 	if (file === "src/pages/404.astro") return "/this-page-does-not-exist";
+
 	if (!file.startsWith("src/pages/") || !file.endsWith(".astro")) return null;
+
 	const route = file
 		.replace(/^src\/pages/, "")
 		.replace(/\.astro$/, "")
 		.replace(/\/index$/, "");
+
 	return route || "/";
 }
 
@@ -333,6 +345,7 @@ function routeForPageFile(file) {
 export function relevantScreenshots(manifest, changedFiles) {
 	const pageNames = new Set();
 	const scenarioNames = new Set();
+
 	const files = Array.isArray(changedFiles)
 		? changedFiles.filter((file) => typeof file === "string")
 		: [];
@@ -342,6 +355,7 @@ export function relevantScreenshots(manifest, changedFiles) {
 			? PAGE_NAMES_BY_FILE[file]
 			: [])
 			pageNames.add(name);
+
 		for (const name of Object.hasOwn(SCENARIO_NAMES_BY_FILE, file)
 			? SCENARIO_NAMES_BY_FILE[file]
 			: [])
@@ -350,11 +364,14 @@ export function relevantScreenshots(manifest, changedFiles) {
 		const scenario = Object.hasOwn(SCENARIO_PAGES, file)
 			? SCENARIO_PAGES[file]
 			: null;
+
 		if (scenario) scenarioNames.add(scenario.scenario);
 
 		const route = routeForPageFile(file);
+
 		if (route) {
 			const dynamicPrefix = route.replace(/\[[^\]]+\]/g, "");
+
 			for (const page of manifest.pages) {
 				if (
 					page.path === route ||
@@ -374,10 +391,13 @@ export function relevantScreenshots(manifest, changedFiles) {
 			])
 				pageNames.add(name);
 		}
+
 		if (file.startsWith("src/content/audio-tracks/")) pageNames.add("audio");
+
 		if (file.startsWith("src/content/recordings/")) {
 			for (const name of MUSIC_CATALOG_PAGES) pageNames.add(name);
 		}
+
 		if (file.startsWith("src/content/audio-examples/")) {
 			for (const name of ["audio-portfolio", "audio-services"])
 				pageNames.add(name);
@@ -445,10 +465,13 @@ export const PREVIEW_OVERRIDES = {
 /** Parses JSON with comments and trailing commas, the format of wrangler.jsonc. */
 export function parseJsonc(text) {
 	let out = "";
+
 	for (let i = 0; i < text.length; i++) {
 		const character = text[i];
+
 		if (character === '"') {
 			const start = i;
+
 			for (i++; i < text.length && text[i] !== '"'; i++)
 				if (text[i] === "\\") i++;
 			out += text.slice(start, i + 1);
@@ -461,6 +484,7 @@ export function parseJsonc(text) {
 		} else if (character !== "," || !/^\s*[}\]]/.test(text.slice(i + 1)))
 			out += character;
 	}
+
 	return JSON.parse(out);
 }
 
@@ -501,8 +525,10 @@ export function withScreenshots(body, section) {
 	const text = body ?? "";
 	const start = text.indexOf(START);
 	const end = text.indexOf(END);
+
 	if (start !== -1 && end > start)
 		return text.slice(0, start) + section + text.slice(end + END.length);
+
 	return text ? `${text}\n\n${section}` : section;
 }
 
@@ -513,6 +539,7 @@ const escape = (value) =>
 			(character) => `&#${character.charCodeAt(0)};`,
 		)
 		.slice(0, 200);
+
 const imageName = /^[a-z0-9-]{1,100}\.png$/;
 
 /**
@@ -522,6 +549,7 @@ const imageName = /^[a-z0-9-]{1,100}\.png$/;
 export function sanitizeManifest(manifest, images) {
 	const available = new Set(images.filter((name) => imageName.test(name)));
 	const has = (file) => typeof file === "string" && available.has(file);
+
 	const pages = (Array.isArray(manifest?.pages) ? manifest.pages : [])
 		.slice(0, 100)
 		.filter(
@@ -531,6 +559,7 @@ export function sanitizeManifest(manifest, images) {
 				has(`${page.name}-phone.png`),
 		)
 		.map((page) => ({ name: page.name, path: escape(page.path ?? "") }));
+
 	const scenarios = (
 		Array.isArray(manifest?.scenarios) ? manifest.scenarios : []
 	)
@@ -555,20 +584,24 @@ export function sanitizeManifest(manifest, images) {
 				.filter((step) => step.images.length),
 		}))
 		.filter((scenario) => scenario.steps.length);
+
 	return { pages, scenarios };
 }
 
 /** Builds the PR description section from a sanitized capture manifest. */
 export function screenshotSection(manifest, rawBase, sha) {
 	const [desktop, phone] = VIEWPORTS;
+
 	const img = (file, alt, width) =>
 		`<img src="${rawBase}/${file}" width="${width}" alt="${alt.replaceAll('"', "&quot;")}">`;
+
 	const lines = [
 		START,
 		"## Relevant screenshots",
 		`_Captured by CI at ${sha.slice(0, 7)} on a local preview. Desktop ${desktop.width}×${desktop.height}, phone ${phone.width}×${phone.height}._`,
 		"",
 	];
+
 	for (const scenario of manifest.scenarios) {
 		lines.push(`### ${scenario.title}`, "");
 		scenario.steps.forEach((step, index) => {
@@ -588,6 +621,7 @@ export function screenshotSection(manifest, rawBase, sha) {
 			);
 		});
 	}
+
 	if (manifest.pages.length)
 		lines.push(
 			"| Page | Desktop | Phone |",
@@ -597,9 +631,11 @@ export function screenshotSection(manifest, rawBase, sha) {
 					`| \`${page.path}\` | ${img(`${page.name}-desktop.png`, `${page.name}, desktop`, 420)} | ${img(`${page.name}-phone.png`, `${page.name}, phone`, 160)} |`,
 			),
 		);
+
 	if (!manifest.pages.length && !manifest.scenarios.length)
 		lines.push("_No captured page matched the changed files._");
 	lines.push(END);
+
 	return lines.join("\n");
 }
 

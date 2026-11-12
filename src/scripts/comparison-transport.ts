@@ -26,6 +26,7 @@ export class ComparisonTransport {
 			const gain = context.createGain();
 			gain.gain.value = 0;
 			gain.connect(context.destination);
+
 			return gain;
 		});
 	}
@@ -46,6 +47,7 @@ export class ComparisonTransport {
 	}
 	play() {
 		if (this.playing || !this.duration) return;
+
 		if (this.storedPosition >= this.duration) this.storedPosition = 0;
 		const generation = ++this.generation;
 		// Schedule ahead so source creation cannot stagger the two start times.
@@ -61,11 +63,13 @@ export class ComparisonTransport {
 				this.storedPosition = this.duration;
 				this.onEnded();
 			};
+
 			source.start(
 				this.startedAt,
 				this.storedPosition + this.offsets[index],
 				this.duration - this.storedPosition,
 			);
+
 			return source;
 		});
 	}
@@ -84,6 +88,7 @@ export class ComparisonTransport {
 		const resume = this.playing;
 		this.pause();
 		this.storedPosition = Math.max(0, Math.min(position, this.duration));
+
 		if (resume && this.storedPosition < this.duration) this.play();
 	}
 }

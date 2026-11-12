@@ -1,4 +1,5 @@
 export type PersonalNameVariant = "first" | "full";
+
 export interface PersonalNameSegment {
 	text: string;
 	variant: PersonalNameVariant | null;

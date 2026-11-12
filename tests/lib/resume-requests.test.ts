@@ -10,6 +10,7 @@ import {
 
 function makeKv() {
 	const store = new Map<string, string>();
+
 	return {
 		get: vi.fn(async (k: string) => store.get(k) ?? null),
 		put: vi.fn(
@@ -83,10 +84,12 @@ describe("getResumeRequest", () => {
 	it("returns the parsed request when present (without deleting)", async () => {
 		const kv = makeKv();
 		const id = "abc";
+
 		const payload: ResumeRequest & { ts: number } = {
 			...sampleRequest,
 			ts: 1700000000000,
 		};
+
 		(kv.get as any).mockResolvedValueOnce(JSON.stringify(payload));
 
 		const result = await getResumeRequest(kv as any, id);

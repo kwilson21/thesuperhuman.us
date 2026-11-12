@@ -7,9 +7,11 @@ function conceptPng() {
 	const width = 480,
 		height = 180,
 		raw = Buffer.alloc(height * (width * 3 + 1));
+
 	const paper = [251, 248, 242],
 		rule = [232, 227, 218],
 		accent = [174, 85, 52];
+
 	for (let y = 0; y < height; y++)
 		for (let x = 0; x < width; x++) {
 			const color =
@@ -18,33 +20,43 @@ function conceptPng() {
 					: x > 20 && x < 32 && y > 35 && y < 48
 						? accent
 						: paper;
+
 			color.forEach(
 				(value, index) =>
 					(raw[y * (width * 3 + 1) + 1 + x * 3 + index] = value),
 			);
 		}
+
 	const crc = (bytes) => {
 		let value = 0xffffffff;
+
 		for (const byte of bytes) {
 			value ^= byte;
+
 			for (let i = 0; i < 8; i++)
 				value = (value >>> 1) ^ (value & 1 ? 0xedb88320 : 0);
 		}
+
 		return (value ^ 0xffffffff) >>> 0;
 	};
+
 	const chunk = (type, data) => {
 		const body = Buffer.concat([Buffer.from(type), data]),
 			length = Buffer.alloc(4),
 			checksum = Buffer.alloc(4);
+
 		length.writeUInt32BE(data.length);
 		checksum.writeUInt32BE(crc(body));
+
 		return Buffer.concat([length, body, checksum]);
 	};
+
 	const header = Buffer.alloc(13);
 	header.writeUInt32BE(width);
 	header.writeUInt32BE(height, 4);
 	header[8] = 8;
 	header[9] = 2;
+
 	return new Uint8Array(
 		Buffer.concat([
 			Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
@@ -54,15 +66,19 @@ function conceptPng() {
 		]),
 	);
 }
+
 export default {
 	title: "Software project start, private updates and studio access",
 	async run({ capture, sql, ownerFetch }) {
 		const id = "screenshot-software-project",
 			at = new Date().toISOString(),
 			email = "software-example@example.com";
+
 		const token = "00000000-0000-4000-8000-000000000005".repeat(2),
 			cookie = { name: "studio_session", value: token };
+
 		const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
+
 		const terms = {
 			outcome: "Client onboarding tracker",
 			summary: "Client onboarding tool",
@@ -94,20 +110,24 @@ export default {
 			timing: "Agreed before start.",
 			paymentMode: "standard",
 		};
+
 		const sentOffer = { id: "screenshot-project-offer", version: 1 };
 		// Intake, sent offer and session need outside Turnstile/email, so only these are seeded.
 		sql(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,created_at,updated_at) VALUES (${quote(id)},'software','workflow','Alex Example',${quote(email)},'Client onboarding tool','{"path":"workflow","company":"Example Studio"}','reviewed',${quote(at)},${quote(at)});
       INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at,sent_at,sent_by) VALUES (${quote(sentOffer.id)},${quote(id)},${sentOffer.version},'sent',${quote(JSON.stringify(terms))},${quote(at)},${quote(at)},${quote(at)},'owner@example.com');
       INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at) VALUES (${quote(createHash("sha256").update(token).digest("hex"))},${quote(email)},${quote(at)},'2099-01-01',${quote(at)})`);
 		const steps = [];
+
 		const projectAt = () =>
 			JSON.parse(
 				sql(
 					`SELECT updated_at FROM software_projects WHERE request_id=${quote(id)}`,
 				),
 			)[0]?.results?.[0]?.updated_at ?? "";
+
 		const shot = async (title, path, name, options = {}) => {
 			const images = [];
+
 			for (const viewport of ["desktop", "phone"])
 				images.push({
 					file: await capture({
@@ -120,6 +140,7 @@ export default {
 				});
 			steps.push({ title, images });
 		};
+
 		sql(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,stripe_invoice_id,hosted_invoice_url,status,due_at,created_by,created_at,updated_at)
       VALUES ('screenshot-deposit',${quote(id)},${quote(sentOffer.id)},0,'deposit',120000,7,'in_fictional_deposit','https://example.com/invoice/deposit','open','2026-10-07','owner@example.com',${quote(at)},${quote(at)})`);
 		await shot(
@@ -207,6 +228,7 @@ export default {
 			"first",
 			{ cookie },
 		);
+
 		const update = {
 			kind: "progress",
 			milestone_index: 0,
@@ -230,18 +252,21 @@ export default {
 				},
 			],
 		};
+
 		const draft = await ownerFetch(`/api/owner/requests/${id}/updates`, {
 			action: "draft",
 			expectedProjectUpdatedAt: projectAt(),
 			update,
 			expectedUpdatedAt: null,
 		});
+
 		const visual = await ownerFetch(
 			`/api/owner/requests/${id}/updates/${draft.id}/visual`,
 			conceptPng(),
 			"PUT",
 			{ "content-type": "image/png", "if-unmodified-since": draft.updatedAt },
 		);
+
 		await shot(
 			"Composer with concept and live client preview",
 			`/owner/requests/${id}/update`,
@@ -278,6 +303,7 @@ export default {
 			cookie,
 			prepare: (page) => prepareAgreedTerms(page),
 		});
+
 		for (const [stage, name, title] of [
 			[1, "agreed-milestones", "Agreed milestones and timing"],
 			[2, "agreed-cost", "Agreed cost and responsibilities"],
@@ -289,6 +315,7 @@ export default {
 				prepare: (page) => prepareAgreedTerms(page, stage),
 			});
 		}
+
 		await shot(
 			"All agreed terms together",
 			`/studio/software/${id}`,
@@ -321,6 +348,7 @@ export default {
 			"unavailable",
 			{ cookie, status: 404 },
 		);
+
 		const share = async (value) =>
 			ownerFetch(`/api/owner/requests/${id}/updates`, {
 				action: "share",
@@ -329,6 +357,7 @@ export default {
 				update: { ...update, ...value, email_client: false },
 				expectedUpdatedAt: null,
 			});
+
 		const decide = async (review, decision) =>
 			ownerFetch(
 				`/api/studio/software/${id}/reviews/${review.id}`,
@@ -336,11 +365,13 @@ export default {
 				"POST",
 				{ cookie: `studio_session=${token}` },
 			);
+
 		const direction = await share({
 			kind: "direction_review",
 			artifact_version: "Direction v1",
 			client_request: "",
 		});
+
 		await shot(
 			"Direction review awaiting a decision",
 			`/studio/software/${id}`,
@@ -367,6 +398,7 @@ export default {
 				},
 			},
 		);
+
 		const delivery = {
 			...update,
 			kind: "delivery_review",
@@ -390,6 +422,7 @@ export default {
 			preview_url: "https://example.com/preview",
 			email_client: false,
 		};
+
 		const deliveryDraft = await ownerFetch(
 			`/api/owner/requests/${id}/updates`,
 			{
@@ -402,6 +435,7 @@ export default {
 				expectedUpdatedAt: null,
 			},
 		);
+
 		await shot(
 			"Owner composer with every delivery check",
 			`/owner/requests/${id}/update`,
@@ -412,13 +446,16 @@ export default {
 					const checkHeadings = page
 						.locator(".client-preview")
 						.getByRole("heading", { name: "Agreed checks", exact: true });
+
 					if ((await checkHeadings.count()) !== 1)
 						throw new Error(
 							"Owner preview should show one active copy of the agreed checks.",
 						);
+
 					const included = await page
 						.locator("[data-preview-delivered-items]")
 						.innerText();
+
 					if (
 						!included.includes("A shared status view") ||
 						included.includes("Next actions with a named owner")
@@ -426,9 +463,11 @@ export default {
 						throw new Error(
 							"Owner preview must distinguish selected deliverables from the full milestone scope.",
 						);
+
 					const acceptanceBoundary = await page
 						.locator("[data-preview-acceptance-boundary]")
 						.innerText();
+
 					if (
 						!acceptanceBoundary.includes("subset") ||
 						!acceptanceBoundary.includes("cannot accept the full milestone")
@@ -437,6 +476,7 @@ export default {
 							"Owner preview must reflect the selected subset and full-milestone acceptance boundary.",
 						);
 					const evidence = page.locator('[data-criteria-group="0"] textarea');
+
 					if (
 						(await evidence.count()) !== 5 ||
 						!(await evidence.evaluateAll((fields) =>
@@ -444,19 +484,23 @@ export default {
 						))
 					)
 						throw new Error("Every agreed check needs required evidence.");
+
 					const referenceFields = page.locator(
 						"[data-delivery-reference] input",
 					);
+
 					await page
 						.locator('[name="link_url"]')
 						.first()
 						.fill("https://draft.example.com/unlabeled");
 					const savedReference = page.locator("[data-reuse-reference]");
+
 					if ((await savedReference.count()) !== 1)
 						throw new Error(
 							"A previously shared project reference should be reusable.",
 						);
 					await savedReference.click();
+
 					if (
 						(await referenceFields.nth(1).inputValue()) !==
 						"https://draft.example.com/unlabeled"
@@ -464,6 +508,7 @@ export default {
 						throw new Error(
 							"Reusing a saved link must not overwrite a URL with a missing label.",
 						);
+
 					if (
 						(await referenceFields.nth(2).inputValue()) !==
 							"Prior progress reference" ||
@@ -473,6 +518,7 @@ export default {
 						throw new Error("The saved link should fill the next empty row.");
 					await page.locator("[name=title]").focus();
 					await page.keyboard.press("Tab");
+
 					if (
 						!(await page
 							.locator("[name=artifact_version]")
@@ -485,6 +531,7 @@ export default {
 				},
 			},
 		);
+
 		const deliveryVisual = await ownerFetch(
 			`/api/owner/requests/${id}/updates/${deliveryDraft.id}/visual`,
 			conceptPng(),
@@ -494,6 +541,7 @@ export default {
 				"if-unmodified-since": deliveryDraft.updatedAt,
 			},
 		);
+
 		const review = await ownerFetch(`/api/owner/requests/${id}/updates`, {
 			action: "share",
 			expectedProjectUpdatedAt: deliveryDraft.projectUpdatedAt,
@@ -501,6 +549,7 @@ export default {
 			update: delivery,
 			expectedUpdatedAt: deliveryVisual.updatedAt,
 		});
+
 		sql(`INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,stripe_invoice_id,hosted_invoice_url,status,due_at,created_by,created_at,updated_at)
       VALUES ('screenshot-balance',${quote(id)},${quote(sentOffer.id)},0,'balance',120000,15,'in_fictional_balance','https://example.com/invoice/balance','open','2026-10-15','owner@example.com',${quote(at)},${quote(at)})`);
 		await shot(
@@ -531,16 +580,19 @@ export default {
 						.locator("summary")
 						.filter({ hasText: "See what's included" })
 						.click();
+
 					if (
 						await page
 							.getByRole("heading", { name: "Agreed checks", exact: true })
 							.count()
 					)
 						throw new Error("Pending checks should appear only in Try these.");
+
 					if (!(await page.locator(".try-check .hint").first().isVisible()))
 						throw new Error(
 							"Each check should show its evidence beside the helper.",
 						);
+
 					if (
 						!(await page
 							.getByRole("heading", { name: "Included in this delivery" })
@@ -549,6 +601,7 @@ export default {
 						throw new Error(
 							"Client review should name what is included in this delivery.",
 						);
+
 					if (
 						!(await page
 							.getByRole("heading", { name: "Full agreed scope · Milestone 1" })
@@ -557,6 +610,7 @@ export default {
 						throw new Error(
 							"Client review should keep the complete acceptance scope visible.",
 						);
+
 					if (
 						!(await page
 							.locator("[data-preview-delivery-scope]")
@@ -590,6 +644,7 @@ export default {
 						throw new Error(
 							"Newer progress must lead while review actions remain available.",
 						);
+
 					if (
 						!(await page
 							.locator(
@@ -609,6 +664,7 @@ export default {
 				cookie,
 				prepare: async (page) => {
 					const mark = page.locator('[data-review-mark="not-yet"]').first();
+
 					if ((await mark.getAttribute("aria-pressed")) !== "true")
 						await mark.click();
 					await page.locator("[data-request-changes] summary").click();
@@ -619,17 +675,21 @@ export default {
 							)?.checked,
 					);
 					const check = page.locator("[name=criteria]").first();
+
 					if (!(await check.isChecked()))
 						throw new Error("Not yet must pre-tick the matching agreed check.");
 					await page.locator('[data-review-mark="works"]').first().click();
+
 					if (await check.isChecked())
 						throw new Error("Works must clear a helper-ticked check.");
 					await mark.click();
+
 					if (!(await check.isChecked()))
 						throw new Error("Not yet must re-tick an untouched check.");
 					await check.uncheck();
 					await page.locator("[data-request-changes] summary").click();
 					await page.locator("[data-request-changes] summary").click();
+
 					if (await check.isChecked())
 						throw new Error("Reopening changes must preserve a manual untick.");
 					await check.check();
@@ -644,11 +704,13 @@ export default {
 			criteria: [0],
 			note: "Adding the fictional sample client does not save.",
 		});
+
 		const corrected = await share({
 			...delivery,
 			artifact_version: "Delivery v2",
 			delivered_deliverables: terms.milestones[0].deliverables,
 		});
+
 		await shot(
 			"Redelivery invoice replacement prompt",
 			`/owner/requests/${id}`,
@@ -663,6 +725,7 @@ export default {
 				cookie,
 				prepare: async (page) => {
 					await page.locator('[data-review-mark="works"]').first().click();
+
 					if (
 						!(await page
 							.getByText(
@@ -674,9 +737,11 @@ export default {
 						throw new Error(
 							"Complete delivery must explain full milestone acceptance.",
 						);
+
 					const payment = page.locator(
 						"[data-software-review] button[value=milestone_accepted] + p",
 					);
+
 					if (
 						!(await payment.isVisible()) ||
 						!/^(The \$[\d,.]+ balance|This milestone) is invoiced on delivery/.test(
@@ -767,6 +832,7 @@ export default {
 				prepare: async (page) => {
 					const current = page.locator(".project-current");
 					const headings = await current.locator("h2").allTextContents();
+
 					if (
 						headings[0] !== "Your files · Milestone 1" ||
 						headings.includes("Your handoff is ready.")
@@ -774,6 +840,7 @@ export default {
 						throw new Error(
 							"Handoff files should lead without a duplicate heading.",
 						);
+
 					if (
 						await page
 							.locator("header")
@@ -837,6 +904,7 @@ export default {
 			"next-milestone-handoff",
 			{ cookie },
 		);
+
 		return steps;
 	},
 };

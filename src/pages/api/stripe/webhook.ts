@@ -25,18 +25,24 @@ const eventStatuses: Record<
 
 export const POST: APIRoute = async ({ request, locals }) => {
 	const signature = request.headers.get("stripe-signature");
+
 	if (!signature) return Response.json({ received: false }, { status: 400 });
 	const db = locals.runtime.env.MUSIC_DB;
+
 	if (!db) return Response.json({ received: false }, { status: 503 });
 	const rawBody = await request.text();
 	let event: Awaited<ReturnType<typeof verifyStripeWebhook>>;
+
 	try {
 		event = await verifyStripeWebhook(locals.runtime.env, rawBody, signature);
 	} catch {
 		return Response.json({ received: false }, { status: 400 });
 	}
+
 	const status = eventStatuses[event.type];
+
 	if (!status) return Response.json({ received: true });
+
 	const invoice = event.data.object as unknown as {
 		id?: string;
 		customer?: string | { id?: string } | null;
@@ -54,6 +60,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			kind?: string;
 		};
 	};
+
 	if (
 		!invoice.metadata?.audio_request_id &&
 		invoice.metadata?.software_request_id &&
@@ -82,13 +89,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
 					? new Date(invoice.due_date * 1000).toISOString()
 					: null,
 			});
+
 			return Response.json({ received: true });
 		} catch {
 			return Response.json({ received: false }, { status: 500 });
 		}
 	}
+
 	const requestId = invoice.metadata?.audio_request_id;
 	const installment = invoice.metadata?.installment;
+
 	if (
 		!invoice.id ||
 		!requestId ||
@@ -96,11 +106,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
 	) {
 		return Response.json({ received: true });
 	}
+
 	const payment = await getAudioPayment(db, requestId);
+
 	const expectedInvoiceId =
 		installment === "booking"
 			? payment?.bookingInvoiceId
 			: payment?.balanceInvoiceId;
+
 	if (!payment || expectedInvoiceId !== invoice.id) {
 		if (await isKnownInvoiceAttempt(db, invoice.id)) {
 			await recordUnmatchedStripeEvent(db, {
@@ -113,12 +126,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				occurredAt: new Date(event.created * 1000).toISOString(),
 				reason: "invoice-conflict",
 			});
+
 			return Response.json({ received: true });
 		}
+
 		const customerId =
 			typeof invoice.customer === "string"
 				? invoice.customer
 				: (invoice.customer?.id ?? null);
+
 		await recoverInvoiceFromWebhook(db, {
 			eventId: event.id,
 			eventType: event.type,
@@ -132,8 +148,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			totalAmountCents: invoice.total ?? -1,
 			currency: invoice.currency ?? "",
 		});
+
 		return Response.json({ received: true });
 	}
+
 	try {
 		await applyStripeInvoiceEvent(db, {
 			eventId: event.id,
@@ -142,6 +160,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			status,
 			occurredAt: new Date(event.created * 1000).toISOString(),
 		});
+
 		return Response.json({ received: true });
 	} catch {
 		return Response.json({ received: false }, { status: 500 });

@@ -5,6 +5,7 @@ import { POST } from "~/pages/api/owner/requests/[id]";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database;
+
 beforeEach(() => {
 	sql = new DatabaseSync(":memory:");
 	sql.exec(
@@ -13,6 +14,7 @@ beforeEach(() => {
 	sql.exec(
 		`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES ('request-1','purchase','fan@example.com','Wants Old News','new','2026-09-19T12:00:00Z','2026-09-19T12:00:00Z')`,
 	);
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		query,
 		args,
@@ -20,17 +22,21 @@ beforeEach(() => {
 		first: async () => sql.prepare(query).get(...args) ?? null,
 		all: async () => ({ results: sql.prepare(query).all(...args) }),
 	});
+
 	db = {
 		prepare: (query: string) => statement(query),
 		batch: async (items: ReturnType<typeof statement>[]) => {
 			sql.exec("BEGIN");
+
 			try {
 				const result = items.map((item) => ({
 					results: /RETURNING/i.test(item.query)
 						? sql.prepare(item.query).all(...item.args)
 						: (sql.prepare(item.query).run(...item.args), []),
 				}));
+
 				sql.exec("COMMIT");
+
 				return result;
 			} catch (error) {
 				sql.exec("ROLLBACK");
@@ -39,6 +45,7 @@ beforeEach(() => {
 		},
 	} as unknown as D1Database;
 });
+
 function context(owner: boolean, body: unknown) {
 	return {
 		params: { id: "request-1" },

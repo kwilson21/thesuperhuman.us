@@ -1,6 +1,7 @@
 import type { KvLike } from "./rate-limit";
 
 export const RESUME_AUDIENCES = ["general", "dod"] as const;
+
 export type ResumeAudience = (typeof RESUME_AUDIENCES)[number];
 
 export interface ResumeRequest {
@@ -34,6 +35,7 @@ export async function createResumeRequest(
 	await kv.put(key(id), JSON.stringify(payload), {
 		expirationTtl: TTL_SECONDS,
 	});
+
 	return id;
 }
 
@@ -42,7 +44,9 @@ export async function getResumeRequest(
 	id: string,
 ): Promise<StoredResumeRequest | null> {
 	const raw = await kv.get(key(id));
+
 	if (!raw) return null;
+
 	try {
 		return JSON.parse(raw) as StoredResumeRequest;
 	} catch {

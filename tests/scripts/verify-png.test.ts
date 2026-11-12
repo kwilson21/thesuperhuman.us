@@ -18,10 +18,12 @@ const png = (width = 40, height = 30) =>
 function chunk(buffer: Buffer, type: string) {
 	for (let offset = 8; offset < buffer.length; ) {
 		const length = buffer.readUInt32BE(offset);
+
 		if (buffer.toString("latin1", offset + 4, offset + 8) === type)
 			return { offset, length };
 		offset += 12 + length;
 	}
+
 	throw new Error(`no ${type}`);
 }
 
@@ -33,6 +35,7 @@ function withChunkData(buffer: Buffer, type: string, data: Buffer) {
 	head.write(type, 4, "latin1");
 	const crc = Buffer.alloc(4);
 	crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])), 0);
+
 	return Buffer.concat([
 		buffer.subarray(0, offset),
 		head,
@@ -83,6 +86,7 @@ describe("PNG verification", () => {
 		expect(
 			pngProblem(withChunkData(valid, "IDAT", Buffer.from("garbage bytes"))),
 		).toMatch(/does not inflate/);
+
 		// A header that claims more rows than the data holds.
 		const header = Buffer.from(
 			valid.subarray(
@@ -90,6 +94,7 @@ describe("PNG verification", () => {
 				chunk(valid, "IHDR").offset + 21,
 			),
 		);
+
 		header.writeUInt32BE(31, 4);
 		expect(pngProblem(withChunkData(valid, "IHDR", header))).toMatch(
 			/expected/,

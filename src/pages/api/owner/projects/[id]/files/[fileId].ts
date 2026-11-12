@@ -7,6 +7,7 @@ import { revokeProjectFile } from "~/lib/audio-project-revocation";
 import { musicRequest } from "~/lib/music-request";
 
 export const prerender = false;
+
 const input = z.discriminatedUnion("action", [
 	z.object({
 		action: z.literal("publish"),
@@ -19,22 +20,28 @@ const input = z.discriminatedUnion("action", [
 export const POST: APIRoute = async ({ params, request, locals }) => {
 	if (!locals.owner) return Response.json({ ok: false }, { status: 403 });
 	const env = locals.runtime?.env;
+
 	if (!clientPortalEnabled(env))
 		return new Response("Not found", { status: 404 });
+
 	if (!env.MUSIC_DB || !locals.runtime.ctx || !params.id || !params.fileId) {
 		return Response.json(
 			{ ok: false, error: "File publication is temporarily unavailable." },
 			{ status: 503 },
 		);
 	}
+
 	const body = await musicRequest(request, 8192);
+
 	if (body instanceof Response) return body;
 	const parsed = input.safeParse(body);
+
 	if (!parsed.success)
 		return Response.json(
 			{ ok: false, error: "Check the file action and try again." },
 			{ status: 400 },
 		);
+
 	try {
 		if (parsed.data.action === "revoke") {
 			const revoked = await revokeProjectFile(
@@ -44,6 +51,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				locals.owner.email,
 				parsed.data.note,
 			);
+
 			if (!revoked)
 				return Response.json(
 					{
@@ -53,6 +61,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					},
 					{ status: 409 },
 				);
+
 			if (revoked.updateId)
 				locals.runtime.ctx.waitUntil(
 					deliverProjectUpdateNotice(env.MUSIC_DB, revoked.updateId, env).catch(
@@ -62,13 +71,16 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 							),
 					),
 				);
+
 			return Response.json({ ok: true });
 		}
+
 		if (!env.AUDIO)
 			return Response.json(
 				{ ok: false, error: "File publication is temporarily unavailable." },
 				{ status: 503 },
 			);
+
 		const updateId = await publishProjectFile(
 			env.MUSIC_DB,
 			env.AUDIO,
@@ -78,6 +90,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			parsed.data.note,
 			parsed.data.downloadable,
 		);
+
 		if (!updateId)
 			return Response.json(
 				{
@@ -92,6 +105,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				console.error("Studio file notice state is uncertain."),
 			),
 		);
+
 		return Response.json({ ok: true, updateId });
 	} catch {
 		return Response.json(

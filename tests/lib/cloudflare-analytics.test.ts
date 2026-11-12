@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { loadTrafficSummary } from "~/lib/cloudflare-analytics";
 
 afterEach(() => vi.unstubAllGlobals());
+
 const range = {
 	start: new Date("2026-09-01T00:00:00Z"),
 	end: new Date("2026-09-19T00:00:00Z"),
@@ -28,11 +29,14 @@ it("requests only eyeball traffic for the production hostname", async () => {
 			{ status: 200 },
 		),
 	);
+
 	vi.stubGlobal("fetch", fetch);
+
 	const result = await loadTrafficSummary(
 		{ CLOUDFLARE_ANALYTICS_TOKEN: "secret", CLOUDFLARE_ZONE_ID: "zone" } as Env,
 		range,
 	);
+
 	expect(result).toEqual({
 		status: "available",
 		summary: { visits: 21, requests: 48 },

@@ -5,18 +5,23 @@ import {
 } from "~/lib/brief-suggestion-pass";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
+
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
 import { POST } from "~/pages/api/software/brief/suggest";
+
 let db: any, database: any, run: ReturnType<typeof vi.fn>;
 let cookie: string;
 const secret = "existing-turnstile-secret-for-tests";
 let siteLimiter: { limit: ReturnType<typeof vi.fn> };
 let limiter: { limit: ReturnType<typeof vi.fn> };
+
 const input = {
 	question: "What happens today?",
 	text: "We track new clients",
 	earlier: { path: "workflow" },
 };
+
 function context(body: unknown = input, env: Record<string, unknown> = {}) {
 	return {
 		request: new Request("https://example.com/api/software/brief/suggest", {
@@ -44,6 +49,7 @@ function context(body: unknown = input, env: Record<string, unknown> = {}) {
 		},
 	} as any;
 }
+
 beforeEach(async () => {
 	cookie = `__Secure-brief-suggestion-pass=${await createSuggestionPass(secret, "test")}`;
 	siteLimiter = { limit: vi.fn(async () => ({ success: true })) };
@@ -57,6 +63,7 @@ beforeEach(async () => {
 				first: async () => db.prepare(sql).get(...args) ?? null,
 				run: async () => {
 					db.prepare(sql).run(...args);
+
 					return { success: true };
 				},
 			}),
@@ -66,20 +73,24 @@ beforeEach(async () => {
 	limiter = {
 		limit: vi.fn(async ({ key }: { key: string }) => {
 			let window = counts.get(key);
+
 			if (!window || Date.now() - window.start >= 60000) {
 				window = { start: Date.now(), count: 0 };
 				counts.set(key, window);
 			}
+
 			return { success: ++window.count <= 30 };
 		}),
 	};
 	run = vi.fn(async () => ({ response: " in a shared spreadsheet" }));
 });
+
 afterEach(() => {
 	db.close();
 	vi.useRealTimers();
 	vi.unstubAllGlobals();
 });
+
 it("sends only allowed answer context with a twelve-token cap", async () => {
 	expect(await (await POST(context())).json()).toEqual({
 		suggestion: " in a shared spreadsheet",
@@ -90,6 +101,7 @@ it("sends only allowed answer context with a twelve-token cap", async () => {
 	});
 	expect(JSON.stringify(run.mock.calls)).not.toContain("test");
 });
+
 it.each([
 	{ ...input, name: "Private" },
 	{ ...input, earlier: { email: "private@example.com" } },
@@ -115,6 +127,7 @@ it.each([
 	expect(await (await POST(context(body))).json()).toEqual({ suggestion: "" });
 	expect(run).not.toHaveBeenCalled();
 });
+
 it.each([
 	[
 		"What’s the website for?",
@@ -141,6 +154,7 @@ it.each([
 		expect(run).toHaveBeenCalledOnce();
 	},
 );
+
 it.each(["What's the website for?", "What's the idea?"])(
 	"accepts %s with a straight apostrophe from a page opened before the curly questions",
 	async (question) => {
@@ -160,6 +174,7 @@ it.each(["What's the website for?", "What's the idea?"])(
 		);
 	},
 );
+
 it.each([
 	{ AI: undefined },
 	{ MUSIC_DB: undefined },
@@ -171,10 +186,12 @@ it.each([
 	});
 	expect(run).not.toHaveBeenCalled();
 });
+
 it("enforces the minute limit", async () => {
 	for (let i = 0; i < 31; i++) await POST(context());
 	expect(run).toHaveBeenCalledTimes(30);
 });
+
 it.each([
 	["visitor", 300],
 	["site", 10000],
@@ -189,6 +206,7 @@ it.each([
 	expect(await (await POST(context())).json()).toEqual({ suggestion: "" });
 	expect(run).not.toHaveBeenCalled();
 });
+
 it.each(["visitor", "site"])(
 	"concurrent requests cannot exceed the %s daily cap",
 	async (scope) => {
@@ -212,14 +230,18 @@ it.each(["visitor", "site"])(
 		).toBe(scope === "site" ? 10000 : 300);
 	},
 );
+
 it("cleans expired rows in bounded batches and retains the previous UTC day", async () => {
 	const day = new Date().toISOString().slice(0, 10);
 	const previous = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+
 	const insert = db.prepare(
 		"INSERT INTO brief_suggestion_budget VALUES (?, ?, 1)",
 	);
+
 	insert.run(previous, "previous");
 	insert.run(day, "today");
+
 	for (let i = 0; i < 1001; i++) insert.run("2000-01-01", String(i));
 	await POST(context());
 	expect(
@@ -235,6 +257,7 @@ it("cleans expired rows in bounded batches and retains the previous UTC day", as
 			.get("previous").count,
 	).toBe(1);
 });
+
 it("returns no suggestion on error, empty model output or timeout", async () => {
 	run.mockRejectedValueOnce(new Error("unavailable"));
 	expect(await (await POST(context())).json()).toEqual({ suggestion: "" });
@@ -253,6 +276,7 @@ it("recovers after sixty seconds", async () => {
 	await POST(context());
 	expect(run).toHaveBeenCalledTimes(31);
 });
+
 it("rejects over-budget combined context and returns at most six words", async () => {
 	expect(
 		await (
@@ -272,6 +296,7 @@ it("rejects over-budget combined context and returns at most six words", async (
 		suggestion: " one two three four five six",
 	});
 });
+
 it("never invokes AI on local previews or cross-origin requests", async () => {
 	const local = context();
 	local.request = new Request("http://localhost/api/software/brief/suggest", {
@@ -293,9 +318,11 @@ it("caps a concurrent burst before invoking AI or daily counters", async () => {
 	const responses = await Promise.all(
 		Array.from({ length: 31 }, () => POST(context())),
 	);
+
 	const bodies = await Promise.all(
 		responses.map((response) => response.json()),
 	);
+
 	expect(
 		bodies.filter((body) => (body as { suggestion: string }).suggestion),
 	).toHaveLength(30);
@@ -305,6 +332,7 @@ it("caps a concurrent burst before invoking AI or daily counters", async () => {
 		new Set(limiter.limit.mock.calls.map(([options]) => options.key)).size,
 	).toBe(1);
 });
+
 it.each([1, 2, 3])(
 	"fails closed when D1 budget statement %s fails",
 	async (failedStatement) => {
@@ -312,20 +340,24 @@ it.each([1, 2, 3])(
 		let count = 0;
 		database.prepare.mockImplementation((sql: string) => {
 			if (++count === failedStatement) throw new Error("unavailable");
+
 			return prepare(sql);
 		});
 		expect(await (await POST(context())).json()).toEqual({ suggestion: "" });
 		expect(run).not.toHaveBeenCalled();
 	},
 );
+
 it("cleans once per UTC day after the first site reservation, never on capped requests", async () => {
 	vi.useFakeTimers();
 	vi.setSystemTime(new Date("2026-10-10T12:00:00Z"));
 	cookie = `__Secure-brief-suggestion-pass=${await createSuggestionPass(secret, "test")}`;
+
 	const cleanupCalls = () =>
 		database.prepare.mock.calls.filter(([sql]: [string]) =>
 			sql.startsWith("DELETE"),
 		);
+
 	await Promise.all([POST(context()), POST(context())]);
 	expect(cleanupCalls()).toHaveLength(1);
 	expect(database.prepare.mock.calls[0][0]).toMatch(/^SELECT/);
@@ -344,17 +376,22 @@ it("cleans once per UTC day after the first site reservation, never on capped re
 	await POST(context());
 	expect(cleanupCalls()).toHaveLength(2);
 });
+
 it.each(["pending", "rejected", "unsuccessful", "throws"])(
 	"does not delay or suppress suggestions when cleanup is %s",
 	async (failure) => {
 		const prepare = database.prepare.getMockImplementation();
 		let finish!: () => void;
+
 		const pending = new Promise((resolve) => {
 			finish = () => resolve({ success: true });
 		});
+
 		database.prepare.mockImplementation((sql: string) => {
 			if (!sql.startsWith("DELETE")) return prepare(sql);
+
 			if (failure === "throws") throw new Error("unavailable");
+
 			return {
 				bind: () => ({
 					run: () =>
@@ -377,6 +414,7 @@ it.each(["pending", "rejected", "unsuccessful", "throws"])(
 		await expect(waitUntil.mock.calls[0][0]).resolves.toBeUndefined();
 	},
 );
+
 it("fails closed when the minute binding throws", async () => {
 	limiter.limit.mockRejectedValueOnce(new Error("unavailable"));
 	await POST(context());
@@ -399,6 +437,7 @@ it.each(["missing", "expired", "tampered", "other-ip"])(
 		expect(database.prepare).not.toHaveBeenCalled();
 	},
 );
+
 it("rejects a missing or exhausted site ceiling", async () => {
 	await POST(context(input, { BRIEF_SUGGEST_SITE_LIMIT: undefined }));
 	siteLimiter.limit.mockResolvedValue({ success: false });
@@ -413,6 +452,7 @@ it("enforces the fixed site ceiling across different visitor passes", async () =
 	siteLimiter.limit.mockImplementation(async () => ({
 		success: ++count <= 120,
 	}));
+
 	for (let i = 0; i < 121; i++) {
 		const ip = `visitor-${i}`;
 		cookie = `__Secure-brief-suggestion-pass=${await createSuggestionPass(secret, ip)}`;
@@ -427,11 +467,13 @@ it("enforces the fixed site ceiling across different visitor passes", async () =
 		});
 		await POST(ctx);
 	}
+
 	expect(run).toHaveBeenCalledTimes(120);
 	expect(
 		new Set(siteLimiter.limit.mock.calls.map(([options]) => options.key)),
 	).toEqual(new Set(["site"]));
 });
+
 it("fails closed when the site limiter throws", async () => {
 	siteLimiter.limit.mockRejectedValueOnce(new Error("unavailable"));
 	await POST(context());
@@ -448,6 +490,7 @@ it.each([10000, 10001])(
 			"site",
 			count,
 		);
+
 		for (const ip of ["test", "new-visitor"]) {
 			cookie = `__Secure-brief-suggestion-pass=${await createSuggestionPass(secret, ip)}`;
 			const ctx = context();
@@ -461,6 +504,7 @@ it.each([10000, 10001])(
 			});
 			expect(await (await POST(ctx)).json()).toEqual({ suggestion: "" });
 		}
+
 		expect(
 			database.prepare.mock.calls.every(([sql]: [string]) =>
 				sql.startsWith("SELECT"),
@@ -472,6 +516,7 @@ it.each([10000, 10001])(
 		expect(run).not.toHaveBeenCalled();
 	},
 );
+
 it("never writes the site row for a capped visitor", async () => {
 	await POST(context());
 	db.prepare(

@@ -12,7 +12,9 @@ export interface Figure {
 /** Reads a display figure such as "100,000+" into its number and the text around it. */
 export function parseFigure(text: string): Figure | null {
 	const match = /^(\D*)(\d[\d,]*)(\D*)$/.exec(text.trim());
+
 	if (!match) return null;
+
 	return {
 		prefix: match[1],
 		value: Number(match[2].replace(/,/g, "")),
@@ -30,14 +32,17 @@ export const easeOutCubic = (t: number) => 1 - (1 - clamp01(t)) ** 3;
 /** Unit cells for a before-and-after capacity comparison: one cell is the old capacity. */
 export function capacityCells(before: Figure, after: Figure, max = 40): number {
 	if (before.value <= 0) return 1;
+
 	return Math.max(1, Math.min(max, Math.round(after.value / before.value)));
 }
 
 /** Deterministic pseudo-random numbers, so the server-rendered frame and the animated one match. */
 function seeded(seed: number) {
 	let state = seed >>> 0;
+
 	return () => {
 		state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+
 		return state / 2 ** 32;
 	};
 }
@@ -45,10 +50,12 @@ function seeded(seed: number) {
 /** Peak heights (0 to 1) for a waveform that fades in, swells twice, and fades out, like a sung phrase. */
 export function waveformPeaks(count: number, seed = 7): number[] {
 	const random = seeded(seed);
+
 	return Array.from({ length: count }, (_, index) => {
 		const x = count > 1 ? index / (count - 1) : 0.5;
 		const taper = Math.sin(Math.PI * x) ** 0.7;
 		const swells = 0.62 + 0.38 * Math.sin(Math.PI * (x * 4 - 0.35));
+
 		return clamp01(taper * swells * (0.42 + 0.58 * random()));
 	});
 }
@@ -56,6 +63,7 @@ export function waveformPeaks(count: number, seed = 7): number[] {
 /** Bar heights for scroll progress: silent at either edge of the viewport, loudest crossing the middle. */
 export function signalFrame(peaks: number[], progress: number): number[] {
 	const level = Math.sin(Math.PI * clamp01(progress));
+
 	return peaks.map(
 		(peak, index) =>
 			peak * level * (0.78 + 0.22 * Math.sin(index * 0.55 - progress * 16)),
@@ -82,12 +90,15 @@ export function barsPath(
 ): string {
 	const slot = width / heights.length;
 	const bar = +(slot * fill).toFixed(2);
+
 	return heights
 		.map((height, index) => {
 			const size = +(clamp01(height) * depth).toFixed(2);
+
 			if (size < 0.05) return "";
 			const x = +(index * slot + (slot - bar) / 2).toFixed(2);
 			const y = direction === "up" ? +(mid - size).toFixed(2) : mid;
+
 			return `M${x} ${y}h${bar}v${size}h${-bar}z`;
 		})
 		.join("");
@@ -97,6 +108,7 @@ export interface CodeSegment {
 	width: number;
 	tone: number;
 }
+
 export interface CodeRow {
 	indent: number;
 	segments: CodeSegment[];
@@ -106,6 +118,7 @@ export interface CodeRow {
 export function codeRows(count: number, seed = 3, tones = 5): CodeRow[] {
 	const random = seeded(seed);
 	let indent = 0;
+
 	return Array.from({ length: count }, () => {
 		const step = random();
 		indent =
@@ -114,6 +127,7 @@ export function codeRows(count: number, seed = 3, tones = 5): CodeRow[] {
 				: step < 0.55
 					? Math.max(indent - 1, 0)
 					: indent;
+
 		const segments = Array.from(
 			{ length: 1 + Math.floor(random() * 4) },
 			() => ({
@@ -121,6 +135,7 @@ export function codeRows(count: number, seed = 3, tones = 5): CodeRow[] {
 				tone: Math.floor(random() * tones),
 			}),
 		);
+
 		return { indent, segments };
 	});
 }

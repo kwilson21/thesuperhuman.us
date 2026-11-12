@@ -60,16 +60,19 @@ describe("line diff", () => {
 		// 2001 x 2000 cells is above the cap, so shared middle lines are not aligned and no unchanged row appears.
 		const middle = (length: number, changed: (k: number) => string) =>
 			Array.from({ length }, (_, k) => (k % 2 ? changed(k) : `same ${k}`));
+
 		const before = [
 			"top old",
 			...middle(1999, (k) => `old ${k}`),
 			"bottom old",
 		].join("\n");
+
 		const after = [
 			"top new",
 			...middle(1998, (k) => `new ${k}`),
 			"bottom new",
 		].join("\n");
+
 		const rows = lineDiff(before, after);
 		expect(rows).toHaveLength(4001);
 		expect(rows.every((row) => row.kind !== "unchanged")).toBe(true);
@@ -114,6 +117,7 @@ describe("line diff", () => {
 		const before = Array.from({ length: 3000 }, (_, i) => `old ${i}`).join(
 			"\n",
 		);
+
 		const after = Array.from({ length: 3000 }, (_, i) => `new ${i}`).join("\n");
 		const rows = lineDiff(before, after);
 		expect(rows).toHaveLength(6000);

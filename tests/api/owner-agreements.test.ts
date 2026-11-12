@@ -7,10 +7,12 @@ import { templateFields } from "~/lib/agreement-templates";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database;
+
 beforeEach(() => {
 	sql = new DatabaseSync(":memory:");
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(readFileSync("db/music.sql", "utf8"));
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		query,
 		args,
@@ -19,17 +21,21 @@ beforeEach(() => {
 		all: async () => ({ results: sql.prepare(query).all(...args) }),
 		run: async () => ({ meta: sql.prepare(query).run(...args) }),
 	});
+
 	db = {
 		prepare: (query: string) => statement(query),
 		batch: async (items: ReturnType<typeof statement>[]) => {
 			sql.exec("BEGIN");
+
 			try {
 				const result = items.map((item) => ({
 					results: /^SELECT|RETURNING/.test(item.query)
 						? sql.prepare(item.query).all(...item.args)
 						: (sql.prepare(item.query).run(...item.args), []),
 				}));
+
 				sql.exec("COMMIT");
+
 				return result;
 			} catch (error) {
 				sql.exec("ROLLBACK");
@@ -52,6 +58,7 @@ const synthetic = (kind: "msa" | "sow") =>
 				.join("\n") +
 			"\n{{/milestones}}"
 		: "");
+
 const revised = (kind: "msa" | "sow") =>
 	synthetic(kind).replace("\n", " revised\n");
 
@@ -71,6 +78,7 @@ function post(body: unknown) {
 		},
 	} as unknown as APIContext);
 }
+
 const publish = (
 	kind: "msa" | "sow",
 	text: string,
@@ -97,9 +105,11 @@ it("previews without a comparison before the first publication and with a line d
 			expectedCurrentVersion: 0,
 		})
 	).json();
+
 	expect(first).toEqual({ ok: true, text: expect.any(String), compare: null });
 	expect((await publish("msa", synthetic("msa"), 0, "v1")).status).toBe(200);
 	const lines = synthetic("msa").split("\n");
+
 	const changed = (await (
 		await post({
 			action: "preview",
@@ -108,6 +118,7 @@ it("previews without a comparison before the first publication and with a line d
 			expectedCurrentVersion: 1,
 		})
 	).json()) as { compare: unknown };
+
 	expect(changed.compare).toEqual({
 		label: "v1",
 		rows: [
@@ -128,7 +139,9 @@ it("previews the submitted version label where the template names the source rev
 			versionLabel: "v2026-12-01",
 		})
 	).json()) as { text: string };
+
 	expect(labelled.text).toContain("msa.source_revision: v2026-12-01");
+
 	const blank = (await (
 		await post({
 			action: "preview",
@@ -138,6 +151,7 @@ it("previews the submitted version label where the template names the source rev
 			versionLabel: "",
 		})
 	).json()) as { text: string };
+
 	expect(blank.text).toContain("msa.source_revision: Sample version label");
 });
 
@@ -152,6 +166,7 @@ it("falls back to the sample label when a typed preview label would not publish"
 				versionLabel,
 			})
 		).json()) as { ok: boolean; text: string };
+
 		expect(preview).toMatchObject({
 			ok: true,
 			text: expect.stringContaining(
@@ -213,6 +228,7 @@ it("refuses a missing, spaced, slashed or over-long label before publishing", as
 			error: "Check required fields and limits.",
 		});
 	}
+
 	expect(
 		sql
 			.prepare("SELECT COUNT(*) AS total FROM software_agreement_templates")
@@ -224,6 +240,7 @@ it("refuses a source revision over 120 characters before publishing", async () =
 	const response = await publish("msa", synthetic("msa"), 0, "v1", {
 		sourceRevision: "a".repeat(121),
 	});
+
 	expect(response.status).toBe(400);
 	expect(await response.json()).toEqual({
 		ok: false,
@@ -239,6 +256,7 @@ it("refuses a source revision over 120 characters before publishing", async () =
 it("shows the identical-text and duplicate-label refusals to the owner unchanged", async () => {
 	expect((await publish("msa", synthetic("msa"), 0, "v1")).status).toBe(200);
 	expect((await publish("sow", synthetic("sow"), 0, "v1")).status).toBe(200);
+
 	const refusals = [
 		[
 			await publish("msa", synthetic("msa"), 1, "v2"),
@@ -253,6 +271,7 @@ it("shows the identical-text and duplicate-label refusals to the owner unchanged
 			"v1 is already used for the SOW. Choose another label.",
 		],
 	] as const;
+
 	for (const [response, error] of refusals) {
 		expect(response.status).toBe(409);
 		expect(await response.json()).toEqual({ ok: false, error });
@@ -292,11 +311,13 @@ it("returns a stored version with its label and comparison, and 404 for an unkno
 			],
 		},
 	});
+
 	const missing = await post({
 		action: "template-version",
 		kind: "msa",
 		version: 9,
 	});
+
 	expect(missing.status).toBe(404);
 	expect(await missing.json()).toEqual({
 		ok: false,

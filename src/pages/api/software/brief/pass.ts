@@ -6,13 +6,17 @@ import {
 	createSuggestionPass,
 	suggestionPassCookie,
 } from "~/lib/brief-suggestion-pass";
+
 export const prerender = false;
 const schema = z.object({ token: z.string().min(1).max(2048) }).strict();
+
 export const POST: APIRoute = async ({ request, locals }) => {
 	const headers = new Headers({ "cache-control": "no-store" });
+
 	try {
 		const env = locals.runtime?.env;
 		const ip = request.headers.get("cf-connecting-ip");
+
 		if (
 			!env?.TURNSTILE_SECRET_KEY ||
 			env.SOFTWARE_SUGGESTIONS_ENABLED !== "true" ||
@@ -20,6 +24,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		)
 			return Response.json({ ok: false }, { headers });
 		const parsed = schema.safeParse(await musicRequest(request, 4096));
+
 		if (
 			!parsed.success ||
 			!(await verifyTurnstile(parsed.data.token, env.TURNSTILE_SECRET_KEY, ip))
@@ -29,6 +34,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			"set-cookie",
 			`${suggestionPassCookie}=${await createSuggestionPass(env.TURNSTILE_SECRET_KEY, ip)}; Path=/api/software/brief; HttpOnly; Secure; SameSite=Strict; Max-Age=1800`,
 		);
+
 		return Response.json({ ok: true }, { headers });
 	} catch {
 		return Response.json({ ok: false }, { headers });

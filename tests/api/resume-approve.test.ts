@@ -10,7 +10,9 @@ function makeBinaryKv(
 			if (type === "arrayBuffer") {
 				return pdfs[k] ?? null;
 			}
+
 			const r = storedRequests[k];
+
 			return r === undefined ? null : JSON.stringify(r);
 		}),
 		put: vi.fn(),
@@ -23,6 +25,7 @@ function makeContext(id: string | null, kv: ReturnType<typeof makeBinaryKv>) {
 		id === null
 			? "https://thesuperhuman.us/api/resume-approve"
 			: `https://thesuperhuman.us/api/resume-approve?id=${id}`;
+
 	return {
 		request: new Request(url, { method: "GET" }),
 		url: new URL(url),
@@ -49,6 +52,7 @@ beforeEach(() => {
 					json: async () => ({ id: "em_1" }),
 				} as unknown as Response;
 			}
+
 			return { ok: false, json: async () => ({}) } as unknown as Response;
 		}),
 	);
@@ -101,9 +105,11 @@ describe("GET /api/resume-approve", () => {
 		expect(kv.delete).toHaveBeenCalledWith("req:abc");
 
 		const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+
 		const resendCall = fetchMock.mock.calls.find(
 			(c) => typeof c[0] === "string" && c[0].includes("resend.com"),
 		);
+
 		expect(resendCall).toBeTruthy();
 		const body = JSON.parse((resendCall![1] as RequestInit).body as string);
 		expect(body.to).toEqual(["jane@example.com"]);

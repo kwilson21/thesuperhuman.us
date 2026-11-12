@@ -7,6 +7,7 @@ import type { Publication } from "~/lib/publication/contract";
 
 // Native loading avoids older Vite versions treating node:sqlite as a package.
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
 const numbered = (args: unknown[]) =>
 	Object.fromEntries(args.map((value, index) => [String(index + 1), value]));
 
@@ -43,18 +44,23 @@ function fixture() {
 		),
 	);
 	let fail = false;
+
 	const db = {
 		prepare: (query: string) => ({
 			bind: (...args: unknown[]) => ({ query, args }),
 		}),
 		batch: async (statements: { query: string; args: never[] }[]) => {
 			sql.exec("BEGIN");
+
 			try {
 				const results = statements.map((s, i) => {
 					if (fail && i === 1) throw new Error("interrupted");
+
 					return { results: sql.prepare(s.query).all(numbered(s.args)) };
 				});
+
 				sql.exec("COMMIT");
+
 				return results;
 			} catch (error) {
 				sql.exec("ROLLBACK");
@@ -62,6 +68,7 @@ function fixture() {
 			}
 		},
 	};
+
 	return {
 		journal: new D1PublicationJournal(db as unknown as D1Database),
 		db: db as unknown as D1Database,
@@ -144,10 +151,12 @@ describe("transactional publication journal", () => {
 	});
 	it("allows one winner for competing expected revisions and isolates projects", async () => {
 		const { journal } = fixture();
+
 		const results = await Promise.all([
 			journal.commit(base),
 			journal.commit({ ...base, eventId: "two", entryId: "second" }),
 		]);
+
 		expect(results.map((r) => r.status).sort()).toEqual([
 			"accepted",
 			"conflict",
@@ -171,6 +180,7 @@ describe("transactional publication journal", () => {
 	it("redacts all entry content and prevents live or historical resurrection", async () => {
 		const { journal, sql } = fixture();
 		await journal.commit(base);
+
 		const withdrawal: Publication = {
 			...base,
 			eventId: "remove",
@@ -178,6 +188,7 @@ describe("transactional publication journal", () => {
 			operation: "withdraw",
 			story: null,
 		};
+
 		const receipt = await journal.commit(withdrawal);
 		expect(receipt.status).toBe("accepted");
 		expect(await journal.commit(withdrawal)).toEqual({

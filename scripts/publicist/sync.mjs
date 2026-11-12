@@ -5,6 +5,7 @@ import { syncAgents } from "./lib.mjs";
 const skill = readFileSync(".agents/skills/publicist/SKILL.md", "utf8");
 const agents = readFileSync("AGENTS.md", "utf8");
 const next = syncAgents(agents, skill);
+
 if (next !== agents) {
 	writeFileSync("AGENTS.md", next);
 	console.log("AGENTS.md publicist block updated.");

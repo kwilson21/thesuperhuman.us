@@ -4,6 +4,7 @@ import { liveSigningGuard, type AgreementSession } from "./agreement-access";
 import { sessionGuard } from "./software-agreements";
 import type { SoftwareOffer } from "./software-offers";
 import type { OwnerRequest } from "./owner-model";
+
 export const businessTypes = [
 	"LLC",
 	"Corporation",
@@ -12,6 +13,7 @@ export const businessTypes = [
 	"Nonprofit",
 	"Other",
 ];
+
 export const states = [
 	"Alabama",
 	"Alaska",
@@ -66,6 +68,7 @@ export const states = [
 	"Wyoming",
 	"Outside the US",
 ];
+
 export const draftSchema = z
 	.object({
 		legal_name: cleanText(200).default(""),
@@ -83,7 +86,9 @@ export const draftSchema = z
 		notice_email: cleanText(320).default(""),
 	})
 	.strict();
+
 export type AgreementDraft = z.infer<typeof draftSchema>;
+
 export const fieldMessages: Record<string, string> = {
 	legal_name: "Add your legal business name",
 	entity_type: "Choose a business type",
@@ -99,8 +104,10 @@ export const fieldMessages: Record<string, string> = {
 	approver_email: "Add a valid approver email",
 	notice_email: "Add a valid notice email",
 };
+
 export function draftFieldErrors(issues: z.ZodIssue[]) {
 	const errors: Record<string, string> = {};
+
 	for (const issue of issues) {
 		const field = String(issue.path[0] ?? "legal_name");
 		errors[field] =
@@ -108,16 +115,20 @@ export function draftFieldErrors(issues: z.ZodIssue[]) {
 				? "Remove unusual characters from this field."
 				: "Check this field.";
 	}
+
 	return errors;
 }
+
 export function resolveClientDetails(input: unknown, email: string) {
 	const parsed = draftSchema.safeParse(input);
+
 	if (!parsed.success)
 		return {
 			ok: false as const,
 			errors: draftFieldErrors(parsed.error.issues),
 		};
 	const draft = parsed.data;
+
 	const client = clientAgreementSchema.safeParse({
 		legal_name: draft.legal_name,
 		entity_type: draft.entity_type,
@@ -134,7 +145,9 @@ export function resolveClientDetails(input: unknown, email: string) {
 		portfolio: draft.portfolio_choice === "private" ? "deny" : "allow",
 		naming: draft.portfolio_choice === "named",
 	});
+
 	const errors: Record<string, string> = {};
+
 	if (!client.success)
 		for (const issue of client.error.issues) {
 			const field =
@@ -143,6 +156,7 @@ export function resolveClientDetails(input: unknown, email: string) {
 						? "country"
 						: "state"
 					: String(issue.path[0]);
+
 			errors[field] =
 				issue.message === "Remove control characters."
 					? "Remove unusual characters from this field."
@@ -151,20 +165,26 @@ export function resolveClientDetails(input: unknown, email: string) {
 						? (fieldMessages[field] ?? "Check this field.")
 						: "Check this field.";
 		}
+
 	if (!businessTypes.includes(draft.entity_type))
 		errors.entity_type = fieldMessages.entity_type;
+
 	if (!states.includes(draft.state)) errors.state = fieldMessages.state;
+
 	if (!draft.portfolio_choice)
 		errors.portfolio_choice = fieldMessages.portfolio_choice;
+
 	return client.success && !Object.keys(errors).length
 		? { ok: true as const, client: client.data }
 		: { ok: false as const, errors };
 }
+
 export function prefillAgreementDraft(
 	request: OwnerRequest,
 	previous?: Record<string, unknown>,
 ) {
 	const jurisdiction = String(previous?.jurisdiction ?? "");
+
 	return draftSchema.parse({
 		legal_name: previous?.legal_name ?? request.details.company ?? "",
 		signer_name: request.name,
@@ -178,6 +198,7 @@ export function prefillAgreementDraft(
 		business_address: previous?.business_address ?? "",
 	});
 }
+
 export async function loadAgreementDraft(
 	db: D1Database,
 	offerId: string,
@@ -189,8 +210,10 @@ export async function loadAgreementDraft(
 		)
 		.bind(offerId, email)
 		.first<{ values_json: string }>();
+
 	return saved ? draftSchema.parse(JSON.parse(saved.values_json)) : null;
 }
+
 export async function saveAgreementDraft(
 	db: D1Database,
 	offer: SoftwareOffer,
@@ -217,5 +240,6 @@ export async function saveAgreementDraft(
 				new Date().toISOString(),
 			),
 	]);
+
 	return draft;
 }

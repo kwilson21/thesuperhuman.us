@@ -14,6 +14,7 @@ function fixture() {
     (id,subject_type,subject_id,name,primary_goal,starts_at,status,created_at,updated_at)
     VALUES ('old-news','release','old-news-single','Old News launch','Meaningful listening','2026-09-16','active','now','now');
     INSERT INTO owner_campaign_tags VALUES ('old-news','instagram','lyric-clip');`);
+
 	const db = {
 		prepare: (query: string) => ({
 			bind: (...args: unknown[]) => ({
@@ -21,6 +22,7 @@ function fixture() {
 			}),
 		}),
 	};
+
 	return db as unknown as D1Database;
 }
 

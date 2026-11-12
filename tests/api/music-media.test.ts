@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import { mediaRange, streamMusic } from "~/lib/music-media";
+
 it("resolves full, bounded, open and suffix ranges without overrunning the file", () => {
 	expect(mediaRange(null, 100)).toBeNull();
 	expect(mediaRange("bytes=10-19", 100)).toEqual({ offset: 10, length: 10 });
@@ -15,6 +16,7 @@ it("allows public media responses to use shared caching", async () => {
 		head: async () => ({ size: 4 }),
 		get: async () => ({ body: new Uint8Array([1, 2, 3, 4]) }),
 	} as unknown as R2Bucket;
+
 	const response = await streamMusic(
 		new Request("https://example.test/music/file/old-news/master"),
 		bucket,
@@ -23,6 +25,7 @@ it("allows public media responses to use shared caching", async () => {
 			type: "audio/mpeg",
 		},
 	);
+
 	expect(response.headers.get("cache-control")).toBe(
 		"public, max-age=3600, s-maxage=3600",
 	);
@@ -37,6 +40,7 @@ it.each([
 			throw new Error("should not reach R2");
 		},
 	} as unknown as R2Bucket;
+
 	const response = await streamMusic(
 		new Request("https://thesuperhuman.us/music/file/example/master"),
 		bucket,
@@ -45,5 +49,6 @@ it.each([
 			type: "audio/mpeg",
 		},
 	);
+
 	expect(response.status).toBe(404);
 });

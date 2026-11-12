@@ -8,7 +8,9 @@ import {
 	saveInterest,
 	saveEvent,
 } from "~/lib/music-demand";
+
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
 const input = {
 	releaseId: "old-news-single",
 	email: " Fan@Example.com ",
@@ -19,11 +21,13 @@ const input = {
 	consent: true,
 	turnstileToken: "token",
 };
+
 function fixture() {
 	const sql = new DatabaseSync(":memory:");
 	sql.exec(
 		readFileSync(new URL("../../db/music.sql", import.meta.url), "utf8"),
 	);
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		query,
 		args,
@@ -32,16 +36,20 @@ function fixture() {
 		all: async () => ({ results: sql.prepare(query).all(...args) }),
 		first: async () => sql.prepare(query).get(...args) ?? null,
 	});
+
 	const db = {
 		prepare: (query: string) => statement(query),
 		batch: async (statements: ReturnType<typeof statement>[]) => {
 			sql.exec("BEGIN");
+
 			try {
 				const results = statements.map((item) => ({
 					results: [],
 					meta: sql.prepare(item.query).run(...item.args),
 				}));
+
 				sql.exec("COMMIT");
+
 				return results;
 			} catch (error) {
 				sql.exec("ROLLBACK");
@@ -49,8 +57,10 @@ function fixture() {
 			}
 		},
 	};
+
 	return { sql, db: db as unknown as D1Database };
 }
+
 describe("private music demand", () => {
 	it("normalizes email and requires valid choices and consent", () => {
 		expect(
@@ -86,7 +96,9 @@ describe("private music demand", () => {
 			consent: false,
 			turnstileToken: "",
 		});
+
 		expect(result.success).toBe(false);
+
 		if (result.success) return;
 		expect(
 			Object.fromEntries(
@@ -104,9 +116,11 @@ describe("private music demand", () => {
 			db,
 			interestSchema.parse({ ...input, merchandise: ["hoodies"] }),
 		);
+
 		const rows = sql
 			.prepare("SELECT email, merchandise FROM music_interest")
 			.all();
+
 		expect(rows).toHaveLength(1);
 		expect(rows[0].merchandise).toBe('["hoodies"]');
 		expect(
@@ -123,6 +137,7 @@ describe("private music demand", () => {
 	});
 	it("deduplicates retries and accepts ordered progress across audio and video", async () => {
 		const { sql, db } = fixture();
+
 		const baseEvent = {
 			releaseId: "old-news-single",
 			recordingId: "old-news-recording",
@@ -130,6 +145,7 @@ describe("private music demand", () => {
 			playthroughId: "0bc1f442-f455-49d6-b3a7-99f4fbd92ab4",
 			mediaDurationSeconds: 200,
 		};
+
 		const start = eventSchema.parse({
 			...baseEvent,
 			eventId: "538b2261-f59b-4489-96bd-1945e307d312",
@@ -138,6 +154,7 @@ describe("private music demand", () => {
 			event: "start",
 			accumulatedSeconds: 0,
 		});
+
 		await saveEvent(
 			db,
 			start,
@@ -207,6 +224,7 @@ describe("private music demand", () => {
 	});
 	it("rejects out-of-order and unearned listening milestones", async () => {
 		const { db } = fixture();
+
 		const event = eventSchema.parse({
 			releaseId: "old-news-single",
 			recordingId: "old-news-recording",
@@ -219,12 +237,14 @@ describe("private music demand", () => {
 			accumulatedSeconds: 10,
 			mediaDurationSeconds: 200,
 		});
+
 		await expect(
 			saveEvent(db, event, { trafficClass: "human" }),
 		).rejects.toBeInstanceOf(PlaybackSequenceError);
 	});
 	it("rejects browser timing that advances faster than server time", async () => {
 		const { db } = fixture();
+
 		const baseEvent = {
 			releaseId: "old-news-single",
 			recordingId: "old-news-recording",
@@ -232,6 +252,7 @@ describe("private music demand", () => {
 			playthroughId: "0bc1f442-f455-49d6-b3a7-99f4fbd92ab4",
 			mediaDurationSeconds: 200,
 		};
+
 		await saveEvent(
 			db,
 			eventSchema.parse({
@@ -263,6 +284,7 @@ describe("private music demand", () => {
 	});
 	it("accepts ordered events that catch up after a delivery delay", async () => {
 		const { db } = fixture();
+
 		const baseEvent = {
 			releaseId: "old-news-single",
 			recordingId: "old-news-recording",
@@ -270,6 +292,7 @@ describe("private music demand", () => {
 			playthroughId: "0bc1f442-f455-49d6-b3a7-99f4fbd92ab4",
 			mediaDurationSeconds: 200,
 		};
+
 		await saveEvent(
 			db,
 			eventSchema.parse({
@@ -327,6 +350,7 @@ describe("private music demand", () => {
 	});
 	it("does not turn an idle gap into earned listening", async () => {
 		const { db } = fixture();
+
 		const baseEvent = {
 			releaseId: "old-news-single",
 			recordingId: "old-news-recording",
@@ -334,6 +358,7 @@ describe("private music demand", () => {
 			playthroughId: "0bc1f442-f455-49d6-b3a7-99f4fbd92ab4",
 			mediaDurationSeconds: 200,
 		};
+
 		await saveEvent(
 			db,
 			eventSchema.parse({

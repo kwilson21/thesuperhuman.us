@@ -15,6 +15,7 @@ const recording = {
 		},
 	},
 };
+
 const single = {
 	id: "old-news-single",
 	slug: "old-news",
@@ -26,6 +27,7 @@ const single = {
 	artwork: "/music/old-news.webp",
 	tracks: ["old-news-recording"],
 };
+
 describe("music catalog", () => {
 	it("allows a same-title album to reference the same recording with a different URL", () => {
 		const catalog = validateCatalog({
@@ -41,6 +43,7 @@ describe("music catalog", () => {
 			],
 			examples: [],
 		});
+
 		expect(catalog.releases.map((r) => r.slug)).toEqual([
 			"old-news",
 			"old-news-album",
@@ -64,6 +67,7 @@ describe("music catalog", () => {
 			releases: [single],
 			examples: [],
 		});
+
 		expect(visibleCatalog(c, false).releases).toHaveLength(0);
 		expect(visibleCatalog(c, true).releases).toHaveLength(1);
 		expect(() =>
@@ -110,6 +114,7 @@ it("supports mix-only portfolio work with explicit methodology and credited role
 			unmixed: recording.versions.master,
 		},
 	};
+
 	const example = {
 		id: "full-mix-demo",
 		recordingId: mixOnly.id,
@@ -120,6 +125,7 @@ it("supports mix-only portfolio work with explicit methodology and credited role
 		before: "unmixed",
 		after: "mix",
 	};
+
 	expect(
 		validateCatalog({
 			recordings: [mixOnly],
@@ -142,6 +148,7 @@ it("supports mix-only portfolio work with explicit methodology and credited role
 		}),
 	).toThrow();
 });
+
 it("rejects invalid comparison pairs and waveform amplitudes", () => {
 	const track = {
 		...recording,
@@ -150,6 +157,7 @@ it("rejects invalid comparison pairs and waveform amplitudes", () => {
 			mix: recording.versions.master,
 		},
 	};
+
 	const example = {
 		id: "mastering-demo",
 		recordingId: track.id,
@@ -159,6 +167,7 @@ it("rejects invalid comparison pairs and waveform amplitudes", () => {
 		before: "mix",
 		after: "master",
 	};
+
 	expect(() =>
 		validateCatalog({
 			recordings: [track],
@@ -190,6 +199,7 @@ it.each([
 			[slot]: { key: `music/song/export.${suffix}`, type },
 		},
 	};
+
 	expect(() =>
 		validateCatalog({ recordings: [track], releases: [], examples: [] }),
 	).toThrow();

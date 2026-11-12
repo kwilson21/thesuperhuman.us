@@ -24,7 +24,9 @@ import {
 	offerSendingMessage,
 } from "~/lib/software-offers";
 import { sendAudioMessage } from "~/lib/audio-resend";
+
 export const prerender = false;
+
 const schema = z.discriminatedUnion("action", [
 	z.object({
 		action: z.literal("fit"),
@@ -58,18 +60,25 @@ const schema = z.discriminatedUnion("action", [
 		text: z.string().trim().min(1).max(2000),
 	}),
 ]);
+
 const headers = { "cache-control": "private, no-store" };
+
 const json = (body: unknown, status = 200) =>
 	Response.json(body, { status, headers });
+
 export const POST: APIRoute = async ({ params, request, locals }) => {
 	if (!locals.owner) return json({ ok: false }, 403);
+
 	const env = locals.runtime.env,
 		db = env.MUSIC_DB;
+
 	if (!db || !params.id) return json({ ok: false }, 503);
 	let body: unknown;
 	body = await musicRequest(request, 80 * 1024);
+
 	if (body instanceof Response) return body;
 	const parsed = schema.safeParse(body);
+
 	if (!parsed.success)
 		return json(
 			{ ok: false, message: "Check the required fields and their limits." },
@@ -77,7 +86,9 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 		);
 	const command = parsed.data;
 	const record = await getOwnerRequest(db, params.id);
+
 	if (!record || record.kind !== "software") return json({ ok: false }, 404);
+
 	if (
 		["draft", "send", "question", "decline"].includes(command.action) &&
 		(await db
@@ -92,11 +103,13 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			},
 			409,
 		);
+
 	if (
 		(record.status === "withdrawn" && command.action !== "revoke") ||
 		!record.email
 	)
 		return json({ ok: false, message: "This request is closed." }, 409);
+
 	if (
 		record.status === "resolved" &&
 		["draft", "send", "fit", "question"].includes(command.action)
@@ -110,27 +123,33 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 		);
 	const actor = locals.owner.email;
 	let now = new Date().toISOString();
+
 	const audit = (action: string, note = "") =>
 		db
 			.prepare(
 				"INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at) VALUES (?,?,?,?,?)",
 			)
 			.bind(record.id, action, actor, note, now);
+
 	const email = async (subject: string, text: string) => {
 		if (!env.RESEND_API_KEY || !env.CONTACT_FROM_EMAIL || !env.OWNER_EMAIL)
 			return { ok: false, copySent: false };
+
 		const payload = {
 			from: env.CONTACT_FROM_EMAIL,
 			reply_to: env.OWNER_EMAIL,
 			subject,
 			text,
 		};
+
 		const sent = await sendAudioMessage({
 			apiKey: env.RESEND_API_KEY,
 			payload: { ...payload, to: [record.email] },
 		});
+
 		if (!sent.ok)
 			return { ok: false, copySent: false, uncertain: sent.uncertain };
+
 		const copy = await sendAudioMessage({
 			apiKey: env.RESEND_API_KEY,
 			payload: {
@@ -139,8 +158,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				subject: `Copy: ${subject}`,
 			},
 		});
+
 		return { ok: true, copySent: copy.ok };
 	};
+
 	// D1 batches are transactions. This assertion rolls back a stale command before any mutation.
 	const guard = (query: string, values: (string | number)[]) =>
 		db
@@ -148,6 +169,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				`SELECT CASE WHEN EXISTS(${query}) THEN 1 ELSE json_extract('Offer changed. Reload and try again.','$') END`,
 			)
 			.bind(...values);
+
 	// Attachment acquisition and archive closure serialize in D1 before either side performs R2 work.
 	const attachmentGuards = (details: unknown) =>
 		agreementDetailsSchema
@@ -170,11 +192,13 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					],
 				),
 			);
+
 	const requestGuard = (updatedAt = record.updatedAt) =>
 		guard(
 			"SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND status=? AND email=?",
 			[record.id, updatedAt, record.status, record.email],
 		);
+
 	try {
 		if (command.action === "fit") {
 			if (
@@ -189,6 +213,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					},
 					409,
 				);
+
 			if (Date.parse(record.updatedAt) >= Date.parse(now))
 				now = new Date(Date.parse(record.updatedAt) + 1).toISOString();
 			await db.batch([
@@ -202,11 +227,14 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					.bind(now, record.id),
 				audit("fit-reviewed"),
 			]);
+
 			return json({ ok: true, updatedAt: now });
 		}
+
 		if (command.action === "question" || command.action === "decline") {
 			if (command.action === "decline") {
 				const block = await depositOfferBlock(db, record.id, true);
+
 				if (block)
 					return json(
 						{
@@ -217,15 +245,19 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 						409,
 					);
 			}
+
 			if (command.action === "decline" && record.status === "resolved")
 				return json(
 					{ ok: false, message: "This request is already resolved." },
 					409,
 				);
+
 			if (command.action === "decline" && (await offerIsSending(db, record.id)))
 				return json({ ok: false, message: offerSendingMessage }, 409);
+
 			if (Date.parse(record.updatedAt) >= Date.parse(now))
 				now = new Date(Date.parse(record.updatedAt) + 1).toISOString();
+
 			if (command.action === "question")
 				await db.batch([
 					requestGuard(),
@@ -237,6 +269,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 						.prepare("UPDATE owner_requests SET updated_at=? WHERE id=?")
 						.bind(now, record.id),
 				]);
+
 			if (command.action === "decline")
 				await db.batch([
 					softwareGuard(
@@ -274,12 +307,14 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 						"Offer withdrawn and link closed to decline the request",
 					),
 				]);
+
 			const sent = await email(
 				command.action === "question"
 					? "A question about your project brief"
 					: "About your project brief",
 				`${command.text}\n\nKazon`,
 			);
+
 			if (!sent.ok)
 				return json(
 					{
@@ -296,6 +331,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					},
 					502,
 				);
+
 			try {
 				await db.batch([
 					requestGuard(now),
@@ -333,11 +369,13 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 						},
 						409,
 					);
+
 				if (
 					command.action === "decline" &&
 					(await offerIsSending(db, record.id))
 				)
 					return json({ ok: false, message: offerSendingMessage }, 409);
+
 				return json(
 					{
 						ok: false,
@@ -347,8 +385,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					409,
 				);
 			}
+
 			return json({ ok: true, copySent: sent.copySent });
 		}
+
 		if (command.action === "revoke") {
 			await db.batch([
 				requestGuard(),
@@ -365,15 +405,21 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					.bind(now, record.id, command.expectedLinkCreatedAt),
 				audit("offer-link-revoked"),
 			]);
+
 			return json({ ok: true });
 		}
+
 		const offers = await listSoftwareOffers(db, record.id),
 			draft = offers.find((offer) => offer.status === "draft");
+
 		if (draft && Date.parse(draft.updated_at) >= Date.parse(now))
 			now = new Date(Date.parse(draft.updated_at) + 1).toISOString();
+
 		if (command.action === "draft") {
 			const terms = validateOfferTerms(command.terms);
+
 			if (!terms.ok) return json({ ok: false, errors: terms.errors }, 400);
+
 			if ((draft?.updated_at ?? null) !== command.expectedUpdatedAt)
 				return json(
 					{
@@ -384,8 +430,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					},
 					409,
 				);
+
 			const version = draft?.version ?? (offers[0]?.version ?? 0) + 1,
 				id = draft?.id ?? crypto.randomUUID();
+
 			const removedMetadata = command.removedAttachmentKeys.length
 				? (
 						await db
@@ -407,6 +455,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 							}>()
 					).results
 				: [];
+
 			const saved = await db.batch([
 				requestGuard(),
 				guard(
@@ -479,7 +528,9 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 						.bind(attachment.id, record.id),
 				),
 			]);
+
 			let attachmentCleanupPending = false;
+
 			const removedKeys = saved
 				.flatMap((result) => result.results)
 				.filter(
@@ -487,6 +538,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 						typeof (row as { object_key?: unknown }).object_key === "string",
 				)
 				.map((row) => row.object_key);
+
 			for (const attachment of removedMetadata.filter((row) =>
 				removedKeys.includes(row.object_key),
 			)) {
@@ -513,6 +565,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					attachmentCleanupPending = true;
 				}
 			}
+
 			return json({
 				ok: true,
 				version,
@@ -520,11 +573,14 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				attachmentCleanupPending,
 			});
 		}
+
 		if (command.action !== "send") return json({ ok: false }, 400);
+
 		if (await offerIsSending(db, record.id))
 			return json({ ok: false, message: offerSendingMessage }, 409);
 		// A revoked link can be reissued for the current sent version without changing its terms.
 		const offer = draft ?? offers.find((value) => value.status === "sent");
+
 		if (
 			!offer ||
 			offer.version !== command.version ||
@@ -535,12 +591,17 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				409,
 			);
 		const terms = validateOfferTerms(JSON.parse(offer.terms_json));
+
 		if (!terms.ok) return json({ ok: false, errors: terms.errors }, 400);
+
 		if (draft) {
 			const block = await depositOfferBlock(db, record.id);
+
 			if (block) return json({ ok: false, message: block }, 409);
 		}
+
 		const enabled = await signingEnabled(db);
+
 		let pin: {
 			details: string;
 			msa: string;
@@ -548,19 +609,23 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			contractor: string;
 			email: string;
 		} | null = null;
+
 		if (enabled && draft) {
 			try {
 				const details = validateAgreementDetails(
 					JSON.parse(offer.agreement_details_json ?? "null"),
 					terms.value,
 				);
+
 				const msa = await currentTemplate(db, "msa"),
 					sow = await currentTemplate(db, "sow");
+
 				const config = await db
 					.prepare(
 						"SELECT version,values_json FROM software_contractor_config ORDER BY version DESC LIMIT 1",
 					)
 					.first<{ version: number; values_json: string }>();
+
 				if (!msa || !sow || !config)
 					return json(
 						{
@@ -570,9 +635,11 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 						},
 						400,
 					);
+
 				const contractor = contractorSchema.parse(
 					JSON.parse(config.values_json),
 				);
+
 				if (
 					offer.reused_msa_id &&
 					!(await db
@@ -589,6 +656,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 						},
 						409,
 					);
+
 				for (const attachment of details.attachments) {
 					if (
 						!(await db
@@ -608,6 +676,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					)
 						throw new Error("Attachment ownership mismatch.");
 					const object = await env.AUDIO?.get(attachment.key);
+
 					if (
 						!object ||
 						object.size !== attachment.bytes ||
@@ -615,9 +684,11 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					)
 						throw new Error("Attachment unavailable.");
 				}
+
 				const { preflightAgreementPacket } = await import(
 					"~/lib/agreement-pdf"
 				);
+
 				await preflightAgreementPacket(
 					env,
 					terms.value,
@@ -656,14 +727,18 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				);
 			}
 		}
+
 		const signingChangeGuard = softwareGuard(
 			db,
 			"SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_agreements WHERE request_id=? AND status IN ('client_signed','executed'))",
 			[record.id],
 		);
+
 		const token = newOfferToken(),
 			tokenHash = await hashOfferToken(token);
+
 		let link: string;
+
 		try {
 			link = new URL(`/offer/${token}`, siteOrigin(env.SITE_ORIGIN)).href;
 		} catch {
@@ -676,6 +751,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				500,
 			);
 		}
+
 		await db.batch([
 			requestGuard(),
 			offerSendingGuard(db, record.id),
@@ -735,16 +811,19 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			...retireRequestSigning(db, record.id, now),
 			audit("offer-sent", `Offer v${offer.version} sent`),
 		]);
+
 		const sent = await email(
 			`Your project offer: ${terms.value.outcome}`,
 			`Hi ${record.name.trim().split(/\s+/)[0] || "there"},\n\nHere’s the offer for ${terms.value.outcome}: ${link}\n\n${enabled && (pin || offer.msa_template_id) ? "Review and sign on the website." : "We will arrange for you to sign outside the website."}\n\nThe link is private to you. You can forward it to whoever approves the budget. Reply to this email with any questions.\n\nKazon`,
 		);
+
 		const live = await db
 			.prepare(`SELECT 1 FROM software_offer_links WHERE request_id=? AND token_hash=? AND revoked_at IS NULL
       AND EXISTS(SELECT 1 FROM software_offers WHERE id=? AND status='sent')
       AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND status<>'withdrawn' AND email<>'')`)
 			.bind(record.id, tokenHash, offer.id, record.id)
 			.first();
+
 		if (sent.ok && !live)
 			return json(
 				{
@@ -754,6 +833,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				},
 				409,
 			);
+
 		return json({
 			ok: true,
 			version: offer.version,
@@ -783,11 +863,13 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				},
 				409,
 			);
+
 		if (
 			["send", "revoke", "decline"].includes(command.action) &&
 			(await offerIsSending(db, record.id))
 		)
 			return json({ ok: false, message: offerSendingMessage }, 409);
+
 		if (
 			["draft", "send", "question", "decline"].includes(command.action) &&
 			(await db
@@ -802,10 +884,12 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				},
 				409,
 			);
+
 		if (command.action === "draft") {
 			const draft = (await listSoftwareOffers(db, record.id)).find(
 				(offer) => offer.status === "draft",
 			);
+
 			return json(
 				{
 					ok: false,
@@ -816,6 +900,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				409,
 			);
 		}
+
 		return json(
 			{
 				ok: false,

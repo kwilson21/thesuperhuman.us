@@ -1,10 +1,13 @@
 export type TrafficSummary = { visits: number; requests: number };
+
 export type TrafficRange = { start: Date; end: Date };
+
 export type TrafficResult =
 	| { status: "available"; summary: TrafficSummary }
 	| { status: "unavailable"; dashboardUrl: string };
 
 const dashboardUrl = "https://dash.cloudflare.com/";
+
 const query = `query OwnerTraffic($zoneTag: string!, $filter: ZoneHttpRequestsAdaptiveGroupsFilter_InputObject!) {
   viewer { zones(filter: { zoneTag: $zoneTag }) {
     totals: httpRequestsAdaptiveGroups(limit: 1, filter: $filter) { count sum { visits } }
@@ -17,13 +20,16 @@ export async function loadTrafficSummary(
 ): Promise<TrafficResult> {
 	if (!env.CLOUDFLARE_ANALYTICS_TOKEN || !env.CLOUDFLARE_ZONE_ID)
 		return { status: "unavailable", dashboardUrl };
+
 	const start = range.start.toISOString(),
 		end = range.end.toISOString();
+
 	if (
 		range.start >= range.end ||
 		range.end.getTime() - range.start.getTime() > 31 * 86_400_000
 	)
 		return { status: "unavailable", dashboardUrl };
+
 	try {
 		const response = await fetch(
 			"https://api.cloudflare.com/client/v4/graphql",
@@ -48,7 +54,9 @@ export async function loadTrafficSummary(
 				}),
 			},
 		);
+
 		if (!response.ok) return { status: "unavailable", dashboardUrl };
+
 		const body = (await response.json()) as {
 			data?: {
 				viewer?: {
@@ -59,13 +67,16 @@ export async function loadTrafficSummary(
 			};
 			errors?: unknown[];
 		};
+
 		const total = body.data?.viewer?.zones?.[0]?.totals?.[0];
+
 		if (
 			body.errors?.length ||
 			typeof total?.count !== "number" ||
 			typeof total.sum?.visits !== "number"
 		)
 			return { status: "unavailable", dashboardUrl };
+
 		return {
 			status: "available",
 			summary: { visits: total.sum.visits, requests: total.count },

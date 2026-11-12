@@ -20,12 +20,14 @@ export function publicReleasePages(releasesDirectory, site) {
 						"utf8",
 					),
 				);
+
 				if (
 					release.visibility !== "public" ||
 					typeof release.slug !== "string" ||
 					!PUBLIC_SLUG.test(release.slug)
 				)
 					return [];
+
 				return [new URL(`/music/${release.slug}`, site).href];
 			} catch {
 				return [];
@@ -38,9 +40,11 @@ const PRIVATE_SECTIONS = ["/owner", "/studio", "/offer", "/agreements"];
 
 export function shouldIncludeSitemapPage(page) {
 	const pathname = new URL(page).pathname.replace(/\/$/, "") || "/";
+
 	// Redirect-only pages: services.html.astro and audio/about.astro answer with a 301, never 200.
 	if (pathname === "/services.html" || pathname === "/audio/about")
 		return false;
+
 	return (
 		!pathname.startsWith("/api/") &&
 		!PRIVATE_SECTIONS.some(

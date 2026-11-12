@@ -9,6 +9,7 @@ export default {
       '{"path":"workflow","today":"We track onboarding in spreadsheets.\\nWe chase updates by email.","audience":"Our client team","firstResult":"One place to see what each client needs next.","company":"Example Studio","timing":"flexible","timingReason":"","budgetStatus":"exploring","budgetNote":"","approver":"self","approverRole":"","clientCopyStatus":"sent"}',
       'new','','2026-09-29T12:00:00.000Z','2026-09-29T12:00:00.000Z','00000000-0000-4000-8000-000000000001')`);
 		const steps = [];
+
 		for (const viewport of ["desktop", "phone"]) {
 			const prepare = async (
 				page,
@@ -19,10 +20,12 @@ export default {
 			) => {
 				const messages = [],
 					requests = [];
+
 				const endpoint = (request) =>
 					/\/api\/software\/brief\/(pass|suggest)$/.test(
 						new URL(request.url()).pathname,
 					);
+
 				page.on("console", (message) =>
 					messages.push(`${message.type()}: ${message.text()}`),
 				);
@@ -42,12 +45,15 @@ export default {
 					const item = requests.find(
 						(item) => item.request === response.request(),
 					);
+
 					if (item) item.status = response.status();
 				});
 				page.on("requestfailed", (request) => {
 					const item = requests.find((item) => item.request === request);
+
 					if (item) item.status = request.failure()?.errorText ?? "failed";
 				});
+
 				try {
 					await page.route("**/api/software/brief/pass", (route) =>
 						route.fulfill({ json: { ok: true } }),
@@ -62,9 +68,11 @@ export default {
 						localStorage.removeItem("software-suggestions");
 					});
 					await page.reload();
+
 					if (target === 0) return;
 					await page.waitForFunction(() => !!window.turnstile);
 					await page.locator(`[name=path][value=${path}]`).check();
+
 					if (target === 1) {
 						if (suggestion) {
 							await page
@@ -78,6 +86,7 @@ export default {
 							await page
 								.locator('[data-step="1"] [data-ghost-text]')
 								.waitFor({ state: "visible" });
+
 							if (
 								(await page
 									.locator('[data-step="1"] textarea')
@@ -85,8 +94,10 @@ export default {
 							)
 								throw new Error("Suggestion was inserted without acceptance");
 						}
+
 						return;
 					}
+
 					await page
 						.locator('[data-step="1"] textarea')
 						.fill(
@@ -95,18 +106,23 @@ export default {
 								: "Let my students book and pay for lessons without emailing me.",
 						);
 					await page.locator("[data-next]").click();
+
 					if (target === 2) return;
 					await page.locator('[data-step="2"] [data-skip]').click();
+
 					if (target === 3) return;
 					await page.locator("[data-next]").click();
+
 					if (target === 4) return;
 					await page.locator('[data-step="4"] [data-skip]').click();
+
 					if (target === 5) return;
 					await page.locator("[name=name]").fill("Alex Example");
 					await page.locator("[name=email]").fill("alex@example.com");
 					await page.locator("[data-next]").click();
 					await page.locator('[data-step="6"]:visible').waitFor();
 					const summary = await page.locator("[data-review]").innerText();
+
 					if (/First result|First version|Budget|Company/.test(summary))
 						throw new Error("Unanswered optional fields appeared in summary");
 					await after();
@@ -115,6 +131,7 @@ export default {
 						.evaluate(() => {
 							const form = document.querySelector("#software-inquiry"),
 								box = form?.querySelector('[data-step="1"] textarea');
+
 							return {
 								enabled:
 									form?.querySelector(
@@ -135,10 +152,13 @@ export default {
 							};
 						})
 						.catch((error) => ({ lastError: String(error) }));
+
 					const endpoints = requests.map(({ request, ...item }) => item);
+
 					const pass = endpoints
 						.filter((item) => item.path.endsWith("/pass"))
 						.at(-1);
+
 					state.lastError ??=
 						messages
 							.filter(
@@ -159,6 +179,7 @@ export default {
 					throw error;
 				}
 			};
+
 			for (let question = 0; question < 7; question++) {
 				steps.push({
 					title: `Brief question ${question + 1}, ${viewport}`,
@@ -175,6 +196,7 @@ export default {
 					],
 				});
 			}
+
 			for (const question of [1, 2])
 				steps.push({
 					title: `Web app question ${question + 1}, ${viewport}`,
@@ -207,6 +229,7 @@ export default {
 					},
 				],
 			});
+
 			for (const state of ["sending", "send-failed"]) {
 				steps.push({
 					title: `Brief ${state}, ${viewport}`,
@@ -260,11 +283,14 @@ export default {
 												(state === "sending" ? "Sending…" : "Try again."),
 											state,
 										);
+
 										const locked = await page
 											.locator("[data-back]")
 											.isDisabled();
+
 										if (locked !== (state === "sending"))
 											throw new Error("Back did not follow delivery state");
+
 										const controlsMatch = await page
 											.locator(
 												"#software-inquiry input, #software-inquiry textarea, [data-review] button",
@@ -277,6 +303,7 @@ export default {
 													),
 												state,
 											);
+
 										if (!controlsMatch)
 											throw new Error("Editing did not follow delivery state");
 									});
@@ -287,6 +314,7 @@ export default {
 					],
 				});
 			}
+
 			for (const clientCopyStatus of [
 				"sent",
 				"uncertain",
@@ -327,6 +355,7 @@ export default {
 										await page
 											.locator("#software-success:visible")
 											.waitFor({ timeout: 30_000 });
+
 										if (
 											await page.evaluate(() =>
 												localStorage.getItem("software-brief-draft"),
@@ -346,7 +375,9 @@ export default {
 				});
 			}
 		}
+
 		const images = [];
+
 		for (const viewport of ["desktop", "phone"]) {
 			for (const status of ["sent", "failed", "uncertain", "unattempted"]) {
 				sql(
@@ -364,6 +395,7 @@ export default {
 					caption: `Fictional software brief ${status}, ${viewport}`,
 				});
 			}
+
 			images.push({
 				file: await capture({
 					file: `software-brief-list-${viewport}.png`,
@@ -374,7 +406,9 @@ export default {
 				caption: `Software request list, ${viewport}`,
 			});
 		}
+
 		steps.push({ title: "Owner reads the saved brief", images });
+
 		return steps;
 	},
 };

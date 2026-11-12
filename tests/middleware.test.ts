@@ -10,7 +10,9 @@ vi.mock("~/lib/owner-access", () => ({
 function makeContext(url: string, hostHeader?: string) {
 	const u = new URL(url);
 	const headers = new Headers();
+
 	if (hostHeader) headers.set("host", hostHeader);
+
 	return {
 		url: u,
 		request: new Request(url, { headers }),
@@ -18,6 +20,7 @@ function makeContext(url: string, hostHeader?: string) {
 		rewrite: vi.fn(async (target: string | URL) => {
 			const rewritten =
 				typeof target === "string" ? new URL(target, u) : target;
+
 			return new Response("rewritten:" + rewritten.pathname, { status: 200 });
 		}),
 	} as any;
@@ -46,6 +49,7 @@ describe("middleware.onRequest", () => {
 		const ctx = makeContext(
 			"https://thesuperhuman.us/studio/projects/request-1",
 		);
+
 		ctx.isPrerendered = true;
 		await expect(onRequest(ctx, vi.fn())).rejects.toThrow(
 			"Studio routes must be server-rendered",
@@ -88,9 +92,11 @@ describe("middleware.onRequest", () => {
 			},
 			body: "{}",
 		});
+
 		const next = vi.fn(
 			async () => new Response(ctx.locals.owner?.email ?? "missing"),
 		);
+
 		const response = (await onRequest(ctx, next)) as Response;
 		expect(await response.text()).toBe("owner@example.com");
 		expect(response.headers.get("cache-control")).toBe("private, no-store");
@@ -100,9 +106,11 @@ describe("middleware.onRequest", () => {
 		vi.mocked(verifyOwnerAccess).mockResolvedValueOnce({
 			email: "owner@example.com",
 		});
+
 		const owner = makeContext(
 			"https://thesuperhuman.us/api/owner/requests/request-1/payment",
 		);
+
 		owner.request = new Request(owner.url, {
 			method: "POST",
 			headers: {
@@ -141,10 +149,12 @@ describe("middleware.onRequest", () => {
 		const page = makeContext(
 			"https://thesuperhuman.us/studio/projects/request-1",
 		);
+
 		const pageResponse = (await onRequest(
 			page,
 			async () => new Response("private project"),
 		)) as Response;
+
 		expect(pageResponse.headers.get("cache-control")).toBe("private, no-store");
 		expect(pageResponse.headers.get("x-robots-tag")).toBe("noindex, nofollow");
 
@@ -177,23 +187,28 @@ describe("middleware.onRequest", () => {
 					...headers,
 				},
 			});
+
 			return (await onRequest(
 				ctx,
 				async () => new Response("next"),
 			)) as Response;
 		};
+
 		expect((await attempt("/api/publication/token")).status).toBe(200);
+
 		const rejectedHeaders: Record<string, string>[] = [
 			{ origin: "https://evil.example" },
 			{ origin: "null" },
 			{ cookie: "session=x" },
 			{ "sec-fetch-site": "cross-site" },
 		];
+
 		for (const headers of rejectedHeaders) {
 			expect((await attempt("/api/publication/token", headers)).status).toBe(
 				403,
 			);
 		}
+
 		expect((await attempt("/api/publication/token", {}, "PUT")).status).toBe(
 			403,
 		);
@@ -207,6 +222,7 @@ describe("middleware.onRequest", () => {
 				)
 			).status,
 		).toBe(403);
+
 		for (const path of [
 			"/api/publication/authorize",
 			"/api/contact",
@@ -233,6 +249,7 @@ describe("middleware.onRequest", () => {
 			"https://audio.thesuperhuman.us/",
 			"audio.thesuperhuman.us",
 		);
+
 		const next = vi.fn(async () => new Response("next", { status: 200 }));
 		await onRequest(ctx, next);
 		expect(ctx.rewrite).toHaveBeenCalledWith("/audio/");
@@ -244,6 +261,7 @@ describe("middleware.onRequest", () => {
 			"https://audio.thesuperhuman.us/about",
 			"audio.thesuperhuman.us",
 		);
+
 		const next = vi.fn(async () => new Response("next", { status: 200 }));
 		await onRequest(ctx, next);
 		expect(ctx.rewrite).toHaveBeenCalledWith("/audio/about");
@@ -254,6 +272,7 @@ describe("middleware.onRequest", () => {
 			"https://audio.thesuperhuman.us/api/audio-inquiry",
 			"audio.thesuperhuman.us",
 		);
+
 		const next = vi.fn(async () => new Response("next", { status: 200 }));
 		await onRequest(ctx, next);
 		expect(ctx.rewrite).not.toHaveBeenCalled();
@@ -270,15 +289,19 @@ describe("middleware.onRequest", () => {
 
 it("keeps dynamic Worker previews out of search results", async () => {
 	const ctx = makeContext("https://preview.example.workers.dev/audio/start");
+
 	const response = (await onRequest(
 		ctx,
 		async () => new Response("preview"),
 	)) as Response;
+
 	expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+
 	const production = (await onRequest(
 		makeContext("https://thesuperhuman.us/audio/start"),
 		async () => new Response("live"),
 	)) as Response;
+
 	expect(production.headers.has("x-robots-tag")).toBe(false);
 });
 
@@ -287,14 +310,17 @@ it("marks offers unavailable or available private and redirects the audio host t
 		makeContext("https://thesuperhuman.us/offer/opaque"),
 		async () => new Response("unavailable", { status: 404 }),
 	)) as Response;
+
 	expect(response.status).toBe(404);
 	expect(response.headers.get("cache-control")).toBe("private, no-store");
 	expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
 	const next = vi.fn();
+
 	const audio = (await onRequest(
 		makeContext("https://audio.thesuperhuman.us/offer/opaque"),
 		next,
 	)) as Response;
+
 	expect(audio.status).toBe(302);
 	expect(audio.headers.get("location")).toBe(
 		"https://thesuperhuman.us/offer/opaque",
@@ -304,10 +330,12 @@ it("marks offers unavailable or available private and redirects the audio host t
 
 it("keeps isolated preview offer paths on their local origin", async () => {
 	const next = vi.fn(async () => new Response("offer"));
+
 	const response = (await onRequest(
 		makeContext("https://preview.example.workers.dev/offer/opaque"),
 		next,
 	)) as Response;
+
 	expect(response.status).toBe(200);
 	expect(next).toHaveBeenCalledOnce();
 	expect(response.headers.has("location")).toBe(false);
@@ -324,6 +352,7 @@ it.each([
 				makeContext("https://thesuperhuman.us" + path),
 				async () => new Response("private", { status }),
 			)) as Response;
+
 			expect(response.headers.get("cache-control")).toBe("private, no-store");
 			expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
 		}
@@ -335,6 +364,7 @@ it("keeps archive one-time link landing private and uncacheable", async () => {
 		makeContext("https://thesuperhuman.us/agreements/verify?key=synthetic"),
 		async () => new Response("expired"),
 	)) as Response;
+
 	expect(response.headers.get("cache-control")).toBe("private, no-store");
 	expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
 });
@@ -353,6 +383,7 @@ it.each([
 		] as const) {
 			const ctx = makeContext(origin + path, host),
 				next = vi.fn();
+
 			expect(((await onRequest(ctx, next)) as Response).status).toBe(404);
 			expect(next).not.toHaveBeenCalled();
 		}
@@ -387,6 +418,7 @@ it("adds the _headers security headers to HTML pages", async () => {
 				headers: { "content-type": "text/html" },
 			}),
 	);
+
 	expectSecurityHeaders(
 		(await onRequest(
 			makeContext("https://thesuperhuman.us/"),
@@ -400,15 +432,18 @@ it("adds the _headers security headers to API JSON", async () => {
 		makeContext("https://thesuperhuman.us/api/work-feed"),
 		async () => Response.json({ ok: true }),
 	)) as Response;
+
 	expectSecurityHeaders(response);
 });
 
 it("keeps owner 403 responses private and adds the _headers security headers", async () => {
 	vi.mocked(verifyOwnerAccess).mockResolvedValueOnce(null);
+
 	const response = (await onRequest(
 		makeContext("https://thesuperhuman.us/owner/requests"),
 		vi.fn(),
 	)) as Response;
+
 	expect(response.status).toBe(403);
 	expect(response.headers.get("cache-control")).toBe("private, no-store");
 	expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
@@ -420,6 +455,7 @@ it("keeps studio pages on no-referrer and adds the other _headers security heade
 		makeContext("https://thesuperhuman.us/studio/projects/request-1"),
 		async () => new Response("private project"),
 	)) as Response;
+
 	expectSecurityHeaders(response, { "referrer-policy": "no-referrer" });
 });
 
@@ -431,6 +467,7 @@ it("keeps the agreement no-referrer policy on early noncanonical host 404s", asy
 		),
 		vi.fn(),
 	)) as Response;
+
 	expect(response.status).toBe(404);
 	expectSecurityHeaders(response, { "referrer-policy": "no-referrer" });
 });
@@ -442,10 +479,12 @@ it("keeps a referrer policy that a route set on purpose", async () => {
 				headers: { "Referrer-Policy": "same-origin" },
 			}),
 	);
+
 	const response = (await onRequest(
 		makeContext("https://thesuperhuman.us/api/publication/authorize"),
 		next,
 	)) as Response;
+
 	expectSecurityHeaders(response, { "referrer-policy": "same-origin" });
 });
 
@@ -457,6 +496,7 @@ it("adds the _headers security headers to audio host rewrites", async () => {
 		),
 		vi.fn(),
 	)) as Response;
+
 	expect(await response.text()).toBe("rewritten:/audio/about");
 	expectSecurityHeaders(response);
 });
@@ -466,6 +506,7 @@ it("adds the _headers security headers to audio host offer redirects", async () 
 		makeContext("https://audio.thesuperhuman.us/offer/opaque"),
 		vi.fn(),
 	)) as Response;
+
 	expect(response.status).toBe(302);
 	expectSecurityHeaders(response);
 });
@@ -475,6 +516,7 @@ it("adds the _headers security headers to redirects returned by routes", async (
 		makeContext("https://thesuperhuman.us/"),
 		async () => Response.redirect("https://thesuperhuman.us/next", 302),
 	)) as Response;
+
 	expect(response.status).toBe(302);
 	expect(response.headers.get("location")).toBe(
 		"https://thesuperhuman.us/next",

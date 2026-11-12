@@ -12,10 +12,12 @@ const base: NextStepInput = {
 	payment: null,
 	stripeEnabled: true,
 };
+
 const pay = (bookingStatus: string, balanceStatus = "not_created") => ({
 	bookingStatus,
 	balanceStatus,
 });
+
 const step = (input: Partial<NextStepInput>) =>
 	ownerNextStep({ ...base, ...input });
 
@@ -216,6 +218,7 @@ describe("ownerNextStep", () => {
 		]
 			.map((file) => readFileSync(file, "utf8"))
 			.join("\n");
+
 		const stages = [
 			"files_under_review",
 			"accepted",
@@ -224,6 +227,7 @@ describe("ownerNextStep", () => {
 			"revision_in_progress",
 			"final_files_ready",
 		];
+
 		const payments = [
 			null,
 			pay("not_created"),
@@ -235,6 +239,7 @@ describe("ownerNextStep", () => {
 			pay("paid", "void"),
 			pay("paid", "paid"),
 		];
+
 		for (const stage of stages)
 			for (const requestStatus of ["new", "reviewed"])
 				for (const payment of payments)
@@ -252,7 +257,9 @@ describe("ownerNextStep", () => {
 								stripeEnabled,
 								reviewDecision,
 							});
+
 							if (!next) continue;
+
 							// The link names the control it lands on, so its label is text the page shows.
 							const label = next
 								.action!.replace(
@@ -263,6 +270,7 @@ describe("ownerNextStep", () => {
 									/^Record (booking|balance) received$/,
 									"Record {manual} received",
 								);
+
 							expect(
 								next.target === "#payment-heading" ||
 									next.target === "#project-messages-heading" ||
@@ -270,12 +278,14 @@ describe("ownerNextStep", () => {
 									page.includes(label),
 								`${next.title}: ${label}`,
 							).toBe(true);
+
 							const id = next
 								.target!.slice(1)
 								.replace(
 									/^record-(booking|balance)-payment$/,
 									"record-${manual}-payment",
 								);
+
 							expect(
 								page.includes(`id="${id}"`) ||
 									page.includes(`'${id}'`) ||

@@ -21,6 +21,7 @@ const publication: Publication = {
 		basis: "repository-verified",
 	},
 };
+
 const receipt: Receipt = {
 	projectId: "threadline",
 	eventId: "outcome-1",
@@ -31,10 +32,12 @@ const receipt: Receipt = {
 function fixture() {
 	let stored: Publication | null = null;
 	let ack: Receipt | null = null;
+
 	const ports = {
 		outbox: {
 			prepare: vi.fn(async (p: Publication) => {
 				stored ??= structuredClone(p);
+
 				return { publication: structuredClone(stored), receipt: ack };
 			}),
 			acknowledge: vi.fn(async (r: Receipt) => {
@@ -49,6 +52,7 @@ function fixture() {
 			})),
 		},
 	};
+
 	return ports;
 }
 

@@ -7,6 +7,7 @@ const read = (path: string) =>
 it("renders shared navigation, one primary action and accessible guidance", () => {
 	const layout = read("src/layouts/OwnerLayout.astro");
 	const today = read("src/pages/owner/index.astro");
+
 	for (const label of ["Today", "Requests", "Campaigns"])
 		expect(layout).toContain(label);
 	expect(today).toContain("Open Campaign Desk");
@@ -51,6 +52,7 @@ it("provides connected request and campaign views", () => {
 	]) {
 		expect(read(path)).toContain("OwnerLayout");
 	}
+
 	expect(read("src/pages/owner/campaigns/[id].astro")).toContain(
 		"Return to Today",
 	);

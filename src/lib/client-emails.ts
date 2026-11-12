@@ -3,6 +3,7 @@ import { renderEmail } from "./email-template";
 
 const site = "https://thesuperhuman.us";
 const studioSignIn = (origin = site) => new URL("/studio/sign-in", origin).href;
+
 // Studio emails carry no project details: the client signs in to see them.
 const signInNote =
 	"Sign in with this email address. You’ll get a one-time code to finish.";
@@ -71,6 +72,7 @@ export const resumeDeliveryEmail = (name: string) =>
 
 const softwareSignIn = (origin = site) =>
 	new URL("/studio/sign-in?for=software", origin).href;
+
 export const softwareInvitationEmail = (origin?: string) =>
 	renderEmail({
 		preheader: "Your project has started.",
@@ -83,6 +85,7 @@ export const softwareInvitationEmail = (origin?: string) =>
 		note: signInNote,
 		reason: "You received this invitation for your software project.",
 	});
+
 export const softwareUpdateEmail = (origin?: string) =>
 	renderEmail({
 		preheader: "A new update is ready on your project page.",
@@ -93,6 +96,7 @@ export const softwareUpdateEmail = (origin?: string) =>
 		note: signInNote,
 		reason: "You received this because your software project has an update.",
 	});
+
 export const softwareReviewEmail = (origin?: string) =>
 	renderEmail({
 		preheader: "Something is ready for your review.",
@@ -104,6 +108,7 @@ export const softwareReviewEmail = (origin?: string) =>
 		reason:
 			"You received this because your software project has something to review.",
 	});
+
 export const softwareHandoffEmail = (origin?: string) =>
 	renderEmail({
 		preheader: "Your handoff is ready.",
@@ -131,6 +136,7 @@ export function softwareBriefEmail(
 		"Kazon",
 		"Reply to this email if you want to add anything.",
 	];
+
 	const { html } = renderEmail({
 		preheader: "Your brief is in.",
 		kicker: "Project brief",
@@ -138,6 +144,7 @@ export function softwareBriefEmail(
 		paragraphs,
 		reason: "You received this because you sent a project brief.",
 	});
+
 	return {
 		text: paragraphs.join("\n\n"),
 		html: html.replace(

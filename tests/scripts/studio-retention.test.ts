@@ -54,6 +54,7 @@ function fixture() {
         ('recent-session','recent@example.com','2028-01-01','2028-01-30','2028-01-01');
     INSERT INTO audio_client_access_audit(request_id,action,occurred_at)
       VALUES ('withdrawn','code-issued','2025-01-01'),('active','code-issued','2028-01-01');`);
+
 	const database = {
 		query: async (query: string) =>
 			sql
@@ -62,11 +63,14 @@ function fixture() {
 				.map((row: Record<string, unknown>) => ({ ...row })),
 		batch: async (statements: string[]) => {
 			sql.exec("BEGIN");
+
 			try {
 				const result = statements.map((statement) =>
 					sql.prepare(statement).all(),
 				);
+
 				sql.exec("COMMIT");
+
 				return result;
 			} catch (error) {
 				sql.exec("ROLLBACK");
@@ -74,17 +78,20 @@ function fixture() {
 			}
 		},
 	};
+
 	return { sql, database };
 }
 
 it("previews without private values and removes only eligible closed project content", async () => {
 	const { sql, database } = fixture();
+
 	const review = await previewStudioRetention(
 		database,
 		"Local test data",
 		storage,
 		now,
 	);
+
 	expect(review.counts).toMatchObject({
 		projects: 2,
 		objects: 2,
@@ -144,15 +151,18 @@ it("previews without private values and removes only eligible closed project con
 
 it("closes eligible access before object deletion and keeps records for a safe retry after storage failure", async () => {
 	const { sql, database } = fixture();
+
 	const review = await previewStudioRetention(
 		database,
 		"Local test data",
 		storage,
 		now,
 	);
+
 	const fail = vi.fn(async () => {
 		throw new Error("R2 unavailable");
 	});
+
 	await expect(
 		applyStudioRetention(
 			database,
@@ -177,12 +187,14 @@ it("closes eligible access before object deletion and keeps records for a safe r
 			)
 			.get(),
 	).toEqual({ total: 1 });
+
 	const retry = await previewStudioRetention(
 		database,
 		"Local test data",
 		storage,
 		new Date(now.getTime() + 1000),
 	);
+
 	await applyStudioRetention(
 		database,
 		retry,
@@ -208,12 +220,14 @@ it("retains a withdrawn delivered project until its final expires, then cleans i
 			"UPDATE owner_requests SET status='withdrawn' WHERE id='delivered'",
 		)
 		.run();
+
 	const review = await previewStudioRetention(
 		database,
 		"Local test data",
 		storage,
 		now,
 	);
+
 	expect(review.counts.projects).toBe(2);
 	await applyStudioRetention(
 		database,
@@ -240,12 +254,14 @@ it.each(["accepted", "in_progress"])(
 		sql
 			.prepare("UPDATE audio_projects SET stage=? WHERE request_id='withdrawn'")
 			.run(stage);
+
 		const review = await previewStudioRetention(
 			database,
 			"Local test data",
 			storage,
 			now,
 		);
+
 		expect(review.counts.projects).toBe(2);
 		await applyStudioRetention(
 			database,
@@ -272,24 +288,28 @@ it("waits 30 days after a new unpublished draft before cleaning delivered conten
 		.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,uploaded_at)
     VALUES ('recent-draft','delivered','final','studio/projects/delivered/recent-draft.mp3','New final draft','audio/mpeg',100,'2028-01-10')`)
 		.run();
+
 	const early = await previewStudioRetention(
 		database,
 		"Local test data",
 		storage,
 		now,
 	);
+
 	expect(early.counts.projects).toBe(1);
 	sql
 		.prepare(
 			"UPDATE audio_project_files SET uploaded_at='2027-12-01' WHERE id='recent-draft'",
 		)
 		.run();
+
 	const later = await previewStudioRetention(
 		database,
 		"Local test data",
 		storage,
 		now,
 	);
+
 	expect(later.counts.projects).toBe(2);
 	sql.close();
 });
@@ -324,12 +344,14 @@ it("cleans a revoked final after its access expiry and 30 days without project a
 
 it("refuses changed data, wrong environment, and already applied reviews before object deletion", async () => {
 	const { sql, database } = fixture();
+
 	const review = await previewStudioRetention(
 		database,
 		"Local test data",
 		storage,
 		now,
 	);
+
 	const deleteObject = vi.fn(async () => {});
 	await expect(
 		applyStudioRetention(
@@ -367,12 +389,14 @@ it("refuses changed data, wrong environment, and already applied reviews before 
 
 it("does not discard a message added after the owner reviewed the cleanup", async () => {
 	const { sql, database } = fixture();
+
 	const review = await previewStudioRetention(
 		database,
 		"Local test data",
 		storage,
 		now,
 	);
+
 	sql
 		.prepare(`INSERT INTO audio_project_messages(request_id,actor,actor_id,body,created_at)
     VALUES ('delivered','client','new-session','A late private note','2028-01-15')`)
@@ -401,18 +425,22 @@ it("does not discard a message added after the owner reviewed the cleanup", asyn
 
 it("refuses a review made for another database or bucket before changing anything", async () => {
 	const { sql, database } = fixture();
+
 	const review = await previewStudioRetention(
 		database,
 		"Local test data",
 		storage,
 		now,
 	);
+
 	const deleteObject = vi.fn(async () => {});
+
 	const before = sql
 		.prepare(
 			"SELECT request_id,revoked_at FROM audio_projects ORDER BY request_id",
 		)
 		.all();
+
 	for (const other of [
 		{ ...storage, bucket: "superhuman-audio" },
 		{ ...storage, databaseId: "staging-music" },
@@ -429,6 +457,7 @@ it("refuses a review made for another database or bucket before changing anythin
 			),
 		).rejects.toThrow("another database or bucket");
 	}
+
 	expect(deleteObject).not.toHaveBeenCalled();
 	expect(
 		sql
@@ -447,17 +476,20 @@ it("reads the storage identity from the selected config and deletes from that bu
 			{ binding: "AUDIO", bucket_name: "staging-audio", jurisdiction: "eu" },
 		],
 	});
+
 	expect(staging).toEqual({
 		accountId: null,
 		databaseId: "staging-db",
 		bucket: "staging-audio",
 		jurisdiction: "eu",
 	});
+
 	const args = remoteObjectDeleteArgs(
 		"studio/projects/song-1/file-1.wav",
 		staging,
 		"staging.json",
 	);
+
 	expect(args).toContain("staging-audio/studio/projects/song-1/file-1.wav");
 	expect(args.join(" ")).not.toContain("superhuman-audio");
 	expect(
@@ -493,6 +525,7 @@ it("cleans a resolved project the client stopped, but keeps a paid booking still
 
 it("retains active software, cleans all prefix objects one year after completion or closure, and keeps audit for two years", async () => {
 	const { sql, database } = fixture();
+
 	for (const [id, completed, revoked] of [
 		["software-active", null, null],
 		["software-complete", "2026-12-01", null],
@@ -535,14 +568,18 @@ it("retains active software, cleans all prefix objects one year after completion
 			)
 			.run(id, id);
 	}
+
 	sql.exec("UPDATE audio_projects SET content_deleted_at='already removed'");
+
 	const list = async (prefix: string) => [
 		prefix + "update/old-orphan.png",
 		prefix + "update/current.png",
 	];
+
 	await expect(
 		previewStudioRetention(database, "Local test data", storage, now),
 	).rejects.toThrow("prefix listing");
+
 	const review = await previewStudioRetention(
 		database,
 		"Local test data",
@@ -550,6 +587,7 @@ it("retains active software, cleans all prefix objects one year after completion
 		now,
 		list,
 	);
+
 	expect(review.counts).toMatchObject({
 		softwareProjects: 2,
 		softwareObjects: 4,
@@ -561,6 +599,7 @@ it("retains active software, cleans all prefix objects one year after completion
 		/Private title|Private message|client@example|software\//,
 	);
 	const deleted: string[] = [];
+
 	const counts = await applyStudioRetention(
 		database,
 		review,
@@ -572,6 +611,7 @@ it("retains active software, cleans all prefix objects one year after completion
 		now,
 		list,
 	);
+
 	expect(studioRetentionCompletion(counts)).toBe(
 		"Removed 0 audio projects, 2 software projects and 4 stored files. Run owner request retention next.",
 	);
@@ -646,6 +686,7 @@ it.each([
     INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,email_client,notification_status,notification_attempted_at,created_by,created_at,updated_at)
       VALUES ('update','software','delivery_review','shared',0,'Review','prototype',1,'failed','2026-01-01','owner','now','now');`);
 		const list = async () => ["software/software/update/visual.png"];
+
 		const review = await previewStudioRetention(
 			database,
 			"Local test data",
@@ -653,11 +694,13 @@ it.each([
 			now,
 			list,
 		);
+
 		if (column === "notification_status") {
 			// Exercise the same retry claim used by the owner endpoint.
 			const { queueSoftwareNotice } = await import(
 				"../../src/lib/software-projects"
 			);
+
 			const adapter = {
 				prepare: (query: string) => ({
 					bind: (...args: unknown[]) => ({
@@ -665,6 +708,7 @@ it.each([
 					}),
 				}),
 			} as unknown as D1Database;
+
 			expect(
 				await queueSoftwareNotice(adapter, "software", false, "update"),
 			).toBe(true);
@@ -708,6 +752,7 @@ it.each(["invitation_status", "invitation_attempted_at", "invitation_sent_at"])(
       VALUES ('update','software','delivery_review','shared',0,'Review','prototype',1,'failed','2026-01-01','owner','now','now');`);
 		sql.exec("UPDATE software_projects SET invitation_status='failed'");
 		const list = async () => ["software/software/update/visual.png"];
+
 		const review = await previewStudioRetention(
 			database,
 			"Local test data",
@@ -715,11 +760,13 @@ it.each(["invitation_status", "invitation_attempted_at", "invitation_sent_at"])(
 			now,
 			list,
 		);
+
 		if (column === "invitation_status") {
 			// Exercise the same retry claim used by the owner endpoint.
 			const { queueSoftwareNotice } = await import(
 				"../../src/lib/software-projects"
 			);
+
 			const adapter = {
 				prepare: (query: string) => ({
 					bind: (...args: unknown[]) => ({
@@ -727,6 +774,7 @@ it.each(["invitation_status", "invitation_attempted_at", "invitation_sent_at"])(
 					}),
 				}),
 			} as unknown as D1Database;
+
 			expect(await queueSoftwareNotice(adapter, "software", false)).toBe(true);
 		} else
 			sql.prepare(`UPDATE software_projects SET ${column}='2028-01-15'`).run();
@@ -764,6 +812,7 @@ it("removes invoice references at one year, retains accounting fields until two 
     INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,stripe_invoice_id,stripe_customer_id,hosted_invoice_url,created_by,created_at,updated_at)
       VALUES ('invoice','software','offer',0,'deposit',100,7,'paid','in_accounting','cus_private','https://example.com/private','owner','2026-07-01','2026-07-01')`);
 	const list = async () => [];
+
 	const first = await previewStudioRetention(
 		database,
 		"Local test data",
@@ -771,6 +820,7 @@ it("removes invoice references at one year, retains accounting fields until two 
 		now,
 		list,
 	);
+
 	sql.exec("UPDATE software_invoices SET updated_at='2028-01-15'");
 	await expect(
 		applyStudioRetention(
@@ -783,6 +833,7 @@ it("removes invoice references at one year, retains accounting fields until two 
 			list,
 		),
 	).rejects.toThrow("changed");
+
 	const review = await previewStudioRetention(
 		database,
 		"Local test data",
@@ -790,6 +841,7 @@ it("removes invoice references at one year, retains accounting fields until two 
 		now,
 		list,
 	);
+
 	await applyStudioRetention(
 		database,
 		review,
@@ -816,6 +868,7 @@ it("removes invoice references at one year, retains accounting fields until two 
 		created_at: "2026-07-01",
 	});
 	const later = new Date("2028-07-02T12:00:00Z");
+
 	const expired = await previewStudioRetention(
 		database,
 		"Local test data",
@@ -823,6 +876,7 @@ it("removes invoice references at one year, retains accounting fields until two 
 		later,
 		list,
 	);
+
 	await applyStudioRetention(
 		database,
 		expired,
@@ -853,12 +907,14 @@ function retainedSoftware(
     VALUES ('invoice','software','offer',0,'balance',100,15,?,'owner','2027-01-01','now')`)
 		.run(status);
 }
+
 it.each(["creating", "open", "payment_failed", "uncollectible"])(
 	"skips retention for %s software invoices until voided",
 	async (status) => {
 		const { sql, database } = fixture();
 		retainedSoftware(sql, status);
 		const list = vi.fn(async () => ["software/software/update/visual.png"]);
+
 		const preview = await previewStudioRetention(
 			database,
 			"Local test data",
@@ -866,6 +922,7 @@ it.each(["creating", "open", "payment_failed", "uncollectible"])(
 			now,
 			list,
 		);
+
 		expect(preview.counts).toMatchObject({ softwareProjects: 0 });
 		expect(list).not.toHaveBeenCalled();
 		sql.exec("UPDATE software_invoices SET status='void'");
@@ -883,6 +940,7 @@ it.each(["creating", "open", "payment_failed", "uncollectible"])(
 		sql.close();
 	},
 );
+
 it("fences invoices in the first batch before deleting objects and tolerates later invoice changes", async () => {
 	const { sql, database } = fixture();
 	retainedSoftware(sql, "void");
@@ -890,6 +948,7 @@ it("fences invoices in the first batch before deleting objects and tolerates lat
 		"INSERT INTO software_milestone_deposits VALUES ('software',1,'now','owner')",
 	);
 	const list = async () => ["software/software/update/visual.png"];
+
 	const review = await previewStudioRetention(
 		database,
 		"Local test data",
@@ -897,6 +956,7 @@ it("fences invoices in the first batch before deleting objects and tolerates lat
 		now,
 		list,
 	);
+
 	const deleted = vi.fn(async () => {
 		expect(
 			sql.prepare("SELECT retention_fenced_at FROM software_invoices").get()
@@ -909,6 +969,7 @@ it("fences invoices in the first batch before deleting objects and tolerates lat
 			"UPDATE software_invoices SET updated_at='after-object-deletion',status='uncollectible'",
 		);
 	});
+
 	await applyStudioRetention(
 		database,
 		review,
@@ -927,10 +988,12 @@ it("fences invoices in the first batch before deleting objects and tolerates lat
 	).toEqual({ n: 0 });
 	sql.close();
 });
+
 it("rejects an invoice becoming payable in the fencing batch before deleting any object", async () => {
 	const { sql, database } = fixture();
 	retainedSoftware(sql, "void");
 	const list = async () => ["software/software/update/visual.png"];
+
 	const review = await previewStudioRetention(
 		database,
 		"Local test data",
@@ -938,11 +1001,14 @@ it("rejects an invoice becoming payable in the fencing batch before deleting any
 		now,
 		list,
 	);
+
 	const original = database.batch;
 	database.batch = async (statements) => {
 		sql.exec("UPDATE software_invoices SET status='open'");
+
 		return original(statements);
 	};
+
 	const deleted = vi.fn(async () => {});
 	await expect(
 		applyStudioRetention(
@@ -995,6 +1061,7 @@ it("uses the sent offer retention period for externally signed projects and clea
 			"UPDATE software_offers SET agreement_details_json=? WHERE id='offer'",
 		)
 		.run(JSON.stringify({ project_retention_days: 30 }));
+
 	const review = await previewStudioRetention(
 		database,
 		"Local test data",
@@ -1002,6 +1069,7 @@ it("uses the sent offer retention period for externally signed projects and clea
 		now,
 		list,
 	);
+
 	expect(review.counts).toMatchObject({ softwareProjects: 1 });
 	await applyStudioRetention(
 		database,
@@ -1031,16 +1099,19 @@ it("uses the sent offer retention period for externally signed projects and clea
 
 it("preserves handoff access beyond a shorter project retention period", () => {
 	const { sql } = fixture();
+
 	try {
 		sql.exec(
 			"INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES('external','software','client@example.com','Tool','resolved','now','now'); INSERT INTO software_offers(id,request_id,version,status,terms_json,agreement_details_json,created_at,updated_at,sent_at) VALUES('offer','external',1,'sent','{}','{\"project_retention_days\":30,\"handoff_access_days\":90}','now','now','now'); INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,completed_at) VALUES('external','offer','{}','standard','now','now','now','owner','now','now','2027-12-01'); INSERT INTO software_project_updates(id,request_id,milestone_index,kind,status,title,evidence_type,created_by,created_at,updated_at,shared_at) VALUES('handoff','external',0,'handoff','shared','Files','handoff','owner','now','now','2027-12-01')",
 		);
+
 		const eligible = (date: Date) =>
 			sql
 				.prepare(
 					`SELECT request_id FROM software_projects WHERE ${softwareRetentionProjectPredicate(date)}`,
 				)
 				.all();
+
 		expect(eligible(now)).toEqual([]);
 		expect(eligible(new Date("2028-03-01T12:00:00Z"))).toEqual([
 			{ request_id: "external" },
@@ -1061,6 +1132,7 @@ it.each(["start_details_json", "external_signature_details_json"])(
 				'{"recorded_by":"owner","parties":"Client","po_number":"PO","earlier_start_agreement":"Agreed","copy_reference":"Copy"}',
 			);
 		const list = async () => [];
+
 		const review = await previewStudioRetention(
 			database,
 			"Local test data",
@@ -1068,6 +1140,7 @@ it.each(["start_details_json", "external_signature_details_json"])(
 			now,
 			list,
 		);
+
 		sql
 			.prepare(`UPDATE software_projects SET ${column}=?`)
 			.run('{"recorded_by":"changed"}');

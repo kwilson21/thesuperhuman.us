@@ -21,12 +21,14 @@ function addMissing(headers: Headers) {
 export function withSecurityHeaders(response: Response) {
 	try {
 		addMissing(response.headers);
+
 		return response;
 	} catch (error) {
 		if (!(error instanceof TypeError)) throw error;
 		// Response.redirect() and fetched responses have immutable headers.
 		const copy = new Response(response.body, response);
 		addMissing(copy.headers);
+
 		return copy;
 	}
 }

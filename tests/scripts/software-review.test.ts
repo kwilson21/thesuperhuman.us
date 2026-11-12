@@ -3,12 +3,15 @@ import { setupSoftwareReviews } from "~/scripts/software-review";
 
 function fixture(direction = false, partial = false) {
 	let submit: (event: unknown) => Promise<void>;
+
 	const note = { value: "", focus: vi.fn() },
 		status = { textContent: "" },
 		buttons = [{ disabled: partial }, { disabled: false }];
+
 	let selected: string[] = [],
 		missing: string[] = [],
 		inaccessible: string[] = [];
+
 	const form = {
 		dataset: {
 			endpoint: "/api/studio/software/r/reviews/u",
@@ -28,6 +31,7 @@ function fixture(direction = false, partial = false) {
 			submit = handler;
 		},
 	};
+
 	vi.stubGlobal("document", { querySelectorAll: () => [form] });
 	vi.stubGlobal(
 		"FormData",
@@ -53,6 +57,7 @@ function fixture(direction = false, partial = false) {
 		vi.fn(async () => Response.json({ ok: true })),
 	);
 	setupSoftwareReviews();
+
 	return {
 		note,
 		status,
@@ -76,7 +81,9 @@ function fixture(direction = false, partial = false) {
 			}),
 	};
 }
+
 afterEach(() => vi.unstubAllGlobals());
+
 it("requires delivery criteria and reproduction notes without sending an invalid decision", async () => {
 	const page = fixture();
 	await page.submit("changes_requested");
@@ -98,6 +105,7 @@ it("requires delivery criteria and reproduction notes without sending an invalid
 		},
 	);
 });
+
 it("requires identified-version confirmation for acceptance and leaves cancel unsent", async () => {
 	const page = fixture();
 	vi.mocked(confirm).mockReturnValueOnce(false);
@@ -112,6 +120,7 @@ it("requires identified-version confirmation for acceptance and leaves cancel un
 	).toBe(true);
 	expect(location.reload).toHaveBeenCalled();
 });
+
 it("permits direction change notes without delivery criteria and exposes server conflicts", async () => {
 	const page = fixture(true);
 	page.note.value = "Move the status beside the client.";
@@ -139,6 +148,7 @@ it("permits reporting a missing deliverable without incorrectly marking a passin
 		note: "The sample import is not included.",
 	});
 });
+
 it("sends included but inaccessible items through a separate selection", async () => {
 	const page = fixture();
 	page.note.value = "I cannot open the view.";
@@ -157,24 +167,29 @@ it("sends included but inaccessible items through a separate selection", async (
 
 it("keeps helper marks local to a review and pre-ticks only Not yet when opening changes", () => {
 	const listeners: Record<string, (event?: any) => void> = {};
+
 	const checkbox = {
 		value: "0",
 		checked: false,
 		addEventListener: (_event: string, handler: any) =>
 			(listeners.manual = handler),
 	};
+
 	const makeMark = (mark: string) => ({
 		dataset: { reviewCheck: "0", reviewMark: mark },
 		setAttribute: vi.fn(),
 		addEventListener: (_event: string, handler: any) =>
 			(listeners[mark] = handler),
 	});
+
 	const works = makeMark("works"),
 		notYet = makeMark("not-yet");
+
 	const details = {
 		addEventListener: (_event: string, handler: any) =>
 			(listeners.toggle = handler),
 	};
+
 	const form = {
 		dataset: { endpoint: "/review/version-2" },
 		querySelector: (selector: string) =>
@@ -187,6 +202,7 @@ it("keeps helper marks local to a review and pre-ticks only Not yet when opening
 					: [],
 		addEventListener: vi.fn(),
 	};
+
 	const storage = { getItem: vi.fn(() => '{"0":"not-yet"}'), setItem: vi.fn() };
 	vi.stubGlobal("localStorage", storage);
 	vi.stubGlobal("document", { querySelectorAll: () => [form] });
@@ -233,6 +249,7 @@ it("keeps helper marks local to a review and pre-ticks only Not yet when opening
 	expect(() => setupSoftwareReviews()).not.toThrow();
 	expect(() => listeners["not-yet"]()).not.toThrow();
 });
+
 it("keeps partial acceptance disabled after a failed change request", async () => {
 	const page = fixture(false, true);
 	page.select(["0"]);

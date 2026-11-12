@@ -1,19 +1,24 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { setupSuggestionPass } from "~/scripts/brief-suggestion-pass";
+
 afterEach(() => vi.unstubAllGlobals());
+
 function setup(interactive = false) {
 	const container = { style: {}, setAttribute: vi.fn(), remove: vi.fn() };
 	vi.stubGlobal("document", {
 		createElement: () => container,
 		body: { appendChild: vi.fn() },
 	});
+
 	const render = vi.fn((_container, options) => {
 		queueMicrotask(() => {
 			if (interactive) options["before-interactive-callback"]();
 			options.callback("token");
 		});
+
 		return "widget";
 	});
+
 	const remove = vi.fn();
 	vi.stubGlobal("window", {
 		turnstile: { ready: (callback: () => void) => callback(), render, remove },
@@ -22,6 +27,7 @@ function setup(interactive = false) {
 		"fetch",
 		vi.fn(async () => Response.json({ ok: true })),
 	);
+
 	return {
 		container,
 		render,
@@ -31,6 +37,7 @@ function setup(interactive = false) {
 		} as any),
 	};
 }
+
 it("verifies silently once and keeps the submission token field separate", async () => {
 	const { start, container, render } = setup();
 	expect(await start()).toBe(true);
@@ -46,6 +53,7 @@ it("verifies silently once and keeps the submission token field separate", async
 		"response-field": false,
 	});
 });
+
 it("never shows an interactive challenge or requests a pass afterward", async () => {
 	const { start, container, remove } = setup(true);
 	expect(await start()).toBe(false);
@@ -54,6 +62,7 @@ it("never shows an interactive challenge or requests a pass afterward", async ()
 	expect(container.remove).toHaveBeenCalled();
 	expect(remove).toHaveBeenCalledWith("widget");
 });
+
 it("disables suggestions without a configured widget", async () => {
 	expect(await setupSuggestionPass({ dataset: {} } as any)()).toBe(false);
 });
@@ -66,6 +75,7 @@ it("shares one renewal check and can renew again after a later expiry", async ()
 	expect(await start(true)).toBe(true);
 	expect(render).toHaveBeenCalledTimes(3);
 });
+
 it("keeps a failed renewal disabled for the page view", async () => {
 	const { start, render } = setup();
 	expect(await start()).toBe(true);
@@ -81,6 +91,7 @@ it("keeps renewal silent when the new check requires interaction", async () => {
 	expect(await start()).toBe(true);
 	render.mockImplementationOnce((_container, options) => {
 		queueMicrotask(() => options["before-interactive-callback"]());
+
 		return "renewal-widget";
 	});
 	expect(await start(true)).toBe(false);

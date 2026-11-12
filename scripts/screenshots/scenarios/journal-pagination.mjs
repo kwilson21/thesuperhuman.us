@@ -6,8 +6,10 @@ export default {
 	title: "Development journal pagination",
 	async run({ capture }) {
 		const steps = [];
+
 		const shot = async (title, name, prepare) => {
 			const images = [];
+
 			for (const viewport of VIEWPORTS) {
 				images.push({
 					file: await capture({
@@ -20,8 +22,10 @@ export default {
 					caption: title,
 				});
 			}
+
 			steps.push({ title, images });
 		};
+
 		await shot("First page, newest entries first", "newest");
 		await shot("After choosing Older", "older", async (page) => {
 			await page.locator("[data-page-next]").click();
@@ -31,6 +35,7 @@ export default {
 					?.textContent?.startsWith("Page 2"),
 			);
 		});
+
 		return steps;
 	},
 };

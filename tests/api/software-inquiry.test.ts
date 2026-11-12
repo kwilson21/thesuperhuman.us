@@ -20,6 +20,7 @@ import { expectSource } from "../helpers/source-text";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 const id = "00000000-0000-4000-8000-000000000001";
+
 const base = {
 	path: "workflow",
 	today: "First line\nSecond line",
@@ -37,14 +38,18 @@ const base = {
 	turnstileToken: "test",
 	submissionId: id,
 };
+
 let sql: InstanceType<typeof DatabaseSync>;
 let db: D1Database;
+
 let kv: {
 	get: ReturnType<typeof vi.fn>;
 	put: ReturnType<typeof vi.fn>;
 	delete: ReturnType<typeof vi.fn>;
 };
+
 let stored: Map<string, string>;
+
 function context(
 	input: unknown = base,
 	options: {
@@ -79,11 +84,13 @@ function context(
 		},
 	} as any;
 }
+
 beforeEach(() => {
 	sql = new DatabaseSync(":memory:");
 	sql.exec(
 		readFileSync(new URL("../../db/music.sql", import.meta.url), "utf8"),
 	);
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		query,
 		args,
@@ -91,17 +98,21 @@ beforeEach(() => {
 		first: async () => sql.prepare(query).get(...args) ?? null,
 		all: async () => ({ results: sql.prepare(query).all(...args) }),
 	});
+
 	db = {
 		prepare: (query: string) => statement(query),
 		batch: async (items: ReturnType<typeof statement>[]) => {
 			sql.exec("BEGIN");
+
 			try {
 				const result = items.map((item) => ({
 					results: /RETURNING/i.test(item.query)
 						? sql.prepare(item.query).all(...item.args)
 						: (sql.prepare(item.query).run(...item.args), []),
 				}));
+
 				sql.exec("COMMIT");
+
 				return result;
 			} catch (error) {
 				sql.exec("ROLLBACK");
@@ -149,6 +160,7 @@ it("stores one verbatim software brief, audit, and no audio project, then return
 		summary: "First line Second line",
 		submission_id: id,
 	});
+
 	const details = JSON.parse(
 		(
 			sql.prepare("SELECT details_json FROM owner_requests").get() as {
@@ -156,6 +168,7 @@ it("stores one verbatim software brief, audit, and no audio project, then return
 			}
 		).details_json,
 	);
+
 	expect(details).toMatchObject({
 		today: "First line\nSecond line",
 		approverRole: "",
@@ -178,10 +191,13 @@ it("stores and returns only the selected idea questions, including the optional 
 		signal: "Repeat use after a month",
 		today: "inactive",
 	};
+
 	const response = await POST(context(idea));
 	expect(response.status).toBe(200);
+
 	const brief = ((await response.json()) as { brief: Record<string, string> })
 		.brief;
+
 	expect(Object.keys(brief).slice(0, 5)).toEqual([
 		"path",
 		"idea",
@@ -191,15 +207,19 @@ it("stores and returns only the selected idea questions, including the optional 
 	]);
 	expect(brief.idea).toBe(idea.idea);
 	expect(brief).not.toHaveProperty("today");
+
 	const saved = sql
 		.prepare("SELECT service_id,summary,details_json FROM owner_requests")
 		.get() as { service_id: string; summary: string; details_json: string };
+
 	expect(saved.service_id).toBe("idea");
 	expect(saved.summary).toBe("Volunteers need a simpler way to find shifts.");
 	expect(JSON.parse(saved.details_json)).not.toHaveProperty("today");
+
 	const notice = vi
 		.mocked(fetch)
 		.mock.calls.find(([url]) => String(url).includes("api.resend.com"))!;
+
 	const body = JSON.parse(notice[1]?.body as string);
 	expect(body.text).toContain(
 		"What’s the idea?\nVolunteers need a simpler way to find shifts.",
@@ -212,6 +232,7 @@ it("gives the updates choice a plain message without an error map, which some zo
 		"updates: z.enum(['self', 'help', 'unsure'], { message: 'Choose one.' })",
 	);
 	expectSource(lib).not.toMatch(/updates:z\.enum\([^)]*errorMap/);
+
 	const site = {
 		...base,
 		path: "website",
@@ -219,12 +240,15 @@ it("gives the updates choice a plain message without an error map, which some zo
 		currentUrl: "",
 		existing: "",
 	};
+
 	for (const updates of [undefined, "nobody"]) {
 		const result = validateSoftwareInquiry({ ...site, updates });
 		expect(result.ok).toBe(false);
+
 		if (!result.ok) expect(result.errors.updates).toBe("Choose one.");
 	}
 });
+
 it("validates each idea answer with the same plain messages and drops unknown keys", () => {
 	const idea = {
 		...base,
@@ -233,6 +257,7 @@ it("validates each idea answer with the same plain messages and drops unknown ke
 		audienceToday: "Volunteers",
 		firstVersion: "Claim a shift",
 	};
+
 	for (const [key, value, message] of [
 		["idea", "", "This answer is required."],
 		["idea", "x".repeat(1001), "Keep this under 1000 characters."],
@@ -245,14 +270,18 @@ it("validates each idea answer with the same plain messages and drops unknown ke
 	] as const) {
 		const result = validateSoftwareInquiry({ ...idea, [key]: value });
 		expect(result.ok, key).toBe(false);
+
 		if (!result.ok) expect(result.errors[key]).toBe(message);
 	}
+
 	const result = validateSoftwareInquiry({
 		...idea,
 		today: "inactive",
 		unknown: "dropped",
 	});
+
 	expect(result.ok).toBe(true);
+
 	if (result.ok) {
 		expect(result.value).not.toHaveProperty("today");
 		expect(result.value).not.toHaveProperty("unknown");
@@ -265,7 +294,9 @@ it("keeps an emoji intact at the summary cutoff", () => {
 		...base,
 		today: `${"a".repeat(79)}😀${"b".repeat(10)}`,
 	});
+
 	expect(parsed.ok).toBe(true);
+
 	if (parsed.ok)
 		expect(softwareRequest(parsed.value).summary).toBe(`${"a".repeat(79)}😀`);
 });
@@ -275,7 +306,9 @@ it("keeps a joined emoji intact at the summary cutoff", () => {
 		...base,
 		today: `${"a".repeat(79)}👩‍💻${"b".repeat(10)}`,
 	});
+
 	expect(parsed.ok).toBe(true);
+
 	if (parsed.ok)
 		expect(softwareRequest(parsed.value).summary).toBe(`${"a".repeat(79)}👩‍💻`);
 });
@@ -283,6 +316,7 @@ it("keeps a joined emoji intact at the summary cutoff", () => {
 it("orders workflow questions in the saved brief", () => {
 	const parsed = validateSoftwareInquiry(base);
 	expect(parsed.ok).toBe(true);
+
 	if (parsed.ok) {
 		const request = softwareRequest(parsed.value);
 		expect(Object.keys(softwareBrief(request as any)).slice(0, 4)).toEqual([
@@ -297,8 +331,10 @@ it("orders workflow questions in the saved brief", () => {
 it("deduplicates after rate limit, rejects another email without leaking the brief, and limits new IDs", async () => {
 	const first = await POST(context({ ...base, email: "alex@example.com" }));
 	expect(first.status).toBe(200);
+
 	const firstBrief = ((await first.json()) as { brief: Record<string, string> })
 		.brief;
+
 	const duplicate = await POST(context());
 	expect(duplicate.status).toBe(200);
 	expect(
@@ -349,6 +385,7 @@ it("re-reads a unique-index race and returns only a matching stored brief", asyn
 			throw new Error("UNIQUE constraint failed");
 		},
 	} as unknown as D1Database;
+
 	const response = await POST(context(base, { db: racing }));
 	expect(response.status).toBe(200);
 	expect(
@@ -368,6 +405,7 @@ it("preserves input and clears success limit after a storage failure", async () 
 			throw new Error("D1 unavailable");
 		},
 	} as unknown as D1Database;
+
 	const response = await POST(context(base, { db: failing }));
 	expect(response.status).toBe(503);
 	expect(((await response.json()) as { error: string }).error).toContain(
@@ -379,9 +417,11 @@ it("preserves input and clears success limit after a storage failure", async () 
 			.mocked(fetch)
 			.mock.calls.filter(([url]) => String(url).includes("api.resend.com")),
 	).toHaveLength(1);
+
 	const alertCall = vi
 		.mocked(fetch)
 		.mock.calls.find(([url]) => String(url).includes("api.resend.com"))!;
+
 	const alert = JSON.parse(alertCall[1]?.body as string);
 	expect(alert.text).toContain("/api/software-inquiry");
 	expect(alert.text).toContain("d1-write-failed");
@@ -412,6 +452,7 @@ it("rejects invalid answers, unknown choices, line breaks, and unknown keys", ()
 		approver: "Choose one.",
 		submissionId: "Invalid submission ID.",
 	};
+
 	for (const [key, value] of [
 		["path", "other"],
 		["today", ""],
@@ -429,6 +470,7 @@ it("rejects invalid answers, unknown choices, line breaks, and unknown keys", ()
 	] as const) {
 		const result = validateSoftwareInquiry({ ...base, [key]: value });
 		expect(result.ok).toBe(false);
+
 		if (!result.ok)
 			expect(result.errors[key]).toBe(
 				value.includes("\n")
@@ -438,8 +480,10 @@ it("rejects invalid answers, unknown choices, line breaks, and unknown keys", ()
 						: (expectedErrors[key] ?? "This answer is required."),
 			);
 	}
+
 	const parsed = validateSoftwareInquiry({ ...base, extra: "secret" });
 	expect(parsed.ok).toBe(true);
+
 	if (parsed.ok) expect(parsed.value).not.toHaveProperty("extra");
 });
 
@@ -466,7 +510,9 @@ it("reports simultaneous field errors, including empty choices and controls", ()
 		budgetStatus: "",
 		approver: "",
 	});
+
 	expect(result.ok).toBe(false);
+
 	if (!result.ok)
 		expect(result.errors).toMatchObject({
 			name: "Add your name.",
@@ -485,6 +531,7 @@ it("uses plain messages for missing fields, wrong types, and non-object bodies",
 	] as const) {
 		const result = validateSoftwareInquiry(input);
 		expect(result.ok).toBe(false);
+
 		if (!result.ok) expect(result.errors[field]).toBe(message);
 	}
 });
@@ -499,6 +546,7 @@ it("alerts and preserves input when the duplicate lookup fails", async () => {
 			}),
 		}),
 	} as unknown as D1Database;
+
 	const response = await POST(context(base, { db: failing }));
 	expect(response.status).toBe(503);
 	expect(((await response.json()) as { error: string }).error).toContain(
@@ -509,9 +557,11 @@ it("alerts and preserves input when the duplicate lookup fails", async () => {
 			.mocked(fetch)
 			.mock.calls.filter(([url]) => String(url).includes("api.resend.com")),
 	).toHaveLength(1);
+
 	const alertCall = vi
 		.mocked(fetch)
 		.mock.calls.find(([url]) => String(url).includes("api.resend.com"))!;
+
 	expect(JSON.stringify(JSON.parse(alertCall[1]?.body as string))).not.toMatch(
 		/alex|first line|second line|our team|example studio|one place to see/i,
 	);
@@ -529,17 +579,21 @@ it("rejects overlength and line breaks in every text field", () => {
 		budgetNote: 200,
 		approverRole: 120,
 	};
+
 	for (const [key, max] of Object.entries(lengths)) {
 		const result = validateSoftwareInquiry({
 			...base,
 			[key]: "a".repeat(max + 1),
 		});
+
 		expect(result.ok, key).toBe(false);
+
 		if (!result.ok)
 			expect(result.errors[key], key).toBe(
 				`Keep this under ${max} characters.`,
 			);
 	}
+
 	for (const key of [
 		"name",
 		"email",
@@ -550,6 +604,7 @@ it("rejects overlength and line breaks in every text field", () => {
 	]) {
 		const result = validateSoftwareInquiry({ ...base, [key]: "a\nb" });
 		expect(result.ok, key).toBe(false);
+
 		if (!result.ok) expect(result.errors[key], key).toBe("Use one line.");
 	}
 });
@@ -576,6 +631,7 @@ it("does not reveal a raced brief to a different email", async () => {
 			throw new Error("UNIQUE constraint failed");
 		},
 	} as unknown as D1Database;
+
 	const response = await POST(context(base, { db: racing }));
 	expect(response.status).toBe(409);
 	expect(JSON.stringify(await response.json())).not.toContain("Private stored");
@@ -587,10 +643,13 @@ it("keeps the approver role only for someone else", () => {
 		approver: "other",
 		approverRole: "Director",
 	});
+
 	expect(other.ok).toBe(true);
+
 	if (other.ok) expect(other.value.approverRole).toBe("Director");
 	const self = validateSoftwareInquiry(base);
 	expect(self.ok).toBe(true);
+
 	if (self.ok) expect(self.value.approverRole).toBe("");
 });
 
@@ -602,9 +661,11 @@ it("uses plain exact messages for choices, line breaks, controls, and lone surro
 		["today", "\u0001", "Remove control characters."],
 		["today", "\ud800", "Remove control characters."],
 	] as const;
+
 	for (const [key, value, message] of cases) {
 		const result = validateSoftwareInquiry({ ...base, [key]: value });
 		expect(result.ok, key).toBe(false);
+
 		if (!result.ok) expect(result.errors[key]).toBe(message);
 	}
 });
@@ -615,6 +676,7 @@ it("renders saved script text and multiline answers verbatim for safe Astro text
 		email: "alex@example.com",
 		details: { ...base, today: "<script>alert(1)</script>\nSecond line" },
 	} as any;
+
 	expect(softwareBrief(request).today).toBe(
 		"<script>alert(1)</script>\nSecond line",
 	);
@@ -635,6 +697,7 @@ it("treats an oversized saved detail as a field error without an urgent alert", 
 			throw new RequestDetailsTooLargeError();
 		},
 	} as unknown as D1Database;
+
 	const response = await POST(context(base, { db: oversized }));
 	expect(response.status).toBe(400);
 	expect(
@@ -656,14 +719,17 @@ it("emails only answered fields to the client with the saved title and configure
 			today: "<script>first</script>\nSecond line",
 		}),
 	);
+
 	expect(await response.json()).toMatchObject({
 		ok: true,
 		clientCopyStatus: "sent",
 	});
+
 	const emails = vi
 		.mocked(fetch)
 		.mock.calls.filter(([url]) => String(url).includes("api.resend.com"))
 		.map(([, init]) => JSON.parse(init!.body as string));
+
 	const copy = emails.find((email) => email.to[0] === "alex@example.com");
 	expect(copy).toMatchObject({
 		from: "from@example.com",
@@ -698,10 +764,13 @@ it.each([
 		vi.mocked(fetch).mockImplementation(async (url, init) => {
 			if (String(url).includes("siteverify"))
 				return { ok: true, json: async () => ({ success: true }) } as Response;
+
 			if (JSON.parse(init!.body as string).to[0] === "alex@example.com") {
 				if (outcome === "timeout") throw new Error("timeout");
+
 				return new Response("", { status: 422 });
 			}
+
 			return new Response("", { status: 200 });
 		});
 		expect(await (await POST(context())).json()).toMatchObject({
@@ -725,8 +794,10 @@ it("retries a failed brief copy once and blocks sent, closed and unconfirmed ret
 	const { POST: retry } = await import(
 		"~/pages/api/owner/requests/[id]/brief-copy"
 	);
+
 	await POST(context());
 	const requestId = sql.prepare("SELECT id FROM owner_requests").get().id;
+
 	const retryContext = (confirmedNotSent = false, owner = true) =>
 		({
 			...context(),
@@ -747,12 +818,14 @@ it("retries a failed brief copy once and blocks sent, closed and unconfirmed ret
 				owner: owner ? { email: "owner@example.com" } : null,
 			},
 		}) as any;
+
 	const set = (status: string, age: number) =>
 		sql
 			.prepare(
 				"UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus',?,'$.clientCopyAttemptedAt',?)",
 			)
 			.run(status, new Date(Date.now() - age).toISOString());
+
 	expect((await retry(retryContext(false, false))).status).toBe(403);
 	set("failed", 0);
 	expect((await retry(retryContext())).status).toBe(200);
@@ -775,15 +848,18 @@ it("keeps delivery uncertain after sending when the final status write fails", a
 			statements.some((item) => item.query.includes("'$.clientCopyStatus',?"))
 		)
 			throw new Error("status write failed");
+
 		return batch(statements);
 	});
 	expect(await (await POST(context())).json()).toMatchObject({
 		ok: true,
 		clientCopyStatus: "uncertain",
 	});
+
 	const details = JSON.parse(
 		sql.prepare("SELECT details_json FROM owner_requests").get().details_json,
 	);
+
 	expect(details.clientCopyStatus).toBe("uncertain");
 	expect(details.clientCopyAttemptedAt).toBeTruthy();
 	expect(await (await POST(context())).json()).toMatchObject({
@@ -809,6 +885,7 @@ it("accepts and stores a short new brief without removed or optional answers", a
 			turnstileToken: "test",
 		}),
 	);
+
 	expect(response.status).toBe(200);
 	const brief = ((await response.json()) as any).brief;
 	expect(brief).not.toHaveProperty("audience");
@@ -820,17 +897,20 @@ it("accepts and stores a short new brief without removed or optional answers", a
 
 it("accepts legacy date briefs and validates explicit new dates", () => {
 	expect(validateSoftwareInquiry({ ...base, timing: "date" }).ok).toBe(true);
+
 	for (const timingDate of ["", "2027-02-30", "invalid"]) {
 		const result = validateSoftwareInquiry({
 			...base,
 			timing: "date",
 			timingDate,
 		});
+
 		expect(result).toMatchObject({
 			ok: false,
 			errors: { timingDate: "Add a valid date." },
 		});
 	}
+
 	expect(
 		validateSoftwareInquiry({
 			...base,
@@ -844,21 +924,26 @@ it.each(["claim", "construction", "config"] as const)(
 	"records a pre-send %s failure and returns an error on owner retry",
 	async (failure) => {
 		const ctx = context();
+
 		if (failure === "config") delete ctx.locals.runtime.env.CONTACT_TO_EMAIL;
+
 		if (failure === "claim") {
 			const prepare = db.prepare.bind(db);
 			vi.spyOn(db, "prepare").mockImplementation((query: string) => {
 				if (query.includes("'$.clientCopyStatus','uncertain'"))
 					throw new Error("claim failed");
+
 				return prepare(query);
 			});
 		}
+
 		if (failure === "construction") {
 			const emails = await import("~/lib/client-emails");
 			vi.spyOn(emails, "softwareBriefEmail").mockImplementation(() => {
 				throw new Error("construction failed");
 			});
 		}
+
 		try {
 			expect(await (await POST(ctx)).json()).toMatchObject({
 				ok: true,
@@ -870,9 +955,11 @@ it.each(["claim", "construction", "config"] as const)(
 						.details_json,
 				).clientCopyStatus,
 			).toBe("failed");
+
 			const { POST: retry } = await import(
 				"~/pages/api/owner/requests/[id]/brief-copy"
 			);
+
 			const response = await retry({
 				...ctx,
 				params: { id: sql.prepare("SELECT id FROM owner_requests").get().id },
@@ -889,6 +976,7 @@ it.each(["claim", "construction", "config"] as const)(
 					},
 				),
 			});
+
 			expect(response.status).toBe(503);
 			expect(await response.json()).toMatchObject({ ok: false });
 			expect(
@@ -923,6 +1011,7 @@ it("omits blank optional answers from the owner idea notification", async () => 
 			signal: "",
 		}),
 	);
+
 	const notice = vi
 		.mocked(fetch)
 		.mock.calls.find(
@@ -930,6 +1019,7 @@ it("omits blank optional answers from the owner idea notification", async () => 
 				String(url).includes("api.resend.com") &&
 				JSON.parse(init!.body as string).to[0] === "inbox@example.com",
 		)!;
+
 	const email = JSON.parse(notice[1]!.body as string);
 	expect(email.text).toContain("What’s the idea?\nA shift board");
 	expect(email.text).not.toMatch(/undefined|How will you know/);
@@ -937,6 +1027,7 @@ it("omits blank optional answers from the owner idea notification", async () => 
 
 it("recovers an unrecorded first claim failure through the guarded owner retry", async () => {
 	const prepare = db.prepare.bind(db);
+
 	const failedWrites = vi
 		.spyOn(db, "prepare")
 		.mockImplementation((query: string) => {
@@ -945,8 +1036,10 @@ it("recovers an unrecorded first claim failure through the guarded owner retry",
 				query.includes("'$.clientCopyStatus','failed'")
 			)
 				throw new Error("copy write failed");
+
 			return prepare(query);
 		});
+
 	expect(await (await POST(context())).json()).toMatchObject({
 		ok: true,
 		clientCopyStatus: "failed",
@@ -961,10 +1054,13 @@ it("recovers an unrecorded first claim failure through the guarded owner retry",
 		ok: true,
 		clientCopyStatus: "failed",
 	});
+
 	const { POST: retry } = await import(
 		"~/pages/api/owner/requests/[id]/brief-copy"
 	);
+
 	const ctx = context();
+
 	const retryContext = {
 		...ctx,
 		params: { id: sql.prepare("SELECT id FROM owner_requests").get().id },
@@ -981,6 +1077,7 @@ it("recovers an unrecorded first claim failure through the guarded owner retry",
 			},
 		),
 	};
+
 	expect(
 		(
 			await retry({
@@ -1025,6 +1122,7 @@ const websiteInput = {
 	email: "jordan@example.com",
 	today: "inactive",
 };
+
 const questionKeys = [
 	"today",
 	"audience",
@@ -1039,12 +1137,15 @@ const questionKeys = [
 	"updates",
 	"appGoal",
 ];
+
 const askedKeys = (details: Record<string, unknown>) =>
 	Object.keys(details).filter((key) => questionKeys.includes(key));
+
 const savedRequest = () =>
 	sql
 		.prepare("SELECT service_id,summary,details_json FROM owner_requests")
 		.get() as { service_id: string; summary: string; details_json: string };
+
 const ownerNotice = () =>
 	JSON.parse(
 		vi
@@ -1059,8 +1160,10 @@ const ownerNotice = () =>
 it("stores a website brief under its own path and questions, and names it in the owner notice", async () => {
 	const response = await POST(context(websiteInput));
 	expect(response.status).toBe(200);
+
 	const brief = ((await response.json()) as { brief: Record<string, string> })
 		.brief;
+
 	expect(Object.keys(brief).slice(0, 5)).toEqual([
 		"path",
 		"purpose",
@@ -1099,10 +1202,13 @@ it("stores a web app brief under its own path and questions", async () => {
 		firstVersion: "See open shifts and claim one.",
 		today: "inactive",
 	};
+
 	const response = await POST(context(app));
 	expect(response.status).toBe(200);
+
 	const brief = ((await response.json()) as { brief: Record<string, string> })
 		.brief;
+
 	expect(Object.keys(brief).slice(0, 3)).toEqual([
 		"path",
 		"appGoal",
@@ -1130,6 +1236,7 @@ it("validates website answers with the approved messages", () => {
 		existing: "",
 		updates: "self",
 	};
+
 	for (const [key, value, message] of [
 		["purpose", undefined, "This answer is required."],
 		["purpose", "", "This answer is required."],
@@ -1252,8 +1359,10 @@ it("validates website answers with the approved messages", () => {
 	] as const) {
 		const result = validateSoftwareInquiry({ ...site, [key]: value });
 		expect(result.ok, `${key}: ${message}`).toBe(false);
+
 		if (!result.ok) expect(result.errors[key], key).toBe(message);
 	}
+
 	for (const [currentUrl, message] of [
 		["https://user:pass@host.example", "Check the link, or leave it empty."],
 		["https://user@studio.com", "Check the link, or leave it empty."],
@@ -1261,8 +1370,10 @@ it("validates website answers with the approved messages", () => {
 	] as const) {
 		const result = validateSoftwareInquiry({ ...site, currentUrl });
 		expect(result.ok, currentUrl).toBe(false);
+
 		if (!result.ok) expect(result.errors.currentUrl, currentUrl).toBe(message);
 	}
+
 	for (const currentUrl of [
 		"http://example.com",
 		"",
@@ -1302,6 +1413,7 @@ it("answers an oversized current URL with the length limit alone, without parsin
 		existing: "",
 		updates: "self",
 	};
+
 	// Unguarded URL parsing of this value takes seconds (about 4 s on Node 22; quadratic in length); the length guard keeps the check under 20 ms.
 	const started = performance.now();
 	expect(
@@ -1329,6 +1441,7 @@ it("keeps the web app goal required and bounded", () => {
 		appGoal: "Let people claim a shift.",
 		firstVersion: "",
 	};
+
 	expect(validateSoftwareInquiry({ ...app, appGoal: "" })).toMatchObject({
 		ok: false,
 		errors: { appGoal: "This answer is required." },
@@ -1356,6 +1469,7 @@ it("names each path, keeps the legacy idea label, and rejects inherited keys", (
 	expect(softwarePathLabel("webapp")).toBe("Web app");
 	expect(softwarePathLabel("workflow")).toBe("Workflow automation");
 	expect(softwarePathLabel("idea")).toBe("Bring an idea to life");
+
 	for (const value of ["toString", "constructor", "", undefined, null])
 		expect(softwarePathLabel(value), String(value)).toBeUndefined();
 });
@@ -1385,6 +1499,7 @@ it("accepts only http and https links with a host", () => {
 	expect(currentSiteHref("HTTPS://Example.com/path")).toBe(
 		"https://example.com/path",
 	);
+
 	for (const value of [
 		"yourstudio.com",
 		"ftp://x.example",
@@ -1412,6 +1527,7 @@ it("labels stored briefs by the path they were sent with", () => {
 		approver: "self",
 		budgetStatus: "exploring",
 	};
+
 	const idea = softwareBrief({
 		...shared,
 		details: {
@@ -1423,6 +1539,7 @@ it("labels stored briefs by the path they were sent with", () => {
 			signal: "",
 		},
 	} as any);
+
 	expect(idea.path).toBe("Bring an idea to life");
 	expect(Object.keys(idea).slice(0, 4)).toEqual([
 		"path",
@@ -1431,6 +1548,7 @@ it("labels stored briefs by the path they were sent with", () => {
 		"firstVersion",
 	]);
 	expect(idea).not.toHaveProperty("today");
+
 	const workflow = softwareBrief({
 		...shared,
 		details: {
@@ -1441,6 +1559,7 @@ it("labels stored briefs by the path they were sent with", () => {
 			firstResult: "One place.",
 		},
 	} as any);
+
 	expect(workflow.path).toBe("Workflow automation");
 	expect(Object.keys(workflow).slice(0, 4)).toEqual([
 		"path",
@@ -1448,10 +1567,12 @@ it("labels stored briefs by the path they were sent with", () => {
 		"audience",
 		"firstResult",
 	]);
+
 	const fallback = softwareBrief({
 		...shared,
 		details: { ...shared, path: "toString", today: "Fallback" },
 	} as any);
+
 	expect(fallback.today).toBe("Fallback");
 });
 
@@ -1463,6 +1584,7 @@ it("words the client copy of a website brief in the client’s voice", () => {
 		existing: "A logo and about 30 class photos.",
 		updates: "Me or someone on my team",
 	});
+
 	expect(copy.html).toContain("Project brief");
 	expect(copy.html).toContain(
 		"You received this because you sent a project brief.",

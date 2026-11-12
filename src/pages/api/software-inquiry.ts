@@ -15,25 +15,31 @@ import {
 	validateSoftwareInquiry,
 } from "~/lib/software-inquiry";
 import { verifyTurnstile } from "~/lib/turnstile";
+
 export const prerender = false;
 
 const preserved =
 	"We couldn’t confirm delivery. Your details are still here. Try again later or email kazon.wilson@thesuperhuman.us.";
+
 async function existing(db: D1Database, submissionId: string) {
 	const row = await db
 		.prepare("SELECT id FROM owner_requests WHERE submission_id=?")
 		.bind(submissionId)
 		.first<{ id: string }>();
+
 	return row ? getOwnerRequest(db, row.id) : null;
 }
 
 export const POST: APIRoute = async ({ request, locals }) => {
 	const body = await musicRequest(request, 32768);
+
 	if (body instanceof Response) return body;
 	const result = validateSoftwareInquiry(body);
+
 	if (!result.ok)
 		return Response.json({ ok: false, errors: result.errors }, { status: 400 });
 	const env = locals.runtime?.env;
+
 	if (!env?.MUSIC_DB || !env.TURNSTILE_SECRET_KEY || !env.RATE_LIMIT)
 		return Response.json(
 			{
@@ -45,6 +51,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		);
 	const input = result.value;
 	const ip = request.headers.get("cf-connecting-ip") ?? "0.0.0.0";
+
 	try {
 		const attempts = await checkRateLimit(
 			env.RATE_LIMIT,
@@ -52,11 +59,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			"rl:software-attempt:",
 			10,
 		);
+
 		if (!attempts.allowed)
 			return Response.json(
 				{ ok: false, error: "Please wait a few minutes before sending again." },
 				{ status: 429 },
 			);
+
 		if (
 			!(await verifyTurnstile(
 				input.turnstileToken,
@@ -74,6 +83,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				{ status: 403 },
 			);
 		let prior;
+
 		try {
 			prior = await existing(env.MUSIC_DB, input.submissionId);
 		} catch {
@@ -84,8 +94,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				code: "d1-write-failed",
 				occurredAt: new Date().toISOString(),
 			});
+
 			return Response.json({ ok: false, error: preserved }, { status: 503 });
 		}
+
 		if (prior)
 			return prior.email.toLowerCase() === input.email.toLowerCase()
 				? Response.json({
@@ -95,6 +107,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 					})
 				: Response.json({ ok: false, error: preserved }, { status: 409 });
 		const limit = await checkRateLimit(env.RATE_LIMIT, ip, "rl:software:");
+
 		if (!limit.allowed)
 			return Response.json(
 				{
@@ -105,12 +118,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				{ status: 429 },
 			);
 		let saved;
+
 		try {
 			saved = await saveOwnerRequest(env.MUSIC_DB, softwareRequest(input));
 		} catch (error) {
 			const raced = await existing(env.MUSIC_DB, input.submissionId).catch(
 				() => null,
 			);
+
 			if (raced)
 				return raced.email.toLowerCase() === input.email.toLowerCase()
 					? Response.json({
@@ -119,8 +134,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
 							clientCopyStatus: raced.details.clientCopyStatus ?? "failed",
 						})
 					: Response.json({ ok: false, error: preserved }, { status: 409 });
+
 			if (error instanceof RequestDetailsTooLargeError) {
 				await env.RATE_LIMIT.delete(`rl:software:${ip}`);
+
 				return Response.json(
 					{
 						ok: false,
@@ -129,6 +146,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 					{ status: 400 },
 				);
 			}
+
 			await env.RATE_LIMIT.delete(`rl:software:${ip}`);
 			await sendUrgentOwnerAlert(env, {
 				category: "request-storage",
@@ -137,13 +155,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				code: "d1-write-failed",
 				occurredAt: new Date().toISOString(),
 			});
+
 			return Response.json({ ok: false, error: preserved }, { status: 503 });
 		}
+
 		const clientCopyStatus = await deliverSoftwareBriefCopy(
 			env.MUSIC_DB,
 			saved,
 			env,
 		);
+
 		const notice = sendSoftwareRequestNotice({
 			requestId: saved.id,
 			path: input.path,
@@ -157,8 +178,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		}).catch(() =>
 			console.error("Owner notification email state is uncertain."),
 		);
+
 		if (locals.runtime?.ctx) locals.runtime.ctx.waitUntil(notice);
 		else await notice;
+
 		return Response.json({
 			ok: true,
 			brief: softwareBrief(saved),

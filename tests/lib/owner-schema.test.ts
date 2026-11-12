@@ -7,6 +7,7 @@ const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 function apply(path: string) {
 	const db = new DatabaseSync(":memory:");
 	db.exec(readFileSync(new URL(path, import.meta.url), "utf8"));
+
 	return db;
 }
 
@@ -21,11 +22,13 @@ describe("owner insights schema", () => {
 	it("rebuilds populated requests without breaking children or audio triggers", () => {
 		const db = new DatabaseSync(":memory:");
 		db.exec("PRAGMA foreign_keys=ON");
+
 		const migrations = readdirSync(
 			new URL("../../migrations/music/", import.meta.url),
 		)
 			.filter((name) => name.endsWith(".sql"))
 			.sort();
+
 		for (const name of migrations.filter((name) => name < "0019"))
 			db.exec(
 				readFileSync(
@@ -155,6 +158,7 @@ describe("owner insights schema", () => {
 	it("rebuilds offer audit without losing rows, ids or the personal-delete trigger", () => {
 		const db = new DatabaseSync(":memory:");
 		db.exec("PRAGMA foreign_keys=ON");
+
 		for (const name of readdirSync(
 			new URL("../../migrations/music/", import.meta.url),
 		)
@@ -166,6 +170,7 @@ describe("owner insights schema", () => {
 					"utf8",
 				),
 			);
+
 		for (const [index, kind] of [
 			"purchase",
 			"merchandise",
@@ -179,12 +184,15 @@ describe("owner insights schema", () => {
 				"INSERT INTO owner_request_audit(id,request_id,action,actor,note,occurred_at) VALUES (?,?,'created','system','keep','now')",
 			).run(index * 5 + 2, String(index));
 		}
+
 		const requests = db
 			.prepare("SELECT * FROM owner_requests ORDER BY id")
 			.all();
+
 		const audit = db
 			.prepare("SELECT * FROM owner_request_audit ORDER BY id")
 			.all();
+
 		db.exec("BEGIN");
 		db.exec(
 			readFileSync(
@@ -225,9 +233,11 @@ describe("owner insights schema", () => {
 		db.exec(
 			"INSERT INTO software_fit_reviews VALUES ('3','potential-fit','','now','owner')",
 		);
+
 		const offer = db.prepare(
 			"INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES (?,'3',?,?,'{}','now','now')",
 		);
+
 		offer.run("draft", 1, "draft");
 		offer.run("sent", 2, "sent");
 		expect(() => offer.run("draft-two", 3, "draft")).toThrow();
@@ -245,11 +255,13 @@ describe("owner insights schema", () => {
 	});
 	it("adds declined-studio closure to a database that already applied 0013 and 0014", () => {
 		const db = new DatabaseSync(":memory:");
+
 		const migrations = readdirSync(
 			new URL("../../migrations/music/", import.meta.url),
 		)
 			.filter((name) => name.endsWith(".sql"))
 			.sort();
+
 		for (const name of migrations.filter((name) => name < "0015"))
 			db.exec(
 				readFileSync(
@@ -289,6 +301,7 @@ describe("owner insights schema", () => {
 		) as {
 			devDependencies?: Record<string, string>;
 		};
+
 		expect(packageJson.devDependencies?.wrangler).toBe("4.146.0");
 	});
 
@@ -297,6 +310,7 @@ describe("owner insights schema", () => {
 			new URL("../../wrangler.jsonc", import.meta.url),
 			"utf8",
 		);
+
 		expect(config).toMatch(
 			/"binding": "MUSIC_DB"[\s\S]*?"migrations_dir": "migrations\/music"/,
 		);
@@ -320,6 +334,7 @@ describe("owner insights schema", () => {
 		)
 			.filter((name) => name.endsWith(".sql"))
 			.sort();
+
 		const concatenated = Buffer.concat(
 			migrations.map((name) =>
 				readFileSync(
@@ -327,10 +342,12 @@ describe("owner insights schema", () => {
 				),
 			),
 		);
+
 		expect(
 			readFileSync(new URL("../../db/music.sql", import.meta.url)),
 		).toEqual(concatenated);
 		const db = apply("../../db/music.sql");
+
 		const expected = [
 			"brief_suggestion_budget",
 			"music_event_daily",
@@ -366,6 +383,7 @@ describe("owner insights schema", () => {
 			"software_project_audit",
 			"software_milestone_payments",
 		];
+
 		expect(tableNames(db)).toEqual(expect.arrayContaining(expected));
 		expect(() =>
 			db.exec(

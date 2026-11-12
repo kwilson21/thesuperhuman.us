@@ -24,10 +24,13 @@ describe("urgent owner alerts", () => {
 				occurredAt: "2026-09-19T12:00:00.000Z",
 			},
 		);
+
 		expect(ok).toBe(true);
+
 		const payload = JSON.parse(
 			vi.mocked(fetch).mock.calls[0][1]?.body as string,
 		);
+
 		expect(payload.text).toContain("request-123");
 		expect(payload.text).not.toContain("artist@example.com");
 		expect(payload.reply_to).toBeUndefined();

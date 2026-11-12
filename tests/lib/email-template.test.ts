@@ -18,6 +18,7 @@ describe("renderEmail", () => {
 			button: { label: "Go", href: 'https://example.com/?a=1&b="2"' },
 			reason: "Because <you>",
 		});
+
 		expect(html).not.toContain("<script>");
 		expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
 		expect(html).toContain(
@@ -69,6 +70,7 @@ describe("renderEmail", () => {
 			expect(email.text).toContain("You received this");
 			expect(email.html + email.text).not.toContain("—");
 		}
+
 		expect(resumeDeliveryEmail("Jane <x>").html).toContain("Hi Jane &lt;x&gt;");
 	});
 });
@@ -76,6 +78,7 @@ describe("renderEmail", () => {
 // Sandbox mail must not send clients into the production studio.
 it("uses the configured origin for every studio email", () => {
 	const origin = "https://test.example.com";
+
 	for (const email of [
 		studioInvitationEmail(origin),
 		studioUpdateEmail(origin),

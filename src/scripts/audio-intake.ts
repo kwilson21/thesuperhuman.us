@@ -11,6 +11,7 @@ import { setupFormSubmission } from "./form-submission";
 import { openMessages } from "./form-messages";
 
 const form = document.querySelector<HTMLFormElement>("#song-intake");
+
 if (form) {
 	const steps = [...form.querySelectorAll<HTMLElement>("[data-step]")];
 	const next = form.querySelector<HTMLButtonElement>("[data-next]")!;
@@ -18,6 +19,7 @@ if (form) {
 	const submit = form.querySelector<HTMLButtonElement>("[type=submit]")!;
 	const status = form.querySelector<HTMLElement>("[data-form-status]")!;
 	let step = 0;
+
 	const payload = (
 		data: FormData,
 	): Omit<IntakeInput, "turnstileToken" | "permission"> & {
@@ -25,6 +27,7 @@ if (form) {
 	} => {
 		const service = String(data.get("service")) as IntakeService;
 		const direction = String(data.get("direction")) as Direction;
+
 		const preferences =
 			direction === "preferences"
 				? Object.fromEntries(
@@ -34,6 +37,7 @@ if (form) {
 						]),
 					)
 				: {};
+
 		return {
 			service,
 			direction,
@@ -48,6 +52,7 @@ if (form) {
 			permission: data.get("permission") === "on",
 		};
 	};
+
 	function renderService() {
 		const data = new FormData(form!);
 		const service = String(data.get("service")) as IntakeService;
@@ -93,14 +98,17 @@ if (form) {
 				: direction === "specific"
 					? "Describe your direction"
 					: "Add a reference or note (optional)";
+
 		if (service === "custom" || direction === "specific")
 			form!.querySelector<HTMLDetailsElement>("[data-reference-fields]")!.open =
 				true;
 	}
+
 	function renderReview() {
 		const input = payload(new FormData(form!));
 		const offer = audioOffers[input.service];
 		const selected = describePreferences(input.service, input.preferences);
+
 		const rows = [
 			[
 				"Service",
@@ -120,18 +128,23 @@ if (form) {
 			["Notes", input.referenceNote],
 			["Preserve / avoid", input.preserve],
 		];
+
 		const list = form!.querySelector<HTMLDListElement>("[data-review]")!;
 		list.replaceChildren();
+
 		for (const [label, value] of rows) {
 			if (!value) continue;
+
 			const dt = document.createElement("dt"),
 				dd = document.createElement("dd");
+
 			dt.textContent = label;
 			dd.textContent = value;
 			list.appendChild(dt);
 			list.appendChild(dd);
 		}
 	}
+
 	function showStep(index: number, focus = true) {
 		step = index;
 		steps.forEach((section, i) => (section.hidden = i !== index));
@@ -145,12 +158,16 @@ if (form) {
 		next.hidden = index === 2;
 		submit.hidden = index !== 2;
 		back.hidden = index === 0;
+
 		if (index === 2) renderReview();
 		next.textContent = index === 1 ? "Review request" : "Continue";
+
 		if (focus) steps[index].querySelector<HTMLElement>("h1")!.focus();
 	}
+
 	function validateStep(): boolean {
 		const input = payload(new FormData(form!));
+
 		// Contact details and captcha are only required on the final step.
 		const validation = validateIntake({
 			...input,
@@ -159,6 +176,7 @@ if (form) {
 			permission: true,
 			turnstileToken: "pending",
 		});
+
 		const fields =
 			step === 0
 				? ["service"]
@@ -170,22 +188,29 @@ if (form) {
 						"preserve",
 						"preferences",
 					];
+
 		const errors: Record<string, string> = validation.ok
 			? {}
 			: validation.errors;
+
 		return openMessages(form!, step === 2 ? submit : next, () => {
 			let first: HTMLElement | null = null;
+
 			for (const field of fields) {
 				const error = form!.querySelector<HTMLElement>(
 					`[data-form-error="${field}"]`,
 				);
+
 				const control = form!.elements.namedItem(field);
+
 				if (error) {
 					error.textContent = errors[field] ?? "";
 					error.hidden = !errors[field];
 				}
+
 				if (control instanceof HTMLElement) {
 					control.toggleAttribute("aria-invalid", Boolean(errors[field]));
+
 					if (errors[field]) {
 						control.closest("details")?.setAttribute("open", "");
 						control.setAttribute("aria-invalid", "true");
@@ -193,15 +218,20 @@ if (form) {
 					}
 				}
 			}
+
 			if (fields.some((field) => errors[field])) {
 				status.textContent = "Please check the highlighted fields.";
 				(first ?? status).focus();
+
 				return false;
 			}
+
 			status.textContent = "";
+
 			return true;
 		});
 	}
+
 	form.addEventListener("change", renderService);
 	next.addEventListener("click", () => {
 		if (validateStep()) showStep(step + 1);
@@ -218,6 +248,7 @@ if (form) {
 		if (step !== 2) {
 			event.preventDefault();
 			event.stopImmediatePropagation();
+
 			if (validateStep()) showStep(step + 1);
 		}
 	});
@@ -227,17 +258,20 @@ if (form) {
 		payload,
 		success: document.getElementById("intake-success")!,
 	});
+
 	// Reveal the earlier step when server validation identifies one of its fields.
 	const observer = new MutationObserver(() => {
 		const errorStep = steps.findIndex(
 			(section) =>
 				section.hidden && section.querySelector('[aria-invalid="true"]'),
 		);
+
 		form!
 			.querySelectorAll<HTMLElement>('[aria-invalid="true"]')
 			.forEach((control) =>
 				control.closest("details")?.setAttribute("open", ""),
 			);
+
 		if (errorStep >= 0) {
 			showStep(errorStep, false);
 			steps[errorStep]
@@ -245,18 +279,22 @@ if (form) {
 				?.focus();
 		}
 	});
+
 	observer.observe(form, {
 		attributes: true,
 		subtree: true,
 		attributeFilter: ["aria-invalid"],
 	});
 	const requestedService = new URLSearchParams(location.search).get("service");
+
 	if (requestedService && Object.hasOwn(audioOffers, requestedService)) {
 		const radio = form.querySelector<HTMLInputElement>(
 			`input[name="service"][value="${requestedService}"]`,
 		);
+
 		if (radio) radio.checked = true;
 	}
+
 	renderService();
 	showStep(0, false);
 }

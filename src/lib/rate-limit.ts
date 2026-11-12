@@ -18,6 +18,7 @@ export async function checkRateLimit(
 ): Promise<{ allowed: boolean }> {
 	const key = `${prefix}${ip}`;
 	const existing = Number((await kv.get(key)) ?? 0);
+
 	if (!Number.isFinite(existing) || existing >= maxRequests)
 		return { allowed: false };
 	// Note: there is a small race window between the get above returning null and
@@ -28,5 +29,6 @@ export async function checkRateLimit(
 	// edge may take ~60 s to propagate to another, so this rate limit is
 	// best-effort across the network; the 5-min window provides natural slack.
 	await kv.put(key, String(existing + 1), { expirationTtl: windowSeconds });
+
 	return { allowed: true };
 }

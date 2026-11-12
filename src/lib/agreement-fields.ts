@@ -2,6 +2,7 @@ import { z } from "astro/zod";
 import { softwareInvoiceTerms } from "./software-invoices";
 import { validProjectDate } from "./audio-project-updates";
 import { formatUSD, offerTotal, type OfferTerms } from "./software-offers";
+
 export const cleanText = (max: number) =>
 	z
 		.string()
@@ -12,15 +13,19 @@ export const cleanText = (max: number) =>
 			(v) => !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]|\p{Cs}/u.test(v),
 			"Remove control characters.",
 		);
+
 const required = (max: number) =>
 	cleanText(max).refine(Boolean, "This answer is required.");
+
 const date = z.string().refine(validProjectDate, "Choose a valid date.");
+
 const email = z
 	.string()
 	.trim()
 	.email()
 	.max(320)
 	.transform((v) => v.toLowerCase());
+
 export const contractorSchema = z
 	.object({
 		legal_name: required(200),
@@ -32,6 +37,7 @@ export const contractorSchema = z
 		registered_agent_confirmed: z.literal(true),
 	})
 	.strict();
+
 export const agreementDetailsSchema = z
 	.object({
 		planned_start: date,
@@ -104,8 +110,10 @@ export const agreementDetailsSchema = z
 	.superRefine((v, c) => {
 		const issue = (path: string, message: string) =>
 			c.addIssue({ code: "custom", path: [path], message });
+
 		const span =
 			(Date.parse(v.planned_end) - Date.parse(v.planned_start)) / 86400000;
+
 		if (span < 0 || span > 89)
 			issue("planned_end", "Use a period of up to 90 calendar days.");
 		let previous = v.planned_start;
@@ -117,8 +125,10 @@ export const agreementDetailsSchema = z
 				);
 			previous = m.target;
 		});
+
 		if (v.review_business_days > 30 && !v.longer_review_confirmed)
 			issue("longer_review_confirmed", "Confirm the longer review period.");
+
 		if (
 			v.data_retention !==
 				"MSA default, including one year for the private project page" &&
@@ -128,6 +138,7 @@ export const agreementDetailsSchema = z
 			).test(v.data_retention)
 		)
 			issue("data_retention", "State the agreed project page period in days.");
+
 		if (
 			v.handoff_access !== "MSA default" &&
 			!new RegExp(
@@ -136,24 +147,31 @@ export const agreementDetailsSchema = z
 			).test(v.handoff_access)
 		)
 			issue("handoff_access", "State the agreed handoff period in days.");
+
 		if (
 			v.data_retention ===
 				"MSA default, including one year for the private project page" &&
 			v.project_retention_days !== 365
 		)
 			issue("project_retention_days", "The default is one year.");
+
 		if (v.handoff_access === "MSA default" && v.handoff_access_days !== 30)
 			issue("handoff_access_days", "The default is 30 days.");
+
 		if (v.attachments.reduce((s, a) => s + a.bytes, 0) > 25 * 1024 * 1024)
 			issue("attachments", "Keep attachments under 25 MiB combined.");
 	});
+
 export type AgreementDetails = z.infer<typeof agreementDetailsSchema>;
+
 export function validateAgreementDetails(input: unknown, terms: OfferTerms) {
 	if (new TextEncoder().encode(JSON.stringify(input)).length > 65536)
 		throw new Error("Agreement details exceed 64 KiB.");
 	const v = agreementDetailsSchema.parse(input);
+
 	if (v.milestones.length !== terms.milestones.length)
 		throw new Error("Complete details for every purchased milestone.");
+
 	if (
 		terms.paymentMode === "invoice" &&
 		(!v.invoice_first_duration ||
@@ -176,8 +194,10 @@ export function validateAgreementDetails(input: unknown, terms: OfferTerms) {
 		)
 			throw new Error("Checkpoint criteria and evidence are required.");
 	});
+
 	return v;
 }
+
 export const clientAgreementSchema = z
 	.object({
 		legal_name: required(200),
@@ -199,17 +219,22 @@ export const clientAgreementSchema = z
 		(v) => v.portfolio === "allow" || !v.naming,
 		"Naming requires portfolio permission.",
 	);
+
 export type ClientAgreement = z.infer<typeof clientAgreementSchema>;
+
 export const signatureReference =
 	"Signature recorded in the signing certificate for this document.";
+
 export const consentText = (party: string, owner = false) =>
 	owner
 		? "I agree to sign and receive these documents electronically, and I’m authorized to sign for The Superhuman Group LLC."
 		: `I agree to sign and receive these documents electronically, and I’m authorized to sign for ${party}, a business. I can download and keep a complete copy.`;
+
 export const intentText = (owner = false, sowOnly = false) =>
 	owner
 		? `Countersigning applies your name above as your electronic signature on the ${sowOnly ? "statement of work" : "agreement and statement of work"} you reviewed.`
 		: `Signing applies your name above as your electronic signature on the ${sowOnly ? "statement of work" : "agreement and statement of work"} linked above.`;
+
 export function agreementValues(
 	terms: OfferTerms,
 	details: AgreementDetails,
@@ -232,6 +257,7 @@ export function agreementValues(
 			? `${formatUSD(softwareInvoiceTerms(terms, i, "deposit").amountCents)} deposit / ${formatUSD(softwareInvoiceTerms(terms, i, "balance").amountCents)} balance`
 			: `${formatUSD(m.feeCents)} full invoice`,
 	);
+
 	const checkpointAmount = (i: number) =>
 		terms.milestones.slice(0, i).reduce((sum, m) => sum + m.feeCents, 0) +
 		Math.round(
@@ -239,6 +265,7 @@ export function agreementValues(
 				terms.milestones[i].checkpoint!.cancellationPercent) /
 				100,
 		);
+
 	const base = {
 		client,
 		contractor,
@@ -301,6 +328,7 @@ export function agreementValues(
 				: "None",
 		})),
 	};
+
 	return {
 		...base,
 		contractor: {

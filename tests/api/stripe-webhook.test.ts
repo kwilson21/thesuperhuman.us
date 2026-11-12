@@ -3,7 +3,9 @@ import { readFileSync } from "node:fs";
 import { beforeEach, expect, it, vi } from "vitest";
 
 const verify = vi.hoisted(() => vi.fn());
+
 vi.mock("~/lib/stripe-invoicing", () => ({ verifyStripeWebhook: verify }));
+
 import { POST } from "~/pages/api/stripe/webhook";
 import { replaceTerminalInvoice } from "~/lib/audio-payments";
 
@@ -21,26 +23,32 @@ beforeEach(() => {
     INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
       offer_accepted_at,stripe_customer_id,booking_invoice_id,booking_invoice_url,booking_status,created_at,updated_at)
     VALUES ('request-1','Mix',20000,10000,10000,'2026-09-20T12:00:00Z','cus_1','in_booking','https://invoice.stripe.com/booking','open','2026-09-20T12:00:00Z','2026-09-20T12:00:00Z')`);
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		query,
 		args,
 		bind: (...values: unknown[]) => statement(query, values),
 		run: async () => {
 			const result = sql.prepare(query).run(...args);
+
 			return { meta: { changes: result.changes }, results: [] };
 		},
 		first: async () => sql.prepare(query).get(...args) ?? null,
 		all: async () => ({ results: sql.prepare(query).all(...args) }),
 	});
+
 	db = {
 		prepare: (query: string) => statement(query),
 		batch: async (items: ReturnType<typeof statement>[]) => {
 			sql.exec("BEGIN");
+
 			try {
 				const results = items.map((item) => ({
 					results: (sql.prepare(item.query).run(...item.args), []),
 				}));
+
 				sql.exec("COMMIT");
+
 				return results;
 			} catch (error) {
 				sql.exec("ROLLBACK");
@@ -197,6 +205,7 @@ it.each([
     INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('offer','software',1,'sent','{}','now','now');
     INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,created_by,created_at,updated_at)
       VALUES ('local','software','offer',0,'deposit',10000,7,'creating','owner','now','now')`);
+
 		const value = {
 			id: "evt_software",
 			type,
@@ -219,6 +228,7 @@ it.each([
 				},
 			},
 		};
+
 		verify.mockResolvedValue(value);
 		expect((await POST(context())).status).toBe(200);
 		expect((await POST(context())).status).toBe(200);

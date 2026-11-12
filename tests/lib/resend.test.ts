@@ -21,12 +21,14 @@ describe("sendContactEmails", () => {
 			ok: true,
 			json: async () => ({ id: "em_1" }),
 		});
+
 		const result = await sendContactEmails({
 			input,
 			apiKey: "key",
 			from: "noreply@thesuperhuman.us",
 			to: "kazon.wilson@thesuperhuman.us",
 		});
+
 		expect(result.ok).toBe(true);
 		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
@@ -43,9 +45,11 @@ describe("sendContactEmails", () => {
 			from: "noreply@thesuperhuman.us",
 			to: "kazon.wilson@thesuperhuman.us",
 		});
+
 		const primaryBody = JSON.parse(
 			(fetchMock.mock.calls[0][1] as RequestInit).body as string,
 		);
+
 		expect(primaryBody.to).toContain("kazon.wilson@thesuperhuman.us");
 		expect(primaryBody.reply_to).toBe("jane@example.com");
 		expect(primaryBody.subject).toBe("New message from Jane");
@@ -67,9 +71,11 @@ describe("sendContactEmails", () => {
 			from: "noreply@thesuperhuman.us",
 			to: "kazon.wilson@thesuperhuman.us",
 		});
+
 		const autoBody = JSON.parse(
 			(fetchMock.mock.calls[1][1] as RequestInit).body as string,
 		);
+
 		expect(autoBody.to).toContain("jane@example.com");
 		expect(autoBody.subject).toMatch(/thanks/i);
 		expect(autoBody.text).toContain("https://thesuperhuman.us/about#resumes");
@@ -88,12 +94,14 @@ describe("sendContactEmails", () => {
 			ok: true,
 			json: async () => ({ id: "em_2" }),
 		});
+
 		const result = await sendContactEmails({
 			input,
 			apiKey: "key",
 			from: "noreply@thesuperhuman.us",
 			to: "kazon.wilson@thesuperhuman.us",
 		});
+
 		expect(result.ok).toBe(false);
 	});
 
@@ -108,12 +116,14 @@ describe("sendContactEmails", () => {
 			status: 500,
 			json: async () => ({ message: "fail" }),
 		});
+
 		const result = await sendContactEmails({
 			input,
 			apiKey: "key",
 			from: "noreply@thesuperhuman.us",
 			to: "kazon.wilson@thesuperhuman.us",
 		});
+
 		expect(result.ok).toBe(true);
 	});
 });

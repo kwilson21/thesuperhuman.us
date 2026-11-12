@@ -26,11 +26,13 @@ export interface MotionContext {
 /** Adds .is-playing for `ms`, then rests. Calling play() while it plays does nothing. */
 export function scenePlayer(element: HTMLElement, ms: number) {
 	let timer: ReturnType<typeof setTimeout> | undefined;
+
 	const stop = () => {
 		clearTimeout(timer);
 		timer = undefined;
 		element.classList.remove("is-playing");
 	};
+
 	const play = () => {
 		if (timer) return;
 		element.classList.remove("is-playing");
@@ -38,6 +40,7 @@ export function scenePlayer(element: HTMLElement, ms: number) {
 		element.classList.add("is-playing");
 		timer = setTimeout(stop, ms);
 	};
+
 	return { play, stop };
 }
 
@@ -63,12 +66,15 @@ function start(setup?: (context: MotionContext) => void): () => void {
 	const scenes = [...document.querySelectorAll<HTMLElement>("[data-scene]")];
 	const last = new Map<HTMLElement, number>();
 	let pending = 0;
+
 	const measure = () => {
 		pending = 0;
 		const viewport = innerHeight;
 		const maxScroll = root.scrollHeight - viewport;
+
 		const readings = scenes.map((element) => {
 			const top = element.getBoundingClientRect().top;
+
 			return sceneProgress({
 				top,
 				viewport,
@@ -77,17 +83,21 @@ function start(setup?: (context: MotionContext) => void): () => void {
 				topAtMaxScroll: top + scrollY - maxScroll,
 			});
 		});
+
 		scenes.forEach((element, index) => {
 			const progress = readings[index];
+
 			if (Math.abs((last.get(element) ?? -1) - progress) < 0.0015) return;
 			last.set(element, progress);
 			element.style.setProperty("--p", progress.toFixed(4));
 			hooks.get(element)?.(progress);
 		});
 	};
+
 	const schedule = () => {
 		pending ||= requestAnimationFrame(measure);
 	};
+
 	addEventListener("scroll", schedule, { passive: true, signal });
 	addEventListener("resize", schedule, { signal });
 	measure();
@@ -106,6 +116,7 @@ function start(setup?: (context: MotionContext) => void): () => void {
 				scenePlayer(element, Number(element.dataset.scenePlay) || 4800),
 			),
 		);
+
 	const playWatch = new IntersectionObserver(
 		(entries) =>
 			entries.forEach((entry) => {
@@ -115,6 +126,7 @@ function start(setup?: (context: MotionContext) => void): () => void {
 			}),
 		{ threshold: 0.5 },
 	);
+
 	players.forEach((_, element) => playWatch.observe(element));
 	cleanups.push(() => {
 		playWatch.disconnect();
@@ -129,18 +141,23 @@ function start(setup?: (context: MotionContext) => void): () => void {
 	const arrivals = [
 		...document.querySelectorAll<HTMLElement>("[data-scene-arrive]"),
 	];
+
 	const looked = new Set<Element>();
+
 	const seen = (entry: IntersectionObserverEntry) =>
 		entry.intersectionRatio >= 0.5 ||
 		entry.intersectionRect.height >=
 			(entry.rootBounds?.height ?? innerHeight) / 2;
+
 	const arriveWatch = new IntersectionObserver(
 		(entries) =>
 			entries.forEach((entry) => {
 				if (!looked.has(entry.target)) {
 					looked.add(entry.target);
+
 					if (entry.intersectionRatio < 0.1) {
 						entry.target.classList.add("is-waiting");
+
 						return;
 					}
 				} else if (!seen(entry)) return;
@@ -149,23 +166,27 @@ function start(setup?: (context: MotionContext) => void): () => void {
 			}),
 		{ threshold: [0.1, 0.2, 0.3, 0.4, 0.5] },
 	);
+
 	arrivals.forEach((element) => arriveWatch.observe(element));
 	cleanups.push(() => {
 		arriveWatch.disconnect();
 		arrivals.forEach((element) => element.classList.remove("is-waiting"));
 	});
+
 	const reveals = [
 		...new Set([
 			...document.querySelectorAll<HTMLElement>("[data-reveal]"),
 			...onRevealRuns.keys(),
 		]),
 	] as HTMLElement[];
+
 	const revealed = (element: Element) => {
 		if (element.classList.contains("is-in")) return;
 		element.classList.add("is-in");
 		observer.unobserve(element);
 		onRevealRuns.get(element)?.forEach((run) => run());
 	};
+
 	const observer = new IntersectionObserver(
 		(entries) =>
 			entries.forEach(
@@ -173,9 +194,11 @@ function start(setup?: (context: MotionContext) => void): () => void {
 			),
 		{ rootMargin: "0px 0px -12% 0px" },
 	);
+
 	// Anything on screen at first paint has been seen; only what is below the fold waits.
 	reveals.forEach((element) => {
 		const box = element.getBoundingClientRect();
+
 		if (box.top < innerHeight && box.bottom > 0) revealed(element);
 		else observer.observe(element);
 	});
@@ -186,6 +209,7 @@ function start(setup?: (context: MotionContext) => void): () => void {
 			const block = reveals.find((element) =>
 				element.contains(event.target as Node),
 			);
+
 			if (!block) return;
 			block.classList.add("is-instant");
 			revealed(block);
@@ -244,6 +268,7 @@ function start(setup?: (context: MotionContext) => void): () => void {
 	requestAnimationFrame(() =>
 		requestAnimationFrame(() => root.classList.remove("motion-starting")),
 	);
+
 	return () => {
 		controller.abort();
 		cleanups.forEach((cleanup) => cleanup());
@@ -255,10 +280,12 @@ function start(setup?: (context: MotionContext) => void): () => void {
 export function runMotion(setup?: (context: MotionContext) => void) {
 	let stop: (() => void) | undefined;
 	let printed = false;
+
 	const halt = () => {
 		stop?.();
 		stop = undefined;
 	};
+
 	const sync = () => {
 		if (motionQuery.matches && !stop && !printed) {
 			try {
@@ -269,12 +296,15 @@ export function runMotion(setup?: (context: MotionContext) => void) {
 			}
 		} else if (!motionQuery.matches && stop) halt();
 	};
+
 	motionQuery.addEventListener("change", sync);
+
 	// A printed or saved page gets every resting frame; motion stays off afterwards.
 	const print = () => {
 		printed = true;
 		halt();
 	};
+
 	addEventListener("beforeprint", print);
 	matchMedia("print").addEventListener("change", (event) => {
 		if (event.matches) print();

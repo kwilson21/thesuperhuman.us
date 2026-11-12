@@ -12,26 +12,31 @@ const text = (max: number, oneLine = false) =>
 			"Remove control characters.",
 		)
 		.refine((value) => !oneLine || !/[\r\n]/.test(value), "Use one line.");
+
 const required = (max: number) =>
 	text(max, true).refine(
 		(value) => value.length > 0,
 		"This answer is required.",
 	);
+
 const cents = z
 	.number()
 	.int("Use whole cents.")
 	.min(100, "The fee must be at least $1.")
 	.max(100_000_000, "The amount must be $1,000,000 or less.");
+
 const estimateCents = z
 	.number()
 	.int("Use whole cents.")
 	.min(0, "Use a non-negative amount.")
 	.max(Number.MAX_SAFE_INTEGER, "Use a safe whole-cent amount.");
+
 const lines = (max: number, count: number) =>
 	z
 		.array(required(max))
 		.min(1, "Add at least one line.")
 		.max(count, `Add no more than ${count} lines.`);
+
 export const offerTermsSchema = z
 	.object({
 		outcome: required(120),
@@ -77,6 +82,7 @@ export const offerTermsSchema = z
 				path: ["projectRange", "highCents"],
 				message: "The high estimate must be at least the low estimate.",
 			});
+
 		if (value.projectRange && value.projectRange.lowCents < offerTotal(value))
 			ctx.addIssue({
 				code: "custom",
@@ -84,7 +90,9 @@ export const offerTermsSchema = z
 				message: "The estimate must be at least the offer total.",
 			});
 	});
+
 export type OfferTerms = z.infer<typeof offerTermsSchema>;
+
 export function validateOfferTerms(input: unknown) {
 	const result = offerTermsSchema.safeParse(input, {
 		errorMap: (issue) => ({
@@ -94,20 +102,24 @@ export function validateOfferTerms(input: unknown) {
 					: "This answer is required.",
 		}),
 	});
+
 	if (result.success) {
 		const errors: Record<string, string> = {};
 		result.data.milestones.forEach((milestone, index) => {
 			const normalized = milestone.deliverables.map((line) =>
 				line.normalize("NFC").replace(/\s+/g, " ").trim().toLowerCase(),
 			);
+
 			if (new Set(normalized).size !== normalized.length)
 				errors[`milestones.${index}.deliverables`] =
 					"Each deliverable needs to be different.";
 		});
+
 		return Object.keys(errors).length
 			? { ok: false as const, errors }
 			: { ok: true as const, value: result.data };
 	}
+
 	return {
 		ok: false as const,
 		errors: Object.fromEntries(
@@ -115,20 +127,24 @@ export function validateOfferTerms(input: unknown) {
 		),
 	};
 }
+
 export const paymentSchedules = {
 	standard:
 		"50% of each milestone before it starts, the balance on delivery, due within 15 days.",
 	invoice:
 		"Each milestone is invoiced on delivery, due within 30 days. The next milestone starts after the previous one is paid.",
 } as const;
+
 export const offerTotal = (terms: Pick<OfferTerms, "milestones">) =>
 	terms.milestones.reduce((sum, milestone) => sum + milestone.feeCents, 0);
+
 export const formatUSD = (cents: number) =>
 	new Intl.NumberFormat("en-US", {
 		style: "currency",
 		currency: "USD",
 		maximumFractionDigits: cents % 100 ? 2 : 0,
 	}).format(cents / 100);
+
 export type SoftwareOffer = {
 	agreement_details_json?: string | null;
 	msa_template_id?: string | null;
@@ -146,6 +162,7 @@ export type SoftwareOffer = {
 	sent_at: string | null;
 	sent_by: string | null;
 };
+
 export async function listSoftwareOffers(db: D1Database, id: string) {
 	return (
 		await db
@@ -156,6 +173,7 @@ export async function listSoftwareOffers(db: D1Database, id: string) {
 			.all<SoftwareOffer>()
 	).results;
 }
+
 // Explicit allowlist: client rendering never receives the owner record or audit data.
 export function clientOffer(
 	request: OwnerRequest,
@@ -163,13 +181,17 @@ export function clientOffer(
 	offers: SoftwareOffer[] = [],
 ) {
 	let input: unknown;
+
 	try {
 		input = JSON.parse(offer.terms_json);
 	} catch {
 		return null;
 	}
+
 	const terms = offerTermsSchema.safeParse(input);
+
 	if (!terms.success) return null;
+
 	return {
 		name: request.name,
 		company:
@@ -189,7 +211,9 @@ export function clientOffer(
 		terms: terms.data,
 	};
 }
+
 export type ClientOffer = NonNullable<ReturnType<typeof clientOffer>>;
+
 export async function hashOfferToken(token: string) {
 	return Array.from(
 		new Uint8Array(
@@ -198,6 +222,7 @@ export async function hashOfferToken(token: string) {
 		(byte) => byte.toString(16).padStart(2, "0"),
 	).join("");
 }
+
 export function newOfferToken() {
 	return btoa(
 		String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))),
@@ -206,8 +231,10 @@ export function newOfferToken() {
 		.replaceAll("/", "_")
 		.replaceAll("=", "");
 }
+
 export async function getLinkedOffer(db: D1Database, token: string) {
 	if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
+
 	return db
 		.prepare(`SELECT o.* FROM software_offers o JOIN software_offer_links l ON l.request_id=o.request_id
     JOIN owner_requests r ON r.id=o.request_id WHERE l.token_hash=? AND l.revoked_at IS NULL AND o.status='sent'
@@ -218,8 +245,10 @@ export async function getLinkedOffer(db: D1Database, token: string) {
 
 export const offerSendingMessage =
 	"An offer is still being sent. Try again in a moment.";
+
 const recentLiveLink =
 	"SELECT 1 FROM software_offer_links WHERE request_id=? AND revoked_at IS NULL AND created_at>?";
+
 export function offerSendingGuard(db: D1Database, requestId: string) {
 	return db
 		.prepare(
@@ -227,6 +256,7 @@ export function offerSendingGuard(db: D1Database, requestId: string) {
 		)
 		.bind(requestId, new Date(Date.now() - 20_000).toISOString());
 }
+
 export async function offerIsSending(db: D1Database, requestId: string) {
 	return Boolean(
 		await db

@@ -32,6 +32,7 @@ const payment = {
 	createdAt: "2026-09-20T13:00:00.000Z",
 	updatedAt: "2026-09-20T13:00:00.000Z",
 };
+
 const request = {
 	name: "Artist Name",
 	email: "artist@example.com",
@@ -91,12 +92,14 @@ describe("Stripe invoicing", () => {
 
 	it("creates, finalizes, and sends the booking invoice with bounded metadata and idempotency", async () => {
 		const stripe = fakeStripe();
+
 		const result = await createInvoiceWithClient(
 			stripe,
 			request,
 			payment,
 			"booking",
 		);
+
 		expect(stripe.customers.create).toHaveBeenCalledWith(
 			{
 				email: "artist@example.com",
@@ -135,12 +138,14 @@ describe("Stripe invoicing", () => {
 
 	it("reuses the customer and bills the exact remaining balance", async () => {
 		const stripe = fakeStripe();
+
 		const result = await createInvoiceWithClient(
 			stripe,
 			request,
 			{ ...payment, stripeCustomerId: "cus_existing" },
 			"balance",
 		);
+
 		expect(stripe.customers.create).not.toHaveBeenCalled();
 		expect(stripe.invoiceItems.create).toHaveBeenCalledWith(
 			expect.objectContaining({

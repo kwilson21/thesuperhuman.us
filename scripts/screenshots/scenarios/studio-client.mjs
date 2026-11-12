@@ -8,12 +8,14 @@ const at = "2026-09-22T12:00:00.000Z";
 const id = "screenshot-studio";
 const email = "studio-client@example.com";
 const token = "00000000-0000-4000-8000-000000000000".repeat(2);
+
 const day = (offset) =>
 	new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
 
 /** One second of a shaped 220 Hz tone as a 16-bit mono WAV, and its waveform peaks. */
 function reviewMix() {
 	const rate = 8000;
+
 	const samples = Array.from(
 		{ length: rate },
 		(_, i) =>
@@ -21,12 +23,15 @@ function reviewMix() {
 			Math.exp((-1.5 * i) / rate) *
 			(0.4 + 0.6 * Math.abs(Math.sin(i / 700))),
 	);
+
 	const bytes = new Uint8Array(44 + samples.length * 2);
 	const view = new DataView(bytes.buffer);
+
 	const text = (offset, value) =>
 		[...value].forEach((character, index) =>
 			view.setUint8(offset + index, character.charCodeAt(0)),
 		);
+
 	text(0, "RIFF");
 	view.setUint32(4, 36 + samples.length * 2, true);
 	text(8, "WAVE");
@@ -44,13 +49,16 @@ function reviewMix() {
 		view.setInt16(44 + index * 2, Math.round(sample * 32767), true),
 	);
 	const bars = 160;
+
 	const peaks = Array.from({ length: bars }, (_, bar) => {
 		const slice = samples.slice(
 			Math.floor((bar * samples.length) / bars),
 			Math.floor(((bar + 1) * samples.length) / bars),
 		);
+
 		return Math.round(Math.max(...slice.map(Math.abs)) * 100);
 	});
+
 	return { bytes, peaks };
 }
 
@@ -64,8 +72,10 @@ export default {
       VALUES ('${createHash("sha256").update(token).digest("hex")}','${email}','${at}','2099-01-01T00:00:00.000Z','${at}')`);
 		const cookie = { name: "studio_session", value: token };
 		const project = `/api/owner/projects/${id}`;
+
 		const shots = async (title, path, name, options = {}) => {
 			const images = [];
+
 			for (const viewport of ["desktop", "phone"]) {
 				images.push({
 					file: await capture({
@@ -77,8 +87,10 @@ export default {
 					caption: `${title}, ${viewport}`,
 				});
 			}
+
 			return { title, images };
 		};
+
 		const steps = [];
 
 		await ownerFetch(`/api/owner/requests/${id}`, { action: "review" });
@@ -149,6 +161,7 @@ export default {
 		});
 
 		const { bytes, peaks } = reviewMix();
+
 		const start = await ownerFetch(`${project}/uploads`, {
 			action: "start",
 			version: "review",
@@ -156,11 +169,13 @@ export default {
 			mediaType: "audio/wav",
 			byteSize: bytes.length,
 		});
+
 		const part = await ownerFetch(
 			`${project}/uploads?uploadId=${start.uploadId}&part=1`,
 			bytes,
 			"PUT",
 		);
+
 		await ownerFetch(`${project}/uploads`, {
 			action: "complete",
 			uploadId: start.uploadId,
@@ -233,6 +248,7 @@ export default {
 				{ cookie, status: 404 },
 			),
 		);
+
 		return steps;
 	},
 };

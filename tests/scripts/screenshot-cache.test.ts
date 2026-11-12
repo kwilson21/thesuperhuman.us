@@ -68,6 +68,7 @@ describe("routeFiles", () => {
 
 describe("sourceClosure", () => {
 	const root = "/repo";
+
 	const graph = {
 		"/repo/src/pages/a.astro": {
 			file: "/repo/src/pages/a.astro",
@@ -122,6 +123,7 @@ describe("sourceClosure", () => {
 				imports: ["/repo/src/lib/also-unrelated.ts"],
 			},
 		};
+
 		expect(sourceClosure(tailwind, ["src/pages/c.astro"], root).files).toEqual([
 			"src/pages/c.astro",
 			"src/styles/global.css",
@@ -138,15 +140,18 @@ describe("sourceClosure", () => {
 
 describe("scenarioPlanner", () => {
 	const names = ["a-writer", "b-reader", "c-writer", "d-reader"];
+
 	const reference = {
 		"a-writer": { writer: true },
 		"b-reader": { writer: false },
 		"c-writer": { writer: true },
 		"d-reader": { writer: false },
 	};
+
 	const run = (changed: string[], wrote: Record<string, boolean> = {}) => {
 		const planner = scenarioPlanner(names, new Set(changed), reference);
 		const ran: string[] = [];
+
 		for (const name of names) {
 			if (!planner.shouldRun(name)) continue;
 			ran.push(name);
@@ -155,6 +160,7 @@ describe("scenarioPlanner", () => {
 				wrote[name] ?? reference[name as keyof typeof reference].writer,
 			);
 		}
+
 		return ran;
 	};
 
@@ -183,6 +189,7 @@ describe("scenarioPlanner", () => {
 		const planner = scenarioPlanner(["new", "old"], new Set(["new"]), {
 			old: { writer: false },
 		});
+
 		expect(planner.shouldRun("new")).toBe(true);
 		planner.ran("new", true);
 		expect(planner.shouldRun("old")).toBe(true);
@@ -192,6 +199,7 @@ describe("scenarioPlanner", () => {
 describe("hashFiles", () => {
 	it("changes with content, names and deletions", async () => {
 		const root = await mkdtemp(join(tmpdir(), "screenshot-cache-"));
+
 		try {
 			await mkdir(join(root, "dir"));
 			await writeFile(join(root, "dir/a.txt"), "a");
@@ -213,6 +221,7 @@ describe("hashFiles", () => {
 describe("stateHash", () => {
 	it("changes when a row does, not when Miniflare's query bookkeeping does", async () => {
 		const root = await mkdtemp(join(tmpdir(), "screenshot-state-"));
+
 		try {
 			await mkdir(join(root, "d1"));
 			await writeFile(join(root, "blob"), "kv value");
@@ -281,6 +290,7 @@ describe("Vite's dependency version tag", () => {
 			new TextEncoder().encode(
 				`import x from "/node_modules/.vite/deps/${name}.js?v=${version}";`,
 			);
+
 		expect(hashBody(body("41f0327e"))).toBe(hashBody(body("1aeeb6dc")));
 		expect(hashBody(body("41f0327e"))).not.toBe(
 			hashBody(body("41f0327e", "jose")),

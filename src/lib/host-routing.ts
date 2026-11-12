@@ -9,13 +9,17 @@ export function rewritePathForHost(
 	pathname: string,
 ): string | null {
 	const hostNoPort = host.split(":")[0].toLowerCase();
+
 	if (hostNoPort !== AUDIO_HOST) return null;
 
 	if (pathname.startsWith("/api/")) return null;
+
 	if (pathname === "/music" || pathname.startsWith("/music/")) return null;
+
 	if (pathname === "/audio" || pathname.startsWith("/audio/")) return null;
 
 	if (pathname === "/") return "/audio/";
+
 	return `/audio${pathname}`;
 }
 

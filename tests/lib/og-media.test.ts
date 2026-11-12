@@ -13,18 +13,22 @@ import {
 } from "~/lib/og-media";
 
 const scenes = Object.keys(OG_SCENES) as OgScene[];
+
 const sceneFiles = readdirSync("scripts/og-video/scenes")
 	.filter((name) => name.endsWith(".html"))
 	.map((name) => name.slice(0, -5));
+
 const { video } = ogMedia(DEFAULT_OG_SCENE);
 const name = video.slice("/og/".length, -".mp4".length);
 const bytes = new Uint8Array(Array.from({ length: 200 }, (_, index) => index));
+
 const assets = {
 	fetch: async (input: RequestInfo | URL) =>
 		String(input).endsWith(`/og/raw/${name}.mp4`)
 			? new Response(bytes)
 			: new Response("Not found", { status: 404 }),
 } as unknown as Fetcher;
+
 const request = (headers: Record<string, string> = {}, method = "GET") =>
 	new Request(`https://thesuperhuman.us${video}`, { method, headers });
 
@@ -69,6 +73,7 @@ describe("link-preview video route", () => {
 			name,
 			assets,
 		);
+
 		expect(response.status).toBe(416);
 		expect(response.headers.get("content-range")).toBe("bytes */200");
 	});
@@ -96,8 +101,10 @@ describe("scene routing", () => {
 				.filter((route) => !route.endsWith("/*"))
 				.map((route) => [route, scene] as const),
 		);
+
 		for (const [route, scene] of exact)
 			expect(ogSceneFor(route)).toEqual({ scene, exact: true });
+
 		for (const scene of scenes) {
 			for (const route of OG_SCENES[scene].routes.filter((route) =>
 				route.endsWith("/*"),
@@ -113,12 +120,14 @@ describe("scene routing", () => {
 				).toBe(true);
 			}
 		}
+
 		expect(ogSceneFor("/no-such-section/page")).toBeNull();
 	});
 
 	it("picks the longest family whatever order the scenes are declared in", () => {
 		const parent = { routes: ["/building/*"] };
 		const child = { routes: ["/building/personal-website/*"] };
+
 		for (const table of [
 			{ building: parent, "personal-website": child },
 			{ "personal-website": child, building: parent },
@@ -162,6 +171,7 @@ describe("rendered scenes", () => {
 			const mp4 = readFileSync(file);
 			expect(mp4.length).toBeLessThan(2.5 * 1024 * 1024);
 			const boxes: string[] = [];
+
 			for (
 				let offset = 0;
 				offset < mp4.length;
@@ -179,8 +189,10 @@ describe("rendered scenes", () => {
 			const entry = (
 				rendered as Record<string, { inputs: string[]; source: string }>
 			)[scene];
+
 			expect(entry.inputs).toContain(`scripts/og-video/scenes/${scene}.html`);
 			const digest = createHash("sha256");
+
 			for (const input of entry.inputs)
 				digest.update(`${input}\0`).update(readFileSync(input)).update("\0");
 			expect(
@@ -197,10 +209,12 @@ describe("rendered scenes", () => {
 				ogMedia(scene).video.slice("/og/".length),
 			]),
 		);
+
 		const files = [
 			...readdirSync("public/og"),
 			...readdirSync("public/og/raw"),
 		].filter((file) => /\.(png|jpg|mp4)$/.test(file));
+
 		expect(files.filter((file) => !current.has(file))).toEqual([]);
 	});
 });

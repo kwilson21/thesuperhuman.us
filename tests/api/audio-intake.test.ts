@@ -10,12 +10,15 @@ vi.mock("~/lib/owner-requests", () => ({
 		...input,
 	})),
 }));
+
 vi.mock("~/lib/owner-alerts", () => ({
 	sendUrgentOwnerAlert: vi.fn(async () => true),
 }));
+
 vi.mock("~/lib/audio-project-invitations", () => ({
 	deliverProjectInvitation: vi.fn(async () => {}),
 }));
+
 const base = {
 	service: "vocal-mix",
 	title: "My song",
@@ -27,6 +30,7 @@ const base = {
 	turnstileToken: "test",
 	fileLink: "https://drive.google.com/example",
 };
+
 function context(body: unknown = base, origin = "https://thesuperhuman.us") {
 	return {
 		request: new Request("https://thesuperhuman.us/api/audio-intake", {
@@ -52,6 +56,7 @@ function context(body: unknown = base, origin = "https://thesuperhuman.us") {
 		},
 	} as any;
 }
+
 beforeEach(() => {
 	vi.clearAllMocks();
 	vi.stubGlobal(
@@ -63,6 +68,7 @@ beforeEach(() => {
 		),
 	);
 });
+
 describe("intake endpoint", () => {
 	it("stores reviewed details without fetching the shared file", async () => {
 		const res = await POST(context());
@@ -80,9 +86,11 @@ describe("intake endpoint", () => {
 		const res = await POST(context());
 		expect(res.status).toBe(200);
 		expect(deliverProjectInvitation).not.toHaveBeenCalled();
+
 		const resendCalls = (fetch as any).mock.calls.filter(([url]: [string]) =>
 			String(url).includes("api.resend.com"),
 		);
+
 		expect(resendCalls).toHaveLength(1);
 		const body = JSON.parse(resendCalls[0][1].body);
 		expect(body.to).toEqual(["owner@example.com"]);
@@ -171,6 +179,7 @@ describe("intake endpoint", () => {
 		const response = await POST(
 			context({ ...base, direction: "specific", referenceNote: "  " }),
 		);
+
 		expect(response.status).toBe(400);
 		expect(await response.json()).toEqual({
 			ok: false,
@@ -182,17 +191,21 @@ describe("intake endpoint", () => {
 	});
 	it("allows a corrected captcha immediately while limiting successful submissions", async () => {
 		const stored = new Map<string, string>();
+
 		const kv = {
 			get: vi.fn(async (key: string) => stored.get(key) ?? null),
 			put: vi.fn(async (key: string, value: string) => {
 				stored.set(key, value);
 			}),
 		};
+
 		const submit = () => {
 			const ctx = context();
 			ctx.locals.runtime.env.RATE_LIMIT = kv;
+
 			return POST(ctx);
 		};
+
 		vi.mocked(fetch).mockResolvedValueOnce({
 			ok: true,
 			json: async () => ({ success: false }),

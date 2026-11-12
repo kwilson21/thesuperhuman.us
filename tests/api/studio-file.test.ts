@@ -9,10 +9,12 @@ import {
 } from "~/lib/audio-project-files";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
 const baseline = readFileSync(
 	new URL("../../db/music.sql", import.meta.url),
 	"utf8",
 );
+
 const secret = "studio-code-key-for-tests-32-characters";
 const now = new Date();
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database, token: string;
@@ -22,6 +24,7 @@ beforeEach(async () => {
 	sql = new DatabaseSync(":memory:");
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(baseline);
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		query,
 		args,
@@ -32,17 +35,21 @@ beforeEach(async () => {
 		first: async () => sql.prepare(query).get(...args) ?? null,
 		all: async () => ({ results: sql.prepare(query).all(...args) }),
 	});
+
 	db = {
 		prepare: (query: string) => statement(query),
 		batch: async (items: ReturnType<typeof statement>[]) => {
 			sql.exec("BEGIN");
+
 			try {
 				const results = items.map((item) => ({
 					results: /\bRETURNING\b/i.test(item.query)
 						? sql.prepare(item.query).all(...item.args)
 						: (sql.prepare(item.query).run(...item.args), []),
 				}));
+
 				sql.exec("COMMIT");
+
 				return results;
 			} catch (error) {
 				sql.exec("ROLLBACK");
@@ -50,9 +57,11 @@ beforeEach(async () => {
 			}
 		},
 	} as unknown as D1Database;
+
 	const insertRequest =
 		sql.prepare(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
     VALUES (?,'service',?,'A song','reviewed',?,?)`);
+
 	insertRequest.run(
 		"song-1",
 		"artist@example.com",
@@ -88,9 +97,11 @@ beforeEach(async () => {
 		secret,
 		now,
 	))!;
+
 	const insertFile = sql.prepare(`INSERT INTO audio_project_files
     (id,request_id,version,object_key,display_name,media_type,byte_size,downloadable,status,uploaded_at,published_at,expires_at)
     VALUES (?,?,?,?,?,'audio/mpeg',5,?,'published',?,?,?)`);
+
 	insertFile.run(
 		"review-1",
 		"song-1",
@@ -144,6 +155,7 @@ function context(
 ) {
 	const project = options.project ?? "song-1";
 	const url = `https://thesuperhuman.us/api/studio/projects/${project}/files/${fileId}${options.download ? "?download=1" : ""}`;
+
 	return {
 		params: { id: project, fileId },
 		request: new Request(url, {

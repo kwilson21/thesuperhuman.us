@@ -8,6 +8,7 @@ afterEach(() => {
 function element(extra: Record<string, unknown> = {}) {
 	const handlers: Record<string, Array<(event?: unknown) => void>> = {};
 	const attributes: Record<string, string> = {};
+
 	return {
 		handlers,
 		disabled: false,
@@ -40,6 +41,7 @@ function element(extra: Record<string, unknown> = {}) {
 
 it("shows an accessible problem and disables the controls when the audio cannot load or play, then retries", async () => {
 	const load = vi.fn();
+
 	const audio = element({
 		paused: true,
 		duration: NaN,
@@ -52,14 +54,17 @@ it("shows an accessible problem and disables the controls when the audio cannot 
 			});
 		}),
 	});
+
 	const toggle = element();
 	toggle.setAttribute("aria-label", "Play Review");
+
 	const seek = element(),
 		time = element(),
 		wave = element(),
 		problem = element(),
 		status = element(),
 		retry = element();
+
 	const parts: Record<string, unknown> = {
 		audio,
 		"[data-player-toggle]": toggle,
@@ -70,9 +75,11 @@ it("shows an accessible problem and disables the controls when the audio cannot 
 		"[data-player-status]": status,
 		"[data-player-retry]": retry,
 	};
+
 	const player = element({
 		querySelector: (selector: string) => parts[selector] ?? null,
 	});
+
 	vi.stubGlobal("document", { querySelectorAll: () => [player] });
 	setupProjectPlayers();
 

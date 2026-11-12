@@ -10,7 +10,9 @@ import {
 vi.mock("~/lib/audio-resend", () => ({
 	sendStudioSignInNotice: vi.fn(async () => ({ ok: true })),
 }));
+
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
 const baseline = readFileSync(
 	new URL("../../db/music.sql", import.meta.url),
 	"utf8",
@@ -20,6 +22,7 @@ function fixture() {
 	const sql = new DatabaseSync(":memory:");
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(baseline);
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		bind: (...values: unknown[]) => statement(query, values),
 		run: async () => ({
@@ -27,13 +30,16 @@ function fixture() {
 		}),
 		first: async () => sql.prepare(query).get(...args) ?? null,
 	});
+
 	const db = {
 		prepare: (query: string) => statement(query),
 	} as unknown as D1Database;
+
 	sql
 		.prepare(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
     VALUES ('song-1','service','artist@example.com','A song','new','2026-09-22','2026-09-22')`)
 		.run();
+
 	return { sql, db };
 }
 
@@ -42,10 +48,12 @@ beforeEach(() => vi.clearAllMocks());
 describe("project invitations", () => {
 	it("sends one sign-in notice and records success", async () => {
 		const { sql, db } = fixture();
+
 		const env = {
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "studio@example.com",
 		} as Env;
+
 		await Promise.all([
 			deliverProjectInvitation(db, "song-1", env),
 			deliverProjectInvitation(db, "song-1", env),
@@ -72,10 +80,12 @@ describe("project invitations", () => {
 
 	it("retains a failed invitation for an explicit retry", async () => {
 		const { sql, db } = fixture();
+
 		const env = {
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "studio@example.com",
 		} as Env;
+
 		vi.mocked(sendStudioSignInNotice).mockResolvedValueOnce({ ok: false });
 		await deliverProjectInvitation(db, "song-1", env);
 		expect(
@@ -93,10 +103,12 @@ describe("project invitations", () => {
 
 	it("requires checking Resend before retrying an uncertain invitation", async () => {
 		const { sql, db } = fixture();
+
 		const env = {
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "studio@example.com",
 		} as Env;
+
 		vi.mocked(sendStudioSignInNotice).mockResolvedValueOnce({
 			ok: false,
 			uncertain: true,
@@ -132,10 +144,12 @@ describe("project invitations", () => {
 
 	it("does not invite a withdrawn or revoked project", async () => {
 		const { sql, db } = fixture();
+
 		const env = {
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "studio@example.com",
 		} as Env;
+
 		sql
 			.prepare("UPDATE owner_requests SET status='withdrawn' WHERE id='song-1'")
 			.run();
@@ -147,18 +161,23 @@ describe("project invitations", () => {
 
 	it("does not send an invitation when access closes after the delivery claim", async () => {
 		const { sql, db } = fixture();
+
 		const env = {
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "studio@example.com",
 		} as Env;
+
 		const interleavedDb = {
 			prepare(query: string) {
 				const statement = db.prepare(query);
+
 				if (!query.includes("SELECT r.email FROM owner_requests"))
 					return statement;
+
 				return {
 					bind(...values: unknown[]) {
 						const bound = statement.bind(...values);
+
 						return {
 							first: async () => {
 								sql
@@ -166,6 +185,7 @@ describe("project invitations", () => {
 										"UPDATE audio_projects SET revoked_at='2026-09-22' WHERE request_id='song-1'",
 									)
 									.run();
+
 								return bound.first();
 							},
 						};
@@ -173,6 +193,7 @@ describe("project invitations", () => {
 				};
 			},
 		} as unknown as D1Database;
+
 		await deliverProjectInvitation(interleavedDb, "song-1", env);
 		expect(sendStudioSignInNotice).not.toHaveBeenCalled();
 		expect(

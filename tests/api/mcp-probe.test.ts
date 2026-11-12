@@ -12,15 +12,19 @@ async function rpc(method: string, params: unknown = {}) {
 			body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
 		}),
 	} as any);
+
 	expect(response.headers.get("cache-control")).toBe("no-store");
+
 	return (await response.json()) as any;
 }
+
 it("negotiates MCP and lists only the read-only probe", async () => {
 	const init = await rpc("initialize", {
 		protocolVersion: "2025-03-26",
 		capabilities: {},
 		clientInfo: { name: "test", version: "1" },
 	});
+
 	expect(init.result.serverInfo.name).toBe("superhuman-connectivity-probe");
 	const list = await rpc("tools/list");
 	expect(list.result.tools.map((t: any) => t.name)).toEqual([
@@ -28,11 +32,13 @@ it("negotiates MCP and lists only the read-only probe", async () => {
 	]);
 	expect(list.result.tools[0].annotations.readOnlyHint).toBe(true);
 });
+
 it("echoes a challenge without publication and rejects unsupported calls", async () => {
 	const reply = await rpc("tools/call", {
 		name: "publication_connection_probe",
 		arguments: { challenge: "connection-123" },
 	});
+
 	expect(JSON.parse(reply.result.content[0].text)).toEqual({
 		service: "thesuperhuman.us",
 		challenge: "connection-123",

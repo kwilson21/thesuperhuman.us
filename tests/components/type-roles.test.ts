@@ -4,16 +4,20 @@ import { describe, expect, it } from "vitest";
 // The owner's picks from the 2026-10-22 type and labels board (D4.1-D, D4.2-C, D4.4-B) and D10.3-B.
 const read = (path: string) =>
 	readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+
 const rule = (source: string, selector: string) => {
 	const start = source.indexOf(`${selector} {`);
 	expect(start, `${selector} rule`).toBeGreaterThanOrEqual(0);
+
 	return source.slice(start, source.indexOf("}", start) + 1);
 };
+
 const global = read("src/styles/global.css");
 
 describe("labels (D4.1, D4.2-C)", () => {
 	it("sets labels in Inter 500 capitals at 11px with .12em tracking", () => {
 		expect(global).toContain("--tracking-eyebrow: 0.12em;");
+
 		for (const selector of [".page-kicker", ".eyebrow"]) {
 			const css = rule(global, selector);
 			expect(css).toContain("font-family: var(--font-sans);");

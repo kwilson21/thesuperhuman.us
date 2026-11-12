@@ -3,8 +3,10 @@ import { createHash } from "node:crypto";
 import { prepareAgreedTerms } from "../agreed-terms.mjs";
 import { BARE_LINK_LANDINGS } from "../config.mjs";
 import { readFileSync } from "node:fs";
+
 const hash = (text) => createHash("sha256").update(text).digest("hex");
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
+
 export default {
 	title: "Software agreement review, signatures and retained copies",
 	async run({ capture, sql, ownerFetch, templates }) {
@@ -20,6 +22,7 @@ export default {
 			),
 		);
 		const template = (kind) => templates[kind];
+
 		const id = "screenshot-signing",
 			token = "g".repeat(43),
 			at = new Date().toISOString(),
@@ -27,6 +30,7 @@ export default {
 			sentAt = new Date(Date.now() - 60_000).toISOString(),
 			session = "v".repeat(43),
 			cookie = { name: "agreement_session", value: session };
+
 		const terms = {
 			outcome: "Fictional client tracker",
 			summary: "One shared view.",
@@ -43,6 +47,7 @@ export default {
 			timing: "Agreed dates.",
 			paymentMode: "standard",
 		};
+
 		const details = {
 			planned_start: "2026-10-01",
 			planned_end: "2026-10-20",
@@ -57,6 +62,7 @@ export default {
 				},
 			],
 		};
+
 		const contractor = {
 			legal_name: "Example Contractor LLC",
 			entity_jurisdiction: "Wyoming LLC",
@@ -66,6 +72,7 @@ export default {
 			business_address: "200 Example Business Street",
 			registered_agent_confirmed: true,
 		};
+
 		const client = {
 			legal_name: "Example Client LLC",
 			entity_type: "LLC",
@@ -81,6 +88,7 @@ export default {
 			approver_email: "approver@example.com",
 			portfolio_choice: "private",
 		};
+
 		sql(`UPDATE software_signing_settings SET software_signing_enabled=1;
    INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at) VALUES(${quote(id)},'software','Example Client','signer@example.com','Fictional tracker','reviewed',${quote(at)},${quote(at)});
    INSERT INTO software_contractor_config VALUES(1,${quote(JSON.stringify(contractor))},${quote(at)},'owner@example.com');
@@ -90,6 +98,7 @@ export default {
    INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES('screenshot-challenge','agreement','screenshot-signing-offer',${quote(hash(token))},'signer@example.com',${quote(hash("fixture-primary"))},${quote(at)},'2099-01-01');
    INSERT INTO software_agreement_sessions VALUES(${quote(hash(session))},'agreement','screenshot-signing-offer',${quote(hash(token))},'signer@example.com','screenshot-challenge',${quote(at)},'2099-01-01',NULL,'screenshot-csrf');`);
 		const steps = [];
+
 		async function shot(name, title, path, options = {}) {
 			for (const viewport of ["desktop", "phone"])
 				steps.push({
@@ -104,17 +113,20 @@ export default {
 								prepare: async (page) => {
 									if (options.prepare) await options.prepare(page);
 									const viewport = page.viewportSize();
+
 									try {
 										for (const width of [320, 390, 768, 1280]) {
 											await page.setViewportSize({
 												width,
 												height: viewport.height,
 											});
+
 											const overflow = await page.evaluate(
 												() =>
 													document.documentElement.scrollWidth >
 													document.documentElement.clientWidth,
 											);
+
 											if (overflow)
 												throw new Error(
 													`Agreement page overflows at ${width}px: ${path}`,
@@ -130,6 +142,7 @@ export default {
 					],
 				});
 		}
+
 		await shot(
 			"templates",
 			"Private template editor and sample fields",
@@ -139,6 +152,7 @@ export default {
 				prepare: async (page) => {
 					const editor = page.locator("[data-template-editor]").first(),
 						text = editor.locator("textarea");
+
 					// A synthetic line makes the preview show a change from the published version.
 					await text.fill(
 						`${(await text.inputValue()).trimEnd()}\nSynthetic change for the screenshot.\n`,
@@ -169,6 +183,7 @@ export default {
 		const attachmentPdf = await PDFDocument.create();
 		attachmentPdf.addPage();
 		const attachmentBytes = Buffer.from(await attachmentPdf.save());
+
 		for (const remove of [false, true]) {
 			await shot(
 				remove ? "attachment-removed" : "attachment-remove-control",
@@ -181,6 +196,7 @@ export default {
 					prepare: async (page) => {
 						const editor = page.locator("[data-software-editor]"),
 							block = editor.locator("[data-agreement-attachments]");
+
 						await block.locator("[data-attachment-file]").setInputFiles({
 							name: "Fictional reference.pdf",
 							mimeType: "application/pdf",
@@ -195,10 +211,12 @@ export default {
 							.waitFor();
 						const removeButtons = block.locator("[data-remove-attachment]");
 						await removeButtons.first().waitFor({ state: "visible" });
+
 						if (remove) {
 							while (await removeButtons.count())
 								await removeButtons.first().click();
 						}
+
 						await editor.locator("[type=submit]").click();
 						await editor
 							.locator("[data-software-status]")
@@ -208,6 +226,7 @@ export default {
 				},
 			);
 		}
+
 		await shot(
 			"missing-send-field",
 			"Missing agreement details prevent sending",
@@ -220,13 +239,16 @@ export default {
 				prepare: async (page) => {
 					page.once("dialog", (dialog) => dialog.accept());
 					const editor = page.locator("[data-software-editor]");
+
 					const response = page.waitForResponse(
 						(res) =>
 							new URL(res.url()).pathname ===
 								`/api/owner/requests/${id}/software` &&
 							res.request().method() === "POST",
 					);
+
 					await editor.locator("[data-send-offer]").click();
+
 					if ((await response).status() !== 400)
 						throw new Error(
 							"Incomplete agreement details must reject sending with HTTP 400.",
@@ -242,9 +264,11 @@ export default {
 			},
 		);
 		sql("DELETE FROM software_offers WHERE id='screenshot-incomplete-draft'");
+
 		for (const { name, path, status } of BARE_LINK_LANDINGS) {
 			await shot(name, "Expired one-time link landing", path, { status });
 		}
+
 		await shot("offer", "Offer review and signing link", `/offer/${token}`);
 		await shot(
 			"check-email",
@@ -261,6 +285,7 @@ export default {
 							"Post-send security check must appear only for interaction.",
 						);
 					const receipt = await page.locator(".page-lede").innerText();
+
 					if (
 						!receipt.includes("s•••@example.com") ||
 						receipt.includes("signer@example.com")
@@ -293,31 +318,38 @@ export default {
 							hasText: "That email didn’t go through. Please try again.",
 						})
 						.waitFor();
+
 					if (await page.locator("[data-agreement-link] button").isDisabled())
 						throw new Error("Definite rejection must permit immediate retry.");
 				},
 			},
 		);
+
 		async function captureLinks(purpose) {
 			const archive = purpose === "archive";
 			const route = archive ? "/agreements/verify" : `/offer/${token}/verify`;
+
 			for (const viewport of ["desktop", "phone"]) {
 				for (const expired of [false, true]) {
 					const name = `${archive ? "archive-" : ""}link-${expired ? "expired" : "open"}`;
+
 					const linkKey =
 						`${archive ? "a" : "s"}${expired ? "e" : "v"}${viewport === "desktop" ? "d" : "p"}`.padEnd(
 							43,
 							"x",
 						);
+
 					const linkId = `screenshot-${purpose}-${expired ? "expired" : "open"}-${viewport}`;
 					sql(
 						`INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES(${quote(linkId)},${quote(purpose)},${archive ? "NULL" : "'screenshot-signing-offer'"},${archive ? "NULL" : quote(hash(token))},'signer@example.com',${quote(hash(linkKey))},${quote(at)},${quote(expired ? "2000-01-01" : "2099-01-01")});`,
 					);
+
 					const title = expired
 						? "This link has expired."
 						: archive
 							? "Your documents are ready."
 							: "Your agreement is ready.";
+
 					const file = await capture({
 						file: `software-signing-${name}-${viewport}.png`,
 						path: `${route}?key=${linkKey}`,
@@ -331,6 +363,7 @@ export default {
 										exact: true,
 									})
 									.waitFor();
+
 								if (
 									!(await page
 										.getByText("Links work once and last an hour.", {
@@ -349,6 +382,7 @@ export default {
 										exact: true,
 									})
 									.waitFor();
+
 								if (
 									!(await page
 										.getByText("This link works once.", { exact: true })
@@ -358,6 +392,7 @@ export default {
 							}
 						},
 					});
+
 					steps.push({
 						title: `${title}, ${viewport}`,
 						images: [{ file, caption: title }],
@@ -365,6 +400,7 @@ export default {
 				}
 			}
 		}
+
 		await captureLinks("agreement");
 		sql(
 			`INSERT OR REPLACE INTO software_agreement_drafts VALUES('screenshot-signing-offer','signer@example.com','{}',${quote(at)});`,
@@ -410,14 +446,17 @@ export default {
 				},
 			},
 		);
+
 		const reviewed = await ownerFetch(
 			`/api/offer/${token}/review`,
 			{ csrf_nonce: "screenshot-csrf", values: client },
 			"POST",
 			{ cookie: `agreement_session=${session}` },
 		);
+
 		let sow = reviewed.documents?.find((d) => d.kind === "sow"),
 			msa = reviewed.documents?.find((d) => d.kind === "msa");
+
 		if (!sow || !msa)
 			throw new Error("Agreement review did not return both exact snapshots.");
 		await shot(
@@ -429,13 +468,16 @@ export default {
 				prepare: async (page) => {
 					await page.waitForFunction(() => {
 						const field = document.querySelector("[name=documents]");
+
 						return field && JSON.parse(field.value).length === 2;
 					});
+
 					if (
 						(await page.locator("[name=country]").inputValue()) !==
 						"United States"
 					)
 						throw new Error("US state must prefill an empty country.");
+
 					if (
 						!(await page
 							.locator(".signing-card")
@@ -452,6 +494,7 @@ export default {
 			`/offer/${token}/sign`,
 			{ cookie, selector: "[data-signing-page] aside" },
 		);
+
 		// Browser captures refresh review snapshots. Fetch the current immutable manifest before signing.
 		const currentReview = await ownerFetch(
 			`/api/offer/${token}/review`,
@@ -459,6 +502,7 @@ export default {
 			"POST",
 			{ cookie: `agreement_session=${session}` },
 		);
+
 		sow = currentReview.documents.find((d) => d.kind === "sow");
 		msa = currentReview.documents.find((d) => d.kind === "msa");
 		await ownerFetch(
@@ -526,11 +570,13 @@ export default {
 			action: "retry-artifact",
 			agreement_id: sow.id,
 		});
+
 		const artifact = JSON.parse(
 			sql(
 				`SELECT status FROM software_agreement_artifacts WHERE agreement_id=${quote(sow.id)}`,
 			),
 		)[0]?.results?.[0];
+
 		if (artifact?.status !== "ready")
 			throw new Error(
 				"Signed PDF preparation must succeed before screenshot start/reuse fixtures.",
@@ -543,12 +589,14 @@ export default {
 			`/owner/requests/${id}`,
 			{ owner: true },
 		);
+
 		const today = new Intl.DateTimeFormat("en-CA", {
 			timeZone: "America/New_York",
 			year: "numeric",
 			month: "2-digit",
 			day: "2-digit",
 		}).format(new Date());
+
 		await ownerFetch(`/api/owner/requests/${id}/project`, {
 			action: "start",
 			expectedRequestUpdatedAt: at,
@@ -581,6 +629,7 @@ export default {
 				cookie: { name: "studio_session", value: studio },
 			},
 		);
+
 		for (const [stage, name, title] of [
 			[0, "guided-outcome", "Guided agreed outcome"],
 			[1, "guided-milestones", "Guided agreed milestones and actual dates"],
@@ -593,6 +642,7 @@ export default {
 				prepare: (page) => prepareAgreedTerms(page, stage),
 			});
 		}
+
 		await shot(
 			"guided-full",
 			"All agreed terms and complete legal documents",
@@ -603,10 +653,12 @@ export default {
 				prepare: (page) => prepareAgreedTerms(page, 3, true),
 			},
 		);
+
 		const reuseId = "screenshot-signing-reuse",
 			reuseToken = "h".repeat(43),
 			reuseSession = "w".repeat(43),
 			reuseCookie = { name: "agreement_session", value: reuseSession };
+
 		sql(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at) VALUES(${quote(reuseId)},'software','Example Client','signer@example.com','Second fictional milestone','reviewed',${quote(at)},${quote(at)});
    INSERT INTO software_offers(id,request_id,version,status,terms_json,agreement_details_json,msa_template_id,sow_template_id,contractor_snapshot_json,recipient_email_snapshot,reused_msa_id,created_at,updated_at,sent_at) SELECT 'screenshot-reuse-offer',${quote(reuseId)},1,'sent',terms_json,agreement_details_json,msa_template_id,sow_template_id,contractor_snapshot_json,recipient_email_snapshot,${quote(msa.id)},${quote(at)},${quote(at)},${quote(at)} FROM software_offers WHERE id='screenshot-signing-offer';
    INSERT INTO software_offer_links VALUES(${quote(reuseId)},${quote(hash(reuseToken))},${quote(at)},NULL);
@@ -655,6 +707,7 @@ export default {
 		);
 		await captureLinks("archive");
 		sql("UPDATE software_signing_settings SET software_signing_enabled=0");
+
 		return steps;
 	},
 };

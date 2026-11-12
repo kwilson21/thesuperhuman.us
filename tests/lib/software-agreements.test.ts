@@ -36,8 +36,10 @@ import {
 import { agreementDownload } from "~/lib/agreement-download";
 import { hashOfferToken, type SoftwareOffer } from "~/lib/software-offers";
 import { projectToday } from "~/lib/audio-project-updates";
+
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database, env: Env;
+
 const token = "x".repeat(43),
 	secret = "test-agreement-code-key-at-least-32-characters",
 	terms = {
@@ -56,6 +58,7 @@ const token = "x".repeat(43),
 		exclusions: "",
 		timing: "",
 	};
+
 const details = {
 	planned_start: "2026-10-01",
 	planned_end: "2026-10-20",
@@ -70,6 +73,7 @@ const details = {
 		},
 	],
 };
+
 const client = {
 	legal_name: "Sample LLC",
 	entity_type: "LLC",
@@ -85,6 +89,7 @@ const client = {
 	portfolio: "deny",
 	naming: false,
 };
+
 const contractor = {
 	legal_name: "Example Contractor LLC",
 	entity_jurisdiction: "Wyoming LLC",
@@ -94,6 +99,7 @@ const contractor = {
 	business_address: "200 Example Business Street",
 	registered_agent_confirmed: true,
 };
+
 const synthetic = (kind: "msa" | "sow") =>
 	templateFields[kind]
 		.filter((f) => !f.startsWith("milestone."))
@@ -107,17 +113,22 @@ const synthetic = (kind: "msa" | "sow") =>
 				.join("\n") +
 			"\n{{/milestones}}"
 		: "");
+
 const revised = (kind: "msa" | "sow") =>
 	synthetic(kind).replace("\n", " revised\n");
+
 const labelRefusal =
 	"Use letters, digits, dots and dashes for the version label, up to 40 characters.";
+
 const failure = (promise: Promise<unknown>) =>
 	promise.then(
 		() => "",
 		(error: Error) => error.message,
 	);
+
 const bucketData = new Map<string, Uint8Array>();
 const bucketUploaded = new Map<string, Date>();
+
 function adapter(database: InstanceType<typeof DatabaseSync>) {
 	const statement = (query: string, args: unknown[] = []) => ({
 		query,
@@ -127,17 +138,21 @@ function adapter(database: InstanceType<typeof DatabaseSync>) {
 		all: async () => ({ results: database.prepare(query).all(...args) }),
 		run: async () => ({ meta: database.prepare(query).run(...args) }),
 	});
+
 	return {
 		prepare: (query: string) => statement(query),
 		batch: async (items: ReturnType<typeof statement>[]) => {
 			database.exec("BEGIN");
+
 			try {
 				const result = items.map((i) => ({
 					results: /^SELECT|RETURNING/.test(i.query)
 						? database.prepare(i.query).all(...i.args)
 						: (database.prepare(i.query).run(...i.args), []),
 				}));
+
 				database.exec("COMMIT");
+
 				return result;
 			} catch (e) {
 				database.exec("ROLLBACK");
@@ -146,6 +161,7 @@ function adapter(database: InstanceType<typeof DatabaseSync>) {
 		},
 	} as unknown as D1Database;
 }
+
 beforeEach(async () => {
 	sql = new DatabaseSync(":memory:");
 	sql.exec("PRAGMA foreign_keys=ON");
@@ -156,6 +172,7 @@ beforeEach(async () => {
 	sql.exec(
 		"UPDATE software_signing_settings SET software_signing_enabled=1; INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at) VALUES('r','software','Example','client@example.com','Tool','reviewed','now','now');",
 	);
+
 	const msa = await publishTemplate(
 			db,
 			"msa",
@@ -172,6 +189,7 @@ beforeEach(async () => {
 			"owner@example.com",
 			{ versionLabel: "v1" },
 		);
+
 	sql
 		.prepare(
 			"INSERT INTO software_offers(id,request_id,version,status,terms_json,agreement_details_json,msa_template_id,sow_template_id,contractor_snapshot_json,recipient_email_snapshot,created_at,updated_at) VALUES('o','r',1,'sent',?,?,?,?,?,'client@example.com','now','now')",
@@ -196,6 +214,7 @@ beforeEach(async () => {
 			"INSERT INTO software_agreement_sessions VALUES(?,'agreement','o',?,'client@example.com','challenge','2026-09-30T12:00:00Z','2099-01-01',NULL,'csrf')",
 		)
 		.run(await hashOfferToken(token), await hashOfferToken(token));
+
 	const bucket = {
 		put: vi.fn(
 			async (
@@ -207,10 +226,13 @@ beforeEach(async () => {
 			) => {
 				const current = bucketData.get(k);
 				const etag = current ? await hashBytes(current) : null;
+
 				if (options?.onlyIf?.etagMatches && options.onlyIf.etagMatches !== etag)
 					return null;
+
 				if (options?.onlyIf?.etagDoesNotMatch === "*" && current) return null;
 				bucketUploaded.set(k, new Date());
+
 				return bucketData.set(
 					k,
 					typeof v === "string" ? new TextEncoder().encode(v) : v,
@@ -230,12 +252,16 @@ beforeEach(async () => {
 				const keys = [...bucketData.keys()]
 					.filter((k) => k.startsWith(prefix))
 					.sort();
+
 				if (cursor && !cursor.startsWith("after:"))
 					throw new Error("Invalid cursor");
+
 				const remaining = keys.filter(
 					(key) => !cursor || key > cursor.slice(6),
 				);
+
 				const page = remaining.slice(0, limit);
+
 				return {
 					objects: page.map((key) => ({
 						key,
@@ -248,10 +274,12 @@ beforeEach(async () => {
 		),
 		delete: vi.fn(async (k: string) => {
 			bucketUploaded.delete(k);
+
 			return bucketData.delete(k);
 		}),
 		get: vi.fn(async (k: string) => {
 			const b = bucketData.get(k);
+
 			return b
 				? {
 						size: b.length,
@@ -263,6 +291,7 @@ beforeEach(async () => {
 				: null;
 		}),
 	};
+
 	env = {
 		MUSIC_DB: db,
 		AUDIO: bucket,
@@ -277,10 +306,12 @@ beforeEach(async () => {
 		vi.fn(async () => new Response('{"success":true}', { status: 200 })),
 	);
 });
+
 afterEach(() => {
 	sql.close();
 	vi.unstubAllGlobals();
 });
+
 const request = () =>
 	new Request(`https://example.com/offer/${token}/sign`, {
 		headers: {
@@ -289,10 +320,12 @@ const request = () =>
 			"user-agent": "Synthetic browser",
 		},
 	});
+
 const offer = () =>
 	db
 		.prepare("SELECT * FROM software_offers WHERE id='o'")
 		.first<SoftwareOffer>();
+
 async function review() {
 	return reviewAgreements(
 		db,
@@ -301,9 +334,11 @@ async function review() {
 		client,
 	);
 }
+
 async function signed() {
 	const result = await review(),
 		session = (await agreementSession(db, request(), "agreement", "o"))!;
+
 	await signAgreements(
 		db,
 		(await offer())!,
@@ -311,12 +346,16 @@ async function signed() {
 		result.documents,
 		request(),
 	);
+
 	return result;
 }
+
 it("removes an unused former client identity when replacing an unsigned review", async () => {
 	await review();
+
 	const former = sql.prepare("SELECT id FROM software_agreement_clients").get()
 		.id as string;
+
 	await reviewAgreements(
 		db,
 		(await offer())!,
@@ -331,27 +370,33 @@ it("removes an unused former client identity when replacing an unsigned review",
 			.prepare("SELECT id FROM software_agreement_clients WHERE id=?")
 			.get(former),
 	).toBeUndefined();
+
 	const current = sql
 		.prepare("SELECT client_id FROM software_agreements WHERE offer_id=?")
 		.get("o").client_id;
+
 	expect(
 		sql
 			.prepare("SELECT legal_name FROM software_agreement_clients WHERE id=?")
 			.get(current),
 	).toEqual({ legal_name: "Updated Sample LLC" });
 });
+
 it("removes a just-uploaded PDF when its database row cannot be saved", async () => {
 	const { PDFDocument } = await import("pdf-lib");
 	const pdf = await PDFDocument.create();
 	pdf.addPage();
 	const bytes = await pdf.save();
+
 	const batch = vi
 		.spyOn(db, "batch")
 		.mockRejectedValue(new Error("database unavailable"));
+
 	try {
 		const { PUT } = await import(
 			"~/pages/api/owner/requests/[id]/agreement-attachments"
 		);
+
 		const response = await PUT({
 			params: { id: "r" },
 			url: new URL(
@@ -370,6 +415,7 @@ it("removes a just-uploaded PDF when its database row cannot be saved", async ()
 			),
 			locals: { owner: { email: "owner@example.com" }, runtime: { env } },
 		} as never);
+
 		expect(response.status).toBe(503);
 		expect(env.AUDIO!.put).toHaveBeenCalledOnce();
 		expect(env.AUDIO!.delete).toHaveBeenCalledOnce();
@@ -378,6 +424,7 @@ it("removes a just-uploaded PDF when its database row cannot be saved", async ()
 		batch.mockRestore();
 	}
 });
+
 it.each(["msa", "sow"] as const)(
 	"rejects incomplete %s templates, HTML, blanks, unknown fields and nesting",
 	(kind) => {
@@ -393,16 +440,20 @@ it.each(["msa", "sow"] as const)(
 		expect(validateTemplate(kind, synthetic(kind))).toBe(synthetic(kind));
 	},
 );
+
 it("fills optional SOW fields in template samples", () => {
 	const text = `${synthetic("sow")}\nSummary: {{sow.summary}}\nTiming: {{sow.timing}}`;
+
 	const rendered = renderAgreement(
 		"sow",
 		text,
 		sampleAgreementValues("sow", text),
 	);
+
 	expect(rendered).toContain("Summary: Sample summary");
 	expect(rendered).toContain("Timing: Sample timing");
 });
+
 it("prints the MSA version label where the template names the source revision, never the internal revision", () => {
 	const text = synthetic("msa");
 	expect(
@@ -413,6 +464,7 @@ it("prints the MSA version label where the template names the source revision, n
 	expect(renderAgreement("msa", text, values)).toContain(
 		"msa.source_revision: v2026-11-01",
 	);
+
 	const rendered = renderAgreement("msa", text, {
 		...values,
 		msa: {
@@ -420,10 +472,12 @@ it("prints the MSA version label where the template names the source revision, n
 			source_revision: "Interim counsel draft 3",
 		},
 	});
+
 	expect(rendered).toContain("msa.source_revision: v2026-11-01");
 	expect(rendered).not.toContain("Interim");
 	expect(rendered).not.toContain("counsel draft 3");
 });
+
 it("names the template placeholder in a missing-value error, not the label it reads from", () => {
 	const text = synthetic("msa");
 	const values = sampleAgreementValues("msa", text, "v2026-11-01");
@@ -432,10 +486,12 @@ it("names the template placeholder in a missing-value error, not the label it re
 		"Missing value: msa.source_revision.",
 	);
 });
+
 it("enforces dates, milestone counts, invoice duration and owner default semantics", () => {
 	expect(
 		validateAgreementDetails(details, terms as never).review_business_days,
 	).toBe(5);
+
 	for (const value of [
 		{ ...details, planned_end: "2027-01-01" },
 		{ ...details, milestones: [] },
@@ -459,6 +515,7 @@ it("enforces dates, milestone counts, invoice duration and owner default semanti
 		}),
 	).toThrow();
 });
+
 it("pins immutable templates with publication CAS", async () => {
 	await expect(
 		publishTemplate(db, "msa", revised("msa"), 0, "owner", {
@@ -476,6 +533,7 @@ it("pins immutable templates with publication CAS", async () => {
 			.run("changed", original),
 	).toThrow();
 });
+
 it("stores the version label and a trimmed source revision, and an empty revision as NULL", async () => {
 	const first = await publishTemplate(
 		db,
@@ -488,6 +546,7 @@ it("stores the version label and a trimmed source revision, and an empty revisio
 			sourceRevision: "  synthetic-revision  ",
 		},
 	);
+
 	expect(first).toEqual({
 		id: expect.any(String),
 		sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
@@ -523,6 +582,7 @@ it("stores the version label and a trimmed source revision, and an empty revisio
 			.get(),
 	).toEqual({ source_revision: null });
 });
+
 it("accepts dotted, dashed and dated labels and refuses missing, spaced, slashed or over-long ones", async () => {
 	for (const versionLabel of ["", "v 1", "v1/2", "a".repeat(41)])
 		expect(
@@ -552,6 +612,7 @@ it("accepts dotted, dashed and dated labels and refuses missing, spaced, slashed
 		).versionLabel,
 	).toBe("2.0.1-rc");
 });
+
 it("refuses identical text before duplicate labels, and refuses a label already used within one kind", async () => {
 	expect(
 		await failure(
@@ -575,6 +636,7 @@ it("refuses identical text before duplicate labels, and refuses a label already 
 		),
 	).toBe("v1 is already used for the SOW. Choose another label.");
 });
+
 it("refuses text that matches the current version once line endings are normalized", async () => {
 	expect(
 		await failure(
@@ -589,6 +651,7 @@ it("refuses text that matches the current version once line endings are normaliz
 		),
 	).toBe("This text matches v1. Nothing to publish.");
 });
+
 it("allows the same label on both kinds", async () => {
 	await expect(
 		publishTemplate(db, "msa", revised("msa"), 1, "owner@example.com", {
@@ -601,6 +664,7 @@ it("allows the same label on both kinds", async () => {
 		}),
 	).resolves.toMatchObject({ version: 2, versionLabel: "v2" });
 });
+
 it("reports a label race caught by the unique index with the same refusal", async () => {
 	const raced = {
 		...db,
@@ -610,6 +674,7 @@ it("reports a label race caught by the unique index with the same refusal", asyn
 			);
 		},
 	} as unknown as D1Database;
+
 	expect(
 		await failure(
 			publishTemplate(raced, "msa", revised("msa"), 1, "owner@example.com", {
@@ -618,6 +683,7 @@ it("reports a label race caught by the unique index with the same refusal", asyn
 		),
 	).toBe("v2 is already used for the MSA. Choose another label.");
 });
+
 it("labels an unlabeled template with the first ten characters of its publication time", () => {
 	expect(
 		templateVersionLabel({
@@ -632,12 +698,15 @@ it("labels an unlabeled template with the first ten characters of its publicatio
 		}),
 	).toBe("v2026-09-30");
 });
+
 it("returns a version by number and compares it only with the version before it", async () => {
 	await publishTemplate(db, "msa", revised("msa"), 1, "owner@example.com", {
 		versionLabel: "v2",
 	});
+
 	const first = await templateVersion(db, "msa", 1),
 		second = await templateVersion(db, "msa", 2);
+
 	expect(first).toMatchObject({
 		version: 1,
 		version_label: "v1",
@@ -655,19 +724,24 @@ it("returns a version by number and compares it only with the version before it"
 		],
 	});
 });
+
 it("creates complete canonical previews and exact cents without unresolved fields", async () => {
 	const result = await review();
 	expect(result.documents).toHaveLength(2);
+
 	for (const d of result.documents) {
 		expect(d.text).not.toMatch(/{{|}}|\[[^\]]+\]|_{3,}/);
 		expect(await hashOfferToken(d.text)).toBe(d.hash);
 	}
+
 	expect(result.documents[1].text).toContain("$0.51");
 	expect(result.documents[1].text).toContain("$0.50");
 });
+
 it("rejects stale hashes and stores one atomic client action with email, IP and browser", async () => {
 	const result = await review(),
 		session = (await agreementSession(db, request()))!;
+
 	await expect(
 		signAgreements(
 			db,
@@ -680,6 +754,7 @@ it("rejects stale hashes and stores one atomic client action with email, IP and 
 	expect(
 		sql.prepare("SELECT count(*) n FROM software_agreement_signatures").get().n,
 	).toBe(0);
+
 	const receipt = await signAgreements(
 		db,
 		(await offer())!,
@@ -687,6 +762,7 @@ it("rejects stale hashes and stores one atomic client action with email, IP and 
 		result.documents,
 		request(),
 	);
+
 	expect(
 		await signAgreements(
 			db,
@@ -720,9 +796,11 @@ it("rejects stale hashes and stores one atomic client action with email, IP and 
 			.run(),
 	).toThrow();
 });
+
 it("does not sign a regenerated preview from another session", async () => {
 	const result = await review(),
 		session = (await agreementSession(db, request()))!;
+
 	await expect(
 		signAgreements(
 			db,
@@ -736,8 +814,10 @@ it("does not sign a regenerated preview from another session", async () => {
 		sql.prepare("SELECT count(*) n FROM software_agreement_signatures").get().n,
 	).toBe(0);
 });
+
 it("countersigns identical hashes atomically and blocks start until artifact and two copies", async () => {
 	const result = await signed();
+
 	const id = await countersignAgreements(
 		db,
 		(await offer())!,
@@ -746,6 +826,7 @@ it("countersigns identical hashes atomically and blocks start until artifact and
 		"owner@example.com",
 		request(),
 	);
+
 	expect(
 		sql
 			.prepare(
@@ -783,18 +864,22 @@ it("countersigns identical hashes atomically and blocks start until artifact and
 	expect(
 		JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body)).attachments,
 	).toHaveLength(1);
+
 	for (const [index, party] of ["client", "contractor"].entries()) {
 		const signature = sql
 			.prepare(
 				"SELECT receipt_id FROM software_agreement_signatures WHERE agreement_id=? AND party=?",
 			)
 			.get(id, party);
+
 		const payload = JSON.parse(
 			String(vi.mocked(fetch).mock.calls[index][1]?.body),
 		);
+
 		expect(payload.text).toContain(`Receipt: ${signature.receipt_id}`);
 		expect(payload.text).not.toContain(`Receipt: ${id}\n`);
 	}
+
 	const ownerCopy = await agreementDownload(env, request(), id, true);
 	expect(ownerCopy.status).toBe(200);
 	expect(
@@ -802,6 +887,7 @@ it("countersigns identical hashes atomically and blocks start until artifact and
 			.status,
 	).toBe(401);
 });
+
 it("retains signatures after artifact failure and copy provider uncertainty", async () => {
 	const result = await signed(),
 		id = await countersignAgreements(
@@ -812,6 +898,7 @@ it("retains signatures after artifact failure and copy provider uncertainty", as
 			"owner",
 			request(),
 		);
+
 	const log = vi.spyOn(console, "error").mockImplementation(() => {});
 	await prepareAgreementArtifact(env, id, async () => {
 		throw new Error("render failed");
@@ -853,6 +940,7 @@ it("retains signatures after artifact failure and copy provider uncertainty", as
 	).toEqual(["sending", "sending"]);
 	expect(await executedOfferAgreement(db, "o")).toBeNull();
 });
+
 it("invalidates scoped signing access on revoked links without granting studio access", async () => {
 	expect(await agreementSession(db, request())).not.toBeNull();
 	sql.exec("UPDATE software_offer_links SET revoked_at='now'");
@@ -866,10 +954,12 @@ it("invalidates scoped signing access on revoked links without granting studio a
 		),
 	).toBeNull();
 });
+
 it("issues a hashed pinned-recipient link, consumes once, expires and limits resend", async () => {
 	const req = new Request("https://example.com", {
 		headers: { "cf-connecting-ip": "192.0.2.2" },
 	});
+
 	expect(
 		(await issueAgreementLink(env, req, { turnstileToken: "test" }, token))
 			.status,
@@ -879,9 +969,11 @@ it("issues a hashed pinned-recipient link, consumes once, expires and limits res
 	expect(payload.subject).toBe("Open your agreement");
 	const link = new URL(payload.text.match(/https:\/\/\S+/)[0]);
 	const key = link.searchParams.get("key")!;
+
 	const stored = sql
 		.prepare("SELECT * FROM software_agreement_links WHERE token_hash=?")
 		.get(await hashOfferToken(key));
+
 	expect(stored).toBeTruthy();
 	expect(JSON.stringify(stored)).not.toContain(key);
 	expect(Date.parse(stored.expires_at) - Date.parse(stored.issued_at)).toBe(
@@ -894,12 +986,14 @@ it("issues a hashed pinned-recipient link, consumes once, expires and limits res
 			.prepare("SELECT used_at FROM software_agreement_links WHERE id=?")
 			.get(stored.id).used_at,
 	).toBeNull();
+
 	const opened = await completeAgreementLink(
 		env,
 		new Request(req.url, { method: "POST" }),
 		key,
 		token,
 	);
+
 	expect(opened.status).toBe(303);
 	expect(opened.headers.get("location")).toBe(`/offer/${token}/sign`);
 	expect(opened.headers.get("set-cookie")).toContain("Max-Age=7200");
@@ -909,12 +1003,15 @@ it("issues a hashed pinned-recipient link, consumes once, expires and limits res
 			.status,
 	).toBe(429);
 });
+
 it("rejects expired links without creating a session", async () => {
 	await issueAgreementLink(env, request(), { turnstileToken: "test" }, token);
 	const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
+
 	const key = new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get(
 		"key",
 	)!;
+
 	sql
 		.prepare("UPDATE software_agreement_links SET expires_at='2000-01-01'")
 		.run();
@@ -932,6 +1029,7 @@ it("rejects expired links without creating a session", async () => {
 		sql.prepare("SELECT count(*) n FROM software_agreement_sessions").get().n,
 	).toBe(1);
 });
+
 it("keeps archive access after project cleanup and disabling signing", async () => {
 	const result = await signed(),
 		id = await countersignAgreements(
@@ -942,6 +1040,7 @@ it("keeps archive access after project cleanup and disabling signing", async () 
 			"owner",
 			request(),
 		);
+
 	await prepareAgreementArtifact(env, id, async () =>
 		new TextEncoder().encode("%PDF-synthetic"),
 	);
@@ -959,9 +1058,11 @@ it("keeps archive access after project cleanup and disabling signing", async () 
 	sql.exec(
 		"INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,completed_at) VALUES('r','o','{}','standard','now','now','now','owner','now','now','2020-01-01')",
 	);
+
 	const { previewStudioRetention, applyStudioRetention } = await import(
 		"../../scripts/studio-retention.mjs"
 	);
+
 	const database = {
 		query: async (query: string) =>
 			sql
@@ -971,14 +1072,17 @@ it("keeps archive access after project cleanup and disabling signing", async () 
 		batch: async (queries: string[]) =>
 			db.batch(queries.map((query) => db.prepare(query))),
 	};
+
 	const storage = {
 		accountId: null,
 		databaseId: "local",
 		bucket: "local",
 		jurisdiction: null,
 	};
+
 	const now = new Date(),
 		list = async () => [];
+
 	const review = await previewStudioRetention(
 		database,
 		"Local test data",
@@ -986,6 +1090,7 @@ it("keeps archive access after project cleanup and disabling signing", async () 
 		now,
 		list,
 	);
+
 	expect(review.counts).toMatchObject({ softwareProjects: 1 });
 	await applyStudioRetention(
 		database,
@@ -1017,6 +1122,7 @@ it("keeps archive access after project cleanup and disabling signing", async () 
 			)
 			.get().used_at,
 	).toBeNull();
+
 	const response = await agreementDownload(
 		env,
 		new Request("https://example.com", {
@@ -1024,10 +1130,13 @@ it("keeps archive access after project cleanup and disabling signing", async () 
 		}),
 		id,
 	);
+
 	expect(response.status).toBe(200);
 });
+
 it("refuses to serve a retained signed PDF whose bytes no longer match its digest", async () => {
 	const result = await signed();
+
 	const id = await countersignAgreements(
 		db,
 		(await offer())!,
@@ -1036,27 +1145,35 @@ it("refuses to serve a retained signed PDF whose bytes no longer match its diges
 		"owner@example.com",
 		request(),
 	);
+
 	await prepareAgreementArtifact(env, id, async () =>
 		new TextEncoder().encode("%PDF-original"),
 	);
+
 	const artifact = sql
 		.prepare(
 			"SELECT pdf_key FROM software_agreement_artifacts WHERE agreement_id=?",
 		)
 		.get(id) as { pdf_key: string };
+
 	bucketData.set(artifact.pdf_key, new TextEncoder().encode("%PDF-changed"));
 	const response = await agreementDownload(env, request(), id, true);
 	expect(response.status).toBe(503);
 	expect(await response.text()).toMatch(/integrity check/i);
 });
+
 it("runs private source templates through one, two and three milestones in both payment modes when supplied", async () => {
 	const path = process.env.AGREEMENT_PRIVATE_TEMPLATES;
+
 	if (!path) return;
+
 	const templates = JSON.parse(readFileSync(path, "utf8")) as {
 		msa: string;
 		sow: string;
 	};
+
 	const { agreementValues } = await import("~/lib/agreement-fields");
+
 	for (const count of [1, 2, 3])
 		for (const mode of ["standard", "invoice"]) {
 			const purchase = {
@@ -1067,6 +1184,7 @@ it("runs private source templates through one, two and three milestones in both 
 					name: `Milestone ${i + 1}`,
 				})),
 			};
+
 			const filled = validateAgreementDetails(
 				{
 					...details,
@@ -1079,6 +1197,7 @@ it("runs private source templates through one, two and three milestones in both 
 				},
 				purchase as never,
 			);
+
 			const values = agreementValues(
 				purchase as never,
 				filled,
@@ -1096,16 +1215,19 @@ it("runs private source templates through one, two and three milestones in both 
 					sow_source_revision: "",
 				},
 			);
+
 			for (const kind of ["msa", "sow"] as const)
 				expect(renderAgreement(kind, templates[kind], values)).not.toMatch(
 					/{{|}}|\[[^\]]+\]|_{3,}/,
 				);
 		}
 });
+
 it("recovers only an owner-confirmed stale artifact attempt", async () => {
 	const { recoverAgreementRendering } = await import(
 		"~/lib/agreement-artifacts"
 	);
+
 	const result = await signed(),
 		id = await countersignAgreements(
 			db,
@@ -1115,6 +1237,7 @@ it("recovers only an owner-confirmed stale artifact attempt", async () => {
 			"owner",
 			request(),
 		);
+
 	const attempt = crypto.randomUUID();
 	sql
 		.prepare(
@@ -1135,8 +1258,10 @@ it("recovers only an owner-confirmed stale artifact attempt", async () => {
 			.get(id).status,
 	).toBe("ready");
 });
+
 it("normalizes native Turnstile form submissions and enforces Origin", async () => {
 	const { agreementRequest } = await import("~/lib/agreement-request");
+
 	const body = await agreementRequest(
 		new Request("https://example.com/api/agreements/link", {
 			method: "POST",
@@ -1147,6 +1272,7 @@ it("normalizes native Turnstile form submissions and enforces Origin", async () 
 			body: "cf-turnstile-response=completed&turnstileToken=",
 		}),
 	);
+
 	expect(body).toMatchObject({ turnstileToken: "completed" });
 	expect(
 		(
@@ -1163,10 +1289,12 @@ it("normalizes native Turnstile form submissions and enforces Origin", async () 
 		).status,
 	).toBe(403);
 });
+
 it("excludes open, held and in-use MSAs from the separate retention preview", async () => {
 	const { previewAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	const result = await signed(),
 		id = await countersignAgreements(
 			db,
@@ -1176,6 +1304,7 @@ it("excludes open, held and in-use MSAs from the separate retention preview", as
 			"owner",
 			request(),
 		);
+
 	expect(
 		(await previewAgreementRetention(db, env.AUDIO, "test-storage")).agreements,
 	).toEqual([]);
@@ -1188,17 +1317,21 @@ it("excludes open, held and in-use MSAs from the separate retention preview", as
 		(await previewAgreementRetention(db, env.AUDIO, "test-storage")).agreements,
 	).toEqual([]);
 	sql.prepare("UPDATE software_agreements SET legal_hold=0 WHERE id=?").run(id);
+
 	const manifest = await previewAgreementRetention(
 		db,
 		env.AUDIO,
 		"test-storage",
 	);
+
 	expect(manifest.agreements.map((a) => a.id)).toEqual([id]);
 });
+
 it("binds exact archive retention to storage and protects held records from stale review", async () => {
 	const { previewAgreementRetention, applyAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	const result = await signed(),
 		id = await countersignAgreements(
 			db,
@@ -1208,6 +1341,7 @@ it("binds exact archive retention to storage and protects held records from stal
 			"owner",
 			request(),
 		);
+
 	sql
 		.prepare(
 			"UPDATE software_agreements SET ended_at='2000-01-01',retain_until='2010-01-01' WHERE id=?",
@@ -1216,11 +1350,13 @@ it("binds exact archive retention to storage and protects held records from stal
 	await prepareAgreementArtifact(env, id, async () =>
 		new TextEncoder().encode("%PDF-retired"),
 	);
+
 	const manifest = await previewAgreementRetention(
 		db,
 		env.AUDIO,
 		"test-storage",
 	);
+
 	await expect(
 		applyAgreementRetention(db, env.AUDIO, "different", manifest),
 	).rejects.toThrow();
@@ -1232,10 +1368,12 @@ it("binds exact archive retention to storage and protects held records from stal
 		sql.prepare("SELECT id FROM software_agreements WHERE id=?").get(id),
 	).toBeTruthy();
 });
+
 it("deletes only the reviewed retired packet, closes archive access and keeps a safe receipt", async () => {
 	const { previewAgreementRetention, applyAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	const result = await signed(),
 		id = await countersignAgreements(
 			db,
@@ -1245,6 +1383,7 @@ it("deletes only the reviewed retired packet, closes archive access and keeps a 
 			"owner",
 			request(),
 		);
+
 	sql
 		.prepare(
 			"UPDATE software_agreements SET ended_at='2000-01-01',retain_until='2010-01-01' WHERE id=?",
@@ -1254,11 +1393,13 @@ it("deletes only the reviewed retired packet, closes archive access and keeps a 
 		new TextEncoder().encode("%PDF-retired"),
 	);
 	bucketData.set("software/unrelated/visual.png", new Uint8Array([1]));
+
 	const manifest = await previewAgreementRetention(
 		db,
 		env.AUDIO,
 		"test-storage",
 	);
+
 	await applyAgreementRetention(db, env.AUDIO, "test-storage", manifest);
 	expect(
 		sql.prepare("SELECT id FROM software_agreements WHERE id=?").get(id),
@@ -1270,10 +1411,12 @@ it("deletes only the reviewed retired packet, closes archive access and keeps a 
 			.get(),
 	).toEqual({ agreement_id: id });
 });
+
 it("expires an ended SOW once its project content has been deleted", async () => {
 	const { previewAgreementRetention, applyAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	const result = await signed(),
 		id = await countersignAgreements(
 			db,
@@ -1283,6 +1426,7 @@ it("expires an ended SOW once its project content has been deleted", async () =>
 			"owner",
 			request(),
 		);
+
 	sql
 		.prepare(
 			"UPDATE software_agreements SET ended_at='2000-01-01',retain_until='2010-01-01' WHERE id=?",
@@ -1293,11 +1437,13 @@ it("expires an ended SOW once its project content has been deleted", async () =>
 			"INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,content_deleted_at,agreement_id) VALUES('r','o','{}','standard','now','now','now','owner','now','now','now',?)",
 		)
 		.run(id);
+
 	const manifest = await previewAgreementRetention(
 		db,
 		env.AUDIO,
 		"test-storage",
 	);
+
 	expect(manifest.agreements.map((a) => a.id)).toContain(id);
 	await applyAgreementRetention(db, env.AUDIO, "test-storage", manifest);
 	expect(
@@ -1308,12 +1454,14 @@ it("expires an ended SOW once its project content has been deleted", async () =>
 			.get(),
 	).toEqual({ agreement_id: null });
 });
+
 it("records business authority in the single explicit consent statement", () => {
 	expect(clientAgreementSchema.safeParse(client).success).toBe(true);
 	const source = readFileSync("src/pages/offer/[token]/sign.astro", "utf8");
 	expect(source.match(/type="checkbox"/g)).toHaveLength(1);
 	expect(source).not.toContain('name="initials"');
 });
+
 it("removes expired access data while retaining signature verification evidence", async () => {
 	const { cleanupAgreementAccess } = await import("~/lib/agreement-access");
 	await signed();
@@ -1338,6 +1486,7 @@ it("removes expired access data while retaining signature verification evidence"
 		verified_at: "2026-09-30T12:00:00Z",
 	});
 });
+
 it("does not reconcile a pre-existing packet whose stored digest is missing or corrupt", async () => {
 	const result = await signed(),
 		id = await countersignAgreements(
@@ -1348,6 +1497,7 @@ it("does not reconcile a pre-existing packet whose stored digest is missing or c
 			"owner",
 			request(),
 		);
+
 	await prepareAgreementArtifact(env, id, async () =>
 		new TextEncoder().encode("%PDF-synthetic"),
 	);
@@ -1367,10 +1517,12 @@ it("does not reconcile a pre-existing packet whose stored digest is missing or c
 			.get(id).status,
 	).toBe("failed");
 });
+
 it("validates font coverage before preserving a review snapshot", async () => {
 	const coverage = JSON.parse(
 		readFileSync("src/assets/agreement-fonts/Inter-coverage.json", "utf8"),
 	);
+
 	expect(
 		await hashBytes(readFileSync("src/assets/agreement-fonts/Inter-400.ttf")),
 	).toBe(coverage.sha256);
@@ -1385,6 +1537,7 @@ it("validates font coverage before preserving a review snapshot", async () => {
 		sql.prepare("SELECT count(*) n FROM software_agreements").get().n,
 	).toBe(0);
 });
+
 it("never interprets substituted milestone text as another template field", async () => {
 	sql.prepare("UPDATE software_offers SET terms_json=? WHERE id='o'").run(
 		JSON.stringify({
@@ -1397,20 +1550,24 @@ it("never interprets substituted milestone text as another template field", asyn
 		sql.prepare("SELECT count(*) n FROM software_agreements").get().n,
 	).toBe(0);
 });
+
 it("uses Unicode casefold for legal-party lookup while preserving original names", async () => {
 	const { legalNameKey } = await import("~/lib/software-agreements");
 	expect(legalNameKey(" Straße LLC ")).toBe(legalNameKey("STRASSE LLC"));
 	expect(legalNameKey("ΟΣ")).toBe(legalNameKey("ος"));
 	expect(legalNameKey("Café")).toBe(legalNameKey("Cafe\u0301"));
 });
+
 it("records changed notice details separately from the immutable party snapshot", async () => {
 	await review();
 	const session = (await agreementSession(db, request()))!;
+
 	const updated = await reviewAgreements(db, (await offer())!, session, {
 		...client,
 		business_address: "300 Other Example Street",
 		notice_email: "updated@example.com",
 	});
+
 	await signAgreements(
 		db,
 		(await offer())!,
@@ -1440,10 +1597,12 @@ it("records changed notice details separately from the immutable party snapshot"
 		recorded_at: expect.stringContaining("T"),
 	});
 });
+
 it("queues signature receipts atomically and keeps uncertain notifications visible without repeating them", async () => {
 	const { deliverAgreementNotifications } = await import(
 		"~/lib/agreement-artifacts"
 	);
+
 	await signed();
 	const id = (await offerAgreements(db, "o")).find((d) => d.kind === "sow")!.id;
 	expect(
@@ -1468,6 +1627,7 @@ it("queues signature receipts atomically and keeps uncertain notifications visib
 	await deliverAgreementNotifications(env, id);
 	expect(vi.mocked(fetch).mock.calls.length).toBe(count);
 });
+
 it("rejects unsupported countersigner names before execution and losslessly renders browser evidence", async () => {
 	const result = await signed();
 	await expect(
@@ -1487,22 +1647,27 @@ it("rejects unsupported countersigner names before execution and losslessly rend
 			)
 			.get().n,
 	).toBe(0);
+
 	const { agreementCertificateText } = await import(
 		"~/lib/agreement-templates"
 	);
+
 	const raw = JSON.stringify({
 			user_agent: "Browser 🧪 漢",
 			typed_name: "José",
 		}),
 		display = agreementCertificateText(raw);
+
 	expect(JSON.parse(display)).toEqual(JSON.parse(raw));
 	expect(display).toContain("José");
 	expect(display).toContain("\\ud83e\\uddea");
 });
+
 it("retires unsigned snapshots on link changes without blocking the next MSA review", async () => {
 	const { abandonUnsignedAgreementReviews } = await import(
 		"~/lib/software-agreements"
 	);
+
 	const old = await review();
 	await db.batch([
 		abandonUnsignedAgreementReviews(db, "r", "2000-01-01T00:00:00Z"),
@@ -1513,9 +1678,11 @@ it("retires unsigned snapshots on link changes without blocking the next MSA rev
 			(d) => !old.documents.some((previous) => previous.id === d.id),
 		),
 	).toBe(true);
+
 	const { previewAgreementRetention, applyAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	let manifest = await previewAgreementRetention(db, env.AUDIO, "test-storage");
 	expect(manifest.agreements.map((a) => a.id)).toEqual([
 		old.documents.find((d) => d.kind === "sow")!.id,
@@ -1526,10 +1693,12 @@ it("retires unsigned snapshots on link changes without blocking the next MSA rev
 		old.documents.find((d) => d.kind === "msa")!.id,
 	]);
 });
+
 it.each(["client-signed", "pdf-failed", "copies-pending"])(
 	"prevents external start from bypassing website state %s",
 	async (state) => {
 		const result = await signed();
+
 		if (state !== "client-signed") {
 			const id = await countersignAgreements(
 				db,
@@ -1539,6 +1708,7 @@ it.each(["client-signed", "pdf-failed", "copies-pending"])(
 				"owner",
 				request(),
 			);
+
 			if (state === "pdf-failed")
 				sql
 					.prepare(
@@ -1550,7 +1720,9 @@ it.each(["client-signed", "pdf-failed", "copies-pending"])(
 					new TextEncoder().encode("%PDF-pending-copies"),
 				);
 		}
+
 		const { POST } = await import("~/pages/api/owner/requests/[id]/project");
+
 		for (const signature_source of ["external", "website"]) {
 			const body = {
 				action: "start",
@@ -1567,6 +1739,7 @@ it.each(["client-signed", "pdf-failed", "copies-pending"])(
 				external_copy_reference: "Synthetic kept copy",
 				next_update_on: "",
 			};
+
 			const response = await POST({
 				params: { id: "r" },
 				request: new Request(
@@ -1585,13 +1758,16 @@ it.each(["client-signed", "pdf-failed", "copies-pending"])(
 					runtime: { env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" } },
 				},
 			} as never);
+
 			expect(response.status).toBe(409);
 		}
+
 		expect(
 			sql.prepare("SELECT count(*) n FROM software_projects").get().n,
 		).toBe(0);
 	},
 );
+
 it("attributes owner verification to the Access account rather than the configured notice mailbox", async () => {
 	const result = await signed();
 	await countersignAgreements(
@@ -1617,9 +1793,11 @@ it("attributes owner verification to the Access account rather than the configur
 			.get(),
 	).toEqual({ email: contractor.notice_email });
 });
+
 it("abandons the complete pending signing action atomically and retains the signatures", async () => {
 	const result = await signed(),
 		{ POST } = await import("~/pages/api/owner/requests/[id]/agreement");
+
 	const call = (documents: { id: string; hash: string }[]) =>
 		POST({
 			params: { id: "r" },
@@ -1641,6 +1819,7 @@ it("abandons the complete pending signing action atomically and retains the sign
 			),
 			locals: { owner: { email: "owner@example.com" }, runtime: { env } },
 		} as never);
+
 	expect((await call([result.documents[0]])).status).toBe(409);
 	expect(
 		sql
@@ -1677,11 +1856,13 @@ it("abandons the complete pending signing action atomically and retains the sign
 			.get().n,
 	).toBe(2);
 });
+
 it.each(["executed", "abandoned"])(
 	"keeps %s evidence under a dated ten-year policy without backdating",
 	async (state) => {
 		const result = await signed();
 		let id = result.documents.find((d) => d.kind === "sow")!.id;
+
 		if (state === "executed")
 			id = await countersignAgreements(
 				db,
@@ -1696,12 +1877,14 @@ it.each(["executed", "abandoned"])(
 				"UPDATE software_agreements SET status='abandoned',abandoned_at='now' WHERE status='client_signed'",
 			);
 		const { POST } = await import("~/pages/api/owner/requests/[id]/agreement");
+
 		const today = new Intl.DateTimeFormat("en-CA", {
 			timeZone: "America/New_York",
 			year: "numeric",
 			month: "2-digit",
 			day: "2-digit",
 		}).format(new Date());
+
 		const end = (ended_on: string) =>
 			POST({
 				params: { id: "r" },
@@ -1723,6 +1906,7 @@ it.each(["executed", "abandoned"])(
 				),
 				locals: { owner: { email: "owner@example.com" }, runtime: { env } },
 			} as never);
+
 		expect((await end("2000-01-01")).status).toBe(409);
 		expect((await end("2099-01-01")).status).toBe(409);
 		expect(
@@ -1730,11 +1914,13 @@ it.each(["executed", "abandoned"])(
 				.ended_at,
 		).toBeNull();
 		expect((await end(today)).status).toBe(200);
+
 		const row = sql
 			.prepare(
 				"SELECT ended_at,retain_until FROM software_agreements WHERE id=?",
 			)
 			.get(id);
+
 		expect(row.ended_at).toBe(today);
 		expect(row.retain_until).toMatch(
 			new RegExp(`^${Number(today.slice(0, 4)) + 10}-`),
@@ -1745,11 +1931,14 @@ it.each(["executed", "abandoned"])(
 		).toBe(state === "executed" ? 4 : 2);
 	},
 );
+
 it("fences archive cleanup against active work and rejects artifact claims after closure", async () => {
 	const { previewAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	const result = await signed();
+
 	const id = await countersignAgreements(
 		db,
 		(await offer())!,
@@ -1758,6 +1947,7 @@ it("fences archive cleanup against active work and rejects artifact claims after
 		"owner",
 		request(),
 	);
+
 	sql
 		.prepare(
 			"UPDATE software_agreements SET ended_at='2000-01-01',retain_until='2010-01-01' WHERE id=?",
@@ -1817,23 +2007,28 @@ it("fences archive cleanup against active work and rejects artifact claims after
 			.run(id),
 	).toThrow("Archive cleanup is reserved");
 });
+
 it("keeps a signed abandoned agreement and its offer out of request retention", async () => {
 	const { previewOwnerRetention } = await import(
 		"../../scripts/owner-retention.mjs"
 	);
+
 	await signed();
 	sql.exec(
 		"UPDATE software_agreements SET status='abandoned',abandoned_at='2020-01-01'; UPDATE owner_requests SET status='resolved',resolved_at='2020-01-01',updated_at='2020-01-01'",
 	);
+
 	const preview = await previewOwnerRetention(
 		{ query: async (statement: string) => sql.prepare(statement).all() },
 		"test",
 	);
+
 	expect(preview.requestContacts).toBe(0);
 	expect(
 		sql.prepare("SELECT COUNT(*) AS n FROM software_agreements").get().n,
 	).toBe(2);
 });
+
 it.each(["resolved", "withdrawn"])(
 	"rejects signing and new sessions for a %s request",
 	async (status) => {
@@ -1852,12 +2047,15 @@ it.each(["resolved", "withdrawn"])(
 		).rejects.toThrow();
 	},
 );
+
 it("consumes a link atomically under parallel verification", async () => {
 	await issueAgreementLink(env, request(), { turnstileToken: "test" }, token);
 	const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
+
 	const key = new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get(
 		"key",
 	)!;
+
 	const results = await Promise.all([
 		completeAgreementLink(
 			env,
@@ -1872,8 +2070,10 @@ it("consumes a link atomically under parallel verification", async () => {
 			token,
 		),
 	]);
+
 	expect(results.map((r) => r.status).sort()).toEqual([303, 401]);
 });
+
 it("rejects expired sessions, wrong recipients, studio cookies and archive purpose for signing", async () => {
 	const original = (await agreementSession(db, request(), "agreement", "o"))!;
 	sql
@@ -1906,6 +2106,7 @@ it("rejects expired sessions, wrong recipients, studio cookies and archive purpo
 
 it("prepares a real signed PDF through the API renderer module without font asset access", async () => {
 	const result = await signed();
+
 	const id = await countersignAgreements(
 		db,
 		(await offer())!,
@@ -1914,6 +2115,7 @@ it("prepares a real signed PDF through the API renderer module without font asse
 		"owner@example.test",
 		request(),
 	);
+
 	const { renderAgreementPacket } = await import("~/lib/agreement-pdf");
 	env.ASSETS = {
 		fetch: async () => {
@@ -1939,6 +2141,7 @@ it("keeps project attachments only on the SOW snapshot used for PDF generation",
 		sha256: "a".repeat(64),
 		bytes: 10,
 	};
+
 	sql
 		.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='o'")
 		.run(JSON.stringify({ ...details, attachments: [attachment] }));
@@ -1965,8 +2168,10 @@ it("reuses an MSA across two offers without importing the first SOW attachments"
 		sha256: "a".repeat(64),
 		bytes: 10,
 	});
+
 	const first = attachment("first"),
 		second = attachment("second");
+
 	sql
 		.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='o'")
 		.run(JSON.stringify({ ...details, attachments: [first] }));
@@ -1986,10 +2191,12 @@ it("reuses an MSA across two offers without importing the first SOW attachments"
 	sql
 		.prepare("UPDATE software_offers SET status='superseded' WHERE id='o'")
 		.run();
+
 	const columns = sql
 		.prepare("PRAGMA table_info(software_offers)")
 		.all()
 		.map((row: { name: string }) => row.name);
+
 	const replacements: Record<string, string> = {
 		id: "'o2'",
 		version: "2",
@@ -1997,6 +2204,7 @@ it("reuses an MSA across two offers without importing the first SOW attachments"
 		reused_msa_id: "?",
 		agreement_details_json: "?",
 	};
+
 	sql
 		.prepare(
 			`INSERT INTO software_offers(${columns.join(",")}) SELECT ${columns.map((name: string) => replacements[name] ?? name).join(",")} FROM software_offers WHERE id='o'`,
@@ -2013,6 +2221,7 @@ it("reuses an MSA across two offers without importing the first SOW attachments"
 	sql.exec(
 		"UPDATE software_agreement_sessions SET offer_id='o2'; UPDATE software_agreement_links SET offer_id='o2'",
 	);
+
 	const reviewed = await reviewAgreements(
 		db,
 		(await db
@@ -2021,6 +2230,7 @@ it("reuses an MSA across two offers without importing the first SOW attachments"
 		(await agreementSession(db, request(), "agreement", "o2"))!,
 		client,
 	);
+
 	expect(reviewed.reused_msa?.id).toBe(msa.id);
 	expect(reviewed.documents.map((document) => document.kind)).toEqual(["sow"]);
 	expect(JSON.parse(msa.attachment_manifest_json)).toEqual([]);
@@ -2033,9 +2243,11 @@ it("reuses an MSA across two offers without importing the first SOW attachments"
 	expect(
 		JSON.parse((await offerAgreements(db, "o2"))[0].attachment_manifest_json),
 	).toEqual([second]);
+
 	const nextOffer = (await db
 		.prepare("SELECT * FROM software_offers WHERE id='o2'")
 		.first<SoftwareOffer>())!;
+
 	await signAgreements(
 		db,
 		nextOffer,
@@ -2051,10 +2263,13 @@ it("reuses an MSA across two offers without importing the first SOW attachments"
 		"owner@example.com",
 		request(),
 	);
+
 	const rows = sql
 		.prepare("SELECT * FROM software_agreement_signatures WHERE agreement_id=?")
 		.all(reviewed.documents[0].id);
+
 	expect(rows).toHaveLength(2);
+
 	for (const row of rows) {
 		expect(row.intent_text).toBe(
 			row.party === "client"
@@ -2071,10 +2286,13 @@ it.each([false, true])(
 		const { previewAgreementRetention, applyAgreementRetention } = await import(
 			"~/lib/agreement-retention"
 		);
+
 		await review();
+
 		const bytes = new Uint8Array([1, 2, 3]),
 			key = "agreements/attachments/shared.pdf",
 			sha256 = await hashBytes(bytes);
+
 		bucketData.set(key, bytes);
 		sql
 			.prepare(
@@ -2098,24 +2316,29 @@ it.each([false, true])(
 				"UPDATE software_agreements SET status='abandoned',msa_id=NULL,ended_at='2000-01-01',retain_until='2000-04-01',attachment_manifest_json=?",
 			)
 			.run(JSON.stringify([{ key, sha256 }]));
+
 		const ids = sql
 			.prepare("SELECT id FROM software_agreements ORDER BY id")
 			.all()
 			.map((row: { id: string }) => row.id);
+
 		if (held)
 			sql
 				.prepare("UPDATE software_agreements SET legal_hold=1 WHERE id=?")
 				.run(ids[1]);
+
 		const manifest = await previewAgreementRetention(
 			db,
 			env.AUDIO,
 			"test-storage",
 		);
+
 		expect(
 			manifest.agreements
 				.flatMap((item) => item.objects)
 				.filter((object) => object.key === key),
 		).toHaveLength(held ? 0 : 1);
+
 		if (!held)
 			expect(manifest.agreements.at(-1)!.objects).toContainEqual({
 				key,
@@ -2144,6 +2367,7 @@ it.each(["agreement", "archive"] as const)(
 		vi.mocked(fetch).mockResolvedValue(
 			new Response('{"success":false}', { status: 200 }),
 		);
+
 		for (let i = 0; i < 3; i++) {
 			const response = await issueAgreementLink(
 				env,
@@ -2151,20 +2375,24 @@ it.each(["agreement", "archive"] as const)(
 				{ turnstileToken: "invalid", email: "client@example.com" },
 				purpose === "agreement" ? token : undefined,
 			);
+
 			expect(response.status).toBe(403);
 		}
+
 		expect(
 			sql.prepare("SELECT uses FROM audio_client_allowances").all(),
 		).toEqual([]);
 		vi.mocked(fetch).mockImplementation(
 			async () => new Response('{"success":true}', { status: 200 }),
 		);
+
 		const response = await issueAgreementLink(
 			env,
 			request(),
 			{ turnstileToken: "valid", email: "client@example.com" },
 			purpose === "agreement" ? token : undefined,
 		);
+
 		expect(response.status).toBe(200);
 		expect(
 			sql
@@ -2188,6 +2416,7 @@ it.each([true, false])(
 			)
 			.run();
 		const { POST } = await import("~/pages/api/owner/requests/[id]/project");
+
 		const response = await POST({
 			params: { id: "r" },
 			request: new Request("https://example.com/api/owner/requests/r/project", {
@@ -2217,18 +2446,23 @@ it.each([true, false])(
 				runtime: { env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" } },
 			},
 		} as never);
+
 		expect(response.status).toBe(current ? 200 : 409);
+
 		const rows = sql
 			.prepare(
 				"SELECT status,abandoned_at,retain_until FROM software_agreements",
 			)
 			.all();
+
 		expect(rows).toHaveLength(snapshots.documents.length);
+
 		for (const row of rows) {
 			expect(row.status).toBe(current ? "abandoned" : "review");
 			expect(Boolean(row.abandoned_at)).toBe(current);
 			expect(Boolean(row.retain_until)).toBe(current);
 		}
+
 		expect(
 			Boolean(
 				sql.prepare("SELECT revoked_at FROM software_agreement_sessions").get()
@@ -2263,6 +2497,7 @@ it("rejects an outside-site signature dated after today without starting the pro
 	const tomorrow = new Date(`${projectToday()}T12:00:00Z`);
 	tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
 	const { POST } = await import("~/pages/api/owner/requests/[id]/project");
+
 	const response = await POST({
 		params: { id: "r" },
 		request: new Request("https://example.com/api/owner/requests/r/project", {
@@ -2292,6 +2527,7 @@ it("rejects an outside-site signature dated after today without starting the pro
 			runtime: { env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" } },
 		},
 	} as never);
+
 	expect(response.status).toBe(400);
 	expect(((await response.json()) as { error: string }).error).toMatch(
 		/cannot be in the future/i,
@@ -2310,9 +2546,11 @@ it("rejects an outside-site signature dated after today without starting the pro
 
 it("preserves omitted draft agreement details and reuse, and permits explicit clearing", async () => {
 	await review();
+
 	const msaId = (await offerAgreements(db, "o")).find(
 		(a) => a.kind === "msa",
 	)!.id;
+
 	sql
 		.prepare(
 			"UPDATE software_offers SET status='draft',reused_msa_id=? WHERE id='o'",
@@ -2320,6 +2558,7 @@ it("preserves omitted draft agreement details and reuse, and permits explicit cl
 		.run(msaId);
 	sql.exec("UPDATE software_signing_settings SET software_signing_enabled=0");
 	const { POST } = await import("~/pages/api/owner/requests/[id]/software");
+
 	const save = async (
 		extra: Record<string, unknown>,
 		expectedUpdatedAt: string,
@@ -2344,6 +2583,7 @@ it("preserves omitted draft agreement details and reuse, and permits explicit cl
 			),
 			locals: { owner: { email: "owner@example.com" }, runtime: { env } },
 		} as never);
+
 	expect((await save({}, "now")).status).toBe(200);
 	const preserved = (await offer())!;
 	expect(JSON.parse(preserved.agreement_details_json!)).toEqual(details);
@@ -2369,13 +2609,17 @@ it.each(["draft", "sent"])(
 		const { abandonUnsignedAgreementReviews } = await import(
 			"~/lib/software-agreements"
 		);
+
 		const { previewAgreementRetention, applyAgreementRetention } = await import(
 			"~/lib/agreement-retention"
 		);
+
 		const bytes = new Uint8Array([1, 2, 3]),
 			key = "agreements/attachments/00000000-0000-4000-8000-000000000002.pdf",
 			sha256 = await hashBytes(bytes);
+
 		bucketData.set(key, bytes);
+
 		const attachment = {
 			filename: "Sample.pdf",
 			version: "1",
@@ -2384,6 +2628,7 @@ it.each(["draft", "sent"])(
 			sha256,
 			bytes: bytes.length,
 		};
+
 		sql
 			.prepare(
 				"UPDATE software_offers SET agreement_details_json=? WHERE id='o'",
@@ -2394,11 +2639,13 @@ it.each(["draft", "sent"])(
 			abandonUnsignedAgreementReviews(db, "r", "2000-01-01T00:00:00Z"),
 		]);
 		sql.prepare("UPDATE software_offers SET status=? WHERE id='o'").run(status);
+
 		const manifest = await previewAgreementRetention(
 			db,
 			env.AUDIO,
 			"test-storage",
 		);
+
 		expect(manifest.agreements).toHaveLength(1);
 		expect(manifest.agreements[0].objects).toEqual([]);
 		await applyAgreementRetention(db, env.AUDIO, "test-storage", manifest);
@@ -2410,21 +2657,26 @@ it("refuses a stale attachment delete when a new live offer reference appears du
 	const { previewAgreementRetention, applyAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	await review();
+
 	const bytes = new Uint8Array([1, 2, 3]),
 		key = "agreements/attachments/00000000-0000-4000-8000-000000000003.pdf",
 		sha256 = await hashBytes(bytes);
+
 	bucketData.set(key, bytes);
 	sql
 		.prepare(
 			"UPDATE software_agreements SET status='abandoned',ended_at='2000-01-01',retain_until='2000-04-01',attachment_manifest_json=? WHERE kind='sow'",
 		)
 		.run(JSON.stringify([{ key, sha256 }]));
+
 	const manifest = await previewAgreementRetention(
 		db,
 		env.AUDIO,
 		"test-storage",
 	);
+
 	expect(manifest.agreements[0].objects).toContainEqual({ key, sha256 });
 	const batch = db.batch.bind(db);
 	vi.spyOn(db, "batch").mockImplementationOnce(async (statements) => {
@@ -2448,6 +2700,7 @@ it("refuses a stale attachment delete when a new live offer reference appears du
 					],
 				}),
 			);
+
 		return batch(statements);
 	});
 	await expect(
@@ -2469,11 +2722,14 @@ it.each(["draft-first", "retention-first"])(
 		const { previewAgreementRetention, applyAgreementRetention } = await import(
 			"~/lib/agreement-retention"
 		);
+
 		const { POST } = await import("~/pages/api/owner/requests/[id]/software");
 		await review();
+
 		const bytes = new Uint8Array([1, 2, 3]),
 			key = "agreements/attachments/00000000-0000-4000-8000-000000000004.pdf",
 			sha256 = await hashBytes(bytes);
+
 		const attachment = {
 			filename: "Sample.pdf",
 			version: "1",
@@ -2482,6 +2738,7 @@ it.each(["draft-first", "retention-first"])(
 			sha256,
 			bytes: bytes.length,
 		};
+
 		bucketData.set(key, bytes);
 		sql
 			.prepare(
@@ -2504,11 +2761,13 @@ it.each(["draft-first", "retention-first"])(
 				"UPDATE software_agreements SET status='abandoned',ended_at='2000-01-01',retain_until='2000-04-01',attachment_manifest_json=? WHERE kind='sow'",
 			)
 			.run(JSON.stringify([attachment]));
+
 		const manifest = await previewAgreementRetention(
 			db,
 			env.AUDIO,
 			"test-storage",
 		);
+
 		const save = () =>
 			POST({
 				params: { id: "r" },
@@ -2530,6 +2789,7 @@ it.each(["draft-first", "retention-first"])(
 				),
 				locals: { owner: { email: "owner@example.com" }, runtime: { env } },
 			} as never);
+
 		if (order === "draft-first") {
 			expect((await save()).status).toBe(200);
 			await expect(
@@ -2546,6 +2806,7 @@ it.each(["draft-first", "retention-first"])(
 						.prepare("SELECT id FROM software_offers WHERE status='draft'")
 						.get(),
 				).toBeUndefined();
+
 				return result;
 			});
 			await applyAgreementRetention(db, env.AUDIO, "test-storage", manifest);
@@ -2561,6 +2822,7 @@ it("ignores malformed partial attachment entries in an unrelated draft during re
 	const { previewAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	await review();
 	sql
 		.prepare(
@@ -2576,11 +2838,13 @@ it("ignores malformed partial attachment entries in an unrelated draft during re
 			"UPDATE software_offers SET status='draft',agreement_details_json=? WHERE id='o'",
 		)
 		.run(JSON.stringify({ attachments: ["incomplete draft"] }));
+
 	const manifest = await previewAgreementRetention(
 		db,
 		env.AUDIO,
 		"test-storage",
 	);
+
 	expect(manifest.agreements).toHaveLength(1);
 	expect(manifest.agreements[0].objects).toHaveLength(1);
 });
@@ -2589,11 +2853,14 @@ it("previews and removes only 30-day-old unattached uploads while preserving ref
 	const { previewAgreementRetention, applyAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	await review();
 	const now = new Date("2026-10-01T12:00:00Z");
+
 	const addAttachment = async (id: string, key: string, createdAt: string) => {
 		const bytes = new Uint8Array([1, 2, id.charCodeAt(0)]),
 			sha256 = await hashBytes(bytes);
+
 		bucketData.set(key, bytes);
 		sql
 			.prepare(
@@ -2611,8 +2878,10 @@ it("previews and removes only 30-day-old unattached uploads while preserving ref
 				createdAt,
 				"owner",
 			);
+
 		return { bytes, sha256 };
 	};
+
 	await addAttachment(
 		"orphan",
 		"agreements/attachments/orphan.pdf",
@@ -2623,20 +2892,25 @@ it("previews and removes only 30-day-old unattached uploads while preserving ref
 		"agreements/attachments/recent.pdf",
 		"2026-09-15T00:00:00Z",
 	);
+
 	const offered = await addAttachment(
 		"offered",
 		"agreements/attachments/offered.pdf",
 		"2026-08-01T00:00:00Z",
 	);
+
 	const manifested = await addAttachment(
 		"manifested",
 		"agreements/attachments/manifested.pdf",
 		"2026-08-01T00:00:00Z",
 	);
+
 	const offeredUnindexed =
 		"agreements/attachments/offered-without-metadata.pdf";
+
 	const manifestedUnindexed =
 		"agreements/attachments/manifested-without-metadata.pdf";
+
 	bucketData.set(offeredUnindexed, new Uint8Array([3, 4, 5]));
 	bucketData.set(manifestedUnindexed, new Uint8Array([6, 7, 8]));
 	bucketUploaded.set(offeredUnindexed, new Date("2026-08-01T00:00:00Z"));
@@ -2679,12 +2953,14 @@ it("previews and removes only 30-day-old unattached uploads while preserving ref
 				{ key: manifestedUnindexed, sha256: "d".repeat(64) },
 			]),
 		);
+
 	const manifest = await previewAgreementRetention(
 		db,
 		env.AUDIO,
 		"test-storage",
 		now,
 	);
+
 	expect(manifest.unattached_attachments.map((item) => item.id)).toEqual([
 		"orphan",
 	]);
@@ -2699,12 +2975,14 @@ it("previews and removes only 30-day-old unattached uploads while preserving ref
 			)
 			.get(),
 	).toBeUndefined();
+
 	for (const id of ["recent", "offered", "manifested"])
 		expect(
 			sql
 				.prepare("SELECT id FROM software_agreement_attachments WHERE id=?")
 				.get(id),
 		).toBeTruthy();
+
 	for (const key of ["recent", "offered", "manifested"])
 		expect(bucketData.has(`agreements/attachments/${key}.pdf`)).toBe(true);
 	expect(bucketData.has(offeredUnindexed)).toBe(true);
@@ -2715,11 +2993,15 @@ it("reserves an orphan attachment before storage deletion so a concurrent offer 
 	const { previewAgreementRetention, applyAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	await review();
+
 	const now = new Date("2026-10-01T12:00:00Z"),
 		key = "agreements/attachments/race.pdf";
+
 	const bytes = new Uint8Array([4, 5, 6]),
 		sha256 = await hashBytes(bytes);
+
 	bucketData.set(key, bytes);
 	sql
 		.prepare(
@@ -2737,6 +3019,7 @@ it("reserves an orphan attachment before storage deletion so a concurrent offer 
 			"2026-08-01T00:00:00Z",
 			"owner",
 		);
+
 	const manifest = await previewAgreementRetention(
 			db,
 			env.AUDIO,
@@ -2744,6 +3027,7 @@ it("reserves an orphan attachment before storage deletion so a concurrent offer 
 			now,
 		),
 		batch = db.batch.bind(db);
+
 	vi.spyOn(db, "batch").mockImplementationOnce(async (statements) => {
 		sql
 			.prepare(
@@ -2764,6 +3048,7 @@ it("reserves an orphan attachment before storage deletion so a concurrent offer 
 					],
 				}),
 			);
+
 		return batch(statements);
 	});
 	await expect(
@@ -2783,11 +3068,15 @@ it("recovers an old private object after interruption between metadata removal a
 	const { previewAgreementRetention, applyAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	await review();
+
 	const now = new Date("2026-10-01T12:00:00Z"),
 		key = "agreements/attachments/interrupted.pdf";
+
 	const bytes = new Uint8Array([8, 6, 7]),
 		sha256 = await hashBytes(bytes);
+
 	bucketData.set(key, bytes);
 	bucketUploaded.set(key, new Date("2026-08-01T00:00:00Z"));
 	sql
@@ -2806,6 +3095,7 @@ it("recovers an old private object after interruption between metadata removal a
 			"2026-08-01T00:00:00Z",
 			"owner",
 		);
+
 	const reviewed = await previewAgreementRetention(
 			db,
 			env.AUDIO,
@@ -2813,6 +3103,7 @@ it("recovers an old private object after interruption between metadata removal a
 			now,
 		),
 		batch = db.batch.bind(db);
+
 	vi.spyOn(db, "batch").mockImplementationOnce(async (statements) => {
 		await batch(statements);
 		throw new Error("Simulated interruption after metadata committed.");
@@ -2835,6 +3126,7 @@ it("recovers an old private object after interruption between metadata removal a
 		"test-storage",
 		now,
 	);
+
 	expect(recovered.orphan_attachments).toEqual([
 		{ key, sha256, uploaded_at: "2026-08-01T00:00:00.000Z" },
 	]);
@@ -2846,11 +3138,15 @@ it("restores retry metadata when private storage refuses orphan deletion", async
 	const { previewAgreementRetention, applyAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	await review();
+
 	const now = new Date("2026-10-01T12:00:00Z"),
 		key = "agreements/attachments/retry.pdf";
+
 	const bytes = new Uint8Array([7, 8, 9]),
 		sha256 = await hashBytes(bytes);
+
 	bucketData.set(key, bytes);
 	sql
 		.prepare(
@@ -2868,12 +3164,14 @@ it("restores retry metadata when private storage refuses orphan deletion", async
 			"2026-08-01T00:00:00Z",
 			"owner",
 		);
+
 	const manifest = await previewAgreementRetention(
 		db,
 		env.AUDIO,
 		"test-storage",
 		now,
 	);
+
 	vi.spyOn(env.AUDIO, "delete").mockRejectedValueOnce(
 		new Error("Storage is temporarily unavailable."),
 	);
@@ -2888,12 +3186,14 @@ it("restores retry metadata when private storage refuses orphan deletion", async
 			)
 			.get(),
 	).toEqual({ id: "retry-attachment", object_key: key, sha256 });
+
 	const retry = await previewAgreementRetention(
 		db,
 		env.AUDIO,
 		"test-storage",
 		now,
 	);
+
 	await applyAgreementRetention(db, env.AUDIO, "test-storage", retry, now);
 	expect(bucketData.has(key)).toBe(false);
 	expect(
@@ -2912,6 +3212,7 @@ it("resumes the server draft under a fresh two-hour email session without sharin
 		prefillAgreementDraft,
 		resolveClientDetails,
 	} = await import("~/lib/agreement-draft");
+
 	const { getOwnerRequest } = await import("~/lib/owner-requests");
 	sql
 		.prepare(
@@ -2924,6 +3225,7 @@ it("resumes the server draft under a fresh two-hour email session without sharin
 	expect(prefilled.signer_title).toBe("");
 	expect(prefilled.portfolio_choice).toBe("");
 	const session = (await agreementSession(db, request(), "agreement", "o"))!;
+
 	const input = {
 		...prefilled,
 		entity_type: "LLC",
@@ -2932,21 +3234,25 @@ it("resumes the server draft under a fresh two-hour email session without sharin
 		signer_title: "Owner",
 		portfolio_choice: "anonymous" as const,
 	};
+
 	await saveAgreementDraft(db, (await offer())!, session, input);
 	sql
 		.prepare("UPDATE software_agreement_sessions SET expires_at='2000-01-01'")
 		.run();
 	await issueAgreementLink(env, request(), { turnstileToken: "test" }, token);
 	const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
+
 	const key = new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get(
 		"key",
 	)!;
+
 	const opened = await completeAgreementLink(
 		env,
 		new Request(request(), { method: "POST" }),
 		key,
 		token,
 	);
+
 	const newSession = await agreementSession(
 		db,
 		new Request(request().url, {
@@ -2955,6 +3261,7 @@ it("resumes the server draft under a fresh two-hour email session without sharin
 		"agreement",
 		"o",
 	);
+
 	expect(newSession).not.toBeNull();
 	expect(
 		Date.parse(newSession!.expires_at) - Date.parse(newSession!.verified_at),
@@ -2965,6 +3272,7 @@ it("resumes the server draft under a fresh two-hour email session without sharin
 	expect(await loadAgreementDraft(db, "o", "other@example.com")).toBeNull();
 	const resolved = resolveClientDetails(input, session.recipient_email);
 	expect(resolved.ok).toBe(true);
+
 	if (resolved.ok) {
 		expect(resolved.client.reviewer_name).toBe("Alex Example");
 		expect(resolved.client.reviewer_email).toBe(session.recipient_email);
@@ -2972,6 +3280,7 @@ it("resumes the server draft under a fresh two-hour email session without sharin
 		expect(resolved.client.notice_email).toBe(session.recipient_email);
 	}
 });
+
 it.each([
 	["private", "deny", false],
 	["anonymous", "allow", false],
@@ -2982,20 +3291,25 @@ it.each([
 		const { resolveClientDetails } = await import("~/lib/agreement-draft");
 		const { jurisdiction, ...rest } = client;
 		const { portfolio: unused, naming: unusedNaming, ...fields } = rest;
+
 		const result = resolveClientDetails(
 			{ ...fields, state: jurisdiction, portfolio_choice: choice },
 			"client@example.com",
 		);
+
 		expect(result.ok).toBe(true);
+
 		if (!result.ok) return;
 		expect(result.client.portfolio).toBe(portfolio);
 		expect(result.client.naming).toBe(naming);
+
 		const reviewed = await reviewAgreements(
 			db,
 			(await offer())!,
 			(await agreementSession(db, request()))!,
 			result.client,
 		);
+
 		const sow = reviewed.documents.find((d) => d.kind === "sow")!;
 		expect(sow.text).toContain(
 			`sow.portfolio: ${portfolio === "deny" ? "Do not allow" : "Allow"}`,
@@ -3004,9 +3318,11 @@ it.each([
 		expect(sow.text).not.toContain("initials");
 	},
 );
+
 it("retains both verbatim statements and verification method in signatures and certificates", async () => {
 	const { consentText, intentText } = await import("~/lib/agreement-fields");
 	const result = await signed();
+
 	const id = await countersignAgreements(
 		db,
 		(await offer())!,
@@ -3015,12 +3331,14 @@ it("retains both verbatim statements and verification method in signatures and c
 		"owner@example.com",
 		request(),
 	);
+
 	for (const party of ["client", "contractor"]) {
 		const row = sql
 			.prepare(
 				"SELECT * FROM software_agreement_signatures WHERE party=? LIMIT 1",
 			)
 			.get(party);
+
 		expect(row.consent_text).toBe(
 			consentText(client.legal_name, party === "contractor"),
 		);
@@ -3035,6 +3353,7 @@ it("retains both verbatim statements and verification method in signatures and c
 				: "verified by owner authentication",
 		);
 	}
+
 	await prepareAgreementArtifact(env, id, async (_env, _docs, certificates) => {
 		const json = JSON.stringify(certificates);
 		expect(json).toContain(consentText(client.legal_name));
@@ -3042,6 +3361,7 @@ it("retains both verbatim statements and verification method in signatures and c
 		expect(json).toContain(intentText(true));
 		expect(json).toContain("verified by one-time email link");
 		expect(json).toContain('"version_label":"v1"');
+
 		return new TextEncoder().encode("%PDF-synthetic");
 	});
 	// prepareAgreementArtifact catches render errors, so a failed assertion above only shows here.
@@ -3053,26 +3373,33 @@ it("retains both verbatim statements and verification method in signatures and c
 			.get(id),
 	).toEqual({ status: "ready" });
 });
+
 it("rejects signing stale reviewed documents after autosaved details change", async () => {
 	const { resolveClientDetails, saveAgreementDraft } = await import(
 		"~/lib/agreement-draft"
 	);
+
 	const { jurisdiction, portfolio, naming, ...rest } = client;
+
 	const input = {
 		...rest,
 		state: jurisdiction,
 		portfolio_choice: "private" as const,
 	};
+
 	const session = (await agreementSession(db, request()))!;
 	await saveAgreementDraft(db, (await offer())!, session, input);
 	const resolved = resolveClientDetails(input, session.recipient_email);
+
 	if (!resolved.ok) throw new Error("Invalid fixture");
+
 	const result = await reviewAgreements(
 		db,
 		(await offer())!,
 		session,
 		resolved.client,
 	);
+
 	await saveAgreementDraft(db, (await offer())!, session, {
 		...input,
 		signer_title: "Updated title",
@@ -3084,8 +3411,10 @@ it("rejects signing stale reviewed documents after autosaved details change", as
 		sql.prepare("SELECT count(*) n FROM software_agreement_signatures").get().n,
 	).toBe(0);
 });
+
 it("returns field-linked validation messages without raw schema output", async () => {
 	const { POST } = await import("~/pages/api/offer/[token]/review");
+
 	const response = await POST({
 		params: { token },
 		locals: { runtime: { env } },
@@ -3099,11 +3428,14 @@ it("returns field-linked validation messages without raw schema output", async (
 			body: JSON.stringify({ csrf_nonce: "csrf", values: {} }),
 		}),
 	} as never);
+
 	expect(response.status).toBe(400);
+
 	const body = (await response.json()) as {
 		error: string;
 		errors: Record<string, string>;
 	};
+
 	expect(body.errors.signer_title).toBe("Add your title");
 	expect(body.errors.portfolio_choice).toBe("Choose a portfolio option");
 	expect(body.error).not.toContain("invalid_type");
@@ -3113,22 +3445,28 @@ it("retires the redundant draft after saving immutable signatures", async () => 
 	const { saveAgreementDraft, resolveClientDetails } = await import(
 		"~/lib/agreement-draft"
 	);
+
 	const { jurisdiction, portfolio, naming, ...rest } = client;
+
 	const input = {
 			...rest,
 			state: jurisdiction,
 			portfolio_choice: "private" as const,
 		},
 		session = (await agreementSession(db, request()))!;
+
 	await saveAgreementDraft(db, (await offer())!, session, input);
 	const resolved = resolveClientDetails(input, session.recipient_email);
+
 	if (!resolved.ok) throw new Error("Invalid fixture");
+
 	const result = await reviewAgreements(
 		db,
 		(await offer())!,
 		session,
 		resolved.client,
 	);
+
 	await signAgreements(
 		db,
 		(await offer())!,
@@ -3143,9 +3481,11 @@ it("retires the redundant draft after saving immutable signatures", async () => 
 		sql.prepare("SELECT count(*) n FROM software_agreement_signatures").get().n,
 	).toBe(2);
 });
+
 it("prevents external start if website signing commits after the initial read", async () => {
 	const reviewed = await review(),
 		session = (await agreementSession(db, request()))!;
+
 	sql
 		.prepare(
 			"UPDATE software_offers SET agreement_details_json=NULL WHERE id='o'",
@@ -3160,9 +3500,11 @@ it("prevents external start if website signing commits after the initial read", 
 			reviewed.documents,
 			request(),
 		);
+
 		return originalBatch(statements);
 	});
 	const { POST } = await import("~/pages/api/owner/requests/[id]/project");
+
 	const response = await POST({
 		params: { id: "r" },
 		request: new Request("https://example.com/api/owner/requests/r/project", {
@@ -3192,6 +3534,7 @@ it("prevents external start if website signing commits after the initial read", 
 			runtime: { env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" } },
 		},
 	} as never);
+
 	expect(response.status).toBe(409);
 	expect(sql.prepare("SELECT count(*) n FROM software_projects").get().n).toBe(
 		0,
@@ -3223,22 +3566,26 @@ it.each([
 	async (field) => {
 		const { resolveClientDetails } = await import("~/lib/agreement-draft");
 		const { jurisdiction, portfolio, naming, ...rest } = client;
+
 		const values = {
 			...rest,
 			state: jurisdiction,
 			portfolio_choice: "private",
 			[field]: "Example\u0001 LLC",
 		};
+
 		const resolved = resolveClientDetails(values, "client@example.com");
 		expect(resolved).toEqual({
 			ok: false,
 			errors: { [field]: "Remove unusual characters from this field." },
 		});
+
 		for (const route of ["review", "draft"]) {
 			const { POST } =
 				route === "review"
 					? await import("~/pages/api/offer/[token]/review")
 					: await import("~/pages/api/offer/[token]/draft");
+
 			const response = await POST({
 				params: { token },
 				locals: { runtime: { env } },
@@ -3252,6 +3599,7 @@ it.each([
 					body: JSON.stringify({ csrf_nonce: "csrf", values }),
 				}),
 			} as never);
+
 			expect(response.status).toBe(400);
 			expect(await response.json()).toEqual({
 				ok: false,
@@ -3261,6 +3609,7 @@ it.each([
 		}
 	},
 );
+
 it("maps unfamiliar draft validation issues to a generic message on the field", async () => {
 	const { resolveClientDetails } = await import("~/lib/agreement-draft");
 	expect(
@@ -3275,7 +3624,9 @@ it("renders cumulative checkpoint payments and invoice-identical odd-cent instal
 	const { agreementValues, agreementDetailsSchema } = await import(
 		"~/lib/agreement-fields"
 	);
+
 	const { softwareInvoiceTerms } = await import("~/lib/software-invoices");
+
 	const purchased = {
 		...terms,
 		paymentMode: "standard" as const,
@@ -3288,6 +3639,7 @@ it("renders cumulative checkpoint payments and invoice-identical odd-cent instal
 			},
 		],
 	};
+
 	const values = agreementValues(
 		purchased,
 		agreementDetailsSchema.parse({
@@ -3316,6 +3668,7 @@ it("renders cumulative checkpoint payments and invoice-identical odd-cent instal
 			sow_source_revision: "",
 		},
 	);
+
 	expect(values.milestones[1].checkpoint_cumulative_amount).toBe(
 		"$3.28 (includes prior payments)",
 	);
@@ -3333,6 +3686,7 @@ it("renders cumulative checkpoint payments and invoice-identical odd-cent instal
 	expect(rendered).toContain("milestone.deposit: $0.50");
 	expect(rendered).toContain("milestone.balance: $0.51");
 });
+
 it.each(["data_retention", "handoff_access"])(
 	"requires a complete day count in custom %s prose",
 	(field) => {
@@ -3344,6 +3698,7 @@ it.each(["data_retention", "handoff_access"])(
 			handoff_access: "Keep for 30 days.",
 			[field]: "Keep access for 130 days.",
 		};
+
 		expect(() => validateAgreementDetails(input, terms as any)).toThrow(
 			"State the agreed",
 		);
@@ -3366,6 +3721,7 @@ it("masks link receipts and refunds definite token-scoped email rejection withou
 				: Response.json({ message: "Rejected" }, { status: 422 }),
 		),
 	);
+
 	for (let i = 0; i < 4; i++) {
 		const response = await issueAgreementLink(
 			env,
@@ -3373,6 +3729,7 @@ it("masks link receipts and refunds definite token-scoped email rejection withou
 			{ turnstileToken: "test" },
 			token,
 		);
+
 		expect(response.status).toBe(502);
 		expect(
 			sql
@@ -3397,16 +3754,19 @@ it("masks link receipts and refunds definite token-scoped email rejection withou
 				.get().n,
 		).toBe(0);
 	}
+
 	vi.stubGlobal(
 		"fetch",
 		vi.fn(async () => Response.json({ success: true })),
 	);
+
 	const response = await issueAgreementLink(
 		env,
 		request(),
 		{ turnstileToken: "test" },
 		token,
 	);
+
 	expect(response.status).toBe(200);
 	expect(
 		sql
@@ -3420,6 +3780,7 @@ it("masks link receipts and refunds definite token-scoped email rejection withou
 			"I sent a link to c•••@example.com. Tap it on any device to open your agreement.",
 	});
 });
+
 it("keeps definite archive send rejection generic", async () => {
 	await signed();
 	sql.exec("UPDATE software_agreements SET status='executed'");
@@ -3431,21 +3792,26 @@ it("keeps definite archive send rejection generic", async () => {
 				: Response.json({ message: "Rejected" }, { status: 422 }),
 		),
 	);
+
 	const response = await issueAgreementLink(env, request(), {
 		turnstileToken: "test",
 		email: "client@example.com",
 	});
+
 	expect(response.status).toBe(200);
 	expect(await response.json()).toMatchObject({
 		message: "If an agreement is available, a link is on its way.",
 	});
 });
+
 it("verifies the attachment bytes against the offer hash before client download", async () => {
 	const { GET } = await import("~/pages/api/agreements/attachments/[id]");
+
 	const id = crypto.randomUUID(),
 		key = `agreements/attachments/${id}.pdf`,
 		bytes = new TextEncoder().encode("%PDF-original"),
 		sha = await hashBytes(bytes);
+
 	sql
 		.prepare(
 			"INSERT INTO software_agreement_attachments VALUES(?,?,?,?,?,?,?,?,?,?)",
@@ -3466,12 +3832,14 @@ it("verifies the attachment bytes against the offer hash before client download"
 		.prepare("UPDATE software_offers SET agreement_details_json=? WHERE id='o'")
 		.run(JSON.stringify({ ...details, attachments: [{ key, sha256: sha }] }));
 	bucketData.set(key, bytes);
+
 	const call = () =>
 		GET({
 			locals: { runtime: { env } },
 			request: request(),
 			params: { id },
 		} as never);
+
 	expect(new Uint8Array(await (await call()).arrayBuffer())).toEqual(bytes);
 	bucketData.set(key, new TextEncoder().encode("%PDF-altered"));
 	const refused = await call();
@@ -3529,6 +3897,7 @@ it.each(["resolve", "withdraw"])(
 		).toBe(0);
 	},
 );
+
 it.each(["revoke", "replace"])(
 	"deletes signing drafts when an offer stops being signable (%s)",
 	async (action) => {
@@ -3539,6 +3908,7 @@ it.each(["revoke", "replace"])(
 				"INSERT INTO software_agreement_drafts VALUES('o','client@example.com',?,'now')",
 			)
 			.run(JSON.stringify({ legal_name: "Private" }));
+
 		if (action === "replace") {
 			sql
 				.prepare(
@@ -3549,10 +3919,12 @@ it.each(["revoke", "replace"])(
 				"UPDATE software_signing_settings SET software_signing_enabled=0",
 			);
 		}
+
 		const body =
 			action === "revoke"
 				? { action: "revoke", expectedLinkCreatedAt: "2000-01-01" }
 				: { action: "send", version: 2, expectedUpdatedAt: "now" };
+
 		const response = await POST({
 			params: { id: "r" },
 			request: new Request(
@@ -3568,12 +3940,14 @@ it.each(["revoke", "replace"])(
 			),
 			locals: { owner: { email: "owner@example.com" }, runtime: { env } },
 		} as never);
+
 		expect(response.status).toBe(200);
 		expect(
 			sql.prepare("SELECT count(*) n FROM software_agreement_drafts").get().n,
 		).toBe(0);
 	},
 );
+
 it.each(["creating", "open", "payment_failed", "uncollectible", "paid"])(
 	"blocks pending signing abandonment with an unrefunded %s deposit",
 	async (status) => {
@@ -3584,6 +3958,7 @@ it.each(["creating", "open", "payment_failed", "uncollectible", "paid"])(
 				"INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,created_by,created_at,updated_at) VALUES('deposit','r','o',0,'deposit',50,7,?,'owner','now','now')",
 			)
 			.run(status);
+
 		const call = () =>
 			POST({
 				params: { id: "r" },
@@ -3605,6 +3980,7 @@ it.each(["creating", "open", "payment_failed", "uncollectible", "paid"])(
 				),
 				locals: { owner: { email: "owner@example.com" }, runtime: { env } },
 			} as never);
+
 		const response = await call();
 		expect(response.status).toBe(409);
 		expect(await response.json()).toMatchObject({
@@ -3624,6 +4000,7 @@ it.each(["creating", "open", "payment_failed", "uncollectible", "paid"])(
 		expect((await call()).status).toBe(200);
 	},
 );
+
 it.each(["draft", "sent"])(
 	"refuses MSA termination while a live %s offer reuses it",
 	async (status) => {
@@ -3646,6 +4023,7 @@ it.each(["draft", "sent"])(
 			)
 			.run(status, msa.id);
 		const { POST } = await import("~/pages/api/owner/requests/[id]/agreement");
+
 		const call = () =>
 			POST({
 				params: { id: "r" },
@@ -3667,6 +4045,7 @@ it.each(["draft", "sent"])(
 				),
 				locals: { owner: { email: "owner@example.com" }, runtime: { env } },
 			} as never);
+
 		const response = await call();
 		expect(response.status).toBe(409);
 		expect(await response.json()).toMatchObject({
@@ -3681,14 +4060,18 @@ it.each(["draft", "sent"])(
 		expect((await call()).status).toBe(200);
 	},
 );
+
 it("bounds the attachment scan even when the archive has nothing eligible", async () => {
 	const { previewAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	const list = vi.fn(async () => {
 		if (list.mock.calls.length > 1) throw new Error("Unbounded scan");
+
 		return { objects: [], truncated: true, cursor: "next" };
 	});
+
 	env.AUDIO.list = list as any;
 	await previewAgreementRetention(db, env.AUDIO, "local");
 	expect(list).toHaveBeenCalledTimes(1);
@@ -3701,10 +4084,12 @@ it.each([false, true])(
 	"removes draft attachments and preserves objects referenced by sent offers (%s)",
 	async (sentReference) => {
 		const { POST } = await import("~/pages/api/owner/requests/[id]/software");
+
 		const id = crypto.randomUUID(),
 			key = `agreements/attachments/${id}.pdf`,
 			bytes = new TextEncoder().encode("%PDF-attachment"),
 			sha = await hashBytes(bytes);
+
 		const attachment = {
 			key,
 			sha256: sha,
@@ -3713,6 +4098,7 @@ it.each([false, true])(
 			date: "2026-10-01",
 			bytes: bytes.length,
 		};
+
 		bucketData.set(key, bytes);
 		sql
 			.prepare(
@@ -3730,6 +4116,7 @@ it.each([false, true])(
 				"now",
 				"owner",
 			);
+
 		if (sentReference)
 			sql
 				.prepare(
@@ -3744,6 +4131,7 @@ it.each([false, true])(
 				JSON.stringify(terms),
 				JSON.stringify({ ...details, attachments: [attachment] }),
 			);
+
 		const response = await POST({
 			params: { id: "r" },
 			request: new Request(
@@ -3765,6 +4153,7 @@ it.each([false, true])(
 			),
 			locals: { owner: { email: "owner@example.com" }, runtime: { env } },
 		} as never);
+
 		expect(response.status).toBe(200);
 		expect(
 			JSON.parse(
@@ -3781,6 +4170,7 @@ it.each([false, true])(
 
 it("saves a valid empty manifest after more than five cumulative attachment removals", async () => {
 	const { POST } = await import("~/pages/api/owner/requests/[id]/software");
+
 	const response = await POST({
 		params: { id: "r" },
 		request: new Request("https://example.com/api/owner/requests/r/software", {
@@ -3802,19 +4192,23 @@ it("saves a valid empty manifest after more than five cumulative attachment remo
 		}),
 		locals: { owner: { email: "owner@example.com" }, runtime: { env } },
 	} as never);
+
 	expect(response.status).toBe(200);
 });
 
 it("rechecks a newly live deposit inside the abandonment transaction", async () => {
 	const result = await signed(),
 		{ POST } = await import("~/pages/api/owner/requests/[id]/agreement");
+
 	const batch = db.batch.bind(db);
 	db.batch = async (statements) => {
 		sql.exec(
 			"INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,created_by,created_at,updated_at) VALUES('racing-deposit','r','o',0,'deposit',50,7,'open','owner','now','now')",
 		);
+
 		return batch(statements);
 	};
+
 	const response = await POST({
 		params: { id: "r" },
 		request: new Request("https://example.com/api/owner/requests/r/agreement", {
@@ -3832,6 +4226,7 @@ it("rechecks a newly live deposit inside the abandonment transaction", async () 
 		}),
 		locals: { owner: { email: "owner@example.com" }, runtime: { env } },
 	} as never);
+
 	expect(response.status).toBe(409);
 	expect(await response.json()).toMatchObject({
 		error: "Void or refund the deposit invoice first.",
@@ -3848,6 +4243,7 @@ it.each(["agreement", "archive"])(
 		const key = "z".repeat(43),
 			hash = await hashOfferToken(key),
 			offerToken = purpose === "agreement" ? token : undefined;
+
 		sql
 			.prepare(
 				"INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES(?,?,?,?,?,?,?,?)",
@@ -3862,9 +4258,11 @@ it.each(["agreement", "archive"])(
 				"now",
 				"2099-01-01",
 			);
+
 		const sessions = sql
 			.prepare("SELECT count(*) n FROM software_agreement_sessions")
 			.get().n;
+
 		for (let i = 0; i < 2; i++)
 			expect(
 				(
@@ -3906,12 +4304,14 @@ it.each(["agreement", "archive"])(
 				"UPDATE software_agreement_links SET expires_at='2099-01-01' WHERE id='landing'",
 			)
 			.run();
+
 		const response = await completeAgreementLink(
 			env,
 			new Request("https://example.com", { method: "POST" }),
 			key,
 			offerToken,
 		);
+
 		expect(response.status).toBe(303);
 		expect(response.headers.get("location")).toBe(
 			purpose === "agreement" ? `/offer/${token}/sign` : "/agreements",
@@ -3919,6 +4319,7 @@ it.each(["agreement", "archive"])(
 		expect(
 			sql.prepare("SELECT count(*) n FROM software_agreement_sessions").get().n,
 		).toBe(sessions + 1);
+
 		for (const method of ["GET", "POST"])
 			expect(
 				(
@@ -3937,49 +4338,60 @@ it("covers later orphan pages, wraps, and applies the reviewed page after anothe
 	const { previewAgreementRetention, applyAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	const now = new Date("2026-10-01T12:00:00Z");
+
 	for (let i = 0; i < 101; i++) {
 		const key = `agreements/attachments/kept-${String(i).padStart(3, "0")}.pdf`;
 		bucketData.set(key, new Uint8Array([1]));
 		bucketUploaded.set(key, now);
 	}
+
 	const key = "agreements/attachments/z-orphan.pdf";
 	bucketData.set(key, new Uint8Array([2]));
+
 	const first = await previewAgreementRetention(
 		db,
 		env.AUDIO,
 		"test-storage",
 		now,
 	);
+
 	expect(first.orphan_scan_cursor).toBeNull();
 	expect(first.orphan_attachments).toEqual([]);
+
 	const second = await previewAgreementRetention(
 		db,
 		env.AUDIO,
 		"test-storage",
 		now,
 	);
+
 	expect(second.orphan_attachments.map((item) => item.key)).toEqual([key]);
 	expect(
 		(await previewAgreementRetention(db, env.AUDIO, "test-storage", now))
 			.orphan_attachments,
 	).toEqual(second.orphan_attachments);
 	await applyAgreementRetention(db, env.AUDIO, "test-storage", second, now);
+
 	const wrapped = await previewAgreementRetention(
 		db,
 		env.AUDIO,
 		"test-storage",
 		now,
 	);
+
 	expect(wrapped.orphan_scan_cursor).toBeNull();
 	expect(wrapped.orphan_attachments).toEqual([]);
 	expect(bucketData.has(key)).toBe(false);
+
 	const next = await previewAgreementRetention(
 		db,
 		env.AUDIO,
 		"test-storage",
 		now,
 	);
+
 	expect(next.orphan_scan_cursor).toBe(second.orphan_scan_cursor);
 });
 
@@ -3991,17 +4403,20 @@ it.each([
 	const { previewAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	bucketData.set(
 		"agreements/retention/attachment-cursor.json",
 		new TextEncoder().encode(marker),
 	);
 	const key = "agreements/attachments/orphan.pdf";
 	bucketData.set(key, new Uint8Array([2]));
+
 	const manifest = await previewAgreementRetention(
 		db,
 		env.AUDIO,
 		"test-storage",
 	);
+
 	expect(manifest.orphan_scan_cursor).toBeNull();
 	expect(manifest.orphan_attachments.map((item) => item.key)).toEqual([key]);
 });
@@ -4010,6 +4425,7 @@ it("retries the same orphan page after storage refuses deletion", async () => {
 	const { previewAgreementRetention, applyAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	for (let i = 0; i < 101; i++)
 		bucketData.set(
 			`agreements/attachments/${String(i).padStart(3, "0")}.pdf`,
@@ -4041,13 +4457,16 @@ it("clears offer snapshots only when its last retained agreement is deleted", as
 	const { previewAgreementRetention, applyAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	await signed();
+
 	const snapshot = () =>
 		sql
 			.prepare(
 				"SELECT recipient_email_snapshot,agreement_details_json FROM software_offers WHERE id='o'",
 			)
 			.get();
+
 	const original = snapshot();
 	sql.exec(
 		"UPDATE software_agreements SET status='abandoned',ended_at='2000-01-01',retain_until='2010-01-01' WHERE kind='sow'",
@@ -4082,15 +4501,18 @@ it("applies the same archive cooldown to known and unknown emails without storin
 		vi.fn(async () => Response.json({ success: true })),
 	);
 	const results = [];
+
 	for (const email of ["client@example.com", "unknown@example.com"]) {
 		const first = await issueAgreementLink(env, request(), {
 			turnstileToken: "test",
 			email,
 		});
+
 		const second = await issueAgreementLink(env, request(), {
 			turnstileToken: "test",
 			email,
 		});
+
 		results.push([
 			first.status,
 			await first.json(),
@@ -4098,6 +4520,7 @@ it("applies the same archive cooldown to known and unknown emails without storin
 			await second.json(),
 		]);
 	}
+
 	expect(results[0]).toEqual(results[1]);
 	expect(results[1][2]).toBe(429);
 	expect(
@@ -4112,10 +4535,12 @@ it("applies the same archive cooldown to known and unknown emails without storin
 		"unknown@example.com",
 	);
 	const { keyedHash } = await import("~/lib/audio-client-access");
+
 	const key = await keyedHash(
 		secret,
 		"archive-link-cooldown:unknown@example.com",
 	);
+
 	expect(
 		sql.prepare("SELECT key FROM audio_client_allowances WHERE key=?").get(key),
 	).toBeDefined();
@@ -4141,28 +4566,34 @@ it("retains review agreements and pinned terms while any project references the 
 	const { previewAgreementRetention, applyAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	await signed();
 	sql.exec(
 		"UPDATE software_agreements SET status='abandoned',ended_at='2000-01-01',retain_until='2010-01-01',terminated_at='2000-01-01'; INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES('r','o','{}','standard','now','now','now','owner','now','now')",
 	);
+
 	const original = sql
 		.prepare("SELECT * FROM software_offers WHERE id='o'")
 		.get();
+
 	const manifest = await previewAgreementRetention(
 		db,
 		env.AUDIO,
 		"test-storage",
 	);
+
 	expect(manifest.agreements).toEqual([]);
 	await applyAgreementRetention(db, env.AUDIO, "test-storage", manifest);
 	expect(
 		sql.prepare("SELECT * FROM software_offers WHERE id='o'").get(),
 	).toEqual(original);
 });
+
 it("leaves a newer saved attachment cursor alone when applying an old preview", async () => {
 	const { previewAgreementRetention, applyAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	const old = await previewAgreementRetention(db, env.AUDIO, "test-storage");
 	const marker = "agreements/retention/attachment-cursor.json";
 	const newer = JSON.stringify({ version: 1, cursor: "after:newer" });
@@ -4170,25 +4601,31 @@ it("leaves a newer saved attachment cursor alone when applying an old preview", 
 	await applyAgreementRetention(db, env.AUDIO, "test-storage", old);
 	expect(new TextDecoder().decode(bucketData.get(marker))).toBe(newer);
 });
+
 it("emails the client signature receipt rather than the agreement ID", async () => {
 	const { deliverAgreementNotifications } = await import(
 		"~/lib/agreement-artifacts"
 	);
+
 	await signed();
+
 	const signature = sql
 		.prepare(
 			"SELECT agreement_id,receipt_id FROM software_agreement_signatures WHERE party='client' AND agreement_id IN (SELECT id FROM software_agreements WHERE kind='sow')",
 		)
 		.get();
+
 	vi.stubGlobal(
 		"fetch",
 		vi.fn(async () => Response.json({ id: "message" })),
 	);
 	await deliverAgreementNotifications(env, signature.agreement_id);
+
 	const payload = vi
 		.mocked(fetch)
 		.mock.calls.map(([, init]) => JSON.parse(String(init?.body)))
 		.find((p) => p.subject === "Your signature is saved");
+
 	expect(payload.text).toContain(`Receipt: ${signature.receipt_id}`);
 	expect(payload.text).not.toContain(`Receipt: ${signature.agreement_id}`);
 });
@@ -4199,13 +4636,16 @@ it.each([false, true])(
 		const { previewAgreementRetention, applyAgreementRetention } = await import(
 			"~/lib/agreement-retention"
 		);
+
 		const marker = "agreements/retention/attachment-cursor.json";
 		const old = await previewAgreementRetention(db, env.AUDIO, "test-storage");
+
 		if (!exists) bucketData.delete(marker);
 		const newer = JSON.stringify({ version: 1, cursor: "after:newer" });
 		const put = vi.mocked(env.AUDIO.put).getMockImplementation()!;
 		vi.mocked(env.AUDIO.put).mockImplementationOnce(async (...args: any[]) => {
 			bucketData.set(marker, new TextEncoder().encode(newer));
+
 			return (put as any)(...args);
 		});
 		await applyAgreementRetention(db, env.AUDIO, "test-storage", old);
@@ -4217,18 +4657,22 @@ it("expires a reused MSA once its project content is deleted", async () => {
 	const { previewAgreementRetention, applyAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	await review();
 	sql.exec(
 		"UPDATE software_offers SET status='superseded' WHERE id='o'; UPDATE software_agreements SET msa_id=NULL,legal_hold=1 WHERE kind='sow'; UPDATE software_agreements SET status='abandoned',ended_at='2000-01-01',retain_until='2010-01-01',terminated_at='2000-01-01'; INSERT INTO software_offers(id,request_id,version,status,terms_json,reused_msa_id,created_at,updated_at) SELECT 'reused','r',2,'sent','{}',id,'now','now' FROM software_agreements WHERE kind='msa'; INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,content_deleted_at) VALUES('r','reused','{}','standard','now','now','now','owner','now','now','now')",
 	);
+
 	const original = sql
 		.prepare("SELECT reused_msa_id FROM software_offers WHERE id='reused'")
 		.get();
+
 	const manifest = await previewAgreementRetention(
 		db,
 		env.AUDIO,
 		"test-storage",
 	);
+
 	expect(manifest.agreements.map((a) => a.id)).toContain(
 		original.reused_msa_id,
 	);
@@ -4246,9 +4690,11 @@ it.each(["agreement", "archive"])(
 		const foreign = new Request("https://foreign.example/api/agreements/link", {
 			method: "POST",
 		});
+
 		const before = sql
 			.prepare("SELECT count(*) n FROM audio_client_allowances")
 			.get().n;
+
 		expect(
 			(
 				await issueAgreementLink(
@@ -4282,6 +4728,7 @@ it.each(["agreement", "archive"])(
 		expect(fetch).not.toHaveBeenCalled();
 	},
 );
+
 it("emails archive access with signed-document copy and the canonical link", async () => {
 	const result = await signed();
 	await countersignAgreements(
@@ -4296,9 +4743,11 @@ it("emails archive access with signed-document copy and the canonical link", asy
 		email: "client@example.com",
 		turnstileToken: "valid",
 	});
+
 	const payload = JSON.parse(
 		String(vi.mocked(fetch).mock.calls.at(-1)![1]?.body),
 	);
+
 	expect(payload.subject).toBe("Your signed documents");
 	expect(payload.text).toContain(
 		"Tap below to open your signed agreement documents.",
@@ -4311,16 +4760,19 @@ it("removes offer events only when its last retained agreement is deleted", asyn
 	const { previewAgreementRetention, applyAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	await review();
 	sql.exec(
 		"UPDATE software_offers SET status='superseded' WHERE id='o'; UPDATE software_agreements SET msa_id=NULL,status='abandoned',ended_at='2000-01-01',retain_until='2010-01-01',terminated_at='2000-01-01'; INSERT INTO software_agreement_events VALUES('offer-event',NULL,'o','link-issued','actor','2000-01-01','{}')",
 	);
 	sql.exec("UPDATE software_agreements SET legal_hold=1 WHERE kind='sow'");
+
 	const manifest = await previewAgreementRetention(
 		db,
 		env.AUDIO,
 		"test-storage",
 	);
+
 	await applyAgreementRetention(db, env.AUDIO, "test-storage", manifest);
 	expect(
 		sql
@@ -4349,12 +4801,15 @@ it("redirects a successful native retention apply to the owner agreements page",
 	const { previewAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	const { POST } = await import("~/pages/api/owner/agreements");
+
 	const manifest = await previewAgreementRetention(
 		db,
 		env.AUDIO,
 		"test-storage",
 	);
+
 	const response = await POST({
 		request: new Request("https://example.com/api/owner/agreements", {
 			method: "POST",
@@ -4375,6 +4830,7 @@ it("redirects a successful native retention apply to the owner agreements page",
 			},
 		},
 	} as never);
+
 	expect(response.status).toBe(303);
 	expect(response.headers.get("location")).toBe("/owner/agreements");
 });
@@ -4387,7 +4843,9 @@ it.each([503, "timeout"])(
 			"fetch",
 			vi.fn(async (url: string) => {
 				if (url.includes("turnstile")) return Response.json({ success: true });
+
 				if (failure === "timeout") throw new Error("timeout");
+
 				return Response.json({ message: "Unavailable" }, { status: 503 });
 			}),
 		);
@@ -4422,15 +4880,18 @@ it("reviews retained external signing evidence and clears it with the last agree
 	const { previewAgreementRetention, applyAgreementRetention } = await import(
 		"~/lib/agreement-retention"
 	);
+
 	await review();
 	sql.exec(
 		"UPDATE software_offers SET status='superseded'; UPDATE software_agreements SET msa_id=NULL,status='abandoned',ended_at='2000-01-01',retain_until='2010-01-01',terminated_at='2000-01-01'; INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,content_deleted_at,external_signature_details_json) VALUES('r','o','{}','standard','now','now','now','','now','now','removed','{\"parties\":\"Client\",\"copy_reference\":\"Copy\"}')",
 	);
+
 	const manifest = await previewAgreementRetention(
 		db,
 		env.AUDIO,
 		"test-storage",
 	);
+
 	expect(
 		manifest.agreements[0].project_evidence[0].external_signature_details_json,
 	).toContain("Copy");
@@ -4470,18 +4931,21 @@ it.each(["resolve", "withdraw"] as const)(
 		).toBe(true);
 	},
 );
+
 it.each(["executed", "abandoned"])(
 	"does not send waiting notices for %s agreements",
 	async (status) => {
 		const { deliverAgreementNotifications } = await import(
 			"~/lib/agreement-artifacts"
 		);
+
 		await signed();
 		sql.prepare("UPDATE software_agreements SET status=?").run(status);
 		vi.stubGlobal(
 			"fetch",
 			vi.fn(async () => Response.json({ id: "message" })),
 		);
+
 		for (const a of await offerAgreements(db, "o"))
 			await deliverAgreementNotifications(env, a.id);
 		expect(fetch).not.toHaveBeenCalled();
@@ -4491,6 +4955,7 @@ it.each(["executed", "abandoned"])(
 it("retries an executed copy instead of the failed waiting receipt", async () => {
 	const { POST } = await import("~/pages/api/owner/requests/[id]/agreement");
 	const result = await signed();
+
 	const id = await countersignAgreements(
 		db,
 		(await offer())!,
@@ -4499,6 +4964,7 @@ it("retries an executed copy instead of the failed waiting receipt", async () =>
 		"owner@example.com",
 		request(),
 	);
+
 	await prepareAgreementArtifact(env, id, async () =>
 		new TextEncoder().encode("%PDF-retry"),
 	);
@@ -4509,6 +4975,7 @@ it("retries an executed copy instead of the failed waiting receipt", async () =>
 		"fetch",
 		vi.fn(async () => Response.json({ id: "message" })),
 	);
+
 	const response = await POST({
 		params: { id: "r" },
 		locals: { owner: { email: "owner@example.com" }, runtime: { env } },
@@ -4521,10 +4988,13 @@ it("retries an executed copy instead of the failed waiting receipt", async () =>
 			body: JSON.stringify({ action: "retry-copy", agreement_id: id }),
 		}),
 	} as never);
+
 	expect(response.status).toBe(200);
+
 	const payloads = vi
 		.mocked(fetch)
 		.mock.calls.map(([, init]) => JSON.parse(String(init?.body)));
+
 	expect(payloads.length).toBeGreaterThan(0);
 	expect(JSON.stringify(payloads)).not.toContain("Waiting for Kazon");
 	expect(
@@ -4552,6 +5022,7 @@ it("retries genuinely failed current signing notices", async () => {
 		"fetch",
 		vi.fn(async () => Response.json({ id: "message" })),
 	);
+
 	const response = await POST({
 		params: { id: "r" },
 		locals: { owner: { email: "owner@example.com" }, runtime: { env } },
@@ -4564,6 +5035,7 @@ it("retries genuinely failed current signing notices", async () => {
 			body: JSON.stringify({ action: "retry-copy", agreement_id: id }),
 		}),
 	} as never);
+
 	expect(response.status).toBe(200);
 	expect(
 		sql
@@ -4580,13 +5052,17 @@ it.each(["executed", "abandoned"])(
 		const { deliverAgreementNotifications } = await import(
 			"~/lib/agreement-artifacts"
 		);
+
 		const { previewAgreementRetention, applyAgreementRetention } = await import(
 			"~/lib/agreement-retention"
 		);
+
 		const result = await signed();
+
 		const id = (await offerAgreements(db, "o")).find(
 			(a) => a.kind === "sow",
 		)!.id;
+
 		vi.stubGlobal(
 			"fetch",
 			vi.fn(async () => {
@@ -4601,6 +5077,7 @@ it.each(["executed", "abandoned"])(
 				)
 				.get().n,
 		).toBe(2);
+
 		if (status === "executed") {
 			await countersignAgreements(
 				db,
@@ -4617,6 +5094,7 @@ it.each(["executed", "abandoned"])(
 			const { POST } = await import(
 				"~/pages/api/owner/requests/[id]/agreement"
 			);
+
 			const response = await POST({
 				params: { id: "r" },
 				locals: { owner: { email: "owner@example.com" }, runtime: { env } },
@@ -4637,8 +5115,10 @@ it.each(["executed", "abandoned"])(
 					},
 				),
 			} as never);
+
 			expect(response.status).toBe(200);
 		}
+
 		expect(
 			sql
 				.prepare(
@@ -4661,6 +5141,7 @@ it.each(["executed", "abandoned"])(
 			vi.fn(async () => Response.json({ id: "message" })),
 		);
 		const { POST } = await import("~/pages/api/owner/requests/[id]/agreement");
+
 		const retry = await POST({
 			params: { id: "r" },
 			locals: { owner: { email: "owner@example.com" }, runtime: { env } },
@@ -4676,6 +5157,7 @@ it.each(["executed", "abandoned"])(
 				},
 			),
 		} as never);
+
 		expect(retry.status).toBe(200);
 		expect(
 			sql
@@ -4687,6 +5169,7 @@ it.each(["executed", "abandoned"])(
 		vi.mocked(fetch).mockClear();
 		await deliverAgreementNotifications(env, id);
 		expect(fetch).not.toHaveBeenCalled();
+
 		if (status === "executed") {
 			await deliverAgreementCopies(env, id);
 			expect(
@@ -4700,14 +5183,17 @@ it.each(["executed", "abandoned"])(
 				"Waiting for Kazon",
 			);
 		}
+
 		sql.exec(
 			"UPDATE software_offers SET status='superseded'; UPDATE software_agreements SET ended_at='2000-01-01',retain_until='2010-01-01',terminated_at='2000-01-01'",
 		);
+
 		const manifest = await previewAgreementRetention(
 			db,
 			env.AUDIO,
 			"test-storage",
 		);
+
 		expect(manifest.agreements.map((a) => a.id)).toContain(id);
 		await applyAgreementRetention(db, env.AUDIO, "test-storage", manifest);
 		await applyAgreementRetention(
@@ -4731,15 +5217,18 @@ it("stores each pinned version label and the source revision on the agreement va
 		"owner@example.com",
 		{ versionLabel: "v2026-11-01", sourceRevision: "Counsel draft 3" },
 	);
+
 	sql
 		.prepare("UPDATE software_offers SET msa_template_id=? WHERE id='o'")
 		.run(pinned.id);
 	await review();
+
 	const stored = async (kind: "msa" | "sow") =>
 		JSON.parse(
 			(await offerAgreements(db, "o")).find((a) => a.kind === kind)!
 				.values_json,
 		);
+
 	expect((await stored("msa")).msa).toMatchObject({
 		version_label: "v2026-11-01",
 		source_revision: "Counsel draft 3",
@@ -4765,6 +5254,7 @@ it("keeps the reused MSA label on a new SOW when the offer pins a newer MSA temp
 	await prepareAgreementArtifact(env, msa.id, async () =>
 		new TextEncoder().encode("%PDF-synthetic"),
 	);
+
 	const newer = await publishTemplate(
 		db,
 		"msa",
@@ -4773,19 +5263,23 @@ it("keeps the reused MSA label on a new SOW when the offer pins a newer MSA temp
 		"owner@example.com",
 		{ versionLabel: "v2026-11-01" },
 	);
+
 	sql
 		.prepare("UPDATE software_offers SET status='superseded' WHERE id='o'")
 		.run();
+
 	const columns = sql
 		.prepare("PRAGMA table_info(software_offers)")
 		.all()
 		.map((row: { name: string }) => row.name);
+
 	const replacements: Record<string, string> = {
 		id: "'o2'",
 		version: "2",
 		status: "'sent'",
 		reused_msa_id: "?",
 	};
+
 	sql
 		.prepare(
 			`INSERT INTO software_offers(${columns.join(",")}) SELECT ${columns.map((name: string) => replacements[name] ?? name).join(",")} FROM software_offers WHERE id='o'`,
@@ -4797,6 +5291,7 @@ it("keeps the reused MSA label on a new SOW when the offer pins a newer MSA temp
 	sql
 		.prepare("UPDATE software_offers SET msa_template_id=? WHERE id='o2'")
 		.run(newer.id);
+
 	const reviewed = await reviewAgreements(
 		db,
 		(await db
@@ -4805,6 +5300,7 @@ it("keeps the reused MSA label on a new SOW when the offer pins a newer MSA temp
 		(await agreementSession(db, request(), "agreement", "o2"))!,
 		client,
 	);
+
 	expect(reviewed.reused_msa?.id).toBe(msa.id);
 	expect(
 		JSON.parse((await offerAgreements(db, "o2"))[0].values_json).msa,
@@ -4820,10 +5316,12 @@ it("certificates carry each document's own version label when the MSA and SOW la
 		"owner@example.com",
 		{ versionLabel: "v2026-11-01" },
 	);
+
 	sql
 		.prepare("UPDATE software_offers SET sow_template_id=? WHERE id='o'")
 		.run(later.id);
 	const result = await signed();
+
 	const id = await countersignAgreements(
 		db,
 		(await offer())!,
@@ -4832,12 +5330,14 @@ it("certificates carry each document's own version label when the MSA and SOW la
 		"owner@example.com",
 		request(),
 	);
+
 	let certificates: { versions: Record<string, unknown> }[] = [];
 	await prepareAgreementArtifact(
 		env,
 		id,
 		async (_env, _documents, received) => {
 			certificates = received as typeof certificates;
+
 			return new TextEncoder().encode("%PDF-synthetic");
 		},
 	);
@@ -4859,6 +5359,7 @@ it("certificates carry each document's own source revision, not the MSA's", asyn
 		"owner@example.com",
 		{ versionLabel: "v2026-11-01", sourceRevision: "MSA rev 7" },
 	);
+
 	const sow = await publishTemplate(
 		db,
 		"sow",
@@ -4867,12 +5368,14 @@ it("certificates carry each document's own source revision, not the MSA's", asyn
 		"owner@example.com",
 		{ versionLabel: "v2026-11-02", sourceRevision: "SOW rev 2" },
 	);
+
 	sql
 		.prepare(
 			"UPDATE software_offers SET msa_template_id=?, sow_template_id=? WHERE id='o'",
 		)
 		.run(msa.id, sow.id);
 	const result = await signed();
+
 	const id = await countersignAgreements(
 		db,
 		(await offer())!,
@@ -4881,12 +5384,14 @@ it("certificates carry each document's own source revision, not the MSA's", asyn
 		"owner@example.com",
 		request(),
 	);
+
 	let certificates: { versions: Record<string, unknown> }[] = [];
 	await prepareAgreementArtifact(
 		env,
 		id,
 		async (_env, _documents, received) => {
 			certificates = received as typeof certificates;
+
 			return new TextEncoder().encode("%PDF-synthetic");
 		},
 	);
@@ -4895,6 +5400,7 @@ it("certificates carry each document's own source revision, not the MSA's", asyn
 		expect.objectContaining({ source_revision: "SOW rev 2" }),
 	]);
 });
+
 it("certificates read older stored values from the template rows, and blank source revisions as empty", async () => {
 	sql
 		.prepare(
@@ -4912,6 +5418,7 @@ it("certificates read older stored values from the template rows, and blank sour
 		)
 		.run();
 	const reviewed = await review();
+
 	for (const agreement of await offerAgreements(db, "o")) {
 		const values = JSON.parse(agreement.values_json);
 		delete values.sow?.version_label;
@@ -4920,11 +5427,13 @@ it("certificates read older stored values from the template rows, and blank sour
 			version_label: "v2026-09-30",
 			source_revision: "Interim v2026-09-30",
 		};
+
 		if (agreement.kind === "msa") delete values.msa.version_label;
 		sql
 			.prepare("UPDATE software_agreements SET values_json=? WHERE id=?")
 			.run(JSON.stringify(values), agreement.id);
 	}
+
 	await signAgreements(
 		db,
 		(await offer())!,
@@ -4932,6 +5441,7 @@ it("certificates read older stored values from the template rows, and blank sour
 		reviewed.documents,
 		request(),
 	);
+
 	const id = await countersignAgreements(
 		db,
 		(await offer())!,
@@ -4940,12 +5450,14 @@ it("certificates read older stored values from the template rows, and blank sour
 		"owner@example.com",
 		request(),
 	);
+
 	let certificates: { versions: Record<string, unknown> }[] = [];
 	await prepareAgreementArtifact(
 		env,
 		id,
 		async (_env, _documents, received) => {
 			certificates = received as typeof certificates;
+
 			return new TextEncoder().encode("%PDF-synthetic");
 		},
 	);
@@ -4977,6 +5489,7 @@ it("keeps a returning client on the executed MSA after a newer MSA is published,
 		"owner@example.com",
 		{ versionLabel: "v2026-09-30" },
 	);
+
 	sql
 		.prepare("UPDATE software_offers SET msa_template_id=? WHERE id='o'")
 		.run(executed.id);
@@ -4993,13 +5506,16 @@ it("keeps a returning client on the executed MSA after a newer MSA is published,
 	await prepareAgreementArtifact(env, msa.id, async () =>
 		new TextEncoder().encode("%PDF-synthetic"),
 	);
+
 	const signedRows = () =>
 		sql
 			.prepare(
 				"SELECT id,kind,status,template_id,msa_id,canonical_text,text_sha256,values_json,executed_at FROM software_agreements WHERE offer_id='o' ORDER BY id",
 			)
 			.all();
+
 	const before = signedRows();
+
 	const newer = await publishTemplate(
 		db,
 		"msa",
@@ -5008,20 +5524,24 @@ it("keeps a returning client on the executed MSA after a newer MSA is published,
 		"owner@example.com",
 		{ versionLabel: "v2026-11-01" },
 	);
+
 	expect(signedRows()).toEqual(before);
 	sql
 		.prepare("UPDATE software_offers SET status='superseded' WHERE id='o'")
 		.run();
+
 	const columns = sql
 		.prepare("PRAGMA table_info(software_offers)")
 		.all()
 		.map((row: { name: string }) => row.name);
+
 	const replacements: Record<string, string> = {
 		id: "'o2'",
 		version: "2",
 		status: "'sent'",
 		reused_msa_id: "?",
 	};
+
 	sql
 		.prepare(
 			`INSERT INTO software_offers(${columns.join(",")}) SELECT ${columns.map((name: string) => replacements[name] ?? name).join(",")} FROM software_offers WHERE id='o'`,
@@ -5033,6 +5553,7 @@ it("keeps a returning client on the executed MSA after a newer MSA is published,
 	sql.exec(
 		"UPDATE software_agreement_sessions SET offer_id='o2'; UPDATE software_agreement_links SET offer_id='o2'",
 	);
+
 	const reviewed = await reviewAgreements(
 		db,
 		(await db
@@ -5041,6 +5562,7 @@ it("keeps a returning client on the executed MSA after a newer MSA is published,
 		(await agreementSession(db, request(), "agreement", "o2"))!,
 		client,
 	);
+
 	expect(reviewed.reused_msa?.id).toBe(msa.id);
 	expect(reviewed.documents.map((d) => d.kind)).toEqual(["sow"]);
 	const [sow] = await offerAgreements(db, "o2");
@@ -5060,6 +5582,7 @@ it("gives a different client with no executed MSA the current MSA, and leaves th
 		"owner@example.com",
 		{ versionLabel: "v2026-09-30" },
 	);
+
 	sql
 		.prepare("UPDATE software_offers SET msa_template_id=? WHERE id='o'")
 		.run(executed.id);
@@ -5072,19 +5595,24 @@ it("gives a different client with no executed MSA the current MSA, and leaves th
 		"owner@example.com",
 		request(),
 	);
+
 	const firstMsa = (await offerAgreements(db, "o")).find(
 		(a) => a.kind === "msa",
 	)!;
+
 	await prepareAgreementArtifact(env, firstMsa.id, async () =>
 		new TextEncoder().encode("%PDF-synthetic"),
 	);
+
 	const firstRows = () =>
 		sql
 			.prepare(
 				"SELECT id,kind,status,template_id,canonical_text,values_json FROM software_agreements WHERE offer_id='o' ORDER BY id",
 			)
 			.all();
+
 	const before = firstRows();
+
 	const current = await publishTemplate(
 		db,
 		"msa",
@@ -5093,6 +5621,7 @@ it("gives a different client with no executed MSA the current MSA, and leaves th
 		"owner@example.com",
 		{ versionLabel: "v2026-11-01" },
 	);
+
 	const otherLink = await hashOfferToken("y".repeat(43));
 	sql.exec(
 		"UPDATE software_offers SET status='superseded' WHERE id='o'; INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at) VALUES('r2','software','Other','other@example.com','Tool','reviewed','now','now')",
@@ -5102,10 +5631,12 @@ it("gives a different client with no executed MSA the current MSA, and leaves th
 			"INSERT INTO software_offer_links(request_id,token_hash,created_at,revoked_at) VALUES('r2',?,'now',NULL)",
 		)
 		.run(otherLink);
+
 	const columns = sql
 		.prepare("PRAGMA table_info(software_offers)")
 		.all()
 		.map((row: { name: string }) => row.name);
+
 	const replacements: Record<string, string> = {
 		id: "'o3'",
 		request_id: "'r2'",
@@ -5114,6 +5645,7 @@ it("gives a different client with no executed MSA the current MSA, and leaves th
 		msa_template_id: "?",
 		recipient_email_snapshot: "'other@example.com'",
 	};
+
 	sql
 		.prepare(
 			`INSERT INTO software_offers(${columns.join(",")}) SELECT ${columns.map((name: string) => replacements[name] ?? name).join(",")} FROM software_offers WHERE id='o'`,
@@ -5129,6 +5661,7 @@ it("gives a different client with no executed MSA the current MSA, and leaves th
 			"UPDATE software_agreement_links SET offer_id='o3', recipient_email='other@example.com', link_hash=?",
 		)
 		.run(otherLink);
+
 	const reviewed = await reviewAgreements(
 		db,
 		(await db
@@ -5137,6 +5670,7 @@ it("gives a different client with no executed MSA the current MSA, and leaves th
 		(await agreementSession(db, request(), "agreement", "o3"))!,
 		{ ...client, legal_name: "Other Sample LLC" },
 	);
+
 	expect(reviewed.reused_msa).toBeNull();
 	expect(reviewed.documents.map((d) => d.kind)).toEqual(["msa", "sow"]);
 	const msa = (await offerAgreements(db, "o3")).find((a) => a.kind === "msa")!;

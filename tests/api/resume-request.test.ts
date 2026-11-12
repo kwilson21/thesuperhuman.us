@@ -12,6 +12,7 @@ const validBody = {
 
 function makeKv() {
 	const store = new Map<string, string>();
+
 	return {
 		get: vi.fn(async (k: string) => store.get(k) ?? null),
 		put: vi.fn(async (k: string, v: string) => {
@@ -30,6 +31,7 @@ function makeContext(
 	kv?: ReturnType<typeof makeKv>,
 ) {
 	const sharedKv = kv ?? makeKv();
+
 	return {
 		request: new Request("https://thesuperhuman.us/api/resume-request", {
 			method: "POST",
@@ -65,12 +67,14 @@ beforeEach(() => {
 					json: async () => ({ success: true }),
 				} as unknown as Response;
 			}
+
 			if (url.includes("resend.com")) {
 				return {
 					ok: true,
 					json: async () => ({ id: "em_1" }),
 				} as unknown as Response;
 			}
+
 			return { ok: false, json: async () => ({}) } as unknown as Response;
 		}),
 	);
@@ -87,16 +91,19 @@ describe("POST /api/resume-request", () => {
 	it("returns 400 with errors on invalid input", async () => {
 		const res = await POST(makeContext({ ...validBody, audience: "sales" }));
 		expect(res.status).toBe(400);
+
 		const json = (await res.json()) as {
 			ok: boolean;
 			errors?: Record<string, string>;
 		};
+
 		expect(json.ok).toBe(false);
 		expect(json.errors?.audience).toBeDefined();
 	});
 
 	it("rejects new DoD requests before storage or external requests", async () => {
 		const kv = makeKv();
+
 		const res = await POST(
 			makeContext(
 				{ ...validBody, audience: "dod" },
@@ -105,6 +112,7 @@ describe("POST /api/resume-request", () => {
 				kv,
 			),
 		);
+
 		expect(res.status).toBe(400);
 		expect(kv.put).not.toHaveBeenCalled();
 		expect(fetch).not.toHaveBeenCalled();
@@ -114,6 +122,7 @@ describe("POST /api/resume-request", () => {
 		const res = await POST(
 			makeContext(validBody, "1.2.3.4", "https://evil.example.com"),
 		);
+
 		expect(res.status).toBe(403);
 	});
 
@@ -122,6 +131,7 @@ describe("POST /api/resume-request", () => {
 			if (url.includes("challenges.cloudflare.com")) {
 				return { ok: true, json: async () => ({ success: false }) };
 			}
+
 			return { ok: true, json: async () => ({ id: "em" }) };
 		});
 		const res = await POST(makeContext(validBody));
@@ -130,13 +140,17 @@ describe("POST /api/resume-request", () => {
 
 	it("returns 429 when same IP submits twice within rate-limit window", async () => {
 		const kv = makeKv();
+
 		const first = await POST(
 			makeContext(validBody, "1.2.3.4", "https://thesuperhuman.us", kv),
 		);
+
 		expect(first.status).toBe(200);
+
 		const second = await POST(
 			makeContext(validBody, "1.2.3.4", "https://thesuperhuman.us", kv),
 		);
+
 		expect(second.status).toBe(429);
 	});
 
@@ -145,9 +159,11 @@ describe("POST /api/resume-request", () => {
 			if (url.includes("challenges.cloudflare.com")) {
 				return { ok: true, json: async () => ({ success: true }) };
 			}
+
 			if (url.includes("resend.com")) {
 				return { ok: false, status: 500, json: async () => ({}) };
 			}
+
 			return { ok: false, json: async () => ({}) };
 		});
 		const res = await POST(makeContext(validBody));
@@ -159,15 +175,19 @@ describe("POST /api/resume-request", () => {
 		await POST(
 			makeContext(validBody, "1.2.3.4", "https://thesuperhuman.us", kv),
 		);
+
 		const reqEntries = Array.from(kv.put.mock.calls).filter(
 			(c) => typeof c[0] === "string" && c[0].startsWith("req:"),
 		);
+
 		expect(reqEntries.length).toBe(1);
 
 		const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+
 		const resendCall = fetchMock.mock.calls.find(
 			(c) => typeof c[0] === "string" && c[0].includes("resend.com"),
 		);
+
 		expect(resendCall).toBeTruthy();
 		const body = JSON.parse((resendCall![1] as RequestInit).body as string);
 		expect(body.to).toEqual(["kazon.wilson@thesuperhuman.us"]);

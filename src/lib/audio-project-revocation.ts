@@ -7,6 +7,7 @@ export async function revokeProjectAccess(
 	if (!actor.trim()) return false;
 	const at = now.toISOString();
 	const revocationId = crypto.randomUUID();
+
 	const [changed] = await db.batch([
 		db
 			.prepare(`UPDATE audio_projects SET revoked_at=?,updated_at=?,access_revocation_id=?
@@ -27,6 +28,7 @@ export async function revokeProjectAccess(
       SELECT request_id,'revoked',?,? FROM audio_projects WHERE request_id=? AND access_revocation_id=?`)
 			.bind(actor, at, requestId, revocationId),
 	]);
+
 	return changed.results.length > 0;
 }
 
@@ -39,18 +41,22 @@ export async function revokeProjectFile(
 	now = new Date(),
 ): Promise<{ updateId: number | null } | null> {
 	if (!actor.trim()) return null;
+
 	const file = await db
 		.prepare(
 			`SELECT version,status FROM audio_project_files WHERE request_id=? AND id=?`,
 		)
 		.bind(requestId, fileId)
 		.first<{ version: "review" | "final"; status: string }>();
+
 	if (!file || !["uploaded", "published"].includes(file.status)) return null;
 	const body = note.trim();
+
 	if (file.status === "published" && (body.length < 1 || body.length > 1000))
 		return null;
 	const at = now.toISOString();
 	const revocationId = crypto.randomUUID();
+
 	const statements = [
 		db
 			.prepare(`UPDATE audio_project_files SET status='revoked',revoked_at=?,revoked_by=?,revocation_id=?
@@ -83,6 +89,7 @@ export async function revokeProjectFile(
       WHERE request_id=? AND stage='in_progress' AND updated_at=? AND changes()=1`)
 			.bind(actor, at, requestId, at),
 	];
+
 	if (file.status === "published")
 		statements.push(
 			db
@@ -92,10 +99,13 @@ export async function revokeProjectFile(
 				.bind(body, actor, at, fileId, revocationId),
 		);
 	const results = await db.batch(statements);
+
 	if (!results[0].results.length) return null;
+
 	const update =
 		file.status === "published"
 			? (results[3].results[0] as { id: number })
 			: null;
+
 	return { updateId: update?.id ?? null };
 }

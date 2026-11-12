@@ -11,6 +11,7 @@ function fixture(
 ) {
 	const handlers = new Map<string, (event?: any) => void>();
 	const fields: Record<string, any> = {};
+
 	for (const name of [
 		"what_changed",
 		"kind",
@@ -49,15 +50,19 @@ function fixture(
 			closest: () => null,
 		};
 	}
+
 	fields.milestone_index.dataset = {
 		currentMilestone: String(currentMilestone),
 	};
+
 	const milestoneOptions = [0, 1, 2].map((value) => ({
 		value: String(value),
 		disabled: false,
 		hidden: false,
 	}));
+
 	const elements = new Map<string, any>();
+
 	const element = (selector: string) => {
 		if (!elements.has(selector))
 			elements.set(selector, {
@@ -73,8 +78,10 @@ function fixture(
 					selector === "[data-preview-image]" ? savedVisual : null,
 				removeAttribute: vi.fn(),
 			});
+
 		return elements.get(selector);
 	};
+
 	const form = {
 		reportValidity: () => true,
 		elements: { namedItem: (name: string) => fields[name] },
@@ -87,7 +94,9 @@ function fixture(
 		addEventListener: (event: string, handler: (event?: any) => void) =>
 			handlers.set(`form:${event}`, handler),
 	};
+
 	const preview = { querySelector: element, querySelectorAll: () => [] };
+
 	const root = {
 		dataset: {
 			id: saved ? "draft" : "",
@@ -101,8 +110,10 @@ function fixture(
 					? preview
 					: element(selector),
 	};
+
 	vi.stubGlobal("document", { querySelector: () => root });
 	setupSoftwareComposer();
+
 	return {
 		fields,
 		elements,
@@ -121,7 +132,9 @@ function fixture(
 		},
 	};
 }
+
 afterEach(() => vi.unstubAllGlobals());
+
 it.each(["direction_review", "delivery_review", "handoff"])(
 	"defaults new %s to email and preserves a manual opt-out",
 	(kind) => {
@@ -134,6 +147,7 @@ it.each(["direction_review", "delivery_review", "handoff"])(
 		expect(page.fields.email_client.checked).toBe(false);
 	},
 );
+
 it("keeps the saved draft email choice on initial render", () => {
 	expect(fixture(true).fields.email_client.checked).toBe(false);
 });
@@ -156,8 +170,10 @@ it("keeps a browser-generated id through a failed first share and retry", async 
 		},
 	);
 	vi.stubGlobal("location", { assign: vi.fn() });
+
 	const id = crypto.randomUUID(),
 		uuid = vi.spyOn(crypto, "randomUUID").mockReturnValue(id);
+
 	const send = vi
 		.fn()
 		.mockRejectedValueOnce(new Error("Lost response"))
@@ -168,6 +184,7 @@ it("keeps a browser-generated id through a failed first share and retry", async 
 				projectUpdatedAt: "project-saved",
 			}),
 		);
+
 	vi.stubGlobal("fetch", send);
 	const page = fixture();
 	page.submit();
@@ -175,6 +192,7 @@ it("keeps a browser-generated id through a failed first share and retry", async 
 	await new Promise((resolve) => setTimeout(resolve, 0));
 	page.submit();
 	await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(2));
+
 	for (const [, options] of send.mock.calls)
 		expect(JSON.parse(options.body)).toMatchObject({
 			updateId: id,
@@ -190,9 +208,11 @@ it.each(["", "/saved-visual"])(
 		const revoke = vi
 			.spyOn(URL, "revokeObjectURL")
 			.mockImplementation(() => {});
+
 		const create = vi
 			.spyOn(URL, "createObjectURL")
 			.mockReturnValue("blob:staged");
+
 		const page = fixture(Boolean(savedVisual), savedVisual);
 		page.fields.visual.files = [
 			{ name: "valid.png", size: 100, type: "image/png" },
@@ -214,6 +234,7 @@ it.each(["", "/saved-visual"])(
 		expect(page.elements.get("[data-preview-figure]").hidden).toBe(
 			!savedVisual,
 		);
+
 		if (savedVisual)
 			expect(page.elements.get("[data-preview-image]").src).toBe(savedVisual);
 		else
@@ -255,10 +276,12 @@ it("restores the saved endpoint after uploading and then rejecting another repla
 		),
 	);
 	const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+
 	const create = vi
 		.spyOn(URL, "createObjectURL")
 		.mockReturnValueOnce("blob:first")
 		.mockReturnValueOnce("blob:second");
+
 	const page = fixture();
 	page.fields.visual_alt.value = "A visual";
 	Object.defineProperty(page.fields.visual, "value", {
@@ -308,6 +331,7 @@ it("carries each saved project version through a visual upload and share", async
 		},
 	);
 	vi.stubGlobal("location", { assign: vi.fn() });
+
 	const send = vi
 		.fn()
 		.mockResolvedValueOnce(
@@ -325,6 +349,7 @@ it("carries each saved project version through a visual upload and share", async
 				projectUpdatedAt: "project-shared",
 			}),
 		);
+
 	vi.stubGlobal("fetch", send);
 	const page = fixture();
 	page.fields.visual_alt.value = "A visual";
@@ -394,6 +419,7 @@ it("offers only the current milestone for progress without changing a saved sele
 		page.milestoneOptions.every((option) => !option.disabled && !option.hidden),
 	).toBe(true);
 });
+
 it("preserves an earlier saved progress milestone and flags it", () => {
 	const page = fixture(true, "", "[false]", 1, 0);
 	expect(page.fields.milestone_index.value).toBe("0");

@@ -8,15 +8,19 @@ import { sendUrgentOwnerAlert } from "~/lib/owner-alerts";
 import { saveOwnerRequest } from "~/lib/owner-requests";
 import { checkRateLimit } from "~/lib/rate-limit";
 import { verifyTurnstile } from "~/lib/turnstile";
+
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request, locals }) => {
 	const body = await musicRequest(request, 32768);
+
 	if (body instanceof Response) return body;
 	const result = validateIntake(body);
+
 	if (!result.ok)
 		return Response.json({ ok: false, errors: result.errors }, { status: 400 });
 	const env = locals.runtime?.env;
+
 	if (!env?.MUSIC_DB || !env.TURNSTILE_SECRET_KEY || !env.RATE_LIMIT) {
 		return Response.json(
 			{
@@ -27,8 +31,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			{ status: 503 },
 		);
 	}
+
 	const input = result.value;
 	const ip = request.headers.get("cf-connecting-ip") ?? "0.0.0.0";
+
 	try {
 		// Bound verification attempts separately so a failed challenge can be retried.
 		const attempts = await checkRateLimit(
@@ -37,11 +43,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			"rl:audio-attempt:",
 			10,
 		);
+
 		if (!attempts.allowed)
 			return Response.json(
 				{ ok: false, error: "Please wait a few minutes before sending again." },
 				{ status: 429 },
 			);
+
 		if (
 			!(await verifyTurnstile(
 				input.turnstileToken,
@@ -59,12 +67,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				{ status: 403 },
 			);
 		const limit = await checkRateLimit(env.RATE_LIMIT, ip, "rl:audio:");
+
 		if (!limit.allowed)
 			return Response.json(
 				{ ok: false, error: "Please wait a few minutes before sending again." },
 				{ status: 429 },
 			);
 		let saved: Awaited<ReturnType<typeof saveOwnerRequest>>;
+
 		try {
 			saved = await saveOwnerRequest(
 				env.MUSIC_DB,
@@ -79,6 +89,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				code: "d1-write-failed",
 				occurredAt: new Date().toISOString(),
 			});
+
 			return Response.json(
 				{
 					ok: false,
@@ -88,6 +99,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				{ status: 503 },
 			);
 		}
+
 		// Best-effort notices: neither blocks the response, and neither can undo the stored request.
 		const notices: Promise<unknown>[] = [
 			sendOwnerRequestNotice({
@@ -101,6 +113,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				console.error("Owner notification email state is uncertain."),
 			),
 		];
+
 		if (clientPortalEnabled(env)) {
 			notices.push(
 				deliverProjectInvitation(env.MUSIC_DB, saved.id, env).catch(() =>
@@ -108,9 +121,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				),
 			);
 		}
+
 		const pending = Promise.all(notices);
+
 		if (locals.runtime?.ctx) locals.runtime.ctx.waitUntil(pending);
 		else await pending;
+
 		return Response.json({ ok: true });
 	} catch {
 		return Response.json(

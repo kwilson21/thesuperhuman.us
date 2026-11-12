@@ -13,12 +13,17 @@ import {
 import { getLinkedOffer } from "~/lib/software-offers";
 import { deliverAgreementNotifications } from "~/lib/agreement-artifacts";
 import { signAgreements, offerAgreements } from "~/lib/software-agreements";
+
 export const prerender = false;
+
 const post: APIRoute = async ({ request, locals, params }) => {
 	const db = locals.runtime.env.MUSIC_DB;
+
 	if (!db) return agreementJson({ ok: false }, 503);
 	const body = await agreementRequest(request);
+
 	if (body instanceof Response) return body;
+
 	const input = z
 		.object({
 			csrf_nonce: z.string().min(1),
@@ -34,10 +39,12 @@ const post: APIRoute = async ({ request, locals, params }) => {
 			consent: z.literal(true),
 		})
 		.safeParse(body);
+
 	const offer = params.token ? await getLinkedOffer(db, params.token) : null,
 		session = offer
 			? await agreementSession(db, request, "agreement", offer.id)
 			: null;
+
 	if (!(await signingEnabled(db)) || !session)
 		return agreementJson(
 			{
@@ -47,6 +54,7 @@ const post: APIRoute = async ({ request, locals, params }) => {
 			},
 			401,
 		);
+
 	if (!input.success)
 		return agreementJson(
 			{
@@ -55,8 +63,10 @@ const post: APIRoute = async ({ request, locals, params }) => {
 			},
 			400,
 		);
+
 	if (input.data.csrf_nonce !== session.csrf_nonce)
 		return agreementJson({ ok: false, error: "Reload and try again." }, 403);
+
 	try {
 		const receipt_id = await signAgreements(
 			db,
@@ -65,15 +75,18 @@ const post: APIRoute = async ({ request, locals, params }) => {
 			input.data.documents,
 			request,
 		);
+
 		const sow = (await offerAgreements(db, offer!.id)).find(
 			(d) => d.kind === "sow",
 		);
+
 		if (sow)
 			try {
 				await deliverAgreementNotifications(locals.runtime.env, sow.id);
 			} catch {
 				/* Saved signatures survive notification failures. */
 			}
+
 		return nativeAgreementResponse(
 			request,
 			agreementJson({ ok: true, receipt_id }),

@@ -1,20 +1,26 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
 import { readFileSync } from "node:fs";
 import { preview, apply, cutoffFor } from "../../scripts/music-retention.mjs";
 import {
 	lifetimePlayback,
 	dailyPlayback,
 } from "../../scripts/music-analytics.mjs";
+
 const now = new Date("2026-09-16T12:00:00.000Z");
+
 const schema = readFileSync(
 	new URL("../../db/music.sql", import.meta.url),
 	"utf8",
 );
+
 function setup() {
 	const db = new DatabaseSync(":memory:");
+
 	for (const sql of schema
 		.replace(/^--.*$/gm, "")
 		.split(/;\s*(?=CREATE\b|$)/i)
@@ -62,6 +68,7 @@ function setup() {
 		"start",
 		"2026-09-15T00:00:00.000Z",
 	);
+
 	return {
 		db,
 		query: async (sql: string) =>
@@ -71,6 +78,7 @@ function setup() {
 				.map((row: Record<string, unknown>) => ({ ...row })),
 	};
 }
+
 test("preview is read-only; cleanup preserves daily and lifetime totals and cannot double count", async () => {
 	const database = setup();
 	const before = await database.query(lifetimePlayback);
@@ -97,6 +105,7 @@ test("preview is read-only; cleanup preserves daily and lifetime totals and cann
 	assert.equal(await apply(database, empty, "Local test data", now), 0);
 	assert.deepEqual(await database.query(lifetimePlayback), before);
 });
+
 test("changed source, edited summary, wrong environment and unsafe cutoff are rejected", async () => {
 	const database = setup();
 	const review = await preview(database, "Local test data", now);
@@ -125,18 +134,22 @@ test("changed source, edited summary, wrong environment and unsafe cutoff are re
 		/changed/,
 	);
 });
+
 test("concurrent change after verification blocks the atomic delete", async () => {
 	const database = setup();
 	const review = await preview(database, "Local test data", now);
+
 	const guarded = {
 		query: async (sql: string) => {
 			if (sql.startsWith("DELETE"))
 				database.db.exec(
 					"UPDATE music_events SET session_id='raced' WHERE session_id='old-a'",
 				);
+
 			return database.query(sql);
 		},
 	};
+
 	await assert.rejects(
 		apply(guarded, review, "Local test data", now),
 		/source changed/,
@@ -150,6 +163,7 @@ test("concurrent change after verification blocks the atomic delete", async () =
 		0,
 	);
 });
+
 test("archive failure rolls back all raw deletes and archive writes", async () => {
 	const database = setup();
 	const review = await preview(database, "Local test data", now);
@@ -169,6 +183,7 @@ test("archive failure rolls back all raw deletes and archive writes", async () =
 		0,
 	);
 });
+
 test("missing or altered archive trigger prevents cleanup", async () => {
 	const database = setup();
 	const review = await preview(database, "Local test data", now);
@@ -181,9 +196,11 @@ test("missing or altered archive trigger prevents cleanup", async () => {
 
 test("large reviews use bounded chunks; failure leaves the rest for a fresh review", async () => {
 	const database = setup();
+
 	const insert = database.db.prepare(
 		"INSERT INTO music_events VALUES (?,?,?,?,?,?)",
 	);
+
 	for (let i = 0; i < 220; i++)
 		insert.run(
 			"batch",
@@ -196,13 +213,16 @@ test("large reviews use bounded chunks; failure leaves the rest for a fresh revi
 	const before = await database.query(lifetimePlayback);
 	const review = await preview(database, "Local test data", now);
 	let deletes = 0;
+
 	const interrupted = {
 		query: async (sql: string) => {
 			if (sql.startsWith("DELETE") && ++deletes === 2)
 				throw new Error("simulated interruption");
+
 			return database.query(sql);
 		},
 	};
+
 	await assert.rejects(
 		apply(interrupted, review, "Local test data", now),
 		/earlier chunks may be archived/,

@@ -13,19 +13,24 @@ import {
 import { sendAudioMessage } from "./audio-resend";
 import { escapeHtml } from "./email-template";
 import { verifyTurnstile } from "./turnstile";
+
 export const maskedAgreementEmail = (email: string) =>
 	`${[...email][0]}•••@${email.split("@")[1]}`;
+
 export const agreementHeaders = {
 	"cache-control": "private, no-store",
 	"x-robots-tag": "noindex, nofollow",
 	"referrer-policy": "no-referrer",
 };
+
 export const agreementJson = (body: unknown, status = 200) =>
 	Response.json(body, { status, headers: agreementHeaders });
+
 export function canonicalAgreementRequest(env: Env, request: Request) {
 	try {
 		const canonical = new URL(siteOrigin(env.SITE_ORIGIN));
 		const url = new URL(request.url);
+
 		return (
 			url.origin === canonical.origin &&
 			(!request.headers.has("host") ||
@@ -35,6 +40,7 @@ export function canonicalAgreementRequest(env: Env, request: Request) {
 		return false;
 	}
 }
+
 export async function cleanupAgreementAccess(db: D1Database) {
 	const before = new Date(Date.now() - 30 * 86400000).toISOString();
 	// Successful verification evidence lives in immutable signatures, independently of these short-lived rows.
@@ -51,6 +57,7 @@ export async function cleanupAgreementAccess(db: D1Database) {
 			.bind(before),
 	]);
 }
+
 export async function signingEnabled(db: D1Database) {
 	return Boolean(
 		(
@@ -62,6 +69,7 @@ export async function signingEnabled(db: D1Database) {
 		)?.software_signing_enabled,
 	);
 }
+
 export type AgreementSession = {
 	token_hash: string;
 	purpose: "agreement" | "archive";
@@ -72,12 +80,14 @@ export type AgreementSession = {
 	expires_at: string;
 	csrf_nonce: string;
 };
+
 export const sessionCookie = (
 	token: string,
 	secure: boolean,
 	purpose = "agreement",
 ) =>
 	`${purpose === "archive" ? "agreement_archive" : "agreement_session"}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=7200${secure ? "; Secure" : ""}`;
+
 export async function agreementSession(
 	db: D1Database,
 	request: Request,
@@ -86,17 +96,22 @@ export async function agreementSession(
 ) {
 	const name =
 		purpose === "archive" ? "agreement_archive" : "agreement_session";
+
 	const token = request.headers
 		.get("cookie")
 		?.match(new RegExp(`(?:^|;\\s*)${name}=([A-Za-z0-9_-]{43})(?:;|$)`))?.[1];
+
 	if (!token) return null;
+
 	const session = await db
 		.prepare(
 			"SELECT * FROM software_agreement_sessions WHERE token_hash=? AND purpose=? AND expires_at>? AND revoked_at IS NULL",
 		)
 		.bind(await hashOfferToken(token), purpose, new Date().toISOString())
 		.first<AgreementSession>();
+
 	if (!session || (offerId && session.offer_id !== offerId)) return null;
+
 	if (purpose === "agreement") {
 		const live = await db
 			.prepare(
@@ -104,10 +119,13 @@ export async function agreementSession(
 			)
 			.bind(session.offer_id, session.link_hash, session.recipient_email)
 			.first();
+
 		if (!live) return null;
 	}
+
 	return session;
 }
+
 export async function issueAgreementLink(
 	env: Env,
 	request: Request,
@@ -116,8 +134,10 @@ export async function issueAgreementLink(
 ) {
 	if (!canonicalAgreementRequest(env, request))
 		return agreementJson({ ok: false }, 404);
+
 	const db = env.MUSIC_DB,
 		purpose = token ? "agreement" : "archive";
+
 	if (
 		!db ||
 		!env.AUDIO_CLIENT_CODE_KEY ||
@@ -129,23 +149,28 @@ export async function issueAgreementLink(
 			{ ok: false, error: "Agreement sign-in is temporarily unavailable." },
 			503,
 		);
+
 	if (token && !(await signingEnabled(db)))
 		return agreementJson({ ok: false, error: "Website signing is off." }, 404);
 	const offer = token ? await getLinkedOffer(db, token) : null;
+
 	if (token && (!offer?.recipient_email_snapshot || !offer.msa_template_id))
 		return agreementJson(
 			{ ok: false, error: "This offer is unavailable for signing." },
 			404,
 		);
+
 	const email = normalizeClientEmail(
 		offer?.recipient_email_snapshot ?? input.email ?? "",
 	);
+
 	if (!email)
 		return agreementJson(
 			{ ok: false, error: "Enter a valid email address." },
 			400,
 		);
 	const ip = request.headers.get("cf-connecting-ip") ?? "0.0.0.0";
+
 	// Verify before charging either allowance so bots cannot exhaust a recipient's access.
 	if (
 		!(await verifyTurnstile(input.turnstileToken, env.TURNSTILE_SECRET_KEY, ip))
@@ -155,6 +180,7 @@ export async function issueAgreementLink(
 			403,
 		);
 	const allowances: Awaited<ReturnType<typeof reserveStudioAllowance>>[] = [];
+
 	for (const [scope, value, limit] of [
 		[`${purpose}-link-ip`, ip, 20],
 		[`${purpose}-link-email`, email, 3],
@@ -166,7 +192,9 @@ export async function issueAgreementLink(
 			limit,
 			env.AUDIO_CLIENT_CODE_KEY,
 		);
+
 		allowances.push(allowance);
+
 		if (!allowance.allowed)
 			return agreementJson(
 				{
@@ -176,18 +204,22 @@ export async function issueAgreementLink(
 				429,
 			);
 	}
+
 	const receipt = {
 		ok: true,
 		message: token
 			? `I sent a link to ${(await agreementSession(db, request, "agreement", offer!.id)) ? email : maskedAgreementEmail(email)}. Tap it on any device to open your agreement.`
 			: "If an agreement is available, a link is on its way.",
 	};
+
 	if (!token) {
 		const at = new Date();
+
 		const cooldownKey = await keyedHash(
 			env.AUDIO_CLIENT_CODE_KEY,
 			`archive-link-cooldown:${email}`,
 		);
+
 		const reserved = await db
 			.prepare(`INSERT INTO audio_client_allowances(key,window_start,uses) VALUES(?,?,1)
       ON CONFLICT(key) DO UPDATE SET window_start=excluded.window_start,uses=1
@@ -198,6 +230,7 @@ export async function issueAgreementLink(
 				new Date(at.getTime() - 30000).toISOString(),
 			)
 			.first();
+
 		if (!reserved)
 			return agreementJson(
 				{
@@ -207,6 +240,7 @@ export async function issueAgreementLink(
 				429,
 			);
 	}
+
 	if (
 		!offer &&
 		!(await db
@@ -217,11 +251,13 @@ export async function issueAgreementLink(
 			.first())
 	)
 		return agreementJson(receipt);
+
 	const at = new Date(),
 		id = crypto.randomUUID(),
 		key = newOfferToken(),
 		hash = await hashOfferToken(key),
 		linkHash = token ? await hashOfferToken(token) : null;
+
 	try {
 		await db.batch([
 			db
@@ -267,11 +303,14 @@ export async function issueAgreementLink(
 			429,
 		);
 	}
+
 	const url = new URL(
 		token ? `/offer/${token}/verify` : "/agreements/verify",
 		siteOrigin(env.SITE_ORIGIN),
 	);
+
 	url.searchParams.set("key", key);
+
 	const brief = offer
 		? await db
 				.prepare("SELECT name FROM owner_requests WHERE id=?")
@@ -283,16 +322,22 @@ export async function issueAgreementLink(
 				)
 				.bind(email)
 				.first<{ name: string }>();
+
 	const project = offer
 		? JSON.parse(offer.terms_json).outcome
 		: "your retained agreements";
+
 	const greeting = `Hi ${brief?.name?.trim().split(/\s+/)[0] || "there"},`;
+
 	const intro = token
 		? `Tap below to review and sign the agreement for ${project}.`
 		: "Tap below to open your signed agreement documents.";
+
 	const action = token ? "Review and sign" : "Open your documents";
+
 	const expiry =
 		"This link works once and expires in an hour. If you didn’t ask for it, you can ignore this email.";
+
 	const sent = await sendAudioMessage({
 		apiKey: env.RESEND_API_KEY,
 		payload: {
@@ -303,6 +348,7 @@ export async function issueAgreementLink(
 			html: `<p>${escapeHtml(greeting)}</p><p>${escapeHtml(intro)}</p><p><a href="${escapeHtml(url.href)}">${action}</a></p><p>${escapeHtml(expiry)}</p><p>Kazon</p>`,
 		},
 	});
+
 	if (!sent.ok && !sent.uncertain) {
 		if (token) {
 			await db.batch([
@@ -323,16 +369,19 @@ export async function issueAgreementLink(
 						.bind(allowance.key, allowance.windowStart),
 				]),
 			]);
+
 			return agreementJson(
 				{ ok: false, error: "That email didn’t go through. Please try again." },
 				502,
 			);
 		}
+
 		await db
 			.prepare("UPDATE software_agreement_links SET used_at=? WHERE id=?")
 			.bind(at.toISOString(), id)
 			.run();
 	}
+
 	if (sent.ok || sent.uncertain)
 		await db
 			.prepare(
@@ -347,8 +396,10 @@ export async function issueAgreementLink(
 				at.toISOString(),
 			)
 			.run();
+
 	return agreementJson(receipt);
 }
+
 export const liveSigningGuard = (
 	db: D1Database,
 	id: string,
@@ -360,6 +411,7 @@ export const liveSigningGuard = (
 			`SELECT CASE WHEN EXISTS(SELECT 1 FROM software_offers o JOIN software_offer_links l ON l.request_id=o.request_id JOIN owner_requests r ON r.id=o.request_id WHERE o.id=? AND o.status='sent' AND l.token_hash=? AND l.revoked_at IS NULL AND o.recipient_email_snapshot=? AND r.status NOT IN ('resolved','withdrawn') AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id) AND EXISTS(SELECT 1 FROM software_signing_settings WHERE software_signing_enabled=1)) THEN 1 ELSE json_extract('Signing state changed','$') END`,
 		)
 		.bind(id, linkHash, email);
+
 export async function completeAgreementLink(
 	env: Env,
 	request: Request,
@@ -368,13 +420,18 @@ export async function completeAgreementLink(
 ) {
 	if (!canonicalAgreementRequest(env, request))
 		return agreementJson({ ok: false }, 404);
+
 	const db = env.MUSIC_DB,
 		purpose = token ? "agreement" : "archive";
+
 	const expired = () =>
 		agreementJson({ ok: false, error: "This link has expired." }, 401);
+
 	if (!db || !/^[A-Za-z0-9_-]{43}$/.test(key)) return expired();
+
 	const hash = await hashOfferToken(key),
 		at = new Date().toISOString();
+
 	const link = await db
 		.prepare(
 			"SELECT * FROM software_agreement_links WHERE token_hash=? AND purpose=? AND used_at IS NULL AND expires_at>?",
@@ -386,8 +443,10 @@ export async function completeAgreementLink(
 			link_hash: string;
 			recipient_email: string;
 		}>();
+
 	if (!link || (token && (await hashOfferToken(token)) !== link.link_hash))
 		return expired();
+
 	if (request.method === "GET") {
 		if (token) {
 			try {
@@ -401,12 +460,16 @@ export async function completeAgreementLink(
 				return expired();
 			}
 		}
+
 		return agreementJson({ ok: true });
 	}
+
 	if (request.method !== "POST") return expired();
+
 	const session = newOfferToken(),
 		sessionHash = await hashOfferToken(session),
 		csrf = newOfferToken();
+
 	try {
 		await db.batch([
 			...(token
@@ -449,6 +512,7 @@ export async function completeAgreementLink(
 	} catch {
 		return expired();
 	}
+
 	return new Response(null, {
 		status: 303,
 		headers: {

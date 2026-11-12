@@ -11,6 +11,7 @@ export default {
 				await page.emulateMedia({ media: "print" });
 			},
 		});
+
 		return [
 			{
 				title: "US Letter print layout",

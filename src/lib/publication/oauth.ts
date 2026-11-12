@@ -25,22 +25,30 @@ async function bounded(request: Request): Promise<Request | null> {
 	const reader = request.body.getReader();
 	const parts: Uint8Array[] = [];
 	let size = 0;
+
 	while (true) {
 		const { done, value } = await reader.read();
+
 		if (done) break;
 		size += value.byteLength;
+
 		if (size > 32768) {
 			await reader.cancel();
+
 			return null;
 		}
+
 		parts.push(value);
 	}
+
 	const bytes = new Uint8Array(size);
 	let offset = 0;
+
 	for (const part of parts) {
 		bytes.set(part, offset);
 		offset += part.length;
 	}
+
 	return new Request(request.url, {
 		method: request.method,
 		headers: request.headers,
@@ -51,9 +59,11 @@ async function bounded(request: Request): Promise<Request | null> {
 export const publicationOAuthRoute: APIRoute = async ({ request, locals }) => {
 	const url = new URL(request.url);
 	const headers = { "Cache-Control": "no-store" };
+
 	if (url.origin !== publicationOrigin || !paths.has(url.pathname))
 		return new Response("Not found", { status: 404, headers });
 	const env = locals.runtime.env;
+
 	if (
 		!env.OAUTH_KV ||
 		!env.PUBLICATION_DB ||
@@ -67,25 +77,31 @@ export const publicationOAuthRoute: APIRoute = async ({ request, locals }) => {
 			headers,
 		});
 	}
+
 	try {
 		const limited = await bounded(request);
+
 		if (!limited)
 			return new Response("Request too large", { status: 413, headers });
+
 		// Dynamic import keeps Worker-only OAuth runtime out of unrelated website routes.
 		const { OAuthProvider } = await import(
 			"@cloudflare/workers-oauth-provider"
 		);
+
 		const scopes = (env.PUBLICATION_PROJECTS ?? "")
 			.split(",")
 			.map((s) => s.trim())
 			.filter(Boolean)
 			.map((p) => `publication:${p}`);
+
 		const provider = new OAuthProvider<LoginEnv>({
 			apiRoute: publicationResource,
 			apiHandler: {
 				async fetch(req, bindings, ctx) {
 					const identity = (ctx as unknown as { props?: PublicationIdentity })
 						.props;
+
 					if (
 						!identity ||
 						typeof identity.ownerId !== "string" ||
@@ -95,6 +111,7 @@ export const publicationOAuthRoute: APIRoute = async ({ request, locals }) => {
 					) {
 						return new Response("Forbidden", { status: 403 });
 					}
+
 					return publicationMcp(req, bindings, identity);
 				},
 			},
@@ -121,13 +138,16 @@ export const publicationOAuthRoute: APIRoute = async ({ request, locals }) => {
 				},
 			}),
 		});
+
 		const response = await provider.fetch(
 			limited,
 			env as unknown as LoginEnv,
 			locals.runtime.ctx,
 		);
+
 		const wrapped = new Response(response.body, response);
 		wrapped.headers.set("Cache-Control", "no-store");
+
 		return wrapped;
 	} catch {
 		return new Response("Publication connection unavailable.", {

@@ -38,6 +38,7 @@ export async function sendAudioMessage({
 			body: JSON.stringify(payload),
 			signal: AbortSignal.timeout(10_000),
 		});
+
 		return { ok: res.ok, uncertain: !res.ok && res.status >= 500 };
 	} catch {
 		// A timeout does not prove the provider rejected the email.
@@ -80,6 +81,7 @@ function ownerRequestNoticeBody(
 	origin = "https://thesuperhuman.us",
 ): string {
 	const preferences = describePreferences(input.service, input.preferences);
+
 	const lines = [
 		`Service: ${audioOffers[input.service].name}`,
 		`Title: ${input.title}`,
@@ -94,6 +96,7 @@ function ownerRequestNoticeBody(
 		"",
 		`Review this request: ${new URL(`/owner/requests/${requestId}`, origin).href}`,
 	];
+
 	return lines.filter((line): line is string => line !== null).join("\n");
 }
 
@@ -111,6 +114,7 @@ export async function sendOwnerRequestNotice(
 	args: OwnerRequestNoticeArgs,
 ): Promise<{ ok: boolean; uncertain?: boolean }> {
 	if (!args.apiKey || !args.from || !args.to) return { ok: false };
+
 	return sendAudioMessage({
 		apiKey: args.apiKey,
 		payload: {
@@ -135,6 +139,7 @@ export async function sendSoftwareRequestNotice(args: {
 	to?: string;
 }): Promise<{ ok: boolean; uncertain?: boolean }> {
 	if (!args.apiKey || !args.from || !args.to) return { ok: false };
+
 	return sendAudioMessage({
 		apiKey: args.apiKey,
 		payload: {

@@ -7,6 +7,7 @@ import { createPlaybackTracker } from "~/scripts/music-playback";
 it("counts actual playback across media while seeking adds no listening time", async () => {
 	let clock = 0;
 	const events: Record<string, unknown>[] = [];
+
 	const tracker = createPlaybackTracker({
 		releaseId: "old-news-single",
 		recordingId: "old-news-recording",
@@ -16,6 +17,7 @@ it("counts actual playback across media while seeking adds no listening time", a
 			events.push(event);
 		},
 	});
+
 	tracker.reset(0);
 	clock = 12_000;
 	tracker.sample(12, true, 1, 100, "audio");
@@ -49,6 +51,7 @@ it("counts actual playback across media while seeking adds no listening time", a
 it("reports completion after genuine playback and starts a replay as a new playthrough", async () => {
 	let clock = 0;
 	const events: Record<string, unknown>[] = [];
+
 	const tracker = createPlaybackTracker({
 		releaseId: "old-news-single",
 		recordingId: "old-news-recording",
@@ -58,6 +61,7 @@ it("reports completion after genuine playback and starts a replay as a new playt
 			events.push(event);
 		},
 	});
+
 	tracker.reset(0);
 	clock = 91_000;
 	tracker.sample(91, true, 1, 100, "audio");
@@ -80,6 +84,7 @@ it("continues submitting later events after one submission throws", async () => 
 	let clock = 0;
 	const events: Record<string, unknown>[] = [];
 	let attempts = 0;
+
 	const tracker = createPlaybackTracker({
 		releaseId: "old-news-single",
 		recordingId: "old-news-recording",
@@ -87,10 +92,12 @@ it("continues submitting later events after one submission throws", async () => 
 		now: () => clock,
 		submit: async (event) => {
 			attempts += 1;
+
 			if (attempts === 1) throw new Error("temporary submit failure");
 			events.push(event);
 		},
 	});
+
 	tracker.reset(0);
 	clock = 12_000;
 	tracker.sample(12, true, 1, 100, "audio");
@@ -103,6 +110,7 @@ it("continues submitting later events after one submission throws", async () => 
 it("retries loading the YouTube API after a temporary script failure", async () => {
 	// Exercise the real loader without loading a third-party script in the test runner.
 	const source = readFileSync("src/scripts/music-playback.ts", "utf8");
+
 	const compiled = ts.transpileModule(
 		`${source}\nexports.loadYoutube = youtubeAPI;`,
 		{
@@ -112,8 +120,10 @@ it("retries loading the YouTube API after a temporary script failure", async () 
 			},
 		},
 	).outputText;
+
 	const scripts: Array<{ onerror?: (error: Error) => void; remove(): void }> =
 		[];
+
 	const window: {
 		YT?: { Player: () => void };
 		onYouTubeIframeAPIReady?: () => void;
@@ -123,6 +133,7 @@ it("retries loading the YouTube API after a temporary script failure", async () 
 		setTimeout,
 		clearTimeout,
 	};
+
 	const exports = {} as { loadYoutube: () => Promise<unknown> };
 	runInNewContext(compiled, {
 		exports,

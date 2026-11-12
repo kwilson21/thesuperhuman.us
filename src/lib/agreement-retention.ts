@@ -2,6 +2,7 @@ import { canonicalJson, hashBytes } from "./agreement-artifacts";
 import { hashOfferToken } from "./software-offers";
 import { agreementEvent } from "./agreement-events";
 import { softwareGuard } from "./software-projects";
+
 export type RetentionManifest = {
 	version: 1;
 	created_at: string;
@@ -26,7 +27,9 @@ export type RetentionManifest = {
 	orphan_next_cursor?: string | null;
 	orphan_attachments: { key: string; sha256: string; uploaded_at: string }[];
 };
+
 const orphanCursorKey = "agreements/retention/attachment-cursor.json";
+
 // A referenced record stays retained. Later owner reviews can include it once every dependent record is retired.
 const eligible = `a.status IN ('executed','abandoned') AND a.ended_at IS NOT NULL AND a.retain_until IS NOT NULL AND a.retain_until<=? AND a.legal_hold=0
  AND NOT EXISTS(SELECT 1 FROM software_agreement_artifacts f WHERE f.agreement_id=a.id AND f.status='rendering')
@@ -37,12 +40,14 @@ const eligible = `a.status IN ('executed','abandoned') AND a.ended_at IS NOT NUL
  AND NOT EXISTS(SELECT 1 FROM software_offers o WHERE o.reused_msa_id=a.id AND (EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id AND p.content_deleted_at IS NULL) OR EXISTS(SELECT 1 FROM software_agreements sow WHERE sow.offer_id=o.id) OR (o.status IN ('sent','draft') AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id AND p.content_deleted_at IS NOT NULL))))
  AND NOT EXISTS(SELECT 1 FROM software_agreements s WHERE s.msa_id=a.id)
  AND (a.kind='sow' OR a.terminated_at IS NOT NULL OR NOT EXISTS(SELECT 1 FROM software_agreement_signatures sig WHERE sig.agreement_id=a.id))`;
+
 // Offers that can still be reviewed pin their uploaded attachments independently of review snapshots.
 const activeOfferAttachment = (
 	keyExpression = "?",
 ) => `SELECT 1 FROM software_offers o,json_each(json_extract(o.agreement_details_json,'$.attachments')) attachment
  WHERE o.status IN ('draft','sent') AND CASE WHEN json_valid(attachment.value) THEN json_extract(attachment.value,'$.key') END=${keyExpression}
  AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id)`;
+
 export async function previewAgreementRetention(
 	db: D1Database,
 	bucket: R2Bucket,
@@ -64,33 +69,41 @@ export async function previewAgreementRetention(
 				}
 			>()
 	).results;
+
 	const retiringIds = JSON.stringify(rows.map((row) => row.id));
 	// Assign a shared attachment to its last retiring reference, after the earlier rows are removed.
 	const attachmentOwners = new Map<string, string>();
+
 	for (const row of rows)
 		for (const attachment of JSON.parse(row.attachment_manifest_json) as {
 			key: string;
 		}[])
 			attachmentOwners.set(attachment.key, row.id);
 	const agreements: RetentionManifest["agreements"] = [];
+
 	for (const row of rows) {
 		const objects: { key: string; sha256: string }[] = [];
 		let cursor: string | undefined;
+
 		do {
 			const listed = await bucket.list({
 				prefix: `agreements/${row.id}/`,
 				cursor,
 			});
+
 			for (const object of listed.objects) {
 				const value = await bucket.get(object.key);
+
 				if (!value) throw new Error("Archive changed.");
 				objects.push({
 					key: object.key,
 					sha256: await hashBytes(await value.arrayBuffer()),
 				});
 			}
+
 			cursor = listed.truncated ? listed.cursor : undefined;
 		} while (cursor);
+
 		for (const attachment of JSON.parse(row.attachment_manifest_json) as {
 			key: string;
 			sha256: string;
@@ -101,10 +114,12 @@ export async function previewAgreementRetention(
 				)
 				.bind(retiringIds, attachment.key)
 				.first();
+
 			const offered = await db
 				.prepare(activeOfferAttachment())
 				.bind(attachment.key)
 				.first();
+
 			if (
 				!shared &&
 				!offered &&
@@ -112,6 +127,7 @@ export async function previewAgreementRetention(
 			)
 				objects.push({ key: attachment.key, sha256: attachment.sha256 });
 		}
+
 		agreements.push({
 			id: row.id,
 			sha256: row.text_sha256,
@@ -129,6 +145,7 @@ export async function previewAgreementRetention(
 			objects: objects.sort((a, b) => a.key.localeCompare(b.key)),
 		});
 	}
+
 	const unattached_attachments = (
 		await db
 			.prepare(`SELECT attachment.id,attachment.object_key AS key,attachment.sha256,attachment.created_at
@@ -141,6 +158,7 @@ export async function previewAgreementRetention(
 			.bind(new Date(now.getTime() - 30 * 86400000).toISOString())
 			.all<RetentionManifest["unattached_attachments"][number]>()
 	).results;
+
 	// A process can stop after the metadata reservation commits but before the R2
 	// delete starts. Keep those old, unindexed private objects visible for a later
 	// owner-reviewed pass. Keys referenced by any live metadata, agreement or offer
@@ -149,13 +167,16 @@ export async function previewAgreementRetention(
 	const orphanCutoff = new Date(now.getTime() - 30 * 86400000);
 	let orphanScanCursor = scan?.cursor ?? null;
 	let orphanNextCursor: string | null = null;
+
 	if (!scan) {
 		const marker = await bucket.get(orphanCursorKey);
+
 		if (marker) {
 			try {
 				const saved = JSON.parse(
 					new TextDecoder().decode(await marker.arrayBuffer()),
 				);
+
 				if (
 					saved.version === 1 &&
 					typeof saved.cursor === "string" &&
@@ -168,8 +189,10 @@ export async function previewAgreementRetention(
 			}
 		}
 	}
+
 	{
 		let listed: R2Objects;
+
 		try {
 			listed = await bucket.list({
 				prefix: "agreements/attachments/",
@@ -185,10 +208,13 @@ export async function previewAgreementRetention(
 				limit: 100,
 			});
 		}
+
 		for (const object of listed.objects) {
 			if (orphan_attachments.length >= 100) break;
 			const uploaded = object.uploaded;
+
 			if (!(uploaded instanceof Date) || uploaded > orphanCutoff) continue;
+
 			const referenced = await db
 				.prepare(`SELECT 1 WHERE
         EXISTS(SELECT 1 FROM software_agreement_attachments WHERE object_key=?)
@@ -197,8 +223,10 @@ export async function previewAgreementRetention(
         OR EXISTS(${activeOfferAttachment()})`)
 				.bind(object.key, object.key, object.key)
 				.first();
+
 			if (referenced) continue;
 			const stored = await bucket.get(object.key);
+
 			if (!stored) continue;
 			orphan_attachments.push({
 				key: object.key,
@@ -206,14 +234,18 @@ export async function previewAgreementRetention(
 				uploaded_at: uploaded.toISOString(),
 			});
 		}
+
 		orphanNextCursor = listed.truncated ? listed.cursor : null;
+
 		if (!scan && !orphan_attachments.length)
 			await bucket.put(
 				orphanCursorKey,
 				JSON.stringify({ version: 1, cursor: orphanNextCursor }),
 			);
 	}
+
 	orphan_attachments.sort((a, b) => a.key.localeCompare(b.key));
+
 	return {
 		version: 1,
 		created_at: now.toISOString(),
@@ -225,6 +257,7 @@ export async function previewAgreementRetention(
 		orphan_next_cursor: orphanNextCursor,
 	};
 }
+
 export async function applyAgreementRetention(
 	db: D1Database,
 	bucket: R2Bucket,
@@ -233,6 +266,7 @@ export async function applyAgreementRetention(
 	now = new Date(),
 ) {
 	const age = now.getTime() - Date.parse(manifest.created_at);
+
 	if (
 		(manifest.orphan_scan_cursor != null &&
 			(typeof manifest.orphan_scan_cursor !== "string" ||
@@ -251,9 +285,11 @@ export async function applyAgreementRetention(
 				manifest.orphan_attachments.length > 100))
 	)
 		throw new Error("Review is stale or belongs to different storage.");
+
 	const fresh = await previewAgreementRetention(db, bucket, binding, now, {
 		cursor: manifest.orphan_scan_cursor ?? null,
 	});
+
 	if (
 		canonicalJson(fresh.agreements) !== canonicalJson(manifest.agreements) ||
 		canonicalJson(fresh.unattached_attachments) !==
@@ -263,6 +299,7 @@ export async function applyAgreementRetention(
 	)
 		throw new Error("Archive changed. Preview again.");
 	const manifestHash = await hashOfferToken(canonicalJson(manifest));
+
 	for (const item of manifest.agreements) {
 		const evidenceGuards = () => [
 			softwareGuard(
@@ -278,6 +315,7 @@ export async function applyAgreementRetention(
 				),
 			),
 		];
+
 		await db.batch([
 			...evidenceGuards(),
 			softwareGuard(
@@ -299,9 +337,11 @@ export async function applyAgreementRetention(
 				)
 				.bind(now.toISOString(), item.id),
 		]);
+
 		// Fail closed. An interrupted delete leaves the retained record and receipt available to the owner for recovery.
 		for (const object of item.objects) {
 			const stored = await bucket.get(object.key);
+
 			if (
 				stored &&
 				(await hashBytes(await stored.arrayBuffer())) !== object.sha256
@@ -309,6 +349,7 @@ export async function applyAgreementRetention(
 				throw new Error("Object changed.");
 			await bucket.delete(object.key);
 		}
+
 		await db.batch([
 			...evidenceGuards(),
 			softwareGuard(
@@ -396,8 +437,10 @@ export async function applyAgreementRetention(
 			)
 			.run();
 	}
+
 	for (const attachment of manifest.unattached_attachments) {
 		const cutoff = new Date(now.getTime() - 30 * 86400000).toISOString();
+
 		const metadata = await db
 			.prepare(`SELECT id,request_id,filename,version,document_date,object_key,sha256,bytes,created_at,created_by
       FROM software_agreement_attachments WHERE id=? AND object_key=? AND sha256=? AND created_at=?`)
@@ -419,8 +462,10 @@ export async function applyAgreementRetention(
 				created_at: string;
 				created_by: string;
 			}>();
+
 		if (!metadata) throw new Error("Archive changed. Preview again.");
 		const stored = await bucket.get(attachment.key);
+
 		if (
 			stored &&
 			(await hashBytes(await stored.arrayBuffer())) !== attachment.sha256
@@ -459,6 +504,7 @@ export async function applyAgreementRetention(
 					attachment.key,
 				),
 		]);
+
 		if (stored) {
 			try {
 				await bucket.delete(attachment.key);
@@ -487,8 +533,10 @@ export async function applyAgreementRetention(
 			}
 		}
 	}
+
 	for (const orphan of manifest.orphan_attachments ?? []) {
 		const uploadedAt = Date.parse(orphan.uploaded_at);
+
 		if (
 			!Number.isFinite(uploadedAt) ||
 			uploadedAt > now.getTime() - 30 * 86400000 ||
@@ -496,6 +544,7 @@ export async function applyAgreementRetention(
 		)
 			throw new Error("Archive changed. Preview again.");
 		const stored = await bucket.get(orphan.key);
+
 		if (
 			!stored ||
 			(await hashBytes(await stored.arrayBuffer())) !== orphan.sha256
@@ -517,19 +566,23 @@ export async function applyAgreementRetention(
 		]);
 		await bucket.delete(orphan.key);
 	}
+
 	const marker = await bucket.get(orphanCursorKey);
 	let savedCursor: string | null = null;
+
 	if (marker) {
 		try {
 			const saved = JSON.parse(
 				new TextDecoder().decode(await marker.arrayBuffer()),
 			);
+
 			if (saved.version === 1 && typeof saved.cursor === "string")
 				savedCursor = saved.cursor;
 		} catch {
 			// Match the preview's restart for an unreadable marker.
 		}
 	}
+
 	if (savedCursor === (manifest.orphan_scan_cursor ?? null))
 		await bucket.put(
 			orphanCursorKey,

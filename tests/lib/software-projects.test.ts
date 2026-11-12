@@ -53,8 +53,10 @@ import {
 	getSoftwareProject,
 } from "~/lib/software-projects";
 import { softwareReviewEmail, softwareHandoffEmail } from "~/lib/client-emails";
+
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database, env: Env;
+
 const terms = {
 	outcome: "Onboarding tool",
 	summary: "One shared view.",
@@ -71,10 +73,13 @@ const terms = {
 	timing: "",
 	paymentMode: "standard",
 };
+
 const termsJson = JSON.stringify(terms, null, 2),
 	secret = "studio-code-key-for-tests-32-characters";
+
 const visualBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0]);
 const bucket = { put: vi.fn(), get: vi.fn(), delete: vi.fn() };
+
 function adapter(database: InstanceType<typeof DatabaseSync>) {
 	const statement = (query: string, args: unknown[] = []) => ({
 		query,
@@ -87,17 +92,21 @@ function adapter(database: InstanceType<typeof DatabaseSync>) {
 			meta: database.prepare(query).run(...args),
 		}),
 	});
+
 	return {
 		prepare: (query: string) => statement(query),
 		batch: async (items: ReturnType<typeof statement>[]) => {
 			database.exec("BEGIN");
+
 			try {
 				const result = items.map((item) => ({
 					results: /RETURNING|^SELECT/i.test(item.query)
 						? database.prepare(item.query).all(...item.args)
 						: (database.prepare(item.query).run(...item.args), []),
 				}));
+
 				database.exec("COMMIT");
+
 				return result;
 			} catch (error) {
 				database.exec("ROLLBACK");
@@ -106,6 +115,7 @@ function adapter(database: InstanceType<typeof DatabaseSync>) {
 		},
 	} as unknown as D1Database;
 }
+
 function request(
 	id = "software",
 	email = "alex@example.com",
@@ -117,6 +127,7 @@ function request(
 		)
 		.run(id, kind, email);
 }
+
 function offer(id = "software", mode = "standard") {
 	sql
 		.prepare(
@@ -130,6 +141,7 @@ function offer(id = "software", mode = "standard") {
 				: JSON.stringify({ ...terms, paymentMode: mode }),
 		);
 }
+
 beforeEach(() => {
 	sql = new DatabaseSync(":memory:");
 	sql.exec("PRAGMA foreign_keys=ON");
@@ -155,10 +167,12 @@ beforeEach(() => {
 		vi.fn(async () => new Response("{}", { status: 200 })),
 	);
 });
+
 afterEach(() => {
 	sql.close();
 	vi.unstubAllGlobals();
 });
+
 async function call(
 	route: typeof projectPost,
 	body: unknown,
@@ -175,6 +189,7 @@ async function call(
 			inputs_ready: true,
 			...(body as object),
 		};
+
 	if (route === updatePost)
 		body = {
 			expectedProjectUpdatedAt:
@@ -185,6 +200,7 @@ async function call(
 					.get(id)?.updated_at ?? "missing",
 			...(body as object),
 		};
+
 	return route({
 		params: { id },
 		request: new Request(
@@ -204,6 +220,7 @@ async function call(
 		},
 	} as never);
 }
+
 const start = () =>
 	call(projectPost, {
 		action: "start",
@@ -214,6 +231,7 @@ const start = () =>
 		payment: true,
 		next_update_on: "2026-10-01",
 	});
+
 const update = {
 	kind: "progress",
 	milestone_index: 0,
@@ -230,6 +248,7 @@ const update = {
 	email_client: false,
 	delivered_deliverables: ["Status view", "Sample import"],
 };
+
 it("parses revision selections from stable indices, never from labels or client notes", () => {
 	const checks = [
 			"Add a client.",
@@ -239,8 +258,10 @@ it("parses revision selections from stable indices, never from labels or client 
 			"Status view",
 			"Label says missing #1: but remains a different item.",
 		];
+
 	const body =
 		"Requested changes to Delivery v1. Checks reported unmet: [2]. Deliverables unavailable: [1]. Included but inaccessible: [2].\n\nNote says check #1: and missing #2: as ordinary text.";
+
 	expect(softwareRevisionTargets(body, checks, planned)).toEqual({
 		checks: [1],
 		deliverables: [0],
@@ -300,19 +321,25 @@ it("parses revision selections from stable indices, never from labels or client 
 		clearUnmetRevisionEvidence(["stale evidence", "keep this"], [0]),
 	).toEqual(["", "keep this"]);
 });
+
 async function draft() {
 	const response = await call(updatePost, {
 		action: "draft",
 		update,
 		expectedUpdatedAt: null,
 	});
+
 	expect(response.status).toBe(200);
+
 	return response.json() as Promise<{ id: string; updatedAt: string }>;
 }
+
 async function session(email = "alex@example.com") {
 	const code = await issueClientCode(db, email, secret);
+
 	return (await completeClientCode(db, email, code!, secret))!;
 }
+
 async function shareReview(
 	kind = "delivery_review",
 	artifact_version = "Delivery v1",
@@ -328,9 +355,12 @@ async function shareReview(
 			criteria: ["Try adding a client in the preview."],
 		},
 	});
+
 	expect(response.status).toBe(200);
+
 	return response.json() as Promise<{ id: string }>;
 }
+
 async function decide(
 	updateId: string,
 	body: unknown,
@@ -354,8 +384,10 @@ async function decide(
 		locals: { runtime: { env } },
 	} as never);
 }
+
 it("requires a named review version, evidence for every check and a bounded review window", async () => {
 	await start();
+
 	for (const changed of [
 		{ artifact_version: "" },
 		{ criteria: [] },
@@ -380,13 +412,16 @@ it("requires a named review version, evidence for every check and a bounded revi
 			).status,
 		).toBe(400);
 	}
+
 	expect(
 		sql.prepare("SELECT count(*) AS n FROM software_project_updates").get(),
 	).toEqual({ n: 0 });
 });
+
 it("snapshots selected deliverables but blocks acceptance until the full milestone is included", async () => {
 	await start();
 	const selected = ["Status view"];
+
 	const response = await call(updatePost, {
 		action: "share",
 		confirmed: true,
@@ -399,13 +434,16 @@ it("snapshots selected deliverables but blocks acceptance until the full milesto
 			delivered_deliverables: selected,
 		},
 	});
+
 	expect(response.status).toBe(200);
 	const { id } = (await response.json()) as { id: string };
+
 	const row = sql
 		.prepare(
 			"SELECT delivered_deliverables_json FROM software_project_updates WHERE id=?",
 		)
 		.get(id);
+
 	expect(row).toEqual({
 		delivered_deliverables_json: JSON.stringify(
 			selected.map((item) => terms.milestones[0].deliverables.indexOf(item)),
@@ -417,15 +455,18 @@ it("snapshots selected deliverables but blocks acceptance until the full milesto
 		),
 	});
 	const token = await session();
+
 	const partial = await decide(
 		id,
 		{ decision: "milestone_accepted", confirm: true },
 		token,
 	);
+
 	expect(partial.status).toBe(400);
 	expect(((await partial.json()) as { error: string }).error).toMatch(
 		/only part of the milestone/i,
 	);
+
 	const full = await call(updatePost, {
 		action: "share",
 		confirmed: true,
@@ -438,6 +479,7 @@ it("snapshots selected deliverables but blocks acceptance until the full milesto
 			delivered_deliverables: ["Status view", "Sample import"],
 		},
 	});
+
 	expect(full.status).toBe(200);
 	const revised = (await full.json()) as { id: string };
 	expect(
@@ -457,9 +499,11 @@ it("snapshots selected deliverables but blocks acceptance until the full milesto
 			.get(revised.id),
 	).toEqual({ decision: "milestone_accepted" });
 });
+
 it("lets clients report a missing planned deliverable even when every included check passes", async () => {
 	await start();
 	const token = await session();
+
 	const response = await call(updatePost, {
 		action: "share",
 		confirmed: true,
@@ -472,6 +516,7 @@ it("lets clients report a missing planned deliverable even when every included c
 			delivered_deliverables: ["Status view"],
 		},
 	});
+
 	expect(response.status).toBe(200);
 	const { id } = (await response.json()) as { id: string };
 	expect(
@@ -495,9 +540,11 @@ it("lets clients report a missing planned deliverable even when every included c
 		"Requested changes to Delivery v1 for milestone 1. Checks reported unmet: []. Deliverables unavailable: [2]. Included but inaccessible: [].\n\nThe sample import is not included yet.",
 	);
 });
+
 it("lets clients report an included deliverable they cannot open without misclassifying it as omitted", async () => {
 	await start();
 	const token = await session();
+
 	const response = await call(updatePost, {
 		action: "share",
 		confirmed: true,
@@ -510,6 +557,7 @@ it("lets clients report an included deliverable they cannot open without misclas
 			delivered_deliverables: ["Status view"],
 		},
 	});
+
 	expect(response.status).toBe(200);
 	const { id } = (await response.json()) as { id: string };
 	expect(
@@ -544,9 +592,11 @@ it("lets clients report an included deliverable they cannot open without misclas
 		"Included deliverables the client could not open or find:\n1. Status view",
 	);
 });
+
 it("rejects mismatching omitted and inaccessible delivery selections", async () => {
 	await start();
 	const token = await session();
+
 	const response = await call(updatePost, {
 		action: "share",
 		confirmed: true,
@@ -559,6 +609,7 @@ it("rejects mismatching omitted and inaccessible delivery selections", async () 
 			delivered_deliverables: ["Status view"],
 		},
 	});
+
 	expect(response.status).toBe(200);
 	const { id } = (await response.json()) as { id: string };
 	expect(
@@ -588,6 +639,7 @@ it("rejects mismatching omitted and inaccessible delivery selections", async () 
 		).status,
 	).toBe(400);
 });
+
 it("keeps project progress on a later milestone when sharing an earlier revision", async () => {
 	const laterTerms = {
 		...terms,
@@ -596,6 +648,7 @@ it("keeps project progress on a later milestone when sharing an earlier revision
 			{ ...terms.milestones[0], name: "Launch" },
 		],
 	};
+
 	sql
 		.prepare("UPDATE software_offers SET terms_json=?")
 		.run(JSON.stringify(laterTerms));
@@ -605,6 +658,7 @@ it("keeps project progress on a later milestone when sharing an earlier revision
 			"UPDATE software_projects SET state='building',step='build',milestone_index=1,next_update_on='2026-10-10',updated_at='2026-10-01T12:00:00Z'",
 		)
 		.run();
+
 	const response = await call(updatePost, {
 		action: "share",
 		confirmed: true,
@@ -618,6 +672,7 @@ it("keeps project progress on a later milestone when sharing an earlier revision
 			delivered_deliverables: ["Status view", "Sample import"],
 		},
 	});
+
 	expect(response.status).toBe(200);
 	expect(
 		sql
@@ -632,10 +687,13 @@ it("keeps project progress on a later milestone when sharing an earlier revision
 		next_update_on: "2026-10-10",
 	});
 });
+
 it("treats legacy reviews without a scope snapshot as the full agreed milestone", async () => {
 	await start();
+
 	const token = await session(),
 		review = await shareReview();
+
 	sql
 		.prepare(
 			"UPDATE software_project_updates SET delivered_deliverables_json='[]' WHERE id=?",
@@ -651,8 +709,10 @@ it("treats legacy reviews without a scope snapshot as the full agreed milestone"
 		).status,
 	).toBe(200);
 });
+
 it("rejects delivery selections outside the agreed scope, duplicates and empty shared selections", async () => {
 	await start();
+
 	for (const delivered_deliverables of [
 		["Not in the contract"],
 		["Status view", "Status view"],
@@ -669,12 +729,15 @@ it("rejects delivery selections outside the agreed scope, duplicates and empty s
 				delivered_deliverables,
 			},
 		});
+
 		expect(response.status).toBe(400);
 	}
+
 	expect(
 		sql.prepare("SELECT count(*) AS n FROM software_project_updates").get(),
 	).toEqual({ n: 0 });
 });
+
 it("stores a longer executed-agreement review window in the additive field", async () => {
 	await start();
 	sql.exec(
@@ -691,6 +754,7 @@ it("stores a longer executed-agreement review window in the additive field", asy
 	sql.exec(
 		"UPDATE software_projects SET agreement_id='test-agreement' WHERE request_id='software'",
 	);
+
 	const response = await call(updatePost, {
 		action: "share",
 		confirmed: true,
@@ -703,6 +767,7 @@ it("stores a longer executed-agreement review window in the additive field", asy
 			review_window_days: 5,
 		},
 	});
+
 	expect(response.status).toBe(200);
 	expect(
 		sql
@@ -715,14 +780,17 @@ it("stores a longer executed-agreement review window in the additive field", asy
 		(await sharedSoftwareUpdates(db, "software"))[0].review_window_days,
 	).toBe(45);
 });
+
 it("lets the owner save an unfinished reference in a private draft and requires it to be safe before sharing", async () => {
 	await start();
 	const reference = { label: "Release notes", url: "" };
+
 	const saved = await call(updatePost, {
 		action: "draft",
 		expectedUpdatedAt: null,
 		update: { ...update, kind: "delivery_review", links: [reference] },
 	});
+
 	expect(saved.status).toBe(200);
 	const draftInfo = (await saved.json()) as { id: string; updatedAt: string };
 	expect(
@@ -732,6 +800,7 @@ it("lets the owner save an unfinished reference in a private draft and requires 
 			)
 			.get(draftInfo.id),
 	).toEqual({ links_json: JSON.stringify([reference]), status: "draft" });
+
 	const shared = await call(updatePost, {
 		action: "share",
 		updateId: draftInfo.id,
@@ -745,20 +814,25 @@ it("lets the owner save an unfinished reference in a private draft and requires 
 			links: [reference],
 		},
 	});
+
 	expect(shared.status).toBe(400);
 	expect(((await shared.json()) as { error: string }).error).toContain(
 		"Finish each reference",
 	);
 });
+
 it("records one version-specific decision and audit together, without confusing direction and acceptance", async () => {
 	await start();
+
 	const token = await session(),
 		direction = await shareReview("direction_review", "Direction v1");
+
 	const mismatch = await decide(
 		direction.id,
 		{ decision: "milestone_accepted", confirm: true },
 		token,
 	);
+
 	expect(mismatch.status).toBe(400);
 	expect(((await mismatch.json()) as { error: string }).error).toBe(
 		"This decision doesn’t apply to this review.",
@@ -816,10 +890,13 @@ it("records one version-specific decision and audit together, without confusing 
 		{ decision: "milestone_accepted", read_at: null },
 	]);
 });
+
 it("requires specific delivery criteria and bounded reproduction notes", async () => {
 	await start();
+
 	const token = await session(),
 		review = await shareReview();
+
 	for (const changed of [
 		{ criteria: [] },
 		{ criteria: [1] },
@@ -867,10 +944,13 @@ it("requires specific delivery criteria and bounded reproduction notes", async (
 			.get().note,
 	).toContain("checks 1");
 });
+
 it("keeps client note text out of the machine-readable change header", async () => {
 	await start();
+
 	const token = await session(),
 		review = await shareReview();
+
 	expect(
 		(
 			await decide(
@@ -884,18 +964,23 @@ it("keeps client note text out of the machine-readable change header", async () 
 			)
 		).status,
 	).toBe(200);
+
 	const body = sql
 		.prepare("SELECT body FROM software_project_messages WHERE update_id=?")
 		.get(review.id).body as string;
+
 	expect(body.split("\n", 1)[0]).toBe(
 		"Requested changes to Delivery v1 for milestone 1. Checks reported unmet: [1]. Deliverables unavailable: []. Included but inaccessible: [].",
 	);
 	expect(body).toContain("The note mentions (Add a different planned check.)");
 });
+
 it("saves revised check evidence so the revision draft can be reopened without loss", async () => {
 	await start();
+
 	const token = await session(),
 		review = await shareReview();
+
 	expect(
 		(
 			await decide(
@@ -909,10 +994,12 @@ it("saves revised check evidence so the revision draft can be reopened without l
 			)
 		).status,
 	).toBe(200);
+
 	const firstEvidence = [
 		"Fixed the sample client form.",
 		"Confirmed export remains available.",
 	];
+
 	const first = await call(updatePost, {
 		action: "draft",
 		expectedUpdatedAt: null,
@@ -925,6 +1012,7 @@ it("saves revised check evidence so the revision draft can be reopened without l
 			delivered_deliverables: ["Status view"],
 		},
 	});
+
 	expect(first.status).toBe(200);
 	const saved = (await first.json()) as { id: string; updatedAt: string };
 	expect(
@@ -932,10 +1020,12 @@ it("saves revised check evidence so the revision draft can be reopened without l
 			.prepare("SELECT criteria_json FROM software_project_updates WHERE id=?")
 			.get(saved.id),
 	).toEqual({ criteria_json: JSON.stringify(firstEvidence) });
+
 	const reopenedEvidence = [
 		"Fixed the sample client form with clearer validation.",
 		"Confirmed export remains available.",
 	];
+
 	const reopened = await call(updatePost, {
 		action: "draft",
 		updateId: saved.id,
@@ -949,6 +1039,7 @@ it("saves revised check evidence so the revision draft can be reopened without l
 			delivered_deliverables: ["Status view"],
 		},
 	});
+
 	expect(reopened.status).toBe(200);
 	expect(
 		sql
@@ -956,8 +1047,10 @@ it("saves revised check evidence so the revision draft can be reopened without l
 			.get(saved.id),
 	).toEqual({ criteria_json: JSON.stringify(reopenedEvidence) });
 });
+
 it("snapshots delivery references with the versioned review while rejecting unsafe links", async () => {
 	await start();
+
 	const links = [
 		{
 			label: "Repository · example only",
@@ -968,6 +1061,7 @@ it("snapshots delivery references with the versioned review while rejecting unsa
 			url: "https://example.com/artifact",
 		},
 	];
+
 	const response = await call(updatePost, {
 		action: "share",
 		confirmed: true,
@@ -980,6 +1074,7 @@ it("snapshots delivery references with the versioned review while rejecting unsa
 			links,
 		},
 	});
+
 	expect(response.status).toBe(200);
 	const shared = await sharedSoftwareUpdates(db, "software");
 	expect(shared[0]).toMatchObject({
@@ -1004,10 +1099,13 @@ it("snapshots delivery references with the versioned review while rejecting unsa
 		).status,
 	).toBe(400);
 });
+
 it("supersedes only the same kind and milestone, keeping old versions and decisions private-safe", async () => {
 	await start();
+
 	const token = await session(),
 		first = await shareReview();
+
 	await decide(
 		first.id,
 		{ decision: "changes_requested", criteria: [0], note: "Try the sample." },
@@ -1041,10 +1139,13 @@ it("supersedes only the same kind and milestone, keeping old versions and decisi
 		/PRIVATE NOTE|actor_id|visual_key|shared_by|notification_status/,
 	);
 });
+
 it("scopes review decisions to own active sessions and rejects unknown or revoked projects", async () => {
 	await start();
+
 	const token = await session(),
 		review = await shareReview();
+
 	expect(
 		(
 			await decide(
@@ -1100,10 +1201,13 @@ it("scopes review decisions to own active sessions and rejects unknown or revoke
 		).status,
 	).toBe(404);
 });
+
 it("rolls back the decision when the audit cannot be written", async () => {
 	await start();
+
 	const token = await session(),
 		review = await shareReview();
+
 	sql.exec(
 		"CREATE TRIGGER fail_decision_audit BEFORE INSERT ON software_project_audit WHEN NEW.action='decision-recorded' BEGIN SELECT RAISE(ABORT,'test'); END",
 	);
@@ -1123,15 +1227,18 @@ it("rolls back the decision when the audit cannot be written", async () => {
 		{ state: "ready_for_review", step: "review" },
 	);
 });
+
 it("gates handoff on accepted delivery, explicit full payment and safe delivered links; completes only after handoff", async () => {
 	await start();
 	const token = await session();
+
 	const handoff = {
 		...update,
 		kind: "handoff",
 		paid_confirmed: true,
 		links: [{ label: "Handoff notes", url: "https://files.example.com/notes" }],
 	};
+
 	const share = (changed = {}) =>
 		call(updatePost, {
 			action: "share",
@@ -1139,6 +1246,7 @@ it("gates handoff on accepted delivery, explicit full payment and safe delivered
 			expectedUpdatedAt: null,
 			update: { ...handoff, ...changed },
 		});
+
 	expect((await share()).status).toBe(409);
 	expect(
 		(await call(projectPost, { action: "complete", confirmed: true })).status,
@@ -1149,6 +1257,7 @@ it("gates handoff on accepted delivery, explicit full payment and safe delivered
 		{ decision: "milestone_accepted", confirm: true },
 		token,
 	);
+
 	for (const changed of [
 		{ paid_confirmed: false },
 		{ links: [] },
@@ -1209,6 +1318,7 @@ it("gates handoff on accepted delivery, explicit full payment and safe delivered
 		).status,
 	).toBe(409);
 });
+
 it("starts corrections at the earlier acceptance or full-payment New York date, across DST", () => {
 	expect(
 		correctionPeriodEnd("2026-10-01T02:00:00Z", "2026-09-28T15:00:00Z"),
@@ -1218,6 +1328,7 @@ it("starts corrections at the earlier acceptance or full-payment New York date, 
 		correctionPeriodEnd("2026-10-01T02:00:00Z", "2026-10-05T12:00:00Z"),
 	).toBe("2026-10-30");
 });
+
 it("renders review and handoff notices with sign-in links and no project details", () => {
 	for (const [render, heading] of [
 		[softwareReviewEmail, "Ready for your review."],
@@ -1232,10 +1343,12 @@ it("renders review and handoff notices with sign-in links and no project details
 		expect(email.text).not.toContain(terms.outcome);
 	}
 });
+
 it("queues the correct review and handoff notice subjects using mocked email transport only", async () => {
 	await start();
 	vi.mocked(fetch).mockClear();
 	const token = await session();
+
 	const response = await call(updatePost, {
 		action: "share",
 		confirmed: true,
@@ -1247,6 +1360,7 @@ it("queues the correct review and handoff notice subjects using mocked email tra
 			email_client: true,
 		},
 	});
+
 	expect(response.status).toBe(200);
 	const review = (await response.json()) as { id: string };
 	expect(
@@ -1257,6 +1371,7 @@ it("queues the correct review and handoff notice subjects using mocked email tra
 		{ decision: "milestone_accepted", confirm: true },
 		token,
 	);
+
 	const handoff = await call(updatePost, {
 		action: "share",
 		confirmed: true,
@@ -1269,16 +1384,21 @@ it("queues the correct review and handoff notice subjects using mocked email tra
 			email_client: true,
 		},
 	});
+
 	expect(handoff.status).toBe(200);
 	expect(
 		JSON.parse(vi.mocked(fetch).mock.calls.at(-1)![1]!.body as string).subject,
 	).toBe("Your project handoff is ready");
 });
+
 it("rejects a review that becomes superseded between validation and the decision batch", async () => {
 	await start();
+
 	const token = await session(),
 		review = await shareReview();
+
 	const original = db.batch.bind(db);
+
 	const batch = vi
 		.spyOn(db, "batch")
 		.mockImplementationOnce(async (statements) => {
@@ -1287,8 +1407,10 @@ it("rejects a review that becomes superseded between validation and the decision
 					"UPDATE software_project_updates SET status='superseded' WHERE id=?",
 				)
 				.run(review.id);
+
 			return original(statements);
 		});
+
 	expect(
 		(
 			await decide(
@@ -1303,15 +1425,18 @@ it("rejects a review that becomes superseded between validation and the decision
 	).toEqual({ n: 0 });
 	batch.mockRestore();
 });
+
 it("enforces the new payment, review-window and factual audit-note schema limits", async () => {
 	await start();
 	await draft();
+
 	for (const value of [4, 31])
 		expect(() =>
 			sql
 				.prepare("UPDATE software_project_updates SET review_window_days=?")
 				.run(value),
 		).toThrow();
+
 	for (const value of [-1, 3])
 		expect(() =>
 			sql
@@ -1343,6 +1468,7 @@ it("enforces the new payment, review-window and factual audit-note schema limits
 	expect(
 		(await listSoftwareUpdates(db, "software"))[0].review_window_days,
 	).toBe(45);
+
 	for (const value of [30, 366])
 		expect(() =>
 			sql
@@ -1352,15 +1478,19 @@ it("enforces the new payment, review-window and factual audit-note schema limits
 				.run(value),
 		).toThrow();
 });
+
 it("does not complete a redelivered milestone using an earlier version’s handoff", async () => {
 	await start();
+
 	const token = await session(),
 		review = await shareReview();
+
 	await decide(
 		review.id,
 		{ decision: "milestone_accepted", confirm: true },
 		token,
 	);
+
 	const handoff = await call(updatePost, {
 		action: "share",
 		confirmed: true,
@@ -1372,6 +1502,7 @@ it("does not complete a redelivered milestone using an earlier version’s hando
 			links: [{ label: "Notes", url: "https://example.com/notes" }],
 		},
 	});
+
 	expect(handoff.status).toBe(200);
 	sql.exec(
 		"UPDATE software_project_updates SET shared_at='2020-01-01' WHERE kind='handoff'",
@@ -1392,6 +1523,7 @@ it("does not complete a redelivered milestone using an earlier version’s hando
 		sql.prepare("SELECT completed_at FROM software_projects").get(),
 	).toEqual({ completed_at: null });
 });
+
 it("starts only with an owner, sent offer and both explicit confirmations, preserving the exact snapshot", async () => {
 	expect((await call(projectPost, { action: "start" }, false)).status).toBe(
 		403,
@@ -1443,6 +1575,7 @@ it("starts only with an owner, sent offer and both explicit confirmations, prese
 		{ terms_json: termsJson },
 	);
 });
+
 it("supports invoice start, failed invitations and checked uncertain retries", async () => {
 	sql
 		.prepare("UPDATE software_offers SET terms_json=?")
@@ -1465,6 +1598,7 @@ it("supports invoice start, failed invitations and checked uncertain retries", a
 	sql.exec("UPDATE software_projects SET invitation_attempted_at='2020-01-01'");
 	expect(await queueSoftwareNotice(db, "software", true)).toBe(true);
 });
+
 it("software-only codes and sessions are scoped across both project kinds and revocation/withdrawal", async () => {
 	await start();
 	const token = await session();
@@ -1513,6 +1647,7 @@ it("software-only codes and sessions are scoped across both project kinds and re
 		await clientSoftwareProjectForSession(db, other, "foreign-software"),
 	).toBeTruthy();
 });
+
 it("refuses sign-in when the only project closes after code issuance, and audits undelivered software codes", async () => {
 	await start();
 	const code = (await issueClientCode(db, "alex@example.com", secret))!;
@@ -1530,6 +1665,7 @@ it("refuses sign-in when the only project closes after code issuance, and audits
 		await completeClientCode(db, "alex@example.com", second, secret),
 	).toBeNull();
 });
+
 it("saves one draft, rejects stale forms, shares only with required content and emails separately", async () => {
 	await start();
 	vi.mocked(fetch).mockClear();
@@ -1563,6 +1699,7 @@ it("saves one draft, rejects stale forms, shares only with required content and 
 			})
 		).status,
 	).toBe(400);
+
 	const changed = (await (
 		await call(updatePost, {
 			action: "draft",
@@ -1570,6 +1707,7 @@ it("saves one draft, rejects stale forms, shares only with required content and 
 			expectedUpdatedAt: saved.updatedAt,
 		})
 	).json()) as { id: string; updatedAt: string };
+
 	expect(
 		(
 			await call(updatePost, {
@@ -1618,6 +1756,7 @@ it("saves one draft, rejects stale forms, shares only with required content and 
 	).toEqual({ notification_status: "failed" });
 	expect(await sharedSoftwareUpdates(db, "software")).toHaveLength(2);
 });
+
 it.each(["http://example.com", "https://user:pass@example.com"])(
 	"rejects unsafe preview links %s",
 	async (preview_url) => {
@@ -1633,6 +1772,7 @@ it.each(["http://example.com", "https://user:pass@example.com"])(
 		).toBe(400);
 	},
 );
+
 async function visualCall(
 	route: typeof uploadVisual,
 	id: string,
@@ -1665,10 +1805,13 @@ async function visualCall(
 		},
 	} as never);
 }
+
 it("limits visual uploads, guards replacement, deletes old objects and restricts client reads to shared own updates", async () => {
 	await start();
+
 	const saved = await draft(),
 		token = await session();
+
 	expect(
 		(await visualCall(uploadVisual, saved.id, { owner: false })).status,
 	).toBe(403);
@@ -1690,15 +1833,19 @@ it("limits visual uploads, guards replacement, deletes old objects and restricts
 	expect(
 		(await visualCall(uploadVisual, saved.id, { version: "stale" })).status,
 	).toBe(409);
+
 	const first = (await (
 		await visualCall(uploadVisual, saved.id, { version: saved.updatedAt })
 	).json()) as { id: string; updatedAt: string };
+
 	const oldKey = sql
 		.prepare("SELECT visual_key FROM software_project_updates WHERE id=?")
 		.get(saved.id).visual_key;
+
 	const second = (await (
 		await visualCall(uploadVisual, saved.id, { version: first.updatedAt })
 	).json()) as { id: string; updatedAt: string };
+
 	expect(bucket.delete).toHaveBeenCalledWith(oldKey);
 	expect((await visualCall(clientVisual, saved.id, { token })).status).toBe(
 		404,
@@ -1747,6 +1894,7 @@ it("limits visual uploads, guards replacement, deletes old objects and restricts
 		404,
 	);
 });
+
 it("client projection excludes private notes, drafts, audit and all owner fields", async () => {
 	await start();
 	await draft();
@@ -1757,9 +1905,11 @@ it("client projection excludes private notes, drafts, audit and all owner fields
 	);
 	expect(await sharedSoftwareUpdates(db, "software")).toEqual([]);
 });
+
 it("state validation, messages and Today reminders use the project snapshot and promise date", async () => {
 	await start();
 	const project = sql.prepare("SELECT updated_at FROM software_projects").get();
+
 	const command = {
 		action: "state",
 		state: "waiting_for_input",
@@ -1769,6 +1919,7 @@ it("state validation, messages and Today reminders use the project snapshot and 
 		next_update_on: "2026-10-01",
 		expectedUpdatedAt: project.updated_at,
 	};
+
 	expect((await call(projectPost, command)).status).toBe(400);
 	expect(
 		(
@@ -1787,10 +1938,12 @@ it("state validation, messages and Today reminders use the project snapshot and 
 	).toBe(409);
 	const token = await session();
 	await postClientSoftwareProjectMessage(db, "software", token, "A question.");
+
 	const attention = await listStudioProjectAttention(
 		db,
 		new Date("2026-09-29T12:00:00Z"),
 	);
+
 	expect(attention).toContainEqual(
 		expect.objectContaining({
 			kind: "software",
@@ -1813,6 +1966,7 @@ it("state validation, messages and Today reminders use the project snapshot and 
 		expect.objectContaining({ requestId: "software", uncheckedNotices: 1 }),
 	);
 });
+
 it.each([
 	[softwareInvitationEmail, "Your project has started."],
 	[softwareUpdateEmail, "You have a new project update."],
@@ -1833,9 +1987,11 @@ it.each([
 		);
 	},
 );
+
 it("migration preserves every earlier row and enforces checks, draft uniqueness, review uniqueness and foreign keys", () => {
 	const database = new DatabaseSync(":memory:");
 	database.exec("PRAGMA foreign_keys=ON");
+
 	for (const name of readdirSync(
 		new URL("../../migrations/music/", import.meta.url),
 	)
@@ -1850,6 +2006,7 @@ it("migration preserves every earlier row and enforces checks, draft uniqueness,
 	database.exec(
 		"INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES ('a','service','a@example.com','Keep','new','now','now'),('s','software','s@example.com','Keep','new','now','now'); INSERT INTO software_offers VALUES ('o','s',1,'sent','{}','now','now','now','owner'); INSERT INTO owner_request_audit(request_id,action,actor,occurred_at) VALUES ('s','created','owner','now')",
 	);
+
 	const tables = [
 		"owner_requests",
 		"owner_request_audit",
@@ -1857,9 +2014,11 @@ it("migration preserves every earlier row and enforces checks, draft uniqueness,
 		"audio_project_audit",
 		"software_offers",
 	];
+
 	const before = tables.map((table) =>
 		database.prepare(`SELECT * FROM ${table}`).all(),
 	);
+
 	database.exec("BEGIN");
 	database.exec(
 		readFileSync(
@@ -1877,6 +2036,7 @@ it("migration preserves every earlier row and enforces checks, draft uniqueness,
 	database.exec(
 		"INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('s','o','{}','standard','now','now','now','owner','now','now')",
 	);
+
 	for (const [column, value] of [
 		["state", "unknown"],
 		["step", "unknown"],
@@ -1888,11 +2048,14 @@ it("migration preserves every earlier row and enforces checks, draft uniqueness,
 		expect(() =>
 			database.prepare(`UPDATE software_projects SET ${column}=?`).run(value),
 		).toThrow();
+
 	const insert = database.prepare(
 		"INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,evidence_type,created_by,created_at,updated_at) VALUES (?,'s',?,?,0,'Title',?,'owner','now','now')",
 	);
+
 	insert.run("d", "progress", "draft", "concept");
 	expect(() => insert.run("d2", "progress", "draft", "concept")).toThrow();
+
 	for (const [column, value] of [
 		["kind", "unknown"],
 		["status", "unknown"],
@@ -1906,9 +2069,11 @@ it("migration preserves every earlier row and enforces checks, draft uniqueness,
 				.prepare(`UPDATE software_project_updates SET ${column}=?`)
 				.run(value),
 		).toThrow();
+
 	const message = database.prepare(
 		"INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES ('s',?,'client',?,'d',?,'now')",
 	);
+
 	message.run("client", "Yes", "direction_confirmed");
 	expect(() => message.run("client", "Again", "changes_requested")).toThrow();
 	expect(() => message.run("unknown", "x", null)).toThrow();
@@ -1956,6 +2121,7 @@ it("withdrawal records access closure and its retention clock in the same transa
 it("rejects offer actions after project start before sending any email", async () => {
 	await start();
 	vi.mocked(fetch).mockClear();
+
 	for (const body of [
 		{ action: "draft", terms, expectedUpdatedAt: null },
 		{ action: "send", version: 1, expectedUpdatedAt: "now" },
@@ -1968,17 +2134,21 @@ it("rejects offer actions after project start before sending any email", async (
 			message: "This project has started. Use the project messages.",
 		});
 	}
+
 	expect(fetch).not.toHaveBeenCalled();
 	expect(sql.prepare("SELECT status FROM owner_requests").get()).toEqual({
 		status: "reviewed",
 	});
 });
+
 it("rolls back a visual object when the database batch fails after storage", async () => {
 	await start();
 	const saved = await draft();
+
 	const batch = vi
 		.spyOn(db, "batch")
 		.mockRejectedValueOnce(new Error("conflict"));
+
 	expect(
 		(await visualCall(uploadVisual, saved.id, { version: saved.updatedAt }))
 			.status,
@@ -1990,9 +2160,11 @@ it("rolls back a visual object when the database batch fails after storage", asy
 	).toEqual({ visual_key: null });
 	batch.mockRestore();
 });
+
 it("scopes the client message route to an active own session", async () => {
 	await start();
 	const token = await session();
+
 	const send = (id: string, cookie = token) =>
 		messagesPost({
 			params: { id },
@@ -2010,6 +2182,7 @@ it("scopes the client message route to an active own session", async () => {
 			),
 			locals: { runtime: { env } },
 		} as never);
+
 	expect((await send("software", "")).status).toBe(401);
 	request("foreign", "other@example.com");
 	offer("foreign");
@@ -2043,8 +2216,10 @@ it("scopes the client message route to an active own session", async () => {
 it("moves review sharing and decisions with state audits in the same batch", async () => {
 	await start();
 	const token = await session();
+
 	const state = () =>
 		sql.prepare("SELECT state,step,waiting_for FROM software_projects").get();
+
 	sql.exec(
 		"UPDATE software_projects SET state='waiting_for_input',waiting_for='Sample'",
 	);
@@ -2095,10 +2270,13 @@ it("moves review sharing and decisions with state audits in the same batch", asy
 			.get(),
 	).toEqual({ n: 6 });
 });
+
 it("rolls back review sharing and decisions if their state audit fails", async () => {
 	await start();
+
 	const token = await session(),
 		review = await shareReview();
+
 	sql.exec(
 		"CREATE TRIGGER fail_state_audit BEFORE INSERT ON software_project_audit WHEN NEW.action='state-changed' BEGIN SELECT RAISE(ABORT,'test'); END",
 	);
@@ -2134,8 +2312,10 @@ it("rolls back review sharing and decisions if their state audit fails", async (
 
 it("keeps newer undecided review state and never moves the milestone backwards", async () => {
 	await start();
+
 	const token = await session(),
 		older = await shareReview();
+
 	const multiTerms = {
 		...terms,
 		milestones: [
@@ -2143,6 +2323,7 @@ it("keeps newer undecided review state and never moves the milestone backwards",
 			{ ...terms.milestones[0], name: "Follow-up" },
 		],
 	};
+
 	sql
 		.prepare("UPDATE software_projects SET terms_json=?")
 		.run(JSON.stringify(multiTerms));
@@ -2154,6 +2335,7 @@ it("keeps newer undecided review state and never moves the milestone backwards",
 			older.id +
 			"'",
 	);
+
 	const response = await call(updatePost, {
 		action: "share",
 		confirmed: true,
@@ -2165,13 +2347,16 @@ it("keeps newer undecided review state and never moves the milestone backwards",
 			artifact_version: "Direction v2",
 		},
 	});
+
 	expect(response.status).toBe(200);
 	const newer = (await response.json()) as { id: string };
+
 	const before = sql
 		.prepare(
 			"SELECT state,step,milestone_index,waiting_for FROM software_projects",
 		)
 		.get();
+
 	expect(
 		(
 			await decide(
@@ -2264,10 +2449,12 @@ it.each(["failed", "pending", "sending"])(
 				"UPDATE software_projects SET invitation_status=?,created_at='2026-09-01',invitation_attempted_at='2026-09-01',next_update_on=NULL",
 			)
 			.run(status);
+
 		const rows = await listStudioProjectAttention(
 			db,
 			new Date("2026-09-29T12:00:00Z"),
 		);
+
 		expect(rows).toContainEqual(
 			expect.objectContaining({
 				requestId: "software",
@@ -2283,6 +2470,7 @@ it.each(["failed", "pending", "sending"])(
 		).toEqual([]);
 	},
 );
+
 it("reviews a new request atomically when starting and removes it from Today", async () => {
 	expect((await loadStudioLedger(db, new Date())).attention.newRequests).toBe(
 		1,
@@ -2298,9 +2486,11 @@ it("reviews a new request atomically when starting and removes it from Today", a
 		sql.prepare("SELECT action,actor FROM owner_request_audit").all(),
 	).toEqual([{ action: "reviewed", actor: "owner@example.com" }]);
 });
+
 it("retries a first share with one row and one email, rejecting changed content", async () => {
 	await start();
 	vi.mocked(fetch).mockClear();
+
 	const body = {
 		action: "share",
 		confirmed: true,
@@ -2311,13 +2501,16 @@ it("retries a first share with one row and one email, rejecting changed content"
 			.get()!.updated_at,
 		update: { ...update, email_client: true },
 	};
+
 	const first = await call(updatePost, body);
 	expect(first.status).toBe(200);
 	const result = await first.json();
+
 	const stale = await call(updatePost, {
 		...body,
 		updateId: crypto.randomUUID(),
 	});
+
 	expect(stale.status).toBe(409);
 	expect(await stale.json()).toEqual({
 		ok: false,
@@ -2348,6 +2541,7 @@ it.each(["id", "version"])(
 				"INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('replacement','software',2,'sent',?,'now','now')",
 			)
 			.run(termsJson);
+
 		const response = await call(projectPost, {
 			action: "start",
 			expectedRequestUpdatedAt: "now",
@@ -2357,6 +2551,7 @@ it.each(["id", "version"])(
 			payment: true,
 			next_update_on: "",
 		});
+
 		expect(response.status).toBe(409);
 		expect(await response.json()).toEqual({
 			ok: false,
@@ -2397,8 +2592,10 @@ it.each(["id", "version"])(
 
 it("records an older direction decision without moving the accepted newer delivery from handoff", async () => {
 	await start();
+
 	const token = await session(),
 		direction = await shareReview("direction_review", "Direction v1");
+
 	const delivery = await shareReview();
 	sql
 		.prepare(
@@ -2436,6 +2633,7 @@ it("records an older direction decision without moving the accepted newer delive
 			.get(),
 	).toEqual({ n: 2 });
 });
+
 it("a reserved question rejects a start from the displayed request before emailing", async () => {
 	env.OWNER_EMAIL = "owner@example.com";
 	let lateStart!: Promise<Response>;
@@ -2450,6 +2648,7 @@ it("a reserved question rejects a start from the displayed request before emaili
 			error:
 				"The request changed since this page loaded. Reload and try again.",
 		});
+
 		return new Response("{}");
 	});
 	expect(
@@ -2471,18 +2670,22 @@ it("a reserved question rejects a start from the displayed request before emaili
 			.get(),
 	).toEqual({ n: 1 });
 });
+
 it("a start committing before question reservation rejects the question without delivery", async () => {
 	env.OWNER_EMAIL = "owner@example.com";
 	const batch = db.batch.bind(db);
 	vi.spyOn(db, "batch").mockImplementationOnce(async (items) => {
 		expect((await start()).status).toBe(200);
 		vi.mocked(fetch).mockClear();
+
 		return batch(items);
 	});
+
 	const response = await call(offerPost, {
 		action: "question",
 		text: "Which sample should we use?",
 	});
+
 	expect(response.status).toBe(409);
 	expect(await response.json()).toMatchObject({
 		message: "This project has started. Use the project messages.",
@@ -2502,9 +2705,11 @@ it.each(["draft", "share"])(
 	async (action) => {
 		await start();
 		const saved = await draft();
+
 		const projectAt = sql
 			.prepare("SELECT updated_at FROM software_projects")
 			.get()!.updated_at;
+
 		const body = {
 			action,
 			confirmed: true,
@@ -2513,15 +2718,18 @@ it.each(["draft", "share"])(
 			expectedUpdatedAt: saved.updatedAt,
 			expectedProjectUpdatedAt: projectAt,
 		};
+
 		sql
 			.prepare(
 				"UPDATE software_projects SET updated_at='2099-01-01T00:00:00.000Z'",
 			)
 			.run();
 		const before = sql.prepare("SELECT * FROM software_project_updates").get();
+
 		const audit = sql
 			.prepare("SELECT count(*) AS n FROM software_project_audit")
 			.get();
+
 		const stale = await call(updatePost, body);
 		expect(stale.status).toBe(409);
 		expect(await stale.json()).toMatchObject({
@@ -2530,14 +2738,17 @@ it.each(["draft", "share"])(
 		});
 		sql.prepare("UPDATE software_projects SET updated_at=?").run(projectAt);
 		const batch = db.batch.bind(db);
+
 		const race = vi.spyOn(db, "batch").mockImplementationOnce(async (items) => {
 			sql
 				.prepare(
 					"UPDATE software_projects SET updated_at='2099-01-01T00:00:00.000Z'",
 				)
 				.run();
+
 			return batch(items);
 		});
+
 		const raced = await call(updatePost, body);
 		expect(raced.status).toBe(409);
 		expect(await raced.json()).toMatchObject({
@@ -2551,10 +2762,12 @@ it.each(["draft", "share"])(
 			sql.prepare("SELECT count(*) AS n FROM software_project_audit").get(),
 		).toEqual(audit);
 		race.mockRestore();
+
 		const success = await call(updatePost, {
 			...body,
 			expectedProjectUpdatedAt: "2099-01-01T00:00:00.000Z",
 		});
+
 		expect(success.status).toBe(200);
 		const result = await success.json();
 		expect(result).toMatchObject({
@@ -2562,6 +2775,7 @@ it.each(["draft", "share"])(
 				.prepare("SELECT updated_at FROM software_projects")
 				.get()!.updated_at,
 		});
+
 		if (action === "share")
 			expect(
 				await (
@@ -2583,6 +2797,7 @@ it("reserves a first deposit without a project, recovers it and starts only from
 		listSoftwareInvoices,
 		recordSoftwareInvoice,
 	} = await import("~/lib/software-invoices");
+
 	const input = {
 		requestId: "software",
 		offerId: "software-offer",
@@ -2591,6 +2806,7 @@ it("reserves a first deposit without a project, recovers it and starts only from
 		allowCard: false,
 		actor: "owner",
 	};
+
 	const invoice = await reserveSoftwareInvoice(db, input);
 	expect(
 		sql.prepare("SELECT count(*) AS n FROM software_projects").get(),
@@ -2605,6 +2821,7 @@ it("reserves a first deposit without a project, recovers it and starts only from
 	expect(
 		(await reserveSoftwareInvoice(db, { ...input, retryId: invoice.id })).id,
 	).toBe(invoice.id);
+
 	const event = {
 		eventId: "evt_paid",
 		eventType: "invoice.paid",
@@ -2622,6 +2839,7 @@ it("reserves a first deposit without a project, recovers it and starts only from
 		hostedUrl: "https://example.com/invoice",
 		dueAt: "2026-10-07T12:00:00Z",
 	};
+
 	expect(await applySoftwareInvoiceEvent(db, event)).toBe("processed");
 	expect(
 		paidFirstDeposit(
@@ -2646,6 +2864,7 @@ it("reserves a first deposit without a project, recovers it and starts only from
 	expect(sql.prepare("SELECT status FROM software_invoices").get().status).toBe(
 		"paid",
 	);
+
 	const body = {
 		action: "start",
 		expectedRequestUpdatedAt: "now",
@@ -2656,12 +2875,14 @@ it("reserves a first deposit without a project, recovers it and starts only from
 		next_update_on: "",
 		deposit_invoice_id: "wrong",
 	};
+
 	expect((await call(projectPost, body)).status).toBe(409);
 	expect(
 		(await call(projectPost, { ...body, deposit_invoice_id: invoice.id }))
 			.status,
 	).toBe(200);
 });
+
 it("blocks sending new terms for open, failed, creating or paid deposits and blocks declines while open", async () => {
 	const { reserveSoftwareInvoice } = await import("~/lib/software-invoices");
 	await reserveSoftwareInvoice(db, {
@@ -2672,12 +2893,15 @@ it("blocks sending new terms for open, failed, creating or paid deposits and blo
 		allowCard: false,
 		actor: "owner",
 	});
+
 	const saved = await call(offerPost, {
 		action: "draft",
 		terms: { ...terms, summary: "New terms" },
 		expectedUpdatedAt: null,
 	});
+
 	const value = (await saved.json()) as { version: number; updatedAt: string };
+
 	for (const status of [
 		"creating",
 		"open",
@@ -2686,15 +2910,18 @@ it("blocks sending new terms for open, failed, creating or paid deposits and blo
 		"paid",
 	]) {
 		sql.prepare("UPDATE software_invoices SET status=?").run(status);
+
 		const sent = await call(offerPost, {
 			action: "send",
 			version: value.version,
 			expectedUpdatedAt: value.updatedAt,
 		});
+
 		expect(sent.status).toBe(409);
 		expect(((await sent.json()) as { message: string }).message).toContain(
 			status === "paid" ? "already paid" : "Void the open deposit",
 		);
+
 		if (status !== "paid")
 			expect(
 				(
@@ -2705,6 +2932,7 @@ it("blocks sending new terms for open, failed, creating or paid deposits and blo
 				).status,
 			).toBe(409);
 	}
+
 	sql.exec("UPDATE software_invoices SET status='void'");
 	expect(
 		(
@@ -2716,13 +2944,16 @@ it("blocks sending new terms for open, failed, creating or paid deposits and blo
 		).status,
 	).toBe(200);
 });
+
 it("pins later invoices, gates delivery and payment, and records a paid balance exactly once", async () => {
 	const {
 		reserveSoftwareInvoice,
 		applySoftwareInvoiceEvent,
 		clientSoftwareInvoices,
 	} = await import("~/lib/software-invoices");
+
 	await start();
+
 	const input = {
 		requestId: "software",
 		offerId: "software-offer",
@@ -2731,11 +2962,13 @@ it("pins later invoices, gates delivery and payment, and records a paid balance 
 		allowCard: true,
 		actor: "owner",
 	};
+
 	await expect(reserveSoftwareInvoice(db, input)).rejects.toThrow(
 		"not available",
 	);
 	await shareReview();
 	const invoice = await reserveSoftwareInvoice(db, input);
+
 	const base = {
 		eventId: "evt_balance",
 		eventType: "invoice.paid",
@@ -2753,6 +2986,7 @@ it("pins later invoices, gates delivery and payment, and records a paid balance 
 		hostedUrl: "https://example.com/pay",
 		dueAt: "2026-10-15T12:00:00Z",
 	};
+
 	expect(
 		await applySoftwareInvoiceEvent(db, {
 			...base,
@@ -2782,10 +3016,12 @@ it("pins later invoices, gates delivery and payment, and records a paid balance 
 			)
 			.get(),
 	).toEqual({ n: 1 });
+
 	const visible = await clientSoftwareInvoices(db, {
 		request_id: "software",
 		offer_id: "software-offer",
 	});
+
 	expect(visible[0]).toMatchObject({
 		status: "paid",
 		amount_cents: 120000,
@@ -2808,10 +3044,12 @@ it("pins later invoices, gates delivery and payment, and records a paid balance 
 	).toEqual([]);
 	await expect(reserveSoftwareInvoice(db, input)).rejects.toThrow();
 });
+
 it("applies ordered software statuses, rejects conflicting identities and replaces only void invoices", async () => {
 	const { reserveSoftwareInvoice, applySoftwareInvoiceEvent } = await import(
 		"~/lib/software-invoices"
 	);
+
 	const input = {
 		requestId: "software",
 		offerId: "software-offer",
@@ -2820,7 +3058,9 @@ it("applies ordered software statuses, rejects conflicting identities and replac
 		allowCard: false,
 		actor: "owner",
 	};
+
 	const invoice = await reserveSoftwareInvoice(db, input);
+
 	const base = {
 		eventId: "evt_open",
 		eventType: "invoice.sent",
@@ -2838,6 +3078,7 @@ it("applies ordered software statuses, rejects conflicting identities and replac
 		hostedUrl: "https://example.com/pay",
 		dueAt: null,
 	};
+
 	for (const changed of [
 		{ offerId: "other" },
 		{ requestId: "other" },
@@ -2885,10 +3126,12 @@ it("applies ordered software statuses, rejects conflicting identities and replac
 		status: "void",
 		occurredAt: "2026-09-30T15:00:00Z",
 	});
+
 	const replacement = await reserveSoftwareInvoice(db, {
 		...input,
 		replaceId: invoice.id,
 	});
+
 	expect(replacement.attempt).toBe(1);
 	expect(replacement.id).not.toBe(invoice.id);
 	expect(
@@ -2902,6 +3145,7 @@ it("applies ordered software statuses, rejects conflicting identities and replac
 			.get(),
 	).toEqual({ n: 1 });
 });
+
 it("releases offer blocks only after an explicit full pre-start refund record and lets old absent attempts recover", async () => {
 	const {
 		reserveSoftwareInvoice,
@@ -2909,9 +3153,11 @@ it("releases offer blocks only after an explicit full pre-start refund record an
 		paidFirstDeposit,
 		listSoftwareInvoices,
 	} = await import("~/lib/software-invoices");
+
 	const { reconciliationStatements } = await import(
 		"../../scripts/stripe-reconciliation.mjs"
 	);
+
 	const input = {
 		requestId: "software",
 		offerId: "software-offer",
@@ -2920,6 +3166,7 @@ it("releases offer blocks only after an explicit full pre-start refund record an
 		allowCard: false,
 		actor: "owner",
 	};
+
 	const invoice = await reserveSoftwareInvoice(db, input);
 	sql
 		.prepare(
@@ -2927,6 +3174,7 @@ it("releases offer blocks only after an explicit full pre-start refund record an
 		)
 		.run(invoice.id);
 	expect(await depositOfferBlock(db, "software")).toContain("already paid");
+
 	for (const statement of reconciliationStatements([
 		"--software-deposit-refunded",
 		invoice.id,
@@ -2961,10 +3209,12 @@ it("releases offer blocks only after an explicit full pre-start refund record an
 	sql.exec(
 		"UPDATE software_offers SET status='superseded';INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) SELECT 'offer-2',request_id,2,'sent',terms_json,created_at,updated_at FROM software_offers WHERE id='software-offer'",
 	);
+
 	const old = await reserveSoftwareInvoice(db, {
 		...input,
 		offerId: "offer-2",
 	});
+
 	sql
 		.prepare(
 			"UPDATE software_invoices SET created_at='2020-01-01',creation_started_at=NULL WHERE id=?",
@@ -2977,19 +3227,23 @@ it("releases offer blocks only after an explicit full pre-start refund record an
 			retryId: old.id,
 		}),
 	).rejects.toThrow("reconcile");
+
 	for (const statement of reconciliationStatements([
 		"--software-no-invoice",
 		old.id,
 		"Confirmed",
 	]))
 		sql.exec(statement);
+
 	const replaced = await reserveSoftwareInvoice(db, {
 		...input,
 		offerId: "offer-2",
 		replaceId: old.id,
 	});
+
 	expect(replaced.attempt).toBe(1);
 });
+
 it("rolls back invoice reservations when full payment arrives between the read and transaction", async () => {
 	const { reserveSoftwareInvoice } = await import("~/lib/software-invoices");
 	await start();
@@ -2999,8 +3253,10 @@ it("rolls back invoice reservations when full payment arrives between the read a
 		sql.exec(
 			"INSERT INTO software_milestone_payments VALUES ('software',0,'now','owner')",
 		);
+
 		return original(items);
 	};
+
 	await expect(
 		reserveSoftwareInvoice(db, {
 			requestId: "software",
@@ -3015,10 +3271,12 @@ it("rolls back invoice reservations when full payment arrives between the read a
 		sql.prepare("SELECT count(*) AS n FROM software_invoices").get(),
 	).toEqual({ n: 0 });
 });
+
 it("cannot restore invoice references when retention runs between webhook lookup and transaction", async () => {
 	const { reserveSoftwareInvoice, applySoftwareInvoiceEvent } = await import(
 		"~/lib/software-invoices"
 	);
+
 	const invoice = await reserveSoftwareInvoice(db, {
 		requestId: "software",
 		offerId: "software-offer",
@@ -3027,13 +3285,16 @@ it("cannot restore invoice references when retention runs between webhook lookup
 		allowCard: false,
 		actor: "owner",
 	});
+
 	const original = db.batch.bind(db);
 	db.batch = async (items) => {
 		sql.exec(
 			"UPDATE software_invoices SET external_refs_deleted_at='now',stripe_customer_id=NULL,hosted_invoice_url=NULL",
 		);
+
 		return original(items);
 	};
+
 	await applySoftwareInvoiceEvent(db, {
 		eventId: "evt_retained",
 		eventType: "invoice.sent",
@@ -3059,16 +3320,19 @@ it("cannot restore invoice references when retention runs between webhook lookup
 			.get(),
 	).toEqual({ stripe_customer_id: null, hosted_invoice_url: null });
 });
+
 it("authorizes invoice creation and preserves a recoverable attempt after provider failure", async () => {
 	env.STRIPE_PAYMENTS_ENABLED = "true";
 	env.STRIPE_SECRET_KEY = "test";
 	env.STRIPE_WEBHOOK_SECRET = "test";
+
 	const body = {
 		offer_id: "software-offer",
 		milestone_index: 0,
 		kind: "deposit",
 		allow_card: true,
 	};
+
 	expect((await call(invoicePost, body, false)).status).toBe(403);
 	expect(
 		(await call(invoicePost, { ...body, allow_card: "true" })).status,
@@ -3085,6 +3349,7 @@ it("authorizes invoice creation and preserves a recoverable attempt after provid
 		dueAt: "2026-10-07T12:00:00Z",
 		status: "open",
 	});
+
 	try {
 		expect((await call(invoicePost, body)).status).toBe(502);
 		const row = sql.prepare("SELECT * FROM software_invoices").get();
@@ -3119,6 +3384,7 @@ it("authorizes invoice creation and preserves a recoverable attempt after provid
 		provider.mockRestore();
 	}
 });
+
 it("requires prior full payment before advancing an Invoice Terms milestone", async () => {
 	sql.prepare("UPDATE software_offers SET terms_json=?").run(
 		JSON.stringify({
@@ -3132,6 +3398,7 @@ it("requires prior full payment before advancing an Invoice Terms milestone", as
 	);
 	await start();
 	const project = sql.prepare("SELECT updated_at FROM software_projects").get();
+
 	const body = {
 		action: "state",
 		state: "building",
@@ -3141,6 +3408,7 @@ it("requires prior full payment before advancing an Invoice Terms milestone", as
 		next_update_on: "",
 		expectedUpdatedAt: project.updated_at,
 	};
+
 	expect((await call(projectPost, body)).status).toBe(409);
 	expect(
 		(
@@ -3162,11 +3430,14 @@ it("requires prior full payment before advancing an Invoice Terms milestone", as
 	);
 	expect((await call(projectPost, body)).status).toBe(200);
 });
+
 it("refuses no-invoice cancellation of recent or actively leased reservations", async () => {
 	const { reserveSoftwareInvoice } = await import("~/lib/software-invoices");
+
 	const { reconciliationStatements } = await import(
 		"../../scripts/stripe-reconciliation.mjs"
 	);
+
 	const invoice = await reserveSoftwareInvoice(db, {
 		requestId: "software",
 		offerId: "software-offer",
@@ -3175,6 +3446,7 @@ it("refuses no-invoice cancellation of recent or actively leased reservations", 
 		allowCard: false,
 		actor: "owner",
 	});
+
 	for (const statement of reconciliationStatements([
 		"--software-no-invoice",
 		invoice.id,
@@ -3187,6 +3459,7 @@ it("refuses no-invoice cancellation of recent or actively leased reservations", 
 	sql
 		.prepare("UPDATE software_invoices SET created_at='2020-01-01' WHERE id=?")
 		.run(invoice.id);
+
 	for (const statement of reconciliationStatements([
 		"--software-no-invoice",
 		invoice.id,
@@ -3197,6 +3470,7 @@ it("refuses no-invoice cancellation of recent or actively leased reservations", 
 		"creating",
 	);
 	sql.exec("UPDATE software_invoices SET creation_started_at=NULL");
+
 	for (const statement of reconciliationStatements([
 		"--software-no-invoice",
 		invoice.id,
@@ -3219,14 +3493,17 @@ function seedInvoice(
     VALUES (?,'software','software-offer',?,?,120000,7,?,'owner','now','now')`)
 		.run(id, milestone, kind, status);
 }
+
 it.each(["creating", "open", "payment_failed", "uncollectible"])(
 	"atomically rejects manual start with a %s deposit",
 	async (status) => {
 		const original = db.batch.bind(db);
 		db.batch = async (items) => {
 			seedInvoice(status);
+
 			return original(items);
 		};
+
 		const response = await start();
 		expect(response.status).toBe(409);
 		expect(await response.json()).toMatchObject({
@@ -3245,10 +3522,12 @@ it.each(["creating", "open", "payment_failed", "uncollectible"])(
 		expect(fetch).not.toHaveBeenCalled();
 	},
 );
+
 it.each(["balance", "milestone"])(
 	"atomically rejects manual full payment with a payable %s",
 	async (kind) => {
 		await start();
+
 		for (const status of [
 			"creating",
 			"open",
@@ -3258,13 +3537,16 @@ it.each(["balance", "milestone"])(
 			const original = db.batch.bind(db);
 			db.batch = async (items) => {
 				seedInvoice(status, kind);
+
 				return original(items);
 			};
+
 			const response = await call(projectPost, {
 				action: "payment",
 				milestone_index: 0,
 				confirmed: true,
 			});
+
 			expect(response.status).toBe(409);
 			expect(await response.json()).toMatchObject({
 				error: invoiceLib.manualPaymentReminder,
@@ -3284,6 +3566,7 @@ it.each(["balance", "milestone"])(
 			db.batch = original;
 			sql.exec("DELETE FROM software_invoices");
 		}
+
 		seedInvoice("void", kind);
 		expect(
 			(
@@ -3296,6 +3579,7 @@ it.each(["balance", "milestone"])(
 		).toBe(200);
 	},
 );
+
 it.each([false, true])(
 	"atomically blocks offer changes or declines for an uncollectible deposit (decline=%s)",
 	async (decline) => {
@@ -3304,15 +3588,19 @@ it.each([false, true])(
 			terms: { ...terms, summary: "Updated" },
 			expectedUpdatedAt: null,
 		});
+
 		const draft = (await saved.json()) as {
 			version: number;
 			updatedAt: string;
 		};
+
 		const original = db.batch.bind(db);
 		db.batch = async (items) => {
 			seedInvoice("uncollectible");
+
 			return original(items);
 		};
+
 		expect(
 			(
 				await call(
@@ -3337,6 +3625,7 @@ it.each([false, true])(
 		});
 	},
 );
+
 function laterTerms() {
 	sql.prepare("UPDATE software_offers SET terms_json=?").run(
 		JSON.stringify({
@@ -3348,11 +3637,13 @@ function laterTerms() {
 		}),
 	);
 }
+
 it.each(["manual", "stripe"])(
 	"requires a destination deposit before Standard moves, paid by %s",
 	async (source) => {
 		laterTerms();
 		await start();
+
 		const body = {
 			action: "state",
 			state: "building",
@@ -3364,6 +3655,7 @@ it.each(["manual", "stripe"])(
 				.prepare("SELECT updated_at FROM software_projects")
 				.get().updated_at,
 		};
+
 		expect((await call(projectPost, body)).status).toBe(409);
 		expect(
 			(
@@ -3388,6 +3680,7 @@ it.each(["manual", "stripe"])(
 				false,
 			),
 		).toBe(true);
+
 		if (source === "stripe") {
 			seedInvoice("paid", "deposit", 1);
 			sql.exec("UPDATE software_invoices SET refunded_at='now'");
@@ -3401,11 +3694,13 @@ it.each(["manual", "stripe"])(
 				"uncollectible",
 			]) {
 				seedInvoice(status, "deposit", 1);
+
 				const response = await call(projectPost, {
 					action: "deposit",
 					milestone_index: 1,
 					confirmed: true,
 				});
+
 				expect(response.status).toBe(409);
 				expect(await response.json()).toMatchObject({
 					error: invoiceLib.manualPaymentReminder,
@@ -3417,6 +3712,7 @@ it.each(["manual", "stripe"])(
 				).toEqual({ n: 0 });
 				sql.exec("DELETE FROM software_invoices");
 			}
+
 			expect(
 				(
 					await call(projectPost, {
@@ -3435,6 +3731,7 @@ it.each(["manual", "stripe"])(
 					)
 				).status,
 			).toBe(403);
+
 			for (let i = 0; i < 2; i++)
 				expect(
 					(
@@ -3468,20 +3765,24 @@ it.each(["manual", "stripe"])(
 				}),
 			).rejects.toThrow("already paid");
 		}
+
 		expect((await call(projectPost, body)).status).toBe(200);
 		expect(
 			sql.prepare("SELECT milestone_index FROM software_projects").get(),
 		).toEqual({ milestone_index: 1 });
 	},
 );
+
 it("rolls back manual later deposit if an invoice is reserved just before the batch", async () => {
 	laterTerms();
 	await start();
 	const original = db.batch.bind(db);
 	db.batch = async (items) => {
 		seedInvoice("creating", "deposit", 1);
+
 		return original(items);
 	};
+
 	expect(
 		(
 			await call(projectPost, {
@@ -3502,6 +3803,7 @@ it("rolls back manual later deposit if an invoice is reserved just before the ba
 			.get(),
 	).toEqual({ n: 0 });
 });
+
 it("does not reserve a later deposit racing a manual confirmation", async () => {
 	laterTerms();
 	await start();
@@ -3510,8 +3812,10 @@ it("does not reserve a later deposit racing a manual confirmation", async () => 
 		sql.exec(
 			"INSERT INTO software_milestone_deposits VALUES ('software',1,'now','owner')",
 		);
+
 		return original(items);
 	};
+
 	await expect(
 		invoiceLib.reserveSoftwareInvoice(db, {
 			requestId: "software",
@@ -3526,18 +3830,22 @@ it("does not reserve a later deposit racing a manual confirmation", async () => 
 		sql.prepare("SELECT count(*) AS n FROM software_invoices").get(),
 	).toEqual({ n: 0 });
 });
+
 it.each([false, true])(
 	"routes a retention-fenced webhook to unmatched, including a lookup race (%s)",
 	async (race) => {
 		seedInvoice("void", "balance");
 		sql.exec("UPDATE software_invoices SET stripe_invoice_id='in_fenced'");
 		const original = db.batch.bind(db);
+
 		if (race)
 			db.batch = async (items) => {
 				sql.exec("UPDATE software_invoices SET retention_fenced_at='now'");
+
 				return original(items);
 			};
 		else sql.exec("UPDATE software_invoices SET retention_fenced_at='now'");
+
 		const result = await invoiceLib.applySoftwareInvoiceEvent(db, {
 			eventId: "evt_fenced",
 			eventType: "invoice.paid",
@@ -3555,6 +3863,7 @@ it.each([false, true])(
 			hostedUrl: "https://example.com/pay",
 			dueAt: null,
 		});
+
 		if (!race) expect(result).toBe("unmatched");
 		expect(
 			sql
@@ -3578,8 +3887,10 @@ it("records a webhook as unmatched if retention deletes the invoice after lookup
 	const original = db.batch.bind(db);
 	db.batch = async (items) => {
 		sql.exec("DELETE FROM software_invoices");
+
 		return original(items);
 	};
+
 	expect(
 		await invoiceLib.applySoftwareInvoiceEvent(db, {
 			eventId: "evt_deleted",
@@ -3616,6 +3927,7 @@ it.each(["standard", "invoice"])(
 				.run(JSON.stringify({ ...terms, paymentMode: mode }));
 		await start();
 		const review = await shareReview();
+
 		const input = {
 			requestId: "software",
 			offerId: "software-offer",
@@ -3624,17 +3936,21 @@ it.each(["standard", "invoice"])(
 			allowCard: false,
 			actor: "owner",
 		};
+
 		const reject = () =>
 			sql
 				.prepare(
 					"INSERT INTO software_project_messages(request_id,actor,actor_id,body,update_id,decision,created_at) VALUES ('software','client','client','Fix it',?,'changes_requested','now')",
 				)
 				.run(review.id);
+
 		const original = db.batch.bind(db);
 		db.batch = async (items) => {
 			reject();
+
 			return original(items);
 		};
+
 		await expect(
 			invoiceLib.reserveSoftwareInvoice(db, input),
 		).rejects.toThrow();
@@ -3652,6 +3968,7 @@ it.each(["standard", "invoice"])(
 		);
 	},
 );
+
 it.each([
 	["uncollectible", "void"],
 	["void", "uncollectible"],
@@ -3664,6 +3981,7 @@ it.each([
 		allowCard: false,
 		actor: "owner",
 	});
+
 	const base = {
 		eventType: "invoice.updated",
 		invoiceId: "in_equal",
@@ -3679,6 +3997,7 @@ it.each([
 		hostedUrl: null,
 		dueAt: null,
 	};
+
 	await invoiceLib.applySoftwareInvoiceEvent(db, {
 		...base,
 		eventId: "evt_first",
@@ -3693,22 +4012,27 @@ it.each([
 		status: "void",
 	});
 });
+
 it.each(["creating", "open", "payment_failed", "uncollectible"])(
 	"withdrawal blocks payable %s deposits before and during batch",
 	async (status) => {
 		seedInvoice(status);
+
 		const command = {
 			id: "software",
 			action: "withdraw" as const,
 			actor: "owner",
 		};
+
 		await expect(changeOwnerRequest(db, command)).rejects.toThrow("Void");
 		sql.exec("DELETE FROM software_invoices");
 		const original = db.batch.bind(db);
 		db.batch = async (items) => {
 			seedInvoice(status);
+
 			return original(items);
 		};
+
 		await expect(changeOwnerRequest(db, command)).rejects.toThrow("Void");
 		expect(sql.prepare("SELECT status FROM owner_requests").get()).toEqual({
 			status: "new",
@@ -3721,6 +4045,7 @@ it.each(["creating", "open", "payment_failed", "uncollectible"])(
 		expect((await changeOwnerRequest(db, command)).status).toBe("withdrawn");
 	},
 );
+
 it("records bank start payment after a voided deposit", async () => {
 	seedInvoice("void");
 	expect((await start()).status).toBe(200);
@@ -3732,25 +4057,30 @@ it("records bank start payment after a voided deposit", async () => {
 		status: "void",
 	});
 });
+
 it.each([1, 2])(
 	"refunds exact later deposit %s only before that milestone starts",
 	async (milestone) => {
 		const { reconciliationStatements } = await import(
 			"../../scripts/stripe-reconciliation.mjs"
 		);
+
 		const { milestoneDepositGuard } = await import("~/lib/software-projects");
 		await start();
 		seedInvoice("paid", "deposit", milestone, "refund-target");
 		seedInvoice("paid", "deposit", 0, "keep-first");
 		await db.batch([milestoneDepositGuard(db, "software", milestone)]);
+
 		const statements = reconciliationStatements([
 			"--software-deposit-refunded",
 			"refund-target",
 			"Confirmed",
 		]);
+
 		sql
 			.prepare("UPDATE software_projects SET milestone_index=?")
 			.run(milestone);
+
 		for (const statement of statements) sql.exec(statement);
 		expect(
 			sql
@@ -3760,6 +4090,7 @@ it.each([1, 2])(
 				.get().refunded_at,
 		).toBeNull();
 		sql.exec("UPDATE software_projects SET milestone_index=0");
+
 		for (const statement of statements) sql.exec(statement);
 		expect(
 			sql
@@ -3786,6 +4117,7 @@ it.each([false, true])(
 	async (races) => {
 		if (!races) await start();
 		const original = db.batch.bind(db);
+
 		if (races)
 			db.batch = async (items) => {
 				sql
@@ -3793,8 +4125,10 @@ it.each([false, true])(
 						"INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('software','software-offer',?,'standard','now','now','now','owner','now','now')",
 					)
 					.run(termsJson);
+
 				return original(items);
 			};
+
 		const response = await call(requestPost, { action: "resolve" });
 		expect(response.status).toBe(409);
 		expect(await response.json()).toEqual({
@@ -3817,6 +4151,7 @@ it.each([false, true])(
 		).toEqual({ n: 0 });
 	},
 );
+
 it.each(["completed_at", "revoked_at"])(
 	"allows resolving a software project with %s recorded",
 	async (column) => {
@@ -3825,6 +4160,7 @@ it.each(["completed_at", "revoked_at"])(
 		expect((await call(requestPost, { action: "resolve" })).status).toBe(200);
 	},
 );
+
 it("allows resolving a software request without a project", async () => {
 	expect((await call(requestPost, { action: "resolve" })).status).toBe(200);
 });
@@ -3832,11 +4168,13 @@ it("allows resolving a software request without a project", async () => {
 it("shows client revision events as sentences while preserving stored target parsing and the note", () => {
 	const body =
 		"Requested changes to Delivery v2. Checks reported unmet: [1]. Deliverables unavailable: [2]. Included but inaccessible: [1].\n\nThe sample form failed.";
+
 	const text = softwareClientRevisionBody(
 		body,
 		["Add a client"],
 		["Status view", "Sample import"],
 	);
+
 	expect(text).toBe(
 		'You marked "Add a client" as not working yet.\n\nYou reported "Sample import" as not included yet.\n\nYou could not open or find "Status view".\n\nThe sample form failed.',
 	);
@@ -3860,6 +4198,7 @@ it("shows client revision events as sentences while preserving stored target par
 			kind: "direction_review",
 		}),
 	).toBe("Sketch 1");
+
 	for (const label of [
 		"v2",
 		"Version 2",
@@ -3892,9 +4231,11 @@ it("shows client revision events as sentences while preserving stored target par
 			kind: "delivery_review",
 		}),
 	).toBe("Release candidate");
+
 	const messages = [
 		{ body, decision: "changes_requested", update_id: "v2" },
 	] as any;
+
 	const updates = [
 		{
 			id: "v2",
@@ -3903,6 +4244,7 @@ it("shows client revision events as sentences while preserving stored target par
 			kind: "delivery_review",
 		},
 	];
+
 	const terms = {
 		milestones: [
 			{
@@ -3911,6 +4253,7 @@ it("shows client revision events as sentences while preserving stored target par
 			},
 		],
 	} as any;
+
 	expect(
 		readableSoftwareProjectMessages(messages, updates, terms)[0].body,
 	).toContain("Checks reported unmet: [1]");
@@ -3930,8 +4273,10 @@ it("shows client revision events as sentences while preserving stored target par
 		)[0].body,
 	).toBe("You accepted Release V2 beta.");
 });
+
 it("stores stable deliverable indexes and cannot accept one repeated label as two selections", async () => {
 	await start();
+
 	const response = await call(updatePost, {
 		action: "share",
 		confirmed: true,
@@ -3943,6 +4288,7 @@ it("stores stable deliverable indexes and cannot accept one repeated label as tw
 			delivered_deliverables: [0],
 		},
 	});
+
 	expect(response.status).toBe(200);
 	const { id } = (await response.json()) as { id: string };
 	expect(
@@ -3968,11 +4314,13 @@ it("stores stable deliverable indexes and cannot accept one repeated label as tw
 				],
 			}),
 		);
+
 	const rejected = await decide(
 		id,
 		{ decision: "milestone_accepted", confirm: true },
 		await session(),
 	);
+
 	expect(rejected.status).toBe(400);
 });
 
@@ -3983,6 +4331,7 @@ it("uses the external sent offer review window instead of submitted days", async
 			"UPDATE software_offers SET sent_at='2026-09-30',agreement_details_json=? WHERE id=(SELECT offer_id FROM software_projects WHERE request_id='software')",
 		)
 		.run(JSON.stringify({ review_business_days: 45 }));
+
 	const response = await call(updatePost, {
 		action: "share",
 		confirmed: true,
@@ -3995,6 +4344,7 @@ it("uses the external sent offer review window instead of submitted days", async
 			review_window_days: 5,
 		},
 	});
+
 	expect(response.status).toBe(200);
 	expect(
 		(await sharedSoftwareUpdates(db, "software"))[0].review_window_days,
@@ -4034,12 +4384,14 @@ it("rejects progress for a milestone that has not started before saving or email
 			milestones: [terms.milestones[0], terms.milestones[0]],
 		}),
 	);
+
 	const response = await call(updatePost, {
 		action: "share",
 		confirmed: true,
 		expectedUpdatedAt: null,
 		update: { ...update, milestone_index: 1, email_client: true },
 	});
+
 	expect(response.status).toBe(400);
 	expect(await response.json()).toMatchObject({
 		error: "Progress updates go on the current milestone.",
@@ -4048,21 +4400,25 @@ it("rejects progress for a milestone that has not started before saving or email
 		sql.prepare("SELECT count(*) n FROM software_project_updates").get().n,
 	).toBe(0);
 	expect(fetch).not.toHaveBeenCalled();
+
 	const current = await call(updatePost, {
 		action: "share",
 		confirmed: true,
 		expectedUpdatedAt: null,
 		update,
 	});
+
 	expect(current.status).toBe(200);
 	sql.exec("UPDATE software_projects SET milestone_index=1");
 	vi.mocked(fetch).mockClear();
+
 	const earlier = await call(updatePost, {
 		action: "share",
 		confirmed: true,
 		expectedUpdatedAt: null,
 		update: { ...update, email_client: true },
 	});
+
 	expect(earlier.status).toBe(400);
 	expect(await earlier.json()).toMatchObject({
 		error: "Progress updates go on the current milestone.",

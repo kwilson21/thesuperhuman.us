@@ -5,9 +5,12 @@ const studio = readFileSync(
 	new URL("../../src/styles/studio.css", import.meta.url),
 	"utf8",
 );
+
 const rule = (selector: string) => {
 	const start = studio.indexOf(`${selector} {`);
+
 	if (start < 0) throw new Error(`${selector} not found in studio.css`);
+
 	return studio.slice(start, studio.indexOf("}", start));
 };
 

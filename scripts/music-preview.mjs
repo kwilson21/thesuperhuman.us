@@ -4,10 +4,13 @@ import { spawnSync } from "node:child_process";
 import { mkdir, writeFile, readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { getPlatformProxy } from "wrangler";
+
 const configPath = resolve(".private/wrangler-music-preview.json");
 const persistPath = resolve(".wrangler/state/v3");
 const wranglerPersistPath = resolve(".wrangler/state");
+
 await mkdir(".private/music-assets", { recursive: true });
+
 await writeFile(
 	configPath,
 	JSON.stringify(
@@ -37,6 +40,7 @@ await writeFile(
 		2,
 	),
 );
+
 const schemaResult = spawnSync(
 	process.execPath,
 	[
@@ -53,30 +57,37 @@ const schemaResult = spawnSync(
 	],
 	{ encoding: "utf8" },
 );
+
 if (schemaResult.status !== 0) {
 	throw new Error(
 		`Could not apply local music database migrations:\n${schemaResult.stderr || schemaResult.stdout}`,
 	);
 }
+
 const proxy = await getPlatformProxy({
 	configPath,
 	persist: { path: persistPath },
 });
+
 try {
 	const schema = await proxy.env.MUSIC_DB.prepare(
 		"SELECT name FROM sqlite_master WHERE type='table' AND name='owner_requests'",
 	).first();
+
 	if (!schema)
 		throw new Error(
 			"Local music schema was written to a different D1 persistence path.",
 		);
+
 	const files = (await readdir(".private/music-assets")).filter((f) =>
 		f.endsWith("-upload.json"),
 	);
+
 	for (const file of files) {
 		const media = JSON.parse(
 			await readFile(`.private/music-assets/${file}`, "utf8"),
 		);
+
 		for (const { key, file: path } of media) {
 			if (!(await proxy.env.AUDIO.head(key))) {
 				await proxy.env.AUDIO.put(
@@ -95,6 +106,7 @@ try {
 } finally {
 	await proxy.dispose();
 }
+
 console.log(
 	"Local preview ready. Start with MUSIC_PREVIEW_CONFIG=.private/wrangler-music-preview.json pnpm run dev",
 );

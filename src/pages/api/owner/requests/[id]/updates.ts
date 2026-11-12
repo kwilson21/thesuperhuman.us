@@ -22,21 +22,29 @@ import {
 	payableSoftwareInvoice,
 	manualPaymentReminder,
 } from "~/lib/software-invoices";
+
 export const prerender = false;
+
 export const POST: APIRoute = async ({ params, request, locals }) => {
 	const json = (value: unknown, status = 200) =>
 		Response.json(value, {
 			status,
 			headers: { "cache-control": "private, no-store" },
 		});
+
 	if (!locals.owner) return json({ ok: false }, 403);
+
 	const env = locals.runtime.env,
 		db = env.MUSIC_DB,
 		id = params.id;
+
 	if (!clientPortalEnabled(env)) return json({ ok: false }, 404);
+
 	if (!db || !id) return json({ ok: false }, 503);
 	const body = await musicRequest(request, 40000);
+
 	if (body instanceof Response) return body;
+
 	const parsed = z
 		.object({
 			action: z.enum(["draft", "share"]),
@@ -47,6 +55,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			update: z.unknown(),
 		})
 		.safeParse(body);
+
 	if (!parsed.success)
 		return json(
 			{
@@ -56,11 +65,13 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			400,
 		);
 	const command = parsed.data;
+
 	const input = updateInput.safeParse(command.update, {
 		errorMap: () => ({
 			message: "Check the required fields and choose a listed option.",
 		}),
 	});
+
 	if (!input.success)
 		return json(
 			{
@@ -70,26 +81,34 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			},
 			400,
 		);
+
 	const value = input.data,
 		actor = locals.owner.email;
+
 	try {
 		const project = await getSoftwareProject(db, id);
+
 		if (!project || project.revoked_at || project.content_deleted_at)
 			return json({ ok: false }, 404);
 		const agreementDetails = await projectAgreementDetails(db, project);
+
 		if (agreementDetails?.review_business_days)
 			value.review_window_days = Number(agreementDetails.review_business_days);
 		else if (value.review_window_days > 30)
 			return json({ ok: false, error: "Use up to 30 business days." }, 400);
+
 		if (project.state === "complete")
 			return json({ ok: false, error: "This project is complete." }, 409);
+
 		if (value.milestone_index >= projectTerms(project).milestones.length)
 			return json(
 				{ ok: false, error: "Choose a milestone from this project." },
 				400,
 			);
+
 		const agreedDeliverables =
 			projectTerms(project).milestones[value.milestone_index].deliverables;
+
 		const delivered = value.delivered_deliverables.map((item) =>
 			typeof item === "number"
 				? item
@@ -97,6 +116,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					? Number(item)
 					: agreedDeliverables.indexOf(item),
 		);
+
 		if (
 			delivered.some(
 				(index) =>
@@ -110,6 +130,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				{ ok: false, error: "Choose deliverables from the agreed milestone." },
 				400,
 			);
+
 		const columns = [
 			"kind",
 			"milestone_index",
@@ -130,7 +151,9 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			"review_window_days",
 			"review_window_days_extended",
 		];
+
 		const review = value.kind.endsWith("_review");
+
 		const stored = {
 			...value,
 			evidence_type: value.kind === "handoff" ? "handoff" : value.evidence_type,
@@ -147,20 +170,24 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					? value.review_window_days
 					: null,
 		};
+
 		const values = columns.map((key) =>
 			key === "next_update_on" || key === "preview_url"
 				? stored[key] || null
 				: stored[key as keyof typeof stored],
 		);
+
 		async function sharedRetry() {
 			if (!command.updateId || command.action !== "share" || !command.confirmed)
 				return null;
+
 			const row = await db!
 				.prepare(
 					"SELECT * FROM software_project_updates WHERE id=? AND request_id=? AND status='shared'",
 				)
 				.bind(command.updateId, id)
 				.first<SoftwareUpdate>();
+
 			return row &&
 				columns.every(
 					(key, index) => row[key as keyof SoftwareUpdate] === values[index],
@@ -174,14 +201,18 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					})
 				: null;
 		}
+
 		const retry = await sharedRetry();
+
 		if (retry) return retry;
+
 		const draft = await db
 			.prepare(
 				"SELECT * FROM software_project_updates WHERE request_id=? AND status='draft'",
 			)
 			.bind(id)
 			.first<SoftwareUpdate>();
+
 		const staleProject = () =>
 			json(
 				{
@@ -191,19 +222,23 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				},
 				409,
 			);
+
 		if (project.updated_at !== command.expectedProjectUpdatedAt)
 			return staleProject();
+
 		if ((draft?.updated_at ?? null) !== command.expectedUpdatedAt)
 			return json(
 				{ ok: false, error: "The draft changed. Reload before saving." },
 				409,
 			);
+
 		if (draft?.visual_key && !value.visual_alt)
 			return json(
 				{ ok: false, error: "Describe the visual for the client." },
 				400,
 			);
 		const share = command.action === "share";
+
 		if (
 			share &&
 			value.kind === "progress" &&
@@ -213,6 +248,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				{ ok: false, error: "Progress updates go on the current milestone." },
 				400,
 			);
+
 		if (share && (!command.confirmed || !value.title || !value.what_changed))
 			return json(
 				{
@@ -221,17 +257,21 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				},
 				400,
 			);
+
 		if (share && review && !value.artifact_version)
 			return json(
 				{ ok: false, error: "Name the version before sharing." },
 				400,
 			);
+
 		if (
 			share &&
 			value.links.some((reference) => {
 				if (!reference.label.trim()) return true;
+
 				try {
 					const url = new URL(reference.url);
+
 					return (
 						url.protocol !== "https:" || Boolean(url.username || url.password)
 					);
@@ -248,8 +288,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				},
 				400,
 			);
+
 		const checks =
 			projectTerms(project).milestones[value.milestone_index].acceptance;
+
 		if (
 			share &&
 			value.kind === "delivery_review" &&
@@ -263,6 +305,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				},
 				400,
 			);
+
 		if (
 			share &&
 			value.kind === "delivery_review" &&
@@ -276,6 +319,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				},
 				400,
 			);
+
 		if (
 			share &&
 			value.kind === "handoff" &&
@@ -293,11 +337,13 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				400,
 			);
 		const updateId = draft?.id ?? command.updateId ?? crypto.randomUUID();
+
 		if (draft && command.updateId && command.updateId !== draft.id)
 			return json(
 				{ ok: false, error: "The draft changed. Reload before saving." },
 				409,
 			);
+
 		const at = new Date(
 			Math.max(
 				Date.now(),
@@ -305,10 +351,13 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				draft ? Date.parse(draft.updated_at) + 1 : 0,
 			),
 		).toISOString();
+
 		const status = share ? "shared" : "draft",
 			notice = share && value.email_client ? "pending" : "not_requested";
+
 		const advancesProjectReview =
 			share && review && value.milestone_index >= project.milestone_index;
+
 		try {
 			await db.batch([
 				openSoftwareGuard(db, id),
@@ -445,7 +494,9 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			]);
 		} catch (error) {
 			const retry = await sharedRetry();
+
 			if (retry) return retry;
+
 			if (
 				(await getSoftwareProject(db!, id!))?.updated_at !==
 				command.expectedProjectUpdatedAt
@@ -453,6 +504,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				return staleProject();
 			throw error;
 		}
+
 		if (share && value.email_client) {
 			try {
 				await deliverSoftwareNotice(db, id, env, updateId);
@@ -467,6 +519,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				});
 			}
 		}
+
 		return json({
 			ok: true,
 			id: updateId,
@@ -476,6 +529,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 		});
 	} catch {
 		const project = await getSoftwareProject(db, id);
+
 		if (
 			command.action === "share" &&
 			value.kind === "handoff" &&
@@ -487,6 +541,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			)
 		)
 			return json({ ok: false, error: manualPaymentReminder }, 409);
+
 		return json(
 			{
 				ok: false,

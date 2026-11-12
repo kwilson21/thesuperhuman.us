@@ -82,6 +82,7 @@ describe("software service sheet", () => {
 			},
 		]);
 		expect(workflow.historyPath).toBe("/work");
+
 		for (const target of [
 			"href(row.path)",
 			"href(link.path)",
@@ -118,22 +119,28 @@ describe("software service sheet", () => {
 		expect(website.detail).toBe(
 			doors.find((door) => door.id === "website")!.line,
 		);
+
 		const nav = readFileSync(
 			new URL("../../src/components/SiteNav.astro", import.meta.url),
 			"utf8",
 		);
+
 		expectSource(nav).toContain("mainHref('/services#website')");
 		expectSource(nav).not.toContain("door-website");
+
 		const workWithMe = readFileSync(
 			new URL("../../src/components/WorkWithMe.astro", import.meta.url),
 			"utf8",
 		);
+
 		expectSource(workWithMe).toContain("id={`door-${door.id}`}");
 		expect(doors.map((door) => door.id)).toContain("website");
+
 		const data = readFileSync(
 			new URL("../../src/data/services.ts", import.meta.url),
 			"utf8",
 		);
+
 		for (const removed of [
 			"Quoted after your brief",
 			"Start a project brief",
@@ -158,6 +165,7 @@ describe("software service sheet", () => {
 	it("uses the approved Website design line on the door and the service row", async () => {
 		const approved =
 			"I design and build your website, from the page plan to a site that works on phones and computers.";
+
 		const { doors } = await import("../../src/data/work-with-me");
 		const door = doors.find((door) => door.id === "website")!;
 		const row = softwareSheet.rows.find((row) => row.id === "website")!;
@@ -185,6 +193,7 @@ describe("software service sheet", () => {
 		expectSource(layout).not.toContain("tally-visual");
 		expectSource(layout).not.toContain("idea-");
 		expectSource(layout).not.toContain("workflow-");
+
 		for (const source of [
 			layout,
 			readFileSync(
@@ -200,10 +209,12 @@ describe("software service sheet", () => {
 	it("expands closed rows for print and restores their previous state", () => {
 		const rows = [{ open: false }, { open: true }];
 		const handlers: Record<string, () => void> = {};
+
 		const script = layout
 			.match(/<script>([\s\S]*?)<\/script>/)![1]
 			.replace(/import .*?;\n/, "")
 			.replace("runMotion();", "");
+
 		runInNewContext(transpileModule(script, {}).outputText, {
 			document: { querySelector: () => null, querySelectorAll: () => rows },
 			window: {
@@ -245,6 +256,7 @@ describe("software service sheet", () => {
 		const external = softwareSheet.rows
 			.flatMap((row) => row.evidence.flatMap((item) => item.links))
 			.filter((link) => "url" in link);
+
 		expect(external).toEqual([
 			{ label: "Try the demo", url: "https://tally-demo.thesuperhuman.us" },
 			{ label: "Play the demo", url: "https://kaillera-next.thesuperhuman.us" },
@@ -263,6 +275,7 @@ describe("software service sheet", () => {
 		]) {
 			expectSource(layout).not.toContain(old);
 		}
+
 		expect(
 			readFileSync(
 				new URL("../../src/data/services.ts", import.meta.url),

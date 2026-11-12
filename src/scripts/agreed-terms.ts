@@ -4,26 +4,34 @@ export function setupAgreedTerms(root: ParentNode = document) {
 		.querySelectorAll<HTMLElement>("[data-terms-reader]")
 		.forEach((reader) => {
 			if (reader.dataset.termsReady) return;
+
 			const stages = [
 				...reader.querySelectorAll<HTMLElement>("[data-terms-stage]"),
 			];
+
 			const buttons = [
 				...reader.querySelectorAll<HTMLButtonElement>(
 					"[data-terms-stage-button]",
 				),
 			];
+
 			const back =
 				reader.querySelector<HTMLButtonElement>("[data-terms-back]")!;
+
 			const next =
 				reader.querySelector<HTMLButtonElement>("[data-terms-next]")!;
+
 			const full =
 				reader.querySelector<HTMLButtonElement>("[data-terms-full]")!;
+
 			const fullHeading = reader.querySelector<HTMLElement>(
 				"[data-terms-full-heading]",
 			)!;
+
 			const progress = reader.querySelector<HTMLElement>(
 				"[data-terms-progress]",
 			)!;
+
 			if (
 				!stages.length ||
 				buttons.length !== stages.length ||
@@ -34,22 +42,28 @@ export function setupAgreedTerms(root: ParentNode = document) {
 				!progress
 			)
 				return;
+
 			let current = 0,
 				all = false;
+
 			const summary = reader.querySelector<HTMLElement>(".terms-summary");
+
 			function summaryOffset() {
 				if (!summary) return 0;
 				const height = summary.getBoundingClientRect().height;
 				// A long name or enlarged text must leave room to read the current stage.
 				summary.style.position =
 					height > window.innerHeight / 3 ? "static" : "";
+
 				return summary.style.position === "static" ? 0 : height;
 			}
+
 			window.addEventListener("resize", summaryOffset);
 			reader
 				.closest("[data-agreed-terms]")
 				?.addEventListener("toggle", summaryOffset);
 			const disclosureStates = new Map<HTMLDetailsElement, boolean>();
+
 			function render(moveFocus = true) {
 				stages.forEach((stage, index) => {
 					stage.hidden = !all && index !== current;
@@ -68,22 +82,26 @@ export function setupAgreedTerms(root: ParentNode = document) {
 					? "All agreed terms"
 					: `Reading stage ${current + 1} of ${stages.length}: ${buttons[current].textContent!.trim()}`;
 				const offset = summaryOffset();
+
 				if (moveFocus) {
 					const heading = all
 						? fullHeading
 						: stages[current].querySelector<HTMLElement>("h2")!;
+
 					// The saved outcome and enlarged text can make the sticky summary taller.
 					heading.style.scrollMarginTop = `${offset + 16}px`;
 					heading.focus({ preventScroll: true });
 					heading.scrollIntoView({ block: "start", behavior: "instant" });
 				}
 			}
+
 			function restoreDisclosures() {
 				disclosureStates.forEach((open, details) => {
 					details.open = open;
 				});
 				disclosureStates.clear();
 			}
+
 			function expandDisclosures() {
 				reader
 					.querySelectorAll<HTMLDetailsElement>("details")
@@ -93,6 +111,7 @@ export function setupAgreedTerms(root: ParentNode = document) {
 						details.open = true;
 					});
 			}
+
 			buttons.forEach((button, index) =>
 				button.addEventListener("click", () => {
 					if (all) restoreDisclosures();
@@ -115,6 +134,7 @@ export function setupAgreedTerms(root: ParentNode = document) {
 			});
 			full.addEventListener("click", () => {
 				all = !all;
+
 				if (all) expandDisclosures();
 				else restoreDisclosures();
 				render();
@@ -123,10 +143,12 @@ export function setupAgreedTerms(root: ParentNode = document) {
 			const printStates = new Map<HTMLDetailsElement, boolean>();
 			window.addEventListener("beforeprint", () => {
 				const outer = reader.closest<HTMLDetailsElement>("[data-agreed-terms]");
+
 				const details = [
 					...reader.querySelectorAll<HTMLDetailsElement>("details"),
 					...(outer ? [outer] : []),
 				];
+
 				details.forEach((item) => {
 					printStates.set(item, item.open);
 					item.open = true;

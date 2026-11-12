@@ -52,6 +52,7 @@ export const GET: APIRoute = async (context) => {
 	}
 
 	const stored = await getResumeRequest(env.RESUME_STORE, id);
+
 	if (!stored) {
 		return htmlResponse(
 			htmlPage(
@@ -63,6 +64,7 @@ export const GET: APIRoute = async (context) => {
 	}
 
 	const pdf = await loadResume(env.RESUME_STORE, stored.audience);
+
 	if (!pdf) {
 		return htmlResponse(
 			htmlPage(

@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { it, expect } from "vitest";
 import { D1PublicationJournal } from "~/lib/publication/journal";
 import type { Publication } from "~/lib/publication/contract";
+
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
 it("serializes simultaneous connections competing for the same project revision", async () => {
@@ -24,6 +25,7 @@ it("serializes simultaneous connections competing for the same project revision"
 	sql.close();
 	const barrier = new SharedArrayBuffer(4);
 	const workers: Worker[] = [];
+
 	const db = {
 		prepare: (query: string) => ({
 			bind: (...args: unknown[]) => ({ query, args }),
@@ -47,6 +49,7 @@ it("serializes simultaneous connections competing for the same project revision"
       `,
 					{ eval: true, workerData: { filename, barrier, statements } },
 				);
+
 				workers.push(worker);
 				worker.once("message", resolve);
 				worker.once("error", reject);
@@ -55,7 +58,9 @@ it("serializes simultaneous connections competing for the same project revision"
 				});
 			}),
 	} as unknown as D1Database;
+
 	const journal = new D1PublicationJournal(db);
+
 	const p: Publication = {
 		version: 1,
 		projectId: "threadline",
@@ -69,11 +74,13 @@ it("serializes simultaneous connections competing for the same project revision"
 		threadId: null,
 		milestoneId: null,
 	};
+
 	try {
 		const results = await Promise.all([
 			journal.commit(p),
 			journal.commit({ ...p, eventId: "b", entryId: "b" }),
 		]);
+
 		expect(results.map((r) => r.status).sort()).toEqual([
 			"accepted",
 			"conflict",

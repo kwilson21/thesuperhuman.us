@@ -3,12 +3,14 @@ import { publicationOAuthRoute } from "~/lib/publication/oauth";
 
 it("serves discovery, registers clients, and rejects missing/invalid bearer tokens using the real OAuth library", async () => {
 	const values = new Map<string, string>();
+
 	const kv = {
 		put: async (key: string, value: string) => {
 			values.set(key, value);
 		},
 		get: async (key: string, type?: string | { type: string }) => {
 			const value = values.get(key) ?? null;
+
 			return value &&
 				(type === "json" || (typeof type === "object" && type.type === "json"))
 				? JSON.parse(value)
@@ -19,6 +21,7 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 		},
 		list: async () => ({ keys: [], list_complete: true }),
 	};
+
 	const env = {
 		OAUTH_KV: kv,
 		PUBLICATION_DB: {},
@@ -28,14 +31,17 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 		PUBLICATION_GITHUB_CLIENT_SECRET: "test-secret",
 		PUBLICATION_COOKIE_KEY: btoa("k".repeat(32)),
 	};
+
 	const call = (path: string, init?: RequestInit) =>
 		publicationOAuthRoute({
 			request: new Request("https://thesuperhuman.us" + path, init),
 			locals: { runtime: { env, ctx: { waitUntil() {} } } },
 		} as any);
+
 	const meta = await call(
 		"/.well-known/oauth-protected-resource/api/publication/mcp",
 	);
+
 	expect(meta.status).toBe(200);
 	expect(((await meta.json()) as any).resource).toBe(
 		"https://thesuperhuman.us/api/publication/mcp",
@@ -44,6 +50,7 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 	expect(
 		((await server.json()) as any).code_challenge_methods_supported,
 	).toContain("S256");
+
 	const registration = await call("/api/publication/register", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
@@ -53,9 +60,11 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 			token_endpoint_auth_method: "none",
 		}),
 	});
+
 	expect(registration.status).toBe(201);
 	const clientId = ((await registration.json()) as any).client_id;
 	expect(clientId).toBeTruthy();
+
 	for (const authorization of ["", "Bearer invalid"]) {
 		const denied = await call("/api/publication/mcp", {
 			method: "POST",
@@ -66,11 +75,13 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 			},
 			body: "{}",
 		});
+
 		expect(denied.status).toBe(401);
 		expect(denied.headers.get("www-authenticate")).toContain(
 			"oauth-protected-resource",
 		);
 	}
+
 	expect(
 		(
 			await call("/api/publication/register", {
@@ -80,9 +91,11 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 		).status,
 	).toBe(413);
 	const verifier = "v".repeat(43);
+
 	const challenge = Buffer.from(
 		await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)),
 	).toString("base64url");
+
 	const params = new URLSearchParams({
 		response_type: "code",
 		client_id: clientId,
@@ -93,9 +106,11 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 		code_challenge: challenge,
 		code_challenge_method: "S256",
 	});
+
 	const page = await call("/api/publication/authorize?" + params);
 	expect(page.status).toBe(200);
 	const nonce = /name="nonce" value="([^"]+)"/.exec(await page.text())![1];
+
 	const consent = await call("/api/publication/authorize", {
 		method: "POST",
 		headers: {
@@ -104,12 +119,15 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 		},
 		body: new URLSearchParams({ nonce }),
 	});
+
 	const fetcher = vi
 		.fn()
 		.mockResolvedValueOnce(Response.json({ access_token: "upstream" }))
 		.mockResolvedValueOnce(Response.json({ id: 10987837 }));
+
 	vi.stubGlobal("fetch", fetcher);
 	let callback: Response;
+
 	try {
 		callback = await call(
 			"/api/publication/callback?code=github-code&state=" + nonce,
@@ -118,10 +136,13 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 	} finally {
 		vi.unstubAllGlobals();
 	}
+
 	expect(callback!.status).toBe(302);
+
 	const code = new URL(callback!.headers.get("location")!).searchParams.get(
 		"code",
 	)!;
+
 	const tokens = await call("/api/publication/token", {
 		method: "POST",
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -134,8 +155,10 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 			resource: "https://thesuperhuman.us/api/publication/mcp",
 		}),
 	});
+
 	expect(tokens.status).toBe(200);
 	const token = (await tokens.json()) as any;
+
 	const refresh = await call("/api/publication/token", {
 		method: "POST",
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -147,8 +170,10 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 			resource: "https://thesuperhuman.us/api/publication/mcp",
 		}),
 	});
+
 	expect(refresh.status).toBe(200);
 	const narrowed = (await refresh.json()) as any;
+
 	const denied = await call("/api/publication/mcp", {
 		method: "POST",
 		headers: {
@@ -166,6 +191,7 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 			},
 		}),
 	});
+
 	expect(denied.status).toBe(200);
 	expect(((await denied.json()) as any).result.content[0].text).toContain(
 		"forbidden",

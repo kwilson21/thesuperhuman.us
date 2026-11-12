@@ -21,12 +21,14 @@ import {
 } from "./agreement-templates";
 import { liveSigningGuard, type AgreementSession } from "./agreement-access";
 import casefold from "./agreement-casefold.json";
+
 export const legalNameKey = (value: string) =>
 	[...value.trim().normalize("NFC")]
 		.map(
 			(c) => (casefold.mapping as Record<string, string>)[c] ?? c.toLowerCase(),
 		)
 		.join("");
+
 export function abandonUnsignedAgreementReviews(
 	db: D1Database,
 	requestId: string,
@@ -43,6 +45,7 @@ export function abandonUnsignedAgreementReviews(
 			requestId,
 		);
 }
+
 export function retireRequestSigning(
 	db: D1Database,
 	requestId: string,
@@ -67,6 +70,7 @@ export function retireRequestSigning(
 			.bind(at, requestId),
 	];
 }
+
 export type Agreement = {
 	id: string;
 	kind: "msa" | "sow";
@@ -85,6 +89,7 @@ export type Agreement = {
 	attachment_manifest_json: string;
 	terminated_at: string | null;
 };
+
 export async function offerAgreements(db: D1Database, id: string) {
 	return (
 		await db
@@ -95,6 +100,7 @@ export async function offerAgreements(db: D1Database, id: string) {
 			.all<Agreement>()
 	).results;
 }
+
 export function sessionGuard(db: D1Database, s: AgreementSession) {
 	return softwareGuard(
 		db,
@@ -102,6 +108,7 @@ export function sessionGuard(db: D1Database, s: AgreementSession) {
 		[s.token_hash, new Date().toISOString()],
 	);
 }
+
 export async function reviewAgreements(
 	db: D1Database,
 	offer: SoftwareOffer,
@@ -119,14 +126,18 @@ export async function reviewAgreements(
 				JSON.parse(offer.contractor_snapshot_json!),
 			),
 		);
+
 	const existing = await offerAgreements(db, offer.id);
+
 	if (existing.some((a) => a.status !== "review"))
 		throw new Error(
 			"A signature is already saved. These documents cannot change.",
 		);
+
 	const replacedClientIds = [
 		...new Set(existing.map((agreement) => agreement.client_id)),
 	];
+
 	const at = new Date().toISOString(),
 		effective = new Intl.DateTimeFormat("en-CA", {
 			timeZone: "America/New_York",
@@ -134,11 +145,13 @@ export async function reviewAgreements(
 			month: "2-digit",
 			day: "2-digit",
 		}).format(new Date());
+
 	const identity = {
 		...client,
 		recipient_email: session.recipient_email,
 		legal_name_key: legalNameKey(client.legal_name),
 	};
+
 	const previous = await db
 		.prepare(
 			"SELECT id FROM software_agreement_clients WHERE recipient_email=? AND legal_name_key=? AND entity_type=? AND jurisdiction=?",
@@ -150,7 +163,9 @@ export async function reviewAgreements(
 			client.jurisdiction,
 		)
 		.first<{ id: string }>();
+
 	const clientId = previous?.id ?? crypto.randomUUID();
+
 	const reused = offer.reused_msa_id
 		? await db
 				.prepare(
@@ -159,22 +174,28 @@ export async function reviewAgreements(
 				.bind(offer.reused_msa_id, clientId)
 				.first<Agreement>()
 		: null;
+
 	if (offer.reused_msa_id && !reused)
 		throw new Error(
 			"The confirmed MSA does not match this legal party. Ask Kazon for a new offer.",
 		);
+
 	const msaTemplate = await db
 		.prepare("SELECT * FROM software_agreement_templates WHERE id=?")
 		.bind(reused?.template_id ?? offer.msa_template_id)
 		.first<AgreementTemplate>();
+
 	const sowTemplate = await db
 		.prepare("SELECT * FROM software_agreement_templates WHERE id=?")
 		.bind(offer.sow_template_id)
 		.first<AgreementTemplate>();
+
 	if (!msaTemplate || !sowTemplate)
 		throw new Error("The pinned templates are unavailable.");
+
 	const msaId = reused?.id ?? crypto.randomUUID(),
 		sowId = crypto.randomUUID();
+
 	const values = agreementValues(
 		terms,
 		details,
@@ -196,12 +217,14 @@ export async function reviewAgreements(
 			sow_source_revision: sowTemplate.source_revision ?? "",
 		},
 	);
+
 	const documents = [] as {
 		id: string;
 		kind: "msa" | "sow";
 		hash: string;
 		text: string;
 	}[];
+
 	if (!reused) {
 		const text = renderAgreement("msa", msaTemplate.text, values);
 		documents.push({
@@ -211,6 +234,7 @@ export async function reviewAgreements(
 			text,
 		});
 	}
+
 	const sowText = renderAgreement("sow", sowTemplate.text, values);
 	documents.push({
 		id: sowId,
@@ -218,12 +242,14 @@ export async function reviewAgreements(
 		hash: await hashOfferToken(sowText),
 		text: sowText,
 	});
+
 	const pending = await db
 		.prepare(
 			"SELECT * FROM software_agreements WHERE client_id=? AND template_id=? AND kind='msa' AND status IN ('review','client_signed') AND offer_id<>?",
 		)
 		.bind(clientId, msaTemplate.id, offer.id)
 		.first<Agreement>();
+
 	if (pending)
 		throw new Error(
 			"Another offer has a pending MSA for this party. Ask Kazon to resolve it.",
@@ -290,6 +316,7 @@ export async function reviewAgreements(
 			: []),
 		agreementEvent(db, "reviewed", session.token_hash, at, null, offer.id),
 	]);
+
 	return {
 		documents,
 		reused_msa: reused
@@ -297,12 +324,14 @@ export async function reviewAgreements(
 			: null,
 	};
 }
+
 export const signatureIds = (documents: { id: string; hash: string }[]) =>
 	JSON.stringify(
 		documents
 			.map((d) => ({ id: d.id, hash: d.hash }))
 			.sort((a, b) => a.id.localeCompare(b.id)),
 	);
+
 export async function signAgreements(
 	db: D1Database,
 	offer: SoftwareOffer,
@@ -312,12 +341,14 @@ export async function signAgreements(
 ) {
 	const agreements = await offerAgreements(db, offer.id),
 		toSign = agreements.filter((a) => a.status !== "executed");
+
 	if (
 		!toSign.length ||
 		signatureIds(toSign.map((a) => ({ id: a.id, hash: a.text_sha256 }))) !==
 			signatureIds(documents)
 	)
 		throw new Error("The reviewed documents changed. Review them again.");
+
 	if (toSign.every((a) => a.status === "client_signed")) {
 		const saved = await db
 			.prepare(
@@ -325,32 +356,40 @@ export async function signAgreements(
 			)
 			.bind(toSign[0].id)
 			.first<{ receipt_id: string; session_token_hash: string }>();
+
 		if (saved?.session_token_hash !== session.token_hash)
 			throw new Error("A different signing action is already saved.");
+
 		return saved.receipt_id;
 	}
+
 	const values = JSON.parse(toSign[0].values_json),
 		client = clientAgreementSchema.parse(values.client),
 		at = new Date().toISOString(),
 		receipt = crypto.randomUUID();
+
 	const draft = await db
 		.prepare(
 			"SELECT values_json FROM software_agreement_drafts WHERE offer_id=? AND recipient_email=?",
 		)
 		.bind(offer.id, session.recipient_email)
 		.first<{ values_json: string }>();
+
 	if (draft) {
 		const { resolveClientDetails } = await import("./agreement-draft");
+
 		const resolved = resolveClientDetails(
 			JSON.parse(draft.values_json),
 			session.recipient_email,
 		);
+
 		if (
 			!resolved.ok ||
 			JSON.stringify(resolved.client) !== JSON.stringify(client)
 		)
 			throw new Error("Your details changed. Review the agreement again.");
 	}
+
 	await db.batch([
 		liveSigningGuard(db, offer.id, session.link_hash!, session.recipient_email),
 		sessionGuard(db, session),
@@ -434,8 +473,10 @@ export async function signAgreements(
 				values.contractor.notice_email,
 			),
 	]);
+
 	return receipt;
 }
+
 function reusedMsaGuard(db: D1Database, offer: SoftwareOffer) {
 	return offer.reused_msa_id
 		? [
@@ -447,6 +488,7 @@ function reusedMsaGuard(db: D1Database, offer: SoftwareOffer) {
 			]
 		: [];
 }
+
 function signatureInsert(
 	db: D1Database,
 	a: Agreement,
@@ -464,10 +506,13 @@ function signatureInsert(
 	request: Request,
 ) {
 	validateAgreementCharacters(name + title);
+
 	const ip = request.headers.get("cf-connecting-ip") ?? "",
 		ua = request.headers.get("user-agent") ?? "";
+
 	if (ip.length > 100 || ua.length > 2000 || /[\x00-\x1f\x7f]/.test(ip + ua))
 		throw new Error("Browser evidence exceeds its limits.");
+
 	return db
 		.prepare(
 			`INSERT INTO software_agreement_signatures(id,agreement_id,party,typed_name,title,consent_text,consent_version,consent_at,signed_at,document_sha256,session_token_hash,owner_subject,verified_email,verified_at,verification_method,intent_text,document_list_json,receipt_id,ip_address,user_agent) VALUES(?,?,?,?,?,?,'website-signing-v3',?,?,?,?,?,?,?,?,?,?,?,?,?)`,
@@ -499,6 +544,7 @@ function signatureInsert(
 			ua,
 		);
 }
+
 // Failed means this uncertain notice is obsolete, not confirmed undelivered.
 export function closeObsoleteAgreementNotifications(
 	db: D1Database,
@@ -538,6 +584,7 @@ export async function countersignAgreements(
 ) {
 	const agreements = await offerAgreements(db, offer.id),
 		pending = agreements.filter((a) => a.status === "client_signed");
+
 	if (
 		!pending.length ||
 		signatureIds(pending.map((a) => ({ id: a.id, hash: a.text_sha256 }))) !==
@@ -546,6 +593,7 @@ export async function countersignAgreements(
 		throw new Error(
 			"The pending documents changed. Reload before countersigning.",
 		);
+
 	const at = new Date().toISOString(),
 		receipt = crypto.randomUUID(),
 		config = contractorSchema.parse(
@@ -554,6 +602,7 @@ export async function countersignAgreements(
 			),
 		),
 		sow = pending.find((a) => a.kind === "sow")!;
+
 	await db.batch([
 		softwareGuard(
 			db,
@@ -612,8 +661,10 @@ export async function countersignAgreements(
 				),
 		),
 	]);
+
 	return sow.id;
 }
+
 export async function executedOfferAgreement(db: D1Database, offerId: string) {
 	return db
 		.prepare(

@@ -27,6 +27,8 @@ export function sceneProgress({
 }: SceneMeasure): number {
 	const from = viewport * start;
 	const to = Math.max(viewport * end, topAtMaxScroll);
+
 	if (from - to < 1) return 1;
+
 	return clamp01((from - top) / (from - to));
 }

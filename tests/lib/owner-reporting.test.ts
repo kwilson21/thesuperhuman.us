@@ -14,6 +14,7 @@ function fixture() {
 	sql.exec(
 		readFileSync(new URL("../../db/music.sql", import.meta.url), "utf8"),
 	);
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		query,
 		args,
@@ -21,9 +22,11 @@ function fixture() {
 		all: async () => ({ results: sql.prepare(query).all(...args) }),
 		first: async () => sql.prepare(query).get(...args) ?? null,
 	});
+
 	const db = {
 		prepare: (query: string) => statement(query),
 	} as unknown as D1Database;
+
 	sql.exec(`INSERT INTO owner_campaigns VALUES
     ('old-news-launch','release','old-news-single','Old News learning campaign','meaningful listening','["purchase demand"]','2026-09-01T00:00:00Z',NULL,'Share the release thoughtfully.','','','active','2026-09-01T00:00:00Z','2026-09-01T00:00:00Z');
     INSERT INTO owner_requests(id,kind,release_id,email,summary,status,created_at,updated_at) VALUES
@@ -32,9 +35,11 @@ function fixture() {
     ('r3','service',NULL,'three@example.com','Mastering request','reviewed','2026-09-18T12:00:00Z','2026-09-18T12:00:00Z'),
     ('r4','software',NULL,'four@example.com','Workflow request','new','2026-09-18T12:30:00Z','2026-09-18T12:30:00Z');
     `);
+
 	const request =
 		sql.prepare(`INSERT INTO owner_requests(id,kind,release_id,campaign_id,email,summary,status,created_at,updated_at)
     VALUES (?,?,?,?,?,?,?,?,?)`);
+
 	for (let index = 0; index < 12; index++)
 		request.run(
 			`d${index}`,
@@ -47,9 +52,11 @@ function fixture() {
 			`2026-09-18T${String(13 + Math.floor(index / 2)).padStart(2, "0")}:00:00Z`,
 			`2026-09-18T${String(13 + Math.floor(index / 2)).padStart(2, "0")}:00:00Z`,
 		);
+
 	const insert = sql.prepare(`INSERT INTO music_playback_events
     (id,release_id,recording_id,session_id,playthrough_id,sequence,medium,event,accumulated_seconds,media_duration_seconds,campaign_id,channel,creative,traffic_class,country,region,city,occurred_at)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+
 	for (let index = 0; index < 7; index++) {
 		const automated = index === 6;
 		const session = index < 5 ? "replaying-session" : `s${index}`;
@@ -73,6 +80,7 @@ function fixture() {
 			index < 5 ? "Nashville" : "Memphis",
 			"2026-09-18T12:00:00Z",
 		);
+
 		if (!automated)
 			insert.run(
 				`l${index}`,
@@ -95,6 +103,7 @@ function fixture() {
 				"2026-09-18T12:01:00Z",
 			);
 	}
+
 	insert.run(
 		"unrelated",
 		"other-release",
@@ -115,6 +124,7 @@ function fixture() {
 		"",
 		"2026-09-18T12:00:00Z",
 	);
+
 	return db;
 }
 
@@ -123,6 +133,7 @@ it("orders attention first, suppresses sparse cities and excludes automated traf
 		fixture(),
 		new Date("2026-09-19T12:00:00Z"),
 	);
+
 	expect(ledger.attention.newRequests).toBe(3);
 	expect(ledger.geography.cities).toEqual([
 		{ label: "Other locations", reportedListens: 2 },
@@ -143,6 +154,7 @@ it("uses the same campaign evidence for the campaign desk", async () => {
 		"old-news-launch",
 		new Date("2026-09-19T12:00:00Z"),
 	);
+
 	expect(desk).toMatchObject({
 		id: "old-news-launch",
 		listening: { reportedStarts: 6, reported30SecondListens: 6 },
@@ -175,13 +187,16 @@ it("shows unread client messages, failed notices, and approaching delivery dates
     INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at,notification_status,notification_attempted_at)
       VALUES ('quiet','progress','Timed out a day ago','owner','2026-09-22T12:00:00Z','sending','2026-09-22T12:00:00Z'),
         ('review','progress','Still sending','owner','2026-09-23T11:59:50Z','sending','2026-09-23T11:59:50Z');`);
+
 	const statement = (query: string, args: unknown[] = []) => ({
 		bind: (...values: unknown[]) => statement(query, values),
 		all: async () => ({ results: sql.prepare(query).all(...args) }),
 	});
+
 	const db = {
 		prepare: (query: string) => statement(query),
 	} as unknown as D1Database;
+
 	expect(
 		await listStudioProjectAttention(db, new Date("2026-09-23T12:00:00Z")),
 	).toEqual([

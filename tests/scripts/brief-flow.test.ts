@@ -1,8 +1,10 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
+
 vi.mock("~/scripts/brief-suggestion-pass", () => ({
 	setupSuggestionPass: () => async () => true,
 }));
+
 class Node extends EventTarget {
 	dataset: Record<string, string> = {};
 	attrs: Record<string, string> = {};
@@ -40,6 +42,7 @@ class Node extends EventTarget {
 	}
 	appendChild(node: Node) {
 		this.children.push(node);
+
 		return node;
 	}
 	replaceChildren() {
@@ -56,6 +59,7 @@ class Node extends EventTarget {
 	}
 	querySelectorAll(selector: string): Node[] {
 		if (selector === "input, textarea") return this.inputs;
+
 		return selector === "[data-form-error]"
 			? Object.entries(this.nodes)
 					.filter(([key]) => key.startsWith("[data-form-error="))
@@ -74,43 +78,57 @@ class Node extends EventTarget {
 		);
 	}
 }
+
 class Input extends Node {}
+
 class Textarea extends Node {}
+
 let form: Node & { elements: any },
 	steps: Node[],
 	controls: Node[],
 	store: Map<string, string>,
 	dots: Node[],
 	kicker: Node;
+
 let observed: (records: { target: Node }[]) => void = () => {};
+
 const make = (name = "", type = "", value = "") => {
 	const node = new Input();
 	Object.assign(node, { name, type, value });
+
 	return node;
 };
+
 function fire(node: Node, event: string, props: Record<string, unknown> = {}) {
 	const message = new Event(event, { cancelable: true });
 	Object.assign(message, props);
 	node.dispatchEvent(message);
+
 	return message;
 }
+
 function fill(name: string, value: string) {
 	const node = controls.find((node) => node.name === name)!;
 	node.value = value;
 	node.setSelectionRange(value.length, value.length);
 	fire(node, "input");
 	fire(form, "input");
+
 	return node;
 }
+
 const field = (name: string) => controls.find((node) => node.name === name)!;
+
 function click(selector: string) {
 	fire(form.nodes[selector], "click");
 }
+
 // A path choice is a pointer choice (pointerdown first) unless a test chooses it with the keyboard.
 function choose(name: string, value: string, pointer = true) {
 	const node = controls.find(
 		(node) => node.name === name && node.value === value,
 	)!;
+
 	if (name === "path" && pointer) fire(form, "pointerdown");
 	controls
 		.filter((node) => node.name === name)
@@ -120,28 +138,37 @@ function choose(name: string, value: string, pointer = true) {
 	Object.defineProperty(message, "target", { value: node });
 	form.dispatchEvent(message);
 }
+
 const chooseByKey = (value: string) => {
 	fire(form, "keydown", { key: "ArrowDown" });
 	choose("path", value, false);
 };
+
 const current = () => steps.findIndex((node) => !node.hidden);
+
 const backToStart = () => {
 	while (current() > 0) click("[data-back]");
 };
+
 const visibleDots = () => dots.map((item) => item.hidden);
+
 async function setup(requestedPath?: string) {
 	form = new Node() as any;
 	form.dataset.available = "false";
 	steps = Array.from({ length: 9 }, () => new Node());
 	controls = [];
+
 	for (const section of steps) section.nodes.h1 = new Node();
+
 	for (const index of [1, 2]) {
 		const section = steps[index],
 			box = new Textarea();
+
 		box.name = "";
 		box.required = index === 1;
 		box.section = section;
 		controls.push(box);
+
 		for (const selector of [
 			"[data-accept-hint]",
 			"[data-answer-label]",
@@ -161,14 +188,18 @@ async function setup(requestedPath?: string) {
 		section.inputs = [box];
 		section.nodes["[data-form-error]"] = new Node();
 	}
+
 	// Website-only screens: the link and notes (no suggestions) and who keeps it up to date.
 	const website = steps[7],
 		currentUrl = make("currentUrl", "url"),
 		existing = new Textarea();
+
 	existing.name = "existing";
+
 	const updates = ["self", "help", "unsure"].map((value) =>
 		make("updates", "radio", value),
 	);
+
 	website.inputs = [currentUrl, existing];
 	website.nodes.currentUrl = currentUrl;
 	website.nodes.existing = existing;
@@ -194,6 +225,7 @@ async function setup(requestedPath?: string) {
 		.filter((node) => node.name === "path")
 		.forEach((node) => (node.checked = node.value === requestedPath));
 	steps[4].inputs = [controls.find((node) => node.name === "budgetNote")!];
+
 	for (const key of [
 		"[data-next]",
 		"[data-back]",
@@ -206,26 +238,33 @@ async function setup(requestedPath?: string) {
 	])
 		form.nodes[key] = new Node();
 	form.nodes['button[type="submit"]'] = form.nodes["[type=submit]"];
+
 	const skips = [2, 4, 7].map((i) => {
 		const node = new Node();
 		steps[i].nodes["[data-skip]"] = node;
+
 		return node;
 	});
+
 	for (const node of controls) {
 		const error = new Node();
 		error.dataset.formError = node.name;
 		form.nodes[`[data-form-error="${node.name}"]`] = error;
 	}
+
 	form.querySelector = (selector: string): any => {
 		// A question's error paragraph follows the question it is configured for.
 		const match = selector.match(/^\[data-form-error="(.+)"\]$/);
+
 		const remapped = match
 			? steps
 					.map((node) => node.nodes["[data-form-error]"])
 					.find((error) => error?.dataset.formError === match[1])
 			: undefined;
+
 		return remapped ?? form.nodes[selector] ?? null;
 	};
+
 	form.querySelectorAll = (selector: string) => {
 		if (selector === "input, textarea, button")
 			return [
@@ -238,10 +277,14 @@ async function setup(requestedPath?: string) {
 					.flatMap((node) => node.children)
 					.filter((node) => node.type === "button"),
 			];
+
 		if (selector === "[data-step]") return steps;
+
 		if (selector === "[data-answer]")
 			return steps.slice(1, 3).map((node) => node.nodes["[data-answer]"]);
+
 		if (selector === "[data-skip]") return skips;
+
 		if (
 			[
 				"[data-suggestions-toggle]",
@@ -250,6 +293,7 @@ async function setup(requestedPath?: string) {
 			].includes(selector)
 		)
 			return steps.slice(1, 3).map((node) => node.nodes[selector]);
+
 		if (selector === "[data-ghost-prefix], [data-ghost-text]")
 			return steps
 				.slice(1, 3)
@@ -257,15 +301,19 @@ async function setup(requestedPath?: string) {
 					node.nodes["[data-ghost-prefix]"],
 					node.nodes["[data-ghost-text]"],
 				]);
+
 		if (selector === "[data-accept]" || selector === "[data-accept-hint]")
 			return steps.slice(1, 3).map((node) => node.nodes[selector]);
+
 		if (selector === "[data-form-error]")
 			return Object.entries(form.nodes)
 				.filter(([key]) => key.startsWith("[data-form-error="))
 				.map(([, value]) => value);
 		const match = selector.match(/^\[name="(.+)"\]$/);
+
 		return match ? controls.filter((node) => node.name === match[1]) : [];
 	};
+
 	form.elements = controls;
 	form.elements.namedItem = (key: string) =>
 		controls.find((node) => node.name === key && node.type !== "radio");
@@ -301,6 +349,7 @@ async function setup(requestedPath?: string) {
 	dots = Array.from({ length: 8 }, () => {
 		const item = new Node();
 		item.nodes[".sr-only"] = new Node();
+
 		return item;
 	});
 	kicker = new Node();
@@ -325,18 +374,21 @@ async function setup(requestedPath?: string) {
 	const { setupSoftwareInquiry } = await import("~/scripts/software-inquiry");
 	setupSoftwareInquiry(form as any);
 }
+
 // Every flow can schedule suggestions; keep old forms from calling the next test's fetch.
 beforeEach(async () => {
 	vi.useFakeTimers();
 	store = new Map();
 	await setup();
 });
+
 afterEach(() => {
 	vi.clearAllTimers();
 	vi.restoreAllMocks();
 	vi.useRealTimers();
 	vi.unstubAllGlobals();
 });
+
 it("enforces required answers, traverses all questions, Back and individual summary Edit", () => {
 	click("[data-next]");
 	expect(current()).toBe(0);
@@ -378,6 +430,7 @@ it("enforces required answers, traverses all questions, Back and individual summ
 	expect(current()).toBe(1);
 	expect(steps[1].nodes.h1.focus).toHaveBeenCalled();
 });
+
 it("restores untrimmed answers, step and identity and supports keyboard continuation", async () => {
 	choose("path", "webapp");
 	fill("appGoal", "An idea with space ");
@@ -391,6 +444,7 @@ it("restores untrimmed answers, step and identity and supports keyboard continua
 		saved.submissionId,
 	);
 });
+
 it("suggests only after a pause and accepts Tab, arrow and the accessible button explicitly", async () => {
 	vi.useFakeTimers();
 	choose("path", "workflow");
@@ -417,6 +471,7 @@ it("suggests only after a pause and accepts Tab, arrow and the accessible button
 		"We track new clients in a spreadsheet in a spreadsheet in a spreadsheet",
 	);
 });
+
 it("ignores suggestions when typing, moving the cursor or switching questions, and remembers off", async () => {
 	vi.useFakeTimers();
 	choose("path", "workflow");
@@ -437,6 +492,7 @@ it("ignores suggestions when typing, moving the cursor or switching questions, a
 		"Turn on",
 	);
 });
+
 it("never sends contact fields, and only supplies earlier project answers for question three", async () => {
 	vi.useFakeTimers();
 	choose("path", "workflow");
@@ -459,6 +515,7 @@ it("never sends contact fields, and only supplies earlier project answers for qu
 		JSON.parse(vi.mocked(fetch).mock.calls[1][1]!.body as string).earlier,
 	).toEqual({ path: "workflow", today: "We track new clients" });
 });
+
 it("keeps writing with unavailable browser storage", async () => {
 	await setup();
 	vi.stubGlobal("localStorage", {
@@ -474,8 +531,10 @@ it("keeps writing with unavailable browser storage", async () => {
 	click("[data-next]");
 	expect(current()).toBe(2);
 });
+
 it("discloses browser drafts and Workers AI accurately, with reassurance only at send", () => {
 	const privacy = readFileSync("src/pages/privacy.astro", "utf8");
+
 	for (const sentence of [
 		"isn’t used to train models without your explicit consent",
 		"The name, email and company fields are never sent for suggestions.",
@@ -534,6 +593,7 @@ it("preserves drafts on failed delivery and clears them after a saved receipt", 
 	await vi.waitFor(() => expect(form.hidden).toBe(true));
 	expect(store.has("software-brief-draft")).toBe(false);
 });
+
 it("discards a late suggestion after navigation", async () => {
 	vi.useFakeTimers();
 	choose("path", "workflow");
@@ -585,6 +645,7 @@ it("preserves both paths across switching and refresh, but sends only the select
 	expect(body).not.toHaveProperty("today");
 	expect(body).not.toHaveProperty("firstResult");
 });
+
 it.each(["storage", "submit"])(
 	"notices a sent draft through %s before sending with a new identity",
 	async (trigger) => {
@@ -602,6 +663,7 @@ it.each(["storage", "submit"])(
 		store.delete("software-brief-draft");
 		form.dataset.available = "true";
 		form.nodes["[type=submit]"].disabled = false;
+
 		if (trigger === "storage")
 			window.dispatchEvent(
 				Object.assign(new Event("storage"), { key: "software-brief-sent" }),
@@ -683,6 +745,7 @@ it.each(["different", "invalid", "missing"])(
 				}),
 		);
 		fire(form, "submit");
+
 		const saved =
 			draft === "different"
 				? JSON.stringify({
@@ -693,6 +756,7 @@ it.each(["different", "invalid", "missing"])(
 				: draft === "invalid"
 					? "{"
 					: undefined;
+
 		if (saved !== undefined) store.set("software-brief-draft", saved);
 		else store.delete("software-brief-draft");
 		vi.stubGlobal("document", { querySelector: () => new Node() });
@@ -716,6 +780,7 @@ it("offers no suggestion when the silent pass requires interaction", async () =>
 			"setupSuggestionPass",
 		)
 		.mockReturnValue(async () => false);
+
 	await setup();
 	vi.useFakeTimers();
 	choose("path", "workflow");
@@ -728,12 +793,14 @@ it("offers no suggestion when the silent pass requires interaction", async () =>
 
 it("renews an expired pass once and retries the current suggestion", async () => {
 	const pass = vi.fn(async (_renew = false) => true);
+
 	const mock = vi
 		.spyOn(
 			await import("~/scripts/brief-suggestion-pass"),
 			"setupSuggestionPass",
 		)
 		.mockReturnValue(pass);
+
 	await setup();
 	vi.useFakeTimers();
 	choose("path", "workflow");
@@ -747,14 +814,17 @@ it("renews an expired pass once and retries the current suggestion", async () =>
 	expect(steps[1].nodes["[data-accept]"].hidden).toBe(false);
 	mock.mockRestore();
 });
+
 it("allows a later suggestion after typing cancels a successfully renewed retry", async () => {
 	const pass = vi.fn(async (_renew = false) => true);
+
 	const mock = vi
 		.spyOn(
 			await import("~/scripts/brief-suggestion-pass"),
 			"setupSuggestionPass",
 		)
 		.mockReturnValue(pass);
+
 	await setup();
 	vi.useFakeTimers();
 	choose("path", "workflow");
@@ -782,24 +852,28 @@ it("allows a later suggestion after typing cancels a successfully renewed retry"
 	expect(steps[1].nodes["[data-accept]"].hidden).toBe(false);
 	mock.mockRestore();
 });
+
 it.each(["check fails", "retry still expired", "retry throws"])(
 	"stays silent for the page after renewal: %s",
 	async (failure) => {
 		const pass = vi.fn(
 			async (renew = false) => !renew || failure !== "check fails",
 		);
+
 		const mock = vi
 			.spyOn(
 				await import("~/scripts/brief-suggestion-pass"),
 				"setupSuggestionPass",
 			)
 			.mockReturnValue(pass);
+
 		await setup();
 		vi.useFakeTimers();
 		choose("path", "workflow");
 		vi.mocked(fetch).mockImplementation(async () =>
 			Response.json({ suggestion: "", passRequired: true }),
 		);
+
 		if (failure === "retry throws")
 			vi.mocked(fetch)
 				.mockResolvedValueOnce(
@@ -828,8 +902,10 @@ it("accepts taps only on ghost text and updates the hint for touch and keyboard"
 	});
 	const box = fill("today", "We track new clients");
 	await vi.advanceTimersByTimeAsync(400);
+
 	const hint = steps[1].nodes["[data-accept-hint]"],
 		ghost = steps[1].nodes["[data-ghost-text]"];
+
 	expect(hint.hidden).toBe(false);
 	expect(hint.textContent).toBe("Tap to accept");
 	fire(box, "click");
@@ -843,6 +919,7 @@ it("accepts taps only on ghost text and updates the hint for touch and keyboard"
 	expect(hint.textContent).toBe("Tab to accept");
 	expect(hint.hidden).toBe(true);
 });
+
 it("keeps the decorative mirror on phones and the accessible accept control visually hidden", () => {
 	const page = readFileSync("src/pages/software/start.astro", "utf8");
 	const css = readFileSync("src/styles/software-intake.css", "utf8");
@@ -895,10 +972,12 @@ it.each(["webapp", "workflow"])(
 		);
 	},
 );
+
 it("opens an explicit path at its first question with no draft", async () => {
 	await setup("webapp");
 	expect(current()).toBe(1);
 });
+
 it("clears remapped question errors and invalid markers when switching paths", () => {
 	choose("path", "webapp");
 	click("[data-next]");
@@ -914,6 +993,7 @@ it("clears remapped question errors and invalid markers when switching paths", (
 		steps[1].nodes["[data-answer]"].getAttribute("aria-invalid"),
 	).toBeNull();
 });
+
 it("grows the answer to fit typed text and the tappable suggestion without scrolling", async () => {
 	choose("path", "workflow");
 	const box = fill("today", "We track new clients");
@@ -928,6 +1008,7 @@ it("grows the answer to fit typed text and the tappable suggestion without scrol
 	expect(css).toMatch(/brief-answer textarea\{[^}]*overflow:hidden/);
 	expect(css).not.toContain("scrollbar-gutter");
 });
+
 it.each(["webapp", "workflow"])(
 	"refresh of the same explicit %s path restores the saved step",
 	async (requested) => {
@@ -951,6 +1032,7 @@ function modelAnswerHeight(box: Node) {
 		get: () => Math.max(box.clientHeight, box.value.length > 100 ? 300 : 100),
 	});
 }
+
 it("shrinks a grown answer after deletion while keeping the six-row minimum", () => {
 	choose("path", "workflow");
 	const box = steps[1].nodes["[data-answer]"];
@@ -965,6 +1047,7 @@ it("shrinks a grown answer after deletion while keeping the six-row minimum", ()
 		'rows="6" data-answer',
 	);
 });
+
 it("shrinks the reused answer box when switching to a shorter answer", () => {
 	choose("path", "workflow");
 	const box = steps[1].nodes["[data-answer]"];
@@ -982,6 +1065,7 @@ it("shrinks the reused answer box when switching to a shorter answer", () => {
 	expect(box.value).toBe("Short");
 	expect(box.style.height).toBe("200px");
 });
+
 it("fits the full suggestion after a grown answer shrinks", async () => {
 	choose("path", "workflow");
 	const box = steps[1].nodes["[data-answer]"];
@@ -1039,9 +1123,11 @@ it.each(["success", "server failure", "network failure"])(
 		click("[data-next]");
 		form.dataset.available = "true";
 		form.nodes["[type=submit]"].disabled = false;
+
 		const edits = form.nodes["[data-review]"].children
 			.flatMap((node) => node.children)
 			.filter((node) => node.type === "button");
+
 		const company = controls.find((node) => node.name === "company")!;
 		company.disabled = true;
 		let resolve!: (response: Response) => void, reject!: (error: Error) => void;
@@ -1068,6 +1154,7 @@ it.each(["success", "server failure", "network failure"])(
 			querySelector: () => new Node(),
 			querySelectorAll: () => [],
 		});
+
 		if (outcome === "network failure") reject(new Error("offline"));
 		else
 			resolve(
@@ -1087,6 +1174,7 @@ it.each(["success", "server failure", "network failure"])(
 				.every((node) => !node.disabled),
 		).toBe(true);
 		expect(company.disabled).toBe(true);
+
 		if (outcome === "success") {
 			expect(form.hidden).toBe(true);
 			expect(store.has("software-brief-draft")).toBe(false);
@@ -1118,6 +1206,7 @@ it("starts a project brief on its first screen and labels it as a project brief"
 		true,
 	]);
 });
+
 it("walks a website brief through its own screens, the link and notes, updates, timing and review", () => {
 	choose("path", "website");
 	expect(kicker.textContent).toBe("Website brief");
@@ -1172,23 +1261,30 @@ it("walks a website brief through its own screens, the link and notes, updates, 
 	expect(text).toContain("Website design");
 	expect(text).toContain("Me or someone on my team");
 	expect(text).toContain("What you already have");
+
 	const edit = rows
 		.flatMap((node) => node.children)
 		.find((node) => node.attrs["aria-label"] === "Edit Current website")!;
+
 	fire(edit, "click");
 	expect(current()).toBe(7);
 	expect(steps[7].nodes.h1.focus).toHaveBeenCalled();
 });
+
 it("links the second answer box to its error once a path names that box, without duplicating the link", () => {
 	choose("path", "website", false);
+
 	const box = steps[2].nodes["[data-answer]"],
 		error = steps[2].nodes["[data-form-error]"];
+
 	// The markup gives the box its help text. Website names no second box, so form-submission had nothing to link at setup.
 	box.attrs["aria-describedby"] = "brief-help-2";
 	error.dataset.formError = "firstResult";
 	Object.assign(error, { id: "software-inquiry-firstResult-error" });
+
 	const described = () =>
 		(box.getAttribute("aria-describedby") ?? "").split(" ");
+
 	choose("path", "workflow", false);
 	expect(box.name).toBe("firstResult");
 	expect(described()).toEqual([
@@ -1203,6 +1299,7 @@ it("links the second answer box to its error once a path names that box, without
 		"software-inquiry-firstResult-error",
 	]);
 });
+
 it("skips the website link and notes together and moves on to who keeps it up to date", () => {
 	choose("path", "website");
 	fill("purpose", "A site for my pottery studio.");
@@ -1214,6 +1311,7 @@ it("skips the website link and notes together and moves on to who keeps it up to
 	expect(field("currentUrl").value).toBe("");
 	expect(field("existing").value).toBe("");
 });
+
 it("sends only the answers for the chosen path, website answers for a website brief", async () => {
 	choose("path", "website");
 	fill("purpose", "A site for my pottery studio.");
@@ -1241,9 +1339,11 @@ it("sends only the answers for the chosen path, website answers for a website br
 		existing: "A logo.",
 		updates: "self",
 	});
+
 	for (const key of ["today", "firstResult", "appGoal", "firstVersion", "idea"])
 		expect(body).not.toHaveProperty(key);
 });
+
 it("sends no website answers for a workflow brief, even after website answers were typed", async () => {
 	choose("path", "website");
 	fill("purpose", "A site for my pottery studio.");
@@ -1272,6 +1372,7 @@ it("sends no website answers for a workflow brief, even after website answers we
 		path: "workflow",
 		today: "We track clients in a spreadsheet.",
 	});
+
 	for (const key of [
 		"purpose",
 		"currentUrl",
@@ -1282,6 +1383,7 @@ it("sends no website answers for a workflow brief, even after website answers we
 	])
 		expect(body).not.toHaveProperty(key);
 });
+
 it("keeps website-only answers through a path switch and a refresh", async () => {
 	choose("path", "website");
 	fill("purpose", "A site for my pottery studio.");
@@ -1311,6 +1413,7 @@ it("keeps website-only answers through a path switch and a refresh", async () =>
 		controls.find((node) => node.name === "updates" && node.checked)!.value,
 	).toBe("help");
 });
+
 it("shows the web app brief with seven screens, its own first question and no timing hint", () => {
 	choose("path", "webapp");
 	expect(kicker.textContent).toBe("Web app brief");
@@ -1339,6 +1442,7 @@ it("shows the web app brief with seven screens, its own first question and no ti
 	expect(current()).toBe(3);
 	expect(form.nodes["[data-timing-hint]"].hidden).toBe(true);
 });
+
 it("restores an old idea draft as a web app brief with its idea as the first answer", async () => {
 	store.set(
 		"software-brief-draft",
@@ -1355,6 +1459,7 @@ it("restores an old idea draft as a web app brief with its idea as the first ans
 	expect(current()).toBe(1);
 	expect(kicker.textContent).toBe("Web app brief");
 });
+
 it.each([
 	[
 		"website",
@@ -1386,6 +1491,7 @@ it.each([
 	);
 	expect(firstStep.textContent).toBe(line);
 });
+
 it("sends the web app first answer as earlier context for the second question", async () => {
 	vi.useFakeTimers();
 	choose("path", "webapp");
@@ -1436,10 +1542,13 @@ it("moves through the starting points with arrow keys without advancing, then co
 	click("[data-next]");
 	expect(current()).toBe(1);
 });
+
 it("clears a sent receipt's page kicker and progress, and tolerates a page without a kicker", async () => {
 	const { renderSoftwareReceipt } = await import("~/scripts/software-inquiry");
+
 	const pageKicker = new Node(),
 		progress = new Node();
+
 	vi.stubGlobal("document", {
 		querySelector: (selector: string) =>
 			selector === "[data-brief-kicker]"
@@ -1471,6 +1580,7 @@ it("clears a sent receipt's page kicker and progress, and tolerates a page witho
 		),
 	).not.toThrow();
 });
+
 it("maps an old idea answer to the web app goal even when the draft switched to workflow", async () => {
 	store.set(
 		"software-brief-draft",
@@ -1489,6 +1599,7 @@ it("maps an old idea answer to the web app goal even when the draft switched to 
 	expect(current()).toBe(1);
 	expect(field("appGoal").value).toBe("Old idea text");
 });
+
 it.each([
 	["an unknown path", { path: "bogus", today: "We track clients." }],
 	["no path", { today: "We track clients." }],
@@ -1500,6 +1611,7 @@ it.each([
 		expect(current()).toBe(0);
 	},
 );
+
 it.each([
 	["workflow", 7],
 	["website", 8],
@@ -1514,18 +1626,23 @@ it.each([
 		expect(current()).toBe(0);
 	},
 );
+
 it("gives AI suggestions only to the project answer screens, never the website link and notes", () => {
 	const page = readFileSync("src/pages/software/start.astro", "utf8");
+
 	const section = (marker: string) => {
 		const start = page.indexOf(marker);
 		expect(start, marker).toBeGreaterThan(-1);
+
 		return page.slice(start, page.indexOf("</section>", start));
 	};
+
 	expect(section('<section data-step="7"')).toContain('name="currentUrl"');
 	expect(section('<section data-step="7"')).not.toContain("data-answer");
 	expect(section('<section data-step="8"')).not.toContain("data-answer");
 	expect(section("<section data-step={index}")).toContain("data-answer");
 });
+
 it("keeps website answers through a refresh while workflow is selected", async () => {
 	choose("path", "website");
 	fill("purpose", "A site for my pottery studio.");
@@ -1549,6 +1666,7 @@ it("keeps website answers through a refresh while workflow is selected", async (
 		controls.find((node) => node.name === "updates" && node.checked)!.value,
 	).toBe("self");
 });
+
 it("sends each website review Edit button to its plan position", () => {
 	choose("path", "website");
 	fill("purpose", "A site for my pottery studio.");
@@ -1566,10 +1684,12 @@ it("sends each website review Edit button to its plan position", () => {
 	fill("company", "Pottery Studio");
 	click("[data-next]");
 	expect(current()).toBe(6);
+
 	const edit = (label: string) =>
 		form.nodes["[data-review]"].children
 			.flatMap((node) => node.children)
 			.find((node) => node.attrs["aria-label"] === `Edit ${label}`)!;
+
 	const cases: [string, number][] = [
 		["Project", 0],
 		["What’s the website for?", 1],
@@ -1582,6 +1702,7 @@ it("sends each website review Edit button to its plan position", () => {
 		["Email", 6],
 		["Company, if you have one", 6],
 	];
+
 	for (const [label, position] of cases) {
 		fire(edit(label), "click");
 		expect(
@@ -1590,6 +1711,7 @@ it("sends each website review Edit button to its plan position", () => {
 		).toBe(position);
 	}
 });
+
 it("jumps to the website step that holds an invalid hidden control and ignores controls outside the plan", () => {
 	choose("path", "website");
 	const url = field("currentUrl");
@@ -1601,6 +1723,7 @@ it("jumps to the website step that holds an invalid hidden control and ignores c
 	);
 	expect(url.focus).toHaveBeenCalled();
 });
+
 it("does not jump when an invalid control belongs to a section outside the current plan", () => {
 	choose("path", "workflow");
 	const url = field("currentUrl");

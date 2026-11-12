@@ -47,23 +47,30 @@ const commandSchema = z.discriminatedUnion("action", [
 
 function ownerView(payment: AudioPayment) {
 	const { stripeCustomerId: _stripeCustomerId, ...visible } = payment;
+
 	return visible;
 }
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
 	if (!locals.owner) return Response.json({ ok: false }, { status: 403 });
 	const db = locals.runtime.env.MUSIC_DB;
+
 	if (!db || !params.id) return Response.json({ ok: false }, { status: 503 });
 	let body: unknown;
+
 	try {
 		body = await request.json();
 	} catch {
 		return Response.json({ ok: false }, { status: 400 });
 	}
+
 	const parsed = commandSchema.safeParse(body);
+
 	if (!parsed.success) return Response.json({ ok: false }, { status: 400 });
 	const requestRecord = await getOwnerRequest(db, params.id);
+
 	if (!requestRecord) return Response.json({ ok: false }, { status: 404 });
+
 	if (requestRecord.kind !== "service")
 		return Response.json({ ok: false }, { status: 409 });
 	const headers = { "cache-control": "private, no-store" };
@@ -71,6 +78,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 	try {
 		if (parsed.data.action === "approve") {
 			const existing = await getAudioPayment(db, requestRecord.id);
+
 			if (
 				existing &&
 				(existing.approvedService !== parsed.data.approvedService ||
@@ -78,6 +86,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			) {
 				return Response.json({ ok: false }, { status: 409, headers });
 			}
+
 			const payment =
 				existing ??
 				(await approveAudioPayment(db, {
@@ -87,6 +96,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					offerAcceptedAt: new Date().toISOString(),
 					actor: locals.owner.email,
 				}));
+
 			return Response.json(
 				{ ok: true, payment: ownerView(payment) },
 				{ headers },
@@ -94,7 +104,9 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 		}
 
 		let payment = await getAudioPayment(db, requestRecord.id);
+
 		if (!payment) return Response.json({ ok: false }, { status: 409, headers });
+
 		if (parsed.data.action === "record-payment-received") {
 			// Needs no Stripe: the owner confirms money that arrived another way.
 			payment = await recordManualPayment(db, {
@@ -104,48 +116,59 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				reference: parsed.data.reference,
 				actor: locals.owner.email,
 			});
+
 			return Response.json(
 				{ ok: true, payment: ownerView(payment) },
 				{ headers },
 			);
 		}
+
 		if (parsed.data.action.startsWith("replace-")) {
 			if (!stripeAvailable(locals.runtime.env))
 				return Response.json({ ok: false }, { status: 503, headers });
+
 			const installment =
 				parsed.data.action === "replace-booking-invoice"
 					? "booking"
 					: "balance";
+
 			payment = await replaceTerminalInvoice(db, {
 				requestId: requestRecord.id,
 				installment,
 				actor: locals.owner.email,
 			});
 		}
+
 		const installment = [
 			"create-booking-invoice",
 			"replace-booking-invoice",
 		].includes(parsed.data.action)
 			? "booking"
 			: "balance";
+
 		const existingId =
 			installment === "booking"
 				? payment.bookingInvoiceId
 				: payment.balanceInvoiceId;
+
 		if (existingId)
 			return Response.json(
 				{ ok: true, payment: ownerView(payment) },
 				{ headers },
 			);
+
 		if (!stripeAvailable(locals.runtime.env))
 			return Response.json({ ok: false }, { status: 503, headers });
+
 		if (installment === "balance" && payment.bookingStatus !== "paid") {
 			return Response.json({ ok: false }, { status: 409, headers });
 		}
+
 		payment = await reserveInvoiceCreation(db, {
 			requestId: requestRecord.id,
 			installment,
 		});
+
 		const invoice =
 			installment === "booking"
 				? await createBookingInvoice(locals.runtime.env, requestRecord, payment)
@@ -154,7 +177,9 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 						requestRecord,
 						payment,
 					);
+
 		let updated: AudioPayment;
+
 		try {
 			updated = await recordInvoice(db, {
 				requestId: requestRecord.id,
@@ -168,6 +193,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				{ status: 503, headers },
 			);
 		}
+
 		return Response.json(
 			{ ok: true, payment: ownerView(updated) },
 			{ headers },
@@ -175,6 +201,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "";
 		const stripeFailure = /Stripe|hosted payment URL/i.test(message);
+
 		return Response.json(
 			{ ok: false },
 			{ status: stripeFailure ? 502 : 409, headers },

@@ -11,9 +11,11 @@ export type ListeningSummary = {
 	reportedCompletions: number;
 	replays: number;
 };
+
 export type GeographySummary = {
 	cities: { label: string; reportedListens: number }[];
 };
+
 export type CampaignSummary = {
 	id: string;
 	name: string;
@@ -22,6 +24,7 @@ export type CampaignSummary = {
 	endsAt: string | null;
 	status: "draft" | "active" | "complete";
 };
+
 export type CampaignDesk = CampaignSummary & {
 	subjectType: "release" | "service";
 	subjectId: string;
@@ -36,6 +39,7 @@ export type CampaignDesk = CampaignSummary & {
 	requests: OwnerRequest[];
 	channels: { channel: string; creative: string }[];
 };
+
 export type StudioLedger = {
 	attention: { newRequests: number };
 	listening: ListeningSummary;
@@ -45,6 +49,7 @@ export type StudioLedger = {
 	activeCampaignListening: ListeningSummary;
 	observations: string[];
 };
+
 export type StudioProjectAttention = {
 	kind: "audio" | "software";
 	requestId: string;
@@ -60,6 +65,7 @@ export type StudioProjectAttention = {
 	dueInDays: number | null;
 	promisedUpdate?: string;
 };
+
 type CampaignRow = {
 	id: string;
 	subject_type: "release" | "service";
@@ -74,6 +80,7 @@ type CampaignRow = {
 	next_lesson: string;
 	status: "draft" | "active" | "complete";
 };
+
 const requestColumns = `id,kind,release_id,service_id,campaign_id,name,email,city_region,
   summary,details_json,status,private_note,created_at,updated_at,resolved_at,contact_delete_after`;
 
@@ -84,6 +91,7 @@ export async function listStudioProjectAttention(
 	const today = projectToday(now);
 	const dueLimit = new Date(`${today}T12:00:00Z`);
 	dueLimit.setUTCDate(dueLimit.getUTCDate() + 2);
+
 	const rows = await db
 		.prepare(`WITH project_attention AS (
     SELECT p.request_id AS requestId,r.summary,p.stage,p.current_due_at AS dueAt,
@@ -118,7 +126,9 @@ export async function listStudioProjectAttention(
 			uncheckedNotices: number;
 			dueSoon: number;
 		}>();
+
 	const day = (value: string) => Date.parse(`${value}T12:00:00Z`) / 86_400_000;
+
 	const softwareRows = await db
 		.prepare(`WITH attention AS (
     SELECT p.request_id AS requestId,json_extract(p.terms_json,'$.outcome') AS summary,p.state AS stage,p.next_update_on AS dueAt,
@@ -146,6 +156,7 @@ export async function listStudioProjectAttention(
 			uncheckedNotices: number;
 			dueSoon: number;
 		}>();
+
 	const software = softwareRows.results.map(({ dueAt, ...row }) => ({
 		...row,
 		kind: "software" as const,
@@ -154,6 +165,7 @@ export async function listStudioProjectAttention(
 		dueInDays: null,
 		promisedUpdate: row.dueSoon && dueAt ? dueAt : undefined,
 	}));
+
 	return [
 		...software,
 		...rows.results.map(({ dueAt, ...row }) => ({
@@ -172,8 +184,10 @@ async function listening(
 	campaignId?: string,
 ): Promise<ListeningSummary> {
 	const campaign = campaignId ? " AND campaign_id=?" : "";
+
 	const query = `SELECT event,COUNT(*) AS total FROM music_playback_events
     WHERE traffic_class='human'${campaign} AND event IN ('start','listen30','complete','replay') GROUP BY event`;
+
 	const rows = (
 		await db
 			.prepare(`${query} UNION ALL SELECT event,SUM(count) AS total FROM music_playback_daily
@@ -181,10 +195,12 @@ async function listening(
 			.bind(...(campaignId ? [campaignId, campaignId] : []))
 			.all<{ event: string; total: number }>()
 	).results;
+
 	const count = (event: string) =>
 		rows
 			.filter((row) => row.event === event)
 			.reduce((sum, row) => sum + Number(row.total), 0);
+
 	return {
 		reportedStarts: count("start") + count("replay"),
 		reported30SecondListens: count("listen30"),
@@ -198,6 +214,7 @@ async function geography(
 	campaignId?: string,
 ): Promise<GeographySummary> {
 	const campaign = campaignId ? " AND campaign_id=?" : "";
+
 	const rows = (
 		await db
 			.prepare(`SELECT city,region,SUM(total) AS total FROM (
@@ -209,17 +226,21 @@ async function geography(
 			.bind(...(campaignId ? [campaignId, campaignId] : []))
 			.all<{ city: string; region: string; total: number }>()
 	).results;
+
 	const visible = rows
 		.filter((row) => row.city && Number(row.total) >= 5)
 		.map((row) => ({
 			label: row.region ? `${row.city}, ${row.region}` : row.city,
 			reportedListens: Number(row.total),
 		}));
+
 	const suppressed = rows
 		.filter((row) => !row.city || Number(row.total) < 5)
 		.reduce((sum, row) => sum + Number(row.total), 0);
+
 	if (suppressed)
 		visible.push({ label: "Other locations", reportedListens: suppressed });
+
 	return { cities: visible };
 }
 
@@ -237,6 +258,7 @@ async function requests(
 			.bind(...values, limit)
 			.all<OwnerRequestRow>()
 	).results;
+
 	return rows.map(ownerRequestFromRow);
 }
 
@@ -261,16 +283,20 @@ export async function loadCampaignDesk(
     approved_plan,retrospective,next_lesson,status FROM owner_campaigns WHERE id=?`)
 		.bind(campaignId)
 		.first<CampaignRow>();
+
 	if (!row) return null;
 	const end = row.ends_at ?? now.toISOString();
+
 	const subjectColumn =
 		row.subject_type === "release" ? "release_id" : "service_id";
+
 	const relatedRequests = await requests(
 		db,
 		`WHERE (campaign_id=? OR (campaign_id IS NULL AND ${subjectColumn}=? AND created_at>=? AND created_at<=?))`,
 		[row.id, row.subject_id, row.starts_at, end],
 		10,
 	);
+
 	const demandRows = (
 		await db
 			.prepare(`SELECT kind,COUNT(*) AS total FROM owner_requests
@@ -279,6 +305,7 @@ export async function loadCampaignDesk(
 			.bind(row.id, row.subject_id, row.starts_at, end)
 			.all<{ kind: "purchase" | "merchandise"; total: number }>()
 	).results;
+
 	const demand = {
 		purchase: Number(
 			demandRows.find((item) => item.kind === "purchase")?.total ?? 0,
@@ -287,6 +314,7 @@ export async function loadCampaignDesk(
 			demandRows.find((item) => item.kind === "merchandise")?.total ?? 0,
 		),
 	};
+
 	const channels = (
 		await db
 			.prepare(
@@ -295,6 +323,7 @@ export async function loadCampaignDesk(
 			.bind(row.id)
 			.all<{ channel: string; creative: string }>()
 	).results;
+
 	return {
 		...campaignSummary(row),
 		subjectType: row.subject_type,
@@ -319,22 +348,27 @@ export async function loadStudioLedger(
 	const newRow = await db
 		.prepare(`SELECT COUNT(*) AS total FROM owner_requests WHERE status='new'`)
 		.first<{ total: number }>();
+
 	const campaign = await db
 		.prepare(`SELECT id,subject_type,subject_id,name,primary_goal,secondary_signals,starts_at,ends_at,
     approved_plan,retrospective,next_lesson,status FROM owner_campaigns
     WHERE status='active' AND starts_at<=? AND (ends_at IS NULL OR ends_at>=?) ORDER BY starts_at DESC LIMIT 1`)
 		.bind(now.toISOString(), now.toISOString())
 		.first<CampaignRow>();
+
 	const listeningSummary = await listening(db);
 	const observations: string[] = [];
+
 	if (Number(newRow?.total ?? 0))
 		observations.push(
 			`${Number(newRow?.total)} people are waiting for review.`,
 		);
+
 	if (listeningSummary.reported30SecondListens)
 		observations.push(
 			`${listeningSummary.reported30SecondListens} reported listens reached 30 seconds.`,
 		);
+
 	return {
 		attention: { newRequests: Number(newRow?.total ?? 0) },
 		listening: listeningSummary,
@@ -362,5 +396,6 @@ export async function listCampaigns(
     approved_plan,retrospective,next_lesson,status FROM owner_campaigns ORDER BY starts_at DESC`)
 			.all<CampaignRow>()
 	).results;
+
 	return rows.map(campaignSummary);
 }

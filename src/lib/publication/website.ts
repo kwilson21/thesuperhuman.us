@@ -1,4 +1,5 @@
 import { readProject, type ProjectFeed } from "./read";
+
 /** Optional public data must never break page rendering. */
 export async function websiteFeed(
 	env: Env,
@@ -12,6 +13,7 @@ export async function websiteFeed(
 			.includes(projectId)
 	)
 		return null;
+
 	try {
 		return await readProject(env.PUBLICATION_DB, projectId);
 	} catch {

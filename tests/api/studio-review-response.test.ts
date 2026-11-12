@@ -6,6 +6,7 @@ vi.mock("~/lib/audio-client-access", async (importOriginal) => ({
 	...(await importOriginal<typeof import("~/lib/audio-client-access")>()),
 	clientProjectForSession: vi.fn(async () => ({ request_id: "song-1" })),
 }));
+
 vi.mock("~/lib/audio-project-messages", async (importOriginal) => ({
 	...(await importOriginal<typeof import("~/lib/audio-project-messages")>()),
 	postClientReviewDecision: vi.fn(
@@ -22,6 +23,7 @@ vi.mock("~/lib/audio-project-messages", async (importOriginal) => ({
 }));
 
 const token = "00000000-0000-4000-8000-000000000000".repeat(2);
+
 function context(body: unknown) {
 	return {
 		params: { id: "song-1" },

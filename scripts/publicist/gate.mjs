@@ -18,6 +18,7 @@ const errors = [];
 const config = JSON.parse(readFileSync("publicist/config.json", "utf8"));
 
 const skill = readFileSync(".agents/skills/publicist/SKILL.md", "utf8");
+
 if (!readFileSync("AGENTS.md", "utf8").includes(agentsBlock(skill))) {
 	errors.push(
 		"AGENTS.md publicist block is out of date; run pnpm run publicist:sync",
@@ -26,16 +27,21 @@ if (!readFileSync("AGENTS.md", "utf8").includes(agentsBlock(skill))) {
 
 const entries = [];
 const earlier = new Set();
+
 for (const [project, { data, preexisting = [] }] of Object.entries(
 	config.projects,
 )) {
 	if (!existsSync(data)) continue;
 	const source = readFileSync(data, "utf8");
 	const needed = entriesNeedingNotes(source, preexisting);
+
 	for (const id of needed) entries.push({ project, id });
+
 	for (const id of entryIds(source)) if (!needed.includes(id)) earlier.add(id);
+
 	for (const problem of textProblems(source))
 		errors.push(`${data}: ${problem}`);
+
 	if (project === "tally")
 		for (const problem of captureProblems(source))
 			errors.push(`${data}: ${problem}`);
@@ -43,12 +49,14 @@ for (const [project, { data, preexisting = [] }] of Object.entries(
 
 const ids = new Set(entries.map((entry) => entry.id));
 const queue = "publicist/queue";
+
 if (existsSync(queue)) {
 	for (const name of readdirSync(queue).filter((name) =>
 		name.endsWith(".md"),
 	)) {
 		const text = readFileSync(join(queue, name), "utf8");
 		const { source } = frontMatter(text);
+
 		if (earlier.has(source))
 			errors.push(
 				`${queue}/${name}: source entry "${source}" predates the publicist and has no review note`,
@@ -57,6 +65,7 @@ if (existsSync(queue)) {
 			errors.push(
 				`${queue}/${name}: source entry "${source}" is not a journal entry`,
 			);
+
 		for (const problem of [...textProblems(text), ...queueBodyProblems(text)])
 			errors.push(`${queue}/${name}: ${problem}`);
 	}
@@ -64,6 +73,7 @@ if (existsSync(queue)) {
 
 const token = process.env.PUBLICIST_PRIVATE_TOKEN;
 const inCi = Boolean(process.env.CI || process.env.WORKERS_CI);
+
 if (entries.length && !token) {
 	if (inCi)
 		errors.push(
@@ -76,6 +86,7 @@ if (entries.length && !token) {
 } else if (entries.length) {
 	for (const { project, id } of entries) {
 		const url = `https://api.github.com/repos/${config.privateRepo}/contents/review-notes/${project}/${id}/note.md?ref=main`;
+
 		const response = await fetch(url, {
 			headers: {
 				Authorization: `Bearer ${token}`,
@@ -83,16 +94,19 @@ if (entries.length && !token) {
 				"X-GitHub-Api-Version": "2022-11-28",
 			},
 		});
+
 		if (response.status === 404) {
 			errors.push(`${id}: no review note on the private main branch`);
 			continue;
 		}
+
 		if (!response.ok) {
 			errors.push(
 				`${id}: could not read review note (HTTP ${response.status})`,
 			);
 			continue;
 		}
+
 		for (const problem of noteProblems(await response.text()))
 			errors.push(`${id}: ${problem}`);
 	}
@@ -102,4 +116,5 @@ if (errors.length) {
 	console.error(`publicist-gate failed:\n- ${errors.join("\n- ")}`);
 	process.exit(1);
 }
+
 console.log(`publicist-gate passed: ${entries.length} entries checked.`);

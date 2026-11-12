@@ -45,13 +45,17 @@ export const audioOffers = {
 			"For full mixing, describe the instrumental and vocal tracks available. For recording support, describe your setup. You can start without finished audio.",
 	},
 } as const;
+
 export type IntakeService = keyof typeof audioOffers;
+
 export type Direction = "judgment" | "preferences" | "specific";
+
 type PreferenceField = {
 	id: string;
 	label: string;
 	options: { value: string; label: string }[];
 };
+
 const vocalFields: PreferenceField[] = [
 	{
 		id: "vocal",
@@ -79,6 +83,7 @@ const vocalFields: PreferenceField[] = [
 		],
 	},
 ];
+
 const masterFields: PreferenceField[] = [
 	{
 		id: "tone",
@@ -97,6 +102,7 @@ const masterFields: PreferenceField[] = [
 		],
 	},
 ];
+
 export function directionFields(service: IntakeService): PreferenceField[] {
 	return service === "mastering"
 		? masterFields
@@ -104,25 +110,32 @@ export function directionFields(service: IntakeService): PreferenceField[] {
 			? []
 			: vocalFields;
 }
+
 export function describePreferences(
 	service: IntakeService,
 	preferences: Record<string, string>,
 ): string[] {
 	return directionFields(service).flatMap((field) => {
 		const option = field.options.find((o) => o.value === preferences[field.id]);
+
 		return option ? [`${field.label}: ${option.label}`] : [];
 	});
 }
+
 const short = (max: number) => z.string().trim().max(max);
+
 const optionalLink = short(2048).refine((value) => {
 	if (!value) return true;
+
 	try {
 		const url = new URL(value);
+
 		return url.protocol === "https:" && !url.username && !url.password;
 	} catch {
 		return false;
 	}
 }, "Use a complete HTTPS link, or leave this blank.");
+
 const schema = z.object({
 	service: z.enum(["vocal-mix", "mastering", "bundle", "custom"]),
 	title: short(120)
@@ -143,12 +156,16 @@ const schema = z.object({
 	turnstileToken: z.string().min(1, "Complete the security check.").max(2048),
 	fileLink: optionalLink.default(""),
 });
+
 export type IntakeInput = z.infer<typeof schema>;
+
 export function isAudioIntakeAvailable(env: Env | undefined) {
 	return Boolean(env?.MUSIC_DB && env.TURNSTILE_SECRET_KEY && env.RATE_LIMIT);
 }
+
 export function ownerRequestForIntake(input: IntakeInput): NewOwnerRequest {
 	const offer = audioOffers[input.service];
+
 	return {
 		kind: "service",
 		serviceId: input.service,
@@ -166,12 +183,14 @@ export function ownerRequestForIntake(input: IntakeInput): NewOwnerRequest {
 		},
 	};
 }
+
 export function validateIntake(
 	input: unknown,
 ):
 	| { ok: true; value: IntakeInput }
 	| { ok: false; errors: Record<string, string> } {
 	const result = schema.safeParse(input);
+
 	if (!result.success)
 		return {
 			ok: false,
@@ -182,11 +201,15 @@ export function validateIntake(
 				]),
 			),
 		};
+
 	const value = result.data,
 		fields = directionFields(value.service);
+
 	const errors: Record<string, string> = {};
+
 	for (const [key, choice] of Object.entries(value.preferences)) {
 		const field = fields.find((f) => f.id === key);
+
 		if (
 			!field ||
 			(choice !== "decide" && !field.options.some((o) => o.value === choice))
@@ -194,18 +217,23 @@ export function validateIntake(
 			errors.preferences =
 				"These preferences do not match your selected service.";
 	}
+
 	if (
 		value.direction === "judgment" &&
 		Object.values(value.preferences).some((v) => v !== "decide")
 	)
 		errors.preferences =
 			"Choose a preference path to include specific settings.";
+
 	if (value.service !== "custom" && !value.fileLink)
 		errors.fileLink = "Provide your files before submitting for review.";
+
 	if (value.direction === "specific" && !value.referenceNote)
 		errors.referenceNote = "Describe the specific direction you have in mind.";
+
 	if (value.service === "custom" && !value.referenceNote)
 		errors.referenceNote = "Briefly describe your project and what you need.";
+
 	return Object.keys(errors).length
 		? { ok: false, errors }
 		: { ok: true, value };

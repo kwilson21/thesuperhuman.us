@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const path = require("node:path");
+
 const { chromium } = require(
 	path.join(process.env.PW_SKILL_DIR, "node_modules/playwright"),
 );
@@ -8,6 +9,7 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 
 (async () => {
 	const browser = await chromium.launch({ headless: true });
+
 	try {
 		const page = await browser.newPage({
 			viewport: { width: 390, height: 844 },
@@ -20,6 +22,7 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 			new URL("/building/personal-website/story", targetUrl).href,
 			{ waitUntil: "commit" },
 		);
+
 		assert.ok(
 			storyResponseEarly && storyResponseEarly.status() < 400,
 			"Personal Website project story did not load successfully",
@@ -29,6 +32,7 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 			.click();
 		const storyProof = page.locator(".timeline-visual-proof");
 		await storyProof.first().waitFor();
+
 		const storyProofWidths = await storyProof
 			.first()
 			.locator("figure")
@@ -37,6 +41,7 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 					Math.round(element.getBoundingClientRect().width),
 				),
 			);
+
 		assert.deepEqual(
 			storyProofWidths,
 			[342, 342],
@@ -47,10 +52,12 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 			new URL("/building/personal-website", targetUrl).href,
 			{ waitUntil: "commit" },
 		);
+
 		assert.ok(
 			response && response.status() < 400,
 			"Personal Website journal did not load successfully",
 		);
+
 		for (const name of [
 			/Let the A\/B player keep playing on iPhone/i,
 			/Make the A\/B controls fit the song/i,
@@ -58,10 +65,13 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 		]) {
 			await page.getByRole("button", { name }).click();
 			await page.getByRole("heading", { name }).waitFor();
+
 			const activeProof = page.locator(
 				"article[data-panel]:not([hidden]) .timeline-visual-proof",
 			);
+
 			await activeProof.waitFor();
+
 			const widths = await activeProof
 				.locator("figure")
 				.evaluateAll((elements) =>
@@ -69,12 +79,14 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 						Math.round(element.getBoundingClientRect().width),
 					),
 				);
+
 			assert.deepEqual(
 				widths,
 				[342, 342],
 				`Opened visual proof does not fit a phone viewport: ${JSON.stringify({ name: String(name), widths })}`,
 			);
 		}
+
 		const metrics = await page.evaluate(() => ({
 			scrollWidth: document.documentElement.scrollWidth,
 			clientWidth: document.documentElement.clientWidth,
@@ -82,6 +94,7 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 			proofLinkCount: document.querySelectorAll(".timeline-visual-proof a")
 				.length,
 		}));
+
 		assert.equal(
 			metrics.scrollWidth,
 			metrics.clientWidth,
@@ -102,16 +115,20 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 		await page.goto(new URL("/building/personal-website", targetUrl).href, {
 			waitUntil: "networkidle",
 		});
+
 		const bounded = await page.evaluate(() => {
 			const rect = (element) =>
 				element ? element.getBoundingClientRect() : null;
+
 			const scoped = (selector) =>
 				document.querySelectorAll(
 					`[aria-labelledby="personal-website-updates-title"] ${selector}`,
 				);
+
 			const nextAction = document.querySelector(
 				'[data-testid="journal-next-action"]',
 			);
+
 			return {
 				heading:
 					document.getElementById("personal-website-updates-title")
@@ -142,6 +159,7 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 				clientWidth: document.documentElement.clientWidth,
 			};
 		});
+
 		// The heading reads "Development journal" (not the plan's own name, "Latest work") so it matches
 		// the one label the shared header link and Building already use for this destination.
 		assert.equal(
@@ -205,10 +223,13 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 			bounded.headingTop !== null,
 			'Missing the "Latest work" heading to measure the other two landmarks from',
 		);
+
 		const latestChangeFromHeading =
 			bounded.latestChange.bottom - bounded.headingTop;
+
 		const nextActionFromHeading =
 			bounded.nextAction.bottom - bounded.headingTop;
+
 		assert.ok(
 			latestChangeFromHeading <= twoScreenBudget,
 			`The latest-change landmark must end within ${twoScreenBudget}px of the "Latest work" heading, ends at ${latestChangeFromHeading}px`,
@@ -227,10 +248,12 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 				tabbable: el.tabIndex >= 0,
 			})),
 		);
+
 		assert.ok(
 			movedAccessibility.length > 0,
 			"Expected at least one moved entry on the bounded main page",
 		);
+
 		for (const entry of movedAccessibility) {
 			assert.equal(
 				entry.display,
@@ -244,6 +267,7 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 			javaScriptEnabled: false,
 			viewport: { width: 390, height: 844 },
 		});
+
 		try {
 			const noJsPage = await noJsContext.newPage();
 			await noJsPage.goto(
@@ -260,11 +284,13 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 				"/building/personal-website/story#website-start-with-the-reader",
 				"A story entry moved off the main page must anchor to its old ID and link to its new location",
 			);
+
 			const panelCountNoJs = await noJsPage
 				.locator(
 					'[aria-labelledby="personal-website-updates-title"] [data-panel]',
 				)
 				.count();
+
 			assert.ok(
 				panelCountNoJs > 0 && panelCountNoJs <= 5,
 				`Without JavaScript, Personal Website must show at most five Latest work entries, got ${panelCountNoJs}`,
@@ -277,9 +303,11 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 				new URL("/building/personal-website", targetUrl).href,
 				{ waitUntil: "load" },
 			);
+
 			const nextActionNoJs = noJsHome.locator(
 				'[data-testid="journal-next-action"]',
 			);
+
 			await nextActionNoJs.waitFor({ state: "visible" });
 			assert.ok(
 				await nextActionNoJs
@@ -308,10 +336,12 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 		const storyPage = await browser.newPage({
 			viewport: { width: 390, height: 844 },
 		});
+
 		const storyResponse = await storyPage.goto(
 			new URL("/building/personal-website/story", targetUrl).href,
 			{ waitUntil: "networkidle" },
 		);
+
 		assert.ok(
 			storyResponse && storyResponse.status() < 400,
 			"Personal Website project story route did not load successfully",
@@ -330,10 +360,12 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 		const archivePage = await browser.newPage({
 			viewport: { width: 390, height: 844 },
 		});
+
 		const archiveResponse = await archivePage.goto(
 			new URL("/building/personal-website/archive", targetUrl).href,
 			{ waitUntil: "networkidle" },
 		);
+
 		assert.ok(
 			archiveResponse && archiveResponse.status() < 400,
 			"Personal Website archive route did not load successfully",
@@ -356,6 +388,7 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 					?.textContent ?? null,
 			position: document.querySelector("[data-position]")?.textContent ?? null,
 		}));
+
 		assert.equal(
 			storyOpenState.position,
 			`1 / ${storyDays.length}`,
@@ -370,6 +403,7 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 					document.querySelector(".project-intro a.site-link span[aria-hidden]")
 						?.textContent ?? null,
 			);
+
 		assert.equal(
 			await arrowOf(page),
 			"↓",
@@ -392,6 +426,7 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 		const clockPage = await browser.newPage({
 			viewport: { width: 390, height: 844 },
 		});
+
 		await clockPage.clock.install();
 		await clockPage.route("**/api/work-feed*", (route) =>
 			route.fulfill({ status: 404, body: "{}" }),
@@ -402,8 +437,10 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 		);
 		await clockPage.clock.runFor(16000); // fires the 15s poll, which sees the 404 and clears published content
 		await clockPage.waitForTimeout(50);
+
 		const afterWithdrawal = await clockPage.evaluate(() => {
 			const ids = [...document.querySelectorAll("[id]")].map((el) => el.id);
+
 			return {
 				noticeHidden: document.querySelector("[data-notice]")?.hidden ?? true,
 				noticeText:
@@ -411,6 +448,7 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 				duplicateIds: ids.length - new Set(ids).size,
 			};
 		});
+
 		assert.equal(
 			afterWithdrawal.noticeHidden,
 			false,
@@ -431,19 +469,24 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 		const desktopPage = await browser.newPage({
 			viewport: { width: 1440, height: 900 },
 		});
+
 		await desktopPage.goto(
 			new URL("/building/personal-website", targetUrl).href,
 			{ waitUntil: "networkidle" },
 		);
+
 		const desktopBounded = await desktopPage.evaluate(() => {
 			const visible = (element) => {
 				if (!element) return false;
 				const box = element.getBoundingClientRect();
+
 				return box.width > 0 && box.height > 0;
 			};
+
 			const nextAction = document.querySelector(
 				'[data-testid="journal-next-action"]',
 			);
+
 			return {
 				pickCount: document.querySelectorAll(
 					'[aria-labelledby="personal-website-updates-title"] [data-pick]',
@@ -462,6 +505,7 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 				),
 			};
 		});
+
 		assert.ok(
 			desktopBounded.pickCount > 0 && desktopBounded.pickCount <= 5,
 			`Desktop Latest work must also cap at five, got ${desktopBounded.pickCount}`,
@@ -482,6 +526,7 @@ const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
 	} finally {
 		await browser.close();
 	}
+
 	console.log("personal website journal browser checks: PASS");
 })().catch((error) => {
 	console.error(error);

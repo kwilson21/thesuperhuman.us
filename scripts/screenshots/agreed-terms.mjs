@@ -1,6 +1,7 @@
 // Exercise the real read-only controls with keyboard navigation before capturing a stage.
 export async function prepareAgreedTerms(page, stage = 0, full = false) {
 	const mutations = [];
+
 	const watch = (request) => {
 		if (
 			request.method() !== "GET" &&
@@ -8,17 +9,21 @@ export async function prepareAgreedTerms(page, stage = 0, full = false) {
 		)
 			mutations.push(request.url());
 	};
+
 	page.on("request", watch);
+
 	try {
 		const outer = page.locator("[data-agreed-terms]");
 		await outer.locator(":scope > summary").click();
 		await page.locator("[data-terms-reader][data-terms-ready=true]").waitFor();
 		const reader = page.locator("[data-terms-reader]");
+
 		for (let index = 0; index < stage; index++) {
 			const next = reader.locator("[data-terms-next]");
 			await next.focus();
 			await next.press("Enter");
 		}
+
 		const verify = async (index) => {
 			const result = await reader.evaluate(
 				(element, index) => ({
@@ -43,6 +48,7 @@ export async function prepareAgreedTerms(page, stage = 0, full = false) {
 				}),
 				index,
 			);
+
 			if (
 				result.visible.join() !== String(index) ||
 				(index > 0 && !result.focused) ||
@@ -53,7 +59,9 @@ export async function prepareAgreedTerms(page, stage = 0, full = false) {
 					`Guided terms stage/focus mismatch: ${JSON.stringify(result)}`,
 				);
 		};
+
 		await verify(stage);
+
 		if (stage > 0) {
 			const back = reader.locator("[data-terms-back]");
 			await back.focus();
@@ -64,6 +72,7 @@ export async function prepareAgreedTerms(page, stage = 0, full = false) {
 			await selected.press("Enter");
 			await verify(stage);
 		}
+
 		// A permitted long project name must not hide the focused heading under the summary.
 		const summaryName = reader.locator(".terms-summary strong");
 		const savedName = await summaryName.textContent();
@@ -88,6 +97,7 @@ export async function prepareAgreedTerms(page, stage = 0, full = false) {
 		const all = reader.locator("[data-terms-full]");
 		await all.focus();
 		await all.press("Enter");
+
 		const expanded = await reader.evaluate((element) => ({
 			shown: [...element.querySelectorAll("[data-terms-stage]")].every(
 				(stage) => !stage.hidden,
@@ -104,6 +114,7 @@ export async function prepareAgreedTerms(page, stage = 0, full = false) {
 				),
 			),
 		}));
+
 		if (
 			!expanded.shown ||
 			!expanded.open ||
@@ -113,11 +124,13 @@ export async function prepareAgreedTerms(page, stage = 0, full = false) {
 			throw new Error(
 				`Full terms review is incomplete or changes consent: ${JSON.stringify(expanded)}`,
 			);
+
 		if (!full) {
 			await all.focus();
 			await all.press("Enter");
 			await verify(stage);
 		}
+
 		if (mutations.length)
 			throw new Error(
 				`Reading terms must not submit mutations: ${mutations.join(", ")}`,

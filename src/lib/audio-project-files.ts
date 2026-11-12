@@ -17,6 +17,7 @@ export type ProjectFile = {
 
 const fileColumns =
 	"f.id,f.request_id,f.version,f.object_key,f.display_name,f.media_type,f.byte_size,f.downloadable,f.published_at,f.expires_at,f.peaks";
+
 const clientFileScope = `FROM audio_project_files f
   JOIN audio_projects p ON p.request_id=f.request_id
   JOIN owner_requests r ON r.id=p.request_id
@@ -40,6 +41,7 @@ export function privateProjectObjectKey(
 		!/^[a-z0-9-]{1,100}$/.test(fileId)
 	)
 		return null;
+
 	return `studio/projects/${requestId}/${fileId}.${mediaType === "audio/mpeg" ? "mp3" : "wav"}`;
 }
 
@@ -53,10 +55,13 @@ function fileAvailable(
 		privateProjectObjectKey(requestId, file.id, file.media_type)
 	)
 		return false;
+
 	if (file.version !== "final") return true;
 	const delivered = new Date(file.published_at);
+
 	if (Number.isNaN(delivered.valueOf())) return false;
 	delivered.setUTCFullYear(delivered.getUTCFullYear() + 1);
+
 	return now < delivered;
 }
 
@@ -68,12 +73,14 @@ export async function clientProjectFiles(
 ): Promise<ProjectFile[]> {
 	const tokenHash = await hashValue(token);
 	const at = now.toISOString();
+
 	const result = await db
 		.prepare(
 			`SELECT ${fileColumns} ${clientFileScope} ORDER BY f.published_at DESC`,
 		)
 		.bind(requestId, at, tokenHash, at, at)
 		.all<ProjectFile>();
+
 	return result.results.filter((file) => fileAvailable(file, requestId, now));
 }
 
@@ -86,10 +93,12 @@ export async function clientProjectFile(
 ): Promise<ProjectFile | null> {
 	const tokenHash = await hashValue(token);
 	const at = now.toISOString();
+
 	const file = await db
 		.prepare(`SELECT ${fileColumns} ${clientFileScope} AND f.id=?`)
 		.bind(requestId, at, tokenHash, at, at, fileId)
 		.first<ProjectFile>();
+
 	return file && fileAvailable(file, requestId, now) ? file : null;
 }
 
@@ -110,41 +119,53 @@ export async function streamClientProjectFile(
 			? `attachment; filename="project-${file.version}.${file.media_type === "audio/mpeg" ? "mp3" : "wav"}"`
 			: "inline",
 	});
+
 	const head = await bucket.head(file.object_key);
+
 	if (!head)
 		return new Response("File unavailable", {
 			status: 404,
 			headers: { "cache-control": "private, no-store" },
 		});
+
 	if (head.size !== file.byte_size)
 		return new Response("File unavailable", {
 			status: 503,
 			headers: { "cache-control": "private, no-store" },
 		});
+
 	const range =
 		request.method === "HEAD"
 			? null
 			: mediaRange(request.headers.get("range"), head.size);
+
 	if (range === "invalid") {
 		headers.set("content-range", `bytes */${head.size}`);
+
 		return new Response(null, { status: 416, headers });
 	}
+
 	headers.set("content-length", String(range?.length ?? head.size));
+
 	if (range)
 		headers.set(
 			"content-range",
 			`bytes ${range.offset}-${range.offset + range.length - 1}/${head.size}`,
 		);
+
 	if (request.method === "HEAD") return new Response(null, { headers });
+
 	const object = await bucket.get(
 		file.object_key,
 		range ? { range } : undefined,
 	);
+
 	if (!object)
 		return new Response("File unavailable", {
 			status: 404,
 			headers: { "cache-control": "private, no-store" },
 		});
+
 	return new Response(object.body, { status: range ? 206 : 200, headers });
 }
 

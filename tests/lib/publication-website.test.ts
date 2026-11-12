@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { websiteFeed } from "~/lib/publication/website";
 import { readProject } from "~/lib/publication/read";
+
 vi.mock("~/lib/publication/read", () => ({ readProject: vi.fn() }));
+
 const env = {
 	PUBLICATION_DB: {},
 	PUBLICATION_PROJECTS: "threadline, the-engineers-daily",
 } as Env;
+
 beforeEach(() => vi.clearAllMocks());
+
 describe("optional project feeds", () => {
 	it("preserves the default Threadline caller", async () => {
 		await websiteFeed(env);

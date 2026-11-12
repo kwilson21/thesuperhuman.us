@@ -22,6 +22,7 @@ function attribute(attributes: string, name: string): string | null {
 	const match = attributes.match(
 		new RegExp(`(?:^|\\s)${name}\\s*=\\s*${ATTRIBUTE_VALUE}`, "i"),
 	);
+
 	return match ? (match[1] ?? match[2] ?? match[3]) : null;
 }
 
@@ -30,6 +31,7 @@ function attributeValues(source: string, name: string): string[] {
 	const matches = source.matchAll(
 		new RegExp(`\\s${name}\\s*=\\s*${ATTRIBUTE_VALUE}`, "gi"),
 	);
+
 	return [...matches].map((match) => match[1] ?? match[2] ?? match[3]);
 }
 
@@ -48,13 +50,16 @@ describe("email signature page", () => {
 			...attributeValues(html, "href"),
 			...attributeValues(html, "src"),
 		];
+
 		expect(urls.length).toBeGreaterThan(0);
+
 		for (const url of urls) expect(url).toMatch(/^https:\/\//);
 	});
 
 	it("keeps images out of inline CSS, since mail clients drop url() references", () => {
 		const styles = attributeValues(html, "style");
 		expect(styles.length).toBeGreaterThan(0);
+
 		for (const style of styles) expect(style).not.toMatch(/url\(/i);
 	});
 
@@ -78,6 +83,7 @@ describe("email signature page", () => {
 	it("gives every image alt text and explicit dimensions", () => {
 		const images = tags("img");
 		expect(images.length).toBeGreaterThan(0);
+
 		for (const image of images) {
 			expect(attribute(image, "alt")?.trim()).toBeTruthy();
 			expect(attribute(image, "width")).toMatch(/^\d+$/);
@@ -89,7 +95,9 @@ describe("email signature page", () => {
 		const hosted = tags("img").filter((image) =>
 			attribute(image, "src")?.startsWith(SITE_ORIGIN),
 		);
+
 		expect(hosted.length).toBeGreaterThan(0);
+
 		for (const image of hosted) {
 			const path = `public/${attribute(image, "src")!.slice(SITE_ORIGIN.length)}`;
 			expect(existsSync(`${ROOT}${path}`), `${path} exists`).toBe(true);
