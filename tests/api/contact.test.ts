@@ -1,5 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { APIContext } from "astro";
 import { POST } from "~/pages/api/contact";
+import { double, fakeKv } from "../helpers/doubles";
+import { jsonBody, type JsonObject } from "../helpers/tests-api-json";
+
+type TestRuntime = APIContext["locals"]["runtime"];
+
+type ContactBody = {
+	ok: boolean;
+	errors?: Record<string, string>;
+	error?: string;
+};
 
 const validBody = {
 	name: "Jane",
@@ -21,13 +32,13 @@ function makeKv() {
 }
 
 function makeContext(
-	body: unknown,
+	body: JsonObject,
 	ip = "1.2.3.4",
 	origin = "https://thesuperhuman.us",
 ) {
 	const kv = makeKv();
 
-	return {
+	return double<APIContext>({
 		request: new Request("https://thesuperhuman.us/api/contact", {
 			method: "POST",
 			headers: {
@@ -37,39 +48,41 @@ function makeContext(
 			},
 			body: JSON.stringify(body),
 		}),
-		locals: {
-			runtime: {
-				env: {
+		locals: double<APIContext["locals"]>({
+			runtime: double<TestRuntime>({
+				env: double<TestRuntime["env"]>({
 					RESEND_API_KEY: "key",
 					TURNSTILE_SECRET_KEY: "secret",
 					CONTACT_TO_EMAIL: "kazon.wilson@thesuperhuman.us",
 					CONTACT_FROM_EMAIL: "noreply@thesuperhuman.us",
-					RATE_LIMIT: kv,
-				},
-			},
-		},
-	} as any;
+					RATE_LIMIT: fakeKv(kv),
+				}),
+			}),
+		}),
+	});
 }
 
 beforeEach(() => {
 	vi.stubGlobal(
 		"fetch",
-		vi.fn(async (url: string) => {
+		vi.fn<typeof fetch>(async (input) => {
+			const url = String(input);
+
 			if (url.includes("challenges.cloudflare.com")) {
-				return {
+				return double<Response>({
 					ok: true,
 					json: async () => ({ success: true }),
-				} as unknown as Response;
+				});
 			}
 
 			if (url.includes("resend.com")) {
-				return {
+				return double<Response>({
 					ok: true,
 					json: async () => ({ id: "em_1" }),
-				} as unknown as Response;
+				});
 			}
 
-			return { ok: false, json: async () => ({}) } as unknown as Response;
+			return double<Response>({ ok: false, json: async () => ({}) });
 		}),
 	);
 });
@@ -79,11 +92,7 @@ describe("POST /api/contact", () => {
 		const res = await POST(makeContext(validBody));
 		expect(res.status).toBe(200);
 
-		const json = (await res.json()) as {
-			ok: boolean;
-			errors?: Record<string, string>;
-			error?: string;
-		};
+		const json = await jsonBody<ContactBody>(res);
 
 		expect(json.ok).toBe(true);
 	});
@@ -92,23 +101,24 @@ describe("POST /api/contact", () => {
 		const res = await POST(makeContext({ ...validBody, email: "bad" }));
 		expect(res.status).toBe(400);
 
-		const json = (await res.json()) as {
-			ok: boolean;
-			errors?: Record<string, string>;
-			error?: string;
-		};
+		const json = await jsonBody<ContactBody>(res);
 
 		expect(json.ok).toBe(false);
 		expect(json.errors?.email).toBeDefined();
 	});
 
 	it("returns 403 on Turnstile failure", async () => {
-		(fetch as any).mockImplementation(async (url: string) => {
+		vi.mocked(fetch).mockImplementation(async (input) => {
+			const url = String(input);
+
 			if (url.includes("challenges.cloudflare.com")) {
-				return { ok: true, json: async () => ({ success: false }) };
+				return double<Response>({
+					ok: true,
+					json: async () => ({ success: false }),
+				});
 			}
 
-			return { ok: true, json: async () => ({ id: "em" }) };
+			return double<Response>({ ok: true, json: async () => ({ id: "em" }) });
 		});
 		const res = await POST(makeContext(validBody));
 		expect(res.status).toBe(403);
@@ -146,16 +156,25 @@ describe("POST /api/contact", () => {
 	});
 
 	it("returns 500 if Resend primary email fails", async () => {
-		(fetch as any).mockImplementation(async (url: string) => {
+		vi.mocked(fetch).mockImplementation(async (input) => {
+			const url = String(input);
+
 			if (url.includes("challenges.cloudflare.com")) {
-				return { ok: true, json: async () => ({ success: true }) };
+				return double<Response>({
+					ok: true,
+					json: async () => ({ success: true }),
+				});
 			}
 
 			if (url.includes("resend.com")) {
-				return { ok: false, status: 500, json: async () => ({}) };
+				return double<Response>({
+					ok: false,
+					status: 500,
+					json: async () => ({}),
+				});
 			}
 
-			return { ok: false, json: async () => ({}) };
+			return double<Response>({ ok: false, json: async () => ({}) });
 		});
 		const res = await POST(makeContext(validBody));
 		expect(res.status).toBe(500);

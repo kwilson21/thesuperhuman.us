@@ -1,4 +1,7 @@
-import { beforeEach, expect, it, vi } from "vitest";
+import type { APIContext } from "astro";
+import { beforeEach, expect, it, vi, type Mock } from "vitest";
+import { double } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/tests-api-runtime";
 import { POST } from "~/pages/api/owner/projects/[id]/invitation";
 import {
 	deliverProjectInvitation,
@@ -10,6 +13,8 @@ vi.mock("~/lib/audio-project-invitations", () => ({
 	queueProjectInvitation: vi.fn(async () => true),
 }));
 
+type InvitationContext = APIContext & { waitUntil: Mock };
+
 function context(
 	options: {
 		owner?: boolean;
@@ -17,15 +22,15 @@ function context(
 		action?: string;
 		confirmedNotSent?: boolean;
 	} = {},
-) {
+): InvitationContext {
 	const waitUntil = vi.fn();
 
-	const env = {
+	const env: Partial<TestRuntime["env"]> = {
 		AUDIO_CLIENT_PORTAL_ENABLED: options.enabled === false ? "false" : "true",
-		MUSIC_DB: {},
+		MUSIC_DB: double<D1Database>({}),
 	};
 
-	return {
+	return double<InvitationContext>({
 		params: { id: "song-1" },
 		request: new Request(
 			"https://thesuperhuman.us/api/owner/projects/song-1/invitation",
@@ -42,11 +47,15 @@ function context(
 			},
 		),
 		locals: {
-			owner: options.owner === false ? null : { email: "owner@example.com" },
-			runtime: { env, ctx: { waitUntil } },
+			owner:
+				options.owner === false ? undefined : { email: "owner@example.com" },
+			runtime: double<TestRuntime>({
+				env: double<TestRuntime["env"]>(env),
+				ctx: double<ExecutionContext>({ waitUntil }),
+			}),
 		},
 		waitUntil,
-	} as any;
+	});
 }
 
 beforeEach(() => vi.clearAllMocks());

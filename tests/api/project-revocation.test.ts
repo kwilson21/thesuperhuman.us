@@ -1,4 +1,7 @@
+import type { APIContext } from "astro";
 import { expect, it } from "vitest";
+import { double } from "../helpers/doubles";
+import { testRuntime } from "../helpers/tests-api-runtime";
 import { POST as revokeAccess } from "~/pages/api/owner/projects/[id]/access";
 import { POST as fileAction } from "~/pages/api/owner/projects/[id]/files/[fileId]";
 
@@ -12,11 +15,11 @@ it("keeps file and project revocation behind the owner and portal gates", async 
 		},
 	);
 
-	const context = {
+	const context = double<APIContext>({
 		params: { id: "song-1" },
 		request,
-		locals: { runtime: { env: { AUDIO_CLIENT_PORTAL_ENABLED: "false" } } },
-	} as any;
+		locals: { runtime: testRuntime({ AUDIO_CLIENT_PORTAL_ENABLED: "false" }) },
+	});
 
 	expect((await revokeAccess(context)).status).toBe(403);
 	context.locals.owner = { email: "owner@example.com" };

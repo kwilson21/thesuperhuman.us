@@ -1,13 +1,17 @@
+import type { APIContext } from "astro";
 import { it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { publicationMcp, projectAccess } from "~/lib/publication/mcp";
 import { publicationOAuthRoute } from "~/lib/publication/oauth";
+import { double } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/tests-api-runtime";
+import { jsonBody } from "../helpers/tests-api-json";
 
-const env = {
+const env = double<TestRuntime["env"]>({
 	PUBLICATION_OWNER_ID: "10987837",
 	PUBLICATION_PROJECTS: "threadline",
-	PUBLICATION_DB: {},
-} as Env;
+	PUBLICATION_DB: double<D1Database>({}),
+});
 
 const identity = { ownerId: "10987837", scopes: ["publication:threadline"] };
 
@@ -43,11 +47,17 @@ it("exposes tools with explicit mutating annotations and denies unauthorized pro
 		});
 
 	const response = await publicationMcp(request("tools/list"), env, identity);
-	const list = (await response.json()) as any;
+
+	const list = await jsonBody<{
+		result: {
+			tools: { name: string; annotations: { destructiveHint: boolean } }[];
+		};
+	}>(response);
+
 	expect(list.result.tools).toHaveLength(2);
 	expect(
-		list.result.tools.find((t: any) => t.name === "publish_project_update")
-			.annotations.destructiveHint,
+		list.result.tools.find((t) => t.name === "publish_project_update")
+			?.annotations.destructiveHint,
 	).toBe(true);
 
 	for (const name of ["get_project_progress"]) {
@@ -57,16 +67,25 @@ it("exposes tools with explicit mutating annotations and denies unauthorized pro
 			identity,
 		);
 
-		expect(((await reply.json()) as any).result.isError).toBe(true);
+		expect(
+			(await jsonBody<{ result: { isError: boolean } }>(reply)).result.isError,
+		).toBe(true);
 	}
 });
 
 it("fails closed before OAuth runtime loading when deployment credentials are absent", async () => {
 	const call = (url: string) =>
-		publicationOAuthRoute({
-			request: new Request(url),
-			locals: { runtime: { env, ctx: {} } },
-		} as any);
+		publicationOAuthRoute(
+			double<APIContext>({
+				request: new Request(url),
+				locals: {
+					runtime: double<TestRuntime>({
+						env,
+						ctx: double<ExecutionContext>({}),
+					}),
+				},
+			}),
+		);
 
 	expect(
 		(await call("https://thesuperhuman.us/api/publication/mcp")).status,

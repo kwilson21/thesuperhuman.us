@@ -1,4 +1,8 @@
+import type { APIContext } from "astro";
 import { beforeEach, expect, it, vi } from "vitest";
+import { double } from "../helpers/doubles";
+import type { JsonObject } from "../helpers/tests-api-json";
+import { testRuntime } from "../helpers/tests-api-runtime";
 import { POST } from "~/pages/api/studio/projects/[id]/messages";
 import { postClientReviewDecision } from "~/lib/audio-project-messages";
 
@@ -11,7 +15,7 @@ vi.mock("~/lib/audio-project-messages", async (importOriginal) => ({
 	...(await importOriginal<typeof import("~/lib/audio-project-messages")>()),
 	postClientReviewDecision: vi.fn(
 		async (
-			_db: unknown,
+			_db: D1Database,
 			_id: string,
 			_token: string,
 			_review: string,
@@ -24,8 +28,8 @@ vi.mock("~/lib/audio-project-messages", async (importOriginal) => ({
 
 const token = "00000000-0000-4000-8000-000000000000".repeat(2);
 
-function context(body: unknown) {
-	return {
+function context(body: JsonObject): APIContext {
+	return double<APIContext>({
 		params: { id: "song-1" },
 		request: new Request(
 			"https://thesuperhuman.us/api/studio/projects/song-1/messages",
@@ -40,9 +44,12 @@ function context(body: unknown) {
 			},
 		),
 		locals: {
-			runtime: { env: { AUDIO_CLIENT_PORTAL_ENABLED: "true", MUSIC_DB: {} } },
+			runtime: testRuntime({
+				AUDIO_CLIENT_PORTAL_ENABLED: "true",
+				MUSIC_DB: double<D1Database>({}),
+			}),
 		},
-	} as any;
+	});
 }
 
 beforeEach(() => vi.clearAllMocks());

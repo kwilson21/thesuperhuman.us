@@ -1,21 +1,36 @@
+import type { APIContext } from "astro";
 import { expect, it } from "vitest";
 import { ALL } from "~/pages/api/mcp-probe";
+import { double } from "../helpers/doubles";
+import { jsonBody, type JsonValue } from "../helpers/tests-api-json";
 
-async function rpc(method: string, params: unknown = {}) {
-	const response = await ALL({
-		request: new Request("https://thesuperhuman.us/api/mcp-probe", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Accept: "application/json, text/event-stream",
-			},
-			body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+/** The JSON-RPC reply fields these tests read. A reply without one fails the expect() that reads it. */
+type RpcReply = {
+	result: {
+		serverInfo: { name: string };
+		tools: { name: string; annotations: { readOnlyHint: boolean } }[];
+		isError?: boolean;
+		content: { text: string }[];
+	};
+};
+
+async function rpc(method: string, params: JsonValue = {}) {
+	const response = await ALL(
+		double<APIContext>({
+			request: new Request("https://thesuperhuman.us/api/mcp-probe", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Accept: "application/json, text/event-stream",
+				},
+				body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+			}),
 		}),
-	} as any);
+	);
 
 	expect(response.headers.get("cache-control")).toBe("no-store");
 
-	return (await response.json()) as any;
+	return jsonBody<RpcReply>(response);
 }
 
 it("negotiates MCP and lists only the read-only probe", async () => {
@@ -27,7 +42,7 @@ it("negotiates MCP and lists only the read-only probe", async () => {
 
 	expect(init.result.serverInfo.name).toBe("superhuman-connectivity-probe");
 	const list = await rpc("tools/list");
-	expect(list.result.tools.map((t: any) => t.name)).toEqual([
+	expect(list.result.tools.map((t) => t.name)).toEqual([
 		"publication_connection_probe",
 	]);
 	expect(list.result.tools[0].annotations.readOnlyHint).toBe(true);

@@ -2,7 +2,33 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { POST } from "~/pages/api/owner/requests/[id]/software";
+import type { APIContext } from "astro";
 import { getLinkedOffer, hashOfferToken } from "~/lib/software-offers";
+import { double } from "../helpers/doubles";
+import { boundQuery, sqliteD1 } from "../helpers/tests-api-d1";
+import { jsonBody, type JsonObject } from "../helpers/tests-api-json";
+
+/** The fields of an offer response that these tests read. A response without one fails the expect() that reads it. */
+type OfferResponse = {
+	version: number;
+	updatedAt: string;
+	link: string;
+	linkCreatedAt: string;
+	uncertain: boolean;
+	emailSent: boolean;
+};
+
+type TestRuntime = APIContext["locals"]["runtime"];
+
+/** A runtime with the env bindings the test supplies. */
+function testRuntime(members: Partial<TestRuntime["env"]>): TestRuntime {
+	return double<TestRuntime>({ env: double<TestRuntime["env"]>(members) });
+}
+
+/** The token at the end of an offer link. split() always returns at least one segment. */
+function linkToken(link: string): string {
+	return link.split("/").at(-1) ?? "";
+}
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database;
@@ -33,35 +59,7 @@ beforeEach(() => {
 		`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at) VALUES ('software','software','Alex Example','alex@example.com','Tool','new','now','now')`,
 	);
 
-	const statement = (query: string, args: unknown[] = []) => ({
-		query,
-		args,
-		bind: (...values: unknown[]) => statement(query, values),
-		first: async () => sql.prepare(query).get(...args) ?? null,
-		all: async () => ({ results: sql.prepare(query).all(...args) }),
-	});
-
-	db = {
-		prepare: (query: string) => statement(query),
-		batch: async (items: ReturnType<typeof statement>[]) => {
-			sql.exec("BEGIN");
-
-			try {
-				const result = items.map((item) => ({
-					results: /RETURNING|^SELECT/i.test(item.query)
-						? sql.prepare(item.query).all(...item.args)
-						: (sql.prepare(item.query).run(...item.args), []),
-				}));
-
-				sql.exec("COMMIT");
-
-				return result;
-			} catch (error) {
-				sql.exec("ROLLBACK");
-				throw error;
-			}
-		},
-	} as unknown as D1Database;
+	db = sqliteD1(sql, /RETURNING|^SELECT/i);
 	vi.stubGlobal(
 		"fetch",
 		vi.fn(async () => new Response("{}", { status: 200 })),
@@ -73,43 +71,43 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-async function call(body: unknown, owner = true, origin?: string) {
-	return POST({
-		params: { id: "software" },
-		request: new Request(
-			"https://thesuperhuman.us/api/owner/requests/software/software",
-			{
-				method: "POST",
-				headers: {
-					"content-type": "application/json",
-					origin: "https://thesuperhuman.us",
+async function call(body: JsonObject, owner = true, origin?: string) {
+	return POST(
+		double<APIContext>({
+			params: { id: "software" },
+			request: new Request(
+				"https://thesuperhuman.us/api/owner/requests/software/software",
+				{
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						origin: "https://thesuperhuman.us",
+					},
+					body: JSON.stringify(body),
 				},
-				body: JSON.stringify(body),
-			},
-		),
-		locals: {
-			owner: owner ? { email: "owner@example.com" } : undefined,
-			runtime: {
-				env: {
+			),
+			locals: {
+				owner: owner ? { email: "owner@example.com" } : undefined,
+				runtime: testRuntime({
 					MUSIC_DB: db,
 					SITE_ORIGIN: origin,
 					RESEND_API_KEY: "fake",
 					CONTACT_FROM_EMAIL: "sender@example.com",
 					OWNER_EMAIL: "owner@example.com",
-				},
+				}),
 			},
-		},
-	} as any);
+		}),
+	);
 }
 
 async function draft(expectedUpdatedAt: string | null = null) {
 	const response = await call({ action: "draft", terms, expectedUpdatedAt });
 	expect(response.status).toBe(200);
 
-	return response.json() as Promise<any>;
+	return jsonBody<OfferResponse>(response);
 }
 
-async function send(value: any) {
+async function send(value: Pick<OfferResponse, "version" | "updatedAt">) {
 	const response = await call({
 		action: "send",
 		version: value.version,
@@ -118,7 +116,7 @@ async function send(value: any) {
 
 	expect(response.status).toBe(200);
 
-	return response.json() as Promise<any>;
+	return jsonBody<OfferResponse>(response);
 }
 
 it.each(["fit", "draft", "send", "revoke", "question", "decline"])(
@@ -190,7 +188,7 @@ it("updates one draft, never emails on save, and refuses stale writes and sends"
 
 it("sends a saved version, supersedes it with the next draft and exposes only the latest sent version", async () => {
 	const first = await send(await draft());
-	const token = first.link.split("/").pop();
+	const token = linkToken(first.link);
 	expect(await getLinkedOffer(db, token)).toMatchObject({
 		version: 1,
 		status: "sent",
@@ -214,7 +212,7 @@ it("sends a saved version, supersedes it with the next draft and exposes only th
 		{ version: 1, status: "superseded" },
 		{ version: 2, status: "sent" },
 	]);
-	expect(await getLinkedOffer(db, second.link.split("/").pop())).toMatchObject({
+	expect(await getLinkedOffer(db, linkToken(second.link))).toMatchObject({
 		version: 2,
 	});
 	expect(await getLinkedOffer(db, token)).toBeNull();
@@ -250,7 +248,7 @@ it("sends a saved version, supersedes it with the next draft and exposes only th
 
 it("revokes and reissues access without mutating sent terms", async () => {
 	const sent = await send(await draft());
-	const token = sent.link.split("/").pop();
+	const token = linkToken(sent.link);
 	sql.exec("UPDATE software_offer_links SET created_at='2020-01-01T00:00:00Z'");
 	expect(
 		(
@@ -274,9 +272,9 @@ it("revokes and reissues access without mutating sent terms", async () => {
 	expect(
 		sql.prepare("SELECT * FROM software_offers WHERE status='sent'").get(),
 	).toEqual(row);
-	expect(
-		await getLinkedOffer(db, reissued.link.split("/").pop()),
-	).toMatchObject({ version: 1 });
+	expect(await getLinkedOffer(db, linkToken(reissued.link))).toMatchObject({
+		version: 1,
+	});
 	expect(
 		(
 			await call({
@@ -353,7 +351,7 @@ it("keeps a sent offer and accessible link after email failure", async () => {
 	const result = await send(await draft());
 	expect(result.emailSent).toBe(false);
 	expect(result.uncertain).toBe(true);
-	expect(await getLinkedOffer(db, result.link.split("/").pop())).toMatchObject({
+	expect(await getLinkedOffer(db, linkToken(result.link))).toMatchObject({
 		status: "sent",
 	});
 });
@@ -443,7 +441,7 @@ it("uses the isolated site origin for the client link and email", async () => {
 		"https://preview.example.workers.dev",
 	);
 
-	const result = (await response.json()) as { link: string };
+	const result = await jsonBody<OfferResponse>(response);
 	expect(result.link).toMatch(
 		/^https:\/\/preview.example.workers.dev\/offer\//,
 	);
@@ -454,7 +452,7 @@ it("uses the isolated site origin for the client link and email", async () => {
 
 it("decline withdraws live and draft offers and revokes access, and ordinary resolution retires access", async () => {
 	const sent = await send(await draft()),
-		token = sent.link.split("/").pop();
+		token = linkToken(sent.link);
 
 	await draft();
 	sql.exec("UPDATE owner_requests SET status='resolved'");
@@ -572,17 +570,19 @@ it.each(["resolve", "decline"])(
 		);
 
 		const change = (action: string) =>
-			changeRequest({
-				params: { id: "software" },
-				request: new Request(
-					"https://example.com/api/owner/requests/software",
-					{ method: "POST", body: JSON.stringify({ action }) },
-				),
-				locals: {
-					owner: { email: "owner@example.com" },
-					runtime: { env: { MUSIC_DB: db } },
-				},
-			} as any);
+			changeRequest(
+				double<APIContext>({
+					params: { id: "software" },
+					request: new Request(
+						"https://example.com/api/owner/requests/software",
+						{ method: "POST", body: JSON.stringify({ action }) },
+					),
+					locals: {
+						owner: { email: "owner@example.com" },
+						runtime: testRuntime({ MUSIC_DB: db }),
+					},
+				}),
+			);
 
 		expect(
 			(
@@ -635,7 +635,7 @@ it("advances fit timestamps, rejects a stale tab and changes the retention snaps
 		expectedRequestUpdatedAt: "now",
 	});
 
-	const result = (await response.json()) as any;
+	const result = await jsonBody<OfferResponse>(response);
 	expect(response.status).toBe(200);
 	expect(
 		sql.prepare("SELECT updated_at FROM owner_requests").get().updated_at,
@@ -668,7 +668,7 @@ it("returns the current draft timestamp for a recoverable save conflict", async 
 	});
 
 	expect(conflict.status).toBe(409);
-	const result = (await conflict.json()) as any;
+	const result = await jsonBody<OfferResponse>(conflict);
 	expect(result.updatedAt).toBe(saved.updatedAt);
 	expect(
 		(
@@ -689,11 +689,11 @@ it("returns the current draft timestamp for a recoverable save conflict", async 
 it("returns a newer draft timestamp when the guarded save batch races", async () => {
 	const saved = await draft();
 	const batch = db.batch.bind(db);
-	db.batch = (async (items: D1PreparedStatement[]) => {
+	db.batch = async (items: D1PreparedStatement[]) => {
 		sql.exec("UPDATE software_offers SET updated_at='concurrent'");
 
 		return batch(items);
-	}) as D1Database["batch"];
+	};
 
 	const response = await call({
 		action: "draft",
@@ -745,27 +745,29 @@ it("rejects generic actions from a tab predating the fit save", async () => {
 		expectedRequestUpdatedAt: "now",
 	});
 
-	const { updatedAt } = (await fit.json()) as any;
+	const { updatedAt } = await jsonBody<OfferResponse>(fit);
 
 	const action = (expectedUpdatedAt: string) =>
-		requestPost({
-			params: { id: "software" },
-			request: new Request(
-				"https://thesuperhuman.us/api/owner/requests/software",
-				{
-					method: "POST",
-					body: JSON.stringify({
-						action: "note",
-						note: "New note",
-						expectedUpdatedAt,
-					}),
+		requestPost(
+			double<APIContext>({
+				params: { id: "software" },
+				request: new Request(
+					"https://thesuperhuman.us/api/owner/requests/software",
+					{
+						method: "POST",
+						body: JSON.stringify({
+							action: "note",
+							note: "New note",
+							expectedUpdatedAt,
+						}),
+					},
+				),
+				locals: {
+					owner: { email: "owner@example.com" },
+					runtime: testRuntime({ MUSIC_DB: db }),
 				},
-			),
-			locals: {
-				owner: { email: "owner@example.com" },
-				runtime: { env: { MUSIC_DB: db } },
-			},
-		} as any);
+			}),
+		);
 
 	expect((await action("now")).status).toBe(409);
 	expect((await action(updatedAt)).status).toBe(200);
@@ -776,13 +778,14 @@ it("decline batch rolls back when a project starts after its pre-check", async (
 	sql.exec("UPDATE software_offer_links SET created_at='2020-01-01T00:00:00Z'");
 	vi.mocked(fetch).mockClear();
 	const batch = db.batch.bind(db);
-	db.batch = (async (items: D1PreparedStatement[]) => {
+	db.batch = async (items: D1PreparedStatement[]) => {
 		sql.exec(
 			"INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) SELECT 'software',id,terms_json,'standard','now','now','now','owner','now','now' FROM software_offers WHERE status='sent'",
 		);
 
 		return batch(items);
-	}) as D1Database["batch"];
+	};
+
 	const before = sql.prepare("SELECT * FROM owner_requests").all();
 	const response = await call({ action: "decline", text: "Thanks." });
 	expect(response.status).toBe(409);
@@ -813,13 +816,14 @@ it("draft batch rolls back when a project starts after its pre-check", async () 
 	sql.exec("UPDATE software_offer_links SET created_at='2020-01-01T00:00:00Z'");
 	vi.mocked(fetch).mockClear();
 	const batch = db.batch.bind(db);
-	db.batch = (async (items: D1PreparedStatement[]) => {
+	db.batch = async (items: D1PreparedStatement[]) => {
 		sql.exec(
 			"INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) SELECT 'software',id,terms_json,'standard','now','now','now','owner','now','now' FROM software_offers WHERE status='sent'",
 		);
 
 		return batch(items);
-	}) as D1Database["batch"];
+	};
+
 	const before = sql.prepare("SELECT * FROM owner_requests").all();
 
 	const response = await call({
@@ -854,17 +858,19 @@ it("draft batch rolls back when a project starts after its pre-check", async () 
 async function withdraw() {
 	const { POST: requestPost } = await import("~/pages/api/owner/requests/[id]");
 
-	return requestPost({
-		params: { id: "software" },
-		request: new Request("https://example.com/api/owner/requests/software", {
-			method: "POST",
-			body: JSON.stringify({ action: "withdraw" }),
+	return requestPost(
+		double<APIContext>({
+			params: { id: "software" },
+			request: new Request("https://example.com/api/owner/requests/software", {
+				method: "POST",
+				body: JSON.stringify({ action: "withdraw" }),
+			}),
+			locals: {
+				owner: { email: "owner@example.com" },
+				runtime: testRuntime({ MUSIC_DB: db }),
+			},
 		}),
-		locals: {
-			owner: { email: "owner@example.com" },
-			runtime: { env: { MUSIC_DB: db } },
-		},
-	} as any);
+	);
 }
 
 it.each(["revoke", "decline", "withdraw"])(
@@ -890,7 +896,7 @@ it.each(["revoke", "decline", "withdraw"])(
 			ok: false,
 			message: "An offer is still being sent. Try again in a moment.",
 		});
-		expect(await getLinkedOffer(db, sent.link.split("/").pop())).toMatchObject({
+		expect(await getLinkedOffer(db, linkToken(sent.link))).toMatchObject({
 			status: "sent",
 		});
 		expect(fetch).not.toHaveBeenCalled();
@@ -898,7 +904,7 @@ it.each(["revoke", "decline", "withdraw"])(
 			.prepare("UPDATE software_offer_links SET created_at=?")
 			.run(new Date(Date.now() - 20_001).toISOString());
 		expect((await close()).status).toBe(200);
-		expect(await getLinkedOffer(db, sent.link.split("/").pop())).toBeNull();
+		expect(await getLinkedOffer(db, linkToken(sent.link))).toBeNull();
 	},
 );
 
@@ -1069,7 +1075,7 @@ it("rejects an actual send batch that read the draft before decline reserved it"
 	db.batch = async (items) => {
 		if (
 			items.some((item) =>
-				(item as any).query.includes("software_offers WHERE id=? AND status=?"),
+				boundQuery(item)?.includes("software_offers WHERE id=? AND status=?"),
 			)
 		) {
 			read();
@@ -1212,9 +1218,9 @@ it("leaves a replacement link live when a stale tab revokes the earlier link", a
 		message:
 			"The client link changed since this page loaded. Reload to see the current link.",
 	});
-	expect(
-		await getLinkedOffer(db, replacement.link.split("/").pop()),
-	).toMatchObject({ status: "sent" });
+	expect(await getLinkedOffer(db, linkToken(replacement.link))).toMatchObject({
+		status: "sent",
+	});
 	expect(
 		sql
 			.prepare(
@@ -1241,7 +1247,7 @@ it("allows only one overlapping decline to email and record its resolution", asy
 	db.batch = async (items) => {
 		if (
 			items.some((item) =>
-				(item as any).query.includes(
+				boundQuery(item)?.includes(
 					"UPDATE software_offers SET status='withdrawn'",
 				),
 			)
@@ -1306,7 +1312,7 @@ it("reissues a pre-signing offer in its original external mode", async () => {
 		sql.prepare("SELECT msa_template_id FROM software_offers").get()
 			.msa_template_id,
 	).toBeNull();
-	expect(JSON.stringify((fetch as any).mock.calls)).toContain(
+	expect(JSON.stringify(vi.mocked(fetch).mock.calls)).toContain(
 		"sign outside the website",
 	);
 });

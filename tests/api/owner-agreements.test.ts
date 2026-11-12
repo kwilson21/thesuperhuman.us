@@ -4,6 +4,14 @@ import { beforeEach, expect, it } from "vitest";
 import type { APIContext } from "astro";
 import { POST } from "~/pages/api/owner/agreements";
 import { templateFields } from "~/lib/agreement-templates";
+import { double } from "../helpers/doubles";
+import { jsonBody } from "../helpers/tests-api-json";
+import { sqliteD1 } from "../helpers/tests-api-d1";
+
+type TestRuntime = APIContext["locals"]["runtime"];
+
+/** The scalar JSON fields a test sends to the agreements route. */
+type AgreementBody = Record<string, string | number | boolean | undefined>;
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database;
@@ -12,37 +20,7 @@ beforeEach(() => {
 	sql = new DatabaseSync(":memory:");
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(readFileSync("db/music.sql", "utf8"));
-
-	const statement = (query: string, args: unknown[] = []) => ({
-		query,
-		args,
-		bind: (...values: unknown[]) => statement(query, values),
-		first: async () => sql.prepare(query).get(...args) ?? null,
-		all: async () => ({ results: sql.prepare(query).all(...args) }),
-		run: async () => ({ meta: sql.prepare(query).run(...args) }),
-	});
-
-	db = {
-		prepare: (query: string) => statement(query),
-		batch: async (items: ReturnType<typeof statement>[]) => {
-			sql.exec("BEGIN");
-
-			try {
-				const result = items.map((item) => ({
-					results: /^SELECT|RETURNING/.test(item.query)
-						? sql.prepare(item.query).all(...item.args)
-						: (sql.prepare(item.query).run(...item.args), []),
-				}));
-
-				sql.exec("COMMIT");
-
-				return result;
-			} catch (error) {
-				sql.exec("ROLLBACK");
-				throw error;
-			}
-		},
-	} as unknown as D1Database;
+	db = sqliteD1(sql, /^SELECT|RETURNING/);
 });
 
 const synthetic = (kind: "msa" | "sow") =>
@@ -62,21 +40,25 @@ const synthetic = (kind: "msa" | "sow") =>
 const revised = (kind: "msa" | "sow") =>
 	synthetic(kind).replace("\n", " revised\n");
 
-function post(body: unknown) {
-	return POST({
-		request: new Request("https://thesuperhuman.us/api/owner/agreements", {
-			method: "POST",
-			headers: {
-				"content-type": "application/json",
-				origin: "https://thesuperhuman.us",
+function post(body: AgreementBody) {
+	return POST(
+		double<APIContext>({
+			request: new Request("https://thesuperhuman.us/api/owner/agreements", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: "https://thesuperhuman.us",
+				},
+				body: JSON.stringify(body),
+			}),
+			locals: {
+				owner: { email: "owner@example.com" },
+				runtime: double<TestRuntime>({
+					env: double<TestRuntime["env"]>({ MUSIC_DB: db }),
+				}),
 			},
-			body: JSON.stringify(body),
 		}),
-		locals: {
-			owner: { email: "owner@example.com" },
-			runtime: { env: { MUSIC_DB: db } },
-		},
-	} as unknown as APIContext);
+	);
 }
 
 const publish = (
@@ -84,7 +66,7 @@ const publish = (
 	text: string,
 	expectedCurrentVersion: number,
 	versionLabel?: string,
-	extra: Record<string, unknown> = {},
+	extra: AgreementBody = {},
 ) =>
 	post({
 		action: "publish",
@@ -110,14 +92,14 @@ it("previews without a comparison before the first publication and with a line d
 	expect((await publish("msa", synthetic("msa"), 0, "v1")).status).toBe(200);
 	const lines = synthetic("msa").split("\n");
 
-	const changed = (await (
+	const changed = await jsonBody<{ compare: unknown }>(
 		await post({
 			action: "preview",
 			kind: "msa",
 			text: revised("msa"),
 			expectedCurrentVersion: 1,
-		})
-	).json()) as { compare: unknown };
+		}),
+	);
 
 	expect(changed.compare).toEqual({
 		label: "v1",
@@ -130,42 +112,42 @@ it("previews without a comparison before the first publication and with a line d
 });
 
 it("previews the submitted version label where the template names the source revision", async () => {
-	const labelled = (await (
+	const labelled = await jsonBody<{ text: string }>(
 		await post({
 			action: "preview",
 			kind: "msa",
 			text: synthetic("msa"),
 			expectedCurrentVersion: 0,
 			versionLabel: "v2026-12-01",
-		})
-	).json()) as { text: string };
+		}),
+	);
 
 	expect(labelled.text).toContain("msa.source_revision: v2026-12-01");
 
-	const blank = (await (
+	const blank = await jsonBody<{ text: string }>(
 		await post({
 			action: "preview",
 			kind: "msa",
 			text: synthetic("msa"),
 			expectedCurrentVersion: 0,
 			versionLabel: "",
-		})
-	).json()) as { text: string };
+		}),
+	);
 
 	expect(blank.text).toContain("msa.source_revision: Sample version label");
 });
 
 it("falls back to the sample label when a typed preview label would not publish", async () => {
 	for (const versionLabel of ["[draft]", "v{{x}}"]) {
-		const preview = (await (
+		const preview = await jsonBody<{ ok: boolean; text: string }>(
 			await post({
 				action: "preview",
 				kind: "msa",
 				text: synthetic("msa"),
 				expectedCurrentVersion: 0,
 				versionLabel,
-			})
-		).json()) as { ok: boolean; text: string };
+			}),
+		);
 
 		expect(preview).toMatchObject({
 			ok: true,

@@ -1,11 +1,17 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
+import type { APIContext } from "astro";
 import { beforeEach, expect, it } from "vitest";
+import { double } from "../helpers/doubles";
+import { sqliteD1 } from "../helpers/tests-api-d1";
+import type { JsonObject } from "../helpers/tests-api-json";
 import { POST as clientPost } from "~/pages/api/studio/projects/[id]/messages";
 import { POST as ownerPost } from "~/pages/api/owner/projects/[id]/messages";
 import { completeClientCode, issueClientCode } from "~/lib/audio-client-access";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
+type TestRuntime = APIContext["locals"]["runtime"];
 
 const baseline = readFileSync(
 	new URL("../../db/music.sql", import.meta.url),
@@ -13,6 +19,7 @@ const baseline = readFileSync(
 );
 
 const secret = "studio-code-key-for-tests-32-characters";
+
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database, token: string;
 
 beforeEach(async () => {
@@ -24,46 +31,14 @@ beforeEach(async () => {
     VALUES ('song-1','service','artist@example.com','A song','new',?,?)`)
 		.run(new Date().toISOString(), new Date().toISOString());
 
-	const statement = (query: string, args: unknown[] = []) => ({
-		query,
-		args,
-		bind: (...values: unknown[]) => statement(query, values),
-		run: async () => ({
-			results: [],
-			meta: { changes: sql.prepare(query).run(...args).changes },
-		}),
-		all: async () => ({ results: sql.prepare(query).all(...args) }),
-		first: async () => sql.prepare(query).get(...args) ?? null,
-	});
-
-	db = {
-		prepare: (query: string) => statement(query),
-		batch: async (items: ReturnType<typeof statement>[]) => {
-			sql.exec("BEGIN");
-
-			try {
-				const results = items.map((item) => ({
-					results: /\bRETURNING\b/i.test(item.query)
-						? sql.prepare(item.query).all(...item.args)
-						: (sql.prepare(item.query).run(...item.args), []),
-				}));
-
-				sql.exec("COMMIT");
-
-				return results;
-			} catch (error) {
-				sql.exec("ROLLBACK");
-				throw error;
-			}
-		},
-	} as unknown as D1Database;
+	db = sqliteD1(sql);
 	const code = (await issueClientCode(db, "artist@example.com", secret))!;
 	token = (await completeClientCode(db, "artist@example.com", code, secret))!;
 });
 
 function context(
 	actor: "owner" | "client",
-	body: unknown,
+	body: JsonObject,
 	options: {
 		enabled?: boolean;
 		owner?: boolean;
@@ -71,12 +46,12 @@ function context(
 		id?: string;
 		cookie?: boolean;
 	} = {},
-) {
+): APIContext {
 	const owner = options.owner ?? actor === "owner";
 	const path = actor === "owner" ? "owner" : "studio";
 	const id = options.id ?? "song-1";
 
-	return {
+	return double<APIContext>({
 		params: { id },
 		request: new Request(
 			`https://thesuperhuman.us/api/${path}/projects/${id}/messages`,
@@ -92,15 +67,15 @@ function context(
 		),
 		locals: {
 			owner: owner ? { email: "owner@example.com" } : undefined,
-			runtime: {
-				env: {
+			runtime: double<TestRuntime>({
+				env: double<TestRuntime["env"]>({
 					AUDIO_CLIENT_PORTAL_ENABLED:
 						options.enabled === false ? "false" : "true",
 					MUSIC_DB: db,
-				},
-			},
+				}),
+			}),
 		},
-	} as any;
+	});
 }
 
 it("requires the right actor and an active portal before storing messages", async () => {

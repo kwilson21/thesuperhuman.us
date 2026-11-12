@@ -1,4 +1,8 @@
+import type { APIContext } from "astro";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { double } from "../helpers/doubles";
+import type { JsonObject } from "../helpers/tests-api-json";
+import type { TestRuntime } from "../helpers/tests-api-runtime";
 import { POST as requestCode } from "~/pages/api/studio/code";
 import { POST as completeCode } from "~/pages/api/studio/session";
 import { POST as signOut } from "~/pages/api/studio/sign-out";
@@ -26,10 +30,16 @@ vi.mock("~/lib/audio-resend", () => ({
 
 const email = "Artist@Example.com";
 
-function context(path: string, body: unknown, enabled = true) {
+type StudioContext = APIContext & { pending: Promise<unknown>[] };
+
+function context(
+	path: string,
+	body: JsonObject,
+	enabled = true,
+): StudioContext {
 	const pending: Promise<unknown>[] = [];
 
-	return {
+	return double<StudioContext>({
 		request: new Request(`https://thesuperhuman.us${path}`, {
 			method: "POST",
 			headers: {
@@ -39,24 +49,24 @@ function context(path: string, body: unknown, enabled = true) {
 			body: JSON.stringify(body),
 		}),
 		locals: {
-			runtime: {
-				ctx: {
+			runtime: double<TestRuntime>({
+				ctx: double<ExecutionContext>({
 					waitUntil: vi.fn((work: Promise<unknown>) => {
 						pending.push(work);
 					}),
-				},
-				env: {
+				}),
+				env: double<TestRuntime["env"]>({
 					AUDIO_CLIENT_PORTAL_ENABLED: enabled ? "true" : "false",
 					AUDIO_CLIENT_CODE_KEY: "a".repeat(32),
-					MUSIC_DB: {},
+					MUSIC_DB: double<D1Database>({}),
 					TURNSTILE_SECRET_KEY: "test",
 					RESEND_API_KEY: "test",
 					CONTACT_FROM_EMAIL: "noreply@example.com",
-				},
-			},
+				}),
+			}),
 		},
 		pending,
-	} as any;
+	});
 }
 
 beforeEach(() => {

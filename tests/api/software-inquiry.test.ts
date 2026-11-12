@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
+import type { APIContext } from "astro";
 import { beforeEach, expect, it, vi } from "vitest";
 import { POST } from "~/pages/api/software-inquiry";
 import { softwareBriefEmail } from "~/lib/client-emails";
@@ -17,9 +18,15 @@ import {
 } from "~/lib/software-inquiry";
 import { RequestDetailsTooLargeError } from "~/lib/owner-requests";
 import { expectSource } from "../helpers/source-text";
+import type { OwnerRequest } from "~/lib/owner-model";
+import { double, fakeD1, fakeKv } from "../helpers/doubles";
+import { boundQuery, sqliteD1 } from "../helpers/tests-api-d1";
+import { jsonBody } from "../helpers/tests-api-json";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 const id = "00000000-0000-4000-8000-000000000001";
+
+type TestRuntime = APIContext["locals"]["runtime"];
 
 const base = {
 	path: "workflow",
@@ -42,86 +49,8 @@ const base = {
 let sql: InstanceType<typeof DatabaseSync>;
 let db: D1Database;
 
-let kv: {
-	get: ReturnType<typeof vi.fn>;
-	put: ReturnType<typeof vi.fn>;
-	delete: ReturnType<typeof vi.fn>;
-};
-
-let stored: Map<string, string>;
-
-function context(
-	input: unknown = base,
-	options: {
-		origin?: string;
-		type?: string;
-		db?: D1Database | null;
-		token?: string | null;
-		rate?: typeof kv | null;
-	} = {},
-) {
+function makeKv() {
 	return {
-		request: new Request("https://thesuperhuman.us/api/software-inquiry", {
-			method: "POST",
-			headers: {
-				origin: options.origin ?? "https://thesuperhuman.us",
-				"content-type": options.type ?? "application/json",
-			},
-			body: typeof input === "string" ? input : JSON.stringify(input),
-		}),
-		locals: {
-			runtime: {
-				env: {
-					MUSIC_DB: options.db === undefined ? db : options.db,
-					TURNSTILE_SECRET_KEY:
-						options.token === undefined ? "test" : options.token,
-					RATE_LIMIT: options.rate === undefined ? kv : options.rate,
-					RESEND_API_KEY: "test",
-					CONTACT_FROM_EMAIL: "from@example.com",
-					CONTACT_TO_EMAIL: "inbox@example.com",
-				},
-			},
-		},
-	} as any;
-}
-
-beforeEach(() => {
-	sql = new DatabaseSync(":memory:");
-	sql.exec(
-		readFileSync(new URL("../../db/music.sql", import.meta.url), "utf8"),
-	);
-
-	const statement = (query: string, args: unknown[] = []) => ({
-		query,
-		args,
-		bind: (...values: unknown[]) => statement(query, values),
-		first: async () => sql.prepare(query).get(...args) ?? null,
-		all: async () => ({ results: sql.prepare(query).all(...args) }),
-	});
-
-	db = {
-		prepare: (query: string) => statement(query),
-		batch: async (items: ReturnType<typeof statement>[]) => {
-			sql.exec("BEGIN");
-
-			try {
-				const result = items.map((item) => ({
-					results: /RETURNING/i.test(item.query)
-						? sql.prepare(item.query).all(...item.args)
-						: (sql.prepare(item.query).run(...item.args), []),
-				}));
-
-				sql.exec("COMMIT");
-
-				return result;
-			} catch (error) {
-				sql.exec("ROLLBACK");
-				throw error;
-			}
-		},
-	} as unknown as D1Database;
-	stored = new Map();
-	kv = {
 		get: vi.fn(async (key: string) => stored.get(key) ?? null),
 		put: vi.fn(async (key: string, value: string) => {
 			stored.set(key, value);
@@ -130,6 +59,64 @@ beforeEach(() => {
 			stored.delete(key);
 		}),
 	};
+}
+
+let kv: ReturnType<typeof makeKv>;
+
+let stored: Map<string, string>;
+
+function isText(input: Record<string, string> | string): input is string {
+	return typeof input === "string";
+}
+
+// A binding passed as null is absent. The routes test each binding with !, so null and undefined are the same to them.
+function context(
+	input: Record<string, string> | string = base,
+	options: {
+		origin?: string;
+		type?: string;
+		db?: D1Database | null;
+		token?: string | null;
+		rate?: KVNamespace | null;
+	} = {},
+): APIContext {
+	return double<APIContext>({
+		request: new Request("https://thesuperhuman.us/api/software-inquiry", {
+			method: "POST",
+			headers: {
+				origin: options.origin ?? "https://thesuperhuman.us",
+				"content-type": options.type ?? "application/json",
+			},
+			body: isText(input) ? input : JSON.stringify(input),
+		}),
+		locals: double<APIContext["locals"]>({
+			runtime: double<TestRuntime>({
+				env: double<TestRuntime["env"]>({
+					MUSIC_DB: options.db === undefined ? db : (options.db ?? undefined),
+					TURNSTILE_SECRET_KEY:
+						options.token === undefined ? "test" : (options.token ?? undefined),
+					RATE_LIMIT:
+						options.rate === undefined
+							? fakeKv(kv)
+							: (options.rate ?? undefined),
+					RESEND_API_KEY: "test",
+					CONTACT_FROM_EMAIL: "from@example.com",
+					CONTACT_TO_EMAIL: "inbox@example.com",
+				}),
+			}),
+		}),
+	});
+}
+
+beforeEach(() => {
+	sql = new DatabaseSync(":memory:");
+	sql.exec(
+		readFileSync(new URL("../../db/music.sql", import.meta.url), "utf8"),
+	);
+
+	db = sqliteD1(sql);
+	stored = new Map();
+	kv = makeKv();
 	vi.stubGlobal(
 		"fetch",
 		vi.fn(async (url: string) =>
@@ -143,7 +130,7 @@ beforeEach(() => {
 it("stores one verbatim software brief, audit, and no audio project, then returns a saved receipt", async () => {
 	const response = await POST(context());
 	expect(response.status).toBe(200);
-	expect(((await response.json()) as { brief: unknown }).brief).toMatchObject({
+	expect((await jsonBody<{ brief: unknown }>(response)).brief).toMatchObject({
 		today: "First line\nSecond line",
 		email: "alex@example.com",
 	});
@@ -161,13 +148,11 @@ it("stores one verbatim software brief, audit, and no audio project, then return
 		submission_id: id,
 	});
 
-	const details = JSON.parse(
-		(
-			sql.prepare("SELECT details_json FROM owner_requests").get() as {
-				details_json: string;
-			}
-		).details_json,
-	);
+	const savedDetails: { details_json: string } = sql
+		.prepare("SELECT details_json FROM owner_requests")
+		.get();
+
+	const details = JSON.parse(savedDetails.details_json);
 
 	expect(details).toMatchObject({
 		today: "First line\nSecond line",
@@ -195,7 +180,7 @@ it("stores and returns only the selected idea questions, including the optional 
 	const response = await POST(context(idea));
 	expect(response.status).toBe(200);
 
-	const brief = ((await response.json()) as { brief: Record<string, string> })
+	const brief = (await jsonBody<{ brief: Record<string, string> }>(response))
 		.brief;
 
 	expect(Object.keys(brief).slice(0, 5)).toEqual([
@@ -210,7 +195,7 @@ it("stores and returns only the selected idea questions, including the optional 
 
 	const saved = sql
 		.prepare("SELECT service_id,summary,details_json FROM owner_requests")
-		.get() as { service_id: string; summary: string; details_json: string };
+		.get();
 
 	expect(saved.service_id).toBe("idea");
 	expect(saved.summary).toBe("Volunteers need a simpler way to find shifts.");
@@ -220,7 +205,7 @@ it("stores and returns only the selected idea questions, including the optional 
 		.mocked(fetch)
 		.mock.calls.find(([url]) => String(url).includes("api.resend.com"))!;
 
-	const body = JSON.parse(notice[1]?.body as string);
+	const body = JSON.parse(String(notice[1]?.body));
 	expect(body.text).toContain(
 		"What’s the idea?\nVolunteers need a simpler way to find shifts.",
 	);
@@ -319,12 +304,9 @@ it("orders workflow questions in the saved brief", () => {
 
 	if (parsed.ok) {
 		const request = softwareRequest(parsed.value);
-		expect(Object.keys(softwareBrief(request as any)).slice(0, 4)).toEqual([
-			"path",
-			"today",
-			"audience",
-			"firstResult",
-		]);
+		expect(
+			Object.keys(softwareBrief(double<OwnerRequest>(request))).slice(0, 4),
+		).toEqual(["path", "today", "audience", "firstResult"]);
 	}
 });
 
@@ -332,13 +314,13 @@ it("deduplicates after rate limit, rejects another email without leaking the bri
 	const first = await POST(context({ ...base, email: "alex@example.com" }));
 	expect(first.status).toBe(200);
 
-	const firstBrief = ((await first.json()) as { brief: Record<string, string> })
+	const firstBrief = (await jsonBody<{ brief: Record<string, string> }>(first))
 		.brief;
 
 	const duplicate = await POST(context());
 	expect(duplicate.status).toBe(200);
 	expect(
-		((await duplicate.json()) as { brief: Record<string, string> }).brief,
+		(await jsonBody<{ brief: Record<string, string> }>(duplicate)).brief,
 	).toEqual(firstBrief);
 	const conflict = await POST(context({ ...base, email: "other@example.com" }));
 	expect(conflict.status).toBe(409);
@@ -364,7 +346,7 @@ it("deduplicates after rate limit, rejects another email without leaking the bri
 });
 
 it("re-reads a unique-index race and returns only a matching stored brief", async () => {
-	const racing = {
+	const racing = fakeD1({
 		prepare: db.prepare.bind(db),
 		batch: async () => {
 			sql
@@ -384,12 +366,12 @@ it("re-reads a unique-index race and returns only a matching stored brief", asyn
 				);
 			throw new Error("UNIQUE constraint failed");
 		},
-	} as unknown as D1Database;
+	});
 
 	const response = await POST(context(base, { db: racing }));
 	expect(response.status).toBe(200);
 	expect(
-		((await response.json()) as { brief: Record<string, string> }).brief.today,
+		(await jsonBody<{ brief: Record<string, string> }>(response)).brief.today,
 	).toBe("Stored answer");
 	expect(
 		vi
@@ -399,16 +381,16 @@ it("re-reads a unique-index race and returns only a matching stored brief", asyn
 });
 
 it("preserves input and clears success limit after a storage failure", async () => {
-	const failing = {
+	const failing = fakeD1({
 		prepare: db.prepare.bind(db),
 		batch: async () => {
 			throw new Error("D1 unavailable");
 		},
-	} as unknown as D1Database;
+	});
 
 	const response = await POST(context(base, { db: failing }));
 	expect(response.status).toBe(503);
-	expect(((await response.json()) as { error: string }).error).toContain(
+	expect((await jsonBody<{ error: string }>(response)).error).toContain(
 		"Your details are still here",
 	);
 	expect(kv.delete).toHaveBeenCalledWith("rl:software:0.0.0.0");
@@ -422,7 +404,7 @@ it("preserves input and clears success limit after a storage failure", async () 
 		.mocked(fetch)
 		.mock.calls.find(([url]) => String(url).includes("api.resend.com"))!;
 
-	const alert = JSON.parse(alertCall[1]?.body as string);
+	const alert = JSON.parse(String(alertCall[1]?.body));
 	expect(alert.text).toContain("/api/software-inquiry");
 	expect(alert.text).toContain("d1-write-failed");
 	expect(JSON.stringify(alert)).not.toMatch(
@@ -433,7 +415,7 @@ it("preserves input and clears success limit after a storage failure", async () 
 it("does not undo a saved request when the owner notice fails", async () => {
 	vi.mocked(fetch).mockImplementation(async (url) =>
 		String(url).includes("siteverify")
-			? ({ ok: true, json: async () => ({ success: true }) } as Response)
+			? double<Response>({ ok: true, json: async () => ({ success: true }) })
 			: Promise.reject(new Error("Resend failed")),
 	);
 	expect((await POST(context())).status).toBe(200);
@@ -443,15 +425,15 @@ it("does not undo a saved request when the owner notice fails", async () => {
 });
 
 it("rejects invalid answers, unknown choices, line breaks, and unknown keys", () => {
-	const expectedErrors: Record<string, string> = {
-		path: "Choose a starting point.",
-		name: "Add your name.",
-		email: "Add a valid email address.",
-		timing: "Choose one.",
-		budgetStatus: "Choose one.",
-		approver: "Choose one.",
-		submissionId: "Invalid submission ID.",
-	};
+	const expectedErrors = new Map([
+		["path", "Choose a starting point."],
+		["name", "Add your name."],
+		["email", "Add a valid email address."],
+		["timing", "Choose one."],
+		["budgetStatus", "Choose one."],
+		["approver", "Choose one."],
+		["submissionId", "Invalid submission ID."],
+	]);
 
 	for (const [key, value] of [
 		["path", "other"],
@@ -477,7 +459,7 @@ it("rejects invalid answers, unknown choices, line breaks, and unknown keys", ()
 					? "Use one line."
 					: value.length === 1001
 						? "Keep this under 1000 characters."
-						: (expectedErrors[key] ?? "This answer is required."),
+						: (expectedErrors.get(key) ?? "This answer is required."),
 			);
 	}
 
@@ -537,19 +519,21 @@ it("uses plain messages for missing fields, wrong types, and non-object bodies",
 });
 
 it("alerts and preserves input when the duplicate lookup fails", async () => {
-	const failing = {
-		prepare: () => ({
-			bind: () => ({
-				first: async () => {
-					throw new Error("D1 unavailable");
-				},
+	const failing = fakeD1({
+		prepare: () =>
+			double<D1PreparedStatement>({
+				bind: () =>
+					double<D1PreparedStatement>({
+						first: async () => {
+							throw new Error("D1 unavailable");
+						},
+					}),
 			}),
-		}),
-	} as unknown as D1Database;
+	});
 
 	const response = await POST(context(base, { db: failing }));
 	expect(response.status).toBe(503);
-	expect(((await response.json()) as { error: string }).error).toContain(
+	expect((await jsonBody<{ error: string }>(response)).error).toContain(
 		"Your details are still here",
 	);
 	expect(
@@ -562,7 +546,7 @@ it("alerts and preserves input when the duplicate lookup fails", async () => {
 		.mocked(fetch)
 		.mock.calls.find(([url]) => String(url).includes("api.resend.com"))!;
 
-	expect(JSON.stringify(JSON.parse(alertCall[1]?.body as string))).not.toMatch(
+	expect(JSON.stringify(JSON.parse(String(alertCall[1]?.body)))).not.toMatch(
 		/alex|first line|second line|our team|example studio|one place to see/i,
 	);
 });
@@ -610,7 +594,7 @@ it("rejects overlength and line breaks in every text field", () => {
 });
 
 it("does not reveal a raced brief to a different email", async () => {
-	const racing = {
+	const racing = fakeD1({
 		prepare: db.prepare.bind(db),
 		batch: async () => {
 			sql
@@ -630,7 +614,7 @@ it("does not reveal a raced brief to a different email", async () => {
 				);
 			throw new Error("UNIQUE constraint failed");
 		},
-	} as unknown as D1Database;
+	});
 
 	const response = await POST(context(base, { db: racing }));
 	expect(response.status).toBe(409);
@@ -671,11 +655,11 @@ it("uses plain exact messages for choices, line breaks, controls, and lone surro
 });
 
 it("renders saved script text and multiline answers verbatim for safe Astro text output", () => {
-	const request = {
+	const request = double<OwnerRequest>({
 		name: "Alex",
 		email: "alex@example.com",
 		details: { ...base, today: "<script>alert(1)</script>\nSecond line" },
-	} as any;
+	});
 
 	expect(softwareBrief(request).today).toBe(
 		"<script>alert(1)</script>\nSecond line",
@@ -686,22 +670,22 @@ it("omits approver role from the API receipt when approver is self", async () =>
 	const response = await POST(context());
 	expect(response.status).toBe(200);
 	expect(
-		((await response.json()) as { brief: Record<string, string> }).brief,
+		(await jsonBody<{ brief: Record<string, string> }>(response)).brief,
 	).not.toHaveProperty("approverRole");
 });
 
 it("treats an oversized saved detail as a field error without an urgent alert", async () => {
-	const oversized = {
+	const oversized = fakeD1({
 		prepare: db.prepare.bind(db),
 		batch: async () => {
 			throw new RequestDetailsTooLargeError();
 		},
-	} as unknown as D1Database;
+	});
 
 	const response = await POST(context(base, { db: oversized }));
 	expect(response.status).toBe(400);
 	expect(
-		((await response.json()) as { errors: Record<string, string> }).errors,
+		(await jsonBody<{ errors: Record<string, string> }>(response)).errors,
 	).toEqual({ _form: "Keep the brief shorter and try again." });
 	expect(kv.delete).toHaveBeenCalledWith("rl:software:0.0.0.0");
 	expect(
@@ -728,7 +712,7 @@ it("emails only answered fields to the client with the saved title and configure
 	const emails = vi
 		.mocked(fetch)
 		.mock.calls.filter(([url]) => String(url).includes("api.resend.com"))
-		.map(([, init]) => JSON.parse(init!.body as string));
+		.map(([, init]) => JSON.parse(String(init!.body)));
 
 	const copy = emails.find((email) => email.to[0] === "alex@example.com");
 	expect(copy).toMatchObject({
@@ -763,9 +747,12 @@ it.each([
 	async (outcome, status) => {
 		vi.mocked(fetch).mockImplementation(async (url, init) => {
 			if (String(url).includes("siteverify"))
-				return { ok: true, json: async () => ({ success: true }) } as Response;
+				return double<Response>({
+					ok: true,
+					json: async () => ({ success: true }),
+				});
 
-			if (JSON.parse(init!.body as string).to[0] === "alex@example.com") {
+			if (JSON.parse(String(init!.body)).to[0] === "alex@example.com") {
 				if (outcome === "timeout") throw new Error("timeout");
 
 				return new Response("", { status: 422 });
@@ -799,7 +786,7 @@ it("retries a failed brief copy once and blocks sent, closed and unconfirmed ret
 	const requestId = sql.prepare("SELECT id FROM owner_requests").get().id;
 
 	const retryContext = (confirmedNotSent = false, owner = true) =>
-		({
+		double<APIContext>({
 			...context(),
 			params: { id: requestId },
 			request: new Request(
@@ -815,9 +802,9 @@ it("retries a failed brief copy once and blocks sent, closed and unconfirmed ret
 			),
 			locals: {
 				...context().locals,
-				owner: owner ? { email: "owner@example.com" } : null,
+				owner: owner ? { email: "owner@example.com" } : undefined,
 			},
-		}) as any;
+		});
 
 	const set = (status: string, age: number) =>
 		sql
@@ -843,14 +830,18 @@ it("retries a failed brief copy once and blocks sent, closed and unconfirmed ret
 
 it("keeps delivery uncertain after sending when the final status write fails", async () => {
 	const batch = db.batch.bind(db);
-	vi.spyOn(db, "batch").mockImplementation(async (statements: any[]) => {
-		if (
-			statements.some((item) => item.query.includes("'$.clientCopyStatus',?"))
-		)
-			throw new Error("status write failed");
+	vi.spyOn(db, "batch").mockImplementation(
+		async (statements: D1PreparedStatement[]) => {
+			if (
+				statements.some((item) =>
+					boundQuery(item)?.includes("'$.clientCopyStatus',?"),
+				)
+			)
+				throw new Error("status write failed");
 
-		return batch(statements);
-	});
+			return batch(statements);
+		},
+	);
 	expect(await (await POST(context())).json()).toMatchObject({
 		ok: true,
 		clientCopyStatus: "uncertain",
@@ -887,7 +878,10 @@ it("accepts and stores a short new brief without removed or optional answers", a
 	);
 
 	expect(response.status).toBe(200);
-	const brief = ((await response.json()) as any).brief;
+
+	const brief = (await jsonBody<{ brief: Record<string, string> }>(response))
+		.brief;
+
 	expect(brief).not.toHaveProperty("audience");
 	expect(brief).not.toHaveProperty("firstResult");
 	expect(sql.prepare("SELECT summary FROM owner_requests").get().summary).toBe(
@@ -925,7 +919,8 @@ it.each(["claim", "construction", "config"] as const)(
 	async (failure) => {
 		const ctx = context();
 
-		if (failure === "config") delete ctx.locals.runtime.env.CONTACT_TO_EMAIL;
+		if (failure === "config")
+			Reflect.deleteProperty(ctx.locals.runtime.env, "CONTACT_TO_EMAIL");
 
 		if (failure === "claim") {
 			const prepare = db.prepare.bind(db);
@@ -991,7 +986,7 @@ it.each(["claim", "construction", "config"] as const)(
 					.mock.calls.filter(
 						([url, init]) =>
 							String(url).includes("api.resend.com") &&
-							JSON.parse(init!.body as string).to?.[0] === "alex@example.com",
+							JSON.parse(String(init!.body)).to?.[0] === "alex@example.com",
 					),
 			).toHaveLength(0);
 		} finally {
@@ -1017,10 +1012,10 @@ it("omits blank optional answers from the owner idea notification", async () => 
 		.mock.calls.find(
 			([url, init]) =>
 				String(url).includes("api.resend.com") &&
-				JSON.parse(init!.body as string).to[0] === "inbox@example.com",
+				JSON.parse(String(init!.body)).to[0] === "inbox@example.com",
 		)!;
 
-	const email = JSON.parse(notice[1]!.body as string);
+	const email = JSON.parse(String(notice[1]!.body));
 	expect(email.text).toContain("What’s the idea?\nA shift board");
 	expect(email.text).not.toMatch(/undefined|How will you know/);
 });
@@ -1080,19 +1075,31 @@ it("recovers an unrecorded first claim failure through the guarded owner retry",
 
 	expect(
 		(
-			await retry({
-				...retryContext,
-				locals: { ...ctx.locals, owner: null },
-			} as any)
+			await retry(
+				double<APIContext>({
+					...retryContext,
+					locals: { ...ctx.locals, owner: undefined },
+				}),
+			)
 		).status,
 	).toBe(403);
+	// SAFETY: clone() returns the same workers Request; only its cf-metadata type parameter differs, and the route reads only the URL, method, headers and body of the request.
 	expect(
-		(await retry({ ...retryContext, request: retryContext.request.clone() }))
-			.status,
+		(
+			await retry({
+				...retryContext,
+				request: retryContext.request.clone() as Request,
+			})
+		).status,
 	).toBe(200);
+	// SAFETY: clone() returns the same workers Request; only its cf-metadata type parameter differs, and the route reads only the URL, method, headers and body of the request.
 	expect(
-		(await retry({ ...retryContext, request: retryContext.request.clone() }))
-			.status,
+		(
+			await retry({
+				...retryContext,
+				request: retryContext.request.clone() as Request,
+			})
+		).status,
 	).toBe(409);
 	expect(
 		JSON.parse(
@@ -1105,7 +1112,7 @@ it("recovers an unrecorded first claim failure through the guarded owner retry",
 			.mock.calls.filter(
 				([url, init]) =>
 					String(url).includes("api.resend.com") &&
-					JSON.parse(init!.body as string).to[0] === "alex@example.com",
+					JSON.parse(String(init!.body)).to[0] === "alex@example.com",
 			),
 	).toHaveLength(1);
 });
@@ -1138,30 +1145,36 @@ const questionKeys = [
 	"appGoal",
 ];
 
-const askedKeys = (details: Record<string, unknown>) =>
+const askedKeys = (details: Partial<Record<string, string>>) =>
 	Object.keys(details).filter((key) => questionKeys.includes(key));
 
-const savedRequest = () =>
+const savedRequest = (): {
+	service_id: string;
+	summary: string;
+	details_json: string;
+} =>
 	sql
 		.prepare("SELECT service_id,summary,details_json FROM owner_requests")
-		.get() as { service_id: string; summary: string; details_json: string };
+		.get();
 
 const ownerNotice = () =>
 	JSON.parse(
-		vi
-			.mocked(fetch)
-			.mock.calls.find(
-				([url, init]) =>
-					String(url).includes("api.resend.com") &&
-					JSON.parse(init!.body as string).to[0] === "inbox@example.com",
-			)![1]!.body as string,
+		String(
+			vi
+				.mocked(fetch)
+				.mock.calls.find(
+					([url, init]) =>
+						String(url).includes("api.resend.com") &&
+						JSON.parse(String(init!.body)).to[0] === "inbox@example.com",
+				)![1]!.body,
+		),
 	);
 
 it("stores a website brief under its own path and questions, and names it in the owner notice", async () => {
 	const response = await POST(context(websiteInput));
 	expect(response.status).toBe(200);
 
-	const brief = ((await response.json()) as { brief: Record<string, string> })
+	const brief = (await jsonBody<{ brief: Record<string, string> }>(response))
 		.brief;
 
 	expect(Object.keys(brief).slice(0, 5)).toEqual([
@@ -1206,7 +1219,7 @@ it("stores a web app brief under its own path and questions", async () => {
 	const response = await POST(context(app));
 	expect(response.status).toBe(200);
 
-	const brief = ((await response.json()) as { brief: Record<string, string> })
+	const brief = (await jsonBody<{ brief: Record<string, string> }>(response))
 		.brief;
 
 	expect(Object.keys(brief).slice(0, 3)).toEqual([
@@ -1528,17 +1541,19 @@ it("labels stored briefs by the path they were sent with", () => {
 		budgetStatus: "exploring",
 	};
 
-	const idea = softwareBrief({
-		...shared,
-		details: {
+	const idea = softwareBrief(
+		double<OwnerRequest>({
 			...shared,
-			path: "idea",
-			idea: "A shift board",
-			audienceToday: "Volunteers",
-			firstVersion: "Claim a shift",
-			signal: "",
-		},
-	} as any);
+			details: {
+				...shared,
+				path: "idea",
+				idea: "A shift board",
+				audienceToday: "Volunteers",
+				firstVersion: "Claim a shift",
+				signal: "",
+			},
+		}),
+	);
 
 	expect(idea.path).toBe("Bring an idea to life");
 	expect(Object.keys(idea).slice(0, 4)).toEqual([
@@ -1549,16 +1564,18 @@ it("labels stored briefs by the path they were sent with", () => {
 	]);
 	expect(idea).not.toHaveProperty("today");
 
-	const workflow = softwareBrief({
-		...shared,
-		details: {
+	const workflow = softwareBrief(
+		double<OwnerRequest>({
 			...shared,
-			path: "workflow",
-			today: "We track clients.",
-			audience: "Our team",
-			firstResult: "One place.",
-		},
-	} as any);
+			details: {
+				...shared,
+				path: "workflow",
+				today: "We track clients.",
+				audience: "Our team",
+				firstResult: "One place.",
+			},
+		}),
+	);
 
 	expect(workflow.path).toBe("Workflow automation");
 	expect(Object.keys(workflow).slice(0, 4)).toEqual([
@@ -1568,10 +1585,12 @@ it("labels stored briefs by the path they were sent with", () => {
 		"firstResult",
 	]);
 
-	const fallback = softwareBrief({
-		...shared,
-		details: { ...shared, path: "toString", today: "Fallback" },
-	} as any);
+	const fallback = softwareBrief(
+		double<OwnerRequest>({
+			...shared,
+			details: { ...shared, path: "toString", today: "Fallback" },
+		}),
+	);
 
 	expect(fallback.today).toBe("Fallback");
 });

@@ -1,5 +1,7 @@
 import { expect, it } from "vitest";
 import { mediaRange, streamMusic } from "~/lib/music-media";
+import { double } from "../helpers/doubles";
+import { bytesStream } from "../helpers/tests-api-r2";
 
 it("resolves full, bounded, open and suffix ranges without overrunning the file", () => {
 	expect(mediaRange(null, 100)).toBeNull();
@@ -12,10 +14,13 @@ it("resolves full, bounded, open and suffix ranges without overrunning the file"
 });
 
 it("allows public media responses to use shared caching", async () => {
-	const bucket = {
-		head: async () => ({ size: 4 }),
-		get: async () => ({ body: new Uint8Array([1, 2, 3, 4]) }),
-	} as unknown as R2Bucket;
+	const bucket = double<R2Bucket>({
+		head: async () => double<R2Object>({ size: 4 }),
+		get: async () =>
+			double<R2ObjectBody>({
+				body: bytesStream(new Uint8Array([1, 2, 3, 4])),
+			}),
+	});
 
 	const response = await streamMusic(
 		new Request("https://example.test/music/file/old-news/master"),
@@ -35,11 +40,11 @@ it.each([
 	"studio/projects/request/file.mp3",
 	"software/request/update/visual.png",
 ])("refuses private object %s through the public media helper", async (key) => {
-	const bucket = {
+	const bucket = double<R2Bucket>({
 		head: async () => {
 			throw new Error("should not reach R2");
 		},
-	} as unknown as R2Bucket;
+	});
 
 	const response = await streamMusic(
 		new Request("https://thesuperhuman.us/music/file/example/master"),

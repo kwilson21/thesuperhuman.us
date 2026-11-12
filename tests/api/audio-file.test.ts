@@ -1,4 +1,7 @@
+import type { APIContext } from "astro";
 import { describe, it, expect, vi } from "vitest";
+import { double } from "../helpers/doubles";
+import { byteRange, bytesStream } from "../helpers/tests-api-r2";
 
 vi.mock("astro:content", () => {
 	return {
@@ -14,28 +17,30 @@ vi.mock("astro:content", () => {
 
 import { GET } from "~/pages/audio/file/[slug]";
 
-function makeR2(body = new Uint8Array([1, 2, 3, 4, 5]), size = 5) {
-	return {
-		head: vi.fn(async (_key: string) => ({ size })),
-		get: vi.fn(async (_key: string, opts?: any) => {
-			const range = opts?.range;
+type TestRuntime = APIContext["locals"]["runtime"];
 
-			if (range && range.offset !== undefined && range.length !== undefined) {
+function makeR2(body = new Uint8Array([1, 2, 3, 4, 5]), size = 5) {
+	return double<R2Bucket>({
+		head: vi.fn(async (_key: string) => double<R2Object>({ size })),
+		get: vi.fn(async (_key: string, opts?: R2GetOptions) => {
+			const range = byteRange(opts?.range);
+
+			if (range) {
 				const slice = body.slice(range.offset, range.offset + range.length);
 
-				return {
-					body: new Response(slice).body,
+				return double<R2ObjectBody>({
+					body: bytesStream(slice),
 					size,
 					range,
-				};
+				});
 			}
 
-			return {
-				body: new Response(body).body,
+			return double<R2ObjectBody>({
+				body: bytesStream(body),
 				size,
-			};
+			});
 		}),
-	};
+	});
 }
 
 function makeContext(slug: string, rangeHeader?: string) {
@@ -44,13 +49,17 @@ function makeContext(slug: string, rangeHeader?: string) {
 	if (rangeHeader) headers.set("range", rangeHeader);
 	const audio = makeR2();
 
-	return {
+	return double<APIContext>({
 		params: { slug },
 		request: new Request(`https://audio.thesuperhuman.us/file/${slug}`, {
 			headers,
 		}),
-		locals: { runtime: { env: { AUDIO: audio } } },
-	} as any;
+		locals: double<APIContext["locals"]>({
+			runtime: double<TestRuntime>({
+				env: double<TestRuntime["env"]>({ AUDIO: audio }),
+			}),
+		}),
+	});
 }
 
 describe("GET /audio/file/[slug]", () => {
