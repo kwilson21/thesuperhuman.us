@@ -1,6 +1,12 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
+import type { APIContext } from "astro";
 import { beforeEach, expect, it, vi } from "vitest";
+import { double } from "../helpers/doubles";
+import { sqliteD1 } from "../helpers/tests-api-d1";
+import type { JsonObject } from "../helpers/tests-api-json";
+
+type TestRuntime = APIContext["locals"]["runtime"];
 
 const invoiceMocks = vi.hoisted(() => ({
 	booking: vi.fn(),
@@ -10,7 +16,7 @@ const invoiceMocks = vi.hoisted(() => ({
 vi.mock("~/lib/stripe-invoicing", () => ({
 	createBookingInvoice: invoiceMocks.booking,
 	createBalanceInvoice: invoiceMocks.balance,
-	stripeAvailable: (env: Record<string, unknown>) =>
+	stripeAvailable: (env: Partial<Record<string, string>>) =>
 		env.STRIPE_PAYMENTS_ENABLED === "true" &&
 		Boolean(env.STRIPE_SECRET_KEY) &&
 		Boolean(env.STRIPE_WEBHOOK_SECRET),
@@ -34,40 +40,7 @@ beforeEach(() => {
 	sql.exec(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,status,created_at,updated_at)
     VALUES ('request-1','service','two-track-mix-master','Artist','artist@example.com','Old News mix','reviewed','2026-09-19T12:00:00Z','2026-09-19T12:00:00Z')`);
 
-	const statement = (query: string, args: unknown[] = []) => ({
-		query,
-		args,
-		bind: (...values: unknown[]) => statement(query, values),
-		run: async () => {
-			const result = sql.prepare(query).run(...args);
-
-			return { meta: { changes: result.changes }, results: [] };
-		},
-		first: async () => sql.prepare(query).get(...args) ?? null,
-		all: async () => ({ results: sql.prepare(query).all(...args) }),
-	});
-
-	db = {
-		prepare: (query: string) => statement(query),
-		batch: async (items: ReturnType<typeof statement>[]) => {
-			sql.exec("BEGIN");
-
-			try {
-				const result = items.map((item) => ({
-					results: /RETURNING/i.test(item.query)
-						? sql.prepare(item.query).all(...item.args)
-						: (sql.prepare(item.query).run(...item.args), []),
-				}));
-
-				sql.exec("COMMIT");
-
-				return result;
-			} catch (error) {
-				sql.exec("ROLLBACK");
-				throw error;
-			}
-		},
-	} as unknown as D1Database;
+	db = sqliteD1(sql);
 	invoiceMocks.booking.mockResolvedValue({
 		stripeCustomerId: "cus_1",
 		invoiceId: "in_booking",
@@ -89,11 +62,11 @@ const stripeEnv = {
 };
 
 function context(
-	body: unknown,
+	body: JsonObject,
 	owner = true,
-	env: Record<string, unknown> = {},
-) {
-	return {
+	env: Partial<Record<string, string>> = {},
+): APIContext {
+	return double<APIContext>({
 		params: { id: "request-1" },
 		request: new Request(
 			"https://thesuperhuman.us/api/owner/requests/request-1/payment",
@@ -103,11 +76,13 @@ function context(
 				body: JSON.stringify(body),
 			},
 		),
-		locals: {
+		locals: double<APIContext["locals"]>({
 			owner: owner ? { email: "owner@example.com" } : undefined,
-			runtime: { env: { MUSIC_DB: db, ...env } },
-		},
-	} as any;
+			runtime: double<TestRuntime>({
+				env: double<TestRuntime["env"]>({ MUSIC_DB: db, ...env }),
+			}),
+		}),
+	});
 }
 
 it("requires owner access and valid explicit offer acceptance", async () => {
@@ -279,7 +254,7 @@ it("does not create an invoice after retention deletes a withdrawn request", asy
 	);
 
 	const originalPrepare = db.prepare.bind(db);
-	db.prepare = ((query: string) => {
+	db.prepare = (query: string) => {
 		const prepared = originalPrepare(query);
 
 		if (
@@ -289,11 +264,11 @@ it("does not create an invoice after retention deletes a withdrawn request", asy
 		)
 			return prepared;
 
-		return {
+		return double<D1PreparedStatement>({
 			bind: (...args: unknown[]) => {
 				const bound = prepared.bind(...args);
 
-				return {
+				return double<D1PreparedStatement>({
 					run: async () => {
 						await applyOwnerRetention(
 							retentionDb,
@@ -304,10 +279,10 @@ it("does not create an invoice after retention deletes a withdrawn request", asy
 
 						return bound.run();
 					},
-				};
+				});
 			},
-		};
-	}) as typeof db.prepare;
+		});
+	};
 
 	const response = await POST(
 		context({ action: "create-booking-invoice" }, true, stripeEnv),
@@ -397,12 +372,12 @@ it("reports pending recovery when D1 fails after Stripe sends the invoice", asyn
 		}),
 	);
 	const working = db;
-	db = {
+	db = double<D1Database>({
 		...working,
 		batch: async () => {
 			throw new Error("D1 unavailable");
 		},
-	} as unknown as D1Database;
+	});
 
 	const response = await POST(
 		context({ action: "create-booking-invoice" }, true, stripeEnv),

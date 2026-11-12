@@ -1,7 +1,12 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { POST as interest } from "~/pages/api/music-interest";
 import { POST as event } from "~/pages/api/music-event";
+import type { APIContext } from "astro";
 import { sendUrgentOwnerAlert } from "~/lib/owner-alerts";
+import { double, fakeD1, fakeKv } from "../helpers/doubles";
+import type { JsonObject } from "../helpers/tests-api-json";
+
+type TestRuntime = APIContext["locals"]["runtime"];
 
 vi.mock("~/lib/music-content", () => ({
 	loadMusicCatalog: async () => ({
@@ -25,7 +30,7 @@ const body = {
 };
 
 function context(
-	data: unknown,
+	data: JsonObject,
 	options: {
 		origin?: string;
 		fail?: boolean;
@@ -33,23 +38,27 @@ function context(
 		eventsEnabled?: string;
 	} = {},
 ) {
-	const database = {
-		prepare: () => ({
-			bind: () => ({
-				run: async () => {
-					if (options.fail) throw new Error("unavailable");
-				},
-				first: async () => null,
+	const database = fakeD1({
+		prepare: () =>
+			double<D1PreparedStatement>({
+				bind: () =>
+					double<D1PreparedStatement>({
+						run: async () => {
+							if (options.fail) throw new Error("unavailable");
+
+							return double<D1Result<unknown>>({ success: true });
+						},
+						first: async () => null,
+					}),
 			}),
-		}),
-		batch: async (statements: { run: () => Promise<unknown> }[]) => {
+		batch: async (statements: D1PreparedStatement[]) => {
 			for (const statement of statements) await statement.run();
 
 			return [];
 		},
-	};
+	});
 
-	return {
+	return double<APIContext>({
 		request: new Request("https://thesuperhuman.us/api/music-interest", {
 			method: "POST",
 			headers: {
@@ -58,21 +67,21 @@ function context(
 			},
 			body: JSON.stringify(data),
 		}),
-		locals: {
-			runtime: {
-				env: {
+		locals: double<APIContext["locals"]>({
+			runtime: double<TestRuntime>({
+				env: double<TestRuntime["env"]>({
 					MUSIC_DB: options.db === false ? undefined : database,
 					MUSIC_EVENTS_ENABLED: options.eventsEnabled,
-					RATE_LIMIT: {
+					RATE_LIMIT: fakeKv({
 						get: async () => null,
 						put: async () => {},
 						delete: async () => {},
-					},
+					}),
 					TURNSTILE_SECRET_KEY: "test",
-				},
-			},
-		},
-	} as any;
+				}),
+			}),
+		}),
+	});
 }
 
 beforeEach(() =>

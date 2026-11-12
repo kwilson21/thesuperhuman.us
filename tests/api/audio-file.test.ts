@@ -1,4 +1,6 @@
+import type { APIContext } from "astro";
 import { describe, it, expect, vi } from "vitest";
+import { double } from "../helpers/doubles";
 
 vi.mock("astro:content", () => {
 	return {
@@ -14,28 +16,30 @@ vi.mock("astro:content", () => {
 
 import { GET } from "~/pages/audio/file/[slug]";
 
+type TestRuntime = APIContext["locals"]["runtime"];
+
 function makeR2(body = new Uint8Array([1, 2, 3, 4, 5]), size = 5) {
-	return {
-		head: vi.fn(async (_key: string) => ({ size })),
-		get: vi.fn(async (_key: string, opts?: any) => {
+	return double<R2Bucket>({
+		head: vi.fn(async (_key: string) => double<R2Object>({ size })),
+		get: vi.fn(async (_key: string, opts?: R2GetOptions) => {
 			const range = opts?.range;
 
 			if (range && range.offset !== undefined && range.length !== undefined) {
 				const slice = body.slice(range.offset, range.offset + range.length);
 
-				return {
+				return double<R2ObjectBody>({
 					body: new Response(slice).body,
 					size,
 					range,
-				};
+				});
 			}
 
-			return {
+			return double<R2ObjectBody>({
 				body: new Response(body).body,
 				size,
-			};
+			});
 		}),
-	};
+	});
 }
 
 function makeContext(slug: string, rangeHeader?: string) {
@@ -44,13 +48,17 @@ function makeContext(slug: string, rangeHeader?: string) {
 	if (rangeHeader) headers.set("range", rangeHeader);
 	const audio = makeR2();
 
-	return {
+	return double<APIContext>({
 		params: { slug },
 		request: new Request(`https://audio.thesuperhuman.us/file/${slug}`, {
 			headers,
 		}),
-		locals: { runtime: { env: { AUDIO: audio } } },
-	} as any;
+		locals: double<APIContext["locals"]>({
+			runtime: double<TestRuntime>({
+				env: double<TestRuntime["env"]>({ AUDIO: audio }),
+			}),
+		}),
+	});
 }
 
 describe("GET /audio/file/[slug]", () => {

@@ -1,4 +1,7 @@
-import { beforeEach, afterEach, expect, it, vi } from "vitest";
+import type { APIContext } from "astro";
+import { beforeEach, afterEach, expect, it, vi, type Mock } from "vitest";
+import { double } from "../helpers/doubles";
+import { jsonBody, type JsonObject } from "../helpers/tests-api-json";
 import {
 	createSuggestionPass,
 	suggestionVisitorHash,
@@ -13,8 +16,13 @@ import { POST } from "~/pages/api/software/brief/suggest";
 let db: any, database: any, run: ReturnType<typeof vi.fn>;
 let cookie: string;
 const secret = "existing-turnstile-secret-for-tests";
-let siteLimiter: { limit: ReturnType<typeof vi.fn> };
-let limiter: { limit: ReturnType<typeof vi.fn> };
+
+type TestRuntime = APIContext["locals"]["runtime"];
+
+type Limiter = { limit: Mock };
+
+let siteLimiter: Limiter;
+let limiter: Limiter;
 
 const input = {
 	question: "What happens today?",
@@ -22,8 +30,11 @@ const input = {
 	earlier: { path: "workflow" },
 };
 
-function context(body: unknown = input, env: Record<string, unknown> = {}) {
-	return {
+function context(
+	body: JsonObject = input,
+	env: Partial<TestRuntime["env"]> = {},
+): APIContext {
+	return double<APIContext>({
 		request: new Request("https://example.com/api/software/brief/suggest", {
 			method: "POST",
 			headers: {
@@ -34,20 +45,20 @@ function context(body: unknown = input, env: Record<string, unknown> = {}) {
 			},
 			body: JSON.stringify(body),
 		}),
-		locals: {
-			runtime: {
-				env: {
-					AI: { run },
+		locals: double<APIContext["locals"]>({
+			runtime: double<TestRuntime>({
+				env: double<TestRuntime["env"]>({
+					AI: double<Ai>({ run }),
 					MUSIC_DB: database,
 					BRIEF_SUGGEST_RATE_LIMIT: limiter,
 					BRIEF_SUGGEST_SITE_LIMIT: siteLimiter,
 					TURNSTILE_SECRET_KEY: secret,
 					SOFTWARE_SUGGESTIONS_ENABLED: "true",
 					...env,
-				},
-			},
-		},
-	} as any;
+				}),
+			}),
+		}),
+	});
 }
 
 beforeEach(async () => {
@@ -320,12 +331,10 @@ it("caps a concurrent burst before invoking AI or daily counters", async () => {
 	);
 
 	const bodies = await Promise.all(
-		responses.map((response) => response.json()),
+		responses.map((response) => jsonBody<{ suggestion: string }>(response)),
 	);
 
-	expect(
-		bodies.filter((body) => (body as { suggestion: string }).suggestion),
-	).toHaveLength(30);
+	expect(bodies.filter((body) => body.suggestion)).toHaveLength(30);
 	expect(run).toHaveBeenCalledTimes(30);
 	expect(limiter.limit).toHaveBeenCalledTimes(31);
 	expect(

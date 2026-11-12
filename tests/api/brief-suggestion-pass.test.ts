@@ -1,4 +1,6 @@
+import type { APIContext } from "astro";
 import { afterEach, expect, it, vi } from "vitest";
+import { double } from "../helpers/doubles";
 import { POST } from "~/pages/api/software/brief/pass";
 import {
 	createSuggestionPass,
@@ -8,8 +10,13 @@ import {
 
 const secret = "existing-turnstile-secret-for-tests";
 
-const context = (token: unknown = "token", overrides = {}) =>
-	({
+type TestRuntime = APIContext["locals"]["runtime"];
+
+const context = (
+	token = "token",
+	overrides: Partial<TestRuntime["env"]> = {},
+): APIContext =>
+	double<APIContext>({
 		request: new Request("https://example.com/api/software/brief/pass", {
 			method: "POST",
 			headers: {
@@ -19,16 +26,16 @@ const context = (token: unknown = "token", overrides = {}) =>
 			},
 			body: JSON.stringify({ token }),
 		}),
-		locals: {
-			runtime: {
-				env: {
+		locals: double<APIContext["locals"]>({
+			runtime: double<TestRuntime>({
+				env: double<TestRuntime["env"]>({
 					TURNSTILE_SECRET_KEY: secret,
 					SOFTWARE_SUGGESTIONS_ENABLED: "true",
 					...overrides,
-				},
-			},
-		},
-	}) as any;
+				}),
+			}),
+		}),
+	});
 
 afterEach(() => {
 	vi.useRealTimers();
