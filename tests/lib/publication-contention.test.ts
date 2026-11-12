@@ -7,7 +7,7 @@ import { it, expect } from "vitest";
 import { D1PublicationJournal } from "~/lib/publication/journal";
 import type { Publication } from "~/lib/publication/contract";
 import { double } from "../helpers/doubles";
-import { fakeBatch } from "../helpers/tests-lib-a-bindings";
+import { boundStatement, fakeBatch, preparedStatement } from "../helpers/d1";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -28,34 +28,8 @@ it("serializes simultaneous connections competing for the same project revision"
 	const barrier = new SharedArrayBuffer(4);
 	const workers: Worker[] = [];
 
-	const pending = new WeakMap<
-		D1PreparedStatement,
-		{ query: string; args: unknown[] }
-	>();
-
-	const statement = (
-		query: string,
-		args: unknown[] = [],
-	): D1PreparedStatement => {
-		const prepared = double<D1PreparedStatement>({
-			bind: (...values: unknown[]) => statement(query, values),
-		});
-
-		pending.set(prepared, { query, args });
-
-		return prepared;
-	};
-
-	const statementOf = (item: D1PreparedStatement) => {
-		const info = pending.get(item);
-
-		if (!info) throw new Error("Expected a statement prepared by this test.");
-
-		return info;
-	};
-
 	const db = double<D1Database>({
-		prepare: (query: string) => statement(query),
+		prepare: (query: string) => preparedStatement(query),
 		batch: fakeBatch(
 			(statements) =>
 				new Promise<D1Result[]>((resolve, reject) => {
@@ -79,7 +53,7 @@ it("serializes simultaneous connections competing for the same project revision"
 							workerData: {
 								filename,
 								barrier,
-								statements: statements.map(statementOf),
+								statements: statements.map(boundStatement),
 							},
 						},
 					);

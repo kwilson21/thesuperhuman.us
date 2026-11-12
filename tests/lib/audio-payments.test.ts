@@ -2,8 +2,8 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { double } from "../helpers/doubles";
-import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
-import { fakeBatch } from "../helpers/tests-lib-a-bindings";
+import { sqliteD1 } from "../helpers/sqlite-d1";
+import { fakeBatch } from "../helpers/d1";
 import {
 	applyStripeInvoiceEvent,
 	approveAudioPayment,
@@ -29,11 +29,6 @@ function fixture(kind: "service" | "purchase" = "service") {
     (id,kind,service_id,email,summary,status,created_at,updated_at)
     VALUES ('request-1',?, 'two-track-mix-master','artist@example.com','Old News mix','reviewed',?,?)`)
 		.run(kind, now, now);
-
-	const pending = new WeakMap<
-		D1PreparedStatement,
-		{ query: string; args: unknown[] }
-	>();
 
 	const db = sqliteD1(sql);
 

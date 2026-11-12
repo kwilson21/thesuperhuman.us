@@ -1,8 +1,8 @@
 import type { APIContext } from "astro";
 import { beforeEach, expect, it, vi } from "vitest";
-import { double } from "../helpers/doubles";
-import type { JsonObject } from "../helpers/tests-api-json";
-import { testRuntime } from "../helpers/tests-api-runtime";
+import { double, partial } from "../helpers/doubles";
+import type { JsonObject } from "../helpers/json";
+import { testRuntime } from "../helpers/runtime";
 import { POST } from "~/pages/api/studio/projects/[id]/messages";
 import { postClientReviewDecision } from "~/lib/audio-project-messages";
 
@@ -29,7 +29,7 @@ vi.mock("~/lib/audio-project-messages", async (importOriginal) => ({
 const token = "00000000-0000-4000-8000-000000000000".repeat(2);
 
 function context(body: JsonObject): APIContext {
-	return double<APIContext>({
+	return partial<APIContext>({
 		params: { id: "song-1" },
 		request: new Request(
 			"https://thesuperhuman.us/api/studio/projects/song-1/messages",

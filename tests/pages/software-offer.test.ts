@@ -15,27 +15,42 @@ import {
 } from "~/lib/agreement-fields";
 import { projectToday } from "~/lib/audio-project-updates";
 import { double, fakeD1 } from "../helpers/doubles";
-import { fakeLocals, sqliteD1 } from "../helpers/tests-other-fakes";
+import { fakeLocals } from "../helpers/runtime";
+import { sqliteD1 } from "../helpers/sqlite-d1";
+import {
+	attrOf,
+	elementWithAttr,
+	findElement,
+	findElements,
+	isElement,
+	childrenOf,
+	hasAttr,
+	textOf,
+} from "../helpers/html";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
-let start: any, privacy: any;
 
-let linkLanding: any,
-	archiveLanding: any,
-	agreements: any,
-	signPage: any,
-	agreementPanel: any,
+/** A compiled Astro page or component, as the container renders it. */
+type Component = Parameters<AstroContainer["renderToResponse"]>[0];
+
+let start: Component, privacy: Component;
+
+let linkLanding: Component,
+	archiveLanding: Component,
+	agreements: Component,
+	signPage: Component,
+	agreementPanel: Component,
 	directory: string,
-	softwarePage: any,
-	composer: any,
-	today: any,
-	page: any,
-	preview: any,
-	editor: any,
-	questions: any,
-	fit: any,
-	panel: any,
-	ownerRequest: any;
+	softwarePage: Component,
+	composer: Component,
+	today: Component,
+	page: Component,
+	preview: Component,
+	editor: Component,
+	questions: Component,
+	fit: Component,
+	panel: Component,
+	ownerRequest: Component;
 
 const token = "a".repeat(43);
 
@@ -3262,26 +3277,19 @@ it("renders the approved receipt and keeps booking reassurance only on the send 
 	expect(html.match(/No booking or payment at this stage\./g)).toHaveLength(1);
 	const receipt = parse(html);
 
-	const find = (node: any): any =>
-		node.attrs?.some(
-			(attr: any) =>
-				attr.name === "class" &&
-				attr.value.split(" ").includes("intake-next-steps"),
-		)
-			? node
-			: node.childNodes?.map(find).find(Boolean);
+	const steps = findElement(receipt, (element) =>
+		(attrOf(element, "class") ?? "").split(" ").includes("intake-next-steps"),
+	);
 
-	const steps = find(receipt);
 	expect(steps?.tagName).toBe("ol");
+
+	const items = (steps ? childrenOf(steps) : []).filter(
+		(node) => node.nodeName === "li",
+	);
+
+	expect(items).toHaveLength(3);
 	expect(
-		steps.childNodes.filter((node: any) => node.tagName === "li"),
-	).toHaveLength(3);
-	expect(
-		steps.childNodes.filter(
-			(node: any) =>
-				node.tagName === "li" &&
-				node.attrs.some((attr: any) => attr.name === "data-receipt-first-step"),
-		),
+		items.filter((node) => hasAttr(node, "data-receipt-first-step")),
 	).toHaveLength(1);
 	expect(await readFile("src/styles/audio-intake.css", "utf8")).toMatch(
 		/\.intake-next-steps\s*\{[^}]*list-style:\s*decimal\s*[;}]/,
@@ -3297,64 +3305,30 @@ it("renders the project brief start page with named paths, website screens and t
 			locals: fakeLocals({}),
 		});
 
-	const textOf = (node: any): string =>
-		node.nodeName === "#text"
-			? node.value
-			: (node.childNodes ?? []).map(textOf).join("");
-
-	const find = (node: any, test: (node: any) => boolean): any =>
-		test(node)
-			? node
-			: (node.childNodes ?? [])
-					.map((child: any) => find(child, test))
-					.find(Boolean);
-
-	const hasAttr = (node: any, name: string) =>
-		node.attrs?.some((attr: any) => attr.name === name);
-
-	const attrValue = (node: any, name: string) =>
-		node.attrs.find((attr: any) => attr.name === name)?.value;
-
-	const pathRadios = (html: string) => {
-		const found: { value: string; checked: boolean }[] = [];
-
-		const visit = (node: any) => {
-			if (node.tagName === "input" && attrValue(node, "name") === "path")
-				found.push({
-					value: attrValue(node, "value"),
-					checked: hasAttr(node, "checked"),
-				});
-
-			for (const child of node.childNodes ?? []) visit(child);
-		};
-
-		visit(parse(html));
-
-		return found;
-	};
+	const pathRadios = (html: string) =>
+		findElements(
+			parse(html),
+			(element) =>
+				element.tagName === "input" && attrOf(element, "name") === "path",
+		).map((element) => ({
+			value: attrOf(element, "value"),
+			checked: hasAttr(element, "checked"),
+		}));
 
 	const progress = (html: string): { hidden: boolean; label: string }[] =>
-		find(parse(html), (node) => hasAttr(node, "data-intake-progress"))
-			.childNodes.filter((node: any) => node.tagName === "li")
-			.map((item: any) => ({
+		childrenOf(elementWithAttr(parse(html), "data-intake-progress"))
+			.filter((node) => node.nodeName === "li")
+			.map((item) => ({
 				hidden: hasAttr(item, "hidden"),
 				label: textOf(item),
 			}));
 
-	const steps = (html: string) => {
-		const found: string[] = [];
-
-		const visit = (node: any) => {
-			if (node.tagName === "section" && hasAttr(node, "data-step"))
-				found.push(attrValue(node, "data-step"));
-
-			for (const child of node.childNodes ?? []) visit(child);
-		};
-
-		visit(parse(html));
-
-		return found;
-	};
+	const steps = (html: string) =>
+		findElements(
+			parse(html),
+			(element) =>
+				element.tagName === "section" && hasAttr(element, "data-step"),
+		).map((element) => attrOf(element, "data-step"));
 
 	const first = await render("");
 	expect(first).toContain("Start a project · Kazon Wilson");
@@ -3383,9 +3357,7 @@ it("renders the project brief start page with named paths, website screens and t
 	expect(first).toContain("What do you have today?");
 	expect(first).toContain("Who will keep it up to date?");
 	expect(
-		find(parse(first), (node) => hasAttr(node, "data-timing-hint")).attrs.some(
-			(attr: any) => attr.name === "hidden",
-		),
+		hasAttr(elementWithAttr(parse(first), "data-timing-hint"), "hidden"),
 	).toBe(true);
 
 	const website = await render("?path=website");
@@ -4234,30 +4206,21 @@ it("renders all four personalized receipt outcomes into the rendered page", asyn
 
 	const dom = parse(html);
 
-	const find = (node: any, attribute: string): any =>
-		node.attrs?.some((attr: any) => attr.name === attribute)
-			? node
-			: node.childNodes
-					?.map((child: any) => find(child, attribute))
-					.find(Boolean);
-
-	expect(
-		find(dom, "data-intake-progress").attrs.some(
-			(attr: any) => attr.name === "hidden",
-		),
-	).toBe(false);
+	expect(hasAttr(elementWithAttr(dom, "data-intake-progress"), "hidden")).toBe(
+		false,
+	);
 
 	const document = {
 		querySelector: (selector: string) => {
 			if (selector === "#software-inquiry") return null;
-			const node = find(dom, selector.slice(1, -1));
+			const node = elementWithAttr(dom, selector.slice(1, -1));
 
 			return {
 				set textContent(value: string) {
 					node.childNodes = [{ nodeName: "#text", value, parentNode: node }];
 				},
 				set hidden(value: boolean) {
-					node.attrs = node.attrs.filter((attr: any) => attr.name !== "hidden");
+					node.attrs = node.attrs.filter((attr) => attr.name !== "hidden");
 
 					if (value) node.attrs.push({ name: "hidden", value: "" });
 				},
@@ -4298,35 +4261,31 @@ it("renders all four personalized receipt outcomes into the rendered page", asyn
 				brief: { name: "Alex Example", email: "alex@example.com" },
 				clientCopyStatus: status,
 			});
-			expect(serialize(find(dom, "data-receipt-thanks"))).toBe(
+			expect(serialize(elementWithAttr(dom, "data-receipt-thanks"))).toBe(
 				"Thanks, Alex. I’ll read it myself and reply within two business days.",
 			);
-			expect(serialize(find(dom, "data-copy-status"))).toBe(line);
-			const card = find(dom, "data-copy-card");
+			expect(serialize(elementWithAttr(dom, "data-copy-status"))).toBe(line);
+			const card = elementWithAttr(dom, "data-copy-card");
 			expect(serialize(card).split(line)).toHaveLength(2);
-			expect(
-				card.attrs.find((attr: any) => attr.name === "class").value,
-			).toContain("intake-link-panel");
+			expect(attrOf(card, "class")).toContain("intake-link-panel");
 			const receipt = card.parentNode;
+
+			if (!receipt) throw new Error("The copy card has no parent.");
 			expect(receipt.childNodes.indexOf(card)).toBeLessThan(
-				receipt.childNodes.findIndex((node: any) => node.tagName === "ol"),
+				receipt.childNodes.findIndex(
+					(node) => isElement(node) && node.tagName === "ol",
+				),
 			);
 			expect(serialize(receipt).match(/data-copy-card/g)).toHaveLength(1);
 			expect(serialize(dom).match(/data-copy-status/g)).toHaveLength(1);
 			expect(
-				find(dom, "data-intake-progress").attrs.some(
-					(attr: any) => attr.name === "hidden",
-				),
+				hasAttr(elementWithAttr(dom, "data-intake-progress"), "hidden"),
 			).toBe(true);
-			expect(
-				find(dom, "data-copy-icon").attrs.some(
-					(attr: any) => attr.name === "hidden",
-				),
-			).toBe(status !== "sent" && status !== "uncertain");
-			const renderedNote = find(dom, "data-copy-note");
-			expect(
-				renderedNote.attrs.some((attr: any) => attr.name === "hidden"),
-			).toBe(note === null);
+			expect(hasAttr(elementWithAttr(dom, "data-copy-icon"), "hidden")).toBe(
+				status !== "sent" && status !== "uncertain",
+			);
+			const renderedNote = elementWithAttr(dom, "data-copy-note");
+			expect(hasAttr(renderedNote, "hidden")).toBe(note === null);
 
 			if (note) expect(serialize(renderedNote)).toBe(note);
 		}
@@ -4344,22 +4303,14 @@ it("renders the AI disclosure beside both answer boxes and the dated retention n
 	});
 
 	const document = parse(html);
-	const sections: any[] = [];
 
-	function visit(node: any) {
-		if (
-			node.tagName === "section" &&
-			node.attrs?.some(
-				(attr: any) =>
-					attr.name === "data-step" && ["1", "2"].includes(attr.value),
-			)
-		)
-			sections.push(node);
+	const sections = findElements(
+		document,
+		(element) =>
+			element.tagName === "section" &&
+			["1", "2"].includes(attrOf(element, "data-step") ?? ""),
+	);
 
-		for (const child of node.childNodes ?? []) visit(child);
-	}
-
-	visit(document);
 	expect(sections).toHaveLength(2);
 
 	for (const section of sections) {

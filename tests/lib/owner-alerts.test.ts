@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { sendUrgentOwnerAlert } from "~/lib/owner-alerts";
-import { double } from "../helpers/doubles";
+import { partial } from "../helpers/doubles";
 
 let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
 
 beforeEach(() => {
 	fetchMock = vi.fn<typeof fetch>(async () =>
-		double<Response>({ ok: true, status: 200 }),
+		partial<Response>({ ok: true, status: 200 }),
 	);
 	vi.stubGlobal("fetch", fetchMock);
 });
@@ -14,7 +14,7 @@ beforeEach(() => {
 describe("urgent owner alerts", () => {
 	it("sends only a safe category, route, request ID, code and time", async () => {
 		const ok = await sendUrgentOwnerAlert(
-			double<Env>({
+			partial<Env>({
 				RESEND_API_KEY: "secret",
 				CONTACT_FROM_EMAIL: "noreply@notifs.thesuperhuman.us",
 				CONTACT_TO_EMAIL: "owner@example.com",
@@ -40,7 +40,7 @@ describe("urgent owner alerts", () => {
 
 	it("stays quiet when alert delivery is not configured", async () => {
 		await expect(
-			sendUrgentOwnerAlert(double<Env>({}), {
+			sendUrgentOwnerAlert(partial<Env>({}), {
 				category: "request-storage",
 				route: "/api/music-interest",
 				requestId: "request-456",

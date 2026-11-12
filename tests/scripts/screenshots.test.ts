@@ -24,15 +24,16 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { runInNewContext } from "node:vm";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { prepareWithDiagnostics } from "../../scripts/screenshots/prepare.mjs";
 import { POST as sendOffer } from "../../src/pages/api/owner/requests/[id]/software";
 import { contractorSchema } from "../../src/lib/agreement-fields";
-import { double } from "../helpers/doubles";
-import { fakeLocals, sqliteD1 } from "../helpers/tests-other-fakes";
+import { partial } from "../helpers/doubles";
+import { fakeLocals } from "../helpers/runtime";
+import { sqliteD1 } from "../helpers/sqlite-d1";
 import {
 	BARE_LINK_LANDINGS,
 	expectedResourceError,
@@ -49,6 +50,66 @@ import {
 	screenshotSection,
 	withScreenshots,
 } from "../../scripts/screenshots/config.mjs";
+
+/** The members of a Playwright page or locator that one scenario step calls; a test supplies the ones its step uses. */
+type FakePage = Record<string, (...args: never[]) => void>;
+
+/** What a scenario hands its capture callback: the screenshot file, the route, and the step that prepares the page. */
+type Capture = {
+	file: string;
+	path: string;
+	status?: number;
+	prepare: (page: FakePage) => Promise<void>;
+};
+
+/** A route handler registered on the fake page. */
+/** The window the stub script runs against: the onload callback it calls, and the API it installs. */
+type FakeWindow = { loaded: Mock; turnstile?: TurnstileApi };
+
+/** The globals the held-request script runs against. */
+type Sandbox = {
+	window: { fetch: Mock };
+	location: { href: string };
+	URL: typeof URL;
+	Request: typeof Request;
+};
+
+/** What a page event handler receives: a console message, a request or a response, each with the members the scenario reads. */
+type PageEvent = {
+	type?: () => string;
+	text?: () => string;
+	url?: () => string;
+	method?: () => string;
+	status?: () => number;
+	request?: () => PageEvent;
+};
+
+/** The element the scenario's stub script renders a Turnstile widget into. */
+type TurnstileContainer = { appendChild?: Mock };
+
+/** The Turnstile API that the scenario's stub script puts on window. */
+type TurnstileApi = {
+	render(
+		container: TurnstileContainer,
+		options: { "response-field": boolean; callback: Mock },
+	): string;
+	getResponse(id: string): string;
+	reset(id: string): void;
+	execute(id: string): void;
+	ready(callback: Mock): void;
+	remove(id: string): void;
+};
+
+type RouteHandler = (route: {
+	fulfill: (response: never) => void;
+}) => Promise<void>;
+
+/** What a page's addInitScript takes: a script's source text or a function to run in the page. */
+type InitScript = string | ((...args: never[]) => void);
+
+/** A function the code under test passed to the fake page, as opposed to a string or a selector. */
+const isFunction = (value: InitScript): value is (...args: never[]) => void =>
+	value instanceof Function;
 
 function pageFiles(directory: string): string[] {
 	return readdirSync(directory).flatMap((name) => {
@@ -161,7 +222,7 @@ it("seeds a completed send so missing details reach the real agreement validatio
 
 		const send = () =>
 			sendOffer(
-				double<APIContext>({
+				partial<APIContext>({
 					params: { id: "screenshot-signing" },
 					request: new Request(
 						"https://example.com/api/owner/requests/screenshot-signing/software",
@@ -218,7 +279,7 @@ it("prepares attachment captures with visible Remove controls and a shrinking li
 				{ id: "sow", kind: "sow", hash: "b".repeat(64) },
 			],
 		}),
-		capture: async ({ file, prepare }: any) => {
+		capture: async ({ file, prepare }: Capture) => {
 			if (
 				!file.includes("attachment-remove-control") &&
 				!file.includes("attachment-removed")
@@ -245,13 +306,16 @@ it("prepares attachment captures with visible Remove controls and a shrinking li
 					})),
 			};
 
-			const locator: any = {
-				locator: (selector: string) =>
-					selector === "[data-remove-attachment]" ? remove : locator,
+			const locator = {
+				locator(selector: string) {
+					return selector === "[data-remove-attachment]" ? remove : this;
+				},
 				setInputFiles: async () => {},
 				fill: async () => {},
 				click: async () => {},
-				filter: () => locator,
+				filter() {
+					return this;
+				},
 				waitFor: async () => {},
 			};
 
@@ -412,7 +476,7 @@ describe("screenshot coverage", () => {
 					: "[]";
 			},
 			ownerFetch: async () => ({ documents }),
-			capture: async ({ file, path, status = 200, prepare }: any) => {
+			capture: async ({ file, path, status = 200, prepare }: Capture) => {
 				const url = new URL(path, "http://localhost");
 
 				if (!url.pathname.endsWith("/verify")) return file;
@@ -440,7 +504,10 @@ describe("screenshot coverage", () => {
 
 							return { isVisible: async () => true };
 						},
-						getByRole: (role: string, options: any) => {
+						getByRole: (
+							role: string,
+							options: { exact: boolean; name: string },
+						) => {
 							expect(options.exact).toBe(true);
 							expect(options.name).toBe(
 								expired
@@ -1152,13 +1219,13 @@ it.each([false, true])(
 		await scenario.default.run({
 			sql: () => "[]",
 			ownerFetch: async () => ({}),
-			capture: async ({ file, prepare }: any) => {
+			capture: async ({ file, prepare }: Capture) => {
 				if (file.includes("changes-open")) {
 					let marked = saved,
 						checked = false,
 						manual = false;
 
-					const first = (value: any) => ({ ...value, first: () => value });
+					const first = (value: FakePage) => ({ ...value, first: () => value });
 
 					const mark = {
 						getAttribute: async () => String(marked),
@@ -1222,14 +1289,24 @@ it("serves a scenario-local Turnstile API for silent and receipt widgets", async
 		"../../scripts/screenshots/scenarios/software-brief.mjs"
 	);
 
-	const routes = new Map<string, any>(),
+	const routes = new Map<string, RouteHandler>(),
 		callback = vi.fn(),
 		onload = vi.fn();
 
-	const inputs: any[] = [],
-		receipt = { appendChild: (input: any) => inputs.push(input) };
+	const inputs: { remove: Mock; name?: string; value?: string }[] = [],
+		receipt = {
+			appendChild: (input: { remove: Mock }) => inputs.push(input),
+		};
 
-	const window: any = { loaded: onload };
+	const handlerFor = (path: string): RouteHandler => {
+		const handler = routes.get(path);
+
+		if (!handler) throw new Error(`No route handler for ${path}`);
+
+		return handler;
+	};
+
+	const window: FakeWindow = { loaded: onload };
 
 	const document = {
 		createElement: () => ({ remove: vi.fn() }),
@@ -1242,17 +1319,23 @@ it("serves a scenario-local Turnstile API for silent and receipt widgets", async
 	await scenario.default.run({
 		base: "http://127.0.0.1:4321",
 		sql() {},
-		capture: async ({ file, prepare }: any) => {
+		capture: async ({ file, prepare }: Capture) => {
 			if (file !== "software-brief-suggestion-phone.png") return file;
 			await prepare({
 				on() {},
-				route: async (path: string, handler: any) => {
+				route: async (path: string, handler: RouteHandler) => {
 					routes.set(path, handler);
 				},
 				addInitScript: async () => {},
 				reload: async () => {
-					await routes.get("https://challenges.cloudflare.com/turnstile/**")({
-						fulfill: ({ body, contentType }: any) => {
+					await handlerFor("https://challenges.cloudflare.com/turnstile/**")({
+						fulfill: ({
+							body,
+							contentType,
+						}: {
+							body: string;
+							contentType: string;
+						}) => {
 							expect(contentType).toBe("application/javascript");
 							runInNewContext(body, { window, document, URL, queueMicrotask });
 						},
@@ -1268,6 +1351,9 @@ it("serves a scenario-local Turnstile API for silent and receipt widgets", async
 				}),
 			});
 			const api = window.turnstile;
+
+			if (!api)
+				throw new Error("The scenario did not define window.turnstile.");
 			expect(onload).toHaveBeenCalledOnce();
 			expect(inputs[0]).toMatchObject({
 				name: "cf-turnstile-response",
@@ -1288,7 +1374,7 @@ it("serves a scenario-local Turnstile API for silent and receipt widgets", async
 			api.remove("screenshot-widget-1");
 			expect(inputs[0].remove).toHaveBeenCalledOnce();
 			const fulfill = vi.fn();
-			await routes.get("**/api/software/brief/pass")({ fulfill });
+			await handlerFor("**/api/software/brief/pass")({ fulfill });
 			expect(fulfill).toHaveBeenCalledWith({ json: { ok: true } });
 
 			return file;
@@ -1316,7 +1402,7 @@ it.each(["reload", "API wait", "ghost wait"])(
 				scenario.default.run({
 					base: "http://127.0.0.1:4321",
 					sql() {},
-					capture: async ({ file, prepare }: any) => {
+					capture: async ({ file, prepare }: Capture) => {
 						if (file !== "software-brief-suggestion-phone.png") return file;
 						await prepare({
 							route: async () => {},
@@ -1327,7 +1413,7 @@ it.each(["reload", "API wait", "ghost wait"])(
 							waitForFunction: async () => {
 								if (stage === "API wait") throw failure;
 							},
-							on: (event: string, handler: any) => {
+							on: (event: string, handler: (event: PageEvent) => void) => {
 								if (event === "console")
 									handler({
 										type: () => "warning",
@@ -1387,7 +1473,7 @@ it.each(["desktop", "phone"])(
 		await scenario.default.run({
 			base: "http://127.0.0.1:4321",
 			sql() {},
-			capture: async ({ file, prepare }: any) => {
+			capture: async ({ file, prepare }: Capture) => {
 				if (file !== `software-brief-suggestion-${viewport}.png`) return file;
 				await prepare({
 					on() {},
@@ -1428,8 +1514,8 @@ it("holds the sending request whether fetch gets a string, a URL, a Request or a
 		route: async () => {},
 		reload: async () => {},
 		waitForFunction: async () => {},
-		addInitScript: async (fn: () => void) => {
-			if (fn.toString().includes("/api/software-inquiry"))
+		addInitScript: async (fn: InitScript) => {
+			if (isFunction(fn) && fn.toString().includes("/api/software-inquiry"))
 				script = fn.toString();
 		},
 		locator: () => ({
@@ -1447,7 +1533,7 @@ it("holds the sending request whether fetch gets a string, a URL, a Request or a
 	await scenario.default.run({
 		base: "http://127.0.0.1:4321",
 		sql() {},
-		capture: async ({ file, prepare }: any) => {
+		capture: async ({ file, prepare }: Capture) => {
 			if (file === "software-brief-sending-desktop.png") await prepare(page);
 
 			return file;
@@ -1460,7 +1546,7 @@ it("holds the sending request whether fetch gets a string, a URL, a Request or a
 
 	const passed: string[] = [];
 
-	const sandbox: any = {
+	const sandbox: Sandbox = {
 		window: {
 			fetch: vi.fn(async (input: RequestInfo | URL) => {
 				passed.push(String(input));
@@ -1532,7 +1618,13 @@ it("declares the mocked 503 only for send-failed captures at both widths", async
 	await scenario.default.run({
 		base: "http://127.0.0.1:4321",
 		sql() {},
-		capture: async ({ file, expectedResourceErrors = [] }: any) => {
+		capture: async ({
+			file,
+			expectedResourceErrors = [],
+		}: {
+			file: string;
+			expectedResourceErrors?: { url: string; status: number }[];
+		}) => {
 			if (expectedResourceErrors.length) {
 				allowances.push(file);
 				expect(expectedResourceErrors).toEqual([
@@ -1561,7 +1653,7 @@ it.each([
 	await scenario.default.run({
 		sql: () => "[]",
 		ownerFetch: async () => ({}),
-		capture: async ({ file, prepare }: any) => {
+		capture: async ({ file, prepare }: Capture) => {
 			if (file.includes("delivery-complete")) {
 				await prepare({
 					getByText: () => ({ isVisible: async () => true }),
@@ -1592,6 +1684,7 @@ describe("moved client modules", () => {
 	const manifest = {
 		pages: PAGES.map(({ name, path }) => ({ name, path })),
 		scenarios: [
+			"journal-pagination",
 			"owner-details",
 			"services-print",
 			"software-brief",
@@ -1645,7 +1738,7 @@ describe("moved client modules", () => {
 		["open-details-links", [], ["software-project"]],
 		["owner-agreements", [], ["software-signing"]],
 		["payload-review-illustration", TIMELINE_PAGES, []],
-		["project-timeline", TIMELINE_PAGES, []],
+		["project-timeline", TIMELINE_PAGES, ["journal-pagination"]],
 		["project-updates-feed", BUILDING_PROJECT_PAGES, []],
 		["release-interest", ["music-old-news"], []],
 		["resume-request-form", ["about"], []],
@@ -1661,6 +1754,19 @@ describe("moved client modules", () => {
 		["studio-sign-out", [], ["studio-client", "software-project"]],
 		["work-experience", ["work"], []],
 	];
+
+	it("selects the journal pagination scenario for the timeline component, on the pages that render it", () => {
+		const selected = relevantScreenshots(manifest, [
+			"src/components/ProjectTimeline.astro",
+		]);
+
+		expect(
+			selected.pages.map((page: { name: string }) => page.name).sort(),
+		).toEqual([...TIMELINE_PAGES].sort());
+		expect(
+			selected.scenarios.map((scenario: { name: string }) => scenario.name),
+		).toEqual(["journal-pagination"]);
+	});
 
 	it.each(moved)(
 		"selects the screenshots that render src/scripts/%s.ts",

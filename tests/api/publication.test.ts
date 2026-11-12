@@ -1,9 +1,8 @@
 import type { APIContext } from "astro";
 import { describe, it, expect, vi } from "vitest";
-import { double } from "../helpers/doubles";
-import { testRuntime } from "../helpers/tests-api-runtime";
-import type { JsonValue } from "../helpers/tests-api-json";
-import type { TestRuntime } from "../helpers/tests-api-runtime";
+import { double, partial } from "../helpers/doubles";
+import { testRuntime, type TestRuntime } from "../helpers/runtime";
+import type { JsonValue } from "../helpers/json";
 
 const { commit, read } = vi.hoisted(() => ({ commit: vi.fn(), read: vi.fn() }));
 
@@ -36,7 +35,7 @@ function ctx(
 	env: Partial<TestRuntime["env"]> = {},
 	token = "secret",
 ): APIContext {
-	return double<APIContext>({
+	return partial<APIContext>({
 		locals: {
 			runtime: testRuntime({
 				PUBLICATION_DB: double<D1Database>({}),

@@ -8,7 +8,7 @@ import {
 	saveInterest,
 	saveEvent,
 } from "~/lib/music-demand";
-import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
+import { sqliteD1 } from "../helpers/sqlite-d1";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 

@@ -129,7 +129,7 @@ function demoAmountsFor(scene: string): readonly string[] {
 
 /** The scene page as a tree of Node, the members the walkers below read. */
 function parseScene(scene: string): Node {
-	// SAFETY: parse5 returns a document tree whose nodes have nodeName, value and childNodes, the only members the lines and allText walkers read from a Node.
+	// SAFETY: parse5 returns a document tree whose nodes have nodeName, value, childNodes and (for a template) content, the only members the lines and allText walkers read from a Node.
 	return parse(readFileSync(join(SCENES, `${scene}.html`), "utf8")) as Node;
 }
 
@@ -189,7 +189,7 @@ describe("link-preview scene copy", () => {
 			(line) =>
 				!corpus.includes(line) &&
 				!composed.has(line) &&
-				!labelsFor(scene)[line],
+				!Object.hasOwn(labelsFor(scene), line),
 		);
 
 		expect(stale, `re-render ${scene} after updating it`).toEqual([]);

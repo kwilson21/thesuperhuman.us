@@ -1,7 +1,7 @@
 import type { APIContext } from "astro";
 import { beforeEach, expect, it, vi, type Mock } from "vitest";
-import { double } from "../helpers/doubles";
-import type { TestRuntime } from "../helpers/tests-api-runtime";
+import { double, partial } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
 import { POST } from "~/pages/api/owner/projects/[id]/invitation";
 import {
 	deliverProjectInvitation,
@@ -49,8 +49,8 @@ function context(
 		locals: {
 			owner:
 				options.owner === false ? undefined : { email: "owner@example.com" },
-			runtime: double<TestRuntime>({
-				env: double<TestRuntime["env"]>(env),
+			runtime: partial<TestRuntime>({
+				env: partial<TestRuntime["env"]>(env),
 				ctx: double<ExecutionContext>({ waitUntil }),
 			}),
 		},

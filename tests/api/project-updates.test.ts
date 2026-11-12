@@ -1,8 +1,8 @@
 import type { APIContext } from "astro";
 import { beforeEach, expect, it, vi } from "vitest";
-import { double } from "../helpers/doubles";
-import type { TestRuntime } from "../helpers/tests-api-runtime";
-import type { JsonObject } from "../helpers/tests-api-json";
+import { double, partial } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
+import type { JsonObject } from "../helpers/json";
 import { POST } from "~/pages/api/owner/projects/[id]/updates";
 import {
 	deliverProjectUpdateNotice,
@@ -21,7 +21,7 @@ function context(
 	body: JsonObject,
 	options: { owner?: boolean; enabled?: boolean; origin?: string } = {},
 ): APIContext {
-	return double<APIContext>({
+	return partial<APIContext>({
 		params: { id: "song-1" },
 		request: new Request(
 			"https://thesuperhuman.us/api/owner/projects/song-1/updates",
@@ -37,8 +37,8 @@ function context(
 		locals: {
 			owner:
 				options.owner === false ? undefined : { email: "owner@example.com" },
-			runtime: double<TestRuntime>({
-				env: double<TestRuntime["env"]>({
+			runtime: partial<TestRuntime>({
+				env: partial<TestRuntime["env"]>({
 					AUDIO_CLIENT_PORTAL_ENABLED:
 						options.enabled === false ? "false" : "true",
 					MUSIC_DB: double<D1Database>({}),
@@ -81,7 +81,7 @@ it("allows only the owner through the disabled-by-default project gate", async (
 
 it("saves first and schedules a separate minimal email delivery", async () => {
 	vi.mocked(saveProjectUpdate).mockResolvedValueOnce(
-		double<NonNullable<Awaited<ReturnType<typeof saveProjectUpdate>>>>({
+		partial<NonNullable<Awaited<ReturnType<typeof saveProjectUpdate>>>>({
 			id: 7,
 			kind: "progress",
 			notification_status: "pending",

@@ -10,8 +10,8 @@ import {
 	saveProjectUpdate,
 	validProjectDate,
 } from "~/lib/audio-project-updates";
-import { double } from "../helpers/doubles";
-import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
+import { partial } from "../helpers/doubles";
+import { sqliteD1 } from "../helpers/sqlite-d1";
 
 vi.mock("~/lib/audio-resend", () => ({
 	sendStudioSignInNotice: vi.fn(async () => ({ ok: true })),
@@ -198,7 +198,7 @@ describe("project updates", () => {
 			now,
 		))!;
 
-		const env = double<Env>({
+		const env = partial<Env>({
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "noreply@example.com",
 		});
@@ -371,7 +371,7 @@ describe("project updates", () => {
 			now,
 		))!;
 
-		const env = double<Env>({
+		const env = partial<Env>({
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "noreply@example.com",
 		});
@@ -444,7 +444,7 @@ describe("project updates", () => {
 		await deliverProjectUpdateNotice(
 			db,
 			update.id,
-			double<Env>({
+			partial<Env>({
 				RESEND_API_KEY: "test",
 				CONTACT_FROM_EMAIL: "noreply@example.com",
 			}),

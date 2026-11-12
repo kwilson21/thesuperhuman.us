@@ -1,9 +1,9 @@
 import type { APIContext } from "astro";
 import { expect, it } from "vitest";
 import { POST, PUT } from "~/pages/api/owner/projects/[id]/uploads";
-import { double } from "../helpers/doubles";
-import { rowD1 } from "../helpers/tests-api-d1";
-import { testRuntime } from "../helpers/tests-api-runtime";
+import { double, partial } from "../helpers/doubles";
+import { rowD1 } from "../helpers/sqlite-d1";
+import { testRuntime } from "../helpers/runtime";
 
 const uuid = "98f3c6a7-9d1e-4f44-ae41-74db25122e14";
 const url = "https://thesuperhuman.us/api/owner/projects/song-1/uploads";
@@ -21,7 +21,7 @@ it("fails closed without owner access or the portal gate", async () => {
 		}),
 	});
 
-	const context = double<APIContext>({
+	const context = partial<APIContext>({
 		params: { id: "song-1" },
 		request,
 		locals: { runtime: testRuntime({ AUDIO_CLIENT_PORTAL_ENABLED: "false" }) },
@@ -58,7 +58,7 @@ it("rejects a wrongly sized part before sending it to R2", async () => {
 		body: new Uint8Array(9),
 	});
 
-	const context = double<APIContext>({
+	const context = partial<APIContext>({
 		params: { id: "song-1" },
 		request,
 		locals: {
@@ -99,7 +99,7 @@ it("checks the received part size even without a content-length header", async (
 
 	const request = new Request(`${url}?uploadId=${uuid}&part=1`, init);
 
-	const context = double<APIContext>({
+	const context = partial<APIContext>({
 		params: { id: "song-1" },
 		request,
 		locals: {

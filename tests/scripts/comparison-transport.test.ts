@@ -1,16 +1,43 @@
-import { describe, expect, it, vi } from "vitest";
-import { double } from "../helpers/doubles";
+import { describe, expect, it, vi, type Mock } from "vitest";
+import { partial } from "../helpers/doubles";
 import { ComparisonTransport } from "../../src/scripts/comparison-transport";
 
+/** An audio buffer source with the members the transport calls; the transport sets and clears onended. */
+type FakeSource = {
+	buffer: null;
+	connect: Mock;
+	disconnect: Mock;
+	start: Mock;
+	stop: Mock;
+	onended: (() => void) | null;
+};
+
+/** A gain node with the members the transport calls. */
+type FakeGain = {
+	gain: {
+		value: number;
+		cancelScheduledValues: Mock;
+		setTargetAtTime: Mock;
+	};
+	connect: Mock;
+};
+
+/** The ended callback the transport set on a source; a source without one fails the test. */
+function endedCallback(source: FakeSource): () => void {
+	if (!source.onended) throw new Error("The transport set no ended callback.");
+
+	return source.onended;
+}
+
 function fixture() {
-	const sources: any[] = [],
-		gains: any[] = [];
+	const sources: FakeSource[] = [],
+		gains: FakeGain[] = [];
 
 	const context = {
 		currentTime: 10,
 		destination: {},
 		createGain() {
-			const node = {
+			const node: FakeGain = {
 				gain: {
 					value: 0,
 					cancelScheduledValues: vi.fn(),
@@ -24,7 +51,7 @@ function fixture() {
 			return node;
 		},
 		createBufferSource() {
-			const source = {
+			const source: FakeSource = {
 				buffer: null,
 				connect: vi.fn(),
 				disconnect: vi.fn(),
@@ -43,8 +70,8 @@ function fixture() {
 		// SAFETY: ComparisonTransport reads only currentTime, destination, createGain and createBufferSource from the context, and the fake supplies each of them; its nodes are plain objects with the members the transport uses.
 		context as never,
 		[
-			double<AudioBuffer>({ duration: 160.3 }),
-			double<AudioBuffer>({ duration: 160 }),
+			partial<AudioBuffer>({ duration: 160.3 }),
+			partial<AudioBuffer>({ duration: 160 }),
 		],
 		[0.05, 0],
 		160,
@@ -97,11 +124,11 @@ describe("shared comparison clock", () => {
 	it("uses the common playable duration and ignores stale ended callbacks after a seek", () => {
 		const { transport, sources } = fixture();
 		transport.play();
-		const ended = sources[0].onended;
+		const ended = endedCallback(sources[0]);
 		transport.seek(30);
 		ended();
 		expect(transport.playing).toBe(true);
-		sources[2].onended();
+		endedCallback(sources[2])();
 		expect(transport.playing).toBe(false);
 		expect(transport.position).toBe(160);
 		transport.play();

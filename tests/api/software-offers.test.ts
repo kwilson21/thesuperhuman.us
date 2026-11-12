@@ -4,9 +4,11 @@ import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { POST } from "~/pages/api/owner/requests/[id]/software";
 import type { APIContext } from "astro";
 import { getLinkedOffer, hashOfferToken } from "~/lib/software-offers";
-import { double } from "../helpers/doubles";
-import { boundQuery, sqliteD1 } from "../helpers/tests-api-d1";
-import { jsonBody, type JsonObject } from "../helpers/tests-api-json";
+import { partial } from "../helpers/doubles";
+import { testRuntime } from "../helpers/runtime";
+import { boundQuery } from "../helpers/d1";
+import { sqliteD1 } from "../helpers/sqlite-d1";
+import { readJson, type JsonObject } from "../helpers/json";
 
 /** The fields of an offer response that these tests read. A response without one fails the expect() that reads it. */
 type OfferResponse = {
@@ -17,13 +19,6 @@ type OfferResponse = {
 	uncertain: boolean;
 	emailSent: boolean;
 };
-
-type TestRuntime = APIContext["locals"]["runtime"];
-
-/** A runtime with the env bindings the test supplies. */
-function testRuntime(members: Partial<TestRuntime["env"]>): TestRuntime {
-	return double<TestRuntime>({ env: double<TestRuntime["env"]>(members) });
-}
 
 /** The token at the end of an offer link. split() always returns at least one segment. */
 function linkToken(link: string): string {
@@ -73,7 +68,7 @@ afterEach(() => {
 
 async function call(body: JsonObject, owner = true, origin?: string) {
 	return POST(
-		double<APIContext>({
+		partial<APIContext>({
 			params: { id: "software" },
 			request: new Request(
 				"https://thesuperhuman.us/api/owner/requests/software/software",
@@ -104,7 +99,7 @@ async function draft(expectedUpdatedAt: string | null = null) {
 	const response = await call({ action: "draft", terms, expectedUpdatedAt });
 	expect(response.status).toBe(200);
 
-	return jsonBody<OfferResponse>(response);
+	return readJson<OfferResponse>(response);
 }
 
 async function send(value: Pick<OfferResponse, "version" | "updatedAt">) {
@@ -116,7 +111,7 @@ async function send(value: Pick<OfferResponse, "version" | "updatedAt">) {
 
 	expect(response.status).toBe(200);
 
-	return jsonBody<OfferResponse>(response);
+	return readJson<OfferResponse>(response);
 }
 
 it.each(["fit", "draft", "send", "revoke", "question", "decline"])(
@@ -441,7 +436,7 @@ it("uses the isolated site origin for the client link and email", async () => {
 		"https://preview.example.workers.dev",
 	);
 
-	const result = await jsonBody<OfferResponse>(response);
+	const result = await readJson<OfferResponse>(response);
 	expect(result.link).toMatch(
 		/^https:\/\/preview.example.workers.dev\/offer\//,
 	);
@@ -571,7 +566,7 @@ it.each(["resolve", "decline"])(
 
 		const change = (action: string) =>
 			changeRequest(
-				double<APIContext>({
+				partial<APIContext>({
 					params: { id: "software" },
 					request: new Request(
 						"https://example.com/api/owner/requests/software",
@@ -635,7 +630,7 @@ it("advances fit timestamps, rejects a stale tab and changes the retention snaps
 		expectedRequestUpdatedAt: "now",
 	});
 
-	const result = await jsonBody<OfferResponse>(response);
+	const result = await readJson<OfferResponse>(response);
 	expect(response.status).toBe(200);
 	expect(
 		sql.prepare("SELECT updated_at FROM owner_requests").get().updated_at,
@@ -668,7 +663,7 @@ it("returns the current draft timestamp for a recoverable save conflict", async 
 	});
 
 	expect(conflict.status).toBe(409);
-	const result = await jsonBody<OfferResponse>(conflict);
+	const result = await readJson<OfferResponse>(conflict);
 	expect(result.updatedAt).toBe(saved.updatedAt);
 	expect(
 		(
@@ -745,11 +740,11 @@ it("rejects generic actions from a tab predating the fit save", async () => {
 		expectedRequestUpdatedAt: "now",
 	});
 
-	const { updatedAt } = await jsonBody<OfferResponse>(fit);
+	const { updatedAt } = await readJson<OfferResponse>(fit);
 
 	const action = (expectedUpdatedAt: string) =>
 		requestPost(
-			double<APIContext>({
+			partial<APIContext>({
 				params: { id: "software" },
 				request: new Request(
 					"https://thesuperhuman.us/api/owner/requests/software",
@@ -859,7 +854,7 @@ async function withdraw() {
 	const { POST: requestPost } = await import("~/pages/api/owner/requests/[id]");
 
 	return requestPost(
-		double<APIContext>({
+		partial<APIContext>({
 			params: { id: "software" },
 			request: new Request("https://example.com/api/owner/requests/software", {
 				method: "POST",

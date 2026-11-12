@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { resolveCampaignTag } from "~/lib/owner-campaigns";
 import { double } from "../helpers/doubles";
-import { fakeFirst } from "../helpers/tests-lib-a-bindings";
+import { fakeFirst } from "../helpers/d1";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 

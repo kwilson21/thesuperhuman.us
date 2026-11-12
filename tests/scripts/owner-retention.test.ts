@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import type { SqliteRow } from "../helpers/tests-other-fakes";
+import type { SqliteRow } from "../helpers/sqlite-d1";
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import {

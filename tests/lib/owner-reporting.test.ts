@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
-import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
+import { sqliteD1 } from "../helpers/sqlite-d1";
 import {
 	listStudioProjectAttention,
 	loadCampaignDesk,

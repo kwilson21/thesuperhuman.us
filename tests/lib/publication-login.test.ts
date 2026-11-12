@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
-import { double } from "../helpers/doubles";
+import { double, partial } from "../helpers/doubles";
 import {
 	publicationLogin,
 	publicationResource,
@@ -25,7 +25,7 @@ function fixture(overrides = {}) {
 		redirectTo: "https://chatgpt.com/callback?code=issued",
 	}));
 
-	const env = double<LoginEnv>({
+	const env = partial<LoginEnv>({
 		PUBLICATION_PROJECTS: "threadline",
 		PUBLICATION_OWNER_ID: "10987837",
 		PUBLICATION_GITHUB_CLIENT_ID: "public-client",
@@ -37,9 +37,11 @@ function fixture(overrides = {}) {
 				...overrides,
 			})),
 			lookupClient: vi.fn<OAuthHelpers["lookupClient"]>(async () =>
-				double<NonNullable<Awaited<ReturnType<OAuthHelpers["lookupClient"]>>>>({
-					clientName: "<script>evil</script>",
-				}),
+				partial<NonNullable<Awaited<ReturnType<OAuthHelpers["lookupClient"]>>>>(
+					{
+						clientName: "<script>evil</script>",
+					},
+				),
 			),
 			completeAuthorization: complete,
 		}),

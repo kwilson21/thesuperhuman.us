@@ -2,9 +2,10 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import type { APIContext } from "astro";
 import { beforeEach, expect, it } from "vitest";
-import { double } from "../helpers/doubles";
-import { byteRange, bytesStream } from "../helpers/tests-api-r2";
-import { sqliteD1 } from "../helpers/tests-api-d1";
+import { double, partial } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
+import { byteRange, bytesStream } from "../helpers/r2";
+import { sqliteD1 } from "../helpers/sqlite-d1";
 import { GET, HEAD } from "~/pages/api/studio/projects/[id]/files/[fileId]";
 import { completeClientCode, issueClientCode } from "~/lib/audio-client-access";
 import {
@@ -22,8 +23,6 @@ const baseline = readFileSync(
 const secret = "studio-code-key-for-tests-32-characters";
 const now = new Date();
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database, token: string;
-
-type TestRuntime = APIContext["locals"]["runtime"];
 
 let bucket: R2Bucket;
 
@@ -102,11 +101,11 @@ beforeEach(async () => {
 	);
 	const bytes = new Uint8Array([1, 2, 3, 4, 5]);
 	bucket = double<R2Bucket>({
-		head: async () => double<R2Object>({ size: bytes.length }),
+		head: async () => partial<R2Object>({ size: bytes.length }),
 		get: async (_key: string, options?: R2GetOptions) => {
 			const range = byteRange(options?.range);
 
-			return double<R2ObjectBody>({
+			return partial<R2ObjectBody>({
 				body: bytesStream(
 					range
 						? bytes.slice(range.offset, range.offset + range.length)
@@ -137,15 +136,15 @@ function context(
 
 	if (options.range) headers.set("range", options.range);
 
-	return double<APIContext>({
+	return partial<APIContext>({
 		params: { id: project, fileId },
 		request: new Request(url, {
 			method: options.method ?? "GET",
 			headers,
 		}),
 		locals: {
-			runtime: double<TestRuntime>({
-				env: double<TestRuntime["env"]>({
+			runtime: partial<TestRuntime>({
+				env: partial<TestRuntime["env"]>({
 					AUDIO_CLIENT_PORTAL_ENABLED: "true",
 					MUSIC_DB: db,
 					AUDIO: bucket,

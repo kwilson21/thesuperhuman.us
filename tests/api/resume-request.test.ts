@@ -1,10 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { APIContext } from "astro";
 import { POST } from "~/pages/api/resume-request";
-import { double, fakeKv } from "../helpers/doubles";
-import { jsonBody, type JsonObject } from "../helpers/tests-api-json";
-
-type TestRuntime = APIContext["locals"]["runtime"];
+import { double, partial, fakeKv } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
+import { readJson, type JsonObject } from "../helpers/json";
 
 const validBody = {
 	name: "Jane Doe",
@@ -37,7 +36,7 @@ function makeContext(
 ) {
 	const sharedKv = fakeKv(kv ?? makeKv());
 
-	return double<APIContext>({
+	return partial<APIContext>({
 		request: new Request("https://thesuperhuman.us/api/resume-request", {
 			method: "POST",
 			headers: {
@@ -47,9 +46,9 @@ function makeContext(
 			},
 			body: JSON.stringify(body),
 		}),
-		locals: double<APIContext["locals"]>({
-			runtime: double<TestRuntime>({
-				env: double<TestRuntime["env"]>({
+		locals: partial<APIContext["locals"]>({
+			runtime: partial<TestRuntime>({
+				env: partial<TestRuntime["env"]>({
 					RESEND_API_KEY: "key",
 					TURNSTILE_SECRET_KEY: "secret",
 					CONTACT_TO_EMAIL: "kazon.wilson@thesuperhuman.us",
@@ -61,6 +60,10 @@ function makeContext(
 		}),
 	});
 }
+
+/** A fetch input given as a URL string, not a Request or a URL object. */
+const isUrlString = (input: RequestInfo | URL): input is string =>
+	!(input instanceof Request) && !(input instanceof URL);
 
 beforeEach(() => {
 	vi.stubGlobal(
@@ -91,7 +94,7 @@ describe("POST /api/resume-request", () => {
 	it("returns 200 ok=true on valid submission", async () => {
 		const res = await POST(makeContext(validBody));
 		expect(res.status).toBe(200);
-		const json = await jsonBody<{ ok: boolean }>(res);
+		const json = await readJson<{ ok: boolean }>(res);
 		expect(json.ok).toBe(true);
 	});
 
@@ -99,7 +102,7 @@ describe("POST /api/resume-request", () => {
 		const res = await POST(makeContext({ ...validBody, audience: "sales" }));
 		expect(res.status).toBe(400);
 
-		const json = await jsonBody<{
+		const json = await readJson<{
 			ok: boolean;
 			errors?: Record<string, string>;
 		}>(res);
@@ -196,14 +199,16 @@ describe("POST /api/resume-request", () => {
 		);
 
 		const reqEntries = Array.from(kv.put.mock.calls).filter((c) =>
-			String(c[0]).startsWith("req:"),
+			c[0].startsWith("req:"),
 		);
 
 		expect(reqEntries.length).toBe(1);
 
 		const resendCall = vi
 			.mocked(fetch)
-			.mock.calls.find(([input]) => String(input).includes("resend.com"));
+			.mock.calls.find(
+				([input]) => isUrlString(input) && input.includes("resend.com"),
+			);
 
 		expect(resendCall).toBeTruthy();
 		const body = JSON.parse(String(resendCall?.[1]?.body));

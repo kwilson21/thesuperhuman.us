@@ -1,8 +1,8 @@
 import type { APIContext } from "astro";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { double } from "../helpers/doubles";
-import type { JsonObject } from "../helpers/tests-api-json";
-import type { TestRuntime } from "../helpers/tests-api-runtime";
+import { double, partial } from "../helpers/doubles";
+import type { JsonObject } from "../helpers/json";
+import type { TestRuntime } from "../helpers/runtime";
 import { POST as requestCode } from "~/pages/api/studio/code";
 import { POST as completeCode } from "~/pages/api/studio/session";
 import { POST as signOut } from "~/pages/api/studio/sign-out";
@@ -39,7 +39,7 @@ function context(
 ): StudioContext {
 	const pending: Promise<unknown>[] = [];
 
-	return double<StudioContext>({
+	return partial<StudioContext>({
 		request: new Request(`https://thesuperhuman.us${path}`, {
 			method: "POST",
 			headers: {
@@ -49,13 +49,13 @@ function context(
 			body: JSON.stringify(body),
 		}),
 		locals: {
-			runtime: double<TestRuntime>({
+			runtime: partial<TestRuntime>({
 				ctx: double<ExecutionContext>({
 					waitUntil: vi.fn((work: Promise<unknown>) => {
 						pending.push(work);
 					}),
 				}),
-				env: double<TestRuntime["env"]>({
+				env: partial<TestRuntime["env"]>({
 					AUDIO_CLIENT_PORTAL_ENABLED: enabled ? "true" : "false",
 					AUDIO_CLIENT_CODE_KEY: "a".repeat(32),
 					MUSIC_DB: double<D1Database>({}),

@@ -1,8 +1,7 @@
 import { createRequire } from "node:module";
-import type { SqliteRow } from "../helpers/tests-other-fakes";
+import { type SqliteRow, sqliteD1 } from "../helpers/sqlite-d1";
 import { readFileSync } from "node:fs";
 import { expect, it, vi } from "vitest";
-import { sqliteD1 } from "../helpers/tests-other-fakes";
 import {
 	applyStudioRetention,
 	studioRetentionCompletion,

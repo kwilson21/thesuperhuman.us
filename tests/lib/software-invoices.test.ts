@@ -8,7 +8,7 @@ import {
 } from "~/lib/software-invoices";
 import type { OfferTerms } from "~/lib/software-offers";
 import { fakeD1 } from "../helpers/doubles";
-import { sqliteD1 } from "../helpers/tests-lib-b-d1";
+import { sqliteD1 } from "../helpers/sqlite-d1";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 

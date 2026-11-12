@@ -21,9 +21,10 @@ import {
 } from "~/lib/agreement-pdf";
 import { canonicalJson, hashBytes } from "~/lib/agreement-artifacts";
 import type { Agreement } from "~/lib/software-agreements";
-import { double } from "../helpers/doubles";
-import { fakeD1First, fakeR2Bytes } from "../helpers/tests-lib-a-bindings";
-import { rawStreamOf } from "../helpers/tests-lib-a-pdf";
+import { double, partial } from "../helpers/doubles";
+import { fakeD1First } from "../helpers/d1";
+import { fakeR2Bytes } from "../helpers/r2";
+import { rawStreamOf } from "../helpers/pdf";
 
 const assets = double<Fetcher>({
 	fetch: async () => {
@@ -36,7 +37,7 @@ function document(
 	text: string,
 	offer = "current",
 ): Agreement {
-	return double<Agreement>({
+	return partial<Agreement>({
 		id: kind,
 		kind,
 		offer_id: offer,
@@ -124,7 +125,7 @@ it("renders selectable full legal text, Unicode, wrapped long words, certificate
 		{ key: "attachment", sha256: await hashBytes(bytes) },
 	]);
 
-	const env = double<Env>({
+	const env = partial<Env>({
 		ASSETS: assets,
 		AUDIO: fakeR2Bytes(bytes),
 	});
@@ -168,7 +169,7 @@ it("renders selectable full legal text, Unicode, wrapped long words, certificate
 });
 
 it("imports the original executed MSA pages unchanged before the later SOW", async () => {
-	const env = double<Env>({ ASSETS: assets });
+	const env = partial<Env>({ ASSETS: assets });
 
 	const original = await renderAgreementPacket(
 		env,
@@ -242,7 +243,7 @@ it("preflights exact attachment merge inputs and rejects a missing original MSA 
 	});
 
 	const templates = (["msa", "sow"] as const).map((kind) =>
-		double<AgreementTemplate>({
+		partial<AgreementTemplate>({
 			kind,
 			version: 1,
 			published_at: "2026-10-01T12:00:00.000Z",
@@ -264,7 +265,7 @@ it("preflights exact attachment merge inputs and rejects a missing original MSA 
 		}),
 	);
 
-	const env = double<Env>({
+	const env = partial<Env>({
 		ASSETS: assets,
 		MUSIC_DB: fakeD1First(null),
 	});
@@ -337,7 +338,7 @@ it("bundles exactly the licensed source font bytes", () => {
 it("sets headings in Libron and agreement text in Inter", async () => {
 	const pdf = await PDFDocument.load(
 		await renderAgreementPacket(
-			double<Env>({ ASSETS: assets }),
+			partial<Env>({ ASSETS: assets }),
 			[
 				document(
 					"sow",
@@ -392,7 +393,7 @@ it("formats PDF certificate dates in New York without changing source evidence",
 
 	const pdf = await PDFDocument.load(
 		await renderAgreementPacket(
-			double<Env>({ ASSETS: assets }),
+			partial<Env>({ ASSETS: assets }),
 			[document("sow", "Exact retained agreement")],
 			[certificate],
 		),
@@ -409,7 +410,7 @@ it("formats PDF certificate dates in New York without changing source evidence",
 it("draws only the document title in the page header when a certificate has no version label", async () => {
 	const pdf = await PDFDocument.load(
 		await renderAgreementPacket(
-			double<Env>({ ASSETS: assets }),
+			partial<Env>({ ASSETS: assets }),
 			[document("sow", "Exact header text")],
 			[{ executed_at: "2026-09-30T13:15:43.382Z", effective_on: "2026-09-30" }],
 		),
@@ -540,7 +541,7 @@ async function checkTemplatePacket(
 	}));
 
 	const pdf = await PDFDocument.load(
-		await renderAgreementPacket(double<Env>({}), docs, certificates),
+		await renderAgreementPacket(partial<Env>({}), docs, certificates),
 	);
 
 	const text = extract(pdf).replace(/\s+/g, " ");
@@ -627,7 +628,7 @@ it("prints each document's own version label in its page headers and in the cert
 	];
 
 	const pdf = await PDFDocument.load(
-		await renderAgreementPacket(double<Env>({}), docs, certificates),
+		await renderAgreementPacket(partial<Env>({}), docs, certificates),
 	);
 
 	const text = extract(pdf).replace(/\s+/g, " ");
@@ -670,7 +671,11 @@ it("preserves heading characters absent from Libron using Inter", async () => {
 	const text = "1 Client " + character;
 
 	const pdf = await PDFDocument.load(
-		await renderAgreementPacket(double<Env>({}), [document("sow", text)], [{}]),
+		await renderAgreementPacket(
+			partial<Env>({}),
+			[document("sow", text)],
+			[{}],
+		),
 	);
 
 	expect(extract(pdf)).toContain("Client " + character);
@@ -702,7 +707,7 @@ it.each([false, true])(
 
 		const pdf = await PDFDocument.load(
 			await renderAgreementPacket(
-				double<Env>({ ASSETS: assets }),
+				partial<Env>({ ASSETS: assets }),
 				[document("sow", "Exact retained agreement")],
 				[certificate],
 			),

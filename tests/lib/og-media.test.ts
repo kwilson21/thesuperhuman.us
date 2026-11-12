@@ -10,12 +10,10 @@ import {
 	ogMedia,
 	ogSceneFor,
 	serveOgVideo,
-	type OgScene,
 } from "~/lib/og-media";
+import { keysOf } from "../helpers/keys";
 
-const isOgScene = (key: string): key is OgScene => key in OG_SCENES;
-
-const scenes = Object.keys(OG_SCENES).filter(isOgScene);
+const scenes = keysOf(OG_SCENES);
 
 const sceneFiles = readdirSync("scripts/og-video/scenes")
 	.filter((name) => name.endsWith(".html"))

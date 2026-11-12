@@ -50,10 +50,7 @@ const reader =
 	async (start: number, end: number) => {
 		log.push(end - start);
 
-		return buffer.buffer.slice(
-			buffer.byteOffset + start,
-			buffer.byteOffset + end,
-		) as ArrayBuffer;
+		return new Uint8Array(buffer.subarray(start, end)).buffer;
 	};
 
 describe("audio peaks", () => {

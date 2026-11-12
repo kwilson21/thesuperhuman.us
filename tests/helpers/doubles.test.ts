@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { double, fakeD1, fakeKv } from "./doubles";
+import { double, fakeD1, fakeKv, partial } from "./doubles";
 
 describe("double", () => {
 	it("returns the members it is given, as the same object", () => {
@@ -11,6 +11,23 @@ describe("double", () => {
 	it("rejects a member of the wrong type at compile time", () => {
 		// @ts-expect-error prepare must be a function, not a number
 		const bad = double<D1Database>({ prepare: 1 });
+
+		expect(bad).toBeDefined();
+	});
+});
+
+describe("partial", () => {
+	it("returns the fields it is given, as the same object, and every other field reads undefined", () => {
+		const fields = { ok: true, status: 200 };
+		const response = partial<Response>(fields);
+
+		expect(response).toBe(fields);
+		expect(response.statusText).toBeUndefined();
+	});
+
+	it("rejects a field of the wrong type at compile time", () => {
+		// @ts-expect-error status must be a number, not a string
+		const bad = partial<Response>({ status: "200" });
 
 		expect(bad).toBeDefined();
 	});
@@ -38,5 +55,13 @@ describe("fakeKv", () => {
 		const kv = fakeKv({ get });
 
 		expect(kv.get).toBe(get);
+	});
+
+	it("accepts put, delete and list, and throws for a member the test did not supply", async () => {
+		const list = async () => ({ keys: [], list_complete: true });
+		const kv = fakeKv({ get: async () => null, list });
+
+		expect(kv.list).toBe(list);
+		expect(() => kv.put("key", "value")).toThrow(TypeError);
 	});
 });

@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
+import { sqliteD1 } from "../helpers/sqlite-d1";
 import {
 	changeOwnerRequest,
 	getOwnerRequest,

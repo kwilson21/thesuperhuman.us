@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
+import { sqliteD1 } from "../helpers/sqlite-d1";
 import { describe, expect, it } from "vitest";
 import {
 	clientProjectForSession,
@@ -59,12 +59,11 @@ describe("audio client access", () => {
 		const code = await issueClientCode(db, "artist@example.com", secret, now);
 		expect(code).toMatch(/^\d{8}$/);
 
-		// SAFETY: the statement selects only code_hash, a NOT NULL TEXT column of audio_client_codes (db/music.sql), and issueClientCode above has just written a code for this email, so the row exists and has that key.
-		const stored = sql
+		const stored: { code_hash: string } = sql
 			.prepare(
 				"SELECT code_hash FROM audio_client_codes WHERE email='artist@example.com'",
 			)
-			.get() as { code_hash: string };
+			.get();
 
 		expect(stored.code_hash).not.toBe(code);
 		expect(stored.code_hash).toMatch(/^[0-9a-f]{64}$/);
@@ -224,10 +223,9 @@ describe("audio client access", () => {
 			),
 		).toBe(true);
 
-		// SAFETY: the statement selects only key, the TEXT PRIMARY KEY column of audio_client_allowances (db/music.sql), so each row has a string key.
-		const stored = sql
+		const stored: { key: string }[] = sql
 			.prepare("SELECT key FROM audio_client_allowances")
-			.all() as { key: string }[];
+			.all();
 
 		expect(stored.every((row) => !row.key.includes("artist"))).toBe(true);
 		sql.close();

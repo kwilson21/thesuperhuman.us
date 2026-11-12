@@ -1,6 +1,7 @@
 import type { APIContext } from "astro";
 import { afterEach, expect, it, vi } from "vitest";
-import { double } from "../helpers/doubles";
+import { partial } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
 import { POST } from "~/pages/api/software/brief/pass";
 import {
 	createSuggestionPass,
@@ -10,13 +11,11 @@ import {
 
 const secret = "existing-turnstile-secret-for-tests";
 
-type TestRuntime = APIContext["locals"]["runtime"];
-
 const context = (
 	token = "token",
 	overrides: Partial<TestRuntime["env"]> = {},
 ): APIContext =>
-	double<APIContext>({
+	partial<APIContext>({
 		request: new Request("https://example.com/api/software/brief/pass", {
 			method: "POST",
 			headers: {
@@ -26,9 +25,9 @@ const context = (
 			},
 			body: JSON.stringify({ token }),
 		}),
-		locals: double<APIContext["locals"]>({
-			runtime: double<TestRuntime>({
-				env: double<TestRuntime["env"]>({
+		locals: partial<APIContext["locals"]>({
+			runtime: partial<TestRuntime>({
+				env: partial<TestRuntime["env"]>({
 					TURNSTILE_SECRET_KEY: secret,
 					SOFTWARE_SUGGESTIONS_ENABLED: "true",
 					...overrides,

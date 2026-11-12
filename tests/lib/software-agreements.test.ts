@@ -2,6 +2,7 @@ import { beforeEach, afterEach, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import type { SQLOutputValue } from "node:sqlite";
 import { createRequire } from "node:module";
+import { z } from "zod";
 import {
 	validateTemplate,
 	renderAgreement,
@@ -33,6 +34,7 @@ import {
 	prepareAgreementArtifact,
 	deliverAgreementCopies,
 	hashBytes,
+	type SigningCertificate,
 } from "~/lib/agreement-artifacts";
 import { agreementDownload } from "~/lib/agreement-download";
 import {
@@ -42,11 +44,11 @@ import {
 } from "~/lib/software-offers";
 import { projectToday } from "~/lib/audio-project-updates";
 import type { APIContext } from "astro";
-import { double, fakeD1 } from "../helpers/doubles";
-import { fakeR2Bucket } from "../helpers/tests-lib-b-r2";
-import { sqliteD1 } from "../helpers/tests-lib-b-d1";
-
-type TestRuntime = APIContext["locals"]["runtime"];
+import { double, partial, fakeD1 } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
+import { readJson } from "../helpers/json";
+import { fakeR2Bucket } from "../helpers/r2";
+import { sqliteD1 } from "../helpers/sqlite-d1";
 
 type TestEnv = TestRuntime["env"];
 
@@ -276,7 +278,7 @@ beforeEach(async () => {
 		}),
 	});
 
-	env = double<TestEnv>({
+	env = partial<TestEnv>({
 		MUSIC_DB: db,
 		AUDIO: bucket,
 		RESEND_API_KEY: "fake",
@@ -311,17 +313,14 @@ const offer = () =>
 		.first<SoftwareOffer>();
 
 /** The certificates prepareAgreementArtifact hands its PDF renderer for agreement `id`, one per document. */
-async function renderedCertificates(
-	id: string,
-): Promise<{ versions: unknown }[]> {
-	let certificates: { versions: unknown }[] = [];
+async function renderedCertificates(id: string): Promise<SigningCertificate[]> {
+	let certificates: SigningCertificate[] = [];
 
 	await prepareAgreementArtifact(
 		env,
 		id,
 		async (_env, _documents, received) => {
-			// SAFETY: src/lib/agreement-artifacts.ts builds each certificate with a versions field and passes displayCertificates, which spreads each certificate, so every object the renderer receives keeps its versions field; this test reads only versions.
-			certificates = received as { versions: unknown }[];
+			certificates = received;
 
 			return new TextEncoder().encode("%PDF-synthetic");
 		},
@@ -357,9 +356,9 @@ async function signed() {
 it("removes an unused former client identity when replacing an unsigned review", async () => {
 	await review();
 
-	// SAFETY: review() above inserts the former client row, and the query selects only its id, a TEXT PRIMARY KEY in db/music.sql.
-	const former = sql.prepare("SELECT id FROM software_agreement_clients").get()
-		.id as string;
+	const former: string = sql
+		.prepare("SELECT id FROM software_agreement_clients")
+		.get().id;
 
 	await reviewAgreements(
 		db,
@@ -403,7 +402,7 @@ it("removes a just-uploaded PDF when its database row cannot be saved", async ()
 		);
 
 		const response = await PUT(
-			double<APIContext>({
+			partial<APIContext>({
 				params: { id: "r" },
 				url: new URL(
 					"https://example.com/api/owner/requests/r/agreement-attachments?filename=Sample.pdf&version=v1&date=2026-10-01",
@@ -421,7 +420,7 @@ it("removes a just-uploaded PDF when its database row cannot be saved", async ()
 				),
 				locals: {
 					owner: { email: "owner@example.com" },
-					runtime: double<TestRuntime>({ env }),
+					runtime: partial<TestRuntime>({ env }),
 				},
 			}),
 		);
@@ -1166,13 +1165,13 @@ it("refuses to serve a retained signed PDF whose bytes no longer match its diges
 		new TextEncoder().encode("%PDF-original"),
 	);
 
-	// SAFETY: the query selects only pdf_key from software_agreement_artifacts, so the row, when present, has that one column.
-	const artifact = sql
+	const artifact: { pdf_key: string | null } = sql
 		.prepare(
 			"SELECT pdf_key FROM software_agreement_artifacts WHERE agreement_id=?",
 		)
-		.get(id) as { pdf_key: string };
+		.get(id);
 
+	if (!artifact.pdf_key) throw new Error("The agreement has no stored PDF.");
 	bucketData.set(artifact.pdf_key, new TextEncoder().encode("%PDF-changed"));
 	const response = await agreementDownload(env, request(), id, true);
 	expect(response.status).toBe(503);
@@ -1184,11 +1183,9 @@ it("runs private source templates through one, two and three milestones in both 
 
 	if (!path) return;
 
-	// SAFETY: AGREEMENT_PRIVATE_TEMPLATES names the owner's private template export, which holds the msa and sow text this test reads; the test returns early when the variable is unset.
-	const templates = JSON.parse(readFileSync(path, "utf8")) as {
-		msa: string;
-		sow: string;
-	};
+	const templates = z
+		.object({ msa: z.string(), sow: z.string() })
+		.parse(JSON.parse(readFileSync(path, "utf8")));
 
 	const { agreementValues } = await import("~/lib/agreement-fields");
 
@@ -1292,21 +1289,19 @@ it("normalizes native Turnstile form submissions and enforces Origin", async () 
 	);
 
 	expect(body).toMatchObject({ turnstileToken: "completed" });
-	// SAFETY: this request has a form content type and a foreign origin, so agreementRequest takes its 403 branch and returns the Response from agreementJson; the test reads only its status.
-	expect(
-		(
-			(await agreementRequest(
-				new Request("https://example.com/api/agreements/link", {
-					method: "POST",
-					headers: {
-						origin: "https://other.example",
-						"content-type": "application/x-www-form-urlencoded",
-					},
-					body: "cf-turnstile-response=completed",
-				}),
-			)) as Response
-		).status,
-	).toBe(403);
+
+	const refused = await agreementRequest(
+		new Request("https://example.com/api/agreements/link", {
+			method: "POST",
+			headers: {
+				origin: "https://other.example",
+				"content-type": "application/x-www-form-urlencoded",
+			},
+			body: "cf-turnstile-response=completed",
+		}),
+	);
+
+	expect(refused instanceof Response ? refused.status : undefined).toBe(403);
 });
 
 it("excludes open, held and in-use MSAs from the separate retention preview", async () => {
@@ -1760,7 +1755,7 @@ it.each(["client-signed", "pdf-failed", "copies-pending"])(
 			};
 
 			const response = await POST(
-				double<APIContext>({
+				partial<APIContext>({
 					params: { id: "r" },
 					request: new Request(
 						"https://example.com/api/owner/requests/r/project",
@@ -1775,7 +1770,7 @@ it.each(["client-signed", "pdf-failed", "copies-pending"])(
 					),
 					locals: {
 						owner: { email: "owner@example.com" },
-						runtime: double<TestRuntime>({
+						runtime: partial<TestRuntime>({
 							env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
 						}),
 					},
@@ -1823,7 +1818,7 @@ it("abandons the complete pending signing action atomically and retains the sign
 
 	const call = (documents: { id: string; hash: string }[]) =>
 		POST(
-			double<APIContext>({
+			partial<APIContext>({
 				params: { id: "r" },
 				request: new Request(
 					"https://example.com/api/owner/requests/r/agreement",
@@ -1843,7 +1838,7 @@ it("abandons the complete pending signing action atomically and retains the sign
 				),
 				locals: {
 					owner: { email: "owner@example.com" },
-					runtime: double<TestRuntime>({ env }),
+					runtime: partial<TestRuntime>({ env }),
 				},
 			}),
 		);
@@ -1915,7 +1910,7 @@ it.each(["executed", "abandoned"])(
 
 		const end = (ended_on: string) =>
 			POST(
-				double<APIContext>({
+				partial<APIContext>({
 					params: { id: "r" },
 					request: new Request(
 						"https://example.com/api/owner/requests/r/agreement",
@@ -1935,7 +1930,7 @@ it.each(["executed", "abandoned"])(
 					),
 					locals: {
 						owner: { email: "owner@example.com" },
-						runtime: double<TestRuntime>({ env }),
+						runtime: partial<TestRuntime>({ env }),
 					},
 				}),
 			);
@@ -2453,7 +2448,7 @@ it.each([true, false])(
 		const { POST } = await import("~/pages/api/owner/requests/[id]/project");
 
 		const response = await POST(
-			double<APIContext>({
+			partial<APIContext>({
 				params: { id: "r" },
 				request: new Request(
 					"https://example.com/api/owner/requests/r/project",
@@ -2482,7 +2477,7 @@ it.each([true, false])(
 				),
 				locals: {
 					owner: { email: "owner@example.com" },
-					runtime: double<TestRuntime>({
+					runtime: partial<TestRuntime>({
 						env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
 					}),
 				},
@@ -2541,7 +2536,7 @@ it("rejects an outside-site signature dated after today without starting the pro
 	const { POST } = await import("~/pages/api/owner/requests/[id]/project");
 
 	const response = await POST(
-		double<APIContext>({
+		partial<APIContext>({
 			params: { id: "r" },
 			request: new Request("https://example.com/api/owner/requests/r/project", {
 				method: "POST",
@@ -2567,7 +2562,7 @@ it("rejects an outside-site signature dated after today without starting the pro
 			}),
 			locals: {
 				owner: { email: "owner@example.com" },
-				runtime: double<TestRuntime>({
+				runtime: partial<TestRuntime>({
 					env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
 				}),
 			},
@@ -2575,8 +2570,7 @@ it("rejects an outside-site signature dated after today without starting the pro
 	);
 
 	expect(response.status).toBe(400);
-	// SAFETY: a 400 from the project route for a future signed date is the { ok, error } body built in src/pages/api/owner/requests/[id]/project.ts, which always carries error.
-	expect(((await response.json()) as { error: string }).error).toMatch(
+	expect((await readJson<{ error: string }>(response)).error).toMatch(
 		/cannot be in the future/i,
 	);
 	expect(
@@ -2611,7 +2605,7 @@ it("preserves omitted draft agreement details and reuse, and permits explicit cl
 		expectedUpdatedAt: string,
 	) =>
 		POST(
-			double<APIContext>({
+			partial<APIContext>({
 				params: { id: "r" },
 				request: new Request(
 					"https://example.com/api/owner/requests/r/software",
@@ -2631,7 +2625,7 @@ it("preserves omitted draft agreement details and reuse, and permits explicit cl
 				),
 				locals: {
 					owner: { email: "owner@example.com" },
-					runtime: double<TestRuntime>({ env }),
+					runtime: partial<TestRuntime>({ env }),
 				},
 			}),
 		);
@@ -2822,7 +2816,7 @@ it.each(["draft-first", "retention-first"])(
 
 		const save = () =>
 			POST(
-				double<APIContext>({
+				partial<APIContext>({
 					params: { id: "r" },
 					request: new Request(
 						"https://example.com/api/owner/requests/r/software",
@@ -2842,7 +2836,7 @@ it.each(["draft-first", "retention-first"])(
 					),
 					locals: {
 						owner: { email: "owner@example.com" },
-						runtime: double<TestRuntime>({ env }),
+						runtime: partial<TestRuntime>({ env }),
 					},
 				}),
 			);
@@ -3473,9 +3467,9 @@ it("returns field-linked validation messages without raw schema output", async (
 	const { POST } = await import("~/pages/api/offer/[token]/review");
 
 	const response = await POST(
-		double<APIContext>({
+		partial<APIContext>({
 			params: { token },
-			locals: { runtime: double<TestRuntime>({ env }) },
+			locals: { runtime: partial<TestRuntime>({ env }) },
 			request: new Request(request().url, {
 				method: "POST",
 				headers: {
@@ -3490,11 +3484,10 @@ it("returns field-linked validation messages without raw schema output", async (
 
 	expect(response.status).toBe(400);
 
-	// SAFETY: the offer review route answers a 400 for highlighted client-detail errors with { ok, error, errors }, where errors maps each field to its message (src/pages/api/offer/[token]/review.ts).
-	const body = (await response.json()) as {
+	const body = await readJson<{
 		error: string;
 		errors: Record<string, string>;
-	};
+	}>(response);
 
 	expect(body.errors.signer_title).toBe("Add your title");
 	expect(body.errors.portfolio_choice).toBe("Choose a portfolio option");
@@ -3566,7 +3559,7 @@ it("prevents external start if website signing commits after the initial read", 
 	const { POST } = await import("~/pages/api/owner/requests/[id]/project");
 
 	const response = await POST(
-		double<APIContext>({
+		partial<APIContext>({
 			params: { id: "r" },
 			request: new Request("https://example.com/api/owner/requests/r/project", {
 				method: "POST",
@@ -3592,7 +3585,7 @@ it("prevents external start if website signing commits after the initial read", 
 			}),
 			locals: {
 				owner: { email: "owner@example.com" },
-				runtime: double<TestRuntime>({
+				runtime: partial<TestRuntime>({
 					env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
 				}),
 			},
@@ -3651,9 +3644,9 @@ it.each([
 					: await import("~/pages/api/offer/[token]/draft");
 
 			const response = await POST(
-				double<APIContext>({
+				partial<APIContext>({
 					params: { token },
-					locals: { runtime: double<TestRuntime>({ env }) },
+					locals: { runtime: partial<TestRuntime>({ env }) },
 					request: new Request(request().url, {
 						method: "POST",
 						headers: {
@@ -3901,8 +3894,8 @@ it("verifies the attachment bytes against the offer hash before client download"
 
 	const call = () =>
 		GET(
-			double<APIContext>({
-				locals: { runtime: double<TestRuntime>({ env }) },
+			partial<APIContext>({
+				locals: { runtime: partial<TestRuntime>({ env }) },
 				request: request(),
 				params: { id },
 			}),
@@ -3994,7 +3987,7 @@ it.each(["revoke", "replace"])(
 				: { action: "send", version: 2, expectedUpdatedAt: "now" };
 
 		const response = await POST(
-			double<APIContext>({
+			partial<APIContext>({
 				params: { id: "r" },
 				request: new Request(
 					"https://example.com/api/owner/requests/r/software",
@@ -4009,7 +4002,7 @@ it.each(["revoke", "replace"])(
 				),
 				locals: {
 					owner: { email: "owner@example.com" },
-					runtime: double<TestRuntime>({ env }),
+					runtime: partial<TestRuntime>({ env }),
 				},
 			}),
 		);
@@ -4034,7 +4027,7 @@ it.each(["creating", "open", "payment_failed", "uncollectible", "paid"])(
 
 		const call = () =>
 			POST(
-				double<APIContext>({
+				partial<APIContext>({
 					params: { id: "r" },
 					request: new Request(
 						"https://example.com/api/owner/requests/r/agreement",
@@ -4054,7 +4047,7 @@ it.each(["creating", "open", "payment_failed", "uncollectible", "paid"])(
 					),
 					locals: {
 						owner: { email: "owner@example.com" },
-						runtime: double<TestRuntime>({ env }),
+						runtime: partial<TestRuntime>({ env }),
 					},
 				}),
 			);
@@ -4104,7 +4097,7 @@ it.each(["draft", "sent"])(
 
 		const call = () =>
 			POST(
-				double<APIContext>({
+				partial<APIContext>({
 					params: { id: "r" },
 					request: new Request(
 						"https://example.com/api/owner/requests/r/agreement",
@@ -4124,7 +4117,7 @@ it.each(["draft", "sent"])(
 					),
 					locals: {
 						owner: { email: "owner@example.com" },
-						runtime: double<TestRuntime>({ env }),
+						runtime: partial<TestRuntime>({ env }),
 					},
 				}),
 			);
@@ -4216,7 +4209,7 @@ it.each([false, true])(
 			);
 
 		const response = await POST(
-			double<APIContext>({
+			partial<APIContext>({
 				params: { id: "r" },
 				request: new Request(
 					"https://example.com/api/owner/requests/r/software",
@@ -4237,7 +4230,7 @@ it.each([false, true])(
 				),
 				locals: {
 					owner: { email: "owner@example.com" },
-					runtime: double<TestRuntime>({ env }),
+					runtime: partial<TestRuntime>({ env }),
 				},
 			}),
 		);
@@ -4260,7 +4253,7 @@ it("saves a valid empty manifest after more than five cumulative attachment remo
 	const { POST } = await import("~/pages/api/owner/requests/[id]/software");
 
 	const response = await POST(
-		double<APIContext>({
+		partial<APIContext>({
 			params: { id: "r" },
 			request: new Request(
 				"https://example.com/api/owner/requests/r/software",
@@ -4284,7 +4277,7 @@ it("saves a valid empty manifest after more than five cumulative attachment remo
 			),
 			locals: {
 				owner: { email: "owner@example.com" },
-				runtime: double<TestRuntime>({ env }),
+				runtime: partial<TestRuntime>({ env }),
 			},
 		}),
 	);
@@ -4306,7 +4299,7 @@ it("rechecks a newly live deposit inside the abandonment transaction", async () 
 	};
 
 	const response = await POST(
-		double<APIContext>({
+		partial<APIContext>({
 			params: { id: "r" },
 			request: new Request(
 				"https://example.com/api/owner/requests/r/agreement",
@@ -4326,7 +4319,7 @@ it("rechecks a newly live deposit inside the abandonment transaction", async () 
 			),
 			locals: {
 				owner: { email: "owner@example.com" },
-				runtime: double<TestRuntime>({ env }),
+				runtime: partial<TestRuntime>({ env }),
 			},
 		}),
 	);
@@ -4915,7 +4908,7 @@ it("redirects a successful native retention apply to the owner agreements page",
 	);
 
 	const response = await POST(
-		double<APIContext>({
+		partial<APIContext>({
 			request: new Request("https://example.com/api/owner/agreements", {
 				method: "POST",
 				headers: {
@@ -4930,7 +4923,7 @@ it("redirects a successful native retention apply to the owner agreements page",
 			}),
 			locals: {
 				owner: { email: "owner@example.com" },
-				runtime: double<TestRuntime>({
+				runtime: partial<TestRuntime>({
 					env: { ...env, AGREEMENT_RETENTION_BINDING_ID: "test-storage" },
 				}),
 			},
@@ -5083,11 +5076,11 @@ it("retries an executed copy instead of the failed waiting receipt", async () =>
 	);
 
 	const response = await POST(
-		double<APIContext>({
+		partial<APIContext>({
 			params: { id: "r" },
 			locals: {
 				owner: { email: "owner@example.com" },
-				runtime: double<TestRuntime>({ env }),
+				runtime: partial<TestRuntime>({ env }),
 			},
 			request: new Request(
 				"https://example.com/api/owner/requests/r/agreement",
@@ -5138,11 +5131,11 @@ it("retries genuinely failed current signing notices", async () => {
 	);
 
 	const response = await POST(
-		double<APIContext>({
+		partial<APIContext>({
 			params: { id: "r" },
 			locals: {
 				owner: { email: "owner@example.com" },
-				runtime: double<TestRuntime>({ env }),
+				runtime: partial<TestRuntime>({ env }),
 			},
 			request: new Request(
 				"https://example.com/api/owner/requests/r/agreement",
@@ -5218,11 +5211,11 @@ it.each(["executed", "abandoned"])(
 			);
 
 			const response = await POST(
-				double<APIContext>({
+				partial<APIContext>({
 					params: { id: "r" },
 					locals: {
 						owner: { email: "owner@example.com" },
-						runtime: double<TestRuntime>({ env }),
+						runtime: partial<TestRuntime>({ env }),
 					},
 					request: new Request(
 						"https://example.com/api/owner/requests/r/agreement",
@@ -5270,11 +5263,11 @@ it.each(["executed", "abandoned"])(
 		const { POST } = await import("~/pages/api/owner/requests/[id]/agreement");
 
 		const retry = await POST(
-			double<APIContext>({
+			partial<APIContext>({
 				params: { id: "r" },
 				locals: {
 					owner: { email: "owner@example.com" },
-					runtime: double<TestRuntime>({ env }),
+					runtime: partial<TestRuntime>({ env }),
 				},
 				request: new Request(
 					"https://example.com/api/owner/requests/r/agreement",

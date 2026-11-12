@@ -4,7 +4,7 @@ import { onRequest } from "~/middleware";
 import { verifyOwnerAccess } from "~/lib/owner-access";
 import { securityHeaders } from "~/lib/security-headers";
 import { double } from "./helpers/doubles";
-import { fakeLocals } from "./helpers/tests-other-fakes";
+import { fakeLocals } from "./helpers/runtime";
 
 vi.mock("~/lib/owner-access", () => ({
 	verifyOwnerAccess: vi.fn(async () => null),

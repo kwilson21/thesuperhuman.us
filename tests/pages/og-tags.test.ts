@@ -6,8 +6,10 @@ import { transform } from "@astrojs/compiler";
 import { experimental_AstroContainer as AstroContainer } from "astro/container";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEFAULT_OG_SCENE, OG_SCENES, ogMedia } from "~/lib/og-media";
+import { keysOf } from "../helpers/keys";
 
-let layout: any, directory: string;
+let layout: Parameters<AstroContainer["renderToString"]>[0];
+let directory: string;
 
 beforeAll(async () => {
 	directory = await mkdtemp(resolve(".og-tags-render-"));
@@ -81,12 +83,6 @@ async function head(
 
 const value = (tags: (readonly [string, string])[], key: string) =>
 	tags.find(([name]) => name === key)?.[1];
-
-/** The keys of o, typed as keyof T. Callers pass OG_SCENES, a literal whose own keys are exactly its scene names. */
-function keysOf<T extends object>(o: T): (keyof T)[] {
-	// SAFETY: OG_SCENES is an object literal, so Object.keys returns exactly its scene names, which are keyof typeof OG_SCENES.
-	return Object.keys(o) as (keyof T)[];
-}
 
 const exactRoute = keysOf(OG_SCENES).flatMap((scene) =>
 	OG_SCENES[scene].routes

@@ -6,8 +6,9 @@ import type * as LineDiff from "~/lib/line-diff";
 import { expect, it, vi } from "vitest";
 import { POST } from "~/pages/api/owner/agreements";
 import { templateFields } from "~/lib/agreement-templates";
-import { double, fakeD1 } from "../helpers/doubles";
-import { fakeLocals } from "../helpers/tests-other-fakes";
+import { fakeFirst } from "../helpers/d1";
+import { double, partial, fakeD1 } from "../helpers/doubles";
+import { fakeLocals } from "../helpers/runtime";
 
 /** The event a fake element passes to a listener: a submit carries preventDefault and its submitter, a click carries neither. */
 type FakeEvent = { preventDefault?: () => void; submitter?: { value: string } };
@@ -93,23 +94,23 @@ const templateDb = (rows: TemplateRow[]) =>
 			double<D1PreparedStatement>({
 				bind: (...args: unknown[]) =>
 					double<D1PreparedStatement>({
-						// SAFETY: the endpoint reads only first from this statement, and the rows it returns are TemplateRow objects, the shape the endpoint's own template query selects.
-						first: (async () =>
-							rows
-								.filter(
-									(row) =>
-										row.kind === args[0] &&
-										(args.length === 1 || row.version === args[1]),
-								)
-								.sort((a, b) => b.version - a.version)[0] ??
-							null) as D1PreparedStatement["first"],
+						first: fakeFirst(
+							() =>
+								rows
+									.filter(
+										(row) =>
+											row.kind === args[0] &&
+											(args.length === 1 || row.version === args[1]),
+									)
+									.sort((a, b) => b.version - a.version)[0] ?? null,
+						),
 					}),
 			}),
 	});
 
 const endpoint = (db: D1Database) => (path: string, init: RequestInit) =>
 	POST(
-		double<APIContext>({
+		partial<APIContext>({
 			request: new Request(`https://example.test${path}`, {
 				...init,
 				headers: { ...init.headers, origin: "https://example.test" },

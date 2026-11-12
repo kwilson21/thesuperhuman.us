@@ -2,16 +2,15 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import type { APIContext } from "astro";
 import { beforeEach, expect, it } from "vitest";
-import { double } from "../helpers/doubles";
-import { sqliteD1 } from "../helpers/tests-api-d1";
-import type { JsonObject } from "../helpers/tests-api-json";
+import { partial } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
+import { sqliteD1 } from "../helpers/sqlite-d1";
+import type { JsonObject } from "../helpers/json";
 import { POST as clientPost } from "~/pages/api/studio/projects/[id]/messages";
 import { POST as ownerPost } from "~/pages/api/owner/projects/[id]/messages";
 import { completeClientCode, issueClientCode } from "~/lib/audio-client-access";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
-
-type TestRuntime = APIContext["locals"]["runtime"];
 
 const baseline = readFileSync(
 	new URL("../../db/music.sql", import.meta.url),
@@ -51,7 +50,7 @@ function context(
 	const path = actor === "owner" ? "owner" : "studio";
 	const id = options.id ?? "song-1";
 
-	return double<APIContext>({
+	return partial<APIContext>({
 		params: { id },
 		request: new Request(
 			`https://thesuperhuman.us/api/${path}/projects/${id}/messages`,
@@ -67,8 +66,8 @@ function context(
 		),
 		locals: {
 			owner: owner ? { email: "owner@example.com" } : undefined,
-			runtime: double<TestRuntime>({
-				env: double<TestRuntime["env"]>({
+			runtime: partial<TestRuntime>({
+				env: partial<TestRuntime["env"]>({
 					AUDIO_CLIENT_PORTAL_ENABLED:
 						options.enabled === false ? "false" : "true",
 					MUSIC_DB: db,

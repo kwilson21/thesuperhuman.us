@@ -3,11 +3,11 @@ import { it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { publicationMcp, projectAccess } from "~/lib/publication/mcp";
 import { publicationOAuthRoute } from "~/lib/publication/oauth";
-import { double } from "../helpers/doubles";
-import type { TestRuntime } from "../helpers/tests-api-runtime";
-import { jsonBody } from "../helpers/tests-api-json";
+import { double, partial } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
+import { readJson } from "../helpers/json";
 
-const env = double<TestRuntime["env"]>({
+const env = partial<TestRuntime["env"]>({
 	PUBLICATION_OWNER_ID: "10987837",
 	PUBLICATION_PROJECTS: "threadline",
 	PUBLICATION_DB: double<D1Database>({}),
@@ -48,7 +48,7 @@ it("exposes tools with explicit mutating annotations and denies unauthorized pro
 
 	const response = await publicationMcp(request("tools/list"), env, identity);
 
-	const list = await jsonBody<{
+	const list = await readJson<{
 		result: {
 			tools: { name: string; annotations: { destructiveHint: boolean } }[];
 		};
@@ -68,7 +68,7 @@ it("exposes tools with explicit mutating annotations and denies unauthorized pro
 		);
 
 		expect(
-			(await jsonBody<{ result: { isError: boolean } }>(reply)).result.isError,
+			(await readJson<{ result: { isError: boolean } }>(reply)).result.isError,
 		).toBe(true);
 	}
 });
@@ -76,10 +76,10 @@ it("exposes tools with explicit mutating annotations and denies unauthorized pro
 it("fails closed before OAuth runtime loading when deployment credentials are absent", async () => {
 	const call = (url: string) =>
 		publicationOAuthRoute(
-			double<APIContext>({
+			partial<APIContext>({
 				request: new Request(url),
 				locals: {
-					runtime: double<TestRuntime>({
+					runtime: partial<TestRuntime>({
 						env,
 						ctx: double<ExecutionContext>({}),
 					}),
