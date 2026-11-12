@@ -320,7 +320,7 @@ async function renderedCertificates(
 		env,
 		id,
 		async (_env, _documents, received) => {
-			// SAFETY: src/lib/agreement-artifacts.ts builds each certificate with a versions field (line 159) and then maps it into displayCertificates by spreading it, so every object the renderer receives keeps versions; this test reads only versions.
+			// SAFETY: src/lib/agreement-artifacts.ts builds each certificate with a versions field and passes displayCertificates, which spreads each certificate, so every object the renderer receives keeps its versions field; this test reads only versions.
 			certificates = received as { versions: unknown }[];
 
 			return new TextEncoder().encode("%PDF-synthetic");

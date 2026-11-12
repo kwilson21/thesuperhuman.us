@@ -3665,10 +3665,10 @@ it.each(["manual", "stripe"])(
 		).toBe(409);
 		expect(
 			invoiceLib.invoiceAvailable(
-				double<OfferTerms>({
+				{
 					...terms,
 					milestones: [terms.milestones[0], terms.milestones[0]],
-				}),
+				},
 				1,
 				"deposit",
 				{ milestone_index: 0, completed_at: null },

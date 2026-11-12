@@ -7,7 +7,8 @@ import {
 	type SoftwareInvoice,
 } from "~/lib/software-invoices";
 import type { OfferTerms } from "~/lib/software-offers";
-import { double, fakeD1 } from "../helpers/doubles";
+import { fakeD1 } from "../helpers/doubles";
+import { sqliteD1 } from "../helpers/tests-lib-b-d1";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -397,42 +398,18 @@ it("blocks partial latest delivery and scope changes during invoice reservation"
 	const sql = new DatabaseSync(":memory:");
 	sql.exec(readFileSync("db/music.sql", "utf8"));
 
-	/** A statement the fake records, so that a batch can replay its SQL and bound arguments. */
-	type RecordedStatement = D1PreparedStatement & {
-		query: string;
-		args: unknown[];
-	};
-
-	const statement = (query: string, args: unknown[] = []): RecordedStatement =>
-		double<RecordedStatement>({
-			query,
-			args,
-			bind: (...values: unknown[]) => statement(query, values),
-			first: async () => sql.prepare(query).get(...args) ?? null,
-			all: async <T>() =>
-				double<D1Result<T>>({ results: sql.prepare(query).all(...args) }),
-		});
-
 	let race = false;
+	const base = sqliteD1(sql);
 
 	const db = fakeD1({
-		prepare: statement,
-		batch: async (items: RecordedStatement[]) => {
+		prepare: base.prepare,
+		batch: async (items: D1PreparedStatement[]) => {
 			if (race)
 				sql.exec(
 					"UPDATE software_project_updates SET delivered_deliverables_json='[0]' WHERE id='latest'",
 				);
-			sql.exec("BEGIN");
 
-			try {
-				for (const item of items) sql.prepare(item.query).all(...item.args);
-				sql.exec("COMMIT");
-
-				return [];
-			} catch (error) {
-				sql.exec("ROLLBACK");
-				throw error;
-			}
+			return base.batch(items);
 		},
 	});
 
