@@ -186,21 +186,25 @@ const OWNER_REQUEST_SCENARIOS = [
 	"website-brief",
 ];
 
-const PROJECT_UPDATE_PAGES = [
+// Building pages import ProjectUpdates, which imports ProjectTimeline.
+const BUILDING_PROJECT_PAGES = [
 	"building-personal-website",
 	"building-personal-website-story",
 	"building-personal-website-archive",
 	"building-threadline",
 	"building-the-engineers-daily",
-	"owner-requests",
 ];
 
-const PROJECT_UPDATE_SCENARIOS = ["studio-client", ...OWNER_REQUEST_SCENARIOS];
-
 const TIMELINE_PAGES = [
-	...PROJECT_UPDATE_PAGES,
+	...BUILDING_PROJECT_PAGES,
 	"building-kaillera-next",
 	"building-tally",
+];
+
+// The countersign panel also renders in the software-signing scenario.
+const OWNER_REQUEST_WITH_SIGNING = [
+	...OWNER_REQUEST_SCENARIOS,
+	"software-signing",
 ];
 
 const PAGE_NAMES_BY_FILE = {
@@ -273,7 +277,7 @@ const PAGE_NAMES_BY_FILE = {
 	"src/scripts/software-agreement-review-links.ts": ["owner-requests"],
 	"src/scripts/payload-review-illustration.ts": TIMELINE_PAGES,
 	"src/scripts/project-timeline.ts": TIMELINE_PAGES,
-	"src/scripts/project-updates-feed.ts": PROJECT_UPDATE_PAGES,
+	"src/scripts/project-updates-feed.ts": BUILDING_PROJECT_PAGES,
 	"src/scripts/studio-sign-in.ts": ["studio-sign-in"],
 	"src/scripts/work-experience.ts": ["work"],
 };
@@ -370,13 +374,10 @@ const SCENARIO_NAMES_BY_FILE = {
 		"owner-details",
 		"software-project",
 	],
-	"src/scripts/countersign-name.ts": OWNER_REQUEST_SCENARIOS,
-	"src/scripts/software-agreement-review-links.ts": OWNER_REQUEST_SCENARIOS,
+	"src/scripts/countersign-name.ts": OWNER_REQUEST_WITH_SIGNING,
+	"src/scripts/software-agreement-review-links.ts": OWNER_REQUEST_WITH_SIGNING,
 	"src/scripts/open-details-links.ts": ["software-project"],
 	"src/scripts/owner-agreements.ts": ["software-signing"],
-	"src/scripts/payload-review-illustration.ts": PROJECT_UPDATE_SCENARIOS,
-	"src/scripts/project-timeline.ts": PROJECT_UPDATE_SCENARIOS,
-	"src/scripts/project-updates-feed.ts": PROJECT_UPDATE_SCENARIOS,
 	"src/scripts/service-sheet.ts": ["services-print"],
 	"src/scripts/software-offer-print.ts": ["software-offer"],
 	"src/scripts/studio-sign-in.ts": ["software-project"],

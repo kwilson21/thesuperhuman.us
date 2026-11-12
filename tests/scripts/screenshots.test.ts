@@ -1606,7 +1606,6 @@ describe("moved client modules", () => {
 			"website-brief",
 		].map((name) => ({ name, title: name, steps: [] })),
 	};
-
 	const OWNER_REQUEST_SCENARIOS = [
 		"owner-details",
 		"software-brief",
@@ -1614,27 +1613,23 @@ describe("moved client modules", () => {
 		"software-project",
 		"website-brief",
 	];
-
-	const PROJECT_UPDATE_PAGES = [
+	const OWNER_REQUEST_WITH_SIGNING = [
+		...OWNER_REQUEST_SCENARIOS,
+		"software-signing",
+	];
+	// Building pages import ProjectUpdates, which imports ProjectTimeline.
+	const BUILDING_PROJECT_PAGES = [
 		"building-personal-website",
 		"building-personal-website-story",
 		"building-personal-website-archive",
 		"building-threadline",
 		"building-the-engineers-daily",
-		"owner-requests",
 	];
-
-	const PROJECT_UPDATE_SCENARIOS = [
-		"studio-client",
-		...OWNER_REQUEST_SCENARIOS,
-	];
-
 	const TIMELINE_PAGES = [
-		...PROJECT_UPDATE_PAGES,
+		...BUILDING_PROJECT_PAGES,
 		"building-kaillera-next",
 		"building-tally",
 	];
-
 	const SHARED_SITE = ["home", "work", "audio", "services", "audio-services"];
 
 	const moved: [string, string[], string[]][] = [
@@ -1643,14 +1638,14 @@ describe("moved client modules", () => {
 		["audio-releases-filter", ["audio-releases"], []],
 		["audio-services-links", ["audio-services"], []],
 		["contact-form", ["home"], []],
-		["countersign-name", ["owner-requests"], OWNER_REQUEST_SCENARIOS],
+		["countersign-name", ["owner-requests"], OWNER_REQUEST_WITH_SIGNING],
 		["home-contact", ["home"], []],
 		["music-detail-links", ["music-old-news"], []],
 		["open-details-links", [], ["software-project"]],
 		["owner-agreements", [], ["software-signing"]],
-		["payload-review-illustration", TIMELINE_PAGES, PROJECT_UPDATE_SCENARIOS],
-		["project-timeline", TIMELINE_PAGES, PROJECT_UPDATE_SCENARIOS],
-		["project-updates-feed", PROJECT_UPDATE_PAGES, PROJECT_UPDATE_SCENARIOS],
+		["payload-review-illustration", TIMELINE_PAGES, []],
+		["project-timeline", TIMELINE_PAGES, []],
+		["project-updates-feed", BUILDING_PROJECT_PAGES, []],
 		["release-interest", ["music-old-news"], []],
 		["resume-request-form", ["about"], []],
 		["service-sheet", ["services"], ["services-print"]],
@@ -1658,7 +1653,7 @@ describe("moved client modules", () => {
 		[
 			"software-agreement-review-links",
 			["owner-requests"],
-			OWNER_REQUEST_SCENARIOS,
+			OWNER_REQUEST_WITH_SIGNING,
 		],
 		["software-offer-print", [], ["software-offer"]],
 		["studio-sign-in", ["studio-sign-in"], ["software-project"]],
