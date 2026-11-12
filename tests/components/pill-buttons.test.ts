@@ -24,7 +24,7 @@ it('declares the panel and radius tokens', () => {
   expect(global).toContain('--radius-button: 999px;');
 });
 
-it('makes the shared button a pill that never wraps', () => {
+it('makes the shared button a pill that defaults to one line', () => {
   const css = global.slice(global.indexOf('.site-button {'), global.indexOf('}', global.indexOf('.site-button {')) + 1);
   expect(css).toContain('border-radius: var(--radius-button);');
   expect(css).toContain('padding: .55rem 1.5rem;');
@@ -71,7 +71,6 @@ it('raises the inline padding on pill rows whose label touched the curve', () =>
 
 it('keeps pill labels on one line', () => {
   expect(read('src/styles/studio.css')).toMatch(/\.studio-button \{[^}]*white-space: nowrap;/);
-  expect(read('src/styles/owner.css')).toMatch(/\.owner-primary-action\{[^}]*white-space:nowrap/);
   expect(read('src/styles/owner.css')).toMatch(/\.owner-filters button,[^{]*\{[^}]*white-space:nowrap/);
   expect(read('src/pages/owner/requests/[id].astro')).toMatch(/\.rail-actions button \{[^}]*white-space: nowrap;/);
   expect(read('src/styles/audio-intake.css')).toMatch(/\.intake-actions \[data-back\]\{[^}]*white-space:nowrap/);
@@ -79,6 +78,31 @@ it('keeps pill labels on one line', () => {
 
 it('keeps text-style buttons and fields square', () => {
   const studio = read('src/styles/studio.css');
-  expect(studio.match(/\.studio-quiet \{[^}]*\}/)?.[0] ?? '').not.toContain('border-radius');
+  const match = studio.match(/\.studio-quiet \{[^}]*\}/);
+  expect(match, '.studio-quiet rule').not.toBeNull();
+  expect(match![0]).not.toContain('border-radius');
   expect(global).not.toMatch(/\.site-form (input|textarea|select)[^{]*\{[^}]*var\(--radius-button\)/);
+});
+
+it('allows narrow-phone button labels and door text to shrink', () => {
+  expect(global).toMatch(/@media \(max-width: 380px\) \{ \.site-button \{ white-space: normal; text-align: center; \} \}/);
+  const doors = read('src/components/WorkWithMe.astro');
+  expect(doors).not.toMatch(/grid-template-columns: \d+px 1fr;/);
+  expect(doors).toContain('minmax(0, 1fr)');
+});
+
+it('lets owner primary action labels wrap within the rail', () => {
+  const match = read('src/styles/owner.css').match(/\.owner-primary-action\{[^}]*\}/);
+  expect(match, '.owner-primary-action rule').not.toBeNull();
+  expect(match![0]).toContain('max-width:100%');
+  expect(match![0]).not.toContain('white-space:nowrap');
+});
+
+it('records the shared pill token, owner wrapping and inherited danger button in the inventory', () => {
+  const inventory = read('docs/design-concepts/2026-11-12/button-inventory.md');
+  expect(inventory).toContain('Pill through `--radius-button` in `src/styles/global.css`.');
+  expect(inventory).toContain('Labels may wrap; the rule sets `max-width: 100%`.');
+  expect(inventory).toContain('| `.intake-actions [data-back]` |');
+  expect(inventory).toContain('| `.rail-actions button.danger` |');
+  expect(inventory).not.toContain('—');
 });

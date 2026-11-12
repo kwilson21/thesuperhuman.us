@@ -63,8 +63,8 @@ const { headingLevel = 'h3', overrides = {}, loading = 'lazy', layout = 'rows' }
     .doors-column .door-button { align-self: start; justify-self: start; }
   }
   @media (max-width: 800px) {
-    .doors { grid-template-columns: 1fr; row-gap: 1.75rem; }
-    .door { grid-template-columns: 104px 1fr; grid-template-areas: "art caption" "art title" "art line" "art button"; column-gap: 1rem; align-items: start; }
+    .doors { grid-template-columns: minmax(0, 1fr); row-gap: 1.75rem; }
+    .door { grid-template-columns: 104px minmax(0, 1fr); grid-template-areas: "art caption" "art title" "art line" "art button"; column-gap: 1rem; align-items: start; }
     .door-art { grid-area: art; }
     .door-caption { grid-area: caption; margin: 0 0 .4rem; }
     .door-title { grid-area: title; font-size: 1.4rem; }

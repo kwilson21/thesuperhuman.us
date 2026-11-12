@@ -100,3 +100,8 @@ it('does not stack bottom padding above the panel on Privacy', () => {
   expect(privacy).toContain('<article class="site-shell pt-16">');
   expect(privacy).not.toContain('py-16');
 });
+
+it('uses ink for readable footer link hover text on the panel', () => {
+  expect(footer).toMatch(/\.compact-footer nav a:hover \{ color: var\(--ink\); \}/);
+  expect(footer).not.toMatch(/nav a:hover \{ color: var\(--accent\)/);
+});

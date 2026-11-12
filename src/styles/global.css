@@ -250,6 +250,9 @@
     .site-link:hover span { transform: translateX(3px); }
   }
   .site-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; max-width: 100%; padding: .55rem 1.5rem; background: var(--accent); color: var(--paper); border: 1px solid var(--accent); border-radius: var(--radius-button); line-height: 1.4; white-space: nowrap; }
+  /* Reflow (WCAG 1.4.10): on the narrowest phones a long label may wrap instead of pushing past the gutter. */
+  @media (max-width: 380px) { .site-button { white-space: normal; text-align: center; } }
+
   .site-button-large { min-height: 52px; font-size: 1.0625rem; padding-inline: 1.75rem; gap: .6rem; }
   .site-button-large span { transition: transform var(--dur-hover) var(--ease-site); }
   @media (hover: hover) and (pointer: fine) {

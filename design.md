@@ -29,6 +29,7 @@ file is the rule. Process rules (audits, triage, image QA, copy) live in
   --accent: #AE5534;  /* oklch(55.3% 0.126 40)  4.78:1 on paper, and paper on accent */
   --field-border: color-mix(in srgb, var(--muted) 65%, var(--paper)); /* 3.4:1, field edges */
   --panel: color-mix(in srgb, var(--rule) 50%, var(--paper)); /* the closing panel and door art: the one soft surface */
+  /* on --panel, ink is 16.5:1, muted is 7.6:1, accent is 4.3:1 (focus rings and non-text only; no accent text on the panel) */
   --radius-panel: 32px;  /* closing panel corners */
   --radius-button: 999px; /* every button is a pill; fields, pictures and cards keep 3px or their own corners */
 
@@ -91,6 +92,8 @@ component (`--ill-*`, `--code-*`); declarations reference tokens, never raw hex.
 - Every page with the shared footer ends on the closing panel (`--panel`,
   `--radius-panel`). It is the site's one soft surface; no other panel, card or field
   takes a large radius without an owner decision.
+  The panel's heading takes no hairline rule.
+  At 380px wide and below a button label may wrap (reflow, WCAG 1.4.10); wider than that it stays on one line.
 
 ## CTA voice
 - Primary · `.site-button`: accent fill, paper text, 1px border, pill (`--radius-button`),
@@ -100,6 +103,8 @@ component (`--ill-*`, `--code-*`); declarations reference tokens, never raw hex.
   text, accent rule about 4px under the baseline, accent arrow, 44px tap area
   (D8.4-C).
 - Running links · ink with a 1px accent rule; accent on fine-pointer hover.
+
+- On the closing panel, footer links are muted and turn ink on a fine-pointer hover; accent is not used for text there (4.3:1).
 
 ## States
 - Focus · `outline: 2px solid var(--accent)` with a 2px offset on `:focus-visible`,
