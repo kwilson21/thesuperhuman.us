@@ -12,8 +12,10 @@ This is the list of every button style in `src/` that was checked for the pill s
 | `.owner-primary-action` | `src/styles/owner.css` | Main action in owner payment and project panels | Pill; side padding raised to 1.25rem |
 | `.owner-filters button` (shared rule with `.request-work button` and `.audience-list button`) | `src/styles/owner.css` | Submits the request filters | Pill; side padding raised to 1.25rem. The other two selectors have no markup in `src/` |
 | `.intake-actions [data-back]` | `src/styles/audio-intake.css` | Goes back a step on the audio and software intake forms | Pill |
-| `.intake-actions .site-button` | `src/styles/audio-intake.css` | Continues or sends on the intake forms | Pill through `.site-button`; stacks full width at 700px and below |
+| `.intake-actions .site-button` | `src/styles/audio-intake.css` | Continues or sends on the intake forms | Pill through `.site-button` |
 | `.rail-actions button` | `src/pages/owner/requests/[id].astro` | Owner request actions (mark reviewed, resolve, withdraw, send invitation) | Pill; side padding raised to 1.25rem |
+| `.sheet-footnote button` | `src/layouts/ServiceSheet.astro` | Print control in the sheet footer | Pill through `.site-button` (it also carries `.site-button-outline`) |
+| `.terms-navigation` buttons | `src/components/SoftwareAgreedTerms.astro` | Back and next controls for the agreed terms | Pill through `.studio-button` |
 
 ## Stays
 
@@ -29,7 +31,6 @@ This is the list of every button style in `src/` that was checked for the pill s
 | `.terms-link` | `src/components/SoftwareAgreedTerms.astro` | Text link style |
 | `.intake-edit button` | `src/styles/audio-intake.css` | Underlined text button to edit an answer |
 | `[data-skip]`, `[data-suggestions-toggle]` | `src/styles/software-intake.css` | Text-style skip and suggestion toggles |
-| `.sheet-footnote button` | `src/layouts/ServiceSheet.astro` | Text-style footer control (its print button is a `.site-button`) |
 | `.revision-action`, `.moved-entry-cta` | `src/components/owner/SoftwareProjectPanel.astro`, `src/styles/project-journal.css` | Text links |
 | `.pad-button`, `.fake-button`, `.controls button`, `.press` | `src/components/BuildingIllustration.astro`, `src/components/PayloadReviewIllustration.astro`, `src/components/ObjectLife.astro` | Buttons drawn inside illustrations |
 
@@ -43,4 +44,8 @@ This is the list of every button style in `src/` that was checked for the pill s
 ## Notes
 
 - Dead selectors with no markup in `src/`: `.request-work button`, `.audience-list button`, `.request-actions .danger`, `[data-review] button`. They were left as they are, apart from the shared owner rule above.
-- Intake labels were checked for the 390px layout. The longest pair that appears side by side is "Back" with "Send for review". The intake buttons stack at 700px and below, which applies to both the audio and software intake pages because they share one stylesheet.
+- Pill labels carry `white-space: nowrap`, so a label stays on one line instead of wrapping inside the curve.
+
+## Out of scope
+
+- The email button in `src/lib/email-template.ts` keeps its 2px radius. Email templates are not part of this change.

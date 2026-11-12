@@ -69,8 +69,12 @@ it('raises the inline padding on pill rows whose label touched the curve', () =>
   expect(read('src/components/WorkWithMe.astro')).toMatch(/\.door-button \{[^}]*padding: \.45rem 1\.5rem;/);
 });
 
-it('stacks the intake actions at 700px and below, primary button first', () => {
-  expect(read('src/styles/audio-intake.css')).toMatch(/@media\(max-width:700px\)\{[^\n]*\.intake-actions\{flex-direction:column-reverse;/);
+it('keeps pill labels on one line', () => {
+  expect(read('src/styles/studio.css')).toMatch(/\.studio-button \{[^}]*white-space: nowrap;/);
+  expect(read('src/styles/owner.css')).toMatch(/\.owner-primary-action\{[^}]*white-space:nowrap/);
+  expect(read('src/styles/owner.css')).toMatch(/\.owner-filters button,[^{]*\{[^}]*white-space:nowrap/);
+  expect(read('src/pages/owner/requests/[id].astro')).toMatch(/\.rail-actions button \{[^}]*white-space: nowrap;/);
+  expect(read('src/styles/audio-intake.css')).toMatch(/\.intake-actions \[data-back\]\{[^}]*white-space:nowrap/);
 });
 
 it('keeps text-style buttons and fields square', () => {
