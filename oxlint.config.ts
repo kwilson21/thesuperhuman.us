@@ -11,6 +11,7 @@ export default defineConfig({
 		"dist/**",
 		"node_modules/**",
 		"public/**",
+		"scripts/og-video/kit.js",
 		"tools/oxlint/anti-slop/**",
 	],
 	jsPlugins: [
