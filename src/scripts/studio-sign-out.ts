@@ -13,7 +13,7 @@ export function setupStudioSignOut() {
 					body: "{}",
 				});
 
-				// SAFETY: src/pages/api/studio/sign-out.ts answers with JSON: { ok: true } on success and { ok: false, localSignedOut: true } with status 503 when the database is missing or revocation fails. Only its plain-text 404 ("Not found", sent when the client portal is off) is not JSON, and json() then throws into the catch below. localSignedOut is optional and read only on the non-ok path.
+				// SAFETY: this calls src/pages/api/studio/sign-out.ts. Its replies are JSON except a plain-text "Not found" 404 sent when the client portal is off, which makes json() throw into the catch below. localSignedOut is optional because only the failure replies set it, and it is read only after the response.ok success branch has returned.
 				const result = (await response.json()) as { localSignedOut?: boolean };
 
 				if (response.ok) {

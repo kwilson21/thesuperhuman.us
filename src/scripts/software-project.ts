@@ -18,7 +18,7 @@ export function setupSoftwareProject() {
 						body: JSON.stringify(body),
 					});
 
-					// SAFETY: the owner requests route src/pages/api/owner/requests/[id]/software.ts sends every reply through its json() helper, so every status has a JSON body: { ok: true, ... } on success, a bare { ok: false } on 403, 503, 404 and some 400s, and { ok: false, message } or { ok: false, errors } on most 400 and 409 replies. error is therefore optional, and the code after the reload branch uses it for failed responses alone.
+					// SAFETY: this calls src/pages/api/owner/requests/[id]/software.ts, which sends its own replies through its json() helper and returns musicRequest's replies as they come, so every reply is JSON and none is a plain-text 404. error is optional because the route's own failures carry message, errors or nothing, while musicRequest's JSON failures carry error. It is read only after the response.ok branch has returned.
 					const result = (await response.json()) as { error?: string };
 
 					if (response.ok) {

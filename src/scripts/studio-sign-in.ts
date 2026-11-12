@@ -35,7 +35,7 @@ export function setupStudioSignIn() {
 				body: JSON.stringify({ email, turnstileToken }),
 			});
 
-			// SAFETY: src/pages/api/studio/code.ts answers every status with JSON, carrying message on success and error on its 400, 403, 429 and 503 replies (musicRequest, which it calls first, also answers 403, 413, 415 and 400 with JSON error). Only its plain-text 404 ("Not found", sent when the client portal is off) is not JSON, and json() then throws into the catch below. Both fields are optional here and read with ??.
+			// SAFETY: this code request calls src/pages/api/studio/code.ts. Its replies are JSON except a plain-text "Not found" 404 sent when the client portal is off, which makes json() throw into the catch below. message and error are both optional because a success carries message while failures carry error. The code reads them with ??, so either may be absent.
 			const result = (await response.json()) as {
 				message?: string;
 				error?: string;
@@ -139,7 +139,7 @@ export function setupStudioSignIn() {
 				body: JSON.stringify({ email, code }),
 			});
 
-			// SAFETY: src/pages/api/studio/session.ts answers with JSON: { ok: true } on success and { ok: false, error } on its 400, 401, 429 and 503 replies (musicRequest adds JSON 403, 413 and 415). Only its plain-text 404 ("Not found", sent when the client portal is off) is not JSON, and json() then throws into the catch below. error is optional and read only after the response.ok success branch has returned.
+			// SAFETY: this code verification calls src/pages/api/studio/session.ts. Its replies are JSON except a plain-text "Not found" 404 sent when the client portal is off, which makes json() throw into the catch below. error is optional because the success body has none; only failures carry it. It is read only after the response.ok success branch has returned.
 			const result = (await response.json()) as { error?: string };
 
 			if (response.ok) {

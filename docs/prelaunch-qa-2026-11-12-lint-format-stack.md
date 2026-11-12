@@ -29,7 +29,7 @@ All runs are local on macOS arm64, Node 26.13.1, pnpm 12.20.0, in clean exported
 
 At each of the six layer tips: `pnpm run check` 0 errors; `pnpm test` all passing (1,781, 1,781, 1,813, 1,818, 1,818 and 1,873 tests, in layer order; the top layer, `claude/lint-6-review-fixes`, also skips 1); `pnpm run build` complete with all prebuild gates; publicist gate 84 entries.
 
-Final head (top of the stack, `claude/lint-6-review-fixes`. The six branches are the stack; the working branch `claude/oxlint-anti-slop` holds the final commits, including this record, and is to be fast-forwarded into the top branch):
+Final head (top of the stack, `claude/lint-6-review-fixes`. The six branches are the stack; the top layer `claude/lint-6-review-fixes` carries the final commits, including this record):
 
 - `pnpm run format:check`: no fixes applied (520 files).
 - `pnpm run check`: 546 files, 0 errors, 0 warnings, 17 hints.

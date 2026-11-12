@@ -36,7 +36,7 @@ export function setupProjectMessages() {
 						body: JSON.stringify({ action: "send", body }),
 					});
 
-					// SAFETY: this endpoint is one of four message routes: src/pages/api/owner/projects/[id]/messages.ts, src/pages/api/owner/requests/[id]/messages.ts, src/pages/api/studio/projects/[id]/messages.ts or src/pages/api/studio/software/[id]/messages.ts. Each answers with JSON: { ok: true } or { ok: true, message } on success, { ok: false, error } on its 400, 429 and 503 replies, and a bare { ok: false } on 401, 403, 404 and 409, so error is optional. Each also answers a plain-text 404 ("Not found", sent when the client portal is off), which is not JSON, and json() then throws into the catch below. error is read only after the response.ok success branch has returned.
+					// SAFETY: this endpoint is one of four message routes: src/pages/api/owner/projects/[id]/messages.ts, src/pages/api/owner/requests/[id]/messages.ts, src/pages/api/studio/projects/[id]/messages.ts or src/pages/api/studio/software/[id]/messages.ts. Every reply from all four is JSON except a plain-text "Not found" 404 sent when the client portal is off, which makes json() throw into the catch below. error is optional because some failures carry it and others are a bare { ok: false }, and it is read only after the response.ok success branch has returned.
 					const result = (await response.json()) as { error?: string };
 
 					if (response.ok) {

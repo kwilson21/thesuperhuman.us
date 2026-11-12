@@ -34,7 +34,7 @@ async function measurePeaks(
 }
 
 async function readError(response: Response) {
-	// SAFETY: callers pass either the publish route (src/pages/api/owner/projects/[id]/files/[fileId].ts) or the access route (src/pages/api/owner/projects/[id]/access.ts). Both answer with JSON: { ok: true } on success, { ok: false, error } on 503 and 409, a bare { ok: false } on 403 (and on 400 for the access route). Both answer a plain-text 404 ("Not found", sent when the client portal is off), which is not JSON, so json() throws into the caller's catch. error is optional, and callers read it only after their !response.ok check.
+	// SAFETY: callers pass the publish route src/pages/api/owner/projects/[id]/files/[fileId].ts, whose success body is { ok: true, updateId }, or the access route src/pages/api/owner/projects/[id]/access.ts. Both reply with JSON except a plain-text "Not found" 404 sent when the client portal is off, which makes json() throw into the caller's catch. error is optional because some failures carry it (musicRequest's JSON errors among them) and others are a bare { ok: false }; callers read it only after their !response.ok check.
 	return (await response.json()) as { error?: string };
 }
 

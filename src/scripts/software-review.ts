@@ -170,7 +170,7 @@ export function setupSoftwareReviews() {
 						}),
 					});
 
-					// SAFETY: form.dataset.endpoint is /api/studio/software/[id]/reviews/[updateId] (src/pages/api/studio/software/[id]/reviews/[updateId].ts). It sends every reply, including the portal-off 404, through its json() helper, so the body is always JSON: the decision result on success, { ok: false, error } on 400 and 409, and a bare { ok: false } on 401, 404 and 503. error is optional and read only after the reload branch has returned.
+					// SAFETY: form.dataset.endpoint is the route src/pages/api/studio/software/[id]/reviews/[updateId].ts. That route sends its own replies through its json() helper, including the portal-off 404, and returns musicRequest's replies as they come, so every reply is JSON. error is optional because some failures carry it and others, such as a 409 from postSoftwareReviewDecision in src/lib/software-project-messages.ts, are a bare { ok: false, status }. error is read only after the response.ok branch has returned.
 					const result = (await response.json()) as { error?: string };
 
 					if (response.ok) {

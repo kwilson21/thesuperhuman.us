@@ -34,7 +34,7 @@ export function setupProjectUpdates() {
 								}),
 							});
 
-							// SAFETY: src/pages/api/owner/projects/[id]/updates.ts answers with JSON: { ok: true } or { ok: true, update } on success, { ok: false, error } on 400, 409 and 503, and a bare { ok: false } on 403 when the caller is not the owner, so error is optional. Its plain-text 404 ("Not found", sent when the client portal is off) is not JSON, and json() then throws into the catch below. error is read only after the response.ok success branch has returned.
+							// SAFETY: this calls src/pages/api/owner/projects/[id]/updates.ts. Its replies are JSON except a plain-text "Not found" 404 sent when the client portal is off, which makes json() throw into the catch below. error is optional because some failures carry it (musicRequest's JSON errors among them) and others are a bare { ok: false }. It is read only after the response.ok success branch has returned.
 							const result = (await response.json()) as { error?: string };
 
 							if (response.ok) {
