@@ -16,8 +16,12 @@ export type OwnerRequestKind = (typeof ownerRequestKinds)[number];
 
 export type OwnerRequestStatus = (typeof ownerRequestStatuses)[number];
 
+function isText<T>(value: T): value is T & string {
+	return typeof value === "string";
+}
+
 export function safeExternalUrl(value: unknown) {
-	if (typeof value !== "string") return null;
+	if (!isText(value)) return null;
 
 	try {
 		const url = new URL(value);

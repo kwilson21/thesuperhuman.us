@@ -223,6 +223,7 @@ export async function changeOwnerRequest(
 				.bind(command.id, actor, now, command.id, now, note),
 		]);
 
+		// SAFETY: update is the UPDATE ... RETURNING ${requestColumns} statement above, and requestColumns lists every OwnerRequestRow field.
 		const row = update.results[0] as OwnerRequestRow | undefined;
 
 		if (!row) throw new Error("Request changed while it was being updated.");
@@ -243,9 +244,9 @@ export async function changeOwnerRequest(
 
 	const transition = transitions[command.action];
 
-	if (
-		!(transition.from as readonly OwnerRequestStatus[]).includes(current.status)
-	)
+	const allowedFrom: readonly OwnerRequestStatus[] = transition.from;
+
+	if (!allowedFrom.includes(current.status))
 		throw new Error("Invalid request transition.");
 	const placeholders = transition.from.map(() => "?").join(",");
 	const resolvedAt = transition.to === "resolved" ? now : null;
@@ -396,6 +397,7 @@ export async function changeOwnerRequest(
 			closingSoftware ? 3 : resolvingSoftware ? 2 : reopeningSoftware ? 1 : 0
 		];
 
+	// SAFETY: update is one of the UPDATE ... RETURNING ${requestColumns} statements in this batch, and requestColumns lists every OwnerRequestRow field.
 	const row = update.results[0] as OwnerRequestRow | undefined;
 
 	if (!row) throw new Error("Request changed while it was being updated.");
