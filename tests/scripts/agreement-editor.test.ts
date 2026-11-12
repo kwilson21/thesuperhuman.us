@@ -56,9 +56,7 @@ runInNewContext(
 );
 
 const pageScript = transpileModule(
-	readFileSync("src/pages/owner/agreements.astro", "utf8")
-		.split("<script>")[1]
-		.split("</script>")[0],
+	readFileSync("src/scripts/owner-agreements.ts", "utf8"),
 	{ compilerOptions: { module: ModuleKind.CommonJS } },
 ).outputText;
 
@@ -133,6 +131,7 @@ function runPage({
 	data?: Record<string, string>;
 	fetch: unknown;
 }) {
+	const moduleExports: { setupOwnerAgreements?: () => void } = {};
 	runInNewContext(pageScript, {
 		document: {
 			querySelector: () => ({ addEventListener: () => {} }),
@@ -150,7 +149,7 @@ function runPage({
 
 			return lineDiffExports;
 		},
-		exports: {},
+		exports: moduleExports,
 		fetch,
 		location: {
 			reload: () => {
@@ -158,6 +157,7 @@ function runPage({
 			},
 		},
 	});
+	moduleExports.setupOwnerAgreements!();
 }
 
 it.each(["msa", "sow"] as const)(
