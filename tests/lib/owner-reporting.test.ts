@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
+import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
 import {
 	listStudioProjectAttention,
 	loadCampaignDesk,
@@ -15,17 +16,7 @@ function fixture() {
 		readFileSync(new URL("../../db/music.sql", import.meta.url), "utf8"),
 	);
 
-	const statement = (query: string, args: unknown[] = []) => ({
-		query,
-		args,
-		bind: (...values: unknown[]) => statement(query, values),
-		all: async () => ({ results: sql.prepare(query).all(...args) }),
-		first: async () => sql.prepare(query).get(...args) ?? null,
-	});
-
-	const db = {
-		prepare: (query: string) => statement(query),
-	} as unknown as D1Database;
+	const db = sqliteD1(sql);
 
 	sql.exec(`INSERT INTO owner_campaigns VALUES
     ('old-news-launch','release','old-news-single','Old News learning campaign','meaningful listening','["purchase demand"]','2026-09-01T00:00:00Z',NULL,'Share the release thoughtfully.','','','active','2026-09-01T00:00:00Z','2026-09-01T00:00:00Z');
@@ -188,14 +179,7 @@ it("shows unread client messages, failed notices, and approaching delivery dates
       VALUES ('quiet','progress','Timed out a day ago','owner','2026-09-22T12:00:00Z','sending','2026-09-22T12:00:00Z'),
         ('review','progress','Still sending','owner','2026-09-23T11:59:50Z','sending','2026-09-23T11:59:50Z');`);
 
-	const statement = (query: string, args: unknown[] = []) => ({
-		bind: (...values: unknown[]) => statement(query, values),
-		all: async () => ({ results: sql.prepare(query).all(...args) }),
-	});
-
-	const db = {
-		prepare: (query: string) => statement(query),
-	} as unknown as D1Database;
+	const db = sqliteD1(sql);
 
 	expect(
 		await listStudioProjectAttention(db, new Date("2026-09-23T12:00:00Z")),

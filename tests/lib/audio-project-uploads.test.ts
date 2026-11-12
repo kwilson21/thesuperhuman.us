@@ -5,6 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 import { getPlatformProxy } from "wrangler";
+import { double } from "../helpers/doubles";
+import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
+import {} from "../helpers/tests-lib-a-bindings";
 import {
 	abortProjectUpload,
 	beginProjectUpload,
@@ -32,17 +35,7 @@ function fixture() {
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(schema);
 
-	const statement = (query: string, args: unknown[] = []) => ({
-		bind: (...values: unknown[]) => statement(query, values),
-		first: async () => sql.prepare(query).get(...args) ?? null,
-		run: async () => ({
-			meta: { changes: sql.prepare(query).run(...args).changes },
-		}),
-	});
-
-	const db = {
-		prepare: (query: string) => statement(query),
-	} as unknown as D1Database;
+	const db = sqliteD1(sql);
 
 	sql
 		.prepare(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
@@ -62,22 +55,22 @@ function fixture() {
 	const uploads = new Map<string, string>();
 	const deleted: string[] = [];
 
-	const bucket = {
+	const bucket = double<R2Bucket>({
 		createMultipartUpload: async (key: string) => {
 			const uploadId = `r2-${uploads.size + 1}`;
 			uploads.set(uploadId, key);
 
-			return {
+			return double<R2MultipartUpload>({
 				uploadId,
 				abort: async () => {
 					uploads.delete(uploadId);
 				},
-			};
+			});
 		},
 		resumeMultipartUpload: (key: string, uploadId: string) => {
 			if (uploads.get(uploadId) !== key) throw new Error("Invalid R2 upload");
 
-			return {
+			return double<R2MultipartUpload>({
 				uploadPart: async (partNumber: number) => ({
 					partNumber,
 					etag: "a".repeat(32),
@@ -86,19 +79,23 @@ function fixture() {
 					const object = { size: uploadPartSize + 3 };
 					objects.set(key, object);
 
-					return object;
+					return double<R2Object>(object);
 				},
 				abort: async () => {
 					uploads.delete(uploadId);
 				},
-			};
+			});
 		},
-		head: async (key: string) => objects.get(key) ?? null,
+		head: async (key: string) => {
+			const object = objects.get(key);
+
+			return object ? double<R2Object>(object) : null;
+		},
 		delete: async (key: string) => {
 			deleted.push(key);
 			objects.delete(key);
 		},
-	} as unknown as R2Bucket;
+	});
 
 	return { sql, db, bucket, objects, deleted };
 }
@@ -172,7 +169,7 @@ it("finishes an upload using the opaque part tag returned by local R2", async ()
 		}),
 	);
 
-	const proxy = await getPlatformProxy({
+	const proxy = await getPlatformProxy<Env>({
 		configPath: join(directory, "wrangler.jsonc"),
 		persist: { path: join(directory, "state") },
 	});
@@ -183,7 +180,7 @@ it("finishes an upload using the opaque part tag returned by local R2", async ()
 				"UPDATE audio_payments SET booking_status='paid' WHERE request_id='song-1'",
 			)
 			.run();
-		const bucket = proxy.env.AUDIO as R2Bucket;
+		const bucket = proxy.env.AUDIO;
 
 		const upload = (await beginProjectUpload(
 			db,
@@ -357,13 +354,15 @@ it("finishes a discard when R2 no longer has the multipart upload", async () => 
 	))!;
 
 	// R2's incomplete-upload lifecycle, or an earlier abort, already removed it.
-	vi.spyOn(bucket, "resumeMultipartUpload").mockReturnValue({
-		abort: async () => {
-			throw new Error(
-				"abort: The specified multipart upload does not exist. (10024)",
-			);
-		},
-	} as unknown as R2MultipartUpload);
+	vi.spyOn(bucket, "resumeMultipartUpload").mockReturnValue(
+		double<R2MultipartUpload>({
+			abort: async () => {
+				throw new Error(
+					"abort: The specified multipart upload does not exist. (10024)",
+				);
+			},
+		}),
+	);
 	await abortProjectUpload(db, bucket, upload);
 	expect(await getProjectUpload(db, "song-1", upload.id)).toBeNull();
 	sql.close();
@@ -392,11 +391,13 @@ it("keeps a discard retryable when aborting the upload fails for another reason"
 
 	const original = bucket.resumeMultipartUpload.bind(bucket);
 	vi.spyOn(bucket, "resumeMultipartUpload")
-		.mockReturnValueOnce({
-			abort: async () => {
-				throw new Error("R2 unavailable");
-			},
-		} as unknown as R2MultipartUpload)
+		.mockReturnValueOnce(
+			double<R2MultipartUpload>({
+				abort: async () => {
+					throw new Error("R2 unavailable");
+				},
+			}),
+		)
 		.mockImplementation(original);
 	await expect(abortProjectUpload(db, bucket, upload)).rejects.toThrow(
 		"R2 unavailable",

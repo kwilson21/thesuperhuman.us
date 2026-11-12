@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { double } from "../helpers/doubles";
+
 import {
 	validateIntake,
 	directionFields,
@@ -121,11 +123,11 @@ describe("audio intake", () => {
 		expect(JSON.stringify(request)).not.toContain("turnstileToken");
 	});
 	it("depends on private storage and abuse controls rather than routine email delivery", () => {
-		const env = {
-			MUSIC_DB: {},
+		const env = double<Env>({
+			MUSIC_DB: double<D1Database>({}),
 			TURNSTILE_SECRET_KEY: "secret",
-			RATE_LIMIT: {},
-		} as Env;
+			RATE_LIMIT: double<KVNamespace>({}),
+		});
 
 		expect(isAudioIntakeAvailable(env)).toBe(true);
 		expect(isAudioIntakeAvailable({ ...env, MUSIC_DB: undefined })).toBe(false);

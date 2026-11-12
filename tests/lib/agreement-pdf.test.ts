@@ -14,32 +14,35 @@ import {
 import type { OfferTerms } from "~/lib/software-offers";
 import { expect, it } from "vitest";
 import { inflateSync } from "node:zlib";
-import { PDFDocument, PDFArray, PDFDict, PDFName, PDFRawStream } from "pdf-lib";
+import { PDFDocument, PDFArray, PDFDict, PDFName } from "pdf-lib";
 import {
 	preflightAgreementPacket,
 	renderAgreementPacket,
 } from "~/lib/agreement-pdf";
 import { canonicalJson, hashBytes } from "~/lib/agreement-artifacts";
 import type { Agreement } from "~/lib/software-agreements";
+import { double } from "../helpers/doubles";
+import { fakeD1First, fakeR2Bytes } from "../helpers/tests-lib-a-bindings";
+import { rawStreamOf } from "../helpers/tests-lib-a-pdf";
 
-const assets = {
+const assets = double<Fetcher>({
 	fetch: async () => {
 		throw new Error("PDF rendering must not fetch font assets.");
 	},
-};
+});
 
 function document(
 	kind: "msa" | "sow",
 	text: string,
 	offer = "current",
 ): Agreement {
-	return {
+	return double<Agreement>({
 		id: kind,
 		kind,
 		offer_id: offer,
 		canonical_text: text,
 		attachment_manifest_json: "[]",
-	} as Agreement;
+	});
 }
 
 function extract(pdf: PDFDocument) {
@@ -57,7 +60,7 @@ function extract(pdf: PDFDocument) {
 
 			return streams
 				.map((ref) => {
-					const stream = pdf.context.lookup(ref) as PDFRawStream;
+					const stream = rawStreamOf(pdf.context.lookup(ref));
 					const content = inflateSync(stream.contents).toString();
 					let cmap = new Map<string, string>();
 					const lines: string[] = [];
@@ -68,9 +71,9 @@ function extract(pdf: PDFDocument) {
 						if (match[1]) {
 							const resource = dictionary.lookup(PDFName.of(match[1]), PDFDict);
 
-							const unicode = resource.lookup(
-								PDFName.of("ToUnicode"),
-							) as PDFRawStream;
+							const unicode = rawStreamOf(
+								resource.lookup(PDFName.of("ToUnicode")),
+							);
 
 							cmap = new Map(
 								[
@@ -121,10 +124,10 @@ it("renders selectable full legal text, Unicode, wrapped long words, certificate
 		{ key: "attachment", sha256: await hashBytes(bytes) },
 	]);
 
-	const env = {
+	const env = double<Env>({
 		ASSETS: assets,
-		AUDIO: { get: async () => ({ arrayBuffer: async () => bytes }) },
-	} as unknown as Env;
+		AUDIO: fakeR2Bytes(bytes),
+	});
 
 	const result = await renderAgreementPacket(
 		env,
@@ -165,7 +168,7 @@ it("renders selectable full legal text, Unicode, wrapped long words, certificate
 });
 
 it("imports the original executed MSA pages unchanged before the later SOW", async () => {
-	const env = { ASSETS: assets } as unknown as Env;
+	const env = double<Env>({ ASSETS: assets });
 
 	const original = await renderAgreementPacket(
 		env,
@@ -173,19 +176,11 @@ it("imports the original executed MSA pages unchanged before the later SOW", asy
 		[{ signatures: [{ receipt_id: "original-receipt" }] }],
 	);
 
-	env.MUSIC_DB = {
-		prepare: () => ({
-			bind: () => ({
-				first: async () => ({
-					pdf_key: "original",
-					pdf_sha256: await hashBytes(original),
-				}),
-			}),
-		}),
-	} as unknown as D1Database;
-	env.AUDIO = {
-		get: async () => ({ arrayBuffer: async () => original }),
-	} as unknown as R2Bucket;
+	env.MUSIC_DB = fakeD1First({
+		pdf_key: "original",
+		pdf_sha256: await hashBytes(original),
+	});
+	env.AUDIO = fakeR2Bytes(original);
 
 	const result = await renderAgreementPacket(
 		env,
@@ -246,36 +241,33 @@ it("preflights exact attachment merge inputs and rejects a missing original MSA 
 		registered_agent_confirmed: true,
 	});
 
-	const templates = (["msa", "sow"] as const).map(
-		(kind) =>
-			({
-				kind,
-				version: 1,
-				published_at: "2026-10-01T12:00:00.000Z",
-				version_label: "v2026-10-01",
-				source_revision: null,
-				text:
-					templateFields[kind]
-						.filter((field) => !field.startsWith("milestone."))
-						.map((field) => `${field}: {{${field}}}`)
-						.join("\n") +
-					(kind === "sow"
-						? "\n{{#milestones}}\n" +
-							templateFields.sow
-								.filter((field) => field.startsWith("milestone."))
-								.map((field) => `${field}: {{${field}}}`)
-								.join("\n") +
-							"\n{{/milestones}}"
-						: ""),
-			}) as AgreementTemplate,
+	const templates = (["msa", "sow"] as const).map((kind) =>
+		double<AgreementTemplate>({
+			kind,
+			version: 1,
+			published_at: "2026-10-01T12:00:00.000Z",
+			version_label: "v2026-10-01",
+			source_revision: null,
+			text:
+				templateFields[kind]
+					.filter((field) => !field.startsWith("milestone."))
+					.map((field) => `${field}: {{${field}}}`)
+					.join("\n") +
+				(kind === "sow"
+					? "\n{{#milestones}}\n" +
+						templateFields.sow
+							.filter((field) => field.startsWith("milestone."))
+							.map((field) => `${field}: {{${field}}}`)
+							.join("\n") +
+						"\n{{/milestones}}"
+					: ""),
+		}),
 	);
 
-	const env = {
+	const env = double<Env>({
 		ASSETS: assets,
-		MUSIC_DB: {
-			prepare: () => ({ bind: () => ({ first: async () => null }) }),
-		},
-	} as unknown as Env;
+		MUSIC_DB: fakeD1First(null),
+	});
 
 	await expect(
 		preflightAgreementPacket(env, terms, details, contractor, templates, null),
@@ -300,11 +292,7 @@ it("preflights exact attachment merge inputs and rejects a missing original MSA 
 			bytes: 10,
 		},
 	];
-	env.AUDIO = {
-		get: async () => ({
-			arrayBuffer: async () => new TextEncoder().encode("%PDF-broken"),
-		}),
-	} as unknown as R2Bucket;
+	env.AUDIO = fakeR2Bytes(new TextEncoder().encode("%PDF-broken"));
 	await expect(
 		preflightAgreementPacket(env, terms, details, contractor, templates, null),
 	).rejects.toThrow("Attachment hash mismatch");
@@ -349,7 +337,7 @@ it("bundles exactly the licensed source font bytes", () => {
 it("sets headings in Libron and agreement text in Inter", async () => {
 	const pdf = await PDFDocument.load(
 		await renderAgreementPacket(
-			{ ASSETS: assets } as unknown as Env,
+			double<Env>({ ASSETS: assets }),
 			[
 				document(
 					"sow",
@@ -363,12 +351,13 @@ it("sets headings in Libron and agreement text in Inter", async () => {
 	const page = pdf.getPage(0);
 	const fonts = page.node.Resources()!.lookup(PDFName.of("Font"), PDFDict);
 
+	const contents = page.node.Contents();
+
+	if (!(contents instanceof PDFArray))
+		throw new Error("Expected the page contents as an array of streams.");
+
 	const content = inflateSync(
-		(
-			pdf.context.lookup(
-				(page.node.Contents() as PDFArray).get(0),
-			) as PDFRawStream
-		).contents,
+		rawStreamOf(pdf.context.lookup(contents.get(0))).contents,
 	).toString();
 
 	const faces = [...content.matchAll(/\/(\S+) ([\d.]+) Tf/g)].map((match) => [
@@ -403,7 +392,7 @@ it("formats PDF certificate dates in New York without changing source evidence",
 
 	const pdf = await PDFDocument.load(
 		await renderAgreementPacket(
-			{ ASSETS: assets } as unknown as Env,
+			double<Env>({ ASSETS: assets }),
 			[document("sow", "Exact retained agreement")],
 			[certificate],
 		),
@@ -420,7 +409,7 @@ it("formats PDF certificate dates in New York without changing source evidence",
 it("draws only the document title in the page header when a certificate has no version label", async () => {
 	const pdf = await PDFDocument.load(
 		await renderAgreementPacket(
-			{ ASSETS: assets } as unknown as Env,
+			double<Env>({ ASSETS: assets }),
 			[document("sow", "Exact header text")],
 			[{ executed_at: "2026-09-30T13:15:43.382Z", effective_on: "2026-09-30" }],
 		),
@@ -551,7 +540,7 @@ async function checkTemplatePacket(
 	}));
 
 	const pdf = await PDFDocument.load(
-		await renderAgreementPacket({} as Env, docs, certificates),
+		await renderAgreementPacket(double<Env>({}), docs, certificates),
 	);
 
 	const text = extract(pdf).replace(/\s+/g, " ");
@@ -599,10 +588,12 @@ async function checkTemplatePacket(
 		.lookup(PDFName.of("EmbeddedFiles"), PDFDict)
 		.lookup(PDFName.of("Names"), PDFArray);
 
-	const file = names
-		.lookup(1, PDFDict)
-		.lookup(PDFName.of("EF"), PDFDict)
-		.lookup(PDFName.of("F")) as PDFRawStream;
+	const file = rawStreamOf(
+		names
+			.lookup(1, PDFDict)
+			.lookup(PDFName.of("EF"), PDFDict)
+			.lookup(PDFName.of("F")),
+	);
 
 	expect(inflateSync(file.contents).toString()).toBe(
 		canonicalJson(certificates),
@@ -636,7 +627,7 @@ it("prints each document's own version label in its page headers and in the cert
 	];
 
 	const pdf = await PDFDocument.load(
-		await renderAgreementPacket({} as Env, docs, certificates),
+		await renderAgreementPacket(double<Env>({}), docs, certificates),
 	);
 
 	const text = extract(pdf).replace(/\s+/g, " ");
@@ -679,7 +670,7 @@ it("preserves heading characters absent from Libron using Inter", async () => {
 	const text = "1 Client " + character;
 
 	const pdf = await PDFDocument.load(
-		await renderAgreementPacket({} as Env, [document("sow", text)], [{}]),
+		await renderAgreementPacket(double<Env>({}), [document("sow", text)], [{}]),
 	);
 
 	expect(extract(pdf)).toContain("Client " + character);
@@ -711,7 +702,7 @@ it.each([false, true])(
 
 		const pdf = await PDFDocument.load(
 			await renderAgreementPacket(
-				{ ASSETS: assets } as unknown as Env,
+				double<Env>({ ASSETS: assets }),
 				[document("sow", "Exact retained agreement")],
 				[certificate],
 			),

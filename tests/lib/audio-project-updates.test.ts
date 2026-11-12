@@ -10,6 +10,8 @@ import {
 	saveProjectUpdate,
 	validProjectDate,
 } from "~/lib/audio-project-updates";
+import { double } from "../helpers/doubles";
+import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
 
 vi.mock("~/lib/audio-resend", () => ({
 	sendStudioSignInNotice: vi.fn(async () => ({ ok: true })),
@@ -29,39 +31,7 @@ function fixture() {
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(baseline);
 
-	const statement = (query: string, args: unknown[] = []) => ({
-		query,
-		args,
-		bind: (...values: unknown[]) => statement(query, values),
-		run: async () => ({
-			results: [],
-			meta: { changes: sql.prepare(query).run(...args).changes },
-		}),
-		all: async () => ({ results: sql.prepare(query).all(...args) }),
-		first: async () => sql.prepare(query).get(...args) ?? null,
-	});
-
-	const db = {
-		prepare: (query: string) => statement(query),
-		batch: async (items: ReturnType<typeof statement>[]) => {
-			sql.exec("BEGIN");
-
-			try {
-				const results = items.map((item) => ({
-					results: /\bRETURNING\b/i.test(item.query)
-						? sql.prepare(item.query).all(...item.args)
-						: (sql.prepare(item.query).run(...item.args), []),
-				}));
-
-				sql.exec("COMMIT");
-
-				return results;
-			} catch (error) {
-				sql.exec("ROLLBACK");
-				throw error;
-			}
-		},
-	} as unknown as D1Database;
+	const db = sqliteD1(sql);
 
 	sql
 		.prepare(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
@@ -228,10 +198,10 @@ describe("project updates", () => {
 			now,
 		))!;
 
-		const env = {
+		const env = double<Env>({
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "noreply@example.com",
-		} as Env;
+		});
 
 		vi.mocked(sendStudioSignInNotice).mockResolvedValueOnce({ ok: false });
 		await deliverProjectUpdateNotice(db, update.id, env);
@@ -401,10 +371,10 @@ describe("project updates", () => {
 			now,
 		))!;
 
-		const env = {
+		const env = double<Env>({
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "noreply@example.com",
-		} as Env;
+		});
 
 		vi.mocked(sendStudioSignInNotice).mockResolvedValueOnce({
 			ok: false,
@@ -471,10 +441,14 @@ describe("project updates", () => {
 				"UPDATE audio_projects SET revoked_at=? WHERE request_id='song-1'",
 			)
 			.run(now.toISOString());
-		await deliverProjectUpdateNotice(db, update.id, {
-			RESEND_API_KEY: "test",
-			CONTACT_FROM_EMAIL: "noreply@example.com",
-		} as Env);
+		await deliverProjectUpdateNotice(
+			db,
+			update.id,
+			double<Env>({
+				RESEND_API_KEY: "test",
+				CONTACT_FROM_EMAIL: "noreply@example.com",
+			}),
+		);
 		expect(sendStudioSignInNotice).not.toHaveBeenCalled();
 		expect(await queueProjectNoticeForDelivery(db, "song-1", update.id)).toBe(
 			false,

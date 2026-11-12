@@ -1,15 +1,15 @@
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 
-const read = (path: string) =>
-	JSON.parse(
-		readFileSync(new URL(`../../${path}`, import.meta.url), "utf8"),
-	) as {
-		visibility?: string;
-		lyrics?: string;
-		youtubeUrl?: string;
-		soundcloudUrl?: string;
-	};
+type Demo = {
+	visibility?: string;
+	lyrics?: string;
+	youtubeUrl?: string;
+	soundcloudUrl?: string;
+};
+
+const read = (path: string): Demo =>
+	JSON.parse(readFileSync(new URL(`../../${path}`, import.meta.url), "utf8"));
 
 it("publishes every Old News surface together after launch verification passes", () => {
 	const paths = [

@@ -4,6 +4,8 @@ import { expect, it } from "vitest";
 import { listProjectUpdates } from "~/lib/audio-project-updates";
 import { privateProjectObjectKey } from "~/lib/audio-project-files";
 import { publishProjectFile } from "~/lib/audio-project-publishing";
+import { double } from "../helpers/doubles";
+import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -19,38 +21,7 @@ function fixture() {
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(schema);
 
-	const statement = (query: string, args: unknown[] = []) => ({
-		query,
-		args,
-		bind: (...values: unknown[]) => statement(query, values),
-		first: async () => sql.prepare(query).get(...args) ?? null,
-		run: async () => ({
-			meta: { changes: sql.prepare(query).run(...args).changes },
-		}),
-		all: async () => ({ results: sql.prepare(query).all(...args) }),
-	});
-
-	const db = {
-		prepare: (query: string) => statement(query),
-		batch: async (items: ReturnType<typeof statement>[]) => {
-			sql.exec("BEGIN");
-
-			try {
-				const results = items.map((item) => ({
-					results: /\bRETURNING\b/i.test(item.query)
-						? sql.prepare(item.query).all(...item.args)
-						: (sql.prepare(item.query).run(...item.args), []),
-				}));
-
-				sql.exec("COMMIT");
-
-				return results;
-			} catch (error) {
-				sql.exec("ROLLBACK");
-				throw error;
-			}
-		},
-	} as unknown as D1Database;
+	const db = sqliteD1(sql);
 
 	sql
 		.prepare(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
@@ -81,7 +52,9 @@ function fixture() {
 				now.toISOString(),
 			);
 
-	const bucket = { head: async () => ({ size: 5 }) } as unknown as R2Bucket;
+	const bucket = double<R2Bucket>({
+		head: async () => double<R2Object>({ size: 5 }),
+	});
 
 	return { sql, db, addFile, bucket };
 }

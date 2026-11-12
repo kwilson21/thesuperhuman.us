@@ -1,21 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { sendUrgentOwnerAlert } from "~/lib/owner-alerts";
+import { double } from "../helpers/doubles";
 
-beforeEach(() =>
-	vi.stubGlobal(
-		"fetch",
-		vi.fn(async () => new Response("{}", { status: 200 })),
-	),
-);
+let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
+
+beforeEach(() => {
+	fetchMock = vi.fn<typeof fetch>(async () =>
+		double<Response>({ ok: true, status: 200 }),
+	);
+	vi.stubGlobal("fetch", fetchMock);
+});
 
 describe("urgent owner alerts", () => {
 	it("sends only a safe category, route, request ID, code and time", async () => {
 		const ok = await sendUrgentOwnerAlert(
-			{
+			double<Env>({
 				RESEND_API_KEY: "secret",
 				CONTACT_FROM_EMAIL: "noreply@notifs.thesuperhuman.us",
 				CONTACT_TO_EMAIL: "owner@example.com",
-			} as Env,
+			}),
 			{
 				category: "request-storage",
 				route: "/api/audio-intake",
@@ -27,9 +30,7 @@ describe("urgent owner alerts", () => {
 
 		expect(ok).toBe(true);
 
-		const payload = JSON.parse(
-			vi.mocked(fetch).mock.calls[0][1]?.body as string,
-		);
+		const payload = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
 
 		expect(payload.text).toContain("request-123");
 		expect(payload.text).not.toContain("artist@example.com");
@@ -39,7 +40,7 @@ describe("urgent owner alerts", () => {
 
 	it("stays quiet when alert delivery is not configured", async () => {
 		await expect(
-			sendUrgentOwnerAlert({} as Env, {
+			sendUrgentOwnerAlert(double<Env>({}), {
 				category: "request-storage",
 				route: "/api/music-interest",
 				requestId: "request-456",
@@ -47,6 +48,6 @@ describe("urgent owner alerts", () => {
 				occurredAt: "2026-09-19T12:00:00.000Z",
 			}),
 		).resolves.toBe(false);
-		expect(fetch).not.toHaveBeenCalled();
+		expect(fetchMock).not.toHaveBeenCalled();
 	});
 });

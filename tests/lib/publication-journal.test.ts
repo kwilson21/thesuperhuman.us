@@ -4,6 +4,8 @@ import { describe, it, expect } from "vitest";
 import { D1PublicationJournal } from "~/lib/publication/journal";
 import { readProject } from "~/lib/publication/read";
 import type { Publication } from "~/lib/publication/contract";
+import { double } from "../helpers/doubles";
+import { fakeBatch } from "../helpers/tests-lib-a-bindings";
 
 // Native loading avoids older Vite versions treating node:sqlite as a package.
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
@@ -45,18 +47,40 @@ function fixture() {
 	);
 	let fail = false;
 
-	const db = {
-		prepare: (query: string) => ({
-			bind: (...args: unknown[]) => ({ query, args }),
-		}),
-		batch: async (statements: { query: string; args: never[] }[]) => {
+	const pending = new WeakMap<
+		D1PreparedStatement,
+		{ query: string; args: unknown[] }
+	>();
+
+	const statement = (
+		query: string,
+		args: unknown[] = [],
+	): D1PreparedStatement => {
+		const prepared = double<D1PreparedStatement>({
+			bind: (...values: unknown[]) => statement(query, values),
+		});
+
+		pending.set(prepared, { query, args });
+
+		return prepared;
+	};
+
+	const db = double<D1Database>({
+		prepare: (query: string) => statement(query),
+		batch: fakeBatch((statements) => {
 			sql.exec("BEGIN");
 
 			try {
-				const results = statements.map((s, i) => {
+				const results = statements.map((item, i) => {
 					if (fail && i === 1) throw new Error("interrupted");
+					const info = pending.get(item);
 
-					return { results: sql.prepare(s.query).all(numbered(s.args)) };
+					if (!info)
+						throw new Error("Expected a statement prepared by this fake.");
+
+					return double<D1Result>({
+						results: sql.prepare(info.query).all(numbered(info.args)),
+					});
 				});
 
 				sql.exec("COMMIT");
@@ -66,12 +90,12 @@ function fixture() {
 				sql.exec("ROLLBACK");
 				throw error;
 			}
-		},
-	};
+		}),
+	});
 
 	return {
-		journal: new D1PublicationJournal(db as unknown as D1Database),
-		db: db as unknown as D1Database,
+		journal: new D1PublicationJournal(db),
+		db,
 		sql,
 		interrupt: () => {
 			fail = true;
@@ -168,6 +192,7 @@ describe("transactional publication journal", () => {
 	it("returns the same receipt for reordered exact retries but conflicts on changed content", async () => {
 		const { journal } = fixture();
 		const first = await journal.commit(base);
+		// SAFETY: reversing the entries of base keeps each Publication property with its value, so the object has the Publication shape; only the key order changes, and the journal reads properties by name.
 		expect(
 			await journal.commit(
 				Object.fromEntries(Object.entries(base).reverse()) as Publication,

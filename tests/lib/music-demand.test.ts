@@ -8,6 +8,7 @@ import {
 	saveInterest,
 	saveEvent,
 } from "~/lib/music-demand";
+import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -28,37 +29,9 @@ function fixture() {
 		readFileSync(new URL("../../db/music.sql", import.meta.url), "utf8"),
 	);
 
-	const statement = (query: string, args: unknown[] = []) => ({
-		query,
-		args,
-		bind: (...values: unknown[]) => statement(query, values),
-		run: async () => sql.prepare(query).run(...args),
-		all: async () => ({ results: sql.prepare(query).all(...args) }),
-		first: async () => sql.prepare(query).get(...args) ?? null,
-	});
+	const db = sqliteD1(sql);
 
-	const db = {
-		prepare: (query: string) => statement(query),
-		batch: async (statements: ReturnType<typeof statement>[]) => {
-			sql.exec("BEGIN");
-
-			try {
-				const results = statements.map((item) => ({
-					results: [],
-					meta: sql.prepare(item.query).run(...item.args),
-				}));
-
-				sql.exec("COMMIT");
-
-				return results;
-			} catch (error) {
-				sql.exec("ROLLBACK");
-				throw error;
-			}
-		},
-	};
-
-	return { sql, db: db as unknown as D1Database };
+	return { sql, db };
 }
 
 describe("private music demand", () => {

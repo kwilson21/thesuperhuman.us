@@ -3,6 +3,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import rendered from "../../src/data/og-media.json";
+import { double } from "../helpers/doubles";
 import {
 	DEFAULT_OG_SCENE,
 	OG_SCENES,
@@ -12,7 +13,9 @@ import {
 	type OgScene,
 } from "~/lib/og-media";
 
-const scenes = Object.keys(OG_SCENES) as OgScene[];
+const isOgScene = (key: string): key is OgScene => key in OG_SCENES;
+
+const scenes = Object.keys(OG_SCENES).filter(isOgScene);
 
 const sceneFiles = readdirSync("scripts/og-video/scenes")
 	.filter((name) => name.endsWith(".html"))
@@ -22,12 +25,12 @@ const { video } = ogMedia(DEFAULT_OG_SCENE);
 const name = video.slice("/og/".length, -".mp4".length);
 const bytes = new Uint8Array(Array.from({ length: 200 }, (_, index) => index));
 
-const assets = {
+const assets = double<Fetcher>({
 	fetch: async (input: RequestInfo | URL) =>
 		String(input).endsWith(`/og/raw/${name}.mp4`)
 			? new Response(bytes)
 			: new Response("Not found", { status: 404 }),
-} as unknown as Fetcher;
+});
 
 const request = (headers: Record<string, string> = {}, method = "GET") =>
 	new Request(`https://thesuperhuman.us${video}`, { method, headers });
@@ -186,9 +189,7 @@ describe("rendered scenes", () => {
 	it.each(scenes)(
 		"%s was rendered from its current scene, kit and images",
 		(scene) => {
-			const entry = (
-				rendered as Record<string, { inputs: string[]; source: string }>
-			)[scene];
+			const entry = rendered[scene];
 
 			expect(entry.inputs).toContain(`scripts/og-video/scenes/${scene}.html`);
 			const digest = createHash("sha256");

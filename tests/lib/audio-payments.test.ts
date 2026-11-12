@@ -1,6 +1,9 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { double } from "../helpers/doubles";
+import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
+import { fakeBatch } from "../helpers/tests-lib-a-bindings";
 import {
 	applyStripeInvoiceEvent,
 	approveAudioPayment,
@@ -27,51 +30,12 @@ function fixture(kind: "service" | "purchase" = "service") {
     VALUES ('request-1',?, 'two-track-mix-master','artist@example.com','Old News mix','reviewed',?,?)`)
 		.run(kind, now, now);
 
-	const statement = (query: string, args: unknown[] = []) => ({
-		query,
-		args,
-		bind: (...values: unknown[]) => statement(query, values),
-		run: async () => {
-			const result = sql.prepare(query).run(...args);
+	const pending = new WeakMap<
+		D1PreparedStatement,
+		{ query: string; args: unknown[] }
+	>();
 
-			return { success: true, meta: { changes: result.changes }, results: [] };
-		},
-		all: async () => ({
-			success: true,
-			results: sql.prepare(query).all(...args),
-		}),
-		first: async () => sql.prepare(query).get(...args) ?? null,
-	});
-
-	const db = {
-		prepare: (query: string) => statement(query),
-		batch: async (statements: ReturnType<typeof statement>[]) => {
-			sql.exec("BEGIN");
-
-			try {
-				const results = statements.map((item) => {
-					const prepared = sql.prepare(item.query);
-
-					if (/\bRETURNING\b/i.test(item.query))
-						return { success: true, results: prepared.all(...item.args) };
-					const result = prepared.run(...item.args);
-
-					return {
-						success: true,
-						meta: { changes: result.changes },
-						results: [],
-					};
-				});
-
-				sql.exec("COMMIT");
-
-				return results;
-			} catch (error) {
-				sql.exec("ROLLBACK");
-				throw error;
-			}
-		},
-	} as unknown as D1Database;
+	const db = sqliteD1(sql);
 
 	return { db, sql };
 }
@@ -327,16 +291,16 @@ describe("audio payments", () => {
 			.prepare(`UPDATE audio_payments SET booking_status='open',booking_status_updated_at='2026-09-20T14:00:00.000Z'
       WHERE request_id='request-1'`)
 			.run();
-		const originalBatch = db.batch.bind(db);
-		(db as any).batch = async (statements: unknown[]) => {
+		const originalBatch = db.batch;
+		db.batch = fakeBatch(async (statements) => {
 			// A competing paid event commits after this handler's SELECT, before its UPDATE.
 			sql
 				.prepare(`UPDATE audio_payments SET booking_status='paid',booking_status_updated_at='2026-09-20T15:00:00.000Z'
         WHERE request_id='request-1'`)
 				.run();
 
-			return originalBatch(statements as any);
-		};
+			return originalBatch(statements);
+		});
 
 		await applyStripeInvoiceEvent(db, {
 			eventId: "evt_old_sent",
@@ -444,16 +408,16 @@ describe("audio payments", () => {
 			status: "void",
 			actor: approval.actor,
 		});
-		const originalBatch = db.batch.bind(db);
-		(db as any).batch = async (statements: unknown[]) => {
+		const originalBatch = db.batch;
+		db.batch = fakeBatch(async (statements) => {
 			sql
 				.prepare(
 					`UPDATE audio_payments SET booking_status='paid' WHERE request_id='request-1'`,
 				)
 				.run();
 
-			return originalBatch(statements as any);
-		};
+			return originalBatch(statements);
+		});
 
 		const payment = await replaceTerminalInvoice(db, {
 			requestId: "request-1",
@@ -721,18 +685,18 @@ describe("audio payments", () => {
 		await approveAudioPayment(db, approval);
 		let raced = false;
 
-		const racing = {
+		const racing = double<D1Database>({
 			...db,
 			prepare: db.prepare.bind(db),
-			batch: async (items: Parameters<D1Database["batch"]>[0]) => {
+			batch: fakeBatch(async (items) => {
 				if (!raced) {
 					raced = true;
 					sql.exec("UPDATE audio_payments SET booking_status='paid'");
 				}
 
 				return db.batch(items);
-			},
-		} as unknown as D1Database;
+			}),
+		});
 
 		expect(
 			await recoverInvoiceFromWebhook(racing, {

@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+import { double } from "../helpers/doubles";
 import {
 	publicationLogin,
 	publicationResource,
@@ -19,24 +21,29 @@ const auth = {
 };
 
 function fixture(overrides = {}) {
-	const complete = vi.fn(async () => ({
+	const complete = vi.fn<OAuthHelpers["completeAuthorization"]>(async () => ({
 		redirectTo: "https://chatgpt.com/callback?code=issued",
 	}));
 
-	const env = {
+	const env = double<LoginEnv>({
 		PUBLICATION_PROJECTS: "threadline",
 		PUBLICATION_OWNER_ID: "10987837",
 		PUBLICATION_GITHUB_CLIENT_ID: "public-client",
 		PUBLICATION_GITHUB_CLIENT_SECRET: "test-secret",
 		PUBLICATION_COOKIE_KEY: btoa("k".repeat(32)),
-		OAUTH_PROVIDER: {
-			parseAuthRequest: vi.fn(async () => ({ ...auth, ...overrides })),
-			lookupClient: vi.fn(async () => ({
-				clientName: "<script>evil</script>",
+		OAUTH_PROVIDER: double<OAuthHelpers>({
+			parseAuthRequest: vi.fn<OAuthHelpers["parseAuthRequest"]>(async () => ({
+				...auth,
+				...overrides,
 			})),
+			lookupClient: vi.fn<OAuthHelpers["lookupClient"]>(async () =>
+				double<NonNullable<Awaited<ReturnType<OAuthHelpers["lookupClient"]>>>>({
+					clientName: "<script>evil</script>",
+				}),
+			),
 			completeAuthorization: complete,
-		},
-	} as unknown as LoginEnv;
+		}),
+	});
 
 	return { env, complete };
 }
@@ -177,9 +184,7 @@ describe("publication consent and GitHub identity", () => {
 
 		expect(result.status).toBe(302);
 
-		const grant = complete.mock.calls[0] as unknown as [
-			Record<string, unknown>,
-		];
+		const grant = complete.mock.calls[0];
 
 		expect(grant[0].props).toEqual({
 			ownerId: "10987837",
