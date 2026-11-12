@@ -341,35 +341,35 @@ const serviceRow = (serviceId: string) =>
     </aside>
   </div>
   <script>
-  import { setupSoftwareOffers } from '~/scripts/software-offers';
+    import { setupSoftwareOffers } from '~/scripts/software-offers';
 
-  setupSoftwareOffers();
+    setupSoftwareOffers();
 
-  import { setupOwnerRequestActions } from '~/scripts/owner-request-actions';
-  import { setupOwnerPaymentActions } from '~/scripts/owner-payment-actions';
-  import { setupProjectMessages } from '~/scripts/project-messages';
-  import { setupProjectUpdates } from '~/scripts/project-updates';
-  import { setupProjectInvitation } from '~/scripts/project-invitation';
-  import { setupOwnerProjectFiles } from '~/scripts/owner-project-files';
+    import { setupOwnerRequestActions } from '~/scripts/owner-request-actions';
+    import { setupOwnerPaymentActions } from '~/scripts/owner-payment-actions';
+    import { setupProjectMessages } from '~/scripts/project-messages';
+    import { setupProjectUpdates } from '~/scripts/project-updates';
+    import { setupProjectInvitation } from '~/scripts/project-invitation';
+    import { setupOwnerProjectFiles } from '~/scripts/owner-project-files';
 
-  setupOwnerRequestActions();
+    setupOwnerRequestActions();
 
-  setupOwnerPaymentActions();
+    setupOwnerPaymentActions();
 
-  setupProjectMessages();
+    setupProjectMessages();
 
-  setupProjectUpdates();
+    setupProjectUpdates();
 
-  setupProjectInvitation();
+    setupProjectInvitation();
 
-  setupProjectInvitation('[data-brief-copy]');
+    setupProjectInvitation('[data-brief-copy]');
 
-  setupOwnerProjectFiles();
+    setupOwnerProjectFiles();
 
-  import { setupNextStep } from '~/scripts/next-step';
+    import { setupNextStep } from '~/scripts/next-step';
 
-  setupNextStep();
-</script>
+    setupNextStep();
+  </script>
   <style>
     .request-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem); gap: clamp(2.5rem, 5vw, 4.5rem); align-items: start; }
     .request-layout:not(.portal) { grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem); }
