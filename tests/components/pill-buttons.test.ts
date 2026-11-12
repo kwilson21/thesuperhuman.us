@@ -53,3 +53,28 @@ it('keeps text and the focus ring readable on the panel', () => {
 it('draws the door art with the panel token', () => {
   expect(read('src/components/WorkWithMe.astro')).toContain('background: var(--panel);');
 });
+
+it('uses the button radius token on every pill in the inventory', () => {
+  const studio = read('src/styles/studio.css');
+  expect(studio).toMatch(/\.studio-button \{[^}]*border-radius: var\(--radius-button\);/);
+  expect(read('src/styles/owner.css')).toMatch(/\.owner-primary-action\{[^}]*border-radius:var\(--radius-button\)/);
+  expect(read('src/styles/owner.css')).toMatch(/\.owner-filters button,\.request-work button,\.audience-list button\{[^}]*border-radius:var\(--radius-button\)/);
+  expect(read('src/styles/audio-intake.css')).toMatch(/\.intake-actions \[data-back\]\{[^}]*border-radius:var\(--radius-button\)/);
+  expect(read('src/pages/owner/requests/[id].astro')).toMatch(/\.rail-actions button \{[^}]*border-radius: var\(--radius-button\);/);
+});
+
+it('raises the inline padding on pill rows whose label touched the curve', () => {
+  expect(read('src/styles/owner.css')).toMatch(/\.owner-primary-action\{[^}]*padding:\.65rem 1\.25rem;/);
+  expect(read('src/pages/owner/requests/[id].astro')).toMatch(/\.rail-actions button \{[^}]*padding: \.45rem 1\.25rem;/);
+  expect(read('src/components/WorkWithMe.astro')).toMatch(/\.door-button \{[^}]*padding: \.45rem 1\.5rem;/);
+});
+
+it('stacks the intake actions at 700px and below, primary button first', () => {
+  expect(read('src/styles/audio-intake.css')).toMatch(/@media\(max-width:700px\)\{[^\n]*\.intake-actions\{flex-direction:column-reverse;/);
+});
+
+it('keeps text-style buttons and fields square', () => {
+  const studio = read('src/styles/studio.css');
+  expect(studio.match(/\.studio-quiet \{[^}]*\}/)?.[0] ?? '').not.toContain('border-radius');
+  expect(global).not.toMatch(/\.site-form (input|textarea|select)[^{]*\{[^}]*var\(--radius-button\)/);
+});

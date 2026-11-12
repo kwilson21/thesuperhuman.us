@@ -55,7 +55,7 @@
   min-height: 2.75rem;
   padding: .6rem 1.2rem;
   border: 1px solid var(--accent);
-  border-radius: 2px;
+  border-radius: var(--radius-button);
   background: var(--accent);
   color: var(--paper);
   font: 500 .88rem/1.2 var(--font-sans);
