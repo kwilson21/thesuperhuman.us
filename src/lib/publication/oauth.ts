@@ -151,10 +151,9 @@ export const publicationOAuthRoute: APIRoute = async ({ request, locals }) => {
 			}),
 		});
 
-		// SAFETY: OAuthProvider.fetch adds env.OAUTH_PROVIDER before routing, and the publication secrets LoginEnv adds are checked at the top of this handler.
 		const response = await provider.fetch(
 			limited,
-			env as LoginEnv,
+			env as unknown as LoginEnv,
 			locals.runtime.ctx,
 		);
 
