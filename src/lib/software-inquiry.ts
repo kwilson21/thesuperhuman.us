@@ -1,6 +1,7 @@
 import { z } from "astro/zod";
 import type { NewOwnerRequest } from "./owner-requests";
 import type { OwnerRequest } from "./owner-model";
+import { isText, isObject } from "./type-guards";
 
 export const softwarePaths = {
 	website: "Website design",
@@ -29,19 +30,11 @@ export type StoredSoftwarePath =
 	| SoftwarePath
 	| keyof typeof legacySoftwarePaths;
 
-function isText<T>(value: T): value is T & string {
-	return typeof value === "string";
-}
-
 function hasKey<T extends object>(
 	record: T,
 	key: string,
 ): key is Extract<keyof T, string> {
 	return Object.hasOwn(record, key);
-}
-
-function isObject(value: unknown): value is object {
-	return value !== null && typeof value === "object";
 }
 
 function labelOf<T extends Record<string, string>>(
@@ -53,7 +46,10 @@ function labelOf<T extends Record<string, string>>(
 		: undefined;
 }
 
-function isSegmenter(value: unknown): value is typeof Intl.Segmenter {
+/** Older runtimes lack Intl.Segmenter although its type says it always exists, so the parameter admits undefined and the check is that it is a function. */
+function isSegmenter(
+	value: typeof Intl.Segmenter | undefined,
+): value is typeof Intl.Segmenter {
 	return typeof value === "function";
 }
 
@@ -421,17 +417,20 @@ export function softwareBrief(request: OwnerRequest): Record<string, string> {
 
 				const text = isText(value) ? value : undefined;
 
+				// The label tables were once indexed with the raw value, which coerces it to a key.
+				const labelKey = value == null ? undefined : String(value);
+
 				const display =
 					key === "path"
 						? softwarePathLabel(text)
 						: key === "timing"
-							? labelOf(timingLabels, text)
+							? labelOf(timingLabels, labelKey)
 							: key === "budgetStatus"
-								? labelOf(budgetLabels, text)
+								? labelOf(budgetLabels, labelKey)
 								: key === "approver"
-									? labelOf(approverLabels, text)
+									? labelOf(approverLabels, labelKey)
 									: key === "updates"
-										? labelOf(updateLabels, text)
+										? labelOf(updateLabels, labelKey)
 										: value;
 
 				const shown = isText(display) ? display : "";
