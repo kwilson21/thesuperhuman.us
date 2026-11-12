@@ -20,4 +20,4 @@ for (const database of preview.d1_databases.filter(item => item.migrations_dir))
     '--local', '--config', previewConfig, '--persist-to', resolve('.wrangler/state')], { encoding: 'utf8', env: { ...process.env, CI: '1' } });
   if (result.status !== 0) throw new Error(`Could not apply local migrations for ${database.binding}:\n${result.stderr || result.stdout}`);
 }
-console.log(`Preview ready. Start with MUSIC_PREVIEW_CONFIG=${previewConfig} npx astro dev --port 4321`);
+console.log(`Preview ready. Start with MUSIC_PREVIEW_CONFIG=${previewConfig} pnpm exec astro dev --port 4321`);

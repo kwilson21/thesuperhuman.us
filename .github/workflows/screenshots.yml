@@ -65,11 +65,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22.19.0
-          cache: npm
-      - run: npm ci
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       # The latest earlier run on this branch, or else on main. capture.mjs copies only the images
       # whose inputs are unchanged.
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -79,13 +80,13 @@ jobs:
           restore-keys: screenshots-
       - name: Keep the earlier run as the reference
         run: if [ -d screenshots ]; then mkdir -p .screenshots && mv screenshots .screenshots/reference; fi
-      - run: npx playwright install --with-deps chromium
-      - run: npm run screenshots:preview
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run screenshots:preview
       - name: Start the local preview
         run: |
-          MUSIC_PREVIEW_CONFIG=.screenshots/wrangler.json npx astro dev --config scripts/screenshots/dev.config.mjs --port 4321 --host 127.0.0.1 > astro.log 2>&1 &
+          MUSIC_PREVIEW_CONFIG=.screenshots/wrangler.json pnpm exec astro dev --config scripts/screenshots/dev.config.mjs --port 4321 --host 127.0.0.1 > astro.log 2>&1 &
           for i in $(seq 1 90); do curl -fsS -o /dev/null http://127.0.0.1:4321/ && break; sleep 2; done
-      - run: npm run screenshots
+      - run: pnpm run screenshots
       - name: Check personal name typography and copy behavior
         env:
           PW_ARTIFACT_DIR: screenshots

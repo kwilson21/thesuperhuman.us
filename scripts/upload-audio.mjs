@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 
 const [, , filePath] = process.argv;
 if (!filePath) {
-  console.error('Usage: npm run audio:upload <path/to/track.mp3>');
+  console.error('Usage: pnpm run audio:upload <path/to/track.mp3>');
   process.exit(1);
 }
 if (!existsSync(filePath)) {
@@ -21,8 +21,8 @@ const key = `tracks/${file}`;
 
 console.log(`Uploading ${filePath} -> R2 (superhuman-audio): ${key}`);
 const r = spawnSync(
-  'npx',
-  ['wrangler', 'r2', 'object', 'put', `superhuman-audio/${key}`, '--file', filePath, '--content-type', 'audio/mpeg', '--remote'],
+  'pnpm',
+  ['exec', 'wrangler', 'r2', 'object', 'put', `superhuman-audio/${key}`, '--file', filePath, '--content-type', 'audio/mpeg', '--remote'],
   { stdio: 'inherit' },
 );
 process.exit(r.status ?? 1);

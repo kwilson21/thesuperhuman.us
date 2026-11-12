@@ -10,7 +10,7 @@ const config = JSON.parse(readFileSync('publicist/config.json', 'utf8'));
 
 const skill = readFileSync('.agents/skills/publicist/SKILL.md', 'utf8');
 if (!readFileSync('AGENTS.md', 'utf8').includes(agentsBlock(skill))) {
-  errors.push('AGENTS.md publicist block is out of date; run npm run publicist:sync');
+  errors.push('AGENTS.md publicist block is out of date; run pnpm run publicist:sync');
 }
 
 const entries = [];

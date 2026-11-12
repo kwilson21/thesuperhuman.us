@@ -37,5 +37,5 @@ mv "$TEMP_PDF" "$OUT"
 echo "Rendered $OUT. Inspect the one-page layout before sharing."
 if "$UPLOAD"; then
   cd "$REPO_ROOT"
-  npx wrangler kv key put --binding=RESUME_STORE --remote doc:services-overview --path "$OUT"
+  pnpm exec wrangler kv key put --binding=RESUME_STORE --remote doc:services-overview --path "$OUT"
 fi

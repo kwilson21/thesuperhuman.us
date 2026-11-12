@@ -39,4 +39,4 @@ try {
     }
   }
 } finally { await proxy.dispose(); }
-console.log('Local preview ready. Start with MUSIC_PREVIEW_CONFIG=.private/wrangler-music-preview.json npm run dev');
+console.log('Local preview ready. Start with MUSIC_PREVIEW_CONFIG=.private/wrangler-music-preview.json pnpm run dev');

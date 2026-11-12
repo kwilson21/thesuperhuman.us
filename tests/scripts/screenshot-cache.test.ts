@@ -167,7 +167,7 @@ describe("Vite's dependency version tag", () => {
     expect(withoutViteVersion(url)).toBe(expected);
   });
 
-  it('leaves files from package-lock.json unhashed and hashes the rest', () => {
+  it('leaves files from pnpm-lock.yaml unhashed and hashes the rest', () => {
     expect(['/@vite/client', '/node_modules/astro/dist/zod.js', '/node_modules/.vite/deps/zod.js'].every(unhashed)).toBe(true);
     expect(['/src/styles/global.css', '/@id/astro:scripts/page.js', '/@fs/repo/src/a.ts', '/fonts/x.woff2'].some(unhashed)).toBe(false);
   });
