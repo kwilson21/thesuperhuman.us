@@ -27,6 +27,8 @@ Verify run (local run on macOS arm64, Node 26.13.1, pnpm 12.20.0; no log retaine
 - `pnpm why vite`: `vite@6.4.4` (one version).
 - `pnpm exec vitest run tests/scripts/package-manager.test.ts` passed. A warning that `astro/tsconfigs/strict` could not be found was observed once in a builder run against an existing `node_modules`. An independent clean-install run under pnpm and under npm did not reproduce it, the config resolves from the repo root, and `astro check` reports the same result as `main`. It is treated as local environment noise, not a repo defect.
 
+- Review on the PR found that pnpm forwards a `--` separator to the script where npm strips it, which made the documented owner commands fail their argument check. The separator is removed from every documented `pnpm run` command, and a test now rejects it.
+
 Earlier run (before this round, from a clean `node_modules`, not re-run here):
 
 - `pnpm install --frozen-lockfile`: `Done in 1.7s using pnpm v12.20.0`. A repeat install printed no "awaiting approval" line.

@@ -10,7 +10,7 @@ Use this page when a promotion is active or when the owner center says something
 2. Follow `01` first. It identifies the action most likely to need attention.
 3. Follow `02` for the next useful signal.
 4. Open **Requests** when the new-request count is above zero. Open **Campaigns** when a promotion is active.
-5. Run `pnpm run owner:health -- --remote` when the health line needs attention. Its report contains safe status and next actions only.
+5. Run `pnpm run owner:health --remote` when the health line needs attention. Its report contains safe status and next actions only.
 
 ## Campaigns
 
@@ -70,15 +70,15 @@ A sign-in code locks after five incorrect entries. Someone who knows a client's 
 
 Run studio cleanup at least monthly while the portal is in use:
 
-1. Run `pnpm run studio:retention:preview -- --remote` and review `.private/studio-retention-review.html`. It contains counts and hashes, not client messages, email addresses, or R2 keys.
-2. Apply the exact manifest with `pnpm run studio:retention:apply -- --remote` within 24 hours. The manifest records the database and R2 bucket from the selected Wrangler config (add `--config path` for another environment), and apply refuses to run against a different one. The command closes eligible project access before deleting private R2 objects. It then atomically clears project messages, updates, file metadata and old access records, and marks content removed.
+1. Run `pnpm run studio:retention:preview --remote` and review `.private/studio-retention-review.html`. It contains counts and hashes, not client messages, email addresses, or R2 keys.
+2. Apply the exact manifest with `pnpm run studio:retention:apply --remote` within 24 hours. The manifest records the database and R2 bucket from the selected Wrangler config (add `--config path` for another environment), and apply refuses to run against a different one. The command closes eligible project access before deleting private R2 objects. It then atomically clears project messages, updates, file metadata and old access records, and marks content removed.
 3. If R2 deletion fails, access stays closed but database content remains for recovery. Fix storage access, generate a new preview, and retry; do not manually erase the project row or remove its payment references.
 4. After studio cleanup, run the owner-retention preview and apply below to clear eligible request contact fields and Stripe references. A live or reconciling payment still blocks that step.
 
-1. Run `pnpm run owner:retention:preview -- --remote`.
+1. Run `pnpm run owner:retention:preview --remote`.
 2. Open `.private/owner-retention-review.html`. Save any useful conclusions in the private development journal. The review must not contain names, email addresses, notes, IP addresses, or secrets.
-3. Apply only the matching manifest: `pnpm run owner:retention:apply -- --remote`.
-4. Run `pnpm run owner:health -- --remote` and confirm the retention check passes.
+3. Apply only the matching manifest: `pnpm run owner:retention:apply --remote`.
+4. Run `pnpm run owner:health --remote` and confirm the retention check passes.
 
 There is no scheduled deletion at launch. To pause retention, do not run an apply command. A preview never deletes data. Record each monthly run or reason it could not complete in the private operations journal; overdue cleanup is a launch or operations issue, not a silent exception.
 
@@ -89,7 +89,7 @@ There is no scheduled deletion at launch. To pause retention, do not run an appl
 1. Run `pnpm exec wrangler versions list` and identify the last known good version from the release record.
 2. Review the target version and current database compatibility.
 3. After explicit deployment approval, run `pnpm exec wrangler versions deploy <version-id>@100%`.
-4. Recheck the public music page, one media range request, request submission, unsigned `/owner` rejection, signed owner access, and `pnpm run owner:health -- --remote`.
+4. Recheck the public music page, one media range request, request submission, unsigned `/owner` rejection, signed owner access, and `pnpm run owner:health --remote`.
 
 ### Hide Old News
 
@@ -129,7 +129,7 @@ For failed, uncollectible or corrected delivery invoices, void the original in S
 
 The client’s private project page lists only its pinned offer’s invoices and payment links. One-year studio cleanup removes customer ids, hosted URLs and owner identities. Accounting fields and invoice ids remain for two years. Owner request retention skips requests with invoice rows younger than two years, including requests that never started. Eligible older invoice rows are removed before request contacts are cleared; the existing request and audit retention conventions remain in place.
 
-After checking a full pre-start deposit refund in Stripe, record it with `pnpm run owner:stripe:reconcile -- --software-deposit-refunded LOCAL_INVOICE_ID Confirmed`. This is an owner assertion, not an automatic refund or provider verification. Partial refunds do not release new terms. The paid accounting status remains; the refund date releases the offer block and removes the received confirmation. If no Stripe invoice exists for an old uncertain attempt, explicitly record that check with `--software-no-invoice LOCAL_INVOICE_ID Confirmed`, then use Replace invoice. Resolve reviewed unmatched software events with `--resolve-software-event EVENT_ID Confirmed`; replay the original signed invoice event when it should recover a known reservation. Do not put personal data in reconciliation notes.
+After checking a full pre-start deposit refund in Stripe, record it with `pnpm run owner:stripe:reconcile --software-deposit-refunded LOCAL_INVOICE_ID Confirmed`. This is an owner assertion, not an automatic refund or provider verification. Partial refunds do not release new terms. The paid accounting status remains; the refund date releases the offer block and removes the received confirmation. If no Stripe invoice exists for an old uncertain attempt, explicitly record that check with `--software-no-invoice LOCAL_INVOICE_ID Confirmed`, then use Replace invoice. Resolve reviewed unmatched software events with `--resolve-software-event EVENT_ID Confirmed`; replay the original signed invoice event when it should recover a known reservation. Do not put personal data in reconciliation notes.
 
 ## Software agreements
 
@@ -169,7 +169,7 @@ period. Keep open agreements, active reused MSAs and records under legal hold.
 Project access closure does not erase signatures or restore access through the
 agreement archive. Never delete agreement objects through project cleanup.
 
-Signing release health: run `pnpm run owner:health -- --remote` before merge to check the target schema and configuration. After deployment, run `pnpm run owner:health -- --remote --post-deploy` to also verify that `/agreements/verify` returns the expected bare-visit 401.
+Signing release health: run `pnpm run owner:health --remote` before merge to check the target schema and configuration. After deployment, run `pnpm run owner:health --remote --post-deploy` to also verify that `/agreements/verify` returns the expected bare-visit 401.
 
 Software brief suggestions require the `BRIEF_SUGGEST_RATE_LIMIT` Workers Rate Limiting binding (30 calls per visitor per 60 seconds). A second binding, `BRIEF_SUGGEST_SITE_LIMIT`, allows 120 calls per 60 seconds with one fixed site key. These per-minute bindings are the abuse limits; the visitor binding is keyed by the existing daily visitor IP hash. Suggestions also require a silently verified Turnstile pass, valid for 30 minutes and bound to that daily hash. The HttpOnly, Secure, SameSite=Strict pass cookie is HMAC-signed with the existing `TURNSTILE_SECRET_KEY` using a separate suggestion-pass label. Missing secrets disable suggestions. Interactive challenges silently disable suggestions. Cloudflare applies its counters per location, rather than as a globally exact quota. Missing bindings disable suggestions, including in local and CI environments. D1 enforces hard UTC daily caps of 300 reservations per visitor and 10,000 site-wide in `brief_suggestion_budget`. Atomic increments reserve the visitor budget first, then the site budget before calling AI. Exhausted budgets or D1 budget reservation failures silently disable suggestions. Reservations count attempts, including AI failures and visitor reservations blocked by the site cap. No KV daily counters are used. Apply migration `0025_brief_suggestion_budget.sql` only after owner authorization. Before it is applied, suggestions fail closed.
 
