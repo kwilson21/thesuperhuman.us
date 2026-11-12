@@ -1591,3 +1591,91 @@ it.each([
 	});
 	expect(prepared).toBe(2);
 });
+
+describe("moved client modules", () => {
+	const manifest = {
+		pages: PAGES.map(({ name, path }) => ({ name, path })),
+		scenarios: [
+			"owner-details",
+			"services-print",
+			"software-brief",
+			"software-offer",
+			"software-project",
+			"software-signing",
+			"studio-client",
+			"website-brief",
+		].map((name) => ({ name, title: name, steps: [] })),
+	};
+	const OWNER_REQUEST_SCENARIOS = [
+		"owner-details",
+		"software-brief",
+		"software-offer",
+		"software-project",
+		"website-brief",
+	];
+	const PROJECT_UPDATE_PAGES = [
+		"building-personal-website",
+		"building-personal-website-story",
+		"building-personal-website-archive",
+		"building-threadline",
+		"building-the-engineers-daily",
+		"owner-requests",
+	];
+	const PROJECT_UPDATE_SCENARIOS = [
+		"studio-client",
+		...OWNER_REQUEST_SCENARIOS,
+	];
+	const TIMELINE_PAGES = [
+		...PROJECT_UPDATE_PAGES,
+		"building-kaillera-next",
+		"building-tally",
+	];
+	const SHARED_SITE = ["home", "work", "audio", "services", "audio-services"];
+
+	const moved: [string, string[], string[]][] = [
+		["about-resume", ["about"], []],
+		["audio-portfolio-filter", ["audio-portfolio"], []],
+		["audio-releases-filter", ["audio-releases"], []],
+		["audio-services-links", ["audio-services"], []],
+		["contact-form", ["home"], []],
+		["countersign-name", ["owner-requests"], OWNER_REQUEST_SCENARIOS],
+		["home-contact", ["home"], []],
+		["music-detail-links", ["music-old-news"], []],
+		["open-details-links", [], ["software-project"]],
+		["owner-agreements", [], ["software-signing"]],
+		["payload-review-illustration", TIMELINE_PAGES, PROJECT_UPDATE_SCENARIOS],
+		["project-timeline", TIMELINE_PAGES, PROJECT_UPDATE_SCENARIOS],
+		["project-updates-feed", PROJECT_UPDATE_PAGES, PROJECT_UPDATE_SCENARIOS],
+		["release-interest", ["music-old-news"], []],
+		["resume-request-form", ["about"], []],
+		["service-sheet", ["services"], ["services-print"]],
+		["site-nav", SHARED_SITE, []],
+		[
+			"software-agreement-review-links",
+			["owner-requests"],
+			OWNER_REQUEST_SCENARIOS,
+		],
+		["software-offer-print", [], ["software-offer"]],
+		["studio-sign-in", ["studio-sign-in"], ["software-project"]],
+		["studio-sign-out", [], ["studio-client", "software-project"]],
+		["work-experience", ["work"], []],
+	];
+
+	it.each(moved)(
+		"selects the screenshots that render src/scripts/%s.ts",
+		(module, pages, scenarios) => {
+			const selected = relevantScreenshots(manifest, [
+				`src/scripts/${module}.ts`,
+			]);
+
+			expect(
+				selected.pages.map((page: { name: string }) => page.name).sort(),
+			).toEqual([...pages].sort());
+			expect(
+				selected.scenarios
+					.map((scenario: { name: string }) => scenario.name)
+					.sort(),
+			).toEqual([...scenarios].sort());
+		},
+	);
+});

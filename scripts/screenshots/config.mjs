@@ -177,6 +177,32 @@ const PROJECT_STORY_PAGES = [
 
 const OWNER_PAGES = ["owner-today", "owner-requests", "owner-campaigns"];
 
+// Client modules in src/scripts are selected by the pages and components that import them.
+const OWNER_REQUEST_SCENARIOS = [
+	"owner-details",
+	"software-brief",
+	"software-offer",
+	"software-project",
+	"website-brief",
+];
+
+const PROJECT_UPDATE_PAGES = [
+	"building-personal-website",
+	"building-personal-website-story",
+	"building-personal-website-archive",
+	"building-threadline",
+	"building-the-engineers-daily",
+	"owner-requests",
+];
+
+const PROJECT_UPDATE_SCENARIOS = ["studio-client", ...OWNER_REQUEST_SCENARIOS];
+
+const TIMELINE_PAGES = [
+	...PROJECT_UPDATE_PAGES,
+	"building-kaillera-next",
+	"building-tally",
+];
+
 const PAGE_NAMES_BY_FILE = {
 	"src/components/SiteNav.astro": SHARED_SITE_PAGES,
 	"src/components/Footer.astro": SHARED_SITE_PAGES,
@@ -232,6 +258,24 @@ const PAGE_NAMES_BY_FILE = {
 		"audio-releases",
 		"music-old-news",
 	],
+	"src/scripts/about-resume.ts": ["about"],
+	"src/scripts/audio-portfolio-filter.ts": ["audio-portfolio"],
+	"src/scripts/audio-releases-filter.ts": ["audio-releases"],
+	"src/scripts/audio-services-links.ts": ["audio-services"],
+	"src/scripts/contact-form.ts": ["home"],
+	"src/scripts/home-contact.ts": ["home"],
+	"src/scripts/music-detail-links.ts": ["music-old-news"],
+	"src/scripts/release-interest.ts": ["music-old-news"],
+	"src/scripts/resume-request-form.ts": ["about"],
+	"src/scripts/service-sheet.ts": ["services"],
+	"src/scripts/site-nav.ts": SHARED_SITE_PAGES,
+	"src/scripts/countersign-name.ts": ["owner-requests"],
+	"src/scripts/software-agreement-review-links.ts": ["owner-requests"],
+	"src/scripts/payload-review-illustration.ts": TIMELINE_PAGES,
+	"src/scripts/project-timeline.ts": TIMELINE_PAGES,
+	"src/scripts/project-updates-feed.ts": PROJECT_UPDATE_PAGES,
+	"src/scripts/studio-sign-in.ts": ["studio-sign-in"],
+	"src/scripts/work-experience.ts": ["work"],
 };
 
 const SCENARIO_NAMES_BY_FILE = {
@@ -326,6 +370,17 @@ const SCENARIO_NAMES_BY_FILE = {
 		"owner-details",
 		"software-project",
 	],
+	"src/scripts/countersign-name.ts": OWNER_REQUEST_SCENARIOS,
+	"src/scripts/software-agreement-review-links.ts": OWNER_REQUEST_SCENARIOS,
+	"src/scripts/open-details-links.ts": ["software-project"],
+	"src/scripts/owner-agreements.ts": ["software-signing"],
+	"src/scripts/payload-review-illustration.ts": PROJECT_UPDATE_SCENARIOS,
+	"src/scripts/project-timeline.ts": PROJECT_UPDATE_SCENARIOS,
+	"src/scripts/project-updates-feed.ts": PROJECT_UPDATE_SCENARIOS,
+	"src/scripts/service-sheet.ts": ["services-print"],
+	"src/scripts/software-offer-print.ts": ["software-offer"],
+	"src/scripts/studio-sign-in.ts": ["software-project"],
+	"src/scripts/studio-sign-out.ts": ["studio-client", "software-project"],
 };
 
 function routeForPageFile(file) {
