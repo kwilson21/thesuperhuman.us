@@ -15,6 +15,7 @@ Package manager and Node version only: pnpm 12.20.0 with `pmOnFail: error`, and 
 ## Owner decisions
 
 - Owner, in conversation, 2026-11-12: use pnpm on the website and Node on the current LTS, matching Tally (kwilson21/tally decisions 203 and 204).
+- Owner, in conversation, 2026-11-12: after the PR checks passed and the Cloudflare build log showed Node 26.13.0 and pnpm 12.20.0, authorized merging this PR once it is ready. Merging to `main` deploys production.
 
 ## Evidence and limits
 
@@ -27,6 +28,8 @@ Verify run (local run on macOS arm64, Node 26.13.1, pnpm 12.20.0; no log retaine
 - `pnpm why vite`: `vite@6.4.4` (one version).
 - `pnpm exec vitest run tests/scripts/package-manager.test.ts` passed. A warning that `astro/tsconfigs/strict` could not be found was observed once in a builder run against an existing `node_modules`. An independent clean-install run under pnpm and under npm did not reproduce it, the config resolves from the repo root, and `astro check` reports the same result as `main`. It is treated as local environment noise, not a repo defect.
 
+- Review on the PR found that pnpm forwards a `--` separator to the script where npm strips it, which made the documented owner commands fail their argument check. The separator is removed from every documented `pnpm run` command, and a test now rejects it.
+
 Earlier run (before this round, from a clean `node_modules`, not re-run here):
 
 - `pnpm install --frozen-lockfile`: `Done in 1.7s using pnpm v12.20.0`. A repeat install printed no "awaiting approval" line.
@@ -37,7 +40,7 @@ Lockfile comparison, reported by the independent review, not re-counted here: th
 
 ### 1. Purpose and content
 
-- PASS, 1.1 Project, branch, local changes, scope and rollback confirmed: branch `claude/website-library-additions-904120`, tooling-only diff against `origin/main`. Deployment authorization: none. No deployment is authorized by this record.
+- PASS, 1.1 Project, branch, local changes, scope and rollback confirmed: branch `claude/website-library-additions-904120`, tooling-only diff against `origin/main`. Deployment authorization: the owner authorized the merge, which deploys production, on 2026-11-12 (see Owner decisions).
 - N/A, 1.2 Approved design and truthful claims: no page, copy or asset changed.
 - N/A, 1.3 Explanatory copy and resume comparison: no explanatory copy, professional claim or stored resume changed.
 - N/A, 1.4 First screen and CTA: no page changed.
@@ -54,7 +57,7 @@ Lockfile comparison, reported by the independent review, not re-counted here: th
 ### 4. Performance and resilience
 
 - N/A, every item in this section: no page, asset, image, client code or route changed; no performance measurement applies to a tooling-only change.
-- N/A, 4.4 and 4.5 (async UI recovery; missing audio, video and external resources), and 4.6 (404 and server-error pages): runtime unchanged; build and CI resilience is covered by the UNVERIFIED Workers Builds and workflow gates below.
+- N/A, 4.4 and 4.5 (async UI recovery; missing audio, video and external resources), and 4.6 (404 and server-error pages): runtime unchanged; build and CI resilience is covered by the Workers Builds and workflow gates below (PASS, see Delivery status).
 
 ### 5. Forms and sensitive flows
 
@@ -64,16 +67,16 @@ Lockfile comparison, reported by the independent review, not re-counted here: th
 
 - PASS, 6.1: one new third-party CI action, `pnpm/action-setup`, pinned to a full commit SHA in both workflows; it runs only in GitHub Actions, not on the site. The Validate checkout sets `persist-credentials: false`. No site storage, processor or script changed.
 - N/A, every other item in this section: no stored data, cookie, analytics, legal text or external embed changed.
-- N/A, 6.6 (error logs and monitoring): runtime unchanged; build and CI resilience is covered by the UNVERIFIED Workers Builds and workflow gates below.
+- N/A, 6.6 (error logs and monitoring): runtime unchanged; build and CI resilience is covered by the Workers Builds and workflow gates below (PASS, see Delivery status).
 
 ### 7. Release and final QA
 
-- PASS, 7.1 Required type, test and build checks (local runs by the builder and, separately, by an independent reviewer on a clean copy; no log retained; CI rerun pending): `pnpm run check` 0 errors and 0 warnings; `pnpm test` all test files passed; `pnpm run build` complete (see Evidence). Build warnings inspected by the reviewer: the `SESSION` binding note, two empty content folders, two zod comment warnings and one CSS optimization warning, all identical on `origin/main` under npm. Vitest prints a Node `localStorage` ExperimentalWarning, also present before the change.
+- PASS, 7.1 Required type, test and build checks (local runs by the builder and, separately, by an independent reviewer on a clean copy; no log retained; GitHub `validate` has since passed on the PR head): `pnpm run check` 0 errors and 0 warnings; `pnpm test` all test files passed; `pnpm run build` complete (see Evidence). Build warnings inspected by the reviewer: the `SESSION` binding note, two empty content folders, two zod comment warnings and one CSS optimization warning, all identical on `origin/main` under npm. Vitest prints a Node `localStorage` ExperimentalWarning, also present before the change.
 - UNVERIFIED, 7.2 Exact diff, dependency, generated-file and public-artifact review on the PR head: Pushed and opened as #230 after this record's checks were run; the independent review of the final head is still required.
 - UNVERIFIED, 7.3 Production bindings, secrets, migrations, HTTPS, host routing, cache behavior and response headers (not deployed): no binding, secret or migration changed, but no deployed response was observed.
 - PASS, 7.4 Rollback version preserved: revision `1d745ba2497e76c60aee8404ab02fe6aa0264dea` is local `origin/main` when this record was written; re-check with `git fetch` before merge.
 - UNVERIFIED, 7.5 After authorized deployment, production revision, journeys, sitemap, robots, metadata, missing page, forms and monitoring (not deployed): nothing deployed.
-- UNVERIFIED, 7.6 Receipt and QA evidence (UNVERIFIED until the PR head is reviewed and CI and Workers Builds have run; this record is the receipt so far), with the four states reported separately. Implemented: yes. Verified locally: yes. Deployed: no. Verified live: no.
+- PASS, 7.6 Receipt and QA evidence for the pre-merge gates: CI, Screenshots, Workers Builds and review have run on the PR head (see Delivery status), with the four states reported separately. Implemented: yes. Verified locally: yes. Deployed: no. Verified live: no. Live verification remains UNVERIFIED.
 
 ### 8. Private owner center
 
@@ -82,11 +85,16 @@ Lockfile comparison, reported by the independent review, not re-counted here: th
 ## Delivery status and remaining gates
 
 - Pushed and opened as #230 after this record's checks were run.
-- GitHub Validate and Screenshots workflows on Linux: UNVERIFIED. Not run in this session.
-- Cloudflare Workers Builds on the PR head: UNVERIFIED. Must be green, with a log showing Node 26 and pnpm 12.20.0, before merge.
-- Dependabot against a pnpm 12 lockfile: UNVERIFIED.
-- Independent review of the final head: required before merge; not yet done for this round.
+- PASS, GitHub `validate` (Linux, pnpm, Node from `.nvmrc`) and Screenshots `capture` passed on head `2f5f89d7`.
+- PASS, Greptile review completed. Its one finding (the `--` separator) is fixed and its thread resolved.
+- PASS, Codex code review completed on `76331798` with no findings; its security review completed on the same commit.
+- PASS, Cloudflare Workers Builds passed on commit `2de09d6b`, and the check also passed on `2f5f89d7`. The log shows "Detected the following tools from environment: nodejs@26.13.0, pnpm@12.20.0" (the Node 26 and pnpm 12.20.0 gate is met), then `pnpm install --frozen-lockfile`, "Lockfile passes supply-chain policies (757 entries)" and "Done in 3s using pnpm v12.20.0". The sharp install script ran. The prebuild gates passed (asset QA 79 files, copy-check, design-check 6 gates, publicist-gate 84 entries), the Astro build completed, and `wrangler versions upload` succeeded (Worker startup time 40 ms). Build warnings were the same set seen locally: the `SESSION` binding note, two empty content folders, two zod comment warnings and one CSS optimization warning.
+- Note: the build and deploy commands configured in the Cloudflare dashboard are still `npm run build` and `npx wrangler versions upload`. They work because npm is present on the image and the scripts call pnpm themselves. Changing them to `pnpm run build` and `pnpm exec wrangler versions upload` is an owner dashboard setting, not part of this PR.
+- UNVERIFIED: Dependabot against a pnpm 12 lockfile (check after merge).
+- UNVERIFIED: post-deployment live verification (not deployed).
+- UNVERIFIED: the branch preview could not be loaded for a smoke check because it sits behind sign-in.
+- Independent review: four rounds of independent subagent review plus Greptile on the PR head and Codex on `76331798`. Commits after `76331798` change this record, command text in three docs and one test only. A last independent pass on the final head runs before merge.
 
-No deployment is authorized by this record.
+Deployment authorization: the owner authorized the merge, which deploys production, on 2026-11-12 (see Owner decisions).
 
 Built by a Claude Haiku 5.5 subagent; reviewed by independent Claude Opus and Sonnet subagents. This record does not certify the checks listed as UNVERIFIED.

@@ -1,10 +1,25 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const read = (path: string) => readFileSync(`${root}${path}`, 'utf8');
 const workflows = ['.github/workflows/validate.yml', '.github/workflows/screenshots.yml'];
+// pnpm forwards a `--` separator to the script (npm stripped it), so documented commands must omit it.
+const pnpmSeparator = /\bpnpm (?:run [\w:.-]+|test) -- /;
+const under = (dir: string) => readdirSync(`${root}${dir}`, { recursive: true }).map(entry => `${dir}/${entry}`);
+const commandFiles = [
+  'README.md',
+  'CLAUDE.md',
+  'AGENTS.md',
+  'package.json',
+  '.agents/skills/publicist/SKILL.md',
+  ...under('docs').filter(
+    path => path.endsWith('.md') && !/^docs\/(prelaunch-qa-|superpowers\/|design-concepts\/)/.test(path),
+  ),
+  ...under('scripts').filter(path => /\.(mjs|sh|md)$/.test(path)),
+  ...under('.github/workflows').filter(path => path.endsWith('.yml')),
+];
 
 describe('package manager and Node pin', () => {
   it('uses pnpm and keeps package-lock.json out of the repository', () => {
@@ -47,5 +62,15 @@ describe('package manager and Node pin', () => {
 
   it.each(workflows)('%s checks out without persisting credentials', path => {
     expect(read(path)).toMatch(/actions\/checkout@[0-9a-f]{40} # v[\d.]+\n\s+with:\n\s+persist-credentials: false/);
+  });
+
+  it('documents pnpm commands without a `--` separator', () => {
+    const offenders = commandFiles.flatMap(path =>
+      read(path)
+        .split('\n')
+        .filter(line => pnpmSeparator.test(line))
+        .map(line => `${path}: ${line.trim()}`),
+    );
+    expect(offenders).toEqual([]);
   });
 });
