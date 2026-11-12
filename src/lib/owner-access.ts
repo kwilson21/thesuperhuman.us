@@ -1,4 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { isText } from "./type-guards";
 
 export type OwnerIdentity = { email: string };
 
@@ -13,10 +14,6 @@ function keySet(issuer: string) {
 	}
 
 	return current;
-}
-
-function isText<T>(value: T): value is T & string {
-	return typeof value === "string";
 }
 
 export async function verifyOwnerAccess(

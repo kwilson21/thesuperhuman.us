@@ -1,4 +1,5 @@
 import { hashValue } from "./audio-client-access";
+import { isText } from "./type-guards";
 
 export type ProjectMessage = {
 	id: number;
@@ -18,10 +19,6 @@ export const REVISION_ROUNDS = 2;
 const messageColumns = "id,actor,body,created_at,read_at,review_decision";
 const CLIENT_MESSAGE_WINDOW_MS = 300_000;
 const CLIENT_MESSAGE_LIMIT = 12;
-
-function isText(value: unknown): value is string {
-	return typeof value === "string";
-}
 
 export function validateProjectMessage(value: unknown): string | null {
 	if (!isText(value)) return null;

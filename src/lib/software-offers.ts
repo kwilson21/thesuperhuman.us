@@ -1,10 +1,7 @@
 import { z } from "astro/zod";
 import type { OwnerRequest } from "./owner-model";
 import { softwarePathLabel, softwarePaths } from "./software-inquiry";
-
-function isText<T>(value: T): value is T & string {
-	return typeof value === "string";
-}
+import { isText } from "./type-guards";
 
 const text = (max: number, oneLine = false) =>
 	z

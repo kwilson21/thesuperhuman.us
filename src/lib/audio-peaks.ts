@@ -1,3 +1,5 @@
+import { isText } from "./type-guards";
+
 // Waveform peaks for private studio files. The owner's browser measures them while
 // uploading; the server only validates and stores the numbers.
 export const peakCount = 160;
@@ -32,10 +34,6 @@ export function peaksFromChannels(
 
 /** What a stored waveform looks like before it is checked: its JSON text, or a list already parsed. */
 type PeaksInput = string | readonly unknown[] | null;
-
-function isText(value: PeaksInput): value is string {
-	return typeof value === "string";
-}
 
 function isPeak(value: unknown): value is number {
 	return (
