@@ -94,3 +94,9 @@ it('keeps Home’s contact section and About’s resume request', () => {
   expect(read('src/pages/index.astro')).toContain('<section id="contact" class="site-section contact-section"');
   expect(read('src/pages/about.astro')).toContain('<details id="resumes" class="resume-section context-disclosure">');
 });
+
+it('does not stack bottom padding above the panel on Privacy', () => {
+  const privacy = read('src/pages/privacy.astro');
+  expect(privacy).toContain('<article class="site-shell pt-16">');
+  expect(privacy).not.toContain('py-16');
+});
