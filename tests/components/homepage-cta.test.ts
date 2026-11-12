@@ -19,5 +19,5 @@ it('routes the homepage hero CTA to the software intake and preserves other CTAs
   expect(workWithMe).not.toContain('Each button starts the relevant intake or contact path.');
   expect(siteNav).toContain('href={mainHref(\'/services\')} aria-current={onHub ? \'page\' : undefined}>Work with me</a>');
   expect(footer).toContain('const hireHref = mainHref(\'/services\');');
-  expect(footer).toContain('<a href={hireHref}>Work with me</a>');
+  expect(footer).toContain("variant === 'quiet' && <a href={hireHref}>Work with me</a>");
 });
