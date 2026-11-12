@@ -1,12 +1,15 @@
 import { afterEach, expect, it, vi, type Mock } from "vitest";
 import { setupOwnerRequestActions } from "~/scripts/owner-request-actions";
 import { setupSoftwareOffers } from "~/scripts/software-offers";
-import { double } from "../helpers/doubles";
 
 /** The event a fake element passes to its listeners: emit supplies preventDefault, target and currentTarget. */
+type FakeTarget =
+	| FakeElement
+	| { closest: () => FakeTarget | { remove: Mock } | null };
+
 type FakeEvent = {
 	preventDefault: Mock;
-	target?: FakeElement;
+	target?: FakeTarget;
 	currentTarget?: FakeElement;
 };
 
@@ -22,11 +25,18 @@ type FakeElement = {
 	value: string;
 	checked: boolean;
 	focus: Mock;
+	select?: Mock;
+	type?: string;
+	name?: string;
+	first?: FakeElement;
+	nextElementSibling?: FakeElement | null;
+	previousElementSibling?: FakeElement | null;
+	remove?: () => void;
 	addEventListener: (
 		name: string,
 		handler: FakeHandler,
 	) => void;
-	emit: (name: string, target?: FakeElement) => Promise<void>;
+	emit: (name: string, target?: FakeTarget) => Promise<void>;
 	querySelector: (selector: string) => FakeElement | null;
 	querySelectorAll: (selector: string) => FakeElement[];
 	setAttribute: Mock;
@@ -848,7 +858,7 @@ it("focuses and announces each added milestone, including the third", async () =
 	for (const count of [2, 3]) {
 		await targets.get("[data-add-milestone]")!.emit("click");
 		expect(list.children).toHaveLength(count);
-		expect(list.lastElementChild.first.focus).toHaveBeenCalledOnce();
+		expect(list.lastElementChild.first?.focus).toHaveBeenCalledOnce();
 		expect(status.textContent).toBe(`Milestone ${count} added.`);
 	}
 
@@ -902,7 +912,7 @@ it.each([0, 1, 2])(
 			};
 		});
 		const neighbor = rows[index + 1] ?? rows[index - 1];
-		const input = neighbor.querySelector("input");
+		const input = neighbor.querySelector("input")!;
 		input.focus.mockClear();
 		const button = { closest: () => rows[index] };
 		await list.emit("click", { closest: () => button });
@@ -914,7 +924,7 @@ it.each([0, 1, 2])(
 
 it("marks and names the full agreement field path returned by send validation", async () => {
 	const { inputs, form, status } = fixture();
-	inputs["agreement.environment"] = { value: "", setAttribute: vi.fn() };
+	inputs["agreement.environment"] = element({ value: "", setAttribute: vi.fn() });
 	vi.stubGlobal(
 		"fetch",
 		vi.fn(async () =>
@@ -953,16 +963,21 @@ it("drops a removed attachment from the manifest and queues its key for draft cl
 	const row = { remove: vi.fn() },
 		button = { dataset: { removeAttachment: "first" }, closest: () => row };
 
-	const block = double<HTMLElement>({
-		dataset: {},
-		addEventListener: (_name: string, fn: Function) => (remove = fn),
+	const dataset: Record<string, string> = {};
+
+	const block = {
+		dataset,
+		addEventListener: (_name: string, fn: Function) => {
+			remove = fn;
+		},
 		querySelector: (selector: string) =>
 			selector.includes("agreement.attachments")
 				? field
 				: { addEventListener: vi.fn() },
-	});
+	};
 
-	setupAgreementAttachments(block);
+	// SAFETY: setupAgreementAttachments reads from block only dataset, addEventListener and querySelector, all supplied above; the test drives only the listener it registers, so the plain object stands in for the element.
+	setupAgreementAttachments(block as never);
 	remove({ target: { closest: () => button } });
 	expect(JSON.parse(field.value)).toEqual([
 		{ key: "second", filename: "Two.pdf" },

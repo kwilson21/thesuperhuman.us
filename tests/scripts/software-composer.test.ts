@@ -11,7 +11,9 @@ type FakeHandler = (event?: FakeEvent) => void;
 type FakeField = {
 	value: string;
 	checked: boolean;
-	files: never[];
+	files: { name: string; size: number; type: string }[];
+	disabled?: boolean;
+	required?: boolean;
 	reportValidity: Mock;
 	setCustomValidity: Mock;
 	addEventListener: (event: string, handler: FakeHandler) => void;
@@ -23,6 +25,7 @@ type FakeField = {
 type FakeElement = {
 	hidden: boolean;
 	textContent: string;
+	src?: string;
 	addEventListener: (event: string, handler: FakeHandler) => void;
 	replaceChildren: Mock;
 	querySelectorAll: () => never[];
@@ -254,7 +257,7 @@ it.each(["", "/saved-visual"])(
 			{ name: "valid.png", size: 100, type: "image/png" },
 		];
 		page.fileChange();
-		expect(page.elements.get("[data-preview-image]").src).toBe("blob:staged");
+		expect(page.elements.get("[data-preview-image]")!.src).toBe("blob:staged");
 		Object.defineProperty(page.fields.visual, "value", {
 			set: () => {
 				page.fields.visual.files = [];
@@ -266,16 +269,16 @@ it.each(["", "/saved-visual"])(
 		];
 		page.fileChange();
 		expect(revoke).toHaveBeenCalledWith("blob:staged");
-		expect(page.elements.get("[data-visual-name]").textContent).toBe("");
-		expect(page.elements.get("[data-preview-figure]").hidden).toBe(
+		expect(page.elements.get("[data-visual-name]")!.textContent).toBe("");
+		expect(page.elements.get("[data-preview-figure]")!.hidden).toBe(
 			!savedVisual,
 		);
 
 		if (savedVisual)
-			expect(page.elements.get("[data-preview-image]").src).toBe(savedVisual);
+			expect(page.elements.get("[data-preview-image]")!.src).toBe(savedVisual);
 		else
 			expect(
-				page.elements.get("[data-preview-image]").removeAttribute,
+				page.elements.get("[data-preview-image]")!.removeAttribute,
 			).toHaveBeenCalledWith("src");
 		expect(page.fields.visual.value).toBe("");
 		expect(page.fields.visual_alt.required).toBe(Boolean(savedVisual));
@@ -340,10 +343,10 @@ it("restores the saved endpoint after uploading and then rejecting another repla
 		{ name: "rejected.png", size: 6 * 1024 * 1024, type: "image/png" },
 	];
 	page.fileChange();
-	expect(page.elements.get("[data-preview-image]").src).toBe(
+	expect(page.elements.get("[data-preview-image]")!.src).toBe(
 		"/api/owner/requests/r/updates/draft/visual",
 	);
-	expect(page.elements.get("[data-preview-figure]").hidden).toBe(false);
+	expect(page.elements.get("[data-preview-figure]")!.hidden).toBe(false);
 	expect(revoke).toHaveBeenCalledWith("blob:first");
 	expect(revoke).toHaveBeenCalledWith("blob:second");
 	revoke.mockRestore();
@@ -416,15 +419,15 @@ it("hides manual handoff payment and blocks sharing while the selected installme
 	vi.stubGlobal("fetch", send);
 	const page = fixture(false, "", "[true,false]");
 	page.change("handoff");
-	expect(page.elements.get("[data-handoff-payment]").hidden).toBe(true);
-	expect(page.elements.get("[data-payment-reminder]").hidden).toBe(false);
+	expect(page.elements.get("[data-handoff-payment]")!.hidden).toBe(true);
+	expect(page.elements.get("[data-payment-reminder]")!.hidden).toBe(false);
 	expect(page.fields.paid_confirmed.disabled).toBe(true);
 	page.submit();
 	page.saveDraft();
 	expect(send).not.toHaveBeenCalled();
 	page.fields.milestone_index.value = "1";
 	page.choose();
-	expect(page.elements.get("[data-handoff-payment]").hidden).toBe(false);
+	expect(page.elements.get("[data-handoff-payment]")!.hidden).toBe(false);
 	expect(page.fields.paid_confirmed.disabled).toBe(false);
 	expect(page.fields.paid_confirmed.required).toBe(true);
 });
