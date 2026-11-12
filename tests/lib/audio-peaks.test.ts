@@ -73,6 +73,8 @@ describe("audio peaks", () => {
 		expect(parsePeaks([...valid.slice(1), 1.5])).toBeNull();
 		expect(parsePeaks(valid.slice(1))).toBeNull();
 		expect(parsePeaks("not json")).toBeNull();
+		expect(parsePeaks(JSON.stringify(42))).toBeNull();
+		expect(parsePeaks(Array.from({ length: 401 }, () => 50))).toBeNull();
 		expect(parsePeaks(null)).toBeNull();
 	});
 

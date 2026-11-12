@@ -30,27 +30,38 @@ export function peaksFromChannels(
 	);
 }
 
+/** What a stored waveform looks like before it is checked: its JSON text, or a list already parsed. */
+type PeaksInput = string | readonly unknown[] | null;
+
+function isText(value: PeaksInput): value is string {
+	return typeof value === "string";
+}
+
+function isPeak(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= 0 &&
+		value <= 100
+	);
+}
+
+function parseJson(text: string) {
+	try {
+		return JSON.parse(text);
+	} catch {
+		return null;
+	}
+}
+
 /** Accepts only a short list of whole numbers from 0 to 100. */
-export function parsePeaks(value: unknown): number[] | null {
-	const peaks =
-		typeof value === "string"
-			? (() => {
-					try {
-						return JSON.parse(value);
-					} catch {
-						return null;
-					}
-				})()
-			: value;
+export function parsePeaks(value: PeaksInput): number[] | null {
+	const peaks = isText(value) ? parseJson(value) : value;
 
 	if (!Array.isArray(peaks) || peaks.length < 16 || peaks.length > 400)
 		return null;
 
-	return peaks.every(
-		(peak) => Number.isInteger(peak) && peak >= 0 && peak <= 100,
-	)
-		? (peaks as number[])
-		: null;
+	return peaks.every(isPeak) ? peaks : null;
 }
 
 /** SVG bars for a 320×40 viewBox, centered on the midline. */
