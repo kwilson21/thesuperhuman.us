@@ -15,6 +15,7 @@ Package manager and Node version only: pnpm 12.20.0 with `pmOnFail: error`, and 
 ## Owner decisions
 
 - Owner, in conversation, 2026-11-12: use pnpm on the website and Node on the current LTS, matching Tally (kwilson21/tally decisions 203 and 204).
+- Owner, in conversation, 2026-11-12: after the PR checks passed and the Cloudflare build log showed Node 26.13.0 and pnpm 12.20.0, authorized merging this PR once it is ready. Merging to `main` deploys production.
 
 ## Evidence and limits
 
@@ -39,7 +40,7 @@ Lockfile comparison, reported by the independent review, not re-counted here: th
 
 ### 1. Purpose and content
 
-- PASS, 1.1 Project, branch, local changes, scope and rollback confirmed: branch `claude/website-library-additions-904120`, tooling-only diff against `origin/main`. Deployment authorization: none. No deployment is authorized by this record.
+- PASS, 1.1 Project, branch, local changes, scope and rollback confirmed: branch `claude/website-library-additions-904120`, tooling-only diff against `origin/main`. Deployment authorization: the owner authorized the merge, which deploys production, on 2026-11-12 (see Owner decisions).
 - N/A, 1.2 Approved design and truthful claims: no page, copy or asset changed.
 - N/A, 1.3 Explanatory copy and resume comparison: no explanatory copy, professional claim or stored resume changed.
 - N/A, 1.4 First screen and CTA: no page changed.
@@ -70,7 +71,7 @@ Lockfile comparison, reported by the independent review, not re-counted here: th
 
 ### 7. Release and final QA
 
-- PASS, 7.1 Required type, test and build checks (local runs by the builder and, separately, by an independent reviewer on a clean copy; no log retained; CI rerun pending): `pnpm run check` 0 errors and 0 warnings; `pnpm test` all test files passed; `pnpm run build` complete (see Evidence). Build warnings inspected by the reviewer: the `SESSION` binding note, two empty content folders, two zod comment warnings and one CSS optimization warning, all identical on `origin/main` under npm. Vitest prints a Node `localStorage` ExperimentalWarning, also present before the change.
+- PASS, 7.1 Required type, test and build checks (local runs by the builder and, separately, by an independent reviewer on a clean copy; no log retained; GitHub `validate` has since passed on the PR head): `pnpm run check` 0 errors and 0 warnings; `pnpm test` all test files passed; `pnpm run build` complete (see Evidence). Build warnings inspected by the reviewer: the `SESSION` binding note, two empty content folders, two zod comment warnings and one CSS optimization warning, all identical on `origin/main` under npm. Vitest prints a Node `localStorage` ExperimentalWarning, also present before the change.
 - UNVERIFIED, 7.2 Exact diff, dependency, generated-file and public-artifact review on the PR head: Pushed and opened as #230 after this record's checks were run; the independent review of the final head is still required.
 - UNVERIFIED, 7.3 Production bindings, secrets, migrations, HTTPS, host routing, cache behavior and response headers (not deployed): no binding, secret or migration changed, but no deployed response was observed.
 - PASS, 7.4 Rollback version preserved: revision `1d745ba2497e76c60aee8404ab02fe6aa0264dea` is local `origin/main` when this record was written; re-check with `git fetch` before merge.
@@ -92,8 +93,8 @@ Lockfile comparison, reported by the independent review, not re-counted here: th
 - UNVERIFIED: Dependabot against a pnpm 12 lockfile (check after merge).
 - UNVERIFIED: post-deployment live verification (not deployed).
 - UNVERIFIED: the branch preview could not be loaded for a smoke check because it sits behind sign-in.
-- Independent review of the final head: required before merge; not yet done for this round.
+- Independent review: four rounds of independent subagent review plus Greptile on the PR head and Codex on `76331798`. Commits after `76331798` change this record, command text in three docs and one test only. A last independent pass on the final head runs before merge.
 
-No deployment is authorized by this record.
+Deployment authorization: the owner authorized the merge, which deploys production, on 2026-11-12 (see Owner decisions).
 
 Built by a Claude Haiku 5.5 subagent; reviewed by independent Claude Opus and Sonnet subagents. This record does not certify the checks listed as UNVERIFIED.
