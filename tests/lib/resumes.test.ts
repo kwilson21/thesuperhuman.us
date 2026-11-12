@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 import { loadResume, RESUME_FILENAMES } from "~/lib/resumes";
-import type { ResumeAudience } from "~/lib/resume-requests";
 
 function makeKv(value: ArrayBuffer | null) {
 	return {
@@ -19,7 +18,7 @@ describe("loadResume", () => {
 	it("reads pdf:<audience> as arrayBuffer for known audiences", async () => {
 		const bytes = new ArrayBuffer(4);
 		const kv = makeKv(bytes);
-		const result = await loadResume(kv as any, "general");
+		const result = await loadResume(kv, "general");
 		expect(kv.get).toHaveBeenCalledWith("pdf:general", "arrayBuffer");
 		expect(result).toBe(bytes);
 	});
@@ -27,13 +26,13 @@ describe("loadResume", () => {
 	it("passes through the correct audience key", async () => {
 		const bytes = new ArrayBuffer(4);
 		const kv = makeKv(bytes);
-		await loadResume(kv as any, "dod" as ResumeAudience);
+		await loadResume(kv, "dod");
 		expect(kv.get).toHaveBeenCalledWith("pdf:dod", "arrayBuffer");
 	});
 
 	it("returns null when the PDF is not in KV", async () => {
 		const kv = makeKv(null);
-		const result = await loadResume(kv as any, "general");
+		const result = await loadResume(kv, "general");
 		expect(result).toBeNull();
 	});
 });

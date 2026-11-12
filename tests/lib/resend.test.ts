@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { sendContactEmails } from "~/lib/resend";
 import type { ContactInput } from "~/lib/validation";
+import { double } from "../helpers/doubles";
 
 const input: ContactInput = {
 	name: "Jane",
@@ -11,16 +12,20 @@ const input: ContactInput = {
 };
 
 describe("sendContactEmails", () => {
+	let fetchMock: Mock<typeof fetch>;
+
 	beforeEach(() => {
-		vi.stubGlobal("fetch", vi.fn());
+		fetchMock = vi.fn<typeof fetch>();
+		vi.stubGlobal("fetch", fetchMock);
 	});
 
 	it("sends both primary and autoresponder emails", async () => {
-		const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
-		fetchMock.mockResolvedValue({
-			ok: true,
-			json: async () => ({ id: "em_1" }),
-		});
+		fetchMock.mockResolvedValue(
+			double<Response>({
+				ok: true,
+				json: async () => ({ id: "em_1" }),
+			}),
+		);
 
 		const result = await sendContactEmails({
 			input,
@@ -34,11 +39,12 @@ describe("sendContactEmails", () => {
 	});
 
 	it("primary email goes to CONTACT_TO_EMAIL with reply-to set to visitor", async () => {
-		const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
-		fetchMock.mockResolvedValue({
-			ok: true,
-			json: async () => ({ id: "em_1" }),
-		});
+		fetchMock.mockResolvedValue(
+			double<Response>({
+				ok: true,
+				json: async () => ({ id: "em_1" }),
+			}),
+		);
 		await sendContactEmails({
 			input,
 			apiKey: "key",
@@ -46,9 +52,7 @@ describe("sendContactEmails", () => {
 			to: "kazon.wilson@thesuperhuman.us",
 		});
 
-		const primaryBody = JSON.parse(
-			(fetchMock.mock.calls[0][1] as RequestInit).body as string,
-		);
+		const primaryBody = JSON.parse(String(fetchMock.mock.calls[0][1]!.body));
 
 		expect(primaryBody.to).toContain("kazon.wilson@thesuperhuman.us");
 		expect(primaryBody.reply_to).toBe("jane@example.com");
@@ -60,11 +64,12 @@ describe("sendContactEmails", () => {
 	});
 
 	it("autoresponder goes to the visitor email", async () => {
-		const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
-		fetchMock.mockResolvedValue({
-			ok: true,
-			json: async () => ({ id: "em_1" }),
-		});
+		fetchMock.mockResolvedValue(
+			double<Response>({
+				ok: true,
+				json: async () => ({ id: "em_1" }),
+			}),
+		);
 		await sendContactEmails({
 			input,
 			apiKey: "key",
@@ -72,9 +77,7 @@ describe("sendContactEmails", () => {
 			to: "kazon.wilson@thesuperhuman.us",
 		});
 
-		const autoBody = JSON.parse(
-			(fetchMock.mock.calls[1][1] as RequestInit).body as string,
-		);
+		const autoBody = JSON.parse(String(fetchMock.mock.calls[1][1]!.body));
 
 		expect(autoBody.to).toContain("jane@example.com");
 		expect(autoBody.subject).toMatch(/thanks/i);
@@ -84,16 +87,19 @@ describe("sendContactEmails", () => {
 	});
 
 	it("returns ok=false if primary email fails", async () => {
-		const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
-		fetchMock.mockResolvedValueOnce({
-			ok: false,
-			status: 500,
-			json: async () => ({ message: "fail" }),
-		});
-		fetchMock.mockResolvedValueOnce({
-			ok: true,
-			json: async () => ({ id: "em_2" }),
-		});
+		fetchMock.mockResolvedValueOnce(
+			double<Response>({
+				ok: false,
+				status: 500,
+				json: async () => ({ message: "fail" }),
+			}),
+		);
+		fetchMock.mockResolvedValueOnce(
+			double<Response>({
+				ok: true,
+				json: async () => ({ id: "em_2" }),
+			}),
+		);
 
 		const result = await sendContactEmails({
 			input,
@@ -106,16 +112,19 @@ describe("sendContactEmails", () => {
 	});
 
 	it("autoresponder failure does NOT fail the request (best-effort)", async () => {
-		const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
-		fetchMock.mockResolvedValueOnce({
-			ok: true,
-			json: async () => ({ id: "em_1" }),
-		});
-		fetchMock.mockResolvedValueOnce({
-			ok: false,
-			status: 500,
-			json: async () => ({ message: "fail" }),
-		});
+		fetchMock.mockResolvedValueOnce(
+			double<Response>({
+				ok: true,
+				json: async () => ({ id: "em_1" }),
+			}),
+		);
+		fetchMock.mockResolvedValueOnce(
+			double<Response>({
+				ok: false,
+				status: 500,
+				json: async () => ({ message: "fail" }),
+			}),
+		);
 
 		const result = await sendContactEmails({
 			input,

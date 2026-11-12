@@ -1,6 +1,7 @@
 import { beforeEach, afterEach, it, expect, vi } from "vitest";
-import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
+import type { SQLOutputValue } from "node:sqlite";
+import { createRequire } from "node:module";
 import {
 	validateTemplate,
 	renderAgreement,
@@ -34,11 +35,24 @@ import {
 	hashBytes,
 } from "~/lib/agreement-artifacts";
 import { agreementDownload } from "~/lib/agreement-download";
-import { hashOfferToken, type SoftwareOffer } from "~/lib/software-offers";
+import {
+	hashOfferToken,
+	type OfferTerms,
+	type SoftwareOffer,
+} from "~/lib/software-offers";
 import { projectToday } from "~/lib/audio-project-updates";
+import type { APIContext } from "astro";
+import { double, fakeD1 } from "../helpers/doubles";
+import { fakeR2Bucket } from "../helpers/tests-lib-b-r2";
+import { sqliteD1 } from "../helpers/tests-lib-b-d1";
+
+type TestRuntime = APIContext["locals"]["runtime"];
+
+type TestEnv = TestRuntime["env"];
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
-let sql: InstanceType<typeof DatabaseSync>, db: D1Database, env: Env;
+
+let sql: InstanceType<typeof DatabaseSync>, db: D1Database, env: TestEnv;
 
 const token = "x".repeat(43),
 	secret = "test-agreement-code-key-at-least-32-characters",
@@ -57,7 +71,7 @@ const token = "x".repeat(43),
 		clientInputs: "",
 		exclusions: "",
 		timing: "",
-	};
+	} satisfies OfferTerms;
 
 const details = {
 	planned_start: "2026-10-01",
@@ -126,47 +140,20 @@ const failure = (promise: Promise<unknown>) =>
 		(error: Error) => error.message,
 	);
 
+const isText = (value: string | Uint8Array): value is string =>
+	typeof value === "string";
+
+const isObject = (value: unknown): value is object =>
+	typeof value === "object" && value !== null;
+
 const bucketData = new Map<string, Uint8Array>();
 const bucketUploaded = new Map<string, Date>();
-
-function adapter(database: InstanceType<typeof DatabaseSync>) {
-	const statement = (query: string, args: unknown[] = []) => ({
-		query,
-		args,
-		bind: (...values: unknown[]) => statement(query, values),
-		first: async () => database.prepare(query).get(...args) ?? null,
-		all: async () => ({ results: database.prepare(query).all(...args) }),
-		run: async () => ({ meta: database.prepare(query).run(...args) }),
-	});
-
-	return {
-		prepare: (query: string) => statement(query),
-		batch: async (items: ReturnType<typeof statement>[]) => {
-			database.exec("BEGIN");
-
-			try {
-				const result = items.map((i) => ({
-					results: /^SELECT|RETURNING/.test(i.query)
-						? database.prepare(i.query).all(...i.args)
-						: (database.prepare(i.query).run(...i.args), []),
-				}));
-
-				database.exec("COMMIT");
-
-				return result;
-			} catch (e) {
-				database.exec("ROLLBACK");
-				throw e;
-			}
-		},
-	} as unknown as D1Database;
-}
 
 beforeEach(async () => {
 	sql = new DatabaseSync(":memory:");
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(readFileSync("db/music.sql", "utf8"));
-	db = adapter(sql);
+	db = sqliteD1(sql);
 	bucketData.clear();
 	bucketUploaded.clear();
 	sql.exec(
@@ -215,7 +202,7 @@ beforeEach(async () => {
 		)
 		.run(await hashOfferToken(token), await hashOfferToken(token));
 
-	const bucket = {
+	const bucket = fakeR2Bucket({
 		put: vi.fn(
 			async (
 				k: string,
@@ -233,10 +220,7 @@ beforeEach(async () => {
 				if (options?.onlyIf?.etagDoesNotMatch === "*" && current) return null;
 				bucketUploaded.set(k, new Date());
 
-				return bucketData.set(
-					k,
-					typeof v === "string" ? new TextEncoder().encode(v) : v,
-				);
+				return bucketData.set(k, isText(v) ? new TextEncoder().encode(v) : v);
 			},
 		),
 		list: vi.fn(
@@ -290,9 +274,9 @@ beforeEach(async () => {
 					}
 				: null;
 		}),
-	};
+	});
 
-	env = {
+	env = double<TestEnv>({
 		MUSIC_DB: db,
 		AUDIO: bucket,
 		RESEND_API_KEY: "fake",
@@ -300,7 +284,7 @@ beforeEach(async () => {
 		AUDIO_CLIENT_CODE_KEY: secret,
 		TURNSTILE_SECRET_KEY: "fake",
 		SITE_ORIGIN: "https://example.com",
-	} as unknown as Env;
+	});
 	vi.stubGlobal(
 		"fetch",
 		vi.fn(async () => new Response('{"success":true}', { status: 200 })),
@@ -325,6 +309,26 @@ const offer = () =>
 	db
 		.prepare("SELECT * FROM software_offers WHERE id='o'")
 		.first<SoftwareOffer>();
+
+/** The certificates prepareAgreementArtifact hands its PDF renderer for agreement `id`, one per document. */
+async function renderedCertificates(
+	id: string,
+): Promise<{ versions: unknown }[]> {
+	let certificates: { versions: unknown }[] = [];
+
+	await prepareAgreementArtifact(
+		env,
+		id,
+		async (_env, _documents, received) => {
+			// SAFETY: src/lib/agreement-artifacts.ts builds each certificate with a versions field and passes displayCertificates, which spreads each certificate, so every object the renderer receives keeps its versions field; this test reads only versions.
+			certificates = received as { versions: unknown }[];
+
+			return new TextEncoder().encode("%PDF-synthetic");
+		},
+	);
+
+	return certificates;
+}
 
 async function review() {
 	return reviewAgreements(
@@ -353,6 +357,7 @@ async function signed() {
 it("removes an unused former client identity when replacing an unsigned review", async () => {
 	await review();
 
+	// SAFETY: review() above inserts the former client row, and the query selects only its id, a TEXT PRIMARY KEY in db/music.sql.
 	const former = sql.prepare("SELECT id FROM software_agreement_clients").get()
 		.id as string;
 
@@ -397,24 +402,29 @@ it("removes a just-uploaded PDF when its database row cannot be saved", async ()
 			"~/pages/api/owner/requests/[id]/agreement-attachments"
 		);
 
-		const response = await PUT({
-			params: { id: "r" },
-			url: new URL(
-				"https://example.com/api/owner/requests/r/agreement-attachments?filename=Sample.pdf&version=v1&date=2026-10-01",
-			),
-			request: new Request(
-				"https://example.com/api/owner/requests/r/agreement-attachments",
-				{
-					method: "PUT",
-					headers: {
-						origin: "https://example.com",
-						"content-type": "application/pdf",
+		const response = await PUT(
+			double<APIContext>({
+				params: { id: "r" },
+				url: new URL(
+					"https://example.com/api/owner/requests/r/agreement-attachments?filename=Sample.pdf&version=v1&date=2026-10-01",
+				),
+				request: new Request(
+					"https://example.com/api/owner/requests/r/agreement-attachments",
+					{
+						method: "PUT",
+						headers: {
+							origin: "https://example.com",
+							"content-type": "application/pdf",
+						},
+						body: new Uint8Array(bytes),
 					},
-					body: bytes as BodyInit,
+				),
+				locals: {
+					owner: { email: "owner@example.com" },
+					runtime: double<TestRuntime>({ env }),
 				},
-			),
-			locals: { owner: { email: "owner@example.com" }, runtime: { env } },
-		} as never);
+			}),
+		);
 
 		expect(response.status).toBe(503);
 		expect(env.AUDIO!.put).toHaveBeenCalledOnce();
@@ -465,10 +475,14 @@ it("prints the MSA version label where the template names the source revision, n
 		"msa.source_revision: v2026-11-01",
 	);
 
+	const { msa } = values;
+
+	if (!isObject(msa)) throw new Error("The msa sample is missing.");
+
 	const rendered = renderAgreement("msa", text, {
 		...values,
 		msa: {
-			...(values.msa as object),
+			...msa,
 			source_revision: "Interim counsel draft 3",
 		},
 	});
@@ -481,16 +495,18 @@ it("prints the MSA version label where the template names the source revision, n
 it("names the template placeholder in a missing-value error, not the label it reads from", () => {
 	const text = synthetic("msa");
 	const values = sampleAgreementValues("msa", text, "v2026-11-01");
-	delete (values.msa as Record<string, unknown>).version_label;
+	const { msa } = values;
+
+	if (!isObject(msa)) throw new Error("The msa sample is missing.");
+
+	Reflect.deleteProperty(msa, "version_label");
 	expect(() => renderAgreement("msa", text, values)).toThrow(
 		"Missing value: msa.source_revision.",
 	);
 });
 
 it("enforces dates, milestone counts, invoice duration and owner default semantics", () => {
-	expect(
-		validateAgreementDetails(details, terms as never).review_business_days,
-	).toBe(5);
+	expect(validateAgreementDetails(details, terms).review_business_days).toBe(5);
 
 	for (const value of [
 		{ ...details, planned_end: "2027-01-01" },
@@ -498,12 +514,12 @@ it("enforces dates, milestone counts, invoice duration and owner default semanti
 		{ ...details, review_business_days: 31 },
 		{ ...details, data_retention: "Keep longer", project_retention_days: 500 },
 	])
-		expect(() => validateAgreementDetails(value, terms as never)).toThrow();
+		expect(() => validateAgreementDetails(value, terms)).toThrow();
 	expect(() =>
 		validateAgreementDetails(details, {
 			...terms,
 			paymentMode: "invoice",
-		} as never),
+		}),
 	).toThrow();
 	expect(() =>
 		clientAgreementSchema.parse({ ...client, naming: true }),
@@ -666,14 +682,14 @@ it("allows the same label on both kinds", async () => {
 });
 
 it("reports a label race caught by the unique index with the same refusal", async () => {
-	const raced = {
+	const raced = fakeD1({
 		...db,
 		batch: async () => {
 			throw new Error(
 				"UNIQUE constraint failed: software_agreement_templates.kind, software_agreement_templates.version_label",
 			);
 		},
-	} as unknown as D1Database;
+	});
 
 	expect(
 		await failure(
@@ -1068,7 +1084,7 @@ it("keeps archive access after project cleanup and disabling signing", async () 
 			sql
 				.prepare(query)
 				.all()
-				.map((row: Record<string, unknown>) => ({ ...row })),
+				.map((row: Record<string, SQLOutputValue>) => ({ ...row })),
 		batch: async (queries: string[]) =>
 			db.batch(queries.map((query) => db.prepare(query))),
 	};
@@ -1150,6 +1166,7 @@ it("refuses to serve a retained signed PDF whose bytes no longer match its diges
 		new TextEncoder().encode("%PDF-original"),
 	);
 
+	// SAFETY: the query selects only pdf_key from software_agreement_artifacts, so the row, when present, has that one column.
 	const artifact = sql
 		.prepare(
 			"SELECT pdf_key FROM software_agreement_artifacts WHERE agreement_id=?",
@@ -1167,6 +1184,7 @@ it("runs private source templates through one, two and three milestones in both 
 
 	if (!path) return;
 
+	// SAFETY: AGREEMENT_PRIVATE_TEMPLATES names the owner's private template export, which holds the msa and sow text this test reads; the test returns early when the variable is unset.
 	const templates = JSON.parse(readFileSync(path, "utf8")) as {
 		msa: string;
 		sow: string;
@@ -1175,7 +1193,7 @@ it("runs private source templates through one, two and three milestones in both 
 	const { agreementValues } = await import("~/lib/agreement-fields");
 
 	for (const count of [1, 2, 3])
-		for (const mode of ["standard", "invoice"]) {
+		for (const mode of ["standard", "invoice"] as const) {
 			const purchase = {
 				...terms,
 				paymentMode: mode,
@@ -1195,11 +1213,11 @@ it("runs private source templates through one, two and three milestones in both 
 						target: `2026-10-${String(5 + i * 5).padStart(2, "0")}`,
 					})),
 				},
-				purchase as never,
+				purchase,
 			);
 
 			const values = agreementValues(
-				purchase as never,
+				purchase,
 				filled,
 				clientAgreementSchema.parse(client),
 				contractorSchema.parse(contractor),
@@ -1274,6 +1292,7 @@ it("normalizes native Turnstile form submissions and enforces Origin", async () 
 	);
 
 	expect(body).toMatchObject({ turnstileToken: "completed" });
+	// SAFETY: this request has a form content type and a foreign origin, so agreementRequest takes its 403 branch and returns the Response from agreementJson; the test reads only its status.
 	expect(
 		(
 			(await agreementRequest(
@@ -1740,24 +1759,28 @@ it.each(["client-signed", "pdf-failed", "copies-pending"])(
 				next_update_on: "",
 			};
 
-			const response = await POST({
-				params: { id: "r" },
-				request: new Request(
-					"https://example.com/api/owner/requests/r/project",
-					{
-						method: "POST",
-						headers: {
-							origin: "https://example.com",
-							"content-type": "application/json",
+			const response = await POST(
+				double<APIContext>({
+					params: { id: "r" },
+					request: new Request(
+						"https://example.com/api/owner/requests/r/project",
+						{
+							method: "POST",
+							headers: {
+								origin: "https://example.com",
+								"content-type": "application/json",
+							},
+							body: JSON.stringify(body),
 						},
-						body: JSON.stringify(body),
+					),
+					locals: {
+						owner: { email: "owner@example.com" },
+						runtime: double<TestRuntime>({
+							env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
+						}),
 					},
-				),
-				locals: {
-					owner: { email: "owner@example.com" },
-					runtime: { env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" } },
-				},
-			} as never);
+				}),
+			);
 
 			expect(response.status).toBe(409);
 		}
@@ -1799,26 +1822,31 @@ it("abandons the complete pending signing action atomically and retains the sign
 		{ POST } = await import("~/pages/api/owner/requests/[id]/agreement");
 
 	const call = (documents: { id: string; hash: string }[]) =>
-		POST({
-			params: { id: "r" },
-			request: new Request(
-				"https://example.com/api/owner/requests/r/agreement",
-				{
-					method: "POST",
-					headers: {
-						origin: "https://example.com",
-						"content-type": "application/json",
+		POST(
+			double<APIContext>({
+				params: { id: "r" },
+				request: new Request(
+					"https://example.com/api/owner/requests/r/agreement",
+					{
+						method: "POST",
+						headers: {
+							origin: "https://example.com",
+							"content-type": "application/json",
+						},
+						body: JSON.stringify({
+							action: "abandon",
+							documents,
+							reason: "Fictional owner cancellation",
+							confirmed: true,
+						}),
 					},
-					body: JSON.stringify({
-						action: "abandon",
-						documents,
-						reason: "Fictional owner cancellation",
-						confirmed: true,
-					}),
+				),
+				locals: {
+					owner: { email: "owner@example.com" },
+					runtime: double<TestRuntime>({ env }),
 				},
-			),
-			locals: { owner: { email: "owner@example.com" }, runtime: { env } },
-		} as never);
+			}),
+		);
 
 	expect((await call([result.documents[0]])).status).toBe(409);
 	expect(
@@ -1886,26 +1914,31 @@ it.each(["executed", "abandoned"])(
 		}).format(new Date());
 
 		const end = (ended_on: string) =>
-			POST({
-				params: { id: "r" },
-				request: new Request(
-					"https://example.com/api/owner/requests/r/agreement",
-					{
-						method: "POST",
-						headers: {
-							origin: "https://example.com",
-							"content-type": "application/json",
+			POST(
+				double<APIContext>({
+					params: { id: "r" },
+					request: new Request(
+						"https://example.com/api/owner/requests/r/agreement",
+						{
+							method: "POST",
+							headers: {
+								origin: "https://example.com",
+								"content-type": "application/json",
+							},
+							body: JSON.stringify({
+								action: "end",
+								agreement_id: id,
+								ended_on,
+								confirmed: true,
+							}),
 						},
-						body: JSON.stringify({
-							action: "end",
-							agreement_id: id,
-							ended_on,
-							confirmed: true,
-						}),
+					),
+					locals: {
+						owner: { email: "owner@example.com" },
+						runtime: double<TestRuntime>({ env }),
 					},
-				),
-				locals: { owner: { email: "owner@example.com" }, runtime: { env } },
-			} as never);
+				}),
+			);
 
 		expect((await end("2000-01-01")).status).toBe(409);
 		expect((await end("2099-01-01")).status).toBe(409);
@@ -2117,11 +2150,11 @@ it("prepares a real signed PDF through the API renderer module without font asse
 	);
 
 	const { renderAgreementPacket } = await import("~/lib/agreement-pdf");
-	env.ASSETS = {
+	env.ASSETS = double<Fetcher>({
 		fetch: async () => {
 			throw new Error("Font asset access is unavailable.");
 		},
-	} as unknown as Fetcher;
+	});
 	await prepareAgreementArtifact(env, id, renderAgreementPacket);
 	expect(
 		sql
@@ -2197,21 +2230,23 @@ it("reuses an MSA across two offers without importing the first SOW attachments"
 		.all()
 		.map((row: { name: string }) => row.name);
 
-	const replacements: Record<string, string> = {
-		id: "'o2'",
-		version: "2",
-		status: "'sent'",
-		reused_msa_id: "?",
-		agreement_details_json: "?",
-	};
+	const replacements = new Map(
+		Object.entries({
+			id: "'o2'",
+			version: "2",
+			status: "'sent'",
+			reused_msa_id: "?",
+			agreement_details_json: "?",
+		}),
+	);
 
 	sql
 		.prepare(
-			`INSERT INTO software_offers(${columns.join(",")}) SELECT ${columns.map((name: string) => replacements[name] ?? name).join(",")} FROM software_offers WHERE id='o'`,
+			`INSERT INTO software_offers(${columns.join(",")}) SELECT ${columns.map((name: string) => replacements.get(name) ?? name).join(",")} FROM software_offers WHERE id='o'`,
 		)
 		.run(
 			...columns
-				.filter((name: string) => replacements[name] === "?")
+				.filter((name: string) => replacements.get(name) === "?")
 				.map((name: string) =>
 					name === "reused_msa_id"
 						? msa.id
@@ -2417,35 +2452,42 @@ it.each([true, false])(
 			.run();
 		const { POST } = await import("~/pages/api/owner/requests/[id]/project");
 
-		const response = await POST({
-			params: { id: "r" },
-			request: new Request("https://example.com/api/owner/requests/r/project", {
-				method: "POST",
-				headers: {
-					origin: "https://example.com",
-					"content-type": "application/json",
+		const response = await POST(
+			double<APIContext>({
+				params: { id: "r" },
+				request: new Request(
+					"https://example.com/api/owner/requests/r/project",
+					{
+						method: "POST",
+						headers: {
+							origin: "https://example.com",
+							"content-type": "application/json",
+						},
+						body: JSON.stringify({
+							action: "start",
+							signature_source: "external",
+							offer_id: "o",
+							offer_version: 1,
+							expectedRequestUpdatedAt: current ? "now" : "stale",
+							signatures: true,
+							payment: true,
+							inputs_ready: true,
+							external_signed_on: "2026-09-30",
+							external_parties: "Sample LLC / Example Contractor LLC",
+							external_kept_copy: true,
+							external_copy_reference: "Synthetic copy",
+							next_update_on: "",
+						}),
+					},
+				),
+				locals: {
+					owner: { email: "owner@example.com" },
+					runtime: double<TestRuntime>({
+						env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
+					}),
 				},
-				body: JSON.stringify({
-					action: "start",
-					signature_source: "external",
-					offer_id: "o",
-					offer_version: 1,
-					expectedRequestUpdatedAt: current ? "now" : "stale",
-					signatures: true,
-					payment: true,
-					inputs_ready: true,
-					external_signed_on: "2026-09-30",
-					external_parties: "Sample LLC / Example Contractor LLC",
-					external_kept_copy: true,
-					external_copy_reference: "Synthetic copy",
-					next_update_on: "",
-				}),
 			}),
-			locals: {
-				owner: { email: "owner@example.com" },
-				runtime: { env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" } },
-			},
-		} as never);
+		);
 
 		expect(response.status).toBe(current ? 200 : 409);
 
@@ -2498,37 +2540,42 @@ it("rejects an outside-site signature dated after today without starting the pro
 	tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
 	const { POST } = await import("~/pages/api/owner/requests/[id]/project");
 
-	const response = await POST({
-		params: { id: "r" },
-		request: new Request("https://example.com/api/owner/requests/r/project", {
-			method: "POST",
-			headers: {
-				origin: "https://example.com",
-				"content-type": "application/json",
-			},
-			body: JSON.stringify({
-				action: "start",
-				signature_source: "external",
-				offer_id: "o",
-				offer_version: 1,
-				expectedRequestUpdatedAt: "now",
-				signatures: true,
-				payment: true,
-				inputs_ready: true,
-				external_signed_on: tomorrow.toISOString().slice(0, 10),
-				external_parties: "Sample LLC / Example Contractor LLC",
-				external_kept_copy: true,
-				external_copy_reference: "Synthetic copy",
-				next_update_on: "",
+	const response = await POST(
+		double<APIContext>({
+			params: { id: "r" },
+			request: new Request("https://example.com/api/owner/requests/r/project", {
+				method: "POST",
+				headers: {
+					origin: "https://example.com",
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					action: "start",
+					signature_source: "external",
+					offer_id: "o",
+					offer_version: 1,
+					expectedRequestUpdatedAt: "now",
+					signatures: true,
+					payment: true,
+					inputs_ready: true,
+					external_signed_on: tomorrow.toISOString().slice(0, 10),
+					external_parties: "Sample LLC / Example Contractor LLC",
+					external_kept_copy: true,
+					external_copy_reference: "Synthetic copy",
+					next_update_on: "",
+				}),
 			}),
+			locals: {
+				owner: { email: "owner@example.com" },
+				runtime: double<TestRuntime>({
+					env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
+				}),
+			},
 		}),
-		locals: {
-			owner: { email: "owner@example.com" },
-			runtime: { env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" } },
-		},
-	} as never);
+	);
 
 	expect(response.status).toBe(400);
+	// SAFETY: a 400 from the project route for a future signed date is the { ok, error } body built in src/pages/api/owner/requests/[id]/project.ts, which always carries error.
 	expect(((await response.json()) as { error: string }).error).toMatch(
 		/cannot be in the future/i,
 	);
@@ -2560,29 +2607,34 @@ it("preserves omitted draft agreement details and reuse, and permits explicit cl
 	const { POST } = await import("~/pages/api/owner/requests/[id]/software");
 
 	const save = async (
-		extra: Record<string, unknown>,
+		extra: { agreementDetails?: unknown; confirmMsaReuse?: boolean },
 		expectedUpdatedAt: string,
 	) =>
-		POST({
-			params: { id: "r" },
-			request: new Request(
-				"https://example.com/api/owner/requests/r/software",
-				{
-					method: "POST",
-					headers: {
-						origin: "https://example.com",
-						"content-type": "application/json",
+		POST(
+			double<APIContext>({
+				params: { id: "r" },
+				request: new Request(
+					"https://example.com/api/owner/requests/r/software",
+					{
+						method: "POST",
+						headers: {
+							origin: "https://example.com",
+							"content-type": "application/json",
+						},
+						body: JSON.stringify({
+							action: "draft",
+							terms: { ...terms, summary: "Updated offer summary" },
+							expectedUpdatedAt,
+							...extra,
+						}),
 					},
-					body: JSON.stringify({
-						action: "draft",
-						terms: { ...terms, summary: "Updated offer summary" },
-						expectedUpdatedAt,
-						...extra,
-					}),
+				),
+				locals: {
+					owner: { email: "owner@example.com" },
+					runtime: double<TestRuntime>({ env }),
 				},
-			),
-			locals: { owner: { email: "owner@example.com" }, runtime: { env } },
-		} as never);
+			}),
+		);
 
 	expect((await save({}, "now")).status).toBe(200);
 	const preserved = (await offer())!;
@@ -2769,26 +2821,31 @@ it.each(["draft-first", "retention-first"])(
 		);
 
 		const save = () =>
-			POST({
-				params: { id: "r" },
-				request: new Request(
-					"https://example.com/api/owner/requests/r/software",
-					{
-						method: "POST",
-						headers: {
-							origin: "https://example.com",
-							"content-type": "application/json",
+			POST(
+				double<APIContext>({
+					params: { id: "r" },
+					request: new Request(
+						"https://example.com/api/owner/requests/r/software",
+						{
+							method: "POST",
+							headers: {
+								origin: "https://example.com",
+								"content-type": "application/json",
+							},
+							body: JSON.stringify({
+								action: "draft",
+								terms,
+								expectedUpdatedAt: null,
+								agreementDetails: { ...details, attachments: [attachment] },
+							}),
 						},
-						body: JSON.stringify({
-							action: "draft",
-							terms,
-							expectedUpdatedAt: null,
-							agreementDetails: { ...details, attachments: [attachment] },
-						}),
+					),
+					locals: {
+						owner: { email: "owner@example.com" },
+						runtime: double<TestRuntime>({ env }),
 					},
-				),
-				locals: { owner: { email: "owner@example.com" }, runtime: { env } },
-			} as never);
+				}),
+			);
 
 		if (order === "draft-first") {
 			expect((await save()).status).toBe(200);
@@ -3415,22 +3472,25 @@ it("rejects signing stale reviewed documents after autosaved details change", as
 it("returns field-linked validation messages without raw schema output", async () => {
 	const { POST } = await import("~/pages/api/offer/[token]/review");
 
-	const response = await POST({
-		params: { token },
-		locals: { runtime: { env } },
-		request: new Request(request().url, {
-			method: "POST",
-			headers: {
-				cookie: `agreement_session=${token}`,
-				origin: "https://example.com",
-				"content-type": "application/json",
-			},
-			body: JSON.stringify({ csrf_nonce: "csrf", values: {} }),
+	const response = await POST(
+		double<APIContext>({
+			params: { token },
+			locals: { runtime: double<TestRuntime>({ env }) },
+			request: new Request(request().url, {
+				method: "POST",
+				headers: {
+					cookie: `agreement_session=${token}`,
+					origin: "https://example.com",
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({ csrf_nonce: "csrf", values: {} }),
+			}),
 		}),
-	} as never);
+	);
 
 	expect(response.status).toBe(400);
 
+	// SAFETY: the offer review route answers a 400 for highlighted client-detail errors with { ok, error, errors }, where errors maps each field to its message (src/pages/api/offer/[token]/review.ts).
 	const body = (await response.json()) as {
 		error: string;
 		errors: Record<string, string>;
@@ -3494,7 +3554,7 @@ it("prevents external start if website signing commits after the initial read", 
 	const originalBatch = db.batch.bind(db);
 	vi.spyOn(db, "batch").mockImplementationOnce(async (statements) => {
 		await signAgreements(
-			{ ...db, batch: originalBatch } as D1Database,
+			fakeD1({ ...db, batch: originalBatch }),
 			(await offer())!,
 			session,
 			reviewed.documents,
@@ -3505,35 +3565,39 @@ it("prevents external start if website signing commits after the initial read", 
 	});
 	const { POST } = await import("~/pages/api/owner/requests/[id]/project");
 
-	const response = await POST({
-		params: { id: "r" },
-		request: new Request("https://example.com/api/owner/requests/r/project", {
-			method: "POST",
-			headers: {
-				origin: "https://example.com",
-				"content-type": "application/json",
-			},
-			body: JSON.stringify({
-				action: "start",
-				signature_source: "external",
-				offer_id: "o",
-				offer_version: 1,
-				expectedRequestUpdatedAt: "now",
-				signatures: true,
-				payment: true,
-				inputs_ready: true,
-				external_signed_on: "2026-09-30",
-				external_parties: "Sample LLC / Example Contractor LLC",
-				external_kept_copy: true,
-				external_copy_reference: "Synthetic copy",
-				next_update_on: "",
+	const response = await POST(
+		double<APIContext>({
+			params: { id: "r" },
+			request: new Request("https://example.com/api/owner/requests/r/project", {
+				method: "POST",
+				headers: {
+					origin: "https://example.com",
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					action: "start",
+					signature_source: "external",
+					offer_id: "o",
+					offer_version: 1,
+					expectedRequestUpdatedAt: "now",
+					signatures: true,
+					payment: true,
+					inputs_ready: true,
+					external_signed_on: "2026-09-30",
+					external_parties: "Sample LLC / Example Contractor LLC",
+					external_kept_copy: true,
+					external_copy_reference: "Synthetic copy",
+					next_update_on: "",
+				}),
 			}),
+			locals: {
+				owner: { email: "owner@example.com" },
+				runtime: double<TestRuntime>({
+					env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
+				}),
+			},
 		}),
-		locals: {
-			owner: { email: "owner@example.com" },
-			runtime: { env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" } },
-		},
-	} as never);
+	);
 
 	expect(response.status).toBe(409);
 	expect(sql.prepare("SELECT count(*) n FROM software_projects").get().n).toBe(
@@ -3586,19 +3650,21 @@ it.each([
 					? await import("~/pages/api/offer/[token]/review")
 					: await import("~/pages/api/offer/[token]/draft");
 
-			const response = await POST({
-				params: { token },
-				locals: { runtime: { env } },
-				request: new Request(request().url, {
-					method: "POST",
-					headers: {
-						cookie: `agreement_session=${token}`,
-						origin: "https://example.com",
-						"content-type": "application/json",
-					},
-					body: JSON.stringify({ csrf_nonce: "csrf", values }),
+			const response = await POST(
+				double<APIContext>({
+					params: { token },
+					locals: { runtime: double<TestRuntime>({ env }) },
+					request: new Request(request().url, {
+						method: "POST",
+						headers: {
+							cookie: `agreement_session=${token}`,
+							origin: "https://example.com",
+							"content-type": "application/json",
+						},
+						body: JSON.stringify({ csrf_nonce: "csrf", values }),
+					}),
 				}),
-			} as never);
+			);
 
 			expect(response.status).toBe(400);
 			expect(await response.json()).toEqual({
@@ -3699,13 +3765,13 @@ it.each(["data_retention", "handoff_access"])(
 			[field]: "Keep access for 130 days.",
 		};
 
-		expect(() => validateAgreementDetails(input, terms as any)).toThrow(
+		expect(() => validateAgreementDetails(input, terms)).toThrow(
 			"State the agreed",
 		);
 		expect(() =>
 			validateAgreementDetails(
 				{ ...input, [field]: "Keep access for 30 days." },
-				terms as any,
+				terms,
 			),
 		).not.toThrow();
 	},
@@ -3834,11 +3900,13 @@ it("verifies the attachment bytes against the offer hash before client download"
 	bucketData.set(key, bytes);
 
 	const call = () =>
-		GET({
-			locals: { runtime: { env } },
-			request: request(),
-			params: { id },
-		} as never);
+		GET(
+			double<APIContext>({
+				locals: { runtime: double<TestRuntime>({ env }) },
+				request: request(),
+				params: { id },
+			}),
+		);
 
 	expect(new Uint8Array(await (await call()).arrayBuffer())).toEqual(bytes);
 	bucketData.set(key, new TextEncoder().encode("%PDF-altered"));
@@ -3849,7 +3917,7 @@ it("verifies the attachment bytes against the offer hash before client download"
 	);
 });
 
-it.each(["resolve", "withdraw"])(
+it.each(["resolve", "withdraw"] as const)(
 	"retires unsigned signing atomically when request is closed (%s)",
 	async (action) => {
 		const { changeOwnerRequest } = await import("~/lib/owner-requests");
@@ -3868,7 +3936,7 @@ it.each(["resolve", "withdraw"])(
 			.run(JSON.stringify({ legal_name: "Private" }));
 		await changeOwnerRequest(db, {
 			id: "r",
-			action: action as "resolve" | "withdraw",
+			action,
 			actor: "owner@example.com",
 		});
 		expect(
@@ -3925,21 +3993,26 @@ it.each(["revoke", "replace"])(
 				? { action: "revoke", expectedLinkCreatedAt: "2000-01-01" }
 				: { action: "send", version: 2, expectedUpdatedAt: "now" };
 
-		const response = await POST({
-			params: { id: "r" },
-			request: new Request(
-				"https://example.com/api/owner/requests/r/software",
-				{
-					method: "POST",
-					headers: {
-						origin: "https://example.com",
-						"content-type": "application/json",
+		const response = await POST(
+			double<APIContext>({
+				params: { id: "r" },
+				request: new Request(
+					"https://example.com/api/owner/requests/r/software",
+					{
+						method: "POST",
+						headers: {
+							origin: "https://example.com",
+							"content-type": "application/json",
+						},
+						body: JSON.stringify(body),
 					},
-					body: JSON.stringify(body),
+				),
+				locals: {
+					owner: { email: "owner@example.com" },
+					runtime: double<TestRuntime>({ env }),
 				},
-			),
-			locals: { owner: { email: "owner@example.com" }, runtime: { env } },
-		} as never);
+			}),
+		);
 
 		expect(response.status).toBe(200);
 		expect(
@@ -3960,26 +4033,31 @@ it.each(["creating", "open", "payment_failed", "uncollectible", "paid"])(
 			.run(status);
 
 		const call = () =>
-			POST({
-				params: { id: "r" },
-				request: new Request(
-					"https://example.com/api/owner/requests/r/agreement",
-					{
-						method: "POST",
-						headers: {
-							origin: "https://example.com",
-							"content-type": "application/json",
+			POST(
+				double<APIContext>({
+					params: { id: "r" },
+					request: new Request(
+						"https://example.com/api/owner/requests/r/agreement",
+						{
+							method: "POST",
+							headers: {
+								origin: "https://example.com",
+								"content-type": "application/json",
+							},
+							body: JSON.stringify({
+								action: "abandon",
+								documents: result.documents,
+								reason: "Cancelled",
+								confirmed: true,
+							}),
 						},
-						body: JSON.stringify({
-							action: "abandon",
-							documents: result.documents,
-							reason: "Cancelled",
-							confirmed: true,
-						}),
+					),
+					locals: {
+						owner: { email: "owner@example.com" },
+						runtime: double<TestRuntime>({ env }),
 					},
-				),
-				locals: { owner: { email: "owner@example.com" }, runtime: { env } },
-			} as never);
+				}),
+			);
 
 		const response = await call();
 		expect(response.status).toBe(409);
@@ -4025,26 +4103,31 @@ it.each(["draft", "sent"])(
 		const { POST } = await import("~/pages/api/owner/requests/[id]/agreement");
 
 		const call = () =>
-			POST({
-				params: { id: "r" },
-				request: new Request(
-					"https://example.com/api/owner/requests/r/agreement",
-					{
-						method: "POST",
-						headers: {
-							origin: "https://example.com",
-							"content-type": "application/json",
+			POST(
+				double<APIContext>({
+					params: { id: "r" },
+					request: new Request(
+						"https://example.com/api/owner/requests/r/agreement",
+						{
+							method: "POST",
+							headers: {
+								origin: "https://example.com",
+								"content-type": "application/json",
+							},
+							body: JSON.stringify({
+								action: "end",
+								agreement_id: msa.id,
+								ended_on: projectToday(),
+								confirmed: true,
+							}),
 						},
-						body: JSON.stringify({
-							action: "end",
-							agreement_id: msa.id,
-							ended_on: projectToday(),
-							confirmed: true,
-						}),
+					),
+					locals: {
+						owner: { email: "owner@example.com" },
+						runtime: double<TestRuntime>({ env }),
 					},
-				),
-				locals: { owner: { email: "owner@example.com" }, runtime: { env } },
-			} as never);
+				}),
+			);
 
 		const response = await call();
 		expect(response.status).toBe(409);
@@ -4072,7 +4155,7 @@ it("bounds the attachment scan even when the archive has nothing eligible", asyn
 		return { objects: [], truncated: true, cursor: "next" };
 	});
 
-	env.AUDIO.list = list as any;
+	env.AUDIO = fakeR2Bucket({ ...env.AUDIO, list });
 	await previewAgreementRetention(db, env.AUDIO, "local");
 	expect(list).toHaveBeenCalledTimes(1);
 	expect(list).toHaveBeenCalledWith(
@@ -4132,27 +4215,32 @@ it.each([false, true])(
 				JSON.stringify({ ...details, attachments: [attachment] }),
 			);
 
-		const response = await POST({
-			params: { id: "r" },
-			request: new Request(
-				"https://example.com/api/owner/requests/r/software",
-				{
-					method: "POST",
-					headers: {
-						origin: "https://example.com",
-						"content-type": "application/json",
+		const response = await POST(
+			double<APIContext>({
+				params: { id: "r" },
+				request: new Request(
+					"https://example.com/api/owner/requests/r/software",
+					{
+						method: "POST",
+						headers: {
+							origin: "https://example.com",
+							"content-type": "application/json",
+						},
+						body: JSON.stringify({
+							action: "draft",
+							terms,
+							agreementDetails: { ...details, attachments: [] },
+							removedAttachmentKeys: [key],
+							expectedUpdatedAt: "now",
+						}),
 					},
-					body: JSON.stringify({
-						action: "draft",
-						terms,
-						agreementDetails: { ...details, attachments: [] },
-						removedAttachmentKeys: [key],
-						expectedUpdatedAt: "now",
-					}),
+				),
+				locals: {
+					owner: { email: "owner@example.com" },
+					runtime: double<TestRuntime>({ env }),
 				},
-			),
-			locals: { owner: { email: "owner@example.com" }, runtime: { env } },
-		} as never);
+			}),
+		);
 
 		expect(response.status).toBe(200);
 		expect(
@@ -4171,27 +4259,35 @@ it.each([false, true])(
 it("saves a valid empty manifest after more than five cumulative attachment removals", async () => {
 	const { POST } = await import("~/pages/api/owner/requests/[id]/software");
 
-	const response = await POST({
-		params: { id: "r" },
-		request: new Request("https://example.com/api/owner/requests/r/software", {
-			method: "POST",
-			headers: {
-				origin: "https://example.com",
-				"content-type": "application/json",
+	const response = await POST(
+		double<APIContext>({
+			params: { id: "r" },
+			request: new Request(
+				"https://example.com/api/owner/requests/r/software",
+				{
+					method: "POST",
+					headers: {
+						origin: "https://example.com",
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({
+						action: "draft",
+						terms,
+						agreementDetails: { ...details, attachments: [] },
+						removedAttachmentKeys: Array.from(
+							{ length: 6 },
+							() => `agreements/attachments/${crypto.randomUUID()}.pdf`,
+						),
+						expectedUpdatedAt: null,
+					}),
+				},
+			),
+			locals: {
+				owner: { email: "owner@example.com" },
+				runtime: double<TestRuntime>({ env }),
 			},
-			body: JSON.stringify({
-				action: "draft",
-				terms,
-				agreementDetails: { ...details, attachments: [] },
-				removedAttachmentKeys: Array.from(
-					{ length: 6 },
-					() => `agreements/attachments/${crypto.randomUUID()}.pdf`,
-				),
-				expectedUpdatedAt: null,
-			}),
 		}),
-		locals: { owner: { email: "owner@example.com" }, runtime: { env } },
-	} as never);
+	);
 
 	expect(response.status).toBe(200);
 });
@@ -4209,23 +4305,31 @@ it("rechecks a newly live deposit inside the abandonment transaction", async () 
 		return batch(statements);
 	};
 
-	const response = await POST({
-		params: { id: "r" },
-		request: new Request("https://example.com/api/owner/requests/r/agreement", {
-			method: "POST",
-			headers: {
-				origin: "https://example.com",
-				"content-type": "application/json",
+	const response = await POST(
+		double<APIContext>({
+			params: { id: "r" },
+			request: new Request(
+				"https://example.com/api/owner/requests/r/agreement",
+				{
+					method: "POST",
+					headers: {
+						origin: "https://example.com",
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({
+						action: "abandon",
+						documents: result.documents,
+						reason: "Cancelled",
+						confirmed: true,
+					}),
+				},
+			),
+			locals: {
+				owner: { email: "owner@example.com" },
+				runtime: double<TestRuntime>({ env }),
 			},
-			body: JSON.stringify({
-				action: "abandon",
-				documents: result.documents,
-				reason: "Cancelled",
-				confirmed: true,
-			}),
 		}),
-		locals: { owner: { email: "owner@example.com" }, runtime: { env } },
-	} as never);
+	);
 
 	expect(response.status).toBe(409);
 	expect(await response.json()).toMatchObject({
@@ -4531,7 +4635,7 @@ it("applies the same archive cooldown to known and unknown emails without storin
 			.prepare("SELECT key FROM audio_client_allowances WHERE key=?")
 			.get(await hashOfferToken("archive-link-cooldown:unknown@example.com")),
 	).toBeUndefined();
-	expect(JSON.stringify((fetch as any).mock.calls)).not.toContain(
+	expect(JSON.stringify(vi.mocked(fetch).mock.calls)).not.toContain(
 		"unknown@example.com",
 	);
 	const { keyedHash } = await import("~/lib/audio-client-access");
@@ -4643,10 +4747,10 @@ it.each([false, true])(
 		if (!exists) bucketData.delete(marker);
 		const newer = JSON.stringify({ version: 1, cursor: "after:newer" });
 		const put = vi.mocked(env.AUDIO.put).getMockImplementation()!;
-		vi.mocked(env.AUDIO.put).mockImplementationOnce(async (...args: any[]) => {
+		vi.mocked(env.AUDIO.put).mockImplementationOnce(async (...args) => {
 			bucketData.set(marker, new TextEncoder().encode(newer));
 
-			return (put as any)(...args);
+			return put(...args);
 		});
 		await applyAgreementRetention(db, env.AUDIO, "test-storage", old);
 		expect(new TextDecoder().decode(bucketData.get(marker))).toBe(newer);
@@ -4810,26 +4914,28 @@ it("redirects a successful native retention apply to the owner agreements page",
 		"test-storage",
 	);
 
-	const response = await POST({
-		request: new Request("https://example.com/api/owner/agreements", {
-			method: "POST",
-			headers: {
-				origin: "https://example.com",
-				"content-type": "application/x-www-form-urlencoded",
-			},
-			body: new URLSearchParams({
-				action: "retention-apply",
-				confirmed: "true",
-				manifest: JSON.stringify(manifest),
+	const response = await POST(
+		double<APIContext>({
+			request: new Request("https://example.com/api/owner/agreements", {
+				method: "POST",
+				headers: {
+					origin: "https://example.com",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					action: "retention-apply",
+					confirmed: "true",
+					manifest: JSON.stringify(manifest),
+				}),
 			}),
-		}),
-		locals: {
-			owner: { email: "owner@example.com" },
-			runtime: {
-				env: { ...env, AGREEMENT_RETENTION_BINDING_ID: "test-storage" },
+			locals: {
+				owner: { email: "owner@example.com" },
+				runtime: double<TestRuntime>({
+					env: { ...env, AGREEMENT_RETENTION_BINDING_ID: "test-storage" },
+				}),
 			},
-		},
-	} as never);
+		}),
+	);
 
 	expect(response.status).toBe(303);
 	expect(response.headers.get("location")).toBe("/owner/agreements");
@@ -4976,18 +5082,26 @@ it("retries an executed copy instead of the failed waiting receipt", async () =>
 		vi.fn(async () => Response.json({ id: "message" })),
 	);
 
-	const response = await POST({
-		params: { id: "r" },
-		locals: { owner: { email: "owner@example.com" }, runtime: { env } },
-		request: new Request("https://example.com/api/owner/requests/r/agreement", {
-			method: "POST",
-			headers: {
-				origin: "https://example.com",
-				"content-type": "application/json",
+	const response = await POST(
+		double<APIContext>({
+			params: { id: "r" },
+			locals: {
+				owner: { email: "owner@example.com" },
+				runtime: double<TestRuntime>({ env }),
 			},
-			body: JSON.stringify({ action: "retry-copy", agreement_id: id }),
+			request: new Request(
+				"https://example.com/api/owner/requests/r/agreement",
+				{
+					method: "POST",
+					headers: {
+						origin: "https://example.com",
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({ action: "retry-copy", agreement_id: id }),
+				},
+			),
 		}),
-	} as never);
+	);
 
 	expect(response.status).toBe(200);
 
@@ -5023,18 +5137,26 @@ it("retries genuinely failed current signing notices", async () => {
 		vi.fn(async () => Response.json({ id: "message" })),
 	);
 
-	const response = await POST({
-		params: { id: "r" },
-		locals: { owner: { email: "owner@example.com" }, runtime: { env } },
-		request: new Request("https://example.com/api/owner/requests/r/agreement", {
-			method: "POST",
-			headers: {
-				origin: "https://example.com",
-				"content-type": "application/json",
+	const response = await POST(
+		double<APIContext>({
+			params: { id: "r" },
+			locals: {
+				owner: { email: "owner@example.com" },
+				runtime: double<TestRuntime>({ env }),
 			},
-			body: JSON.stringify({ action: "retry-copy", agreement_id: id }),
+			request: new Request(
+				"https://example.com/api/owner/requests/r/agreement",
+				{
+					method: "POST",
+					headers: {
+						origin: "https://example.com",
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({ action: "retry-copy", agreement_id: id }),
+				},
+			),
 		}),
-	} as never);
+	);
 
 	expect(response.status).toBe(200);
 	expect(
@@ -5095,26 +5217,31 @@ it.each(["executed", "abandoned"])(
 				"~/pages/api/owner/requests/[id]/agreement"
 			);
 
-			const response = await POST({
-				params: { id: "r" },
-				locals: { owner: { email: "owner@example.com" }, runtime: { env } },
-				request: new Request(
-					"https://example.com/api/owner/requests/r/agreement",
-					{
-						method: "POST",
-						headers: {
-							origin: "https://example.com",
-							"content-type": "application/json",
-						},
-						body: JSON.stringify({
-							action: "abandon",
-							documents: result.documents,
-							reason: "Cancelled",
-							confirmed: true,
-						}),
+			const response = await POST(
+				double<APIContext>({
+					params: { id: "r" },
+					locals: {
+						owner: { email: "owner@example.com" },
+						runtime: double<TestRuntime>({ env }),
 					},
-				),
-			} as never);
+					request: new Request(
+						"https://example.com/api/owner/requests/r/agreement",
+						{
+							method: "POST",
+							headers: {
+								origin: "https://example.com",
+								"content-type": "application/json",
+							},
+							body: JSON.stringify({
+								action: "abandon",
+								documents: result.documents,
+								reason: "Cancelled",
+								confirmed: true,
+							}),
+						},
+					),
+				}),
+			);
 
 			expect(response.status).toBe(200);
 		}
@@ -5142,21 +5269,26 @@ it.each(["executed", "abandoned"])(
 		);
 		const { POST } = await import("~/pages/api/owner/requests/[id]/agreement");
 
-		const retry = await POST({
-			params: { id: "r" },
-			locals: { owner: { email: "owner@example.com" }, runtime: { env } },
-			request: new Request(
-				"https://example.com/api/owner/requests/r/agreement",
-				{
-					method: "POST",
-					headers: {
-						origin: "https://example.com",
-						"content-type": "application/json",
-					},
-					body: JSON.stringify({ action: "retry-copy", agreement_id: id }),
+		const retry = await POST(
+			double<APIContext>({
+				params: { id: "r" },
+				locals: {
+					owner: { email: "owner@example.com" },
+					runtime: double<TestRuntime>({ env }),
 				},
-			),
-		} as never);
+				request: new Request(
+					"https://example.com/api/owner/requests/r/agreement",
+					{
+						method: "POST",
+						headers: {
+							origin: "https://example.com",
+							"content-type": "application/json",
+						},
+						body: JSON.stringify({ action: "retry-copy", agreement_id: id }),
+					},
+				),
+			}),
+		);
 
 		expect(retry.status).toBe(200);
 		expect(
@@ -5273,16 +5405,18 @@ it("keeps the reused MSA label on a new SOW when the offer pins a newer MSA temp
 		.all()
 		.map((row: { name: string }) => row.name);
 
-	const replacements: Record<string, string> = {
-		id: "'o2'",
-		version: "2",
-		status: "'sent'",
-		reused_msa_id: "?",
-	};
+	const replacements = new Map(
+		Object.entries({
+			id: "'o2'",
+			version: "2",
+			status: "'sent'",
+			reused_msa_id: "?",
+		}),
+	);
 
 	sql
 		.prepare(
-			`INSERT INTO software_offers(${columns.join(",")}) SELECT ${columns.map((name: string) => replacements[name] ?? name).join(",")} FROM software_offers WHERE id='o'`,
+			`INSERT INTO software_offers(${columns.join(",")}) SELECT ${columns.map((name: string) => replacements.get(name) ?? name).join(",")} FROM software_offers WHERE id='o'`,
 		)
 		.run(msa.id);
 	sql.exec(
@@ -5331,16 +5465,7 @@ it("certificates carry each document's own version label when the MSA and SOW la
 		request(),
 	);
 
-	let certificates: { versions: Record<string, unknown> }[] = [];
-	await prepareAgreementArtifact(
-		env,
-		id,
-		async (_env, _documents, received) => {
-			certificates = received as typeof certificates;
-
-			return new TextEncoder().encode("%PDF-synthetic");
-		},
-	);
+	const certificates = await renderedCertificates(id);
 	expect(certificates.map((c) => c.versions)).toEqual([
 		expect.objectContaining({ version_label: "v1", source_revision: "" }),
 		expect.objectContaining({
@@ -5385,16 +5510,7 @@ it("certificates carry each document's own source revision, not the MSA's", asyn
 		request(),
 	);
 
-	let certificates: { versions: Record<string, unknown> }[] = [];
-	await prepareAgreementArtifact(
-		env,
-		id,
-		async (_env, _documents, received) => {
-			certificates = received as typeof certificates;
-
-			return new TextEncoder().encode("%PDF-synthetic");
-		},
-	);
+	const certificates = await renderedCertificates(id);
 	expect(certificates.map((c) => c.versions)).toEqual([
 		expect.objectContaining({ source_revision: "MSA rev 7" }),
 		expect.objectContaining({ source_revision: "SOW rev 2" }),
@@ -5451,16 +5567,7 @@ it("certificates read older stored values from the template rows, and blank sour
 		request(),
 	);
 
-	let certificates: { versions: Record<string, unknown> }[] = [];
-	await prepareAgreementArtifact(
-		env,
-		id,
-		async (_env, _documents, received) => {
-			certificates = received as typeof certificates;
-
-			return new TextEncoder().encode("%PDF-synthetic");
-		},
-	);
+	const certificates = await renderedCertificates(id);
 	expect(
 		sql
 			.prepare(
@@ -5535,16 +5642,18 @@ it("keeps a returning client on the executed MSA after a newer MSA is published,
 		.all()
 		.map((row: { name: string }) => row.name);
 
-	const replacements: Record<string, string> = {
-		id: "'o2'",
-		version: "2",
-		status: "'sent'",
-		reused_msa_id: "?",
-	};
+	const replacements = new Map(
+		Object.entries({
+			id: "'o2'",
+			version: "2",
+			status: "'sent'",
+			reused_msa_id: "?",
+		}),
+	);
 
 	sql
 		.prepare(
-			`INSERT INTO software_offers(${columns.join(",")}) SELECT ${columns.map((name: string) => replacements[name] ?? name).join(",")} FROM software_offers WHERE id='o'`,
+			`INSERT INTO software_offers(${columns.join(",")}) SELECT ${columns.map((name: string) => replacements.get(name) ?? name).join(",")} FROM software_offers WHERE id='o'`,
 		)
 		.run(msa.id);
 	sql
@@ -5637,18 +5746,20 @@ it("gives a different client with no executed MSA the current MSA, and leaves th
 		.all()
 		.map((row: { name: string }) => row.name);
 
-	const replacements: Record<string, string> = {
-		id: "'o3'",
-		request_id: "'r2'",
-		version: "2",
-		status: "'sent'",
-		msa_template_id: "?",
-		recipient_email_snapshot: "'other@example.com'",
-	};
+	const replacements = new Map(
+		Object.entries({
+			id: "'o3'",
+			request_id: "'r2'",
+			version: "2",
+			status: "'sent'",
+			msa_template_id: "?",
+			recipient_email_snapshot: "'other@example.com'",
+		}),
+	);
 
 	sql
 		.prepare(
-			`INSERT INTO software_offers(${columns.join(",")}) SELECT ${columns.map((name: string) => replacements[name] ?? name).join(",")} FROM software_offers WHERE id='o'`,
+			`INSERT INTO software_offers(${columns.join(",")}) SELECT ${columns.map((name: string) => replacements.get(name) ?? name).join(",")} FROM software_offers WHERE id='o'`,
 		)
 		.run(current.id);
 	sql

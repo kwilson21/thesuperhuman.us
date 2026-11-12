@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { double } from "../helpers/doubles";
 import {
 	createInvoiceWithClient,
 	stripeAvailable,
@@ -33,6 +34,13 @@ const payment = {
 	updatedAt: "2026-09-20T13:00:00.000Z",
 };
 
+/** The fields of a Stripe invoice that the code under test reads from a send response. */
+type SentInvoice = {
+	id: string;
+	status: string;
+	hosted_invoice_url: string | null;
+};
+
 const request = {
 	name: "Artist Name",
 	email: "artist@example.com",
@@ -49,7 +57,7 @@ function fakeStripe() {
 				status: "open",
 				hosted_invoice_url: "https://invoice.stripe.com/i/in_1",
 			})),
-			sendInvoice: vi.fn(async () => ({
+			sendInvoice: vi.fn<() => Promise<SentInvoice>>(async () => ({
 				id: "in_1",
 				status: "open",
 				hosted_invoice_url: "https://invoice.stripe.com/i/in_1",
@@ -62,31 +70,39 @@ function fakeStripe() {
 describe("Stripe invoicing", () => {
 	it("fails closed unless the explicit gate and both secrets are configured", () => {
 		expect(
-			stripeAvailable({
-				STRIPE_PAYMENTS_ENABLED: "false",
-				STRIPE_SECRET_KEY: "sk_test_1",
-				STRIPE_WEBHOOK_SECRET: "whsec_1",
-			} as Env),
+			stripeAvailable(
+				double<Env>({
+					STRIPE_PAYMENTS_ENABLED: "false",
+					STRIPE_SECRET_KEY: "sk_test_1",
+					STRIPE_WEBHOOK_SECRET: "whsec_1",
+				}),
+			),
 		).toBe(false);
 		expect(
-			stripeAvailable({
-				STRIPE_PAYMENTS_ENABLED: "true",
-				STRIPE_SECRET_KEY: "sk_test_1",
-			} as Env),
+			stripeAvailable(
+				double<Env>({
+					STRIPE_PAYMENTS_ENABLED: "true",
+					STRIPE_SECRET_KEY: "sk_test_1",
+				}),
+			),
 		).toBe(false);
 		expect(
-			stripeAvailable({
-				STRIPE_PAYMENTS_ENABLED: "true",
-				STRIPE_SECRET_KEY: "sk_test_1",
-				STRIPE_WEBHOOK_SECRET: "whsec_1",
-			} as Env),
+			stripeAvailable(
+				double<Env>({
+					STRIPE_PAYMENTS_ENABLED: "true",
+					STRIPE_SECRET_KEY: "sk_test_1",
+					STRIPE_WEBHOOK_SECRET: "whsec_1",
+				}),
+			),
 		).toBe(true);
 		expect(
-			stripeWebhookAvailable({
-				STRIPE_PAYMENTS_ENABLED: "false",
-				STRIPE_SECRET_KEY: "sk_test_1",
-				STRIPE_WEBHOOK_SECRET: "whsec_1",
-			} as Env),
+			stripeWebhookAvailable(
+				double<Env>({
+					STRIPE_PAYMENTS_ENABLED: "false",
+					STRIPE_SECRET_KEY: "sk_test_1",
+					STRIPE_WEBHOOK_SECRET: "whsec_1",
+				}),
+			),
 		).toBe(true);
 	});
 
@@ -165,7 +181,7 @@ describe("Stripe invoicing", () => {
 			id: "in_1",
 			status: "open",
 			hosted_invoice_url: null,
-		} as never);
+		});
 		await expect(
 			createInvoiceWithClient(stripe, request, payment, "booking"),
 		).rejects.toThrow("hosted payment URL");

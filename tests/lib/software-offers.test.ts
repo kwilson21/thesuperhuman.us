@@ -5,7 +5,10 @@ import {
 	clientOffer,
 	hashOfferToken,
 	newOfferToken,
+	type SoftwareOffer,
 } from "~/lib/software-offers";
+import type { OwnerRequest } from "~/lib/owner-model";
+import { double } from "../helpers/doubles";
 
 export const terms = {
 	outcome: "Onboarding",
@@ -24,7 +27,8 @@ export const terms = {
 	paymentMode: "standard",
 };
 
-const errors = (value: unknown) => {
+/** Validates any object as offer terms; the validator, not the type, decides which fields are wrong. */
+const errors = <T extends object>(value: T) => {
 	const result = validateOfferTerms(value);
 	expect(result.ok).toBe(false);
 
@@ -145,19 +149,19 @@ describe("software offer terms", () => {
 	});
 	it("projects only client identity, version, path and validated terms", () => {
 		const projection = clientOffer(
-			{
+			double<OwnerRequest & { privateNote: string; email: string }>({
 				name: "Alex",
 				privateNote: "SECRET",
 				email: "private@example.com",
 				details: { company: "Example", fit: "SECRET" },
 				serviceId: "workflow",
-			} as any,
-			{
+			}),
+			double<SoftwareOffer & { sent_by: string }>({
 				version: 2,
 				terms_json: JSON.stringify({ ...terms, privateNote: "SECRET" }),
 				sent_by: "private@example.com",
 				status: "sent",
-			} as any,
+			}),
 		);
 
 		expect(Object.keys(projection!)).toEqual([
@@ -228,8 +232,12 @@ it.each([
 	["unknown", "Workflow automation"],
 ])("names the offer path for a %s brief", (serviceId, path) => {
 	const projection = clientOffer(
-		{ name: "Alex", details: {}, serviceId } as any,
-		{ version: 1, terms_json: JSON.stringify(terms), status: "sent" } as any,
+		double<OwnerRequest>({ name: "Alex", details: {}, serviceId }),
+		double<SoftwareOffer>({
+			version: 1,
+			terms_json: JSON.stringify(terms),
+			status: "sent",
+		}),
 	);
 
 	expect(projection?.path).toBe(path);
