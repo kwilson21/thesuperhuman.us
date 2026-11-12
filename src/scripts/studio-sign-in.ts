@@ -1,5 +1,3 @@
-import { readPortalJson } from "./portal-response";
-
 export function setupStudioSignIn() {
 	const requestForm = document.querySelector<HTMLFormElement>(
 		"#studio-code-request",
@@ -37,9 +35,11 @@ export function setupStudioSignIn() {
 				body: JSON.stringify({ email, turnstileToken }),
 			});
 
-			const result = await readPortalJson<{ message?: string; error?: string }>(
-				response,
-			);
+			// SAFETY: src/pages/api/studio/code.ts answers every status with JSON, carrying message on success and error on its 400, 403, 429 and 503 replies (musicRequest, which it calls first, also answers 403, 413, 415 and 400 with JSON error). Only its plain-text 404 ("Not found", sent when the client portal is off) is not JSON, and json() then throws into the catch below. Both fields are optional here and read with ??.
+			const result = (await response.json()) as {
+				message?: string;
+				error?: string;
+			};
 
 			status.textContent =
 				result.message ?? result.error ?? "Please try again.";
@@ -139,7 +139,8 @@ export function setupStudioSignIn() {
 				body: JSON.stringify({ email, code }),
 			});
 
-			const result = await readPortalJson(response);
+			// SAFETY: src/pages/api/studio/session.ts answers with JSON: { ok: true } on success and { ok: false, error } on its 400, 401, 429 and 503 replies (musicRequest adds JSON 403, 413 and 415). Only its plain-text 404 ("Not found", sent when the client portal is off) is not JSON, and json() then throws into the catch below. error is optional and read only after the response.ok success branch has returned.
+			const result = (await response.json()) as { error?: string };
 
 			if (response.ok) {
 				location.assign("/studio");

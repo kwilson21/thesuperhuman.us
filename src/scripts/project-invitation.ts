@@ -1,5 +1,3 @@
-import { readPortalJson } from "./portal-response";
-
 export function setupProjectInvitation(selector = "[data-project-invitation]") {
 	const root = document.querySelector<HTMLElement>(selector);
 
@@ -40,7 +38,8 @@ export function setupProjectInvitation(selector = "[data-project-invitation]") {
 				return;
 			}
 
-			const result = await readPortalJson(response);
+			// SAFETY: src/pages/api/owner/projects/[id]/invitation.ts answers with JSON: { ok: true } on success, { ok: false, error } on 400, 409 and 503, and a bare { ok: false } on 403 when the caller is not the owner, so error is optional and falls back to the local message. Its plain-text 404 ("Not found", sent when the client portal is off) is not JSON, and json() then throws into the catch below.
+			const result = (await response.json()) as { error?: string };
 			status.textContent = result.error ?? failure;
 		} catch {
 			status.textContent = failure;

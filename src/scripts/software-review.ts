@@ -170,7 +170,7 @@ export function setupSoftwareReviews() {
 						}),
 					});
 
-					// SAFETY: form.dataset.endpoint is the review route; its body is read as JSON with only an optional error declared, which the submit handler uses once the reload branch has returned.
+					// SAFETY: form.dataset.endpoint is /api/studio/software/[id]/reviews/[updateId] (src/pages/api/studio/software/[id]/reviews/[updateId].ts). It sends every reply, including the portal-off 404, through its json() helper, so the body is always JSON: the decision result on success, { ok: false, error } on 400 and 409, and a bare { ok: false } on 401, 404 and 503. error is optional and read only after the reload branch has returned.
 					const result = (await response.json()) as { error?: string };
 
 					if (response.ok) {

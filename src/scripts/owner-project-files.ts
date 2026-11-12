@@ -1,5 +1,4 @@
 import { peaksFromChannels, peaksFromWav } from "~/lib/audio-peaks";
-import { readPortalJson } from "./portal-response";
 
 type UploadPart = { partNumber: number; etag: string };
 
@@ -32,6 +31,11 @@ async function measurePeaks(
 	} catch {
 		return null;
 	}
+}
+
+async function readError(response: Response) {
+	// SAFETY: callers pass either the publish route (src/pages/api/owner/projects/[id]/files/[fileId].ts) or the access route (src/pages/api/owner/projects/[id]/access.ts). Both answer with JSON: { ok: true } on success, { ok: false, error } on 503 and 409, a bare { ok: false } on 403 (and on 400 for the access route). Both answer a plain-text 404 ("Not found", sent when the client portal is off), which is not JSON, so json() throws into the caller's catch. error is optional, and callers read it only after their !response.ok check.
+	return (await response.json()) as { error?: string };
 }
 
 export function setupOwnerProjectFiles() {
@@ -88,7 +92,7 @@ export function setupOwnerProjectFiles() {
 									},
 								);
 
-								const result = await readPortalJson(response);
+								const result = await readError(response);
 
 								if (!response.ok)
 									throw new Error(
@@ -148,7 +152,7 @@ export function setupOwnerProjectFiles() {
 									},
 								);
 
-								const result = await readPortalJson(response);
+								const result = await readError(response);
 
 								if (!response.ok)
 									throw new Error(
@@ -417,7 +421,7 @@ export function setupOwnerProjectFiles() {
 						body: JSON.stringify({ action: "revoke" }),
 					});
 
-					const result = await readPortalJson(response);
+					const result = await readError(response);
 
 					if (!response.ok)
 						throw new Error(result.error ?? "Could not close client access.");

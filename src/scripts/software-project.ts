@@ -18,7 +18,7 @@ export function setupSoftwareProject() {
 						body: JSON.stringify(body),
 					});
 
-					// SAFETY: send() reads the body as JSON and declares only error, optional, because the code after the reload branch uses it for failed responses alone.
+					// SAFETY: the owner requests route src/pages/api/owner/requests/[id]/software.ts sends every reply through its json() helper, so every status has a JSON body: { ok: true, ... } on success, a bare { ok: false } on 403, 503, 404 and some 400s, and { ok: false, message } or { ok: false, errors } on most 400 and 409 replies. error is therefore optional, and the code after the reload branch uses it for failed responses alone.
 					const result = (await response.json()) as { error?: string };
 
 					if (response.ok) {
