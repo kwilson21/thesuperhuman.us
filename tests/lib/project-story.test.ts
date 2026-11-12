@@ -100,12 +100,46 @@ describe("project story publication projection", () => {
 		expect(feedChange(feed([entry("old")], 5), feed([], 0))).toBe("replace"));
 });
 
+const deliveries: readonly string[] = [
+	"proposed",
+	"implemented",
+	"tested",
+	"available",
+];
+
+const bases: readonly string[] = [
+	"agent-reported",
+	"repository-verified",
+	"human-confirmed",
+];
+
+function isStory(value: Record<keyof Story, string | null>): value is Story {
+	return (
+		typeof value.headline === "string" &&
+		typeof value.summary === "string" &&
+		(value.technicalDetail === null ||
+			typeof value.technicalDetail === "string") &&
+		deliveries.includes(value.delivery ?? "") &&
+		bases.includes(value.basis ?? "")
+	);
+}
+
+/** A copy of the reviewed story, so tests that change their copy leave the shared JSON unchanged. */
+function storyCopy(value: Record<keyof Story, string | null>): Story {
+	if (!isStory(value))
+		throw new Error(
+			"The reviewed threadline story does not match the Story type.",
+		);
+
+	return { ...value };
+}
+
 const reviewedEntry = (): PublicEntry => ({
 	entryId: approved.entryId,
 	occurredOn: approved.occurredOn,
 	publishedAt: "2026-09-09T23:00:00Z",
 	backfilled: true,
-	story: { ...approved.story } as Story,
+	story: storyCopy(approved.story),
 });
 
 describe("reviewed milestone illustration", () => {
@@ -128,7 +162,7 @@ describe("reviewed milestone illustration", () => {
 		).toBeUndefined();
 	});
 	it("removes the illustration for a correction to any reviewed story field or a withdrawal", () => {
-		for (const key of Object.keys(approved.story) as (keyof Story)[]) {
+		for (const key of Object.keys(approved.story)) {
 			const e = reviewedEntry();
 			Object.assign(e.story, { [key]: "Changed" });
 			expect(publicationMilestones(feed([e]))[0].illustration).toBeUndefined();
@@ -405,18 +439,18 @@ describe("project status lives once, on the story data", () => {
 	});
 
 	it("never hardcodes a status prop on a page", () => {
-		const offenders = pageSources
-			.filter(({ source }) => source.includes('status="'))
-			.map(({ file }) => file);
+		const offenders = pageSources.flatMap(({ file, source }) =>
+			source.includes('status="') ? [file] : [],
+		);
 
 		expect(offenders).toEqual([]);
 	});
 
 	it("never repeats a project story status literally in page source instead of reading the data", () => {
 		const offenders = pageSources.flatMap(({ file, source }) =>
-			statuses
-				.filter((status) => source.includes(status))
-				.map((status) => `${file}: ${status}`),
+			statuses.flatMap((status) =>
+				source.includes(status) ? [`${file}: ${status}`] : [],
+			),
 		);
 
 		expect(offenders).toEqual([]);

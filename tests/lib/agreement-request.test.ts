@@ -1,14 +1,15 @@
 import { expect, it } from "vitest";
 import { nativeAgreementRoute } from "~/lib/agreement-request";
 import type { APIContext } from "astro";
+import { double } from "../helpers/doubles";
 
 const context = (type: string) =>
-	({
+	double<APIContext>({
 		request: new Request("https://example.test/api/agreements/session", {
 			method: "POST",
 			headers: { "content-type": type },
 		}),
-	}) as APIContext;
+	});
 
 it("shows escaped actionable native errors while preserving status and no-store headers", async () => {
 	const route = nativeAgreementRoute(

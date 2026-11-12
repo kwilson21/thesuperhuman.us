@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { it, expect } from "vitest";
 import { D1PublicationJournal } from "~/lib/publication/journal";
 import type { Publication } from "~/lib/publication/contract";
+import { double } from "../helpers/doubles";
+import { fakeBatch } from "../helpers/tests-lib-a-bindings";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -26,14 +28,39 @@ it("serializes simultaneous connections competing for the same project revision"
 	const barrier = new SharedArrayBuffer(4);
 	const workers: Worker[] = [];
 
-	const db = {
-		prepare: (query: string) => ({
-			bind: (...args: unknown[]) => ({ query, args }),
-		}),
-		batch: (statements: unknown[]) =>
-			new Promise((resolve, reject) => {
-				const worker = new Worker(
-					`
+	const pending = new WeakMap<
+		D1PreparedStatement,
+		{ query: string; args: unknown[] }
+	>();
+
+	const statement = (
+		query: string,
+		args: unknown[] = [],
+	): D1PreparedStatement => {
+		const prepared = double<D1PreparedStatement>({
+			bind: (...values: unknown[]) => statement(query, values),
+		});
+
+		pending.set(prepared, { query, args });
+
+		return prepared;
+	};
+
+	const statementOf = (item: D1PreparedStatement) => {
+		const info = pending.get(item);
+
+		if (!info) throw new Error("Expected a statement prepared by this test.");
+
+		return info;
+	};
+
+	const db = double<D1Database>({
+		prepare: (query: string) => statement(query),
+		batch: fakeBatch(
+			(statements) =>
+				new Promise<D1Result[]>((resolve, reject) => {
+					const worker = new Worker(
+						`
         const { workerData: d, parentPort } = require('node:worker_threads');
         const { DatabaseSync } = require('node:sqlite');
         const db = new DatabaseSync(d.filename);
@@ -47,17 +74,25 @@ it("serializes simultaneous connections competing for the same project revision"
           db.exec('COMMIT'); parentPort.postMessage(results);
         } finally { db.close(); }
       `,
-					{ eval: true, workerData: { filename, barrier, statements } },
-				);
+						{
+							eval: true,
+							workerData: {
+								filename,
+								barrier,
+								statements: statements.map(statementOf),
+							},
+						},
+					);
 
-				workers.push(worker);
-				worker.once("message", resolve);
-				worker.once("error", reject);
-				worker.once("exit", (code) => {
-					if (code) reject(new Error("Worker failed"));
-				});
-			}),
-	} as unknown as D1Database;
+					workers.push(worker);
+					worker.once("message", resolve);
+					worker.once("error", reject);
+					worker.once("exit", (code) => {
+						if (code) reject(new Error("Worker failed"));
+					});
+				}),
+		),
+	});
 
 	const journal = new D1PublicationJournal(db);
 

@@ -22,10 +22,7 @@ import {
 import { canonicalJson, hashBytes } from "~/lib/agreement-artifacts";
 import type { Agreement } from "~/lib/software-agreements";
 import { double } from "../helpers/doubles";
-import {
-	fakeD1First,
-	fakeR2Bytes,
-} from "../helpers/tests-lib-a-bindings";
+import { fakeD1First, fakeR2Bytes } from "../helpers/tests-lib-a-bindings";
 import { rawStreamOf } from "../helpers/tests-lib-a-pdf";
 
 const assets = double<Fetcher>({
@@ -244,28 +241,27 @@ it("preflights exact attachment merge inputs and rejects a missing original MSA 
 		registered_agent_confirmed: true,
 	});
 
-	const templates = (["msa", "sow"] as const).map(
-		(kind) =>
-			double<AgreementTemplate>({
-				kind,
-				version: 1,
-				published_at: "2026-10-01T12:00:00.000Z",
-				version_label: "v2026-10-01",
-				source_revision: null,
-				text:
-					templateFields[kind]
-						.filter((field) => !field.startsWith("milestone."))
-						.map((field) => `${field}: {{${field}}}`)
-						.join("\n") +
-					(kind === "sow"
-						? "\n{{#milestones}}\n" +
-							templateFields.sow
-								.filter((field) => field.startsWith("milestone."))
-								.map((field) => `${field}: {{${field}}}`)
-								.join("\n") +
-							"\n{{/milestones}}"
-						: ""),
-			}),
+	const templates = (["msa", "sow"] as const).map((kind) =>
+		double<AgreementTemplate>({
+			kind,
+			version: 1,
+			published_at: "2026-10-01T12:00:00.000Z",
+			version_label: "v2026-10-01",
+			source_revision: null,
+			text:
+				templateFields[kind]
+					.filter((field) => !field.startsWith("milestone."))
+					.map((field) => `${field}: {{${field}}}`)
+					.join("\n") +
+				(kind === "sow"
+					? "\n{{#milestones}}\n" +
+						templateFields.sow
+							.filter((field) => field.startsWith("milestone."))
+							.map((field) => `${field}: {{${field}}}`)
+							.join("\n") +
+						"\n{{/milestones}}"
+					: ""),
+		}),
 	);
 
 	const env = double<Env>({
@@ -593,7 +589,10 @@ async function checkTemplatePacket(
 		.lookup(PDFName.of("Names"), PDFArray);
 
 	const file = rawStreamOf(
-		names.lookup(1, PDFDict).lookup(PDFName.of("EF"), PDFDict).lookup(PDFName.of("F")),
+		names
+			.lookup(1, PDFDict)
+			.lookup(PDFName.of("EF"), PDFDict)
+			.lookup(PDFName.of("F")),
 	);
 
 	expect(inflateSync(file.contents).toString()).toBe(

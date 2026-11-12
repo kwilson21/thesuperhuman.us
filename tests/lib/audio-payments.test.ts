@@ -2,12 +2,8 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { double } from "../helpers/doubles";
-import {
-	d1Meta,
-	fakeBatch,
-	fakeFirst,
-	fakeResult,
-} from "../helpers/tests-lib-a-bindings";
+import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
+import { fakeBatch } from "../helpers/tests-lib-a-bindings";
 import {
 	applyStripeInvoiceEvent,
 	approveAudioPayment,
@@ -39,73 +35,7 @@ function fixture(kind: "service" | "purchase" = "service") {
 		{ query: string; args: unknown[] }
 	>();
 
-	const statement = (query: string, args: unknown[] = []): D1PreparedStatement => {
-		const prepared = double<D1PreparedStatement>({
-			bind: (...values: unknown[]) => statement(query, values),
-			run: fakeResult(() => {
-				const result = sql.prepare(query).run(...args);
-
-				return double<D1Result>({
-					success: true,
-					meta: d1Meta(result.changes),
-					results: [],
-				});
-			}),
-			all: fakeResult(() =>
-				double<D1Result>({
-					success: true,
-					results: sql.prepare(query).all(...args),
-				}),
-			),
-			first: fakeFirst(() => sql.prepare(query).get(...args) ?? null),
-		});
-
-		pending.set(prepared, { query, args });
-
-		return prepared;
-	};
-
-	const statementOf = (item: D1PreparedStatement) => {
-		const info = pending.get(item);
-
-		if (!info) throw new Error("Expected a statement prepared by this fixture.");
-
-		return info;
-	};
-
-	const db = double<D1Database>({
-		prepare: (query: string) => statement(query),
-		batch: fakeBatch((statements) => {
-			sql.exec("BEGIN");
-
-			try {
-				const results = statements.map((item) => {
-					const { query, args } = statementOf(item);
-					const prepared = sql.prepare(query);
-
-					if (/\bRETURNING\b/i.test(query))
-						return double<D1Result>({
-							success: true,
-							results: prepared.all(...args),
-						});
-					const result = prepared.run(...args);
-
-					return double<D1Result>({
-						success: true,
-						meta: d1Meta(result.changes),
-						results: [],
-					});
-				});
-
-				sql.exec("COMMIT");
-
-				return results;
-			} catch (error) {
-				sql.exec("ROLLBACK");
-				throw error;
-			}
-		}),
-	});
+	const db = sqliteD1(sql);
 
 	return { db, sql };
 }

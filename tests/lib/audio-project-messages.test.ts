@@ -17,6 +17,7 @@ import {
 	postOwnerProjectMessage,
 	validateProjectMessage,
 } from "~/lib/audio-project-messages";
+import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -33,51 +34,7 @@ function fixture() {
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(baseline);
 
-	const statement = (query: string, args: unknown[] = []) => ({
-		query,
-		args,
-		bind: (...values: unknown[]) => statement(query, values),
-		run: async () => {
-			const result = sql.prepare(query).run(...args);
-
-			return { success: true, meta: { changes: result.changes }, results: [] };
-		},
-		all: async () => ({
-			success: true,
-			results: sql.prepare(query).all(...args),
-		}),
-		first: async () => sql.prepare(query).get(...args) ?? null,
-	});
-
-	const db = {
-		prepare: (query: string) => statement(query),
-		batch: async (statements: ReturnType<typeof statement>[]) => {
-			sql.exec("BEGIN");
-
-			try {
-				const results = statements.map((item) => {
-					const prepared = sql.prepare(item.query);
-
-					if (/\bRETURNING\b/i.test(item.query))
-						return { success: true, results: prepared.all(...item.args) };
-					const result = prepared.run(...item.args);
-
-					return {
-						success: true,
-						meta: { changes: result.changes },
-						results: [],
-					};
-				});
-
-				sql.exec("COMMIT");
-
-				return results;
-			} catch (error) {
-				sql.exec("ROLLBACK");
-				throw error;
-			}
-		},
-	} as unknown as D1Database;
+	const db = sqliteD1(sql);
 
 	function addRequest(id: string, email = "artist@example.com") {
 		sql

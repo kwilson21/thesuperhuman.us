@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
+import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
 import { describe, expect, it } from "vitest";
 import {
 	clientProjectForSession,
@@ -29,51 +30,7 @@ function fixture() {
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(baseline);
 
-	const statement = (query: string, args: unknown[] = []) => ({
-		query,
-		args,
-		bind: (...values: unknown[]) => statement(query, values),
-		run: async () => {
-			const result = sql.prepare(query).run(...args);
-
-			return { success: true, meta: { changes: result.changes }, results: [] };
-		},
-		all: async () => ({
-			success: true,
-			results: sql.prepare(query).all(...args),
-		}),
-		first: async () => sql.prepare(query).get(...args) ?? null,
-	});
-
-	const db = {
-		prepare: (query: string) => statement(query),
-		batch: async (statements: ReturnType<typeof statement>[]) => {
-			sql.exec("BEGIN");
-
-			try {
-				const results = statements.map((item) => {
-					const prepared = sql.prepare(item.query);
-
-					if (/\bRETURNING\b/i.test(item.query))
-						return { success: true, results: prepared.all(...item.args) };
-					const result = prepared.run(...item.args);
-
-					return {
-						success: true,
-						meta: { changes: result.changes },
-						results: [],
-					};
-				});
-
-				sql.exec("COMMIT");
-
-				return results;
-			} catch (error) {
-				sql.exec("ROLLBACK");
-				throw error;
-			}
-		},
-	} as unknown as D1Database;
+	const db = sqliteD1(sql);
 
 	const addRequest = (id: string, email = "artist@example.com") =>
 		sql
@@ -102,6 +59,7 @@ describe("audio client access", () => {
 		const code = await issueClientCode(db, "artist@example.com", secret, now);
 		expect(code).toMatch(/^\d{8}$/);
 
+		// SAFETY: the statement selects only code_hash, a NOT NULL TEXT column of audio_client_codes (db/music.sql), and issueClientCode above has just written a code for this email, so the row exists and has that key.
 		const stored = sql
 			.prepare(
 				"SELECT code_hash FROM audio_client_codes WHERE email='artist@example.com'",
@@ -266,6 +224,7 @@ describe("audio client access", () => {
 			),
 		).toBe(true);
 
+		// SAFETY: the statement selects only key, the TEXT PRIMARY KEY column of audio_client_allowances (db/music.sql), so each row has a string key.
 		const stored = sql
 			.prepare("SELECT key FROM audio_client_allowances")
 			.all() as { key: string }[];

@@ -296,11 +296,10 @@ describe("owner insights schema", () => {
 	});
 
 	it("pins the reviewed Wrangler release", () => {
-		const packageJson = JSON.parse(
-			readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
-		) as {
-			devDependencies?: Record<string, string>;
-		};
+		const packageJson: { devDependencies?: Record<string, string> } =
+			JSON.parse(
+				readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+			);
 
 		expect(packageJson.devDependencies?.wrangler).toBe("4.146.0");
 	});

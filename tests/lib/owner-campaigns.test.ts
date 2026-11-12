@@ -2,6 +2,8 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { resolveCampaignTag } from "~/lib/owner-campaigns";
+import { double } from "../helpers/doubles";
+import { fakeFirst } from "../helpers/tests-lib-a-bindings";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -15,15 +17,15 @@ function fixture() {
     VALUES ('old-news','release','old-news-single','Old News launch','Meaningful listening','2026-09-16','active','now','now');
     INSERT INTO owner_campaign_tags VALUES ('old-news','instagram','lyric-clip');`);
 
-	const db = {
-		prepare: (query: string) => ({
-			bind: (...args: unknown[]) => ({
-				first: async () => sql.prepare(query).get(...args) ?? null,
+	return double<D1Database>({
+		prepare: (query: string) =>
+			double<D1PreparedStatement>({
+				bind: (...args: unknown[]) =>
+					double<D1PreparedStatement>({
+						first: fakeFirst(() => sql.prepare(query).get(...args) ?? null),
+					}),
 			}),
-		}),
-	};
-
-	return db as unknown as D1Database;
+	});
 }
 
 describe("controlled campaign attribution", () => {

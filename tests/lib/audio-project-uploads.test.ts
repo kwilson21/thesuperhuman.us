@@ -6,11 +6,8 @@ import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 import { getPlatformProxy } from "wrangler";
 import { double } from "../helpers/doubles";
-import {
-	d1Meta,
-	fakeFirst,
-	fakeResult,
-} from "../helpers/tests-lib-a-bindings";
+import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
+import {} from "../helpers/tests-lib-a-bindings";
 import {
 	abortProjectUpload,
 	beginProjectUpload,
@@ -38,23 +35,7 @@ function fixture() {
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(schema);
 
-	const statement = (
-		query: string,
-		args: unknown[] = [],
-	): D1PreparedStatement =>
-		double<D1PreparedStatement>({
-			bind: (...values: unknown[]) => statement(query, values),
-			first: fakeFirst(() => sql.prepare(query).get(...args) ?? null),
-			run: fakeResult(() =>
-				double<D1Result>({
-					meta: d1Meta(sql.prepare(query).run(...args).changes),
-				}),
-			),
-		});
-
-	const db = double<D1Database>({
-		prepare: (query: string) => statement(query),
-	});
+	const db = sqliteD1(sql);
 
 	sql
 		.prepare(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)

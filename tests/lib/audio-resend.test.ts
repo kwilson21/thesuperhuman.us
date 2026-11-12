@@ -201,11 +201,11 @@ it("keeps owner and client notification links in the configured environment", as
 		to: "b",
 		origin,
 	});
-	expect(
-		JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).text,
-	).toContain(`${origin}/owner/requests/req-1`);
+	expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).text).toContain(
+		`${origin}/owner/requests/req-1`,
+	);
 	await sendStudioSignInNotice("k", "a", "b", "Update", "update", origin);
-	expect(
-		JSON.parse(String(fetchMock.mock.calls[1][1]?.body)).text,
-	).toContain(`${origin}/studio/sign-in`);
+	expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body)).text).toContain(
+		`${origin}/studio/sign-in`,
+	);
 });

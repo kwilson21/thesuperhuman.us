@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
 import {
 	changeOwnerRequest,
 	getOwnerRequest,
@@ -31,51 +32,7 @@ function fixture(beforeSoftware = false) {
 			readFileSync(new URL("../../db/music.sql", import.meta.url), "utf8"),
 		);
 
-	const statement = (query: string, args: unknown[] = []) => ({
-		query,
-		args,
-		bind: (...values: unknown[]) => statement(query, values),
-		run: async () => {
-			const result = sql.prepare(query).run(...args);
-
-			return { success: true, meta: { changes: result.changes }, results: [] };
-		},
-		all: async () => ({
-			success: true,
-			results: sql.prepare(query).all(...args),
-		}),
-		first: async () => sql.prepare(query).get(...args) ?? null,
-	});
-
-	const db = {
-		prepare: (query: string) => statement(query),
-		batch: async (statements: ReturnType<typeof statement>[]) => {
-			sql.exec("BEGIN");
-
-			try {
-				const results = statements.map((item) => {
-					const prepared = sql.prepare(item.query);
-
-					if (/\bRETURNING\b/i.test(item.query))
-						return { success: true, results: prepared.all(...item.args) };
-					const result = prepared.run(...item.args);
-
-					return {
-						success: true,
-						meta: { changes: result.changes },
-						results: [],
-					};
-				});
-
-				sql.exec("COMMIT");
-
-				return results;
-			} catch (error) {
-				sql.exec("ROLLBACK");
-				throw error;
-			}
-		},
-	} as unknown as D1Database;
+	const db = sqliteD1(sql);
 
 	return { db, sql };
 }

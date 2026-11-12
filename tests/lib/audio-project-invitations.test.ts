@@ -7,11 +7,8 @@ import {
 	queueProjectInvitation,
 } from "~/lib/audio-project-invitations";
 import { double } from "../helpers/doubles";
-import {
-	d1Meta,
-	fakeFirst,
-	fakeResult,
-} from "../helpers/tests-lib-a-bindings";
+import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
+import { fakeFirst } from "../helpers/tests-lib-a-bindings";
 
 vi.mock("~/lib/audio-resend", () => ({
 	sendStudioSignInNotice: vi.fn(async () => ({ ok: true })),
@@ -29,23 +26,7 @@ function fixture() {
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(baseline);
 
-	const statement = (
-		query: string,
-		args: unknown[] = [],
-	): D1PreparedStatement =>
-		double<D1PreparedStatement>({
-			bind: (...values: unknown[]) => statement(query, values),
-			run: fakeResult(() =>
-				double<D1Result>({
-					meta: d1Meta(sql.prepare(query).run(...args).changes),
-				}),
-			),
-			first: fakeFirst(() => sql.prepare(query).get(...args) ?? null),
-		});
-
-	const db = double<D1Database>({
-		prepare: (query: string) => statement(query),
-	});
+	const db = sqliteD1(sql);
 
 	sql
 		.prepare(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
