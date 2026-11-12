@@ -4,4 +4,7 @@ allowBuilds:
   workerd: true
 overrides:
   vite: ^6.4.4
+permissions:
+  '@cloudflare/workers-oauth-provider':
+    skills: false
 pmOnFail: error

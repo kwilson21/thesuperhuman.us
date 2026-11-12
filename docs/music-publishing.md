@@ -14,7 +14,7 @@ recording. Keep IDs stable after launch so analytics and requests stay attached.
 
 ## Prepare a release
 
-Use Node 24 or newer for the publishing helpers. Copy
+Use the Node version in `.nvmrc` for the publishing helpers. Copy
 `templates/music/release-package.json` beside a release's source folders and fill
 in accurate metadata and relative asset paths. Remove unavailable versions and
 examples. MP3 is the streaming audio format, MP4 the hosted video format. Retain

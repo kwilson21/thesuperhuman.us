@@ -14,7 +14,7 @@ Personal site for Kazon Wilson · software engineer building useful software · 
 
 ## Development
 
-Use the Node version in `.nvmrc` (26) and the pnpm version in `package.json`'s `packageManager` field.
+Use the Node version in `.nvmrc` and the pnpm version in `package.json`'s `packageManager` field.
 
 ```bash
 pnpm install
