@@ -30,11 +30,6 @@ function fixture(kind: "service" | "purchase" = "service") {
     VALUES ('request-1',?, 'two-track-mix-master','artist@example.com','Old News mix','reviewed',?,?)`)
 		.run(kind, now, now);
 
-	const pending = new WeakMap<
-		D1PreparedStatement,
-		{ query: string; args: unknown[] }
-	>();
-
 	const db = sqliteD1(sql);
 
 	return { db, sql };

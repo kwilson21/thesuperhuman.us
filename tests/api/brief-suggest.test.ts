@@ -3,18 +3,31 @@ import { beforeEach, afterEach, expect, it, vi, type Mock } from "vitest";
 import { double, partial } from "../helpers/doubles";
 import type { TestRuntime } from "../helpers/runtime";
 import { readJson, type JsonObject } from "../helpers/json";
+import { DatabaseSync, type SqliteDatabase } from "../helpers/sqlite-d1";
+import type { SQLInputValue } from "node:sqlite";
 import {
 	createSuggestionPass,
 	suggestionVisitorHash,
 } from "~/lib/brief-suggestion-pass";
-import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-
-const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
 import { POST } from "~/pages/api/software/brief/suggest";
 
-let db: any, database: any, run: ReturnType<typeof vi.fn>;
+let db: SqliteDatabase;
+let database: { prepare: Mock };
+let run: ReturnType<typeof vi.fn>;
+
+/** A D1 prepare() over the node:sqlite database: first() reads a row or null, and run() writes. */
+const realPrepare = (sql: string) => ({
+	bind: (...args: SQLInputValue[]) => ({
+		first: async () => db.prepare(sql).get(...args) ?? null,
+		run: async () => {
+			db.prepare(sql).run(...args);
+
+			return { success: true };
+		},
+	}),
+});
 let cookie: string;
 const secret = "existing-turnstile-secret-for-tests";
 
@@ -49,7 +62,7 @@ function context(
 			runtime: partial<TestRuntime>({
 				env: partial<TestRuntime["env"]>({
 					AI: double<Ai>({ run: run as Ai["run"] }),
-					MUSIC_DB: database,
+					MUSIC_DB: double<D1Database>(database),
 					BRIEF_SUGGEST_RATE_LIMIT: limiter,
 					BRIEF_SUGGEST_SITE_LIMIT: siteLimiter,
 					TURNSTILE_SECRET_KEY: secret,
@@ -68,18 +81,7 @@ beforeEach(async () => {
 	db.exec(
 		readFileSync("migrations/music/0025_brief_suggestion_budget.sql", "utf8"),
 	);
-	database = {
-		prepare: vi.fn((sql: string) => ({
-			bind: (...args: unknown[]) => ({
-				first: async () => db.prepare(sql).get(...args) ?? null,
-				run: async () => {
-					db.prepare(sql).run(...args);
-
-					return { success: true };
-				},
-			}),
-		})),
-	};
+	database = { prepare: vi.fn(realPrepare) };
 	const counts = new Map<string, { start: number; count: number }>();
 	limiter = {
 		limit: vi.fn(async ({ key }: { key: string }) => {
@@ -237,7 +239,7 @@ it.each(["visitor", "site"])(
 						? "SELECT count FROM brief_suggestion_budget WHERE scope='site'"
 						: "SELECT count FROM brief_suggestion_budget WHERE scope!='site'",
 				)
-				.get().count,
+				.get()?.count,
 		).toBe(scope === "site" ? 10000 : 300);
 	},
 );
@@ -260,12 +262,12 @@ it("cleans expired rows in bounded batches and retains the previous UTC day", as
 			.prepare(
 				"SELECT count(*) n FROM brief_suggestion_budget WHERE day='2000-01-01'",
 			)
-			.get().n,
+			.get()?.n,
 	).toBe(1);
 	expect(
 		db
 			.prepare("SELECT count FROM brief_suggestion_budget WHERE scope=?")
-			.get("previous").count,
+			.get("previous")?.count,
 	).toBe(1);
 });
 
@@ -345,12 +347,11 @@ it("caps a concurrent burst before invoking AI or daily counters", async () => {
 it.each([1, 2, 3])(
 	"fails closed when D1 budget statement %s fails",
 	async (failedStatement) => {
-		const prepare = database.prepare.getMockImplementation();
 		let count = 0;
 		database.prepare.mockImplementation((sql: string) => {
 			if (++count === failedStatement) throw new Error("unavailable");
 
-			return prepare(sql);
+			return realPrepare(sql);
 		});
 		expect(await (await POST(context())).json()).toEqual({ suggestion: "" });
 		expect(run).not.toHaveBeenCalled();
@@ -363,9 +364,7 @@ it("cleans once per UTC day after the first site reservation, never on capped re
 	cookie = `__Secure-brief-suggestion-pass=${await createSuggestionPass(secret, "test")}`;
 
 	const cleanupCalls = () =>
-		database.prepare.mock.calls.filter(([sql]: [string]) =>
-			sql.startsWith("DELETE"),
-		);
+		database.prepare.mock.calls.filter(([sql]) => sql.startsWith("DELETE"));
 
 	await Promise.all([POST(context()), POST(context())]);
 	expect(cleanupCalls()).toHaveLength(1);
@@ -389,7 +388,6 @@ it("cleans once per UTC day after the first site reservation, never on capped re
 it.each(["pending", "rejected", "unsuccessful", "throws"])(
 	"does not delay or suppress suggestions when cleanup is %s",
 	async (failure) => {
-		const prepare = database.prepare.getMockImplementation();
 		let finish!: () => void;
 
 		const pending = new Promise((resolve) => {
@@ -397,7 +395,7 @@ it.each(["pending", "rejected", "unsuccessful", "throws"])(
 		});
 
 		database.prepare.mockImplementation((sql: string) => {
-			if (!sql.startsWith("DELETE")) return prepare(sql);
+			if (!sql.startsWith("DELETE")) return realPrepare(sql);
 
 			if (failure === "throws") throw new Error("unavailable");
 
@@ -515,9 +513,7 @@ it.each([10000, 10001])(
 		}
 
 		expect(
-			database.prepare.mock.calls.every(([sql]: [string]) =>
-				sql.startsWith("SELECT"),
-			),
+			database.prepare.mock.calls.every(([sql]) => sql.startsWith("SELECT")),
 		).toBe(true);
 		expect(
 			db.prepare("SELECT * FROM brief_suggestion_budget").all(),
@@ -534,14 +530,12 @@ it("never writes the site row for a capped visitor", async () => {
 	database.prepare.mockClear();
 	await POST(context());
 	expect(
-		database.prepare.mock.calls.filter(([sql]: [string]) =>
-			sql.startsWith("INSERT"),
-		),
+		database.prepare.mock.calls.filter(([sql]) => sql.startsWith("INSERT")),
 	).toHaveLength(1);
 	expect(
 		db
 			.prepare("SELECT count FROM brief_suggestion_budget WHERE scope='site'")
-			.get().count,
+			.get()?.count,
 	).toBe(1);
 });
 
@@ -552,6 +546,6 @@ it("uses the keyed visitor identity for both the limiter and persisted daily bud
 	expect(
 		db
 			.prepare("SELECT scope FROM brief_suggestion_budget WHERE scope != ?")
-			.get("site").scope,
+			.get("site")?.scope,
 	).toBe(key);
 });

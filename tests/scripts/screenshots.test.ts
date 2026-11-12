@@ -24,7 +24,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { runInNewContext } from "node:vm";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
@@ -50,6 +50,39 @@ import {
 	screenshotSection,
 	withScreenshots,
 } from "../../scripts/screenshots/config.mjs";
+
+/** The members of a Playwright page or locator that one scenario step calls; a test supplies the ones its step uses. */
+type FakePage = Record<string, (...args: never[]) => void>;
+
+/** What a scenario hands its capture callback: the screenshot file, the route, and the step that prepares the page. */
+type Capture = {
+	file: string;
+	path: string;
+	status?: number;
+	prepare: (page: FakePage) => Promise<void>;
+};
+
+/** A route handler registered on the fake page. */
+/** The Turnstile API that the scenario's stub script puts on window. */
+type TurnstileApi = {
+	render(
+		container: object,
+		options: { "response-field": boolean; callback: Mock },
+	): string;
+	getResponse(id: string): string;
+	reset(id: string): void;
+	execute(id: string): void;
+	ready(callback: Mock): void;
+	remove(id: string): void;
+};
+
+type RouteHandler = (route: {
+	fulfill: (response: never) => void;
+}) => Promise<void>;
+
+/** A function the code under test passed to the fake page, as opposed to a string or a selector. */
+const isFunction = (value: unknown): value is (...args: never[]) => void =>
+	value instanceof Function;
 
 function pageFiles(directory: string): string[] {
 	return readdirSync(directory).flatMap((name) => {
@@ -219,7 +252,7 @@ it("prepares attachment captures with visible Remove controls and a shrinking li
 				{ id: "sow", kind: "sow", hash: "b".repeat(64) },
 			],
 		}),
-		capture: async ({ file, prepare }: any) => {
+		capture: async ({ file, prepare }: Capture) => {
 			if (
 				!file.includes("attachment-remove-control") &&
 				!file.includes("attachment-removed")
@@ -246,7 +279,7 @@ it("prepares attachment captures with visible Remove controls and a shrinking li
 					})),
 			};
 
-			const locator: any = {
+			const locator: FakePage = {
 				locator: (selector: string) =>
 					selector === "[data-remove-attachment]" ? remove : locator,
 				setInputFiles: async () => {},
@@ -413,7 +446,7 @@ describe("screenshot coverage", () => {
 					: "[]";
 			},
 			ownerFetch: async () => ({ documents }),
-			capture: async ({ file, path, status = 200, prepare }: any) => {
+			capture: async ({ file, path, status = 200, prepare }: Capture) => {
 				const url = new URL(path, "http://localhost");
 
 				if (!url.pathname.endsWith("/verify")) return file;
@@ -441,7 +474,10 @@ describe("screenshot coverage", () => {
 
 							return { isVisible: async () => true };
 						},
-						getByRole: (role: string, options: any) => {
+						getByRole: (
+							role: string,
+							options: { exact: boolean; name: string },
+						) => {
 							expect(options.exact).toBe(true);
 							expect(options.name).toBe(
 								expired
@@ -1153,13 +1189,13 @@ it.each([false, true])(
 		await scenario.default.run({
 			sql: () => "[]",
 			ownerFetch: async () => ({}),
-			capture: async ({ file, prepare }: any) => {
+			capture: async ({ file, prepare }: Capture) => {
 				if (file.includes("changes-open")) {
 					let marked = saved,
 						checked = false,
 						manual = false;
 
-					const first = (value: any) => ({ ...value, first: () => value });
+					const first = (value: FakePage) => ({ ...value, first: () => value });
 
 					const mark = {
 						getAttribute: async () => String(marked),
@@ -1223,14 +1259,24 @@ it("serves a scenario-local Turnstile API for silent and receipt widgets", async
 		"../../scripts/screenshots/scenarios/software-brief.mjs"
 	);
 
-	const routes = new Map<string, any>(),
+	const routes = new Map<string, RouteHandler>(),
 		callback = vi.fn(),
 		onload = vi.fn();
 
-	const inputs: any[] = [],
-		receipt = { appendChild: (input: any) => inputs.push(input) };
+	const inputs: { remove: Mock; name?: string; value?: string }[] = [],
+		receipt = {
+			appendChild: (input: { remove: Mock }) => inputs.push(input),
+		};
 
-	const window: any = { loaded: onload };
+	const handlerFor = (path: string): RouteHandler => {
+		const handler = routes.get(path);
+
+		if (!handler) throw new Error(`No route handler for ${path}`);
+
+		return handler;
+	};
+
+	const window: { loaded: Mock; turnstile?: TurnstileApi } = { loaded: onload };
 
 	const document = {
 		createElement: () => ({ remove: vi.fn() }),
@@ -1243,17 +1289,23 @@ it("serves a scenario-local Turnstile API for silent and receipt widgets", async
 	await scenario.default.run({
 		base: "http://127.0.0.1:4321",
 		sql() {},
-		capture: async ({ file, prepare }: any) => {
+		capture: async ({ file, prepare }: Capture) => {
 			if (file !== "software-brief-suggestion-phone.png") return file;
 			await prepare({
 				on() {},
-				route: async (path: string, handler: any) => {
+				route: async (path: string, handler: RouteHandler) => {
 					routes.set(path, handler);
 				},
 				addInitScript: async () => {},
 				reload: async () => {
-					await routes.get("https://challenges.cloudflare.com/turnstile/**")({
-						fulfill: ({ body, contentType }: any) => {
+					await handlerFor("https://challenges.cloudflare.com/turnstile/**")({
+						fulfill: ({
+							body,
+							contentType,
+						}: {
+							body: string;
+							contentType: string;
+						}) => {
 							expect(contentType).toBe("application/javascript");
 							runInNewContext(body, { window, document, URL, queueMicrotask });
 						},
@@ -1269,6 +1321,9 @@ it("serves a scenario-local Turnstile API for silent and receipt widgets", async
 				}),
 			});
 			const api = window.turnstile;
+
+			if (!api)
+				throw new Error("The scenario did not define window.turnstile.");
 			expect(onload).toHaveBeenCalledOnce();
 			expect(inputs[0]).toMatchObject({
 				name: "cf-turnstile-response",
@@ -1289,7 +1344,7 @@ it("serves a scenario-local Turnstile API for silent and receipt widgets", async
 			api.remove("screenshot-widget-1");
 			expect(inputs[0].remove).toHaveBeenCalledOnce();
 			const fulfill = vi.fn();
-			await routes.get("**/api/software/brief/pass")({ fulfill });
+			await handlerFor("**/api/software/brief/pass")({ fulfill });
 			expect(fulfill).toHaveBeenCalledWith({ json: { ok: true } });
 
 			return file;
@@ -1317,7 +1372,7 @@ it.each(["reload", "API wait", "ghost wait"])(
 				scenario.default.run({
 					base: "http://127.0.0.1:4321",
 					sql() {},
-					capture: async ({ file, prepare }: any) => {
+					capture: async ({ file, prepare }: Capture) => {
 						if (file !== "software-brief-suggestion-phone.png") return file;
 						await prepare({
 							route: async () => {},
@@ -1328,7 +1383,7 @@ it.each(["reload", "API wait", "ghost wait"])(
 							waitForFunction: async () => {
 								if (stage === "API wait") throw failure;
 							},
-							on: (event: string, handler: any) => {
+							on: (event: string, handler: (message: object) => void) => {
 								if (event === "console")
 									handler({
 										type: () => "warning",
@@ -1388,7 +1443,7 @@ it.each(["desktop", "phone"])(
 		await scenario.default.run({
 			base: "http://127.0.0.1:4321",
 			sql() {},
-			capture: async ({ file, prepare }: any) => {
+			capture: async ({ file, prepare }: Capture) => {
 				if (file !== `software-brief-suggestion-${viewport}.png`) return file;
 				await prepare({
 					on() {},
@@ -1429,8 +1484,8 @@ it("holds the sending request whether fetch gets a string, a URL, a Request or a
 		route: async () => {},
 		reload: async () => {},
 		waitForFunction: async () => {},
-		addInitScript: async (fn: () => void) => {
-			if (fn.toString().includes("/api/software-inquiry"))
+		addInitScript: async (fn: unknown) => {
+			if (isFunction(fn) && fn.toString().includes("/api/software-inquiry"))
 				script = fn.toString();
 		},
 		locator: () => ({
@@ -1448,7 +1503,7 @@ it("holds the sending request whether fetch gets a string, a URL, a Request or a
 	await scenario.default.run({
 		base: "http://127.0.0.1:4321",
 		sql() {},
-		capture: async ({ file, prepare }: any) => {
+		capture: async ({ file, prepare }: Capture) => {
 			if (file === "software-brief-sending-desktop.png") await prepare(page);
 
 			return file;
@@ -1461,7 +1516,12 @@ it("holds the sending request whether fetch gets a string, a URL, a Request or a
 
 	const passed: string[] = [];
 
-	const sandbox: any = {
+	const sandbox: {
+		window: { fetch: Mock };
+		location: { href: string };
+		URL: typeof URL;
+		Request: typeof Request;
+	} = {
 		window: {
 			fetch: vi.fn(async (input: RequestInfo | URL) => {
 				passed.push(String(input));
@@ -1533,7 +1593,13 @@ it("declares the mocked 503 only for send-failed captures at both widths", async
 	await scenario.default.run({
 		base: "http://127.0.0.1:4321",
 		sql() {},
-		capture: async ({ file, expectedResourceErrors = [] }: any) => {
+		capture: async ({
+			file,
+			expectedResourceErrors = [],
+		}: {
+			file: string;
+			expectedResourceErrors?: { url: string; status: number }[];
+		}) => {
 			if (expectedResourceErrors.length) {
 				allowances.push(file);
 				expect(expectedResourceErrors).toEqual([
@@ -1562,7 +1628,7 @@ it.each([
 	await scenario.default.run({
 		sql: () => "[]",
 		ownerFetch: async () => ({}),
-		capture: async ({ file, prepare }: any) => {
+		capture: async ({ file, prepare }: Capture) => {
 			if (file.includes("delivery-complete")) {
 				await prepare({
 					getByText: () => ({ isVisible: async () => true }),

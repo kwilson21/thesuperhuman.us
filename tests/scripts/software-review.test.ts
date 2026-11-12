@@ -1,6 +1,9 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { setupSoftwareReviews } from "~/scripts/software-review";
 
+/** A listener as the review page registers it; only the toggle listener reads its event. */
+type Listener = (event?: { currentTarget: { open: boolean } }) => void;
+
 function fixture(direction = false, partial = false) {
 	let submit: (event: {
 		preventDefault(): void;
@@ -167,19 +170,19 @@ it("sends included but inaccessible items through a separate selection", async (
 });
 
 it("keeps helper marks local to a review and pre-ticks only Not yet when opening changes", () => {
-	const listeners: Record<string, (event?: any) => void> = {};
+	const listeners: Record<string, Listener> = {};
 
 	const checkbox = {
 		value: "0",
 		checked: false,
-		addEventListener: (_event: string, handler: any) =>
+		addEventListener: (_event: string, handler: Listener) =>
 			(listeners.manual = handler),
 	};
 
 	const makeMark = (mark: string) => ({
 		dataset: { reviewCheck: "0", reviewMark: mark },
 		setAttribute: vi.fn(),
-		addEventListener: (_event: string, handler: any) =>
+		addEventListener: (_event: string, handler: Listener) =>
 			(listeners[mark] = handler),
 	});
 
@@ -187,7 +190,7 @@ it("keeps helper marks local to a review and pre-ticks only Not yet when opening
 		notYet = makeMark("not-yet");
 
 	const details = {
-		addEventListener: (_event: string, handler: any) =>
+		addEventListener: (_event: string, handler: Listener) =>
 			(listeners.toggle = handler),
 	};
 

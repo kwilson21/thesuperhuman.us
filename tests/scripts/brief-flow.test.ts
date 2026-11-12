@@ -54,7 +54,7 @@ class Node extends EventTarget {
 	closest() {
 		return this.section;
 	}
-	querySelector(selector: string): any {
+	querySelector(selector: string): Node | null {
 		return this.nodes[selector] ?? null;
 	}
 	querySelectorAll(selector: string): Node[] {
@@ -83,7 +83,10 @@ class Input extends Node {}
 
 class Textarea extends Node {}
 
-let form: Node & { elements: any },
+/** The form's controls: an array that the test gives the namedItem lookup of HTMLFormControlsCollection. */
+type Elements = Node[] & { namedItem?: (key: string) => Node | undefined };
+
+let form: Node & { elements: Elements },
 	steps: Node[],
 	controls: Node[],
 	store: Map<string, string>,
@@ -260,7 +263,7 @@ async function setup(requestedPath?: string) {
 		form.nodes[`[data-form-error="${node.name}"]`] = error;
 	}
 
-	form.querySelector = (selector: string): any => {
+	form.querySelector = (selector: string): Node | null => {
 		// A question's error paragraph follows the question it is configured for.
 		const match = selector.match(/^\[data-form-error="(.+)"\]$/);
 
@@ -380,7 +383,7 @@ async function setup(requestedPath?: string) {
 		vi.fn(async () => Response.json({ suggestion: " in a spreadsheet" })),
 	);
 	const { setupSoftwareInquiry } = await import("~/scripts/software-inquiry");
-	// SAFETY: setupSoftwareInquiry reads from form only dataset, elements, and the listeners the test drives, and the fake supplies each of them.
+	// SAFETY: setupSoftwareInquiry and the helpers it passes form to read only dataset, id, elements, getAttribute, querySelector, querySelectorAll and addEventListener from form; the fake Node supplies each except id, which reads undefined, and its elements is a plain array, so form cannot be typed as an HTMLFormElement.
 	setupSoftwareInquiry(form as never);
 }
 

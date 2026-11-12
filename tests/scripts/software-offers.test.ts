@@ -2,6 +2,9 @@ import { afterEach, expect, it, vi, type Mock } from "vitest";
 import { setupOwnerRequestActions } from "~/scripts/owner-request-actions";
 import { setupSoftwareOffers } from "~/scripts/software-offers";
 
+/** The submit listener a form registers; the test calls it with an event that carries preventDefault. */
+type SubmitListener = (event: { preventDefault: Mock }) => Promise<void>;
+
 /** The event a fake element passes to its listeners: emit supplies preventDefault, target and currentTarget. */
 type FakeTarget =
 	| FakeElement
@@ -425,14 +428,14 @@ it("clears radio group invalid state after selection changes", async () => {
 it("reloads after decline with unsaved offer edits only after confirmed discard", async () => {
 	const { root } = fixture();
 	root.dataset.dirty = "true";
-	let submit!: (event: any) => Promise<void>;
+	let submit!: SubmitListener;
 
 	const status = { textContent: "" },
 		button = { disabled: false };
 
 	const form = {
 		dataset: { softwareAction: "decline", endpoint: "/api/software" },
-		addEventListener: (_name: string, handler: any) => {
+		addEventListener: (_name: string, handler: SubmitListener) => {
 			submit = handler;
 		},
 		querySelector: (selector: string) =>
@@ -618,7 +621,7 @@ it.each(["fit", "question", "decline"])(
 	"keeps %s form contents and restores its button on a non-JSON session failure",
 	async (action) => {
 		const { root } = fixture();
-		let submit!: (event: any) => Promise<void>;
+		let submit!: SubmitListener;
 
 		const status = { textContent: "" },
 			button = { disabled: false },
@@ -626,7 +629,7 @@ it.each(["fit", "question", "decline"])(
 
 		const form = {
 			dataset: { softwareAction: action, endpoint: "/api/software" },
-			addEventListener: (_name: string, handler: any) => {
+			addEventListener: (_name: string, handler: SubmitListener) => {
 				submit = handler;
 			},
 			querySelector: (selector: string) =>

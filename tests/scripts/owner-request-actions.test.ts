@@ -1,5 +1,11 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi, type Mock } from "vitest";
 import { setupOwnerRequestActions } from "../../src/scripts/owner-request-actions";
+
+/** An event listener as the actions pass it: the event carries preventDefault and the element it was bound to. */
+type Listener = (event: {
+	preventDefault: Mock;
+	currentTarget: object;
+}) => void;
 
 afterEach(() => {
 	vi.unstubAllGlobals();
@@ -174,19 +180,19 @@ it("scrolls to the Accept panel on the reloaded page and clears the fragment", (
 it.each(["note", "review", "resolve", "reopen", "withdraw"])(
 	"confirms dirty offer edits before %s and sends the shared timestamp",
 	async (action) => {
-		let handler!: (event: any) => void;
+		let handler!: Listener;
 
 		const button = {
 			dataset: { action },
 			closest: () => null,
-			addEventListener: (_: string, fn: any) => {
+			addEventListener: (_: string, fn: Listener) => {
 				handler = fn;
 			},
 		};
 
 		const note = {
 			dataset: { dirty: "true" },
-			addEventListener: (_: string, fn: any) => {
+			addEventListener: (_: string, fn: Listener) => {
 				if (action === "note") handler = fn;
 			},
 		};
@@ -262,7 +268,7 @@ it.each(["offer", "fit", "question", "decline", "private-note"])(
 		const button = {
 			dataset: { action: "reopen" },
 			closest: () => null,
-			addEventListener: (_: string, fn: any) => {
+			addEventListener: (_: string, fn: () => void) => {
 				click = fn;
 			},
 		};
@@ -313,7 +319,7 @@ it.each(["offer", "fit", "question", "decline", "private-note"])(
 it.each([true, false])(
 	"saves its own private note without a discard prompt (software %s)",
 	async (software) => {
-		let submit!: (event: any) => void;
+		let submit!: Listener;
 
 		const root = {
 			setAttribute: vi.fn(),
@@ -323,7 +329,7 @@ it.each([true, false])(
 
 		const note = {
 			dataset: { dirty: "true" },
-			addEventListener: (_: string, fn: any) => {
+			addEventListener: (_: string, fn: Listener) => {
 				submit = fn;
 			},
 		};
@@ -371,11 +377,11 @@ it.each([true, false])(
 it.each(["note", "review", "resolve", "reopen", "withdraw"])(
 	"locks the request page during %s and restores it on error",
 	async (action) => {
-		let handler!: (event: any) => void;
+		let handler!: Listener;
 
 		const note = {
 			dataset: { dirty: "true" },
-			addEventListener: (_: string, fn: any) => {
+			addEventListener: (_: string, fn: Listener) => {
 				if (action === "note") handler = fn;
 			},
 		};
@@ -383,7 +389,7 @@ it.each(["note", "review", "resolve", "reopen", "withdraw"])(
 		const button = {
 			dataset: { action },
 			closest: () => null,
-			addEventListener: (_: string, fn: any) => {
+			addEventListener: (_: string, fn: Listener) => {
 				handler = fn;
 			},
 		};
