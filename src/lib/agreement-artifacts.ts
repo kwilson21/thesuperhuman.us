@@ -5,7 +5,7 @@ import type { Agreement } from "./software-agreements";
 import { templateVersionLabel } from "./agreement-version-label";
 import type { StoredAgreementValues } from "./agreement-fields";
 
-// SAFETY: every caller passes an arrayBuffer() result or readFileSync/TextEncoder bytes; the cast only narrows TypeScript's ArrayBufferLike to ArrayBuffer, and digest accepts any BufferSource view at runtime.
+// SAFETY: every caller passes an ArrayBuffer (arrayBuffer() or readBodyWithin output) or a Uint8Array view over one (new Uint8Array of arrayBuffer(), readFileSync, or TextEncoder output); the cast only narrows TypeScript's ArrayBufferLike to ArrayBuffer, and digest accepts any BufferSource at runtime.
 export const hashBytes = async (bytes: ArrayBuffer | Uint8Array) =>
 	[
 		...new Uint8Array(
