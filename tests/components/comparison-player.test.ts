@@ -71,17 +71,17 @@ it("places compact playback beside the waveform and seeks from both the track an
 	expect(component).toContain(
 		'.comparison-player--compact[data-initialized="true"]:not([data-audio-fallback="true"]) .compact-waveform-stage{display:grid}',
 	);
-	expect(
-		sourceText(script).indexOf(
-			sourceText(
-				"media.forEach(audio => { audio.pause(); audio.controls = false; audio.hidden = true; });",
-			),
-		),
-	).toBeLessThan(
-		sourceText(script).indexOf(
-			sourceText("root.dataset.initialized = 'true';"),
+	const hide = sourceText(script).indexOf(
+		sourceText(
+			"media.forEach(audio => { audio.pause(); audio.controls = false; audio.hidden = true; });",
 		),
 	);
+	const initialized = sourceText(script).indexOf(
+		sourceText("root.dataset.initialized = 'true';"),
+	);
+	expect(hide).toBeGreaterThanOrEqual(0);
+	expect(initialized).toBeGreaterThanOrEqual(0);
+	expect(hide).toBeLessThan(initialized);
 	expect(component).toContain(
 		".comparison-player--compact .comparison-switch span{display:inline}",
 	);
@@ -150,11 +150,15 @@ it("tells visitors they can click, tap or drag the full waveform to seek", () =>
 });
 
 it("keeps the compact played fill above the unplayed bars by source order", () => {
-	expect(
-		component.indexOf(".comparison-player--compact .compact-waveform{"),
-	).toBeLessThan(
-		component.indexOf(".comparison-player--compact .compact-waveform-played{"),
+	const unplayed = component.indexOf(
+		".comparison-player--compact .compact-waveform{",
 	);
+	const played = component.indexOf(
+		".comparison-player--compact .compact-waveform-played{",
+	);
+	expect(unplayed).toBeGreaterThanOrEqual(0);
+	expect(played).toBeGreaterThanOrEqual(0);
+	expect(unplayed).toBeLessThan(played);
 });
 
 it("seeks once per gesture, keeps playback through a drag past the end, and leaves fallback players alone", () => {
@@ -176,11 +180,16 @@ it("seeks only when the target time changes, so pen pressure and clamped drags c
 	expect(script).toContain("const seconds = waveformSeekSeconds(");
 	expect(script).toContain("if (seconds === gesture.lastSeconds) return;");
 	expect(script).toContain("gesture.lastSeconds = seconds;");
-	expect(
-		sourceText(script).indexOf(
-			sourceText("if (seconds === gesture.lastSeconds) return;"),
-		),
-	).toBeLessThan(sourceText(script).indexOf(sourceText("seekTo(seconds);")));
+	const guard = sourceText(script).indexOf(
+		sourceText("if (seconds === gesture.lastSeconds) return;"),
+	);
+	const seek = sourceText(script).indexOf(
+		sourceText("seekTo(seconds);"),
+		guard,
+	);
+	expect(guard).toBeGreaterThanOrEqual(0);
+	expect(seek).toBeGreaterThanOrEqual(0);
+	expect(guard).toBeLessThan(seek);
 });
 
 it("draws the unplayed bars and both seek tracks at 3:1 or better against paper (WCAG 1.4.11)", () => {

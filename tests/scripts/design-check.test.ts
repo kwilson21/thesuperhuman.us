@@ -709,13 +709,25 @@ describe("gates", () => {
 
 		for (const id of Object.keys(GATES)) {
 			const start = source.indexOf(sourceText(`'${id}': {`));
-			const block = source.slice(start, source.indexOf("},", start));
+			expect(start).toBeGreaterThanOrEqual(0);
+			const block = gateBlock(source, start);
+			expect(block).toBeDefined();
 			expect(block).toMatch(
-				/Hallmark|[Gg]ate\d+|motion\.md|interaction-and-states\.md/,
+				/Hallmark|[Gg]ates? \d+|motion\.md|interaction-and-states\.md/,
 			);
 		}
 	});
 });
+
+/** The object literal that starts at `start`, up to its matching closing brace. */
+function gateBlock(source: string, start: number): string | undefined {
+	let depth = 0;
+	for (let i = source.indexOf("{", start); i >= 0 && i < source.length; i++) {
+		if (source[i] === "{") depth++;
+		if (source[i] === "}" && --depth === 0) return source.slice(start, i + 1);
+	}
+	return undefined;
+}
 
 describe("allowlist", () => {
 	const hit = {

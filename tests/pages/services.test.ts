@@ -5,6 +5,10 @@ import { describe, expect, it } from "vitest";
 import { softwareSheet } from "../../src/data/services";
 import { audioPath } from "../../src/lib/host-routing";
 
+interface ServiceSheetExports {
+	setupServiceSheet?: () => void;
+}
+
 const layout = readFileSync(
 	new URL("../../src/layouts/ServiceSheet.astro", import.meta.url),
 	"utf8",
@@ -214,7 +218,7 @@ describe("software service sheet", () => {
 		const rows = [{ open: false }, { open: true }];
 		const handlers: Record<string, () => void> = {};
 
-		const moduleExports: { setupServiceSheet?: () => void } = {};
+		const moduleExports: ServiceSheetExports = {};
 		runInNewContext(
 			transpileModule(sheetScript, {
 				compilerOptions: { module: ModuleKind.CommonJS },

@@ -6,6 +6,10 @@ import { expect, it, vi } from "vitest";
 import { POST } from "~/pages/api/owner/agreements";
 import { templateFields } from "~/lib/agreement-templates";
 
+interface OwnerAgreementsExports {
+	setupOwnerAgreements?: () => void;
+}
+
 // Minimal DOM: only what the page script touches (text, classes, hidden, children and listeners).
 class FakeElement {
 	tagName = "";
@@ -131,7 +135,7 @@ function runPage({
 	data?: Record<string, string>;
 	fetch: unknown;
 }) {
-	const moduleExports: { setupOwnerAgreements?: () => void } = {};
+	const moduleExports: OwnerAgreementsExports = {};
 	runInNewContext(pageScript, {
 		document: {
 			querySelector: () => ({ addEventListener: () => {} }),
