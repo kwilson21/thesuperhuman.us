@@ -77,9 +77,8 @@ const showFeedNotices = view !== "story";
 const movedEntry = (entry: Milestone) => ({
 	id: entry.id,
 	title: entry.title,
-	destination: (entry.placement === "story" ? "story" : "archive") as
-		| "story"
-		| "archive",
+	destination:
+		entry.placement === "story" ? ("story" as const) : ("archive" as const),
 });
 
 const moved = bounded

@@ -261,14 +261,13 @@ async function renderIn(browser, key, attempt) {
 		const root = document.documentElement;
 
 		// A line that may not wrap must fit its own box, or it runs into its neighbour unseen.
-		const cramped = texts
-			.filter(
-				(element) =>
-					getComputedStyle(element).whiteSpace === "nowrap" &&
-					element.clientWidth > 0 &&
-					element.scrollWidth > element.clientWidth + 1,
-			)
-			.map((element) => element.textContent.trim().slice(0, 40));
+		const cramped = texts.flatMap((element) =>
+			getComputedStyle(element).whiteSpace === "nowrap" &&
+			element.clientWidth > 0 &&
+			element.scrollWidth > element.clientWidth + 1
+				? [element.textContent.trim().slice(0, 40)]
+				: [],
+		);
 
 		return {
 			duration: Number(root.dataset.duration),

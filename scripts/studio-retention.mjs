@@ -775,25 +775,26 @@ async function main() {
 			);
 
 			proxyConfig = resolve(proxyDirectory, "wrangler.json");
-			await writeFile(
-				proxyConfig,
-				JSON.stringify({
-					name: "software-retention-list",
-					compatibility_date: selected.compatibility_date,
-					...(storage.accountId ? { account_id: storage.accountId } : {}),
-					r2_buckets: [
-						{
-							binding: "AUDIO",
-							bucket_name: storage.bucket,
-							remote: true,
-							...(storage.jurisdiction
-								? { jurisdiction: storage.jurisdiction }
-								: {}),
-						},
-					],
-				}),
-				{ mode: 0o600 },
-			);
+
+			const proxyWrangler = {
+				name: "software-retention-list",
+				compatibility_date: selected.compatibility_date,
+			};
+
+			if (storage.accountId) proxyWrangler.account_id = storage.accountId;
+
+			const audioBucket = {
+				binding: "AUDIO",
+				bucket_name: storage.bucket,
+				remote: true,
+			};
+
+			if (storage.jurisdiction) audioBucket.jurisdiction = storage.jurisdiction;
+			proxyWrangler.r2_buckets = [audioBucket];
+
+			await writeFile(proxyConfig, JSON.stringify(proxyWrangler), {
+				mode: 0o600,
+			});
 		}
 
 		if (needsProxy)

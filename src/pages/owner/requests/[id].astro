@@ -174,10 +174,14 @@ const detailRows = Object.entries(request.details).filter(
 		(!Array.isArray(value) || value.length),
 );
 
+function isObjectValue(value: unknown): value is object {
+	return typeof value === "object" && value !== null;
+}
+
 const detailValue = (value: unknown) =>
 	Array.isArray(value)
 		? value.join(", ")
-		: typeof value === "object" && value
+		: isObjectValue(value)
 			? Object.entries(value)
 					.map(([key, item]) => `${label(key)}: ${String(item)}`)
 					.join(" · ")
@@ -259,17 +263,15 @@ const softwarePath =
 	request.kind === "software" ? (request.serviceId ?? "") : "";
 
 // Each software path's row on the services page. Earlier web app briefs keep the idea path name.
-const softwareServiceRows: Record<string, string> = {
-	website: "website",
-	webapp: "web-app",
-	idea: "web-app",
-	workflow: "workflow",
-};
+const softwareServiceRows = new Map([
+	["website", "website"],
+	["webapp", "web-app"],
+	["idea", "web-app"],
+	["workflow", "workflow"],
+]);
 
 const serviceRow = (serviceId: string) =>
-	Object.hasOwn(softwareServiceRows, serviceId)
-		? softwareServiceRows[serviceId]
-		: "software";
+	softwareServiceRows.get(serviceId) ?? "software";
 ---
 <OwnerLayout title={request.summary} current="requests" newRequestCount={newRequests.length} ownerEmail={Astro.locals.owner?.email ?? ''}>
   <p class="owner-breadcrumb"><a href="/owner/requests">Requests</a> <span aria-hidden="true">/</span> {request.summary}</p>

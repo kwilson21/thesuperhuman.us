@@ -202,11 +202,10 @@ async function capture({
 	if (prepare)
 		await prepareWithDiagnostics(page, prepare, OUT, currentScenario, file);
 	const target = selector ? page.locator(selector).first() : page;
-	await target.screenshot({
-		path: `${OUT}/${file}`,
-		...(selector ? {} : { fullPage: true }),
-		animations: "disabled",
-	});
+	const screenshotOptions = { path: `${OUT}/${file}`, animations: "disabled" };
+
+	if (!selector) screenshotOptions.fullPage = true;
+	await target.screenshot(screenshotOptions);
 	await context.close();
 
 	return file;
@@ -265,12 +264,16 @@ function replay({ url, accept }, owner) {
 
 	if (unhashed(url)) return "not hashed";
 
+	const headers = { accept };
+
+	if (owner) Object.assign(headers, ownerHeaders);
+
 	if (!replayed.has(key)) {
 		replayed.set(
 			key,
 			fetch(BASE + url, {
 				redirect: "manual",
-				headers: { accept, ...(owner ? ownerHeaders : {}) },
+				headers,
 			})
 				.then(
 					async (response) =>
@@ -510,13 +513,13 @@ try {
 			wrote,
 			paths: [
 				...scenarioPaths,
-				...requests
-					.filter((request) => !isAsset(request))
-					.map((request) => new URL(BASE + request.url).pathname),
+				...requests.flatMap((request) =>
+					isAsset(request) ? [] : [new URL(BASE + request.url).pathname],
+				),
 			],
-			assets: requests
-				.filter(isAsset)
-				.map(({ url, accept }) => ({ url, accept })),
+			assets: requests.flatMap((request) =>
+				isAsset(request) ? [{ url: request.url, accept: request.accept }] : [],
+			),
 			captured: captured.filter((item) => item.scenario === name),
 		});
 	}
