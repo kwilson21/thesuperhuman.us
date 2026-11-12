@@ -1,0 +1,80 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"files": {
+		"ignoreUnknown": false,
+		"includes": [
+			"src/**",
+			"scripts/**",
+			"tests/**",
+			"astro.config.mjs",
+			"oxlint.config.ts",
+			"vitest.config.ts",
+			"tsconfig.json",
+			"wrangler.jsonc",
+			"!scripts/og-video/kit.js",
+			"!scripts/og-video/kit.css",
+			"!**/*.css",
+			"!src/**/*.json",
+			"!scripts/**/*.json",
+			"!scripts/check-design.mjs",
+			"!scripts/publicist/gate.mjs",
+			"!scripts/publicist/lib.mjs",
+			"!src/components/Footer.astro",
+			"!src/components/Hero.astro",
+			"!src/components/SiteNav.astro",
+			"!src/components/WorkWithMe.astro",
+			"!src/components/audio/AudioPlayer.astro",
+			"!src/components/audio/ComparisonPlayer.astro",
+			"!src/components/owner/SoftwareInvoiceLine.astro",
+			"!src/components/owner/SoftwareProjectPanel.astro",
+			"!src/data/project-stories/personal-website.ts",
+			"!src/data/project-stories/tally.ts",
+			"!src/data/services.ts",
+			"!src/data/work-with-me.ts",
+			"!src/layouts/ServiceSheet.astro",
+			"!src/lib/client-emails.ts",
+			"!src/lib/email-template.ts",
+			"!src/lib/software-inquiry.ts",
+			"!src/pages/api/resume-approve.ts",
+			"!src/pages/audio/services.astro",
+			"!src/pages/audio/start.astro",
+			"!src/pages/index.astro",
+			"!src/pages/software/start.astro",
+			"!src/scripts/comparison-player.ts",
+			"!src/scripts/music-controls.ts",
+			"!src/pages/music/\\[slug\\].astro",
+			"!src/data/project-stories/**",
+			"!tests/scripts/design-check.test.ts"
+		]
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab"
+	},
+	"linter": {
+		"enabled": false
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "double"
+		}
+	},
+	"css": {
+		"parser": {
+			"tailwindDirectives": true
+		}
+	},
+	"assist": {
+		"enabled": true,
+		"actions": {
+			"source": {
+				"organizeImports": "on"
+			}
+		}
+	}
+}

@@ -19,6 +19,8 @@
     "publicist:sync": "node scripts/publicist/sync.mjs",
     "preview": "wrangler dev --local",
     "check": "astro check",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
     "lint": "oxlint",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -55,6 +57,7 @@
   },
   "devDependencies": {
     "@astrojs/compiler": "2.13.1",
+    "@biomejs/biome": "2.5.14",
     "@cloudflare/workers-types": "^5.20261010.1",
     "@oxlint/plugins": "1.93.0",
     "esbuild": "0.27.7",
