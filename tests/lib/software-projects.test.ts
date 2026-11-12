@@ -1592,6 +1592,51 @@ it("supports invoice start, failed invitations and checked uncertain retries", a
 	expect(await queueSoftwareNotice(db, "software", true)).toBe(true);
 });
 
+it("sends no notice once the project's access is closed, and cannot queue one", async () => {
+	expect((await start()).status).toBe(200);
+	sql.exec(
+		"UPDATE software_projects SET invitation_status='pending',invitation_attempted_at=NULL,revoked_at='2026-10-01T00:00:00.000Z'",
+	);
+	vi.mocked(fetch).mockClear();
+	await deliverSoftwareNotice(db, "software", env);
+	expect(fetch).not.toHaveBeenCalled();
+	expect(
+		sql.prepare("SELECT invitation_status FROM software_projects").get(),
+	).toEqual({ invitation_status: "pending" });
+	sql.exec("UPDATE software_projects SET invitation_status='failed'");
+	expect(await queueSoftwareNotice(db, "software", false)).toBe(false);
+	expect(
+		sql.prepare("SELECT invitation_status FROM software_projects").get(),
+	).toEqual({ invitation_status: "failed" });
+});
+
+it("does not email a recipient whose access closes after the notice is claimed", async () => {
+	expect((await start()).status).toBe(200);
+	sql.exec(
+		"UPDATE software_projects SET invitation_status='pending',invitation_attempted_at=NULL",
+	);
+	vi.mocked(fetch).mockClear();
+	const prepare = db.prepare.bind(db);
+	db.prepare = (query) => {
+		if (query.includes("SELECT r.email FROM owner_requests r"))
+			sql.exec(
+				"UPDATE software_projects SET revoked_at='2026-10-01T00:00:00.000Z'",
+			);
+
+		return prepare(query);
+	};
+
+	await deliverSoftwareNotice(db, "software", env);
+	expect(fetch).not.toHaveBeenCalled();
+	expect(
+		sql
+			.prepare(
+				"SELECT invitation_status,invitation_sent_at FROM software_projects",
+			)
+			.get(),
+	).toEqual({ invitation_status: "failed", invitation_sent_at: null });
+});
+
 it("software-only codes and sessions are scoped across both project kinds and revocation/withdrawal", async () => {
 	await start();
 	const token = await session();
@@ -3268,6 +3313,38 @@ it("rolls back invoice reservations when full payment arrives between the read a
 	expect(
 		sql.prepare("SELECT count(*) AS n FROM software_invoices").get(),
 	).toEqual({ n: 0 });
+});
+
+it("refuses an invoice retry when the invoice stops creating between the read and the transaction", async () => {
+	const { reserveSoftwareInvoice } = await import("~/lib/software-invoices");
+
+	const input = {
+		requestId: "software",
+		offerId: "software-offer",
+		milestone: 0,
+		kind: "deposit" as const,
+		allowCard: false,
+		actor: "owner",
+	};
+
+	const invoice = await reserveSoftwareInvoice(db, input);
+
+	sql
+		.prepare("UPDATE software_invoices SET creation_started_at=NULL WHERE id=?")
+		.run(invoice.id);
+	const original = db.batch.bind(db);
+	db.batch = async (items) => {
+		sql.exec("UPDATE software_invoices SET status='open'");
+
+		return original(items);
+	};
+
+	await expect(
+		reserveSoftwareInvoice(db, { ...input, retryId: invoice.id }),
+	).rejects.toThrow();
+	expect(
+		sql.prepare("SELECT creation_started_at FROM software_invoices").get(),
+	).toEqual({ creation_started_at: null });
 });
 
 it("cannot restore invoice references when retention runs between webhook lookup and transaction", async () => {

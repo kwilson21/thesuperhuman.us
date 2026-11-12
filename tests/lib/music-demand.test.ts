@@ -108,6 +108,32 @@ describe("private music demand", () => {
 			sql.prepare("SELECT count(*) AS total FROM owner_request_audit").get(),
 		).toEqual({ total: 4 });
 	});
+	it("stores a repeated merchandise choice once in the aggregate and in the owner request", async () => {
+		const { sql, db } = fixture();
+
+		await saveInterest(
+			db,
+			interestSchema.parse({
+				...input,
+				merchandise: ["shirts", "hoodies", "shirts"],
+			}),
+		);
+
+		expect(
+			sql.prepare("SELECT merchandise FROM music_interest").get().merchandise,
+		).toBe('["shirts","hoodies"]');
+
+		expect(
+			JSON.parse(
+				sql
+					.prepare(
+						"SELECT details_json FROM owner_requests WHERE kind='merchandise'",
+					)
+					.get().details_json,
+			).merchandise,
+		).toEqual(["shirts", "hoodies"]);
+	});
+
 	it("deduplicates retries and accepts ordered progress across audio and video", async () => {
 		const { sql, db } = fixture();
 

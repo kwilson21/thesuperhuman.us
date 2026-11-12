@@ -50,4 +50,28 @@ describe("urgent owner alerts", () => {
 		).resolves.toBe(false);
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
+
+	it("reports a failed send as false, whether the provider rejects it or the request throws", async () => {
+		const env = partial<Env>({
+			RESEND_API_KEY: "secret",
+			CONTACT_FROM_EMAIL: "noreply@notifs.thesuperhuman.us",
+			CONTACT_TO_EMAIL: "owner@example.com",
+		});
+
+		const incident = {
+			category: "request-storage",
+			route: "/api/software-inquiry",
+			requestId: "request-789",
+			code: "d1-write-failed",
+			occurredAt: "2026-09-19T12:00:00.000Z",
+		} as const;
+
+		fetchMock.mockResolvedValueOnce(
+			partial<Response>({ ok: false, status: 422 }),
+		);
+		await expect(sendUrgentOwnerAlert(env, incident)).resolves.toBe(false);
+		fetchMock.mockRejectedValueOnce(new Error("network down"));
+		await expect(sendUrgentOwnerAlert(env, incident)).resolves.toBe(false);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
 });

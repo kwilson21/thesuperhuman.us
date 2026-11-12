@@ -675,6 +675,37 @@ describe("audio payments", () => {
 		});
 	});
 
+	it("refuses a balance payment outside Stripe when the booking stops being paid between its read and its write", async () => {
+		const { db, sql } = fixture();
+		await approveAudioPayment(db, approval);
+
+		const manual = {
+			requestId: "request-1",
+			method: "Zelle" as const,
+			reference: "zelle 1234",
+			actor: "owner@example.com",
+		};
+
+		await recordManualPayment(db, { ...manual, installment: "booking" });
+
+		const racing = double<D1Database>({
+			...db,
+			prepare: db.prepare.bind(db),
+			batch: fakeBatch(async (items) => {
+				sql.exec("UPDATE audio_payments SET booking_status='void'");
+
+				return db.batch(items);
+			}),
+		});
+
+		await expect(
+			recordManualPayment(racing, { ...manual, installment: "balance" }),
+		).rejects.toThrow("already has an invoice");
+		expect(await getAudioPayment(db, "request-1")).toMatchObject({
+			balanceStatus: "not_created",
+		});
+	});
+
 	it("holds a recovered Stripe invoice as unmatched when a manual payment lands between its read and its write", async () => {
 		const { db, sql } = fixture();
 		await approveAudioPayment(db, approval);

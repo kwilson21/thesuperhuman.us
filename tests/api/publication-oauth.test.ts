@@ -220,3 +220,42 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 			.content[0].text,
 	).toContain("forbidden");
 });
+
+it.each([
+	"OAUTH_KV",
+	"PUBLICATION_DB",
+	"PUBLICATION_OWNER_ID",
+	"PUBLICATION_GITHUB_CLIENT_ID",
+	"PUBLICATION_GITHUB_CLIENT_SECRET",
+	"PUBLICATION_COOKIE_KEY",
+] as const)("answers 503 when %s is not configured", async (missing) => {
+	const env: Partial<TestRuntime["env"]> = {
+		OAUTH_KV: fakeKv({ get: async () => null }),
+		PUBLICATION_DB: double<D1Database>({}),
+		PUBLICATION_OWNER_ID: "10987837",
+		PUBLICATION_GITHUB_CLIENT_ID: "test-client",
+		PUBLICATION_GITHUB_CLIENT_SECRET: "test-secret",
+		PUBLICATION_COOKIE_KEY: btoa("k".repeat(32)),
+	};
+
+	delete env[missing];
+
+	const response = await publicationOAuthRoute(
+		partial<APIContext>({
+			request: new Request(
+				"https://thesuperhuman.us/.well-known/oauth-authorization-server",
+			),
+			locals: {
+				runtime: partial<TestRuntime>({
+					env: partial<TestRuntime["env"]>(env),
+					ctx: double<ExecutionContext>({ waitUntil() {} }),
+				}),
+			},
+		}),
+	);
+
+	expect(response.status).toBe(503);
+	expect(await response.text()).toBe(
+		"Publication connection is not configured.",
+	);
+});

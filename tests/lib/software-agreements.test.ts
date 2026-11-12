@@ -812,6 +812,46 @@ it("rejects stale hashes and stores one atomic client action with email, IP and 
 	).toThrow();
 });
 
+it("refuses a new review once a client signature is saved", async () => {
+	await signed();
+	await expect(review()).rejects.toThrow(
+		"A signature is already saved. These documents cannot change.",
+	);
+});
+
+it("returns a saved client signature only to the session that made it", async () => {
+	const result = await review(),
+		session = (await agreementSession(db, request()))!;
+
+	const receipt = await signAgreements(
+		db,
+		(await offer())!,
+		session,
+		result.documents,
+		request(),
+	);
+
+	await expect(
+		signAgreements(
+			db,
+			(await offer())!,
+			{ ...session, token_hash: "wrong" },
+			result.documents,
+			request(),
+		),
+	).rejects.toThrow("A different signing action is already saved.");
+
+	expect(
+		await signAgreements(
+			db,
+			(await offer())!,
+			session,
+			result.documents,
+			request(),
+		),
+	).toBe(receipt);
+});
+
 it("does not sign a regenerated preview from another session", async () => {
 	const result = await review(),
 		session = (await agreementSession(db, request()))!;
