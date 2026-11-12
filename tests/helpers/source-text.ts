@@ -18,9 +18,9 @@ export function sourceText(text: string): string {
 	return text
 		.replace(/"/g, "'")
 		.replace(/\s+/g, " ")
+		.replace(/\((\w+)\) ?=>/g, "$1 =>")
 		.replace(new RegExp(` ?([${PUNCTUATION}]) ?`, "g"), "$1")
 		.replace(/,(?=[)\]}])/g, "")
-		.replace(/\((\w+)\)=>/g, "$1=>")
 		.trim();
 }
 

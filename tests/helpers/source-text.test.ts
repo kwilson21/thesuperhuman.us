@@ -31,6 +31,13 @@ describe("sourceText", () => {
 		expect(sourceText("[a,\n]")).toBe("[a]");
 	});
 
+	it("keeps the word before an arrow when an async keyword precedes it", () => {
+		expect(sourceText("const f = async (x) => x")).toBe(
+			sourceText("const f = async x => x"),
+		);
+		expect(sourceText("const f = async (x) => x")).toContain("async x=>x");
+	});
+
 	it("reads a single arrow parameter with or without parentheses alike", () => {
 		expect(sourceText("(x) => x")).toBe(sourceText("x => x"));
 		expect(sourceText("(x) => x")).toBe("x=>x");
