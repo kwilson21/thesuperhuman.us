@@ -17,6 +17,7 @@ This is the list of every button style in `src/` that was checked for the pill s
 | `.rail-actions button.danger` | `src/pages/owner/requests/[id].astro` | Destructive owner request actions | Inherits the pill from `.rail-actions button` |
 | `.sheet-footnote button` | `src/layouts/ServiceSheet.astro` | Print control in the sheet footer | Pill through `.site-button` (it also carries `.site-button-outline`) |
 | `.terms-navigation` buttons | `src/components/SoftwareAgreedTerms.astro` | Back and next controls for the agreed terms | Pill through `.studio-button` |
+| `.next-step-link` | `src/components/AudioProjectUpdates.astro` | Outlined link to the owner's next step on an audio project | Pill; the label is stored text and may wrap. |
 
 ## Stays
 

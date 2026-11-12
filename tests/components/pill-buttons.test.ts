@@ -114,3 +114,12 @@ it('records the shared pill token, owner wrapping and inherited danger button in
   expect(inventory).toContain('| `.rail-actions button.danger` |');
   expect(inventory).not.toContain('—');
 });
+
+it('gives the owner next-step link the pill shape and lets its stored label wrap', () => {
+  const match = read('src/components/AudioProjectUpdates.astro').match(/\.next-step-link \{[^}]*\}/);
+  expect(match, '.next-step-link rule').not.toBeNull();
+  expect(match![0]).toContain('border-radius: var(--radius-button);');
+  expect(match![0]).toContain('max-width: 100%;');
+  expect(match![0]).toContain('padding: .5rem 1.25rem;');
+  expect(match![0]).not.toContain('white-space: nowrap');
+});
