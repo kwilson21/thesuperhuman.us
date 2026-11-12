@@ -254,7 +254,7 @@ describe("software service sheet", () => {
 		expect(print).toContain(
 			".sheet-software .service-offer > summary { grid-template-columns: 1fr 1fr; gap: 8pt; padding: 2pt 0; }",
 		);
-		expect(print).not.toMatch(/font-size:[0-7](\.\d+)?pt/);
+		expect(print).not.toMatch(/font-size: [0-7](\.\d+)?pt/);
 		expect(print.match(/\.sheet-address \{/g)).toHaveLength(1);
 	});
 

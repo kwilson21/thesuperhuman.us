@@ -72,7 +72,8 @@ it("places compact playback beside the waveform and seeks from both the track an
 		'.comparison-player--compact[data-initialized="true"]:not([data-audio-fallback="true"]) .compact-waveform-stage{display:grid}',
 	);
 
-	const hide = sourceText(script).indexOf(
+	// The same statement also runs in the audio-fallback branch, so anchor to the last one: the init-time hide.
+	const hide = sourceText(script).lastIndexOf(
 		sourceText(
 			"media.forEach(audio => { audio.pause(); audio.controls = false; audio.hidden = true; });",
 		),
@@ -253,7 +254,7 @@ it("sets every player control in Libron at 14px or more (type board D4.4-B)", ()
 		".comparison-match{display:flex;align-items:center;gap:.4rem;font:.875rem var(--font-serif)}",
 	);
 	expect(component).not.toContain("var(--font-sans)");
-	expect(component).not.toMatch(/Inter,sans-serif/);
+	expect(component).not.toMatch(/Inter,\s*sans-serif/);
 
 	// The only size under 14px is the visually hidden seek label (font-size:0).
 	const sizes = [...component.matchAll(/font(?:-size)?:([\d.]+)rem/g)].map(
